@@ -629,6 +629,15 @@ class Gcrev_Insight_API {
     // =========================================================
     public function prefetch_chunk(int $offset, int $limit): void {
 
+        // ─── 重複実行防止ロック（最初のチャンクのみ設定） ───
+        if ( $offset === 0 ) {
+            if ( get_transient( self::LOCK_PREFETCH ) ) {
+                error_log( '[GCREV] prefetch_chunk: LOCKED, skipping duplicate run' );
+                return;
+            }
+            set_transient( self::LOCK_PREFETCH, 1, self::LOCK_TTL );
+        }
+
         error_log("[GCREV] prefetch_chunk START: offset={$offset}, limit={$limit}");
 
         $users = get_users([
@@ -706,6 +715,7 @@ class Gcrev_Insight_API {
             wp_schedule_single_event(time() + 10, 'gcrev_prefetch_chunk_event', [$next_offset, $limit]);
             error_log("[GCREV] Scheduled next prefetch_chunk: offset={$next_offset}");
         } else {
+            delete_transient( self::LOCK_PREFETCH );
             error_log("[GCREV] Prefetch DONE. No more users.");
         }
     }
@@ -1393,7 +1403,20 @@ class Gcrev_Insight_API {
      * 
      * 注意：実際は毎日Cronを動かし、日付チェックで1日のみ実行する設計
      */
+    /** Transientロック: 重複実行防止 */
+    private const LOCK_REPORT_GEN      = 'gcrev_lock_report_gen';
+    private const LOCK_REPORT_FINALIZE = 'gcrev_lock_report_finalize';
+    private const LOCK_PREFETCH        = 'gcrev_lock_prefetch';
+    private const LOCK_TTL             = 3600; // 1時間
+
     public function auto_generate_monthly_reports(): void {
+
+        // ─── 重複実行防止ロック ───
+        if ( get_transient( self::LOCK_REPORT_GEN ) ) {
+            error_log( '[GCREV] auto_generate_monthly_reports: LOCKED, skipping duplicate run' );
+            return;
+        }
+        set_transient( self::LOCK_REPORT_GEN, 1, self::LOCK_TTL );
 
         $tz = wp_timezone();
         $now = new DateTimeImmutable('now', $tz);
@@ -1401,6 +1424,7 @@ class Gcrev_Insight_API {
         // 1日以外は何もしない（冪等性）
         if ((int)$now->format('d') !== 1) {
             error_log("[GCREV] auto_generate_monthly_reports: Not 1st of month, skipping.");
+            delete_transient( self::LOCK_REPORT_GEN );
             return;
         }
 
@@ -1504,15 +1528,23 @@ class Gcrev_Insight_API {
             }
         }
 
+        delete_transient( self::LOCK_REPORT_GEN );
         error_log("[GCREV] auto_generate_monthly_reports: DONE");
     }
 
     /**
      * === Cronから呼ばれる：月末に未確定レポートを自動確定 ===
-     * 
+     *
      * 注意：実際は毎日Cronを動かし、月末かどうかチェックして実行
      */
     public function auto_finalize_monthly_reports(): void {
+
+        // ─── 重複実行防止ロック ───
+        if ( get_transient( self::LOCK_REPORT_FINALIZE ) ) {
+            error_log( '[GCREV] auto_finalize: LOCKED, skipping duplicate run' );
+            return;
+        }
+        set_transient( self::LOCK_REPORT_FINALIZE, 1, self::LOCK_TTL );
 
         $tz = wp_timezone();
         $now = new DateTimeImmutable('now', $tz);
@@ -1521,6 +1553,7 @@ class Gcrev_Insight_API {
         $tomorrow = $now->add(new DateInterval('P1D'));
         if ((int)$tomorrow->format('d') !== 1) {
             error_log("[GCREV] auto_finalize: Not end of month, skipping.");
+            delete_transient( self::LOCK_REPORT_FINALIZE );
             return;
         }
 
@@ -1576,6 +1609,7 @@ class Gcrev_Insight_API {
             error_log("[GCREV] auto_finalize: SUCCESS user_id={$user_id}, post_id={$post->ID}, year_month={$year_month}");
         }
 
+        delete_transient( self::LOCK_REPORT_FINALIZE );
         error_log("[GCREV] auto_finalize_monthly_reports: DONE");
     }
     // =========================================================
