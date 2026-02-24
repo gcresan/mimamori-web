@@ -466,6 +466,10 @@ $gcrev_utils_crypto = $gcrev_utils_path . 'class-crypto.php';
 if ( file_exists( $gcrev_utils_crypto ) ) {
     require_once $gcrev_utils_crypto;
 }
+$gcrev_utils_rate_limiter = $gcrev_utils_path . 'class-rate-limiter.php';
+if ( file_exists( $gcrev_utils_rate_limiter ) ) {
+    require_once $gcrev_utils_rate_limiter;
+}
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）

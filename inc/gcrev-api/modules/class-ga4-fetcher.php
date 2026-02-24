@@ -46,9 +46,19 @@ class Gcrev_GA4_Fetcher {
         $this->config = $config;
     }
 
+    /**
+     * GA4 API 呼び出し前の共通準備（認証 + レートリミット）
+     */
+    private function prepare_ga4_call(): void {
+        if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
+            Gcrev_Rate_Limiter::check_and_wait( 'ga4' );
+        }
+        putenv( 'GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path() );
+    }
+
     public function fetch_ga4_data(string $property_id, string $start, string $end, string $site_url = ''): array {
 
-        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
+        $this->prepare_ga4_call();
 
         $client = new BetaAnalyticsDataClient();
 
@@ -139,7 +149,7 @@ class Gcrev_GA4_Fetcher {
     // =========================================================
     public function fetch_ga4_summary(string $property_id, string $start, string $end): array {
 
-        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
+        $this->prepare_ga4_call();
 
         $client = new BetaAnalyticsDataClient();
 

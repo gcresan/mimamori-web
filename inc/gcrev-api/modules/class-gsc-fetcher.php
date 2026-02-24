@@ -36,6 +36,9 @@ class Gcrev_GSC_Fetcher {
 
     public function fetch_gsc_data(string $site_url, string $start, string $end): array {
 
+        if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
+            Gcrev_Rate_Limiter::check_and_wait( 'gsc' );
+        }
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
 
         $client = new GoogleClient();
