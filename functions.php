@@ -711,6 +711,26 @@ advice を使う:
 
 迷ったら talk。ユーザーが詳しく知りたそうなら、次の返答で advice を使えばOK。
 
+## 改修作業の案内（support_notice）
+ホームページの改善を提案する際、その作業を誰がやるかを判断してください。
+
+お客様自身でできる作業（support_notice 不要）:
+- ブログ記事・お知らせの投稿や編集
+- 施工事例・実績・メニューなど、WordPress管理画面から更新できるコンテンツ
+- 写真の差し替え・テキスト修正など、CMS上で完結する更新
+
+専門スタッフの作業が必要（"support_notice": true を付ける）:
+- トップページや固定ページのレイアウト・構成の変更
+- HTMLソースコードの修正が必要な改修
+- ページの新規追加・ナビゲーション構造の変更
+- フォームの項目変更・機能追加
+- デザインの大幅な変更（色・フォント・余白などCSS修正を伴うもの）
+- サイト全体の構造に関わる変更
+
+判断に迷う場合は support_notice: true を付けてください（付けすぎて問題なし）。
+JSON例: {"type":"advice","summary":"...","sections":[...],"support_notice":true}
+JSON例: {"type":"talk","text":"...","support_notice":true}
+
 ## 共通ルール
 1. 必ず有効なJSONのみを返す（JSON以外の文字を前後に絶対付けない）
 2. 専門用語は一切使わない（上の言い換え表に従う）
@@ -899,24 +919,33 @@ function mimamori_parse_ai_response( string $raw_text ): array {
  * @return array
  */
 function mimamori_build_parsed_result( array $parsed, string $raw_text ): array {
-    $type = $parsed['type'] ?? '';
+    $type           = $parsed['type'] ?? '';
+    $support_notice = ! empty( $parsed['support_notice'] );
 
     // --- talk: 対話形式 ---
     if ( $type === 'talk' && isset( $parsed['text'] ) ) {
-        return [
+        $result = [
             'type' => 'talk',
             'text' => (string) $parsed['text'],
         ];
+        if ( $support_notice ) {
+            $result['support_notice'] = true;
+        }
+        return $result;
     }
 
     // --- advice: 構造化アドバイス ---
     if ( ( $type === 'advice' || $type === '' ) && isset( $parsed['summary'] ) ) {
         $sections = mimamori_normalize_sections( $parsed['sections'] ?? [] );
-        return [
+        $result = [
             'type'     => 'advice',
             'summary'  => (string) $parsed['summary'],
             'sections' => $sections,
         ];
+        if ( $support_notice ) {
+            $result['support_notice'] = true;
+        }
+        return $result;
     }
 
     // --- その他のJSON → 中のテキスト値を探して talk fallback ---
@@ -924,10 +953,14 @@ function mimamori_build_parsed_result( array $parsed, string $raw_text ): array 
     if ( $text === '' ) {
         $text = $raw_text;
     }
-    return [
+    $result = [
         'type' => 'talk',
         'text' => (string) $text,
     ];
+    if ( $support_notice ) {
+        $result['support_notice'] = true;
+    }
+    return $result;
 }
 
 /**

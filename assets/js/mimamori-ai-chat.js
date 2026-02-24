@@ -212,6 +212,48 @@
       }
     }
 
+    // Support notice — 専門スタッフ対応が必要な場合
+    if (payload.support_notice) {
+      var notice = document.createElement('div');
+      notice.className = 'mw-chat-support-notice';
+
+      var noticeIcon = document.createElement('div');
+      noticeIcon.className = 'mw-chat-support-notice__icon';
+      noticeIcon.textContent = '\u{1F4E9}'; // 📩
+
+      var noticeBody = document.createElement('div');
+      noticeBody.className = 'mw-chat-support-notice__body';
+
+      var noticeTitle = document.createElement('div');
+      noticeTitle.className = 'mw-chat-support-notice__title';
+      noticeTitle.textContent = '\u5C02\u9580\u30B9\u30BF\u30C3\u30D5\u304C\u30B5\u30DD\u30FC\u30C8\u3044\u305F\u3057\u307E\u3059'; // 専門スタッフがサポートいたします
+
+      var noticeText = document.createElement('div');
+      noticeText.className = 'mw-chat-support-notice__text';
+      setTextWithBreaks(noticeText,
+        '\u3053\u306E\u5185\u5BB9\u306F\u3001\u307F\u307E\u3082\u308A\u30A6\u30A7\u30D6\u62C5\u5F53\u306E\u5C02\u9580\u30B9\u30BF\u30C3\u30D5\u304C\n' + // この内容は、みまもりウェブ担当の専門スタッフが
+        '\u5185\u5BB9\u3092\u78BA\u8A8D\u306E\u3046\u3048\u3001\u76F4\u63A5\u3054\u6848\u5185\u3044\u305F\u3057\u307E\u3059\u3002\n' + // 内容を確認のうえ、直接ご案内いたします。
+        '\u304A\u6C17\u8EFD\u306B\u3054\u76F8\u8AC7\u304F\u3060\u3055\u3044\u3002' // お気軽にご相談ください。
+      );
+
+      var noticeContact = document.createElement('a');
+      noticeContact.className = 'mw-chat-support-notice__link';
+      noticeContact.href = 'mailto:support@g-crev.jp';
+      noticeContact.textContent = '\u2709 support@g-crev.jp'; // ✉ support@g-crev.jp
+
+      var noticeLabel = document.createElement('div');
+      noticeLabel.className = 'mw-chat-support-notice__label';
+      noticeLabel.textContent = '\u682A\u5F0F\u4F1A\u793E\u30B8\u30A3\u30AF\u30EC\u30D6\u300C\u307F\u307E\u3082\u308A\u30A6\u30A7\u30D6\u62C5\u5F53\u300D'; // 株式会社ジィクレブ「みまもりウェブ担当」
+
+      noticeBody.appendChild(noticeTitle);
+      noticeBody.appendChild(noticeText);
+      noticeBody.appendChild(noticeLabel);
+      noticeBody.appendChild(noticeContact);
+      notice.appendChild(noticeIcon);
+      notice.appendChild(noticeBody);
+      content.appendChild(notice);
+    }
+
     // Time
     var time = document.createElement('div');
     time.className = 'mw-chat-msg__time';
