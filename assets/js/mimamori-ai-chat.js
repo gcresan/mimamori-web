@@ -780,16 +780,13 @@
       switchViewMode('closed');
     });
 
-    // Quick question chips (event delegation)
+    // Quick question chips (event delegation) — 押下で即送信
     els.quickArea.addEventListener('click', function (e) {
       var chip = e.target.closest('.mw-chat-quick__chip');
       if (!chip) return;
       var q = chip.getAttribute('data-question');
-      if (q && els.textarea) {
-        els.textarea.value = q;
-        els.textarea.focus();
-        autoResize(els.textarea);
-      }
+      if (q && !state.isLoading) {
+        sendMessage(q);
     });
 
     // Send button: 通常時は送信、録音モード時は確定

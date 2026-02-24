@@ -49,31 +49,52 @@ if ( ! defined( 'ABSPATH' ) ) {
                   aria-label="<?php echo esc_attr( '閉じる' ); ?>">&#x2715;</button>
         </div>
       </div>
-      <div class="mw-chat-header__subtitle"><?php echo esc_html( '数字の見方・改善案をやさしく案内' ); ?></div>
+      <div class="mw-chat-header__subtitle"><?php echo esc_html( '今どうなっていて、次に何をすればいいかをお伝えします' ); ?></div>
       <div class="mw-chat-header__status">
         <span class="mw-chat-header__status-dot" aria-hidden="true"></span>
         <span><?php echo esc_html( '相談受付中' ); ?></span>
       </div>
     </div>
 
-    <!-- Quick Questions -->
+    <!-- Report Info Badge (C) -->
+    <div class="mw-chat-info-badge">
+      <span class="mw-chat-info-badge__icon" aria-hidden="true">&#x1F4C1;</span>
+      <span class="mw-chat-info-badge__text"><?php echo esc_html( '月次レポートは毎月自動で蓄積されています。気になったときだけ聞けばOKです。' ); ?></span>
+    </div>
+
+    <!-- Quick Questions — grouped by usage order (B) -->
     <div class="mw-chat-quick">
-      <button type="button" class="mw-chat-quick__chip"
-              data-question="<?php echo esc_attr( 'CTRって何？' ); ?>">
-        <?php echo esc_html( 'CTRって何？' ); ?>
-      </button>
-      <button type="button" class="mw-chat-quick__chip"
-              data-question="<?php echo esc_attr( 'この数字は良いですか？' ); ?>">
-        <?php echo esc_html( 'この数字は良いですか？' ); ?>
-      </button>
-      <button type="button" class="mw-chat-quick__chip"
-              data-question="<?php echo esc_attr( '今月やることを3つ教えて' ); ?>">
-        <?php echo esc_html( '今月やることを3つ' ); ?>
-      </button>
-      <button type="button" class="mw-chat-quick__chip"
-              data-question="<?php echo esc_attr( 'このページの改善点を教えて' ); ?>">
-        <?php echo esc_html( 'このページの改善点' ); ?>
-      </button>
+      <div class="mw-chat-quick__group">
+        <div class="mw-chat-quick__label"><?php echo esc_html( "\xF0\x9F\x9F\xA2 まずはここから" ); ?></div>
+        <div class="mw-chat-quick__chips">
+          <button type="button" class="mw-chat-quick__chip mw-chat-quick__chip--primary"
+                  data-question="<?php echo esc_attr( '今月やることを3つ教えて' ); ?>">
+            <?php echo esc_html( '今月やることを3つ' ); ?>
+          </button>
+        </div>
+      </div>
+      <div class="mw-chat-quick__group">
+        <div class="mw-chat-quick__label"><?php echo esc_html( "\xF0\x9F\x93\x8A 状況を知りたいとき" ); ?></div>
+        <div class="mw-chat-quick__chips">
+          <button type="button" class="mw-chat-quick__chip"
+                  data-question="<?php echo esc_attr( 'この数字は良いですか？' ); ?>">
+            <?php echo esc_html( 'この数字は良いですか？' ); ?>
+          </button>
+          <button type="button" class="mw-chat-quick__chip"
+                  data-question="<?php echo esc_attr( '先月と比べてどうですか？' ); ?>">
+            <?php echo esc_html( '先月と比べてどう？' ); ?>
+          </button>
+        </div>
+      </div>
+      <div class="mw-chat-quick__group">
+        <div class="mw-chat-quick__label"><?php echo esc_html( "\xF0\x9F\x9B\xA0 改善したいとき" ); ?></div>
+        <div class="mw-chat-quick__chips">
+          <button type="button" class="mw-chat-quick__chip"
+                  data-question="<?php echo esc_attr( 'このページの改善点を教えて' ); ?>">
+            <?php echo esc_html( 'このページの改善点' ); ?>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Messages -->
@@ -82,8 +103,11 @@ if ( ! defined( 'ABSPATH' ) ) {
         <div class="mw-chat-welcome__icon" aria-hidden="true">&#x1F44B;</div>
         <div class="mw-chat-welcome__title"><?php echo esc_html( 'こんにちは！' ); ?></div>
         <div class="mw-chat-welcome__text">
-          <?php echo esc_html( 'アクセス解析や改善についてお気軽にご質問ください。' ); ?><br>
-          <?php echo esc_html( '数字の意味から具体的な改善案まで、わかりやすくお答えします。' ); ?>
+          <?php echo esc_html( '今月のアクセス状況や「次に何をすればいいか」を' ); ?><br>
+          <?php echo esc_html( '一緒に整理するためのAIです。' ); ?>
+        </div>
+        <div class="mw-chat-welcome__hint">
+          <?php echo esc_html( "\xE2\x86\x91 まずは「今月やることを3つ」を押してみてください" ); ?>
         </div>
       </div>
     </div>
