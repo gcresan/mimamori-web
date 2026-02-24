@@ -57,7 +57,9 @@
   function setTextWithBreaks(el, text) {
     el.innerHTML = ''; // clear
     if (!text) return;
-    var lines = String(text).split('\n');
+    // リテラル \n（AI が \\n で返すケース）を実際の改行に正規化
+    var normalized = String(text).replace(/\\n/g, '\n');
+    var lines = normalized.split('\n');
     for (var i = 0; i < lines.length; i++) {
       if (i > 0) {
         el.appendChild(document.createElement('br'));
