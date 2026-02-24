@@ -19,6 +19,7 @@
   var state = {
     viewMode: 'closed',
     isLoading: false,
+    isRecording: false,
     hasError: false,
     history: [],  // 会話履歴 [{role:'user',content:'...'},{role:'assistant',content:'...'},...]
     options: {
@@ -37,6 +38,9 @@
      DOM references (populated on init)
      ============================ */
   var els = {};
+
+  /** SpeechRecognition instance (null if browser unsupported) */
+  var recognition = null;
 
   /* ============================
      Helpers
@@ -61,6 +65,11 @@
     if (!els.root) return;
     var valid = ['closed', 'normal', 'panel', 'modal'];
     if (valid.indexOf(mode) === -1) return;
+
+    // Stop voice recording if closing
+    if (mode === 'closed' && state.isRecording && recognition) {
+      recognition.stop();
+    }
 
     els.root.className = 'mw-chat mw-chat--' + mode;
     state.viewMode = mode;
@@ -260,8 +269,9 @@
       scrollToBottom();
     }
 
-    // Disable/enable send button
+    // Disable/enable send & voice buttons
     if (els.sendBtn) els.sendBtn.disabled = isLoading;
+    if (els.voiceBtn) els.voiceBtn.disabled = isLoading;
   }
 
   function setError(message) {
@@ -412,6 +422,113 @@
   }
 
   /* ============================
+     Voice Input (Web Speech API)
+     ============================ */
+
+  /**
+   * 音声認識を初期化する
+   * 非対応ブラウザではボタンを非表示にする
+   */
+  function initVoice() {
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition || !els.voiceBtn) {
+      if (els.voiceBtn) els.voiceBtn.style.display = 'none';
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+
+    var preExistingText = '';
+
+    recognition.addEventListener('start', function () {
+      state.isRecording = true;
+      els.voiceBtn.classList.add('mw-chat-input__btn--recording');
+      els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B\u4E2D'); // 音声入力中
+      preExistingText = els.textarea ? els.textarea.value : '';
+    });
+
+    recognition.addEventListener('result', function (e) {
+      var interim = '';
+      var final = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        var transcript = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          final += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+      if (els.textarea) {
+        els.textarea.value = preExistingText + final + interim;
+        autoResize(els.textarea);
+      }
+    });
+
+    recognition.addEventListener('end', function () {
+      state.isRecording = false;
+      els.voiceBtn.classList.remove('mw-chat-input__btn--recording');
+      els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B'); // 音声入力
+      // Focus textarea so user can review/edit and send
+      if (els.textarea && els.textarea.value.trim()) {
+        els.textarea.focus();
+      }
+    });
+
+    recognition.addEventListener('error', function (e) {
+      state.isRecording = false;
+      els.voiceBtn.classList.remove('mw-chat-input__btn--recording');
+      els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B'); // 音声入力
+      handleVoiceError(e.error);
+    });
+  }
+
+  /** 録音の開始/停止を切り替える */
+  function toggleVoice() {
+    if (!recognition) return;
+
+    if (state.isRecording) {
+      recognition.stop();
+    } else {
+      if (state.isLoading) return;
+      try {
+        recognition.start();
+      } catch (e) {
+        // DOMException if already started — safe to ignore
+      }
+    }
+  }
+
+  /**
+   * 音声認識エラーをユーザーに通知する
+   * @param {string} errorType — SpeechRecognitionErrorEvent.error
+   */
+  function handleVoiceError(errorType) {
+    var messages = {
+      'not-allowed':    '\u30DE\u30A4\u30AF\u306E\u4F7F\u7528\u304C\u8A31\u53EF\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002\u30D6\u30E9\u30A6\u30B6\u306E\u8A2D\u5B9A\u304B\u3089\u30DE\u30A4\u30AF\u3092\u8A31\u53EF\u3057\u3066\u304F\u3060\u3055\u3044\u3002',
+      // マイクの使用が許可されていません。ブラウザの設定からマイクを許可してください。
+      'no-speech':      '\u97F3\u58F0\u304C\u691C\u51FA\u3055\u308C\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u3082\u3046\u4E00\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002',
+      // 音声が検出されませんでした。もう一度お試しください。
+      'network':        '\u97F3\u58F0\u8A8D\u8B58\u306E\u901A\u4FE1\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002',
+      // 音声認識の通信エラーが発生しました。
+      'audio-capture':  '\u30DE\u30A4\u30AF\u304C\u898B\u3064\u304B\u308A\u307E\u305B\u3093\u3002\u30DE\u30A4\u30AF\u304C\u63A5\u7D9A\u3055\u308C\u3066\u3044\u308B\u304B\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002',
+      // マイクが見つかりません。マイクが接続されているか確認してください。
+      'aborted':        null  // User-initiated abort — no message needed
+    };
+
+    var msg = messages[errorType];
+    if (msg === null) return;
+    if (msg === undefined) {
+      msg = '\u97F3\u58F0\u5165\u529B\u3067\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002';
+      // 音声入力でエラーが発生しました。
+    }
+    setError(msg);
+  }
+
+  /* ============================
      Event Binding
      ============================ */
   function bindEvents() {
@@ -457,10 +574,10 @@
       sendMessage();
     });
 
-    // Voice button (placeholder)
-    if (els.voiceBtn) {
+    // Voice button — toggle recording
+    if (els.voiceBtn && recognition) {
       els.voiceBtn.addEventListener('click', function () {
-        // TODO: implement voice input in a future phase
+        toggleVoice();
       });
     }
 
@@ -520,6 +637,7 @@
 
     if (!els.fab || !els.messages || !els.textarea) return;
 
+    initVoice();
     bindEvents();
   }
 

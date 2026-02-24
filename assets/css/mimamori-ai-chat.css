@@ -16,6 +16,7 @@
   --mw-text-ter: #718096;
   --mw-border: #e8eaed;
   --mw-border-md: #d1d5db;
+  --mw-danger: #e74c3c;
   --mw-shadow-float: 0 4px 12px rgba(0,0,0,0.12);
   --mw-shadow-modal: 0 8px 32px rgba(0,0,0,0.16);
 
@@ -596,6 +597,20 @@
   color: var(--mw-text-sub);
 }
 .mw-chat-input__btn--voice:hover { background: var(--mw-bg-ter); }
+
+/* Voice button: recording state */
+.mw-chat-input__btn--recording {
+  background: var(--mw-danger);
+  color: #fff;
+  animation: mw-chat-voice-pulse 1.5s ease-in-out infinite;
+}
+.mw-chat-input__btn--recording:hover {
+  background: #c0392b;
+}
+@keyframes mw-chat-voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(231, 76, 60, 0); }
+}
 
 .mw-chat-input__btn--send {
   background: var(--mw-primary);
