@@ -1,0 +1,109 @@
+.login * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+.login body {
+  font-family: 'Noto Sans JP', 'Zen Kaku Gothic New', 'Hiragino Sans', Meiryo, sans-serif;
+  background: #F7F8F9;
+  color: #333333;
+  line-height: 1.75;
+}
+.login .login-container {
+  max-width: 420px;
+  margin: 80px auto;
+  padding: 40px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+.login .logo {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.login .logo img {
+  max-width: 160px;
+}
+.login h1 {
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 30px;
+  color: #2C3E40;
+}
+.login fieldset {
+  border: none !important;
+}
+.login legend {
+  display: none;
+}
+.login .div_text {
+  margin-bottom: 20px;
+}
+.login label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #555555;
+}
+.login input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #D0D5DA;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: border-color 0.2s;
+}
+.login input:focus {
+  outline: none;
+  border-color: #3D6B6E;
+  box-shadow: 0 0 0 3px rgba(61, 107, 110, 0.10);
+}
+.login .button_div {
+  margin-top: 20px;
+}
+.login .button_div input#rememberme {
+  width: initial;
+}
+.login .button_div label {
+  display: inline;
+}
+.login .buttons {
+  margin-top: 20px;
+  margin-bottom: 20px;
+  width: 100%;
+  padding: 14px;
+  background: #3D6B6E;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.login .buttons:hover {
+  background: #346062;
+}
+.login .link-text {
+  text-align: center;
+  font-size: 14px;
+}
+.login .link-text a {
+  color: #3D6B6E;
+  text-decoration: none;
+  font-weight: 500;
+}
+.login .link-text a:hover {
+  text-decoration: underline;
+}
+.login .security-note {
+  margin-top: 30px;
+  padding: 16px;
+  background: #F7F8F9;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #888888;
+  text-align: center;
+}

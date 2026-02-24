@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レポート比較 - GCREV INSIGHT</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: #f5f7fa;
+      color: #333;
+    }
+    .wrapper { display: flex; min-height: 100vh; }
+
+    /* サイドバー */
+    .sidebar {
+      width: 260px; background: #1e293b; color: #fff;
+      position: fixed; top: 0; bottom: 0; left: 0; overflow-y: auto; z-index: 100;
+      transition: transform 0.3s;
+    }
+    .sidebar-header {
+      padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 20px; font-weight: 700; letter-spacing: 0.5px;
+    }
+    .nav-section { padding: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .nav-section-title {
+      padding: 0 20px 8px; font-size: 11px; text-transform: uppercase;
+      color: #94a3b8; letter-spacing: 0.5px; font-weight: 600;
+    }
+    .nav-link {
+      display: flex; align-items: center; padding: 10px 20px;
+      color: #cbd5e1; text-decoration: none; transition: all 0.2s;
+      font-size: 14px;
+    }
+    .nav-link:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .nav-link.active {
+      background: rgba(59,130,246,0.1); color: #60a5fa;
+      border-left: 3px solid #3b82f6;
+    }
+    .nav-link .icon { margin-right: 10px; font-size: 16px; }
+
+    /* トップバー */
+    .main-wrapper { margin-left: 260px; flex: 1; display: flex; flex-direction: column; }
+    .topbar {
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .hamburger { display: none; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #6b7280; }
+    .breadcrumb a { color: #3b82f6; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    /* メインコンテンツ */
+    .main-content { flex: 1; padding: 32px; max-width: 1400px; }
+    .page-header {
+      margin-bottom: 24px;
+    }
+    .page-title { font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
+    .page-desc { color: #6b7280; font-size: 14px; }
+
+    /* 比較選択エリア */
+    .compare-selector {
+      background: #fff; border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;
+    }
+    .selector-title { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 16px; }
+    .selector-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px; margin-bottom: 20px;
+    }
+    .selector-item { display: flex; flex-direction: column; gap: 6px; }
+    .selector-label { font-size: 12px; color: #6b7280; font-weight: 600; }
+    .selector-input {
+      padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: 14px;
+    }
+    .btn {
+      padding: 10px 20px; border-radius: 8px; font-size: 14px;
+      font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+      justify-content: center;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: #fff;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+
+    /* 比較結果エリア */
+    .compare-result { display: none; }
+    .compare-result.active { display: block; }
+
+    /* 比較ヘッダー */
+    .compare-header {
+      background: #fff; border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;
+    }
+    .compare-period {
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 16px; background: #f9fafb; border-radius: 8px;
+    }
+    .period-label { font-size: 12px; color: #6b7280; font-weight: 600; }
+    .period-value { font-size: 20px; color: #1e293b; font-weight: 700; }
+    .period-meta { font-size: 13px; color: #6b7280; }
+
+    /* 比較グリッド */
+    .compare-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px; margin-bottom: 24px;
+    }
+    .compare-card {
+      background: #fff; border-radius: 12px; padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .compare-metric { font-size: 13px; color: #6b7280; font-weight: 600; margin-bottom: 12px; }
+    .compare-values {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px;
+    }
+    .compare-value {
+      display: flex; flex-direction: column; gap: 4px;
+      flex: 1; text-align: center;
+    }
+    .value-label { font-size: 11px; color: #9ca3af; }
+    .value-number { font-size: 24px; font-weight: 700; color: #1e293b; }
+    .compare-diff {
+      padding: 8px 12px; background: #f3f4f6; border-radius: 6px;
+      text-align: center; font-size: 13px; font-weight: 600;
+    }
+    .diff-positive { color: #059669; background: #d1fae5; }
+    .diff-negative { color: #dc2626; background: #fee2e2; }
+    .diff-neutral { color: #6b7280; background: #f3f4f6; }
+
+    /* 総評比較 */
+    .compare-summary {
+      background: #fff; border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;
+    }
+    .summary-title { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 16px; }
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px;
+    }
+    .summary-item {
+      padding: 16px; background: #f9fafb; border-radius: 8px;
+    }
+    .summary-label {
+      font-size: 13px; color: #6b7280; font-weight: 600; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .summary-content { font-size: 14px; line-height: 1.7; color: #374151; }
+
+    /* 詳細比較テーブル */
+    .compare-table-wrapper {
+      background: #fff; border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow-x: auto;
+    }
+    .table-title { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 16px; }
+    .compare-table {
+      width: 100%; border-collapse: collapse; font-size: 14px;
+    }
+    .compare-table th {
+      background: #f9fafb; padding: 12px 16px; text-align: left;
+      font-weight: 600; color: #374151; border-bottom: 2px solid #e5e7eb;
+    }
+    .compare-table td {
+      padding: 12px 16px; border-bottom: 1px solid #e5e7eb;
+    }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-table tr:hover { background: #f9fafb; }
+
+    /* モバイル */
+    @media (max-width: 1024px) {
+      .main-wrapper { margin-left: 0; }
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.active { transform: translateX(0); }
+      .hamburger { display: block; }
+      .overlay {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90;
+      }
+      .overlay.active { display: block; }
+    }
+    @media (max-width: 768px) {
+      .main-content { padding: 20px; }
+      .selector-grid { grid-template-columns: 1fr; }
+      .compare-header { grid-template-columns: 1fr; }
+      .summary-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- サイドバー -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">GCREV INSIGHT</div>
+      <nav>
+        <!-- ダッシュボード -->
+        <div class="nav-section">
+          <div class="nav-section-title">ダッシュボード</div>
+          <a href="gcrev-insight-v2-dashboard.html" class="nav-link"><span class="icon">📊</span>総合ダッシュボード</a>
+        </div>
+
+        <!-- 分析 -->
+        <div class="nav-section">
+          <div class="nav-section-title">分析</div>
+          <a href="gcrev-insight-v2-analysis.html" class="nav-link"><span class="icon">📈</span>分析（トップ）</a>
+          <a href="gcrev-insight-v2-keywords.html" class="nav-link"><span class="icon">🔍</span>キーワード</a>
+          <a href="gcrev-insight-v2-pages.html" class="nav-link"><span class="icon">📄</span>ページ</a>
+        </div>
+
+        <!-- AIレポート -->
+        <div class="nav-section">
+          <div class="nav-section-title">AIレポート</div>
+          <a href="gcrev-insight-v2-ai-report-latest.html" class="nav-link"><span class="icon">📰</span>最新月次レポート</a>
+          <a href="gcrev-insight-v2-ai-report-list.html" class="nav-link"><span class="icon">📚</span>月別レポート一覧</a>
+          <a href="gcrev-insight-v2-ai-report-compare.html" class="nav-link active"><span class="icon">🔀</span>レポート比較</a>
+        </div>
+
+        <!-- AI支援 -->
+        <div class="nav-section">
+          <div class="nav-section-title">AI支援 / 改善提案</div>
+          <a href="gcrev-insight-v2-ai-report-settings.html" class="nav-link"><span class="icon">⚙️</span>AIレポート設定</a>
+          <a href="#" class="nav-link"><span class="icon">🎯</span>優先施策ランキング</a>
+          <a href="#" class="nav-link"><span class="icon">💡</span>コンテンツ企画AI</a>
+        </div>
+
+        <!-- アカウント -->
+        <div class="nav-section">
+          <div class="nav-section-title">アカウント</div>
+          <a href="#" class="nav-link"><span class="icon">👤</span>プラン確認</a>
+          <a href="#" class="nav-link"><span class="icon">⚙️</span>設定</a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- メインコンテンツ -->
+    <div class="main-wrapper">
+      <div class="topbar">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div class="breadcrumb">
+          <a href="gcrev-insight-v2-dashboard.html">ホーム</a>
+          <span>›</span>
+          <span>AIレポート</span>
+          <span>›</span>
+          <span>レポート比較</span>
+        </div>
+      </div>
+
+      <main class="main-content">
+        <div class="page-header">
+          <h1 class="page-title">🔀 レポート比較</h1>
+          <p class="page-desc">2つの月次レポートを比較して、成長傾向や改善ポイントを確認できます</p>
+        </div>
+
+        <!-- 比較選択エリア -->
+        <div class="compare-selector">
+          <div class="selector-title">📅 比較するレポートを選択</div>
+          <div class="selector-grid">
+            <div class="selector-item">
+              <label class="selector-label">比較元（A）</label>
+              <select class="selector-input" id="reportA">
+                <option value="">選択してください</option>
+                <option value="2026-01" selected>2026年1月</option>
+                <option value="2025-12">2025年12月</option>
+                <option value="2025-11">2025年11月</option>
+                <option value="2025-10">2025年10月</option>
+                <option value="2025-09">2025年9月</option>
+              </select>
+            </div>
+            <div class="selector-item">
+              <label class="selector-label">比較先（B）</label>
+              <select class="selector-input" id="reportB">
+                <option value="">選択してください</option>
+                <option value="2026-01">2026年1月</option>
+                <option value="2025-12" selected>2025年12月</option>
+                <option value="2025-11">2025年11月</option>
+                <option value="2025-10">2025年10月</option>
+                <option value="2025-09">2025年9月</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="compareBtn">🔍 比較を実行</button>
+        </div>
+
+        <!-- 比較結果エリア -->
+        <div class="compare-result active" id="compareResult">
+          <!-- 比較ヘッダー -->
+          <div class="compare-header">
+            <div class="compare-period">
+              <span class="period-label">📊 比較元（A）</span>
+              <span class="period-value">2026年1月</span>
+              <span class="period-meta">生成日：2026年2月3日 / 総合評価：72点</span>
+            </div>
+            <div class="compare-period">
+              <span class="period-label">📊 比較先（B）</span>
+              <span class="period-value">2025年12月</span>
+              <span class="period-meta">生成日：2026年1月5日 / 総合評価：65点</span>
+            </div>
+          </div>
+
+          <!-- 主要KPI比較 -->
+          <div class="compare-grid">
+            <!-- PV -->
+            <div class="compare-card">
+              <div class="compare-metric">📈 ページビュー（PV）</div>
+              <div class="compare-values">
+                <div class="compare-value">
+                  <span class="value-label">A（1月）</span>
+                  <span class="value-number">8,389</span>
+                </div>
+                <div style="width: 2px; background: #e5e7eb;"></div>
+                <div class="compare-value">
+                  <span class="value-label">B（12月）</span>
+                  <span class="value-number">7,120</span>
+                </div>
+              </div>
+              <div class="compare-diff diff-positive">↑ 1,269 (+17.8%)</div>
+            </div>
+
+            <!-- セッション -->
+            <div class="compare-card">
+              <div class="compare-metric">🎯 セッション数</div>
+              <div class="compare-values">
+                <div class="compare-value">
+                  <span class="value-label">A（1月）</span>
+                  <span class="value-number">3,986</span>
+                </div>
+                <div style="width: 2px; background: #e5e7eb;"></div>
+                <div class="compare-value">
+                  <span class="value-label">B（12月）</span>
+                  <span class="value-number">3,368</span>
+                </div>
+              </div>
+              <div class="compare-diff diff-positive">↑ 618 (+18.4%)</div>
+            </div>
+
+            <!-- ユーザー -->
+            <div class="compare-card">
+              <div class="compare-metric">👥 ユーザー数</div>
+              <div class="compare-values">
+                <div class="compare-value">
+                  <span class="value-label">A（1月）</span>
+                  <span class="value-number">3,502</span>
+                </div>
+                <div style="width: 2px; background: #e5e7eb;"></div>
+                <div class="compare-value">
+                  <span class="value-label">B（12月）</span>
+                  <span class="value-number">3,120</span>
+                </div>
+              </div>
+              <div class="compare-diff diff-positive">↑ 382 (+12.2%)</div>
+            </div>
+
+            <!-- 新規ユーザー -->
+            <div class="compare-card">
+              <div class="compare-metric">✨ 新規ユーザー</div>
+              <div class="compare-values">
+                <div class="compare-value">
+                  <span class="value-label">A（1月）</span>
+                  <span class="value-number">2,681</span>
+                </div>
+                <div style="width: 2px; background: #e5e7eb;"></div>
+                <div class="compare-value">
+                  <span class="value-label">B（12月）</span>
+                  <span class="value-number">2,468</span>
+                </div>
+              </div>
+              <div class="compare-diff diff-positive">↑ 213 (+8.6%)</div>
+            </div>
+
+            <!-- リピーター -->
+            <div class="compare-card">
+              <div class="compare-metric">🔁 リピーター</div>
+              <div class="compare-values">
+                <div class="compare-value">
+                  <span class="value-label">A（1月）</span>
+                  <span class="value-number">821</span>
+                </div>
+                <div style="width: 2px; background: #e5e7eb;"></div>
+                <div class="compare-value">
+                  <span class="value-label">B（12月）</span>
+                  <span class="value-number">652</span>
+                </div>
+              </div>
+              <div class="compare-diff diff-positive">↑ 169 (+25.9%)</div>
+            </div>
+
+            <!-- 平均滞在時間 -->
+            <div class="compare-card">
+              <div class="compare-metric">⏱️ 平均滞在時間</div>
+              <div class="compare-values">
+                <div class="compare-value">
+                  <span class="value-label">A（1月）</span>
+                  <span class="value-number">43秒</span>
+                </div>
+                <div style="width: 2px; background: #e5e7eb;"></div>
+                <div class="compare-value">
+                  <span class="value-label">B（12月）</span>
+                  <span class="value-number">47秒</span>
+                </div>
+              </div>
+              <div class="compare-diff diff-negative">↓ 4秒 (-8.5%)</div>
+            </div>
+          </div>
+
+          <!-- 総評比較 -->
+          <div class="compare-summary">
+            <div class="summary-title">📋 総評の比較</div>
+            <div class="summary-grid">
+              <div class="summary-item">
+                <div class="summary-label">📊 A（2026年1月）の総評</div>
+                <div class="summary-content">
+                  年始の新規流入効果により、セッション数が前月比+18.4%と大幅に伸長。特に検索流入（Organic Search）が+22%と好調。一方で平均滞在時間が減少し、コンテンツの質的改善が課題。
+                </div>
+              </div>
+              <div class="summary-item">
+                <div class="summary-label">📊 B（2025年12月）の総評</div>
+                <div class="summary-content">
+                  年末商戦期の流入増加が見られたものの、セッション数は前月比+5.2%にとどまる。直帰率が高く、コンテンツの改善とモバイル最適化が必要。リピーター率の低下も課題。
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 詳細比較テーブル -->
+          <div class="compare-table-wrapper">
+            <div class="table-title">📊 詳細指標の比較</div>
+            <table class="compare-table">
+              <thead>
+                <tr>
+                  <th>指標</th>
+                  <th>A（2026年1月）</th>
+                  <th>B（2025年12月）</th>
+                  <th>差分</th>
+                  <th>変化率</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>ページビュー（PV）</td>
+                  <td>8,389</td>
+                  <td>7,120</td>
+                  <td style="color: #059669; font-weight: 600;">+1,269</td>
+                  <td style="color: #059669; font-weight: 600;">+17.8%</td>
+                </tr>
+                <tr>
+                  <td>セッション数</td>
+                  <td>3,986</td>
+                  <td>3,368</td>
+                  <td style="color: #059669; font-weight: 600;">+618</td>
+                  <td style="color: #059669; font-weight: 600;">+18.4%</td>
+                </tr>
+                <tr>
+                  <td>ユーザー数</td>
+                  <td>3,502</td>
+                  <td>3,120</td>
+                  <td style="color: #059669; font-weight: 600;">+382</td>
+                  <td style="color: #059669; font-weight: 600;">+12.2%</td>
+                </tr>
+                <tr>
+                  <td>新規ユーザー</td>
+                  <td>2,681</td>
+                  <td>2,468</td>
+                  <td style="color: #059669; font-weight: 600;">+213</td>
+                  <td style="color: #059669; font-weight: 600;">+8.6%</td>
+                </tr>
+                <tr>
+                  <td>リピーター</td>
+                  <td>821</td>
+                  <td>652</td>
+                  <td style="color: #059669; font-weight: 600;">+169</td>
+                  <td style="color: #059669; font-weight: 600;">+25.9%</td>
+                </tr>
+                <tr>
+                  <td>平均滞在時間</td>
+                  <td>43秒</td>
+                  <td>47秒</td>
+                  <td style="color: #dc2626; font-weight: 600;">-4秒</td>
+                  <td style="color: #dc2626; font-weight: 600;">-8.5%</td>
+                </tr>
+                <tr>
+                  <td>直帰率</td>
+                  <td>62.0%</td>
+                  <td>64.5%</td>
+                  <td style="color: #059669; font-weight: 600;">-2.5pt</td>
+                  <td style="color: #059669; font-weight: 600;">改善</td>
+                </tr>
+                <tr>
+                  <td>コンバージョン率</td>
+                  <td>2.8%</td>
+                  <td>2.6%</td>
+                  <td style="color: #059669; font-weight: 600;">+0.2pt</td>
+                  <td style="color: #059669; font-weight: 600;">+7.7%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    hamburger?.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+      overlay.classList.toggle('active');
+    });
+
+    overlay?.addEventListener('click', () => {
+      sidebar.classList.remove('active');
+      overlay.classList.remove('active');
+    });
+
+    document.getElementById('compareBtn')?.addEventListener('click', () => {
+      const reportA = document.getElementById('reportA').value;
+      const reportB = document.getElementById('reportB').value;
+      
+      if (!reportA || !reportB) {
+        alert('比較するレポートを両方選択してください');
+        return;
+      }
+      
+      if (reportA === reportB) {
+        alert('異なるレポートを選択してください');
+        return;
+      }
+      
+      document.getElementById('compareResult').classList.add('active');
+    });
+  </script>
+</body>
+</html>

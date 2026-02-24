@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お申込み - GCREV INSIGHT</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; }
+    
+    .wrapper { display: flex; min-height: 100vh; }
+    
+    /* サイドバー */
+    .sidebar {
+      width: 260px; background: #1e293b; color: #fff;
+      position: fixed; top: 0; left: 0; height: 100vh;
+      overflow-y: auto; z-index: 100; transition: transform 0.3s;
+    }
+    .sidebar-header {
+      padding: 24px 20px; font-size: 20px; font-weight: 700;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .nav-section { padding: 16px 0; }
+    .nav-section-title {
+      padding: 8px 20px; font-size: 11px; text-transform: uppercase;
+      color: #94a3b8; font-weight: 600; letter-spacing: 0.5px;
+    }
+    .nav-item {
+      padding: 10px 20px; color: #cbd5e1; cursor: pointer;
+      transition: all 0.2s; display: flex; align-items: center;
+      font-size: 14px; text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .nav-item.active { background: #3b82f6; color: #fff; }
+    
+    /* メインコンテンツ */
+    .main-wrapper { margin-left: 260px; flex: 1; }
+    .topbar {
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: 16px 32px; display: flex; align-items: center;
+      justify-content: space-between; position: sticky; top: 0; z-index: 50;
+    }
+    .hamburger {
+      display: none; background: none; border: none;
+      font-size: 24px; cursor: pointer; color: #1e293b;
+    }
+    .main-content { padding: 32px; }
+    
+    .page-header { margin-bottom: 24px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1e293b; }
+    
+    /* パンくずリスト */
+    .breadcrumb {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; color: #6b7280; margin-bottom: 20px;
+    }
+    .breadcrumb a { color: #3b82f6; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    
+    /* 既存カードスタイル */
+    .summary-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-left: 4px solid #3b82f6;
+    }
+    .summary-card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .summary-card-content {
+      font-size: 14px;
+      color: #4b5563;
+      line-height: 1.6;
+    }
+    
+    /* 申込ページ専用スタイル */
+    .content-area {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    /* ヒーロー */
+    .signup-hero {
+      text-align: center;
+      margin-bottom: 48px;
+      padding: 40px 32px;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      border-radius: 16px;
+      color: #fff;
+    }
+    .signup-hero-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+    .signup-hero-subtitle {
+      font-size: 16px;
+      color: rgba(255,255,255,0.9);
+      line-height: 1.6;
+    }
+    
+    /* プラン選択 */
+    .signup-plans {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+    .signup-plan-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 3px solid #e5e7eb;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .signup-plan-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .signup-plan-card.selected {
+      border-color: #3b82f6;
+      background: #f0f9ff;
+    }
+    .signup-plan-badge {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: #3b82f6;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+    .signup-plan-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 16px;
+    }
+    .signup-plan-price {
+      font-size: 36px;
+      font-weight: 700;
+      color: #3b82f6;
+      margin-bottom: 8px;
+      line-height: 1;
+    }
+    .signup-plan-unit {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+    .signup-plan-detail {
+      font-size: 14px;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+    .signup-plan-checkmark {
+      display: none;
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      width: 24px;
+      height: 24px;
+      background: #3b82f6;
+      border-radius: 50%;
+      color: #fff;
+      text-align: center;
+      line-height: 24px;
+      font-weight: 700;
+    }
+    .signup-plan-card.selected .signup-plan-checkmark {
+      display: block;
+    }
+    
+    /* セクション */
+    .signup-section {
+      margin-bottom: 48px;
+    }
+    .signup-section-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    
+    /* 重要事項 */
+    .signup-terms-box {
+      background: #f9fafb;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 48px;
+    }
+    .signup-terms-list {
+      list-style: none;
+      padding: 0;
+    }
+    .signup-terms-list li {
+      padding: 12px 0;
+      padding-left: 28px;
+      position: relative;
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.8;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .signup-terms-list li:last-child {
+      border-bottom: none;
+    }
+    .signup-terms-list li:before {
+      content: "●";
+      position: absolute;
+      left: 8px;
+      color: #3b82f6;
+      font-weight: bold;
+    }
+    .signup-terms-list strong {
+      color: #1e293b;
+      font-weight: 600;
+    }
+    
+    /* 同意チェック */
+    .signup-consent-box {
+      background: #fff;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 32px;
+    }
+    .signup-consent-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .signup-consent-item:last-child {
+      border-bottom: none;
+    }
+    .signup-consent-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .signup-consent-label {
+      font-size: 15px;
+      color: #1e293b;
+      font-weight: 500;
+      cursor: pointer;
+      flex: 1;
+    }
+    .signup-consent-label a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    .signup-consent-label a:hover {
+      text-decoration: underline;
+    }
+    
+    /* フォーム */
+    .signup-form {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 32px;
+    }
+    .signup-form-group {
+      margin-bottom: 24px;
+    }
+    .signup-form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+    .signup-form-label .required {
+      color: #ef4444;
+      margin-left: 4px;
+    }
+    .signup-form-input {
+      width: 100%;
+      padding: 12px 16px;
+      font-size: 15px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .signup-form-input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .signup-form-display {
+      padding: 12px 16px;
+      background: #f9fafb;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 15px;
+      color: #1e293b;
+      font-weight: 600;
+    }
+    
+    /* CTA */
+    .signup-cta-box {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .signup-cta-warning {
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 14px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .signup-cta-warning.show {
+      display: block;
+    }
+    .signup-cta-button {
+      background: #3b82f6;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      padding: 18px 48px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    .signup-cta-button:hover:not(:disabled) {
+      background: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+    }
+    .signup-cta-button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .signup-cta-note {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 12px;
+    }
+    
+    /* フッターリンク */
+    .signup-footer {
+      text-align: center;
+      padding: 24px 0;
+      border-top: 1px solid #e5e7eb;
+    }
+    .signup-footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .signup-footer-link {
+      color: #6b7280;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .signup-footer-link:hover {
+      color: #3b82f6;
+      text-decoration: underline;
+    }
+    
+    /* レスポンシブ */
+    @media (max-width: 1024px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.active { transform: translateX(0); }
+      .main-wrapper { margin-left: 0; }
+      .hamburger { display: block; }
+    }
+    
+    @media (max-width: 768px) {
+      .main-content { padding: 20px; }
+      .signup-plans { grid-template-columns: 1fr; }
+      .signup-hero { padding: 32px 24px; }
+      .signup-hero-title { font-size: 24px; }
+      .signup-form { padding: 24px; }
+      .signup-cta-button { width: 100%; }
+    }
+    
+    /* オーバーレイ */
+    .overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 99;
+    }
+    .overlay.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- サイドバー -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">GCREV INSIGHT</div>
+      <nav>
+        <div class="nav-section">
+          <div class="nav-section-title">ダッシュボード</div>
+          <a href="#" class="nav-item">📊 総合ダッシュボード</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">WEBサイト分析</div>
+          <a href="#" class="nav-item">📈 アクセス解析</a>
+          <a href="#" class="nav-item">📍 地域別分析</a>
+          <a href="#" class="nav-item">💻 流入元分析</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">成果分析</div>
+          <a href="#" class="nav-item">🎯 CV分析</a>
+          <a href="#" class="nav-item">📞 コンバージョン経路</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">お申込み</div>
+          <a href="#" class="nav-item active">📝 お申込み</a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- メインコンテンツ -->
+    <div class="main-wrapper">
+      <div class="topbar">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div></div>
+      </div>
+      
+      <main class="main-content">
+        <!-- パンくずリスト -->
+        <div class="breadcrumb">
+          <a href="#">ホーム</a>
+          <span>›</span>
+          <span>お申込み</span>
+        </div>
+
+        <!-- ページヘッダー -->
+        <div class="page-header">
+          <h1 class="page-title">お申込み</h1>
+        </div>
+
+        <!-- コンテンツエリア -->
+        <div class="content-area">
+          
+          <!-- 1) ヒーロー -->
+          <div class="signup-hero">
+            <h2 class="signup-hero-title">お申込み<br>ジィクレブインサイト伴走サービス</h2>
+            <p class="signup-hero-subtitle">Webを「作って終わり」にしないための伴走型サービスです。</p>
+          </div>
+
+          <!-- 2) プラン選択 -->
+          <section class="signup-section">
+            <h3 class="signup-section-title">プランを選択してください</h3>
+            <div class="signup-plans">
+              <!-- 2年プラン -->
+              <div class="signup-plan-card" data-plan="2year" data-plan-name="2年プラン" data-price="528,000">
+                <span class="signup-plan-badge">おすすめ</span>
+                <div class="signup-plan-checkmark">✓</div>
+                <div class="signup-plan-name">2年プラン</div>
+                <div class="signup-plan-price">528,000<span style="font-size: 20px;">円</span></div>
+                <div class="signup-plan-unit">（税込）</div>
+                <div class="signup-plan-detail">
+                  月額 22,000円（税込）×24回<br>
+                  クレジットカード分割払い
+                </div>
+              </div>
+
+              <!-- 1年プラン -->
+              <div class="signup-plan-card" data-plan="1year" data-plan-name="1年プラン" data-price="264,000">
+                <div class="signup-plan-checkmark">✓</div>
+                <div class="signup-plan-name">1年プラン</div>
+                <div class="signup-plan-price">264,000<span style="font-size: 20px;">円</span></div>
+                <div class="signup-plan-unit">（税込）</div>
+                <div class="signup-plan-detail">
+                  月額 22,000円（税込）×12回<br>
+                  クレジットカード分割払い
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 3) 重要事項 -->
+          <section class="signup-section">
+            <h3 class="signup-section-title">重要事項のご確認</h3>
+            <div class="signup-terms-box">
+              <ul class="signup-terms-list">
+                <li>
+                  <strong>最低契約期間</strong>：選択されたプラン期間（1年または2年）が最低契約期間となります。
+                </li>
+                <li>
+                  <strong>途中解約</strong>：契約期間中の途中解約は原則不可。やむを得ない事情による解約の場合も、残期間分の料金をお支払いいただきます。
+                </li>
+                <li>
+                  <strong>契約満了後</strong>：契約満了後は月額22,000円（税込）の月次サブスクリプションへ自動移行。期間の定めはなく、前月末までの通知で解約可能です。
+                </li>
+                <li>
+                  <strong>制作物の著作権</strong>：制作物の著作権は株式会社ジィクレブに帰属し、お客様には利用許諾を付与します。著作権の買い取りは任意で可能です（2年プラン：30万円、1年プラン：55万円）。
+                </li>
+                <li>
+                  <strong>WordPressの編集権限</strong>：お客様には編集者権限のみを付与します。プラグインの追加やテーマファイルの改変は禁止されています。
+                </li>
+                <li>
+                  <strong>成果保証について</strong>：本サービスは成果保証型ではありません。最善の施策をご提案しますが、結果を保証するものではありません。
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- 4) 同意チェック -->
+          <section class="signup-section">
+            <h3 class="signup-section-title">同意事項</h3>
+            <div class="signup-consent-box">
+              <div class="signup-consent-item">
+                <input type="checkbox" id="consent-terms" class="signup-consent-checkbox consent-checkbox">
+                <label for="consent-terms" class="signup-consent-label">
+                  上記の重要事項に同意します <span style="color: #ef4444;">(必須)</span>
+                </label>
+              </div>
+              <div class="signup-consent-item">
+                <input type="checkbox" id="consent-policy" class="signup-consent-checkbox consent-checkbox">
+                <label for="consent-policy" class="signup-consent-label">
+                  <a href="https://example.com/terms" target="_blank">利用規約</a>に同意します <span style="color: #ef4444;">(必須)</span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <!-- 5) 申込フォーム -->
+          <section class="signup-section">
+            <h3 class="signup-section-title">お申込み情報</h3>
+            <div class="signup-form">
+              <div class="signup-form-group">
+                <label class="signup-form-label">
+                  会社名 <span class="required">*</span>
+                </label>
+                <input type="text" class="signup-form-input" placeholder="例：株式会社サンプル" required>
+              </div>
+
+              <div class="signup-form-group">
+                <label class="signup-form-label">
+                  担当者名 <span class="required">*</span>
+                </label>
+                <input type="text" class="signup-form-input" placeholder="例：山田 太郎" required>
+              </div>
+
+              <div class="signup-form-group">
+                <label class="signup-form-label">
+                  メールアドレス <span class="required">*</span>
+                </label>
+                <input type="email" class="signup-form-input" placeholder="例：info@example.com" required>
+              </div>
+
+              <div class="signup-form-group">
+                <label class="signup-form-label">
+                  電話番号
+                </label>
+                <input type="tel" class="signup-form-input" placeholder="例：03-1234-5678">
+              </div>
+
+              <div class="signup-form-group">
+                <label class="signup-form-label">
+                  選択中のプラン
+                </label>
+                <div class="signup-form-display" id="selected-plan-display">プランを選択してください</div>
+                <input type="hidden" id="selected-plan" name="plan">
+                <input type="hidden" name="terms-version" value="v1.0">
+              </div>
+            </div>
+          </section>
+
+          <!-- 6) CTA -->
+          <section class="signup-cta-box">
+            <div class="signup-cta-warning" id="consent-warning">
+              ⚠️ すべての同意事項にチェックを入れてください
+            </div>
+            <button class="signup-cta-button" id="cta-button" disabled>
+              決済へ進む（安全な決済ページへ）
+            </button>
+            <p class="signup-cta-note">
+              ボタンを押すと、安全な決済ページ（UnivaPay）へ移動します
+            </p>
+          </section>
+
+          <!-- 7) フッターリンク -->
+          <footer class="signup-footer">
+            <div class="signup-footer-links">
+              <a href="https://example.com/tokusho" target="_blank" class="signup-footer-link">特定商取引法に基づく表記</a>
+              <a href="https://example.com/privacy" target="_blank" class="signup-footer-link">プライバシーポリシー</a>
+            </div>
+          </footer>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- オーバーレイ -->
+  <div class="overlay" id="overlay"></div>
+
+  <script>
+    // ハンバーガーメニュー
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+      overlay.classList.toggle('active');
+    });
+
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('active');
+      overlay.classList.remove('active');
+    });
+
+    // プラン選択
+    const planCards = document.querySelectorAll('.signup-plan-card');
+    const selectedPlanDisplay = document.getElementById('selected-plan-display');
+    const selectedPlanInput = document.getElementById('selected-plan');
+    let selectedPlan = null;
+
+    planCards.forEach(card => {
+      card.addEventListener('click', () => {
+        // 全カードの選択解除
+        planCards.forEach(c => c.classList.remove('selected'));
+        // クリックされたカードを選択
+        card.classList.add('selected');
+        selectedPlan = card.dataset.plan;
+        
+        // 表示を更新
+        const planName = card.dataset.planName;
+        const price = card.dataset.price;
+        selectedPlanDisplay.textContent = `${planName}（総額 ${price}円・税込）`;
+        selectedPlanInput.value = selectedPlan;
+        
+        // 同意チェック状態を再確認
+        checkConsent();
+      });
+    });
+
+    // 同意チェック
+    const consentCheckboxes = document.querySelectorAll('.consent-checkbox');
+    const ctaButton = document.getElementById('cta-button');
+    const consentWarning = document.getElementById('consent-warning');
+
+    function checkConsent() {
+      const allChecked = Array.from(consentCheckboxes).every(cb => cb.checked);
+      const planSelected = selectedPlan !== null;
+      
+      if (allChecked && planSelected) {
+        ctaButton.disabled = false;
+        consentWarning.classList.remove('show');
+      } else {
+        ctaButton.disabled = true;
+        if (!allChecked) {
+          consentWarning.classList.add('show');
+        }
+      }
+    }
+
+    consentCheckboxes.forEach(cb => {
+      cb.addEventListener('change', checkConsent);
+    });
+
+    // CTA ボタンクリック
+    ctaButton.addEventListener('click', () => {
+      if (!ctaButton.disabled) {
+        // 実際の決済ページへ遷移（ダミーURL）
+        window.location.href = 'https://example.com/univapay';
+      }
+    });
+  </script>
+</body>
+</html>

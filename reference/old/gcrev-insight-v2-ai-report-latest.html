@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>最新月次レポート - GCREV INSIGHT</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: #f5f7fa;
+      color: #333;
+    }
+    .wrapper { display: flex; min-height: 100vh; }
+
+    /* サイドバー */
+    .sidebar {
+      width: 260px; background: #1e293b; color: #fff;
+      position: fixed; top: 0; bottom: 0; left: 0; overflow-y: auto; z-index: 100;
+      transition: transform 0.3s;
+    }
+    .sidebar-header {
+      padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 20px; font-weight: 700; letter-spacing: 0.5px;
+    }
+    .nav-section { padding: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .nav-section-title {
+      padding: 0 20px 8px; font-size: 11px; text-transform: uppercase;
+      color: #94a3b8; letter-spacing: 0.5px; font-weight: 600;
+    }
+    .nav-link {
+      display: flex; align-items: center; padding: 10px 20px;
+      color: #cbd5e1; text-decoration: none; transition: all 0.2s;
+      font-size: 14px;
+    }
+    .nav-link:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .nav-link.active {
+      background: rgba(59,130,246,0.1); color: #60a5fa;
+      border-left: 3px solid #3b82f6;
+    }
+    .nav-link .icon { margin-right: 10px; font-size: 16px; }
+    .nav-sub { padding-left: 36px; }
+
+    /* トップバー */
+    .main-wrapper { margin-left: 260px; flex: 1; display: flex; flex-direction: column; }
+    .topbar {
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .hamburger { display: none; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #6b7280; }
+    .breadcrumb a { color: #3b82f6; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    /* メインコンテンツ */
+    .main-content { flex: 1; padding: 32px; max-width: 1400px; }
+    .page-header {
+      margin-bottom: 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .page-title { font-size: 28px; font-weight: 700; color: #1e293b; }
+    .action-btns { display: flex; gap: 12px; }
+    .btn {
+      padding: 10px 20px; border-radius: 8px; font-size: 14px;
+      font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: #fff;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+    .btn-secondary {
+      background: #fff; color: #374151; border: 1px solid #d1d5db;
+    }
+    .btn-secondary:hover { background: #f9fafb; }
+
+    /* レポートメタ情報 */
+    .report-meta {
+      background: #fff; border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;
+    }
+    .meta-item { display: flex; flex-direction: column; gap: 4px; }
+    .meta-label { font-size: 12px; color: #6b7280; font-weight: 600; }
+    .meta-value { font-size: 18px; color: #1e293b; font-weight: 600; }
+    .status-badge {
+      display: inline-block; padding: 4px 12px; border-radius: 20px;
+      font-size: 12px; font-weight: 600;
+    }
+    .status-complete { background: #d1fae5; color: #065f46; }
+
+    /* レポートコンテンツ */
+    .report-content {
+      background: #fff; border-radius: 12px; padding: 40px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .report-section { margin-bottom: 40px; }
+    .report-section:last-child { margin-bottom: 0; }
+    .section-title {
+      font-size: 22px; font-weight: 700; color: #1e293b;
+      margin-bottom: 16px; padding-bottom: 12px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .section-content { line-height: 1.8; color: #374151; }
+    .highlight-box {
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border-left: 4px solid #3b82f6; padding: 20px;
+      border-radius: 8px; margin: 16px 0;
+    }
+    .highlight-box h4 {
+      font-size: 16px; font-weight: 700; color: #1e40af; margin-bottom: 8px;
+    }
+    .highlight-box p { color: #1e3a8a; line-height: 1.7; }
+    
+    .list-box ul { padding-left: 20px; }
+    .list-box li {
+      margin-bottom: 12px; line-height: 1.7;
+    }
+    .list-box li strong { color: #1e293b; }
+
+    .next-actions {
+      display: grid; gap: 16px;
+    }
+    .action-item {
+      background: #f9fafb; border-left: 4px solid #3b82f6;
+      padding: 16px; border-radius: 8px; display: flex; align-items: start; gap: 12px;
+    }
+    .action-priority {
+      background: #3b82f6; color: #fff; font-size: 12px; font-weight: 700;
+      padding: 4px 10px; border-radius: 20px; flex-shrink: 0;
+    }
+    .action-priority.high { background: #ef4444; }
+    .action-priority.medium { background: #f59e0b; }
+    .action-priority.low { background: #10b981; }
+    .action-text { flex: 1; line-height: 1.6; color: #374151; }
+
+    /* 分析期間 */
+    .period-info {
+      background: #fff; border-radius: 12px; padding: 20px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;
+      display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+    }
+    .period-item {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .period-label {
+      font-size: 13px; color: #6b7280; font-weight: 600;
+    }
+    .period-value {
+      font-size: 15px; color: #1e293b; font-weight: 600;
+    }
+    .period-divider {
+      width: 1px; height: 24px; background: #e5e7eb;
+    }
+
+    /* KPIサマリーカード */
+    .kpi-summary {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: #fff; border-radius: 12px; padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .kpi-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .kpi-label {
+      font-size: 13px; color: #6b7280; font-weight: 600;
+    }
+    .kpi-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .kpi-value {
+      font-size: 28px; font-weight: 700; color: #1e293b;
+    }
+    .kpi-change {
+      font-size: 13px; font-weight: 600; display: inline-flex;
+      align-items: center; gap: 4px;
+    }
+    .kpi-change.positive { color: #059669; }
+    .kpi-change.negative { color: #dc2626; }
+    .kpi-change.neutral { color: #6b7280; }
+    .sparkline {
+      height: 40px; margin-top: 8px;
+    }
+    .sparkline svg {
+      width: 100%; height: 100%;
+    }
+
+    /* 分析セクション */
+    .analysis-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px; margin-bottom: 24px;
+    }
+    .analysis-card {
+      background: #fff; border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .analysis-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .analysis-title {
+      font-size: 16px; font-weight: 700; color: #1e293b;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .analysis-link {
+      font-size: 13px; color: #3b82f6; text-decoration: none;
+      font-weight: 600;
+    }
+    .analysis-link:hover { text-decoration: underline; }
+    .analysis-content {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .data-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid #f3f4f6;
+    }
+    .data-row:last-child { border-bottom: none; }
+    .data-label {
+      font-size: 14px; color: #374151; display: flex;
+      align-items: center; gap: 8px;
+    }
+    .data-value {
+      font-size: 15px; font-weight: 600; color: #1e293b;
+    }
+    .data-bar {
+      width: 100%; height: 8px; background: #e5e7eb;
+      border-radius: 4px; overflow: hidden; margin-top: 4px;
+    }
+    .data-bar-fill {
+      height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      transition: width 0.3s;
+    }
+
+    /* モバイル */
+    @media (max-width: 1024px) {
+      .main-wrapper { margin-left: 0; }
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.active { transform: translateX(0); }
+      .hamburger { display: block; }
+      .overlay {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90;
+      }
+      .overlay.active { display: block; }
+    }
+    @media (max-width: 1200px) {
+      .kpi-summary { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 900px) {
+      .kpi-summary { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .main-content { padding: 20px; }
+      .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+      .action-btns { width: 100%; flex-direction: column; }
+      .btn { width: 100%; justify-content: center; }
+      .report-content { padding: 24px; }
+      .kpi-summary { grid-template-columns: 1fr; }
+      .period-info { flex-direction: column; align-items: flex-start; }
+      .period-divider { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- サイドバー -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">GCREV INSIGHT</div>
+      <nav>
+        <!-- ダッシュボード -->
+        <div class="nav-section">
+          <div class="nav-section-title">ダッシュボード</div>
+          <a href="gcrev-insight-v2-dashboard.html" class="nav-link"><span class="icon">📊</span>総合ダッシュボード</a>
+        </div>
+
+        <!-- 分析 -->
+        <div class="nav-section">
+          <div class="nav-section-title">分析</div>
+          <a href="gcrev-insight-v2-analysis.html" class="nav-link"><span class="icon">📈</span>分析（トップ）</a>
+          <a href="gcrev-insight-v2-keywords.html" class="nav-link"><span class="icon">🔍</span>キーワード</a>
+          <a href="gcrev-insight-v2-pages.html" class="nav-link"><span class="icon">📄</span>ページ</a>
+        </div>
+
+        <!-- AIレポート -->
+        <div class="nav-section">
+          <div class="nav-section-title">AIレポート</div>
+          <a href="gcrev-insight-v2-ai-report-latest.html" class="nav-link active"><span class="icon">📰</span>最新月次レポート</a>
+          <a href="gcrev-insight-v2-ai-report-list.html" class="nav-link"><span class="icon">📚</span>月別レポート一覧</a>
+          <a href="gcrev-insight-v2-ai-report-compare.html" class="nav-link"><span class="icon">🔀</span>レポート比較</a>
+        </div>
+
+        <!-- AI支援 -->
+        <div class="nav-section">
+          <div class="nav-section-title">AI支援 / 改善提案</div>
+          <a href="gcrev-insight-v2-ai-report-settings.html" class="nav-link"><span class="icon">⚙️</span>AIレポート設定</a>
+          <a href="#" class="nav-link"><span class="icon">🎯</span>優先施策ランキング</a>
+          <a href="#" class="nav-link"><span class="icon">💡</span>コンテンツ企画AI</a>
+        </div>
+
+        <!-- アカウント -->
+        <div class="nav-section">
+          <div class="nav-section-title">アカウント</div>
+          <a href="#" class="nav-link"><span class="icon">👤</span>プラン確認</a>
+          <a href="#" class="nav-link"><span class="icon">⚙️</span>設定</a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- メインコンテンツ -->
+    <div class="main-wrapper">
+      <div class="topbar">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div class="breadcrumb">
+          <a href="gcrev-insight-v2-dashboard.html">ホーム</a>
+          <span>›</span>
+          <span>AIレポート</span>
+          <span>›</span>
+          <span>最新月次レポート</span>
+        </div>
+      </div>
+
+      <main class="main-content">
+        <div class="page-header">
+          <h1 class="page-title">📰 最新月次レポート</h1>
+          <div class="action-btns">
+            <button class="btn btn-secondary" onclick="window.print()">🖨️ PDF出力</button>
+            <a href="gcrev-insight-v2-ai-report-list.html" class="btn btn-secondary">📚 過去レポート</a>
+          </div>
+        </div>
+
+        <!-- 分析期間 -->
+        <div class="period-info">
+          <div class="period-item">
+            <span class="period-label">📅 分析対象期間：</span>
+            <span class="period-value">2026年1月（1/1 - 1/31）</span>
+          </div>
+          <div class="period-divider"></div>
+          <div class="period-item">
+            <span class="period-label">📊 比較期間：</span>
+            <span class="period-value">2025年12月（12/1 - 12/31）</span>
+          </div>
+        </div>
+
+        <!-- KPIサマリーカード -->
+        <div class="kpi-summary">
+          <!-- ページビュー -->
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">ページビュー</span>
+              <div class="kpi-icon" style="background: #eff6ff;">👁️</div>
+            </div>
+            <div class="kpi-value">10,280</div>
+            <div class="kpi-change positive">▲ +22.5%</div>
+            <div class="sparkline">
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <path d="M0,30 L10,28 L20,32 L30,25 L40,27 L50,20 L60,22 L70,18 L80,15 L90,12 L100,10" 
+                      fill="none" stroke="#3b82f6" stroke-width="2" opacity="0.8"/>
+                <path d="M0,30 L10,28 L20,32 L30,25 L40,27 L50,20 L60,22 L70,18 L80,15 L90,12 L100,10 L100,40 L0,40 Z" 
+                      fill="#3b82f6" opacity="0.1"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- セッション -->
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">セッション</span>
+              <div class="kpi-icon" style="background: #fef3c7;">🎯</div>
+            </div>
+            <div class="kpi-value">5,717</div>
+            <div class="kpi-change positive">▲ +43.6%</div>
+            <div class="sparkline">
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <path d="M0,35 L10,33 L20,30 L30,28 L40,25 L50,22 L60,20 L70,18 L80,14 L90,10 L100,8" 
+                      fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.8"/>
+                <path d="M0,35 L10,33 L20,30 L30,28 L40,25 L50,22 L60,20 L70,18 L80,14 L90,10 L100,8 L100,40 L0,40 Z" 
+                      fill="#f59e0b" opacity="0.1"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- ユーザー -->
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">ユーザー</span>
+              <div class="kpi-icon" style="background: #d1fae5;">👥</div>
+            </div>
+            <div class="kpi-value">4,643</div>
+            <div class="kpi-change positive">▲ +83.8%</div>
+            <div class="sparkline">
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <path d="M0,32 L10,30 L20,28 L30,26 L40,23 L50,20 L60,18 L70,15 L80,12 L90,9 L100,6" 
+                      fill="none" stroke="#10b981" stroke-width="2" opacity="0.8"/>
+                <path d="M0,32 L10,30 L20,28 L30,26 L40,23 L50,20 L60,18 L70,15 L80,12 L90,9 L100,6 L100,40 L0,40 Z" 
+                      fill="#10b981" opacity="0.1"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 新規ユーザー -->
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">新規ユーザー</span>
+              <div class="kpi-icon" style="background: #e0e7ff;">✨</div>
+            </div>
+            <div class="kpi-value">4,489</div>
+            <div class="kpi-change positive">▲ +67.4%</div>
+            <div class="sparkline">
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <path d="M0,33 L10,31 L20,29 L30,27 L40,24 L50,21 L60,19 L70,16 L80,13 L90,10 L100,7" 
+                      fill="none" stroke="#818cf8" stroke-width="2" opacity="0.8"/>
+                <path d="M0,33 L10,31 L20,29 L30,27 L40,24 L50,21 L60,19 L70,16 L80,13 L90,10 L100,7 L100,40 L0,40 Z" 
+                      fill="#818cf8" opacity="0.1"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- リピーター -->
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">リピーター</span>
+              <div class="kpi-icon" style="background: #fce7f3;">🔁</div>
+            </div>
+            <div class="kpi-value">154</div>
+            <div class="kpi-change neutral">→ 0.0%</div>
+            <div class="sparkline">
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <path d="M0,25 L10,26 L20,24 L30,25 L40,26 L50,25 L60,24 L70,25 L80,26 L90,25 L100,24" 
+                      fill="none" stroke="#ec4899" stroke-width="2" opacity="0.8"/>
+                <path d="M0,25 L10,26 L20,24 L30,25 L40,26 L50,25 L60,24 L70,25 L80,26 L90,25 L100,24 L100,40 L0,40 Z" 
+                      fill="#ec4899" opacity="0.1"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 平均滞在時間 -->
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">平均滞在時間</span>
+              <div class="kpi-icon" style="background: #fed7aa;">⏱️</div>
+            </div>
+            <div class="kpi-value">85秒</div>
+            <div class="kpi-change negative">▼ -31.3%</div>
+            <div class="sparkline">
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <path d="M0,15 L10,16 L20,18 L30,20 L40,22 L50,24 L60,26 L70,28 L80,30 L90,32 L100,34" 
+                      fill="none" stroke="#f97316" stroke-width="2" opacity="0.8"/>
+                <path d="M0,15 L10,16 L20,18 L30,20 L40,22 L50,24 L60,26 L70,28 L80,30 L90,32 L100,34 L100,40 L0,40 Z" 
+                      fill="#f97316" opacity="0.1"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- CV数 -->
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">CV数</span>
+              <div class="kpi-icon" style="background: #d1fae5;">🎉</div>
+            </div>
+            <div class="kpi-value">112</div>
+            <div class="kpi-change positive">▲ +25.8%</div>
+            <div class="sparkline">
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <path d="M0,30 L10,29 L20,27 L30,25 L40,23 L50,20 L60,18 L70,16 L80,14 L90,11 L100,8" 
+                      fill="none" stroke="#10b981" stroke-width="2" opacity="0.8"/>
+                <path d="M0,30 L10,29 L20,27 L30,25 L40,23 L50,20 L60,18 L70,16 L80,14 L90,11 L100,8 L100,40 L0,40 Z" 
+                      fill="#10b981" opacity="0.1"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- レポートメタ情報 -->
+        <div class="report-meta">
+          <div class="meta-item">
+            <span class="meta-label">対象期間</span>
+            <span class="meta-value">2026年1月</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">生成日時</span>
+            <span class="meta-value">2026年2月3日 10:30</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">ステータス</span>
+            <span class="status-badge status-complete">✅ 生成完了</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">サイトURL</span>
+            <span class="meta-value" style="font-size: 14px; word-break: break-all;">https://example.com</span>
+          </div>
+        </div>
+
+        <!-- レポート本文 -->
+        <div class="report-content">
+          <!-- 総評 -->
+          <div class="report-section">
+            <h2 class="section-title">📋 2026年1月の総評</h2>
+            <div class="section-content">
+              <div class="highlight-box">
+                <h4>🎯 今月の総合評価：おおむね良好（スコア 72/100）</h4>
+                <p>
+                  1月は年始の新規流入効果により、セッション数が前月比+18.4%と大幅に伸長しました。
+                  特に検索流入（Organic Search）が+22%と好調で、SEO施策の効果が顕著に表れています。
+                  一方で、平均滞在時間が47秒→43秒に減少しており、コンテンツの質的改善が今後の課題です。
+                </p>
+              </div>
+              <p>
+                全体として、訪問者数の増加トレンドは継続しており、特に「○○サービス 比較」「○○ おすすめ」などのキーワードで
+                検索順位が向上したことが大きく貢献しています。デバイス別では、モバイル比率が68%に達し、
+                スマートフォン最適化の重要性がますます高まっています。
+              </p>
+            </div>
+          </div>
+
+          <!-- 良かった点 -->
+          <div class="report-section">
+            <h2 class="section-title">✅ 良かった点（成果）</h2>
+            <div class="section-content list-box">
+              <ul>
+                <li><strong>セッション数の大幅増加：</strong>3,986セッション（前月比+18.4%）。新規流入施策が奏功し、検索順位の向上が直接的な成果につながりました。</li>
+                <li><strong>新規ユーザーの拡大：</strong>2,681人（前月比+8.6%）。特に20代〜30代の新規訪問者が増加し、ターゲット層へのリーチが拡大しています。</li>
+                <li><strong>検索流入の強化：</strong>Organic Searchからの流入が+22%。「○○サービス 比較」「○○ 料金」など商業意図の強いキーワードで上位表示を獲得。</li>
+                <li><strong>コンバージョン率の維持：</strong>全体CVRは2.8%と前月並み。流入増加と並行してCV数も増加しており、質の高いトラフィックを獲得できています。</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 改善が必要な点 -->
+          <div class="report-section">
+            <h2 class="section-title">⚠️ 改善が必要な点（課題）</h2>
+            <div class="section-content list-box">
+              <ul>
+                <li><strong>平均滞在時間の減少：</strong>47秒→43秒（前月比-8.5%）。新規流入が増えた一方で、コンテンツへの関心度が低下している可能性があります。ページ内容の見直しが必要です。</li>
+                <li><strong>リピーター率の低下：</strong>リピートユーザーが前月比-10.4%。一度訪問したユーザーを再訪させる仕組み（メルマガ、リターゲティングなど）の強化が求められます。</li>
+                <li><strong>直帰率の高さ：</strong>主要ランディングページの直帰率が62%と高水準。ファーストビューの改善、内部リンク導線の最適化が急務です。</li>
+                <li><strong>モバイルUXの課題：</strong>モバイルの平均滞在時間がPC比で20%短い。タップ領域の拡大、読み込み速度の改善、スクロール導線の最適化が必要です。</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 考察 -->
+          <div class="report-section">
+            <h2 class="section-title">💡 考察とインサイト</h2>
+            <div class="section-content">
+              <p>
+                今月の最大の成果は、<strong>検索流入の大幅な増加</strong>です。これは過去3ヶ月にわたるSEO施策（コンテンツ拡充、内部リンク最適化、
+                タイトルタグ改善）が実を結んだ結果といえます。特に「○○サービス 比較」のような比較検索で上位表示されたことで、
+                購買意欲の高いユーザー層を効率的に獲得できました。
+              </p>
+              <p>
+                一方で、<strong>滞在時間とリピート率の低下</strong>は見過ごせない課題です。新規流入が増えたことで、
+                サイトに不慣れなユーザーが増え、期待していた情報にすぐたどり着けずに離脱している可能性があります。
+                ユーザーの検索意図とコンテンツ内容のマッチング精度を高めるとともに、初回訪問者向けの導線改善（サイト内検索の強化、
+                関連記事のレコメンド、チャットボット導入など）を検討すべきタイミングです。
+              </p>
+              <p>
+                また、<strong>モバイルUXの改善</strong>は最優先課題です。モバイル比率が68%に達している現状では、
+                スマートフォンでの体験がサイト全体のパフォーマンスを左右します。具体的には、Core Web Vitalsの改善
+                （LCP、FID、CLSの最適化）、タップ可能要素のサイズ拡大、読み込み速度の高速化などが有効です。
+              </p>
+            </div>
+          </div>
+
+          <!-- 集客分析結果 -->
+          <div class="report-section">
+            <h2 class="section-title">📊 集客分析結果</h2>
+            <div class="analysis-grid">
+              <!-- デバイス別アクセス -->
+              <div class="analysis-card">
+                <div class="analysis-header">
+                  <div class="analysis-title">📱 デバイス別アクセス</div>
+                  <a href="gcrev-insight-v2-device.html" class="analysis-link">詳細を見る →</a>
+                </div>
+                <div class="analysis-content">
+                  <div class="data-row">
+                    <div class="data-label">
+                      <span style="width:12px;height:12px;border-radius:50%;background:#3b82f6;display:inline-block;"></span>
+                      モバイル
+                    </div>
+                    <div class="data-value">53.6%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 53.6%; background: linear-gradient(90deg, #3b82f6, #60a5fa);"></div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">
+                      <span style="width:12px;height:12px;border-radius:50%;background:#10b981;display:inline-block;"></span>
+                      デスクトップ
+                    </div>
+                    <div class="data-value">43.9%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 43.9%; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">
+                      <span style="width:12px;height:12px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>
+                      タブレット
+                    </div>
+                    <div class="data-value">2.5%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 2.5%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 年齢別アクセス -->
+              <div class="analysis-card">
+                <div class="analysis-header">
+                  <div class="analysis-title">👥 年齢別アクセス</div>
+                  <a href="gcrev-insight-v2-age.html" class="analysis-link">詳細を見る →</a>
+                </div>
+                <div class="analysis-content">
+                  <div class="data-row">
+                    <div class="data-label">unknown</div>
+                    <div class="data-value">82.0%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 82%; background: linear-gradient(90deg, #6b7280, #9ca3af);"></div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">25-34</div>
+                    <div class="data-value">5.6%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 5.6%; background: linear-gradient(90deg, #3b82f6, #60a5fa);"></div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">35-44</div>
+                    <div class="data-value">4.5%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 4.5%; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 流入元 -->
+              <div class="analysis-card">
+                <div class="analysis-header">
+                  <div class="analysis-title">🌐 流入元</div>
+                  <a href="gcrev-insight-v2-source.html" class="analysis-link">詳細を見る →</a>
+                </div>
+                <div class="analysis-content">
+                  <div class="data-row">
+                    <div class="data-label">自然検索</div>
+                    <div class="data-value">43.9%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 43.9%; background: linear-gradient(90deg, #3b82f6, #60a5fa);"></div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">直接</div>
+                    <div class="data-value">35.7%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 35.7%; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">参照元</div>
+                    <div class="data-value">12.6%</div>
+                  </div>
+                  <div class="data-bar">
+                    <div class="data-bar-fill" style="width: 12.6%; background: linear-gradient(90deg, #f59e0b, #fbbf24);"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 地域別アクセス TOP5 -->
+              <div class="analysis-card">
+                <div class="analysis-header">
+                  <div class="analysis-title">🗾 地域別アクセス TOP5</div>
+                  <a href="gcrev-insight-v2-region.html" class="analysis-link">詳細を見る →</a>
+                </div>
+                <div class="analysis-content">
+                  <div class="data-row">
+                    <div class="data-label">1. 愛媛県</div>
+                    <div class="data-value">4,950</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">2. 甘粛省</div>
+                    <div class="data-value">4,292</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">3. 東京都</div>
+                    <div class="data-value">4,194</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">4. 大阪府</div>
+                    <div class="data-value">2,055</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">5. 広島県</div>
+                    <div class="data-value">909</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ページランキング TOP5 -->
+              <div class="analysis-card">
+                <div class="analysis-header">
+                  <div class="analysis-title">📄 ページランキング TOP5</div>
+                  <a href="gcrev-insight-v2-pages.html" class="analysis-link">詳細を見る →</a>
+                </div>
+                <div class="analysis-content">
+                  <div class="data-row">
+                    <div class="data-label" style="font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">1. 愛媛県松山市のパッシブハウス・デザイン住...</div>
+                    <div class="data-value">8,066</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label" style="font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">2. スタッフブログ - 愛媛県松山市のパッシブハ...</div>
+                    <div class="data-value">4,336</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label" style="font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">3. エネルギーの単位として使われるJ（ジュ...</div>
+                    <div class="data-value">2,010</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label" style="font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">4. 施工実績 アーカイブ - 愛媛県松山市のパッ...</div>
+                    <div class="data-value">1,101</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label" style="font-size: 12px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">5. 会社案内 - 愛媛県松山市のパッシブハウス・デ...</div>
+                    <div class="data-value">880</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- キーワードランキング TOP5 -->
+              <div class="analysis-card">
+                <div class="analysis-header">
+                  <div class="analysis-title">🔍 キーワードランキング TOP5</div>
+                  <a href="gcrev-insight-v2-keywords.html" class="analysis-link">詳細を見る →</a>
+                </div>
+                <div class="analysis-content">
+                  <div class="data-row">
+                    <div class="data-label">1. 金融空調</div>
+                    <div class="data-value">8</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">2. ジュール 単位</div>
+                    <div class="data-value">27</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">3. ジュール</div>
+                    <div class="data-value">30</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">4. 免疫ウレタン</div>
+                    <div class="data-value">3</div>
+                  </div>
+                  <div class="data-row">
+                    <div class="data-label">5. fix窓とは</div>
+                    <div class="data-value">1</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ネクストアクション -->
+          <div class="report-section">
+            <h2 class="section-title">🎯 ネクストアクション（優先度順）</h2>
+            <div class="next-actions">
+              <div class="action-item">
+                <span class="action-priority high">最優先</span>
+                <div class="action-text">
+                  <strong>主要ランディングページの直帰率改善</strong><br>
+                  ファーストビューの訴求強化、内部リンク導線の最適化、関連記事レコメンドの実装。目標：直帰率を62%→50%以下に改善。
+                </div>
+              </div>
+              <div class="action-item">
+                <span class="action-priority high">最優先</span>
+                <div class="action-text">
+                  <strong>モバイルUXの全面改善</strong><br>
+                  Core Web Vitals最適化、画像圧縮、タップ領域拡大、フォント拡大。目標：モバイル滞在時間を+15%改善。
+                </div>
+              </div>
+              <div class="action-item">
+                <span class="action-priority medium">中</span>
+                <div class="action-text">
+                  <strong>リピーター獲得施策の導入</strong><br>
+                  メールマガジン登録フォームの設置、リターゲティング広告の開始、会員登録導線の設計。目標：リピート率を前月水準に回復。
+                </div>
+              </div>
+              <div class="action-item">
+                <span class="action-priority medium">中</span>
+                <div class="action-text">
+                  <strong>コンテンツ品質の向上</strong><br>
+                  滞在時間の短いページを特定し、コンテンツの加筆・動画埋め込み・図解追加などでエンゲージメント向上を図る。
+                </div>
+              </div>
+              <div class="action-item">
+                <span class="action-priority low">低</span>
+                <div class="action-text">
+                  <strong>検索順位のさらなる向上</strong><br>
+                  上位表示できていないロングテールキーワードをリストアップし、新規記事作成または既存記事のリライトを実施。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    hamburger?.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+      overlay.classList.toggle('active');
+    });
+
+    overlay?.addEventListener('click', () => {
+      sidebar.classList.remove('active');
+      overlay.classList.remove('active');
+    });
+  </script>
+</body>
+</html>

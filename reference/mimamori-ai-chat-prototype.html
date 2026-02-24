@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIチャット - 見守りウェブ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      /* 見守りウェブカラー */
+      --primary-blue: #4a6d7c;
+      --primary-teal: #7db5b3;
+      --soft-gray: #8c9199;
+      
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8f9fa;
+      --bg-tertiary: #f0f2f4;
+      
+      --text-primary: #1a202c;
+      --text-secondary: #4a5568;
+      --text-tertiary: #718096;
+      
+      --border-light: #e8eaed;
+      --border-medium: #d1d5db;
+      
+      --accent-positive: #7db5b3;
+      --accent-ai: #4a6d7c;
+      
+      --shadow-soft: 0 1px 3px rgba(0,0,0,0.04);
+      --shadow-card: 0 1px 4px rgba(0,0,0,0.06);
+      --shadow-float: 0 4px 12px rgba(0,0,0,0.12);
+      --shadow-modal: 0 8px 32px rgba(0,0,0,0.16);
+    }
+    
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif;
+      background: var(--bg-secondary); 
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding: 20px;
+    }
+    
+    /* デモ用管理画面の簡易レイアウト */
+    .demo-dashboard {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      padding: 40px;
+      min-height: 80vh;
+      box-shadow: var(--shadow-card);
+    }
+    
+    .demo-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+    
+    .demo-content {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+    }
+    
+    /* ========================================
+       1) 右下FAB（フローティングアクションボタン）
+       ======================================== */
+    .chat-fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 160px;
+      height: 56px;
+      background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-teal) 100%);
+      border-radius: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--shadow-float);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+    
+    .chat-fab:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(74, 109, 124, 0.3);
+    }
+    
+    .chat-fab-icon {
+      font-size: 24px;
+    }
+    
+    .chat-fab-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 20px;
+      height: 20px;
+      background: #ef4444;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      border: 2px solid var(--bg-secondary);
+    }
+    
+    .chat-fab.hidden {
+      display: none;
+    }
+    
+    /* ========================================
+       2) チャットウィンドウ（通常サイズ）
+       ======================================== */
+    .chat-window {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 400px;
+      height: 600px;
+      background: var(--bg-primary);
+      border-radius: 16px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 1001;
+      transform: scale(0.9) translateY(20px);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s ease;
+    }
+    
+    .chat-window.open {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+      pointer-events: all;
+    }
+    
+    /* ========================================
+       3) チャットヘッダー
+       ======================================== */
+    .chat-header {
+      background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-teal) 100%);
+      color: #fff;
+      padding: 20px;
+      border-radius: 16px 16px 0 0;
+    }
+    
+    .chat-header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    
+    .chat-header-title {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .chat-header-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .chat-header-btn {
+      width: 32px;
+      height: 32px;
+      background: rgba(255,255,255,0.2);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    
+    .chat-header-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    
+    .chat-header-subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 6px;
+    }
+    
+    .chat-header-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.95);
+      background: rgba(255,255,255,0.15);
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+    
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: #10b981;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    /* ========================================
+       4) クイック質問チップ
+       ======================================== */
+    .quick-questions {
+      padding: 16px 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .quick-chip {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 16px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .quick-chip:hover {
+      background: var(--primary-teal);
+      color: #fff;
+      border-color: var(--primary-teal);
+    }
+    
+    /* ========================================
+       5) 会話エリア
+       ======================================== */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: var(--border-medium);
+      border-radius: 3px;
+    }
+    
+    /* メッセージバブル */
+    .message {
+      display: flex;
+      gap: 12px;
+      animation: fadeInUp 0.3s ease;
+    }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .message.user {
+      flex-direction: row-reverse;
+    }
+    
+    .message-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    
+    .message.ai .message-avatar {
+      background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-teal) 100%);
+      color: #fff;
+    }
+    
+    .message.user .message-avatar {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+    }
+    
+    .message-content {
+      flex: 1;
+      max-width: 75%;
+    }
+    
+    .message-bubble {
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    .message.ai .message-bubble {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border-radius: 12px 12px 12px 4px;
+    }
+    
+    .message.user .message-bubble {
+      background: var(--primary-blue);
+      color: #fff;
+      border-radius: 12px 12px 4px 12px;
+    }
+    
+    .message-time {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+      padding: 0 4px;
+    }
+    
+    /* AI回答の構造化表示 */
+    .ai-answer {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 8px;
+    }
+    
+    .ai-answer-section {
+      margin-bottom: 16px;
+    }
+    
+    .ai-answer-section:last-child {
+      margin-bottom: 0;
+    }
+    
+    .ai-answer-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--primary-blue);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .ai-answer-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    
+    .ai-answer-list {
+      list-style: none;
+      padding: 0;
+    }
+    
+    .ai-answer-list li {
+      padding: 6px 0;
+      padding-left: 20px;
+      position: relative;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    
+    .ai-answer-list li:before {
+      content: "●";
+      position: absolute;
+      left: 4px;
+      color: var(--primary-teal);
+      font-size: 12px;
+    }
+    
+    /* 評価ボタン */
+    .message-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 0 4px;
+    }
+    
+    .feedback-btn {
+      background: none;
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+    
+    .feedback-btn:hover {
+      background: var(--bg-secondary);
+      border-color: var(--border-medium);
+    }
+    
+    /* ローディング */
+    .loading-message {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .loading-dots {
+      display: flex;
+      gap: 4px;
+      padding: 12px 16px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+    }
+    
+    .loading-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--primary-teal);
+      border-radius: 50%;
+      animation: bounce 1.4s infinite;
+    }
+    
+    .loading-dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    
+    .loading-dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+      40% { transform: scale(1.2); opacity: 1; }
+    }
+    
+    /* ========================================
+       6) 入力エリア
+       ======================================== */
+    .chat-input-area {
+      border-top: 1px solid var(--border-light);
+      padding: 16px 20px;
+      background: var(--bg-primary);
+    }
+    
+    .chat-input-options {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    
+    .input-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .input-option input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    
+    .chat-input-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    
+    .chat-input {
+      flex: 1;
+      min-height: 40px;
+      max-height: 120px;
+      padding: 10px 14px;
+      border: 2px solid var(--border-light);
+      border-radius: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      transition: all 0.2s;
+    }
+    
+    .chat-input:focus {
+      outline: none;
+      border-color: var(--primary-teal);
+      box-shadow: 0 0 0 3px rgba(125, 181, 179, 0.1);
+    }
+    
+    .chat-input-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 10px;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    
+    .chat-input-btn.secondary {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+    }
+    
+    .chat-input-btn.secondary:hover {
+      background: var(--bg-tertiary);
+    }
+    
+    .chat-input-btn.primary {
+      background: var(--primary-blue);
+      color: #fff;
+    }
+    
+    .chat-input-btn.primary:hover {
+      background: var(--primary-teal);
+    }
+    
+    /* ========================================
+       7) 拡大表示 - 中央モーダル版
+       ======================================== */
+    .chat-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+    
+    .chat-modal-overlay.open {
+      display: flex;
+    }
+    
+    .chat-window-large {
+      width: 100%;
+      max-width: 900px;
+      height: 85vh;
+      background: var(--bg-primary);
+      border-radius: 16px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: modalFadeIn 0.3s ease;
+    }
+    
+    @keyframes modalFadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    
+    /* 拡大時のメッセージ幅調整 */
+    .chat-window-large .message-content {
+      max-width: 80%;
+    }
+    
+    /* ========================================
+       8) 拡大表示 - 右側パネル版
+       ======================================== */
+    .chat-panel-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+    }
+    
+    .chat-panel-overlay.open {
+      display: block;
+    }
+    
+    .chat-window-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 720px;
+      height: 100vh;
+      background: var(--bg-primary);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 2001;
+    }
+    
+    .chat-panel-overlay.open .chat-window-panel {
+      transform: translateX(0);
+    }
+    
+    /* ========================================
+       9) 歓迎メッセージ
+       ======================================== */
+    .welcome-message {
+      text-align: center;
+      padding: 32px 20px;
+    }
+    
+    .welcome-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    
+    .welcome-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    
+    .welcome-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    
+    /* ========================================
+       10) エラー表示
+       ======================================== */
+    .error-message {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    
+    .error-icon {
+      font-size: 20px;
+      color: #dc2626;
+      flex-shrink: 0;
+    }
+    
+    .error-content {
+      flex: 1;
+    }
+    
+    .error-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #991b1b;
+      margin-bottom: 4px;
+    }
+    
+    .error-text {
+      font-size: 13px;
+      color: #dc2626;
+      margin-bottom: 8px;
+    }
+    
+    .error-retry {
+      background: #dc2626;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .error-retry:hover {
+      background: #b91c1c;
+    }
+    
+    /* ========================================
+       11) レスポンシブ
+       ======================================== */
+    @media (max-width: 768px) {
+      .chat-window {
+        bottom: 0;
+        right: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+      }
+      
+      .chat-fab {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+      }
+      
+      .chat-fab-text {
+        display: none;
+      }
+      
+      .chat-window-large {
+        max-width: 100%;
+        height: 100vh;
+        border-radius: 0;
+      }
+      
+      .chat-window-panel {
+        width: 100%;
+      }
+    }
+    
+    /* ========================================
+       12) デモ切替ボタン
+       ======================================== */
+    .demo-controls {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      gap: 12px;
+      z-index: 999;
+    }
+    
+    .demo-btn {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      cursor: pointer;
+      box-shadow: var(--shadow-card);
+      transition: all 0.2s;
+    }
+    
+    .demo-btn:hover {
+      background: var(--bg-secondary);
+      border-color: var(--border-medium);
+    }
+    
+    .demo-btn.active {
+      background: var(--primary-blue);
+      color: #fff;
+      border-color: var(--primary-blue);
+    }
+  </style>
+</head>
+<body>
+  <!-- デモ用管理画面 -->
+  <div class="demo-dashboard">
+    <h1 class="demo-title">ダッシュボード</h1>
+    <div class="demo-content">
+      <p>ここに管理画面のコンテンツが表示されます。</p>
+      <p>右下のAIチャットボタンをクリックしてください。</p>
+    </div>
+  </div>
+
+  <!-- デモ切替ボタン -->
+  <div class="demo-controls">
+    <button class="demo-btn active" onclick="showState('normal')">通常サイズ</button>
+    <button class="demo-btn" onclick="showState('modal')">拡大（モーダル）</button>
+    <button class="demo-btn" onclick="showState('panel')">拡大（パネル）</button>
+  </div>
+
+  <!-- 1) FAB -->
+  <div class="chat-fab" id="chatFab" onclick="openChat()">
+    <span class="chat-fab-icon">🤖</span>
+    <span class="chat-fab-text">AI相談</span>
+    <span class="chat-fab-badge">1</span>
+  </div>
+
+  <!-- 2) チャットウィンドウ（通常サイズ） -->
+  <div class="chat-window" id="chatWindow">
+    <!-- ヘッダー -->
+    <div class="chat-header">
+      <div class="chat-header-top">
+        <div class="chat-header-title">
+          <span>🤖</span>
+          <span>みまもりAI</span>
+        </div>
+        <div class="chat-header-actions">
+          <button class="chat-header-btn" onclick="expandChat('modal')" title="拡大表示">⤢</button>
+          <button class="chat-header-btn" onclick="closeChat()" title="閉じる">✕</button>
+        </div>
+      </div>
+      <div class="chat-header-subtitle">数字の見方・改善案をやさしく案内</div>
+      <div class="chat-header-status">
+        <span class="status-dot"></span>
+        <span>相談受付中</span>
+      </div>
+    </div>
+
+    <!-- クイック質問 -->
+    <div class="quick-questions">
+      <div class="quick-chip" onclick="insertQuestion('CTRって何？')">CTRって何？</div>
+      <div class="quick-chip" onclick="insertQuestion('この数字は良いですか？')">この数字は良いですか？</div>
+      <div class="quick-chip" onclick="insertQuestion('今月やることを3つ教えて')">今月やることを3つ</div>
+    </div>
+
+    <!-- 会話エリア -->
+    <div class="chat-messages" id="chatMessages">
+      <!-- 歓迎メッセージ -->
+      <div class="welcome-message">
+        <div class="welcome-icon">👋</div>
+        <div class="welcome-title">こんにちは！</div>
+        <div class="welcome-text">
+          アクセス解析や改善についてお気軽にご質問ください。<br>
+          数字の意味から具体的な改善案まで、わかりやすくお答えします。
+        </div>
+      </div>
+    </div>
+
+    <!-- 入力エリア -->
+    <div class="chat-input-area">
+      <div class="chat-input-options">
+        <label class="input-option">
+          <input type="checkbox" id="useScreenshot">
+          <span>このページを見て回答</span>
+        </label>
+        <label class="input-option">
+          <input type="checkbox" id="useDetailedData">
+          <span>詳細データを使う</span>
+        </label>
+      </div>
+      <div class="chat-input-wrapper">
+        <textarea 
+          class="chat-input" 
+          id="chatInput"
+          placeholder="「この数字の意味は？」「先月より落ちている理由は？」"
+          rows="1"
+        ></textarea>
+        <button class="chat-input-btn secondary" onclick="voiceInput()" title="音声入力">🎤</button>
+        <button class="chat-input-btn primary" onclick="sendMessage()" title="送信">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3) 拡大表示 - 中央モーダル版 -->
+  <div class="chat-modal-overlay" id="chatModalOverlay" onclick="closeExpanded()">
+    <div class="chat-window-large" onclick="event.stopPropagation()">
+      <!-- ヘッダー -->
+      <div class="chat-header">
+        <div class="chat-header-top">
+          <div class="chat-header-title">
+            <span>🤖</span>
+            <span>みまもりAI</span>
+          </div>
+          <div class="chat-header-actions">
+            <button class="chat-header-btn" onclick="collapseChat()" title="通常サイズに戻す">⤡</button>
+            <button class="chat-header-btn" onclick="closeExpanded()" title="閉じる">✕</button>
+          </div>
+        </div>
+        <div class="chat-header-subtitle">数字の見方・改善案をやさしく案内</div>
+        <div class="chat-header-status">
+          <span class="status-dot"></span>
+          <span>相談受付中</span>
+        </div>
+      </div>
+
+      <!-- クイック質問 -->
+      <div class="quick-questions">
+        <div class="quick-chip" onclick="insertQuestion('CTRって何？')">CTRって何？</div>
+        <div class="quick-chip" onclick="insertQuestion('この数字は良いですか？')">この数字は良いですか？</div>
+        <div class="quick-chip" onclick="insertQuestion('今月やることを3つ教えて')">今月やることを3つ</div>
+        <div class="quick-chip" onclick="insertQuestion('このページの改善点を教えて')">このページの改善点</div>
+      </div>
+
+      <!-- 会話エリア（サンプル会話） -->
+      <div class="chat-messages" id="chatMessagesModal">
+        <!-- ユーザーメッセージ -->
+        <div class="message user">
+          <div class="message-avatar">👤</div>
+          <div class="message-content">
+            <div class="message-bubble">
+              先月よりアクセスが落ちてるのはなぜ？
+            </div>
+            <div class="message-time">14:23</div>
+          </div>
+        </div>
+
+        <!-- AI回答 -->
+        <div class="message ai">
+          <div class="message-avatar">🤖</div>
+          <div class="message-content">
+            <div class="message-bubble">
+              確認しました。検索からの流入が減ったことが主な原因です。
+            </div>
+            <div class="ai-answer">
+              <div class="ai-answer-section">
+                <div class="ai-answer-title">📊 結論</div>
+                <div class="ai-answer-text">
+                  検索からの流入が減ったことが主な原因です。
+                </div>
+              </div>
+              
+              <div class="ai-answer-section">
+                <div class="ai-answer-title">💡 理由</div>
+                <ul class="ai-answer-list">
+                  <li>一部の検索キーワードの表示回数が下がっています</li>
+                  <li>主要ページのクリック率が少し下がっています</li>
+                  <li>問い合わせページへの流入も減っています</li>
+                </ul>
+              </div>
+              
+              <div class="ai-answer-section">
+                <div class="ai-answer-title">✅ 今すぐやること</div>
+                <ul class="ai-answer-list">
+                  <li>タイトルを見直す</li>
+                  <li>主要ページに内部リンクを追加する</li>
+                  <li>問い合わせ導線を目立たせる</li>
+                </ul>
+              </div>
+              
+              <div class="ai-answer-section">
+                <div class="ai-answer-title">📈 次に見る数字</div>
+                <ul class="ai-answer-list">
+                  <li>検索クリック数</li>
+                  <li>主要ページのCTR</li>
+                  <li>問い合わせページの閲覧数</li>
+                </ul>
+              </div>
+            </div>
+            <div class="message-actions">
+              <button class="feedback-btn" title="役に立った">👍</button>
+              <button class="feedback-btn" title="役に立たなかった">👎</button>
+            </div>
+            <div class="message-time">14:24</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 入力エリア -->
+      <div class="chat-input-area">
+        <div class="chat-input-options">
+          <label class="input-option">
+            <input type="checkbox" checked>
+            <span>このページを見て回答</span>
+          </label>
+          <label class="input-option">
+            <input type="checkbox">
+            <span>詳細データを使う</span>
+          </label>
+        </div>
+        <div class="chat-input-wrapper">
+          <textarea 
+            class="chat-input" 
+            placeholder="「この数字の意味は？」「先月より落ちている理由は？」"
+            rows="1"
+          ></textarea>
+          <button class="chat-input-btn secondary" title="音声入力">🎤</button>
+          <button class="chat-input-btn primary" title="送信">➤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4) 拡大表示 - 右側パネル版 -->
+  <div class="chat-panel-overlay" id="chatPanelOverlay" onclick="closeExpanded()">
+    <div class="chat-window-panel" onclick="event.stopPropagation()">
+      <!-- ヘッダー -->
+      <div class="chat-header">
+        <div class="chat-header-top">
+          <div class="chat-header-title">
+            <span>🤖</span>
+            <span>みまもりAI</span>
+          </div>
+          <div class="chat-header-actions">
+            <button class="chat-header-btn" onclick="collapseChat()" title="通常サイズに戻す">⤡</button>
+            <button class="chat-header-btn" onclick="closeExpanded()" title="閉じる">✕</button>
+          </div>
+        </div>
+        <div class="chat-header-subtitle">数字の見方・改善案をやさしく案内</div>
+        <div class="chat-header-status">
+          <span class="status-dot"></span>
+          <span>相談受付中</span>
+        </div>
+      </div>
+
+      <!-- クイック質問 -->
+      <div class="quick-questions">
+        <div class="quick-chip">CTRって何？</div>
+        <div class="quick-chip">この数字は良いですか？</div>
+        <div class="quick-chip">今月やることを3つ</div>
+        <div class="quick-chip">このページの改善点</div>
+      </div>
+
+      <!-- 会話エリア（サンプル会話） -->
+      <div class="chat-messages">
+        <!-- ユーザーメッセージ -->
+        <div class="message user">
+          <div class="message-avatar">👤</div>
+          <div class="message-content">
+            <div class="message-bubble">
+              先月よりアクセスが落ちてるのはなぜ？
+            </div>
+            <div class="message-time">14:23</div>
+          </div>
+        </div>
+
+        <!-- AI回答（同じ内容） -->
+        <div class="message ai">
+          <div class="message-avatar">🤖</div>
+          <div class="message-content">
+            <div class="message-bubble">
+              確認しました。検索からの流入が減ったことが主な原因です。
+            </div>
+            <div class="ai-answer">
+              <div class="ai-answer-section">
+                <div class="ai-answer-title">📊 結論</div>
+                <div class="ai-answer-text">
+                  検索からの流入が減ったことが主な原因です。
+                </div>
+              </div>
+              
+              <div class="ai-answer-section">
+                <div class="ai-answer-title">💡 理由</div>
+                <ul class="ai-answer-list">
+                  <li>一部の検索キーワードの表示回数が下がっています</li>
+                  <li>主要ページのクリック率が少し下がっています</li>
+                  <li>問い合わせページへの流入も減っています</li>
+                </ul>
+              </div>
+              
+              <div class="ai-answer-section">
+                <div class="ai-answer-title">✅ 今すぐやること</div>
+                <ul class="ai-answer-list">
+                  <li>タイトルを見直す</li>
+                  <li>主要ページに内部リンクを追加する</li>
+                  <li>問い合わせ導線を目立たせる</li>
+                </ul>
+              </div>
+              
+              <div class="ai-answer-section">
+                <div class="ai-answer-title">📈 次に見る数字</div>
+                <ul class="ai-answer-list">
+                  <li>検索クリック数</li>
+                  <li>主要ページのCTR</li>
+                  <li>問い合わせページの閲覧数</li>
+                </ul>
+              </div>
+            </div>
+            <div class="message-actions">
+              <button class="feedback-btn" title="役に立った">👍</button>
+              <button class="feedback-btn" title="役に立たなかった">👎</button>
+            </div>
+            <div class="message-time">14:24</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 入力エリア -->
+      <div class="chat-input-area">
+        <div class="chat-input-options">
+          <label class="input-option">
+            <input type="checkbox" checked>
+            <span>このページを見て回答</span>
+          </label>
+          <label class="input-option">
+            <input type="checkbox">
+            <span>詳細データを使う</span>
+          </label>
+        </div>
+        <div class="chat-input-wrapper">
+          <textarea 
+            class="chat-input" 
+            placeholder="「この数字の意味は？」「先月より落ちている理由は？」"
+            rows="1"
+          ></textarea>
+          <button class="chat-input-btn secondary" title="音声入力">🎤</button>
+          <button class="chat-input-btn primary" title="送信">➤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 状態管理
+    let currentState = 'closed';
+    
+    // FABクリック
+    function openChat() {
+      document.getElementById('chatFab').classList.add('hidden');
+      document.getElementById('chatWindow').classList.add('open');
+      currentState = 'normal';
+    }
+    
+    // 通常チャットを閉じる
+    function closeChat() {
+      document.getElementById('chatWindow').classList.remove('open');
+      document.getElementById('chatFab').classList.remove('hidden');
+      currentState = 'closed';
+    }
+    
+    // 拡大表示（モーダル）
+    function expandChat(type) {
+      if (type === 'modal') {
+        document.getElementById('chatWindow').classList.remove('open');
+        document.getElementById('chatModalOverlay').classList.add('open');
+        currentState = 'modal';
+      } else if (type === 'panel') {
+        document.getElementById('chatWindow').classList.remove('open');
+        document.getElementById('chatPanelOverlay').classList.add('open');
+        currentState = 'panel';
+      }
+    }
+    
+    // 拡大表示を閉じる
+    function closeExpanded() {
+      document.getElementById('chatModalOverlay').classList.remove('open');
+      document.getElementById('chatPanelOverlay').classList.remove('open');
+      document.getElementById('chatFab').classList.remove('hidden');
+      currentState = 'closed';
+    }
+    
+    // 通常サイズに戻す
+    function collapseChat() {
+      document.getElementById('chatModalOverlay').classList.remove('open');
+      document.getElementById('chatPanelOverlay').classList.remove('open');
+      document.getElementById('chatWindow').classList.add('open');
+      currentState = 'normal';
+    }
+    
+    // デモ状態切替
+    function showState(state) {
+      // ボタンのアクティブ状態更新
+      document.querySelectorAll('.demo-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+      
+      // すべて閉じる
+      document.getElementById('chatFab').classList.remove('hidden');
+      document.getElementById('chatWindow').classList.remove('open');
+      document.getElementById('chatModalOverlay').classList.remove('open');
+      document.getElementById('chatPanelOverlay').classList.remove('open');
+      
+      // 指定の状態を開く
+      if (state === 'normal') {
+        openChat();
+      } else if (state === 'modal') {
+        document.getElementById('chatFab').classList.add('hidden');
+        document.getElementById('chatModalOverlay').classList.add('open');
+      } else if (state === 'panel') {
+        document.getElementById('chatFab').classList.add('hidden');
+        document.getElementById('chatPanelOverlay').classList.add('open');
+      }
+    }
+    
+    // クイック質問挿入
+    function insertQuestion(text) {
+      document.getElementById('chatInput').value = text;
+      document.getElementById('chatInput').focus();
+    }
+    
+    // メッセージ送信（デモ）
+    function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      
+      if (!text) return;
+      
+      // ユーザーメッセージを追加
+      const messagesContainer = document.getElementById('chatMessages');
+      const userMsg = createUserMessage(text);
+      messagesContainer.appendChild(userMsg);
+      
+      // 入力欄をクリア
+      input.value = '';
+      
+      // ローディング表示
+      const loadingMsg = createLoadingMessage();
+      messagesContainer.appendChild(loadingMsg);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      
+      // 3秒後にAI回答を表示（デモ）
+      setTimeout(() => {
+        loadingMsg.remove();
+        const aiMsg = createAIMessage();
+        messagesContainer.appendChild(aiMsg);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }, 3000);
+    }
+    
+    // ユーザーメッセージ作成
+    function createUserMessage(text) {
+      const div = document.createElement('div');
+      div.className = 'message user';
+      div.innerHTML = `
+        <div class="message-avatar">👤</div>
+        <div class="message-content">
+          <div class="message-bubble">${text}</div>
+          <div class="message-time">${new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}</div>
+        </div>
+      `;
+      return div;
+    }
+    
+    // ローディングメッセージ作成
+    function createLoadingMessage() {
+      const div = document.createElement('div');
+      div.className = 'loading-message message ai';
+      div.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="loading-dots">
+          <div class="loading-dot"></div>
+          <div class="loading-dot"></div>
+          <div class="loading-dot"></div>
+        </div>
+      `;
+      return div;
+    }
+    
+    // AIメッセージ作成
+    function createAIMessage() {
+      const div = document.createElement('div');
+      div.className = 'message ai';
+      div.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-content">
+          <div class="message-bubble">
+            確認しました。お答えします。
+          </div>
+          <div class="ai-answer">
+            <div class="ai-answer-section">
+              <div class="ai-answer-title">📊 回答</div>
+              <div class="ai-answer-text">
+                ご質問ありがとうございます。データを確認してお答えします。
+              </div>
+            </div>
+          </div>
+          <div class="message-actions">
+            <button class="feedback-btn" title="役に立った">👍</button>
+            <button class="feedback-btn" title="役に立たなかった">👎</button>
+          </div>
+          <div class="message-time">${new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'})}</div>
+        </div>
+      `;
+      return div;
+    }
+    
+    // 音声入力（デモ）
+    function voiceInput() {
+      alert('音声入力機能は実装時に追加されます');
+    }
+    
+    // Enterキーで送信
+    document.getElementById('chatInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,821 @@
+/* ===================================
+   signup.css
+   申込ページ + サンクスページ 共通スタイル
+   reference/gcrev-insight-signup.html 準拠
+   =================================== */
+
+/* ---- レイアウト ---- */
+.content-area {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* ===================================
+   1) ヒーロー
+   =================================== */
+.signup-hero {
+    text-align: center;
+    margin-bottom: 48px;
+    padding: 40px 32px;
+    background: linear-gradient(135deg, #3D6B6E 0%, #346062 100%);
+    border-radius: 16px;
+    color: #FFFFFF;
+}
+.signup-hero-title {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    line-height: 1.3;
+}
+.signup-hero-subtitle {
+    font-size: 16px;
+    color: rgba(255,255,255,0.9);
+    line-height: 1.6;
+}
+
+/* ===================================
+   2) プラン選択カード
+   =================================== */
+.signup-plans {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    margin-bottom: 48px;
+}
+.signup-plan-card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 3px solid #E2E6EA;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+.signup-plan-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.signup-plan-card.selected {
+    border-color: #3D6B6E;
+    background: rgba(61, 107, 110, 0.04);
+}
+.signup-plan-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: #3D6B6E;
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 12px;
+}
+.signup-plan-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: #2C3E40;
+    margin-bottom: 16px;
+}
+.signup-plan-price {
+    font-size: 36px;
+    font-weight: 700;
+    color: #3D6B6E;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+.signup-plan-unit {
+    font-size: 14px;
+    color: #666666;
+    margin-bottom: 12px;
+}
+.signup-plan-detail {
+    font-size: 14px;
+    color: #666666;
+    line-height: 1.6;
+}
+.signup-plan-checkmark {
+    display: none;
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: 24px;
+    height: 24px;
+    background: #3D6B6E;
+    border-radius: 50%;
+    color: #FFFFFF;
+    text-align: center;
+    line-height: 24px;
+    font-weight: 700;
+}
+.signup-plan-card.selected .signup-plan-checkmark {
+    display: block;
+}
+
+/* ===================================
+   2b) プラングループ（制作あり / 制作なし 分類）
+   =================================== */
+.signup-plan-group {
+    margin-bottom: 40px;
+}
+.signup-plan-group:last-child {
+    margin-bottom: 48px;
+}
+.signup-plan-group-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    border-radius: 12px 12px 0 0;
+    margin-bottom: 0;
+}
+.signup-plan-group-header--seisaku {
+    background: linear-gradient(135deg, #3D6B6E 0%, #346062 100%);
+    color: #FFFFFF;
+}
+.signup-plan-group-header--unyou {
+    background: linear-gradient(135deg, #3D8B6E 0%, #2E7A5D 100%);
+    color: #FFFFFF;
+}
+.signup-plan-group-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+}
+.signup-plan-group-name {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+.signup-plan-group-desc {
+    font-size: 14px;
+    opacity: 0.9;
+    margin: 0;
+}
+/* グループ内グリッド */
+.signup-plans--seisaku,
+.signup-plans--unyou {
+    border: 2px solid #E2E6EA;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    background: #F7F8F9;
+}
+/* 月額金額（大きく強調） */
+.signup-plan-price-monthly {
+    font-size: 16px;
+    color: #2C3E40;
+    margin-bottom: 4px;
+    line-height: 1.2;
+}
+.signup-plan-price-monthly strong {
+    font-size: 36px;
+    font-weight: 700;
+    color: #3D6B6E;
+}
+.signup-plans--unyou .signup-plan-price-monthly strong {
+    color: #3D8B6E;
+}
+/* 総額（小さく） */
+.signup-plan-price-total {
+    font-size: 14px;
+    color: #666666;
+    margin-bottom: 12px;
+}
+
+/* ===================================
+   3) セクション
+   =================================== */
+.signup-section {
+    margin-bottom: 48px;
+}
+.signup-section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #2C3E40;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #E2E6EA;
+}
+
+/* ===================================
+   4) 重要事項
+   =================================== */
+.signup-terms-box {
+    background: #F7F8F9;
+    border: 2px solid #E2E6EA;
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 48px;
+}
+.signup-terms-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.signup-terms-list li {
+    padding: 12px 0 12px 28px;
+    position: relative;
+    font-size: 14px;
+    color: #555555;
+    line-height: 1.8;
+    border-bottom: 1px solid #E2E6EA;
+}
+.signup-terms-list li:last-child {
+    border-bottom: none;
+}
+.signup-terms-list li::before {
+    content: "●";
+    position: absolute;
+    left: 8px;
+    color: #3D6B6E;
+    font-weight: bold;
+}
+.signup-terms-list strong {
+    color: #2C3E40;
+    font-weight: 600;
+}
+
+/* ===================================
+   5) 同意チェック
+   =================================== */
+.signup-consent-box {
+    background: #FFFFFF;
+    border: 2px solid #E2E6EA;
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 32px;
+}
+.signup-consent-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 0;
+    border-bottom: 1px solid #EFF1F3;
+}
+.signup-consent-item:last-child {
+    border-bottom: none;
+}
+.signup-consent-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+.signup-consent-label {
+    font-size: 15px;
+    color: #2C3E40;
+    font-weight: 500;
+    cursor: pointer;
+    flex: 1;
+}
+.signup-consent-label a {
+    color: #3D6B6E;
+    text-decoration: none;
+}
+.signup-consent-label a:hover {
+    text-decoration: underline;
+}
+.signup-consent-label .required {
+    color: #C0392B;
+    font-size: 13px;
+    font-weight: 600;
+}
+/* 同意エラーメッセージ（JS で .show 付与時に表示） */
+.signup-consent-error {
+    color: #C0392B;
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 12px;
+    padding: 10px 16px;
+    background: #FDF0EE;
+    border-radius: 8px;
+    display: none;
+}
+.signup-consent-error.show {
+    display: block;
+}
+
+/* ===================================
+   6) フォーム（MW WP Form 上書き）
+   =================================== */
+.signup-form {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 32px;
+}
+.signup-form-group {
+    margin-bottom: 24px;
+}
+.signup-form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #555555;
+    margin-bottom: 8px;
+}
+.signup-form-label .required {
+    color: #C0392B;
+    margin-left: 4px;
+}
+.signup-form-input,
+.signup-form input[type="text"],
+.signup-form input[type="email"],
+.signup-form input[type="tel"] {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 15px;
+    border: 2px solid #E2E6EA;
+    border-radius: 8px;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+.signup-form-input:focus,
+.signup-form input[type="text"]:focus,
+.signup-form input[type="email"]:focus,
+.signup-form input[type="tel"]:focus {
+    outline: none;
+    border-color: #3D6B6E;
+    box-shadow: 0 0 0 3px rgba(61, 107, 110, 0.10);
+}
+.signup-form-display {
+    padding: 12px 16px;
+    background: #F7F8F9;
+    border: 2px solid #E2E6EA;
+    border-radius: 8px;
+    font-size: 15px;
+    color: #2C3E40;
+    font-weight: 600;
+}
+
+/* MW WP Form バリデーションエラー */
+.mw_wp_form .error {
+    color: #C0392B;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+/* MW WP Form テキスト入力の統一スタイル */
+.content-area .mw_wp_form input[type="text"],
+.content-area .mw_wp_form input[type="email"],
+.content-area .mw_wp_form input[type="tel"] {
+    padding: 12px 16px;
+    font-size: 15px;
+    border: 2px solid #E2E6EA;
+    border-radius: 8px;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+.content-area .mw_wp_form input[type="text"]:focus,
+.content-area .mw_wp_form input[type="email"]:focus,
+.content-area .mw_wp_form input[type="tel"]:focus {
+    outline: none;
+    border-color: #3D6B6E;
+    box-shadow: 0 0 0 3px rgba(61, 107, 110, 0.10);
+}
+
+/* ===================================
+   6b) 電話番号 横並び3分割
+   MW WP Form で tel-1, tel-2, tel-3 と分割している場合、
+   親要素 (.signup-tel-row) または隣接 input[name^="tel"] を横並びに。
+   =================================== */
+
+/* A) テンプレート側で .signup-tel-row ラッパーを使う場合 */
+.signup-tel-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.signup-tel-row input[type="text"],
+.signup-tel-row input[type="tel"] {
+    width: auto !important;
+    flex: 1;
+    min-width: 0;
+    max-width: 140px;
+}
+.signup-tel-row .signup-tel-separator {
+    color: #8A9197;
+    font-size: 18px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+/* B) MW WP Form が連続する tel 入力を出力する場合の汎用対応
+   各 input の親 <span> を横並びにする */
+.content-area .mw_wp_form .tel-fields,
+.content-area .mw_wp_form .signup-form-tel-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.content-area .mw_wp_form .tel-fields input[type="text"],
+.content-area .mw_wp_form .tel-fields input[type="tel"],
+.content-area .mw_wp_form .signup-form-tel-group input[type="text"],
+.content-area .mw_wp_form .signup-form-tel-group input[type="tel"] {
+    width: auto !important;
+    flex: 1;
+    min-width: 0;
+    max-width: 140px;
+}
+
+/* C) MW WP Form の標準出力パターン対応:
+   name="tel-1", name="tel-2", name="tel-3" が <span> 内にある場合 */
+.content-area .mw_wp_form span + span > input[name*="tel"],
+.content-area .mw_wp_form input[name="tel-1"],
+.content-area .mw_wp_form input[name="tel-2"],
+.content-area .mw_wp_form input[name="tel-3"],
+.content-area .mw_wp_form input[name="tel1"],
+.content-area .mw_wp_form input[name="tel2"],
+.content-area .mw_wp_form input[name="tel3"] {
+    width: 120px !important;
+    max-width: 140px;
+    display: inline-block;
+}
+
+/* ===================================
+   6c) MW WP Form 送信ボタン余白調整（修正3）
+   =================================== */
+.content-area .mw_wp_form input[type="submit"] {
+    background: #3D6B6E;
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 14px 48px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(61, 107, 110, 0.3);
+    margin-top: 16px;
+}
+.content-area .mw_wp_form input[type="submit"]:hover {
+    background: #346062;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(61, 107, 110, 0.4);
+}
+.content-area .mw_wp_form input[type="submit"]:disabled {
+    background: #8A9197;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* MW WP Form フォーム全体の下余白を詰める */
+.content-area .mw_wp_form {
+    margin-bottom: 0;
+}
+/* MW WP Form の p タグ間の余白を詰める（送信ボタン手前） */
+.content-area .mw_wp_form form > p:last-of-type {
+    margin-bottom: 8px;
+}
+
+/* ===================================
+   7) CTA ボタン
+   =================================== */
+.signup-cta-box {
+    text-align: center;
+    margin-bottom: 32px;
+}
+.signup-cta-warning {
+    background: #FFF8E6;
+    color: #7A5B00;
+    font-size: 14px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: none;
+}
+.signup-cta-warning.show {
+    display: block;
+}
+.signup-cta-button {
+    background: #3D6B6E;
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 18px 48px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(61, 107, 110, 0.3);
+}
+.signup-cta-button:hover:not(:disabled) {
+    background: #346062;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(61, 107, 110, 0.4);
+}
+.signup-cta-button:disabled {
+    background: #8A9197;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+.signup-cta-note {
+    font-size: 13px;
+    color: #666666;
+    margin-top: 12px;
+}
+
+/* ===================================
+   8) フッター
+   =================================== */
+.signup-footer {
+    text-align: center;
+    padding: 24px 0;
+    border-top: 1px solid #E2E6EA;
+}
+.signup-footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+.signup-footer-link {
+    color: #666666;
+    text-decoration: none;
+    font-size: 14px;
+}
+.signup-footer-link:hover {
+    color: #3D6B6E;
+    text-decoration: underline;
+}
+
+/* ===================================
+   サンクスページ
+   =================================== */
+
+/* 完了ヒーロー */
+.thanks-hero {
+    text-align: center;
+    margin-bottom: 48px;
+    padding: 48px 32px;
+    background: linear-gradient(135deg, #3D8B6E 0%, #2E7A5D 100%);
+    border-radius: 16px;
+    color: #FFFFFF;
+}
+.thanks-hero-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+.thanks-hero-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    line-height: 1.3;
+}
+.thanks-hero-subtitle {
+    font-size: 16px;
+    color: rgba(255,255,255,0.9);
+    line-height: 1.6;
+}
+
+/* 申込内容確認 */
+.thanks-summary {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 40px;
+}
+.thanks-summary-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2C3E40;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #E2E6EA;
+}
+.thanks-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.thanks-summary-table th,
+.thanks-summary-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #EFF1F3;
+    font-size: 15px;
+}
+.thanks-summary-table th {
+    color: #666666;
+    font-weight: 600;
+    width: 140px;
+    white-space: nowrap;
+}
+.thanks-summary-table td {
+    color: #2C3E40;
+    font-weight: 500;
+}
+
+/* 決済ボタンセクション */
+.thanks-payment-section {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 40px;
+}
+.thanks-payment-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #2C3E40;
+    margin-bottom: 8px;
+}
+.thanks-payment-desc {
+    font-size: 15px;
+    color: #666666;
+    margin-bottom: 24px;
+}
+.thanks-payment-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.thanks-payment-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+}
+.thanks-payment-btn:hover {
+    transform: translateY(-2px);
+}
+.thanks-payment-btn--primary {
+    background: linear-gradient(135deg, #3D6B6E 0%, #346062 100%);
+    color: #FFFFFF;
+    box-shadow: 0 4px 12px rgba(61, 107, 110, 0.3);
+}
+.thanks-payment-btn--primary:hover {
+    box-shadow: 0 6px 16px rgba(61, 107, 110, 0.4);
+}
+.thanks-payment-btn--secondary {
+    background: #FFFFFF;
+    color: #2C3E40;
+    border-color: #E2E6EA;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.thanks-payment-btn--secondary:hover {
+    border-color: #3D6B6E;
+    box-shadow: 0 4px 12px rgba(61, 107, 110, 0.15);
+}
+.thanks-payment-btn-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+}
+.thanks-payment-btn-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.thanks-payment-btn-text strong {
+    font-size: 16px;
+    font-weight: 700;
+}
+.thanks-payment-btn-text small {
+    font-size: 13px;
+    opacity: 0.8;
+}
+.thanks-payment-btn--secondary .thanks-payment-btn-text small {
+    color: #666666;
+}
+.thanks-payment-btn-arrow {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+.thanks-payment-note {
+    font-size: 13px;
+    color: #666666;
+    line-height: 1.8;
+}
+
+/* エラー表示 */
+.thanks-error-box {
+    text-align: center;
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 60px 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin: 40px 0;
+}
+.thanks-error-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+.thanks-error-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #2C3E40;
+    margin-bottom: 12px;
+}
+.thanks-error-message {
+    font-size: 15px;
+    color: #666666;
+    line-height: 1.8;
+    margin-bottom: 32px;
+}
+.thanks-back-link {
+    display: inline-block;
+    color: #3D6B6E;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 12px 24px;
+    border: 2px solid #3D6B6E;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+.thanks-back-link:hover {
+    background: #3D6B6E;
+    color: #FFFFFF;
+}
+
+/* ===================================
+   レスポンシブ
+   =================================== */
+@media (max-width: 768px) {
+    .signup-plans,
+    .signup-plans--seisaku,
+    .signup-plans--unyou {
+        grid-template-columns: 1fr;
+    }
+    .signup-plan-group-header {
+        padding: 16px 20px;
+    }
+    .signup-plan-group-name {
+        font-size: 16px;
+    }
+    .signup-hero,
+    .thanks-hero {
+        padding: 32px 24px;
+    }
+    .signup-hero-title {
+        font-size: 24px;
+    }
+    .thanks-hero-title {
+        font-size: 22px;
+    }
+    .signup-form,
+    .thanks-summary,
+    .thanks-payment-section {
+        padding: 24px;
+    }
+    .signup-cta-button {
+        width: 100%;
+    }
+    .thanks-summary-table th {
+        width: auto;
+        display: block;
+        padding-bottom: 4px;
+        border-bottom: none;
+    }
+    .thanks-summary-table td {
+        display: block;
+        padding-top: 0;
+    }
+    .thanks-payment-btn {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    /* 電話番号: スマホでは折り返し可にする */
+    .signup-tel-row,
+    .content-area .mw_wp_form .tel-fields,
+    .content-area .mw_wp_form .signup-form-tel-group {
+        flex-wrap: wrap;
+    }
+    .signup-tel-row input[type="text"],
+    .signup-tel-row input[type="tel"],
+    .content-area .mw_wp_form .tel-fields input[type="text"],
+    .content-area .mw_wp_form .tel-fields input[type="tel"],
+    .content-area .mw_wp_form .signup-form-tel-group input[type="text"],
+    .content-area .mw_wp_form .signup-form-tel-group input[type="tel"] {
+        max-width: none;
+        flex: 1 1 80px;
+    }
+    .content-area .mw_wp_form input[type="submit"] {
+        width: 100%;
+    }
+}
+
+/* ===================================
+   印刷用
+   =================================== */
+@media print {
+    .sidebar,
+    .topbar,
+    .breadcrumb,
+    .signup-cta-box,
+    .signup-footer {
+        display: none !important;
+    }
+}

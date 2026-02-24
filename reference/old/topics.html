@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>トピックス - クライアントポータル</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f5f7fa; color: #333; line-height: 1.6; }
+        
+        header { background: #2c3e50; color: #fff; padding: 15px 20px; }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo { font-size: 20px; font-weight: 700; }
+        .user-info { font-size: 14px; }
+        
+        nav { background: #34495e; }
+        nav ul { list-style: none; display: flex; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; }
+        nav li { flex: 1; min-width: 120px; }
+        nav a { display: block; padding: 15px 20px; color: #ecf0f1; text-decoration: none; text-align: center; transition: background 0.3s; }
+        nav a:hover, nav a.active { background: #2c3e50; }
+        
+        main { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+        
+        .breadcrumb { margin-bottom: 20px; font-size: 14px; color: #7f8c8d; }
+        .breadcrumb a { color: #3498db; text-decoration: none; }
+        
+        h1 { font-size: 28px; color: #2c3e50; margin-bottom: 30px; }
+        
+        /* フィルタエリア */
+        .filter-panel { background: #fff; padding: 25px; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .filter-panel h2 { font-size: 18px; margin-bottom: 15px; color: #2c3e50; }
+        
+        .search-bar { display: flex; gap: 10px; margin-bottom: 20px; }
+        .search-bar input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .search-bar button { padding: 12px 24px; background: #3498db; color: #fff; border: none; border-radius: 4px; cursor: pointer; transition: background 0.3s; }
+        .search-bar button:hover { background: #2980b9; }
+        
+        .filter-tags { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+        .filter-tag { padding: 8px 15px; background: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 20px; cursor: pointer; transition: all 0.3s; font-size: 14px; }
+        .filter-tag:hover { background: #d5dbdb; }
+        .filter-tag.active { background: #3498db; color: #fff; border-color: #3498db; }
+        
+        .importance-filter { display: flex; gap: 10px; align-items: center; }
+        .importance-filter label { font-weight: 600; color: #555; }
+        
+        /* トピックスカード */
+        .topics-grid { display: grid; gap: 20px; }
+        
+        .topic-card { background: #fff; border-radius: 8px; padding: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.3s, box-shadow 0.3s; }
+        .topic-card:hover { transform: translateY(-5px); box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+        
+        .topic-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; gap: 15px; }
+        .topic-title { font-size: 20px; font-weight: 700; color: #2c3e50; flex: 1; }
+        .topic-title a { color: #2c3e50; text-decoration: none; }
+        .topic-title a:hover { color: #3498db; }
+        
+        .importance-badge { padding: 5px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+        .importance-badge.high { background: #e74c3c; color: #fff; }
+        .importance-badge.medium { background: #f39c12; color: #fff; }
+        .importance-badge.low { background: #95a5a6; color: #fff; }
+        
+        .topic-meta { display: flex; gap: 15px; margin-bottom: 15px; font-size: 13px; color: #7f8c8d; flex-wrap: wrap; }
+        .topic-date { display: flex; align-items: center; gap: 5px; }
+        
+        .topic-summary { color: #555; margin-bottom: 15px; line-height: 1.8; }
+        
+        .topic-impact { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 15px; border-radius: 4px; }
+        .topic-impact strong { color: #856404; }
+        .topic-impact p { margin-top: 5px; color: #555; }
+        
+        .topic-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .topic-categories { display: flex; gap: 8px; flex-wrap: wrap; }
+        .category-tag { padding: 4px 10px; background: #e8f4f8; color: #2980b9; border-radius: 3px; font-size: 12px; }
+        
+        .topic-actions { display: flex; gap: 10px; }
+        .btn { display: inline-block; padding: 8px 16px; background: #3498db; color: #fff; text-decoration: none; border-radius: 4px; transition: background 0.3s; font-size: 13px; border: none; cursor: pointer; }
+        .btn:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-small { padding: 6px 12px; font-size: 12px; }
+        
+        .pagination { display: flex; justify-content: center; gap: 10px; margin-top: 40px; }
+        .pagination a { padding: 10px 15px; background: #fff; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #333; transition: all 0.3s; }
+        .pagination a:hover, .pagination a.active { background: #3498db; color: #fff; border-color: #3498db; }
+        
+        footer { background: #2c3e50; color: #ecf0f1; text-align: center; padding: 20px; margin-top: 50px; }
+        
+        @media (max-width: 768px) {
+            nav ul { flex-direction: column; }
+            .search-bar { flex-direction: column; }
+            .topic-header { flex-direction: column; }
+            .topic-footer { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">クライアントポータル</div>
+            <div class="user-info">〇〇株式会社 / 山田太郎 様</div>
+        </div>
+    </header>
+    
+    <nav>
+        <ul>
+            <li><a href="/dashboard">ダッシュボード</a></li>
+            <li><a href="/reports">月次レポート</a></li>
+            <li><a href="/topics" class="active">トピックス</a></li>
+            <li><a href="/inquiry">問い合わせ</a></li>
+            <li><a href="/resources">資料庫</a></li>
+            <li><a href="/account">アカウント</a></li>
+        </ul>
+    </nav>
+    
+    <main>
+        <div class="breadcrumb">
+            <a href="/dashboard">ダッシュボード</a> &gt; トピックス
+        </div>
+        
+        <h1>📰 トピックス（あなたの事業に関連するニュース）</h1>
+        
+        <!-- フィルタパネル -->
+        <div class="filter-panel">
+            <h2>🔍 検索・フィルタ</h2>
+            
+            <div class="search-bar">
+                <input type="text" placeholder="キーワードで検索（例: 補助金、SEO、競合）">
+                <button>検索</button>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <strong style="display: block; margin-bottom: 10px; color: #555;">カテゴリで絞り込み:</strong>
+                <div class="filter-tags">
+                    <span class="filter-tag active">すべて</span>
+                    <span class="filter-tag">💰 補助金</span>
+                    <span class="filter-tag">📊 業界ニュース</span>
+                    <span class="filter-tag">🎯 SEO/広告</span>
+                    <span class="filter-tag">🏢 競合動向</span>
+                    <span class="filter-tag">⚖️ 法改正</span>
+                    <span class="filter-tag">📍 地域情報</span>
+                    <span class="filter-tag">🤖 技術トレンド</span>
+                </div>
+            </div>
+            
+            <div class="importance-filter">
+                <label>重要度:</label>
+                <div class="filter-tags">
+                    <span class="filter-tag active">すべて</span>
+                    <span class="filter-tag">🔴 高</span>
+                    <span class="filter-tag">🟡 中</span>
+                    <span class="filter-tag">⚪ 低</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- トピックス一覧 -->
+        <div class="topics-grid">
+            <!-- トピックス1 -->
+            <div class="topic-card">
+                <div class="topic-header">
+                    <h3 class="topic-title">
+                        <a href="/topics/123">2026年度「IT導入補助金」の申請受付が開始 - Webサイト制作も対象</a>
+                    </h3>
+                    <span class="importance-badge high">重要度: 高</span>
+                </div>
+                
+                <div class="topic-meta">
+                    <span class="topic-date">📅 2026/01/24</span>
+                    <span>📂 補助金</span>
+                </div>
+                
+                <div class="topic-summary">
+                    経済産業省は、2026年度「IT導入補助金」の申請受付を開始しました。今年度は、Webサイト制作やECサイト構築も補助対象に追加され、中小企業のDX推進を強力に支援します。補助率は最大2/3、上限450万円。申請期限は2026年3月31日まで。
+                </div>
+                
+                <div class="topic-impact">
+                    <strong>🎯 あなたの事業への影響:</strong>
+                    <p>現在検討中のWebサイトリニューアルに、この補助金を活用できる可能性があります。最大300万円の補助が見込めるため、早急に申請の検討をおすすめします。</p>
+                </div>
+                
+                <div class="topic-footer">
+                    <div class="topic-categories">
+                        <span class="category-tag">補助金</span>
+                        <span class="category-tag">DX推進</span>
+                        <span class="category-tag">Web制作</span>
+                    </div>
+                    <div class="topic-actions">
+                        <a href="https://example.com/it-subsidy-2026" target="_blank" class="btn btn-small">🔗 出典を見る</a>
+                        <a href="/inquiry/new?topic=123" class="btn btn-secondary btn-small">💬 相談する</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- トピックス2 -->
+            <div class="topic-card">
+                <div class="topic-header">
+                    <h3 class="topic-title">
+                        <a href="/topics/122">Google、2026年3月にコアアルゴリズムアップデートを実施予定</a>
+                    </h3>
+                    <span class="importance-badge medium">重要度: 中</span>
+                </div>
+                
+                <div class="topic-meta">
+                    <span class="topic-date">📅 2026/01/23</span>
+                    <span>📂 SEO/広告</span>
+                </div>
+                
+                <div class="topic-summary">
+                    Googleは、2026年3月にコアアルゴリズムの大規模アップデートを実施すると発表しました。今回のアップデートでは、ユーザー体験（UX）とコンテンツの独自性がより重視される見込みです。特にモバイルページの表示速度と、E-E-A-T（経験・専門性・権威性・信頼性）が評価基準となります。
+                </div>
+                
+                <div class="topic-impact">
+                    <strong>🎯 あなたの事業への影響:</strong>
+                    <p>現在のWebサイトのモバイル表示速度が平均以下のため、検索順位に影響が出る可能性があります。アップデート前にページ速度改善とコンテンツ見直しを推奨します。</p>
+                </div>
+                
+                <div class="topic-footer">
+                    <div class="topic-categories">
+                        <span class="category-tag">SEO</span>
+                        <span class="category-tag">Google</span>
+                        <span class="category-tag">アルゴリズム</span>
+                    </div>
+                    <div class="topic-actions">
+                        <a href="https://example.com/google-update-2026" target="_blank" class="btn btn-small">🔗 出典を見る</a>
+                        <a href="/inquiry/new?topic=122" class="btn btn-secondary btn-small">💬 相談する</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- トピックス3 -->
+            <div class="topic-card">
+                <div class="topic-header">
+                    <h3 class="topic-title">
+                        <a href="/topics/121">競合A社が新サービス「〇〇プラン」をリリース - 価格競争が激化</a>
+                    </h3>
+                    <span class="importance-badge high">重要度: 高</span>
+                </div>
+                
+                <div class="topic-meta">
+                    <span class="topic-date">📅 2026/01/22</span>
+                    <span>📂 競合動向</span>
+                </div>
+                
+                <div class="topic-summary">
+                    競合A社が、従来サービスより30%低価格の新プラン「〇〇プラン」をリリースしました。若年層をターゲットにしたシンプルな設計で、SNSでの口コミが急拡大しています。初月無料キャンペーンも実施中で、顧客流出のリスクが高まっています。
+                </div>
+                
+                <div class="topic-impact">
+                    <strong>🎯 あなたの事業への影響:</strong>
+                    <p>価格帯が競合するため、既存顧客の流出リスクがあります。差別化ポイント（品質・サポート）の訴求強化と、プロモーション戦略の見直しが急務です。緊急ミーティングを推奨します。</p>
+                </div>
+                
+                <div class="topic-footer">
+                    <div class="topic-categories">
+                        <span class="category-tag">競合</span>
+                        <span class="category-tag">価格戦略</span>
+                        <span class="category-tag">市場動向</span>
+                    </div>
+                    <div class="topic-actions">
+                        <a href="https://example.com/competitor-a-new-plan" target="_blank" class="btn btn-small">🔗 出典を見る</a>
+                        <a href="/inquiry/new?topic=121" class="btn btn-secondary btn-small">💬 相談する</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- トピックス4 -->
+            <div class="topic-card">
+                <div class="topic-header">
+                    <h3 class="topic-title">
+                        <a href="/topics/120">地域経済ニュース: 〇〇市が「中小企業DX支援プログラム」を開始</a>
+                    </h3>
+                    <span class="importance-badge low">重要度: 低</span>
+                </div>
+                
+                <div class="topic-meta">
+                    <span class="topic-date">📅 2026/01/20</span>
+                    <span>📂 地域情報</span>
+                </div>
+                
+                <div class="topic-summary">
+                    〇〇市が、地域の中小企業向けに「DX支援プログラム」を開始しました。専門家による無料相談、ITツール導入支援、オンラインセミナーを提供。参加企業には最大50万円の助成金も用意されています。申込は市のWebサイトから。
+                </div>
+                
+                <div class="topic-impact">
+                    <strong>🎯 あなたの事業への影響:</strong>
+                    <p>直接的な影響は少ないですが、地域でのビジネス機会拡大に活用できる可能性があります。関心があればご相談ください。</p>
+                </div>
+                
+                <div class="topic-footer">
+                    <div class="topic-categories">
+                        <span class="category-tag">地域</span>
+                        <span class="category-tag">DX</span>
+                        <span class="category-tag">助成金</span>
+                    </div>
+                    <div class="topic-actions">
+                        <a href="https://example.com/city-dx-program" target="_blank" class="btn btn-small">🔗 出典を見る</a>
+                        <a href="/inquiry/new?topic=120" class="btn btn-secondary btn-small">💬 相談する</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ページネーション -->
+        <div class="pagination">
+            <a href="#">&laquo; 前へ</a>
+            <a href="#" class="active">1</a>
+            <a href="#">2</a>
+            <a href="#">3</a>
+            <a href="#">4</a>
+            <a href="#">5</a>
+            <a href="#">次へ &raquo;</a>
+        </div>
+    </main>
+    
+    <footer>
+        <p>&copy; 2026 Your Company. All rights reserved.</p>
+    </footer>
+</body>
+</html>

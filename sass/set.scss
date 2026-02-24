@@ -1,0 +1,94 @@
+// ===========================
+// Color Palette — みたて365 ロゴ準拠
+// ===========================
+// 和モダン・静か・知的・落ち着き
+// 生成り背景 × 墨黒文字 × スモーキーネイビーアクセント
+
+$primary-color: #2F3A4A;    // ダークネイビー（メインアクセント）
+$primary-hover: #3D4B5C;    // ネイビーやや明るめ（ホバー）
+
+$secondary-color: #2B2B2B;  // 墨黒（見出し等）
+$tertiary-color: #4A5261;   // スモーキーブルーグレー
+
+$success-color: #5B8A72;    // くすみグリーン
+$success-bg: #EDF3EF;       // くすみグリーン背景
+$success-border: #5B8A72;
+$success-text: #3A5C49;     // くすみグリーン濃
+
+$danger-color: #B5574B;     // 落ち着いた赤（煉瓦色）
+$danger-hover: #9C4940;
+
+$warning-color: #C9A84C;    // くすみイエロー
+
+$neutral-color: #8C8A85;    // ウォームグレー
+$neutral-hover: #726F6A;
+
+
+// ===========================
+// Background Colors — 生成り〜グレージュ系
+// ===========================
+
+$bg-light: #F2F1EC;         // メイン背景（生成りグレージュ）
+$bg-card: #FAF9F6;          // カード背景（背景よりわずかに白寄り）
+
+$bg-kpi: #EEEDEA;           // KPI背景
+$bg-note: #EEEDEA;          // KPIと同色（用途別で残す）
+$bg-info: #F5F4F0;          // インフォ背景
+$bg-comparison: #EDE9E3;    // 比較テーブル背景
+
+
+// ===========================
+// Text Colors — 墨黒〜チャコール
+// ===========================
+
+$text-primary: #2B2B2B;     // メイン文字（墨黒）
+$text-secondary: #666660;   // 補助文字（ウォームグレー）
+$text-muted: #8C8A85;       // ミュート文字
+$text-light: #EEEDEA;       // 明色テキスト
+
+
+// ===========================
+// Border — 薄いグレージュ
+// ===========================
+
+$border-color: #E5E3DC;     // ごく薄いグレージュボーダー
+
+
+// ===========================
+// Shadow — 柔らかい奥行き
+// ===========================
+
+$shadow-sm: 0 1px 3px rgba(43, 43, 43, 0.06);
+$shadow-md: 0 2px 8px rgba(43, 43, 43, 0.06);
+$shadow-lg: 0 4px 12px rgba(47, 58, 74, 0.12);
+
+
+// ===========================
+// Radius
+// ===========================
+
+$border-radius-sm: 4px;
+$border-radius-md: 6px;
+$border-radius: 8px;
+
+
+// ===========================
+// Breakpoints & Mixin
+// ===========================
+
+$breakpoints: (
+  'xs': (max-width: 0),
+  'sm': (max-width: 576px),
+  'md': (max-width: 768px),
+  'lg': (max-width: 1366px),
+  'xl': (max-width: 1440px),
+  'xxl': (max-width: 1680px)
+) !default;
+
+@mixin responsive($breakpoint) {
+  @if map-has-key($breakpoints, $breakpoint) {
+    @media screen and #{inspect(map-get($breakpoints, $breakpoint))} {
+      @content;
+    }
+  }
+}

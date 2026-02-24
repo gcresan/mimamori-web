@@ -1,0 +1,152 @@
+@charset "UTF-8";
+
+
+// 変数定義 — みたて365 ロゴ準拠
+$primary-color: #2F3A4A;
+$primary-hover: #3D4B5C;
+$secondary-color: #2B2B2B;
+
+$text-primary: #2B2B2B;
+$text-secondary: #666660;
+$text-muted: #8C8A85;
+
+$bg-light: #F2F1EC;
+$bg-card: #FAF9F6;
+$bg-note: #EEEDEA;
+
+$border-color: #E5E3DC;
+
+$shadow-md: 0 2px 8px rgba(43, 43, 43, 0.06);
+
+$border-radius: 8px;
+$border-radius-sm: 4px;
+
+// リセット
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+// ベーススタイル
+body {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  background: $bg-light;
+  color: $text-primary;
+  line-height: 1.6;
+}
+
+// ログインコンテナ
+.container {
+  max-width: 600px;
+  margin: 80px auto;
+  padding: 40px;
+  background: $bg-card;
+  border-radius: $border-radius;
+  box-shadow: $shadow-md;
+}
+.req {
+  color:#ff0000;
+  font-size:20px;
+}
+.req-text {
+  font-size:12px;
+}
+.div_text {
+  margin-bottom:20px;
+}
+// ロゴ
+.logo {
+  text-align: center;
+  margin-bottom: 30px;
+
+  img {
+    max-width: 150px;
+  }
+}
+
+// 見出し
+h1 {
+  font-size: 24px;
+  text-align: center;
+  margin-bottom: 30px;
+  color: $secondary-color;
+}
+
+
+// フォームグループ
+.form-group {
+  margin-bottom: 20px;
+}
+fieldset {
+  border:none !important;
+}
+legend {
+  display:none;
+}
+// ラベル
+label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+// 入力フィールド
+input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-sm;
+  font-size: 14px;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+  }
+}
+
+// プライマリボタン
+.buttons {
+  width: 100%;
+  padding: 14px;
+  background: $primary-color;
+  color: $bg-card;
+  border: none;
+  border-radius: $border-radius-sm;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s;
+
+  &:hover {
+    background: $primary-hover;
+  }
+}
+
+// リンク
+.links {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 14px;
+
+  a {
+    color: $primary-color;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+// セキュリティ注意書き
+.security-note {
+  margin-top: 30px;
+  padding: 15px;
+  background: $bg-note;
+  border-radius: $border-radius-sm;
+  font-size: 12px;
+  color: $text-muted;
+  text-align: center;
+}

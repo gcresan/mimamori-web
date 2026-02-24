@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html <?php language_attributes(); ?>>
+   <head>
+      <meta charset="<?php bloginfo('charset'); ?>">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+      <title><?php wp_title(' | ', true, 'right'); bloginfo('name'); ?></title>
+      <link rel="icon" type="image/x-icon" href="<?php echo get_template_directory_uri(); ?>/images/favicon.ico">
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <link rel="stylesheet" type="text/css" href="<?php echo get_template_directory_uri(); ?>/css/import.css" media="all">
+      <?php get_template_part( 'kaiseki' ); ?>
+      <?php wp_head(); ?>
+   </head>
+<?php if(is_home() && !is_paged()): ?>
+<body class="page blog">
+<?php elseif ( is_front_page() ) : ?>
+<body class="login">
+<?php elseif ( is_page('8') ) : ?>
+<body class="page dashboard">
+<?php elseif ( is_page('13') ) : ?>
+<body class="page account">
+<?php elseif ( is_page('75') ) : ?>
+<body class="page analysis">
+<?php elseif ( is_page('21') ) : ?>
+<body class="page service">
+<?php else : ?>
+<!-- <body class="page blog"> -->
+<body <?php body_class(); ?>>
+<?php endif; ?>
+
+   <!-- サイドバーオーバーレイ(モバイル用) -->
+   <div class="sidebar-overlay" id="sidebarOverlay"></div>
+   <div class="app-container">
+   <!-- サイドバー -->
+   <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+         <div class="logo-area">
+            <a href="<?php echo esc_url( home_url() ); ?>">
+               <img src="<?php echo esc_url( get_template_directory_uri() . '/images/common/logo.png' ); ?>" width="518" height="341" alt="みたて365">
+            </a>
+         </div>
+         <?php if ( is_user_logged_in() ) :
+            $u = wp_get_current_user();
+
+            // 表示名優先 → 姓
+            $company = $u->last_name ?: $u->display_name;
+            ?>
+         <div class="sidebar-user-info">
+            <div class="sidebar-user-name">
+               <?php echo esc_html( $company ); ?> 様
+            </div>
+            <div class="sidebar-user-plan">
+               お試し期間：残り14日
+            </div>
+         </div>
+         <?php endif; ?>
+      </div>
+      <nav class="sidebar-nav">
+         <!-- B. ホームページ（GA / GSC）-->
+         <div class="nav-section">
+            <div class="nav-section-title">概要</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/dashboard/'); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
+                  <span class="nav-icon">◎</span>
+                  <span>全体のようす</span>
+                  </a>
+               </li>
+            </ul>
+         </div>
+         <div class="nav-section">
+            <div class="nav-section-title">分析</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/report/report-latest/'); ?>" class="nav-link <?php echo is_page('report-latest') ? 'active' : ''; ?>">
+                  <span class="nav-icon">◯</span>
+                  <span>今月のふりかえり</span>
+                  </a>
+                  <ul class="nav-submenu">
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/analysis-device/'); ?>" class="nav-link <?php echo is_page('analysis-device') ? 'active' : ''; ?>">
+                        <span>スマホとパソコンの割合</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/analysis-age/'); ?>" class="nav-link <?php echo is_page('analysis-age') ? 'active' : ''; ?>">
+                        <span>見ている人の年代</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/analysis-source/'); ?>" class="nav-link <?php echo is_page('analysis-source') ? 'active' : ''; ?>">
+                        <span>見つけたきっかけ</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/analysis-region/'); ?>" class="nav-link <?php echo is_page('analysis-region') ? 'active' : ''; ?>">
+                        <span>見ている人の場所</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/analysis-pages/'); ?>" class="nav-link <?php echo is_page('analysis-pages') ? 'active' : ''; ?>">
+                        <span>よく見られているページ</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/analysis-keywords/'); ?>" class="nav-link <?php echo is_page('analysis-keywords') ? 'active' : ''; ?>">
+                        <span>どんな言葉で探された？</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/analysis-cv/'); ?>" class="nav-link <?php echo is_page('analysis-cv') ? 'active' : ''; ?>">
+                        <span>お問い合わせの数</span>
+                        </a>
+                     </li>
+                  </ul>
+               </li>
+
+
+            </ul>
+         </div>
+         <!-- C. MEO（Googleビジネス） -->
+         <div class="nav-section">
+            <div class="nav-section-title">MEO（Googleビジネス）</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('meo/meo-dashboard/'); ?>" class="nav-link">
+                  <span class="nav-icon">📍</span>
+                  <span>ダッシュボード</span>
+                  </a>
+               </li>
+            </ul>
+            <ul class="nav-submenu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/meo-report/'); ?>" class="nav-link">
+                  <span>診断レポート</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/meo-ranking/'); ?>" class="nav-link">
+                  <span>順位チェック</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/meo-reviews/'); ?>" class="nav-link">
+                  <span>クチコミ分析</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/meo-posts/'); ?>" class="nav-link">
+                  <span>投稿チェック</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/meo-competitors/'); ?>" class="nav-link">
+                  <span>競合比較</span>
+                  </a>
+               </li>
+            </ul>
+         </div>
+         <!-- D. SNS（Instagram） -->
+         <div class="nav-section">
+            <div class="nav-section-title">SNS（Instagram）</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/instagram-dashboard/'); ?>" class="nav-link">
+                  <span class="nav-icon">📱</span>
+                  <span>ダッシュボード</span>
+                  </a>
+               </li>
+            </ul>
+            <ul class="nav-submenu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/instagram-posts/'); ?>" class="nav-link">
+                  <span>投稿別分析</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/instagram-followers/'); ?>" class="nav-link">
+                  <span>フォロワー推移</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/instagram-hashtags/'); ?>" class="nav-link">
+                  <span>ハッシュタグ分析</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/instagram-ai-suggestions/'); ?>" class="nav-link">
+                  <span>改善提案（AI）</span>
+                  </a>
+               </li>
+            </ul>
+         </div>
+         <!-- E. AI支援 / 改善提案 -->
+         <div class="nav-section">
+            <div class="nav-section-title">AI支援 / 改善提案</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/ai-improvements/'); ?>" class="nav-link">
+                  <span class="nav-icon">🤖</span>
+                  <span>今月の改善ポイント</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/ai-priority-actions/'); ?>" class="nav-link">
+                  <span class="nav-icon">⭐</span>
+                  <span>優先施策ランキング</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/ai-content-ideas/'); ?>" class="nav-link">
+                  <span class="nav-icon">✏️</span>
+                  <span>コンテンツ企画AI</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/ai-ad-suggestions/'); ?>" class="nav-link">
+                  <span class="nav-icon">📢</span>
+                  <span>広告改善案</span>
+                  </a>
+               </li>
+            </ul>
+         </div>
+         <!-- F. お知らせ・トピックス -->
+         <div class="nav-section">
+            <div class="nav-section-title">お知らせ・トピックス</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/topics/'); ?>" class="nav-link">
+                  <span class="nav-icon">📰</span>
+                  <span>最新トピックス</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/updates/'); ?>" class="nav-link">
+                  <span class="nav-icon">🔔</span>
+                  <span>機能アップデート</span>
+                  </a>
+               </li>
+
+            </ul>
+         </div>
+         <!-- G. サポート・問い合わせ -->
+         <div class="nav-section">
+            <div class="nav-section-title">サポート・問い合わせ</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/faq/'); ?>" class="nav-link">
+                  <span class="nav-icon">❓</span>
+                  <span>よくある質問</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/tutorials/'); ?>" class="nav-link">
+                  <span class="nav-icon">📚</span>
+                  <span>使い方ガイド</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/inquiry/'); ?>" class="nav-link">
+                  <span class="nav-icon">✉️</span>
+                  <span>問い合わせ</span>
+                  </a>
+               </li>
+            </ul>
+         </div>
+         <!-- H. オプションサービス -->
+         <div class="nav-section">
+            <div class="nav-section-title">オプションサービス</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/service/'); ?>" class="nav-link">
+                  <span class="nav-icon">🚀</span>
+                  <span>伴走サポート</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/improvement-request/'); ?>" class="nav-link">
+                  <span class="nav-icon">🔧</span>
+                  <span>改善依頼</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/training/'); ?>" class="nav-link">
+                  <span class="nav-icon">🎓</span>
+                  <span>研修申込み</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/ad-consulting/'); ?>" class="nav-link">
+                  <span class="nav-icon">📢</span>
+                  <span>広告相談</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/meeting-reservation/'); ?>" class="nav-link">
+                  <span class="nav-icon">📅</span>
+                  <span>打ち合わせ予約</span>
+                  </a>
+               </li>
+            </ul>
+         </div>
+         <!-- I. アカウント -->
+         <div class="nav-section">
+            <div class="nav-section-title">アカウント</div>
+            <ul class="nav-menu">
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/account/plan/'); ?>" class="nav-link">
+                  <span class="nav-icon">⚙️</span>
+                  <span>プラン確認</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/account/contract/'); ?>" class="nav-link">
+                  <span class="nav-icon">📋</span>
+                  <span>契約状況</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/account/billing/'); ?>" class="nav-link">
+                  <span class="nav-icon">💳</span>
+                  <span>請求情報</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/account/period/'); ?>" class="nav-link">
+                  <span class="nav-icon">📆</span>
+                  <span>利用期間</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/account/client-settings/'); ?>" class="nav-link">
+                  <span class="nav-icon">🏢</span>
+                  <span>クライアント設定</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/account/ga-gsc-connection/'); ?>" class="nav-link">
+                  <span class="nav-icon">🔌</span>
+                  <span>GA / GSC連携</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/account/meo-connection/'); ?>" class="nav-link">
+                  <span class="nav-icon">📍</span>
+                  <span>MEO連携</span>
+                  </a>
+               </li>
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/account/notifications/'); ?>" class="nav-link">
+                  <span class="nav-icon">🔔</span>
+                  <span>通知設定</span>
+                  </a>
+               </li>
+            </ul>
+         </div>
+      </nav>
+   </aside>
+   <!-- メインコンテンツ -->
+   <main class="main-content">
+   <!-- トップバー -->
+   <div class="topbar">
+      <div class="topbar-left">
+         <button class="menu-toggle" id="menuToggle">☰</button>
+         <h1 class="page-title"><?php
+            $page_title = get_query_var('gcrev_page_title');
+            if (!$page_title) {
+                $page_title = get_the_title();
+            }
+            echo esc_html($page_title);
+            ?></h1>
+         <?php
+         $page_subtitle = get_query_var('gcrev_page_subtitle');
+         if ($page_subtitle):
+         ?>
+         <p class="page-subtitle"><?php echo esc_html($page_subtitle); ?></p>
+         <?php endif; ?>
+      </div>
+      <div class="topbar-right">
+         <?php if ( is_user_logged_in() ) :
+            $u = wp_get_current_user();
+            $company = $u->last_name ?: $u->display_name;
+            ?>
+
+         <a href="<?php echo home_url('/report/report-settings/'); ?>" class="report-setting-btn">AIレポート設定</a>
+         <div class="logout">
+            <a href="<?php echo wp_logout_url( home_url('/login/') ); ?>" class="logout-btn">
+            ログアウト
+            </a>
+         </div>
+         <?php endif; ?>
+      </div>
+   </div>
+   <!-- パンくず（ページ側で出力する場合もあり） -->
+   <?php 
+      $breadcrumb = get_query_var('gcrev_breadcrumb');
+      if ($breadcrumb): 
+      ?>
+   <div class="breadcrumb">
+      <?php echo $breadcrumb; // XSS対策済みの前提 ?>
+   </div>
+   <?php endif; ?>
+   <!-- ここからページ固有のコンテンツが始まる -->

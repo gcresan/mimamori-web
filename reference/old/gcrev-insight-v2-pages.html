@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ページ - GCREV INSIGHT</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: #1a1d24;
+            color: #fff;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .sidebar-nav {
+            padding: 16px 0 32px 0;
+        }
+
+        .nav-section {
+            margin-bottom: 20px;
+        }
+
+        .nav-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 12px 20px 8px 20px;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 2px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 20px;
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            background: rgba(255,255,255,0.06);
+            color: #e5e7eb;
+        }
+
+        .nav-link.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            font-weight: 600;
+        }
+
+        .nav-link.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: #3b82f6;
+            border-radius: 0 2px 2px 0;
+        }
+
+        .nav-icon {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .nav-submenu {
+            list-style: none;
+            margin-top: 2px;
+        }
+
+        .nav-submenu .nav-link {
+            padding: 8px 20px 8px 52px;
+            font-size: 13px;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            width: calc(100% - 260px);
+        }
+
+        .topbar {
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #333;
+            padding: 4px;
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .user-menu:hover {
+            background: #f3f4f6;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .breadcrumb {
+            padding: 16px 32px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .breadcrumb a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb span {
+            margin: 0 8px;
+            color: #d1d5db;
+        }
+
+        .content-area {
+            padding: 32px;
+            max-width: 1400px;
+        }
+
+        .filter-section {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid #f0f0f0;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #4b5563;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .filter-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .filter-btn {
+            padding: 10px 20px;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover {
+            background: #2563eb;
+        }
+
+        .filter-btn.secondary {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .filter-btn.secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .table-section {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid #f0f0f0;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .table-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .table-btn {
+            padding: 8px 16px;
+            background: #f3f4f6;
+            color: #4b5563;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .table-btn:hover {
+            background: #e5e7eb;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .data-table thead th {
+            background: #f9fafb;
+            padding: 14px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+            white-space: nowrap;
+        }
+
+        .data-table tbody tr {
+            border-bottom: 1px solid #f3f4f6;
+            transition: background 0.2s ease;
+        }
+
+        .data-table tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .data-table tbody td {
+            padding: 14px 12px;
+            color: #6b7280;
+        }
+
+        .data-table tbody td.page-url {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #3b82f6;
+            font-weight: 500;
+        }
+
+        .rank-badge {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            background: #f3f4f6;
+            color: #6b7280;
+            text-align: center;
+            line-height: 28px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .rank-badge.top5 {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #fff;
+        }
+
+        .trend-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .trend-badge.up {
+            background: #ecfdf5;
+            color: #10b981;
+        }
+
+        .trend-badge.down {
+            background: #fef2f2;
+            color: #ef4444;
+        }
+
+        .trend-badge.neutral {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 24px;
+        }
+
+        .pagination-btn {
+            padding: 8px 12px;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            color: #4b5563;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .pagination-btn:hover {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+        }
+
+        .pagination-btn.active {
+            background: #3b82f6;
+            color: #fff;
+            border-color: #3b82f6;
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .topbar {
+                padding: 12px 16px;
+            }
+
+            .page-title {
+                font-size: 18px;
+            }
+
+            .content-area {
+                padding: 16px;
+            }
+
+            .breadcrumb {
+                padding: 12px 16px;
+            }
+
+            .user-menu span {
+                display: none;
+            }
+
+            .filter-row {
+                flex-direction: column;
+            }
+
+            .filter-group {
+                width: 100%;
+            }
+
+            .table-section {
+                overflow-x: auto;
+            }
+
+            .data-table {
+                min-width: 900px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="app-container">
+        <!-- サイドバー（省略：前のファイルと同じ） -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="#" class="logo">
+                    <div class="logo-icon">G</div>
+                    <span>GCREV INSIGHT</span>
+                </a>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">ダッシュボード</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="gcrev-insight-v2-dashboard.html" class="nav-link"><span class="nav-icon">📊</span><span>総合ダッシュボード</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">💡</span><span>今月の結論 / ネクストアクション</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📈</span><span>KPI一覧</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🔔</span><span>アラート</span></a></li>
+                    </ul>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">ホームページ（GA / GSC）</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🏠</span><span>ダッシュボード</span></a></li>
+                        <li class="nav-item"><a href="gcrev-insight-v2-analysis.html" class="nav-link"><span class="nav-icon">🔍</span><span>分析（トップ）</span></a></li>
+                        <li class="nav-item"><a href="gcrev-insight-v2-keywords.html" class="nav-link"><span class="nav-icon">🔑</span><span>キーワード</span></a></li>
+                        <li class="nav-item"><a href="gcrev-insight-v2-pages.html" class="nav-link active"><span class="nav-icon">📄</span><span>ページ</span></a></li>
+                    </ul>
+                </div>
+                <!-- 他のセクションは省略 -->
+            </nav>
+        </aside>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <div class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle">☰</button>
+                    <h1 class="page-title">ページ</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="user-menu">
+                        <div class="user-avatar">G</div>
+                        <span style="font-size: 14px; font-weight: 600;">管理者</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="breadcrumb">
+                <a href="#">ホーム</a>
+                <span>›</span>
+                <a href="#">ホームページ</a>
+                <span>›</span>
+                <strong>ページ</strong>
+            </div>
+
+            <div class="content-area">
+                <!-- フィルターセクション -->
+                <div class="filter-section">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label class="filter-label">期間</label>
+                            <select class="filter-input">
+                                <option>前月（2026年1月）</option>
+                                <option>直近30日</option>
+                                <option>前々月（2025年12月）</option>
+                                <option>カスタム期間</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">ページURL検索</label>
+                            <input type="text" class="filter-input" placeholder="URLまたはタイトルを入力...">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">並び替え</label>
+                            <select class="filter-input">
+                                <option>PV数（多い順）</option>
+                                <option>PV数（少ない順）</option>
+                                <option>セッション（多い順）</option>
+                                <option>エンゲージメント率（高い順）</option>
+                            </select>
+                        </div>
+                        <div class="filter-group" style="flex: 0;">
+                            <label class="filter-label">&nbsp;</label>
+                            <button class="filter-btn">🔍 検索</button>
+                        </div>
+                        <div class="filter-group" style="flex: 0;">
+                            <label class="filter-label">&nbsp;</label>
+                            <button class="filter-btn secondary">リセット</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- データテーブルセクション -->
+                <div class="table-section">
+                    <div class="table-header">
+                        <h3 class="table-title">ページ別パフォーマンス</h3>
+                        <div class="table-actions">
+                            <button class="table-btn">📥 CSVエクスポート</button>
+                            <button class="table-btn">📊 レポート作成</button>
+                        </div>
+                    </div>
+
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>順位</th>
+                                <th>ページタイトル / URL</th>
+                                <th>PV</th>
+                                <th>割合</th>
+                                <th>セッション</th>
+                                <th>平均滞在時間</th>
+                                <th>直帰率</th>
+                                <th>エンゲージメント率</th>
+                                <th>変動</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="rank-badge top5">1</span></td>
+                                <td class="page-url">トップページ<br><small style="color: #9ca3af;">/</small></td>
+                                <td>1,875</td>
+                                <td>22.4%</td>
+                                <td>2,215</td>
+                                <td>1:42</td>
+                                <td>42.3%</td>
+                                <td>42.7%</td>
+                                <td><span class="trend-badge up">↑ 5.3%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge top5">2</span></td>
+                                <td class="page-url">会社概要<br><small style="color: #9ca3af;">/about</small></td>
+                                <td>986</td>
+                                <td>11.8%</td>
+                                <td>856</td>
+                                <td>2:15</td>
+                                <td>38.5%</td>
+                                <td>38.2%</td>
+                                <td><span class="trend-badge up">↑ 2.1%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge top5">3</span></td>
+                                <td class="page-url">サービス案内<br><small style="color: #9ca3af;">/service</small></td>
+                                <td>842</td>
+                                <td>10.0%</td>
+                                <td>732</td>
+                                <td>3:20</td>
+                                <td>35.8%</td>
+                                <td>45.1%</td>
+                                <td><span class="trend-badge down">↓ 1.8%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge top5">4</span></td>
+                                <td class="page-url">お問い合わせ<br><small style="color: #9ca3af;">/contact</small></td>
+                                <td>645</td>
+                                <td>7.7%</td>
+                                <td>589</td>
+                                <td>1:52</td>
+                                <td>28.3%</td>
+                                <td>52.3%</td>
+                                <td><span class="trend-badge up">↑ 8.2%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge top5">5</span></td>
+                                <td class="page-url">ブログ一覧<br><small style="color: #9ca3af;">/blog</small></td>
+                                <td>523</td>
+                                <td>6.2%</td>
+                                <td>468</td>
+                                <td>2:08</td>
+                                <td>45.2%</td>
+                                <td>35.8%</td>
+                                <td><span class="trend-badge down">↓ 3.5%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge">6</span></td>
+                                <td class="page-url">制作実績<br><small style="color: #9ca3af;">/works</small></td>
+                                <td>412</td>
+                                <td>4.9%</td>
+                                <td>385</td>
+                                <td>2:45</td>
+                                <td>32.8%</td>
+                                <td>48.5%</td>
+                                <td><span class="trend-badge up">↑ 6.5%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge">7</span></td>
+                                <td class="page-url">料金プラン<br><small style="color: #9ca3af;">/pricing</small></td>
+                                <td>358</td>
+                                <td>4.3%</td>
+                                <td>325</td>
+                                <td>2:38</td>
+                                <td>40.5%</td>
+                                <td>44.2%</td>
+                                <td><span class="trend-badge up">↑ 12.8%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge">8</span></td>
+                                <td class="page-url">採用情報<br><small style="color: #9ca3af;">/recruit</small></td>
+                                <td>285</td>
+                                <td>3.4%</td>
+                                <td>268</td>
+                                <td>1:58</td>
+                                <td>52.8%</td>
+                                <td>38.5%</td>
+                                <td><span class="trend-badge neutral">- 0.8%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge">9</span></td>
+                                <td class="page-url">よくある質問<br><small style="color: #9ca3af;">/faq</small></td>
+                                <td>248</td>
+                                <td>3.0%</td>
+                                <td>221</td>
+                                <td>3:12</td>
+                                <td>28.5%</td>
+                                <td>55.8%</td>
+                                <td><span class="trend-badge up">↑ 18.5%</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rank-badge">10</span></td>
+                                <td class="page-url">お客様の声<br><small style="color: #9ca3af;">/voice</small></td>
+                                <td>215</td>
+                                <td>2.6%</td>
+                                <td>198</td>
+                                <td>2:25</td>
+                                <td>35.2%</td>
+                                <td>48.2%</td>
+                                <td><span class="trend-badge up">↑ 4.8%</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- ペジネーション -->
+                    <div class="pagination">
+                        <button class="pagination-btn" disabled>‹ 前へ</button>
+                        <button class="pagination-btn active">1</button>
+                        <button class="pagination-btn">2</button>
+                        <button class="pagination-btn">3</button>
+                        <button class="pagination-btn">4</button>
+                        <button class="pagination-btn">5</button>
+                        <button class="pagination-btn">次へ ›</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuToggle = document.getElementById('menuToggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+            });
+
+            sidebarOverlay.addEventListener('click', function() {
+                sidebar.classList.remove('active');
+                sidebarOverlay.classList.remove('active');
+            });
+        });
+    </script>
+</body>
+</html>

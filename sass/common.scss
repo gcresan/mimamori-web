@@ -1,0 +1,435 @@
+@charset "UTF-8";
+@import 'set';
+
+/* ローディングオーバーレイ */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.loading-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-spinner {
+    background: $bg-card;
+    padding: 32px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 16px;
+    border: 4px solid $border-color;
+    border-top-color: $primary-color;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+// header
+.sidebar-user-info {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid $border-color;
+    text-align: left;
+}
+
+.sidebar-user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+}
+
+.sidebar-user-plan {
+    margin-top: 4px;
+    font-size: 12px;
+    color: $text-secondary;
+}
+
+
+
+
+/* レイアウト構造 */
+.app-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* サイドバー — 生成り系ライトテーマ */
+.sidebar {
+    width: 260px;
+    background: $bg-card;
+    color: $text-primary;
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+    border-right: 1px solid $border-color;
+}
+
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(43, 43, 43, 0.12);
+    border-radius: 3px;
+}
+
+.sidebar-header {
+    padding: 24px 20px;
+    border-bottom: 1px solid $border-color;
+}
+
+.logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: $secondary-color;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo-icon {
+    width: 36px;
+    height: 36px;
+    background: $primary-color;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: #FAF9F6;
+}
+
+.sidebar-nav {
+    padding: 16px 0 32px;
+
+    .nav-section {
+        margin-bottom: 20px;
+    }
+
+    .nav-section-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: $text-secondary;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        padding: 12px 20px 8px;
+    }
+
+    .nav-menu {
+        list-style: none;
+    }
+
+    .nav-item {
+        margin-bottom: 2px;
+    }
+
+    .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 20px;
+        color: $text-secondary;
+        text-decoration: none;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .nav-link:hover {
+        background: $bg-light;
+        color: $primary-color;
+    }
+
+    .nav-link.active {
+        background: rgba(47, 58, 74, 0.08);
+        color: $primary-color;
+        font-weight: 600;
+    }
+
+    .nav-link.active::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: $primary-color;
+        border-radius: 0 2px 2px 0;
+    }
+
+    .nav-icon {
+        font-size: 18px;
+        width: 20px;
+        text-align: center;
+        flex-shrink: 0;
+    }
+
+    .nav-submenu {
+        list-style: none;
+        margin-top: 2px;
+    }
+
+    .nav-submenu .nav-link {
+        padding: 8px 20px 8px 52px;
+        font-size: 13px;
+    }
+
+
+}
+/* かんたん解説（リテラシー低め向け） */
+.help-lead {
+    margin: 12px 0 20px;
+    padding: 12px 14px;
+    background: $bg-info;
+    border: 1px solid $border-color;
+    border-radius: 10px;
+    color: $text-secondary;
+    font-size: 16px;
+    line-height: 1.6;
+}
+.help-lead strong { color: $text-primary; }
+
+
+/* メインコンテンツ */
+.main-content {
+    flex: 1;
+    margin-left: 260px;
+    width: calc(100% - 260px);
+}
+
+/* トップバー */
+.topbar {
+    background: $bg-card;
+    border-bottom: 1px solid $border-color;
+    padding: 16px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 1500;
+
+    .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .menu-toggle {
+        display: none;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: $text-primary;
+        padding: 4px;
+    }
+
+    .page-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: $secondary-color;
+    }
+
+    .topbar-right {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+
+
+        .report-setting-btn {
+            display: inline-block;
+            padding: 7px 14px;
+            background: $primary-color;
+            border-radius: 6px;
+            font-size: 13px;
+            text-decoration: none;
+            color: #FAF9F6;
+            white-space: nowrap;
+        }
+
+        .report-setting-btn:hover {
+            background: $primary-hover;
+        }
+
+        /* ユーザー情報 */
+        .topbar-user-info {
+            text-align: right;
+            line-height: 1.2;
+            padding-right: 110px;
+            margin-top: 4px;
+        }
+
+        .topbar-user-name {
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        .topbar-user-plan {
+            font-size: 11px;
+            color: $text-muted;
+            margin-top: 5px;
+        }
+
+        /* ログアウトを右上固定 */
+        .logout {
+            position: static;
+            right: 20px;
+            top: 20px;
+            z-index: 2000;
+        }
+
+        .logout-btn {
+            display: inline-block;
+            padding: 7px 14px;
+            background: $neutral-color;
+            border-radius: 6px;
+            font-size: 13px;
+            text-decoration: none;
+            color: #FAF9F6;
+        }
+
+        .logout-btn:hover {
+            background: $primary-color;
+        }
+    }
+}
+
+
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+.user-menu:hover {
+    background: $bg-light;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: $primary-color;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FAF9F6;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* パンくず */
+.breadcrumb {
+    padding: 16px 32px;
+    background: $bg-card;
+    border-bottom: 1px solid $border-color;
+    font-size: 14px;
+    color: $text-secondary;
+}
+
+.breadcrumb a {
+    color: $primary-color;
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb span {
+    margin: 0 8px;
+    color: $border-color;
+}
+
+/* コンテンツエリア */
+.content-area {
+    padding: 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+
+
+
+/* 期間セレクター */
+.period-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 32px;
+    background: $bg-kpi;
+    padding: 4px;
+    border-radius: 8px;
+    width: fit-content;
+}
+
+.period-btn {
+    padding: 8px 20px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: $text-secondary;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.period-btn:hover {
+    background: rgba(47, 58, 74, 0.06);
+    color: $primary-color;
+}
+
+.period-btn.active {
+    background: $bg-card;
+    color: $text-primary;
+    font-weight: 600;
+    box-shadow: $shadow-sm;
+}
+
+
+/* 期間表示テキスト */
+.period-display {
+    font-size: 14px;
+    color: $text-secondary;
+    margin-bottom: 24px;
+}
+
+.period-display strong {
+    color: $text-primary;
+    font-weight: 600;
+}

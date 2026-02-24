@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>年齢別アクセス - GCREV INSIGHT</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: #1a1d24;
+            color: #fff;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .sidebar-nav {
+            padding: 16px 0 32px 0;
+        }
+
+        .nav-section {
+            margin-bottom: 20px;
+        }
+
+        .nav-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 12px 20px 8px 20px;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 2px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 20px;
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            background: rgba(255,255,255,0.06);
+            color: #e5e7eb;
+        }
+
+        .nav-link.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            font-weight: 600;
+        }
+
+        .nav-link.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: #3b82f6;
+            border-radius: 0 2px 2px 0;
+        }
+
+        .nav-icon {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .nav-submenu {
+            list-style: none;
+            margin-top: 2px;
+        }
+
+        .nav-submenu .nav-link {
+            padding: 8px 20px 8px 52px;
+            font-size: 13px;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            width: calc(100% - 260px);
+        }
+
+        .topbar {
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #333;
+            padding: 4px;
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .period-selector {
+            display: flex;
+            gap: 8px;
+            background: #f3f4f6;
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .period-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .period-btn:hover {
+            color: #1a1a1a;
+        }
+
+        .period-btn.active {
+            background: #fff;
+            color: #3b82f6;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .user-menu:hover {
+            background: #f3f4f6;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .breadcrumb {
+            padding: 16px 32px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .breadcrumb a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb span {
+            margin: 0 8px;
+            color: #d1d5db;
+        }
+
+        .content-area {
+            padding: 32px;
+            max-width: 1400px;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .summary-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid #f0f0f0;
+        }
+
+        .summary-card-header {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .summary-card-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .summary-card-change {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .summary-card-change.positive {
+            color: #10b981;
+            background: #ecfdf5;
+        }
+
+        .summary-card-change.negative {
+            color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #f3f4f6;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .chart-section {
+            background: #fff;
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid #f0f0f0;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .chart-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chart-btn {
+            padding: 8px 16px;
+            background: #f3f4f6;
+            color: #4b5563;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .chart-btn:hover {
+            background: #e5e7eb;
+        }
+
+        .chart-placeholder {
+            width: 100%;
+            height: 400px;
+            background: #f9fafb;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            font-size: 14px;
+            border: 2px dashed #e5e7eb;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            margin-top: 24px;
+        }
+
+        .data-table thead th {
+            background: #f9fafb;
+            padding: 14px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .data-table tbody tr {
+            border-bottom: 1px solid #f3f4f6;
+            transition: background 0.2s ease;
+        }
+
+        .data-table tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .data-table tbody td {
+            padding: 14px 12px;
+            color: #6b7280;
+        }
+
+        .data-table tbody td:first-child {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .topbar {
+                padding: 12px 16px;
+            }
+
+            .page-title {
+                font-size: 18px;
+            }
+
+            .content-area {
+                padding: 16px;
+            }
+
+            .breadcrumb {
+                padding: 12px 16px;
+            }
+
+            .user-menu span {
+                display: none;
+            }
+
+            .summary-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-placeholder {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="app-container">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="#" class="logo">
+                    <div class="logo-icon">G</div>
+                    <span>GCREV INSIGHT</span>
+                </a>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">ダッシュボード</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="gcrev-insight-v2-dashboard.html" class="nav-link"><span class="nav-icon">📊</span><span>総合ダッシュボード</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">💡</span><span>今月の結論 / ネクストアクション</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📈</span><span>KPI一覧</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🔔</span><span>アラート</span></a></li>
+                    </ul>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">ホームページ（GA / GSC）</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🏠</span><span>ダッシュボード</span></a></li>
+                        <li class="nav-item"><a href="gcrev-insight-v2-analysis.html" class="nav-link"><span class="nav-icon">🔍</span><span>分析（トップ）</span></a></li>
+                        <li class="nav-item"><a href="gcrev-insight-v2-keywords.html" class="nav-link"><span class="nav-icon">🔑</span><span>キーワード</span></a></li>
+                        <li class="nav-item"><a href="gcrev-insight-v2-pages.html" class="nav-link"><span class="nav-icon">📄</span><span>ページ</span></a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle">☰</button>
+                    <h1 class="page-title">年齢別アクセス</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="period-selector">
+                        <button class="period-btn active">前月</button>
+                        <button class="period-btn">直近30日</button>
+                    </div>
+                    <div class="user-menu">
+                        <div class="user-avatar">G</div>
+                        <span style="font-size: 14px; font-weight: 600;">管理者</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="breadcrumb">
+                <a href="#">ホーム</a>
+                <span>›</span>
+                <a href="#">ホームページ</a>
+                <span>›</span>
+                <a href="gcrev-insight-v2-analysis.html">分析（トップ）</a>
+                <span>›</span>
+                <strong>年齢別アクセス</strong>
+            </div>
+
+            <div class="content-area">
+                <!-- サマリーカード -->
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <div class="summary-card-header">25-34歳</div>
+                        <div class="summary-card-value">220</div>
+                        <div class="summary-card-change positive">
+                            <span>▲</span>
+                            <span>18.3%</span>
+                        </div>
+                        <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">32.4%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 32.4%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="summary-card-header">35-44歳</div>
+                        <div class="summary-card-value">139</div>
+                        <div class="summary-card-change positive">
+                            <span>▲</span>
+                            <span>2.1%</span>
+                        </div>
+                        <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">20.5%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 20.5%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="summary-card-header">18-24歳</div>
+                        <div class="summary-card-value">132</div>
+                        <div class="summary-card-change negative">
+                            <span>▼</span>
+                            <span>4.2%</span>
+                        </div>
+                        <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">19.5%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 19.5%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="summary-card-header">45-54歳</div>
+                        <div class="summary-card-value">95</div>
+                        <div class="summary-card-change positive">
+                            <span>▲</span>
+                            <span>1.8%</span>
+                        </div>
+                        <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">14.0%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 14.0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="summary-card-header">55-64歳</div>
+                        <div class="summary-card-value">56</div>
+                        <div class="summary-card-change negative">
+                            <span>▼</span>
+                            <span>2.5%</span>
+                        </div>
+                        <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">8.3%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 8.3%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card">
+                        <div class="summary-card-header">65歳以上</div>
+                        <div class="summary-card-value">36</div>
+                        <div class="summary-card-change positive">
+                            <span>▲</span>
+                            <span>5.8%</span>
+                        </div>
+                        <div style="font-size: 13px; color: #6b7280; margin-top: 8px;">5.3%</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 5.3%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 年齢別分布チャート -->
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h3 class="chart-title">📊 年齢別分布</h3>
+                        <div class="chart-actions">
+                            <button class="chart-btn">📥 データ出力</button>
+                        </div>
+                    </div>
+                    <div class="chart-placeholder">棒グラフ：年齢別セッション数</div>
+                </div>
+
+                <!-- 性別×年齢クロス分析 -->
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h3 class="chart-title">👥 性別×年齢クロス分析</h3>
+                        <div class="chart-actions">
+                            <button class="chart-btn">📥 データ出力</button>
+                        </div>
+                    </div>
+                    <div class="chart-placeholder">積み上げ棒グラフ：性別×年齢別</div>
+                </div>
+
+                <!-- 詳細データテーブル -->
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <h3 class="chart-title">📋 年齢別詳細データ</h3>
+                        <div class="chart-actions">
+                            <button class="chart-btn">📥 CSVエクスポート</button>
+                        </div>
+                    </div>
+
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>年齢層</th>
+                                <th>セッション</th>
+                                <th>割合</th>
+                                <th>PV</th>
+                                <th>平均滞在時間</th>
+                                <th>直帰率</th>
+                                <th>エンゲージメント率</th>
+                                <th>CV数</th>
+                                <th>CVR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>25-34歳</td>
+                                <td>220</td>
+                                <td>32.4%</td>
+                                <td>512</td>
+                                <td>1:08</td>
+                                <td>38.2%</td>
+                                <td>52.8%</td>
+                                <td>8</td>
+                                <td>3.64%</td>
+                            </tr>
+                            <tr>
+                                <td>35-44歳</td>
+                                <td>139</td>
+                                <td>20.5%</td>
+                                <td>298</td>
+                                <td>1:22</td>
+                                <td>35.8%</td>
+                                <td>58.3%</td>
+                                <td>6</td>
+                                <td>4.32%</td>
+                            </tr>
+                            <tr>
+                                <td>18-24歳</td>
+                                <td>132</td>
+                                <td>19.5%</td>
+                                <td>285</td>
+                                <td>0:52</td>
+                                <td>48.5%</td>
+                                <td>45.2%</td>
+                                <td>3</td>
+                                <td>2.27%</td>
+                            </tr>
+                            <tr>
+                                <td>45-54歳</td>
+                                <td>95</td>
+                                <td>14.0%</td>
+                                <td>215</td>
+                                <td>1:35</td>
+                                <td>32.8%</td>
+                                <td>62.5%</td>
+                                <td>5</td>
+                                <td>5.26%</td>
+                            </tr>
+                            <tr>
+                                <td>55-64歳</td>
+                                <td>56</td>
+                                <td>8.3%</td>
+                                <td>128</td>
+                                <td>1:18</td>
+                                <td>42.8%</td>
+                                <td>48.5%</td>
+                                <td>2</td>
+                                <td>3.57%</td>
+                            </tr>
+                            <tr>
+                                <td>65歳以上</td>
+                                <td>36</td>
+                                <td>5.3%</td>
+                                <td>82</td>
+                                <td>1:42</td>
+                                <td>38.8%</td>
+                                <td>55.6%</td>
+                                <td>1</td>
+                                <td>2.78%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuToggle = document.getElementById('menuToggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+            });
+
+            sidebarOverlay.addEventListener('click', function() {
+                sidebar.classList.remove('active');
+                sidebarOverlay.classList.remove('active');
+            });
+
+            const periodBtns = document.querySelectorAll('.period-btn');
+            periodBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    periodBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ダッシュボード - GCREV-INSIGHT</title>
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; background: #f5f7fa; color: #333; line-height: 1.8; }
+        
+        /* ヘッダー */
+        header { background: #2c3e50; color: #fff; padding: 15px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo { font-size: 20px; font-weight: 700; }
+        .user-info { font-size: 14px; }
+        
+        /* ナビゲーション */
+        nav { background: #34495e; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        nav ul { list-style: none; display: flex; flex-wrap: wrap; max-width: 1400px; margin: 0 auto; }
+        nav li { flex: 1; min-width: 120px; }
+        nav a { display: block; padding: 15px 20px; color: #ecf0f1; text-decoration: none; text-align: center; transition: background 0.3s; }
+        nav a:hover, nav a.active { background: #2c3e50; }
+        
+        /* メインコンテンツ */
+        main { max-width: 1400px; margin: 30px auto; padding: 0 20px; }
+        .welcome { margin-bottom: 20px; }
+        .welcome h1 { font-size: 28px; color: #2c3e50; margin-bottom: 10px; }
+        .welcome p { color: #7f8c8d; }
+        
+        /* 期間切替タブ */
+        .period-selector { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .period-selector h2 { font-size: 16px; color: #2c3e50; margin-bottom: 15px; font-weight: 600; }
+        .period-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+        .period-tab { 
+            flex: 1; 
+            min-width: 150px;
+            padding: 12px 20px; 
+            background: #ecf0f1; 
+            border: 2px solid #bdc3c7; 
+            border-radius: 6px; 
+            text-align: center; 
+            cursor: pointer; 
+            transition: all 0.3s;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+        }
+        .period-tab:hover { background: #d5dbdb; border-color: #95a5a6; }
+        .period-tab.active { background: #3498db; color: #fff; border-color: #3498db; box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3); }
+        .period-tab .period-name { display: block; font-size: 15px; margin-bottom: 5px; }
+        .period-tab .period-date { display: block; font-size: 12px; opacity: 0.8; }
+        
+        /* グリッドレイアウト */
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .dashboard-grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+        
+        /* カード共通 */
+        .card { background: #fff; border-radius: 8px; padding: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .card h2 { font-size: 18px; margin-bottom: 20px; color: #1e40af; border-left: 5px solid #2563eb; padding-left: 15px; }
+        .card h3 { font-size: 16px; color: #333; margin: 25px 0 15px 0; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb; }
+        
+        /* グラフコンテナ */
+        .chart-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 450px; 
+            margin: 20px auto;
+            height: 300px;
+        }
+        .chart-container canvas {
+            max-height: 300px;
+        }
+        
+        /* 結論サマリー */
+        .summary-box { 
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            color: #0c4a6e; 
+            padding: 30px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            line-height: 2; 
+            border: 3px solid #0ea5e9;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+        }
+        .summary-box p { font-size: 15px; margin-bottom: 15px; }
+        .summary-box strong { color: #0c4a6e; }
+        
+        /* 良かった点・改善点 */
+        .good-box { 
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border-left: 5px solid #10b981; 
+            padding: 25px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+        }
+        .good-box ul { margin: 15px 0 0 20px; }
+        .good-box li { margin: 12px 0; line-height: 1.8; }
+        
+        .bad-box { 
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border-left: 5px solid #ef4444; 
+            padding: 25px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+        }
+        .bad-box ul { margin: 15px 0 0 20px; }
+        .bad-box li { margin: 12px 0; line-height: 1.8; }
+        
+        /* ターゲットエリア・考察・アクション */
+        .area-box { 
+            background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 100%);
+            border-left: 5px solid #f59e0b; 
+            padding: 25px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+        }
+        
+        .insight-box { 
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-left: 5px solid #3b82f6; 
+            padding: 25px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        }
+        
+        .action-box {
+            background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
+            border-left: 5px solid #a855f7;
+            padding: 25px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(168, 85, 247, 0.15);
+        }
+        
+        /* 比較期間情報 */
+        .comparison-info {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #2c3e50;
+        }
+        
+        /* 数値の色分け */
+        .number-down { color: #ef4444; font-weight: bold; }
+        .number-up { color: #10b981; font-weight: bold; }
+        .number-neutral { color: #6b7280; font-weight: bold; }
+        .highlight { background-color: #fef08a; padding: 2px 6px; border-radius: 3px; font-weight: bold; }
+        
+        /* KPIグリッド（推移グラフ統合版） */
+        .kpi-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 20px; 
+            margin: 20px 0; 
+        }
+        .kpi-item { 
+            text-align: center; 
+            padding: 20px; 
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .kpi-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-3px);
+        }
+        .kpi-label { font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 600; }
+        .kpi-value { font-size: 28px; font-weight: 700; color: #1e40af; margin: 10px 0; }
+        .kpi-change { font-size: 13px; margin-top: 8px; font-weight: 600; margin-bottom: 15px; }
+        
+        /* KPIミニグラフ（スパークライン） */
+        .kpi-sparkline {
+            height: 60px;
+            margin-top: 15px;
+            position: relative;
+        }
+        .kpi-sparkline canvas {
+            width: 100% !important;
+            height: 60px !important;
+        }
+        
+        /* 重要ポイント */
+        .important-points {
+            margin-top: 25px;
+            padding: 20px;
+            background: #fef2f2;
+            border-left: 4px solid #ef4444;
+            border-radius: 4px;
+        }
+        .important-points h3 {
+            font-size: 16px;
+            color: #991b1b;
+            margin: 0 0 15px 0;
+            border: none;
+            padding: 0;
+        }
+        .important-points ul {
+            margin: 0 0 0 20px;
+            color: #991b1b;
+        }
+        .important-points li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        
+        /* テーブル */
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background-color: #f3f4f6; font-weight: bold; color: #374151; font-size: 12px; }
+        tr:hover { background-color: #f9fafb; }
+        td.number { text-align: right; font-family: 'Courier New', monospace; }
+        
+        /* プログレスバー */
+        .progress-bar {
+            height: 24px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            transition: width 0.5s ease;
+        }
+        .progress-fill.orange { background: linear-gradient(90deg, #f97316, #fb923c); }
+        
+        /* 優先度バッジ */
+        .priority-high { background-color: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; display: inline-block; }
+        .priority-medium { background-color: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; display: inline-block; }
+        
+        /* ローディング */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        .loading-overlay.active { display: flex; }
+        .loading-spinner {
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* ボタン */
+        .btn { 
+            display: inline-block; 
+            padding: 12px 24px; 
+            background: #3498db; 
+            color: #fff; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            transition: all 0.3s; 
+            font-size: 14px; 
+            border: none; 
+            cursor: pointer; 
+            font-weight: 600;
+        }
+        .btn:hover { background: #2980b9; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3); }
+        .btn-secondary { background: #95a5a6; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .cta-buttons { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        
+        /* フッター */
+        footer { background: #2c3e50; color: #ecf0f1; text-align: center; padding: 20px; margin-top: 50px; }
+        
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            nav ul { flex-direction: column; }
+            nav li { min-width: 100%; }
+            .kpi-grid { grid-template-columns: 1fr; }
+            .dashboard-grid-2col { grid-template-columns: 1fr; }
+            .cta-buttons { flex-direction: column; }
+            .btn { width: 100%; text-align: center; }
+            .period-tabs { flex-direction: column; }
+            .period-tab { min-width: 100%; }
+            table { font-size: 11px; }
+            th, td { padding: 8px 5px; }
+            .chart-container { max-width: 100%; height: 250px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">GCREV-INSIGHT</div>
+            <div class="user-info">〇〇株式会社 様</div>
+        </div>
+    </header>
+    
+    <nav>
+        <ul>
+            <li><a href="/dashboard" class="active">ダッシュボード</a></li>
+            <li><a href="/reports">月次レポート</a></li>
+            <li><a href="/topics">トピックス</a></li>
+            <li><a href="/inquiry">問い合わせ</a></li>
+            <li><a href="/resources">資料庫</a></li>
+            <li><a href="/account">アカウント</a></li>
+        </ul>
+    </nav>
+    
+    <main>
+        <div class="welcome">
+            <h1>ダッシュボード</h1>
+            <p>〇〇株式会社 様 の最新情報</p>
+        </div>
+        
+        <!-- 期間切替セクション -->
+        <div class="period-selector">
+            <h2>📅 表示期間を選択</h2>
+            <div class="period-tabs">
+                <div class="period-tab active" data-range="last30" onclick="changePeriod('last30')">
+                    <span class="period-name">直近30日</span>
+                    <span class="period-date" id="date-last30">2025/12/27 - 2026/01/26</span>
+                </div>
+                <div class="period-tab" data-range="previousMonth" onclick="changePeriod('previousMonth')">
+                    <span class="period-name">前月</span>
+                    <span class="period-date" id="date-previousMonth">2025年12月（12/1 - 12/31）</span>
+                </div>
+                <div class="period-tab" data-range="twoMonthsAgo" onclick="changePeriod('twoMonthsAgo')">
+                    <span class="period-name">前々月</span>
+                    <span class="period-date" id="date-twoMonthsAgo">2025年11月（11/1 - 11/30）</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 1. 結論サマリー -->
+        <div class="card">
+            <h2>📊 1. 結論サマリー</h2>
+            <div class="comparison-info" id="comparison-info">
+                <strong>比較期間:</strong> 前期（2025/11/27 - 2025/12/26）との比較
+            </div>
+            
+            <div class="summary-box" id="summary-content">
+                <p><strong>⚠️ 全体の状況：</strong>訪問者数（セッション数）は<span class="number-up">ほぼ横ばい（+0.0%）</span>で安定していますが、肝心の<span class="number-down">イベント申込みが激減（10件→1件、-90%）</span>しており、深刻な状況です。</p>
+                <p><strong>🚨 最重要課題：</strong>愛媛県からの訪問が<span class="number-down">646人→589人（-8.8%減少）</span>し、全体に占める割合も<span class="number-down">15.6%→14.5%</span>に低下。地元である愛媛の集客が弱まっています。</p>
+                <p><strong>💡 考えられる原因：</strong>11月は「東垣生エコハウス」「伊予市エコハウス」の見学会が複数開催され申込みが集中しましたが、12月は大きなイベントがなかった可能性があります。</p>
+                <p><strong>📱 デバイス：</strong>スマホからの訪問が<span class="number-up">56.9%</span>と多数派ですが、スマホでの滞在時間やページビューが伸び悩んでいます。</p>
+            </div>
+            
+            <!-- 主要KPI（推移グラフ付き） -->
+            <div class="kpi-grid" id="kpi-container">
+                <div class="kpi-item">
+                    <div class="kpi-label">PV（ページ閲覧数）</div>
+                    <div class="kpi-value" id="kpi-pv">8,389</div>
+                    <div class="kpi-change up" id="kpi-pv-change">▲ 0.4%</div>
+                    <div class="kpi-sparkline">
+                        <canvas id="sparkline-pv"></canvas>
+                    </div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">セッション（訪問回数）</div>
+                    <div class="kpi-value" id="kpi-sessions">3,986</div>
+                    <div class="kpi-change neutral" id="kpi-sessions-change">± 0.0%</div>
+                    <div class="kpi-sparkline">
+                        <canvas id="sparkline-sessions"></canvas>
+                    </div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">ユーザー（訪問者数）</div>
+                    <div class="kpi-value" id="kpi-users">3,502</div>
+                    <div class="kpi-change up" id="kpi-users-change">▲ 3.5%</div>
+                    <div class="kpi-sparkline">
+                        <canvas id="sparkline-users"></canvas>
+                    </div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">新規ユーザー</div>
+                    <div class="kpi-value" id="kpi-new-users">2,681</div>
+                    <div class="kpi-change up" id="kpi-new-users-change">▲ 8.6%</div>
+                    <div class="kpi-sparkline">
+                        <canvas id="sparkline-new-users"></canvas>
+                    </div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">リピーター</div>
+                    <div class="kpi-value" id="kpi-returning">821</div>
+                    <div class="kpi-change down" id="kpi-returning-change">▼ 10.4%</div>
+                    <div class="kpi-sparkline">
+                        <canvas id="sparkline-returning"></canvas>
+                    </div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">平均滞在時間</div>
+                    <div class="kpi-value" id="kpi-duration">47秒</div>
+                    <div class="kpi-change up" id="kpi-duration-change">▲ 17.5%</div>
+                    <div class="kpi-sparkline">
+                        <canvas id="sparkline-duration"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 重要ポイント -->
+            <div class="important-points">
+                <h3>🚨 最重要ポイント</h3>
+                <ul>
+                    <li>愛媛県からの訪問が<strong>-8.8%減少</strong>（目標と逆の結果）</li>
+                    <li>イベント申込みが<strong>激減（10件→1件、-90%）</strong></li>
+                    <li>通常の問い合わせは<strong>依然としてゼロ</strong></li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- デバイス・年齢の可視化 -->
+        <div class="dashboard-grid-2col">
+            <!-- デバイス別 -->
+            <div class="card">
+                <h2>📱 デバイス別アクセス</h2>
+                <div class="chart-container">
+                    <canvas id="deviceChart"></canvas>
+                </div>
+                <table id="deviceTable">
+                    <thead>
+                        <tr>
+                            <th>デバイス</th>
+                            <th>セッション</th>
+                            <th>割合</th>
+                            <th>CV</th>
+                            <th>CVR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>モバイル</strong></td>
+                            <td class="number">2,268</td>
+                            <td class="number">56.9%</td>
+                            <td class="number">0</td>
+                            <td class="number">0.00%</td>
+                        </tr>
+                        <tr>
+                            <td>デスクトップ</td>
+                            <td class="number">1,592</td>
+                            <td class="number">39.9%</td>
+                            <td class="number">1</td>
+                            <td class="number">0.06%</td>
+                        </tr>
+                        <tr>
+                            <td>タブレット</td>
+                            <td class="number">126</td>
+                            <td class="number">3.2%</td>
+                            <td class="number">0</td>
+                            <td class="number">0.00%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 年齢別 -->
+            <div class="card">
+                <h2>👥 年齢別アクセス</h2>
+                <div class="chart-container">
+                    <canvas id="ageChart"></canvas>
+                </div>
+                <table id="ageTable">
+                    <thead>
+                        <tr>
+                            <th>年齢層</th>
+                            <th>セッション</th>
+                            <th>割合</th>
+                            <th>CV</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>25-34</td>
+                            <td class="number">220</td>
+                            <td class="number">32.4%</td>
+                            <td class="number">2</td>
+                        </tr>
+                        <tr>
+                            <td>35-44</td>
+                            <td class="number">139</td>
+                            <td class="number">20.5%</td>
+                            <td class="number">1</td>
+                        </tr>
+                        <tr>
+                            <td>18-24</td>
+                            <td class="number">132</td>
+                            <td class="number">19.5%</td>
+                            <td class="number">0</td>
+                        </tr>
+                        <tr>
+                            <td>45-54</td>
+                            <td class="number">95</td>
+                            <td class="number">14.0%</td>
+                            <td class="number">0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 流入元 -->
+        <div class="card">
+            <h2>🔗 流入元（メディアと参照元）</h2>
+            <div class="chart-container" style="max-width: 500px;">
+                <canvas id="mediaChart"></canvas>
+            </div>
+            
+            <table id="mediaTable">
+                <thead>
+                    <tr>
+                        <th>メディア</th>
+                        <th>セッション</th>
+                        <th>割合</th>
+                        <th style="width: 200px;">セッション分布</th>
+                        <th>CV</th>
+                        <th>CVR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>(none) - 直接訪問</strong></td>
+                        <td class="number">1,940</td>
+                        <td class="number">37.4%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 37.4%;">37.4%</div>
+                            </div>
+                        </td>
+                        <td class="number">158</td>
+                        <td class="number"><strong>8.14%</strong></td>
+                    </tr>
+                    <tr>
+                        <td>organic - 自然検索</td>
+                        <td class="number">1,848</td>
+                        <td class="number">35.7%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 35.7%;">35.7%</div>
+                            </div>
+                        </td>
+                        <td class="number">4</td>
+                        <td class="number">0.22%</td>
+                    </tr>
+                    <tr>
+                        <td>referral - 他サイト</td>
+                        <td class="number">750</td>
+                        <td class="number">14.5%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 14.5%;">14.5%</div>
+                            </div>
+                        </td>
+                        <td class="number">0</td>
+                        <td class="number">0.00%</td>
+                    </tr>
+                    <tr>
+                        <td>paid - 広告</td>
+                        <td class="number">373</td>
+                        <td class="number">7.2%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 7.2%;">7.2%</div>
+                            </div>
+                        </td>
+                        <td class="number">0</td>
+                        <td class="number">0.00%</td>
+                    </tr>
+                    <tr>
+                        <td>cpc - クリック広告</td>
+                        <td class="number">177</td>
+                        <td class="number">3.4%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 3.4%;">3.4%</div>
+                            </div>
+                        </td>
+                        <td class="number">0</td>
+                        <td class="number">0.00%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 地域別アクセス -->
+        <div class="card">
+            <h2>📍 地域別アクセス（都道府県 TOP10）</h2>
+            <div class="chart-container" style="max-width: 100%; height: 400px;">
+                <canvas id="regionChart"></canvas>
+            </div>
+            
+            <table id="regionTable">
+                <thead>
+                    <tr>
+                        <th>地域</th>
+                        <th>セッション</th>
+                        <th>割合</th>
+                        <th style="width: 200px;">セッション分布</th>
+                        <th>CV</th>
+                        <th>CVR</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background: #fef9e7;">
+                        <td><strong>愛媛</strong></td>
+                        <td class="number"><strong>816</strong></td>
+                        <td class="number"><strong>15.3%</strong></td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill orange" style="width: 15.3%;">15.3%</div>
+                            </div>
+                        </td>
+                        <td class="number"><strong>8</strong></td>
+                        <td class="number"><strong>0.98%</strong></td>
+                    </tr>
+                    <tr>
+                        <td>関西</td>
+                        <td class="number">839</td>
+                        <td class="number">15.7%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 15.7%;">15.7%</div>
+                            </div>
+                        </td>
+                        <td class="number">0</td>
+                        <td class="number">0.00%</td>
+                    </tr>
+                    <tr>
+                        <td>東京</td>
+                        <td class="number">725</td>
+                        <td class="number">13.6%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 13.6%;">13.6%</div>
+                            </div>
+                        </td>
+                        <td class="number">15</td>
+                        <td class="number">2.07%</td>
+                    </tr>
+                    <tr>
+                        <td>大阪</td>
+                        <td class="number">372</td>
+                        <td class="number">7.0%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 7.0%;">7.0%</div>
+                            </div>
+                        </td>
+                        <td class="number">8</td>
+                        <td class="number">2.15%</td>
+                    </tr>
+                    <tr>
+                        <td>北海道</td>
+                        <td class="number">186</td>
+                        <td class="number">3.5%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 3.5%;">3.5%</div>
+                            </div>
+                        </td>
+                        <td class="number">13</td>
+                        <td class="number">6.99%</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <p style="margin-top: 20px; padding: 15px; background: #fef9e7; border-radius: 4px; border-left: 4px solid #f59e0b;">
+                <strong>💡 重要：</strong>愛媛県からのセッションは<strong>816回（15.3%）</strong>で、目標エリアからの集客が安定しています。引き続き<span class="highlight">地域SEO対策</span>と<span class="highlight">地元イベント告知</span>を強化しましょう。
+            </p>
+        </div>
+        
+
+        <!-- ページ別PV -->
+        <div class="card">
+            <h2>📄 よく見られているページ（TOP10）</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 50%;">ページタイトル</th>
+                        <th>PV</th>
+                        <th>割合</th>
+                        <th style="width: 150px;">PV分布</th>
+                        <th>Eセッション</th>
+                        <th>E率</th>
+                    </tr>
+                </thead>
+                <tbody id="page-ranking">
+                    <tr>
+                        <td>愛媛県松山市のパッシブハウス・デザイン住宅の工務店｜アーキテクト工房Pure</td>
+                        <td class="number">1,875</td>
+                        <td class="number">20.7%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill orange" style="width: 100%;">20.7%</div>
+                            </div>
+                        </td>
+                        <td class="number">2,215</td>
+                        <td class="number">42.7%</td>
+                    </tr>
+                    <tr>
+                        <td>スタッフブログ - 愛媛県松山市のパッシブハウス・デザイン注文住宅</td>
+                        <td class="number">559</td>
+                        <td class="number">6.2%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill orange" style="width: 29.8%;">6.2%</div>
+                            </div>
+                        </td>
+                        <td class="number">981</td>
+                        <td class="number">85.5%</td>
+                    </tr>
+                    <tr>
+                        <td>エネルギーの基礎として捉えられる、3（ジュール）という単位と…</td>
+                        <td class="number">247</td>
+                        <td class="number">2.7%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill orange" style="width: 13.2%;">2.7%</div>
+                            </div>
+                        </td>
+                        <td class="number">536</td>
+                        <td class="number">62.7%</td>
+                    </tr>
+                    <tr>
+                        <td>施工事例 アーカイブ - 愛媛県松山市のパッシブハウス</td>
+                        <td class="number">212</td>
+                        <td class="number">2.3%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill orange" style="width: 11.3%;">2.3%</div>
+                            </div>
+                        </td>
+                        <td class="number">328</td>
+                        <td class="number">94.5%</td>
+                    </tr>
+                    <tr>
+                        <td>会社案内｜愛媛県松山市のパッシブハウス・デザイン注文住宅</td>
+                        <td class="number">184</td>
+                        <td class="number">2.0%</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill orange" style="width: 9.8%;">2.0%</div>
+                            </div>
+                        </td>
+                        <td class="number">291</td>
+                        <td class="number">84.8%</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <p style="margin-top: 20px; padding: 15px; background: #e8f4f8; border-radius: 4px; border-left: 4px solid #3b82f6;">
+                <strong>💡 分析：</strong>トップページが<strong>20.7%</strong>を占めており、入口として機能しています。スタッフブログが6.2%と2位で、コンテンツマーケティングが成功しています。
+            </p>
+        </div>
+
+
+        
+        <!-- よく使う機能 -->
+        <div class="card">
+            <h2>🚀 よく使う機能</h2>
+            <div class="cta-buttons">
+                <a href="/reports" class="btn">月次レポート一覧</a>
+                <a href="/topics" class="btn">トピックス一覧</a>
+                <a href="/inquiry/new" class="btn">問い合わせする</a>
+                <a href="/resources" class="btn btn-secondary">資料庫を見る</a>
+            </div>
+        </div>
+    </main>
+    
+    <!-- ローディングオーバーレイ -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>データを読み込んでいます...</p>
+        </div>
+    </div>
+    
+    <footer>
+        <p>&copy; 2026 Your Company. All rights reserved.</p>
+    </footer>
+    
+    <script>
+        // Chart.jsインスタンス保持
+        let deviceChart, ageChart, mediaChart, regionChart;
+        let sparklineCharts = {};
+        let currentPeriod = 'last30';
+        
+        // Chart.jsデフォルト設定
+        Chart.defaults.font.family = "'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif";
+        Chart.defaults.font.size = 11;
+        
+        // 期間切替関数
+        function changePeriod(range) {
+            if (currentPeriod === range) return;
+            
+            document.querySelectorAll('.period-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[data-range="${range}"]`).classList.add('active');
+            
+            document.getElementById('loadingOverlay').classList.add('active');
+            currentPeriod = range;
+            fetchDashboardData(range);
+        }
+        
+        // APIからデータを取得
+        async function fetchDashboardData(range) {
+            try {
+                const response = await fetch(`/api/ga4-summary?range=${range}`);
+                
+                if (!response.ok) {
+                    throw new Error('データの取得に失敗しました');
+                }
+                
+                const data = await response.json();
+                updateDashboard(data);
+                
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').classList.remove('active');
+                }, 500);
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                
+                // デモ用: エラー時はモックデータを使用
+                console.log('Using mock data for demonstration');
+                const mockData = getMockData();
+                updateDashboard(mockData);
+                
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').classList.remove('active');
+                }, 500);
+            }
+        }
+        
+        // ダッシュボード更新
+        function updateDashboard(data) {
+            // 比較期間情報を更新
+            document.getElementById('comparison-info').innerHTML = 
+                `<strong>比較期間:</strong> ${data.comparisonPeriod || '前期との比較'}`;
+            
+            // KPI更新
+            document.getElementById('kpi-pv').textContent = formatNumber(data.pageViews);
+            document.getElementById('kpi-sessions').textContent = formatNumber(data.sessions);
+            document.getElementById('kpi-users').textContent = formatNumber(data.users);
+            document.getElementById('kpi-new-users').textContent = formatNumber(data.newUsers);
+            document.getElementById('kpi-returning').textContent = formatNumber(data.returningUsers);
+            document.getElementById('kpi-duration').textContent = data.avgDuration + '秒';
+            
+            updateChangeIndicator('kpi-pv-change', data.pageViewsChange);
+            updateChangeIndicator('kpi-sessions-change', data.sessionsChange);
+            updateChangeIndicator('kpi-users-change', data.usersChange);
+            updateChangeIndicator('kpi-new-users-change', data.newUsersChange);
+            updateChangeIndicator('kpi-returning-change', data.returningUsersChange);
+            updateChangeIndicator('kpi-duration-change', data.avgDurationChange);
+            
+            // スパークライングラフ更新
+            updateSparklines(data.trends);
+            
+            // グラフ更新
+            updateDeviceChart(data.devices);
+            updateAgeChart(data.ageGroups);
+            updateMediaChart(data.media);
+            updateRegionChart(data.regions);
+            
+            // テーブル更新
+            updateDeviceTable(data.devices);
+            updateAgeTable(data.ageGroups);
+            updateMediaTable(data.media);
+            updateRegionTable(data.regions);
+        }
+        
+        // スパークライン（ミニグラフ）更新
+        function updateSparklines(trends) {
+            const sparklineConfigs = [
+                { id: 'sparkline-pv', data: trends.pageViews, color: '#3b82f6' },
+                { id: 'sparkline-sessions', data: trends.sessions, color: '#3b82f6' },
+                { id: 'sparkline-users', data: trends.users, color: '#10b981' },
+                { id: 'sparkline-new-users', data: trends.newUsers, color: '#10b981' },
+                { id: 'sparkline-returning', data: trends.returningUsers, color: '#ef4444' },
+                { id: 'sparkline-duration', data: trends.avgDuration, color: '#f59e0b' }
+            ];
+            
+            sparklineConfigs.forEach(config => {
+                createSparkline(config.id, config.data, config.color);
+            });
+        }
+        
+        // スパークライン生成
+        function createSparkline(canvasId, data, color) {
+            const ctx = document.getElementById(canvasId);
+            
+            // 既存のグラフを破棄
+            if (sparklineCharts[canvasId]) {
+                sparklineCharts[canvasId].destroy();
+            }
+            
+            // ラベル生成（日付）
+            const labels = data.labels || generateLabels(data.values.length);
+            
+            sparklineCharts[canvasId] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data.values,
+                        borderColor: color,
+                        backgroundColor: `${color}33`, // 20% opacity
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: color,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                title: function(context) {
+                                    return context[0].label;
+                                },
+                                label: function(context) {
+                                    return formatNumber(context.parsed.y);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: false
+                        },
+                        y: {
+                            display: false,
+                            beginAtZero: false
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+        
+        // デバイス別グラフ
+        function updateDeviceChart(devices) {
+            const ctx = document.getElementById('deviceChart');
+            
+            if (deviceChart) {
+                deviceChart.destroy();
+            }
+            
+            deviceChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: devices.map(d => d.name === 'mobile' ? 'モバイル' : d.name === 'desktop' ? 'デスクトップ' : 'タブレット'),
+                    datasets: [{
+                        data: devices.map(d => d.sessions),
+                        backgroundColor: [
+                            '#ef4444', // mobile - red
+                            '#3b82f6', // desktop - blue
+                            '#fbbf24'  // tablet - yellow
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: { size: 13 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${formatNumber(value)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 年齢別グラフ
+        function updateAgeChart(ageGroups) {
+            const ctx = document.getElementById('ageChart');
+            
+            if (ageChart) {
+                ageChart.destroy();
+            }
+            
+            ageChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ageGroups.map(a => a.name),
+                    datasets: [{
+                        data: ageGroups.map(a => a.sessions),
+                        backgroundColor: [
+                            '#ec4899', // 18-24 - pink
+                            '#3b82f6', // 25-34 - blue
+                            '#06b6d4', // 35-44 - cyan
+                            '#f97316', // 45-54 - orange
+                            '#eab308', // 55-64 - yellow
+                            '#22c55e'  // 65+ - green
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: { size: 13 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${formatNumber(value)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 流入元グラフ
+        function updateMediaChart(media) {
+            const ctx = document.getElementById('mediaChart');
+            
+            if (mediaChart) {
+                mediaChart.destroy();
+            }
+            
+            mediaChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: media.map(m => m.name),
+                    datasets: [{
+                        data: media.map(m => m.sessions),
+                        backgroundColor: [
+                            '#ef4444', // (none) - red
+                            '#3b82f6', // organic - blue
+                            '#fbbf24', // referral - yellow
+                            '#ec4899', // paid - pink
+                            '#10b981', // cpc - green
+                            '#06b6d4', // display - cyan
+                            '#8b5cf6', // social - purple
+                            '#f97316'  // (not set) - orange
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 12,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${formatNumber(value)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 地域別グラフ（横棒グラフ）
+        function updateRegionChart(regions) {
+            const ctx = document.getElementById('regionChart');
+            
+            if (regionChart) {
+                regionChart.destroy();
+            }
+            
+            // TOP10のみ表示
+            const top10 = regions.slice(0, 10);
+            
+            regionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: top10.map(r => r.name),
+                    datasets: [{
+                        label: 'セッション数',
+                        data: top10.map(r => r.sessions),
+                        backgroundColor: top10.map((r, i) => 
+                            i === 0 ? '#f97316' : '#3b82f6' // 1位だけオレンジ、他は青
+                        ),
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.x || 0;
+                                    return `セッション: ${formatNumber(value)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatNumber(value);
+                                }
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                font: {
+                                    size: 12,
+                                    weight: function(context) {
+                                        return context.index === 0 ? 'bold' : 'normal';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // テーブル更新関数
+        function updateDeviceTable(devices) {
+            const tbody = document.querySelector('#deviceTable tbody');
+            tbody.innerHTML = '';
+            
+            devices.forEach(device => {
+                const tr = document.createElement('tr');
+                const deviceName = device.name === 'mobile' ? '<strong>モバイル</strong>' : 
+                                  device.name === 'desktop' ? 'デスクトップ' : 'タブレット';
+                tr.innerHTML = `
+                    <td>${deviceName}</td>
+                    <td class="number">${formatNumber(device.sessions)}</td>
+                    <td class="number">${device.percentage.toFixed(1)}%</td>
+                    <td class="number">${device.cv}</td>
+                    <td class="number">${device.cvr.toFixed(2)}%</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function updateAgeTable(ageGroups) {
+            const tbody = document.querySelector('#ageTable tbody');
+            tbody.innerHTML = '';
+            
+            ageGroups.forEach(age => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${age.name}</td>
+                    <td class="number">${formatNumber(age.sessions)}</td>
+                    <td class="number">${age.percentage.toFixed(1)}%</td>
+                    <td class="number">${age.cv}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function updateMediaTable(media) {
+            const tbody = document.querySelector('#mediaTable tbody');
+            tbody.innerHTML = '';
+            
+            media.slice(0, 5).forEach(m => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${m.name === '(none)' ? '<strong>(none) - 直接訪問</strong>' : m.name}</td>
+                    <td class="number">${formatNumber(m.sessions)}</td>
+                    <td class="number">${m.percentage.toFixed(1)}%</td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${m.percentage}%;">${m.percentage.toFixed(1)}%</div>
+                        </div>
+                    </td>
+                    <td class="number">${m.cv}</td>
+                    <td class="number">${m.name === '(none)' ? '<strong>' + m.cvr.toFixed(2) + '%</strong>' : m.cvr.toFixed(2) + '%'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function updateRegionTable(regions) {
+            const tbody = document.querySelector('#regionTable tbody');
+            tbody.innerHTML = '';
+            
+            regions.slice(0, 5).forEach((region, index) => {
+                const tr = document.createElement('tr');
+                if (index === 0) {
+                    tr.style.background = '#fef9e7';
+                }
+                
+                tr.innerHTML = `
+                    <td>${index === 0 ? '<strong>' + region.name + '</strong>' : region.name}</td>
+                    <td class="number">${index === 0 ? '<strong>' + formatNumber(region.sessions) + '</strong>' : formatNumber(region.sessions)}</td>
+                    <td class="number">${index === 0 ? '<strong>' + region.percentage.toFixed(1) + '%</strong>' : region.percentage.toFixed(1) + '%'}</td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${index === 0 ? 'orange' : ''}" style="width: ${region.percentage}%;">${region.percentage.toFixed(1)}%</div>
+                        </div>
+                    </td>
+                    <td class="number">${index === 0 ? '<strong>' + region.cv + '</strong>' : region.cv}</td>
+                    <td class="number">${index === 0 ? '<strong>' + region.cvr.toFixed(2) + '%</strong>' : region.cvr.toFixed(2) + '%'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        // 変動率の表示を更新
+        function updateChangeIndicator(elementId, changeValue) {
+            const element = document.getElementById(elementId);
+            element.classList.remove('up', 'down', 'neutral');
+            
+            if (changeValue > 0) {
+                element.classList.add('up');
+                element.textContent = `▲ ${changeValue}%`;
+            } else if (changeValue < 0) {
+                element.classList.add('down');
+                element.textContent = `▼ ${Math.abs(changeValue)}%`;
+            } else {
+                element.classList.add('neutral');
+                element.textContent = '± 0.0%';
+            }
+        }
+        
+        // ラベル生成（日付）
+        function generateLabels(count) {
+            const labels = [];
+            for (let i = count - 1; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i * 5); // 5日間隔
+                labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+            }
+            return labels;
+        }
+        
+        // 数値フォーマット
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+        
+        // 期間の日付表示を動的に生成
+        function initializePeriodDates() {
+            const today = new Date();
+            
+            const last30Start = new Date(today);
+            last30Start.setDate(today.getDate() - 29);
+            document.getElementById('date-last30').textContent = 
+                `${formatDate(last30Start)} - ${formatDate(today)}`;
+            
+            const previousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            const previousMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+            document.getElementById('date-previousMonth').textContent = 
+                `${previousMonth.getFullYear()}年${previousMonth.getMonth() + 1}月（${previousMonth.getMonth() + 1}/1 - ${previousMonth.getMonth() + 1}/${previousMonthEnd.getDate()}）`;
+            
+            const twoMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+            const twoMonthsAgoEnd = new Date(today.getFullYear(), today.getMonth() - 1, 0);
+            document.getElementById('date-twoMonthsAgo').textContent = 
+                `${twoMonthsAgo.getFullYear()}年${twoMonthsAgo.getMonth() + 1}月（${twoMonthsAgo.getMonth() + 1}/1 - ${twoMonthsAgo.getMonth() + 1}/${twoMonthsAgoEnd.getDate()}）`;
+        }
+        
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}/${month}/${day}`;
+        }
+        
+        // モックデータ（デモ用）
+        function getMockData() {
+            return {
+                comparisonPeriod: "前期（2025/11/27 - 2025/12/26）との比較",
+                pageViews: 8389,
+                pageViewsChange: 0.4,
+                sessions: 3986,
+                sessionsChange: 0.0,
+                users: 3502,
+                usersChange: 3.5,
+                newUsers: 2681,
+                newUsersChange: 8.6,
+                returningUsers: 821,
+                returningUsersChange: -10.4,
+                avgDuration: 47,
+                avgDurationChange: 17.5,
+                trends: {
+                    pageViews: {
+                        labels: ['30日前', '25日前', '20日前', '15日前', '10日前', '5日前', '昨日'],
+                        values: [7800, 7650, 8100, 7900, 8300, 8500, 8389]
+                    },
+                    sessions: {
+                        labels: ['30日前', '25日前', '20日前', '15日前', '10日前', '5日前', '昨日'],
+                        values: [3800, 3500, 4000, 3500, 4700, 5100, 4600]
+                    },
+                    users: {
+                        labels: ['30日前', '25日前', '20日前', '15日前', '10日前', '5日前', '昨日'],
+                        values: [3200, 3100, 3400, 3300, 3600, 3700, 3502]
+                    },
+                    newUsers: {
+                        labels: ['30日前', '25日前', '20日前', '15日前', '10日前', '5日前', '昨日'],
+                        values: [2300, 2200, 2500, 2400, 2700, 2800, 2681]
+                    },
+                    returningUsers: {
+                        labels: ['30日前', '25日前', '20日前', '15日前', '10日前', '5日前', '昨日'],
+                        values: [950, 920, 880, 860, 840, 830, 821]
+                    },
+                    avgDuration: {
+                        labels: ['30日前', '25日前', '20日前', '15日前', '10日前', '5日前', '昨日'],
+                        values: [42, 40, 43, 41, 45, 48, 47]
+                    }
+                },
+                devices: [
+                    { name: "mobile", sessions: 2268, percentage: 56.9, cv: 0, cvr: 0.00 },
+                    { name: "desktop", sessions: 1592, percentage: 39.9, cv: 1, cvr: 0.06 },
+                    { name: "tablet", sessions: 126, percentage: 3.2, cv: 0, cvr: 0.00 }
+                ],
+                ageGroups: [
+                    { name: "25-34", sessions: 220, percentage: 32.4, cv: 2 },
+                    { name: "35-44", sessions: 139, percentage: 20.5, cv: 1 },
+                    { name: "18-24", sessions: 132, percentage: 19.5, cv: 0 },
+                    { name: "45-54", sessions: 95, percentage: 14.0, cv: 0 },
+                    { name: "55-64", sessions: 49, percentage: 7.2, cv: 0 },
+                    { name: "65+", sessions: 43, percentage: 6.3, cv: 0 }
+                ],
+                media: [
+                    { name: "(none)", sessions: 1940, percentage: 37.4, cv: 158, cvr: 8.14 },
+                    { name: "organic", sessions: 1848, percentage: 35.7, cv: 4, cvr: 0.22 },
+                    { name: "referral", sessions: 750, percentage: 14.5, cv: 0, cvr: 0.00 },
+                    { name: "paid", sessions: 373, percentage: 7.2, cv: 0, cvr: 0.00 },
+                    { name: "cpc", sessions: 177, percentage: 3.4, cv: 0, cvr: 0.00 },
+                    { name: "display", sessions: 40, percentage: 0.8, cv: 0, cvr: 0.00 },
+                    { name: "social", sessions: 36, percentage: 0.7, cv: 1, cvr: 2.78 },
+                    { name: "(not set)", sessions: 13, percentage: 0.3, cv: 0, cvr: 0.00 }
+                ],
+                regions: [
+                    { name: "愛媛", sessions: 816, percentage: 15.3, cv: 8, cvr: 0.98 },
+                    { name: "関西", sessions: 839, percentage: 15.7, cv: 0, cvr: 0.00 },
+                    { name: "東京", sessions: 725, percentage: 13.6, cv: 15, cvr: 2.07 },
+                    { name: "大阪", sessions: 372, percentage: 7.0, cv: 8, cvr: 2.15 },
+                    { name: "北海道", sessions: 186, percentage: 3.5, cv: 13, cvr: 6.99 },
+                    { name: "愛知", sessions: 158, percentage: 3.0, cv: 3, cvr: 1.90 },
+                    { name: "広島", sessions: 137, percentage: 2.6, cv: 6, cvr: 4.38 },
+                    { name: "神奈川", sessions: 137, percentage: 2.6, cv: 1, cvr: 0.73 },
+                    { name: "千葉", sessions: 125, percentage: 2.3, cv: 13, cvr: 10.40 },
+                    { name: "兵庫", sessions: 109, percentage: 2.0, cv: 5, cvr: 4.59 }
+                ]
+            };
+        }
+        
+        // ページ読み込み時に実行
+        document.addEventListener('DOMContentLoaded', function() {
+            initializePeriodDates();
+            
+            // 初期データを読み込み（モックデータ使用）
+            const initialData = getMockData();
+            updateDashboard(initialData);
+        });
+    </script>
+</body>
+</html>

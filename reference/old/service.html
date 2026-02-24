@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GCREV INSIGHT × 伴走支援 × 実践研修 | 地方企業のWeb集客を変える</title>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; background: #f5f7fa; color: #333; line-height: 1.8; }
+        
+        /* ヘッダー */
+        header { background: #2c3e50; color: #fff; padding: 15px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo { font-size: 20px; font-weight: 700; }
+        .header-nav { display: flex; gap: 20px; align-items: center; }
+        .header-nav a { color: #ecf0f1; text-decoration: none; font-size: 14px; transition: color 0.3s; }
+        .header-nav a:hover { color: #3498db; }
+        
+        /* ナビゲーション */
+        nav { background: #34495e; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        nav ul { list-style: none; display: flex; flex-wrap: wrap; max-width: 1400px; margin: 0 auto; }
+        nav li { flex: 1; min-width: 120px; }
+        nav a { display: block; padding: 15px 20px; color: #ecf0f1; text-decoration: none; text-align: center; transition: background 0.3s; }
+        nav a:hover, nav a.active { background: #2c3e50; }
+        
+        /* メインコンテンツ */
+        main { max-width: 1200px; margin: 0 auto; padding: 0; }
+        section { padding: 60px 20px; }
+        
+        /* ファーストビュー */
+        .hero { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            text-align: center;
+            padding: 100px 20px 80px;
+            position: relative;
+        }
+        .hero h1 { font-size: 38px; margin-bottom: 20px; line-height: 1.4; font-weight: 700; }
+        .hero .sub-copy { font-size: 18px; margin-bottom: 30px; opacity: 0.95; line-height: 1.7; }
+        .hero .target-reader { 
+            background: rgba(255,255,255,0.15); 
+            display: inline-block; 
+            padding: 12px 30px; 
+            border-radius: 30px; 
+            font-size: 14px; 
+            margin-bottom: 40px;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .hero .cta-buttons { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
+        .btn-primary { 
+            background: #fff; 
+            color: #667eea; 
+            padding: 18px 40px; 
+            border-radius: 50px; 
+            text-decoration: none; 
+            font-weight: 700; 
+            font-size: 16px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+        .btn-secondary { 
+            background: transparent; 
+            color: #fff; 
+            padding: 18px 40px; 
+            border-radius: 50px; 
+            text-decoration: none; 
+            font-weight: 700; 
+            font-size: 16px;
+            border: 2px solid #fff;
+            transition: all 0.3s;
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+        
+        /* セクション共通 */
+        .section-title { 
+            font-size: 32px; 
+            text-align: center; 
+            margin-bottom: 20px; 
+            color: #2c3e50;
+            font-weight: 700;
+        }
+        .section-subtitle { 
+            text-align: center; 
+            color: #7f8c8d; 
+            margin-bottom: 50px; 
+            font-size: 16px;
+        }
+        
+        /* 課題提示 */
+        .problems { background: #fff; }
+        .problem-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 25px; 
+            margin-top: 40px;
+        }
+        .problem-card { 
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border-left: 5px solid #ef4444;
+            padding: 30px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .problem-card:hover { transform: translateY(-5px); box-shadow: 0 6px 20px rgba(239,68,68,0.2); }
+        .problem-card h3 { 
+            font-size: 18px; 
+            margin-bottom: 15px; 
+            color: #991b1b;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .problem-card p { color: #dc2626; font-size: 14px; line-height: 1.7; }
+        
+        /* INSIGHT紹介 */
+        .insight-intro { background: #f9fafb; }
+        .insight-feature-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+            gap: 25px; 
+            margin-top: 40px;
+        }
+        .feature-card { 
+            background: #fff;
+            padding: 35px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            border-top: 4px solid #3498db;
+        }
+        .feature-card:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 8px 25px rgba(52,152,219,0.15); 
+        }
+        .feature-card h3 { 
+            font-size: 18px; 
+            margin-bottom: 15px; 
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .feature-card p { color: #555; font-size: 14px; line-height: 1.7; }
+        
+        /* 伴走支援プラン（比較表形式） */
+        .plans { background: #fff; }
+        
+        .plan-comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 40px;
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .plan-comparison-table thead tr {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        
+        .plan-comparison-table th {
+            padding: 20px 15px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+        
+        .plan-comparison-table th:first-child {
+            text-align: left;
+            width: 35%;
+        }
+        
+        .plan-comparison-table th.featured {
+            background: #f59e0b;
+            position: relative;
+        }
+        
+        .plan-comparison-table th.featured:after {
+            content: "🏆 おすすめ";
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff;
+            color: #f59e0b;
+            padding: 3px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            white-space: nowrap;
+            font-weight: 700;
+        }
+        
+        .plan-comparison-table .price-row {
+            background: #f9fafb;
+            font-weight: 700;
+        }
+        
+        .plan-comparison-table .price-row td {
+            padding: 20px 15px;
+            text-align: center;
+            font-size: 18px;
+            color: #3498db;
+        }
+        
+        .plan-comparison-table .price-row td:first-child {
+            text-align: left;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        
+        .plan-comparison-table .price-row .price {
+            display: block;
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        
+        .plan-comparison-table .price-row .note {
+            display: block;
+            font-size: 11px;
+            color: #7f8c8d;
+            font-weight: 400;
+        }
+        
+        .plan-comparison-table tbody tr {
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .plan-comparison-table tbody tr:hover {
+            background: #f9fafb;
+        }
+        
+        .plan-comparison-table td {
+            padding: 15px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .plan-comparison-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .plan-comparison-table td.category-header {
+            background: #f3f4f6;
+            font-weight: 700;
+            color: #374151;
+            text-align: left;
+            padding: 12px 15px;
+        }
+        
+        .plan-comparison-table td.sub-item {
+            padding-left: 35px;
+            font-size: 13px;
+            color: #6b7280;
+        }
+        
+        .plan-comparison-table .check {
+            color: #10b981;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .plan-comparison-table .cross {
+            color: #d1d5db;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        
+        .plan-comparison-table .cta-row {
+            background: #f9fafb;
+        }
+        
+        .plan-comparison-table .cta-row td {
+            padding: 20px 15px;
+        }
+        
+        .plan-cta-btn {
+            display: inline-block;
+            background: #3498db;
+            color: #fff;
+            padding: 12px 30px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .plan-cta-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        /* 研修ラインナップ */
+        .training { background: #f9fafb; }
+        .training-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+            gap: 25px; 
+            margin-top: 40px;
+        }
+        .training-card { 
+            background: #fff;
+            border-radius: 12px;
+            padding: 35px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+            border-left: 5px solid #8b5cf6;
+        }
+        .training-card:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 8px 25px rgba(139,92,246,0.15); 
+        }
+        .training-number { 
+            background: #8b5cf6; 
+            color: #fff; 
+            width: 40px; 
+            height: 40px; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+        .training-card h3 { font-size: 18px; margin-bottom: 10px; color: #2c3e50; }
+        .training-card .price { 
+            color: #8b5cf6; 
+            font-weight: 700; 
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .training-card ul { 
+            list-style: none; 
+            font-size: 14px;
+            color: #555;
+        }
+        .training-card li { 
+            padding: 8px 0; 
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .training-card li:before { content: "→"; color: #8b5cf6; font-weight: 700; }
+        
+        /* 強み */
+        .strengths { background: #fff; }
+        .strength-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 25px; 
+            margin-top: 40px;
+        }
+        .strength-card { 
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border-left: 5px solid #10b981;
+            padding: 30px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .strength-card:hover { transform: translateY(-5px); box-shadow: 0 6px 20px rgba(16,185,129,0.15); }
+        .strength-card h3 { 
+            font-size: 18px; 
+            margin-bottom: 15px; 
+            color: #065f46;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .strength-card p { color: #047857; font-size: 14px; line-height: 1.7; }
+        
+        /* 導入の流れ */
+        .flow { background: #f9fafb; }
+        .flow-steps { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 20px; 
+            margin-top: 40px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .flow-step { 
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            transition: all 0.3s;
+        }
+        .flow-step:hover { transform: translateX(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.12); }
+        .flow-number { 
+            background: #3498db; 
+            color: #fff; 
+            width: 60px; 
+            height: 60px; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: 700;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .flow-content h3 { font-size: 18px; margin-bottom: 8px; color: #2c3e50; }
+        .flow-content p { color: #555; font-size: 14px; line-height: 1.7; }
+        
+        /* FAQ */
+        .faq { background: #fff; }
+        .faq-list { 
+            max-width: 900px; 
+            margin: 40px auto 0;
+        }
+        .faq-item { 
+            background: #f9fafb;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        .faq-question { 
+            padding: 20px 25px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: #2c3e50;
+            transition: background 0.3s;
+        }
+        .faq-question:hover { background: #f3f4f6; }
+        .faq-answer { 
+            padding: 0 25px 20px;
+            color: #555;
+            font-size: 14px;
+            line-height: 1.7;
+            display: none;
+        }
+        .faq-item.active .faq-answer { display: block; }
+        
+        /* CTA */
+        .cta-section { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            text-align: center;
+            padding: 80px 20px;
+        }
+        .cta-section h2 { font-size: 32px; margin-bottom: 20px; }
+        .cta-section p { font-size: 16px; margin-bottom: 40px; opacity: 0.95; }
+        
+        /* フッター */
+        footer { background: #2c3e50; color: #ecf0f1; text-align: center; padding: 40px 20px; }
+        footer p { font-size: 14px; }
+        
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 28px; }
+            .hero .sub-copy { font-size: 16px; }
+            .section-title { font-size: 26px; }
+            .plan-grid, .training-grid, .problem-grid, .strength-grid, .insight-feature-grid { 
+                grid-template-columns: 1fr; 
+            }
+            .flow-step { flex-direction: column; text-align: center; }
+            nav ul { flex-direction: column; }
+            nav li { min-width: 100%; }
+            
+            /* テーブルのレスポンシブ対応 */
+            .plan-comparison-table {
+                font-size: 12px;
+            }
+            .plan-comparison-table th,
+            .plan-comparison-table td {
+                padding: 10px 5px;
+            }
+            .plan-comparison-table .price-row .price {
+                font-size: 20px;
+            }
+            .plan-comparison-table th:first-child,
+            .plan-comparison-table td:first-child {
+                width: 40%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ヘッダー（ダッシュボードと共通） -->
+    <header>
+        <div class="header-content">
+            <div class="logo">GCREV-INSIGHT</div>
+            <div class="header-nav">
+                <a href="#plans">料金プラン</a>
+                <a href="#training">研修</a>
+                <a href="#faq">よくある質問</a>
+                <a href="#cta">お問い合わせ</a>
+            </div>
+        </div>
+    </header>
+    
+    <!-- ナビゲーション（ダッシュボードと共通） -->
+    <nav>
+        <ul>
+            <li><a href="/">サービス紹介</a></li>
+            <li><a href="/dashboard">ダッシュボード</a></li>
+            <li><a href="/reports">月次レポート</a></li>
+            <li><a href="/topics">トピックス</a></li>
+            <li><a href="/inquiry">問い合わせ</a></li>
+            <li><a href="/resources">資料庫</a></li>
+        </ul>
+    </nav>
+    
+    <main>
+        <!-- ファーストビュー -->
+        <section class="hero">
+            <h1>
+                Web施策、もう迷わない。<br>
+                数字で判断、伴走で前進。
+            </h1>
+            <p class="sub-copy">
+                GA4・Search Console・SNS分析を統合したダッシュボード「GCREV INSIGHT」に、<br>
+                プロの伴走支援と実践研修をセット。地方の中小企業が、<br>
+                Web集客の「見える化」から「内製化」まで実現できる支援サービスです。
+            </p>
+            <div class="target-reader">
+                📌 対象：地方の中小企業・士業・工務店・医療・介護事業者の経営者・管理職の方
+            </div>
+            <div class="cta-buttons">
+                <a href="#cta" class="btn-primary">📄 資料請求（無料）</a>
+                <a href="#cta" class="btn-secondary">💬 無料相談を予約</a>
+            </div>
+        </section>
+        
+        <!-- 課題提示 -->
+        <section class="problems" id="problems">
+            <h2 class="section-title">こんなお悩み、ありませんか?</h2>
+            <p class="section-subtitle">Web施策を進めたいが、何から手をつければいいか分からない...</p>
+            
+            <div class="problem-grid">
+                <div class="problem-card">
+                    <h3>🤔 優先順位が分からない</h3>
+                    <p>SEO、SNS、広告...やることは多いが、自社にとって何が最優先か判断できない。</p>
+                </div>
+                <div class="problem-card">
+                    <h3>📊 数字を活かせていない</h3>
+                    <p>GA4やSearch Consoleは導入したが、見方が分からず放置。データが宝の持ち腐れに。</p>
+                </div>
+                <div class="problem-card">
+                    <h3>⏸️ 施策が続かない</h3>
+                    <p>コンサルに依頼したが、契約終了後は元通り。社内にノウハウが残らない。</p>
+                </div>
+                <div class="problem-card">
+                    <h3>❓ 判断基準がない</h3>
+                    <p>Web担当者が「良い」と言うから信じるしかない。経営層が判断できる材料がない。</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- GCREV INSIGHTとは -->
+        <section class="insight-intro" id="insight">
+            <h2 class="section-title">GCREV INSIGHTとは</h2>
+            <p class="section-subtitle">GA4・Search Console・SNS・AI分析を統合した、Web集客ダッシュボード</p>
+            
+            <div class="insight-feature-grid">
+                <div class="feature-card">
+                    <h3>📊 統合ダッシュボード</h3>
+                    <p>GA4、Search Console、SNS指標を1画面で確認。毎日ツールを切り替える手間が不要に。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📝 月次AIレポート</h3>
+                    <p>毎月、前月比較と改善提案を自動生成。経営会議の資料作成時間を90%削減。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🚨 異常検知アラート</h3>
+                    <p>アクセス急減、順位下落を自動検知。問題を早期発見し、対応遅れを防止。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>💡 改善テーマ抽出</h3>
+                    <p>AIが優先すべき施策を提案。「次に何をやるべきか」が明確になります。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>👥 伴走支援と連動</h3>
+                    <p>ダッシュボードを見ながらプロと月次MTG。データに基づいた戦略立案が可能に。</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🎓 研修カリキュラム</h3>
+                    <p>実データを使った実践研修で、社内に判断基準とスキルを定着させます。</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 伴走支援プラン（比較表形式） -->
+        <section class="plans" id="plans">
+            <h2 class="section-title">伴走支援プラン</h2>
+            <p class="section-subtitle">ご予算と目的に合わせて、3つのプランをご用意</p>
+            
+            <table class="plan-comparison-table">
+                <thead>
+                    <tr>
+                        <th>機能 / プラン</th>
+                        <th>ライトプラン</th>
+                        <th class="featured">スタンダードプラン</th>
+                        <th>マスタープラン</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 料金行 -->
+                    <tr class="price-row">
+                        <td>料金</td>
+                        <td>
+                            <span class="price">月額 5,000円</span>
+                            <span class="note">※ 初回2週間無料</span>
+                        </td>
+                        <td>
+                            <span class="price">月額 60,000円</span>
+                            <span class="note">※ 初回月50,000円</span>
+                        </td>
+                        <td>
+                            <span class="price">月額 300,000円</span>
+                            <span class="note">※ 6ヶ月契約～</span>
+                        </td>
+                    </tr>
+                    
+                    <!-- カテゴリ：GCREV INSIGHT -->
+                    <tr>
+                        <td colspan="4" class="category-header">GCREV INSIGHT（閲覧無制限）</td>
+                    </tr>
+                    <tr>
+                        <td class="sub-item">ダッシュボード利用</td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td class="sub-item">月次AIレポート自動配信</td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td class="sub-item">異常検知アラート（メール通知）</td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td class="sub-item">データエクスポート機能</td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    
+                    <!-- カテゴリ：伴走支援 -->
+                    <tr>
+                        <td colspan="4" class="category-header">伴走支援</td>
+                    </tr>
+                    <tr>
+                        <td>月1回オンラインMTG（60分）</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td>人による分析レポート作成</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td>軽微なページ改善（月1件まで）</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td>改善テーマ整理・優先順位付け</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td>Slack/Teamsでの質問対応</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    
+                    <!-- カテゴリ：マスター限定 -->
+                    <tr>
+                        <td colspan="4" class="category-header">マスター限定機能</td>
+                    </tr>
+                    <tr>
+                        <td>月2回の戦略MTG（各90分）</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td>大幅改修を含む施策実行支援</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td>優先対応（48時間以内返信保証）</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td>実践研修パッケージ込み</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    <tr>
+                        <td>Web責任者代行（月間20時間まで）</td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="cross">✕</span></td>
+                        <td><span class="check">◯</span></td>
+                    </tr>
+                    
+                    <!-- CTAボタン行 -->
+                    <tr class="cta-row">
+                        <td>お申し込み</td>
+                        <td><a href="#cta" class="plan-cta-btn">まずはライトから</a></td>
+                        <td><a href="#cta" class="plan-cta-btn">詳しく見る</a></td>
+                        <td><a href="#cta" class="plan-cta-btn">相談する</a></td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">
+                💡 <strong>補助金活用の可能性</strong>：IT導入補助金・小規模事業者持続化補助金等の対象となる場合があります（審査結果により異なります）。詳しくはご相談ください。
+            </p>
+        </section>
+        
+        <!-- 実践研修ラインナップ -->
+        <section class="training" id="training">
+            <h2 class="section-title">実践研修ラインナップ</h2>
+            <p class="section-subtitle">実データを使って学ぶ、社内に残るスキルアップ研修</p>
+            
+            <div class="training-grid">
+                <!-- 研修① -->
+                <div class="training-card">
+                    <div class="training-number">①</div>
+                    <h3>Web運用改善研修</h3>
+                    <div class="price">価格目安：15〜20万円（全3回）</div>
+                    <ul>
+                        <li>GA4の見方と基本操作</li>
+                        <li>KPI設計と目標設定</li>
+                        <li>改善テーマの抽出方法</li>
+                        <li>30日アクションプラン作成</li>
+                    </ul>
+                </div>
+                
+                <!-- 研修② -->
+                <div class="training-card">
+                    <div class="training-number">②</div>
+                    <h3>SNS運用戦略研修</h3>
+                    <div class="price">価格目安：10〜15万円（全2回）</div>
+                    <ul>
+                        <li>SNSの目的と役割の整理</li>
+                        <li>投稿設計とコンテンツ企画</li>
+                        <li>運用ルールとチェック体制</li>
+                        <li>効果測定と改善サイクル</li>
+                    </ul>
+                </div>
+                
+                <!-- 研修③ -->
+                <div class="training-card">
+                    <div class="training-number">③</div>
+                    <h3>AI業務効率化研修</h3>
+                    <div class="price">価格目安：12〜18万円（全3回）</div>
+                    <ul>
+                        <li>生成AI活用の基礎</li>
+                        <li>資料作成の自動化</li>
+                        <li>コンテンツ制作の効率化</li>
+                        <li>業務プロセスの見直し</li>
+                    </ul>
+                </div>
+                
+                <!-- 研修④ -->
+                <div class="training-card">
+                    <div class="training-number">④</div>
+                    <h3>フルパック研修</h3>
+                    <div class="price">価格目安：35〜55万円（全8回）</div>
+                    <ul>
+                        <li>上記①②③すべての内容</li>
+                        <li>90日改善ロードマップ作成</li>
+                        <li>チーム体制構築支援</li>
+                        <li>6ヶ月間のフォローアップ</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <p style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 14px;">
+                🎓 研修は全てオンライン実施。録画提供・資料配布で復習も可能です。
+            </p>
+        </section>
+        
+        <!-- INSIGHT × 研修 × 伴走の強み -->
+        <section class="strengths" id="strengths">
+            <h2 class="section-title">INSIGHT × 研修 × 伴走の強み</h2>
+            <p class="section-subtitle">ツールと人のハイブリッド支援で、確実に成果を出す</p>
+            
+            <div class="strength-grid">
+                <div class="strength-card">
+                    <h3>💻 実データを使う</h3>
+                    <p>座学ではなく、自社のダッシュボードを見ながら学ぶ。現場で即活用できるスキルが身につきます。</p>
+                </div>
+                <div class="strength-card">
+                    <h3>📐 判断基準が残る</h3>
+                    <p>「なぜこの施策を優先するのか」の判断軸を社内に定着。担当者が変わっても継続できます。</p>
+                </div>
+                <div class="strength-card">
+                    <h3>🤝 ツールと人の両輪</h3>
+                    <p>自動化できる部分はツールに任せ、戦略と判断は人が支援。最適なバランスで伴走します。</p>
+                </div>
+                <div class="strength-card">
+                    <h3>🏠 内製化できる</h3>
+                    <p>研修とダッシュボードで、社内だけで運用できる体制を構築。外注依存から脱却できます。</p>
+                </div>
+                <div class="strength-card">
+                    <h3>👨‍💼 属人化しない</h3>
+                    <p>ダッシュボードとドキュメントで情報を可視化。担当者依存のリスクを軽減します。</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 導入の流れ -->
+        <section class="flow" id="flow">
+            <h2 class="section-title">導入の流れ</h2>
+            <p class="section-subtitle">最短2週間でスタート可能</p>
+            
+            <div class="flow-steps">
+                <div class="flow-step">
+                    <div class="flow-number">1</div>
+                    <div class="flow-content">
+                        <h3>無料相談（30分）</h3>
+                        <p>現状のWeb施策やお悩みをヒアリング。GCREV INSIGHTがどう役立つかご提案します。</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-number">2</div>
+                    <div class="flow-content">
+                        <h3>詳細ヒアリング（60分）</h3>
+                        <p>GA4・Search Consoleの接続状況、現在の課題、目標を詳しく確認します。</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-number">3</div>
+                    <div class="flow-content">
+                        <h3>トライアル（2週間）</h3>
+                        <p>実際にダッシュボードを使っていただき、使い勝手や効果を体験。</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-number">4</div>
+                    <div class="flow-content">
+                        <h3>研修実施（必要に応じて）</h3>
+                        <p>選択された研修プログラムを実施。実データを使った実践的な内容です。</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-number">5</div>
+                    <div class="flow-content">
+                        <h3>伴走開始</h3>
+                        <p>月次MTGと日常的な質問対応で、継続的な改善をサポートします。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- よくある質問 -->
+        <section class="faq" id="faq">
+            <h2 class="section-title">よくある質問</h2>
+            
+            <div class="faq-list">
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        補助金は使えますか？
+                        <span>▼</span>
+                    </div>
+                    <div class="faq-answer">
+                        IT導入補助金、小規模事業者持続化補助金などの対象となる場合があります。ただし、審査結果や補助対象範囲は申請時の状況により異なるため、詳細はご相談ください。申請サポートも承ります。
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        途中で解約はできますか？
+                        <span>▼</span>
+                    </div>
+                    <div class="faq-answer">
+                        ライト・スタンダードプランは月単位で解約可能です（前月末までに通知）。マスタープランは6ヶ月の最低契約期間がございますが、以降は月単位で解約できます。
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        地方でも対応できますか？
+                        <span>▼</span>
+                    </div>
+                    <div class="faq-answer">
+                        はい、全国対応しております。MTGや研修は全てオンライン（Zoom等）で実施しますので、場所を問わずご利用いただけます。むしろ地方企業のためのサービスです。
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        対面での支援は可能ですか？
+                        <span>▼</span>
+                    </div>
+                    <div class="faq-answer">
+                        基本はオンラインですが、マスタープランの場合、別途費用で訪問対応も可能です（交通費・宿泊費は実費）。キックオフや重要な戦略会議など、必要に応じてご相談ください。
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        GA4やSearch Consoleの設定が不安です
+                        <span>▼</span>
+                    </div>
+                    <div class="faq-answer">
+                        初期設定のサポートも含まれていますのでご安心ください。未導入の場合も、導入から支援いたします（スタンダード・マスタープラン）。
+                    </div>
+                </div>
+                
+                <div class="faq-item">
+                    <div class="faq-question" onclick="toggleFAQ(this)">
+                        研修だけの単発依頼は可能ですか？
+                        <span>▼</span>
+                    </div>
+                    <div class="faq-answer">
+                        はい、研修のみの単発依頼も可能です。ただし、ダッシュボードと組み合わせることで効果が最大化するため、セット利用を推奨しております。
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- CTA -->
+        <section class="cta-section" id="cta">
+            <h2>まずは無料相談から始めませんか？</h2>
+            <p>
+                Web施策の優先順位、データの見方、社内体制づくり...どんなご相談でもお気軽に。<br>
+                30分のオンライン相談で、課題整理からスタートできます。
+            </p>
+            <div class="cta-buttons">
+                <a href="https://example.com/contact" class="btn-primary">📄 資料請求（無料）</a>
+                <a href="https://example.com/inquiry" class="btn-secondary">💬 無料相談を予約</a>
+            </div>
+        </section>
+    </main>
+    
+    <!-- フッター（ダッシュボードと共通） -->
+    <footer>
+        <p>&copy; 2026 GCREV INSIGHT. All rights reserved.</p>
+    </footer>
+    
+    <script>
+        // FAQトグル
+        function toggleFAQ(element) {
+            const faqItem = element.parentElement;
+            faqItem.classList.toggle('active');
+        }
+        
+        // スムーススクロール
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

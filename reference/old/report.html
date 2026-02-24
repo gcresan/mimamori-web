@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ダッシュボード - クライアントポータル</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; background: #f5f7fa; color: #333; line-height: 1.8; }
+        
+        /* ヘッダー */
+        header { background: #2c3e50; color: #fff; padding: 15px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo { font-size: 20px; font-weight: 700; }
+        .user-info { font-size: 14px; }
+        
+        /* ナビゲーション */
+        nav { background: #34495e; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        nav ul { list-style: none; display: flex; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; }
+        nav li { flex: 1; min-width: 120px; }
+        nav a { display: block; padding: 15px 20px; color: #ecf0f1; text-decoration: none; text-align: center; transition: background 0.3s; }
+        nav a:hover, nav a.active { background: #2c3e50; }
+        
+        /* メインコンテンツ */
+        main { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+        .welcome { margin-bottom: 20px; }
+        .welcome h1 { font-size: 28px; color: #2c3e50; margin-bottom: 10px; }
+        .welcome p { color: #7f8c8d; }
+        
+        /* 期間切替タブ */
+        .period-selector { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .period-selector h2 { font-size: 16px; color: #2c3e50; margin-bottom: 15px; font-weight: 600; }
+        .period-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+        .period-tab { 
+            flex: 1; 
+            min-width: 150px;
+            padding: 12px 20px; 
+            background: #ecf0f1; 
+            border: 2px solid #bdc3c7; 
+            border-radius: 6px; 
+            text-align: center; 
+            cursor: pointer; 
+            transition: all 0.3s;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+        }
+        .period-tab:hover { 
+            background: #d5dbdb; 
+            border-color: #95a5a6;
+        }
+        .period-tab.active { 
+            background: #3498db; 
+            color: #fff; 
+            border-color: #3498db;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+        .period-tab .period-name { 
+            display: block; 
+            font-size: 15px; 
+            margin-bottom: 5px; 
+        }
+        .period-tab .period-date { 
+            display: block; 
+            font-size: 12px; 
+            opacity: 0.8; 
+        }
+        
+        /* ローディング表示 */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        .loading-overlay.active {
+            display: flex;
+        }
+        .loading-spinner {
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* カード共通 */
+        .card { background: #fff; border-radius: 8px; padding: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .card h2 { font-size: 20px; margin-bottom: 15px; color: #1e40af; border-left: 5px solid #2563eb; padding-left: 15px; }
+        .card h3 { font-size: 18px; color: #333; margin: 30px 0 15px 0; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb; }
+        
+        /* 1. 結論サマリー */
+        .summary-box { 
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            color: #0c4a6e; 
+            padding: 30px; 
+            border-radius: 8px; 
+            margin-bottom: 30px; 
+            line-height: 2; 
+            border: 3px solid #0ea5e9;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+        }
+        .summary-box p { font-size: 15px; margin-bottom: 15px; }
+        .summary-box strong { color: #0c4a6e; }
+        
+        /* 2. 良かった点 */
+        .good-box { 
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border-left: 5px solid #10b981; 
+            padding: 25px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+        }
+        .good-box ul { margin: 15px 0 0 20px; }
+        .good-box li { margin: 12px 0; line-height: 1.8; }
+        
+        /* 3. 改善が必要な点 */
+        .bad-box { 
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border-left: 5px solid #ef4444; 
+            padding: 25px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+        }
+        .bad-box ul { margin: 15px 0 0 20px; }
+        .bad-box li { margin: 12px 0; line-height: 1.8; }
+        
+        /* 4. ターゲットエリア */
+        .area-box { 
+            background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 100%);
+            border-left: 5px solid #f59e0b; 
+            padding: 25px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+        }
+        
+        /* 5. 考察 */
+        .insight-box { 
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-left: 5px solid #3b82f6; 
+            padding: 25px; 
+            margin: 20px 0; 
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+        }
+        
+        /* 6. ネクストアクション */
+        .action-box {
+            background: linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%);
+            border-left: 5px solid #a855f7;
+            padding: 25px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(168, 85, 247, 0.15);
+        }
+        
+        /* 数値の色分け */
+        .number-down { color: #ef4444; font-weight: bold; }
+        .number-up { color: #10b981; font-weight: bold; }
+        .number-neutral { color: #6b7280; font-weight: bold; }
+        .highlight { background-color: #fef08a; padding: 2px 6px; border-radius: 3px; font-weight: bold; }
+        
+        /* KPIグリッド */
+        .kpi-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); 
+            gap: 15px; 
+            margin: 20px 0; 
+        }
+        .kpi-item { 
+            text-align: center; 
+            padding: 20px; 
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .kpi-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-3px);
+        }
+        .kpi-value { font-size: 28px; font-weight: 700; color: #1e40af; margin: 10px 0; }
+        .kpi-label { font-size: 13px; color: #6b7280; margin-bottom: 5px; }
+        .kpi-change { font-size: 13px; margin-top: 8px; font-weight: 600; }
+        
+        /* テーブル */
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background-color: #f3f4f6; font-weight: bold; color: #374151; }
+        tr:hover { background-color: #f9fafb; }
+        
+        /* 優先度バッジ */
+        .priority-high { background-color: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; display: inline-block; }
+        .priority-medium { background-color: #fef3c7; color: #92400e; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; display: inline-block; }
+        .priority-low { background-color: #dbeafe; color: #1e40af; padding: 4px 12px; border-radius: 4px; font-weight: bold; font-size: 12px; display: inline-block; }
+        
+        /* 比較期間情報 */
+        .comparison-info {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #2c3e50;
+        }
+        
+        /* ボタン */
+        .btn { 
+            display: inline-block; 
+            padding: 12px 24px; 
+            background: #3498db; 
+            color: #fff; 
+            text-decoration: none; 
+            border-radius: 6px; 
+            transition: all 0.3s; 
+            font-size: 14px; 
+            border: none; 
+            cursor: pointer; 
+            font-weight: 600;
+        }
+        .btn:hover { background: #2980b9; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3); }
+        .btn-secondary { background: #95a5a6; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .cta-buttons { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
+        
+        /* フッター */
+        footer { background: #2c3e50; color: #ecf0f1; text-align: center; padding: 20px; margin-top: 50px; }
+        
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            nav ul { flex-direction: column; }
+            nav li { min-width: 100%; }
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+            .cta-buttons { flex-direction: column; }
+            .btn { width: 100%; text-align: center; }
+            .period-tabs { flex-direction: column; }
+            .period-tab { min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">クライアントポータル</div>
+            <div class="user-info">〇〇株式会社 / 山田太郎 様</div>
+        </div>
+    </header>
+    
+    <nav>
+        <ul>
+            <li><a href="/dashboard" class="active">ダッシュボード</a></li>
+            <li><a href="/reports">月次レポート</a></li>
+            <li><a href="/topics">トピックス</a></li>
+            <li><a href="/inquiry">問い合わせ</a></li>
+            <li><a href="/resources">資料庫</a></li>
+            <li><a href="/account">アカウント</a></li>
+        </ul>
+    </nav>
+    
+    <main>
+        <div class="welcome">
+            <h1>ダッシュボード</h1>
+            <p>〇〇株式会社 様 の最新情報</p>
+        </div>
+        
+        <!-- 期間切替セクション -->
+        <div class="period-selector">
+            <h2>📅 表示期間を選択</h2>
+            <div class="period-tabs">
+                <div class="period-tab active" data-range="last30" onclick="changePeriod('last30')">
+                    <span class="period-name">直近30日</span>
+                    <span class="period-date" id="date-last30">2025/12/27 - 2026/01/26</span>
+                </div>
+                <div class="period-tab" data-range="previousMonth" onclick="changePeriod('previousMonth')">
+                    <span class="period-name">前月</span>
+                    <span class="period-date" id="date-previousMonth">2025年12月（12/1 - 12/31）</span>
+                </div>
+                <div class="period-tab" data-range="twoMonthsAgo" onclick="changePeriod('twoMonthsAgo')">
+                    <span class="period-name">前々月</span>
+                    <span class="period-date" id="date-twoMonthsAgo">2025年11月（11/1 - 11/30）</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 1. 結論サマリー -->
+        <div class="card">
+            <h2>📊 1. 結論サマリー</h2>
+            <div class="comparison-info" id="comparison-info">
+                <strong>比較期間:</strong> 前期（2025/11/27 - 2025/12/26）との比較
+            </div>
+            
+            <div class="summary-box" id="summary-content">
+                <p><strong>⚠️ 全体の状況：</strong>訪問者数（セッション数）は<span class="number-up">ほぼ横ばい（+0.0%）</span>で安定していますが、肝心の<span class="number-down">イベント申込みが激減（10件→1件、-90%）</span>しており、深刻な状況です。</p>
+                <p><strong>🚨 最重要課題：</strong>愛媛県からの訪問が<span class="number-down">646人→589人（-8.8%減少）</span>し、全体に占める割合も<span class="number-down">15.6%→14.5%</span>に低下。地元である愛媛の集客が弱まっています。</p>
+                <p><strong>💡 考えられる原因：</strong>11月は「東垣生エコハウス」「伊予市エコハウス」の見学会が複数開催され申込みが集中しましたが、12月は大きなイベントがなかった可能性があります。</p>
+                <p><strong>📱 デバイス：</strong>スマホからの訪問が<span class="number-up">59.9%</span>と多数派ですが、スマホでの滞在時間やページビューが伸び悩んでいます。</p>
+            </div>
+            
+            <!-- 主要KPI -->
+            <div class="kpi-grid" id="kpi-container">
+                <div class="kpi-item">
+                    <div class="kpi-label">PV（ページ閲覧数）</div>
+                    <div class="kpi-value" id="kpi-pv">8,389</div>
+                    <div class="kpi-change up" id="kpi-pv-change">▲ 0.4%</div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">セッション（訪問回数）</div>
+                    <div class="kpi-value" id="kpi-sessions">3,986</div>
+                    <div class="kpi-change neutral" id="kpi-sessions-change">± 0.0%</div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">ユーザー（訪問者数）</div>
+                    <div class="kpi-value" id="kpi-users">3,502</div>
+                    <div class="kpi-change up" id="kpi-users-change">▲ 3.5%</div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">新規ユーザー</div>
+                    <div class="kpi-value" id="kpi-new-users">2,681</div>
+                    <div class="kpi-change up" id="kpi-new-users-change">▲ 8.6%</div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">リピーター</div>
+                    <div class="kpi-value" id="kpi-returning">821</div>
+                    <div class="kpi-change down" id="kpi-returning-change">▼ 10.4%</div>
+                </div>
+                <div class="kpi-item">
+                    <div class="kpi-label">平均滞在時間</div>
+                    <div class="kpi-value" id="kpi-duration">47秒</div>
+                    <div class="kpi-change up" id="kpi-duration-change">▲ 17.5%</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 2. 今月の良かった点 -->
+        <div class="card">
+            <h2>✅ 2. 今月の良かった点</h2>
+            <div class="good-box" id="good-points">
+                <ul>
+                    <li><strong>訪問数の安定：</strong>セッション（訪問回数）は3,986回で、前月と<span class="number-up">ほぼ同じ水準（+0.0%）</span>を維持できています</li>
+                    <li><strong>ユーザー数の増加：</strong>サイトに訪れた人の数は<span class="number-up">3,385人→3,502人（+3.5%増）</span>と微増</li>
+                    <li><strong>新規訪問者の増加：</strong>初めてサイトに来た人は<span class="number-up">2,469人→2,681人（+8.6%増）</span>。新しい人へのリーチは成功しています</li>
+                    <li><strong>平均滞在時間の改善：</strong><span class="number-up">40秒→47秒（+17.5%）</span>。訪問者がサイトに長く滞在するようになりました</li>
+                    <li><strong>直接訪問の増加：</strong>ブックマークや名刺・チラシからの直接訪問が<span class="number-up">+8.9%</span>増加。オフライン施策が効いています</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 3. 改善が必要な点 -->
+        <div class="card">
+            <h2>⚠️ 3. 改善が必要な点</h2>
+            <div class="bad-box" id="improvement-points">
+                <ul>
+                    <li><strong>イベント申込みが激減：</strong><span class="number-down">10件→1件（-90%）</span>。これが今月最大の問題です。11月は複数のイベントがあったのに対し、12月はイベントが少なかった可能性があります</li>
+                    <li><strong>愛媛県からの訪問が減少：</strong>目標である地元・愛媛からの訪問が<span class="number-down">646人→589人（-8.8%）</span>に減少。全体に占める割合も15.6%→14.5%に低下</li>
+                    <li><strong>自然検索からの流入が減少：</strong>Google等の検索経由での訪問が<span class="number-down">2,123回→1,946回（-8.3%）</span>と減少</li>
+                    <li><strong>リピーター（再訪問者）の減少：</strong><span class="number-down">916人→821人（-10.4%）</span>。一度来た人が戻ってきていません</li>
+                    <li><strong>通常の問い合わせはゼロ：</strong>イベント申込み以外の「お問い合わせ」は依然としてゼロ。サイトからの自然な問い合わせを増やす仕組みが必要です</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 4. ターゲットエリアの状況 -->
+        <div class="card">
+            <h2>📍 4. ターゲットエリアの状況</h2>
+            <div class="area-box" id="area-analysis">
+                <h3>愛媛県からのアクセス状況</h3>
+                <div class="kpi-grid">
+                    <div class="kpi-item" style="background: #fef2f2;">
+                        <div class="kpi-label">愛媛県訪問数</div>
+                        <div class="kpi-value" style="color: #ef4444;">589人</div>
+                        <div class="kpi-change down">▼ 57人減（-8.8%）</div>
+                    </div>
+                    <div class="kpi-item" style="background: #fef2f2;">
+                        <div class="kpi-label">全体に占める割合</div>
+                        <div class="kpi-value" style="color: #ef4444;">14.5%</div>
+                        <div class="kpi-change down">▼ 前月15.6%から低下</div>
+                    </div>
+                </div>
+                
+                <h3>地域別訪問数ランキング</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>順位</th>
+                            <th>地域</th>
+                            <th>訪問数</th>
+                            <th>変化</th>
+                        </tr>
+                    </thead>
+                    <tbody id="region-ranking">
+                        <tr>
+                            <td>1位</td>
+                            <td><strong>愛媛県</strong></td>
+                            <td><strong>589</strong></td>
+                            <td><span class="number-down">▼ 57人減</span></td>
+                        </tr>
+                        <tr>
+                            <td>2位</td>
+                            <td>東京都</td>
+                            <td>567</td>
+                            <td><span class="number-down">▼ 115人減</span></td>
+                        </tr>
+                        <tr>
+                            <td>3位</td>
+                            <td>大阪府</td>
+                            <td>274</td>
+                            <td><span class="number-down">▼ 83人減</span></td>
+                        </tr>
+                        <tr>
+                            <td>4位</td>
+                            <td>北海道</td>
+                            <td>142</td>
+                            <td><span class="number-down">▼ 11人減</span></td>
+                        </tr>
+                        <tr>
+                            <td>5位</td>
+                            <td>愛知県</td>
+                            <td>129</td>
+                            <td><span class="number-up">▲ 2人増</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <p><strong>💡 分析：</strong>愛媛県内の住宅購入検討者にサイトが届いていない状況です。<span class="highlight">「愛媛 注文住宅」「松山 工務店」「松山 パッシブハウス」などの地域キーワードでの検索順位</span>を確認し、上位表示できるよう対策が必要です。</p>
+            </div>
+        </div>
+        
+        <!-- 5. 考察：なぜこのような状態になっているのか -->
+        <div class="card">
+            <h2>💭 5. 考察：なぜこのような状態になっているのか</h2>
+            
+            <h3>🚨 イベント申込みが激減した理由</h3>
+            <div class="insight-box">
+                <p><strong>問題点：</strong>前月10件→今月1件と、<span class="number-down">イベント申込みが90%減少</span>しました。これが今月最大の問題です。</p>
+                <br>
+                <p><strong>具体的な原因：</strong></p>
+                <ul>
+                    <li><strong>イベント開催数の減少：</strong>11月は「東垣生エコハウス完成見学会」「伊予市エコハウス完成見学会」など<span class="highlight">複数の大型イベント</span>があったのに対し、12月は大きなイベントが少なかった可能性があります</li>
+                    <li><strong>年末の時期的要因：</strong>12月は年末で住宅検討者の動きが鈍くなる時期。これは業界全体の傾向です</li>
+                    <li><strong>イベント告知のタイミング：</strong>11月末に12月のイベントを告知できていなかった可能性があります</li>
+                    <li><strong>完成物件の減少：</strong>見学会を開催できる完成物件が11月に比べて少なかった可能性があります</li>
+                </ul>
+                <br>
+                <p><strong>💡 重要：</strong>イベント申込みは<span class="highlight">「完成物件がある時」に集中</span>します。常時イベントを開催できるよう、<strong>構造見学会</strong>や<strong>OB宅見学会</strong>、<strong>オンライン相談会</strong>など、完成物件以外のイベントも企画することをお勧めします。</p>
+            </div>
+            
+            <h3>📉 愛媛県からのアクセスが減少した理由</h3>
+            <div class="insight-box">
+                <p><strong>問題点：</strong>目標である「愛媛県内の訪問者を増やす」に対し、実際には前月比-8.8%と減少しています。</p>
+                <br>
+                <p><strong>具体的な原因：</strong></p>
+                <ul>
+                    <li><strong>地域キーワードでの露出不足：</strong>「愛媛 注文住宅」「松山 工務店」「松山 パッシブハウス」などの<span class="highlight">地域名+サービス名のキーワードで上位表示できていない</span>可能性があります</li>
+                    <li><strong>自然検索全体の減少：</strong>Google等の検索経由での訪問が前月比-8.3%と減少しており、愛媛だけでなく全国的に検索流入が減っています</li>
+                    <li><strong>地域性の訴求不足：</strong>サイトを見ても「愛媛の工務店」という印象が薄く、地元の住宅購入検討者が親近感を持ちにくい可能性があります</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 6. ネクストアクション（優先度順） -->
+        <div class="card">
+            <h2>🎯 6. ネクストアクション（優先度順）</h2>
+            
+            <h3>📌 優先度【高】：今すぐ取り組むべきこと</h3>
+            <div class="action-box">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 60%">アクション</th>
+                            <th style="width: 40%">期待される効果</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <span class="priority-high">最優先</span><br>
+                                <strong>【緊急】イベント開催数を増やす</strong>
+                                <ul style="margin-top: 10px;">
+                                    <li>完成見学会だけでなく、<strong>構造見学会</strong>（建築中の家）を積極的に開催</li>
+                                    <li>月1回以上の<strong>OB宅見学会</strong>を企画（既に住んでいるお客様の協力を得る）</li>
+                                    <li><strong>オンライン相談会</strong>を毎週開催し、遠方の人や忙しい人でも参加できるようにする</li>
+                                    <li>「パッシブハウス勉強会」など<strong>セミナー形式</strong>のイベントも企画</li>
+                                </ul>
+                            </td>
+                            <td>
+                                ・イベント申込み数の回復<br>
+                                ・見込み客との接点増加<br>
+                                ・年間を通じた安定した集客<br>
+                                ・完成物件に依存しない集客体制
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <span class="priority-high">最優先</span><br>
+                                <strong>【愛媛県内集客】地域SEO対策の強化</strong>
+                                <ul style="margin-top: 10px;">
+                                    <li>タイトルタグに「<strong>愛媛県松山市</strong>」を明記</li>
+                                    <li>各ページの本文に「<strong>愛媛</strong>」「<strong>松山</strong>」などの地域キーワードを自然に盛り込む</li>
+                                    <li>「<strong>愛媛 注文住宅</strong>」「<strong>松山 工務店</strong>」で現在の検索順位を確認し、上位表示を目指す</li>
+                                    <li>Googleビジネスプロフィールを充実させる（写真追加、投稿、レビュー獲得）</li>
+                                </ul>
+                            </td>
+                            <td>
+                                ・愛媛県からの訪問数増加<br>
+                                ・地元での認知度向上<br>
+                                ・「近くの工務店」検索での表示
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <span class="priority-high">最優先</span><br>
+                                <strong>通常の問い合わせ導線の改善</strong>
+                                <ul style="margin-top: 10px;">
+                                    <li>全ページの<strong>右下に「無料相談」ボタンを固定表示</strong></li>
+                                    <li>問い合わせフォームの項目を減らす（4つのみ）</li>
+                                    <li>「<strong>まずは話を聞くだけでもOK</strong>」など、心理的ハードルを下げる一言を追加</li>
+                                    <li>電話番号を<strong>タップで発信できる形式</strong>にする</li>
+                                </ul>
+                            </td>
+                            <td>
+                                ・イベント以外の問い合わせ獲得<br>
+                                ・ライトな相談の増加<br>
+                                ・年間を通じた問い合わせの安定化
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <h3>📌 優先度【中】：早めに取り組むべきこと</h3>
+            <div class="action-box">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 60%">アクション</th>
+                            <th style="width: 40%">期待される効果</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <span class="priority-medium">中優先</span><br>
+                                <strong>施工実績ページへの導線を強化</strong>
+                                <ul style="margin-top: 10px;">
+                                    <li>トップページに「<strong>愛媛県内の施工実績</strong>」セクションを追加</li>
+                                    <li>各事例に市町村名を明記し、「近くで建てた実績」として訴求</li>
+                                    <li>「お客様の声」も合わせて掲載</li>
+                                </ul>
+                            </td>
+                            <td>
+                                ・ページビュー数の増加<br>
+                                ・滞在時間の延長<br>
+                                ・愛媛県内の実績アピール
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <span class="priority-medium">中優先</span><br>
+                                <strong>リピーター獲得施策</strong>
+                                <ul style="margin-top: 10px;">
+                                    <li>メールマガジンやLINE公式アカウントを開設</li>
+                                    <li>「無料の家づくり相談会」をオンラインで開催</li>
+                                    <li>「お役立ち資料ダウンロード」を設置</li>
+                                </ul>
+                            </td>
+                            <td>
+                                ・リピーター数の回復<br>
+                                ・見込み客リストの構築<br>
+                                ・中長期的な関係性の構築
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- 主要CTA -->
+        <div class="card">
+            <h2>🚀 よく使う機能</h2>
+            <div class="cta-buttons">
+                <a href="/reports" class="btn">月次レポート一覧</a>
+                <a href="/topics" class="btn">トピックス一覧</a>
+                <a href="/inquiry/new" class="btn">問い合わせする</a>
+                <a href="/resources" class="btn btn-secondary">資料庫を見る</a>
+            </div>
+        </div>
+    </main>
+    
+    <!-- ローディングオーバーレイ -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>データを読み込んでいます...</p>
+        </div>
+    </div>
+    
+    <footer>
+        <p>&copy; 2026 Your Company. All rights reserved.</p>
+    </footer>
+    
+    <script>
+        // 現在の期間を保持
+        let currentPeriod = 'last30';
+        
+        // 期間切替関数
+        function changePeriod(range) {
+            if (currentPeriod === range) return;
+            
+            // タブのアクティブ状態を更新
+            document.querySelectorAll('.period-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[data-range="${range}"]`).classList.add('active');
+            
+            // ローディング表示
+            document.getElementById('loadingOverlay').classList.add('active');
+            
+            currentPeriod = range;
+            
+            // APIからデータを取得
+            fetchDashboardData(range);
+        }
+        
+        // APIからデータを取得する関数
+        async function fetchDashboardData(range) {
+            try {
+                const response = await fetch(`/api/ga4-summary?range=${range}`);
+                
+                if (!response.ok) {
+                    throw new Error('データの取得に失敗しました');
+                }
+                
+                const data = await response.json();
+                updateDashboard(data);
+                
+                setTimeout(() => {
+                    document.getElementById('loadingOverlay').classList.remove('active');
+                }, 500);
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                alert('データの取得中にエラーが発生しました。もう一度お試しください。');
+                document.getElementById('loadingOverlay').classList.remove('active');
+            }
+        }
+        
+        // ダッシュボードのデータを更新する関数
+        function updateDashboard(data) {
+            // 比較期間情報を更新
+            document.getElementById('comparison-info').innerHTML = 
+                `<strong>比較期間:</strong> ${data.comparisonPeriod || '前期との比較'}`;
+            
+            // サマリーボックスを更新
+            document.getElementById('summary-content').innerHTML = data.summary || '';
+            
+            // KPI値を更新
+            document.getElementById('kpi-pv').textContent = formatNumber(data.pageViews);
+            document.getElementById('kpi-sessions').textContent = formatNumber(data.sessions);
+            document.getElementById('kpi-users').textContent = formatNumber(data.users);
+            document.getElementById('kpi-new-users').textContent = formatNumber(data.newUsers);
+            document.getElementById('kpi-returning').textContent = formatNumber(data.returningUsers);
+            document.getElementById('kpi-duration').textContent = data.avgDuration + '秒';
+            
+            // 変動率を更新
+            updateChangeIndicator('kpi-pv-change', data.pageViewsChange);
+            updateChangeIndicator('kpi-sessions-change', data.sessionsChange);
+            updateChangeIndicator('kpi-users-change', data.usersChange);
+            updateChangeIndicator('kpi-new-users-change', data.newUsersChange);
+            updateChangeIndicator('kpi-returning-change', data.returningUsersChange);
+            updateChangeIndicator('kpi-duration-change', data.avgDurationChange);
+            
+            // 良かった点・改善点を更新
+            if (data.goodPoints) {
+                document.getElementById('good-points').innerHTML = data.goodPoints;
+            }
+            if (data.improvementPoints) {
+                document.getElementById('improvement-points').innerHTML = data.improvementPoints;
+            }
+            
+            // ターゲットエリアを更新
+            if (data.regionRanking) {
+                updateRegionRanking(data.regionRanking);
+            }
+        }
+        
+        // 変動率の表示を更新する関数
+        function updateChangeIndicator(elementId, changeValue) {
+            const element = document.getElementById(elementId);
+            element.classList.remove('up', 'down', 'neutral');
+            
+            if (changeValue > 0) {
+                element.classList.add('up');
+                element.textContent = `▲ ${changeValue}%`;
+            } else if (changeValue < 0) {
+                element.classList.add('down');
+                element.textContent = `▼ ${Math.abs(changeValue)}%`;
+            } else {
+                element.classList.add('neutral');
+                element.textContent = '± 0.0%';
+            }
+        }
+        
+        // 地域ランキングを更新する関数
+        function updateRegionRanking(rankings) {
+            const tbody = document.getElementById('region-ranking');
+            tbody.innerHTML = '';
+            
+            rankings.forEach((region, index) => {
+                const tr = document.createElement('tr');
+                const changeClass = region.change >= 0 ? 'number-up' : 'number-down';
+                const changeSymbol = region.change >= 0 ? '▲' : '▼';
+                
+                tr.innerHTML = `
+                    <td>${index + 1}位</td>
+                    <td>${region.name === '愛媛県' ? '<strong>' + region.name + '</strong>' : region.name}</td>
+                    <td>${region.name === '愛媛県' ? '<strong>' + region.count + '</strong>' : region.count}</td>
+                    <td><span class="${changeClass}">${changeSymbol} ${Math.abs(region.change)}人</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        // 数値をフォーマットする関数
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+        
+        // 期間の日付表示を動的に生成する関数
+        function initializePeriodDates() {
+            const today = new Date();
+            
+            // 直近30日
+            const last30Start = new Date(today);
+            last30Start.setDate(today.getDate() - 29);
+            document.getElementById('date-last30').textContent = 
+                `${formatDate(last30Start)} - ${formatDate(today)}`;
+            
+            // 前月
+            const previousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            const previousMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+            document.getElementById('date-previousMonth').textContent = 
+                `${previousMonth.getFullYear()}年${previousMonth.getMonth() + 1}月（${previousMonth.getMonth() + 1}/1 - ${previousMonth.getMonth() + 1}/${previousMonthEnd.getDate()}）`;
+            
+            // 前々月
+            const twoMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+            const twoMonthsAgoEnd = new Date(today.getFullYear(), today.getMonth() - 1, 0);
+            document.getElementById('date-twoMonthsAgo').textContent = 
+                `${twoMonthsAgo.getFullYear()}年${twoMonthsAgo.getMonth() + 1}月（${twoMonthsAgo.getMonth() + 1}/1 - ${twoMonthsAgo.getMonth() + 1}/${twoMonthsAgoEnd.getDate()}）`;
+        }
+        
+        // 日付をフォーマットする関数
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}/${month}/${day}`;
+        }
+        
+        // ページ読み込み時に実行
+        document.addEventListener('DOMContentLoaded', function() {
+            initializePeriodDates();
+        });
+    </script>
+</body>
+</html>

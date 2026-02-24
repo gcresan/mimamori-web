@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分析（トップ） - GCREV INSIGHT</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: #1a1d24;
+            color: #fff;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .sidebar-nav {
+            padding: 16px 0 32px 0;
+        }
+
+        .nav-section {
+            margin-bottom: 20px;
+        }
+
+        .nav-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 12px 20px 8px 20px;
+        }
+
+        .nav-menu {
+            list-style: none;
+        }
+
+        .nav-item {
+            margin-bottom: 2px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 20px;
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .nav-link:hover {
+            background: rgba(255,255,255,0.06);
+            color: #e5e7eb;
+        }
+
+        .nav-link.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            font-weight: 600;
+        }
+
+        .nav-link.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: #3b82f6;
+            border-radius: 0 2px 2px 0;
+        }
+
+        .nav-icon {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .nav-submenu {
+            list-style: none;
+            margin-top: 2px;
+        }
+
+        .nav-submenu .nav-link {
+            padding: 8px 20px 8px 52px;
+            font-size: 13px;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            width: calc(100% - 260px);
+        }
+
+        .topbar {
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #333;
+            padding: 4px;
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .period-selector {
+            display: flex;
+            gap: 8px;
+            background: #f3f4f6;
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .period-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .period-btn:hover {
+            color: #1a1a1a;
+        }
+
+        .period-btn.active {
+            background: #fff;
+            color: #3b82f6;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .user-menu:hover {
+            background: #f3f4f6;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .breadcrumb {
+            padding: 16px 32px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .breadcrumb a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb span {
+            margin: 0 8px;
+            color: #d1d5db;
+        }
+
+        .content-area {
+            padding: 32px;
+            max-width: 1400px;
+        }
+
+        /* 分析サマリー（帯カード） */
+        .summary-banner {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-left: 4px solid #3b82f6;
+            padding: 20px 24px;
+            border-radius: 10px;
+            margin-bottom: 32px;
+        }
+
+        .summary-banner h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 12px;
+        }
+
+        .summary-banner ul {
+            list-style: none;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 8px;
+        }
+
+        .summary-banner li {
+            font-size: 14px;
+            color: #1e3a8a;
+            padding: 4px 0;
+        }
+
+        .summary-banner li::before {
+            content: '✓ ';
+            color: #3b82f6;
+            font-weight: 700;
+            margin-right: 6px;
+        }
+
+        /* ダイジェストカードグリッド */
+        .digest-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .digest-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid #f0f0f0;
+            transition: all 0.3s ease;
+        }
+
+        .digest-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+        }
+
+        .digest-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .digest-card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .detail-link {
+            font-size: 13px;
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s ease;
+        }
+
+        .detail-link:hover {
+            color: #2563eb;
+            text-decoration: underline;
+        }
+
+        .digest-chart-placeholder {
+            width: 100%;
+            height: 180px;
+            background: #f9fafb;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .digest-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .digest-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 14px;
+        }
+
+        .digest-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .digest-list-item-name {
+            color: #1a1a1a;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .digest-list-item-value {
+            color: #3b82f6;
+            font-weight: 700;
+            margin-left: 16px;
+        }
+
+        .digest-list-item-change {
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .digest-list-item-change.positive {
+            color: #10b981;
+            background: #ecfdf5;
+        }
+
+        .digest-list-item-change.negative {
+            color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .digest-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .topbar {
+                padding: 12px 16px;
+            }
+
+            .page-title {
+                font-size: 18px;
+            }
+
+            .content-area {
+                padding: 16px;
+            }
+
+            .breadcrumb {
+                padding: 12px 16px;
+            }
+
+            .user-menu span {
+                display: none;
+            }
+
+            .summary-banner ul {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <div class="app-container">
+        <!-- サイドバー（同じ構造） -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="#" class="logo">
+                    <div class="logo-icon">G</div>
+                    <span>GCREV INSIGHT</span>
+                </a>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">ダッシュボード</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item">
+                            <a href="gcrev-insight-v2-dashboard.html" class="nav-link">
+                                <span class="nav-icon">📊</span>
+                                <span>総合ダッシュボード</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <span class="nav-icon">💡</span>
+                                <span>今月の結論 / ネクストアクション</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <span class="nav-icon">📈</span>
+                                <span>KPI一覧</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <span class="nav-icon">🔔</span>
+                                <span>アラート</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">ホームページ（GA / GSC）</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <span class="nav-icon">🏠</span>
+                                <span>ダッシュボード</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="gcrev-insight-v2-analysis.html" class="nav-link active">
+                                <span class="nav-icon">🔍</span>
+                                <span>分析（トップ）</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="gcrev-insight-v2-keywords.html" class="nav-link">
+                                <span class="nav-icon">🔑</span>
+                                <span>キーワード</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="gcrev-insight-v2-pages.html" class="nav-link">
+                                <span class="nav-icon">📄</span>
+                                <span>ページ</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">MEO（Googleビジネス）</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <span class="nav-icon">📍</span>
+                                <span>ダッシュボード</span>
+                            </a>
+                        </li>
+                    </ul>
+                    <ul class="nav-submenu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span>診断レポート</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span>順位チェック</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span>クチコミ分析</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span>投稿チェック</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span>競合比較</span></a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">SNS（Instagram）</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link">
+                                <span class="nav-icon">📱</span>
+                                <span>ダッシュボード</span>
+                            </a>
+                        </li>
+                    </ul>
+                    <ul class="nav-submenu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span>投稿別分析</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span>フォロワー推移</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span>ハッシュタグ分析</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span>改善提案（AI）</span></a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">AI支援 / 改善提案</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🤖</span><span>今月の改善ポイント</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">⭐</span><span>優先施策ランキング</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">✏️</span><span>コンテンツ企画AI</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📢</span><span>広告改善案</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🎯</span><span>LP改善案</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">💰</span><span>CV改善アドバイス</span></a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">レポート</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📄</span><span>月次レポート</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🗂️</span><span>過去レポート</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📥</span><span>PDF出力</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🔗</span><span>共有リンク</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📊</span><span>Looker Studio</span></a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">トピックス / 学習</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📰</span><span>業界ニュース</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📊</span><span>集客トレンド</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🏆</span><span>成功事例</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📚</span><span>GCREVコラム</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🎓</span><span>セミナー案内</span></a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">問い合わせ / 伴走サポート</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">💬</span><span>相談フォーム</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🔧</span><span>改善依頼</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🎓</span><span>研修申込み</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📢</span><span>広告相談</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📅</span><span>打ち合わせ予約</span></a></li>
+                    </ul>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">アカウント</div>
+                    <ul class="nav-menu">
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">⚙️</span><span>プラン確認</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📋</span><span>契約状況</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">💳</span><span>請求情報</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📆</span><span>利用期間</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🏢</span><span>クライアント設定</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🔌</span><span>GA / GSC連携</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">📍</span><span>MEO連携</span></a></li>
+                        <li class="nav-item"><a href="#" class="nav-link"><span class="nav-icon">🔔</span><span>通知設定</span></a></li>
+                    </ul>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <div class="topbar">
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle">☰</button>
+                    <h1 class="page-title">分析（トップ）</h1>
+                </div>
+                <div class="topbar-right">
+                    <div class="period-selector">
+                        <button class="period-btn active" data-period="prev-month">前月</button>
+                        <button class="period-btn" data-period="last30">直近30日</button>
+                    </div>
+                    <div class="user-menu">
+                        <div class="user-avatar">G</div>
+                        <span style="font-size: 14px; font-weight: 600;">管理者</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="breadcrumb">
+                <a href="#">ホーム</a>
+                <span>›</span>
+                <a href="#">ホームページ</a>
+                <span>›</span>
+                <strong>分析（トップ）</strong>
+            </div>
+
+            <div class="content-area">
+                <!-- 分析サマリー（帯） -->
+                <div class="summary-banner">
+                    <h3>📊 主要トレンドサマリー</h3>
+                    <ul>
+                        <li>モバイルからのアクセスが前月比+5.2%増加</li>
+                        <li>25-34歳層のエンゲージメント率が大幅改善（+18.3%）</li>
+                        <li>オーガニック検索からの流入が安定して推移</li>
+                        <li>愛媛県からのアクセスが減少傾向（-8.8%）</li>
+                    </ul>
+                </div>
+
+                <!-- ダイジェストカードグリッド -->
+                <div class="digest-grid">
+                    <!-- デバイス別アクセス -->
+                    <div class="digest-card">
+                        <div class="digest-card-header">
+                            <h3 class="digest-card-title">
+                                <span>📱</span>
+                                <span>デバイス別アクセス</span>
+                            </h3>
+                            <a href="#" class="detail-link">詳細を見る →</a>
+                        </div>
+                        <div class="digest-chart-placeholder">ミニ円グラフ領域</div>
+                        <ul class="digest-list">
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">Mobile</span>
+                                <span class="digest-list-item-value">56.9%</span>
+                                <span class="digest-list-item-change positive">+5.2%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">Desktop</span>
+                                <span class="digest-list-item-value">39.9%</span>
+                                <span class="digest-list-item-change negative">-3.1%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">Tablet</span>
+                                <span class="digest-list-item-value">3.2%</span>
+                                <span class="digest-list-item-change negative">-0.5%</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- 年齢別アクセス -->
+                    <div class="digest-card">
+                        <div class="digest-card-header">
+                            <h3 class="digest-card-title">
+                                <span>👥</span>
+                                <span>年齢別アクセス</span>
+                            </h3>
+                            <a href="#" class="detail-link">詳細を見る →</a>
+                        </div>
+                        <div class="digest-chart-placeholder">ミニ棒グラフ領域</div>
+                        <ul class="digest-list">
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">25-34歳</span>
+                                <span class="digest-list-item-value">32.4%</span>
+                                <span class="digest-list-item-change positive">+18.3%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">35-44歳</span>
+                                <span class="digest-list-item-value">20.5%</span>
+                                <span class="digest-list-item-change positive">+2.1%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">18-24歳</span>
+                                <span class="digest-list-item-value">19.5%</span>
+                                <span class="digest-list-item-change negative">-4.2%</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- 流入元 -->
+                    <div class="digest-card">
+                        <div class="digest-card-header">
+                            <h3 class="digest-card-title">
+                                <span>🌐</span>
+                                <span>流入元</span>
+                            </h3>
+                            <a href="#" class="detail-link">詳細を見る →</a>
+                        </div>
+                        <div class="digest-chart-placeholder">ミニ棒グラフ領域</div>
+                        <ul class="digest-list">
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">Direct</span>
+                                <span class="digest-list-item-value">37.4%</span>
+                                <span class="digest-list-item-change positive">+1.2%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">Organic</span>
+                                <span class="digest-list-item-value">35.7%</span>
+                                <span class="digest-list-item-change positive">+3.8%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">Referral</span>
+                                <span class="digest-list-item-value">14.5%</span>
+                                <span class="digest-list-item-change negative">-2.3%</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- 地域別アクセス -->
+                    <div class="digest-card">
+                        <div class="digest-card-header">
+                            <h3 class="digest-card-title">
+                                <span>📍</span>
+                                <span>地域別アクセス TOP5</span>
+                            </h3>
+                            <a href="#" class="detail-link">詳細を見る →</a>
+                        </div>
+                        <ul class="digest-list" style="margin-top: 20px;">
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">1. 関西</span>
+                                <span class="digest-list-item-value">839</span>
+                                <span class="digest-list-item-change positive">+2.5%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">2. 愛媛</span>
+                                <span class="digest-list-item-value">816</span>
+                                <span class="digest-list-item-change negative">-8.8%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">3. 東京</span>
+                                <span class="digest-list-item-value">725</span>
+                                <span class="digest-list-item-change positive">+1.3%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">4. 大阪</span>
+                                <span class="digest-list-item-value">372</span>
+                                <span class="digest-list-item-change positive">+4.2%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">5. 北海道</span>
+                                <span class="digest-list-item-value">186</span>
+                                <span class="digest-list-item-change negative">-1.5%</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- ページランキング -->
+                    <div class="digest-card">
+                        <div class="digest-card-header">
+                            <h3 class="digest-card-title">
+                                <span>📄</span>
+                                <span>ページランキング TOP5</span>
+                            </h3>
+                            <a href="gcrev-insight-v2-pages.html" class="detail-link">詳細を見る →</a>
+                        </div>
+                        <ul class="digest-list" style="margin-top: 20px;">
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">1. トップページ</span>
+                                <span class="digest-list-item-value">1,875</span>
+                                <span class="digest-list-item-change positive">+5.3%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">2. 会社概要</span>
+                                <span class="digest-list-item-value">986</span>
+                                <span class="digest-list-item-change positive">+2.1%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">3. サービス案内</span>
+                                <span class="digest-list-item-value">842</span>
+                                <span class="digest-list-item-change negative">-1.8%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">4. お問い合わせ</span>
+                                <span class="digest-list-item-value">645</span>
+                                <span class="digest-list-item-change positive">+8.2%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">5. ブログ一覧</span>
+                                <span class="digest-list-item-value">523</span>
+                                <span class="digest-list-item-change negative">-3.5%</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- キーワードランキング -->
+                    <div class="digest-card">
+                        <div class="digest-card-header">
+                            <h3 class="digest-card-title">
+                                <span>🔑</span>
+                                <span>キーワードランキング TOP5</span>
+                            </h3>
+                            <a href="gcrev-insight-v2-keywords.html" class="detail-link">詳細を見る →</a>
+                        </div>
+                        <ul class="digest-list" style="margin-top: 20px;">
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">1. Web制作 愛媛</span>
+                                <span class="digest-list-item-value">352</span>
+                                <span class="digest-list-item-change positive">+12.5%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">2. ホームページ制作</span>
+                                <span class="digest-list-item-value">289</span>
+                                <span class="digest-list-item-change positive">+8.3%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">3. SEO対策 四国</span>
+                                <span class="digest-list-item-value">215</span>
+                                <span class="digest-list-item-change negative">-5.2%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">4. Webマーケティング</span>
+                                <span class="digest-list-item-value">178</span>
+                                <span class="digest-list-item-change positive">+15.8%</span>
+                            </li>
+                            <li class="digest-list-item">
+                                <span class="digest-list-item-name">5. ブランディング 企業</span>
+                                <span class="digest-list-item-value">142</span>
+                                <span class="digest-list-item-change positive">+3.7%</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuToggle = document.getElementById('menuToggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('active');
+                sidebarOverlay.classList.toggle('active');
+            });
+
+            sidebarOverlay.addEventListener('click', function() {
+                sidebar.classList.remove('active');
+                sidebarOverlay.classList.remove('active');
+            });
+
+            const periodBtns = document.querySelectorAll('.period-btn');
+            periodBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    periodBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    console.log('期間切替:', this.dataset.period);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

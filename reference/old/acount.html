@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アカウント設定 - クライアントポータル</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #f5f7fa; color: #333; line-height: 1.6; }
+        
+        header { background: #2c3e50; color: #fff; padding: 15px 20px; }
+        .header-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .logo { font-size: 20px; font-weight: 700; }
+        .user-info { font-size: 14px; }
+        
+        nav { background: #34495e; }
+        nav ul { list-style: none; display: flex; flex-wrap: wrap; max-width: 1200px; margin: 0 auto; }
+        nav li { flex: 1; min-width: 120px; }
+        nav a { display: block; padding: 15px 20px; color: #ecf0f1; text-decoration: none; text-align: center; transition: background 0.3s; }
+        nav a:hover, nav a.active { background: #2c3e50; }
+        
+        main { max-width: 900px; margin: 30px auto; padding: 0 20px; }
+        
+        .breadcrumb { margin-bottom: 20px; font-size: 14px; color: #7f8c8d; }
+        .breadcrumb a { color: #3498db; text-decoration: none; }
+        
+        h1 { font-size: 28px; color: #2c3e50; margin-bottom: 30px; }
+        
+        .card { background: #fff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .card h2 { font-size: 20px; margin-bottom: 20px; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; font-size: 14px; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-group input:disabled { background: #f5f7fa; color: #7f8c8d; cursor: not-allowed; }
+        .form-note { font-size: 13px; color: #7f8c8d; margin-top: 5px; }
+        
+        .info-display { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+        .info-display strong { color: #2c3e50; display: block; margin-bottom: 5px; }
+        .info-display span { color: #555; }
+        
+        .btn { display: inline-block; padding: 12px 24px; background: #3498db; color: #fff; text-decoration: none; border-radius: 4px; transition: background 0.3s; font-size: 14px; border: none; cursor: pointer; font-weight: 600; }
+        .btn:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        
+        .toggle-switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #27ae60; }
+        input:checked + .slider:before { transform: translateX(26px); }
+        
+        .notification-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 4px; margin-bottom: 15px; }
+        .notification-label { flex: 1; }
+        .notification-label strong { display: block; color: #2c3e50; margin-bottom: 3px; }
+        .notification-label small { color: #7f8c8d; }
+        
+        .alert { padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px; margin-bottom: 20px; color: #155724; }
+        
+        footer { background: #2c3e50; color: #ecf0f1; text-align: center; padding: 20px; margin-top: 50px; }
+        
+        @media (max-width: 768px) {
+            nav ul { flex-direction: column; }
+            .notification-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">クライアントポータル</div>
+            <div class="user-info">〇〇株式会社 / 山田太郎 様</div>
+        </div>
+    </header>
+    
+    <nav>
+        <ul>
+            <li><a href="/dashboard">ダッシュボード</a></li>
+            <li><a href="/reports">月次レポート</a></li>
+            <li><a href="/topics">トピックス</a></li>
+            <li><a href="/inquiry">問い合わせ</a></li>
+            <li><a href="/resources">資料庫</a></li>
+            <li><a href="/account" class="active">アカウント</a></li>
+        </ul>
+    </nav>
+    
+    <main>
+        <div class="breadcrumb">
+            <a href="/dashboard">ダッシュボード</a> &gt; アカウント設定
+        </div>
+        
+        <h1>⚙️ アカウント設定</h1>
+        
+        <!-- ユーザー情報 -->
+        <div class="card">
+            <h2>👤 ユーザー情報</h2>
+            
+            <form action="/account/update" method="POST">
+                <div class="form-group">
+                    <label for="name">氏名</label>
+                    <input type="text" id="name" name="name" value="山田太郎" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">メールアドレス</label>
+                    <input type="email" id="email" name="email" value="yamada@example.com" required>
+                    <div class="form-note">※ ログインIDとしても使用されます</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>会社名</label>
+                    <div class="info-display">
+                        <span>〇〇株式会社</span>
+                    </div>
+                    <div class="form-note">※ 会社名は変更できません。変更が必要な場合はサポートまでお問い合わせください。</div>
+                </div>
+                
+                <button type="submit" class="btn">💾 変更を保存</button>
+            </form>
+        </div>
+        
+        <!-- パスワード変更 -->
+        <div class="card">
+            <h2>🔒 パスワード変更</h2>
+            
+            <form action="/account/change-password" method="POST">
+                <div class="form-group">
+                    <label for="current-password">現在のパスワード</label>
+                    <input type="password" id="current-password" name="current_password" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="new-password">新しいパスワード</label>
+                    <input type="password" id="new-password" name="new_password" required>
+                    <div class="form-note">※ 8文字以上、英字と数字を含む必要があります</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirm-password">新しいパスワード（確認）</label>
+                    <input type="password" id="confirm-password" name="confirm_password" required>
+                </div>
+                
+                <button type="submit" class="btn">🔄 パスワードを変更</button>
+            </form>
+        </div>
+        
+        <!-- 通知設定 -->
+        <div class="card">
+            <h2>🔔 通知設定</h2>
+            
+            <p style="margin-bottom: 20px; color: #555;">以下の通知をメールで受け取るかどうかを設定できます。</p>
+            
+            <form action="/account/notification-settings" method="POST">
+                <div class="notification-item">
+                    <div class="notification-label">
+                        <strong>月次レポート更新通知</strong>
+                        <small>新しい月次レポートが公開されたときに通知します</small>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" name="notify_report" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="notification-item">
+                    <div class="notification-label">
+                        <strong>トピックス更新通知</strong>
+                        <small>新しいトピックスが追加されたときに通知します</small>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" name="notify_topics" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="notification-item">
+                    <div class="notification-label">
+                        <strong>問い合わせ返信通知</strong>
+                        <small>問い合わせに返信があったときに通知します</small>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" name="notify_inquiry" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="notification-item">
+                    <div class="notification-label">
+                        <strong>重要なお知らせ</strong>
+                        <small>システムメンテナンスや重要な変更に関する通知</small>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" name="notify_important" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button type="submit" class="btn">💾 設定を保存</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- アカウント情報 -->
+        <div class="card">
+            <h2>ℹ️ アカウント情報</h2>
+            
+            <div class="info-display">
+                <strong>ユーザーID:</strong>
+                <span>USER-12345</span>
+            </div>
+            
+            <div class="info-display">
+                <strong>登録日:</strong>
+                <span>2025年10月1日</span>
+            </div>
+            
+            <div class="info-display">
+                <strong>最終ログイン:</strong>
+                <span>2026年1月26日 10:45</span>
+            </div>
+            
+            <div class="info-display">
+                <strong>契約プラン:</strong>
+                <span>スタンダードプラン</span>
+            </div>
+        </div>
+        
+        <!-- ログアウト -->
+        <div class="card">
+            <h2>🚪 ログアウト</h2>
+            
+            <p style="margin-bottom: 20px; color: #555;">
+                現在のセッションを終了します。再度ログインするには、メールアドレスとパスワードが必要です。
+            </p>
+            
+            <a href="/logout" class="btn btn-danger">ログアウト</a>
+        </div>
+        
+        <!-- サポート情報 -->
+        <div class="card">
+            <h2>🆘 サポート</h2>
+            
+            <p style="margin-bottom: 15px; color: #555;">
+                アカウントに関するお困りごとやご質問がございましたら、お気軽にお問い合わせください。
+            </p>
+            
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <a href="/inquiry/new" class="btn">💬 お問い合わせ</a>
+                <a href="mailto:support@example.com" class="btn btn-secondary">📧 メールで連絡</a>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        <p>&copy; 2026 Your Company. All rights reserved.</p>
+    </footer>
+</body>
+</html>

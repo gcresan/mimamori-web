@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ダッシュボード - 見守りウェブ</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      /* ロゴから抽出した配色 */
+      --primary-blue: #4a6d7c;
+      --primary-teal: #7db5b3;
+      --soft-gray: #8c9199;
+      
+      /* 背景・ベース */
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8f9fa;
+      --bg-tertiary: #f0f2f4;
+      
+      /* テキスト */
+      --text-primary: #1a202c;
+      --text-secondary: #4a5568;
+      --text-tertiary: #718096;
+      
+      /* 境界線 */
+      --border-light: #e8eaed;
+      --border-medium: #d1d5db;
+      
+      /* アクセント */
+      --accent-positive: #7db5b3;
+      --accent-neutral: #8c9199;
+      --accent-attention: #9da6ae;
+      
+      /* 影 */
+      --shadow-soft: 0 1px 3px rgba(0,0,0,0.04);
+      --shadow-card: 0 1px 4px rgba(0,0,0,0.06);
+      --shadow-float: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+      background: var(--bg-secondary); 
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    .wrapper { display: flex; min-height: 100vh; }
+    
+    /* サイドバー */
+    .sidebar {
+      width: 260px; 
+      background: var(--bg-primary); 
+      border-right: 1px solid var(--border-light);
+      position: fixed; 
+      top: 0; 
+      left: 0; 
+      height: 100vh;
+      overflow-y: auto; 
+      z-index: 100; 
+      transition: transform 0.3s ease;
+    }
+    
+    .sidebar-header {
+      border-bottom: 1px solid var(--border-light);
+      background-color:#f7f7f7;
+    }
+
+
+    .logo-area img {
+      width: 100%;
+      height:auto;
+    }
+
+    
+    .nav-section { 
+      padding: 24px 0; 
+      border-bottom: 1px solid var(--border-light);
+    }
+    
+    .nav-section:last-child {
+      border-bottom: none;
+    }
+    
+    .nav-section-title {
+      padding: 0 24px 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    
+    .nav-item {
+      padding: 10px 24px;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .nav-item:hover { 
+      background: var(--bg-secondary);
+      color: var(--primary-blue);
+    }
+    
+    .nav-item.active { 
+      background: rgba(125, 181, 179, 0.12);
+      color: var(--primary-blue);
+      font-weight: 600;
+      border-right: 3px solid var(--primary-teal);
+    }
+    
+    .nav-icon {
+      font-size: 18px;
+      opacity: 0.7;
+    }
+    
+    /* メインコンテンツ */
+    .main-wrapper { 
+      margin-left: 260px; 
+      flex: 1; 
+      background: var(--bg-secondary);
+    }
+    
+    .topbar {
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border-light);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    
+    .hamburger {
+      display: none;
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-secondary);
+    }
+    
+    .topbar-info {
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+    
+    .main-content { 
+      padding: 40px 40px 60px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    /* ページヘッダー */
+    .page-header { 
+      margin-bottom: 40px;
+    }
+    
+    .page-title { 
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      letter-spacing: 0.02em;
+    }
+    
+    .page-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+    
+    /* 期間選択 */
+    .period-selector {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      flex-wrap: wrap;
+    }
+    
+    .period-label {
+      font-weight: 600;
+      color: var(--text-primary);
+      min-width: 100px;
+    }
+    
+    .period-value {
+      color: var(--text-secondary);
+    }
+    
+    /* 状態サマリー */
+    .status-summary {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+    
+    .status-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+    
+    .status-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+      margin-bottom: 16px;
+    }
+    
+    .status-highlights {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-light);
+    }
+    
+    .highlight-item {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .highlight-label {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 6px;
+      font-weight: 400;
+    }
+    
+    .highlight-value {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--primary-blue);
+      letter-spacing: -0.02em;
+    }
+    
+    .highlight-unit {
+      font-size: 14px;
+      color: var(--text-tertiary);
+      margin-left: 4px;
+    }
+    
+    .highlight-change {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    
+    /* KPIカード */
+    .kpi-section {
+      margin-bottom: 40px;
+    }
+    
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+    
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    
+    .kpi-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 24px;
+      transition: all 0.2s ease;
+    }
+    
+    .kpi-card:hover {
+      box-shadow: var(--shadow-float);
+      border-color: var(--border-medium);
+    }
+    
+    .kpi-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+    
+    .kpi-value {
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+    
+    .kpi-change {
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .kpi-change.positive { color: var(--accent-positive); }
+    .kpi-change.neutral { color: var(--accent-neutral); }
+    
+    /* ローディング状態 */
+    .loading {
+      display: inline-block;
+      color: var(--text-tertiary);
+      font-size: 14px;
+    }
+    
+    /* 気づきセクション */
+    .insight-section {
+      margin-bottom: 40px;
+    }
+    
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    
+    .insight-card {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-left: 3px solid var(--primary-teal);
+      border-radius: 10px;
+      padding: 24px;
+    }
+    
+    .insight-card.attention {
+      border-left-color: var(--accent-attention);
+    }
+    
+    .insight-icon {
+      font-size: 20px;
+      margin-bottom: 12px;
+      opacity: 0.7;
+    }
+    
+    .insight-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 10px;
+      letter-spacing: 0.01em;
+    }
+    
+    .insight-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    
+    /* ネクストアクション */
+    .action-section {
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 40px;
+    }
+    
+    .action-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+    
+    .action-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .action-item {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      padding: 20px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    
+    .action-number {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: var(--bg-tertiary);
+      color: var(--primary-blue);
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    
+    .action-content {
+      flex: 1;
+    }
+    
+    .action-item-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    
+    .action-description {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    
+    /* チャート領域 */
+    .chart-area {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 28px;
+      margin-bottom: 32px;
+    }
+    
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    
+    .chart-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.01em;
+    }
+    
+    .chart-placeholder {
+      height: 280px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+    
+    /* レスポンシブ */
+    @media (max-width: 1024px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.active { transform: translateX(0); }
+      .main-wrapper { margin-left: 0; }
+      .hamburger { display: block; }
+    }
+    
+    @media (max-width: 768px) {
+      .main-content { padding: 24px 20px; }
+      .kpi-grid { grid-template-columns: 1fr; }
+      .insight-grid { grid-template-columns: 1fr; }
+      .period-selector { flex-direction: column; align-items: flex-start; }
+    }
+    
+    /* オーバーレイ */
+    .overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 99;
+    }
+    .overlay.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- サイドバー -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-area">
+          <img src="images/common/logo.jpg" width="518" height="341" alt="見守りウェブ">
+        </div>
+      </div>
+      <nav>
+        <div class="nav-section">
+          <div class="nav-section-title">概要</div>
+          <a href="#" class="nav-item active">
+            <span class="nav-icon">◎</span>
+            <span>ダッシュボード</span>
+          </a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">分析</div>
+          <a href="#" class="nav-item">
+            <span class="nav-icon">◯</span>
+            <span>アクセス状況</span>
+          </a>
+          <a href="#" class="nav-item">
+            <span class="nav-icon">◯</span>
+            <span>流入経路</span>
+          </a>
+          <a href="#" class="nav-item">
+            <span class="nav-icon">◯</span>
+            <span>成果の確認</span>
+          </a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">検索</div>
+          <a href="#" class="nav-item">
+            <span class="nav-icon">◯</span>
+            <span>キーワード</span>
+          </a>
+          <a href="#" class="nav-item">
+            <span class="nav-icon">◯</span>
+            <span>地図検索</span>
+          </a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- メインコンテンツ -->
+    <div class="main-wrapper">
+      <div class="topbar">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div class="topbar-info" id="last-updated">最終更新：<span class="loading">読み込み中...</span></div>
+      </div>
+      
+      <main class="main-content">
+        <!-- ページヘッダー -->
+        <div class="page-header">
+          <h1 class="page-title">ダッシュボード</h1>
+          <p class="page-subtitle">今月の状態を確認できます</p>
+        </div>
+
+        <!-- 期間選択 -->
+        <div class="period-selector" id="period-selector">
+          <span class="period-label">分析期間</span>
+          <span class="period-value loading">読み込み中...</span>
+          <span style="color: var(--text-tertiary); margin: 0 8px;">｜</span>
+          <span class="period-label">比較期間</span>
+          <span class="period-value loading">読み込み中...</span>
+        </div>
+
+        <!-- 状態サマリー -->
+        <div class="status-summary">
+          <h2 class="status-title">今月の状態</h2>
+          <p class="status-text" id="status-text-1">
+            <span class="loading">データを読み込んでいます...</span>
+          </p>
+          <p class="status-text" id="status-text-2"></p>
+          
+          <div class="status-highlights">
+            <div class="highlight-item">
+              <div class="highlight-label">訪問者数</div>
+              <div class="highlight-value" id="highlight-users"><span class="loading">...</span><span class="highlight-unit">名</span></div>
+              <div class="highlight-change" id="highlight-users-change"></div>
+            </div>
+            <div class="highlight-item">
+              <div class="highlight-label">問い合わせ</div>
+              <div class="highlight-value" id="highlight-conversions"><span class="loading">...</span><span class="highlight-unit">件</span></div>
+              <div class="highlight-change" id="highlight-conversions-change"></div>
+            </div>
+            <div class="highlight-item">
+              <div class="highlight-label">平均滞在時間</div>
+              <div class="highlight-value" id="highlight-duration"><span class="loading">...</span><span class="highlight-unit">分</span></div>
+              <div class="highlight-change" id="highlight-duration-change"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPIカード -->
+        <section class="kpi-section">
+          <h2 class="section-title">主な指標</h2>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label">ページ閲覧数</div>
+              <div class="kpi-value" id="kpi-pageviews"><span class="loading">...</span></div>
+              <div class="kpi-change" id="kpi-pageviews-change"></div>
+            </div>
+            
+            <div class="kpi-card">
+              <div class="kpi-label">セッション数</div>
+              <div class="kpi-value" id="kpi-sessions"><span class="loading">...</span></div>
+              <div class="kpi-change" id="kpi-sessions-change"></div>
+            </div>
+            
+            <div class="kpi-card">
+              <div class="kpi-label">新規訪問者</div>
+              <div class="kpi-value" id="kpi-new-users"><span class="loading">...</span></div>
+              <div class="kpi-change" id="kpi-new-users-change"></div>
+            </div>
+            
+            <div class="kpi-card">
+              <div class="kpi-label">電話タップ数</div>
+              <div class="kpi-value" id="kpi-phone"><span class="loading">...</span></div>
+              <div class="kpi-change" id="kpi-phone-change"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- チャート -->
+        <div class="chart-area">
+          <div class="chart-header">
+            <div class="chart-title">日別の訪問推移</div>
+          </div>
+          <div class="chart-placeholder" id="chart-placeholder">
+            データを読み込んでいます...
+          </div>
+        </div>
+
+        <!-- 気づき -->
+        <section class="insight-section">
+          <h2 class="section-title">気づけること</h2>
+          <div class="insight-grid" id="insights-container">
+            <!-- JavaScriptで動的に生成 -->
+          </div>
+        </section>
+
+        <!-- ネクストアクション -->
+        <section class="action-section">
+          <h2 class="action-title">次に考えられること</h2>
+          <div class="action-list" id="actions-container">
+            <!-- JavaScriptで動的に生成 -->
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- オーバーレイ -->
+  <div class="overlay" id="overlay"></div>
+
+  <script>
+    // ハンバーガーメニュー
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    hamburger.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+      overlay.classList.toggle('active');
+    });
+
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('active');
+      overlay.classList.remove('active');
+    });
+
+    // データ取得と表示のサンプル関数
+    // 実際にはバックエンドAPIからデータを取得
+    async function fetchDashboardData() {
+      try {
+        // APIエンドポイント例
+        // const response = await fetch('/api/dashboard?startDate=2026-01-01&endDate=2026-01-31');
+        // const data = await response.json();
+        
+        // デモデータ（実装時は上記のAPI呼び出しに置き換える）
+        const data = {
+          lastUpdated: '2026年2月17日 9:00',
+          currentPeriod: {
+            start: '2026/01/01',
+            end: '2026/01/31'
+          },
+          previousPeriod: {
+            start: '2025/12/01',
+            end: '2025/12/31'
+          },
+          metrics: {
+            users: { current: 4643, previous: 2875, change: 61.5 },
+            conversions: { current: 42, previous: 33, change: 27.3 },
+            avgSessionDuration: { current: 128, previous: 111, change: 15.3 },
+            pageviews: { current: 10280, previous: 8394, change: 22.5 },
+            sessions: { current: 5717, previous: 3980, change: 43.6 },
+            newUsers: { current: 4489, previous: 2681, change: 67.4 },
+            phoneTaps: { current: 127, previous: 90, change: 41.1 }
+          },
+          insights: [
+            {
+              type: 'positive',
+              title: '地図検索からの訪問が増えています',
+              text: 'Googleマップ経由での訪問が前月の1.3倍に。地域での認知が広がっている可能性があります。写真や営業時間の情報が役立っているかもしれません。'
+            },
+            {
+              type: 'positive',
+              title: '実績ページがよく見られています',
+              text: '問い合わせ前によく見られているページは実績紹介でした。訪問者の方が具体的な事例を通じて安心を得ている様子が伺えます。'
+            },
+            {
+              type: 'attention',
+              title: 'スマートフォンでの滞在時間が短めです',
+              text: 'スマホからの訪問は全体の68%ですが、滞在時間はPCより短い傾向にあります。スマホでの見やすさを確認する余地があるかもしれません。'
+            }
+          ],
+          actions: [
+            {
+              title: '地図検索対策の継続',
+              description: '地図検索経由の訪問が増えているため、Googleビジネスプロフィールの情報を引き続き充実させることが考えられます。最新の写真追加や口コミへの返信などが挙げられます。'
+            },
+            {
+              title: '実績紹介の追加',
+              description: '実績ページがよく見られているため、新しい事例を追加することで、より多くの方の参考になる可能性があります。'
+            },
+            {
+              title: 'スマホでの表示確認',
+              description: 'スマホからの訪問が多いため、実際にスマホで各ページを確認してみることが考えられます。文字サイズやボタンの押しやすさなどを確認できます。'
+            }
+          ]
+        };
+
+        return data;
+      } catch (error) {
+        console.error('データ取得エラー:', error);
+        return null;
+      }
+    }
+
+    // データを表示する関数
+    function displayDashboardData(data) {
+      if (!data) return;
+
+      // 最終更新日時
+      document.getElementById('last-updated').textContent = `最終更新：${data.lastUpdated}`;
+
+      // 期間選択
+      const periodSelector = document.getElementById('period-selector');
+      periodSelector.innerHTML = `
+        <span class="period-label">分析期間</span>
+        <span class="period-value">2026年1月（${data.currentPeriod.start} ～ ${data.currentPeriod.end}）</span>
+        <span style="color: var(--text-tertiary); margin: 0 8px;">｜</span>
+        <span class="period-label">比較期間</span>
+        <span class="period-value">2025年12月（${data.previousPeriod.start} ～ ${data.previousPeriod.end}）</span>
+      `;
+
+      // 状態テキスト（サンプル）
+      document.getElementById('status-text-1').textContent = 
+        '今月は前月と比べて、サイトへの訪問が増えています。特に地図検索経由での訪問が目立っており、地域での認知が広がっている可能性が考えられます。';
+      document.getElementById('status-text-2').textContent = 
+        '問い合わせにつながったページは、実績紹介と料金ページが中心でした。検討段階での安心材料を求める動きが見られます。';
+
+      // ハイライト指標
+      const m = data.metrics;
+      document.getElementById('highlight-users').innerHTML = 
+        `${m.users.current.toLocaleString()}<span class="highlight-unit">名</span>`;
+      document.getElementById('highlight-users-change').textContent = 
+        `前月より ${(m.users.current - m.users.previous).toLocaleString()}名 増加`;
+      
+      document.getElementById('highlight-conversions').innerHTML = 
+        `${m.conversions.current}<span class="highlight-unit">件</span>`;
+      document.getElementById('highlight-conversions-change').textContent = 
+        `前月より ${m.conversions.current - m.conversions.previous}件 増加`;
+      
+      const minutes = Math.floor(m.avgSessionDuration.current / 60);
+      const seconds = m.avgSessionDuration.current % 60;
+      document.getElementById('highlight-duration').innerHTML = 
+        `${minutes}:${seconds.toString().padStart(2, '0')}<span class="highlight-unit">分</span>`;
+      document.getElementById('highlight-duration-change').textContent = 
+        `前月より ${m.avgSessionDuration.current - m.avgSessionDuration.previous}秒 増加`;
+
+      // KPIカード
+      document.getElementById('kpi-pageviews').textContent = m.pageviews.current.toLocaleString();
+      document.getElementById('kpi-pageviews-change').innerHTML = 
+        `<span class="positive">前月より ${m.pageviews.change}% 増</span>`;
+
+      document.getElementById('kpi-sessions').textContent = m.sessions.current.toLocaleString();
+      document.getElementById('kpi-sessions-change').innerHTML = 
+        `<span class="positive">前月より ${m.sessions.change}% 増</span>`;
+
+      document.getElementById('kpi-new-users').textContent = m.newUsers.current.toLocaleString();
+      document.getElementById('kpi-new-users-change').innerHTML = 
+        `<span class="positive">前月より ${m.newUsers.change}% 増</span>`;
+
+      document.getElementById('kpi-phone').textContent = m.phoneTaps.current;
+      document.getElementById('kpi-phone-change').innerHTML = 
+        `<span class="positive">前月より ${m.phoneTaps.change}% 増</span>`;
+
+      // チャート（プレースホルダー）
+      document.getElementById('chart-placeholder').textContent = 
+        'グラフが表示されます（Chart.jsやGoogle Charts等で実装）';
+
+      // 気づき
+      const insightsContainer = document.getElementById('insights-container');
+      insightsContainer.innerHTML = data.insights.map(insight => `
+        <div class="insight-card ${insight.type === 'attention' ? 'attention' : ''}">
+          <div class="insight-icon">${insight.type === 'attention' ? '△' : '◯'}</div>
+          <div class="insight-title">${insight.title}</div>
+          <div class="insight-text">${insight.text}</div>
+        </div>
+      `).join('');
+
+      // ネクストアクション
+      const actionsContainer = document.getElementById('actions-container');
+      actionsContainer.innerHTML = data.actions.map((action, index) => `
+        <div class="action-item">
+          <div class="action-number">${index + 1}</div>
+          <div class="action-content">
+            <div class="action-item-title">${action.title}</div>
+            <div class="action-description">${action.description}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ページ読み込み時にデータを取得
+    window.addEventListener('DOMContentLoaded', async () => {
+      const data = await fetchDashboardData();
+      displayDashboardData(data);
+    });
+  </script>
+</body>
+</html>

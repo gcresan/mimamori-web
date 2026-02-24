@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>キーワードランキング分析 - GCREV INSIGHT</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      background: #f5f7fa;
+      color: #333;
+    }
+    .wrapper { display: flex; min-height: 100vh; }
+
+    /* サイドバー */
+    .sidebar {
+      width: 260px; background: #1e293b; color: #fff;
+      position: fixed; top: 0; bottom: 0; left: 0; overflow-y: auto; z-index: 100;
+      transition: transform 0.3s;
+    }
+    .sidebar-header {
+      padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-size: 20px; font-weight: 700; letter-spacing: 0.5px;
+    }
+    .nav-section { padding: 20px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .nav-section-title {
+      padding: 0 20px 8px; font-size: 11px; text-transform: uppercase;
+      color: #94a3b8; letter-spacing: 0.5px; font-weight: 600;
+    }
+    .nav-link {
+      display: flex; align-items: center; padding: 10px 20px;
+      color: #cbd5e1; text-decoration: none; transition: all 0.2s;
+      font-size: 14px;
+    }
+    .nav-link:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    .nav-link.active {
+      background: rgba(59,130,246,0.1); color: #60a5fa;
+      border-left: 3px solid #3b82f6;
+    }
+    .nav-link .icon { margin-right: 10px; font-size: 16px; }
+
+    /* トップバー */
+    .main-wrapper { margin-left: 260px; flex: 1; display: flex; flex-direction: column; }
+    .topbar {
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .hamburger { display: none; background: none; border: none; font-size: 24px; cursor: pointer; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #6b7280; }
+    .breadcrumb a { color: #3b82f6; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .period-selector {
+      display: flex; gap: 8px; background: #f3f4f6; padding: 4px;
+      border-radius: 8px;
+    }
+    .period-btn {
+      padding: 6px 16px; border: none; background: transparent;
+      border-radius: 6px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; color: #6b7280;
+    }
+    .period-btn.active {
+      background: #fff; color: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* メインコンテンツ */
+    .main-content { flex: 1; padding: 32px; max-width: 1600px; }
+    .page-header {
+      margin-bottom: 24px;
+    }
+    .page-title { font-size: 28px; font-weight: 700; color: #1e293b; }
+
+    /* ランキング計測起点情報 */
+    .tracking-info {
+      background: #fff; border-radius: 12px; padding: 20px 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;
+    }
+    .tracking-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .tracking-title {
+      font-size: 16px; font-weight: 700; color: #1e293b;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .edit-btn {
+      padding: 6px 16px; background: #fff; color: #3b82f6;
+      border: 1px solid #3b82f6; border-radius: 6px; font-size: 13px;
+      font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .edit-btn:hover { background: #eff6ff; }
+    .tracking-content {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .tracking-row {
+      display: flex; align-items: center; gap: 16px; font-size: 14px;
+    }
+    .tracking-label {
+      color: #6b7280; font-weight: 600; min-width: 100px;
+    }
+    .tracking-value {
+      color: #1e293b; font-weight: 600;
+    }
+    .alert-box {
+      background: #fef3c7; border-left: 4px solid #f59e0b;
+      padding: 12px 16px; border-radius: 6px; font-size: 13px;
+      color: #92400e; line-height: 1.6; margin-top: 12px;
+    }
+    .google-link {
+      color: #3b82f6; text-decoration: none; font-weight: 600;
+    }
+    .google-link:hover { text-decoration: underline; }
+
+    /* 検索順位レポートグラフ */
+    .chart-card {
+      background: #fff; border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;
+    }
+    .chart-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .chart-title { font-size: 18px; font-weight: 700; color: #1e293b; }
+    .chart-controls {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .control-group {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .control-label {
+      font-size: 13px; font-weight: 600; color: #6b7280;
+      white-space: nowrap;
+    }
+    .control-select {
+      padding: 6px 12px; border: 1px solid #d1d5db;
+      background: #fff; border-radius: 6px; font-size: 13px;
+      color: #374151; cursor: pointer; transition: all 0.2s;
+      min-width: 140px;
+    }
+    .control-select:hover {
+      border-color: #9ca3af;
+    }
+    .control-select:focus {
+      outline: none; border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .chart-btn {
+      padding: 6px 12px; border: 1px solid #d1d5db; background: #fff;
+      border-radius: 6px; font-size: 12px; cursor: pointer;
+      color: #374151; font-weight: 600; transition: all 0.2s;
+    }
+    .chart-btn:hover { background: #f9fafb; }
+    .update-btn {
+      background: #3b82f6; border-color: #3b82f6;
+      color: #fff;
+    }
+    .update-btn:hover {
+      background: #2563eb; border-color: #2563eb;
+    }
+    .chart-placeholder {
+      height: 300px; background: #f9fafb; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #9ca3af; font-size: 14px; border: 2px dashed #e5e7eb;
+    }
+
+    /* テーブル */
+    .table-card {
+      background: #fff; border-radius: 12px; padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;
+      overflow-x: auto;
+    }
+    .table-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .table-title { font-size: 18px; font-weight: 700; color: #1e293b; }
+    .table-actions { display: flex; gap: 8px; }
+    .view-all-btn {
+      padding: 6px 12px; background: #fff; color: #3b82f6;
+      border: 1px solid #3b82f6; border-radius: 6px; font-size: 13px;
+      font-weight: 600; cursor: pointer; transition: all 0.2s;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .view-all-btn:hover { background: #eff6ff; }
+
+    table {
+      width: 100%; border-collapse: collapse; font-size: 14px;
+    }
+    thead {
+      background: #f9fafb; border-bottom: 2px solid #e5e7eb;
+    }
+    th {
+      padding: 12px 16px; text-align: left; font-weight: 600;
+      color: #374151; font-size: 13px;
+    }
+    td {
+      padding: 12px 16px; border-bottom: 1px solid #f3f4f6;
+    }
+    tbody tr:hover { background: #f9fafb; }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .rank-cell {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .rank-number {
+      font-weight: 700; color: #1e293b; min-width: 24px;
+    }
+    .rank-medal {
+      font-size: 18px;
+    }
+    .keyword-cell {
+      font-weight: 600; color: #1e293b;
+    }
+    .keyword-with-note {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .keyword-note {
+      font-size: 11px; color: #9ca3af; font-weight: 400;
+    }
+    .position-value {
+      font-weight: 600; color: #1e293b;
+    }
+    .impression-value {
+      color: #6b7280;
+    }
+
+    .star-rating {
+      display: flex; gap: 2px;
+    }
+    .star {
+      color: #fbbf24; font-size: 14px;
+    }
+    .star.empty {
+      color: #e5e7eb;
+    }
+
+    /* タブ */
+    .tabs {
+      display: flex; gap: 4px; border-bottom: 2px solid #e5e7eb;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px; border: none; background: transparent;
+      font-size: 14px; font-weight: 600; color: #6b7280;
+      cursor: pointer; transition: all 0.2s; border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab.active {
+      color: #3b82f6; border-bottom-color: #3b82f6;
+    }
+    .tab:hover {
+      color: #1e293b;
+    }
+
+    /* フィルターバー */
+    .filter-bar {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb;
+    }
+    .filter-group {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .filter-label {
+      font-size: 13px; color: #6b7280; font-weight: 600;
+    }
+    .filter-select {
+      padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: 13px; background: #fff; color: #374151;
+    }
+    .filter-input {
+      padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: 13px; min-width: 200px;
+    }
+    .filter-search-btn {
+      padding: 6px 16px; background: #3b82f6; color: #fff;
+      border: none; border-radius: 6px; font-size: 13px;
+      font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .filter-search-btn:hover { background: #2563eb; }
+
+    /* ページネーション */
+    .pagination {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; margin-top: 24px;
+    }
+    .page-btn {
+      padding: 8px 12px; border: 1px solid #d1d5db; background: #fff;
+      border-radius: 6px; font-size: 14px; cursor: pointer;
+      color: #374151; font-weight: 600; transition: all 0.2s;
+    }
+    .page-btn:hover { background: #f9fafb; }
+    .page-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* 計測キーワードカード */
+    .keyword-item-card {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 12px; padding: 20px; margin-bottom: 16px;
+      transition: all 0.2s;
+    }
+    .keyword-item-card:hover {
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .keyword-item-left {
+      display: flex; align-items: center; gap: 16px; flex: 1;
+    }
+    .keyword-drag-handle {
+      color: #9ca3af; font-size: 18px; cursor: move;
+    }
+    .keyword-item-info {
+      flex: 1;
+    }
+    .keyword-item-name {
+      font-size: 16px; font-weight: 700; color: #1e293b;
+      margin-bottom: 6px;
+    }
+    .keyword-item-meta {
+      font-size: 13px; color: #6b7280;
+    }
+    .keyword-item-actions {
+      display: flex; gap: 8px;
+    }
+    .keyword-action-btn {
+      padding: 8px 16px; border: 1px solid #d1d5db;
+      background: #fff; border-radius: 6px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      color: #374151; transition: all 0.2s;
+    }
+    .keyword-action-btn:hover {
+      background: #f9fafb;
+    }
+    .keyword-action-btn.delete {
+      color: #dc2626; border-color: #fecaca;
+    }
+    .keyword-action-btn.delete:hover {
+      background: #fef2f2;
+    }
+
+    /* キーワード追加カード */
+    .keyword-add-card {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #f9fafb; border: 2px dashed #d1d5db;
+      border-radius: 12px; padding: 32px 20px;
+      cursor: pointer; transition: all 0.2s;
+      text-align: center;
+    }
+    .keyword-add-card:hover {
+      border-color: #3b82f6; background: #eff6ff;
+    }
+    .keyword-add-icon {
+      font-size: 32px; margin-bottom: 12px;
+    }
+    .keyword-add-text {
+      font-size: 16px; font-weight: 700; color: #6b7280;
+      margin-bottom: 6px;
+    }
+    .keyword-add-subtext {
+      font-size: 13px; color: #9ca3af;
+    }
+
+    /* モバイル */
+    @media (max-width: 1024px) {
+      .main-wrapper { margin-left: 0; }
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.active { transform: translateX(0); }
+      .hamburger { display: block; }
+      .overlay {
+        display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 90;
+      }
+      .overlay.active { display: block; }
+    }
+    @media (max-width: 768px) {
+      .main-content { padding: 20px; }
+      .chart-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .chart-controls {
+        flex-direction: column; align-items: stretch; width: 100%; gap: 8px;
+      }
+      .control-group {
+        width: 100%; flex-direction: row; justify-content: space-between;
+      }
+      .control-select { flex: 1; min-width: auto; }
+      .update-btn { width: 100%; }
+      .table-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .table-card { padding: 16px; }
+      .filter-bar { flex-direction: column; align-items: stretch; }
+      .filter-group { width: 100%; }
+      .filter-input { width: 100%; }
+      .keyword-item-card {
+        flex-direction: column; align-items: stretch; gap: 16px;
+      }
+      .keyword-item-left {
+        flex-direction: column; align-items: flex-start; gap: 12px;
+      }
+      .keyword-item-actions {
+        width: 100%;
+      }
+      .keyword-action-btn {
+        flex: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- サイドバー -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">GCREV INSIGHT</div>
+      <nav>
+        <!-- ダッシュボード -->
+        <div class="nav-section">
+          <div class="nav-section-title">ダッシュボード</div>
+          <a href="gcrev-insight-v2-dashboard.html" class="nav-link"><span class="icon">📊</span>総合ダッシュボード</a>
+        </div>
+
+        <!-- 分析 -->
+        <div class="nav-section">
+          <div class="nav-section-title">分析</div>
+          <a href="gcrev-insight-v2-analysis.html" class="nav-link"><span class="icon">📈</span>分析（トップ）</a>
+          <a href="gcrev-insight-v2-keyword-ranking.html" class="nav-link active"><span class="icon">🔍</span>キーワードランキング</a>
+          <a href="gcrev-insight-v2-pages.html" class="nav-link"><span class="icon">📄</span>ページ</a>
+        </div>
+
+        <!-- AIレポート -->
+        <div class="nav-section">
+          <div class="nav-section-title">AIレポート</div>
+          <a href="gcrev-insight-v2-ai-report-latest.html" class="nav-link"><span class="icon">📰</span>最新月次レポート</a>
+          <a href="gcrev-insight-v2-ai-report-list.html" class="nav-link"><span class="icon">📚</span>月別レポート一覧</a>
+          <a href="gcrev-insight-v2-ai-report-compare.html" class="nav-link"><span class="icon">🔀</span>レポート比較</a>
+        </div>
+
+        <!-- AI支援 -->
+        <div class="nav-section">
+          <div class="nav-section-title">AI支援 / 改善提案</div>
+          <a href="gcrev-insight-v2-ai-report-settings.html" class="nav-link"><span class="icon">⚙️</span>AIレポート設定</a>
+          <a href="#" class="nav-link"><span class="icon">🎯</span>優先施策ランキング</a>
+          <a href="#" class="nav-link"><span class="icon">💡</span>コンテンツ企画AI</a>
+        </div>
+
+        <!-- アカウント -->
+        <div class="nav-section">
+          <div class="nav-section-title">アカウント</div>
+          <a href="#" class="nav-link"><span class="icon">👤</span>プラン確認</a>
+          <a href="#" class="nav-link"><span class="icon">⚙️</span>設定</a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- メインコンテンツ -->
+    <div class="main-wrapper">
+      <div class="topbar">
+        <button class="hamburger" id="hamburger">☰</button>
+        <div class="breadcrumb">
+          <a href="gcrev-insight-v2-dashboard.html">ホーム</a>
+          <span>›</span>
+          <span>分析</span>
+          <span>›</span>
+          <span>キーワードランキング</span>
+        </div>
+        <div class="period-selector">
+          <button class="period-btn">直近30日</button>
+          <button class="period-btn active">前月</button>
+        </div>
+      </div>
+
+      <main class="main-content">
+        <div class="page-header">
+          <h1 class="page-title">🔍 キーワードランキング分析</h1>
+        </div>
+
+        <!-- ランキング計測起点情報 -->
+        <div class="tracking-info">
+          <div class="tracking-header">
+            <div class="tracking-title">
+              ⚙️ ランキング計測起点情報
+            </div>
+            <button class="edit-btn" onclick="alert('編集機能は実装予定です')">📝 編集する</button>
+          </div>
+          <div class="tracking-content">
+            <div class="tracking-row">
+              <span class="tracking-label">🎯 検索起点住所</span>
+              <span class="tracking-value">愛媛県松山市<br>〒790-0003 愛媛県松山市三番町７丁目１２−１</span>
+            </div>
+            <div class="tracking-row">
+              <span class="tracking-label">📍 検索半径</span>
+              <span class="tracking-value">10000 m</span>
+            </div>
+            <div class="alert-box">
+              ⚠️ <a href="https://search.google.com/search-console" target="_blank" class="google-link">Google サーチコンソール</a>で計測が不可の場合、
+              こちらのプログラムでも計測ができません。詳しくは<a href="#" class="google-link">こちらのページ</a>をご確認ください。
+            </div>
+          </div>
+        </div>
+
+        <!-- 検索順位レポートグラフ -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">📈 検索順位レポート</div>
+            <div class="chart-controls">
+              <div class="control-group">
+                <label class="control-label">期間</label>
+                <select class="control-select">
+                  <option value="30">直近30日</option>
+                  <option value="60">直近60日</option>
+                  <option value="90">直近90日</option>
+                  <option value="custom">カスタム期間</option>
+                </select>
+              </div>
+              <div class="control-group">
+                <label class="control-label">キーワード</label>
+                <select class="control-select">
+                  <option value="all">すべてのキーワード</option>
+                  <option value="keyword1">パッシブハウス 15% 断熱</option>
+                  <option value="keyword2">松山市エコハウス工事店</option>
+                  <option value="keyword3">認定エコハウス住宅</option>
+                </select>
+              </div>
+              <button class="chart-btn update-btn">🔄 更新</button>
+            </div>
+          </div>
+          <div class="chart-placeholder">
+            📊 グラフエリア（Chart.js等で実装予定）
+          </div>
+        </div>
+
+        <!-- 流入キーワード TOP5 -->
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">🏆 流入キーワード TOP5</div>
+            <a href="#" class="view-all-btn">全て表示 →</a>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 60px;"></th>
+                <th>キーワード</th>
+                <th colspan="7" style="text-align: center; background: #f3f4f6; font-size: 13px; padding: 8px;">表示回数</th>
+              </tr>
+              <tr>
+                <th></th>
+                <th></th>
+                <th style="width: 90px;">9/23</th>
+                <th style="width: 90px;">10/23</th>
+                <th style="width: 90px;">11/23</th>
+                <th style="width: 90px;">12/23</th>
+                <th style="width: 90px;">1/24</th>
+                <th style="width: 90px;">2/24</th>
+                <th style="width: 90px;">今月</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-medal">🥇</span>
+                  </div>
+                </td>
+                <td class="keyword-cell">パッシブハウス</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">4,256</td>
+                <td class="impression-value">5,142</td>
+                <td class="impression-value">6,328</td>
+                <td class="impression-value">7,891</td>
+                <td class="position-value">8,450</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-medal">🥈</span>
+                  </div>
+                </td>
+                <td class="keyword-cell">高断熱住宅</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">2,851</td>
+                <td class="impression-value">3,124</td>
+                <td class="impression-value">3,567</td>
+                <td class="impression-value">4,228</td>
+                <td class="impression-value">5,012</td>
+                <td class="position-value">5,623</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-medal">🥉</span>
+                  </div>
+                </td>
+                <td class="keyword-cell">省エネ住宅</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">2,145</td>
+                <td class="impression-value">2,678</td>
+                <td class="impression-value">3,241</td>
+                <td class="impression-value">3,892</td>
+                <td class="position-value">4,412</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-number">4</span>
+                  </div>
+                </td>
+                <td class="keyword-cell">ZEH住宅</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">1,567</td>
+                <td class="impression-value">1,824</td>
+                <td class="impression-value">2,156</td>
+                <td class="impression-value">2,534</td>
+                <td class="impression-value">2,987</td>
+                <td class="position-value">3,268</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-number">5</span>
+                  </div>
+                </td>
+                <td class="keyword-cell">注文住宅 松山</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">1,234</td>
+                <td class="impression-value">1,567</td>
+                <td class="impression-value">1,892</td>
+                <td class="impression-value">2,145</td>
+                <td class="position-value">2,487</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 計測キーワードランキング -->
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">📊 計測キーワードランキング</div>
+            
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 60px;">順位</th>
+                <th>ページ</th>
+                <th style="width: 80px;">9/23</th>
+                <th style="width: 80px;">10/23</th>
+                <th style="width: 80px;">11/23</th>
+                <th style="width: 80px;">12/23</th>
+                <th style="width: 80px;">1/24</th>
+                <th style="width: 80px;">2/24</th>
+                <th style="width: 80px;">今月</th>
+                <th style="width: 100px;">前月比</th>
+                <th style="width: 100px;">難易度</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-number">1</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="keyword-with-note">
+                    <span class="keyword-cell">パッシブハウス 15% 断熱</span>
+                    <span class="keyword-note">愛媛県 | 320回</span>
+                  </div>
+                </td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">5.2</td>
+                <td class="impression-value">4.1</td>
+                <td class="impression-value">2.8</td>
+                <td class="impression-value">1.8</td>
+                <td class="position-value">1.2</td>
+                <td style="color: #059669; font-weight: 600;">▲ 0.6</td>
+                <td>
+                  <div class="star-rating">
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star empty">★</span>
+                    <span class="star empty">★</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-number">2</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="keyword-with-note">
+                    <span class="keyword-cell">松山市エコハウス工事店</span>
+                    <span class="keyword-note">愛媛県 | 280回</span>
+                  </div>
+                </td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">8.5</td>
+                <td class="impression-value">7.2</td>
+                <td class="impression-value">6.1</td>
+                <td class="impression-value">5.2</td>
+                <td class="impression-value">4.3</td>
+                <td class="position-value">3.5</td>
+                <td style="color: #059669; font-weight: 600;">▲ 0.8</td>
+                <td>
+                  <div class="star-rating">
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star empty">★</span>
+                    <span class="star empty">★</span>
+                    <span class="star empty">★</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-number">3</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="keyword-with-note">
+                    <span class="keyword-cell">認定エコハウス住宅</span>
+                    <span class="keyword-note">全国 | 450回</span>
+                  </div>
+                </td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">18.5</td>
+                <td class="impression-value">15.2</td>
+                <td class="impression-value">12.3</td>
+                <td class="impression-value">10.1</td>
+                <td class="impression-value">8.9</td>
+                <td class="position-value">7.8</td>
+                <td style="color: #059669; font-weight: 600;">▲ 1.1</td>
+                <td>
+                  <div class="star-rating">
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star empty">★</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-number">4</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="keyword-with-note">
+                    <span class="keyword-cell">松山市 ハウスメーカー 評判</span>
+                    <span class="keyword-note">愛媛県 | 190回</span>
+                  </div>
+                </td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">15.8</td>
+                <td class="impression-value">13.2</td>
+                <td class="impression-value">9.8</td>
+                <td class="impression-value">10.5</td>
+                <td class="position-value">11.2</td>
+                <td style="color: #dc2626; font-weight: 600;">▼ 0.7</td>
+                <td>
+                  <div class="star-rating">
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star empty">★</span>
+                    <span class="star empty">★</span>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="rank-cell">
+                    <span class="rank-number">5</span>
+                  </div>
+                </td>
+                <td>
+                  <div class="keyword-with-note">
+                    <span class="keyword-cell">松山市 エコキュート住宅</span>
+                    <span class="keyword-note">愛媛県 | 160回</span>
+                  </div>
+                </td>
+                <td class="impression-value">-</td>
+                <td class="impression-value">25.1</td>
+                <td class="impression-value">22.3</td>
+                <td class="impression-value">18.2</td>
+                <td class="impression-value">16.8</td>
+                <td class="impression-value">15.5</td>
+                <td class="position-value">14.6</td>
+                <td style="color: #059669; font-weight: 600;">▲ 0.9</td>
+                <td>
+                  <div class="star-rating">
+                    <span class="star">★</span>
+                    <span class="star">★</span>
+                    <span class="star empty">★</span>
+                    <span class="star empty">★</span>
+                    <span class="star empty">★</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          
+          
+        </div>
+
+        <!-- 計測キーワード -->
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">🔍 計測キーワード</div>
+            <div style="font-size: 13px; color: #6b7280;">最大5つまで追加可能</div>
+          </div>
+
+          <!-- 設定済みキーワード -->
+          <div class="keyword-item-card">
+            <div class="keyword-item-left">
+              <div class="keyword-drag-handle">☰</div>
+              <div class="keyword-item-info">
+                <div class="keyword-item-name">パッシブハウス 15% 断熱</div>
+                <div class="keyword-item-meta">追加日：2025年11月20日 | 難易度：★★★☆☆</div>
+              </div>
+            </div>
+            <div class="keyword-item-actions">
+              <button class="keyword-action-btn" onclick="alert('編集機能は実装予定です')">✏️ 編集</button>
+              <button class="keyword-action-btn delete" onclick="alert('削除機能は実装予定です')">🗑️ 削除</button>
+            </div>
+          </div>
+
+          <div class="keyword-item-card">
+            <div class="keyword-item-left">
+              <div class="keyword-drag-handle">☰</div>
+              <div class="keyword-item-info">
+                <div class="keyword-item-name">松山市エコハウス工事店</div>
+                <div class="keyword-item-meta">追加日：2025年11月22日 | 難易度：★★☆☆☆</div>
+              </div>
+            </div>
+            <div class="keyword-item-actions">
+              <button class="keyword-action-btn" onclick="alert('編集機能は実装予定です')">✏️ 編集</button>
+              <button class="keyword-action-btn delete" onclick="alert('削除機能は実装予定です')">🗑️ 削除</button>
+            </div>
+          </div>
+
+          <div class="keyword-item-card">
+            <div class="keyword-item-left">
+              <div class="keyword-drag-handle">☰</div>
+              <div class="keyword-item-info">
+                <div class="keyword-item-name">認定エコハウス住宅</div>
+                <div class="keyword-item-meta">追加日：2025年11月25日 | 難易度：★★★★☆</div>
+              </div>
+            </div>
+            <div class="keyword-item-actions">
+              <button class="keyword-action-btn" onclick="alert('編集機能は実装予定です')">✏️ 編集</button>
+              <button class="keyword-action-btn delete" onclick="alert('削除機能は実装予定です')">🗑️ 削除</button>
+            </div>
+          </div>
+
+          <!-- キーワード追加カード -->
+          <div class="keyword-add-card" onclick="alert('キーワード追加ダイアログを表示\n\n入力項目：\n- キーワード\n- 対象URL（オプション）\n- 難易度評価')">
+            <div class="keyword-add-icon">➕</div>
+            <div class="keyword-add-text">キーワードを追加</div>
+            <div class="keyword-add-subtext">クリックして計測したいキーワードを追加しましょう（残り2枚）</div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    hamburger?.addEventListener('click', () => {
+      sidebar.classList.toggle('active');
+      overlay.classList.toggle('active');
+    });
+
+    overlay?.addEventListener('click', () => {
+      sidebar.classList.remove('active');
+      overlay.classList.remove('active');
+    });
+
+    // タブ切り替え
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
