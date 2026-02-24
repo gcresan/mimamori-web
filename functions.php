@@ -648,8 +648,9 @@ add_action('wp_enqueue_scripts', function() {
     );
 
     wp_localize_script( 'mw-ai-chat', 'mwChatConfig', [
-        'apiUrl' => rest_url( 'mimamori/v1/ai-chat' ),
-        'nonce'  => wp_create_nonce( 'wp_rest' ),
+        'apiUrl'   => rest_url( 'mimamori/v1/ai-chat' ),
+        'voiceUrl' => rest_url( 'mimamori/v1/voice-transcribe' ),
+        'nonce'    => wp_create_nonce( 'wp_rest' ),
     ] );
 });
 
@@ -665,6 +666,14 @@ add_action( 'rest_api_init', function () {
     register_rest_route( 'mimamori/v1', '/ai-chat', [
         'methods'             => 'POST',
         'callback'            => 'mimamori_handle_ai_chat_request',
+        'permission_callback' => function () {
+            return is_user_logged_in();
+        },
+    ] );
+
+    register_rest_route( 'mimamori/v1', '/voice-transcribe', [
+        'methods'             => 'POST',
+        'callback'            => 'mimamori_handle_voice_transcribe',
         'permission_callback' => function () {
             return is_user_logged_in();
         },
@@ -890,6 +899,148 @@ function mimamori_call_openai_responses_api( array $payload ) {
     }
 
     return [ 'text' => $text ];
+}
+
+/**
+ * 音声ファイルを OpenAI Whisper API で文字起こしする
+ *
+ * @param string $file_path  音声ファイルの絶対パス
+ * @param string $language   言語コード（デフォルト: ja）
+ * @return array|WP_Error    成功時: ['text'=>string], 失敗時: WP_Error
+ */
+function mimamori_call_whisper_api( string $file_path, string $language = 'ja' ) {
+    $api_key  = defined( 'MIMAMORI_OPENAI_API_KEY' )  ? MIMAMORI_OPENAI_API_KEY  : '';
+    $base_url = defined( 'MIMAMORI_OPENAI_BASE_URL' ) ? MIMAMORI_OPENAI_BASE_URL : 'https://api.openai.com/v1';
+    $timeout  = defined( 'MIMAMORI_OPENAI_TIMEOUT' )  ? (int) MIMAMORI_OPENAI_TIMEOUT : 60;
+
+    if ( $api_key === '' ) {
+        return new WP_Error( 'no_api_key', 'OpenAI APIキーが設定されていません' );
+    }
+
+    if ( ! file_exists( $file_path ) ) {
+        return new WP_Error( 'file_not_found', '音声ファイルが見つかりません' );
+    }
+
+    $url = rtrim( $base_url, '/' ) . '/audio/transcriptions';
+
+    // cURL を使用（wp_remote_post はマルチパートファイルアップロードが煩雑なため）
+    $ch = curl_init();
+    curl_setopt_array( $ch, [
+        CURLOPT_URL            => $url,
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => $timeout,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $api_key,
+        ],
+        CURLOPT_POSTFIELDS     => [
+            'file'            => new CURLFile( $file_path ),
+            'model'           => 'whisper-1',
+            'language'        => $language,
+            'response_format' => 'json',
+        ],
+    ] );
+
+    $response = curl_exec( $ch );
+    $http_code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+    $curl_err  = curl_error( $ch );
+    curl_close( $ch );
+
+    if ( $response === false || $curl_err !== '' ) {
+        return new WP_Error( 'curl_error', '音声認識サーバーとの通信に失敗しました: ' . $curl_err );
+    }
+
+    $body = json_decode( $response, true );
+
+    if ( $http_code !== 200 ) {
+        $err_msg = $body['error']['message'] ?? ( 'Whisper API Error (HTTP ' . $http_code . ')' );
+        return new WP_Error( 'whisper_error', $err_msg );
+    }
+
+    $text = isset( $body['text'] ) ? trim( $body['text'] ) : '';
+
+    if ( $text === '' ) {
+        return new WP_Error( 'empty_transcription', '音声を認識できませんでした。もう一度お試しください。' );
+    }
+
+    return [ 'text' => $text ];
+}
+
+/**
+ * 音声文字起こし REST ハンドラ
+ *
+ * POST /wp-json/mimamori/v1/voice-transcribe
+ * Content-Type: multipart/form-data
+ * Body: audio=<file>
+ *
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
+ */
+function mimamori_handle_voice_transcribe( WP_REST_Request $request ): WP_REST_Response {
+    $files = $request->get_file_params();
+
+    if ( empty( $files['audio'] ) || empty( $files['audio']['tmp_name'] ) ) {
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => '音声ファイルが送信されていません',
+        ], 400 );
+    }
+
+    $file = $files['audio'];
+
+    // エラーチェック
+    if ( $file['error'] !== UPLOAD_ERR_OK ) {
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => 'ファイルアップロードに失敗しました（コード: ' . $file['error'] . '）',
+        ], 400 );
+    }
+
+    // サイズチェック（25MB = Whisper API 上限）
+    $max_size = 25 * 1024 * 1024;
+    if ( $file['size'] > $max_size ) {
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => '音声ファイルが大きすぎます（上限: 25MB）',
+        ], 400 );
+    }
+
+    // MIMEタイプチェック
+    $allowed_mimes = [
+        'audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/mpga',
+        'audio/ogg', 'audio/wav', 'audio/x-m4a', 'audio/m4a',
+        'audio/mp3', 'video/webm',  // Chrome は video/webm で送ることがある
+    ];
+    $finfo = new finfo( FILEINFO_MIME_TYPE );
+    $detected_mime = $finfo->file( $file['tmp_name'] );
+    if ( ! in_array( $detected_mime, $allowed_mimes, true ) ) {
+        // tmp_name のMIME判定が不正確な場合もあるため、ブラウザ送信の type もチェック
+        $browser_mime = sanitize_text_field( $file['type'] ?? '' );
+        if ( ! in_array( $browser_mime, $allowed_mimes, true ) ) {
+            return new WP_REST_Response( [
+                'success' => false,
+                'message' => 'サポートされていない音声形式です（' . $detected_mime . '）',
+            ], 400 );
+        }
+    }
+
+    // Whisper API 呼び出し
+    $result = mimamori_call_whisper_api( $file['tmp_name'] );
+
+    if ( is_wp_error( $result ) ) {
+        $status = ( $result->get_error_code() === 'no_api_key' ) ? 500 : 502;
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => $result->get_error_message(),
+        ], $status );
+    }
+
+    return new WP_REST_Response( [
+        'success' => true,
+        'data'    => [
+            'text' => $result['text'],
+        ],
+    ], 200 );
 }
 
 /**

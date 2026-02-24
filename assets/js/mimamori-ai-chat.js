@@ -456,7 +456,11 @@
   }
 
   /* ============================
-     Voice Input (Web Speech API + Waveform)
+     Voice Input (Web Speech API + MediaRecorder Fallback + Waveform)
+
+     戦略:
+     1. SpeechRecognition 対応 → リアルタイム認識（従来動作）
+     2. 非対応 or networkエラー発生 → MediaRecorder + Whisper API に自動切替
      ============================ */
 
   var VOICE_MAX_DURATION = 45000;   // 最大45秒（安全制限）
@@ -470,8 +474,16 @@
   var waveCanvas = null;
   var waveCtx = null;
 
-  /** 録音中にバッファするテキスト */
+  /** 録音中にバッファするテキスト（SpeechRecognition 用） */
   var voiceBuffer = '';
+
+  /** MediaRecorder フォールバック用 */
+  var useFallback = false;       // true = MediaRecorder + Whisper を使用
+  var mediaRecorder = null;
+  var mediaChunks = [];
+  var fallbackMaxTimer = null;
+  var fallbackStream = null;     // MediaRecorder 用ストリーム
+  var isTranscribing = false;    // Whisper API 呼び出し中
 
   /** 録音モードUIが表示中かどうか */
   function isInRecordingMode() {
@@ -480,35 +492,60 @@
 
   /**
    * 音声認識を初期化する
-   * continuous: true で長時間（20〜30秒）の発話に対応
-   * 非対応ブラウザではボタンを非表示にする
+   * SpeechRecognition 対応ブラウザ → リアルタイム認識
+   * 非対応 → MediaRecorder + Whisper API フォールバック
    */
   function initVoice() {
+    if (!els.voiceBtn) return;
+
+    // --- Waveform DOM element (hidden by default via CSS) ---
+    initWaveformCanvas();
+
+    // MediaRecorder (フォールバック) が使えるか確認
+    var hasMediaRecorder = !!(navigator.mediaDevices &&
+                              navigator.mediaDevices.getUserMedia &&
+                              window.MediaRecorder);
+
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition || !els.voiceBtn) {
-      if (els.voiceBtn) els.voiceBtn.style.display = 'none';
+
+    if (SpeechRecognition) {
+      // SpeechRecognition 対応 → 従来のリアルタイム認識で初期化
+      initSpeechRecognition(SpeechRecognition, hasMediaRecorder);
+    } else if (hasMediaRecorder && config.voiceUrl) {
+      // SpeechRecognition 非対応 → MediaRecorder フォールバック
+      useFallback = true;
+    } else {
+      // どちらも使えない → ボタン非表示
+      els.voiceBtn.style.display = 'none';
       return;
     }
+  }
 
+  /** Waveform Canvas を DOM に追加 */
+  function initWaveformCanvas() {
+    if (!els.inputRow) return;
+    var waveContainer = document.createElement('div');
+    waveContainer.className = 'mw-chat-input__waveform';
+    waveCanvas = document.createElement('canvas');
+    waveCanvas.width = 600;
+    waveCanvas.height = 80;
+    waveContainer.appendChild(waveCanvas);
+    waveCtx = waveCanvas.getContext('2d');
+    els.inputRow.insertBefore(waveContainer, els.voiceBtn);
+  }
+
+  /**
+   * SpeechRecognition を初期化する
+   * @param {Function} SpeechRecognition コンストラクタ
+   * @param {boolean}  hasMediaRecorder  フォールバック切替可能か
+   */
+  function initSpeechRecognition(SpeechRecognition, hasMediaRecorder) {
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.interimResults = true;
     recognition.continuous = true;
     recognition.maxAlternatives = 1;
 
-    // --- Waveform DOM element (hidden by default via CSS) ---
-    if (els.inputRow) {
-      var waveContainer = document.createElement('div');
-      waveContainer.className = 'mw-chat-input__waveform';
-      waveCanvas = document.createElement('canvas');
-      waveCanvas.width = 600;
-      waveCanvas.height = 80;
-      waveContainer.appendChild(waveCanvas);
-      waveCtx = waveCanvas.getContext('2d');
-      els.inputRow.insertBefore(waveContainer, els.voiceBtn);
-    }
-
-    // --- Recognition event handlers ---
     var accumulatedFinal = '';
     var silenceTimer = null;
     var maxTimer = null;
@@ -522,7 +559,7 @@
       if (silenceTimer) clearTimeout(silenceTimer);
       silenceTimer = setTimeout(function () {
         if (state.isRecording && recognition) {
-          recognition.stop(); // 認識停止（録音UIはそのまま）
+          recognition.stop();
         }
       }, VOICE_SILENCE_TIMEOUT);
     }
@@ -569,15 +606,60 @@
       clearTimers();
       stopWaveformAnimation();
       exitRecordingMode();
-      if (e.error !== 'aborted') {
-        handleVoiceError(e.error);
+
+      if (e.error === 'aborted') return;
+
+      // network エラー → 次回以降フォールバックに切替
+      if (e.error === 'network' && hasMediaRecorder && config.voiceUrl) {
+        useFallback = true;
+        setError('\u97F3\u58F0\u8A8D\u8B58\u306E\u901A\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u6B21\u56DE\u304B\u3089\u4EE3\u66FF\u65B9\u5F0F\u3067\u9332\u97F3\u3057\u307E\u3059\u3002\u3082\u3046\u4E00\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002');
+        // 音声認識の通信に失敗しました。次回から代替方式で録音します。もう一度お試しください。
+        return;
       }
+
+      handleVoiceError(e.error);
     });
   }
 
+  // ---------------------------------------------------------
+  // 統合 Voice API（useFallback で自動分岐）
+  // ---------------------------------------------------------
+
   /** 録音を開始し、録音モードUIに切り替える */
   function startVoice() {
-    if (!recognition || state.isRecording || state.isLoading) return;
+    if (state.isRecording || state.isLoading || isTranscribing) return;
+
+    if (useFallback) {
+      startVoiceFallback();
+    } else {
+      startVoiceSpeech();
+    }
+  }
+
+  /** 録音を確定する */
+  function confirmVoice() {
+    if (useFallback) {
+      confirmVoiceFallback();
+    } else {
+      confirmVoiceSpeech();
+    }
+  }
+
+  /** 録音をキャンセルし、テキストを破棄する */
+  function cancelVoice() {
+    if (useFallback) {
+      cancelVoiceFallback();
+    } else {
+      cancelVoiceSpeech();
+    }
+  }
+
+  // ---------------------------------------------------------
+  // SpeechRecognition 方式（従来ロジック）
+  // ---------------------------------------------------------
+
+  function startVoiceSpeech() {
+    if (!recognition) return;
 
     voiceBuffer = '';
     enterRecordingMode();
@@ -592,8 +674,7 @@
     startWaveformAnimation();
   }
 
-  /** 録音を確定し、テキストを入力欄に配置する */
-  function confirmVoice() {
+  function confirmVoiceSpeech() {
     if (recognition && state.isRecording) {
       try { recognition.stop(); } catch (e) {}
     }
@@ -609,8 +690,7 @@
     if (els.textarea) els.textarea.focus();
   }
 
-  /** 録音をキャンセルし、テキストを破棄する */
-  function cancelVoice() {
+  function cancelVoiceSpeech() {
     if (recognition && state.isRecording) {
       try { recognition.stop(); } catch (e) {}
     }
@@ -618,6 +698,203 @@
     voiceBuffer = '';
     exitRecordingMode();
   }
+
+  // ---------------------------------------------------------
+  // MediaRecorder + Whisper API フォールバック
+  // ---------------------------------------------------------
+
+  /** フォールバック: 録音開始 */
+  function startVoiceFallback() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+
+    enterRecordingMode();
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function (stream) {
+        if (!isInRecordingMode()) {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          return;
+        }
+
+        fallbackStream = stream;
+        mediaChunks = [];
+
+        // MIME タイプ選択（ブラウザ対応順）
+        var mimeType = '';
+        var mimeOptions = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', ''];
+        for (var i = 0; i < mimeOptions.length; i++) {
+          if (mimeOptions[i] === '' || MediaRecorder.isTypeSupported(mimeOptions[i])) {
+            mimeType = mimeOptions[i];
+            break;
+          }
+        }
+
+        var recorderOptions = {};
+        if (mimeType) recorderOptions.mimeType = mimeType;
+
+        try {
+          mediaRecorder = new MediaRecorder(stream, recorderOptions);
+        } catch (e) {
+          exitRecordingMode();
+          stopFallbackStream();
+          setError('\u9332\u97F3\u306E\u958B\u59CB\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002');
+          // 録音の開始に失敗しました。
+          return;
+        }
+
+        mediaRecorder.addEventListener('dataavailable', function (e) {
+          if (e.data && e.data.size > 0) {
+            mediaChunks.push(e.data);
+          }
+        });
+
+        mediaRecorder.addEventListener('stop', function () {
+          // stop は confirmVoiceFallback / cancelVoiceFallback から呼ばれる
+          // Blob 処理はそちらで行う
+        });
+
+        mediaRecorder.start(1000); // 1秒ごとにデータ取得
+        state.isRecording = true;
+
+        // 波形アニメーション（ストリーム共有）
+        startWaveformFromStream(stream);
+
+        // 最大録音時間
+        fallbackMaxTimer = setTimeout(function () {
+          if (state.isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+            // 自動停止 → 確定扱い
+            confirmVoiceFallback();
+          }
+        }, VOICE_MAX_DURATION);
+      })
+      .catch(function (err) {
+        exitRecordingMode();
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError('\u30DE\u30A4\u30AF\u306E\u4F7F\u7528\u304C\u8A31\u53EF\u3055\u308C\u3066\u3044\u307E\u305B\u3093\u3002\u30D6\u30E9\u30A6\u30B6\u306E\u8A2D\u5B9A\u304B\u3089\u30DE\u30A4\u30AF\u3092\u8A31\u53EF\u3057\u3066\u304F\u3060\u3055\u3044\u3002');
+          // マイクの使用が許可されていません。ブラウザの設定からマイクを許可してください。
+        } else {
+          setError('\u30DE\u30A4\u30AF\u306B\u30A2\u30AF\u30BB\u30B9\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002');
+          // マイクにアクセスできませんでした。
+        }
+      });
+  }
+
+  /** フォールバック: 録音確定 → Whisper API で文字起こし */
+  function confirmVoiceFallback() {
+    if (fallbackMaxTimer) { clearTimeout(fallbackMaxTimer); fallbackMaxTimer = null; }
+
+    var wasRecording = (mediaRecorder && mediaRecorder.state === 'recording');
+
+    if (wasRecording) {
+      // stop イベントで最終データが来てから Blob を作る
+      mediaRecorder.addEventListener('stop', function onStop() {
+        mediaRecorder.removeEventListener('stop', onStop);
+        processRecordedAudio();
+      }, { once: true });
+      mediaRecorder.stop();
+    } else {
+      processRecordedAudio();
+    }
+
+    state.isRecording = false;
+    stopWaveformAnimation();
+    stopFallbackStream();
+  }
+
+  /** 録音完了後: Blob → REST API 送信 */
+  function processRecordedAudio() {
+    if (mediaChunks.length === 0) {
+      exitRecordingMode();
+      return;
+    }
+
+    var mimeType = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
+    var blob = new Blob(mediaChunks, { type: mimeType });
+    mediaChunks = [];
+
+    // サイズチェック（25MB）
+    if (blob.size > 25 * 1024 * 1024) {
+      exitRecordingMode();
+      setError('\u9332\u97F3\u304C\u9577\u3059\u304E\u307E\u3059\u3002\u77ED\u304F\u3057\u3066\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002');
+      // 録音が長すぎます。短くしてお試しください。
+      return;
+    }
+
+    // 極端に小さい場合（0.5秒未満相当）スキップ
+    if (blob.size < 1000) {
+      exitRecordingMode();
+      return;
+    }
+
+    // UI: 文字起こし中表示
+    isTranscribing = true;
+    enterTranscribingMode();
+
+    // ファイル拡張子を MIME タイプから推定
+    var ext = 'webm';
+    if (mimeType.indexOf('mp4') !== -1 || mimeType.indexOf('m4a') !== -1) ext = 'mp4';
+    else if (mimeType.indexOf('ogg') !== -1) ext = 'ogg';
+
+    var formData = new FormData();
+    formData.append('audio', blob, 'recording.' + ext);
+
+    fetch(config.voiceUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'X-WP-Nonce': config.nonce
+      },
+      body: formData
+    })
+    .then(function (response) { return response.json(); })
+    .then(function (data) {
+      isTranscribing = false;
+      exitRecordingMode();
+
+      if (data.success && data.data && data.data.text) {
+        if (els.textarea) {
+          els.textarea.value = data.data.text;
+          autoResize(els.textarea);
+          els.textarea.focus();
+        }
+      } else {
+        setError(data.message || '\u97F3\u58F0\u3092\u8A8D\u8B58\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u3082\u3046\u4E00\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002');
+        // 音声を認識できませんでした。もう一度お試しください。
+      }
+    })
+    .catch(function () {
+      isTranscribing = false;
+      exitRecordingMode();
+      setError('\u97F3\u58F0\u306E\u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u901A\u4FE1\u74B0\u5883\u3092\u78BA\u8A8D\u3057\u3066\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002');
+      // 音声の送信に失敗しました。通信環境を確認してお試しください。
+    });
+  }
+
+  /** フォールバック: 録音キャンセル */
+  function cancelVoiceFallback() {
+    if (fallbackMaxTimer) { clearTimeout(fallbackMaxTimer); fallbackMaxTimer = null; }
+
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      try { mediaRecorder.stop(); } catch (e) {}
+    }
+    state.isRecording = false;
+    mediaChunks = [];
+    stopWaveformAnimation();
+    stopFallbackStream();
+    exitRecordingMode();
+  }
+
+  /** フォールバック用ストリーム停止 */
+  function stopFallbackStream() {
+    if (fallbackStream) {
+      fallbackStream.getTracks().forEach(function (t) { t.stop(); });
+      fallbackStream = null;
+    }
+  }
+
+  // ---------------------------------------------------------
+  // 共通 UI: 録音モード / 文字起こし中
+  // ---------------------------------------------------------
 
   /** 録音モードUIに切り替える（テキスト欄→波形、ボタンアイコン差替） */
   function enterRecordingMode() {
@@ -627,11 +904,25 @@
       els.voiceBtn.textContent = '\u2715'; // ✕
       els.voiceBtn.title = '\u30AD\u30E3\u30F3\u30BB\u30EB'; // キャンセル
       els.voiceBtn.setAttribute('aria-label', '\u30AD\u30E3\u30F3\u30BB\u30EB');
+      els.voiceBtn.disabled = false;
     }
     if (els.sendBtn) {
       els.sendBtn.textContent = '\u2713'; // ✓
       els.sendBtn.title = '\u78BA\u5B9A'; // 確定
       els.sendBtn.setAttribute('aria-label', '\u78BA\u5B9A');
+      els.sendBtn.disabled = false;
+    }
+  }
+
+  /** 文字起こし処理中の表示（確定ボタン押下後〜Whisper応答まで） */
+  function enterTranscribingMode() {
+    if (els.voiceBtn) {
+      els.voiceBtn.disabled = true;
+    }
+    if (els.sendBtn) {
+      els.sendBtn.textContent = '\u23F3'; // ⏳
+      els.sendBtn.title = '\u6587\u5B57\u8D77\u3053\u3057\u4E2D...'; // 文字起こし中...
+      els.sendBtn.disabled = true;
     }
   }
 
@@ -645,15 +936,21 @@
       els.voiceBtn.textContent = '\uD83C\uDF99'; // 🎙
       els.voiceBtn.title = '\u97F3\u58F0\u5165\u529B'; // 音声入力
       els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B');
+      els.voiceBtn.disabled = false;
     }
     if (els.sendBtn) {
       els.sendBtn.textContent = '\u27A4'; // ➤
       els.sendBtn.title = '\u9001\u4FE1'; // 送信
       els.sendBtn.setAttribute('aria-label', '\u9001\u4FE1');
+      els.sendBtn.disabled = false;
     }
   }
 
-  /** Waveform アニメーション開始（Web Audio API で実波形描画） */
+  // ---------------------------------------------------------
+  // Waveform (波形アニメーション)
+  // ---------------------------------------------------------
+
+  /** 新規ストリームを取得して波形アニメーション開始（SpeechRecognition 用） */
   function startWaveformAnimation() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
 
@@ -664,17 +961,32 @@
           return;
         }
         audioStream = stream;
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        var source = audioCtx.createMediaStreamSource(stream);
-        audioAnalyser = audioCtx.createAnalyser();
-        audioAnalyser.fftSize = 128;
-        audioAnalyser.smoothingTimeConstant = 0.7;
-        source.connect(audioAnalyser);
-        drawWaveform();
+        connectWaveformAnalyser(stream);
       })
       .catch(function () {
         // マイク取得失敗 — 波形なしだが認識は動作する
       });
+  }
+
+  /** 既存ストリームで波形アニメーション開始（MediaRecorder 用） */
+  function startWaveformFromStream(stream) {
+    audioStream = null; // ストリームの管理は fallbackStream 側が行う
+    connectWaveformAnalyser(stream);
+  }
+
+  /** ストリームを AnalyserNode に接続して描画ループ開始 */
+  function connectWaveformAnalyser(stream) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var source = audioCtx.createMediaStreamSource(stream);
+      audioAnalyser = audioCtx.createAnalyser();
+      audioAnalyser.fftSize = 128;
+      audioAnalyser.smoothingTimeConstant = 0.7;
+      source.connect(audioAnalyser);
+      drawWaveform();
+    } catch (e) {
+      // AudioContext 非対応 — 波形なし
+    }
   }
 
   /** Waveform アニメーション停止 */
@@ -724,6 +1036,10 @@
       waveCtx.fillRect(x, y, barW, barH);
     }
   }
+
+  // ---------------------------------------------------------
+  // エラーハンドリング
+  // ---------------------------------------------------------
 
   /**
    * 音声認識エラーをユーザーに通知する
@@ -800,7 +1116,8 @@
     });
 
     // Voice button: 通常時は録音開始、録音モード時はキャンセル
-    if (els.voiceBtn && recognition) {
+    // recognition(SpeechRecognition) または useFallback(MediaRecorder) のいずれかが有効な場合
+    if (els.voiceBtn && (recognition || useFallback)) {
       els.voiceBtn.addEventListener('click', function () {
         if (isInRecordingMode()) {
           cancelVoice();
