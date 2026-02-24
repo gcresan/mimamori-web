@@ -429,6 +429,15 @@
    * 音声認識を初期化する
    * 非対応ブラウザではボタンを非表示にする
    */
+  /** 音声認識の制限時間（ミリ秒） */
+  var VOICE_MAX_DURATION = 45000;   // 最大45秒（安全制限）
+  var VOICE_SILENCE_TIMEOUT = 3000; // 沈黙3秒で自動停止
+
+  /**
+   * 音声認識を初期化する
+   * continuous: true で長時間（20〜30秒）の発話に対応
+   * 非対応ブラウザではボタンを非表示にする
+   */
   function initVoice() {
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition || !els.voiceBtn) {
@@ -439,37 +448,73 @@
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = true;       // 沈黙で止まらない（長時間発話対応）
     recognition.maxAlternatives = 1;
 
     var preExistingText = '';
+    var accumulatedFinal = '';           // continuous モードで確定テキストを蓄積
+    var silenceTimer = null;
+    var maxTimer = null;
+
+    /** タイマーを全てクリアする */
+    function clearTimers() {
+      if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+      if (maxTimer) { clearTimeout(maxTimer); maxTimer = null; }
+    }
+
+    /** 沈黙タイマーをリセットする（発話検出のたびに呼ぶ） */
+    function resetSilenceTimer() {
+      if (silenceTimer) clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(function () {
+        if (state.isRecording && recognition) {
+          recognition.stop();
+        }
+      }, VOICE_SILENCE_TIMEOUT);
+    }
 
     recognition.addEventListener('start', function () {
       state.isRecording = true;
       els.voiceBtn.classList.add('mw-chat-input__btn--recording');
       els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B\u4E2D'); // 音声入力中
       preExistingText = els.textarea ? els.textarea.value : '';
+      accumulatedFinal = '';
+
+      // 最大録音時間の安全制限
+      maxTimer = setTimeout(function () {
+        if (state.isRecording && recognition) {
+          recognition.stop();
+        }
+      }, VOICE_MAX_DURATION);
+
+      // 初回の沈黙タイマー開始
+      resetSilenceTimer();
     });
 
     recognition.addEventListener('result', function (e) {
       var interim = '';
-      var final = '';
+      var newFinal = '';
       for (var i = e.resultIndex; i < e.results.length; i++) {
         var transcript = e.results[i][0].transcript;
         if (e.results[i].isFinal) {
-          final += transcript;
+          newFinal += transcript;
         } else {
           interim += transcript;
         }
       }
+      accumulatedFinal += newFinal;
+
       if (els.textarea) {
-        els.textarea.value = preExistingText + final + interim;
+        els.textarea.value = preExistingText + accumulatedFinal + interim;
         autoResize(els.textarea);
       }
+
+      // 発話検出 → 沈黙タイマーリセット
+      resetSilenceTimer();
     });
 
     recognition.addEventListener('end', function () {
       state.isRecording = false;
+      clearTimers();
       els.voiceBtn.classList.remove('mw-chat-input__btn--recording');
       els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B'); // 音声入力
       // Focus textarea so user can review/edit and send
@@ -480,6 +525,7 @@
 
     recognition.addEventListener('error', function (e) {
       state.isRecording = false;
+      clearTimers();
       els.voiceBtn.classList.remove('mw-chat-input__btn--recording');
       els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B'); // 音声入力
       handleVoiceError(e.error);
