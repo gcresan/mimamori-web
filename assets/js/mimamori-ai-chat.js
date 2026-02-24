@@ -66,9 +66,9 @@
     var valid = ['closed', 'normal', 'panel', 'modal'];
     if (valid.indexOf(mode) === -1) return;
 
-    // Stop voice recording if closing
-    if (mode === 'closed' && state.isRecording && recognition) {
-      recognition.stop();
+    // Cancel voice recording if closing
+    if (mode === 'closed' && isInRecordingMode()) {
+      cancelVoice();
     }
 
     els.root.className = 'mw-chat mw-chat--' + mode;
@@ -422,16 +422,27 @@
   }
 
   /* ============================
-     Voice Input (Web Speech API)
+     Voice Input (Web Speech API + Waveform)
      ============================ */
 
-  /**
-   * 音声認識を初期化する
-   * 非対応ブラウザではボタンを非表示にする
-   */
-  /** 音声認識の制限時間（ミリ秒） */
   var VOICE_MAX_DURATION = 45000;   // 最大45秒（安全制限）
-  var VOICE_SILENCE_TIMEOUT = 3000; // 沈黙3秒で自動停止
+  var VOICE_SILENCE_TIMEOUT = 3000; // 沈黙3秒で認識自動停止
+
+  /** Audio visualization state */
+  var audioCtx = null;
+  var audioAnalyser = null;
+  var audioStream = null;
+  var waveAnimId = null;
+  var waveCanvas = null;
+  var waveCtx = null;
+
+  /** 録音中にバッファするテキスト */
+  var voiceBuffer = '';
+
+  /** 録音モードUIが表示中かどうか */
+  function isInRecordingMode() {
+    return els.inputArea && els.inputArea.classList.contains('mw-chat-input--recording');
+  }
 
   /**
    * 音声認識を初期化する
@@ -448,45 +459,50 @@
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.interimResults = true;
-    recognition.continuous = true;       // 沈黙で止まらない（長時間発話対応）
+    recognition.continuous = true;
     recognition.maxAlternatives = 1;
 
-    var preExistingText = '';
-    var accumulatedFinal = '';           // continuous モードで確定テキストを蓄積
+    // --- Waveform DOM element (hidden by default via CSS) ---
+    if (els.inputRow) {
+      var waveContainer = document.createElement('div');
+      waveContainer.className = 'mw-chat-input__waveform';
+      waveCanvas = document.createElement('canvas');
+      waveCanvas.width = 600;
+      waveCanvas.height = 80;
+      waveContainer.appendChild(waveCanvas);
+      waveCtx = waveCanvas.getContext('2d');
+      els.inputRow.insertBefore(waveContainer, els.voiceBtn);
+    }
+
+    // --- Recognition event handlers ---
+    var accumulatedFinal = '';
     var silenceTimer = null;
     var maxTimer = null;
 
-    /** タイマーを全てクリアする */
     function clearTimers() {
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
       if (maxTimer) { clearTimeout(maxTimer); maxTimer = null; }
     }
 
-    /** 沈黙タイマーをリセットする（発話検出のたびに呼ぶ） */
     function resetSilenceTimer() {
       if (silenceTimer) clearTimeout(silenceTimer);
       silenceTimer = setTimeout(function () {
         if (state.isRecording && recognition) {
-          recognition.stop();
+          recognition.stop(); // 認識停止（録音UIはそのまま）
         }
       }, VOICE_SILENCE_TIMEOUT);
     }
 
     recognition.addEventListener('start', function () {
       state.isRecording = true;
-      els.voiceBtn.classList.add('mw-chat-input__btn--recording');
-      els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B\u4E2D'); // 音声入力中
-      preExistingText = els.textarea ? els.textarea.value : '';
       accumulatedFinal = '';
 
-      // 最大録音時間の安全制限
       maxTimer = setTimeout(function () {
         if (state.isRecording && recognition) {
           recognition.stop();
         }
       }, VOICE_MAX_DURATION);
 
-      // 初回の沈黙タイマー開始
       resetSilenceTimer();
     });
 
@@ -502,49 +518,176 @@
         }
       }
       accumulatedFinal += newFinal;
+      voiceBuffer = accumulatedFinal + interim;
 
-      if (els.textarea) {
-        els.textarea.value = preExistingText + accumulatedFinal + interim;
-        autoResize(els.textarea);
-      }
-
-      // 発話検出 → 沈黙タイマーリセット
       resetSilenceTimer();
     });
 
     recognition.addEventListener('end', function () {
       state.isRecording = false;
       clearTimers();
-      els.voiceBtn.classList.remove('mw-chat-input__btn--recording');
-      els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B'); // 音声入力
-      // Focus textarea so user can review/edit and send
-      if (els.textarea && els.textarea.value.trim()) {
-        els.textarea.focus();
-      }
+      stopWaveformAnimation();
+      // 録音UIは維持 — ユーザーが ✓ or ✕ をクリックするのを待つ
     });
 
     recognition.addEventListener('error', function (e) {
       state.isRecording = false;
       clearTimers();
-      els.voiceBtn.classList.remove('mw-chat-input__btn--recording');
-      els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B'); // 音声入力
-      handleVoiceError(e.error);
+      stopWaveformAnimation();
+      exitRecordingMode();
+      if (e.error !== 'aborted') {
+        handleVoiceError(e.error);
+      }
     });
   }
 
-  /** 録音の開始/停止を切り替える */
-  function toggleVoice() {
-    if (!recognition) return;
+  /** 録音を開始し、録音モードUIに切り替える */
+  function startVoice() {
+    if (!recognition || state.isRecording || state.isLoading) return;
 
-    if (state.isRecording) {
-      recognition.stop();
-    } else {
-      if (state.isLoading) return;
-      try {
-        recognition.start();
-      } catch (e) {
-        // DOMException if already started — safe to ignore
-      }
+    voiceBuffer = '';
+    enterRecordingMode();
+
+    try {
+      recognition.start();
+    } catch (e) {
+      exitRecordingMode();
+      return;
+    }
+
+    startWaveformAnimation();
+  }
+
+  /** 録音を確定し、テキストを入力欄に配置する */
+  function confirmVoice() {
+    if (recognition && state.isRecording) {
+      try { recognition.stop(); } catch (e) {}
+    }
+    stopWaveformAnimation();
+
+    if (els.textarea && voiceBuffer) {
+      els.textarea.value = voiceBuffer;
+      autoResize(els.textarea);
+    }
+    voiceBuffer = '';
+    exitRecordingMode();
+
+    if (els.textarea) els.textarea.focus();
+  }
+
+  /** 録音をキャンセルし、テキストを破棄する */
+  function cancelVoice() {
+    if (recognition && state.isRecording) {
+      try { recognition.stop(); } catch (e) {}
+    }
+    stopWaveformAnimation();
+    voiceBuffer = '';
+    exitRecordingMode();
+  }
+
+  /** 録音モードUIに切り替える（テキスト欄→波形、ボタンアイコン差替） */
+  function enterRecordingMode() {
+    if (els.inputArea) els.inputArea.classList.add('mw-chat-input--recording');
+
+    if (els.voiceBtn) {
+      els.voiceBtn.textContent = '\u2715'; // ✕
+      els.voiceBtn.title = '\u30AD\u30E3\u30F3\u30BB\u30EB'; // キャンセル
+      els.voiceBtn.setAttribute('aria-label', '\u30AD\u30E3\u30F3\u30BB\u30EB');
+    }
+    if (els.sendBtn) {
+      els.sendBtn.textContent = '\u2713'; // ✓
+      els.sendBtn.title = '\u78BA\u5B9A'; // 確定
+      els.sendBtn.setAttribute('aria-label', '\u78BA\u5B9A');
+    }
+  }
+
+  /** 通常モードUIに戻す */
+  function exitRecordingMode() {
+    state.isRecording = false;
+
+    if (els.inputArea) els.inputArea.classList.remove('mw-chat-input--recording');
+
+    if (els.voiceBtn) {
+      els.voiceBtn.textContent = '\uD83C\uDFA4'; // 🎤
+      els.voiceBtn.title = '\u97F3\u58F0\u5165\u529B'; // 音声入力
+      els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B');
+    }
+    if (els.sendBtn) {
+      els.sendBtn.textContent = '\u27A4'; // ➤
+      els.sendBtn.title = '\u9001\u4FE1'; // 送信
+      els.sendBtn.setAttribute('aria-label', '\u9001\u4FE1');
+    }
+  }
+
+  /** Waveform アニメーション開始（Web Audio API で実波形描画） */
+  function startWaveformAnimation() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function (stream) {
+        if (!isInRecordingMode()) {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          return;
+        }
+        audioStream = stream;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        var source = audioCtx.createMediaStreamSource(stream);
+        audioAnalyser = audioCtx.createAnalyser();
+        audioAnalyser.fftSize = 128;
+        audioAnalyser.smoothingTimeConstant = 0.7;
+        source.connect(audioAnalyser);
+        drawWaveform();
+      })
+      .catch(function () {
+        // マイク取得失敗 — 波形なしだが認識は動作する
+      });
+  }
+
+  /** Waveform アニメーション停止 */
+  function stopWaveformAnimation() {
+    if (waveAnimId) {
+      cancelAnimationFrame(waveAnimId);
+      waveAnimId = null;
+    }
+    if (audioStream) {
+      audioStream.getTracks().forEach(function (t) { t.stop(); });
+      audioStream = null;
+    }
+    if (audioCtx && audioCtx.state !== 'closed') {
+      audioCtx.close().catch(function () {});
+      audioCtx = null;
+    }
+    audioAnalyser = null;
+  }
+
+  /** Waveform 描画ループ（周波数データからバー描画） */
+  function drawWaveform() {
+    waveAnimId = requestAnimationFrame(drawWaveform);
+
+    if (!audioAnalyser || !waveCtx || !waveCanvas) return;
+
+    var bufferLength = audioAnalyser.frequencyBinCount;
+    var dataArray = new Uint8Array(bufferLength);
+    audioAnalyser.getByteFrequencyData(dataArray);
+
+    var width = waveCanvas.width;
+    var height = waveCanvas.height;
+    waveCtx.clearRect(0, 0, width, height);
+
+    var barCount = 50;
+    var totalW = width * 0.9;
+    var startX = (width - totalW) / 2;
+    var barW = totalW / barCount * 0.6;
+    var gap = totalW / barCount * 0.4;
+
+    waveCtx.fillStyle = '#4a6d7c';
+    for (var i = 0; i < barCount; i++) {
+      var idx = Math.floor(i * bufferLength / barCount);
+      var amp = dataArray[idx] / 255.0;
+      var barH = Math.max(2, amp * height * 0.85);
+      var x = startX + i * (barW + gap);
+      var y = (height - barH) / 2;
+      waveCtx.fillRect(x, y, barW, barH);
     }
   }
 
@@ -615,15 +758,23 @@
       }
     });
 
-    // Send button
+    // Send button: 通常時は送信、録音モード時は確定
     els.sendBtn.addEventListener('click', function () {
-      sendMessage();
+      if (isInRecordingMode()) {
+        confirmVoice();
+      } else {
+        sendMessage();
+      }
     });
 
-    // Voice button — toggle recording
+    // Voice button: 通常時は録音開始、録音モード時はキャンセル
     if (els.voiceBtn && recognition) {
       els.voiceBtn.addEventListener('click', function () {
-        toggleVoice();
+        if (isInRecordingMode()) {
+          cancelVoice();
+        } else {
+          startVoice();
+        }
       });
     }
 
@@ -673,6 +824,8 @@
     els.overlay     = els.root.querySelector('.mw-chat-overlay');
     els.window      = els.root.querySelector('.mw-chat-window');
     els.messages    = els.root.querySelector('.mw-chat-messages');
+    els.inputArea   = els.root.querySelector('.mw-chat-input');
+    els.inputRow    = els.root.querySelector('.mw-chat-input__row');
     els.textarea    = els.root.querySelector('.mw-chat-input__textarea');
     els.sendBtn     = els.root.querySelector('.mw-chat-input__btn--send');
     els.voiceBtn    = els.root.querySelector('.mw-chat-input__btn--voice');
