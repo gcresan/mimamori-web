@@ -787,6 +787,7 @@
       var q = chip.getAttribute('data-question');
       if (q && !state.isLoading) {
         sendMessage(q);
+      }
     });
 
     // Send button: 通常時は送信、録音モード時は確定
