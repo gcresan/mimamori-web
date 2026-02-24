@@ -2,7 +2,7 @@
 /**
  * Template Name: お申込み（伴走運用プラン）
  *
- * GCREV INSIGHT 伴走運用プラン（¥16,500/月）の申込ページ。
+ * みまもりウェブ 伴走運用プラン（¥16,500/月）の申込ページ。
  * ログイン不要の公開ページ。プランは1つのみ（プリセレクト）。
  *
  * @package GCREV_INSIGHT
@@ -29,7 +29,7 @@ get_header();
 
   <!-- 1) ヒーロー -->
   <div class="signup-hero">
-    <h2 class="signup-hero-title">お申込み<br>GCREV INSIGHT 伴走運用プラン</h2>
+    <h2 class="signup-hero-title">お申込み<br>みまもりウェブ 伴走運用プラン</h2>
     <p class="signup-hero-subtitle">レポート＋解釈＋次の打ち手まで伴走する運用サポートプランです。</p>
   </div>
 
@@ -46,10 +46,10 @@ get_header();
         </div>
       </div>
       <div class="signup-plans signup-plans--unyou">
-        <!-- GCREV INSIGHT 伴走運用プラン（プリセレクト） -->
-        <div class="signup-plan-card selected" data-plan="unyou" data-plan-name="GCREV INSIGHT 伴走運用プラン" data-price="16,500/月">
+        <!-- みまもりウェブ 伴走運用プラン（プリセレクト） -->
+        <div class="signup-plan-card selected" data-plan="unyou" data-plan-name="みまもりウェブ 伴走運用プラン" data-price="16,500/月">
           <div class="signup-plan-checkmark">&#x2713;</div>
-          <div class="signup-plan-name">GCREV INSIGHT【伴走運用プラン】</div>
+          <div class="signup-plan-name">みまもりウェブ【伴走運用プラン】</div>
           <div class="signup-plan-price-monthly">
             月額 <strong>16,500</strong><span>円（税込）</span>
           </div>

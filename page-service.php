@@ -35,9 +35,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- GCREV INSIGHT -->
+                    <!-- みまもりウェブ -->
                     <tr class="category-row">
-                        <td colspan="4"><strong>GCREV INSIGHT</strong>（閲覧無制限）</td>
+                        <td colspan="4"><strong>みまもりウェブ</strong>（閲覧無制限）</td>
                     </tr>
                     <tr>
                         <td class="sub-item">ダッシュボード利用</td>
@@ -265,7 +265,7 @@
                     <div class="flow-number">1</div>
                     <div class="flow-content">
                         <h3>無料相談（30分）</h3>
-                        <p>現状のWeb施策やお悩みをヒアリング。GCREV INSIGHTがどう役立つかご提案します。</p>
+                        <p>現状のWeb施策やお悩みをヒアリング。みまもりウェブがどう役立つかご提案します。</p>
                     </div>
                 </div>
                 <div class="flow-step">

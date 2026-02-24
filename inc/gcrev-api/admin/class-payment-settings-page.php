@@ -9,7 +9,7 @@ if ( class_exists('Gcrev_Payment_Settings_Page') ) { return; }
 /**
  * Gcrev_Payment_Settings_Page
  *
- * WordPress管理画面に「GCREV INSIGHT > 決済設定」ページを追加する。
+ * WordPress管理画面に「みまもりウェブ > 決済設定」ページを追加する。
  * - 5パターンの決済URLを wp_options に保存
  * - ユーザー別の契約タイプ・決済ステータス一覧を表示
  *
@@ -74,8 +74,8 @@ class Gcrev_Payment_Settings_Page {
     public function add_menu_page(): void {
         if ( empty( $GLOBALS['admin_page_hooks']['gcrev-insight'] ) ) {
             add_menu_page(
-                'GCREV INSIGHT',
-                'GCREV INSIGHT',
+                'みまもりウェブ',
+                'みまもりウェブ',
                 'manage_options',
                 'gcrev-insight',
                 '__return_null',
@@ -86,7 +86,7 @@ class Gcrev_Payment_Settings_Page {
 
         add_submenu_page(
             'gcrev-insight',
-            '決済設定 - GCREV INSIGHT',
+            '決済設定 - みまもりウェブ',
             '💳 決済設定',
             'manage_options',
             self::MENU_SLUG,

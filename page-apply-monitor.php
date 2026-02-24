@@ -2,7 +2,7 @@
 /**
  * Template Name: お申込み（モニター価格）
  *
- * GCREV INSIGHT 伴走運用プラン モニター価格（¥11,000/月）の申込ページ。
+ * みまもりウェブ 伴走運用プラン モニター価格（¥11,000/月）の申込ページ。
  * 既存クライアント限定。最低契約期間3ヶ月。
  * ログイン不要の公開ページ。プランは1つのみ（プリセレクト）。
  *
@@ -30,7 +30,7 @@ get_header();
 
   <!-- 1) ヒーロー -->
   <div class="signup-hero">
-    <h2 class="signup-hero-title">お申込み<br>GCREV INSIGHT 伴走運用プラン<br><small style="font-size: 0.6em; color: #B8941E;">モニター価格</small></h2>
+    <h2 class="signup-hero-title">お申込み<br>みまもりウェブ 伴走運用プラン<br><small style="font-size: 0.6em; color: #B8941E;">モニター価格</small></h2>
     <p class="signup-hero-subtitle">既存クライアント限定のモニター価格でご利用いただけます。</p>
   </div>
 
@@ -48,10 +48,10 @@ get_header();
       </div>
       <div class="signup-plans signup-plans--unyou">
         <!-- モニター価格プラン（プリセレクト） -->
-        <div class="signup-plan-card selected" data-plan="monitor" data-plan-name="GCREV INSIGHT 伴走運用プラン（モニター価格）" data-price="11,000/月">
+        <div class="signup-plan-card selected" data-plan="monitor" data-plan-name="みまもりウェブ 伴走運用プラン（モニター価格）" data-price="11,000/月">
           <span class="signup-plan-badge" style="background: rgba(212,168,66,0.08); color: #B8941E;">モニター価格</span>
           <div class="signup-plan-checkmark">&#x2713;</div>
-          <div class="signup-plan-name">GCREV INSIGHT【伴走運用プラン】</div>
+          <div class="signup-plan-name">みまもりウェブ【伴走運用プラン】</div>
           <div class="signup-plan-price-monthly">
             月額 <strong>11,000</strong><span>円（税込）</span>
           </div>

@@ -105,7 +105,7 @@ class Gcrev_Error_Notifier {
         $to      = self::get_recipient();
         $site    = get_bloginfo( 'name' );
         $subject = "[{$site}] GCREV 通知テスト";
-        $body    = "このメールは GCREV INSIGHT のエラー通知機能のテストです。\n\n";
+        $body    = "このメールは みまもりウェブ のエラー通知機能のテストです。\n\n";
         $body   .= "通知が正常に設定されています。\n";
         $body   .= '送信先: ' . $to . "\n";
         $body   .= '閾値: ' . self::get_threshold() . " エラー以上で通知\n\n";

@@ -1,6 +1,6 @@
 <?php
 /**
- * GCREV INSIGHT Bootstrap
+ * みまもりウェブ Bootstrap
  * - Cron / Hook 登録を集約
  * - 既存イベント名・実行時刻は変更しない
  */

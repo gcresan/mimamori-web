@@ -9,7 +9,7 @@ if ( class_exists( 'Gcrev_Notification_Settings_Page' ) ) { return; }
 /**
  * Gcrev_Notification_Settings_Page
  *
- * 管理画面「GCREV INSIGHT > 通知設定」ページ。
+ * 管理画面「みまもりウェブ > 通知設定」ページ。
  * Cron エラー通知の有効/無効、送信先、閾値を設定する。
  *
  * @package GCREV_INSIGHT
@@ -37,8 +37,8 @@ class Gcrev_Notification_Settings_Page {
     public function add_menu_page(): void {
         if ( empty( $GLOBALS['admin_page_hooks']['gcrev-insight'] ) ) {
             add_menu_page(
-                'GCREV INSIGHT',
-                'GCREV INSIGHT',
+                'みまもりウェブ',
+                'みまもりウェブ',
                 'manage_options',
                 'gcrev-insight',
                 '__return_null',
@@ -49,7 +49,7 @@ class Gcrev_Notification_Settings_Page {
 
         add_submenu_page(
             'gcrev-insight',
-            '通知設定 - GCREV INSIGHT',
+            '通知設定 - みまもりウェブ',
             "\xF0\x9F\x94\x94 通知設定",
             'manage_options',
             self::MENU_SLUG,
@@ -172,7 +172,7 @@ class Gcrev_Notification_Settings_Page {
         }
         ?>
         <div class="wrap">
-            <h1>GCREV INSIGHT — 通知設定</h1>
+            <h1>みまもりウェブ — 通知設定</h1>
 
             <?php settings_errors( 'gcrev_notification' ); ?>
 

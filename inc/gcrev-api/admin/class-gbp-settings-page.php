@@ -9,7 +9,7 @@ if ( class_exists('Gcrev_GBP_Settings_Page') ) { return; }
 /**
  * Gcrev_GBP_Settings_Page
  *
- * WordPress管理画面に「GCREV INSIGHT > GBP設定」ページを追加する。
+ * WordPress管理画面に「みまもりウェブ > GBP設定」ページを追加する。
  * GBP OAuth のクライアントID / シークレットを wp_options に保存・管理する。
  *
  * option_name（class-config.php の get() と整合）:
@@ -49,8 +49,8 @@ class Gcrev_GBP_Settings_Page {
         // トップメニュー（既に存在する場合はスキップ）
         if ( empty( $GLOBALS['admin_page_hooks']['gcrev-insight'] ) ) {
             add_menu_page(
-                'GCREV INSIGHT',
-                'GCREV INSIGHT',
+                'みまもりウェブ',
+                'みまもりウェブ',
                 'manage_options',
                 'gcrev-insight',
                 '__return_null',
@@ -61,7 +61,7 @@ class Gcrev_GBP_Settings_Page {
 
         add_submenu_page(
             'gcrev-insight',
-            'GBP設定 - GCREV INSIGHT',
+            'GBP設定 - みまもりウェブ',
             '📍 GBP設定',
             'manage_options',
             self::MENU_SLUG,

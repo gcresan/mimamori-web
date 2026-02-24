@@ -593,7 +593,7 @@ add_action('wp_enqueue_scripts', function () {
 
 /**
  * ============================================================
- * GCREV INSIGHT - Period Selector Module (共通期間切替UI)
+ * みまもりウェブ - Period Selector Module (共通期間切替UI)
  * 各テンプレートで使える期間セレクター用のJS/CSSを読み込む
  *
  * assets/js/period-selector.js
@@ -621,7 +621,7 @@ add_action('wp_enqueue_scripts', function() {
 
 /**
  * ============================================================
- * GCREV INSIGHT - AIチャット UIコンポーネント
+ * みまもりウェブ - AIチャット UIコンポーネント
  *
  * assets/js/mimamori-ai-chat.js
  * assets/css/mimamori-ai-chat.css
@@ -2875,7 +2875,7 @@ function gcrev_get_plan_definitions(): array {
             'min_months'      => 0,
         ],
         'unyou' => [
-            'name'            => 'GCREV INSIGHT 伴走運用プラン',
+            'name'            => 'みまもりウェブ 伴走運用プラン',
             'category'        => 'unyou',
             'total'           => null,
             'monthly'         => 16500,
@@ -2884,7 +2884,7 @@ function gcrev_get_plan_definitions(): array {
             'min_months'      => 0,
         ],
         'etsurann' => [
-            'name'            => 'GCREV INSIGHT 閲覧プラン',
+            'name'            => 'みまもりウェブ 閲覧プラン',
             'category'        => 'unyou',
             'total'           => null,
             'monthly'         => 5500,
@@ -2893,7 +2893,7 @@ function gcrev_get_plan_definitions(): array {
             'min_months'      => 0,
         ],
         'monitor' => [
-            'name'            => 'GCREV INSIGHT 伴走運用プラン（モニター価格）',
+            'name'            => 'みまもりウェブ 伴走運用プラン（モニター価格）',
             'category'        => 'unyou',
             'total'           => null,
             'monthly'         => 11000,
