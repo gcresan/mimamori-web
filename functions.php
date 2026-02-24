@@ -462,6 +462,10 @@ if ( file_exists( $gcrev_utils_html_extractor ) ) {
 if ( file_exists( $gcrev_utils_ai_json_parser ) ) {
     require_once $gcrev_utils_ai_json_parser;
 }
+$gcrev_utils_crypto = $gcrev_utils_path . 'class-crypto.php';
+if ( file_exists( $gcrev_utils_crypto ) ) {
+    require_once $gcrev_utils_crypto;
+}
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）

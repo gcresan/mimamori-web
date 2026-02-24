@@ -2871,7 +2871,7 @@ class Gcrev_Insight_API {
      * @return array ['connected' => bool, 'needs_reauth' => bool]
      */
     public function gbp_get_connection_status(int $user_id): array {
-        $refresh_token = get_user_meta($user_id, '_gcrev_gbp_refresh_token', true);
+        $refresh_token = Gcrev_Crypto::decrypt( get_user_meta($user_id, '_gcrev_gbp_refresh_token', true) );
 
         // refresh_tokenが無い → 未接続
         if (empty($refresh_token)) {
@@ -2975,15 +2975,15 @@ class Gcrev_Insight_API {
             return ['success' => false, 'message' => 'トークンの取得に失敗しました: ' . $error_desc];
         }
 
-        // user_metaに保存
-        update_user_meta($user_id, '_gcrev_gbp_access_token',  $body['access_token']);
+        // user_metaに保存（暗号化）
+        update_user_meta($user_id, '_gcrev_gbp_access_token',  Gcrev_Crypto::encrypt($body['access_token']));
         update_user_meta($user_id, '_gcrev_gbp_token_expires', time() + (int)($body['expires_in'] ?? 3600));
 
         if (!empty($body['refresh_token'])) {
-            update_user_meta($user_id, '_gcrev_gbp_refresh_token', $body['refresh_token']);
+            update_user_meta($user_id, '_gcrev_gbp_refresh_token', Gcrev_Crypto::encrypt($body['refresh_token']));
         }
 
-        error_log("[GCREV][GBP] Tokens stored successfully for user_id={$user_id}");
+        error_log("[GCREV][GBP] Tokens stored (encrypted) for user_id={$user_id}");
         return ['success' => true, 'message' => ''];
     }
 
@@ -2994,7 +2994,8 @@ class Gcrev_Insight_API {
      * @return bool 成功ならtrue
      */
     private function gbp_refresh_access_token(int $user_id): bool {
-        $refresh_token = get_user_meta($user_id, '_gcrev_gbp_refresh_token', true);
+        $refresh_token_raw = get_user_meta($user_id, '_gcrev_gbp_refresh_token', true);
+        $refresh_token     = Gcrev_Crypto::decrypt($refresh_token_raw);
         if (empty($refresh_token)) {
             return false;
         }
@@ -3029,10 +3030,15 @@ class Gcrev_Insight_API {
             return false;
         }
 
-        update_user_meta($user_id, '_gcrev_gbp_access_token',  $body['access_token']);
+        update_user_meta($user_id, '_gcrev_gbp_access_token',  Gcrev_Crypto::encrypt($body['access_token']));
         update_user_meta($user_id, '_gcrev_gbp_token_expires', time() + (int)($body['expires_in'] ?? 3600));
 
-        error_log("[GCREV][GBP] Token refreshed for user_id={$user_id}");
+        // Google がリフレッシュ時に新しい refresh_token を返す場合がある（ローテーション対応）
+        if ( ! empty( $body['refresh_token'] ) ) {
+            update_user_meta( $user_id, '_gcrev_gbp_refresh_token', Gcrev_Crypto::encrypt( $body['refresh_token'] ) );
+        }
+
+        error_log("[GCREV][GBP] Token refreshed (encrypted) for user_id={$user_id}");
         return true;
     }
 
@@ -3047,7 +3053,7 @@ class Gcrev_Insight_API {
 
         // 有効期限内ならそのまま返す（5分マージン）
         if ($expires > time() + 300) {
-            $token = get_user_meta($user_id, '_gcrev_gbp_access_token', true);
+            $token = Gcrev_Crypto::decrypt( get_user_meta($user_id, '_gcrev_gbp_access_token', true) );
             if (!empty($token)) {
                 return $token;
             }
@@ -3055,7 +3061,7 @@ class Gcrev_Insight_API {
 
         // リフレッシュ
         if ($this->gbp_refresh_access_token($user_id)) {
-            return get_user_meta($user_id, '_gcrev_gbp_access_token', true) ?: null;
+            return Gcrev_Crypto::decrypt( get_user_meta($user_id, '_gcrev_gbp_access_token', true) ) ?: null;
         }
 
         return null;
