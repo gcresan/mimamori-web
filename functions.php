@@ -1154,16 +1154,14 @@ function mimamori_classify_question( string $message ): array {
 }
 
 /**
- * データソースの使用可否を決定する
+ * データソースの使用可否を決定する（AI自動判断）
  *
- * 優先順位:
- *   1. ユーザーがチェックで強制指定 → 必ず使う
- *   2. AI自動判定が必要と判断 → 使う
- *   3. どちらでもない → 使わない
+ * 質問内容・意図から自動的にデータソースの要否を判定する。
+ * force_* 引数は後方互換のため残すが、通常は false を渡す。
  *
- * @param array $classification  mimamori_classify_question() の返り値
- * @param bool  $force_page      チェックボックスによるページ文脈の強制指定
- * @param bool  $force_analytics  チェックボックスによるGA4/GSCの強制指定
+ * @param array $classification  mimamori_rewrite_intent() の返り値（needs_page / needs_analytics 含む）
+ * @param bool  $force_page      ページ文脈の強制指定（将来用・通常 false）
+ * @param bool  $force_analytics  GA4/GSCの強制指定（将来用・通常 false）
  * @return array ['use_page_context' => bool, 'use_analytics' => bool]
  */
 function mimamori_resolve_data_sources( array $classification, bool $force_page, bool $force_analytics ): array {
@@ -1743,16 +1741,14 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     // コンテキスト構築
     $input = mimamori_build_chat_context( $data );
 
-    // --- 意図補正 + データソースの解決 ---
-    $force_page      = ! empty( $data['forcePageContext'] );
-    $force_analytics = ! empty( $data['forceAnalytics'] );
+    // --- 意図補正 + データソースの自動解決 ---
     $current_page    = ( isset( $data['currentPage'] ) && is_array( $data['currentPage'] ) )
                        ? $data['currentPage']
                        : [];
 
     $page_type = mimamori_detect_page_type( $current_page );
     $intent    = mimamori_rewrite_intent( $message, $page_type );
-    $sources   = mimamori_resolve_data_sources( $intent, $force_page, $force_analytics );
+    $sources   = mimamori_resolve_data_sources( $intent, false, false );
 
     // システムプロンプト + 意図補正コンテキスト
     $instructions    = mimamori_get_system_prompt();

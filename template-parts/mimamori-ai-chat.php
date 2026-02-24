@@ -90,16 +90,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
     <!-- Input Area -->
     <div class="mw-chat-input">
-      <div class="mw-chat-input__options">
-        <label class="mw-chat-input__option">
-          <input type="checkbox" data-option="screenshot">
-          <span><?php echo esc_html( 'このページを見て回答' ); ?></span>
-        </label>
-        <label class="mw-chat-input__option">
-          <input type="checkbox" data-option="detailed">
-          <span><?php echo esc_html( '詳細データを使う' ); ?></span>
-        </label>
-      </div>
       <div class="mw-chat-input__row">
         <textarea
           class="mw-chat-input__textarea"

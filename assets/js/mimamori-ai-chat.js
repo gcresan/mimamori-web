@@ -23,8 +23,6 @@
     hasError: false,
     history: [],  // 会話履歴 [{role:'user',content:'...'},{role:'assistant',content:'...'},...]
     options: {
-      forcePageContext: false,
-      forceAnalytics: false,
       conversationId: null
     }
   };
@@ -354,8 +352,6 @@
 
     // Merge options
     var opts = {
-      forcePageContext: state.options.forcePageContext,
-      forceAnalytics: state.options.forceAnalytics,
       conversationId: state.options.conversationId
     };
     if (options) {
@@ -383,8 +379,6 @@
     var body = {
       message: text,
       history: state.history.slice(0, -1).slice(-20), // Previous messages (max 20, exclude current)
-      forcePageContext: opts.forcePageContext,
-      forceAnalytics: opts.forceAnalytics,
       conversationId: opts.conversationId,
       viewMode: state.viewMode,
       currentPage: {
@@ -806,20 +800,6 @@
     els.textarea.addEventListener('input', function () {
       autoResize(this);
     });
-
-    // Option checkboxes
-    var screenshotCb = els.root.querySelector('[data-option="screenshot"]');
-    var detailedCb = els.root.querySelector('[data-option="detailed"]');
-    if (screenshotCb) {
-      screenshotCb.addEventListener('change', function () {
-        state.options.forcePageContext = this.checked;
-      });
-    }
-    if (detailedCb) {
-      detailedCb.addEventListener('change', function () {
-        state.options.forceAnalytics = this.checked;
-      });
-    }
 
     // Escape key → close
     document.addEventListener('keydown', function (e) {
