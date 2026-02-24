@@ -474,6 +474,10 @@ $gcrev_utils_cron_logger = $gcrev_utils_path . 'class-cron-logger.php';
 if ( file_exists( $gcrev_utils_cron_logger ) ) {
     require_once $gcrev_utils_cron_logger;
 }
+$gcrev_utils_db_optimizer = $gcrev_utils_path . 'class-db-optimizer.php';
+if ( file_exists( $gcrev_utils_db_optimizer ) ) {
+    require_once $gcrev_utils_db_optimizer;
+}
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）
@@ -2447,6 +2451,9 @@ add_action('after_setup_theme', function () {
     gcrev_cv_routes_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
+    }
+    if ( class_exists( 'Gcrev_DB_Optimizer' ) ) {
+        Gcrev_DB_Optimizer::ensure_indexes();
     }
 });
 
