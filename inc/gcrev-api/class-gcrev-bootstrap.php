@@ -21,6 +21,15 @@ class Gcrev_Bootstrap {
         // Cron Log クリーンアップ
         add_action('gcrev_cron_log_cleanup_event', [__CLASS__, 'on_cron_log_cleanup']);
 
+        // スロット別プリフェッチ
+        if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+            $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
+            for ( $i = 0; $i < $slot_count; $i++ ) {
+                add_action( "gcrev_prefetch_daily_event_slot_{$i}", [__CLASS__, 'on_prefetch_slot_event'] );
+                add_action( "gcrev_prefetch_chunk_slot_{$i}_event", [__CLASS__, 'on_prefetch_chunk_slot_event'], 10, 3 );
+            }
+        }
+
         // schedule (initで「未登録なら登録」※現状と同じ)
         add_action('init', [__CLASS__, 'maybe_schedule_events']);
 
@@ -48,6 +57,11 @@ class Gcrev_Bootstrap {
     // =========================================================
 
     public static function on_prefetch_daily_event(): void {
+        // スロット方式が有効な場合はスロット側で処理するので旧方式はスキップ
+        if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+            error_log( '[GCREV] gcrev_prefetch_daily_event: slot-based scheduling active, skipping legacy prefetch' );
+            return;
+        }
         error_log('[GCREV] gcrev_prefetch_daily_event triggered');
         $api = new Gcrev_Insight_API(false);
         $api->prefetch_chunk(0, Gcrev_Insight_API::PREFETCH_CHUNK_LIMIT);
@@ -89,13 +103,43 @@ class Gcrev_Bootstrap {
         }
     }
 
+    /**
+     * スロット別プリフェッチ日次イベント
+     */
+    public static function on_prefetch_slot_event(): void {
+        $action = current_action();
+        if ( preg_match( '/slot_(\d+)$/', $action, $m ) ) {
+            $slot = (int) $m[1];
+            error_log( "[GCREV] gcrev_prefetch_daily_event_slot_{$slot} triggered" );
+            $api = new Gcrev_Insight_API( false );
+            $api->prefetch_chunk_for_slot( $slot, 0, Gcrev_Insight_API::PREFETCH_CHUNK_LIMIT );
+        }
+    }
+
+    /**
+     * スロット別プリフェッチチャンクイベント
+     */
+    public static function on_prefetch_chunk_slot_event( $slot, $offset, $limit ): void {
+        $slot   = (int) $slot;
+        $offset = (int) $offset;
+        $limit  = (int) $limit;
+        error_log( "[GCREV] prefetch_chunk_slot_{$slot}_event triggered: offset={$offset}, limit={$limit}" );
+        $api = new Gcrev_Insight_API( false );
+        $api->prefetch_chunk_for_slot( $slot, $offset, $limit );
+    }
+
     // =========================================================
     // Schedule登録（イベント名・時刻は現状維持）
     // =========================================================
 
     public static function maybe_schedule_events(): void {
 
-        // Prefetch daily (tomorrow 03:10)
+        // Prefetch: スロット方式が利用可能ならスロット別にスケジュール
+        if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+            Gcrev_Prefetch_Scheduler::schedule_all_slots();
+        }
+
+        // Prefetch daily (レガシー: スロット方式が無効な場合のフォールバック)
         self::schedule_daily_if_missing('gcrev_prefetch_daily_event', 'tomorrow 03:10:00');
 
         // Monthly report generate (tomorrow 04:00)
@@ -140,6 +184,12 @@ class Gcrev_Bootstrap {
                 $ts = wp_next_scheduled($hook);
             }
         }
+
+        // スロット別プリフェッチイベントも掃除
+        if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+            Gcrev_Prefetch_Scheduler::unschedule_all_slots();
+        }
+
         error_log('[GCREV] Unschedule events done (switch_theme)');
     }
 }

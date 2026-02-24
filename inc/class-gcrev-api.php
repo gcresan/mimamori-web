@@ -757,6 +757,141 @@ class Gcrev_Insight_API {
         }
     }
 
+    // =========================================================
+    // スロット別プリフェッチ処理（Phase 3: 時間帯分散用）
+    // =========================================================
+
+    /**
+     * 特定スロットのユーザーをプリフェッチする。
+     *
+     * @param int $slot   スロット番号
+     * @param int $offset チャンクオフセット
+     * @param int $limit  チャンクサイズ
+     */
+    public function prefetch_chunk_for_slot( int $slot, int $offset, int $limit ): void {
+
+        $lock_key     = "gcrev_lock_prefetch_slot_{$slot}";
+        $log_id_key   = "gcrev_current_prefetch_slot_{$slot}_log_id";
+        $chunk_hook   = "gcrev_prefetch_chunk_slot_{$slot}_event";
+
+        // ─── 重複実行防止ロック（最初のチャンクのみ設定） ───
+        if ( $offset === 0 ) {
+            if ( get_transient( $lock_key ) ) {
+                error_log( "[GCREV] prefetch_slot_{$slot}: LOCKED, skipping" );
+                if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    $locked_id = Gcrev_Cron_Logger::start( "prefetch_slot_{$slot}", [ 'note' => 'locked' ] );
+                    Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
+                }
+                return;
+            }
+            set_transient( $lock_key, 1, self::LOCK_TTL );
+
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                $log_id = Gcrev_Cron_Logger::start( "prefetch_slot_{$slot}", [ 'slot' => $slot, 'chunk_limit' => $limit ] );
+                set_transient( $log_id_key, $log_id, self::LOCK_TTL );
+            }
+        }
+
+        $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( $log_id_key ) : 0;
+
+        error_log( "[GCREV] prefetch_slot_{$slot} START: offset={$offset}, limit={$limit}" );
+
+        // スロット別ユーザー取得
+        if ( ! class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+            error_log( "[GCREV] prefetch_slot_{$slot}: Gcrev_Prefetch_Scheduler not loaded, aborting" );
+            return;
+        }
+
+        $user_ids = Gcrev_Prefetch_Scheduler::get_users_for_slot( $slot, $limit, $offset );
+
+        if ( empty( $user_ids ) ) {
+            error_log( "[GCREV] prefetch_slot_{$slot}: No users at offset={$offset}. DONE." );
+            delete_transient( $lock_key );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( $log_id_key );
+            }
+            return;
+        }
+
+        $ranges = ['last30', 'previousMonth', 'twoMonthsAgo'];
+
+        foreach ( $user_ids as $user_id ) {
+            error_log( "[GCREV] Prefetch slot_{$slot} processing: user_id={$user_id}" );
+            $user_had_error = false;
+
+            try {
+                $config = $this->config->get_user_config( $user_id );
+            } catch ( \Exception $e ) {
+                error_log( "[GCREV] Prefetch slot_{$slot} SKIP user_id={$user_id}: " . $e->getMessage() );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $e->getMessage() );
+                }
+                continue;
+            }
+
+            // --- (1) ダッシュボード ---
+            foreach ( $ranges as $range ) {
+                $cached = $this->dashboard_cache_get( $user_id, $range );
+                if ( $cached ) {
+                    continue;
+                }
+                try {
+                    $data = $this->fetch_dashboard_data_internal( $config, $range );
+                    $this->dashboard_cache_set( $user_id, $range, $data );
+                } catch ( \Exception $e ) {
+                    error_log( "[GCREV] Prefetch slot_{$slot} ERROR user_id={$user_id}, range={$range}: " . $e->getMessage() );
+                    $user_had_error = true;
+                }
+                usleep( self::PREFETCH_SLEEP_US );
+            }
+
+            // --- (2) 分析ページ ---
+            foreach ( ['prev-month', 'last30'] as $period ) {
+                $this->prefetch_analysis_caches( $user_id, $config, $period );
+            }
+
+            // --- (3) KPIトレンド ---
+            foreach ( ['sessions', 'cv', 'meo'] as $trend_metric ) {
+                $trend_cache_key = "gcrev_trend_{$user_id}_{$trend_metric}_" . date( 'Y-m' );
+                if ( get_transient( $trend_cache_key ) !== false ) {
+                    continue;
+                }
+                try {
+                    $this->get_monthly_metric_trend( $user_id, $trend_metric, 12 );
+                } catch ( \Exception $e ) {
+                    error_log( "[GCREV] Prefetch slot_{$slot} trend ERROR user_id={$user_id}: " . $e->getMessage() );
+                    $user_had_error = true;
+                }
+                usleep( self::PREFETCH_SLEEP_US );
+            }
+
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::log_user(
+                    $log_id,
+                    $user_id,
+                    $user_had_error ? 'error' : 'success',
+                    $user_had_error ? 'Some ranges had errors' : null
+                );
+            }
+        }
+
+        // ─── 次チャンクのスケジュール ───
+        $next_offset = $offset + $limit;
+
+        if ( Gcrev_Prefetch_Scheduler::has_more_users( $slot, $next_offset ) ) {
+            wp_schedule_single_event( time() + 10, $chunk_hook, [ $slot, $next_offset, $limit ] );
+            error_log( "[GCREV] prefetch_slot_{$slot}: Scheduled next chunk offset={$next_offset}" );
+        } else {
+            delete_transient( $lock_key );
+            error_log( "[GCREV] prefetch_slot_{$slot}: DONE." );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( $log_id_key );
+            }
+        }
+    }
+
     /**
      * 各分析ページ（流入元・地域・ページ・キーワード）のキャッシュをプリフェッチ
      * 既存の REST コールバック内部と同一のキャッシュキー／ロジックを使用

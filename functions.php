@@ -478,6 +478,10 @@ $gcrev_utils_db_optimizer = $gcrev_utils_path . 'class-db-optimizer.php';
 if ( file_exists( $gcrev_utils_db_optimizer ) ) {
     require_once $gcrev_utils_db_optimizer;
 }
+$gcrev_utils_prefetch_scheduler = $gcrev_utils_path . 'class-prefetch-scheduler.php';
+if ( file_exists( $gcrev_utils_prefetch_scheduler ) ) {
+    require_once $gcrev_utils_prefetch_scheduler;
+}
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）
