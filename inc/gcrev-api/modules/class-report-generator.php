@@ -22,8 +22,8 @@ class Gcrev_Report_Generator {
     // ===== レポート・セクション生成設定 =====
     // 1回のGemini呼び出しで生成するセクション数の上限
     private const SECTIONS_PER_CALL    = 2;
-    // セクション不完全時の最大リトライ回数
-    private const MAX_SECTION_RETRIES  = 10;
+    // セクション不完全時の最大リトライ回数（10→3 に削減: 暴走防止）
+    private const MAX_SECTION_RETRIES  = 3;
 
     /**
      * セクション定義の順序と必須クラス

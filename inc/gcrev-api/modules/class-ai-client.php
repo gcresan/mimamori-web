@@ -54,7 +54,16 @@ class Gcrev_AI_Client {
      * @return string アクセストークン
      * @throws \Exception トークン取得に失敗した場合
      */
+    /** Transient キー: Vertex AI アクセストークンキャッシュ */
+    private const VERTEX_TOKEN_CACHE_KEY = 'gcrev_vertex_token';
+
     public function get_vertex_access_token() {
+
+        // キャッシュがあればそのまま返す
+        $cached = get_transient( self::VERTEX_TOKEN_CACHE_KEY );
+        if ( $cached !== false && is_string( $cached ) && $cached !== '' ) {
+            return $cached;
+        }
 
         $sa_path = $this->config->get_service_account_path();
 
@@ -69,6 +78,10 @@ class Gcrev_AI_Client {
         if (!is_array($token) || empty($token['access_token'])) {
             throw new \Exception('Google アクセストークンを取得できませんでした。サービスアカウント設定を確認してください。');
         }
+
+        // expires_in（通常 3600秒）の120秒前にキャッシュ切れ
+        $ttl = max( 60, (int)( $token['expires_in'] ?? 3600 ) - 120 );
+        set_transient( self::VERTEX_TOKEN_CACHE_KEY, (string) $token['access_token'], $ttl );
 
         return (string)$token['access_token'];
     }
