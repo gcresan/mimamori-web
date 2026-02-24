@@ -482,6 +482,10 @@ $gcrev_utils_prefetch_scheduler = $gcrev_utils_path . 'class-prefetch-scheduler.
 if ( file_exists( $gcrev_utils_prefetch_scheduler ) ) {
     require_once $gcrev_utils_prefetch_scheduler;
 }
+$gcrev_utils_error_notifier = $gcrev_utils_path . 'class-error-notifier.php';
+if ( file_exists( $gcrev_utils_error_notifier ) ) {
+    require_once $gcrev_utils_error_notifier;
+}
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）

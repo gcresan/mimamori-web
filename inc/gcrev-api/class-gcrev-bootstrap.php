@@ -49,6 +49,12 @@ class Gcrev_Bootstrap {
                 require_once $payment_settings_path;
                 (new Gcrev_Payment_Settings_Page())->register();
             }
+
+            $notification_settings_path = __DIR__ . '/admin/class-notification-settings-page.php';
+            if ( file_exists($notification_settings_path) ) {
+                require_once $notification_settings_path;
+                (new Gcrev_Notification_Settings_Page())->register();
+            }
         }
     }
 
