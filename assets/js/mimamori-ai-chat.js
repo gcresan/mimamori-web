@@ -23,8 +23,8 @@
     hasError: false,
     history: [],  // 会話履歴 [{role:'user',content:'...'},{role:'assistant',content:'...'},...]
     options: {
-      includeScreenshot: false,
-      useDetailedData: false,
+      forcePageContext: false,
+      forceAnalytics: false,
       conversationId: null
     }
   };
@@ -338,8 +338,8 @@
 
     // Merge options
     var opts = {
-      includeScreenshot: state.options.includeScreenshot,
-      useDetailedData: state.options.useDetailedData,
+      forcePageContext: state.options.forcePageContext,
+      forceAnalytics: state.options.forceAnalytics,
       conversationId: state.options.conversationId
     };
     if (options) {
@@ -367,8 +367,8 @@
     var body = {
       message: text,
       history: state.history.slice(0, -1).slice(-20), // Previous messages (max 20, exclude current)
-      includeScreenshot: opts.includeScreenshot,
-      useDetailedData: opts.useDetailedData,
+      forcePageContext: opts.forcePageContext,
+      forceAnalytics: opts.forceAnalytics,
       conversationId: opts.conversationId,
       viewMode: state.viewMode,
       currentPage: {
@@ -796,12 +796,12 @@
     var detailedCb = els.root.querySelector('[data-option="detailed"]');
     if (screenshotCb) {
       screenshotCb.addEventListener('change', function () {
-        state.options.includeScreenshot = this.checked;
+        state.options.forcePageContext = this.checked;
       });
     }
     if (detailedCb) {
       detailedCb.addEventListener('change', function () {
-        state.options.useDetailedData = this.checked;
+        state.options.forceAnalytics = this.checked;
       });
     }
 

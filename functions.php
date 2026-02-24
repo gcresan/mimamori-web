@@ -698,6 +698,19 @@ advice を使う:
 4. やさしい口調で、伴走感を大切にする
 5. advice の sections は質問内容に応じて1〜4個（全部使う必要はない）
 6. items と text は質問内容に応じて使い分けてOK
+
+## 参照データについて
+質問内容に応じて、GA4やSearch Consoleの実データがこのプロンプトの末尾に付与されることがあります。
+- 提供されたデータに基づいて回答する場合、自然にデータに言及する
+  良い例：「直近28日のデータを見ると、セッション数が前期比で増加していますね」
+  良い例：「今見ているダッシュボードの数字によると〜」
+  良い例：「Search Consoleのデータだと、キーワード「○○」で〜」
+- データの出典やシステム内部の判断ロジックには絶対に言及しない
+  悪い例：「チェックボックスがONだったので〜」
+  悪い例：「自動判断によりGA4データを参照しました」
+  悪い例：「詳細データモードが有効なので〜」
+- データが提供されていない場合は一般的な知識で回答し、具体的な数値が必要なら「実際のデータで確認してみましょう」と促す
+- データが不完全な場合は「手元のデータでは」「推測ですが」と前置きする
 PROMPT;
 }
 
@@ -888,6 +901,335 @@ function mimamori_parse_ai_response( string $raw_text ): array {
 }
 
 /**
+ * ============================================================
+ * 自動判断ロジック — 質問分類・データソース解決・コンテキスト構築
+ * ============================================================
+ */
+
+/**
+ * 質問内容からデータソースの必要性を自動判定する（キーワードベース）
+ *
+ * @param string $message  ユーザーの質問テキスト
+ * @return array  ['needs_page' => bool, 'needs_analytics' => bool]
+ */
+function mimamori_classify_question( string $message ): array {
+    $needs_page      = false;
+    $needs_analytics = false;
+
+    // ページ文脈系キーワード
+    $page_keywords = [
+        'このページ', 'この画面', '今見ている', '見ている画面',
+        '表示中', 'ここの', 'このサイトの',
+        'ページの改善', '改善点を', '見にくい', '分かりにくい',
+        'レイアウト', 'デザイン', '構成', '導線',
+    ];
+
+    // 数値・推移・比較系キーワード
+    $analytics_keywords = [
+        // 指標名
+        'アクセス数', 'アクセスデータ', 'PV', 'ページビュー',
+        'セッション', 'ユーザー数', '訪問者', '訪問数',
+        'CTR', 'クリック率', '表示回数', 'インプレッション',
+        '検索順位', '順位', '掲載順位',
+        'コンバージョン', 'CV数', '成果', '問い合わせ数',
+        '直帰率', '離脱率', '滞在時間', 'エンゲージメント',
+        // 分析
+        '流入', '検索キーワード', 'クエリ', '検索ワード',
+        'デバイス別', 'モバイル', 'スマホ比率',
+        '地域別', 'エリア別', '都道府県',
+        '年齢層', '年齢別', 'デモグラ',
+        // 時系列
+        '先月', '前月', '前年', '推移', '増えた', '減った',
+        '下がった', '上がった', '比較', '変化', '伸び',
+        // ツール名
+        'GA4', 'GSC', 'サーチコンソール', 'アナリティクス',
+        // 数値・データ参照
+        '数字', '数値', 'データを見', '実際の数', '何件', '何人',
+        'うちのサイト', '自社サイト', 'うちの',
+    ];
+
+    $msg = mb_strtolower( $message );
+
+    foreach ( $page_keywords as $kw ) {
+        if ( mb_strpos( $msg, mb_strtolower( $kw ) ) !== false ) {
+            $needs_page = true;
+            break;
+        }
+    }
+
+    foreach ( $analytics_keywords as $kw ) {
+        if ( mb_strpos( $msg, mb_strtolower( $kw ) ) !== false ) {
+            $needs_analytics = true;
+            break;
+        }
+    }
+
+    return [
+        'needs_page'      => $needs_page,
+        'needs_analytics' => $needs_analytics,
+    ];
+}
+
+/**
+ * データソースの使用可否を決定する
+ *
+ * 優先順位:
+ *   1. ユーザーがチェックで強制指定 → 必ず使う
+ *   2. AI自動判定が必要と判断 → 使う
+ *   3. どちらでもない → 使わない
+ *
+ * @param array $classification  mimamori_classify_question() の返り値
+ * @param bool  $force_page      チェックボックスによるページ文脈の強制指定
+ * @param bool  $force_analytics  チェックボックスによるGA4/GSCの強制指定
+ * @return array ['use_page_context' => bool, 'use_analytics' => bool]
+ */
+function mimamori_resolve_data_sources( array $classification, bool $force_page, bool $force_analytics ): array {
+    return [
+        'use_page_context' => $force_page      || $classification['needs_page'],
+        'use_analytics'    => $force_analytics  || $classification['needs_analytics'],
+    ];
+}
+
+/**
+ * 表示中ページの文脈情報を取得する
+ *
+ * @param array $current_page  JS から送信される { url, title }
+ * @return string  コンテキストテキスト（空文字 = 取得不可）
+ */
+function mimamori_get_page_context( array $current_page ): string {
+    $url   = isset( $current_page['url'] )   ? esc_url_raw( $current_page['url'] )            : '';
+    $title = isset( $current_page['title'] ) ? sanitize_text_field( $current_page['title'] )  : '';
+
+    if ( $url === '' ) {
+        return '';
+    }
+
+    $path = wp_parse_url( $url, PHP_URL_PATH );
+    if ( ! $path ) {
+        return '';
+    }
+    $path = rtrim( $path, '/' ) . '/';
+
+    // 既知のダッシュボード / 分析ページへのマッピング
+    $contexts = [
+        '/mypage/dashboard/'         => 'ダッシュボード（月次KPIサマリー）',
+        '/mypage/analysis/source/'   => '流入元分析（チャネル別・参照元別のアクセス内訳）',
+        '/mypage/analysis/page/'     => 'ページ別分析（各ページのPV・滞在時間・CVR）',
+        '/mypage/analysis/keywords/' => 'キーワード分析（検索クエリ・表示回数・CTR・順位）',
+        '/mypage/analysis/region/'   => '地域別分析（都道府県ごとのアクセス・CV）',
+        '/mypage/analysis/device/'   => 'デバイス別分析（PC / スマホ / タブレットの比率）',
+        '/mypage/analysis/age/'      => '年齢層分析（訪問者の年齢層分布）',
+        '/mypage/report/'            => '月次レポート（AI生成の詳細分析レポート）',
+        '/mypage/actual-cv/'         => '実績CV入力（問い合わせ・電話等の実績登録）',
+    ];
+
+    foreach ( $contexts as $slug => $desc ) {
+        if ( strpos( $path, $slug ) !== false ) {
+            return 'ユーザーが現在表示中のページ: ' . $desc . "\nURL: " . $url;
+        }
+    }
+
+    // WordPress 固定ページからタイトルを取得（フォールバック）
+    $post_id = url_to_postid( $url );
+    if ( $post_id > 0 ) {
+        $post_title = get_the_title( $post_id );
+        if ( $post_title ) {
+            return 'ユーザーが現在表示中のページ: ' . $post_title . "\nURL: " . $url;
+        }
+    }
+
+    if ( $title !== '' ) {
+        return 'ユーザーが現在表示中のページ: ' . $title . "\nURL: " . $url;
+    }
+
+    return '';
+}
+
+/**
+ * GA4 / GSC の要約ダイジェストを生成する
+ *
+ * 直近28日間の主要KPIと前期比、Search Console 上位キーワードを取得し、
+ * AI に渡すテキスト形式に整形する。結果は Transient で 4 時間キャッシュ。
+ *
+ * @param int $user_id  WordPress ユーザーID
+ * @return string  ダイジェストテキスト（空文字 = データなし or 未設定）
+ */
+function mimamori_get_analytics_digest( int $user_id ): string {
+    // 必要クラスの存在チェック
+    if ( ! class_exists( 'Gcrev_Config' ) ) {
+        return '';
+    }
+
+    // キャッシュ確認（4時間TTL）
+    $cache_key = 'mw_ai_digest_' . $user_id;
+    $cached    = get_transient( $cache_key );
+    if ( $cached !== false ) {
+        return $cached;
+    }
+
+    try {
+        $config      = new Gcrev_Config();
+        $user_config = $config->get_user_config( $user_id );
+
+        $ga4_id  = $user_config['ga4_id']  ?? '';
+        $gsc_url = $user_config['gsc_url'] ?? '';
+
+        if ( $ga4_id === '' && $gsc_url === '' ) {
+            // 設定なし → 空キャッシュ（短め: 1時間）
+            set_transient( $cache_key, '', HOUR_IN_SECONDS );
+            return '';
+        }
+
+        // 日付範囲: 直近28日間 + 前28日間（比較用）
+        $tz         = wp_timezone();
+        $end        = new DateTime( 'now', $tz );
+        $start      = ( clone $end )->modify( '-27 days' );
+        $prev_end   = ( clone $start )->modify( '-1 day' );
+        $prev_start = ( clone $prev_end )->modify( '-27 days' );
+
+        $start_str      = $start->format( 'Y-m-d' );
+        $end_str        = $end->format( 'Y-m-d' );
+        $prev_start_str = $prev_start->format( 'Y-m-d' );
+        $prev_end_str   = $prev_end->format( 'Y-m-d' );
+
+        $lines = [];
+
+        // --- GA4 サマリー ---
+        if ( $ga4_id !== '' && class_exists( 'Gcrev_GA4_Fetcher' ) ) {
+            $ga4     = new Gcrev_GA4_Fetcher( $config );
+            $current  = $ga4->fetch_ga4_summary( $ga4_id, $start_str, $end_str );
+            $previous = $ga4->fetch_ga4_summary( $ga4_id, $prev_start_str, $prev_end_str );
+
+            if ( is_array( $current ) && ! is_wp_error( $current ) && ! empty( $current ) ) {
+                $lines[] = '【GA4 アクセスデータ（直近28日間: ' . $start_str . ' 〜 ' . $end_str . '）】';
+
+                $metrics = [
+                    [ 'label' => 'ページビュー',     'key' => 'pageViews',   'raw' => '_pageViews' ],
+                    [ 'label' => 'セッション',       'key' => 'sessions',    'raw' => '_sessions' ],
+                    [ 'label' => 'ユーザー',         'key' => 'users',       'raw' => '_users' ],
+                    [ 'label' => '新規ユーザー',     'key' => 'newUsers',    'raw' => '_newUsers' ],
+                    [ 'label' => 'コンバージョン',   'key' => 'conversions', 'raw' => '_conversions' ],
+                ];
+
+                $prev_arr = ( is_array( $previous ) && ! is_wp_error( $previous ) ) ? $previous : [];
+
+                foreach ( $metrics as $m ) {
+                    $val  = $current[ $m['key'] ] ?? '0';
+                    $line = '・' . $m['label'] . ': ' . $val;
+
+                    // 前期比
+                    $cur_raw  = (float) ( $current[ $m['raw'] ]  ?? 0 );
+                    $prev_raw = (float) ( $prev_arr[ $m['raw'] ] ?? 0 );
+                    if ( $prev_raw > 0 ) {
+                        $change = ( ( $cur_raw - $prev_raw ) / $prev_raw ) * 100;
+                        $sign   = $change >= 0 ? '+' : '';
+                        $line  .= '（前期比 ' . $sign . number_format( $change, 1 ) . '%）';
+                    }
+                    $lines[] = $line;
+                }
+
+                // 追加指標
+                if ( isset( $current['avgDuration'] ) ) {
+                    $lines[] = '・平均滞在時間: ' . $current['avgDuration'] . '秒';
+                }
+                if ( isset( $current['engagementRate'] ) ) {
+                    $lines[] = '・エンゲージメント率: ' . $current['engagementRate'];
+                }
+            }
+        }
+
+        // --- GSC キーワード ---
+        if ( $gsc_url !== '' && class_exists( 'Gcrev_GSC_Fetcher' ) ) {
+            $gsc      = new Gcrev_GSC_Fetcher( $config );
+            $gsc_data = $gsc->fetch_gsc_data( $gsc_url, $start_str, $end_str );
+
+            if ( is_array( $gsc_data ) && ! is_wp_error( $gsc_data ) && ! empty( $gsc_data ) ) {
+                $lines[] = '';
+                $lines[] = '【Search Console 検索データ（直近28日間）】';
+
+                if ( ! empty( $gsc_data['total'] ) ) {
+                    $lines[] = '・合計表示回数: ' . ( $gsc_data['total']['impressions'] ?? '0' );
+                    $lines[] = '・合計クリック: ' . ( $gsc_data['total']['clicks'] ?? '0' );
+                    $lines[] = '・平均CTR: '      . ( $gsc_data['total']['ctr'] ?? '0%' );
+                }
+
+                if ( ! empty( $gsc_data['keywords'] ) && is_array( $gsc_data['keywords'] ) ) {
+                    $lines[] = '・主要キーワード（上位5件）:';
+                    $top  = array_slice( $gsc_data['keywords'], 0, 5 );
+                    $rank = 1;
+                    foreach ( $top as $kw ) {
+                        $lines[] = '  ' . $rank . '. ' . ( $kw['query'] ?? '?' )
+                            . '（表示: ' . ( $kw['impressions'] ?? 0 )
+                            . ' / クリック: ' . ( $kw['clicks'] ?? 0 )
+                            . ' / 順位: ' . ( $kw['position'] ?? '-' ) . '）';
+                        $rank++;
+                    }
+                }
+            }
+        }
+
+        $digest = implode( "\n", $lines );
+
+        // キャッシュ保存（4時間）
+        if ( $digest !== '' ) {
+            set_transient( $cache_key, $digest, 4 * HOUR_IN_SECONDS );
+        } else {
+            // データ取得できなかった場合も短めにキャッシュ
+            set_transient( $cache_key, '', HOUR_IN_SECONDS );
+        }
+
+        return $digest;
+
+    } catch ( \Exception $e ) {
+        error_log( '[みまもりAI] Analytics digest error: ' . $e->getMessage() );
+        return '';
+    }
+}
+
+/**
+ * 動的コンテキスト（ページ情報・GA4/GSCデータ）をテキストブロックとして組み立てる
+ *
+ * @param array  $sources       mimamori_resolve_data_sources() の返り値
+ * @param array  $current_page  JS から送信される { url, title }
+ * @param int    $user_id       WordPress ユーザーID
+ * @return string  コンテキストブロック（空文字 = データなし）
+ */
+function mimamori_build_data_context( array $sources, array $current_page, int $user_id ): string {
+    $blocks  = [];
+    $ref_list = [];
+
+    // ページ文脈
+    if ( ! empty( $sources['use_page_context'] ) ) {
+        $page_ctx = mimamori_get_page_context( $current_page );
+        if ( $page_ctx !== '' ) {
+            $blocks[]   = "【表示中ページ情報】\n" . $page_ctx;
+            $ref_list[] = '表示中ページの情報';
+        }
+    }
+
+    // GA4 / GSC ダイジェスト
+    if ( ! empty( $sources['use_analytics'] ) ) {
+        $digest = mimamori_get_analytics_digest( $user_id );
+        if ( $digest !== '' ) {
+            $blocks[]   = $digest;
+            $ref_list[] = 'GA4 / Search Console のデータ（直近28日間）';
+        }
+    }
+
+    if ( empty( $blocks ) ) {
+        return '';
+    }
+
+    // データ宣言 + データ本体
+    $declaration = "【今回の回答で参照できる情報】\n- " . implode( "\n- ", $ref_list );
+
+    return "---\n"
+        . "以下は今回の回答で参照可能なデータです。必要に応じて活用してください。\n\n"
+        . $declaration . "\n\n"
+        . implode( "\n\n", $blocks );
+}
+
+/**
  * REST API ハンドラー: POST /mimamori/v1/ai-chat
  *
  * @param WP_REST_Request $request
@@ -907,12 +1249,29 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     // コンテキスト構築
     $input = mimamori_build_chat_context( $data );
 
+    // --- 自動判断: データソースの解決 ---
+    $force_page      = ! empty( $data['forcePageContext'] );
+    $force_analytics = ! empty( $data['forceAnalytics'] );
+    $current_page    = ( isset( $data['currentPage'] ) && is_array( $data['currentPage'] ) )
+                       ? $data['currentPage']
+                       : [];
+
+    $classification = mimamori_classify_question( $message );
+    $sources        = mimamori_resolve_data_sources( $classification, $force_page, $force_analytics );
+
+    // システムプロンプト + 動的コンテキスト
+    $instructions  = mimamori_get_system_prompt();
+    $data_context  = mimamori_build_data_context( $sources, $current_page, get_current_user_id() );
+    if ( $data_context !== '' ) {
+        $instructions .= "\n\n" . $data_context;
+    }
+
     // OpenAI 呼び出し
     $model = defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini';
 
     $result = mimamori_call_openai_responses_api( [
         'model'        => $model,
-        'instructions' => mimamori_get_system_prompt(),
+        'instructions' => $instructions,
         'input'        => $input,
     ] );
 
