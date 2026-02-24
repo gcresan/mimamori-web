@@ -55,6 +55,12 @@ class Gcrev_Bootstrap {
                 require_once $notification_settings_path;
                 (new Gcrev_Notification_Settings_Page())->register();
             }
+
+            $cron_monitor_path = __DIR__ . '/admin/class-cron-monitor-page.php';
+            if ( file_exists($cron_monitor_path) ) {
+                require_once $cron_monitor_path;
+                (new Gcrev_Cron_Monitor_Page())->register();
+            }
         }
     }
 
