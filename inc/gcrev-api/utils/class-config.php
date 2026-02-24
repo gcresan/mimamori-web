@@ -89,7 +89,8 @@ class Gcrev_Config {
         if ( function_exists( 'gcrev_is_payment_active' ) ) {
             return gcrev_is_payment_active();
         }
-        return true;
+        // 決済チェック関数が未定義の場合は安全側に倒す（fail-closed）
+        return false;
     }
 
     // =========================================================

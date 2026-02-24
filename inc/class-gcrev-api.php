@@ -1057,14 +1057,14 @@ class Gcrev_Insight_API {
         $user_id = get_current_user_id();
         $params  = $request->get_json_params();
 
-        update_user_meta($user_id, 'report_site_url',      $params['site_url']      ?? '');
-        update_user_meta($user_id, 'report_target',        $params['target']        ?? '');
-        update_user_meta($user_id, 'report_issue',         $params['issue']         ?? '');
-        update_user_meta($user_id, 'report_goal_monthly',  $params['goal_monthly']  ?? '');
-        update_user_meta($user_id, 'report_focus_numbers', $params['focus_numbers'] ?? '');
-        update_user_meta($user_id, 'report_current_state', $params['current_state'] ?? '');
-        update_user_meta($user_id, 'report_goal_main',     $params['goal_main']     ?? '');
-        update_user_meta($user_id, 'report_additional_notes', $params['additional_notes'] ?? '');
+        update_user_meta($user_id, 'report_site_url',         esc_url_raw($params['site_url'] ?? ''));
+        update_user_meta($user_id, 'report_target',           sanitize_text_field($params['target'] ?? ''));
+        update_user_meta($user_id, 'report_issue',            sanitize_text_field($params['issue'] ?? ''));
+        update_user_meta($user_id, 'report_goal_monthly',     sanitize_text_field($params['goal_monthly'] ?? ''));
+        update_user_meta($user_id, 'report_focus_numbers',    sanitize_text_field($params['focus_numbers'] ?? ''));
+        update_user_meta($user_id, 'report_current_state',    sanitize_text_field($params['current_state'] ?? ''));
+        update_user_meta($user_id, 'report_goal_main',        sanitize_text_field($params['goal_main'] ?? ''));
+        update_user_meta($user_id, 'report_additional_notes', sanitize_text_field($params['additional_notes'] ?? ''));
         
         // 出力モードの保存
         $output_mode = $params['output_mode'] ?? 'normal';
