@@ -595,6 +595,35 @@ add_action('wp_enqueue_scripts', function() {
 
 });
 
+/**
+ * ============================================================
+ * GCREV INSIGHT - AIチャット UIコンポーネント
+ *
+ * assets/js/mimamori-ai-chat.js
+ * assets/css/mimamori-ai-chat.css
+ * ============================================================
+ */
+add_action('wp_enqueue_scripts', function() {
+    if ( ! is_user_logged_in() ) {
+        return;
+    }
+
+    wp_enqueue_script(
+        'mw-ai-chat',
+        get_template_directory_uri() . '/assets/js/mimamori-ai-chat.js',
+        [],
+        '1.0.0',
+        true
+    );
+
+    wp_enqueue_style(
+        'mw-ai-chat',
+        get_template_directory_uri() . '/assets/css/mimamori-ai-chat.css',
+        [],
+        '1.0.0'
+    );
+});
+
 
 
 

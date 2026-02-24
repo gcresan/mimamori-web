@@ -1,6 +1,10 @@
     </main>
 </div><!-- .app-container -->
 
+<?php if ( is_user_logged_in() ) : ?>
+    <?php get_template_part( 'template-parts/mimamori-ai-chat' ); ?>
+<?php endif; ?>
+
 <script>
 // =============================================
 // 共通JavaScript
