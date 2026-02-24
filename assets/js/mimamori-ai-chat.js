@@ -109,9 +109,16 @@
 
   /**
    * AI回答をDOMに追加
+   *
+   * payload.type === 'talk'   → 対話形式（バブルのみ）
+   * payload.type === 'advice' → 構造化アドバイス（サマリー + カード）
+   * type 省略時は sections の有無で自動判定
+   *
    * @param {Object} payload
-   * @param {string} payload.summary — 要約テキスト
-   * @param {Array}  payload.sections — [{title, text?, items?[]}, ...]
+   * @param {string} [payload.type]     — 'talk' | 'advice'
+   * @param {string} [payload.text]     — talk 用テキスト
+   * @param {string} [payload.summary]  — advice 用サマリー
+   * @param {Array}  [payload.sections] — [{title, text?, items?[]}, ...]
    */
   function appendAssistantMessage(payload) {
     removeWelcome();
@@ -126,46 +133,60 @@
     var content = document.createElement('div');
     content.className = 'mw-chat-msg__content';
 
-    // Summary bubble
-    var bubble = document.createElement('div');
-    bubble.className = 'mw-chat-msg__bubble';
-    bubble.textContent = payload.summary || '';
-    content.appendChild(bubble);
+    // Determine response type
+    var isTalk = payload.type === 'talk' ||
+                 (!payload.type && (!payload.sections || payload.sections.length === 0));
 
-    // Structured answer sections
-    if (payload.sections && payload.sections.length > 0) {
-      var answer = document.createElement('div');
-      answer.className = 'mw-chat-answer';
+    if (isTalk) {
+      // --- 対話形式: テキストバブルのみ ---
+      var bubble = document.createElement('div');
+      bubble.className = 'mw-chat-msg__bubble';
+      bubble.textContent = payload.text || payload.summary || '';
+      content.appendChild(bubble);
 
-      for (var i = 0; i < payload.sections.length; i++) {
-        var s = payload.sections[i];
-        var sec = document.createElement('div');
-        sec.className = 'mw-chat-answer__section';
-
-        var title = document.createElement('div');
-        title.className = 'mw-chat-answer__title';
-        title.textContent = s.title;
-        sec.appendChild(title);
-
-        if (s.items && s.items.length > 0) {
-          var ul = document.createElement('ul');
-          ul.className = 'mw-chat-answer__list';
-          for (var j = 0; j < s.items.length; j++) {
-            var li = document.createElement('li');
-            li.textContent = s.items[j]; // safe
-            ul.appendChild(li);
-          }
-          sec.appendChild(ul);
-        } else if (s.text) {
-          var txt = document.createElement('div');
-          txt.className = 'mw-chat-answer__text';
-          txt.textContent = s.text; // safe
-          sec.appendChild(txt);
-        }
-
-        answer.appendChild(sec);
+    } else {
+      // --- 構造化アドバイス: サマリー + カード ---
+      if (payload.summary) {
+        var summaryBubble = document.createElement('div');
+        summaryBubble.className = 'mw-chat-msg__bubble';
+        summaryBubble.textContent = payload.summary;
+        content.appendChild(summaryBubble);
       }
-      content.appendChild(answer);
+
+      if (payload.sections && payload.sections.length > 0) {
+        var answer = document.createElement('div');
+        answer.className = 'mw-chat-answer';
+
+        for (var i = 0; i < payload.sections.length; i++) {
+          var s = payload.sections[i];
+          var sec = document.createElement('div');
+          sec.className = 'mw-chat-answer__section';
+
+          var title = document.createElement('div');
+          title.className = 'mw-chat-answer__title';
+          title.textContent = s.title;
+          sec.appendChild(title);
+
+          if (s.items && s.items.length > 0) {
+            var ul = document.createElement('ul');
+            ul.className = 'mw-chat-answer__list';
+            for (var j = 0; j < s.items.length; j++) {
+              var li = document.createElement('li');
+              li.textContent = s.items[j]; // safe
+              ul.appendChild(li);
+            }
+            sec.appendChild(ul);
+          } else if (s.text) {
+            var txt = document.createElement('div');
+            txt.className = 'mw-chat-answer__text';
+            txt.textContent = s.text; // safe
+            sec.appendChild(txt);
+          }
+
+          answer.appendChild(sec);
+        }
+        content.appendChild(answer);
+      }
     }
 
     // Feedback buttons
@@ -366,7 +387,7 @@
         var msg = data.data.message;
 
         // Use structured response if available, otherwise plain text fallback
-        var payload = msg.structured || { summary: msg.content, sections: [] };
+        var payload = msg.structured || { type: 'talk', text: msg.content };
         appendAssistantMessage(payload);
 
         // Track assistant response in history (raw content for API context)
