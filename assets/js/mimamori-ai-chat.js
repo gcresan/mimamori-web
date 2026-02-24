@@ -755,9 +755,9 @@
      Event Binding
      ============================ */
   function bindEvents() {
-    // FAB click → open normal
+    // FAB click → open panel (最大化で開く)
     els.fab.addEventListener('click', function () {
-      switchViewMode('normal');
+      switchViewMode('panel');
     });
 
     // Close button
