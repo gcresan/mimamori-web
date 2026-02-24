@@ -43,7 +43,7 @@ class Gcrev_Insight_API {
     // Step5: Dashboard Service（ここに追加）
     private Gcrev_Dashboard_Service $dashboard_service;
 
-    private string $service_account_path = '/home/gcrev/secrets/gcrev-insight-fd0cc85fabe2.json';
+    private string $service_account_path = '';
 
     // ===== キャッシュ設定 =====
     private const DASHBOARD_CACHE_TTL  = 86400;   // 24h

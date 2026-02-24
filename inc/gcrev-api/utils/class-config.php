@@ -49,10 +49,17 @@ class Gcrev_Config {
     /**
      * @param string $service_account_path サービスアカウント JSON のパス（省略時はデフォルト）
      */
-    public function __construct(
-        string $service_account_path = '/home/gcrev/secrets/gcrev-insight-fd0cc85fabe2.json'
-    ) {
-        $this->service_account_path = $service_account_path;
+    /** デフォルトのサービスアカウントパス（GCREV_SA_PATH 定数で上書き可能） */
+    private const DEFAULT_SA_PATH = '/home/gcrev/secrets/gcrev-insight-fd0cc85fabe2.json';
+
+    public function __construct( string $service_account_path = '' ) {
+        if ( $service_account_path !== '' ) {
+            $this->service_account_path = $service_account_path;
+        } elseif ( defined( 'GCREV_SA_PATH' ) && GCREV_SA_PATH !== '' ) {
+            $this->service_account_path = GCREV_SA_PATH;
+        } else {
+            $this->service_account_path = self::DEFAULT_SA_PATH;
+        }
     }
 
     // =========================================================
