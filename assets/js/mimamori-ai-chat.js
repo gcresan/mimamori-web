@@ -4,7 +4,7 @@
  *
  * Public API: window.GCREV.chat
  *   .switchViewMode(mode)           — 'closed' | 'normal' | 'panel' | 'modal'
- *   .sendMessage(text, options?)    — メッセージ送信（今はダミー応答）
+ *   .sendMessage(text, options?)    — メッセージ送信 → REST API → OpenAI
  *   .appendUserMessage(text)        — ユーザーメッセージ追加
  *   .appendAssistantMessage(payload)— AI応答追加
  *   .setLoading(bool)              — ローディング表示切替
@@ -20,12 +20,18 @@
     viewMode: 'closed',
     isLoading: false,
     hasError: false,
+    history: [],  // 会話履歴 [{role:'user',content:'...'},{role:'assistant',content:'...'},...]
     options: {
       includeScreenshot: false,
       useDetailedData: false,
       conversationId: null
     }
   };
+
+  /* ============================
+     Config (from wp_localize_script)
+     ============================ */
+  var config = window.mwChatConfig || {};
 
   /* ============================
      DOM references (populated on init)
@@ -283,126 +289,11 @@
   }
 
   /* ============================
-     Dummy Response System
-     ============================ */
-  function getDummyResponse(text) {
-
-    // --- 用語解説系 ---
-    if (/ctr|用語|とは$|意味/i.test(text)) {
-      return {
-        summary: 'CTR（クリック率）について説明します。',
-        sections: [
-          {
-            title: '\uD83D\uDCCA \u7D50\u8AD6', // 📊 結論
-            text: 'CTRとは「Click Through Rate」の略で、表示された回数に対してクリックされた割合のことです。'
-          },
-          {
-            title: '\uD83D\uDCA1 \u7406\u7531', // 💡 理由
-            items: [
-              'CTRが高い＝検索結果で選ばれやすいページです',
-              '業種平均は2〜5%くらいが目安になります',
-              'タイトルやメタディスクリプションの工夫で改善できます'
-            ]
-          },
-          {
-            title: '\u2705 \u4ECA\u3059\u3050\u3084\u308B\u3053\u3068', // ✅ 今すぐやること
-            items: [
-              'CTRが低いページのタイトルを見直してみましょう',
-              '検索結果でどう表示されているか確認しましょう',
-              '競合のタイトルと比較してみましょう'
-            ]
-          },
-          {
-            title: '\uD83D\uDCC8 \u6B21\u306B\u898B\u308B\u6570\u5B57', // 📈 次に見る数字
-            items: [
-              '各ページのCTR（Search Console → 検索パフォーマンス）',
-              '表示回数が多いのにCTRが低いページ',
-              '改善後のCTR変化（2週間後に確認）'
-            ]
-          }
-        ]
-      };
-    }
-
-    // --- 減少・低下系 ---
-    if (/落ち|下がっ|減|低下|悪化/.test(text)) {
-      return {
-        summary: '確認しました。数値の変化について分析します。',
-        sections: [
-          {
-            title: '\uD83D\uDCCA \u7D50\u8AD6',
-            text: '検索からの流入が減ったことが主な原因と考えられます。'
-          },
-          {
-            title: '\uD83D\uDCA1 \u7406\u7531',
-            items: [
-              '一部の検索キーワードの表示回数が下がっています',
-              '主要ページのクリック率が少し低下しています',
-              '季節的な要因も影響している可能性があります'
-            ]
-          },
-          {
-            title: '\u2705 \u4ECA\u3059\u3050\u3084\u308B\u3053\u3068',
-            items: [
-              '表示回数が減ったキーワードを特定する',
-              'タイトルタグとメタディスクリプションを見直す',
-              '内部リンクを追加してページの評価を高める'
-            ]
-          },
-          {
-            title: '\uD83D\uDCC8 \u6B21\u306B\u898B\u308B\u6570\u5B57',
-            items: [
-              '検索クリック数（前月比）',
-              '主要ページのCTR推移',
-              '問い合わせページの閲覧数'
-            ]
-          }
-        ]
-      };
-    }
-
-    // --- 汎用回答 ---
-    return {
-      summary: 'ご質問ありがとうございます。データを確認してお答えします。',
-      sections: [
-        {
-          title: '\uD83D\uDCCA \u7D50\u8AD6',
-          text: 'お客様のサイトは全体的に安定した状態です。いくつか改善できるポイントがあります。'
-        },
-        {
-          title: '\uD83D\uDCA1 \u7406\u7531',
-          items: [
-            'アクセス数は前月と同水準で推移しています',
-            '特定のページに集中したアクセスパターンが見られます',
-            'モバイルからの閲覧が全体の7割を占めています'
-          ]
-        },
-        {
-          title: '\u2705 \u4ECA\u3059\u3050\u3084\u308B\u3053\u3068',
-          items: [
-            'アクセスの多いページの内容を充実させる',
-            'モバイルでの表示速度を確認する',
-            'お問い合わせへの導線を見直す'
-          ]
-        },
-        {
-          title: '\uD83D\uDCC8 \u6B21\u306B\u898B\u308B\u6570\u5B57',
-          items: [
-            'ページごとの滞在時間',
-            'お問い合わせ完了率',
-            '新規ユーザーの割合'
-          ]
-        }
-      ]
-    };
-  }
-
-  /* ============================
-     Send Message
+     Send Message → REST API → OpenAI
      ============================ */
 
   /**
-   * メッセージを送信する（ダミー応答 → 将来 API 接続ポイント）
+   * メッセージを送信し、REST API 経由で AI 応答を取得する
    *
    * @param {string}  [messageText] — 省略時は textarea の値を使う
    * @param {Object}  [options]
@@ -426,8 +317,11 @@
       }
     }
 
-    // Add user message
+    // Add user message to DOM
     appendUserMessage(text);
+
+    // Track in history (before API call so context is maintained even on failure)
+    state.history.push({ role: 'user', content: text });
 
     // Clear input
     if (els.textarea) {
@@ -438,36 +332,53 @@
     // Show loading
     setLoading(true);
 
-    // -------------------------------------------------------
-    // API connection point (Phase 2)
-    //
-    // Replace the setTimeout below with:
-    //
-    //   fetch(mwChatConfig.apiUrl, {
-    //     method: 'POST',
-    //     headers: {
-    //       'Content-Type': 'application/json',
-    //       'X-WP-Nonce': mwChatConfig.nonce
-    //     },
-    //     body: JSON.stringify({ message: text, ...opts })
-    //   })
-    //   .then(function(r) { return r.json(); })
-    //   .then(function(data) {
-    //     setLoading(false);
-    //     appendAssistantMessage(data);
-    //   })
-    //   .catch(function(err) {
-    //     setLoading(false);
-    //     setError(err.message || '通信エラーが発生しました');
-    //   });
-    //
-    // -------------------------------------------------------
-    var capturedText = text;
-    setTimeout(function () {
+    // Build request body
+    var body = {
+      message: text,
+      history: state.history.slice(0, -1).slice(-20), // Previous messages (max 20, exclude current)
+      includeScreenshot: opts.includeScreenshot,
+      useDetailedData: opts.useDetailedData,
+      conversationId: opts.conversationId,
+      viewMode: state.viewMode,
+      currentPage: {
+        title: document.title,
+        url: window.location.href
+      }
+    };
+
+    // API call
+    fetch(config.apiUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-WP-Nonce': config.nonce
+      },
+      body: JSON.stringify(body)
+    })
+    .then(function (response) {
+      return response.json();
+    })
+    .then(function (data) {
       setLoading(false);
-      var response = getDummyResponse(capturedText);
-      appendAssistantMessage(response);
-    }, 1000);
+
+      if (data.success && data.data && data.data.message) {
+        var msg = data.data.message;
+
+        // Use structured response if available, otherwise plain text fallback
+        var payload = msg.structured || { summary: msg.content, sections: [] };
+        appendAssistantMessage(payload);
+
+        // Track assistant response in history (raw content for API context)
+        state.history.push({ role: 'assistant', content: msg.content });
+      } else {
+        setError(data.message || '\u56DE\u7B54\u306E\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F'); // 回答の取得に失敗しました
+      }
+    })
+    .catch(function () {
+      setLoading(false);
+      setError('\u901A\u4FE1\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002\u3082\u3046\u5C11\u3057\u6642\u9593\u3092\u304A\u3044\u3066\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002'); // 通信エラーが発生しました。もう少し時間をおいてお試しください。
+    });
   }
 
   /* ============================

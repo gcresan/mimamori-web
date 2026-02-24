@@ -622,10 +622,263 @@ add_action('wp_enqueue_scripts', function() {
         [],
         '1.0.0'
     );
+
+    wp_localize_script( 'mw-ai-chat', 'mwChatConfig', [
+        'apiUrl' => rest_url( 'mimamori/v1/ai-chat' ),
+        'nonce'  => wp_create_nonce( 'wp_rest' ),
+    ] );
 });
 
+// ============================================================
+// みまもりAI チャット — REST API + OpenAI 連携 (Phase 2)
+// ※ 後でクラスファイルに切り出し可能な構造にしている
+// ============================================================
 
+/**
+ * REST API ルート登録
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'mimamori/v1', '/ai-chat', [
+        'methods'             => 'POST',
+        'callback'            => 'mimamori_handle_ai_chat_request',
+        'permission_callback' => function () {
+            return is_user_logged_in();
+        },
+    ] );
+} );
 
+/**
+ * みまもりAI システムプロンプト
+ *
+ * @return string
+ */
+function mimamori_get_system_prompt(): string {
+    return <<<'PROMPT'
+あなたは「みまもりAI」です。中小企業のホームページ担当者（初心者）を支援するアシスタントです。
+
+## あなたの役割
+- GA4やSearch Consoleの数字の見方をやさしく説明する
+- アクセスの増減理由をわかりやすく分析する
+- 今すぐできる改善策を具体的に提案する
+- 専門用語は必ず言い換えて説明する（例：「CTR（クリック率のこと）」）
+
+## 回答ルール
+1. 必ず以下のJSON形式「のみ」で回答してください（他のテキストは含めない）
+2. 専門用語を使う場合は「〇〇（△△のこと）」のように説明を添える
+3. データが不十分な場合は「推測ですが」と明記する
+4. 回答は簡潔に。各項目は1〜3文程度
+5. リスト項目は3〜5個程度
+6. やさしい口調で、伴走感を大切にする
+
+## 回答JSON形式（必ずこの形式で返すこと）
+{
+  "summary": "一言で回答の要点（1文）",
+  "sections": [
+    {"title": "📊 結論", "text": "結論テキスト"},
+    {"title": "💡 理由", "items": ["理由1", "理由2", "理由3"]},
+    {"title": "✅ 今すぐやること", "items": ["アクション1", "アクション2", "アクション3"]},
+    {"title": "📈 次に見る数字", "items": ["指標1", "指標2", "指標3"]}
+  ]
+}
+
+注意:
+- 必ず有効なJSONのみを返してください（```json``` マークダウン装飾は絶対に付けない）
+- 質問が簡単な用語説明の場合は sections を1〜2個に減らしてOK
+- items と text は質問内容に応じて使い分けてOK
+PROMPT;
+}
+
+/**
+ * 会話コンテキスト構築（history + 現メッセージ → OpenAI input 配列）
+ *
+ * @param array $data  REST リクエストのJSONパラメータ
+ * @return array       OpenAI Responses API の input 配列
+ */
+function mimamori_build_chat_context( array $data ): array {
+    $input = [];
+
+    // 過去の会話履歴（最大50メッセージ = 25往復まで）
+    if ( ! empty( $data['history'] ) && is_array( $data['history'] ) ) {
+        $history = array_slice( $data['history'], -50 );
+        foreach ( $history as $msg ) {
+            if ( ! is_array( $msg ) || empty( $msg['content'] ) ) {
+                continue;
+            }
+            $role    = ( isset( $msg['role'] ) && $msg['role'] === 'assistant' ) ? 'assistant' : 'user';
+            $content = sanitize_textarea_field( $msg['content'] );
+            if ( $content !== '' ) {
+                $input[] = [ 'role' => $role, 'content' => $content ];
+            }
+        }
+    }
+
+    // 現在のメッセージ
+    $message = sanitize_textarea_field( $data['message'] ?? '' );
+    if ( $message !== '' ) {
+        $input[] = [ 'role' => 'user', 'content' => $message ];
+    }
+
+    return $input;
+}
+
+/**
+ * OpenAI Responses API 呼び出し
+ *
+ * @param array $payload  ['model'=>..., 'instructions'=>..., 'input'=>[...]]
+ * @return array|WP_Error  成功時: ['text'=>string], 失敗時: WP_Error
+ */
+function mimamori_call_openai_responses_api( array $payload ) {
+    $api_key  = defined( 'MIMAMORI_OPENAI_API_KEY' )  ? MIMAMORI_OPENAI_API_KEY  : '';
+    $base_url = defined( 'MIMAMORI_OPENAI_BASE_URL' ) ? MIMAMORI_OPENAI_BASE_URL : 'https://api.openai.com/v1';
+    $timeout  = defined( 'MIMAMORI_OPENAI_TIMEOUT' )  ? (int) MIMAMORI_OPENAI_TIMEOUT : 60;
+
+    if ( $api_key === '' ) {
+        return new WP_Error( 'no_api_key', 'OpenAI APIキーが設定されていません' );
+    }
+
+    $url = rtrim( $base_url, '/' ) . '/responses';
+
+    $response = wp_remote_post( $url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $api_key,
+            'Content-Type'  => 'application/json',
+        ],
+        'body'    => wp_json_encode( $payload, JSON_UNESCAPED_UNICODE ),
+        'timeout' => $timeout,
+    ] );
+
+    if ( is_wp_error( $response ) ) {
+        return $response;
+    }
+
+    $code = wp_remote_retrieve_response_code( $response );
+    $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+    if ( $code !== 200 ) {
+        $err_msg = $body['error']['message'] ?? ( 'OpenAI API Error (HTTP ' . $code . ')' );
+        return new WP_Error( 'openai_error', $err_msg );
+    }
+
+    // Responses API: output[0].content[0].text
+    $text = '';
+    if ( ! empty( $body['output'] ) && is_array( $body['output'] ) ) {
+        foreach ( $body['output'] as $item ) {
+            if ( ( $item['type'] ?? '' ) === 'message' && ! empty( $item['content'] ) ) {
+                foreach ( $item['content'] as $part ) {
+                    if ( ( $part['type'] ?? '' ) === 'output_text' ) {
+                        $text = $part['text'];
+                        break 2;
+                    }
+                }
+            }
+        }
+    }
+
+    if ( $text === '' ) {
+        return new WP_Error( 'empty_response', 'AIから空の応答が返されました' );
+    }
+
+    return [ 'text' => $text ];
+}
+
+/**
+ * AI応答テキストを構造化データにパースする
+ * JSON パース失敗時はプレーンテキスト fallback
+ *
+ * @param string $raw_text  AIからの生テキスト
+ * @return array  { summary: string, sections: array }
+ */
+function mimamori_parse_ai_response( string $raw_text ): array {
+    // ```json ... ``` ブロックが含まれている場合は中身を抽出
+    $cleaned = $raw_text;
+    if ( preg_match( '/```(?:json)?\s*([\s\S]*?)```/', $cleaned, $m ) ) {
+        $cleaned = trim( $m[1] );
+    }
+    $cleaned = trim( $cleaned );
+
+    $parsed = json_decode( $cleaned, true );
+
+    if ( is_array( $parsed ) && isset( $parsed['summary'] ) ) {
+        // sections の各要素を検証
+        $sections = [];
+        if ( ! empty( $parsed['sections'] ) && is_array( $parsed['sections'] ) ) {
+            foreach ( $parsed['sections'] as $sec ) {
+                if ( ! is_array( $sec ) || empty( $sec['title'] ) ) {
+                    continue;
+                }
+                $s = [ 'title' => (string) $sec['title'] ];
+                if ( ! empty( $sec['items'] ) && is_array( $sec['items'] ) ) {
+                    $s['items'] = array_map( 'strval', $sec['items'] );
+                } elseif ( ! empty( $sec['text'] ) ) {
+                    $s['text'] = (string) $sec['text'];
+                }
+                $sections[] = $s;
+            }
+        }
+        return [
+            'summary'  => (string) $parsed['summary'],
+            'sections' => $sections,
+        ];
+    }
+
+    // JSON パース失敗 → プレーンテキスト fallback
+    return [
+        'summary'  => mb_substr( $raw_text, 0, 200 ),
+        'sections' => [],
+    ];
+}
+
+/**
+ * REST API ハンドラー: POST /mimamori/v1/ai-chat
+ *
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
+ */
+function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Response {
+    $data = $request->get_json_params();
+
+    $message = sanitize_textarea_field( $data['message'] ?? '' );
+    if ( $message === '' ) {
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => 'メッセージが空です',
+        ], 400 );
+    }
+
+    // コンテキスト構築
+    $input = mimamori_build_chat_context( $data );
+
+    // OpenAI 呼び出し
+    $model = defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini';
+
+    $result = mimamori_call_openai_responses_api( [
+        'model'        => $model,
+        'instructions' => mimamori_get_system_prompt(),
+        'input'        => $input,
+    ] );
+
+    if ( is_wp_error( $result ) ) {
+        $status = ( $result->get_error_code() === 'no_api_key' ) ? 500 : 502;
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => $result->get_error_message(),
+        ], $status );
+    }
+
+    $raw_text   = $result['text'];
+    $structured = mimamori_parse_ai_response( $raw_text );
+
+    return new WP_REST_Response( [
+        'success' => true,
+        'data'    => [
+            'message' => [
+                'role'       => 'assistant',
+                'content'    => $raw_text,
+                'structured' => $structured,
+            ],
+        ],
+    ], 200 );
+}
 
 
 // =========================================
@@ -1752,3 +2005,4 @@ add_action( 'template_redirect', function () {
         exit;
     }
 });
+
