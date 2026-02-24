@@ -1760,6 +1760,523 @@ function mimamori_build_context_blocks(
 }
 
 /**
+ * ============================================================
+ * 2パス動的データ取得 — プランナー・バリデーション・データ取得・整形
+ * ============================================================
+ */
+
+/**
+ * プランナーパス用のシステムプロンプトを生成する
+ *
+ * @return string
+ */
+function mimamori_get_planner_prompt(): string {
+    $today = wp_date( 'Y-m-d' );
+
+    return <<<PROMPT
+あなたはデータクエリプランナーです。ユーザーの質問に正確に回答するために、追加で取得すべきGA4/GSCデータを判断します。
+
+今日の日付: {$today}
+
+利用可能なクエリタイプ:
+- daily_traffic: 日別アクセス推移（PV/セッション/ユーザー/CV の日別データ）
+- page_breakdown: ページ別PVランキング（どのページが何回見られたか）
+- device_breakdown: デバイス別統計（PC/スマホ/タブレットの内訳）
+- device_daily: デバイス×日別のセッション推移
+- channel_breakdown: 流入チャネル/参照元別（検索/直接/SNS等）のセッション・CV
+- region_breakdown: 地域（都道府県）別のセッション・CV
+
+ルール:
+1. 質問に答えるために本当に必要なクエリだけを選ぶ（最大3件）
+2. 28日間のサマリー（総PV/セッション/ユーザー/上位5キーワード）は既に持っている。それで十分なら空配列を返す
+3. 各クエリに日付範囲（start/end）を指定する。日付指定がない一般的な質問なら直近28日間を使う
+4. 特定の日付に関する質問の場合、その前後を含む適切な範囲を設定する（例: 「1月19日」→ 1月10日〜1月25日程度）
+5. 必ず有効なJSONのみを返す。JSON以外のテキストを前後に付けない
+
+出力形式（厳守）:
+{"queries":[{"type":"クエリタイプ","start":"YYYY-MM-DD","end":"YYYY-MM-DD"}]}
+
+追加データ不要の場合:
+{"queries":[]}
+PROMPT;
+}
+
+/**
+ * プランナーのレスポンスをバリデーション・正規化する
+ *
+ * @param array $raw_queries  プランナーが返した queries 配列
+ * @return array  バリデーション済みクエリ配列（最大3件）
+ */
+function mimamori_validate_planner_queries( array $raw_queries ): array {
+    $allowed_types = [
+        'daily_traffic',
+        'page_breakdown',
+        'device_breakdown',
+        'device_daily',
+        'channel_breakdown',
+        'region_breakdown',
+    ];
+
+    $tz    = wp_timezone();
+    $today = ( new DateTime( 'now', $tz ) )->format( 'Y-m-d' );
+    $d28   = ( new DateTime( 'now', $tz ) )->modify( '-27 days' )->format( 'Y-m-d' );
+
+    $validated = [];
+    $seen      = [];
+
+    foreach ( $raw_queries as $q ) {
+        if ( ! is_array( $q ) ) {
+            continue;
+        }
+
+        $type = $q['type'] ?? '';
+        if ( ! in_array( $type, $allowed_types, true ) ) {
+            continue;
+        }
+
+        // 重複排除
+        if ( isset( $seen[ $type ] ) ) {
+            continue;
+        }
+        $seen[ $type ] = true;
+
+        // 日付バリデーション
+        $start = ( isset( $q['start'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $q['start'] ) )
+            ? $q['start'] : $d28;
+        $end   = ( isset( $q['end'] )   && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $q['end'] ) )
+            ? $q['end']   : $today;
+
+        // start > end なら入れ替え
+        if ( $start > $end ) {
+            [ $start, $end ] = [ $end, $start ];
+        }
+
+        // 未来日は今日に補正
+        if ( $end > $today ) {
+            $end = $today;
+        }
+
+        // 最大92日間に制限
+        $start_dt = new DateTime( $start, $tz );
+        $end_dt   = new DateTime( $end, $tz );
+        $diff     = (int) $start_dt->diff( $end_dt )->days;
+        if ( $diff > 92 ) {
+            $start = $end_dt->modify( '-92 days' )->format( 'Y-m-d' );
+        }
+
+        // 2年以上前は拒否
+        $two_years_ago = ( new DateTime( 'now', $tz ) )->modify( '-2 years' )->format( 'Y-m-d' );
+        if ( $start < $two_years_ago ) {
+            $start = $two_years_ago;
+        }
+
+        $validated[] = [
+            'type'  => $type,
+            'start' => $start,
+            'end'   => $end,
+        ];
+
+        // 最大3件
+        if ( count( $validated ) >= 3 ) {
+            break;
+        }
+    }
+
+    return $validated;
+}
+
+/**
+ * プランナーパス: 追加データクエリの判定をAIに依頼する
+ *
+ * @param string $message  ユーザーの質問テキスト
+ * @param string $digest   既存の28日サマリー
+ * @return array  バリデーション済みクエリ配列
+ */
+function mimamori_call_planner_pass( string $message, string $digest ): array {
+    $planner_model = defined( 'MIMAMORI_OPENAI_PLANNER_MODEL' )
+        ? MIMAMORI_OPENAI_PLANNER_MODEL
+        : ( defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini' );
+
+    // プランナーへの入力: 質問 + 既存データの概要
+    $digest_summary = '';
+    if ( $digest !== '' ) {
+        $digest_summary = "\n\n既に持っているデータ:\n" . mb_substr( $digest, 0, 300 ) . '...（省略）';
+    } else {
+        $digest_summary = "\n\n既に持っているデータ: 28日サマリーなし（GA4/GSC未設定の可能性）";
+    }
+
+    $input = [
+        [
+            'role'    => 'user',
+            'content' => '質問: ' . $message . $digest_summary,
+        ],
+    ];
+
+    $result = mimamori_call_openai_responses_api( [
+        'model'             => $planner_model,
+        'instructions'      => mimamori_get_planner_prompt(),
+        'input'             => $input,
+        'max_output_tokens' => 256,
+    ] );
+
+    if ( is_wp_error( $result ) ) {
+        error_log( '[みまもりAI] Planner pass failed: ' . $result->get_error_message() );
+        return [];
+    }
+
+    $text = $result['text'] ?? '';
+
+    // JSON パース（{ を探す → json_decode）
+    $brace = strpos( $text, '{' );
+    if ( $brace === false ) {
+        return [];
+    }
+    $json_str = substr( $text, $brace );
+    $parsed   = json_decode( $json_str, true );
+
+    if ( ! is_array( $parsed ) || ! isset( $parsed['queries'] ) || ! is_array( $parsed['queries'] ) ) {
+        return [];
+    }
+
+    return mimamori_validate_planner_queries( $parsed['queries'] );
+}
+
+/**
+ * プランナーが指定したクエリを実行し、追加データを取得する
+ *
+ * @param array $queries   バリデーション済みクエリ配列
+ * @param int   $user_id   WordPress ユーザーID
+ * @return array  ['query_type' => ['type'=>..., 'start'=>..., 'end'=>..., 'data'=>...], ...]
+ */
+function mimamori_fetch_enrichment_data( array $queries, int $user_id ): array {
+    if ( ! class_exists( 'Gcrev_Config' ) ) {
+        return [];
+    }
+
+    try {
+        $config      = new Gcrev_Config();
+        $user_config = $config->get_user_config( $user_id );
+        $ga4_id      = $user_config['ga4_id']  ?? '';
+        $gsc_url     = $user_config['gsc_url'] ?? '';
+
+        if ( $ga4_id === '' ) {
+            return [];
+        }
+    } catch ( \Exception $e ) {
+        error_log( '[みまもりAI] Enrichment config error: ' . $e->getMessage() );
+        return [];
+    }
+
+    $ga4 = class_exists( 'Gcrev_GA4_Fetcher' ) ? new Gcrev_GA4_Fetcher( $config ) : null;
+
+    $results = [];
+
+    foreach ( $queries as $q ) {
+        $type  = $q['type'];
+        $start = $q['start'];
+        $end   = $q['end'];
+
+        // Transient キャッシュチェック
+        $cache_key = 'mw_ai_extra_' . $user_id . '_' . $type . '_' . $start . '_' . $end;
+        $cached    = get_transient( $cache_key );
+        if ( $cached !== false ) {
+            $results[] = [
+                'type'  => $type,
+                'start' => $start,
+                'end'   => $end,
+                'data'  => $cached,
+            ];
+            continue;
+        }
+
+        if ( ! $ga4 ) {
+            continue;
+        }
+
+        try {
+            $data = null;
+
+            switch ( $type ) {
+                case 'daily_traffic':
+                    $data = $ga4->fetch_ga4_daily_series( $ga4_id, $start, $end );
+                    break;
+
+                case 'page_breakdown':
+                    $data = $ga4->fetch_page_details( $ga4_id, $start, $end, $gsc_url );
+                    break;
+
+                case 'device_breakdown':
+                    $data = $ga4->fetch_device_details( $ga4_id, $start, $end );
+                    break;
+
+                case 'device_daily':
+                    $data = $ga4->fetch_device_daily_series( $ga4_id, $start, $end );
+                    break;
+
+                case 'channel_breakdown':
+                    $data = $ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
+                    break;
+
+                case 'region_breakdown':
+                    $data = $ga4->fetch_region_details( $ga4_id, $start, $end );
+                    break;
+            }
+
+            if ( is_array( $data ) && ! is_wp_error( $data ) && ! empty( $data ) ) {
+                set_transient( $cache_key, $data, 2 * HOUR_IN_SECONDS );
+                $results[] = [
+                    'type'  => $type,
+                    'start' => $start,
+                    'end'   => $end,
+                    'data'  => $data,
+                ];
+            }
+
+        } catch ( \Exception $e ) {
+            error_log( '[みまもりAI] Enrichment fetch error (' . $type . '): ' . $e->getMessage() );
+            // スキップして次のクエリへ
+        }
+    }
+
+    return $results;
+}
+
+/**
+ * 取得した追加データをAIに渡すテキスト形式に整形する
+ *
+ * @param array $enrichment_results  mimamori_fetch_enrichment_data() の返り値
+ * @return string  追加データのテキストブロック（空文字 = データなし）
+ */
+function mimamori_format_enrichment_for_ai( array $enrichment_results ): string {
+    $blocks = [];
+
+    foreach ( $enrichment_results as $r ) {
+        $type  = $r['type'];
+        $start = $r['start'];
+        $end   = $r['end'];
+        $data  = $r['data'];
+        $range = $start . ' 〜 ' . $end;
+
+        switch ( $type ) {
+            case 'daily_traffic':
+                $blocks[] = mimamori_format_daily_traffic( $data, $range );
+                break;
+            case 'page_breakdown':
+                $blocks[] = mimamori_format_page_breakdown( $data, $range );
+                break;
+            case 'device_breakdown':
+                $blocks[] = mimamori_format_device_breakdown( $data, $range );
+                break;
+            case 'device_daily':
+                $blocks[] = mimamori_format_device_daily( $data, $range );
+                break;
+            case 'channel_breakdown':
+                $blocks[] = mimamori_format_channel_breakdown( $data, $range );
+                break;
+            case 'region_breakdown':
+                $blocks[] = mimamori_format_region_breakdown( $data, $range );
+                break;
+        }
+    }
+
+    $blocks = array_filter( $blocks );
+    if ( empty( $blocks ) ) {
+        return '';
+    }
+
+    return "【追加で取得した詳細データ】\n\n" . implode( "\n\n", $blocks );
+}
+
+/**
+ * 日別アクセス推移のフォーマット
+ */
+function mimamori_format_daily_traffic( array $data, string $range ): string {
+    if ( empty( $data['labels'] ) ) {
+        return '';
+    }
+
+    $lines   = [ '▼ 日別アクセス推移（' . $range . '）' ];
+    $lines[] = '日付 | PV | セッション | ユーザー';
+
+    $labels = $data['labels'] ?? [];
+    $pvs    = $data['pageViews'] ?? $data['values']['pageViews'] ?? [];
+    $sess   = $data['sessions']  ?? $data['values']['sessions']  ?? [];
+    $users  = $data['users']     ?? $data['values']['users']     ?? [];
+
+    $count = min( count( $labels ), 30 );
+    for ( $i = 0; $i < $count; $i++ ) {
+        $label = $labels[ $i ] ?? '';
+        // YYYYMMDD → YYYY-MM-DD
+        if ( strlen( $label ) === 8 && ctype_digit( $label ) ) {
+            $label = substr( $label, 0, 4 ) . '-' . substr( $label, 4, 2 ) . '-' . substr( $label, 6, 2 );
+        }
+        $pv = $pvs[ $i ]   ?? 0;
+        $se = $sess[ $i ]  ?? 0;
+        $us = $users[ $i ] ?? 0;
+        $lines[] = $label . ' | ' . $pv . ' | ' . $se . ' | ' . $us;
+    }
+
+    return implode( "\n", $lines );
+}
+
+/**
+ * ページ別アクセスのフォーマット（上位20件）
+ */
+function mimamori_format_page_breakdown( array $data, string $range ): string {
+    if ( empty( $data ) ) {
+        return '';
+    }
+
+    // fetch_page_details の返り値は配列の配列
+    $pages = is_array( $data ) ? array_values( $data ) : [];
+    if ( empty( $pages ) || ! is_array( $pages[0] ?? null ) ) {
+        return '';
+    }
+
+    $lines   = [ '▼ ページ別アクセス（' . $range . '・上位20件）' ];
+    $lines[] = '順位 | ページ | PV | セッション | 直帰率';
+
+    $count = min( count( $pages ), 20 );
+    for ( $i = 0; $i < $count; $i++ ) {
+        $p    = $pages[ $i ];
+        $path = $p['pagePath']  ?? $p['path']  ?? '?';
+        $pv   = $p['pageViews'] ?? $p['screenPageViews'] ?? $p['pv'] ?? 0;
+        $se   = $p['sessions']  ?? 0;
+        $br   = $p['bounceRate'] ?? '-';
+        $lines[] = ( $i + 1 ) . ' | ' . $path . ' | ' . $pv . ' | ' . $se . ' | ' . $br;
+    }
+
+    return implode( "\n", $lines );
+}
+
+/**
+ * デバイス別のフォーマット
+ */
+function mimamori_format_device_breakdown( array $data, string $range ): string {
+    if ( empty( $data ) ) {
+        return '';
+    }
+
+    $lines   = [ '▼ デバイス別アクセス（' . $range . '）' ];
+    $lines[] = 'デバイス | セッション | シェア | PV | 直帰率 | CV';
+
+    foreach ( $data as $d ) {
+        if ( ! is_array( $d ) ) {
+            continue;
+        }
+        $name  = $d['device'] ?? $d['deviceCategory'] ?? $d['name'] ?? '?';
+        $sess  = $d['sessions']  ?? 0;
+        $share = $d['share']     ?? $d['percentage'] ?? '-';
+        $pv    = $d['pageViews'] ?? $d['screenPageViews'] ?? 0;
+        $br    = $d['bounceRate'] ?? '-';
+        $cv    = $d['conversions'] ?? $d['cv'] ?? 0;
+        $lines[] = $name . ' | ' . $sess . ' | ' . $share . ' | ' . $pv . ' | ' . $br . ' | ' . $cv;
+    }
+
+    return implode( "\n", $lines );
+}
+
+/**
+ * デバイス×日別推移のフォーマット（最大20行）
+ */
+function mimamori_format_device_daily( array $data, string $range ): string {
+    if ( empty( $data['labels'] ) ) {
+        return '';
+    }
+
+    $lines   = [ '▼ デバイス別×日別セッション推移（' . $range . '）' ];
+    $lines[] = '日付 | mobile | desktop | tablet';
+
+    $labels  = $data['labels']  ?? [];
+    $mobile  = $data['mobile']  ?? [];
+    $desktop = $data['desktop'] ?? [];
+    $tablet  = $data['tablet']  ?? [];
+
+    $count = min( count( $labels ), 20 );
+    for ( $i = 0; $i < $count; $i++ ) {
+        $label = $labels[ $i ] ?? '';
+        $m     = $mobile[ $i ]  ?? 0;
+        $d     = $desktop[ $i ] ?? 0;
+        $t     = $tablet[ $i ]  ?? 0;
+        $lines[] = $label . ' | ' . $m . ' | ' . $d . ' | ' . $t;
+    }
+
+    return implode( "\n", $lines );
+}
+
+/**
+ * 流入チャネルのフォーマット
+ */
+function mimamori_format_channel_breakdown( array $data, string $range ): string {
+    $parts = [];
+
+    // チャネル別
+    if ( ! empty( $data['channels'] ) && is_array( $data['channels'] ) ) {
+        $lines   = [ '▼ 流入チャネル別（' . $range . '）' ];
+        $lines[] = 'チャネル | セッション | PV | CV';
+
+        $count = min( count( $data['channels'] ), 10 );
+        for ( $i = 0; $i < $count; $i++ ) {
+            $ch   = $data['channels'][ $i ];
+            $name = $ch['channel'] ?? $ch['name'] ?? '?';
+            $sess = $ch['sessions'] ?? 0;
+            $pv   = $ch['pageViews'] ?? $ch['screenPageViews'] ?? 0;
+            $cv   = $ch['conversions'] ?? $ch['cv'] ?? 0;
+            $lines[] = $name . ' | ' . $sess . ' | ' . $pv . ' | ' . $cv;
+        }
+        $parts[] = implode( "\n", $lines );
+    }
+
+    // 参照元 TOP10
+    if ( ! empty( $data['sources'] ) && is_array( $data['sources'] ) ) {
+        $lines   = [ '▼ 参照元 TOP10（' . $range . '）' ];
+        $lines[] = '参照元 | セッション | PV';
+
+        $count = min( count( $data['sources'] ), 10 );
+        for ( $i = 0; $i < $count; $i++ ) {
+            $src  = $data['sources'][ $i ];
+            $name = $src['source'] ?? $src['name'] ?? '?';
+            $sess = $src['sessions'] ?? 0;
+            $pv   = $src['pageViews'] ?? $src['screenPageViews'] ?? 0;
+            $lines[] = $name . ' | ' . $sess . ' | ' . $pv;
+        }
+        $parts[] = implode( "\n", $lines );
+    }
+
+    return implode( "\n\n", $parts );
+}
+
+/**
+ * 地域別のフォーマット（上位15件）
+ */
+function mimamori_format_region_breakdown( array $data, string $range ): string {
+    if ( empty( $data ) ) {
+        return '';
+    }
+
+    $lines   = [ '▼ 地域別アクセス（' . $range . '・上位15件）' ];
+    $lines[] = '地域 | セッション | ユーザー | PV | CV';
+
+    $items = is_array( $data ) ? array_values( $data ) : [];
+    $count = min( count( $items ), 15 );
+
+    for ( $i = 0; $i < $count; $i++ ) {
+        $r    = $items[ $i ];
+        if ( ! is_array( $r ) ) {
+            continue;
+        }
+        $name  = $r['region'] ?? $r['name'] ?? '?';
+        $sess  = $r['sessions']  ?? 0;
+        $users = $r['users']     ?? $r['totalUsers'] ?? 0;
+        $pv    = $r['pageViews'] ?? $r['screenPageViews'] ?? 0;
+        $cv    = $r['conversions'] ?? $r['cv'] ?? 0;
+        $lines[] = $name . ' | ' . $sess . ' | ' . $users . ' | ' . $pv . ' | ' . $cv;
+    }
+
+    return implode( "\n", $lines );
+}
+
+/**
  * REST API ハンドラー: POST /mimamori/v1/ai-chat
  *
  * @param WP_REST_Request $request
@@ -1795,7 +2312,24 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
         $instructions .= $context_blocks;
     }
 
-    // OpenAI 呼び出し
+    // === 2パス: 追加データの動的取得 ===
+    if ( ! empty( $sources['use_analytics'] ) ) {
+        $digest          = mimamori_get_analytics_digest( get_current_user_id() );
+        $planner_queries = mimamori_call_planner_pass( $message, $digest );
+
+        if ( ! empty( $planner_queries ) ) {
+            $enrichment_data = mimamori_fetch_enrichment_data( $planner_queries, get_current_user_id() );
+
+            if ( ! empty( $enrichment_data ) ) {
+                $enrichment_text = mimamori_format_enrichment_for_ai( $enrichment_data );
+                if ( $enrichment_text !== '' ) {
+                    $instructions .= "\n\n" . $enrichment_text;
+                }
+            }
+        }
+    }
+
+    // OpenAI 回答呼び出し
     $model = defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini';
 
     $result = mimamori_call_openai_responses_api( [
