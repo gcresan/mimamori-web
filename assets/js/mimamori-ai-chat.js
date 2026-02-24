@@ -52,6 +52,22 @@
     return now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   }
 
+  /**
+   * テキストを安全に要素へ挿入する（\n を <br> に変換）
+   * textContent と違い改行を反映しつつ XSS を防ぐ。
+   */
+  function setTextWithBreaks(el, text) {
+    el.innerHTML = ''; // clear
+    if (!text) return;
+    var lines = String(text).split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (i > 0) {
+        el.appendChild(document.createElement('br'));
+      }
+      el.appendChild(document.createTextNode(lines[i]));
+    }
+  }
+
   /** メッセージ一覧の最下部へスクロール */
   function scrollToBottom() {
     if (!els.messages) return;
@@ -150,7 +166,7 @@
       // --- 対話形式: テキストバブルのみ ---
       var bubble = document.createElement('div');
       bubble.className = 'mw-chat-msg__bubble';
-      bubble.textContent = payload.text || payload.summary || '';
+      setTextWithBreaks(bubble, payload.text || payload.summary || '');
       content.appendChild(bubble);
 
     } else {
@@ -158,7 +174,7 @@
       if (payload.summary) {
         var summaryBubble = document.createElement('div');
         summaryBubble.className = 'mw-chat-msg__bubble';
-        summaryBubble.textContent = payload.summary;
+        setTextWithBreaks(summaryBubble, payload.summary);
         content.appendChild(summaryBubble);
       }
 
@@ -181,14 +197,14 @@
             ul.className = 'mw-chat-answer__list';
             for (var j = 0; j < s.items.length; j++) {
               var li = document.createElement('li');
-              li.textContent = s.items[j]; // safe
+              setTextWithBreaks(li, s.items[j]);
               ul.appendChild(li);
             }
             sec.appendChild(ul);
           } else if (s.text) {
             var txt = document.createElement('div');
             txt.className = 'mw-chat-answer__text';
-            txt.textContent = s.text; // safe
+            setTextWithBreaks(txt, s.text);
             sec.appendChild(txt);
           }
 

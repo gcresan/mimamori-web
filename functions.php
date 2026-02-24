@@ -657,47 +657,67 @@ function mimamori_get_system_prompt(): string {
 あなたは「みまもりAI」です。中小企業のホームページ担当者（初心者）を支援するアシスタントです。
 
 ## あなたの役割
-- GA4やSearch Consoleの数字の見方をやさしく説明する
+- ホームページのアクセス数字の見方をやさしく説明する
 - アクセスの増減理由をわかりやすく分析する
 - 今すぐできる改善策を具体的に提案する
-- 専門用語は必ず言い換えて説明する（例：「CTR（クリック率のこと）」）
+- 専門用語は一切使わず、日常の言葉だけで説明する
+  絶対に使ってはいけない言葉と言い換え例：
+  × CTR → ○「検索結果でクリックされた割合」
+  × セッション → ○「サイトへの訪問回数」
+  × コンバージョン/CV → ○「お問い合わせや申込みなどの成果」
+  × 直帰率 → ○「1ページだけ見てすぐ帰った人の割合」
+  × エンゲージメント → ○「しっかり見てくれた人の割合」
+  × インプレッション → ○「検索結果に表示された回数」
+  × PV/ページビュー → ○「ページが見られた回数」
+  × GA4 → ○「アクセス解析のデータ」
+  × Search Console/GSC → ○「Google検索のデータ」
+  × KPI → ○ 使わない
+  × SEO → ○「検索で上位に出るための対策」
 
 ## 回答スタイル — 対話ファースト
 基本は **対話形式** で自然に会話してください。聞かれたことに端的に答えます。
 具体的な改善提案・データ分析など、整理して伝えた方がわかりやすい場面でのみ構造化カードを使います。
 
-## 回答JSON形式（必ず有効なJSONのみを返すこと。マークダウン装飾は絶対に付けない）
+## 回答JSON形式（最重要ルール）
+必ず有効なJSONのみを返すこと。JSON以外のテキストを前後に付けない。マークダウン装飾（```等）も絶対に付けない。
+JSON全体を必ず完結させること（途中で切れてはいけない）。
 
 ### 通常の会話（デフォルト — ほとんどの場合こちら）
 短い説明、質問への端的な回答、確認、あいさつ等に使います。
 {"type":"talk","text":"会話テキスト（改行は\\nで表現OK）"}
 
 ### 構造化アドバイス（詳しい分析・改善提案が必要な場合のみ）
-改善提案、ステップバイステップの施策、データ分析のまとめに使います。
-{"type":"advice","summary":"一言で回答の要点","sections":[{"title":"📊 結論","text":"結論テキスト"},{"title":"💡 理由","items":["理由1","理由2"]},{"title":"✅ 今すぐやること","items":["アクション1","アクション2"]},{"title":"📈 次に見る数字","items":["指標1","指標2"]}]}
+改善提案やデータ分析のまとめに使います。必ず短く・具体的に。
+{"type":"advice","summary":"一言要約（30文字以内）","sections":[{"title":"📊 わかったこと","text":"結論を1〜2文で"},{"title":"💡 その理由","items":["理由1","理由2"]},{"title":"✅ 今すぐやること","items":["具体的アクション1","具体的アクション2"]}]}
+
+構造化アドバイスの厳守ルール：
+- sections は最大3つまで（多すぎると読まれない）
+- 各 items は最大3つまで
+- 各 item は1〜2文で簡潔に書く
+- summary は30文字以内
+- 必ずJSON全体を完結させる（途中で切れるぐらいなら sections を減らす）
 
 ## 使い分けの判断基準
 talk を使う:
-- あいさつ・お礼への返答（「こんにちは！何でも聞いてくださいね」）
-- 用語の説明（「CTRはクリック率のことで〜」）
+- あいさつ・お礼への返答
+- 用語の説明
 - はい/いいえで答えられる質問
-- 確認や聞き返し（「どのページのことですか？」）
+- 確認や聞き返し
 - 短い感想やコメント
 
 advice を使う:
 - 「改善策を教えて」「やることリスト」のような具体的施策の依頼
 - 複数のポイントを整理して伝えたい分析結果
-- 「このページの改善点を教えて」のような診断依頼
 
 迷ったら talk。ユーザーが詳しく知りたそうなら、次の返答で advice を使えばOK。
 
 ## 共通ルール
-1. 必ず有効なJSONのみを返す
-2. 専門用語を使う場合は「〇〇（△△のこと）」のように説明を添える
+1. 必ず有効なJSONのみを返す（JSON以外の文字を前後に絶対付けない）
+2. 専門用語は一切使わない（上の言い換え表に従う）
 3. データが不十分な場合は「推測ですが」と明記する
-4. やさしい口調で、伴走感を大切にする
-5. advice の sections は質問内容に応じて1〜4個（全部使う必要はない）
-6. items と text は質問内容に応じて使い分けてOK
+4. やさしい口調で、初心者に寄り添う伴走感を大切にする
+5. advice の sections は最大3つ、各 items も最大3つ（短くまとめる）
+6. 回答は必ず完結させる（途中で切れるぐらいなら短くする）
 
 ## 回答対象のルール（最重要）
 - あなたが改善を提案する対象は、常に「クライアントのWebサイト（ホームページ）」です
@@ -815,33 +835,70 @@ function mimamori_call_openai_responses_api( array $payload ) {
 }
 
 /**
- * AI応答テキストを構造化データにパースする
+ * AI応答テキストを構造化データにパースする（堅牢版）
  *
  * type=talk  → 対話形式（テキストのみ）
  * type=advice → 構造化アドバイス（サマリー + セクション）
- * JSON パース失敗時はプレーンテキスト fallback（talk 扱い）
+ *
+ * パース戦略:
+ * 1. ```json ブロック抽出
+ * 2. 先頭テキスト付き JSON（{ を探す）
+ * 3. 途中切れ JSON の自動修復
+ * 4. JSONから読めるテキストを抽出して talk fallback
+ * ※ 生の JSON を chat に表示しない
  *
  * @param string $raw_text  AIからの生テキスト
  * @return array  { type: 'talk'|'advice', text?: string, summary?: string, sections?: array }
  */
 function mimamori_parse_ai_response( string $raw_text ): array {
-    // ```json ... ``` ブロックが含まれている場合は中身を抽出
-    $cleaned = $raw_text;
+    $cleaned = trim( $raw_text );
+
+    // --- Step 1: ```json ... ``` ブロック抽出 ---
     if ( preg_match( '/```(?:json)?\s*([\s\S]*?)```/', $cleaned, $m ) ) {
         $cleaned = trim( $m[1] );
     }
-    $cleaned = trim( $cleaned );
 
-    $parsed = json_decode( $cleaned, true );
-
-    if ( ! is_array( $parsed ) ) {
-        // JSON パース失敗 → プレーンテキスト fallback（talk 扱い）
+    // --- Step 2: 先頭に余分テキストがある場合 → 最初の { を見つける ---
+    $brace_pos = strpos( $cleaned, '{' );
+    if ( $brace_pos === false ) {
+        // JSON が一切含まれていない → プレーンテキストとして返す
         return [
             'type' => 'talk',
             'text' => $raw_text,
         ];
     }
+    $json_candidate = substr( $cleaned, $brace_pos );
 
+    // --- Step 3: まずそのままパースを試みる ---
+    $parsed = json_decode( $json_candidate, true );
+
+    // --- Step 4: 失敗時 → 途中切れ JSON の修復を試みる ---
+    if ( ! is_array( $parsed ) ) {
+        $repaired = mimamori_repair_truncated_json( $json_candidate );
+        $parsed   = json_decode( $repaired, true );
+    }
+
+    // --- Step 5: それでも失敗 → JSON 内のテキスト値を抽出して talk fallback ---
+    if ( ! is_array( $parsed ) ) {
+        $extracted = mimamori_extract_text_from_broken_json( $json_candidate );
+        return [
+            'type' => 'talk',
+            'text' => $extracted !== '' ? $extracted : $raw_text,
+        ];
+    }
+
+    // --- パース成功: type に応じて返す ---
+    return mimamori_build_parsed_result( $parsed, $raw_text );
+}
+
+/**
+ * パース済み配列から構造化結果を構築する（共通ロジック）
+ *
+ * @param array  $parsed    json_decode 成功後の配列
+ * @param string $raw_text  元の生テキスト（最終 fallback 用）
+ * @return array
+ */
+function mimamori_build_parsed_result( array $parsed, string $raw_text ): array {
     $type = $parsed['type'] ?? '';
 
     // --- talk: 対話形式 ---
@@ -853,22 +910,8 @@ function mimamori_parse_ai_response( string $raw_text ): array {
     }
 
     // --- advice: 構造化アドバイス ---
-    if ( $type === 'advice' && isset( $parsed['summary'] ) ) {
-        $sections = [];
-        if ( ! empty( $parsed['sections'] ) && is_array( $parsed['sections'] ) ) {
-            foreach ( $parsed['sections'] as $sec ) {
-                if ( ! is_array( $sec ) || empty( $sec['title'] ) ) {
-                    continue;
-                }
-                $s = [ 'title' => (string) $sec['title'] ];
-                if ( ! empty( $sec['items'] ) && is_array( $sec['items'] ) ) {
-                    $s['items'] = array_map( 'strval', $sec['items'] );
-                } elseif ( ! empty( $sec['text'] ) ) {
-                    $s['text'] = (string) $sec['text'];
-                }
-                $sections[] = $s;
-            }
-        }
+    if ( ( $type === 'advice' || $type === '' ) && isset( $parsed['summary'] ) ) {
+        $sections = mimamori_normalize_sections( $parsed['sections'] ?? [] );
         return [
             'type'     => 'advice',
             'summary'  => (string) $parsed['summary'],
@@ -876,35 +919,168 @@ function mimamori_parse_ai_response( string $raw_text ): array {
         ];
     }
 
-    // --- 旧形式互換: type なしで summary がある場合 → advice 扱い ---
-    if ( isset( $parsed['summary'] ) ) {
-        $sections = [];
-        if ( ! empty( $parsed['sections'] ) && is_array( $parsed['sections'] ) ) {
-            foreach ( $parsed['sections'] as $sec ) {
-                if ( ! is_array( $sec ) || empty( $sec['title'] ) ) {
-                    continue;
-                }
-                $s = [ 'title' => (string) $sec['title'] ];
-                if ( ! empty( $sec['items'] ) && is_array( $sec['items'] ) ) {
-                    $s['items'] = array_map( 'strval', $sec['items'] );
-                } elseif ( ! empty( $sec['text'] ) ) {
-                    $s['text'] = (string) $sec['text'];
-                }
-                $sections[] = $s;
-            }
-        }
-        return [
-            'type'     => 'advice',
-            'summary'  => (string) $parsed['summary'],
-            'sections' => $sections,
-        ];
+    // --- その他のJSON → 中のテキスト値を探して talk fallback ---
+    $text = $parsed['text'] ?? $parsed['summary'] ?? $parsed['message'] ?? '';
+    if ( $text === '' ) {
+        $text = $raw_text;
     }
-
-    // --- その他のJSON → talk fallback ---
     return [
         'type' => 'talk',
-        'text' => $raw_text,
+        'text' => (string) $text,
     ];
+}
+
+/**
+ * sections 配列を安全に正規化する
+ *
+ * @param mixed $raw_sections
+ * @return array
+ */
+function mimamori_normalize_sections( $raw_sections ): array {
+    if ( ! is_array( $raw_sections ) ) {
+        return [];
+    }
+    $sections = [];
+    foreach ( $raw_sections as $sec ) {
+        if ( ! is_array( $sec ) || empty( $sec['title'] ) ) {
+            continue;
+        }
+        $s = [ 'title' => (string) $sec['title'] ];
+        if ( ! empty( $sec['items'] ) && is_array( $sec['items'] ) ) {
+            $s['items'] = array_map( 'strval', $sec['items'] );
+        } elseif ( ! empty( $sec['text'] ) ) {
+            $s['text'] = (string) $sec['text'];
+        }
+        $sections[] = $s;
+    }
+    return $sections;
+}
+
+/**
+ * 途中切れ JSON を閉じ括弧で修復する
+ *
+ * トークン制限で応答が途中で切れた場合、開き括弧に対応する
+ * 閉じ括弧/引用符を補って json_decode 可能にする。
+ *
+ * @param string $json  途中切れの可能性がある JSON 文字列
+ * @return string       修復済み JSON 文字列
+ */
+function mimamori_repair_truncated_json( string $json ): string {
+    // 文字列の途中で切れている場合 → 閉じ引用符を補う
+    $in_string = false;
+    $escape    = false;
+    $len       = strlen( $json );
+    for ( $i = 0; $i < $len; $i++ ) {
+        $ch = $json[ $i ];
+        if ( $escape ) {
+            $escape = false;
+            continue;
+        }
+        if ( $ch === '\\' && $in_string ) {
+            $escape = true;
+            continue;
+        }
+        if ( $ch === '"' ) {
+            $in_string = ! $in_string;
+        }
+    }
+    if ( $in_string ) {
+        $json .= '"';
+    }
+
+    // 最後の不完全な key: value ペアを除去（例: ,"items":[ の途中）
+    // 末尾カンマやコロンの後が不完全な場合に備える
+    $json = preg_replace( '/,\s*"[^"]*"\s*:\s*$/', '', $json );
+    $json = preg_replace( '/,\s*$/', '', $json );
+
+    // 開き括弧と閉じ括弧のバランスを修復
+    $stack = [];
+    $in_str = false;
+    $esc    = false;
+    $len    = strlen( $json );
+    for ( $i = 0; $i < $len; $i++ ) {
+        $ch = $json[ $i ];
+        if ( $esc ) {
+            $esc = false;
+            continue;
+        }
+        if ( $ch === '\\' && $in_str ) {
+            $esc = true;
+            continue;
+        }
+        if ( $ch === '"' ) {
+            $in_str = ! $in_str;
+            continue;
+        }
+        if ( $in_str ) {
+            continue;
+        }
+        if ( $ch === '{' || $ch === '[' ) {
+            $stack[] = $ch;
+        } elseif ( $ch === '}' ) {
+            if ( end( $stack ) === '{' ) {
+                array_pop( $stack );
+            }
+        } elseif ( $ch === ']' ) {
+            if ( end( $stack ) === '[' ) {
+                array_pop( $stack );
+            }
+        }
+    }
+
+    // 逆順に閉じ括弧を補う
+    while ( ! empty( $stack ) ) {
+        $open = array_pop( $stack );
+        $json .= ( $open === '{' ) ? '}' : ']';
+    }
+
+    return $json;
+}
+
+/**
+ * 壊れた JSON 文字列から読めるテキスト値を抽出する
+ *
+ * パースに完全に失敗した場合でも、"text": "..." や "summary": "..." の
+ * 値を正規表現で拾い、ユーザーに意味のあるテキストを返す。
+ * 生の JSON をそのまま表示しない。
+ *
+ * @param string $broken_json
+ * @return string  抽出テキスト（見つからなければ空文字）
+ */
+function mimamori_extract_text_from_broken_json( string $broken_json ): string {
+    $parts = [];
+
+    // "text": "..." or "summary": "..." を抽出
+    if ( preg_match( '/"summary"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/s', $broken_json, $m ) ) {
+        $parts[] = stripcslashes( $m[1] );
+    }
+    if ( preg_match( '/"text"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/s', $broken_json, $m ) ) {
+        $parts[] = stripcslashes( $m[1] );
+    }
+
+    // "items": ["...", "..."] からテキスト抽出
+    if ( preg_match_all( '/"items"\s*:\s*\[(.*?)\]/s', $broken_json, $matches ) ) {
+        foreach ( $matches[1] as $items_str ) {
+            if ( preg_match_all( '/"((?:[^"\\\\]|\\\\.)*)"/s', $items_str, $item_m ) ) {
+                foreach ( $item_m[1] as $item ) {
+                    $parts[] = '・' . stripcslashes( $item );
+                }
+            }
+        }
+    }
+
+    // "title": "..." も拾って見出し風に
+    if ( preg_match_all( '/"title"\s*:\s*"((?:[^"\\\\]|\\\\.)*)"/s', $broken_json, $title_m ) ) {
+        // title は parts の先頭に挿入するより、既に items が拾えていれば十分
+        // parts が空の場合のみ title を使う
+        if ( empty( $parts ) ) {
+            foreach ( $title_m[1] as $t ) {
+                $parts[] = stripcslashes( $t );
+            }
+        }
+    }
+
+    return implode( "\n", $parts );
 }
 
 /**
@@ -1589,9 +1765,10 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     $model = defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini';
 
     $result = mimamori_call_openai_responses_api( [
-        'model'        => $model,
-        'instructions' => $instructions,
-        'input'        => $input,
+        'model'             => $model,
+        'instructions'      => $instructions,
+        'input'             => $input,
+        'max_output_tokens' => 2048,
     ] );
 
     if ( is_wp_error( $result ) ) {
