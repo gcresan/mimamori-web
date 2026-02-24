@@ -763,6 +763,15 @@ JSON例: {"type":"advice","summary":"...","sections":[...],"support_notice":true
   悪い例：「詳細データモードが有効なので〜」
 - データが提供されていない場合は一般的な知識で回答し、具体的な数値が必要なら「実際のデータで確認してみましょう」と促す
 - データが不完全な場合は「手元のデータでは」「推測ですが」と前置きする
+
+## ページへの言及ルール
+ページについて回答するとき、必ず**ページタイトル**で言及すること。
+順位番号やURLパスだけで伝えるのは禁止。
+  良い例：「一番見られているのは『施工事例 | ○○工務店』で、月に95回見られています」
+  良い例：「『お問い合わせ』ページへのアクセスが先月より増えています」
+  悪い例：「1位が95回の見られ方です」
+  悪い例：「/works/ が最もアクセスが多いです」
+データにタイトルとURLの両方がある場合は、タイトルを主体にし、必要に応じてURLを補足する程度にする。
 PROMPT;
 }
 
@@ -2146,16 +2155,19 @@ function mimamori_format_page_breakdown( array $data, string $range ): string {
     }
 
     $lines   = [ '▼ ページ別アクセス（' . $range . '・上位20件）' ];
-    $lines[] = '順位 | ページ | PV | セッション | 直帰率';
+    $lines[] = '順位 | ページタイトル | URL | PV | セッション | 直帰率';
 
     $count = min( count( $pages ), 20 );
     for ( $i = 0; $i < $count; $i++ ) {
-        $p    = $pages[ $i ];
-        $path = $p['pagePath']  ?? $p['path']  ?? '?';
-        $pv   = $p['pageViews'] ?? $p['screenPageViews'] ?? $p['pv'] ?? 0;
-        $se   = $p['sessions']  ?? 0;
-        $br   = $p['bounceRate'] ?? '-';
-        $lines[] = ( $i + 1 ) . ' | ' . $path . ' | ' . $pv . ' | ' . $se . ' | ' . $br;
+        $p     = $pages[ $i ];
+        $title = $p['title']     ?? '';
+        $path  = $p['page']      ?? $p['pagePath'] ?? $p['path'] ?? '?';
+        $pv    = $p['pageViews'] ?? $p['screenPageViews'] ?? $p['pv'] ?? 0;
+        $se    = $p['sessions']  ?? 0;
+        $br    = $p['bounceRate'] ?? '-';
+        // タイトルが空ならパスをタイトル代わりに
+        $display_title = ( $title !== '' && $title !== '(not set)' ) ? $title : $path;
+        $lines[] = ( $i + 1 ) . ' | ' . $display_title . ' | ' . $path . ' | ' . $pv . ' | ' . $se . ' | ' . $br;
     }
 
     return implode( "\n", $lines );
