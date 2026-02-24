@@ -3558,3 +3558,14 @@ add_action( 'template_redirect', function () {
     }
 });
 
+// ========================================
+// WP-CLI Commands
+// ========================================
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+    $gcrev_cli_path = get_template_directory() . '/inc/cli/class-gcrev-cli.php';
+    if ( file_exists( $gcrev_cli_path ) ) {
+        require_once $gcrev_cli_path;
+        WP_CLI::add_command( 'gcrev', 'Gcrev_CLI' );
+    }
+}
+
