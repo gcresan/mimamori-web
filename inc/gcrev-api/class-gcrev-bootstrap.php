@@ -15,6 +15,7 @@ class Gcrev_Bootstrap {
         add_action('gcrev_prefetch_chunk_event', [__CLASS__, 'on_prefetch_chunk_event'], 10, 2);
 
         add_action('gcrev_monthly_report_generate_event', [__CLASS__, 'on_monthly_report_generate_event']);
+        add_action('gcrev_monthly_report_generate_chunk_event', [__CLASS__, 'on_monthly_report_generate_chunk_event'], 10, 2);
         add_action('gcrev_monthly_report_finalize_event', [__CLASS__, 'on_monthly_report_finalize_event']);
 
         // schedule (initで「未登録なら登録」※現状と同じ)
@@ -61,6 +62,17 @@ class Gcrev_Bootstrap {
         $api->auto_generate_monthly_reports();
     }
 
+    /**
+     * 月次レポート生成チャンクイベント
+     * auto_generate_monthly_reports() からスケジュールされ、
+     * 3社ずつ自己チェーンで処理する。
+     */
+    public static function on_monthly_report_generate_chunk_event( $offset, $limit ): void {
+        error_log("[GCREV] gcrev_monthly_report_generate_chunk_event triggered: offset={$offset}, limit={$limit}");
+        $api = new Gcrev_Insight_API(false);
+        $api->report_generate_chunk( (int) $offset, (int) $limit );
+    }
+
     public static function on_monthly_report_finalize_event(): void {
         error_log('[GCREV] gcrev_monthly_report_finalize_event triggered');
         $api = new Gcrev_Insight_API(false);
@@ -104,6 +116,7 @@ class Gcrev_Bootstrap {
             'gcrev_monthly_report_finalize_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
+            // 'gcrev_monthly_report_generate_chunk_event',
         ];
 
         foreach ($hooks as $hook) {

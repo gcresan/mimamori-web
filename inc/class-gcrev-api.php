@@ -1407,8 +1407,17 @@ class Gcrev_Insight_API {
     private const LOCK_REPORT_GEN      = 'gcrev_lock_report_gen';
     private const LOCK_REPORT_FINALIZE = 'gcrev_lock_report_finalize';
     private const LOCK_PREFETCH        = 'gcrev_lock_prefetch';
-    private const LOCK_TTL             = 3600; // 1時間
+    private const LOCK_TTL             = 7200; // 2時間（チャンク処理の全完了を待つため）
 
+    /** レポート生成チャンクサイズ（重い処理なのでプリフェッチより少なく） */
+    public const REPORT_CHUNK_LIMIT = 3;
+
+    /**
+     * === Cronから呼ばれる：毎月1日にチャンク生成を起動 ===
+     *
+     * 全ユーザーを直列処理せず、REPORT_CHUNK_LIMIT ずつ
+     * 自己チェーンで分割実行する（prefetch_chunk と同パターン）。
+     */
     public function auto_generate_monthly_reports(): void {
 
         // ─── 重複実行防止ロック ───
@@ -1418,80 +1427,112 @@ class Gcrev_Insight_API {
         }
         set_transient( self::LOCK_REPORT_GEN, 1, self::LOCK_TTL );
 
-        $tz = wp_timezone();
-        $now = new DateTimeImmutable('now', $tz);
+        $tz  = wp_timezone();
+        $now = new DateTimeImmutable( 'now', $tz );
 
         // 1日以外は何もしない（冪等性）
-        if ((int)$now->format('d') !== 1) {
-            error_log("[GCREV] auto_generate_monthly_reports: Not 1st of month, skipping.");
+        if ( (int) $now->format( 'd' ) !== 1 ) {
+            error_log( '[GCREV] auto_generate_monthly_reports: Not 1st of month, skipping.' );
             delete_transient( self::LOCK_REPORT_GEN );
             return;
         }
 
-        error_log("[GCREV] auto_generate_monthly_reports: START on " . $now->format('Y-m-d'));
+        error_log( '[GCREV] auto_generate_monthly_reports: START on ' . $now->format( 'Y-m-d' ) . ' — scheduling chunk(0)' );
 
-        $year_month = $now->format('Y-m');
+        // 最初のチャンクをスケジュール（10秒後）
+        wp_schedule_single_event(
+            time() + 10,
+            'gcrev_monthly_report_generate_chunk_event',
+            [ 0, self::REPORT_CHUNK_LIMIT ]
+        );
+    }
 
-        // 全ユーザー取得
-        $users = get_users(['fields' => ['ID']]);
+    /**
+     * レポート生成チャンク処理
+     *
+     * prefetch_chunk() と同じ自己チェーンパターン。
+     * REPORT_CHUNK_LIMIT 人分のレポートを生成し、
+     * まだ残りユーザーがいれば次のチャンクをスケジュールする。
+     *
+     * @param int $offset ユーザーリストのオフセット
+     * @param int $limit  チャンクサイズ
+     */
+    public function report_generate_chunk( int $offset, int $limit ): void {
 
-        foreach ($users as $u) {
+        error_log( "[GCREV] report_generate_chunk START: offset={$offset}, limit={$limit}" );
+
+        $tz         = wp_timezone();
+        $now        = new DateTimeImmutable( 'now', $tz );
+        $year_month = $now->format( 'Y-m' );
+
+        $users = get_users( [
+            'number' => $limit,
+            'offset' => $offset,
+            'fields' => ['ID'],
+        ] );
+
+        if ( empty( $users ) ) {
+            delete_transient( self::LOCK_REPORT_GEN );
+            error_log( "[GCREV] report_generate_chunk: No users at offset={$offset}. DONE." );
+            return;
+        }
+
+        foreach ( $users as $u ) {
             $user_id = (int) $u->ID;
 
             // 当月レポートが既に存在するかチェック
-            $existing = $this->repo->get_reports_by_month($user_id, $year_month);
-            if (!empty($existing)) {
-                error_log("[GCREV] auto_generate: user_id={$user_id} already has report for {$year_month}, skipping.");
+            $existing = $this->repo->get_reports_by_month( $user_id, $year_month );
+            if ( ! empty( $existing ) ) {
+                error_log( "[GCREV] auto_generate: user_id={$user_id} already has report for {$year_month}, skipping." );
                 continue;
             }
 
             // クライアント情報取得
             $client_info = [
-                'site_url'      => get_user_meta($user_id, 'report_site_url', true),
-                'target'        => get_user_meta($user_id, 'report_target', true),
-                'issue'         => get_user_meta($user_id, 'report_issue', true),
-                'goal_monthly'  => get_user_meta($user_id, 'report_goal_monthly', true),
-                'focus_numbers' => get_user_meta($user_id, 'report_focus_numbers', true),
-                'current_state' => get_user_meta($user_id, 'report_current_state', true),
-                'goal_main'     => get_user_meta($user_id, 'report_goal_main', true),
+                'site_url'      => get_user_meta( $user_id, 'report_site_url', true ),
+                'target'        => get_user_meta( $user_id, 'report_target', true ),
+                'issue'         => get_user_meta( $user_id, 'report_issue', true ),
+                'goal_monthly'  => get_user_meta( $user_id, 'report_goal_monthly', true ),
+                'focus_numbers' => get_user_meta( $user_id, 'report_focus_numbers', true ),
+                'current_state' => get_user_meta( $user_id, 'report_current_state', true ),
+                'goal_main'     => get_user_meta( $user_id, 'report_goal_main', true ),
             ];
 
             // 必須項目チェック
-            if (empty($client_info['site_url']) || empty($client_info['target'])) {
-                error_log("[GCREV] auto_generate: user_id={$user_id} missing client info, skipping.");
+            if ( empty( $client_info['site_url'] ) || empty( $client_info['target'] ) ) {
+                error_log( "[GCREV] auto_generate: user_id={$user_id} missing client info, skipping." );
                 continue;
             }
 
             // GA4プロパティ設定チェック
-            $prev2_check = $this->has_prev2_data($user_id);
-            if (!$prev2_check['available']) {
-                error_log("[GCREV] auto_generate: user_id={$user_id} GA4_NOT_READY, skipping: " . ($prev2_check['reason'] ?? ''));
+            $prev2_check = $this->has_prev2_data( $user_id );
+            if ( ! $prev2_check['available'] ) {
+                error_log( "[GCREV] auto_generate: user_id={$user_id} GA4_NOT_READY, skipping: " . ( $prev2_check['reason'] ?? '' ) );
                 continue;
             }
 
             try {
                 // 前月・前々月データ取得
-                $config = $this->config->get_user_config($user_id);
-                $prev_data = $this->fetch_dashboard_data_internal($config, 'previousMonth');
-                $two_data  = $this->fetch_dashboard_data_internal($config, 'twoMonthsAgo');
+                $config    = $this->config->get_user_config( $user_id );
+                $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
+                $two_data  = $this->fetch_dashboard_data_internal( $config, 'twoMonthsAgo' );
 
-                // レポート生成
                 // 実質CV注入
-                $auto_ym = (new DateTimeImmutable('first day of last month', $tz))->format('Y-m');
-                $eff_auto = $this->get_effective_cv_monthly($auto_ym, $user_id);
+                $auto_ym  = ( new DateTimeImmutable( 'first day of last month', $tz ) )->format( 'Y-m' );
+                $eff_auto = $this->get_effective_cv_monthly( $auto_ym, $user_id );
                 $client_info['effective_cv'] = [
                     'source'     => $eff_auto['source'],
                     'cv'         => $eff_auto['total'],
-                    'has_actual' => ($eff_auto['source'] !== 'ga4'),
+                    'has_actual' => ( $eff_auto['source'] !== 'ga4' ),
                     'detail'     => $eff_auto['breakdown_manual'] ?? [],
                     'components' => $eff_auto['components'],
                 ];
 
-                $report_html = $this->generator->generate_report_multi_pass($prev_data, $two_data, $client_info);
+                $report_html = $this->generator->generate_report_multi_pass( $prev_data, $two_data, $client_info );
 
                 // === 初心者向けモード：全文リライト（Markdown出力） ===
                 $auto_beginner_md = '';
-                if (($client_info['output_mode'] ?? 'normal') === 'easy') {
+                if ( ( $client_info['output_mode'] ?? 'normal' ) === 'easy' ) {
                     $auto_beginner_md = $this->generator->rewrite_report_for_beginner(
                         $report_html,
                         null,
@@ -1501,35 +1542,47 @@ class Gcrev_Insight_API {
                 }
 
                 // 保存（source=auto）
-                $highlights = $this->highlights_mod->extract_highlights_from_html($report_html, $user_id);
-                $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'auto', null, $highlights, $auto_beginner_md);
+                $highlights = $this->highlights_mod->extract_highlights_from_html( $report_html, $user_id );
+                $this->repo->save_report_to_history( $user_id, $report_html, $client_info, 'auto', null, $highlights, $auto_beginner_md );
 
                 // === インフォグラフィックJSON生成・保存 ===
                 try {
-                    $infographic = $this->generate_infographic_json($prev_data, $two_data, $client_info, $user_id);
-                    if ($infographic) {
-                        $prev_dt  = new DateTimeImmutable('first day of last month', $tz);
-                        $ig_year  = (int) $prev_dt->format('Y');
-                        $ig_month = (int) $prev_dt->format('n');
-                        $this->save_monthly_infographic($ig_year, $ig_month, $user_id, $infographic);
-                        error_log("[GCREV] auto_generate: Infographic saved for user_id={$user_id}");
+                    $infographic = $this->generate_infographic_json( $prev_data, $two_data, $client_info, $user_id );
+                    if ( $infographic ) {
+                        $prev_dt  = new DateTimeImmutable( 'first day of last month', $tz );
+                        $ig_year  = (int) $prev_dt->format( 'Y' );
+                        $ig_month = (int) $prev_dt->format( 'n' );
+                        $this->save_monthly_infographic( $ig_year, $ig_month, $user_id, $infographic );
+                        error_log( "[GCREV] auto_generate: Infographic saved for user_id={$user_id}" );
                     } else {
-                        error_log("[GCREV] auto_generate: Infographic generation returned null for user_id={$user_id}");
+                        error_log( "[GCREV] auto_generate: Infographic generation returned null for user_id={$user_id}" );
                     }
-                } catch (\Exception $ig_e) {
-                    // インフォグラフィック失敗はレポート本体には影響させない
-                    error_log("[GCREV] auto_generate: Infographic error for user_id={$user_id}: " . $ig_e->getMessage());
+                } catch ( \Exception $ig_e ) {
+                    error_log( "[GCREV] auto_generate: Infographic error for user_id={$user_id}: " . $ig_e->getMessage() );
                 }
 
-                error_log("[GCREV] auto_generate: SUCCESS user_id={$user_id}, year_month={$year_month}");
+                error_log( "[GCREV] auto_generate: SUCCESS user_id={$user_id}, year_month={$year_month}" );
 
-            } catch (\Exception $e) {
-                error_log("[GCREV] auto_generate: ERROR user_id={$user_id}: " . $e->getMessage());
+            } catch ( \Exception $e ) {
+                error_log( "[GCREV] auto_generate: ERROR user_id={$user_id}: " . $e->getMessage() );
             }
         }
 
-        delete_transient( self::LOCK_REPORT_GEN );
-        error_log("[GCREV] auto_generate_monthly_reports: DONE");
+        // ─── 次チャンクのスケジュール ───
+        $next_offset = $offset + $limit;
+        $next_users  = get_users( [ 'number' => 1, 'offset' => $next_offset, 'fields' => ['ID'] ] );
+
+        if ( ! empty( $next_users ) ) {
+            wp_schedule_single_event(
+                time() + 10,
+                'gcrev_monthly_report_generate_chunk_event',
+                [ $next_offset, $limit ]
+            );
+            error_log( "[GCREV] report_generate_chunk: Scheduled next chunk offset={$next_offset}" );
+        } else {
+            delete_transient( self::LOCK_REPORT_GEN );
+            error_log( '[GCREV] report_generate_chunk: All users processed. DONE.' );
+        }
     }
 
     /**
