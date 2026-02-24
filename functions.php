@@ -699,6 +699,13 @@ advice を使う:
 5. advice の sections は質問内容に応じて1〜4個（全部使う必要はない）
 6. items と text は質問内容に応じて使い分けてOK
 
+## 回答対象のルール（最重要）
+- あなたが改善を提案する対象は、常に「クライアントのWebサイト（ホームページ）」です
+- この管理画面（みまもりウェブ）自体のUI・デザイン・使い勝手の改善は絶対に提案しません
+- レポートや分析画面の数字は「判断材料」であり、改善すべき対象ではありません
+- ユーザーが「改善点」「問題点」と聞いた場合、それは管理画面の批評を求めているのではなく、クライアントのWebサイト集客・問い合わせ増加のための改善を求めています
+- 必要に応じて「もう少し詳しく教えていただけますか？」と1〜2問だけ聞き返してOK
+
 ## 参照データについて
 質問内容に応じて、GA4やSearch Consoleの実データがこのプロンプトの末尾に付与されることがあります。
 - 提供されたデータに基づいて回答する場合、自然にデータに言及する
@@ -1230,6 +1237,317 @@ function mimamori_build_data_context( array $sources, array $current_page, int $
 }
 
 /**
+ * ============================================================
+ * 意図補正（Intent Rewriter）— ページ種別判定・意図自動補正・コンテキスト統合
+ * ============================================================
+ */
+
+/**
+ * 表示中ページの種別を判定する
+ *
+ * @param array $current_page  JS から送信される { url, title }
+ * @return string  'report_dashboard' | 'analysis_detail' | 'settings' | 'unknown'
+ */
+function mimamori_detect_page_type( array $current_page ): string {
+    $url = $current_page['url'] ?? '';
+    if ( $url === '' ) {
+        return 'unknown';
+    }
+
+    $path = wp_parse_url( $url, PHP_URL_PATH );
+    if ( ! $path ) {
+        return 'unknown';
+    }
+    $path = rtrim( $path, '/' ) . '/';
+
+    // 順序重要: 具体的なパターンを先に判定（/report-setting を /report/ より先に）
+    $rules = [
+        // settings（/report/ との衝突回避のため先に判定）
+        '/report-setting'  => 'settings',
+        '/account/'        => 'settings',
+        '/gbp-oauth'       => 'settings',
+        // report_dashboard
+        '/dashboard/'      => 'report_dashboard',
+        '/report/'         => 'report_dashboard',
+        '/report-latest/'  => 'report_dashboard',
+        '/meo-dashboard/'  => 'report_dashboard',
+        '/meo/'            => 'report_dashboard',
+        // analysis_detail
+        '/analysis/'       => 'analysis_detail',
+        '/analysis-'       => 'analysis_detail',
+        '/actual-cv/'      => 'analysis_detail',
+    ];
+
+    foreach ( $rules as $pattern => $type ) {
+        if ( strpos( $path, $pattern ) !== false ) {
+            return $type;
+        }
+    }
+
+    return 'unknown';
+}
+
+/**
+ * ユーザーの質問とページ種別から意図を補正する（Intent Rewriter）
+ *
+ * 返り値:
+ *   intent          — 'site_improvement' | 'report_interpretation' | 'reason_analysis' | 'how_to' | 'general'
+ *   target          — 'client_site' | 'settings' | 'general'
+ *   needs_page      — ページ文脈が必要か
+ *   needs_analytics — GA4/GSCデータが必要か
+ *
+ * 強制ルール:
+ *   report_dashboard / analysis_detail で「改善点」等の曖昧ワード
+ *   → 管理画面UI改善ではなく、クライアントWebサイト改善として解釈
+ *
+ * @param string $message    ユーザーの質問テキスト
+ * @param string $page_type  mimamori_detect_page_type() の返り値
+ * @return array
+ */
+function mimamori_rewrite_intent( string $message, string $page_type ): array {
+    $msg = mb_strtolower( $message );
+
+    // --- キーワード群 ---
+
+    // 改善・施策系（曖昧ワード → 意図補正の対象）
+    $improvement_kw = [
+        '改善', '何をすべき', 'どうしたらいい', '問題', '対策', '施策',
+        '打ち手', '優先度', '伸ばす', '増やす', '上げる',
+        'アドバイス', '提案', 'おすすめ', 'やること', 'TODO',
+    ];
+
+    // ネガティブ変動（下落・悪化）
+    $negative_kw = [
+        '下がった', '落ちた', '悪い', '減った', '低い', '少ない', '悪化',
+    ];
+
+    // 数値確認・解釈
+    $eval_kw = [
+        '良い？', '良いですか', 'どう？', 'どうですか', '大丈夫',
+        'どのくらい', '平均', '目安', '基準', '高い？', '低い？',
+    ];
+
+    // 原因・理由
+    $reason_kw = [
+        'なぜ', '理由', '原因', 'どうして', 'なんで', '要因',
+    ];
+
+    // 操作方法・概念
+    $howto_kw = [
+        'やり方', '方法', 'どうやって', 'どこで見', '見方', '使い方',
+        'とは', 'って何', 'って何ですか', '意味', '説明',
+    ];
+
+    // GA4/GSCデータが必要な質問
+    $analytics_kw = [
+        'アクセス', 'PV', 'ページビュー', 'セッション', 'ユーザー数', '訪問',
+        'CTR', 'クリック率', '表示回数', 'インプレッション', '検索順位', '順位',
+        'コンバージョン', 'CV', '成果', '問い合わせ数',
+        '直帰率', '離脱率', '滞在時間', 'エンゲージメント',
+        '流入', '検索キーワード', 'クエリ', '検索ワード',
+        'デバイス', 'モバイル', 'スマホ',
+        '地域', 'エリア', '都道府県',
+        '年齢', 'デモグラ',
+        '先月', '前月', '前年', '推移', '比較', '変化',
+        'GA4', 'GSC', 'サーチコンソール', 'アナリティクス',
+        '数字', '数値', 'データ', '何件', '何人',
+        'うちのサイト', '自社サイト', 'うちの',
+    ];
+
+    // ページ文脈系
+    $page_kw = [
+        'このページ', 'この画面', '今見ている', '見ている画面',
+        '表示中', 'ここの', 'このサイトの',
+    ];
+
+    // --- キーワード判定 ---
+    $has_improvement = mimamori_has_keyword( $msg, $improvement_kw );
+    $has_negative    = mimamori_has_keyword( $msg, $negative_kw );
+    $has_eval        = mimamori_has_keyword( $msg, $eval_kw );
+    $has_reason      = mimamori_has_keyword( $msg, $reason_kw );
+    $has_howto       = mimamori_has_keyword( $msg, $howto_kw );
+    $has_analytics   = mimamori_has_keyword( $msg, $analytics_kw );
+    $has_page        = mimamori_has_keyword( $msg, $page_kw );
+
+    // --- 意図判定 ---
+    $intent          = 'general';
+    $target          = 'general';
+    $needs_page      = false;
+    $needs_analytics = false;
+
+    // 1) 操作方法・概念説明（最優先: 「とは」「って何」がある場合）
+    if ( $has_howto && ! $has_improvement && ! $has_negative && ! $has_reason ) {
+        $intent = 'how_to';
+        $target = 'general';
+        // how_to は基本データ不要。ただし analytics キーワードがあれば参考程度に
+    }
+    // 2) 原因・理由分析
+    elseif ( $has_reason || ( $has_negative && $has_analytics ) ) {
+        $intent          = 'reason_analysis';
+        $target          = 'client_site';
+        $needs_analytics = true;
+        $needs_page      = ( $page_type === 'report_dashboard' || $page_type === 'analysis_detail' );
+    }
+    // 3) 数値の評価・解釈（「この数字は良い？」系）
+    elseif ( $has_eval && $has_analytics && ! $has_improvement ) {
+        $intent          = 'report_interpretation';
+        $target          = 'client_site';
+        $needs_analytics = true;
+        $needs_page      = ( $page_type === 'report_dashboard' || $page_type === 'analysis_detail' );
+    }
+    // 4) 改善・施策系（★ 意図補正の核心）
+    elseif ( $has_improvement || $has_negative ) {
+        $intent          = 'site_improvement';
+        $needs_analytics = true;  // 改善提案にはデータが必要
+
+        if ( $page_type === 'report_dashboard' || $page_type === 'analysis_detail' ) {
+            // ★ 強制ルール: レポート/分析画面では管理画面UIではなくクライアントサイト改善
+            $target     = 'client_site';
+            $needs_page = true;
+        } elseif ( $page_type === 'settings' ) {
+            $target          = 'settings';
+            $needs_page      = true;
+            $needs_analytics = false;  // 設定画面ではGA4不要
+        } else {
+            $target = 'client_site';
+        }
+    }
+    // 5) データ関連の質問（明確な分析キーワードあり）
+    elseif ( $has_analytics ) {
+        $intent          = 'report_interpretation';
+        $target          = 'client_site';
+        $needs_analytics = true;
+        $needs_page      = $has_page;
+    }
+    // 6) ページ文脈のみ（「このページの〜」）
+    elseif ( $has_page ) {
+        // ページ系だがレポート/分析画面の場合はサイト改善として解釈
+        if ( $page_type === 'report_dashboard' || $page_type === 'analysis_detail' ) {
+            $intent          = 'site_improvement';
+            $target          = 'client_site';
+            $needs_page      = true;
+            $needs_analytics = true;
+        } else {
+            $intent     = 'general';
+            $target     = 'general';
+            $needs_page = true;
+        }
+    }
+
+    return [
+        'intent'          => $intent,
+        'target'          => $target,
+        'needs_page'      => $needs_page,
+        'needs_analytics' => $needs_analytics,
+    ];
+}
+
+/**
+ * メッセージ内にキーワード群のいずれかが含まれるか判定する
+ *
+ * @param string $message_lower  mb_strtolower 済みのメッセージ
+ * @param array  $keywords       検索キーワード配列
+ * @return bool
+ */
+function mimamori_has_keyword( string $message_lower, array $keywords ): bool {
+    foreach ( $keywords as $kw ) {
+        if ( mb_strpos( $message_lower, mb_strtolower( $kw ) ) !== false ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * ページ種別・意図補正・データソースを統合したコンテキストブロックを生成する
+ *
+ * mimamori_build_data_context() の上位互換。意図補正メッセージ（ガードレール）を含む。
+ *
+ * @param string $page_type      mimamori_detect_page_type() の返り値
+ * @param array  $intent_result  mimamori_rewrite_intent() の返り値
+ * @param array  $sources        mimamori_resolve_data_sources() の返り値
+ * @param array  $current_page   JS から送信される { url, title }
+ * @param int    $user_id        WordPress ユーザーID
+ * @return string  instructions に追記するテキスト（空文字 = 追記なし）
+ */
+function mimamori_build_context_blocks(
+    string $page_type,
+    array  $intent_result,
+    array  $sources,
+    array  $current_page,
+    int    $user_id
+): string {
+    $blocks   = [];
+    $ref_list = [];
+
+    // --- Block 1: ページ種別の宣言 ---
+    $page_type_labels = [
+        'report_dashboard' => 'レポート / ダッシュボード画面（月次サマリー・KPI・ふりかえり）',
+        'analysis_detail'  => '詳細分析画面（流入元・キーワード・ページ別・地域・デバイス・CV等）',
+        'settings'         => '設定画面（GA4/GSC連携・レポート設定など）',
+        'unknown'          => 'その他のページ',
+    ];
+    $blocks[] = '【現在のページ種別】' . ( $page_type_labels[ $page_type ] ?? 'その他のページ' );
+
+    // --- Block 2: 意図補正の宣言（★ ズレ回答防止の核心） ---
+    $intent = $intent_result['intent'] ?? 'general';
+    $target = $intent_result['target'] ?? 'general';
+
+    if ( $target === 'client_site' && in_array( $page_type, [ 'report_dashboard', 'analysis_detail' ], true ) ) {
+        $blocks[] = "【重要：回答の対象について】\n"
+            . "ユーザーが見ている画面はレポート・分析ツール（みまもりウェブ管理画面）です。\n"
+            . "この画面自体のUI/デザイン/使い勝手の改善は絶対に提案しないでください。\n"
+            . "ユーザーの質問は「このレポート/分析結果を踏まえ、クライアントのWebサイト（ホームページ）をどう改善すべきか」として解釈してください。\n"
+            . "改善対象 = クライアントのWebサイト（集客・問い合わせ増加のためのホームページ改善）です。";
+    } elseif ( $target === 'settings' ) {
+        $blocks[] = "【回答の対象について】\n"
+            . "ユーザーは設定画面を見ています。\n"
+            . "質問が改善に関するものであれば、設定の見直し（GA4/GSC連携・計測設定・目標設定など）についてアドバイスしてください。\n"
+            . "管理画面のUIデザインの批評はしないでください。";
+    }
+
+    // 意図カテゴリの補足（AIが質問を正しく解釈するためのヒント）
+    $intent_hints = [
+        'site_improvement'       => 'ユーザーはクライアントWebサイトの改善策を求めています。データを根拠に具体的なアクションを提案してください。',
+        'report_interpretation'  => 'ユーザーは数値の意味・良し悪しを知りたがっています。業界平均との比較や解釈を交えて説明してください。',
+        'reason_analysis'        => 'ユーザーは数値の変動理由を知りたがっています。考えられる要因を挙げ、確認すべきポイントを示してください。',
+    ];
+    if ( isset( $intent_hints[ $intent ] ) ) {
+        $blocks[] = '【質問の意図】' . $intent_hints[ $intent ];
+    }
+
+    // --- Block 3: ページ文脈情報 ---
+    if ( ! empty( $sources['use_page_context'] ) ) {
+        $page_ctx = mimamori_get_page_context( $current_page );
+        if ( $page_ctx !== '' ) {
+            $blocks[]   = "【表示中ページ情報】\n" . $page_ctx;
+            $ref_list[] = '表示中ページの情報';
+        }
+    }
+
+    // --- Block 4: GA4/GSC ダイジェスト ---
+    if ( ! empty( $sources['use_analytics'] ) ) {
+        $digest = mimamori_get_analytics_digest( $user_id );
+        if ( $digest !== '' ) {
+            $blocks[]   = $digest;
+            $ref_list[] = 'GA4 / Search Console のデータ（直近28日間）';
+        }
+    }
+
+    if ( empty( $blocks ) ) {
+        return '';
+    }
+
+    // --- ヘッダー ---
+    $header = "---\n以下は今回の回答に使用するコンテキストです。";
+    if ( ! empty( $ref_list ) ) {
+        $header .= "\n\n【参照データ】\n- " . implode( "\n- ", $ref_list );
+    }
+
+    return "\n\n" . $header . "\n\n" . implode( "\n\n", $blocks );
+}
+
+/**
  * REST API ハンドラー: POST /mimamori/v1/ai-chat
  *
  * @param WP_REST_Request $request
@@ -1249,21 +1567,22 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     // コンテキスト構築
     $input = mimamori_build_chat_context( $data );
 
-    // --- 自動判断: データソースの解決 ---
+    // --- 意図補正 + データソースの解決 ---
     $force_page      = ! empty( $data['forcePageContext'] );
     $force_analytics = ! empty( $data['forceAnalytics'] );
     $current_page    = ( isset( $data['currentPage'] ) && is_array( $data['currentPage'] ) )
                        ? $data['currentPage']
                        : [];
 
-    $classification = mimamori_classify_question( $message );
-    $sources        = mimamori_resolve_data_sources( $classification, $force_page, $force_analytics );
+    $page_type = mimamori_detect_page_type( $current_page );
+    $intent    = mimamori_rewrite_intent( $message, $page_type );
+    $sources   = mimamori_resolve_data_sources( $intent, $force_page, $force_analytics );
 
-    // システムプロンプト + 動的コンテキスト
-    $instructions  = mimamori_get_system_prompt();
-    $data_context  = mimamori_build_data_context( $sources, $current_page, get_current_user_id() );
-    if ( $data_context !== '' ) {
-        $instructions .= "\n\n" . $data_context;
+    // システムプロンプト + 意図補正コンテキスト
+    $instructions    = mimamori_get_system_prompt();
+    $context_blocks  = mimamori_build_context_blocks( $page_type, $intent, $sources, $current_page, get_current_user_id() );
+    if ( $context_blocks !== '' ) {
+        $instructions .= $context_blocks;
     }
 
     // OpenAI 呼び出し
