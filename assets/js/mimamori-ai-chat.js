@@ -212,26 +212,6 @@
       }
     }
 
-    // Feedback buttons
-    var actions = document.createElement('div');
-    actions.className = 'mw-chat-msg__actions';
-
-    var thumbUp = document.createElement('button');
-    thumbUp.type = 'button';
-    thumbUp.className = 'mw-chat-feedback';
-    thumbUp.title = '\u5F79\u306B\u7ACB\u3063\u305F'; // 役に立った
-    thumbUp.textContent = '\uD83D\uDC4D';
-
-    var thumbDown = document.createElement('button');
-    thumbDown.type = 'button';
-    thumbDown.className = 'mw-chat-feedback';
-    thumbDown.title = '\u5F79\u306B\u7ACB\u305F\u306A\u304B\u3063\u305F'; // 役に立たなかった
-    thumbDown.textContent = '\uD83D\uDC4E';
-
-    actions.appendChild(thumbUp);
-    actions.appendChild(thumbDown);
-    content.appendChild(actions);
-
     // Time
     var time = document.createElement('div');
     time.className = 'mw-chat-msg__time';
@@ -618,7 +598,7 @@
     if (els.inputArea) els.inputArea.classList.remove('mw-chat-input--recording');
 
     if (els.voiceBtn) {
-      els.voiceBtn.textContent = '\uD83C\uDFA4'; // 🎤
+      els.voiceBtn.textContent = '\uD83C\uDF99'; // 🎙
       els.voiceBtn.title = '\u97F3\u58F0\u5165\u529B'; // 音声入力
       els.voiceBtn.setAttribute('aria-label', '\u97F3\u58F0\u5165\u529B');
     }

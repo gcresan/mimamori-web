@@ -93,13 +93,13 @@ if ( ! defined( 'ABSPATH' ) ) {
       <div class="mw-chat-input__row">
         <textarea
           class="mw-chat-input__textarea"
-          placeholder="<?php echo esc_attr( '「この数字の意味は？」「先月より落ちている理由は？」' ); ?>"
+          placeholder=""
           rows="1"
         ></textarea>
         <button type="button"
                 class="mw-chat-input__btn mw-chat-input__btn--voice"
                 title="<?php echo esc_attr( '音声入力' ); ?>"
-                aria-label="<?php echo esc_attr( '音声入力' ); ?>">&#x1F3A4;</button>
+                aria-label="<?php echo esc_attr( '音声入力' ); ?>">&#x1F399;</button>
         <button type="button"
                 class="mw-chat-input__btn mw-chat-input__btn--send"
                 title="<?php echo esc_attr( '送信' ); ?>"
