@@ -1785,6 +1785,7 @@ function mimamori_get_planner_prompt(): string {
 - device_daily: デバイス×日別のセッション推移
 - channel_breakdown: 流入チャネル/参照元別（検索/直接/SNS等）のセッション・CV
 - region_breakdown: 地域（都道府県）別のセッション・CV
+- gsc_keywords: Google検索キーワード詳細（どんな言葉で検索されたか・表示回数・クリック数・順位、上位200件）
 
 ルール:
 1. 質問に答えるために本当に必要なクエリだけを選ぶ（最大3件）
@@ -1815,6 +1816,7 @@ function mimamori_validate_planner_queries( array $raw_queries ): array {
         'device_daily',
         'channel_breakdown',
         'region_breakdown',
+        'gsc_keywords',
     ];
 
     $tz    = wp_timezone();
@@ -2020,6 +2022,13 @@ function mimamori_fetch_enrichment_data( array $queries, int $user_id ): array {
                 case 'region_breakdown':
                     $data = $ga4->fetch_region_details( $ga4_id, $start, $end );
                     break;
+
+                case 'gsc_keywords':
+                    if ( $gsc_url !== '' && class_exists( 'Gcrev_GSC_Fetcher' ) ) {
+                        $gsc  = new Gcrev_GSC_Fetcher( $config );
+                        $data = $gsc->fetch_gsc_data( $gsc_url, $start, $end );
+                    }
+                    break;
             }
 
             if ( is_array( $data ) && ! is_wp_error( $data ) && ! empty( $data ) ) {
@@ -2075,6 +2084,9 @@ function mimamori_format_enrichment_for_ai( array $enrichment_results ): string 
                 break;
             case 'region_breakdown':
                 $blocks[] = mimamori_format_region_breakdown( $data, $range );
+                break;
+            case 'gsc_keywords':
+                $blocks[] = mimamori_format_gsc_keywords( $data, $range );
                 break;
         }
     }
@@ -2274,6 +2286,44 @@ function mimamori_format_region_breakdown( array $data, string $range ): string 
     }
 
     return implode( "\n", $lines );
+}
+
+/**
+ * GSC 検索キーワード詳細のフォーマット（上位30件）
+ */
+function mimamori_format_gsc_keywords( array $data, string $range ): string {
+    $lines = [];
+
+    // 合計
+    if ( ! empty( $data['total'] ) && is_array( $data['total'] ) ) {
+        $lines[] = '▼ Google検索キーワード（' . $range . '）';
+        $lines[] = '合計表示回数: ' . ( $data['total']['impressions'] ?? 0 )
+            . ' / 合計クリック: ' . ( $data['total']['clicks'] ?? 0 )
+            . ' / 平均CTR: ' . ( $data['total']['ctr'] ?? '0%' );
+        $lines[] = '';
+    }
+
+    // キーワード一覧
+    if ( ! empty( $data['keywords'] ) && is_array( $data['keywords'] ) ) {
+        $lines[] = '順位 | 検索キーワード | 表示回数 | クリック | CTR | 掲載順位';
+
+        $count = min( count( $data['keywords'] ), 30 );
+        for ( $i = 0; $i < $count; $i++ ) {
+            $kw = $data['keywords'][ $i ];
+            if ( ! is_array( $kw ) ) {
+                continue;
+            }
+            $query = $kw['query']       ?? '?';
+            $imp   = $kw['impressions'] ?? 0;
+            $click = $kw['clicks']      ?? 0;
+            $ctr   = $kw['ctr']         ?? '-';
+            $pos   = $kw['position']    ?? '-';
+
+            $lines[] = ( $i + 1 ) . ' | ' . $query . ' | ' . $imp . ' | ' . $click . ' | ' . $ctr . ' | ' . $pos;
+        }
+    }
+
+    return ! empty( $lines ) ? implode( "\n", $lines ) : '';
 }
 
 /**
