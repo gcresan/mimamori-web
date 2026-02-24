@@ -18,6 +18,9 @@ class Gcrev_Bootstrap {
         add_action('gcrev_monthly_report_generate_chunk_event', [__CLASS__, 'on_monthly_report_generate_chunk_event'], 10, 2);
         add_action('gcrev_monthly_report_finalize_event', [__CLASS__, 'on_monthly_report_finalize_event']);
 
+        // Cron Log クリーンアップ
+        add_action('gcrev_cron_log_cleanup_event', [__CLASS__, 'on_cron_log_cleanup']);
+
         // schedule (initで「未登録なら登録」※現状と同じ)
         add_action('init', [__CLASS__, 'maybe_schedule_events']);
 
@@ -79,6 +82,13 @@ class Gcrev_Bootstrap {
         $api->auto_finalize_monthly_reports();
     }
 
+    public static function on_cron_log_cleanup(): void {
+        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+            $deleted = Gcrev_Cron_Logger::cleanup_old( 90 );
+            error_log( "[GCREV] Cron log cleanup: {$deleted} old entries removed" );
+        }
+    }
+
     // =========================================================
     // Schedule登録（イベント名・時刻は現状維持）
     // =========================================================
@@ -93,6 +103,9 @@ class Gcrev_Bootstrap {
 
         // Monthly report finalize (tomorrow 23:00)
         self::schedule_daily_if_missing('gcrev_monthly_report_finalize_event', 'tomorrow 23:00:00');
+
+        // Cron log cleanup (tomorrow 02:00)
+        self::schedule_daily_if_missing('gcrev_cron_log_cleanup_event', 'tomorrow 02:00:00');
     }
 
     private static function schedule_daily_if_missing(string $hook, string $when): void {
@@ -114,6 +127,7 @@ class Gcrev_Bootstrap {
             'gcrev_prefetch_daily_event',
             'gcrev_monthly_report_generate_event',
             'gcrev_monthly_report_finalize_event',
+            'gcrev_cron_log_cleanup_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',

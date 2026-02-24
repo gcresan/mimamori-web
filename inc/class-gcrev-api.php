@@ -633,10 +633,22 @@ class Gcrev_Insight_API {
         if ( $offset === 0 ) {
             if ( get_transient( self::LOCK_PREFETCH ) ) {
                 error_log( '[GCREV] prefetch_chunk: LOCKED, skipping duplicate run' );
+                if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    $locked_id = Gcrev_Cron_Logger::start( 'prefetch', [ 'note' => 'locked' ] );
+                    Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
+                }
                 return;
             }
             set_transient( self::LOCK_PREFETCH, 1, self::LOCK_TTL );
+            // Cron Logger: ジョブ開始
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                $log_id = Gcrev_Cron_Logger::start( 'prefetch', [ 'chunk_limit' => $limit ] );
+                set_transient( 'gcrev_current_prefetch_log_id', $log_id, self::LOCK_TTL );
+            }
         }
+
+        // Cron Logger: log_id を取得
+        $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( 'gcrev_current_prefetch_log_id' ) : 0;
 
         error_log("[GCREV] prefetch_chunk START: offset={$offset}, limit={$limit}");
 
@@ -648,6 +660,10 @@ class Gcrev_Insight_API {
 
         if (empty($users)) {
             error_log("[GCREV] prefetch_chunk: No users found (offset={$offset}). Stopping.");
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( 'gcrev_current_prefetch_log_id' );
+            }
             return;
         }
 
@@ -656,11 +672,15 @@ class Gcrev_Insight_API {
         foreach ($users as $u) {
             $user_id = (int)$u->ID;
             error_log("[GCREV] Prefetch processing: user_id={$user_id}");
+            $user_had_error = false;
 
             try {
                 $config = $this->config->get_user_config($user_id);
             } catch (\Exception $e) {
                 error_log("[GCREV] Prefetch SKIP user_id={$user_id}: " . $e->getMessage());
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $e->getMessage() );
+                }
                 continue;
             }
 
@@ -678,6 +698,7 @@ class Gcrev_Insight_API {
                     error_log("[GCREV] Prefetch SUCCESS user_id={$user_id}, range={$range}");
                 } catch (\Exception $e) {
                     error_log("[GCREV] Prefetch ERROR user_id={$user_id}, range={$range}: " . $e->getMessage());
+                    $user_had_error = true;
                 }
 
                 usleep(self::PREFETCH_SLEEP_US);
@@ -703,8 +724,19 @@ class Gcrev_Insight_API {
                     error_log("[GCREV] Prefetch trend SUCCESS user_id={$user_id}, metric={$trend_metric}");
                 } catch (\Exception $e) {
                     error_log("[GCREV] Prefetch trend ERROR user_id={$user_id}, metric={$trend_metric}: " . $e->getMessage());
+                    $user_had_error = true;
                 }
                 usleep(self::PREFETCH_SLEEP_US);
+            }
+
+            // Cron Logger: ユーザー単位の結果を記録
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::log_user(
+                    $log_id,
+                    $user_id,
+                    $user_had_error ? 'error' : 'success',
+                    $user_had_error ? 'Some ranges had errors' : null
+                );
             }
         }
 
@@ -717,6 +749,11 @@ class Gcrev_Insight_API {
         } else {
             delete_transient( self::LOCK_PREFETCH );
             error_log("[GCREV] Prefetch DONE. No more users.");
+            // Cron Logger: ジョブ完了
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( 'gcrev_current_prefetch_log_id' );
+            }
         }
     }
 
@@ -1423,6 +1460,10 @@ class Gcrev_Insight_API {
         // ─── 重複実行防止ロック ───
         if ( get_transient( self::LOCK_REPORT_GEN ) ) {
             error_log( '[GCREV] auto_generate_monthly_reports: LOCKED, skipping duplicate run' );
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                $locked_id = Gcrev_Cron_Logger::start( 'report_generate', [ 'note' => 'locked' ] );
+                Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
+            }
             return;
         }
         set_transient( self::LOCK_REPORT_GEN, 1, self::LOCK_TTL );
@@ -1435,6 +1476,12 @@ class Gcrev_Insight_API {
             error_log( '[GCREV] auto_generate_monthly_reports: Not 1st of month, skipping.' );
             delete_transient( self::LOCK_REPORT_GEN );
             return;
+        }
+
+        // Cron Logger: ジョブ開始
+        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+            $log_id = Gcrev_Cron_Logger::start( 'report_generate', [ 'chunk_limit' => self::REPORT_CHUNK_LIMIT ] );
+            set_transient( 'gcrev_current_report_gen_log_id', $log_id, self::LOCK_TTL );
         }
 
         error_log( '[GCREV] auto_generate_monthly_reports: START on ' . $now->format( 'Y-m-d' ) . ' — scheduling chunk(0)' );
@@ -1459,6 +1506,9 @@ class Gcrev_Insight_API {
      */
     public function report_generate_chunk( int $offset, int $limit ): void {
 
+        // Cron Logger: log_id を取得
+        $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( 'gcrev_current_report_gen_log_id' ) : 0;
+
         error_log( "[GCREV] report_generate_chunk START: offset={$offset}, limit={$limit}" );
 
         $tz         = wp_timezone();
@@ -1474,6 +1524,10 @@ class Gcrev_Insight_API {
         if ( empty( $users ) ) {
             delete_transient( self::LOCK_REPORT_GEN );
             error_log( "[GCREV] report_generate_chunk: No users at offset={$offset}. DONE." );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( 'gcrev_current_report_gen_log_id' );
+            }
             return;
         }
 
@@ -1484,6 +1538,9 @@ class Gcrev_Insight_API {
             $existing = $this->repo->get_reports_by_month( $user_id, $year_month );
             if ( ! empty( $existing ) ) {
                 error_log( "[GCREV] auto_generate: user_id={$user_id} already has report for {$year_month}, skipping." );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Report already exists' );
+                }
                 continue;
             }
 
@@ -1501,6 +1558,9 @@ class Gcrev_Insight_API {
             // 必須項目チェック
             if ( empty( $client_info['site_url'] ) || empty( $client_info['target'] ) ) {
                 error_log( "[GCREV] auto_generate: user_id={$user_id} missing client info, skipping." );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Missing client info' );
+                }
                 continue;
             }
 
@@ -1508,6 +1568,9 @@ class Gcrev_Insight_API {
             $prev2_check = $this->has_prev2_data( $user_id );
             if ( ! $prev2_check['available'] ) {
                 error_log( "[GCREV] auto_generate: user_id={$user_id} GA4_NOT_READY, skipping: " . ( $prev2_check['reason'] ?? '' ) );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'GA4 not ready: ' . ( $prev2_check['reason'] ?? '' ) );
+                }
                 continue;
             }
 
@@ -1562,9 +1625,15 @@ class Gcrev_Insight_API {
                 }
 
                 error_log( "[GCREV] auto_generate: SUCCESS user_id={$user_id}, year_month={$year_month}" );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'success' );
+                }
 
             } catch ( \Exception $e ) {
                 error_log( "[GCREV] auto_generate: ERROR user_id={$user_id}: " . $e->getMessage() );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'error', $e->getMessage() );
+                }
             }
         }
 
@@ -1582,6 +1651,10 @@ class Gcrev_Insight_API {
         } else {
             delete_transient( self::LOCK_REPORT_GEN );
             error_log( '[GCREV] report_generate_chunk: All users processed. DONE.' );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( 'gcrev_current_report_gen_log_id' );
+            }
         }
     }
 
@@ -1595,6 +1668,10 @@ class Gcrev_Insight_API {
         // ─── 重複実行防止ロック ───
         if ( get_transient( self::LOCK_REPORT_FINALIZE ) ) {
             error_log( '[GCREV] auto_finalize: LOCKED, skipping duplicate run' );
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                $locked_id = Gcrev_Cron_Logger::start( 'report_finalize', [ 'note' => 'locked' ] );
+                Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
+            }
             return;
         }
         set_transient( self::LOCK_REPORT_FINALIZE, 1, self::LOCK_TTL );
@@ -1608,6 +1685,12 @@ class Gcrev_Insight_API {
             error_log("[GCREV] auto_finalize: Not end of month, skipping.");
             delete_transient( self::LOCK_REPORT_FINALIZE );
             return;
+        }
+
+        // Cron Logger: ジョブ開始
+        $log_id = 0;
+        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+            $log_id = Gcrev_Cron_Logger::start( 'report_finalize' );
         }
 
         error_log("[GCREV] auto_finalize_monthly_reports: START on " . $now->format('Y-m-d'));
@@ -1643,6 +1726,9 @@ class Gcrev_Insight_API {
             $posts = get_posts($args);
             if (empty($posts)) {
                 error_log("[GCREV] auto_finalize: user_id={$user_id} has no current report for {$year_month}, skipping.");
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'No current report' );
+                }
                 continue;
             }
 
@@ -1652,6 +1738,9 @@ class Gcrev_Insight_API {
             // 既にfinalなら何もしない
             if ($state === 'final') {
                 error_log("[GCREV] auto_finalize: user_id={$user_id} report already final, skipping.");
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Already final' );
+                }
                 continue;
             }
 
@@ -1660,10 +1749,18 @@ class Gcrev_Insight_API {
             update_post_meta($post->ID, '_gcrev_finalized_at', $now->format('Y-m-d H:i:s'));
 
             error_log("[GCREV] auto_finalize: SUCCESS user_id={$user_id}, post_id={$post->ID}, year_month={$year_month}");
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'success' );
+            }
         }
 
         delete_transient( self::LOCK_REPORT_FINALIZE );
         error_log("[GCREV] auto_finalize_monthly_reports: DONE");
+
+        // Cron Logger: ジョブ完了
+        if ( $log_id > 0 ) {
+            Gcrev_Cron_Logger::finish( $log_id, 'success' );
+        }
     }
     // =========================================================
     // v2ダッシュボード統合用メソッド（2881行目の直後に追加）

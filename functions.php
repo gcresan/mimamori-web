@@ -470,6 +470,10 @@ $gcrev_utils_rate_limiter = $gcrev_utils_path . 'class-rate-limiter.php';
 if ( file_exists( $gcrev_utils_rate_limiter ) ) {
     require_once $gcrev_utils_rate_limiter;
 }
+$gcrev_utils_cron_logger = $gcrev_utils_path . 'class-cron-logger.php';
+if ( file_exists( $gcrev_utils_cron_logger ) ) {
+    require_once $gcrev_utils_cron_logger;
+}
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）
@@ -2441,6 +2445,9 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
 add_action('after_setup_theme', function () {
     gcrev_actual_cv_create_table();
     gcrev_cv_routes_create_table();
+    if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+        Gcrev_Cron_Logger::create_tables();
+    }
 });
 
 function gcrev_actual_cv_table_name(): string {
