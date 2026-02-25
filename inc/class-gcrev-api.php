@@ -3,7 +3,42 @@ declare(strict_types=1);
 
 if ( ! defined('ABSPATH') ) { exit; }
 
-require_once '/home/gcrev/vendor/autoload.php';
+/**
+ * Composer autoload — 環境に応じたパスで読み込む
+ *
+ * 優先順:
+ *   1. wp-config.php の GCREV_VENDOR_PATH 定数
+ *   2. テーマ親ディレクトリの vendor/ （開発環境用フォールバック）
+ *
+ * 見つからない場合は error_log に記録し wp_die() で停止する。
+ */
+$gcrev_autoload_path = '';
+
+if ( defined( 'GCREV_VENDOR_PATH' ) && GCREV_VENDOR_PATH !== '' ) {
+    $gcrev_autoload_path = rtrim( GCREV_VENDOR_PATH, '/' ) . '/autoload.php';
+} else {
+    // フォールバック: テーマの2階層上に vendor/ がある想定
+    $gcrev_autoload_path = dirname( __DIR__, 2 ) . '/vendor/autoload.php';
+}
+
+if ( ! file_exists( $gcrev_autoload_path ) ) {
+    $gcrev_err = sprintf(
+        '[GCREV] vendor/autoload.php が見つかりません: %s — wp-config.php に define(\'GCREV_VENDOR_PATH\', \'/path/to/vendor\'); を追加してください。',
+        $gcrev_autoload_path
+    );
+    error_log( $gcrev_err );
+    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+        WP_CLI::error( $gcrev_err );
+    }
+    wp_die(
+        esc_html( $gcrev_err ),
+        'GCREV 設定エラー',
+        [ 'response' => 500 ]
+    );
+}
+
+require_once $gcrev_autoload_path;
+unset( $gcrev_autoload_path, $gcrev_err );
 
 use Google\Analytics\Data\V1beta\Client\BetaAnalyticsDataClient;
 use Google\Analytics\Data\V1beta\RunReportRequest;
@@ -304,6 +339,20 @@ class Gcrev_Insight_API {
         register_rest_route('gcrev/v1', '/meo/location-id', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_set_meo_location_id' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
+        // ===== GBPロケーション一覧取得エンドポイント =====
+        register_rest_route('gcrev/v1', '/meo/gbp-locations', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_gbp_locations' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
+        // ===== GBPロケーション選択・保存エンドポイント =====
+        register_rest_route('gcrev/v1', '/meo/select-location', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_select_gbp_location' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
@@ -2683,6 +2732,209 @@ class Gcrev_Insight_API {
         return new \WP_REST_Response([
             'success'  => true,
             'message'  => $test_ok ? 'ロケーションIDを設定しました（API接続テスト成功）' : 'ロケーションIDを保存しました（API接続テストに失敗しました。IDが正しいか確認してください）',
+            'verified' => $test_ok,
+        ], 200);
+    }
+
+    // =========================================================
+    // GBP ロケーション自動取得
+    // =========================================================
+
+    /**
+     * GBP Account Management / Business Information API からロケーション一覧を取得
+     *
+     * @param int $user_id
+     * @return array ['success' => bool, 'locations' => array, 'message' => string]
+     */
+    public function gbp_list_locations(int $user_id): array {
+        $access_token = $this->gbp_get_access_token($user_id);
+        if (empty($access_token)) {
+            return ['success' => false, 'locations' => [], 'message' => 'アクセストークンを取得できません。再接続してください。'];
+        }
+
+        // Step 1: アカウント一覧取得
+        $accounts_url  = 'https://mybusinessaccountmanagement.googleapis.com/v1/accounts';
+        $accounts_resp = wp_remote_get($accounts_url, [
+            'headers' => ['Authorization' => 'Bearer ' . $access_token],
+            'timeout' => 30,
+        ]);
+
+        if (is_wp_error($accounts_resp)) {
+            $err = $accounts_resp->get_error_message();
+            error_log("[GCREV][GBP] Accounts API error: {$err}");
+            return ['success' => false, 'locations' => [], 'message' => 'Google API接続エラー: ' . $err];
+        }
+
+        $accounts_status = wp_remote_retrieve_response_code($accounts_resp);
+        if ($accounts_status !== 200) {
+            $accounts_body = wp_remote_retrieve_body($accounts_resp);
+            error_log("[GCREV][GBP] Accounts API HTTP {$accounts_status}: {$accounts_body}");
+            return ['success' => false, 'locations' => [], 'message' => "アカウント一覧の取得に失敗しました（HTTP {$accounts_status}）。Google Cloud Console で My Business Account Management API が有効か確認してください。"];
+        }
+
+        $accounts_data = json_decode(wp_remote_retrieve_body($accounts_resp), true);
+        $accounts      = $accounts_data['accounts'] ?? [];
+
+        if (empty($accounts)) {
+            error_log("[GCREV][GBP] No accounts found for user_id={$user_id}");
+            return ['success' => true, 'locations' => [], 'message' => 'Googleビジネスプロフィールのアカウントが見つかりません。'];
+        }
+
+        // Step 2: 各アカウントのロケーション一覧取得
+        $all_locations = [];
+        foreach ($accounts as $account) {
+            $account_name = $account['name'] ?? '';
+            if (empty($account_name)) {
+                continue;
+            }
+
+            $locations_url  = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/locations";
+            $locations_url .= '?' . http_build_query(['readMask' => 'name,title,storefrontAddress'], '', '&');
+
+            $locations_resp = wp_remote_get($locations_url, [
+                'headers' => ['Authorization' => 'Bearer ' . $access_token],
+                'timeout' => 30,
+            ]);
+
+            if (is_wp_error($locations_resp)) {
+                error_log("[GCREV][GBP] Locations API error for {$account_name}: " . $locations_resp->get_error_message());
+                continue;
+            }
+
+            $loc_status = wp_remote_retrieve_response_code($locations_resp);
+            if ($loc_status !== 200) {
+                $loc_body = wp_remote_retrieve_body($locations_resp);
+                error_log("[GCREV][GBP] Locations API HTTP {$loc_status} for {$account_name}: {$loc_body}");
+                continue;
+            }
+
+            $loc_data   = json_decode(wp_remote_retrieve_body($locations_resp), true);
+            $locations  = $loc_data['locations'] ?? [];
+
+            foreach ($locations as $loc) {
+                $loc_name = $loc['name'] ?? '';
+                if (empty($loc_name)) {
+                    continue;
+                }
+
+                // 住所を結合
+                $addr_parts = [];
+                $addr       = $loc['storefrontAddress'] ?? [];
+                if (!empty($addr['regionCode']) && $addr['regionCode'] !== 'JP') {
+                    $addr_parts[] = $addr['regionCode'];
+                }
+                if (!empty($addr['administrativeArea'])) {
+                    $addr_parts[] = $addr['administrativeArea'];
+                }
+                if (!empty($addr['locality'])) {
+                    $addr_parts[] = $addr['locality'];
+                }
+                foreach (($addr['addressLines'] ?? []) as $line) {
+                    $addr_parts[] = $line;
+                }
+                $address_str = implode('', $addr_parts);
+
+                $all_locations[] = [
+                    'location_id' => $loc_name,
+                    'title'       => $loc['title'] ?? '',
+                    'address'     => $address_str,
+                ];
+            }
+        }
+
+        error_log("[GCREV][GBP] Found " . count($all_locations) . " location(s) for user_id={$user_id}");
+
+        return [
+            'success'   => true,
+            'locations' => $all_locations,
+            'message'   => empty($all_locations) ? 'ロケーションが見つかりません。Googleビジネスプロフィールに店舗が登録されているか確認してください。' : '',
+        ];
+    }
+
+    /**
+     * REST: GBPロケーション一覧を取得
+     */
+    public function rest_get_gbp_locations(\WP_REST_Request $request): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
+        }
+
+        $result = $this->gbp_list_locations($user_id);
+
+        return new \WP_REST_Response($result, $result['success'] ? 200 : 500);
+    }
+
+    /**
+     * REST: GBPロケーションを選択して保存
+     */
+    public function rest_select_gbp_location(\WP_REST_Request $request): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
+        }
+
+        $params      = $request->get_json_params();
+        $location_id = sanitize_text_field($params['location_id'] ?? '');
+        $title       = sanitize_text_field($params['title'] ?? '');
+        $address     = sanitize_text_field($params['address'] ?? '');
+
+        if (empty($location_id)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'ロケーションIDは必須です'], 400);
+        }
+
+        // locations/ 形式であることを確認
+        if (strpos($location_id, 'locations/') !== 0) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'ロケーションIDの形式が正しくありません'], 400);
+        }
+
+        // GBP Performance API で疎通テスト
+        $access_token = $this->gbp_get_access_token($user_id);
+        $test_ok = false;
+        if (!empty($access_token)) {
+            $test_url  = "https://businessprofileperformance.googleapis.com/v1/{$location_id}:fetchMultiDailyMetricsTimeSeries";
+            $today     = new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tokyo'));
+            $start     = $today->modify('-7 days');
+            $test_body = [
+                'dailyMetrics' => ['BUSINESS_IMPRESSIONS_DESKTOP_SEARCH'],
+                'dailyRange'   => [
+                    'startDate' => ['year' => (int) $start->format('Y'), 'month' => (int) $start->format('n'), 'day' => (int) $start->format('j')],
+                    'endDate'   => ['year' => (int) $today->format('Y'), 'month' => (int) $today->format('n'), 'day' => (int) $today->format('j')],
+                ],
+            ];
+            $test_response = wp_remote_post($test_url, [
+                'headers' => ['Authorization' => 'Bearer ' . $access_token, 'Content-Type' => 'application/json'],
+                'body'    => wp_json_encode($test_body),
+                'timeout' => 15,
+            ]);
+            $test_status = wp_remote_retrieve_response_code($test_response);
+            $test_ok     = ($test_status === 200);
+            error_log("[GCREV][GBP] Select location test: {$location_id} → HTTP {$test_status}");
+        }
+
+        // user_meta に保存
+        update_user_meta($user_id, '_gcrev_gbp_location_id',      $location_id);
+        update_user_meta($user_id, '_gcrev_gbp_location_name',    $title);
+        update_user_meta($user_id, '_gcrev_gbp_location_address', $address);
+
+        // 検索範囲が未設定ならデフォルト
+        $existing_radius = (int) get_user_meta($user_id, '_gcrev_gbp_location_radius', true);
+        if ($existing_radius < 100) {
+            update_user_meta($user_id, '_gcrev_gbp_location_radius', 1000);
+        }
+
+        // MEOキャッシュ削除
+        global $wpdb;
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            '%gcrev_meo_' . $user_id . '%'
+        ));
+
+        error_log("[GCREV][GBP] Location selected: user_id={$user_id}, location_id={$location_id}, title={$title}");
+
+        return new \WP_REST_Response([
+            'success'  => true,
+            'message'  => $test_ok ? 'ロケーションを設定しました（API接続テスト成功）' : 'ロケーションを保存しました（API接続テストに失敗しました。データ取得にはBusiness Profile Performance APIの有効化が必要です）',
             'verified' => $test_ok,
         ], 200);
     }

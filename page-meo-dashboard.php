@@ -100,127 +100,207 @@ get_header();
     </div>
 
 <?php elseif ( ! $has_location ): ?>
-    <!-- ===== ロケーション未設定：登録フォーム ===== -->
-    <?php
-    $user_info      = get_userdata($user_id);
-    $user_last_name = get_user_meta($user_id, 'last_name', true);
-    if (!empty($user_last_name)) {
-        $display_label = $user_last_name;
-    } elseif (!empty($user_info->display_name) && $user_info->display_name !== $user_info->user_login) {
-        $display_label = $user_info->display_name;
-    } else {
-        $display_label = get_bloginfo('name');
-    }
-    ?>
-    <div style="max-width: 600px; margin: 40px auto; padding: 0 20px;">
+    <!-- ===== ロケーション未設定：GBPから自動取得 + 選択 ===== -->
+    <div style="max-width: 700px; margin: 40px auto; padding: 0 20px;">
         <div style="background: #fff; border-radius: 16px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-            <h3 style="font-size: 20px; font-weight: 700; color: #2C3E40; text-align: center; margin-bottom: 32px;">
-                「<?php echo esc_html($display_label); ?>」のランキング計測場所を登録してください
+            <h3 id="gbp-loc-heading" style="font-size: 20px; font-weight: 700; color: #2C3E40; text-align: center; margin-bottom: 12px;">
+                📍 Googleビジネスプロフィールからロケーションを取得中...
             </h3>
+            <p id="gbp-loc-status" style="text-align: center; color: #666; margin-bottom: 24px;">接続先のGBPアカウントからロケーション一覧を読み込んでいます...</p>
 
-            <div id="meo-location-form">
-                <!-- 場所名 -->
-                <div style="margin-bottom: 24px;">
-                    <label style="display: block; font-size: 14px; font-weight: 600; color: #555555; margin-bottom: 8px;">場所名</label>
-                    <input type="text" id="meo-loc-name"
-                           placeholder="例：愛媛県松山市"
-                           style="width: 100%; padding: 12px 16px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 15px; color: #2C3E40; outline: none; transition: border-color 0.15s; box-sizing: border-box;"
-                           onfocus="this.style.borderColor='#3D6B6E'" onblur="this.style.borderColor='#D0D5DA'">
-                    <div style="font-size: 12px; color: #888888; margin-top: 6px;">※任意(チーム内で分かりやすい場所名を入力してください)</div>
+            <!-- ロケーション一覧表示エリア -->
+            <div id="gbp-loc-list" style="display: none;"></div>
+
+            <!-- エラー時メッセージ -->
+            <div id="gbp-loc-error" style="display: none; background: #fef2f2; border-radius: 8px; padding: 16px; margin-bottom: 20px; color: #C0392B; font-size: 14px;"></div>
+
+            <!-- 選択結果メッセージ -->
+            <div id="gbp-loc-message" style="display: none; margin-top: 20px; padding: 12px 16px; border-radius: 8px; font-size: 14px; text-align: center;"></div>
+
+            <!-- フォールバック：手動入力（非表示→ エラー時に表示） -->
+            <div id="gbp-loc-manual" style="display: none; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 24px;">
+                <h4 style="font-size: 15px; font-weight: 600; color: #555; margin-bottom: 16px;">手動でロケーション情報を入力</h4>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">ロケーションID</label>
+                    <input type="text" id="manual-loc-id" placeholder="例：12345678901234567"
+                           style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;">
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">Googleビジネスプロフィールの管理画面URLに含まれる数字</div>
                 </div>
-
-                <!-- 住所 -->
-                <div style="margin-bottom: 24px;">
-                    <label style="display: block; font-size: 14px; font-weight: 600; color: #555555; margin-bottom: 8px;">住所</label>
-                    <input type="text" id="meo-loc-address"
-                           placeholder="例：〒790-0003 愛媛県松山市三番町7丁目12-1"
-                           style="width: 100%; padding: 12px 16px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 15px; color: #2C3E40; outline: none; transition: border-color 0.15s; box-sizing: border-box;"
-                           onfocus="this.style.borderColor='#3D6B6E'" onblur="this.style.borderColor='#D0D5DA'">
-                    <div style="font-size: 12px; color: #888888; margin-top: 6px;">※必須</div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">店舗名</label>
+                    <input type="text" id="manual-loc-title" placeholder="例：株式会社ジィクレブ"
+                           style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;">
                 </div>
-
-                <!-- 検索範囲 -->
-                <div style="margin-bottom: 32px;">
-                    <label style="display: block; font-size: 14px; font-weight: 600; color: #555555; margin-bottom: 8px;">検索範囲（m）</label>
-                    <input type="number" id="meo-loc-radius" value="1000" min="100" max="50000" step="100"
-                           style="width: 100%; padding: 12px 16px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 15px; color: #2C3E40; outline: none; transition: border-color 0.15s; box-sizing: border-box;"
-                           onfocus="this.style.borderColor='#3D6B6E'" onblur="this.style.borderColor='#D0D5DA'">
-                    <div style="font-size: 12px; color: #888888; margin-top: 6px;">※キーワードランキングを検索する範囲（デフォルト：1000m）</div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">住所</label>
+                    <input type="text" id="manual-loc-address" placeholder="例：愛媛県松山市三番町7丁目12-1"
+                           style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;">
                 </div>
-
-                <!-- 送信ボタン -->
                 <div style="text-align: center;">
-                    <button id="meo-loc-submit"
-                            onclick="submitLocation()"
-                            style="min-width: 240px; padding: 14px 40px; background: #3D6B6E; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.15s;"
-                            onmouseover="this.style.background='#346062'" onmouseout="this.style.background='#3D6B6E'">
-                        送信
+                    <button onclick="gcrevSubmitManualLocation()"
+                            id="manual-loc-btn"
+                            style="padding: 12px 32px; background: #3D6B6E; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                        設定
                     </button>
                 </div>
-
-                <!-- メッセージ -->
-                <div id="meo-loc-message" style="display: none; margin-top: 20px; padding: 12px 16px; border-radius: 8px; font-size: 14px; text-align: center;"></div>
             </div>
         </div>
     </div>
 
     <script>
-    async function submitLocation() {
-        var name    = document.getElementById('meo-loc-name').value.trim();
-        var address = document.getElementById('meo-loc-address').value.trim();
-        var radius  = document.getElementById('meo-loc-radius').value.trim();
-        var msgEl   = document.getElementById('meo-loc-message');
-        var btn     = document.getElementById('meo-loc-submit');
+    (function() {
+        var GBP_LOC_API   = '<?php echo esc_js(rest_url("gcrev/v1/meo/gbp-locations")); ?>';
+        var SELECT_API    = '<?php echo esc_js(rest_url("gcrev/v1/meo/select-location")); ?>';
+        var WP_NONCE      = '<?php echo esc_js(wp_create_nonce("wp_rest")); ?>';
 
-        if (!address) {
-            msgEl.style.display = 'block';
-            msgEl.style.background = '#fef2f2';
-            msgEl.style.color = '#C0392B';
-            msgEl.textContent = '住所は必須です。';
-            return;
+        function escHtml(str) {
+            var d = document.createElement('div');
+            d.appendChild(document.createTextNode(str || ''));
+            return d.innerHTML;
+        }
+        function escAttr(str) {
+            return (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
 
-        btn.disabled = true;
-        btn.textContent = '送信中...';
-        btn.style.background = '#93c5fd';
-        msgEl.style.display = 'none';
+        // ページ読み込み時に自動取得
+        (async function() {
+            var headingEl = document.getElementById('gbp-loc-heading');
+            var statusEl  = document.getElementById('gbp-loc-status');
+            var listEl    = document.getElementById('gbp-loc-list');
+            var errorEl   = document.getElementById('gbp-loc-error');
+            var manualEl  = document.getElementById('gbp-loc-manual');
 
-        try {
-            var response = await fetch('<?php echo esc_js(rest_url("gcrev/v1/meo/location")); ?>', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-WP-Nonce': '<?php echo wp_create_nonce("wp_rest"); ?>'
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    name: name,
-                    address: address,
-                    radius: parseInt(radius) || 1000
-                })
-            });
+            try {
+                var response = await fetch(GBP_LOC_API, {
+                    headers: { 'X-WP-Nonce': WP_NONCE },
+                    credentials: 'same-origin'
+                });
+                var result = await response.json();
 
-            var result = await response.json();
+                if (!result.success || !result.locations || result.locations.length === 0) {
+                    headingEl.textContent = '📍 ロケーションの設定';
+                    statusEl.textContent = '';
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = result.message || 'ロケーションが見つかりません。Google Cloud Console で My Business Account Management API と My Business Business Information API が有効化されているか確認してください。';
+                    manualEl.style.display = 'block';
+                    return;
+                }
 
-            if (result.success) {
-                msgEl.style.display = 'block';
-                msgEl.style.background = '#f0fdf4';
-                msgEl.style.color = '#16a34a';
-                msgEl.textContent = '✅ 登録しました。ページをリロードします...';
-                setTimeout(function() { location.reload(); }, 1500);
-            } else {
-                throw new Error(result.message || '登録に失敗しました');
+                // ロケーション一覧を表示
+                headingEl.textContent = '📍 ロケーションを選択してください';
+                statusEl.textContent = '以下のロケーションが見つかりました。設定するロケーションを選択してください。';
+                listEl.style.display = 'block';
+
+                var html = '';
+                result.locations.forEach(function(loc) {
+                    html += '<div style="border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">';
+                    html += '  <div style="flex: 1; min-width: 200px;">';
+                    html += '    <div style="font-size: 16px; font-weight: 700; color: #2C3E40; margin-bottom: 4px;">' + escHtml(loc.title) + '</div>';
+                    html += '    <div style="font-size: 13px; color: #666;">' + escHtml(loc.address) + '</div>';
+                    html += '    <div style="font-size: 11px; color: #999; margin-top: 4px;">ID: ' + escHtml(loc.location_id) + '</div>';
+                    html += '  </div>';
+                    html += '  <button onclick="gcrevSelectLocation(\'' + escAttr(loc.location_id) + '\', \'' + escAttr(loc.title) + '\', \'' + escAttr(loc.address) + '\', this)"';
+                    html += '    style="padding: 10px 24px; background: #3D6B6E; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"';
+                    html += '    onmouseover="this.style.background=\'#346062\'" onmouseout="this.style.background=\'#3D6B6E\'">';
+                    html += '    この店舗を設定';
+                    html += '  </button>';
+                    html += '</div>';
+                });
+                listEl.innerHTML = html;
+
+            } catch (error) {
+                headingEl.textContent = '📍 ロケーションの設定';
+                statusEl.textContent = '';
+                errorEl.style.display = 'block';
+                errorEl.textContent = 'ロケーション取得中にエラーが発生しました: ' + error.message;
+                manualEl.style.display = 'block';
             }
-        } catch (error) {
-            msgEl.style.display = 'block';
-            msgEl.style.background = '#fef2f2';
-            msgEl.style.color = '#C0392B';
-            msgEl.textContent = 'エラー: ' + error.message;
-            btn.disabled = false;
-            btn.textContent = '送信';
-            btn.style.background = '#3D6B6E';
-        }
-    }
+        })();
+
+        // ロケーション選択
+        window.gcrevSelectLocation = async function(locationId, title, address, btn) {
+            var msgEl = document.getElementById('gbp-loc-message');
+            btn.disabled = true;
+            btn.textContent = '設定中...';
+            btn.style.background = '#93c5fd';
+            msgEl.style.display = 'none';
+
+            try {
+                var response = await fetch(SELECT_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ location_id: locationId, title: title, address: address })
+                });
+                var result = await response.json();
+                if (result.success) {
+                    msgEl.style.display = 'block';
+                    msgEl.style.background = result.verified ? '#f0fdf4' : '#fffbeb';
+                    msgEl.style.color = result.verified ? '#16a34a' : '#B8941E';
+                    msgEl.textContent = (result.verified ? '✅ ' : '⚠️ ') + result.message + '　ページをリロードします...';
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    throw new Error(result.message || '設定に失敗しました');
+                }
+            } catch (error) {
+                msgEl.style.display = 'block';
+                msgEl.style.background = '#fef2f2';
+                msgEl.style.color = '#C0392B';
+                msgEl.textContent = 'エラー: ' + error.message;
+                btn.disabled = false;
+                btn.textContent = 'この店舗を設定';
+                btn.style.background = '#3D6B6E';
+            }
+        };
+
+        // 手動入力
+        window.gcrevSubmitManualLocation = async function() {
+            var locId   = document.getElementById('manual-loc-id').value.trim();
+            var title   = document.getElementById('manual-loc-title').value.trim();
+            var address = document.getElementById('manual-loc-address').value.trim();
+            var btn     = document.getElementById('manual-loc-btn');
+            var msgEl   = document.getElementById('gbp-loc-message');
+
+            if (!locId) {
+                msgEl.style.display = 'block';
+                msgEl.style.background = '#fef2f2';
+                msgEl.style.color = '#C0392B';
+                msgEl.textContent = 'ロケーションIDは必須です。';
+                return;
+            }
+            if (/^\d+$/.test(locId)) { locId = 'locations/' + locId; }
+
+            btn.disabled = true;
+            btn.textContent = '設定中...';
+            msgEl.style.display = 'none';
+
+            try {
+                var response = await fetch(SELECT_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ location_id: locId, title: title, address: address })
+                });
+                var result = await response.json();
+                if (result.success) {
+                    msgEl.style.display = 'block';
+                    msgEl.style.background = result.verified ? '#f0fdf4' : '#fffbeb';
+                    msgEl.style.color = result.verified ? '#16a34a' : '#B8941E';
+                    msgEl.textContent = (result.verified ? '✅ ' : '⚠️ ') + result.message + '　ページをリロードします...';
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    throw new Error(result.message || '設定に失敗しました');
+                }
+            } catch (error) {
+                msgEl.style.display = 'block';
+                msgEl.style.background = '#fef2f2';
+                msgEl.style.color = '#C0392B';
+                msgEl.textContent = 'エラー: ' + error.message;
+                btn.disabled = false;
+                btn.textContent = '設定';
+            }
+        };
+    })();
     </script>
 
 <?php else: ?>
@@ -235,74 +315,194 @@ get_header();
         <h4 style="font-size: 16px; font-weight: 700; color: #92400e; margin-bottom: 8px;">⚠️ GBPロケーションIDを設定してください</h4>
         <p style="font-size: 13px; color: #78350f; margin-bottom: 16px; line-height: 1.6;">
             ロケーションIDが未設定のため、データを取得できません。<br>
-            Googleビジネスプロフィールの管理画面URLに含まれる数字がロケーションIDです。<br>
-            例：<code style="background:rgba(212,168,66,0.12);padding:2px 6px;border-radius:4px;">https://business.google.com/dashboard/l/<strong style="color:#C0392B;">12345678901234567</strong></code>
+            「GBPから自動取得」ボタンでロケーションを取得するか、手動でIDを入力してください。
         </p>
-        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-            <input type="text" id="meo-location-id-input"
-                   placeholder="例：12345678901234567"
-                   style="flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
-                   onfocus="this.style.borderColor='#3D6B6E'" onblur="this.style.borderColor='#D0D5DA'">
-            <button id="meo-set-location-btn" onclick="setLocationId()"
-                    style="padding: 10px 24px; background: #D4A842; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
-                    onmouseover="this.style.background='#B8941E'" onmouseout="this.style.background='#D4A842'">
-                設定
+
+        <!-- 自動取得ボタン -->
+        <div style="margin-bottom: 16px;">
+            <button id="meo-auto-fetch-btn" onclick="gcrevAutoFetchLocation()"
+                    style="padding: 10px 24px; background: #3D6B6E; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
+                    onmouseover="this.style.background='#346062'" onmouseout="this.style.background='#3D6B6E'">
+                📍 GBPから自動取得
             </button>
         </div>
+
+        <!-- 自動取得結果表示エリア -->
+        <div id="meo-auto-loc-list" style="display: none; margin-bottom: 16px;"></div>
+
+        <!-- 手動入力（折りたたみ） -->
+        <details style="margin-top: 12px;">
+            <summary style="cursor: pointer; font-size: 13px; color: #78350f; font-weight: 600;">手動でロケーションIDを入力する</summary>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px;">
+                <input type="text" id="meo-location-id-input"
+                       placeholder="例：12345678901234567"
+                       style="flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
+                       onfocus="this.style.borderColor='#3D6B6E'" onblur="this.style.borderColor='#D0D5DA'">
+                <button id="meo-set-location-btn" onclick="gcrevSetManualLocationId()"
+                        style="padding: 10px 24px; background: #D4A842; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
+                        onmouseover="this.style.background='#B8941E'" onmouseout="this.style.background='#D4A842'">
+                    設定
+                </button>
+            </div>
+        </details>
+
         <div id="meo-locid-message" style="display: none; margin-top: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px;"></div>
     </div>
     <script>
-    async function setLocationId() {
-        var input = document.getElementById('meo-location-id-input').value.trim();
-        var msgEl = document.getElementById('meo-locid-message');
-        var btn   = document.getElementById('meo-set-location-btn');
+    (function() {
+        var GBP_LOC_API = '<?php echo esc_js(rest_url("gcrev/v1/meo/gbp-locations")); ?>';
+        var SELECT_API  = '<?php echo esc_js(rest_url("gcrev/v1/meo/select-location")); ?>';
+        var LOCID_API   = '<?php echo esc_js(rest_url("gcrev/v1/meo/location-id")); ?>';
+        var WP_NONCE    = '<?php echo esc_js(wp_create_nonce("wp_rest")); ?>';
 
-        if (!input) {
-            msgEl.style.display = 'block';
-            msgEl.style.background = '#fef2f2';
-            msgEl.style.color = '#C0392B';
-            msgEl.textContent = 'ロケーションIDを入力してください';
-            return;
-        }
+        function escHtml(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s || '')); return d.innerHTML; }
+        function escAttr(s) { return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"'); }
 
-        btn.disabled = true;
-        btn.textContent = '設定中...';
-        msgEl.style.display = 'none';
+        // 自動取得
+        window.gcrevAutoFetchLocation = async function() {
+            var btn    = document.getElementById('meo-auto-fetch-btn');
+            var listEl = document.getElementById('meo-auto-loc-list');
+            var msgEl  = document.getElementById('meo-locid-message');
+            btn.disabled = true;
+            btn.textContent = '取得中...';
+            btn.style.background = '#93c5fd';
+            msgEl.style.display = 'none';
+            listEl.style.display = 'none';
 
-        try {
-            var response = await fetch('<?php echo esc_js(rest_url("gcrev/v1/meo/location-id")); ?>', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': '<?php echo wp_create_nonce("wp_rest"); ?>' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ location_id: input })
-            });
-            var result = await response.json();
-            if (result.success) {
+            try {
+                var response = await fetch(GBP_LOC_API, {
+                    headers: { 'X-WP-Nonce': WP_NONCE },
+                    credentials: 'same-origin'
+                });
+                var result = await response.json();
+
+                if (!result.success || !result.locations || result.locations.length === 0) {
+                    msgEl.style.display = 'block';
+                    msgEl.style.background = '#fef2f2';
+                    msgEl.style.color = '#C0392B';
+                    msgEl.textContent = result.message || 'ロケーションが見つかりません。';
+                    btn.disabled = false;
+                    btn.textContent = '📍 GBPから自動取得';
+                    btn.style.background = '#3D6B6E';
+                    return;
+                }
+
+                // ロケーション一覧表示
+                listEl.style.display = 'block';
+                var html = '';
+                result.locations.forEach(function(loc) {
+                    html += '<div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; background: #fff;">';
+                    html += '  <div style="flex: 1; min-width: 180px;">';
+                    html += '    <div style="font-weight: 700; color: #2C3E40;">' + escHtml(loc.title) + '</div>';
+                    html += '    <div style="font-size: 12px; color: #666;">' + escHtml(loc.address) + '</div>';
+                    html += '  </div>';
+                    html += '  <button onclick="gcrevSelectPendingLocation(\'' + escAttr(loc.location_id) + '\', \'' + escAttr(loc.title) + '\', \'' + escAttr(loc.address) + '\', this)"';
+                    html += '    style="padding: 8px 20px; background: #3D6B6E; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">';
+                    html += '    選択';
+                    html += '  </button>';
+                    html += '</div>';
+                });
+                listEl.innerHTML = html;
+                btn.style.display = 'none';
+
+            } catch (error) {
                 msgEl.style.display = 'block';
-                if (result.verified) {
-                    msgEl.style.background = '#f0fdf4';
-                    msgEl.style.color = '#16a34a';
-                    msgEl.textContent = '✅ ' + result.message + '　ページをリロードします...';
+                msgEl.style.background = '#fef2f2';
+                msgEl.style.color = '#C0392B';
+                msgEl.textContent = 'エラー: ' + error.message;
+                btn.disabled = false;
+                btn.textContent = '📍 GBPから自動取得';
+                btn.style.background = '#3D6B6E';
+            }
+        };
+
+        // 自動取得からの選択
+        window.gcrevSelectPendingLocation = async function(locationId, title, address, btn) {
+            var msgEl = document.getElementById('meo-locid-message');
+            btn.disabled = true;
+            btn.textContent = '設定中...';
+            msgEl.style.display = 'none';
+
+            try {
+                var response = await fetch(SELECT_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ location_id: locationId, title: title, address: address })
+                });
+                var result = await response.json();
+                if (result.success) {
+                    msgEl.style.display = 'block';
+                    msgEl.style.background = result.verified ? '#f0fdf4' : '#fffbeb';
+                    msgEl.style.color = result.verified ? '#16a34a' : '#B8941E';
+                    msgEl.textContent = (result.verified ? '✅ ' : '⚠️ ') + result.message + '　ページをリロードします...';
                     setTimeout(function() { location.reload(); }, 1500);
                 } else {
-                    msgEl.style.background = '#fffbeb';
-                    msgEl.style.color = '#B8941E';
-                    msgEl.textContent = '⚠️ ' + result.message;
-                    btn.disabled = false;
-                    btn.textContent = '設定';
+                    throw new Error(result.message || '設定に失敗しました');
                 }
-            } else {
-                throw new Error(result.message || '設定に失敗しました');
+            } catch (error) {
+                msgEl.style.display = 'block';
+                msgEl.style.background = '#fef2f2';
+                msgEl.style.color = '#C0392B';
+                msgEl.textContent = 'エラー: ' + error.message;
+                btn.disabled = false;
+                btn.textContent = '選択';
             }
-        } catch (error) {
-            msgEl.style.display = 'block';
-            msgEl.style.background = '#fef2f2';
-            msgEl.style.color = '#C0392B';
-            msgEl.textContent = 'エラー: ' + error.message;
-            btn.disabled = false;
-            btn.textContent = '設定';
-        }
-    }
+        };
+
+        // 手動入力
+        window.gcrevSetManualLocationId = async function() {
+            var input = document.getElementById('meo-location-id-input').value.trim();
+            var msgEl = document.getElementById('meo-locid-message');
+            var btn   = document.getElementById('meo-set-location-btn');
+
+            if (!input) {
+                msgEl.style.display = 'block';
+                msgEl.style.background = '#fef2f2';
+                msgEl.style.color = '#C0392B';
+                msgEl.textContent = 'ロケーションIDを入力してください';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '設定中...';
+            msgEl.style.display = 'none';
+
+            try {
+                var response = await fetch(LOCID_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ location_id: input })
+                });
+                var result = await response.json();
+                if (result.success) {
+                    msgEl.style.display = 'block';
+                    if (result.verified) {
+                        msgEl.style.background = '#f0fdf4';
+                        msgEl.style.color = '#16a34a';
+                        msgEl.textContent = '✅ ' + result.message + '　ページをリロードします...';
+                        setTimeout(function() { location.reload(); }, 1500);
+                    } else {
+                        msgEl.style.background = '#fffbeb';
+                        msgEl.style.color = '#B8941E';
+                        msgEl.textContent = '⚠️ ' + result.message;
+                        btn.disabled = false;
+                        btn.textContent = '設定';
+                    }
+                } else {
+                    throw new Error(result.message || '設定に失敗しました');
+                }
+            } catch (error) {
+                msgEl.style.display = 'block';
+                msgEl.style.background = '#fef2f2';
+                msgEl.style.color = '#C0392B';
+                msgEl.textContent = 'エラー: ' + error.message;
+                btn.disabled = false;
+                btn.textContent = '設定';
+            }
+        };
+    })();
     </script>
     <?php endif; ?>
 
