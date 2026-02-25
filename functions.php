@@ -636,7 +636,7 @@ add_action('wp_enqueue_scripts', function() {
         'mw-ai-chat',
         get_template_directory_uri() . '/assets/js/mimamori-ai-chat.js',
         [],
-        '1.0.0',
+        '1.3.0',
         true
     );
 
@@ -644,7 +644,7 @@ add_action('wp_enqueue_scripts', function() {
         'mw-ai-chat',
         get_template_directory_uri() . '/assets/css/mimamori-ai-chat.css',
         [],
-        '1.0.0'
+        '1.3.0'
     );
 
     wp_localize_script( 'mw-ai-chat', 'mwChatConfig', [
@@ -908,7 +908,7 @@ function mimamori_call_openai_responses_api( array $payload ) {
  * @param string $language   言語コード（デフォルト: ja）
  * @return array|WP_Error    成功時: ['text'=>string], 失敗時: WP_Error
  */
-function mimamori_call_whisper_api( string $file_path, string $language = 'ja' ) {
+function mimamori_call_whisper_api( string $file_path, string $language = 'ja', string $mime_type = '', string $filename = '' ) {
     $api_key  = defined( 'MIMAMORI_OPENAI_API_KEY' )  ? MIMAMORI_OPENAI_API_KEY  : '';
     $base_url = defined( 'MIMAMORI_OPENAI_BASE_URL' ) ? MIMAMORI_OPENAI_BASE_URL : 'https://api.openai.com/v1';
     $timeout  = defined( 'MIMAMORI_OPENAI_TIMEOUT' )  ? (int) MIMAMORI_OPENAI_TIMEOUT : 60;
@@ -919,6 +919,26 @@ function mimamori_call_whisper_api( string $file_path, string $language = 'ja' )
 
     if ( ! file_exists( $file_path ) ) {
         return new WP_Error( 'file_not_found', '音声ファイルが見つかりません' );
+    }
+
+    // MIME タイプとファイル名をデフォルト設定（Whisper はファイル拡張子で形式を判定する）
+    if ( $mime_type === '' ) {
+        $finfo     = new finfo( FILEINFO_MIME_TYPE );
+        $mime_type = $finfo->file( $file_path ) ?: 'audio/mp4';
+    }
+    if ( $filename === '' ) {
+        // MIME からファイル名を推定
+        $ext_map = [
+            'audio/webm' => 'webm', 'audio/mp4' => 'm4a', 'audio/x-m4a' => 'm4a',
+            'audio/m4a'  => 'm4a',  'audio/ogg' => 'ogg', 'audio/mpeg'  => 'mp3',
+            'audio/mpga' => 'mp3',  'audio/mp3' => 'mp3', 'audio/wav'   => 'wav',
+            'audio/flac' => 'flac', 'video/webm' => 'webm',
+            'audio/aac'  => 'm4a',  'audio/x-caf' => 'm4a',
+            'application/octet-stream' => 'm4a',
+        ];
+        $base_mime = preg_replace( '/;.*$/', '', $mime_type ); // codecs 除去
+        $ext       = $ext_map[ $base_mime ] ?? 'm4a';
+        $filename  = 'audio.' . $ext;
     }
 
     $url = rtrim( $base_url, '/' ) . '/audio/transcriptions';
@@ -934,7 +954,7 @@ function mimamori_call_whisper_api( string $file_path, string $language = 'ja' )
             'Authorization: Bearer ' . $api_key,
         ],
         CURLOPT_POSTFIELDS     => [
-            'file'            => new CURLFile( $file_path ),
+            'file'            => new CURLFile( $file_path, $mime_type, $filename ),
             'model'           => 'whisper-1',
             'language'        => $language,
             'response_format' => 'json',
@@ -1009,23 +1029,33 @@ function mimamori_handle_voice_transcribe( WP_REST_Request $request ): WP_REST_R
     $allowed_mimes = [
         'audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/mpga',
         'audio/ogg', 'audio/wav', 'audio/x-m4a', 'audio/m4a',
-        'audio/mp3', 'video/webm',  // Chrome は video/webm で送ることがある
+        'audio/mp3', 'audio/aac', 'audio/x-caf', 'audio/flac',
+        'video/webm', 'video/mp4',  // Chrome は video/webm、iOS は video/mp4 で送ることがある
+        'application/octet-stream',  // finfo が音声ファイルを正しく識別できない場合
     ];
     $finfo = new finfo( FILEINFO_MIME_TYPE );
     $detected_mime = $finfo->file( $file['tmp_name'] );
-    if ( ! in_array( $detected_mime, $allowed_mimes, true ) ) {
-        // tmp_name のMIME判定が不正確な場合もあるため、ブラウザ送信の type もチェック
-        $browser_mime = sanitize_text_field( $file['type'] ?? '' );
-        if ( ! in_array( $browser_mime, $allowed_mimes, true ) ) {
-            return new WP_REST_Response( [
-                'success' => false,
-                'message' => 'サポートされていない音声形式です（' . $detected_mime . '）',
-            ], 400 );
-        }
+    $browser_mime  = sanitize_text_field( $file['type'] ?? '' );
+
+    // finfo 判定 or ブラウザ送信MIMEのいずれかがOKなら通す
+    $mime_ok = in_array( $detected_mime, $allowed_mimes, true )
+            || in_array( $browser_mime, $allowed_mimes, true );
+
+    if ( ! $mime_ok ) {
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => 'サポートされていない音声形式です（' . $detected_mime . '）',
+        ], 400 );
     }
 
-    // Whisper API 呼び出し
-    $result = mimamori_call_whisper_api( $file['tmp_name'] );
+    // Whisper API に渡すMIMEは、ブラウザ送信のほうが正確な場合が多い（finfo は音声を誤判定しやすい）
+    if ( $detected_mime === 'application/octet-stream' && $browser_mime !== '' ) {
+        $detected_mime = $browser_mime;
+    }
+
+    // Whisper API 呼び出し（ファイル拡張子で形式判定されるため元のファイル名を渡す）
+    $original_name = sanitize_file_name( $file['name'] ?? 'audio.m4a' );
+    $result = mimamori_call_whisper_api( $file['tmp_name'], 'ja', $detected_mime, $original_name );
 
     if ( is_wp_error( $result ) ) {
         $status = ( $result->get_error_code() === 'no_api_key' ) ? 500 : 502;
