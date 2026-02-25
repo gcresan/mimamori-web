@@ -49,8 +49,16 @@ class Gcrev_Config {
     /**
      * @param string $service_account_path サービスアカウント JSON のパス（省略時はデフォルト）
      */
-    /** デフォルトのサービスアカウントパス（GCREV_SA_PATH 定数で上書き可能） */
-    private const DEFAULT_SA_PATH = '/home/gcrev/secrets/gcrev-insight-fd0cc85fabe2.json';
+    /**
+     * デフォルトのサービスアカウントパス
+     *
+     * 移行時は wp-config.php に define('GCREV_SA_PATH', '/path/to/sa.json'); を定義すること。
+     * 空文字にしておくことで、定数未設定時にハードコードパスへ暗黙フォールバックするのを防ぐ。
+     */
+    private const DEFAULT_SA_PATH = '';
+
+    /** SA ファイルが見つからなかった場合の警告フラグ */
+    private bool $sa_file_missing = false;
 
     public function __construct( string $service_account_path = '' ) {
         if ( $service_account_path !== '' ) {
@@ -60,6 +68,39 @@ class Gcrev_Config {
         } else {
             $this->service_account_path = self::DEFAULT_SA_PATH;
         }
+
+        // SA ファイルの存在チェック（パスが空、またはファイルが存在しない場合に警告）
+        if ( $this->service_account_path === '' || ! file_exists( $this->service_account_path ) ) {
+            $this->sa_file_missing = true;
+
+            $detail = $this->service_account_path === ''
+                ? 'GCREV_SA_PATH が未定義です'
+                : 'ファイルが見つかりません: ' . $this->service_account_path;
+
+            error_log( sprintf(
+                '[GCREV] Google サービスアカウント JSON が利用できません（%s）。wp-config.php に define(\'GCREV_SA_PATH\', \'/path/to/sa.json\'); を追加してください。',
+                $detail
+            ) );
+
+            // 管理画面に警告を表示（admin_notices は複数回呼んでも安全）
+            if ( is_admin() && ! wp_doing_ajax() && ! wp_doing_cron() ) {
+                add_action( 'admin_notices', static function () use ( $detail ) {
+                    printf(
+                        '<div class="notice notice-error"><p><strong>[GCREV]</strong> Google サービスアカウント JSON が利用できません（%s）。<br><code>wp-config.php</code> に <code>define(\'GCREV_SA_PATH\', \'/path/to/sa.json\');</code> を追加してください。</p></div>',
+                        esc_html( $detail )
+                    );
+                } );
+            }
+        }
+    }
+
+    /**
+     * SA ファイルが利用可能かどうかを返す
+     *
+     * @return bool true = 利用可能 / false = ファイルが見つからない
+     */
+    public function is_sa_available(): bool {
+        return ! $this->sa_file_missing;
     }
 
     // =========================================================
