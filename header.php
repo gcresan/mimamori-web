@@ -9,7 +9,7 @@
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
-      <link rel="stylesheet" type="text/css" href="<?php echo get_template_directory_uri(); ?>/css/import.css" media="all">
+      <link rel="stylesheet" type="text/css" href="<?php echo get_template_directory_uri(); ?>/css/import.css?v=1.4.0" media="all">
       <?php get_template_part( 'kaiseki' ); ?>
       <?php wp_head(); ?>
    </head>
@@ -362,6 +362,11 @@
    <main class="main-content">
    <!-- トップバー -->
    <div class="topbar">
+      <div class="topbar-logo">
+         <a href="<?php echo esc_url( home_url() ); ?>">
+            <img src="<?php echo esc_url( get_template_directory_uri() . '/images/common/logo.png' ); ?>" alt="<?php echo esc_attr( 'みまもりウェブ' ); ?>">
+         </a>
+      </div>
       <div class="topbar-left">
          <button class="menu-toggle" id="menuToggle">☰</button>
          <h1 class="page-title"><?php

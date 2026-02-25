@@ -974,10 +974,84 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 
 @media (max-width: 768px) {
+
+  /* トップバー / パンくず → common.css のモバイルスタイルを継承 */
+
   .content-area {
-    padding: 24px 20px;
+    padding: 16px 12px;
+    overflow-x: hidden;
+    word-break: break-word;
   }
 
+  /* ========== 期間セレクター ========== */
+  .period-selector {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 4px;
+  }
+
+  .period-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* ========== 期間情報バー ========== */
+  .period-info-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  .period-info-bar > div + div::before {
+    display: none;
+  }
+
+  /* ========== テーブル: 横スクロール対応 ========== */
+  .info-breakdown-details,
+  .info-breakdown-body,
+  .table-section,
+  .data-table-wrapper,
+  .chart-section {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .info-breakdown-table,
+  .data-table,
+  .cv-data-table,
+  .actual-cv-table,
+  .cv-routes-table {
+    min-width: 480px;     /* テーブルの最小幅を保証（横スクロールで全体表示） */
+    font-size: 12px;
+  }
+
+  .info-breakdown-table th,
+  .info-breakdown-table td,
+  .data-table th,
+  .data-table td {
+    padding: 8px 6px;
+    white-space: nowrap;
+  }
+
+  .info-breakdown-table .bd-prev {
+    display: none;
+  }
+
+  .data-table tbody td.page-url {
+    max-width: 180px;
+  }
+
+  /* ========== KPI グリッド ========== */
+  .info-kpi {
+    grid-template-columns: 1fr;
+  }
+
+  /* ========== インフォグラフィック ========== */
   .info-top-row {
     flex-direction: column;
     gap: 20px;
@@ -987,25 +1061,13 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
     width: 100%;
   }
 
-  .info-kpi {
-    grid-template-columns: 1fr;
-  }
-
   .info-monthly-highlights {
     grid-template-columns: 1fr;
   }
 
-  .period-info-bar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .period-info-bar > div + div::before {
-    display: none;
-  }
-
   .dashboard-infographic-title {
     padding-right: 0;
+    font-size: 16px;
   }
 
   .info-monthly-link--corner {
@@ -1017,16 +1079,13 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
     margin-bottom: 16px;
   }
 
-  .topbar {
-    padding: 12px 16px;
-  }
-
-  .topbar .page-title {
-    font-size: 18px;
-  }
-
-  .info-breakdown-table .bd-prev {
-    display: none;
+  /* ========== 各種セクション ========== */
+  .kpi-section-title,
+  .info-monthly-title,
+  .info-kpi-heading,
+  .section-title,
+  .table-title {
+    font-size: 15px;
   }
 }
 

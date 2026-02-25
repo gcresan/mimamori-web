@@ -1,10 +1,10 @@
 /* CSS Document */
 @import url("base.css");
-@import url("common.css");
-@import url("layout.css");
+@import url("common.css?v=1.4.0");
+@import url("layout.css?v=1.4.0");
 @import url("resize.css");
 @import url("smp_common.css");
 @import url("smp_layout.css");
 @import url("smp_menu.css");
-@import url("dashboard-redesign.css");
+@import url("dashboard-redesign.css?v=1.4.0");
 
