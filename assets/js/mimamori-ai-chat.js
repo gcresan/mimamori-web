@@ -491,8 +491,23 @@
   }
 
   /**
+   * iOS デバイス判定
+   * iPhone / iPad / iPod touch を検出する。
+   * iPad (iPadOS 13+) は User-Agent が Mac になるため maxTouchPoints で補完。
+   */
+  function isIOSDevice() {
+    var ua = navigator.userAgent || '';
+    if (/iPhone|iPod/.test(ua)) return true;
+    if (/iPad/.test(ua)) return true;
+    // iPadOS 13+ Safari は Mac 表記だが touchPoints で判別
+    if (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) return true;
+    return false;
+  }
+
+  /**
    * 音声認識を初期化する
-   * SpeechRecognition 対応ブラウザ → リアルタイム認識
+   * iOS → 常に MediaRecorder + Whisper（SpeechRecognition が不安定なため）
+   * PC等で SpeechRecognition 対応 → リアルタイム認識
    * 非対応 → MediaRecorder + Whisper API フォールバック
    */
   function initVoice() {
@@ -505,6 +520,16 @@
     var hasMediaRecorder = !!(navigator.mediaDevices &&
                               navigator.mediaDevices.getUserMedia &&
                               window.MediaRecorder);
+
+    // iOS は SpeechRecognition が不安定 → 常に MediaRecorder を使用
+    if (isIOSDevice()) {
+      if (hasMediaRecorder && config.voiceUrl) {
+        useFallback = true;
+      } else {
+        els.voiceBtn.style.display = 'none';
+      }
+      return;
+    }
 
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -609,11 +634,23 @@
 
       if (e.error === 'aborted') return;
 
-      // network エラー → 次回以降フォールバックに切替
-      if (e.error === 'network' && hasMediaRecorder && config.voiceUrl) {
+      // not-allowed / audio-capture はハードウェア系 → フォールバックでも解決不可
+      if (e.error === 'not-allowed' || e.error === 'audio-capture') {
+        handleVoiceError(e.error);
+        return;
+      }
+
+      // no-speech はユーザー操作ミス → フォールバック不要
+      if (e.error === 'no-speech') {
+        handleVoiceError(e.error);
+        return;
+      }
+
+      // network / service-not-allowed / その他すべて → フォールバックに切替
+      if (hasMediaRecorder && config.voiceUrl) {
         useFallback = true;
-        setError('\u97F3\u58F0\u8A8D\u8B58\u306E\u901A\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u6B21\u56DE\u304B\u3089\u4EE3\u66FF\u65B9\u5F0F\u3067\u9332\u97F3\u3057\u307E\u3059\u3002\u3082\u3046\u4E00\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002');
-        // 音声認識の通信に失敗しました。次回から代替方式で録音します。もう一度お試しください。
+        setError('\u97F3\u58F0\u8A8D\u8B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u6B21\u56DE\u304B\u3089\u4EE3\u66FF\u65B9\u5F0F\u3067\u9332\u97F3\u3057\u307E\u3059\u3002\u3082\u3046\u4E00\u5EA6\u304A\u8A66\u3057\u304F\u3060\u3055\u3044\u3002');
+        // 音声認識に失敗しました。次回から代替方式で録音します。もう一度お試しください。
         return;
       }
 
@@ -830,10 +867,16 @@
     isTranscribing = true;
     enterTranscribingMode();
 
-    // ファイル拡張子を MIME タイプから推定
+    // ファイル拡張子を MIME タイプから推定（Whisper API はファイル拡張子で形式を判定する）
     var ext = 'webm';
-    if (mimeType.indexOf('mp4') !== -1 || mimeType.indexOf('m4a') !== -1) ext = 'mp4';
-    else if (mimeType.indexOf('ogg') !== -1) ext = 'ogg';
+    if (mimeType.indexOf('mp4') !== -1 || mimeType.indexOf('m4a') !== -1 || mimeType.indexOf('aac') !== -1) {
+      ext = 'm4a';
+    } else if (mimeType.indexOf('ogg') !== -1) {
+      ext = 'ogg';
+    } else if (isIOSDevice()) {
+      // iOS のデフォルト録音形式は AAC/MP4 → m4a として送信
+      ext = 'm4a';
+    }
 
     var formData = new FormData();
     formData.append('audio', blob, 'recording.' + ext);
@@ -911,6 +954,13 @@
       els.sendBtn.title = '\u78BA\u5B9A'; // 確定
       els.sendBtn.setAttribute('aria-label', '\u78BA\u5B9A');
       els.sendBtn.disabled = false;
+    }
+
+    // モバイル: 入力エリアが画面内に見えるようスクロール
+    if (els.inputArea) {
+      setTimeout(function () {
+        els.inputArea.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 100);
     }
   }
 

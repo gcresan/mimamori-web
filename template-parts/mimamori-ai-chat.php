@@ -56,12 +56,6 @@ if ( ! defined( 'ABSPATH' ) ) {
       </div>
     </div>
 
-    <!-- Report Info Badge (C) -->
-    <div class="mw-chat-info-badge">
-      <span class="mw-chat-info-badge__icon" aria-hidden="true">&#x1F4C1;</span>
-      <span class="mw-chat-info-badge__text"><?php echo esc_html( '月次レポートは毎月自動で蓄積されています。気になったときだけ聞けばOKです。' ); ?></span>
-    </div>
-
     <!-- Quick Questions — grouped by usage order (B) -->
     <div class="mw-chat-quick">
       <div class="mw-chat-quick__group">
