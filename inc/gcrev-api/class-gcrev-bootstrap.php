@@ -61,6 +61,15 @@ class Gcrev_Bootstrap {
                 require_once $cron_monitor_path;
                 (new Gcrev_Cron_Monitor_Page())->register();
             }
+
+            // デプロイ管理画面（Dev 環境のみ）
+            if ( defined( 'MIMAMORI_ENV' ) && MIMAMORI_ENV === 'development' ) {
+                $deploy_page_path = __DIR__ . '/admin/class-deploy-page.php';
+                if ( file_exists( $deploy_page_path ) ) {
+                    require_once $deploy_page_path;
+                    (new Gcrev_Deploy_Page())->register();
+                }
+            }
         }
     }
 
@@ -145,6 +154,11 @@ class Gcrev_Bootstrap {
     // =========================================================
 
     public static function maybe_schedule_events(): void {
+
+        // Dev/Staging 環境では Cron スケジュール登録を完全スキップ
+        if ( defined( 'MIMAMORI_ENV' ) && MIMAMORI_ENV !== 'production' ) {
+            return;
+        }
 
         // Prefetch: スロット方式が利用可能ならスロット別にスケジュール
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
