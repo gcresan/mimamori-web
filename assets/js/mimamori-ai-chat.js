@@ -1121,8 +1121,12 @@
      Event Binding
      ============================ */
   function bindEvents() {
-    // FAB click → open panel (最大化で開く)
+    // FAB click → 決済未完了なら payment-status へリダイレクト、完了済みなら panel を開く
     els.fab.addEventListener('click', function () {
+      if ( !config.paymentActive && config.paymentStatusUrl ) {
+        window.location.href = config.paymentStatusUrl;
+        return;
+      }
       switchViewMode('panel');
     });
 

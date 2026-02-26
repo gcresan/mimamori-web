@@ -187,11 +187,31 @@ get_header();
 
         <?php
         // 前々月データチェック（通知表示用）
+        // 重いAPI呼び出し（has_prev2_data）を避け、キャッシュ → 設定チェックで軽量判定
         global $gcrev_api_instance;
         if ( ! isset($gcrev_api_instance) || ! ($gcrev_api_instance instanceof Gcrev_Insight_API) ) {
             $gcrev_api_instance = new Gcrev_Insight_API(false);
         }
-        $prev2_check_rs = $gcrev_api_instance->has_prev2_data($user_id);
+        $config_tmp = new Gcrev_Config();
+        $user_config_rs = $config_tmp->get_user_config($user_id);
+        $has_ga4_rs = !empty($user_config_rs['ga4_id']);
+        if ( $has_ga4_rs ) {
+            // キャッシュに前々月データがあればゼロ判定も可能
+            $cached_prev2 = get_transient('gcrev_dash_' . $user_id . '_twoMonthsAgo');
+            if ( $cached_prev2 && is_array($cached_prev2) ) {
+                $sessions_rs   = (int) ($cached_prev2['ga4']['total']['sessions']  ?? 0);
+                $page_views_rs = (int) ($cached_prev2['ga4']['total']['pageViews'] ?? 0);
+                $prev2_check_rs = [
+                    'available' => true,
+                    'is_zero'   => ($sessions_rs === 0 && $page_views_rs === 0),
+                ];
+            } else {
+                // キャッシュなし → GA4設定ありなので available とみなす（実際の判定はレポート生成時）
+                $prev2_check_rs = ['available' => true, 'is_zero' => false];
+            }
+        } else {
+            $prev2_check_rs = ['available' => false, 'reason' => 'GA4プロパティが設定されていません。'];
+        }
         if (!$prev2_check_rs['available']):
         ?>
         <div class="gcrev-notice-prev2" id="prev2-notice">

@@ -426,7 +426,144 @@ add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
     return home_url('/payment-status/');
 }, 10, 2);
 
+// ----------------------------------------
+// wp-login.php カスタマイズ
+// ----------------------------------------
 
+/**
+ * wp-login.php でのログインを禁止し、トップページへリダイレクト。
+ * ただし以下は許可:
+ *   - パスワードリセット系アクション（lostpassword / rp / resetpass 等）
+ *   - /wp-admin/ 経由のリダイレクト（管理者ログイン）
+ *   - 既にログイン済みのユーザー
+ */
+add_action( 'login_init', function () {
+    // ログイン済みなら許可（wp-admin へのアクセス等）
+    if ( is_user_logged_in() ) {
+        return;
+    }
+
+    $action = isset( $_REQUEST['action'] ) ? $_REQUEST['action'] : 'login';
+
+    // パスワードリセット・ログアウト等は許可
+    $allowed_actions = [ 'lostpassword', 'retrievepassword', 'rp', 'resetpass', 'postpass', 'logout' ];
+    if ( in_array( $action, $allowed_actions, true ) ) {
+        return;
+    }
+
+    // redirect_to に wp-admin が含まれていれば管理者ログインとみなし許可
+    $redirect_to = isset( $_REQUEST['redirect_to'] ) ? $_REQUEST['redirect_to'] : '';
+    if ( strpos( $redirect_to, 'wp-admin' ) !== false ) {
+        return;
+    }
+
+    // 上記以外（一般ユーザーが直接 wp-login.php を開いた場合）→ トップへリダイレクト
+    wp_safe_redirect( home_url( '/' ) );
+    exit;
+} );
+
+/**
+ * wp-login.php の外観カスタマイズ（パスワードリセット画面用）
+ * - ロゴをみまもりウェブに変更
+ * - テーマカラーに合わせた配色
+ * - 「ログイン」リンクを非表示
+ */
+add_action( 'login_enqueue_scripts', function () {
+    $logo_url = esc_url( get_template_directory_uri() . '/images/common/logo.png' );
+    ?>
+    <style>
+    /* 背景 */
+    body.login {
+        background: #F2F1EC !important;
+        font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif !important;
+    }
+    /* ロゴ → みまもりウェブ */
+    #login h1 a {
+        background-image: url('<?php echo $logo_url; ?>') !important;
+        background-size: contain !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        width: 225px !important;
+        height: 80px !important;
+        margin: 0 auto 20px !important;
+        display: block !important;
+    }
+    /* フォームカード */
+    .login form {
+        background: #FAF9F6 !important;
+        border: none !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 8px rgba(43,43,43,0.06) !important;
+        padding: 26px 24px !important;
+    }
+    /* 入力フィールド */
+    .login input[type="text"],
+    .login input[type="email"],
+    .login input[type="password"] {
+        border: 1px solid #E5E3DC !important;
+        border-radius: 4px !important;
+        box-shadow: none !important;
+    }
+    .login input[type="text"]:focus,
+    .login input[type="email"]:focus,
+    .login input[type="password"]:focus {
+        border-color: #3D6B6E !important;
+        box-shadow: 0 0 0 1px #3D6B6E !important;
+    }
+    /* ボタン（テーマカラー） */
+    .login .button-primary,
+    .wp-core-ui .button-primary {
+        background: #2F3A4A !important;
+        border: none !important;
+        border-radius: 4px !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+        font-weight: 600 !important;
+        padding: 6px 14px !important;
+    }
+    .login .button-primary:hover,
+    .wp-core-ui .button-primary:hover,
+    .login .button-primary:focus,
+    .wp-core-ui .button-primary:focus {
+        background: #3D4B5C !important;
+        box-shadow: none !important;
+    }
+    /* 「ログイン」リンクを非表示、「← サイトへ移動」は残す */
+    #nav { display: none !important; }
+    /* 言語切替セレクタを非表示 */
+    .language-switcher,
+    #language-switcher { display: none !important; }
+    /* サイトリンクの色 */
+    #backtoblog a {
+        color: #8C8A85 !important;
+    }
+    #backtoblog a:hover {
+        color: #3D6B6E !important;
+    }
+    /* メッセージボックスのアクセントカラー */
+    .login .message,
+    .login .success {
+        border-left-color: #3D6B6E !important;
+    }
+    .login a {
+        color: #3D6B6E !important;
+    }
+    .login a:hover {
+        color: #346062 !important;
+    }
+    </style>
+    <?php
+} );
+
+// ロゴのリンク先をサイトトップに変更
+add_filter( 'login_headerurl', function () {
+    return home_url( '/' );
+} );
+
+// ロゴの alt テキスト
+add_filter( 'login_headertext', function () {
+    return 'みまもりウェブ';
+} );
 
 
 
@@ -648,9 +785,11 @@ add_action('wp_enqueue_scripts', function() {
     );
 
     wp_localize_script( 'mw-ai-chat', 'mwChatConfig', [
-        'apiUrl'   => rest_url( 'mimamori/v1/ai-chat' ),
-        'voiceUrl' => rest_url( 'mimamori/v1/voice-transcribe' ),
-        'nonce'    => wp_create_nonce( 'wp_rest' ),
+        'apiUrl'           => rest_url( 'mimamori/v1/ai-chat' ),
+        'voiceUrl'         => rest_url( 'mimamori/v1/voice-transcribe' ),
+        'nonce'            => wp_create_nonce( 'wp_rest' ),
+        'paymentActive'    => gcrev_is_payment_active(),
+        'paymentStatusUrl' => home_url( '/payment-status/' ),
     ] );
 });
 

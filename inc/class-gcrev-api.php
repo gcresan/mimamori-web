@@ -449,8 +449,8 @@ class Gcrev_Insight_API {
 
     private function dashboard_cache_set(int $user_id, string $range, array $data): void {
         $key = $this->cache_key_dashboard($user_id, $range);
-        // [CACHE_FIRST] last180/last365 は 48h キャッシュ（重いため長めに保持）
-        $ttl = in_array($range, ['last180', 'last365'], true)
+        // [CACHE_FIRST] last90/last180/last365 は 48h キャッシュ（重いため長めに保持）
+        $ttl = in_array($range, ['last90', 'last180', 'last365'], true)
             ? 172800   // 48h
             : $this->dashboard_cache_ttl;  // 24h（既存）
         set_transient($key, $data, $ttl);
@@ -748,7 +748,7 @@ class Gcrev_Insight_API {
             return;
         }
 
-        $ranges = ['last30', 'previousMonth', 'twoMonthsAgo'];
+        $ranges = ['last30', 'last90', 'last180', 'last365', 'previousMonth', 'twoMonthsAgo'];
 
         foreach ($users as $u) {
             $user_id = (int)$u->ID;
@@ -895,7 +895,7 @@ class Gcrev_Insight_API {
             return;
         }
 
-        $ranges = ['last30', 'previousMonth', 'twoMonthsAgo'];
+        $ranges = ['last30', 'last90', 'last180', 'last365', 'previousMonth', 'twoMonthsAgo'];
 
         foreach ( $user_ids as $user_id ) {
             error_log( "[GCREV] Prefetch slot_{$slot} processing: user_id={$user_id}" );
@@ -2016,13 +2016,19 @@ class Gcrev_Insight_API {
         $range = $range_map[$period] ?? 'previousMonth';
 
         // --- [CACHE_FIRST] 長期間の場合：明示的にキャッシュ優先パスを通る ---
-        // last180/last365 は自動的に cache_first=1 扱いにする（JS側が付け忘れても安全）
-        if ($cache_first || in_array($period, ['last180', 'last365'], true)) {
+        // last90/last180/last365 は自動的に cache_first=1 扱いにする（JS側が付け忘れても安全）
+        if ($cache_first || in_array($period, ['last90', 'last180', 'last365'], true)) {
             $cached = $this->dashboard_cache_get($user_id, $range);
             if ($cached !== null) {
                 $cached = $this->inject_effective_cv_into_kpi($cached, $period, $user_id);
                 return $cached;
             }
+        }
+
+        // cache_first 明示指定でキャッシュが空 → 重い API 呼び出しをスキップし空を返す
+        // （呼び出し元の JS 側で非同期フォールバック取得する）
+        if ( $cache_first ) {
+            return [];
         }
 
         // 既存メソッドでデータ取得（WP_REST_Requestをモック）

@@ -119,7 +119,7 @@ get_header();
         <h2 class="ps-title">お支払い手続きをお願いします</h2>
         <p class="ps-desc">
             お申込みありがとうございます。<br>
-            GCREV Insight のご利用を開始するには、以下の手順でお支払いを完了してください。
+            みまもりウェブ のご利用を開始するには、以下の手順でお支払いを完了してください。
         </p>
 
         <ul class="ps-step-list">
@@ -133,25 +133,14 @@ get_header();
             </li>
             <li>
                 <span class="ps-step-icon ps-step-icon--future">3</span>
-                <span>GCREV Insight 利用開始</span>
+                <span>みまもりウェブ 利用開始</span>
             </li>
         </ul>
 
-        <?php if ( $installment_url ): ?>
-        <a href="<?php echo esc_url( $installment_url ); ?>"
-           class="ps-btn ps-btn--primary"
-           target="_blank" rel="noopener noreferrer">
-            &#x1F4B3; 分割払い（初回決済）を行う &#x2192;
+        <a href="<?php echo esc_url( home_url('/apply/with-production/') ); ?>"
+           class="ps-btn ps-btn--primary">
+            &#x1F4DD; 申し込みフォームへ &#x2192;
         </a>
-        <p class="ps-note">
-            ※ ボタンを押すと安全な決済ページへ移動します。<br>
-            ※ お支払い確認後、管理者がステータスを更新いたします。
-        </p>
-        <?php else: ?>
-        <p class="ps-desc" style="color:#B8941E; text-align:center;">
-            &#x26A0;&#xFE0F; 決済URLが設定されていません。管理者にお問い合わせください。
-        </p>
-        <?php endif; ?>
     </div>
 
     <?php elseif ( $initial_completed && ! $subscription_completed ): ?>
@@ -175,7 +164,7 @@ get_header();
             </li>
             <li>
                 <span class="ps-step-icon ps-step-icon--future">3</span>
-                <span>GCREV Insight 利用開始</span>
+                <span>みまもりウェブ 利用開始</span>
             </li>
         </ul>
 
@@ -195,7 +184,7 @@ get_header();
         <h2 class="ps-title">すべての手続きが完了しました</h2>
         <p class="ps-desc">
             お支払いの確認が完了しました。<br>
-            GCREV Insight の全機能をご利用いただけます。
+            みまもりウェブ の全機能をご利用いただけます。
         </p>
 
         <ul class="ps-step-list">
@@ -209,13 +198,13 @@ get_header();
             </li>
             <li>
                 <span class="ps-step-icon ps-step-icon--done">&#x2713;</span>
-                <span><strong>GCREV Insight 利用開始</strong> — ご利用可能です</span>
+                <span><strong>みまもりウェブ 利用開始</strong> — ご利用可能です</span>
             </li>
         </ul>
 
         <a href="<?php echo esc_url( home_url('/mypage/dashboard/') ); ?>"
            class="ps-btn ps-btn--success">
-            &#x1F680; GCREV Insight スタート &#x2192;
+            &#x1F680; みまもりウェブ スタート &#x2192;
         </a>
     </div>
     <?php endif; ?>
@@ -242,7 +231,7 @@ get_header();
             </li>
             <li>
                 <span class="ps-step-icon ps-step-icon--future">2</span>
-                <span>GCREV Insight 利用開始</span>
+                <span>みまもりウェブ 利用開始</span>
             </li>
         </ul>
 
@@ -262,7 +251,7 @@ get_header();
         <h2 class="ps-title">すべての手続きが完了しました</h2>
         <p class="ps-desc">
             お支払いの確認が完了しました。<br>
-            GCREV Insight の全機能をご利用いただけます。
+            みまもりウェブ の全機能をご利用いただけます。
         </p>
 
         <ul class="ps-step-list">
@@ -272,13 +261,13 @@ get_header();
             </li>
             <li>
                 <span class="ps-step-icon ps-step-icon--done">&#x2713;</span>
-                <span><strong>GCREV Insight 利用開始</strong> — ご利用可能です</span>
+                <span><strong>みまもりウェブ 利用開始</strong> — ご利用可能です</span>
             </li>
         </ul>
 
         <a href="<?php echo esc_url( home_url('/mypage/dashboard/') ); ?>"
            class="ps-btn ps-btn--success">
-            &#x1F680; GCREV Insight スタート &#x2192;
+            &#x1F680; みまもりウェブ スタート &#x2192;
         </a>
     </div>
     <?php endif; ?>

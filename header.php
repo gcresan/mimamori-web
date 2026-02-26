@@ -38,7 +38,7 @@
       <div class="sidebar-header">
          <div class="logo-area">
             <a href="<?php echo esc_url( home_url() ); ?>">
-               <img src="<?php echo esc_url( get_template_directory_uri() . '/images/common/logo.png' ); ?>" width="518" height="341" alt="みたて365">
+               <img src="<?php echo esc_url( get_template_directory_uri() . '/images/common/logo.png' ); ?>" width="518" height="341" alt="みまもりウェブ">
             </a>
          </div>
          <?php if ( is_user_logged_in() ) :
@@ -51,9 +51,9 @@
             <div class="sidebar-user-name">
                <?php echo esc_html( $company ); ?> 様
             </div>
-            <div class="sidebar-user-plan">
+<!--             <div class="sidebar-user-plan">
                お試し期間：残り14日
-            </div>
+            </div> -->
          </div>
          <?php endif; ?>
       </div>

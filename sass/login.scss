@@ -9,6 +9,7 @@ $secondary-color: #2B2B2B;
 $text-primary: #2B2B2B;
 $text-secondary: #666660;
 $text-muted: #8C8A85;
+$text-faint: #B0AEA8;
 
 $bg-light: #F2F1EC;
 $bg-card: #FAF9F6;
@@ -22,6 +23,16 @@ $border-radius: 8px;
 $border-radius-sm: 4px;
 
 .login {
+    // body.login に直接適用
+    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    background: $bg-light;
+    color: $text-primary;
+    line-height: 1.6;
+    width: 100%;
+    min-height: 100vh;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
 
     // リセット
     * {
@@ -30,18 +41,11 @@ $border-radius-sm: 4px;
         box-sizing: border-box;
     }
 
-    // ベーススタイル
-    body {
-        font-family: 'Helvetica Neue', Arial, sans-serif;
-        background: $bg-light;
-        color: $text-primary;
-        line-height: 1.6;
-    }
-
     // ログインコンテナ
     .login-container {
-        max-width: 400px;
-        margin: 80px auto;
+        width: 90%;
+        max-width: 440px;
+        margin: 60px auto;
         padding: 40px;
         background: $bg-card;
         border-radius: $border-radius;
@@ -54,7 +58,9 @@ $border-radius-sm: 4px;
         margin-bottom: 30px;
 
         img {
-            max-width: 150px;
+            max-width: 225px;
+            width: auto;
+            height: auto;
         }
     }
 
@@ -66,9 +72,16 @@ $border-radius-sm: 4px;
         color: $secondary-color;
     }
 
+    // WP-Members フォーム幅100%
+    form {
+        width: 100%;
+    }
 
     fieldset {
         border: none !important;
+        width: 100%;
+        padding: 0 !important;
+        margin: 0 !important;
     }
 
     legend {
@@ -77,6 +90,7 @@ $border-radius-sm: 4px;
 
     .div_text {
         margin-bottom: 20px;
+        width: 100%;
     }
 
     // ラベル
@@ -85,15 +99,19 @@ $border-radius-sm: 4px;
         margin-bottom: 5px;
         font-weight: 600;
         color: $text-secondary;
+        font-size: 14px;
     }
 
-    // 入力フィールド
-    input {
-        width: 100%;
+    // 入力フィールド — type指定で横幅100%を確実に
+    input[type="text"],
+    input[type="password"],
+    input[type="email"] {
+        width: 100% !important;
         padding: 12px;
         border: 1px solid $border-color;
         border-radius: $border-radius-sm;
         font-size: 14px;
+        display: block;
 
         &:focus {
             outline: none;
@@ -105,7 +123,8 @@ $border-radius-sm: 4px;
         margin-top: 20px;
 
         input#rememberme {
-            width: initial;
+            width: auto !important;
+            display: inline;
         }
 
         label {
@@ -114,10 +133,11 @@ $border-radius-sm: 4px;
     }
 
     // プライマリボタン
-    .buttons {
+    .buttons,
+    input[type="submit"] {
         margin-top: 20px;
         margin-bottom: 20px;
-        width: 100%;
+        width: 100% !important;
         padding: 14px;
         background: $primary-color;
         color: $bg-card;
@@ -127,16 +147,15 @@ $border-radius-sm: 4px;
         font-weight: 600;
         cursor: pointer;
         transition: background 0.3s;
+        display: block;
 
         &:hover {
             background: $primary-hover;
         }
     }
 
-
     // リンク
     .link-text {
-
         text-align: center;
         font-size: 14px;
 
@@ -145,6 +164,23 @@ $border-radius-sm: 4px;
             text-decoration: none;
 
             &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+
+    // パスワードリマインダー — 控えめなスタイル
+    .login-links {
+        text-align: center;
+        margin-top: 20px;
+        font-size: 12px;
+
+        a {
+            color: $text-faint;
+            text-decoration: none;
+
+            &:hover {
+                color: $text-secondary;
                 text-decoration: underline;
             }
         }

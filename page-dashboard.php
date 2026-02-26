@@ -236,11 +236,11 @@ if ($infographic && is_array($infographic)) {
         }
 
         // === KPIライブデータで流入・検索の採点を補正 ===
-        // ※ number_format() 済み文字列のカンマ問題で保存値が壊れているため、
-        //    キャッシュ済みKPIデータから正しい数値を取得して上書きする
-        $kpi_curr = $gcrev_api->get_dashboard_kpi('prev-month', $user_id);
-        $kpi_prev = $gcrev_api->get_dashboard_kpi('prev-prev-month', $user_id);
+        // cache_first=1: キャッシュがあれば使い、なければスキップ（JS側で非同期取得）
+        $kpi_curr = $gcrev_api->get_dashboard_kpi('prev-month', $user_id, 1);
+        $kpi_prev = $gcrev_api->get_dashboard_kpi('prev-prev-month', $user_id, 1);
 
+        if (!empty($kpi_curr)) {
         // --- 流入（traffic = sessions）を上書き ---
         $sess_curr = (int)str_replace(',', '', (string)($kpi_curr['sessions'] ?? '0'));
         $sess_prev = (int)str_replace(',', '', (string)($kpi_prev['sessions'] ?? '0'));
@@ -307,6 +307,7 @@ if ($infographic && is_array($infographic)) {
         if ($infographic['score'] >= 75) $infographic['status'] = '安定しています';
         elseif ($infographic['score'] >= 50) $infographic['status'] = '改善傾向です';
         else $infographic['status'] = '要注意です';
+        } // end if (!empty($kpi_curr))
     } catch (\Throwable $e) {
         error_log('[GCREV] page-dashboard infographic override error: ' . $e->getMessage());
     }
@@ -349,7 +350,7 @@ if ($infographic) {
 
   <!-- 外枠右上：最新月次レポートを見る（※月次レポートがある時だけ表示） -->
   <?php if (!empty($monthly_report)): ?>
-    <a href="https://g-crev.jp/mypage/report/report-latest/" class="info-monthly-link info-monthly-link--corner">
+    <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="info-monthly-link info-monthly-link--corner">
       <span aria-hidden="true">📊</span> 最新月次レポートを見る
     </a>
   <?php endif; ?>
@@ -567,9 +568,6 @@ foreach ($highlight_items as $highlight):
                         <li><?php echo esc_html($cause); ?></li>
                     <?php endforeach; ?>
                     </ul>
-                    <?php if (!empty($monthly_report)): ?>
-                    <a href="<?php echo esc_url(home_url('/mypage/report/report-latest/')); ?>" class="highlight-detail-more-link">📄 レポートで詳しく見る →</a>
-                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
                 <?php if (!empty($detail['actions'])): ?>
@@ -606,8 +604,13 @@ foreach ($highlight_items as $highlight):
       </p>
 
       <?php
-      // 前々月データチェック（通知表示用）
-      $prev2_check = $gcrev_api->has_prev2_data($user_id);
+      // 前々月データチェック（軽量版: GA4設定の有無のみ確認、重いAPI呼び出しを回避）
+      $config_tmp = new Gcrev_Config();
+      $user_config = $config_tmp->get_user_config($user_id);
+      $has_ga4 = !empty($user_config['ga4_id']);
+      $prev2_check = $has_ga4
+          ? ['available' => true]
+          : ['available' => false, 'reason' => 'GA4プロパティが設定されていません。'];
       if (!$prev2_check['available']):
       ?>
       <div class="gcrev-notice-prev2">
@@ -671,14 +674,8 @@ foreach ($highlight_items as $highlight):
 
 <script>
 (function(){
-    // サーバーサイドで既に取得済みのKPIデータをインライン（REST API不要）
-    var curr = <?php echo wp_json_encode($kpi_curr ? ['sessions' => $kpi_curr['sessions'] ?? 0, 'conversions' => $kpi_curr['conversions'] ?? 0] : null); ?>;
-    var prev = <?php echo wp_json_encode($kpi_prev ? ['sessions' => $kpi_prev['sessions'] ?? 0, 'conversions' => $kpi_prev['conversions'] ?? 0] : null); ?>;
-
-    if(!curr) return;
-
+    // KPI更新の共通関数
     function fmt(n){ return n.toLocaleString(); }
-
     function updateInfoKpi(key, value, diff){
         var el = document.querySelector('[data-kpi-key="' + key + '"]');
         if(!el) return;
@@ -693,6 +690,11 @@ foreach ($highlight_items as $highlight):
         }
     }
 
+    <?php if (!empty($kpi_curr)): ?>
+    // --- キャッシュヒット: サーバーサイドで取得済みのデータをそのまま適用 ---
+    var curr = <?php echo wp_json_encode(['sessions' => $kpi_curr['sessions'] ?? 0, 'conversions' => $kpi_curr['conversions'] ?? 0]); ?>;
+    var prev = <?php echo wp_json_encode($kpi_prev ? ['sessions' => $kpi_prev['sessions'] ?? 0, 'conversions' => $kpi_prev['conversions'] ?? 0] : null); ?>;
+
     var currSessions = parseInt(String(curr.sessions || 0).replace(/,/g, ''), 10);
     var prevSessions = prev ? parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10) : 0;
     updateInfoKpi('visits', currSessions, currSessions - prevSessions);
@@ -700,6 +702,49 @@ foreach ($highlight_items as $highlight):
     var currCv = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
     var prevCv = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
     updateInfoKpi('cv', currCv, currCv - prevCv);
+
+    <?php else: ?>
+    // --- キャッシュミス: REST API で非同期取得（ページは即座に表示済み） ---
+    (function(){
+        var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
+        var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
+
+        // KPI値にローディング表示
+        document.querySelectorAll('.info-kpi-value').forEach(function(el){
+            el.style.opacity = '0.3';
+            el.style.transition = 'opacity 0.3s';
+        });
+
+        Promise.all([
+            fetch(restBase + 'dashboard/kpi?period=prev-month', {
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': nonce }
+            }).then(function(r){ return r.json(); }),
+            fetch(restBase + 'dashboard/kpi?period=prev-prev-month', {
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': nonce }
+            }).then(function(r){ return r.json(); })
+        ]).then(function(results){
+            var curr = results[0].success ? results[0].data : null;
+            var prev = results[1].success ? results[1].data : null;
+            if(!curr) return;
+
+            var cS = parseInt(String(curr.sessions || 0).replace(/,/g, ''), 10);
+            var pS = prev ? parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10) : 0;
+            updateInfoKpi('visits', cS, cS - pS);
+
+            var cC = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
+            var pC = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
+            updateInfoKpi('cv', cC, cC - pC);
+        }).catch(function(err){
+            console.error('[GCREV] KPI async fetch error:', err);
+        }).finally(function(){
+            document.querySelectorAll('.info-kpi-value').forEach(function(el){
+                el.style.opacity = '1';
+            });
+        });
+    })();
+    <?php endif; ?>
 })();
 
 // --- KPI トレンドモーダル ---
@@ -707,6 +752,20 @@ foreach ($highlight_items as $highlight):
     var restBase = '<?php echo esc_url(rest_url('gcrev/v1/')); ?>';
     var nonce    = '<?php echo esc_js(wp_create_nonce('wp_rest')); ?>';
     var kpiTrendChart = null;
+
+    // KPIトレンドデータをバックグラウンドで先読み（クリック時に即表示するため）
+    var _trendCache = {};
+    setTimeout(function(){
+        ['sessions', 'cv', 'meo'].forEach(function(m){
+            fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(m), {
+                headers: { 'X-WP-Nonce': nonce },
+                credentials: 'same-origin'
+            })
+            .then(function(res){ return res.json(); })
+            .then(function(json){ _trendCache[m] = json; })
+            .catch(function(){});
+        });
+    }, 1500);
 
     // KPIカードクリック
     document.querySelectorAll('.info-kpi-item[data-metric]').forEach(function(card){
@@ -716,6 +775,70 @@ foreach ($highlight_items as $highlight):
             openKpiTrend(metric, label);
         });
     });
+
+    // トレンドチャート描画（共通）
+    function renderTrendChart(json, label, chartWrap, loading){
+        loading.classList.remove('active');
+        chartWrap.style.display = 'block';
+        if(kpiTrendChart){ kpiTrendChart.destroy(); kpiTrendChart = null; }
+        if(!json.success || !json.values){
+            chartWrap.innerHTML = '<p style="text-align:center;color:#888;padding:40px 0;">データを取得できませんでした</p>';
+            return;
+        }
+        chartWrap.innerHTML = '<canvas id="kpiTrendChart"></canvas>';
+        var shortLabels = json.labels.map(function(ym){
+            return parseInt(ym.split('-')[1], 10) + '月';
+        });
+        var dataLen = json.values.length;
+        var pointBg = json.values.map(function(v, i){
+            return i === dataLen - 1 ? '#B5574B' : '#3D6B6E';
+        });
+        var pointR = json.values.map(function(v, i){
+            return i === dataLen - 1 ? 6 : 3;
+        });
+        kpiTrendChart = new Chart('kpiTrendChart', {
+            type: 'line',
+            data: {
+                labels: shortLabels,
+                datasets: [{
+                    label: label,
+                    data: json.values,
+                    borderColor: '#3D6B6E',
+                    borderWidth: 2,
+                    pointBackgroundColor: pointBg,
+                    pointRadius: pointR,
+                    tension: 0.3,
+                    fill: true,
+                    backgroundColor: 'rgba(59,130,246,0.08)',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: function(ctx){
+                                return json.labels[ctx[0].dataIndex];
+                            },
+                            label: function(ctx){
+                                return label + ': ' + ctx.parsed.y.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(v){ return v.toLocaleString(); }
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     function openKpiTrend(metric, label){
         var overlay = document.getElementById('kpiTrendOverlay');
@@ -727,80 +850,21 @@ foreach ($highlight_items as $highlight):
         loading.classList.add('active');
         chartWrap.style.display = 'none';
 
+        // バックグラウンド先読みキャッシュがあれば即表示
+        if (_trendCache[metric]) {
+            renderTrendChart(_trendCache[metric], label, chartWrap, loading);
+            return;
+        }
+
+        // キャッシュなし → API取得
         fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(metric), {
             headers: { 'X-WP-Nonce': nonce },
             credentials: 'same-origin'
         })
         .then(function(res){ return res.json(); })
         .then(function(json){
-            loading.classList.remove('active');
-            chartWrap.style.display = 'block';
-
-            if(kpiTrendChart){ kpiTrendChart.destroy(); kpiTrendChart = null; }
-
-            if(!json.success || !json.values){
-                chartWrap.innerHTML = '<p style="text-align:center;color:#888;padding:40px 0;">データを取得できませんでした</p>';
-                return;
-            }
-
-            // canvas を再生成（Chart.js の再描画を確実にする）
-            chartWrap.innerHTML = '<canvas id="kpiTrendChart"></canvas>';
-
-            // ラベルを短縮表示（2025-03 → 3月）
-            var shortLabels = json.labels.map(function(ym){
-                return parseInt(ym.split('-')[1], 10) + '月';
-            });
-
-            var dataLen = json.values.length;
-            var pointBg = json.values.map(function(v, i){
-                return i === dataLen - 1 ? '#B5574B' : '#3D6B6E';
-            });
-            var pointR = json.values.map(function(v, i){
-                return i === dataLen - 1 ? 6 : 3;
-            });
-
-            kpiTrendChart = new Chart('kpiTrendChart', {
-                type: 'line',
-                data: {
-                    labels: shortLabels,
-                    datasets: [{
-                        label: label,
-                        data: json.values,
-                        borderColor: '#3D6B6E',
-                        borderWidth: 2,
-                        pointBackgroundColor: pointBg,
-                        pointRadius: pointR,
-                        tension: 0.3,
-                        fill: true,
-                        backgroundColor: 'rgba(59,130,246,0.08)',
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                title: function(ctx){
-                                    return json.labels[ctx[0].dataIndex];
-                                },
-                                label: function(ctx){
-                                    return label + ': ' + ctx.parsed.y.toLocaleString();
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(v){ return v.toLocaleString(); }
-                            }
-                        }
-                    }
-                }
-            });
+            _trendCache[metric] = json;
+            renderTrendChart(json, label, chartWrap, loading);
         })
         .catch(function(){
             loading.classList.remove('active');

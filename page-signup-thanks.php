@@ -75,7 +75,7 @@ get_header();
   <!-- 完了メッセージ -->
   <div class="thanks-hero">
     <div class="thanks-hero-icon">&#x2705;</div>
-    <h2 class="thanks-hero-title">お申込みを受け付けました</h2>
+    <h2 class="thanks-hero-title" style="color: #fff;">お申込みを受け付けました</h2>
     <p class="thanks-hero-subtitle">
       ありがとうございます。<br>
       ご登録内容の確認完了後、ご利用開始のご案内をメールでお送りいたします。<br>
@@ -91,9 +91,7 @@ get_header();
       $plan_defs    = gcrev_get_plan_definitions();
       $plan_info    = isset($plan_defs[$plan]) ? $plan_defs[$plan] : null;
       $plan_display = $plan_info ? $plan_info['name'] : esc_html($plan);
-      if ($plan_info && $plan_info['has_installment']) {
-          $plan_display .= '（総額 約' . number_format($plan_info['total']) . '円前後・税込）';
-      } elseif ($plan_info) {
+      if ($plan_info && !$plan_info['has_installment']) {
           $plan_display .= '（月額 ' . number_format($plan_info['monthly']) . '円・税込）';
       }
       ?>
@@ -144,7 +142,10 @@ get_header();
               box-shadow:0 4px 12px rgba(59,130,246,.3); transition:all 0.2s;">
         &#x1F4B3; 分割払い（初回決済）を行う &#x2192;
     </a>
-    <p style="font-size:13px; color:#888888; margin-top:12px; line-height:1.6;">
+    <p style="font-size:14px; color:#C0392B; margin-top:14px; line-height:1.7; font-weight:600;">
+      ※ 1年プランの場合は支払い回数を<strong>12回</strong>、2年プランの場合は<strong>24回</strong>を選択してください。
+    </p>
+    <p style="font-size:13px; color:#888888; margin-top:10px; line-height:1.6;">
       ※ ボタンを押すと安全な決済ページへ移動します。<br>
       ※ お支払い確認後、管理者がステータスを更新いたします。
     </p>
@@ -161,12 +162,12 @@ get_header();
   </div>
 
   <!-- フッターリンク -->
-  <footer class="signup-footer">
+<!--   <footer class="signup-footer">
     <div class="signup-footer-links">
       <a href="https://example.com/tokusho" target="_blank" rel="noopener noreferrer" class="signup-footer-link">特定商取引法に基づく表記</a>
       <a href="https://example.com/privacy" target="_blank" rel="noopener noreferrer" class="signup-footer-link">プライバシーポリシー</a>
     </div>
-  </footer>
+  </footer> -->
 
   <?php endif; ?>
 
