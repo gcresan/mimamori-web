@@ -121,7 +121,7 @@
             </ul>
          </div>
          <!-- C. MEO（Googleビジネス） -->
-         <div class="nav-section">
+<!--          <div class="nav-section">
             <div class="nav-section-title">MEO（Googleビジネス）</div>
             <ul class="nav-menu">
                <li class="nav-item">
@@ -158,9 +158,9 @@
                   </a>
                </li>
             </ul>
-         </div>
+         </div> -->
          <!-- D. SNS（Instagram） -->
-         <div class="nav-section">
+<!--          <div class="nav-section">
             <div class="nav-section-title">SNS（Instagram）</div>
             <ul class="nav-menu">
                <li class="nav-item">
@@ -192,9 +192,9 @@
                   </a>
                </li>
             </ul>
-         </div>
+         </div> -->
          <!-- E. AI支援 / 改善提案 -->
-         <div class="nav-section">
+<!--          <div class="nav-section">
             <div class="nav-section-title">AI支援 / 改善提案</div>
             <ul class="nav-menu">
                <li class="nav-item">
@@ -222,9 +222,9 @@
                   </a>
                </li>
             </ul>
-         </div>
+         </div> -->
          <!-- F. お知らせ・トピックス -->
-         <div class="nav-section">
+<!--          <div class="nav-section">
             <div class="nav-section-title">お知らせ・トピックス</div>
             <ul class="nav-menu">
                <li class="nav-item">
@@ -241,9 +241,9 @@
                </li>
 
             </ul>
-         </div>
+         </div> -->
          <!-- G. サポート・問い合わせ -->
-         <div class="nav-section">
+<!--          <div class="nav-section">
             <div class="nav-section-title">サポート・問い合わせ</div>
             <ul class="nav-menu">
                <li class="nav-item">
@@ -265,9 +265,9 @@
                   </a>
                </li>
             </ul>
-         </div>
+         </div> -->
          <!-- H. オプションサービス -->
-         <div class="nav-section">
+<!--          <div class="nav-section">
             <div class="nav-section-title">オプションサービス</div>
             <ul class="nav-menu">
                <li class="nav-item">
@@ -301,9 +301,9 @@
                   </a>
                </li>
             </ul>
-         </div>
+         </div> -->
          <!-- I. アカウント -->
-         <div class="nav-section">
+<!--          <div class="nav-section">
             <div class="nav-section-title">アカウント</div>
             <ul class="nav-menu">
                <li class="nav-item">
@@ -355,7 +355,7 @@
                   </a>
                </li>
             </ul>
-         </div>
+         </div> -->
       </nav>
    </aside>
    <!-- メインコンテンツ -->

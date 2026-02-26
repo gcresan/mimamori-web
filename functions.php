@@ -852,11 +852,13 @@ function mimamori_call_openai_responses_api( array $payload ) {
     $base_url = defined( 'MIMAMORI_OPENAI_BASE_URL' ) ? MIMAMORI_OPENAI_BASE_URL : 'https://api.openai.com/v1';
     $timeout  = defined( 'MIMAMORI_OPENAI_TIMEOUT' )  ? (int) MIMAMORI_OPENAI_TIMEOUT : 60;
 
+    $model = $payload['model'] ?? '(none)';
+    $url   = rtrim( $base_url, '/' ) . '/responses';
+
     if ( $api_key === '' ) {
+        error_log( '[みまもりAI] ERROR: MIMAMORI_OPENAI_API_KEY is empty' );
         return new WP_Error( 'no_api_key', 'OpenAI APIキーが設定されていません' );
     }
-
-    $url = rtrim( $base_url, '/' ) . '/responses';
 
     $response = wp_remote_post( $url, [
         'headers' => [
@@ -868,15 +870,35 @@ function mimamori_call_openai_responses_api( array $payload ) {
     ] );
 
     if ( is_wp_error( $response ) ) {
-        return $response;
+        error_log( '[みまもりAI] HTTP Error: ' . $response->get_error_message() );
+        return new WP_Error( 'openai_http_error', 'AI サービスに接続できませんでした。しばらくしてからお試しください。' );
     }
 
-    $code = wp_remote_retrieve_response_code( $response );
-    $body = json_decode( wp_remote_retrieve_body( $response ), true );
+    $code     = wp_remote_retrieve_response_code( $response );
+    $raw_body = wp_remote_retrieve_body( $response );
+    $body     = json_decode( $raw_body, true );
 
     if ( $code !== 200 ) {
-        $err_msg = $body['error']['message'] ?? ( 'OpenAI API Error (HTTP ' . $code . ')' );
-        return new WP_Error( 'openai_error', $err_msg );
+        // --- 詳細エラーをログに記録（フロントには出さない） ---
+        $err_type = $body['error']['type']    ?? 'unknown';
+        $err_code = $body['error']['code']    ?? 'unknown';
+        $err_msg  = $body['error']['message'] ?? 'No message';
+        error_log( sprintf(
+            '[みまもりAI] OpenAI API Error — HTTP %d, type=%s, code=%s, message=%s',
+            $code,
+            $err_type,
+            $err_code,
+            mb_substr( $err_msg, 0, 500 )
+        ) );
+
+        // フロント向けメッセージ（管理者のみ詳細、一般ユーザーは汎用文言）
+        if ( current_user_can( 'manage_options' ) ) {
+            $front_msg = sprintf( 'AI設定エラー (HTTP %d / %s): %s', $code, $err_code, mb_substr( $err_msg, 0, 200 ) );
+        } else {
+            $front_msg = 'AI機能に一時的な問題が発生しています。管理者にお問い合わせください。';
+        }
+
+        return new WP_Error( 'openai_error', $front_msg );
     }
 
     // Responses API: output[0].content[0].text
@@ -895,6 +917,7 @@ function mimamori_call_openai_responses_api( array $payload ) {
     }
 
     if ( $text === '' ) {
+        error_log( '[みまもりAI] Empty response body: ' . mb_substr( $raw_body, 0, 500 ) );
         return new WP_Error( 'empty_response', 'AIから空の応答が返されました' );
     }
 
@@ -2607,7 +2630,11 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     ] );
 
     if ( is_wp_error( $result ) ) {
-        $status = ( $result->get_error_code() === 'no_api_key' ) ? 500 : 502;
+        $err_code = $result->get_error_code();
+        $status   = ( $err_code === 'no_api_key' ) ? 500 : 502;
+
+        // エラーメッセージは mimamori_call_openai_responses_api() 内で
+        // 管理者向け/一般向けに分岐済み
         return new WP_REST_Response( [
             'success' => false,
             'message' => $result->get_error_message(),

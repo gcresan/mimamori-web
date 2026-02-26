@@ -39,10 +39,12 @@ class Gcrev_GSC_Fetcher {
         if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
             Gcrev_Rate_Limiter::check_and_wait( 'gsc' );
         }
-        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
+
+        $sa_path = $this->config->get_service_account_path();
+        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $sa_path);
 
         $client = new GoogleClient();
-        $client->setAuthConfig($this->config->get_service_account_path());
+        $client->setAuthConfig($sa_path);
         $client->addScope(GoogleWebmasters::WEBMASTERS_READONLY);
 
         $service = new GoogleWebmasters($client);

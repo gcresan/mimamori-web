@@ -18,6 +18,11 @@ if ( class_exists('Gcrev_Config') ) { return; }
  * - GCPプロジェクトID / Gemini ロケーション / モデル名の取得
  *   （API通信そのものは含まない。設定値の参照のみ）
  *
+ * Dev/Prod 分離用の wp-config.php 定数:
+ *   GCREV_SA_PATH           … サービスアカウント JSON パス（必須）
+ *   GCREV_GCP_PROJECT_ID    … GCP プロジェクトID（省略時は SA JSON から自動取得）
+ *   GCREV_GCP_LOCATION      … Vertex AI リージョン（省略時は GEMINI_LOCATION env → 'us-central1'）
+ *
  * @package GCREV_INSIGHT
  * @since   2.0.0
  */
@@ -174,33 +179,65 @@ class Gcrev_Config {
     // GCP / Gemini 設定参照（通信は含まない）
     // =========================================================
 
+    /** project_id のインメモリキャッシュ（SA JSON を毎回読まないため） */
+    private string $cached_project_id = '';
+    private bool   $project_id_resolved = false;
+
     /**
-     * サービスアカウント JSON から GCP プロジェクト ID を取得
+     * GCP プロジェクト ID を取得する
+     *
+     * 優先順位:
+     *   1. wp-config.php 定数 GCREV_GCP_PROJECT_ID（Dev/Prod 分離用）
+     *   2. サービスアカウント JSON の project_id フィールド
      *
      * @return string プロジェクトID（取得できない場合は空文字）
      */
     public function get_gcp_project_id(): string {
 
-        if (!is_readable($this->service_account_path)) return '';
+        // インメモリキャッシュ
+        if ( $this->project_id_resolved ) {
+            return $this->cached_project_id;
+        }
+        $this->project_id_resolved = true;
 
-        $json = file_get_contents($this->service_account_path);
-        if ($json === false) return '';
+        // 1. wp-config.php 定数を最優先
+        if ( defined( 'GCREV_GCP_PROJECT_ID' ) && GCREV_GCP_PROJECT_ID !== '' ) {
+            $this->cached_project_id = (string) GCREV_GCP_PROJECT_ID;
+            return $this->cached_project_id;
+        }
 
-        $data = json_decode($json, true);
-        if (!is_array($data)) return '';
+        // 2. SA JSON からフォールバック
+        if ( is_readable( $this->service_account_path ) ) {
+            $json = file_get_contents( $this->service_account_path );
+            if ( $json !== false ) {
+                $data = json_decode( $json, true );
+                if ( is_array( $data ) && isset( $data['project_id'] ) ) {
+                    $this->cached_project_id = (string) $data['project_id'];
+                }
+            }
+        }
 
-        return (string)($data['project_id'] ?? '');
+        return $this->cached_project_id;
     }
 
     /**
-     * Gemini API のロケーション（リージョン）を返す
-     * 環境変数 GEMINI_LOCATION が設定されていればそれを使用
+     * GCP ロケーション（Vertex AI リージョン）を返す
+     *
+     * 優先順位:
+     *   1. wp-config.php 定数 GCREV_GCP_LOCATION（Dev/Prod 分離用）
+     *   2. 環境変数 GEMINI_LOCATION
+     *   3. デフォルト 'us-central1'
      *
      * @return string
      */
     public function get_gemini_location(): string {
-        $loc = getenv('GEMINI_LOCATION');
-        return ($loc !== false && $loc !== '') ? (string)$loc : 'us-central1';
+        // 1. wp-config.php 定数を最優先
+        if ( defined( 'GCREV_GCP_LOCATION' ) && GCREV_GCP_LOCATION !== '' ) {
+            return (string) GCREV_GCP_LOCATION;
+        }
+        // 2. 環境変数
+        $loc = getenv( 'GEMINI_LOCATION' );
+        return ( $loc !== false && $loc !== '' ) ? (string) $loc : 'us-central1';
     }
 
     /**
@@ -210,10 +247,11 @@ class Gcrev_Config {
      * @return string
      */
     public function get_gemini_model(): string {
-        $model = getenv('GEMINI_MODEL');
-        return ($model !== false && $model !== '') ? (string)$model : 'gemini-2.5-flash';
+        $model = getenv( 'GEMINI_MODEL' );
+        return ( $model !== false && $model !== '' ) ? (string) $model : 'gemini-2.5-flash';
     }
-        /**
+
+    /**
      * Google Business Profile OAuth の Client ID を返す
      * wp-config.php の定数があればそれを優先し、なければ wp_options を参照
      */

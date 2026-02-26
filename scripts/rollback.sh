@@ -2,8 +2,8 @@
 # ===========================================================
 # rollback.sh — 本番テーマをスナップショットからロールバック
 #
-# 配置先: /home/kusanagi/mimamori/scripts/rollback.sh
-# 実行者: sudo -u kusanagi（PHP-FPM httpd ユーザーから）
+# 配置先: /home/kusanagi/mimamori-dev/scripts/rollback.sh
+# 実行者: kusanagi（PHP-FPM 実行ユーザー）
 #
 # 使い方:
 #   rollback.sh theme <filename.zip>  — テーマ ZIP から復元（補助）
@@ -13,8 +13,8 @@ set -euo pipefail
 
 # --- 固定パス ---
 PROD_THEME="/home/kusanagi/mimamori/DocumentRoot/wp-content/themes/mimamori"
-SNAPSHOT_DIR="/home/kusanagi/mimamori/snapshots/theme"
-LOG_FILE="/home/kusanagi/mimamori/snapshots/deploy.log"
+SNAPSHOT_DIR="/home/kusanagi/mimamori-dev/snapshots/theme"
+LOG_FILE="/home/kusanagi/mimamori-dev/snapshots/deploy.log"
 
 TIMESTAMP=$(date +"%Y-%m-%d_%H%M%S")
 
@@ -65,8 +65,7 @@ case "$MODE" in
         cd "$PROD_THEME/.."
         unzip -qo "$SNAPSHOT_PATH"
 
-        # 所有権修正
-        chown -R httpd:kusanagi "$PROD_THEME"
+        # chown 不要: PHP-FPM が kusanagi ユーザーで動作するため
 
         echo "[$TIMESTAMP] Theme rollback complete. Pre-rollback backup: ${BACKUP_NAME}" | tee -a "$LOG_FILE"
         ;;

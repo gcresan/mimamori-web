@@ -2,8 +2,8 @@
 # ===========================================================
 # deploy.sh — Dev テーマを本番にデプロイする
 #
-# 配置先: /home/kusanagi/mimamori/scripts/deploy.sh
-# 実行者: sudo -u kusanagi（PHP-FPM httpd ユーザーから）
+# 配置先: /home/kusanagi/mimamori-dev/scripts/deploy.sh
+# 実行者: kusanagi（PHP-FPM 実行ユーザー）
 #
 # 処理:
 #   1. 本番テーマの ZIP スナップショット作成
@@ -17,8 +17,8 @@ set -euo pipefail
 # --- 固定パス（ハードコード: 環境に合わせて変更不可） ---
 DEV_THEME="/home/kusanagi/mimamori-dev/DocumentRoot/wp-content/themes/mimamori"
 PROD_THEME="/home/kusanagi/mimamori/DocumentRoot/wp-content/themes/mimamori"
-SNAPSHOT_DIR="/home/kusanagi/mimamori/snapshots/theme"
-LOG_FILE="/home/kusanagi/mimamori/snapshots/deploy.log"
+SNAPSHOT_DIR="/home/kusanagi/mimamori-dev/snapshots/theme"
+LOG_FILE="/home/kusanagi/mimamori-dev/snapshots/deploy.log"
 MAX_SNAPSHOTS=10
 
 TIMESTAMP=$(date +"%Y-%m-%d_%H%M%S")
@@ -47,7 +47,7 @@ zip -rq "${SNAPSHOT_DIR}/${TIMESTAMP}.zip" mimamori \
 
 # --- 2. rsync (Dev → Prod) ---
 echo "[$TIMESTAMP] Deploying dev -> prod via rsync..." | tee -a "$LOG_FILE"
-rsync -a --delete \
+rsync -a --delete --no-group --no-owner \
     --exclude='.git' \
     --exclude='node_modules' \
     --exclude='.env' \
@@ -59,8 +59,8 @@ rsync -a --delete \
     --exclude='scripts' \
     "$DEV_THEME/" "$PROD_THEME/"
 
-# --- 3. 所有権修正 ---
-chown -R httpd:kusanagi "$PROD_THEME"
+# --- 3. 所有権 ---
+# chown 不要: PHP-FPM が kusanagi ユーザーで動作するため rsync 後の所有権は kusanagi:kusanagi
 
 # --- 4. キャッシュクリア ---
 # OPcache リセット（PHP-FPM reload）

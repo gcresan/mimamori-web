@@ -53,6 +53,7 @@ class Gcrev_GA4_Fetcher {
         if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
             Gcrev_Rate_Limiter::check_and_wait( 'ga4' );
         }
+
         putenv( 'GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path() );
     }
 

@@ -12,14 +12,15 @@ if ( class_exists( 'Gcrev_Deploy_Page' ) ) { return; }
  * Dev 環境の WordPress 管理画面に「みまもりウェブ > デプロイ」ページを追加する。
  * ワンクリックで Dev テーマを本番にデプロイ、またはスナップショットからロールバックする。
  *
- * 固定シェルスクリプト（deploy.sh / rollback.sh / snapshot.sh）を sudo 経由で実行する。
+ * 固定シェルスクリプト（deploy.sh / rollback.sh）を直接実行する。
+ * PHP-FPM は httpd ユーザーで動作するため sudo -u kusanagi 経由で実行。
  * PHP からの任意コマンド実行は禁止。
  *
  * 必要な wp-config.php 定数:
  *   MIMAMORI_ENV          = 'development'
  *   MIMAMORI_PROD_THEME_PATH  = '/home/kusanagi/mimamori/DocumentRoot/wp-content/themes/mimamori'
- *   MIMAMORI_SNAPSHOT_DIR     = '/home/kusanagi/mimamori/snapshots'
- *   MIMAMORI_SCRIPTS_DIR      = '/home/kusanagi/mimamori/scripts'
+ *   MIMAMORI_SNAPSHOT_DIR     = '/home/kusanagi/mimamori-dev/snapshots'
+ *   MIMAMORI_SCRIPTS_DIR      = '/home/kusanagi/mimamori-dev/scripts'
  *
  * @package GCREV_INSIGHT
  * @since   3.1.0
@@ -33,7 +34,7 @@ class Gcrev_Deploy_Page {
     private const NONCE_ACTION = 'gcrev_deploy_nonce';
 
     /** 許可するスクリプトのホワイトリスト */
-    private const ALLOWED_SCRIPTS = [ 'deploy.sh', 'rollback.sh', 'snapshot.sh' ];
+    private const ALLOWED_SCRIPTS = [ 'deploy.sh', 'rollback.sh' ];
 
     /** スナップショットファイル名の正規表現 */
     private const SNAPSHOT_PATTERN = '/^[\w\-]+\.zip$/';
@@ -123,10 +124,6 @@ class Gcrev_Deploy_Page {
                 $this->action_rollback( $snapshot );
                 break;
 
-            case 'snapshot':
-                $this->action_snapshot();
-                break;
-
             default:
                 add_settings_error(
                     'gcrev_deploy',
@@ -187,24 +184,6 @@ class Gcrev_Deploy_Page {
         error_log( '[GCREV Deploy] rollback: ' . ( $success ? 'OK' : 'FAIL' ) . ' snapshot=' . $snapshot );
     }
 
-    /**
-     * KUSANAGI スナップショット作成
-     */
-    private function action_snapshot(): void {
-        $output  = $this->run_script( 'snapshot.sh' );
-        $success = ( strpos( $output, 'OK' ) !== false );
-
-        add_settings_error(
-            'gcrev_deploy',
-            'snapshot_result',
-            $success
-                ? 'KUSANAGI スナップショットを作成しました。'
-                : 'スナップショット作成に失敗しました: ' . esc_html( mb_substr( $output, 0, 500 ) ),
-            $success ? 'success' : 'error'
-        );
-
-        error_log( '[GCREV Deploy] snapshot: ' . ( $success ? 'OK' : 'FAIL' ) . ' output=' . mb_substr( $output, 0, 300 ) );
-    }
 
     // =========================================================
     // スクリプト実行（固定スクリプトのみ）
@@ -239,8 +218,11 @@ class Gcrev_Deploy_Page {
         if ( ! is_file( $script_path ) ) {
             return 'ERROR: script file not found';
         }
+        if ( ! is_executable( $script_path ) ) {
+            return 'ERROR: script not executable (chmod +x required)';
+        }
 
-        // コマンド組み立て
+        // コマンド組み立て（PHP-FPM は httpd ユーザーのため sudo -u kusanagi で実行）
         $cmd = sprintf( 'sudo -u kusanagi %s', escapeshellarg( $script_path ) );
         foreach ( $args as $arg ) {
             $cmd .= ' ' . escapeshellarg( (string) $arg );
@@ -423,22 +405,6 @@ class Gcrev_Deploy_Page {
             </div>
         <?php else: ?>
             <div style="max-width:720px;">
-                <!-- KUSANAGI Snapshot -->
-                <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:16px 20px; margin-bottom:16px;">
-                    <h3 style="margin:0 0 8px; font-size:15px; color:#0369a1;">📸 KUSANAGI Snapshot（推奨: デプロイ前に作成）</h3>
-                    <p style="margin:0 0 12px; color:#64748b; font-size:13px;">
-                        DB + ファイル全体のスナップショットを作成します。重大な問題が発生した場合、SSH から完全復元できます。
-                    </p>
-                    <form method="post" style="display:inline;">
-                        <?php wp_nonce_field( self::NONCE_ACTION ); ?>
-                        <input type="hidden" name="gcrev_deploy_action" value="snapshot" />
-                        <button type="submit" class="button button-secondary"
-                                onclick="return confirm('KUSANAGI Snapshot を作成しますか？');">
-                            📸 KUSANAGI Snapshot 作成
-                        </button>
-                    </form>
-                </div>
-
                 <!-- Deploy -->
                 <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:16px 20px;">
                     <h3 style="margin:0 0 8px; font-size:15px; color:#dc2626;">🚀 Dev → 本番デプロイ</h3>
@@ -446,7 +412,7 @@ class Gcrev_Deploy_Page {
                         現在の Dev テーマを本番にデプロイします。実行前にテーマ ZIP スナップショットが自動作成されます。
                     </p>
                     <p style="margin:0 0 12px; color:#ef4444; font-size:13px; font-weight:600;">
-                        ※ 本番サイトに即時反映されます。事前に KUSANAGI Snapshot の作成を推奨します。
+                        ※ 本番サイトに即時反映されます。事前に SSH でフルバックアップの作成を推奨します。
                     </p>
                     <form method="post" style="display:inline;">
                         <?php wp_nonce_field( self::NONCE_ACTION ); ?>
@@ -477,7 +443,7 @@ class Gcrev_Deploy_Page {
                         onclick="switchRollbackTab('kusanagi')"
                         id="tab-kusanagi"
                         style="padding:8px 20px; border:1px solid #ccc; border-bottom:none; border-radius:6px 6px 0 0; background:#fff; cursor:pointer; font-weight:600;">
-                    KUSANAGI Snapshot（推奨）
+                    SSH フルバックアップ（推奨）
                 </button>
                 <button type="button" class="gcrev-tab"
                         onclick="switchRollbackTab('theme')"
@@ -487,23 +453,29 @@ class Gcrev_Deploy_Page {
                 </button>
             </div>
 
-            <!-- KUSANAGI Snapshot タブ -->
+            <!-- SSH フルバックアップ タブ -->
             <div id="panel-kusanagi" style="border:1px solid #ccc; border-radius:0 6px 6px 6px; padding:20px; background:#fff;">
                 <p style="margin:0 0 12px; color:#334155;">
-                    KUSANAGI Snapshot は DB + ファイル全体を含む完全なロールバック手段です。<br>
-                    影響範囲が大きいため、<strong>SSH でのコマンド実行を推奨</strong>します。
+                    DB + ファイルを含む完全なバックアップ・復元は SSH で手動実行してください。<br>
+                    テーマだけでなく DB の変更も戻したい場合に有効です。
                 </p>
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px 16px; margin-bottom:16px;">
+                    <p style="margin:0 0 8px; font-weight:600; color:#1e293b;">💾 バックアップ作成（デプロイ前に推奨）:</p>
+                    <pre style="margin:0; background:#1e293b; color:#e2e8f0; padding:10px 14px; border-radius:4px; font-size:12px; line-height:1.6; overflow-x:auto;"># DB ダンプ
+mysqldump -u root mimamori | gzip > /home/kusanagi/mimamori-dev/snapshots/db_$(date +%Y%m%d_%H%M%S).sql.gz
+
+# テーマファイル一式
+cd /home/kusanagi/mimamori/DocumentRoot/wp-content/themes
+tar czf /home/kusanagi/mimamori-dev/snapshots/theme_$(date +%Y%m%d_%H%M%S).tar.gz mimamori</pre>
+                </div>
                 <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px 16px;">
-                    <p style="margin:0 0 8px; font-weight:600; color:#1e293b;">復元手順:</p>
-                    <ol style="margin:0; padding-left:20px; color:#475569; line-height:1.8;">
-                        <li>SSH でサーバーにログイン</li>
-                        <li>スナップショット一覧を確認:
-                            <code style="background:#e2e8f0; padding:2px 6px; border-radius:3px;">kusanagi snapshot list mimamori</code>
-                        </li>
-                        <li>復元を実行:
-                            <code style="background:#e2e8f0; padding:2px 6px; border-radius:3px;">kusanagi snapshot restore &lt;snapshot-name&gt; mimamori</code>
-                        </li>
-                    </ol>
+                    <p style="margin:0 0 8px; font-weight:600; color:#1e293b;">🔄 復元手順:</p>
+                    <pre style="margin:0; background:#1e293b; color:#e2e8f0; padding:10px 14px; border-radius:4px; font-size:12px; line-height:1.6; overflow-x:auto;"># DB 復元
+gunzip -c /home/kusanagi/mimamori-dev/snapshots/db_XXXXXXXX.sql.gz | mysql -u root mimamori
+
+# テーマ復元
+cd /home/kusanagi/mimamori/DocumentRoot/wp-content/themes
+tar xzf /home/kusanagi/mimamori-dev/snapshots/theme_XXXXXXXX.tar.gz</pre>
                 </div>
             </div>
 

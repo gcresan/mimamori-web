@@ -627,6 +627,7 @@ class Gcrev_Insight_API {
 
         try {
             $config = $this->config->get_user_config($user_id);
+
             $data   = $this->fetch_dashboard_data_internal($config, $range);
 
             $this->dashboard_cache_set($user_id, $range, $data);
@@ -637,11 +638,42 @@ class Gcrev_Insight_API {
                 'cached'  => false,
             ], 200);
 
-        } catch (\Exception $e) {
-            error_log("[GCREV] REST /dashboard ERROR (user_id={$user_id}, range={$range}): " . $e->getMessage());
+        } catch (\Google\Service\Exception $e) {
+            // Google API 固有のエラー（HTTP ステータス + 詳細付き）
+            $status  = $e->getCode() ?: 500;
+            $errors  = $e->getErrors();
+            $reason  = ! empty( $errors[0]['reason'] ) ? $errors[0]['reason'] : 'unknown';
+            $domain  = ! empty( $errors[0]['domain'] ) ? $errors[0]['domain'] : 'unknown';
+            error_log( sprintf(
+                '[GCREV] REST /dashboard Google API ERROR — user=%d, range=%s, HTTP %d, reason=%s, domain=%s, message=%s',
+                $user_id, $range, $status, $reason, $domain, mb_substr( $e->getMessage(), 0, 500 )
+            ) );
+
+            // 管理者にはやや詳細、一般ユーザーには汎用文言
+            if ( current_user_can( 'manage_options' ) ) {
+                $front_msg = sprintf( 'Google API エラー (HTTP %d / %s): %s', $status, $reason, mb_substr( $e->getMessage(), 0, 200 ) );
+            } else {
+                $front_msg = 'データの取得に失敗しました。しばらくしてからお試しください。';
+            }
             return new WP_REST_Response([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $front_msg,
+            ], 500);
+
+        } catch (\Exception $e) {
+            error_log( sprintf(
+                '[GCREV] REST /dashboard ERROR — user=%d, range=%s, class=%s, message=%s',
+                $user_id, $range, get_class( $e ), mb_substr( $e->getMessage(), 0, 500 )
+            ) );
+
+            if ( current_user_can( 'manage_options' ) ) {
+                $front_msg = 'エラー: ' . mb_substr( $e->getMessage(), 0, 200 );
+            } else {
+                $front_msg = 'データの取得に失敗しました。しばらくしてからお試しください。';
+            }
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => $front_msg,
             ], 500);
         }
     }

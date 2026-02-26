@@ -54,13 +54,24 @@ class Gcrev_AI_Client {
      * @return string アクセストークン
      * @throws \Exception トークン取得に失敗した場合
      */
-    /** Transient キー: Vertex AI アクセストークンキャッシュ */
-    private const VERTEX_TOKEN_CACHE_KEY = 'gcrev_vertex_token';
+    /** Transient キー: Vertex AI アクセストークンキャッシュ（プレフィックス） */
+    private const VERTEX_TOKEN_CACHE_PREFIX = 'gcrev_vertex_token_';
+
+    /**
+     * 環境別のトークンキャッシュキーを返す。
+     * Dev/Prod で SA が異なる場合にキャッシュが混在しないようにする。
+     */
+    private function get_token_cache_key(): string {
+        $env = defined( 'MIMAMORI_ENV' ) ? MIMAMORI_ENV : 'default';
+        return self::VERTEX_TOKEN_CACHE_PREFIX . $env;
+    }
 
     public function get_vertex_access_token() {
 
+        $cache_key = $this->get_token_cache_key();
+
         // キャッシュがあればそのまま返す
-        $cached = get_transient( self::VERTEX_TOKEN_CACHE_KEY );
+        $cached = get_transient( $cache_key );
         if ( $cached !== false && is_string( $cached ) && $cached !== '' ) {
             return $cached;
         }
@@ -81,7 +92,7 @@ class Gcrev_AI_Client {
 
         // expires_in（通常 3600秒）の120秒前にキャッシュ切れ
         $ttl = max( 60, (int)( $token['expires_in'] ?? 3600 ) - 120 );
-        set_transient( self::VERTEX_TOKEN_CACHE_KEY, (string) $token['access_token'], $ttl );
+        set_transient( $cache_key, (string) $token['access_token'], $ttl );
 
         return (string)$token['access_token'];
     }
