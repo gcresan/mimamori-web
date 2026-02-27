@@ -403,6 +403,26 @@
             ?>
 
          <a href="<?php echo home_url('/report/report-settings/'); ?>" class="report-setting-btn">AIレポート設定</a>
+
+         <!-- アップデート通知ベル -->
+         <div class="updates-bell" id="updatesBell">
+            <button class="updates-bell-btn" type="button" aria-label="アップデート通知">
+               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+               </svg>
+               <span class="updates-badge" id="updatesBadge" style="display:none;"></span>
+            </button>
+            <div class="updates-dropdown" id="updatesDropdown">
+               <div class="updates-dropdown-header">
+                  <span class="updates-dropdown-title">アップデート情報</span>
+               </div>
+               <div class="updates-dropdown-list" id="updatesDropdownList">
+                  <div class="updates-loading">読み込み中...</div>
+               </div>
+            </div>
+         </div>
+
          <div class="logout">
             <a href="<?php echo wp_logout_url( home_url('/login/') ); ?>" class="logout-btn">
             ログアウト

@@ -68,6 +68,17 @@ add_action('init', function () {
         'has_archive'  => true,
         'supports'     => ['title', 'editor'],
     ]);
+
+    // アップデート履歴（release notes / 更新情報ベル）
+    register_post_type('mimamori_update', [
+        'label'           => 'アップデート',
+        'hierarchical'    => false,
+        'public'          => false,
+        'show_ui'         => true,
+        'show_in_menu'    => 'gcrev-insight',
+        'supports'        => ['title', 'editor'],
+        'capability_type' => 'post',
+    ]);
 });
 
 // ----------------------------------------
@@ -726,6 +737,16 @@ if ( file_exists( $gcrev_dashboard_service ) ) {
     require_once $gcrev_dashboard_service;
 }
 
+// ========================================
+// Updates API（更新情報ベル通知）
+// ========================================
+$mimamori_updates_api = $gcrev_modules_path . 'class-updates-api.php';
+if ( file_exists( $mimamori_updates_api ) ) {
+    require_once $mimamori_updates_api;
+    if ( class_exists( 'Mimamori_Updates_API' ) ) {
+        ( new Mimamori_Updates_API() )->register();
+    }
+}
 
 // ========================================
 // 既存のAPIクラス（入口）は最後に読み込む
@@ -832,6 +853,42 @@ add_action('wp_enqueue_scripts', function() {
         'paymentStatusUrl' => home_url( '/payment-status/' ),
     ] );
 });
+
+/**
+ * ============================================================
+ * みまもりウェブ - アップデート通知ベル
+ *
+ * assets/js/mimamori-updates-bell.js
+ * assets/css/mimamori-updates-bell.css
+ * ============================================================
+ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_user_logged_in() ) {
+        return;
+    }
+
+    wp_enqueue_script(
+        'mw-updates-bell',
+        get_template_directory_uri() . '/assets/js/mimamori-updates-bell.js',
+        [],
+        '1.0.0',
+        true
+    );
+
+    wp_enqueue_style(
+        'mw-updates-bell',
+        get_template_directory_uri() . '/assets/css/mimamori-updates-bell.css',
+        [],
+        '1.0.0'
+    );
+
+    wp_localize_script( 'mw-updates-bell', 'mwUpdatesConfig', [
+        'apiUrl'         => rest_url( 'mimamori/v1/updates' ),
+        'markReadUrl'    => rest_url( 'mimamori/v1/updates/mark-read' ),
+        'unreadCountUrl' => rest_url( 'mimamori/v1/updates/unread-count' ),
+        'nonce'          => wp_create_nonce( 'wp_rest' ),
+    ] );
+} );
 
 // ============================================================
 // みまもりAI チャット — REST API + OpenAI 連携 (Phase 2)

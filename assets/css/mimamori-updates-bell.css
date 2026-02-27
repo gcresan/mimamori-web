@@ -1,0 +1,187 @@
+/* ========================================
+   Updates Bell - Notification Dropdown
+   テーマカラー準拠: #2F3A4A / #B5574B / #FAF9F6 / #E5E3DC
+   ======================================== */
+
+/* ---------- Bell Button ---------- */
+.updates-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.updates-bell-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  padding: 6px;
+  color: #666660;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.updates-bell-btn:hover {
+  background: #EEEDEA;
+  color: #2B2B2B;
+}
+
+/* ---------- Badge ---------- */
+.updates-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #B5574B;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  pointer-events: none;
+}
+
+/* ---------- Dropdown Container ---------- */
+.updates-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  max-height: 440px;
+  background: #FAF9F6;
+  border: 1px solid #E5E3DC;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(47, 58, 74, 0.12);
+  z-index: 3000;
+  overflow: hidden;
+}
+.updates-dropdown.open {
+  display: block;
+}
+
+/* ---------- Dropdown Header ---------- */
+.updates-dropdown-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #E5E3DC;
+}
+.updates-dropdown-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #2B2B2B;
+}
+
+/* ---------- Dropdown List ---------- */
+.updates-dropdown-list {
+  overflow-y: auto;
+  max-height: 380px;
+  padding: 4px 0;
+}
+
+/* ---------- Loading / Empty ---------- */
+.updates-loading,
+.updates-empty {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #8C8A85;
+}
+
+/* ---------- Item ---------- */
+.updates-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #EEEDEA;
+  transition: background 0.1s;
+}
+.updates-item:last-child {
+  border-bottom: none;
+}
+.updates-item:hover {
+  background: #F5F4F0;
+}
+
+/* Unread: 左ボーダー + 薄い背景 */
+.updates-item.is-unread {
+  background: #F0EFE9;
+  border-left: 3px solid #2F3A4A;
+  padding-left: 13px;  /* 16 - 3 border */
+}
+
+/* ---------- Item Header ---------- */
+.updates-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+/* ---------- Category Pill ---------- */
+.updates-item-category {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+.updates-cat-feature {
+  background: #EDF3EF;
+  color: #3A5C49;
+}
+.updates-cat-improvement {
+  background: #E8EDF3;
+  color: #2F3A4A;
+}
+.updates-cat-fix {
+  background: #FDF0EE;
+  color: #B5574B;
+}
+.updates-cat-other {
+  background: #EEEDEA;
+  color: #666660;
+}
+
+/* ---------- Date ---------- */
+.updates-item-date {
+  font-size: 11px;
+  color: #8C8A85;
+  flex-shrink: 0;
+}
+
+/* ---------- Title ---------- */
+.updates-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #2B2B2B;
+  line-height: 1.5;
+}
+
+/* ========================================
+   Mobile (<768px): bottom-sheet 風
+   ======================================== */
+@media (max-width: 768px) {
+  .updates-dropdown {
+    position: fixed;
+    top: auto;
+    right: 8px;
+    left: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 60vh;
+    border-radius: 12px;
+  }
+  .updates-bell-btn {
+    padding: 4px;
+  }
+  .updates-bell-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+}
