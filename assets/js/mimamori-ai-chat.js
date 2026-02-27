@@ -16,12 +16,16 @@
   /* ============================
      State
      ============================ */
+  var STORAGE_KEY_HISTORY  = 'mw_chat_history';
+  var STORAGE_KEY_VIEW     = 'mw_chat_viewMode';
+  var MAX_PERSISTED_MESSAGES = 50;
+
   var state = {
     viewMode: 'closed',
     isLoading: false,
     isRecording: false,
     hasError: false,
-    history: [],  // 会話履歴 [{role:'user',content:'...'},{role:'assistant',content:'...'},...]
+    history: [],  // 会話履歴 [{role:'user',content:'...',structured?:{}},...]
     options: {
       conversationId: null
     }
@@ -75,6 +79,69 @@
   }
 
   /* ============================
+     Session Persistence (sessionStorage)
+     ============================ */
+
+  /** 会話履歴と表示モードを sessionStorage に保存 */
+  function saveSession() {
+    try {
+      var toSave = state.history.slice(-MAX_PERSISTED_MESSAGES);
+      sessionStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(toSave));
+      sessionStorage.setItem(STORAGE_KEY_VIEW, state.viewMode);
+    } catch (e) { /* QuotaExceeded 等は無視 */ }
+  }
+
+  /**
+   * sessionStorage から会話履歴を復元し、DOMに再描画する
+   * @returns {boolean} 復元されたかどうか
+   */
+  function restoreSession() {
+    try {
+      var raw = sessionStorage.getItem(STORAGE_KEY_HISTORY);
+      if (!raw) return false;
+
+      var saved = JSON.parse(raw);
+      if (!Array.isArray(saved) || saved.length === 0) return false;
+
+      // Welcome メッセージを除去（復元メッセージで上書きされるため）
+      removeWelcome();
+
+      // 履歴を復元
+      state.history = saved;
+
+      // DOM に再描画
+      for (var i = 0; i < saved.length; i++) {
+        var entry = saved[i];
+        if (entry.role === 'user') {
+          appendUserMessage(entry.content);
+        } else if (entry.role === 'assistant') {
+          var payload = entry.structured || { type: 'talk', text: entry.content };
+          appendAssistantMessage(payload);
+        }
+      }
+
+      // Quick question chips を非表示にする（会話がある場合）
+      var quickArea = els.quickArea || (els.root ? els.root.querySelector('.mw-chat-quick') : null);
+      if (quickArea) quickArea.style.display = 'none';
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** 保存済み viewMode を復元 */
+  function restoreViewMode() {
+    try {
+      var saved = sessionStorage.getItem(STORAGE_KEY_VIEW);
+      if (saved && saved !== 'closed') {
+        return saved;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /* ============================
      View Mode
      ============================ */
   function switchViewMode(mode) {
@@ -89,6 +156,7 @@
 
     els.root.className = 'mw-chat mw-chat--' + mode;
     state.viewMode = mode;
+    saveSession();
 
     if (mode !== 'closed' && els.textarea) {
       setTimeout(function () { els.textarea.focus(); }, 300);
@@ -389,6 +457,7 @@
 
     // Track in history (before API call so context is maintained even on failure)
     state.history.push({ role: 'user', content: text });
+    saveSession();
 
     // Clear input
     if (els.textarea) {
@@ -434,8 +503,9 @@
         var payload = msg.structured || { type: 'talk', text: msg.content };
         appendAssistantMessage(payload);
 
-        // Track assistant response in history (raw content for API context)
-        state.history.push({ role: 'assistant', content: msg.content });
+        // Track assistant response in history (raw content for API context + structured for DOM rebuild)
+        state.history.push({ role: 'assistant', content: msg.content, structured: payload });
+        saveSession();
       } else {
         setError(data.message || '\u56DE\u7B54\u306E\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F'); // 回答の取得に失敗しました
       }
@@ -1227,6 +1297,15 @@
 
     initVoice();
     bindEvents();
+
+    // セッション復元: 前ページの会話履歴をDOMに再描画
+    var hadHistory = restoreSession();
+
+    // viewMode 復元: チャットが開いていた状態を維持
+    var savedMode = restoreViewMode();
+    if (savedMode && hadHistory) {
+      switchViewMode(savedMode);
+    }
   }
 
   /* ============================

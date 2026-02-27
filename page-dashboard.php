@@ -157,12 +157,89 @@ get_header();
   position: relative;
 }
 
-/* KPI trend modal responsive (page-specific) */
+/* KPI trend inline responsive (page-specific) */
 @media (max-width: 600px) {
-  .kpi-trend-modal { max-width: 100%; border-radius: 12px; }
-  .kpi-trend-chart-wrap { height: 240px; }
-  .kpi-trend-header { padding: 16px 16px 10px; }
-  .kpi-trend-body { padding: 16px; }
+  .kpi-trend-chart-wrap { height: 200px; }
+  .kpi-trend-inline-title { font-size: 13px; }
+  .kpi-trend-inline-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+
+/* =========================================================
+   レポート未生成 — セットアップガイド
+   ========================================================= */
+.dashboard-setup-guide {
+  text-align: center;
+  padding: 48px 32px;
+  background: #FAF9F6;
+  border: 2px dashed #D5D3CD;
+  border-radius: 12px;
+  margin-top: 8px;
+}
+.setup-guide-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+.setup-guide-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #2B2B2B;
+  margin: 0 0 12px;
+}
+.setup-guide-desc {
+  font-size: 14px;
+  color: #6B6B65;
+  line-height: 1.9;
+  margin: 0 0 28px;
+}
+.setup-guide-steps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: left;
+  margin: 0 auto 32px;
+  width: fit-content;
+}
+.setup-guide-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #3b3b3b;
+}
+.setup-guide-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #3D6B6E;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.setup-guide-btn {
+  display: block;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 14px 36px;
+  background: #3D6B6E;
+  color: #fff !important;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.setup-guide-btn:hover {
+  background: #346062;
+}
+@media (max-width: 600px) {
+  .dashboard-setup-guide { padding: 32px 20px; }
+  .setup-guide-title { font-size: 18px; }
+  .setup-guide-desc br { display: none; }
 }
 
 </style>
@@ -392,8 +469,9 @@ if ($infographic) {
         $kpi_items = [
           'visits' => ['label' => '訪問数',   'icon' => '👥', 'metric' => 'sessions'],
           'cv'     => ['label' => '問合せ数', 'icon' => '🎯', 'metric' => 'cv'],
-          'meo'    => ['label' => 'MEO表示',  'icon' => '📍', 'metric' => 'meo'],
+          'meo'    => ['label' => 'Googleマップでの表示回数',  'icon' => '📍', 'metric' => 'meo'],
         ];
+        $first_kpi = true;
         foreach ($kpi_items as $key => $meta):
           $kpi = $infographic['kpi'][$key] ?? ['value' => 0, 'diff' => 0];
           $kpi_val  = (int)($kpi['value'] ?? 0);
@@ -402,27 +480,53 @@ if ($infographic) {
           $kpi_diff_class = $kpi_diff > 0 ? 'positive' : ($kpi_diff < 0 ? 'negative' : 'neutral');
           $kpi_diff_icon  = $kpi_diff > 0 ? '▲' : ($kpi_diff < 0 ? '▼' : '→');
           $kpi_diff_text  = $kpi_diff > 0 ? '+' . number_format($kpi_diff) : number_format($kpi_diff);
+          $is_first_active = $first_kpi ? ' is-active' : '';
+          $aria_pressed    = $first_kpi ? 'true' : 'false';
         ?>
-          <div class="info-kpi-item" data-kpi-key="<?php echo esc_attr($key); ?>" data-metric="<?php echo esc_attr($meta['metric']); ?>">
+          <button type="button" class="info-kpi-item<?php echo $is_first_active; ?>" data-kpi-key="<?php echo esc_attr($key); ?>" data-metric="<?php echo esc_attr($meta['metric']); ?>" data-kpi-icon="<?php echo esc_attr($meta['icon']); ?>" aria-pressed="<?php echo esc_attr($aria_pressed); ?>">
             <span class="info-kpi-icon"><?php echo $meta['icon']; ?></span>
             <span class="info-kpi-label"><?php echo esc_html($meta['label']); ?></span>
             <span class="info-kpi-value" data-kpi-role="value"><?php echo esc_html(number_format($kpi_val)); ?></span>
             <span class="info-kpi-diff <?php echo esc_attr($kpi_diff_class); ?>" data-kpi-role="diff">
               <?php echo esc_html($kpi_diff_icon . ' ' . $kpi_diff_text); ?>
             </span>
-            <span class="info-kpi-hint">クリックで推移を見る 📊</span>
-          </div>
-        <?php endforeach; ?>
+            <span class="info-kpi-hint">クリックでグラフ切替</span>
+          </button>
+        <?php $first_kpi = false; endforeach; ?>
       </div>
     </div>
   </div>
 
   <!-- サマリー -->
   <div class="info-summary">
-    <?php echo esc_html($infographic['summary'] ?? ''); ?>
+    <span class="info-summary-icon" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 1.5a5.5 5.5 0 0 1 3.16 10.01c-.44.31-.66.56-.76.82-.1.27-.15.61-.15 1.17v.5H7.75v-.5c0-.56-.05-.9-.15-1.17-.1-.26-.32-.51-.76-.82A5.5 5.5 0 0 1 10 1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16.5h4M8.5 14h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10" cy="7" r="1" fill="currentColor"/></svg>
+    </span>
+    <span class="info-summary-text"><?php echo esc_html($infographic['summary'] ?? ''); ?></span>
   </div>
 
-
+  <!-- KPI トレンドチャート（インライン常時表示） -->
+  <div class="kpi-trend-inline" id="kpiTrendInline">
+    <div class="kpi-trend-inline-header">
+      <h3 class="kpi-trend-inline-title" id="kpiTrendTitle">
+        <span class="kpi-trend-inline-icon" id="kpiTrendIcon">👥</span>
+        <span id="kpiTrendTitleText">訪問数 — 過去12ヶ月の推移</span>
+      </h3>
+      <span class="kpi-trend-inline-meta">直近12ヶ月</span>
+    </div>
+    <div class="kpi-trend-inline-body">
+      <div class="kpi-trend-loading active" id="kpiTrendLoading">
+        <div class="kpi-trend-skeleton"></div>
+      </div>
+      <div class="kpi-trend-chart-wrap" id="kpiTrendChartWrap" style="display:none;">
+        <canvas id="kpiTrendChart"></canvas>
+      </div>
+      <div class="kpi-trend-error" id="kpiTrendError" style="display:none;">
+        <p>データを取得できませんでした</p>
+        <button type="button" class="kpi-trend-retry" id="kpiTrendRetry">再試行</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 採点の内訳（breakdown） -->
   <?php
@@ -528,9 +632,9 @@ $next_action = !empty($infographic['action'])
     : ($highlights['opportunity'] ?? '改善施策を検討');
 
 $highlight_items = [
-    ['label' => '📈 最重要ポイント',     'value' => $highlights['most_important'] ?? '新規ユーザー獲得', 'key' => 'most_important'],
-    ['label' => '⚠️ 最優先課題',         'value' => $highlights['top_issue'] ?? 'コンバージョン改善',    'key' => 'top_issue'],
-    ['label' => '🎯 ネクストアクション', 'value' => $next_action,                                       'key' => 'opportunity'],
+    ['label' => '📈 今月うまくいっていること',  'value' => $highlights['most_important'] ?? '新規ユーザー獲得', 'key' => 'most_important'],
+    ['label' => '⚠️ 今いちばん気をつけたい点',  'value' => $highlights['top_issue'] ?? 'コンバージョン改善',    'key' => 'top_issue'],
+    ['label' => '🎯 次にやるとよいこと',         'value' => $next_action,                                       'key' => 'opportunity'],
 ];
 
 foreach ($highlight_items as $highlight):
@@ -646,29 +750,38 @@ foreach ($highlight_items as $highlight):
 </section>
 
 
+<?php else: ?>
+<!-- レポート未生成：設定画面への誘導 -->
+<section class="dashboard-setup-guide">
+  <div class="setup-guide-icon">🚀</div>
+  <h2 class="setup-guide-title">AIレポートを始めましょう</h2>
+  <p class="setup-guide-desc">
+    まだレポートが生成されていません。<br>
+    レポート設定画面で、対象サイトや目標を登録すると、<br>
+    AIが毎月のホームページの状態を自動で分析・レポートします。
+  </p>
+  <div class="setup-guide-steps">
+    <div class="setup-guide-step">
+      <span class="setup-guide-step-num">1</span>
+      <span>レポート設定で<strong>対象サイト</strong>と<strong>目標</strong>を登録</span>
+    </div>
+    <div class="setup-guide-step">
+      <span class="setup-guide-step-num">2</span>
+      <span>AIが自動でデータを分析・<strong>レポート生成</strong></span>
+    </div>
+    <div class="setup-guide-step">
+      <span class="setup-guide-step-num">3</span>
+      <span>毎月この画面に<strong>スコアやハイライト</strong>が表示されます</span>
+    </div>
+  </div>
+  <a href="<?php echo esc_url( home_url('/mypage/report-settings/') ); ?>" class="setup-guide-btn">
+    ⚙️ レポート設定へ進む
+  </a>
+</section>
 <?php endif; ?>
 
 
 
-
-
-
-
-<!-- KPI トレンドモーダル -->
-<div class="kpi-trend-overlay" id="kpiTrendOverlay">
-  <div class="kpi-trend-modal">
-    <div class="kpi-trend-header">
-      <h3 id="kpiTrendTitle">過去12ヶ月の推移</h3>
-      <button class="kpi-trend-close" id="kpiTrendClose">&times;</button>
-    </div>
-    <div class="kpi-trend-body">
-      <div class="kpi-trend-loading" id="kpiTrendLoading">データ取得中...</div>
-      <div class="kpi-trend-chart-wrap">
-        <canvas id="kpiTrendChart"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
 
 </div><!-- .content-area -->
 
@@ -709,10 +822,10 @@ foreach ($highlight_items as $highlight):
         var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
         var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
 
-        // KPI値にローディング表示
+        // KPI値にローディング表示（不透明度は変えず、テキストで明示）
         document.querySelectorAll('.info-kpi-value').forEach(function(el){
-            el.style.opacity = '0.3';
-            el.style.transition = 'opacity 0.3s';
+            el.dataset.originalText = el.textContent;
+            el.textContent = '---';
         });
 
         Promise.all([
@@ -738,53 +851,168 @@ foreach ($highlight_items as $highlight):
             updateInfoKpi('cv', cC, cC - pC);
         }).catch(function(err){
             console.error('[GCREV] KPI async fetch error:', err);
-        }).finally(function(){
+            // エラー時は保存していた元テキストに戻す
             document.querySelectorAll('.info-kpi-value').forEach(function(el){
-                el.style.opacity = '1';
+                if (el.dataset.originalText) {
+                    el.textContent = el.dataset.originalText;
+                }
             });
         });
     })();
     <?php endif; ?>
 })();
 
-// --- KPI トレンドモーダル ---
+// --- KPI トレンドチャート（インライン常時表示） ---
 (function(){
     var restBase = '<?php echo esc_url(rest_url('gcrev/v1/')); ?>';
     var nonce    = '<?php echo esc_js(wp_create_nonce('wp_rest')); ?>';
     var kpiTrendChart = null;
+    var _trendCache   = {};
+    var _activeMetric = null;
+    var _retryMetric  = null;
+    var _retryLabel   = null;
+    var _retryIcon    = null;
 
-    // KPIトレンドデータをバックグラウンドで先読み（クリック時に即表示するため）
-    var _trendCache = {};
-    setTimeout(function(){
-        ['sessions', 'cv', 'meo'].forEach(function(m){
-            fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(m), {
-                headers: { 'X-WP-Nonce': nonce },
-                credentials: 'same-origin'
-            })
-            .then(function(res){ return res.json(); })
-            .then(function(json){ _trendCache[m] = json; })
-            .catch(function(){});
+    // DOM参照
+    var titleText = document.getElementById('kpiTrendTitleText');
+    var titleIcon = document.getElementById('kpiTrendIcon');
+    var loading   = document.getElementById('kpiTrendLoading');
+    var chartWrap = document.getElementById('kpiTrendChartWrap');
+    var errorEl   = document.getElementById('kpiTrendError');
+    var retryBtn  = document.getElementById('kpiTrendRetry');
+
+    // (1) 即時データ先読み — 全3指標をfetch、sessionsが来たら即描画
+    ['sessions', 'cv', 'meo'].forEach(function(m){
+        fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(m), {
+            headers: { 'X-WP-Nonce': nonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res){ return res.json(); })
+        .then(function(json){
+            _trendCache[m] = json;
+            // sessionsデータが取れたらまだ何も表示していなければ即描画
+            if (m === 'sessions' && !_activeMetric) {
+                showTrend('sessions', '訪問数', '👥');
+            }
+        })
+        .catch(function(){
+            // sessions の初回ロードが失敗した場合はエラー表示
+            if (m === 'sessions' && !_activeMetric) {
+                showError('sessions', '訪問数', '👥');
+            }
         });
-    }, 1500);
+    });
 
-    // KPIカードクリック
+    // (2) KPIカードクリックでチャート切替
     document.querySelectorAll('.info-kpi-item[data-metric]').forEach(function(card){
         card.addEventListener('click', function(){
             var metric = card.dataset.metric;
             var label  = card.querySelector('.info-kpi-label').textContent.trim();
-            openKpiTrend(metric, label);
+            var icon   = card.dataset.kpiIcon || '📊';
+            showTrend(metric, label, icon);
         });
     });
 
-    // トレンドチャート描画（共通）
-    function renderTrendChart(json, label, chartWrap, loading){
-        loading.classList.remove('active');
-        chartWrap.style.display = 'block';
-        if(kpiTrendChart){ kpiTrendChart.destroy(); kpiTrendChart = null; }
-        if(!json.success || !json.values){
-            chartWrap.innerHTML = '<p style="text-align:center;color:#888;padding:40px 0;">データを取得できませんでした</p>';
+    // (3) アクティブカード状態更新（is-active + aria-pressed）
+    function setActiveCard(metric) {
+        document.querySelectorAll('.info-kpi-item[data-metric]').forEach(function(card){
+            if (card.dataset.metric === metric) {
+                card.classList.add('is-active');
+                card.setAttribute('aria-pressed', 'true');
+            } else {
+                card.classList.remove('is-active');
+                card.setAttribute('aria-pressed', 'false');
+            }
+        });
+    }
+
+    // (4) チャート表示メイン関数
+    function showTrend(metric, label, icon) {
+        if (_activeMetric === metric) return; // 同じメトリクスなら何もしない
+        _activeMetric = metric;
+        setActiveCard(metric);
+
+        // タイトル更新
+        titleText.textContent = label + ' — 過去12ヶ月の推移';
+        titleIcon.textContent = icon;
+
+        // エラー非表示
+        errorEl.style.display = 'none';
+
+        // キャッシュがあれば即表示（フェードアニメーション付き）
+        if (_trendCache[metric]) {
+            // 切替アニメーション: 0.3s fade
+            chartWrap.style.opacity = '0';
+            loading.classList.remove('active');
+            chartWrap.style.display = 'block';
+            renderTrendChart(_trendCache[metric], label);
+            // requestAnimationFrame で次フレームに opacity を戻す
+            requestAnimationFrame(function(){
+                requestAnimationFrame(function(){
+                    chartWrap.style.opacity = '1';
+                });
+            });
             return;
         }
+
+        // なければローディング表示 → API取得
+        chartWrap.style.display = 'none';
+        loading.classList.add('active');
+
+        fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(metric), {
+            headers: { 'X-WP-Nonce': nonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res){ return res.json(); })
+        .then(function(json){
+            _trendCache[metric] = json;
+            // 取得中にユーザーが別カードを押した場合はスキップ
+            if (_activeMetric !== metric) return;
+            loading.classList.remove('active');
+            chartWrap.style.display = 'block';
+            chartWrap.style.opacity = '1';
+            renderTrendChart(json, label);
+        })
+        .catch(function(){
+            if (_activeMetric !== metric) return;
+            showError(metric, label, icon);
+        });
+    }
+
+    // (5) エラー表示 + 再試行対応
+    function showError(metric, label, icon) {
+        loading.classList.remove('active');
+        chartWrap.style.display = 'none';
+        errorEl.style.display = 'block';
+        _retryMetric = metric;
+        _retryLabel  = label;
+        _retryIcon   = icon;
+    }
+
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function(){
+            if (!_retryMetric) return;
+            // リトライ: キャッシュをクリアして再取得
+            var m = _retryMetric;
+            var l = _retryLabel;
+            var i = _retryIcon;
+            _activeMetric = null; // ガードをリセット
+            delete _trendCache[m];
+            errorEl.style.display = 'none';
+            showTrend(m, l, i);
+        });
+    }
+
+    // (6) Chart.js レンダリング
+    function renderTrendChart(json, label) {
+        if (kpiTrendChart) { kpiTrendChart.destroy(); kpiTrendChart = null; }
+
+        if (!json.success || !json.values) {
+            chartWrap.style.display = 'none';
+            errorEl.style.display = 'block';
+            return;
+        }
+
         chartWrap.innerHTML = '<canvas id="kpiTrendChart"></canvas>';
         var shortLabels = json.labels.map(function(ym){
             return parseInt(ym.split('-')[1], 10) + '月';
@@ -796,6 +1024,7 @@ foreach ($highlight_items as $highlight):
         var pointR = json.values.map(function(v, i){
             return i === dataLen - 1 ? 6 : 3;
         });
+
         kpiTrendChart = new Chart('kpiTrendChart', {
             type: 'line',
             data: {
@@ -819,74 +1048,19 @@ foreach ($highlight_items as $highlight):
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            title: function(ctx){
-                                return json.labels[ctx[0].dataIndex];
-                            },
-                            label: function(ctx){
-                                return label + ': ' + ctx.parsed.y.toLocaleString();
-                            }
+                            title: function(ctx){ return json.labels[ctx[0].dataIndex]; },
+                            label: function(ctx){ return label + ': ' + ctx.parsed.y.toLocaleString(); }
                         }
                     }
                 },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        ticks: {
-                            callback: function(v){ return v.toLocaleString(); }
-                        }
+                        ticks: { callback: function(v){ return v.toLocaleString(); } }
                     }
                 }
             }
         });
-    }
-
-    function openKpiTrend(metric, label){
-        var overlay = document.getElementById('kpiTrendOverlay');
-        var loading = document.getElementById('kpiTrendLoading');
-        var chartWrap = overlay.querySelector('.kpi-trend-chart-wrap');
-
-        document.getElementById('kpiTrendTitle').textContent = label + ' — 過去12ヶ月の推移';
-        overlay.classList.add('active');
-        loading.classList.add('active');
-        chartWrap.style.display = 'none';
-
-        // バックグラウンド先読みキャッシュがあれば即表示
-        if (_trendCache[metric]) {
-            renderTrendChart(_trendCache[metric], label, chartWrap, loading);
-            return;
-        }
-
-        // キャッシュなし → API取得
-        fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(metric), {
-            headers: { 'X-WP-Nonce': nonce },
-            credentials: 'same-origin'
-        })
-        .then(function(res){ return res.json(); })
-        .then(function(json){
-            _trendCache[metric] = json;
-            renderTrendChart(json, label, chartWrap, loading);
-        })
-        .catch(function(){
-            loading.classList.remove('active');
-            chartWrap.style.display = 'block';
-            chartWrap.innerHTML = '<p style="text-align:center;color:#888;padding:40px 0;">データを取得できませんでした</p>';
-        });
-    }
-
-    // 閉じる
-    document.getElementById('kpiTrendClose').addEventListener('click', closeKpiTrend);
-    document.getElementById('kpiTrendOverlay').addEventListener('click', function(e){
-        if(e.target === e.currentTarget) closeKpiTrend();
-    });
-    document.addEventListener('keydown', function(e){
-        if(e.key === 'Escape' && document.getElementById('kpiTrendOverlay').classList.contains('active')){
-            closeKpiTrend();
-        }
-    });
-
-    function closeKpiTrend(){
-        document.getElementById('kpiTrendOverlay').classList.remove('active');
-        if(kpiTrendChart){ kpiTrendChart.destroy(); kpiTrendChart = null; }
     }
 })();
 

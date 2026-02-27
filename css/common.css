@@ -171,10 +171,18 @@
   border-radius: 0 2px 2px 0;
 }
 .sidebar-nav .nav-icon {
-  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 20px;
-  text-align: center;
+  height: 20px;
   flex-shrink: 0;
+  color: currentColor;
+  opacity: 0.6;
+}
+.sidebar-nav .nav-icon svg {
+  width: 17px;
+  height: 17px;
 }
 .sidebar-nav .nav-submenu {
   list-style: none;

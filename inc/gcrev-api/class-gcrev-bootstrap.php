@@ -62,6 +62,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Cron_Monitor_Page())->register();
             }
 
+            $client_management_path = __DIR__ . '/admin/class-client-management-page.php';
+            if ( file_exists($client_management_path) ) {
+                require_once $client_management_path;
+                (new Gcrev_Client_Management_Page())->register();
+            }
+
             // デプロイ管理画面（Dev 環境のみ）
             if ( defined( 'MIMAMORI_ENV' ) && MIMAMORI_ENV === 'development' ) {
                 $deploy_page_path = __DIR__ . '/admin/class-deploy-page.php';

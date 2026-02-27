@@ -386,6 +386,46 @@ add_filter('user_can_richedit', function ($wp_rich_edit) {
 });
 
 // ----------------------------------------
+// ユーザー編集画面カスタマイズ（一般ユーザー向け）
+// ----------------------------------------
+
+// カラースキーム選択を非表示（admin_init で実行しないと効かない）
+add_action( 'admin_init', function () {
+    remove_action( 'admin_color_scheme_picker', 'admin_color_scheme_picker' );
+} );
+
+// アプリケーションパスワードを非表示
+add_filter( 'wp_is_application_passwords_available_for_user', '__return_false' );
+
+// ツールバーのデフォルトを OFF に設定（新規ユーザー登録時）
+add_filter( 'get_user_option_show_admin_bar_front', function ( $value, $option, $user ) {
+    // まだ明示的に設定されていない場合は false（非表示）
+    $raw = get_user_meta( $user->ID, 'show_admin_bar_front', true );
+    if ( '' === $raw ) {
+        return 'false';
+    }
+    return $value;
+}, 10, 3 );
+
+// CSS で不要セクションを非表示
+add_action( 'admin_head-profile.php', 'gcrev_hide_profile_sections_css' );
+add_action( 'admin_head-user-edit.php', 'gcrev_hide_profile_sections_css' );
+function gcrev_hide_profile_sections_css() {
+    ?>
+    <style>
+    .user-comment-shortcuts-wrap,  /* キーボードショートカット */
+    .user-admin-bar-front-wrap,    /* ツールバー */
+    .user-language-wrap,           /* 言語 */
+    .user-url-wrap,                /* サイト */
+    .user-description-wrap,        /* プロフィール情報 */
+    .user-profile-picture,         /* プロフィール写真 */
+    #application-passwords-section /* アプリケーションパスワード */
+    { display: none !important; }
+    </style>
+    <?php
+}
+
+// ----------------------------------------
 // Mobile detection
 // ----------------------------------------
 
@@ -921,20 +961,60 @@ JSON例: {"type":"advice","summary":"...","sections":[...],"support_notice":true
 - この管理画面（みまもりウェブ）自体のUI・デザイン・使い勝手の改善は絶対に提案しません
 - レポートや分析画面の数字は「判断材料」であり、改善すべき対象ではありません
 - ユーザーが「改善点」「問題点」と聞いた場合、それは管理画面の批評を求めているのではなく、クライアントのWebサイト集客・問い合わせ増加のための改善を求めています
-- 必要に応じて「もう少し詳しく教えていただけますか？」と1〜2問だけ聞き返してOK
 
-## 参照データについて
-質問内容に応じて、GA4やSearch Consoleの実データがこのプロンプトの末尾に付与されることがあります。
-- 提供されたデータに基づいて回答する場合、自然にデータに言及する
-  良い例：「直近28日のデータを見ると、セッション数が前期比で増加していますね」
-  良い例：「今見ているダッシュボードの数字によると〜」
-  良い例：「Search Consoleのデータだと、キーワード「○○」で〜」
-- データの出典やシステム内部の判断ロジックには絶対に言及しない
+## 追加質問のルール（重要）
+あなたにはGA4やSearch Consoleのデータが自動的に提供されます。以下の情報は既に手元にあるか、自動取得されるため、ユーザーに聞いてはいけません:
+- アクセス数・PV・セッション・ユーザー数
+- 検索キーワード・表示回数・クリック数・検索順位
+- 流入チャネル（検索・SNS・直接流入など）の内訳
+- ページ別のアクセス数
+- デバイス別（PC/スマホ）の比率
+- 地域別のアクセス
+- 前期比の増減
+
+ユーザーに追加で質問してよいのは、APIでは取得できないビジネス情報だけです:
+- 事業の目標（例: 「月の問い合わせ目標は何件ですか？」）
+- ターゲット顧客層（例: 「主なお客様はどんな方ですか？」）
+- 商圏・対象エリア（例: 「サービス対象地域はどのあたりですか？」）
+- 競合他社や差別化ポイント
+- 最近の施策やキャンペーン（例: 「最近チラシ配布やSNS投稿をされましたか？」）
+- 季節性やイベントの影響
+
+追加質問は回答の最後に1つだけ、かつ分析の結論を先に述べてから聞くこと。データで答えられる質問を投げ返すのは禁止。
+
+## 分析回答のテンプレート（データ分析・改善提案が必要な場合）
+データに基づく分析を求められた場合、以下の順序で回答すること:
+1. まず結論（何が起きているか・何をすべきか）
+2. データの根拠（「直近28日のデータを見ると〜」のように具体的数値を引用）
+3. 仮説（なぜそうなっているかの推測、「推測ですが」と前置き）
+4. おすすめのアクション（具体的に1〜3つ）
+5. 確認質問（必要な場合のみ。APIで取得できないビジネス情報について1つだけ）
+
+この順序は「結論→根拠→仮説→アクション→確認」と覚えてください。
+データが提供されている場合は必ずデータを引用して結論を述べ、先にユーザーに聞き返さないこと。
+
+## 参照データについて（推測禁止ルール）
+質問内容に応じて、GA4やSearch Consoleの実データがこのプロンプトの末尾に付与されます。
+
+最重要ルール: GA4で取得可能な質問（国/地域/参照元/ページ/日別/チャネル等）には、必ずGA4の実数値だけで回答すること。
+- データが提供されている場合: 数字を引用して断定的に回答する。「〜と思われます」は使わず「〜です」「〜でした」と事実を述べる
+  良い例：「9月5日のアクセスはUnited Statesからが245セッション（全体の78.2%）で最も多いです」
+  良い例：「直帰率が98.5%と極端に高く、スパムの可能性があります」
+- データが提供されていない / 取得に失敗した場合: 推測回答は一切せず「GA4データを確認できませんでした（理由: ○○）」と伝える
+- 「〜かもしれません」「〜と考えられます」「〜でしょう」などの推測表現は、GA4で確認可能な数値について使用禁止
+- 推測が許されるのは、GA4では分からないビジネス上の仮説（例: 「季節要因かもしれません」）のみ
+
+データの出典やシステム内部の判断ロジックには絶対に言及しない:
   悪い例：「チェックボックスがONだったので〜」
   悪い例：「自動判断によりGA4データを参照しました」
-  悪い例：「詳細データモードが有効なので〜」
-- データが提供されていない場合は一般的な知識で回答し、具体的な数値が必要なら「実際のデータで確認してみましょう」と促す
-- データが不完全な場合は「手元のデータでは」「推測ですが」と前置きする
+  悪い例：「フレキシブルクエリで取得した結果によると〜」
+
+## 異常値・スパムに関する回答ルール
+データに「異常値の可能性」の注記が付いている場合:
+- まず事実（国名・セッション数・構成比）を提示する
+- 次に異常値のシグナル（低エンゲージメント率、高直帰率、短い滞在時間等）を具体的数値で示す
+- 「スパムまたはbotアクセスの可能性があります」と注記する（断定ではなく可能性として）
+- 最後に、次に確認すべきGA4レポート（参照元/メディア、ランディングページ等）を提案する
 
 ## ページへの言及ルール
 ページについて回答するとき、必ず**ページタイトル**で言及すること。
@@ -1935,6 +2015,9 @@ function mimamori_rewrite_intent( string $message, string $page_type ): array {
         '流入', '検索キーワード', 'クエリ', '検索ワード',
         'デバイス', 'モバイル', 'スマホ',
         '地域', 'エリア', '都道府県',
+        '国', '海外', '都市', 'どこから',
+        '参照元', 'ソース', 'ランディング',
+        'スパム', 'bot', 'ボット',
         '年齢', 'デモグラ',
         '先月', '前月', '前年', '推移', '比較', '変化',
         'GA4', 'GSC', 'サーチコンソール', 'アナリティクス',
@@ -2096,9 +2179,9 @@ function mimamori_build_context_blocks(
 
     // 意図カテゴリの補足（AIが質問を正しく解釈するためのヒント）
     $intent_hints = [
-        'site_improvement'       => 'ユーザーはクライアントWebサイトの改善策を求めています。データを根拠に具体的なアクションを提案してください。',
+        'site_improvement'       => 'ユーザーはクライアントWebサイトの改善策を求めています。手元のデータから現状を分析し、結論→根拠→仮説→アクションの順序で具体的に提案してください。データで答えられることをユーザーに聞き返してはいけません。',
         'report_interpretation'  => 'ユーザーは数値の意味・良し悪しを知りたがっています。業界平均との比較や解釈を交えて説明してください。',
-        'reason_analysis'        => 'ユーザーは数値の変動理由を知りたがっています。考えられる要因を挙げ、確認すべきポイントを示してください。',
+        'reason_analysis'        => 'ユーザーは数値の変動理由を知りたがっています。提供されたデータから考えられる要因を自ら分析し、結論→根拠→仮説→アクションの順序で回答してください。データで確認できることをユーザーに聞き返してはいけません。',
     ];
     if ( isset( $intent_hints[ $intent ] ) ) {
         $blocks[] = '【質問の意図】' . $intent_hints[ $intent ];
@@ -2146,8 +2229,38 @@ function mimamori_build_context_blocks(
  *
  * @return string
  */
-function mimamori_get_planner_prompt(): string {
+function mimamori_get_planner_prompt( string $intent = 'general' ): string {
     $today = wp_date( 'Y-m-d' );
+
+    // 意図に応じた追加指示
+    $intent_instruction = '';
+    switch ( $intent ) {
+        case 'reason_analysis':
+            $intent_instruction = "\n\n"
+                . "重要: ユーザーは数値の変動理由を分析したいと考えています。\n"
+                . "原因分析には多角的なデータが必要です。以下を参考にクエリを選んでください:\n"
+                . "- daily_traffic（いつ変動が起きたか特定）\n"
+                . "- channel_breakdown（どのチャネルが増減したか）\n"
+                . "- page_breakdown（どのページに影響があったか）\n"
+                . "- gsc_keywords（検索キーワードの変動）\n"
+                . "最低2件のクエリを出力してください。空配列は禁止です。";
+            break;
+        case 'site_improvement':
+            $intent_instruction = "\n\n"
+                . "重要: ユーザーはサイトの改善策を求めています。\n"
+                . "改善提案にはサイトの現状把握が必要です。以下を参考にクエリを選んでください:\n"
+                . "- page_breakdown（どのページが効果的か/課題か）\n"
+                . "- channel_breakdown（集客チャネルのバランス）\n"
+                . "- gsc_keywords（検索流入の質と量）\n"
+                . "- device_breakdown（デバイス別のUX差）\n"
+                . "最低2件のクエリを出力してください。空配列は禁止です。";
+            break;
+        case 'report_interpretation':
+            $intent_instruction = "\n\n"
+                . "重要: ユーザーは数値の意味・良し悪しを知りたがっています。\n"
+                . "評価に必要なデータを取得してください。最低1件のクエリを出力してください。";
+            break;
+    }
 
     return <<<PROMPT
 あなたはデータクエリプランナーです。ユーザーの質問に正確に回答するために、追加で取得すべきGA4/GSCデータを判断します。
@@ -2164,14 +2277,17 @@ function mimamori_get_planner_prompt(): string {
 - gsc_keywords: Google検索キーワード詳細（どんな言葉で検索されたか・表示回数・クリック数・順位、上位200件）
 
 ルール:
-1. 質問に答えるために本当に必要なクエリだけを選ぶ（最大3件）
+1. 質問に答えるために本当に必要なクエリだけを選ぶ（最大5件）
 2. 28日間のサマリー（総PV/セッション/ユーザー/上位5キーワード）は既に持っている。それで十分なら空配列を返す
 3. 各クエリに日付範囲（start/end）を指定する。日付指定がない一般的な質問なら直近28日間を使う
 4. 特定の日付に関する質問の場合、その前後を含む適切な範囲を設定する（例: 「1月19日」→ 1月10日〜1月25日程度）
 5. 必ず有効なJSONのみを返す。JSON以外のテキストを前後に付けない
-
+6. 比較データが必要な場合、compare フラグを true にする。システムが同じ長さの前期間データを自動取得する
+{$intent_instruction}
 出力形式（厳守）:
-{"queries":[{"type":"クエリタイプ","start":"YYYY-MM-DD","end":"YYYY-MM-DD"}]}
+{"queries":[{"type":"クエリタイプ","start":"YYYY-MM-DD","end":"YYYY-MM-DD","compare":true}]}
+
+compare は省略可能（省略時は false 扱い）。原因分析や改善提案の場合は true を推奨。
 
 追加データ不要の場合:
 {"queries":[]}
@@ -2249,13 +2365,14 @@ function mimamori_validate_planner_queries( array $raw_queries ): array {
         }
 
         $validated[] = [
-            'type'  => $type,
-            'start' => $start,
-            'end'   => $end,
+            'type'    => $type,
+            'start'   => $start,
+            'end'     => $end,
+            'compare' => ! empty( $q['compare'] ),
         ];
 
-        // 最大3件
-        if ( count( $validated ) >= 3 ) {
+        // 最大5件
+        if ( count( $validated ) >= 5 ) {
             break;
         }
     }
@@ -2268,14 +2385,15 @@ function mimamori_validate_planner_queries( array $raw_queries ): array {
  *
  * @param string $message  ユーザーの質問テキスト
  * @param string $digest   既存の28日サマリー
+ * @param string $intent   意図タイプ（'reason_analysis' | 'site_improvement' | 'report_interpretation' | 'general'）
  * @return array  バリデーション済みクエリ配列
  */
-function mimamori_call_planner_pass( string $message, string $digest ): array {
+function mimamori_call_planner_pass( string $message, string $digest, string $intent = 'general' ): array {
     $planner_model = defined( 'MIMAMORI_OPENAI_PLANNER_MODEL' )
         ? MIMAMORI_OPENAI_PLANNER_MODEL
         : ( defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini' );
 
-    // プランナーへの入力: 質問 + 既存データの概要
+    // プランナーへの入力: 質問 + 意図ラベル + 既存データの概要
     $digest_summary = '';
     if ( $digest !== '' ) {
         $digest_summary = "\n\n既に持っているデータ:\n" . mb_substr( $digest, 0, 300 ) . '...（省略）';
@@ -2283,16 +2401,26 @@ function mimamori_call_planner_pass( string $message, string $digest ): array {
         $digest_summary = "\n\n既に持っているデータ: 28日サマリーなし（GA4/GSC未設定の可能性）";
     }
 
+    $intent_label = '';
+    if ( $intent !== 'general' ) {
+        $intent_labels = [
+            'reason_analysis'       => '原因分析',
+            'site_improvement'      => '改善提案',
+            'report_interpretation' => '数値解釈',
+        ];
+        $intent_label = "\n質問の意図: " . ( $intent_labels[ $intent ] ?? $intent );
+    }
+
     $input = [
         [
             'role'    => 'user',
-            'content' => '質問: ' . $message . $digest_summary,
+            'content' => '質問: ' . $message . $intent_label . $digest_summary,
         ],
     ];
 
     $result = mimamori_call_openai_responses_api( [
         'model'             => $planner_model,
-        'instructions'      => mimamori_get_planner_prompt(),
+        'instructions'      => mimamori_get_planner_prompt( $intent ),
         'input'             => $input,
         'max_output_tokens' => 256,
     ] );
@@ -2320,11 +2448,74 @@ function mimamori_call_planner_pass( string $message, string $digest ): array {
 }
 
 /**
+ * 単一クエリのデータ取得ヘルパー
+ *
+ * switch/case を共通化し、当期・前期の両方で使い回す。
+ *
+ * @param string $type     クエリタイプ
+ * @param string $start    開始日（YYYY-MM-DD）
+ * @param string $end      終了日（YYYY-MM-DD）
+ * @param mixed  $ga4      Gcrev_GA4_Fetcher インスタンス（null 可）
+ * @param string $ga4_id   GA4 プロパティID
+ * @param string $gsc_url  GSC サイトURL
+ * @param mixed  $config   Gcrev_Config インスタンス
+ * @return array|null  取得データ（空/エラー時は null）
+ */
+function mimamori_fetch_single_query( string $type, string $start, string $end, $ga4, string $ga4_id, string $gsc_url, $config ) {
+    if ( ! $ga4 && $type !== 'gsc_keywords' ) {
+        return null;
+    }
+
+    $data = null;
+
+    switch ( $type ) {
+        case 'daily_traffic':
+            $data = $ga4->fetch_ga4_daily_series( $ga4_id, $start, $end );
+            break;
+
+        case 'page_breakdown':
+            $data = $ga4->fetch_page_details( $ga4_id, $start, $end, $gsc_url );
+            break;
+
+        case 'device_breakdown':
+            $data = $ga4->fetch_device_details( $ga4_id, $start, $end );
+            break;
+
+        case 'device_daily':
+            $data = $ga4->fetch_device_daily_series( $ga4_id, $start, $end );
+            break;
+
+        case 'channel_breakdown':
+            $data = $ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
+            break;
+
+        case 'region_breakdown':
+            $data = $ga4->fetch_region_details( $ga4_id, $start, $end );
+            break;
+
+        case 'gsc_keywords':
+            if ( $gsc_url !== '' && class_exists( 'Gcrev_GSC_Fetcher' ) ) {
+                $gsc  = new Gcrev_GSC_Fetcher( $config );
+                $data = $gsc->fetch_gsc_data( $gsc_url, $start, $end );
+            }
+            break;
+    }
+
+    if ( is_array( $data ) && ! is_wp_error( $data ) && ! empty( $data ) ) {
+        return $data;
+    }
+
+    return null;
+}
+
+/**
  * プランナーが指定したクエリを実行し、追加データを取得する
+ *
+ * compare フラグが true のクエリは、同じ長さの前期間データも自動取得する。
  *
  * @param array $queries   バリデーション済みクエリ配列
  * @param int   $user_id   WordPress ユーザーID
- * @return array  ['query_type' => ['type'=>..., 'start'=>..., 'end'=>..., 'data'=>...], ...]
+ * @return array  [['type'=>..., 'start'=>..., 'end'=>..., 'data'=>..., 'prev_data'=>...?], ...]
  */
 function mimamori_fetch_enrichment_data( array $queries, int $user_id ): array {
     if ( ! class_exists( 'Gcrev_Config' ) ) {
@@ -2350,77 +2541,78 @@ function mimamori_fetch_enrichment_data( array $queries, int $user_id ): array {
     $results = [];
 
     foreach ( $queries as $q ) {
-        $type  = $q['type'];
-        $start = $q['start'];
-        $end   = $q['end'];
+        $type    = $q['type'];
+        $start   = $q['start'];
+        $end     = $q['end'];
+        $compare = ! empty( $q['compare'] );
 
-        // Transient キャッシュチェック
+        // --- 当期データ取得 ---
         $cache_key = 'mw_ai_extra_' . $user_id . '_' . $type . '_' . $start . '_' . $end;
         $cached    = get_transient( $cache_key );
+
         if ( $cached !== false ) {
-            $results[] = [
-                'type'  => $type,
-                'start' => $start,
-                'end'   => $end,
-                'data'  => $cached,
-            ];
+            $data = $cached;
+        } else {
+            try {
+                $data = mimamori_fetch_single_query( $type, $start, $end, $ga4, $ga4_id, $gsc_url, $config );
+                if ( $data !== null ) {
+                    set_transient( $cache_key, $data, 2 * HOUR_IN_SECONDS );
+                }
+            } catch ( \Exception $e ) {
+                error_log( '[みまもりAI] Enrichment fetch error (' . $type . '): ' . $e->getMessage() );
+                $data = null;
+            }
+        }
+
+        if ( $data === null ) {
             continue;
         }
 
-        if ( ! $ga4 ) {
-            continue;
-        }
+        $result_item = [
+            'type'  => $type,
+            'start' => $start,
+            'end'   => $end,
+            'data'  => $data,
+        ];
 
-        try {
-            $data = null;
+        // --- 前期データの自動取得（compare = true の場合） ---
+        if ( $compare ) {
+            try {
+                $tz       = wp_timezone();
+                $start_dt = new DateTime( $start, $tz );
+                $end_dt   = new DateTime( $end, $tz );
+                $days     = (int) $start_dt->diff( $end_dt )->days;
 
-            switch ( $type ) {
-                case 'daily_traffic':
-                    $data = $ga4->fetch_ga4_daily_series( $ga4_id, $start, $end );
-                    break;
+                $prev_end_dt   = ( clone $start_dt )->modify( '-1 day' );
+                $prev_start_dt = ( clone $prev_end_dt )->modify( '-' . $days . ' days' );
+                $prev_start    = $prev_start_dt->format( 'Y-m-d' );
+                $prev_end      = $prev_end_dt->format( 'Y-m-d' );
 
-                case 'page_breakdown':
-                    $data = $ga4->fetch_page_details( $ga4_id, $start, $end, $gsc_url );
-                    break;
+                // 前期キャッシュチェック
+                $prev_cache_key = 'mw_ai_extra_' . $user_id . '_' . $type . '_' . $prev_start . '_' . $prev_end;
+                $prev_cached    = get_transient( $prev_cache_key );
 
-                case 'device_breakdown':
-                    $data = $ga4->fetch_device_details( $ga4_id, $start, $end );
-                    break;
-
-                case 'device_daily':
-                    $data = $ga4->fetch_device_daily_series( $ga4_id, $start, $end );
-                    break;
-
-                case 'channel_breakdown':
-                    $data = $ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
-                    break;
-
-                case 'region_breakdown':
-                    $data = $ga4->fetch_region_details( $ga4_id, $start, $end );
-                    break;
-
-                case 'gsc_keywords':
-                    if ( $gsc_url !== '' && class_exists( 'Gcrev_GSC_Fetcher' ) ) {
-                        $gsc  = new Gcrev_GSC_Fetcher( $config );
-                        $data = $gsc->fetch_gsc_data( $gsc_url, $start, $end );
+                if ( $prev_cached !== false ) {
+                    $prev_data = $prev_cached;
+                } else {
+                    $prev_data = mimamori_fetch_single_query( $type, $prev_start, $prev_end, $ga4, $ga4_id, $gsc_url, $config );
+                    if ( $prev_data !== null ) {
+                        set_transient( $prev_cache_key, $prev_data, 2 * HOUR_IN_SECONDS );
                     }
-                    break;
-            }
+                }
 
-            if ( is_array( $data ) && ! is_wp_error( $data ) && ! empty( $data ) ) {
-                set_transient( $cache_key, $data, 2 * HOUR_IN_SECONDS );
-                $results[] = [
-                    'type'  => $type,
-                    'start' => $start,
-                    'end'   => $end,
-                    'data'  => $data,
-                ];
+                if ( $prev_data !== null ) {
+                    $result_item['prev_start'] = $prev_start;
+                    $result_item['prev_end']   = $prev_end;
+                    $result_item['prev_data']  = $prev_data;
+                }
+            } catch ( \Exception $e ) {
+                error_log( '[みまもりAI] Enrichment prev-period error (' . $type . '): ' . $e->getMessage() );
+                // 前期取得失敗でも当期データは返す
             }
-
-        } catch ( \Exception $e ) {
-            error_log( '[みまもりAI] Enrichment fetch error (' . $type . '): ' . $e->getMessage() );
-            // スキップして次のクエリへ
         }
+
+        $results[] = $result_item;
     }
 
     return $results;
@@ -2436,33 +2628,38 @@ function mimamori_format_enrichment_for_ai( array $enrichment_results ): string 
     $blocks = [];
 
     foreach ( $enrichment_results as $r ) {
-        $type  = $r['type'];
-        $start = $r['start'];
-        $end   = $r['end'];
-        $data  = $r['data'];
-        $range = $start . ' 〜 ' . $end;
+        $type      = $r['type'];
+        $start     = $r['start'];
+        $end       = $r['end'];
+        $data      = $r['data'];
+        $range     = $start . ' 〜 ' . $end;
+        $prev_data  = $r['prev_data']  ?? null;
+        $prev_range = '';
+        if ( $prev_data && isset( $r['prev_start'], $r['prev_end'] ) ) {
+            $prev_range = $r['prev_start'] . ' 〜 ' . $r['prev_end'];
+        }
 
         switch ( $type ) {
             case 'daily_traffic':
                 $blocks[] = mimamori_format_daily_traffic( $data, $range );
                 break;
             case 'page_breakdown':
-                $blocks[] = mimamori_format_page_breakdown( $data, $range );
+                $blocks[] = mimamori_format_page_breakdown( $data, $range, $prev_data, $prev_range );
                 break;
             case 'device_breakdown':
-                $blocks[] = mimamori_format_device_breakdown( $data, $range );
+                $blocks[] = mimamori_format_device_breakdown( $data, $range, $prev_data, $prev_range );
                 break;
             case 'device_daily':
                 $blocks[] = mimamori_format_device_daily( $data, $range );
                 break;
             case 'channel_breakdown':
-                $blocks[] = mimamori_format_channel_breakdown( $data, $range );
+                $blocks[] = mimamori_format_channel_breakdown( $data, $range, $prev_data, $prev_range );
                 break;
             case 'region_breakdown':
-                $blocks[] = mimamori_format_region_breakdown( $data, $range );
+                $blocks[] = mimamori_format_region_breakdown( $data, $range, $prev_data, $prev_range );
                 break;
             case 'gsc_keywords':
-                $blocks[] = mimamori_format_gsc_keywords( $data, $range );
+                $blocks[] = mimamori_format_gsc_keywords( $data, $range, $prev_data, $prev_range );
                 break;
         }
     }
@@ -2510,7 +2707,7 @@ function mimamori_format_daily_traffic( array $data, string $range ): string {
 /**
  * ページ別アクセスのフォーマット（上位20件）
  */
-function mimamori_format_page_breakdown( array $data, string $range ): string {
+function mimamori_format_page_breakdown( array $data, string $range, ?array $prev_data = null, string $prev_range = '' ): string {
     if ( empty( $data ) ) {
         return '';
     }
@@ -2537,19 +2734,68 @@ function mimamori_format_page_breakdown( array $data, string $range ): string {
         $lines[] = ( $i + 1 ) . ' | ' . $display_title . ' | ' . $path . ' | ' . $pv . ' | ' . $se . ' | ' . $br;
     }
 
+    // 前期比サマリー
+    if ( $prev_data && ! empty( $prev_data ) ) {
+        $prev_pages  = is_array( $prev_data ) ? array_values( $prev_data ) : [];
+        $prev_lookup = [];
+        foreach ( $prev_pages as $pp ) {
+            $ppath = $pp['page'] ?? $pp['pagePath'] ?? $pp['path'] ?? '';
+            if ( $ppath !== '' ) {
+                $prev_lookup[ $ppath ] = $pp;
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = '▼ 前期比（' . $prev_range . ' との比較・上位10件）';
+        $compare_count = min( $count, 10 );
+        for ( $i = 0; $i < $compare_count; $i++ ) {
+            $p       = $pages[ $i ];
+            $path    = $p['page'] ?? $p['pagePath'] ?? $p['path'] ?? '';
+            $title   = $p['title'] ?? $path;
+            $display = ( $title !== '' && $title !== '(not set)' ) ? $title : $path;
+            $cur_pv  = (int) ( $p['pageViews'] ?? $p['screenPageViews'] ?? $p['pv'] ?? 0 );
+
+            if ( isset( $prev_lookup[ $path ] ) ) {
+                $prev_pv = (int) ( $prev_lookup[ $path ]['pageViews'] ?? $prev_lookup[ $path ]['screenPageViews'] ?? $prev_lookup[ $path ]['pv'] ?? 0 );
+                if ( $prev_pv > 0 ) {
+                    $change = ( ( $cur_pv - $prev_pv ) / $prev_pv ) * 100;
+                    $sign   = $change >= 0 ? '+' : '';
+                    $lines[] = $display . ': ' . $cur_pv . 'PV（前期比 ' . $sign . number_format( $change, 1 ) . '%）';
+                } else {
+                    $lines[] = $display . ': ' . $cur_pv . 'PV（前期: 0PV）';
+                }
+            } else {
+                $lines[] = $display . ': ' . $cur_pv . 'PV（新規ページ）';
+            }
+        }
+    }
+
     return implode( "\n", $lines );
 }
 
 /**
  * デバイス別のフォーマット
  */
-function mimamori_format_device_breakdown( array $data, string $range ): string {
+function mimamori_format_device_breakdown( array $data, string $range, ?array $prev_data = null, string $prev_range = '' ): string {
     if ( empty( $data ) ) {
         return '';
     }
 
+    // 前期データの lookup
+    $prev_lookup = [];
+    if ( $prev_data ) {
+        foreach ( $prev_data as $pd ) {
+            if ( is_array( $pd ) ) {
+                $pname = $pd['device'] ?? $pd['deviceCategory'] ?? $pd['name'] ?? '';
+                if ( $pname !== '' ) {
+                    $prev_lookup[ mb_strtolower( $pname ) ] = $pd;
+                }
+            }
+        }
+    }
+
     $lines   = [ '▼ デバイス別アクセス（' . $range . '）' ];
-    $lines[] = 'デバイス | セッション | シェア | PV | 直帰率 | CV';
+    $lines[] = 'デバイス | セッション | シェア | PV | 直帰率 | CV' . ( $prev_data ? ' | 前期比(セッション)' : '' );
 
     foreach ( $data as $d ) {
         if ( ! is_array( $d ) ) {
@@ -2561,7 +2807,25 @@ function mimamori_format_device_breakdown( array $data, string $range ): string 
         $pv    = $d['pageViews'] ?? $d['screenPageViews'] ?? 0;
         $br    = $d['bounceRate'] ?? '-';
         $cv    = $d['conversions'] ?? $d['cv'] ?? 0;
-        $lines[] = $name . ' | ' . $sess . ' | ' . $share . ' | ' . $pv . ' | ' . $br . ' | ' . $cv;
+        $line  = $name . ' | ' . $sess . ' | ' . $share . ' | ' . $pv . ' | ' . $br . ' | ' . $cv;
+
+        if ( $prev_data ) {
+            $key = mb_strtolower( $name );
+            if ( isset( $prev_lookup[ $key ] ) ) {
+                $prev_sess = (int) ( $prev_lookup[ $key ]['sessions'] ?? 0 );
+                if ( $prev_sess > 0 ) {
+                    $change = ( ( (int) $sess - $prev_sess ) / $prev_sess ) * 100;
+                    $sign   = $change >= 0 ? '+' : '';
+                    $line  .= ' | ' . $sign . number_format( $change, 1 ) . '%';
+                } else {
+                    $line .= ' | -';
+                }
+            } else {
+                $line .= ' | 新規';
+            }
+        }
+
+        $lines[] = $line;
     }
 
     return implode( "\n", $lines );
@@ -2598,13 +2862,24 @@ function mimamori_format_device_daily( array $data, string $range ): string {
 /**
  * 流入チャネルのフォーマット
  */
-function mimamori_format_channel_breakdown( array $data, string $range ): string {
+function mimamori_format_channel_breakdown( array $data, string $range, ?array $prev_data = null, string $prev_range = '' ): string {
     $parts = [];
+
+    // 前期チャネル lookup
+    $prev_ch_lookup = [];
+    if ( $prev_data && ! empty( $prev_data['channels'] ) ) {
+        foreach ( $prev_data['channels'] as $pch ) {
+            $pname = $pch['channel'] ?? $pch['name'] ?? '';
+            if ( $pname !== '' ) {
+                $prev_ch_lookup[ mb_strtolower( $pname ) ] = $pch;
+            }
+        }
+    }
 
     // チャネル別
     if ( ! empty( $data['channels'] ) && is_array( $data['channels'] ) ) {
         $lines   = [ '▼ 流入チャネル別（' . $range . '）' ];
-        $lines[] = 'チャネル | セッション | PV | CV';
+        $lines[] = 'チャネル | セッション | PV | CV' . ( $prev_data ? ' | 前期比(セッション)' : '' );
 
         $count = min( count( $data['channels'] ), 10 );
         for ( $i = 0; $i < $count; $i++ ) {
@@ -2613,7 +2888,25 @@ function mimamori_format_channel_breakdown( array $data, string $range ): string
             $sess = $ch['sessions'] ?? 0;
             $pv   = $ch['pageViews'] ?? $ch['screenPageViews'] ?? 0;
             $cv   = $ch['conversions'] ?? $ch['cv'] ?? 0;
-            $lines[] = $name . ' | ' . $sess . ' | ' . $pv . ' | ' . $cv;
+            $line = $name . ' | ' . $sess . ' | ' . $pv . ' | ' . $cv;
+
+            if ( $prev_data ) {
+                $key = mb_strtolower( $name );
+                if ( isset( $prev_ch_lookup[ $key ] ) ) {
+                    $prev_sess = (int) ( $prev_ch_lookup[ $key ]['sessions'] ?? 0 );
+                    if ( $prev_sess > 0 ) {
+                        $change = ( ( (int) $sess - $prev_sess ) / $prev_sess ) * 100;
+                        $sign   = $change >= 0 ? '+' : '';
+                        $line  .= ' | ' . $sign . number_format( $change, 1 ) . '%';
+                    } else {
+                        $line .= ' | -';
+                    }
+                } else {
+                    $line .= ' | 新規';
+                }
+            }
+
+            $lines[] = $line;
         }
         $parts[] = implode( "\n", $lines );
     }
@@ -2640,13 +2933,27 @@ function mimamori_format_channel_breakdown( array $data, string $range ): string
 /**
  * 地域別のフォーマット（上位15件）
  */
-function mimamori_format_region_breakdown( array $data, string $range ): string {
+function mimamori_format_region_breakdown( array $data, string $range, ?array $prev_data = null, string $prev_range = '' ): string {
     if ( empty( $data ) ) {
         return '';
     }
 
+    // 前期データ lookup
+    $prev_lookup = [];
+    if ( $prev_data ) {
+        $prev_items = is_array( $prev_data ) ? array_values( $prev_data ) : [];
+        foreach ( $prev_items as $pr ) {
+            if ( is_array( $pr ) ) {
+                $pname = $pr['region'] ?? $pr['name'] ?? '';
+                if ( $pname !== '' ) {
+                    $prev_lookup[ $pname ] = $pr;
+                }
+            }
+        }
+    }
+
     $lines   = [ '▼ 地域別アクセス（' . $range . '・上位15件）' ];
-    $lines[] = '地域 | セッション | ユーザー | PV | CV';
+    $lines[] = '地域 | セッション | ユーザー | PV | CV' . ( $prev_data ? ' | 前期比(セッション)' : '' );
 
     $items = is_array( $data ) ? array_values( $data ) : [];
     $count = min( count( $items ), 15 );
@@ -2661,7 +2968,22 @@ function mimamori_format_region_breakdown( array $data, string $range ): string 
         $users = $r['users']     ?? $r['totalUsers'] ?? 0;
         $pv    = $r['pageViews'] ?? $r['screenPageViews'] ?? 0;
         $cv    = $r['conversions'] ?? $r['cv'] ?? 0;
-        $lines[] = $name . ' | ' . $sess . ' | ' . $users . ' | ' . $pv . ' | ' . $cv;
+        $line  = $name . ' | ' . $sess . ' | ' . $users . ' | ' . $pv . ' | ' . $cv;
+
+        if ( $prev_data && isset( $prev_lookup[ $name ] ) ) {
+            $prev_sess = (int) ( $prev_lookup[ $name ]['sessions'] ?? 0 );
+            if ( $prev_sess > 0 ) {
+                $change = ( ( (int) $sess - $prev_sess ) / $prev_sess ) * 100;
+                $sign   = $change >= 0 ? '+' : '';
+                $line  .= ' | ' . $sign . number_format( $change, 1 ) . '%';
+            } else {
+                $line .= ' | -';
+            }
+        } elseif ( $prev_data ) {
+            $line .= ' | 新規';
+        }
+
+        $lines[] = $line;
     }
 
     return implode( "\n", $lines );
@@ -2670,21 +2992,55 @@ function mimamori_format_region_breakdown( array $data, string $range ): string 
 /**
  * GSC 検索キーワード詳細のフォーマット（上位30件）
  */
-function mimamori_format_gsc_keywords( array $data, string $range ): string {
+function mimamori_format_gsc_keywords( array $data, string $range, ?array $prev_data = null, string $prev_range = '' ): string {
     $lines = [];
 
     // 合計
     if ( ! empty( $data['total'] ) && is_array( $data['total'] ) ) {
         $lines[] = '▼ Google検索キーワード（' . $range . '）';
-        $lines[] = '合計表示回数: ' . ( $data['total']['impressions'] ?? 0 )
+        $total_line = '合計表示回数: ' . ( $data['total']['impressions'] ?? 0 )
             . ' / 合計クリック: ' . ( $data['total']['clicks'] ?? 0 )
             . ' / 平均CTR: ' . ( $data['total']['ctr'] ?? '0%' );
+
+        // 前期比（合計）
+        if ( $prev_data && ! empty( $prev_data['total'] ) ) {
+            $cur_clicks  = (int) ( $data['total']['clicks'] ?? 0 );
+            $prev_clicks = (int) ( $prev_data['total']['clicks'] ?? 0 );
+            $cur_imp     = (int) ( $data['total']['impressions'] ?? 0 );
+            $prev_imp    = (int) ( $prev_data['total']['impressions'] ?? 0 );
+
+            $parts = [];
+            if ( $prev_clicks > 0 ) {
+                $ch = ( ( $cur_clicks - $prev_clicks ) / $prev_clicks ) * 100;
+                $parts[] = 'クリック前期比: ' . ( $ch >= 0 ? '+' : '' ) . number_format( $ch, 1 ) . '%';
+            }
+            if ( $prev_imp > 0 ) {
+                $ch = ( ( $cur_imp - $prev_imp ) / $prev_imp ) * 100;
+                $parts[] = '表示回数前期比: ' . ( $ch >= 0 ? '+' : '' ) . number_format( $ch, 1 ) . '%';
+            }
+            if ( ! empty( $parts ) ) {
+                $total_line .= "\n" . implode( ' / ', $parts );
+            }
+        }
+
+        $lines[] = $total_line;
         $lines[] = '';
+    }
+
+    // 前期キーワード lookup
+    $prev_kw_lookup = [];
+    if ( $prev_data && ! empty( $prev_data['keywords'] ) ) {
+        foreach ( $prev_data['keywords'] as $pkw ) {
+            $pq = $pkw['query'] ?? '';
+            if ( $pq !== '' ) {
+                $prev_kw_lookup[ $pq ] = $pkw;
+            }
+        }
     }
 
     // キーワード一覧
     if ( ! empty( $data['keywords'] ) && is_array( $data['keywords'] ) ) {
-        $lines[] = '順位 | 検索キーワード | 表示回数 | クリック | CTR | 掲載順位';
+        $lines[] = '順位 | 検索キーワード | 表示回数 | クリック | CTR | 掲載順位' . ( $prev_data ? ' | 前期比(クリック)' : '' );
 
         $count = min( count( $data['keywords'] ), 30 );
         for ( $i = 0; $i < $count; $i++ ) {
@@ -2698,11 +3054,549 @@ function mimamori_format_gsc_keywords( array $data, string $range ): string {
             $ctr   = $kw['ctr']         ?? '-';
             $pos   = $kw['position']    ?? '-';
 
-            $lines[] = ( $i + 1 ) . ' | ' . $query . ' | ' . $imp . ' | ' . $click . ' | ' . $ctr . ' | ' . $pos;
+            $line = ( $i + 1 ) . ' | ' . $query . ' | ' . $imp . ' | ' . $click . ' | ' . $ctr . ' | ' . $pos;
+
+            if ( $prev_data ) {
+                if ( isset( $prev_kw_lookup[ $query ] ) ) {
+                    $prev_click = (int) ( $prev_kw_lookup[ $query ]['clicks'] ?? 0 );
+                    if ( $prev_click > 0 ) {
+                        $change = ( ( (int) $click - $prev_click ) / $prev_click ) * 100;
+                        $sign   = $change >= 0 ? '+' : '';
+                        $line  .= ' | ' . $sign . number_format( $change, 1 ) . '%';
+                    } else {
+                        $line .= ' | -';
+                    }
+                } else {
+                    $line .= ' | 新規';
+                }
+            }
+
+            $lines[] = $line;
         }
     }
 
     return ! empty( $lines ) ? implode( "\n", $lines ) : '';
+}
+
+/**
+ * ============================================================
+ * 確定的データプランナー（Deterministic Data Planner）
+ *
+ * ユーザーの質問からキーワードで必要なGA4クエリを確定的に判定する。
+ * AI プランナーの補助として動作し、推測回答を排除する。
+ * ============================================================
+ */
+
+/**
+ * 確定的プランナー: 質問からGA4フレキシブルクエリを生成する
+ *
+ * キーワードマッチングで「国/都市/source/medium/ランディングページ」等の
+ * 具体的ディメンションが必要か判定し、fetch_flexible_report() 用のクエリを返す。
+ *
+ * @param string $message    ユーザーの質問テキスト
+ * @param string $intent_type  意図タイプ
+ * @return array  フレキシブルクエリ配列 [['dimensions'=>[...], 'metrics'=>[...], 'start'=>..., 'end'=>..., 'label'=>...], ...]
+ */
+function mimamori_build_deterministic_queries( string $message, string $intent_type ): array {
+    $msg = mb_strtolower( $message );
+
+    $queries = [];
+
+    // --- 日付の抽出 ---
+    $date_range = mimamori_extract_date_range( $message );
+
+    // --- キーワードマッチ → クエリ生成 ---
+
+    // 国/海外系
+    $country_kw = [ '国', 'どこの国', '海外', 'アメリカ', '米国', 'usa', 'united states', 'china', '中国',
+                    'country', '外国', '国別', '国から', '国内', '国外', '海外アクセス', 'スパム' ];
+    if ( mimamori_has_keyword( $msg, $country_kw ) ) {
+        $queries[] = [
+            'label'      => 'country_breakdown',
+            'dimensions' => [ 'country' ],
+            'metrics'    => [ 'sessions', 'totalUsers', 'engagementRate', 'averageSessionDuration', 'bounceRate', 'screenPageViews' ],
+            'start'      => $date_range['start'],
+            'end'        => $date_range['end'],
+            'limit'      => 20,
+        ];
+    }
+
+    // 都市/市区町村
+    $city_kw = [ '都市', '市', '市区町村', 'city', 'どこから', 'エリア', '地域', '地方' ];
+    if ( mimamori_has_keyword( $msg, $city_kw ) ) {
+        $queries[] = [
+            'label'      => 'city_breakdown',
+            'dimensions' => [ 'city' ],
+            'metrics'    => [ 'sessions', 'totalUsers', 'engagementRate', 'averageSessionDuration' ],
+            'start'      => $date_range['start'],
+            'end'        => $date_range['end'],
+            'limit'      => 20,
+        ];
+    }
+
+    // 参照元/ソース/メディア
+    $source_kw = [ '参照元', 'ソース', 'メディア', 'source', 'medium', 'リファラー', 'referral',
+                   'どこから来', 'どこ経由', '流入元', '流入経路', 'sns', 'twitter', 'instagram', 'facebook' ];
+    if ( mimamori_has_keyword( $msg, $source_kw ) ) {
+        $queries[] = [
+            'label'      => 'source_medium',
+            'dimensions' => [ 'sessionSource', 'sessionMedium' ],
+            'metrics'    => [ 'sessions', 'totalUsers', 'engagementRate', 'bounceRate', 'screenPageViews' ],
+            'start'      => $date_range['start'],
+            'end'        => $date_range['end'],
+            'limit'      => 20,
+        ];
+    }
+
+    // ランディングページ
+    $landing_kw = [ 'ランディングページ', '着地ページ', '最初のページ', 'ランディング', 'landing', 'lp',
+                    'どのページに来', 'どのページから入' ];
+    if ( mimamori_has_keyword( $msg, $landing_kw ) ) {
+        $queries[] = [
+            'label'      => 'landing_page',
+            'dimensions' => [ 'landingPagePlusQueryString' ],
+            'metrics'    => [ 'sessions', 'totalUsers', 'engagementRate', 'bounceRate' ],
+            'start'      => $date_range['start'],
+            'end'        => $date_range['end'],
+            'limit'      => 20,
+        ];
+    }
+
+    // 「どこから」「訪問」系の包括パターン（国もソースも含みうる → 両方取得）
+    $where_from_kw = [ 'どこからの訪問', 'どこからのアクセス', 'どこからの流入',
+                       'どこから来て', 'アクセス元', '訪問元' ];
+    if ( mimamori_has_keyword( $msg, $where_from_kw ) && empty( $queries ) ) {
+        // 国別 + ソース別の両方を取得
+        $queries[] = [
+            'label'      => 'country_breakdown',
+            'dimensions' => [ 'country' ],
+            'metrics'    => [ 'sessions', 'totalUsers', 'engagementRate', 'averageSessionDuration', 'bounceRate', 'screenPageViews' ],
+            'start'      => $date_range['start'],
+            'end'        => $date_range['end'],
+            'limit'      => 20,
+        ];
+        $queries[] = [
+            'label'      => 'source_medium',
+            'dimensions' => [ 'sessionSource', 'sessionMedium' ],
+            'metrics'    => [ 'sessions', 'totalUsers', 'engagementRate', 'bounceRate' ],
+            'start'      => $date_range['start'],
+            'end'        => $date_range['end'],
+            'limit'      => 15,
+        ];
+    }
+
+    return $queries;
+}
+
+/**
+ * メッセージから日付範囲を抽出する
+ *
+ * 「2025年9月5日」「9/5」「9月」「先月」「今月」等のパターンを検出。
+ * 見つからなければ直近28日間を返す。
+ *
+ * @param string $message  ユーザーの質問テキスト
+ * @return array ['start' => 'YYYY-MM-DD', 'end' => 'YYYY-MM-DD']
+ */
+function mimamori_extract_date_range( string $message ): array {
+    $tz    = wp_timezone();
+    $today = new DateTime( 'now', $tz );
+
+    // パターン1: YYYY年M月D日 or YYYY/M/D or YYYY-M-D
+    if ( preg_match( '/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*[月\/\-]\s*(\d{1,2})\s*日?/', $message, $m ) ) {
+        $date_str = sprintf( '%04d-%02d-%02d', (int) $m[1], (int) $m[2], (int) $m[3] );
+        return [ 'start' => $date_str, 'end' => $date_str ];
+    }
+
+    // パターン2: M月D日（年なし → 直近の該当日を推測）
+    if ( preg_match( '/(\d{1,2})\s*月\s*(\d{1,2})\s*日/', $message, $m ) ) {
+        $month = (int) $m[1];
+        $day   = (int) $m[2];
+        $year  = (int) $today->format( 'Y' );
+        $candidate = sprintf( '%04d-%02d-%02d', $year, $month, $day );
+        if ( $candidate > $today->format( 'Y-m-d' ) ) {
+            $year--;
+            $candidate = sprintf( '%04d-%02d-%02d', $year, $month, $day );
+        }
+        return [ 'start' => $candidate, 'end' => $candidate ];
+    }
+
+    // パターン3: M/D（年なし）
+    if ( preg_match( '/(\d{1,2})\/(\d{1,2})/', $message, $m ) ) {
+        $month = (int) $m[1];
+        $day   = (int) $m[2];
+        if ( $month >= 1 && $month <= 12 && $day >= 1 && $day <= 31 ) {
+            $year  = (int) $today->format( 'Y' );
+            $candidate = sprintf( '%04d-%02d-%02d', $year, $month, $day );
+            if ( $candidate > $today->format( 'Y-m-d' ) ) {
+                $year--;
+                $candidate = sprintf( '%04d-%02d-%02d', $year, $month, $day );
+            }
+            return [ 'start' => $candidate, 'end' => $candidate ];
+        }
+    }
+
+    // パターン4: YYYY年M月 or YYYY/M（月単位）
+    if ( preg_match( '/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?(?!\s*\d)/', $message, $m ) ) {
+        $year  = (int) $m[1];
+        $month = (int) $m[2];
+        $start = sprintf( '%04d-%02d-01', $year, $month );
+        $end_dt = ( new DateTime( $start, $tz ) )->modify( 'last day of this month' );
+        $end = $end_dt->format( 'Y-m-d' );
+        if ( $end > $today->format( 'Y-m-d' ) ) {
+            $end = $today->format( 'Y-m-d' );
+        }
+        return [ 'start' => $start, 'end' => $end ];
+    }
+
+    // パターン5: M月（年なし・月単位）
+    if ( preg_match( '/(\d{1,2})\s*月(?!\s*\d)/', $message, $m ) ) {
+        $month = (int) $m[1];
+        $year  = (int) $today->format( 'Y' );
+        $start = sprintf( '%04d-%02d-01', $year, $month );
+        $end_dt = ( new DateTime( $start, $tz ) )->modify( 'last day of this month' );
+        $end = $end_dt->format( 'Y-m-d' );
+        if ( $end > $today->format( 'Y-m-d' ) ) {
+            // 未来月なら前年
+            $year--;
+            $start = sprintf( '%04d-%02d-01', $year, $month );
+            $end_dt = ( new DateTime( $start, $tz ) )->modify( 'last day of this month' );
+            $end = $end_dt->format( 'Y-m-d' );
+        }
+        return [ 'start' => $start, 'end' => $end ];
+    }
+
+    // パターン6: 「先月」「前月」
+    if ( preg_match( '/先月|前月/', $message ) ) {
+        $first = ( clone $today )->modify( 'first day of last month' );
+        $last  = ( clone $today )->modify( 'last day of last month' );
+        return [ 'start' => $first->format( 'Y-m-d' ), 'end' => $last->format( 'Y-m-d' ) ];
+    }
+
+    // パターン7: 「今月」
+    if ( preg_match( '/今月/', $message ) ) {
+        $first = ( clone $today )->modify( 'first day of this month' );
+        return [ 'start' => $first->format( 'Y-m-d' ), 'end' => $today->format( 'Y-m-d' ) ];
+    }
+
+    // パターン8: 「昨日」
+    if ( preg_match( '/昨日/', $message ) ) {
+        $yesterday = ( clone $today )->modify( '-1 day' )->format( 'Y-m-d' );
+        return [ 'start' => $yesterday, 'end' => $yesterday ];
+    }
+
+    // デフォルト: 直近28日
+    $d28 = ( clone $today )->modify( '-27 days' )->format( 'Y-m-d' );
+    return [ 'start' => $d28, 'end' => $today->format( 'Y-m-d' ) ];
+}
+
+/**
+ * フレキシブルクエリを実行する
+ *
+ * @param array $flex_queries  mimamori_build_deterministic_queries() の返り値
+ * @param int   $user_id       WordPress ユーザーID
+ * @return array  [['label'=>..., 'query_meta'=>..., 'rows'=>[...], 'totals'=>[...], 'row_count'=>int, 'error'=>string?], ...]
+ */
+function mimamori_execute_flexible_queries( array $flex_queries, int $user_id ): array {
+    if ( empty( $flex_queries ) || ! class_exists( 'Gcrev_Config' ) ) {
+        return [];
+    }
+
+    try {
+        $config      = new Gcrev_Config();
+        $user_config = $config->get_user_config( $user_id );
+        $ga4_id      = $user_config['ga4_id'] ?? '';
+
+        if ( $ga4_id === '' ) {
+            error_log( '[みまもりAI] Flex query: GA4 property ID not configured for user ' . $user_id );
+            return [ [ 'label' => 'error', 'error' => 'GA4プロパティIDが設定されていません。レポート設定画面でGA4連携を完了してください。' ] ];
+        }
+    } catch ( \Exception $e ) {
+        error_log( '[みまもりAI] Flex query config error: ' . $e->getMessage() );
+        return [ [ 'label' => 'error', 'error' => 'GA4設定の読み込みに失敗しました。' ] ];
+    }
+
+    $ga4     = class_exists( 'Gcrev_GA4_Fetcher' ) ? new Gcrev_GA4_Fetcher( $config ) : null;
+    if ( ! $ga4 ) {
+        return [ [ 'label' => 'error', 'error' => 'GA4フェッチャーが利用できません。' ] ];
+    }
+
+    $results = [];
+
+    foreach ( $flex_queries as $q ) {
+        $label      = $q['label'] ?? 'unknown';
+        $dimensions = $q['dimensions'] ?? [];
+        $metrics    = $q['metrics'] ?? [ 'sessions' ];
+        $start      = $q['start'] ?? '';
+        $end        = $q['end'] ?? '';
+        $limit      = $q['limit'] ?? 20;
+
+        // キャッシュ
+        $cache_key = 'mw_ai_flex_' . $user_id . '_' . md5( $label . $start . $end . implode( ',', $dimensions ) );
+        $cached    = get_transient( $cache_key );
+        if ( $cached !== false ) {
+            $results[] = array_merge( [ 'label' => $label ], $cached );
+
+            error_log( sprintf(
+                '[みまもりAI] Flex query [%s] cache hit | dims=%s | %s〜%s',
+                $label, implode( ',', $dimensions ), $start, $end
+            ) );
+            continue;
+        }
+
+        try {
+            $report = $ga4->fetch_flexible_report( $ga4_id, $start, $end, $dimensions, $metrics, $limit );
+
+            // ログ出力
+            error_log( sprintf(
+                '[みまもりAI] Flex query [%s] | dims=%s | metrics=%s | %s〜%s | rows=%d',
+                $label,
+                implode( ',', $dimensions ),
+                implode( ',', $metrics ),
+                $start,
+                $end,
+                $report['row_count'] ?? 0
+            ) );
+
+            set_transient( $cache_key, $report, 2 * HOUR_IN_SECONDS );
+            $results[] = array_merge( [ 'label' => $label ], $report );
+
+        } catch ( \Exception $e ) {
+            $error_msg = $e->getMessage();
+            error_log( '[みまもりAI] Flex query error [' . $label . ']: ' . $error_msg );
+
+            $user_error = 'GA4データの取得に失敗しました。';
+            if ( strpos( $error_msg, 'PERMISSION_DENIED' ) !== false ) {
+                $user_error = 'GA4への権限がありません。サービスアカウントの設定を確認してください。';
+            } elseif ( strpos( $error_msg, 'NOT_FOUND' ) !== false ) {
+                $user_error = 'GA4プロパティが見つかりません。プロパティIDを確認してください。';
+            }
+
+            $results[] = [ 'label' => $label, 'error' => $user_error, 'row_count' => 0 ];
+        }
+    }
+
+    return $results;
+}
+
+/**
+ * フレキシブルクエリ結果の異常値/スパム検知
+ *
+ * 国別データに対して、エンゲージメント率が極端に低い + セッション数が突出している
+ * パターンを検出し、注記テキストを返す。
+ *
+ * @param array $flex_results  mimamori_execute_flexible_queries() の結果
+ * @return array  異常検知結果 [['label'=>..., 'anomalies'=>[...], 'summary'=>string], ...]
+ */
+function mimamori_detect_anomalies( array $flex_results ): array {
+    $detections = [];
+
+    foreach ( $flex_results as $result ) {
+        if ( ! empty( $result['error'] ) || empty( $result['rows'] ) ) {
+            continue;
+        }
+
+        $label = $result['label'] ?? '';
+        $rows  = $result['rows'];
+
+        // 国別・都市別データに対してのみ異常検知
+        if ( ! in_array( $label, [ 'country_breakdown', 'city_breakdown', 'source_medium' ], true ) ) {
+            continue;
+        }
+
+        // 全体の平均値を計算
+        $total_sessions = 0;
+        $row_count      = count( $rows );
+        foreach ( $rows as $r ) {
+            $total_sessions += (int) ( $r['sessions'] ?? 0 );
+        }
+        $avg_sessions = $row_count > 0 ? $total_sessions / $row_count : 0;
+
+        $anomalies = [];
+
+        foreach ( $rows as $r ) {
+            $sessions        = (int) ( $r['sessions'] ?? 0 );
+            $engagement_rate = (float) ( $r['engagementRate'] ?? 1.0 );
+            $avg_duration    = (float) ( $r['averageSessionDuration'] ?? 0 );
+            $bounce_rate     = (float) ( $r['bounceRate'] ?? 0 );
+
+            // 識別キー
+            $name = $r['country'] ?? $r['city'] ?? ( ( $r['sessionSource'] ?? '' ) . '/' . ( $r['sessionMedium'] ?? '' ) ) ?? '?';
+
+            $signals = [];
+
+            // シグナル1: セッション数が平均の5倍以上
+            if ( $avg_sessions > 0 && $sessions >= $avg_sessions * 5 && $sessions >= 10 ) {
+                $signals[] = '他と比べてセッション数が突出（平均の' . number_format( $sessions / $avg_sessions, 1 ) . '倍）';
+            }
+
+            // シグナル2: セッション構成比が50%超 + 低エンゲージメント
+            $share = $total_sessions > 0 ? $sessions / $total_sessions : 0;
+            if ( $share > 0.5 && $engagement_rate < 0.1 ) {
+                $signals[] = '構成比' . number_format( $share * 100, 1 ) . '%かつエンゲージメント率が極端に低い(' . number_format( $engagement_rate * 100, 1 ) . '%)';
+            }
+
+            // シグナル3: エンゲージメント率 < 5% かつ 平均滞在時間 < 3秒 かつ セッション10以上
+            if ( $engagement_rate < 0.05 && $avg_duration < 3.0 && $sessions >= 10 ) {
+                $signals[] = 'エンゲージメント率' . number_format( $engagement_rate * 100, 1 ) . '%・平均滞在' . number_format( $avg_duration, 1 ) . '秒（botまたはスパムの可能性）';
+            }
+
+            // シグナル4: 直帰率 > 95% かつ セッション多い
+            if ( $bounce_rate > 0.95 && $sessions >= 20 ) {
+                $signals[] = '直帰率' . number_format( $bounce_rate * 100, 1 ) . '%';
+            }
+
+            if ( ! empty( $signals ) ) {
+                $anomalies[] = [
+                    'name'     => $name,
+                    'sessions' => $sessions,
+                    'share'    => number_format( $share * 100, 1 ) . '%',
+                    'signals'  => $signals,
+                ];
+
+                // ログ
+                error_log( sprintf(
+                    '[みまもりAI] Anomaly detected [%s]: %s | sessions=%d | signals=%s',
+                    $label, $name, $sessions, implode( '; ', $signals )
+                ) );
+            }
+        }
+
+        if ( ! empty( $anomalies ) ) {
+            $summary_parts = [];
+            foreach ( $anomalies as $a ) {
+                $summary_parts[] = $a['name'] . '（' . implode( '、', $a['signals'] ) . '）';
+            }
+            $detections[] = [
+                'label'     => $label,
+                'anomalies' => $anomalies,
+                'summary'   => '⚠ 異常値の可能性: ' . implode( '／', $summary_parts ),
+            ];
+        }
+    }
+
+    return $detections;
+}
+
+/**
+ * フレキシブルクエリ結果をAI向けテキストに整形する
+ *
+ * @param array $flex_results    mimamori_execute_flexible_queries() の結果
+ * @param array $anomaly_results mimamori_detect_anomalies() の結果
+ * @return string  AIに渡すテキストブロック
+ */
+function mimamori_format_flexible_results_for_ai( array $flex_results, array $anomaly_results ): string {
+    $blocks = [];
+
+    // 異常検知 lookup
+    $anomaly_map = [];
+    foreach ( $anomaly_results as $a ) {
+        $anomaly_map[ $a['label'] ] = $a;
+    }
+
+    foreach ( $flex_results as $result ) {
+        $label = $result['label'] ?? '';
+
+        // エラーの場合
+        if ( ! empty( $result['error'] ) ) {
+            $blocks[] = '▼ ' . $label . ': ' . $result['error'];
+            continue;
+        }
+
+        if ( empty( $result['rows'] ) ) {
+            continue;
+        }
+
+        $rows       = $result['rows'];
+        $totals     = $result['totals'] ?? [];
+        $query_meta = $result['query_meta'] ?? [];
+        $range      = ( $query_meta['start'] ?? '' ) . ' 〜 ' . ( $query_meta['end'] ?? '' );
+        $dimensions = $query_meta['dimensions'] ?? [];
+        $metrics    = $query_meta['metrics'] ?? [];
+
+        // ラベル → 日本語タイトル
+        $title_map = [
+            'country_breakdown' => '国別アクセス',
+            'city_breakdown'    => '都市別アクセス',
+            'source_medium'     => '参照元/メディア別アクセス',
+            'landing_page'      => 'ランディングページ別アクセス',
+        ];
+        $title = $title_map[ $label ] ?? $label;
+
+        $lines   = [ '▼ ' . $title . '（' . $range . '）— GA4実データ' ];
+
+        // ヘッダー行
+        $header_parts = [];
+        foreach ( $dimensions as $d ) {
+            $dim_labels = [
+                'country' => '国', 'city' => '都市', 'region' => '地域',
+                'sessionSource' => '参照元', 'sessionMedium' => 'メディア',
+                'landingPagePlusQueryString' => 'ランディングページ',
+            ];
+            $header_parts[] = $dim_labels[ $d ] ?? $d;
+        }
+        $metric_labels = [
+            'sessions' => 'セッション', 'totalUsers' => 'ユーザー',
+            'engagementRate' => 'エンゲージメント率', 'averageSessionDuration' => '平均滞在(秒)',
+            'bounceRate' => '直帰率', 'screenPageViews' => 'PV',
+        ];
+        foreach ( $metrics as $m ) {
+            $header_parts[] = $metric_labels[ $m ] ?? $m;
+        }
+        $header_parts[] = '構成比';
+        $lines[] = implode( ' | ', $header_parts );
+
+        // データ行
+        $total_sessions = (int) ( $totals['sessions'] ?? 0 );
+        $row_limit = min( count( $rows ), 15 );
+
+        for ( $i = 0; $i < $row_limit; $i++ ) {
+            $r     = $rows[ $i ];
+            $parts = [];
+
+            foreach ( $dimensions as $d ) {
+                $val = $r[ $d ] ?? '(not set)';
+                $parts[] = $val;
+            }
+
+            foreach ( $metrics as $m ) {
+                $val = $r[ $m ] ?? 0;
+                if ( in_array( $m, [ 'engagementRate', 'bounceRate' ], true ) ) {
+                    $parts[] = number_format( (float) $val * 100, 1 ) . '%';
+                } elseif ( $m === 'averageSessionDuration' ) {
+                    $parts[] = number_format( (float) $val, 1 );
+                } else {
+                    $parts[] = number_format( (int) $val );
+                }
+            }
+
+            // 構成比
+            $sess  = (int) ( $r['sessions'] ?? 0 );
+            $share = $total_sessions > 0 ? ( $sess / $total_sessions ) * 100 : 0;
+            $parts[] = number_format( $share, 1 ) . '%';
+
+            $lines[] = ( $i + 1 ) . '. ' . implode( ' | ', $parts );
+        }
+
+        // 合計
+        if ( $total_sessions > 0 ) {
+            $lines[] = '合計セッション: ' . number_format( $total_sessions );
+        }
+
+        // 異常値注記
+        if ( isset( $anomaly_map[ $label ] ) ) {
+            $lines[] = '';
+            $lines[] = $anomaly_map[ $label ]['summary'];
+            $lines[] = '→ GA4の「レポート > ユーザー属性 > テクノロジー > ユーザーの環境の詳細」や「参照元/メディア」レポートで詳しく確認してください。';
+        }
+
+        $blocks[] = implode( "\n", $lines );
+    }
+
+    if ( empty( $blocks ) ) {
+        return '';
+    }
+
+    return "【GA4実データ（フレキシブルクエリ取得）】\n以下のデータはGA4 Data APIから直接取得した実データです。推測ではありません。\n\n" . implode( "\n\n", $blocks );
 }
 
 /**
@@ -2730,24 +3624,54 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
                        ? $data['currentPage']
                        : [];
 
-    $page_type = mimamori_detect_page_type( $current_page );
-    $intent    = mimamori_rewrite_intent( $message, $page_type );
-    $sources   = mimamori_resolve_data_sources( $intent, false, false );
+    $page_type   = mimamori_detect_page_type( $current_page );
+    $intent      = mimamori_rewrite_intent( $message, $page_type );
+    $intent_type = $intent['intent'] ?? 'general';
+    $sources     = mimamori_resolve_data_sources( $intent, false, false );
+
+    // 分析系意図ではアナリティクスを強制有効化
+    if ( in_array( $intent_type, [ 'reason_analysis', 'site_improvement' ], true ) ) {
+        $sources['use_analytics'] = true;
+    }
+
+    $user_id = get_current_user_id();
+
+    // ログ: 質問分類
+    error_log( sprintf(
+        '[みまもりAI] Chat request | intent=%s | page_type=%s | analytics=%s | user=%d',
+        $intent_type, $page_type, $sources['use_analytics'] ? 'yes' : 'no', $user_id
+    ) );
 
     // システムプロンプト + 意図補正コンテキスト
     $instructions    = mimamori_get_system_prompt();
-    $context_blocks  = mimamori_build_context_blocks( $page_type, $intent, $sources, $current_page, get_current_user_id() );
+    $context_blocks  = mimamori_build_context_blocks( $page_type, $intent, $sources, $current_page, $user_id );
     if ( $context_blocks !== '' ) {
         $instructions .= $context_blocks;
     }
 
-    // === 2パス: 追加データの動的取得 ===
+    // === 確定的プランナー: 国/都市/source等の特定クエリを自動実行 ===
+    $flex_queries = mimamori_build_deterministic_queries( $message, $intent_type );
+
+    if ( ! empty( $flex_queries ) ) {
+        // フレキシブルクエリが必要 → アナリティクスも強制ON
+        $sources['use_analytics'] = true;
+
+        $flex_results    = mimamori_execute_flexible_queries( $flex_queries, $user_id );
+        $anomaly_results = mimamori_detect_anomalies( $flex_results );
+        $flex_text       = mimamori_format_flexible_results_for_ai( $flex_results, $anomaly_results );
+
+        if ( $flex_text !== '' ) {
+            $instructions .= "\n\n" . $flex_text;
+        }
+    }
+
+    // === 2パス: 追加データの動的取得（AI プランナー） ===
     if ( ! empty( $sources['use_analytics'] ) ) {
-        $digest          = mimamori_get_analytics_digest( get_current_user_id() );
-        $planner_queries = mimamori_call_planner_pass( $message, $digest );
+        $digest          = mimamori_get_analytics_digest( $user_id );
+        $planner_queries = mimamori_call_planner_pass( $message, $digest, $intent_type );
 
         if ( ! empty( $planner_queries ) ) {
-            $enrichment_data = mimamori_fetch_enrichment_data( $planner_queries, get_current_user_id() );
+            $enrichment_data = mimamori_fetch_enrichment_data( $planner_queries, $user_id );
 
             if ( ! empty( $enrichment_data ) ) {
                 $enrichment_text = mimamori_format_enrichment_for_ai( $enrichment_data );
@@ -3401,6 +4325,22 @@ if ( GCREV_SIGNUP_FORM_KEY > 0 ) {
         'mwform_skip_confirm_' . $gcrev_form_key,
         '__return_true'
     );
+
+    // D) メール内の {plan} をプランID → 日本語名に変換
+    add_filter(
+        'mwform_custom_mail_tag_' . $gcrev_form_key,
+        function ( $value, $name, $saved_mail_id ) {
+            if ( 'plan' === $name && $value ) {
+                $defs = gcrev_get_plan_definitions();
+                if ( isset( $defs[ $value ] ) ) {
+                    return $defs[ $value ]['name'];
+                }
+            }
+            return $value;
+        },
+        10,
+        3
+    );
 }
 
 // ========================================================================
@@ -3818,6 +4758,63 @@ function gcrev_render_payment_status_fields( $user ) {
     })();
     </script>
     <?php
+}
+
+// --------------------------------------------------
+// WP管理画面 — テスト運用チェックボックスを表示
+// --------------------------------------------------
+add_action( 'edit_user_profile', 'gcrev_render_test_operation_field' );
+add_action( 'show_user_profile', 'gcrev_render_test_operation_field' );
+
+function gcrev_render_test_operation_field( $user ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    if ( user_can( $user->ID, 'manage_options' ) ) {
+        return;
+    }
+
+    $is_test = ( get_user_meta( $user->ID, 'gcrev_test_operation', true ) === '1' );
+    ?>
+    <h3>運用ステータス</h3>
+    <table class="form-table" role="presentation">
+        <tr>
+            <th><label for="gcrev_test_operation">テスト運用</label></th>
+            <td>
+                <label>
+                    <input type="checkbox"
+                           id="gcrev_test_operation"
+                           name="gcrev_test_operation"
+                           value="1"
+                           <?php checked( $is_test ); ?>>
+                    テスト運用中
+                </label>
+                <p class="description">チェックを入れると、フロントのサイドバーに「テスト運用」バッジが表示されます。</p>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+
+// --------------------------------------------------
+// WP管理画面 — テスト運用チェックボックスの保存処理
+// --------------------------------------------------
+add_action( 'edit_user_profile_update', 'gcrev_save_test_operation_field' );
+add_action( 'personal_options_update',  'gcrev_save_test_operation_field' );
+
+function gcrev_save_test_operation_field( int $user_id ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    if ( user_can( $user_id, 'manage_options' ) ) {
+        return;
+    }
+
+    if ( ! empty( $_POST['gcrev_test_operation'] ) ) {
+        update_user_meta( $user_id, 'gcrev_test_operation', '1' );
+    } else {
+        delete_user_meta( $user_id, 'gcrev_test_operation' );
+    }
 }
 
 // --------------------------------------------------

@@ -71,7 +71,8 @@ get_header();
     </div>
     <?php endif; ?>
 
-    <!-- キャッシュ管理セクション（全ユーザー表示） -->
+    <?php if ($is_admin): ?>
+    <!-- キャッシュ管理セクション（管理者のみ表示） -->
     <div class="admin-refresh-section">
         <h3>🗄 キャッシュ管理</h3>
         <p style="font-size:13px;color:#64748b;margin:0 0 12px;">データが古い場合や、表示がおかしい場合にキャッシュを削除してください。</p>
@@ -79,13 +80,13 @@ get_header();
             <button type="button" class="btn-refresh" onclick="clearMyCache()">
                 🔄 自分のキャッシュを削除
             </button>
-            <?php if ($is_admin): ?>
             <button type="button" class="btn-refresh" style="background:#B5574B;" onmouseover="this.style.background='#9C4940'" onmouseout="this.style.background='#B5574B'" onclick="clearAllCache()">
                 🗑 全ユーザーのキャッシュを削除
             </button>
-            <?php endif; ?>
         </div>
     </div>
+
+    <?php endif; ?>
 
     <?php if ($is_admin): ?>
     <!-- 管理者用：レポート機能 -->

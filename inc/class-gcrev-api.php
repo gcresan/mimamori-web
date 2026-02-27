@@ -500,7 +500,7 @@ class Gcrev_Insight_API {
     /**
      * 全 gcrev_ transient プレフィックス一覧（一元管理）
      */
-    private static function get_all_cache_prefixes(): array {
+    public static function get_all_cache_prefixes(): array {
         return [
             'gcrev_dash_',
             'gcrev_report_',

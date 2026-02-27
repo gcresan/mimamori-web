@@ -1634,7 +1634,128 @@ class Gcrev_GA4_Fetcher {
         ksort($daily_data);
         
         $result['daily_series'] = $daily_data;
-        
+
         return $result;
+    }
+
+    /**
+     * フレキシブルレポート取得
+     *
+     * 任意のディメンション・メトリクス組み合わせで GA4 Data API を叩く。
+     * みまもりAI チャットからの動的クエリに使用する。
+     *
+     * @param string $property_id  GA4 プロパティID
+     * @param string $start        開始日 YYYY-MM-DD
+     * @param string $end          終了日 YYYY-MM-DD
+     * @param array  $dimensions   ディメンション名の配列（例: ['country', 'city']）
+     * @param array  $metrics      メトリクス名の配列（例: ['sessions', 'totalUsers']）
+     * @param int    $limit        取得行数上限（デフォルト 20）
+     * @param string $order_metric 並べ替えメトリクス名（デフォルト: $metrics[0]）
+     * @param bool   $order_desc   降順（デフォルト true）
+     * @return array {
+     *   rows: [[ dim1 => val, dim2 => val, metric1 => val, ... ], ...],
+     *   totals: [ metric1 => val, ... ],
+     *   row_count: int,
+     *   query_meta: [ dimensions => [...], metrics => [...], start => ..., end => ..., limit => ... ]
+     * }
+     */
+    public function fetch_flexible_report(
+        string $property_id,
+        string $start,
+        string $end,
+        array  $dimensions,
+        array  $metrics,
+        int    $limit        = 20,
+        string $order_metric = '',
+        bool   $order_desc   = true
+    ): array {
+        $this->prepare_ga4_call();
+
+        $client = new BetaAnalyticsDataClient();
+
+        // ディメンション構築
+        $dim_objects = [];
+        foreach ( $dimensions as $d ) {
+            $dim_objects[] = new Dimension( [ 'name' => $d ] );
+        }
+
+        // メトリクス構築
+        $met_objects = [];
+        foreach ( $metrics as $m ) {
+            $met_objects[] = new Metric( [ 'name' => $m ] );
+        }
+
+        // 並び順
+        if ( $order_metric === '' && ! empty( $metrics ) ) {
+            $order_metric = $metrics[0];
+        }
+
+        $request_params = [
+            'property'    => 'properties/' . $property_id,
+            'date_ranges' => [ new DateRange( [ 'start_date' => $start, 'end_date' => $end ] ) ],
+            'dimensions'  => $dim_objects,
+            'metrics'     => $met_objects,
+            'limit'       => $limit,
+        ];
+
+        if ( $order_metric !== '' ) {
+            $request_params['order_bys'] = [
+                new OrderBy( [
+                    'metric' => new OrderBy\MetricOrderBy( [
+                        'metric_name' => $order_metric,
+                    ] ),
+                    'desc' => $order_desc,
+                ] ),
+            ];
+        }
+
+        $request  = new RunReportRequest( $request_params );
+        $response = $client->runReport( $request );
+
+        // 結果パース
+        $rows   = [];
+        $totals = [];
+        foreach ( $metrics as $m ) {
+            $totals[ $m ] = 0;
+        }
+
+        foreach ( $response->getRows() as $row ) {
+            $item = [];
+
+            // ディメンション値
+            $dim_vals = $row->getDimensionValues();
+            foreach ( $dimensions as $i => $d ) {
+                $item[ $d ] = isset( $dim_vals[ $i ] ) ? $dim_vals[ $i ]->getValue() : '';
+            }
+
+            // メトリクス値
+            $met_vals = $row->getMetricValues();
+            foreach ( $metrics as $i => $m ) {
+                $raw = isset( $met_vals[ $i ] ) ? $met_vals[ $i ]->getValue() : '0';
+                // 小数を含むメトリクスは float、それ以外は int
+                $is_float = in_array( $m, [
+                    'averageSessionDuration', 'bounceRate', 'engagementRate',
+                    'averageEngagementTime', 'averageEngagementTimePerSession',
+                ], true );
+                $val = $is_float ? (float) $raw : (int) $raw;
+                $item[ $m ] = $val;
+                $totals[ $m ] += $val;
+            }
+
+            $rows[] = $item;
+        }
+
+        return [
+            'rows'       => $rows,
+            'totals'     => $totals,
+            'row_count'  => count( $rows ),
+            'query_meta' => [
+                'dimensions' => $dimensions,
+                'metrics'    => $metrics,
+                'start'      => $start,
+                'end'        => $end,
+                'limit'      => $limit,
+            ],
+        ];
     }
 }

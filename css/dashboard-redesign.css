@@ -20,6 +20,7 @@
   /* テキスト — 濃いグレー系（視認性最優先） */
   --mw-text-primary: #333333;     /* メイン文字（濃いグレー） */
   --mw-text-secondary: #555555;   /* 補助文字 */
+  --mw-text-body: #3a3a3a;        /* 本文用（読みやすい濃さ） */
   --mw-text-tertiary: #888888;    /* 薄い補助文字 */
 
   /* 境界線 */
@@ -192,8 +193,23 @@ h3 { font-size: 18px; font-weight: 600; }
 }
 
 .sidebar-nav .nav-icon {
-  font-size: 18px;
-  opacity: 0.75;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: currentColor;
+  opacity: 0.55;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+.sidebar-nav .nav-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.sidebar-nav .nav-link.active .nav-icon {
+  opacity: 1;
+  color: var(--mw-primary-blue);
 }
 
 .sidebar-nav .nav-submenu .nav-link {
@@ -485,16 +501,62 @@ h3 { font-size: 18px; font-weight: 600; }
   color: var(--mw-text-tertiary);
 }
 
+/* KPI card — button reset (button化に伴うリセット) */
+button.info-kpi-item {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* KPI card — active/selected state */
+.info-kpi-item.is-active {
+  border-color: var(--mw-primary-blue);
+  border-bottom: 3px solid var(--mw-primary-blue);
+  background: rgba(61, 107, 110, 0.04);
+  box-shadow: var(--mw-shadow-soft);
+}
+.info-kpi-item.is-active .info-kpi-label {
+  color: var(--mw-primary-blue);
+  font-weight: 600;
+}
+.info-kpi-item.is-active .info-kpi-hint {
+  color: var(--mw-primary-blue);
+}
+
 /* ========== Summary Text ========== */
 .info-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   max-width: 1100px;
   font-size: 16px;
   font-weight: 700;
   line-height: 1.8;
-  color: var(--mw-text-secondary);
+  color: #4a6d7c;
   margin-top: 0;
   margin-bottom: 16px;
-  color:#4a6d7c;
+}
+.info-summary-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 3px;
+  color: var(--mw-primary-blue);
+  opacity: 0.7;
+}
+.info-summary-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.info-summary-text {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ========== Breakdown Details → 参照テンプレの chart-area スタイル ========== */
@@ -704,10 +766,10 @@ details[open] .info-breakdown-arrow {
 }
 
 .info-monthly-highlight-value {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--mw-primary-blue);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 /* ========== Highlight Detail Accordion ========== */
@@ -752,13 +814,14 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   font-size: 13px;
   font-weight: 600;
   color: var(--mw-text-heading);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .highlight-detail-section-text {
-  font-size: 13px;
-  color: var(--mw-text-secondary);
-  line-height: 1.7;
+  font-size: 14.5px;
+  color: var(--mw-text-body, #3a3a3a);
+  line-height: 1.9;
+  letter-spacing: 0.02em;
 }
 
 .highlight-detail-list {
@@ -768,10 +831,11 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 
 .highlight-detail-list li {
-  padding: 4px 0 4px 16px;
-  font-size: 13px;
-  color: var(--mw-text-secondary);
-  line-height: 1.6;
+  padding: 6px 0 6px 18px;
+  font-size: 14.5px;
+  color: var(--mw-text-body, #3a3a3a);
+  line-height: 1.85;
+  letter-spacing: 0.02em;
   position: relative;
 }
 
@@ -841,92 +905,96 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   opacity: 0.95;
 }
 
-/* ========== KPI Trend Modal ========== */
-.kpi-trend-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.25s ease, visibility 0.25s ease;
-}
-.kpi-trend-overlay.active {
-  opacity: 1;
-  visibility: visible;
-}
-
-.kpi-trend-modal {
+/* ========== KPI Trend Inline Chart ========== */
+.kpi-trend-inline {
+  margin-top: 24px;
+  padding: 20px 24px;
   background: var(--mw-bg-primary);
+  border: 1px solid var(--mw-border-light);
   border-radius: 10px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  width: 90%;
-  max-width: 640px;
-  max-height: 85vh;
-  overflow: hidden;
-  transform: translateY(12px);
-  transition: transform 0.25s ease;
-}
-.kpi-trend-overlay.active .kpi-trend-modal {
-  transform: translateY(0);
 }
 
-.kpi-trend-header {
+.kpi-trend-inline-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 14px;
-  border-bottom: 1px solid var(--mw-border-light);
+  margin-bottom: 16px;
 }
 
-.kpi-trend-header h3 {
-  color: var(--mw-text-heading);
+.kpi-trend-inline-title {
   font-size: 15px;
   font-weight: 600;
+  color: var(--mw-text-heading);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.kpi-trend-close {
-  background: none;
-  border: none;
-  font-size: 22px;
+.kpi-trend-inline-icon {
+  font-size: 16px;
+}
+
+.kpi-trend-inline-meta {
+  font-size: 11px;
   color: var(--mw-text-tertiary);
-  cursor: pointer;
-  padding: 4px 8px;
-  line-height: 1;
-  border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
-}
-.kpi-trend-close:hover {
-  background: var(--mw-bg-tertiary);
-  color: var(--mw-text-primary);
+  white-space: nowrap;
 }
 
-.kpi-trend-body {
-  padding: 24px;
+.kpi-trend-inline-body {
   position: relative;
 }
 
 .kpi-trend-loading {
   display: none;
-  text-align: center;
-  padding: 40px 0;
-  color: var(--mw-text-tertiary);
-  font-size: 14px;
 }
 .kpi-trend-loading.active {
   display: block;
 }
 
+.kpi-trend-skeleton {
+  height: 260px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.5s ease infinite;
+  border-radius: 8px;
+}
+
+@keyframes skeleton-pulse {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .kpi-trend-chart-wrap {
-  height: 320px;
+  height: 260px;
   position: relative;
+  transition: opacity 0.3s ease;
+}
+
+.kpi-trend-error {
+  text-align: center;
+  padding: 60px 0;
+  color: var(--mw-text-tertiary);
+  font-size: 14px;
+}
+.kpi-trend-error p {
+  margin: 0 0 12px;
+}
+
+.kpi-trend-retry {
+  display: inline-block;
+  padding: 8px 20px;
+  background: var(--mw-primary-blue);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.kpi-trend-retry:hover {
+  background: var(--mw-primary-teal);
 }
 
 /* ========== Loading Overlay ========== */
@@ -1011,6 +1079,20 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
     display: none;
   }
 
+  /* ========== サマリー ========== */
+  .info-summary { font-size: 14px; gap: 6px; }
+  .info-summary-icon { width: 22px; height: 22px; margin-top: 2px; }
+  .info-summary-icon svg { width: 16px; height: 16px; }
+
+  /* ========== 本文可読性（モバイル） ========== */
+  .highlight-detail-section-text,
+  .highlight-detail-list li { font-size: 14px; line-height: 1.85; }
+  .section-content,
+  .highlight-box p,
+  .list-box li,
+  .action-text,
+  .beginner-report-desc { font-size: 14.5px; line-height: 1.85; }
+
   /* ========== テーブル: 横スクロール対応 ========== */
   .info-breakdown-details,
   .info-breakdown-body,
@@ -1049,6 +1131,17 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   /* ========== KPI グリッド ========== */
   .info-kpi {
     grid-template-columns: 1fr;
+  }
+
+  /* ========== KPI トレンドインラインチャート ========== */
+  .kpi-trend-inline {
+    padding: 16px;
+  }
+  .kpi-trend-chart-wrap {
+    height: 220px;
+  }
+  .kpi-trend-skeleton {
+    height: 220px;
   }
 
   /* ========== インフォグラフィック ========== */
@@ -1787,8 +1880,10 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   border-bottom: 2px solid var(--mw-border-light);
 }
 .section-content {
-  line-height: 1.8;
-  color: var(--mw-text-secondary);
+  font-size: 15px;
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  color: var(--mw-text-body, #3a3a3a);
 }
 
 /* Highlight Box */
@@ -1806,8 +1901,10 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   margin-bottom: 8px;
 }
 .highlight-box p {
-  color: var(--mw-text-secondary);
-  line-height: 1.7;
+  font-size: 15px;
+  color: var(--mw-text-body, #3a3a3a);
+  line-height: 1.9;
+  letter-spacing: 0.02em;
 }
 
 /* List Box */
@@ -1815,8 +1912,11 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   padding-left: 20px;
 }
 .list-box li {
-  margin-bottom: 12px;
-  line-height: 1.7;
+  margin-bottom: 14px;
+  font-size: 15px;
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  color: var(--mw-text-body, #3a3a3a);
 }
 .list-box li strong {
   color: var(--mw-text-primary);
@@ -1850,8 +1950,10 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 .action-priority.low    { background: var(--mw-primary-teal); }
 .action-text {
   flex: 1;
-  line-height: 1.6;
-  color: var(--mw-text-secondary);
+  font-size: 15px;
+  line-height: 1.85;
+  letter-spacing: 0.02em;
+  color: var(--mw-text-body, #3a3a3a);
 }
 
 /* ========== Report Empty State ========== */
@@ -1896,8 +1998,10 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .beginner-report-desc {
   margin: 0 0 14px 0;
-  line-height: 1.8;
-  color: var(--mw-text-secondary);
+  font-size: 15px;
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  color: var(--mw-text-body, #3a3a3a);
   font-weight: 400;
 }
 .beginner-report-desc p {

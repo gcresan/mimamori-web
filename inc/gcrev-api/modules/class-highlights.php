@@ -216,7 +216,7 @@ class Gcrev_Highlights {
                 $fact .= ' また、' . implode('、', array_slice($others, 0, 2)) . 'しています。';
             }
         } else {
-            $fact = '今月は大きな変動はありませんでした。安定した状態が続いています。';
+            $fact = '今月は大きな変動はなく、安定した状態が続いています。';
         }
 
         // --- causes ---
@@ -264,7 +264,7 @@ class Gcrev_Highlights {
                 $label = $this->detail_kpi_labels()[$lowest['key']] ?? $lowest['key'];
                 $fact = "{$label}のスコアは{$lowest['points']}/{$lowest['max']}で、他の指標に比べて改善余地があります。";
             } else {
-                $fact = '全体的にはバランスが取れていますが、さらなる成長のための課題を示しています。';
+                $fact = '全体的には安定していますが、さらに伸ばせる余地がありそうです。';
             }
         }
 
@@ -300,9 +300,10 @@ class Gcrev_Highlights {
         if ($worst) {
             $label = $this->detail_kpi_labels()[$worst['key']] ?? $worst['key'];
             $curr  = number_format((float)($worst['curr'] ?? 0));
-            $fact = "現在の{$label}は{$curr}で、改善余地があります。このアクションは課題を解決するための第一歩です。";
+            $prev  = number_format((float)($worst['prev'] ?? 0));
+            $fact = "現在の{$label}は{$curr}（前月{$prev}）で、ここを改善すると全体の成果が上がりやすくなります。";
         } else {
-            $fact = 'このアクションは、現在の好調な傾向をさらに伸ばすための具体的な施策です。';
+            $fact = '今の好調さをさらに伸ばすために、次の一歩を踏み出すのに良いタイミングです。';
         }
 
         // --- causes (なぜこの施策が有効か) ---
@@ -332,13 +333,13 @@ class Gcrev_Highlights {
             }
         }
         if (count($causes) < 2) {
-            $causes = ['この施策は、課題に直接アプローチできるため効果が期待できます', '小さな改善から始めることで、早期に変化を実感できます'];
+            $causes = ['いちばん効果が出やすいところから手をつけるのがポイントです', '小さな改善でも、続けることで数値に変化が出てきます'];
         }
 
         // --- actions (具体ステップ) ---
         $actions = $this->extract_report_actions($report, 0, 3);
         if (empty($actions)) {
-            $actions = ['まずは現状のページや導線を確認する', '改善ポイントを1つに絞って実施する', '1〜2週間後に数値の変化をチェックする'];
+            $actions = ['まずは今のサイトの状態をざっと確認してみる', '気になるところを1つだけ選んで手を入れてみる', '1〜2週間後にもう一度数値を見て変化を確かめる'];
         }
 
         return ['fact' => $fact, 'causes' => $causes, 'actions' => $actions];
@@ -354,7 +355,7 @@ class Gcrev_Highlights {
             'traffic' => '訪問数',
             'cv'      => '問い合わせ数',
             'gsc'     => '検索クリック数',
-            'meo'     => 'MEO表示数',
+            'meo'     => 'Googleマップ表示数',
         ];
     }
 
@@ -412,17 +413,45 @@ class Gcrev_Highlights {
 
     /**
      * KPIデータから読みやすい事実文を生成
+     *
+     * 小さい数値（前月0や絶対値5以下）の場合は率を強調せず、
+     * 事実ベースのやさしい表現に切り替える。
      */
     private function format_kpi_sentence(array $kpi_data, string $direction): string {
         $labels = $this->detail_kpi_labels();
         $label  = $labels[$kpi_data['key']] ?? $kpi_data['key'];
-        $curr   = number_format((float)($kpi_data['curr'] ?? 0));
-        $prev   = number_format((float)($kpi_data['prev'] ?? 0));
+        $curr_raw = (float)($kpi_data['curr'] ?? 0);
+        $prev_raw = (float)($kpi_data['prev'] ?? 0);
+        $curr   = number_format($curr_raw);
+        $prev   = number_format($prev_raw);
         $pct    = abs((float)($kpi_data['pct'] ?? 0));
 
+        // --- 小さい数値の特別処理 ---
+        $is_tiny = ($prev_raw <= 2 && $curr_raw <= 5) || ($curr_raw <= 2 && $prev_raw <= 5);
+
         if ($direction === 'positive') {
+            if ($prev_raw == 0 && $curr_raw > 0) {
+                // 0 → N: 「初めて確認された」表現
+                if ($curr_raw <= 3) {
+                    return "これまで見られなかった{$label}が初めて{$curr}件確認されました。今後の動きに注目です。";
+                }
+                return "{$label}が前月の{$prev}から{$curr}へと発生し始めています。";
+            }
+            if ($is_tiny) {
+                // 1→2, 2→3 など: 率を使わず事実ベース
+                return "{$label}は前月の{$prev}から{$curr}へと少しずつ出始めています。";
+            }
+            // 通常: 率を含む表現
             return "当月の{$label}は{$curr}で、前月の{$prev}から+" . number_format($pct, 1) . '%増加しました。';
         } else {
+            if ($curr_raw == 0 && $prev_raw > 0 && $prev_raw <= 3) {
+                // 少数→0: トーンダウン
+                return "{$label}は前月の{$prev}から{$curr}へと減っています。もともと少ない数値のため、大きな変動とは限りません。";
+            }
+            if ($is_tiny) {
+                return "{$label}は前月の{$prev}から{$curr}へと減少しています。まだ数が少ないため、今後の推移を見守る段階です。";
+            }
+            // 通常
             return "当月の{$label}は{$curr}で、前月の{$prev}から" . number_format($pct, 1) . '%減少しています。';
         }
     }
@@ -813,15 +842,14 @@ class Gcrev_Highlights {
             }
 
         } elseif ($section_hint === 'issue') {
-            // ====== 最優先課題：関連的ボトルネック表現 ======
+            // ====== 最優先課題：読みやすい文章形式 ======
             if ($found_metric !== '' && $normalized_keyword !== '') {
-                // 指標 + 変化語 → 関連的ボトルネック
                 $phrase = $this->build_relational_bottleneck($found_metric, $normalized_keyword);
             } elseif ($found_metric !== '') {
-                // 指標のみ → 方向不明の関連的ボトルネック
                 $phrase = $this->build_relational_bottleneck($found_metric, '');
             } else {
-                $phrase = $this->force_taigen_dome($s);
+                // メトリクスが見つからない場合: 元文から短い文を抽出
+                $phrase = $this->extract_short_issue_sentence($s);
             }
 
         } elseif ($section_hint === 'action') {
@@ -863,7 +891,7 @@ class Gcrev_Highlights {
         }
 
         // --- 最終整形 ---
-        $phrase = $this->finalize_highlight($phrase);
+        $phrase = $this->finalize_highlight($phrase, $section_hint);
 
         return $phrase;
     }
@@ -1026,19 +1054,19 @@ class Gcrev_Highlights {
         // ケース1: 指標 + ネガティブ変化 → 関連的ボトルネック（ネガティブ版）
         if ($found_metric !== '' && in_array($found_change, $negative_changes, true)) {
             $relational = $this->build_relational_bottleneck($found_metric, $found_change);
-            return $this->finalize_highlight($relational);
+            return $this->finalize_highlight($relational, 'issue');
         }
 
         // ケース2: 指標 + ポジティブ変化 → 関連的ボトルネック（ポジティブ版）
         if ($found_metric !== '' && in_array($found_change, $positive_changes, true)) {
             $relational = $this->build_relational_bottleneck($found_metric, $found_change);
-            return $this->finalize_highlight($relational);
+            return $this->finalize_highlight($relational, 'issue');
         }
 
         // ケース3: 指標のみ → 関連的ボトルネック（方向不明）
         if ($found_metric !== '') {
             $relational = $this->build_relational_bottleneck($found_metric, '');
-            return $this->finalize_highlight($relational);
+            return $this->finalize_highlight($relational, 'issue');
         }
 
         // ケース4: 変化語のみ → 文中から別の指標を探して関連的ボトルネック化
@@ -1047,11 +1075,11 @@ class Gcrev_Highlights {
             foreach ($easy_metric_patterns as $pattern => $metric_name) {
                 if (mb_strpos($s, $pattern) !== false) {
                     $relational = $this->build_relational_bottleneck($metric_name, $found_change);
-                    return $this->finalize_highlight($relational);
+                    return $this->finalize_highlight($relational, 'issue');
                 }
             }
             // どの指標にも当たらない場合
-            return $this->finalize_highlight('成果への転換不足');
+            return $this->finalize_highlight('成果への転換不足', 'issue');
         }
 
         return '';
@@ -1316,15 +1344,41 @@ class Gcrev_Highlights {
     /**
      * ハイライトフレーズの最終整形
      *
-     * - 目標: 20文字以内（最大22文字まで許容）
-     * - 口語・感想表現を除去
-     * - 体言止め保証
+     * section_hint により出力形式を切り替え:
+     *   - 'site_wide' → 体言止め、目標20文字（最大22文字）
+     *   - 'issue'     → 完結した短い文、最大40文字
+     *   - 'action'    → 体言止め、目標20文字（最大22文字）
+     *   - その他      → 体言止め、目標20文字（最大22文字）
      */
-    private function finalize_highlight(string $text): string {
+    private function finalize_highlight(string $text, string $section_hint = ''): string {
         $text = $this->strip_highlight_symbols($text);
-        $text = str_replace(['。', '、', '，', '．', ',', '.'], '', $text);
         $text = preg_replace('/\s+/u', '', $text);
         $text = trim($text);
+
+        // issue の場合は文章形式を許容（体言止め化しない）
+        if ($section_hint === 'issue') {
+            // 句読点は残す（文として自然にするため）
+            // 末尾の余計な「。」だけ除去
+            $text = rtrim($text, '。');
+
+            // --- 長さ制御: 最大40文字 ---
+            if (mb_strlen($text, 'UTF-8') > 40) {
+                $text = $this->smart_truncate_sentence($text, 40);
+            }
+
+            // 文末が名詞で終わっていて不自然な場合、補完
+            if (!preg_match('/(です|ます|ません|でした|ました|れます|せん|ている|されている|あります|なります|できます|みられます|考えられます|出ています|必要です|見られます)$/u', $text)) {
+                // 体言止めなら「が見られます」を付与
+                if (preg_match('/(不足|低下|減少|悪化|停滞|低迷|課題|乖離|ミスマッチ|伸び悩み)$/u', $text)) {
+                    $text .= 'が見られます';
+                }
+            }
+
+            return $text;
+        }
+
+        // site_wide / action / その他 → 従来の体言止め
+        $text = str_replace(['。', '、', '，', '．', ',', '.'], '', $text);
 
         // --- 口語・感想・評価表現の除去 ---
         $colloquial_suffixes = [
@@ -1356,6 +1410,38 @@ class Gcrev_Highlights {
         }
 
         return $text;
+    }
+
+    /**
+     * 文章形式の短縮: 文の切れ目（句点・読点）で切る
+     */
+    private function smart_truncate_sentence(string $text, int $max_len): string {
+        if (mb_strlen($text, 'UTF-8') <= $max_len) return $text;
+
+        $search = mb_substr($text, 0, $max_len, 'UTF-8');
+        // 句点で切れるか
+        $last_period = mb_strrpos($search, '。', 0, 'UTF-8');
+        if ($last_period !== false && $last_period > 10) {
+            return mb_substr($text, 0, $last_period, 'UTF-8');
+        }
+        // 読点で切れるか
+        $last_comma = mb_strrpos($search, '、', 0, 'UTF-8');
+        if ($last_comma !== false && $last_comma > 10) {
+            return mb_substr($text, 0, $last_comma, 'UTF-8');
+        }
+        // 助詞の切れ目
+        $cut_particles = ['の', 'と', 'に', 'を', 'が', 'は', 'で', 'へ'];
+        $best = 0;
+        foreach ($cut_particles as $p) {
+            $pos = mb_strrpos($search, $p, 0, 'UTF-8');
+            if ($pos !== false && $pos > $best && $pos > 10) {
+                $best = $pos;
+            }
+        }
+        if ($best > 0) {
+            return mb_substr($text, 0, $best, 'UTF-8');
+        }
+        return $search;
     }
 
     /**
@@ -1394,85 +1480,120 @@ class Gcrev_Highlights {
      */
     private function build_relational_bottleneck(string $metric, string $change): string {
 
-        // 指標ごとの「次のステップ」定義
-        $next_step_map = [
-            '訪問者数'       => '成果転換',
-            '訪問数'         => '成果転換',
-            '訪問回数'       => '成果転換',
-            'セッション数'   => '成果転換',
-            'ページ閲覧数'   => '成果への結びつき',
-            'ページビュー数' => '成果への結びつき',
-            '検索表示回数'   => 'クリック獲得',
-            '検索露出'       => 'クリック獲得',
-            '検索クリック数' => '成果転換',
-            '検索流入数'     => '成果転換',
-            '自然検索流入'   => '成果転換',
-            '検索流入'       => '成果転換',
-            '新規訪問者数'   => 'リピーター化',
-            '新規ユーザー数' => 'リピーター化',
-            'ユーザー数'     => '成果転換',
-            '問い合わせ数'   => '受注獲得',
-            'お問い合わせ数' => '受注獲得',
-            '熟読率'         => '行動喚起',
-            '成果'           => '安定的な獲得',
-            '直帰率'         => '回遊促進',
-            '離脱率'         => '回遊促進',
-            'エンゲージメント率' => '成果転換',
-            'コンバージョン率'   => '安定的な獲得',
-            'コンバージョン数'   => '安定的な獲得',
+        // 指標ごとの「次のステップ」定義（文章形式用）
+        $next_step_sentence = [
+            '訪問者数'       => '成果につなげきれていない状況です',
+            '訪問数'         => '成果につなげきれていない状況です',
+            '訪問回数'       => '成果につなげきれていない状況です',
+            'セッション数'   => '成果につなげきれていない状況です',
+            'ページ閲覧数'   => '具体的な行動にはつながっていません',
+            'ページビュー数' => '具体的な行動にはつながっていません',
+            '検索表示回数'   => 'クリックには結びついていません',
+            '検索露出'       => 'クリックには結びついていません',
+            '検索クリック数' => '問い合わせにはつながっていません',
+            '検索流入数'     => '問い合わせにはつながっていません',
+            '自然検索流入'   => '問い合わせにはつながっていません',
+            '検索流入'       => '問い合わせにはつながっていません',
+            '新規訪問者数'   => 'リピーターにはつながっていません',
+            '新規ユーザー数' => 'リピーターにはつながっていません',
+            'ユーザー数'     => '成果につなげきれていない状況です',
+            '問い合わせ数'   => '安定的な獲得には至っていません',
+            'お問い合わせ数' => '安定的な獲得には至っていません',
+            '熟読率'         => '行動にはつながっていません',
+            '成果'           => '安定的な成果獲得には至っていません',
+            '直帰率'         => 'サイト内の回遊が不足しています',
+            '離脱率'         => 'サイト内の回遊が不足しています',
+            'エンゲージメント率' => '成果につなげきれていない状況です',
+            'コンバージョン率'   => '安定的な獲得には至っていません',
+            'コンバージョン数'   => '安定的な成果獲得には至っていません',
         ];
 
         $positive_changes = ['増加', '大幅増加', '上昇', '改善', '好調', '初発生', '微増', '成長', '回復', '向上', '獲得', '達成'];
         $negative_changes = ['減少', '大幅減少', '低下', '微減', '未発生', '未転換', '低水準', '横ばい', '悪化', '下落', '停滞', '不足'];
 
         $short = $this->shorten_metric($metric);
-        $next  = $next_step_map[$metric] ?? '成果転換';
+        $next_s = $next_step_sentence[$metric] ?? '成果につなげきれていない状況です';
 
         if (in_array($change, $positive_changes, true)) {
-            // ポジティブ → "増えたXのY不足"
-            $adj = $this->change_to_adjective($change);
-            $phrase = $adj . $short . 'の' . $next . '不足';
-
-            if (mb_strlen($phrase, 'UTF-8') <= 22) {
-                return $phrase;
-            }
-            // 長すぎる場合の短縮形
-            return $short . 'の' . $next . '不足';
+            // ポジティブ → "訪問は増えていますが、成果にはつながっていません"
+            $verb = $this->change_to_progressive($change);
+            return $short . 'は' . $verb . 'が、' . $next_s;
         }
 
         if (in_array($change, $negative_changes, true)) {
-            // ネガティブ → "Xの低迷" / "X獲得の課題"
-            $neg_template_map = [
-                '訪問者数'       => '訪問数の低迷',
-                '訪問数'         => '訪問数の低迷',
-                '訪問回数'       => '訪問数の低迷',
-                'セッション数'   => '訪問数の伸び悩み',
-                'ページ閲覧数'   => '閲覧数の伸び悩み',
-                'ページビュー数' => '閲覧数の伸び悩み',
-                '検索表示回数'   => '検索露出の不足',
-                '検索露出'       => '検索露出の不足',
-                '検索クリック数' => '検索流入の不足',
-                '検索流入数'     => '検索流入の不足',
-                '自然検索流入'   => '検索流入の不足',
-                '検索流入'       => '検索流入の不足',
-                '新規訪問者数'   => '新規訪問の伸び悩み',
-                '新規ユーザー数' => '新規訪問の伸び悩み',
-                'ユーザー数'     => '訪問者数の伸び悩み',
-                '問い合わせ数'   => '問い合わせ獲得の課題',
-                'お問い合わせ数' => '問い合わせ獲得の課題',
-                '熟読率'         => '閲覧の質の低下',
-                '成果'           => '成果発生の課題',
-                '直帰率'         => '直帰率の高止まり',
-                '離脱率'         => '離脱率の高止まり',
-                'エンゲージメント率' => '閲覧の質の低下',
-                'コンバージョン率'   => 'コンバージョン率の低迷',
-                'コンバージョン数'   => '成果獲得の停滞',
+            // ネガティブ → "訪問数が減っており、改善が必要です"
+            $neg_sentence_map = [
+                '訪問者数'       => '訪問数が伸び悩んでおり、改善が必要です',
+                '訪問数'         => '訪問数が伸び悩んでおり、改善が必要です',
+                '訪問回数'       => '訪問数が伸び悩んでおり、改善が必要です',
+                'セッション数'   => '訪問数が伸び悩んでおり、改善が必要です',
+                'ページ閲覧数'   => '閲覧数が伸び悩んでいます',
+                'ページビュー数' => '閲覧数が伸び悩んでいます',
+                '検索表示回数'   => '検索での露出が不足しています',
+                '検索露出'       => '検索での露出が不足しています',
+                '検索クリック数' => '検索からの流入が不足しています',
+                '検索流入数'     => '検索からの流入が不足しています',
+                '自然検索流入'   => '検索からの流入が不足しています',
+                '検索流入'       => '検索からの流入が不足しています',
+                '新規訪問者数'   => '新規の訪問者が伸び悩んでいます',
+                '新規ユーザー数' => '新規の訪問者が伸び悩んでいます',
+                'ユーザー数'     => '訪問者数が伸び悩んでいます',
+                '問い合わせ数'   => '問い合わせの獲得が課題です',
+                'お問い合わせ数' => '問い合わせの獲得が課題です',
+                '熟読率'         => 'ページの閲覧の質が低下しています',
+                '成果'           => '成果の発生が課題となっています',
+                '直帰率'         => 'すぐに離脱するユーザーが多い状況です',
+                '離脱率'         => '途中で離脱するユーザーが多い状況です',
+                'エンゲージメント率' => 'ページへの関心度が低下しています',
+                'コンバージョン率'   => '成果につながる割合が低迷しています',
+                'コンバージョン数'   => '成果の獲得が停滞しています',
             ];
-            return $neg_template_map[$metric] ?? ($short . 'の伸び悩み');
+            return $neg_sentence_map[$metric] ?? ($short . 'が伸び悩んでいます');
         }
 
-        // 方向不明 → 汎用ボトルネック
-        return $short . 'の' . $next . '不足';
+        // 方向不明 → 汎用文
+        return $short . 'を' . $next_s;
+    }
+
+    /**
+     * 変化名詞を進行形に変換（「増加」→「増えています」）
+     */
+    private function change_to_progressive(string $change): string {
+        $map = [
+            '増加'     => '増えています',
+            '大幅増加' => '大きく増えています',
+            '上昇'     => '上がっています',
+            '改善'     => '改善しています',
+            '好調'     => '好調です',
+            '初発生'   => '発生しています',
+            '微増'     => '微増しています',
+            '成長'     => '伸びています',
+            '回復'     => '回復しています',
+            '向上'     => '向上しています',
+            '獲得'     => '獲得できています',
+            '達成'     => '達成しています',
+        ];
+        return $map[$change] ?? ($change . 'しています');
+    }
+
+    /**
+     * 元文から短い課題文を抽出（issueフォールバック用）
+     * メトリクスが特定できない場合に、元の文から40文字以内の意味ある文を取り出す
+     */
+    private function extract_short_issue_sentence(string $text): string {
+        // 句点で分割して最初の文を取得
+        $sentences = preg_split('/[。！？]/u', $text, -1, PREG_SPLIT_NO_EMPTY);
+        if (!empty($sentences)) {
+            $first = trim($sentences[0]);
+            if (mb_strlen($first, 'UTF-8') <= 40 && mb_strlen($first, 'UTF-8') > 5) {
+                // 文末が自然な形でない場合は補完
+                if (!preg_match('/(です|ます|ません|ている|されている|あります|なります|できます|みられます|必要です|見られます)$/u', $first)) {
+                    $first .= 'が課題です';
+                }
+                return $first;
+            }
+        }
+        return '改善が必要な項目があります';
     }
 
     /**
@@ -1601,7 +1722,7 @@ class Gcrev_Highlights {
         if ($fact_metric !== '' && $fact_metric === $issue_metric) {
             $fact_change = $this->extract_change_from_phrase($fact);
             $relational = $this->build_relational_bottleneck($fact_metric, $fact_change);
-            return $this->finalize_highlight($relational);
+            return $this->finalize_highlight($relational, 'issue');
         }
 
         // 構造的同一チェック（「Xの増加」「Xの減少」パターン）
@@ -1612,7 +1733,7 @@ class Gcrev_Highlights {
             $fact_change = $this->extract_change_from_phrase($fact);
             $metric = $fact_metric !== '' ? $fact_metric : $fact_base;
             $relational = $this->build_relational_bottleneck($metric, $fact_change);
-            return $this->finalize_highlight($relational);
+            return $this->finalize_highlight($relational, 'issue');
         }
 
         return $issue;

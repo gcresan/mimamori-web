@@ -51,9 +51,22 @@
             <div class="sidebar-user-name">
                <?php echo esc_html( $company ); ?> 様
             </div>
-<!--             <div class="sidebar-user-plan">
-               お試し期間：残り14日
-            </div> -->
+            <?php
+            $site_url = get_user_meta( $u->ID, 'report_site_url', true )
+                      ?: get_user_meta( $u->ID, 'weisite_url', true );
+            if ( $site_url ) :
+               $display_url = preg_replace( '#^https?://#', '', untrailingslashit( $site_url ) );
+            ?>
+            <div class="sidebar-user-plan">
+               <a href="<?php echo esc_url( $site_url ); ?>" target="_blank" rel="noopener noreferrer"
+                  style="color: inherit; text-decoration: none;"><?php echo esc_html( $display_url ); ?></a>
+            </div>
+            <?php endif; ?>
+            <?php if ( get_user_meta( $u->ID, 'gcrev_test_operation', true ) === '1' ) : ?>
+            <div class="sidebar-test-badge" style="margin-top: 6px;">
+               <span style="display: inline-block; padding: 2px 10px; font-size: 11px; font-weight: 600; color: #c0392b; background: #fdf0ee; border: 1px solid #e8c4bf; border-radius: 4px; letter-spacing: 0.05em;">テスト運用</span>
+            </div>
+            <?php endif; ?>
          </div>
          <?php endif; ?>
       </div>
@@ -64,7 +77,7 @@
             <ul class="nav-menu">
                <li class="nav-item">
                   <a href="<?php echo home_url('/dashboard/'); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
-                  <span class="nav-icon">◎</span>
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3C6 3 2.7 5.9 1.5 10c1.2 4.1 4.5 7 8.5 7s7.3-2.9 8.5-7C17.3 5.9 14 3 10 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
                   <span>全体のようす</span>
                   </a>
                </li>
@@ -75,8 +88,8 @@
             <ul class="nav-menu">
                <li class="nav-item">
                   <a href="<?php echo home_url('/report/report-latest/'); ?>" class="nav-link <?php echo is_page('report-latest') ? 'active' : ''; ?>">
-                  <span class="nav-icon">◯</span>
-                  <span>今月のふりかえり</span>
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 2.5V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 11h5M7.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+                  <span>最新月次レポート</span>
                   </a>
                   <ul class="nav-submenu">
                      <li class="nav-item">

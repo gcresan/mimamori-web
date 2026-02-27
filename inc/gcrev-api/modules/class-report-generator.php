@@ -240,8 +240,9 @@ class Gcrev_Report_Generator {
         【actionsセクション】
         「今後の作戦」として書く。
         - 冒頭に1〜2文で全体の方向性を示す。
-        - **「私からの提案：」**として、一番手軽で効果が出やすい1つの施策を具体的に提案する。
-        - 「まずは○○してみませんか？」という提案口調で締める。
+        - **必ず3つの提案を出すこと**。「おすすめ①」「おすすめ②」「おすすめ③」の順で、手軽で効果が出やすい施策を具体的に提案する。
+        - 各提案は「何を」「どこに」「どうする」まで書く。
+        - 「○○してみませんか？」という提案口調で締める。
 
         MODE;
                 }
@@ -289,18 +290,29 @@ class Gcrev_Report_Generator {
 
                 if ($is_easy_mode) {
                     $prompt .= "【初心者モード：actionsの構造】\n";
+                    $prompt .= "※ 初心者モードでも**必ず3つのアクションを出力**すること。\n";
                     $prompt .= "```html\n";
                     $prompt .= "<div class=\"actions\">\n";
                     $prompt .= "  <h2>💡 今後の作戦（ネクストステップ）</h2>\n";
                     $prompt .= "  <p>（全体の方向性を1〜2文で）</p>\n";
                     $prompt .= "  <div class=\"action-item\">\n";
-                    $prompt .= "    <div class=\"action-priority\">私からの提案</div>\n";
+                    $prompt .= "    <div class=\"action-priority\">おすすめ① いちばん大事！</div>\n";
                     $prompt .= "    <div class=\"action-title\">（一番手軽で効果が出やすい施策タイトル）</div>\n";
                     $prompt .= "    <div class=\"action-description\">（「何を」「どこに」「どうする」を具体的に。「〜してみませんか？」の口調で）</div>\n";
                     $prompt .= "  </div>\n";
+                    $prompt .= "  <div class=\"action-item\">\n";
+                    $prompt .= "    <div class=\"action-priority\">おすすめ② やっておくと安心</div>\n";
+                    $prompt .= "    <div class=\"action-title\">（2つ目の施策タイトル）</div>\n";
+                    $prompt .= "    <div class=\"action-description\">（具体的な説明。「〜してみませんか？」の口調で）</div>\n";
+                    $prompt .= "  </div>\n";
+                    $prompt .= "  <div class=\"action-item\">\n";
+                    $prompt .= "    <div class=\"action-priority\">おすすめ③ 余裕があれば</div>\n";
+                    $prompt .= "    <div class=\"action-title\">（3つ目の施策タイトル）</div>\n";
+                    $prompt .= "    <div class=\"action-description\">（具体的な説明。「〜してみませんか？」の口調で）</div>\n";
+                    $prompt .= "  </div>\n";
                     $prompt .= "</div>\n";
                     $prompt .= "```\n";
-                    $prompt .= "※ 初心者モードでは Priority 表記は不要。「私からの提案」1つに絞って具体的に書くこと。\n";
+                    $prompt .= "※ 初心者モードでは Priority 表記ではなく「おすすめ①②③」を使う。必ず3つ出力すること。\n";
                 } else {
                     $prompt .= "【必須のHTML構造】以下の構造を**完全に**再現すること:\n\n";
                     $prompt .= "```html\n";
@@ -359,8 +371,12 @@ class Gcrev_Report_Generator {
              各liの中は「<strong>小見出し</strong>＋説明」の形。最低2つ、最大4つ。
 
            - 改善が必要な点（improvement-points）:
-             `<div class="improvement-points"><h3>❌ 課題</h3><p>（要約1〜2文）</p><ol><li><strong>見出し</strong><br>説明文<br><strong>対策：</strong>具体的な改善アクション</li></ol></div>`
-             各liの中は「<strong>見出し</strong>＋説明＋<strong>対策：</strong>具体策」の3段構成。最低2つ、最大4つ。
+             `<div class="improvement-points"><h3>❌ 課題</h3><ul class="point-list"><li>...</li></ul></div>`
+             **各liは必ず「完結した1文」で書くこと。見出し＋コロンや名詞だけの記述は禁止。**
+             ❌ NG: <li><strong>見出し</strong><br>説明文<br><strong>対策：</strong>...</li>（3段構成は禁止）
+             ❌ NG: <li>低いエンゲージメント率</li>（名詞句だけは禁止）
+             ✅ OK: <li>エンゲージメント率が<strong>低く</strong>、ページの内容が合っていないかもしれません。</li>
+             最低2つ、最大4つ。やさしい口調で。
 
            - ターゲットエリアの状況（area-box）:
              `<div class="area-box"><div class="consideration"><h3>🏠 地元のお客さんの動き</h3><p>...</p></div></div>`
@@ -369,7 +385,8 @@ class Gcrev_Report_Generator {
              `<div class="insight-box"><div class="consideration"><h3>今のサイトの状態をひと言で言うと</h3><p>...</p></div></div>`
 
            - ネクストアクション（actions）:
-             `<div class="actions"><h2>💡 今後の作戦（ネクストステップ）</h2><p>（方向性）</p><div class="action-item"><div class="action-priority">私からの提案</div><div class="action-title">...</div><div class="action-description">...してみませんか？</div></div></div>`
+             `<div class="actions"><h2>💡 今後の作戦（ネクストステップ）</h2><p>（方向性）</p><div class="action-item"><div class="action-priority">おすすめ① いちばん大事！</div><div class="action-title">...</div><div class="action-description">...してみませんか？</div></div><div class="action-item"><div class="action-priority">おすすめ② やっておくと安心</div>...</div><div class="action-item"><div class="action-priority">おすすめ③ 余裕があれば</div>...</div></div>`
+             ※ 必ず3つの action-item を出力すること。
 
         7. **出力はHTMLのみ**（``` は使用しない）。`<style>` や `<html><head><body>`、`<div class="container">`、`<div class="section">` は出力しない（こちらで外枠は組み立てます）
 
@@ -422,11 +439,32 @@ class Gcrev_Report_Generator {
              `<div class="good-points"><ul class="point-list"><li>...</li></ul></div>`
              **【重要】最低3つの項目を必ず記載すること。ただし、不必要に項目を増やさないこと(最大5つ程度)**
              **【禁止】「つまり何をすればいいか」「具体的なアクション」などの余計な小見出しは絶対に出力しないこと**
+             **【文体ルール — 最重要】各<li>は必ず「完結した1文」で書くこと。名詞句や「：」で終わる見出しだけの記述は禁止。**
+             以下の形式を厳守：
+             ❌ NG例: <li>セッション数の増加とエンゲージメント率の改善：</li>
+             ❌ NG例: <li>新規キーワードによる流入の可能性：</li>
+             ✅ OK例: <li>セッション数が前月より<strong>増加</strong>し、エンゲージメント率も<strong>改善</strong>しました。</li>
+             ✅ OK例: <li>Search Consoleにおいて表示回数・クリック数がともに<strong>大きく伸び</strong>ました。</li>
+             ✅ OK例: <li>新規キーワードでの表示回数が<strong>増加</strong>し、今後の流入拡大が期待できます。</li>
+             - 文末は「〜しました」「〜が確認できました」「〜が期待できます」など、成果として言い切る
+             - 「改善が必要な点（課題）」と同じ粒度・文体・完成度に揃える
 
            - 改善が必要な点（improvement-points）:
              `<div class="improvement-points"><ul class="point-list"><li>...</li></ul></div>`
              **【重要】最低3つの項目を必ず記載すること。ただし、不必要に項目を増やさないこと(最大5つ程度)**
              **【禁止】「つまり何をすればいいか」「具体的なアクション」などの余計な小見出しは絶対に出力しないこと**
+             **【文体ルール — 最重要】各<li>は必ず「完結した1文」で書くこと。名詞句や「：」で終わる見出しだけの記述は禁止。**
+             「良かった点（成果）」と同じ粒度・文体で、1つの<li>＝1つの完結した文にすること。
+             以下の形式を厳守：
+             ❌ NG例: <li>主要ターゲット層へのリーチ不足とミスマッチ：</li>
+             ❌ NG例: <li>低いエンゲージメント率</li>
+             ❌ NG例: <li>地域ターゲットとの乖離</li>
+             ❌ NG例: <li><strong>見出し</strong><br>説明文...</li>（見出し＋説明の2段構成も禁止）
+             ✅ OK例: <li>主要ターゲット層へのリーチが<strong>不足</strong>しており、狙う層との<strong>ミスマッチ</strong>が見られます。</li>
+             ✅ OK例: <li>エンゲージメント率が<strong>低下</strong>しており、ページ内容が訪問者の期待と合っていない可能性があります。</li>
+             ✅ OK例: <li>検索エンジンからの流入が<strong>少なく</strong>、SEO面での改善余地があります。</li>
+             - 文末は「〜しています」「〜が見られます」「〜があります」「〜が必要です」など、課題として言い切る
+             - 各<li>内に<br>や<strong>見出し</strong>で始まる2段構成は使わない。フラットな1文のみ
 
            - ターゲットエリアの状況（area-box）※target_area がある場合のみ:
              `<div class="area-box"><div class="consideration"><h3>データから分かる事実</h3><p>...</p><h3>考えられる可能性</h3><p>...</p><ul style="padding-left: 20px; margin-top: 10px;"><li style="margin-bottom: 8px;">...</li></ul></div></div>`
@@ -691,9 +729,13 @@ class Gcrev_Report_Generator {
             list-style: none;
             padding-left: 0;
         }.ai-report .point-list li{
-            padding: 12px 0;
+            padding: 14px 0;
             padding-left: 30px;
             position: relative;
+            font-size: 15px;
+            line-height: 1.9;
+            letter-spacing: 0.02em;
+            color: #3a3a3a;
         }.ai-report .good-points .point-list li:before{
             content: "✓";
             position: absolute;
@@ -739,7 +781,10 @@ class Gcrev_Report_Generator {
             font-size: 18px;
         }.ai-report .consideration p{
             margin-bottom: 15px;
+            font-size: 15px;
             line-height: 2;
+            letter-spacing: 0.02em;
+            color: #3a3a3a;
         }.ai-report .actions{
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
             color: black;
@@ -768,8 +813,10 @@ class Gcrev_Report_Generator {
             font-weight: bold;
             margin-bottom: 10px;
         }.ai-report .action-description{
-            font-size: 16px;
-            line-height: 1.8;
+            font-size: 15px;
+            line-height: 1.9;
+            letter-spacing: 0.02em;
+            color: #3a3a3a;
         }.ai-report .alert-box{
             background: #ffebee;
             border-left: 4px solid #e53935;
@@ -1109,11 +1156,53 @@ class Gcrev_Report_Generator {
         }
 
         $html .= '<div class="section"><h2>' . ($is_easy ? '⭕ 良かったこと' : '👍 今月の良かった点') . '</h2>';
-        $html .= !empty($by_id['good']) ? $by_id['good'] : '<div class="good-points"><ul class="point-list"><li>（AI生成に失敗しました）</li></ul></div>';
+        $good_html = !empty($by_id['good']) ? $by_id['good'] : '<div class="good-points"><ul class="point-list"><li>（AI生成に失敗しました）</li></ul></div>';
+        // 良かった点の文末補正: 名詞句＋「：」で終わるli要素を修正
+        $good_html = preg_replace_callback(
+            '/<li>(.*?)<\/li>/s',
+            function ($m) {
+                $text = trim($m[1]);
+                // 文末が「：」「:」で終わっている場合 → 除去して「が確認できました。」を追加
+                if (preg_match('/[：:](<\/strong>)?$/u', $text)) {
+                    $text = preg_replace('/[：:](<\/strong>)?$/u', '$1', $text);
+                    // 文末に句点系がなければ追加
+                    if (!preg_match('/[。！？](<\/strong>)?$/u', $text)) {
+                        $text .= 'が確認できました。';
+                    }
+                }
+                return '<li>' . $text . '</li>';
+            },
+            $good_html
+        );
+        $html .= $good_html;
         $html .= '</div>';
 
         $html .= '<div class="section"><h2>' . ($is_easy ? '❌ 課題' : '⚠️ 改善が必要な点') . '</h2>';
-        $html .= !empty($by_id['bad']) ? $by_id['bad'] : '<div class="improvement-points"><ul class="point-list"><li>（AI生成に失敗しました）</li></ul></div>';
+        $bad_html = !empty($by_id['bad']) ? $by_id['bad'] : '<div class="improvement-points"><ul class="point-list"><li>（AI生成に失敗しました）</li></ul></div>';
+        // 改善が必要な点の文末補正: 名詞句＋「：」で終わるli要素を修正（良かった点と同じ）
+        $bad_html = preg_replace_callback(
+            '/<li>(.*?)<\/li>/s',
+            function ($m) {
+                $text = trim($m[1]);
+                // 文末が「：」「:」で終わっている場合 → 除去して「が課題です。」を追加
+                if (preg_match('/[：:](<\/strong>)?$/u', $text)) {
+                    $text = preg_replace('/[：:](<\/strong>)?$/u', '$1', $text);
+                    if (!preg_match('/[。！？](<\/strong>)?$/u', $text)) {
+                        $text .= 'が課題として挙げられます。';
+                    }
+                }
+                // 名詞句のみ（句点系で終わらない短い項目）→ 文末補完
+                $stripped = strip_tags($text);
+                if (mb_strlen($stripped) > 0
+                    && mb_strlen($stripped) <= 40
+                    && !preg_match('/[。！？)）]$/u', $stripped)) {
+                    $text .= 'の改善が必要です。';
+                }
+                return '<li>' . $text . '</li>';
+            },
+            $bad_html
+        );
+        $html .= $bad_html;
         $html .= '</div>';
 
         // ---- エリア状況（条件付き） ----

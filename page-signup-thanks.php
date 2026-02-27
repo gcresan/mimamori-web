@@ -44,8 +44,7 @@ set_query_var('gcrev_page_title', 'お申込み完了');
 
 $breadcrumb = '<a href="' . esc_url(home_url('/')) . '">ホーム</a>';
 $breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . esc_url(home_url('/apply/')) . '">お申込み</a>';
-$breadcrumb .= '<span>›</span>';
+
 $breadcrumb .= '<span>お申込み完了</span>';
 set_query_var('gcrev_breadcrumb', $breadcrumb);
 

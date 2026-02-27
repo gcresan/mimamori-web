@@ -1,6 +1,6 @@
 <?php
 /*
-Template Name: 今月のふりかえり
+Template Name: 最新月次レポート
 */
 
 if (!is_user_logged_in()) {
@@ -16,7 +16,7 @@ $report_output_mode = get_user_meta($user_id, 'report_output_mode', true) ?: 'no
 $is_easy_mode = ($report_output_mode === 'easy');
 
 // ページタイトル設定（★ダッシュボードではなくレポート用に修正）
-set_query_var('gcrev_page_title', '今月のふりかえり');
+set_query_var('gcrev_page_title', '最新月次レポート');
 set_query_var('gcrev_page_subtitle', '今月のアクセス状況や反応を、わかりやすくまとめています。');
 
 // パンくず設定（★参照HTMLに合わせてレポート用に修正）
@@ -24,7 +24,7 @@ $breadcrumb = '<a href="' . esc_url(home_url('/mypage/dashboard/')) . '">ホー�
 $breadcrumb .= '<span>›</span>';
 $breadcrumb .= '<span>AIレポート</span>';
 $breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<span>今月のふりかえり</span>';
+$breadcrumb .= '<span>最新月次レポート</span>';
 set_query_var('gcrev_breadcrumb', $breadcrumb);
 
 // ========================================
@@ -547,21 +547,26 @@ get_header();
                 <?php if (!empty($action)): ?>
                 <div class="action-item">
                     <?php
-                    // 優先度判定（dashboard同一ロジック）
+                    // 優先度判定（通常モード＋初心者モード両対応）
                     $priority_label = '中';
                     $priority_class = 'medium';
                     if (is_array($action) && !empty($action['priority'])) {
-                        $p = mb_strtolower($action['priority']);
-                        if (strpos($p, '最優先') !== false || strpos($p, '高') !== false || strpos($p, 'high') !== false) {
-                            $priority_label = '最優先';
+                        $p = $action['priority'];
+                        $p_lower = mb_strtolower($p);
+                        if (strpos($p_lower, '最優先') !== false || strpos($p_lower, '高') !== false || strpos($p_lower, 'high') !== false
+                            || strpos($p, 'おすすめ①') !== false || strpos($p, 'いちばん大事') !== false
+                            || strpos($p_lower, 'priority 1') !== false || strpos($p_lower, 'priority 2') !== false) {
+                            $priority_label = '高';
                             $priority_class = 'high';
-                        } elseif (strpos($p, '低') !== false || strpos($p, 'low') !== false) {
+                        } elseif (strpos($p_lower, '低') !== false || strpos($p_lower, 'low') !== false
+                            || strpos($p, 'おすすめ③') !== false || strpos($p, '余裕があれば') !== false) {
                             $priority_label = '低';
                             $priority_class = 'low';
                         }
                     } else {
+                        // priority フィールドなし → indexで自動判定
                         if ($index < 2) {
-                            $priority_label = '最優先';
+                            $priority_label = '高';
                             $priority_class = 'high';
                         } elseif ($index >= 4) {
                             $priority_label = '低';
