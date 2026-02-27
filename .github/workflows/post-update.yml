@@ -1,0 +1,65 @@
+name: Post Update Notification
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  post-update:
+    runs-on: ubuntu-latest
+
+    # feat: / fix: / style: で始まるコミットのみ実行
+    if: >
+      startsWith(github.event.head_commit.message, 'feat:') ||
+      startsWith(github.event.head_commit.message, 'feat(') ||
+      startsWith(github.event.head_commit.message, 'fix:') ||
+      startsWith(github.event.head_commit.message, 'fix(') ||
+      startsWith(github.event.head_commit.message, 'style:') ||
+      startsWith(github.event.head_commit.message, 'style(')
+
+    steps:
+      - name: Parse commit and post update
+        env:
+          SITE_URL: ${{ secrets.MIMAMORI_SITE_URL }}
+          INGEST_TOKEN: ${{ secrets.MIMAMORI_UPDATES_INGEST_TOKEN }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # 1行目のみ取得
+          FIRST_LINE=$(echo "$COMMIT_MSG" | head -n 1)
+
+          # カテゴリ判定
+          if echo "$FIRST_LINE" | grep -qE '^feat(\(|:)'; then
+            CATEGORY="feature"
+          elif echo "$FIRST_LINE" | grep -qE '^fix(\(|:)'; then
+            CATEGORY="fix"
+          elif echo "$FIRST_LINE" | grep -qE '^style(\(|:)'; then
+            CATEGORY="improvement"
+          else
+            CATEGORY="other"
+          fi
+
+          # prefix 除去 → ユーザー向けタイトル
+          TITLE=$(echo "$FIRST_LINE" | sed -E 's/^(feat|fix|style)(\([^)]*\))?:\s*//')
+
+          # Short SHA
+          VERSION="${COMMIT_SHA:0:7}"
+
+          # JSON ペイロード構築
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg category "$CATEGORY" \
+            --arg version "$VERSION" \
+            --arg content "Commit: ${COMMIT_SHA}" \
+            '{title: $title, category: $category, version: $version, content: $content}')
+
+          echo "Posting update: $TITLE ($CATEGORY)"
+
+          # ingest エンドポイントへ POST
+          curl -sf -X POST \
+            "${SITE_URL}/wp-json/mimamori/v1/updates/ingest" \
+            -H "Content-Type: application/json" \
+            -H "X-Mimamori-Ingest-Token: ${INGEST_TOKEN}" \
+            -d "$PAYLOAD"
