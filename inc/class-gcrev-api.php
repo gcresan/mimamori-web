@@ -6194,6 +6194,10 @@ PROMPT;
         }
 
         $table = $wpdb->prefix . 'gcrev_cv_review';
+
+        // テーブル存在チェック — 無ければ作成
+        $this->ensure_cv_review_table($table);
+
         $now   = current_time('mysql');
 
         // 既存行チェック
@@ -6261,20 +6265,13 @@ PROMPT;
 
         $table = $wpdb->prefix . 'gcrev_cv_review';
 
-        // テーブル存在チェック — 無ければ作成を試みる
+        // テーブル存在チェック — 無ければ作成
+        $this->ensure_cv_review_table($table);
         if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
-            error_log('[GCREV] cv-review bulk-update: table not found, attempting creation');
-            if (function_exists('gcrev_cv_review_create_table')) {
-                gcrev_cv_review_create_table();
-            }
-            // 再チェック
-            if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
-                error_log('[GCREV] cv-review bulk-update: table creation failed');
-                return new WP_REST_Response([
-                    'success' => false,
-                    'message' => 'データベーステーブルが見つかりません。管理者にお問い合わせください。',
-                ], 500);
-            }
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'テーブル作成に失敗しました: ' . $wpdb->last_error,
+            ], 500);
         }
 
         $now     = current_time('mysql');
@@ -6358,6 +6355,45 @@ PROMPT;
         }
 
         return new WP_REST_Response(['success' => true, 'updated' => $updated, 'errors' => $errors], 200);
+    }
+
+    /**
+     * gcrev_cv_review テーブルが存在しなければ直接 CREATE TABLE する
+     */
+    private function ensure_cv_review_table(string $table = ''): void {
+        global $wpdb;
+        if (!$table) {
+            $table = $wpdb->prefix . 'gcrev_cv_review';
+        }
+        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+            return;
+        }
+        error_log('[GCREV] ensure_cv_review_table: creating ' . $table);
+        $charset_collate = $wpdb->get_charset_collate();
+        $wpdb->query("CREATE TABLE IF NOT EXISTS {$table} (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id BIGINT(20) UNSIGNED NOT NULL,
+            year_month VARCHAR(7) NOT NULL,
+            row_hash VARCHAR(32) NOT NULL,
+            event_name VARCHAR(100) NOT NULL DEFAULT '',
+            date_hour_minute VARCHAR(12) NOT NULL DEFAULT '',
+            page_path VARCHAR(500) NOT NULL DEFAULT '',
+            source_medium VARCHAR(200) NOT NULL DEFAULT '',
+            device_category VARCHAR(50) NOT NULL DEFAULT '',
+            country VARCHAR(100) NOT NULL DEFAULT '',
+            event_count INT NOT NULL DEFAULT 1,
+            status TINYINT(1) NOT NULL DEFAULT 0,
+            memo VARCHAR(500) NULL,
+            updated_by BIGINT(20) UNSIGNED NULL,
+            updated_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY user_month_hash (user_id, year_month, row_hash),
+            KEY user_month (user_id, year_month),
+            KEY status (status)
+        ) {$charset_collate}");
+        if ($wpdb->last_error) {
+            error_log('[GCREV] ensure_cv_review_table error: ' . $wpdb->last_error);
+        }
     }
 
     /**
