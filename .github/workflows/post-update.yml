@@ -18,9 +18,8 @@ jobs:
       startsWith(github.event.head_commit.message, 'style(')
 
     steps:
-      - name: Parse commit and post update
+      - name: Parse commit and post update (dev only)
         env:
-          PROD_URL: ${{ secrets.MIMAMORI_SITE_URL }}
           DEV_URL: ${{ secrets.MIMAMORI_DEV_SITE_URL }}
           INGEST_TOKEN: ${{ secrets.MIMAMORI_UPDATES_INGEST_TOKEN }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
@@ -58,16 +57,7 @@ jobs:
 
           echo "Posting update: $TITLE ($CATEGORY)"
 
-          # 本番環境へ POST
-          if [ -n "$PROD_URL" ]; then
-            echo "→ Prod: $PROD_URL"
-            curl -sf -X POST \
-              "${PROD_URL}/wp-json/mimamori/v1/updates/ingest" \
-              -H "Content-Type: application/json" \
-              -H "X-Mimamori-Ingest-Token: ${INGEST_TOKEN}" \
-              -d "$PAYLOAD" || echo "⚠ Prod post failed (non-fatal)"
-          fi
-
+          # ※ 本番環境への POST は deploy-prod.yml で行う（デプロイ時のみ）
           # 開発環境へ POST
           if [ -n "$DEV_URL" ]; then
             echo "→ Dev: $DEV_URL"
