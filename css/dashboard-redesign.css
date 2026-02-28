@@ -54,6 +54,24 @@
   --mw-btn-primary-bg: #3D6B6E;
   --mw-btn-primary-hover: #346062;
   --mw-btn-primary-text: #FFFFFF;
+
+  /* ===== タイポグラフィ — 可読性優先 ===== */
+  --mw-font-size-base: 16px;          /* 本文（15→16px） */
+  --mw-font-size-sm: 13px;            /* 補足テキスト（12→13px） */
+  --mw-font-size-xs: 11px;            /* 最小補足（10→11px） */
+  --mw-font-size-lg: 18px;            /* セクション見出し（16→18px） */
+  --mw-font-size-menu: 15px;          /* サイドメニュー（14→15px） */
+  --mw-font-size-submenu: 14px;       /* サブメニュー（13→14px） */
+  --mw-font-size-card-title: 14px;    /* カードラベル（12→14px） */
+  --mw-font-size-card-value: 46px;    /* KPI数値（42→46px） */
+  --mw-line-height-base: 1.7;         /* 本文行間 */
+  --mw-line-height-heading: 1.4;      /* 見出し行間 */
+
+  /* ===== コントラスト改善 — 1段階濃く ===== */
+  --mw-text-secondary: #444444;       /* 旧 #555555 → 1段階濃く */
+  --mw-text-tertiary: #6B6B6B;        /* 旧 #888888 → 大幅に濃く（補足が読める） */
+  --mw-text-body: #333333;            /* 旧 #3a3a3a → 統一 */
+  --mw-border-light: #D5D9DE;         /* 旧 #E2E6EA → 少し濃く */
 }
 
 /* ========== Body ========== */
@@ -61,8 +79,8 @@ body {
   font-family: var(--mw-font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.8;
-  font-size: 15px;
+  line-height: var(--mw-line-height-base);
+  font-size: var(--mw-font-size-base);
   color: var(--mw-text-primary);
   background: var(--mw-bg-secondary);
 }
@@ -74,17 +92,17 @@ body {
   font-family: var(--mw-font-heading);
   font-weight: 700;
   letter-spacing: 0.02em;
-  font-size: 24px;
+  font-size: 26px;
 }
 
 h1, h2, h3 {
   font-family: var(--mw-font-heading);
   color: var(--mw-text-heading);
-  line-height: 1.5;
+  line-height: var(--mw-line-height-heading);
 }
-h1 { font-size: 26px; font-weight: 700; }
-h2 { font-size: 22px; font-weight: 700; }
-h3 { font-size: 18px; font-weight: 600; }
+h1 { font-size: 28px; font-weight: 700; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 19px; font-weight: 600; }
 
 /* ========== Sidebar Override ========== */
 .sidebar {
@@ -329,7 +347,7 @@ h3 { font-size: 18px; font-weight: 600; }
 }
 
 .dashboard-infographic-title {
-  font-size: 23px;
+  font-size: 25px;
   font-weight: 600;
   color: var(--mw-text-heading);
   margin-bottom: 20px;
@@ -404,8 +422,8 @@ h3 { font-size: 18px; font-weight: 600; }
 
 .info-score-label {
   margin-top: 2px;
-  font-size: 13px;
-  color: var(--mw-text-tertiary);
+  font-size: 14px;
+  color: var(--mw-text-secondary);
 }
 
 .info-score-diff {
@@ -446,7 +464,7 @@ h3 { font-size: 18px; font-weight: 600; }
   background: var(--mw-bg-primary);
   border: 1px solid var(--mw-border-light);
   border-radius: 8px;
-  padding: 14px 16px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -470,14 +488,14 @@ h3 { font-size: 18px; font-weight: 600; }
 }
 
 .info-kpi-label {
-  font-size: 12px;
+  font-size: var(--mw-font-size-card-title);
   color: var(--mw-text-secondary);
-  font-weight: 500;
+  font-weight: 600;
   opacity: 1;
 }
 
 .info-kpi-value {
-  font-size: 42px;
+  font-size: var(--mw-font-size-card-value);
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -485,8 +503,8 @@ h3 { font-size: 18px; font-weight: 600; }
 }
 
 .info-kpi-diff {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--mw-font-size-sm);
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -497,7 +515,7 @@ h3 { font-size: 18px; font-weight: 600; }
 .info-kpi-diff.neutral  { color: var(--mw-accent-neutral); }
 
 .info-kpi-hint {
-  font-size: 10px;
+  font-size: var(--mw-font-size-xs);
   color: var(--mw-text-tertiary);
 }
 
@@ -616,7 +634,7 @@ button.info-kpi-item {
   max-width: 1100px;
   font-size: 16px;
   font-weight: 700;
-  line-height: 1.8;
+  line-height: 1.7;
   color: #4a6d7c;
   margin-top: 0;
   margin-bottom: 16px;
@@ -795,7 +813,7 @@ details[open] .info-breakdown-arrow {
 }
 
 .info-monthly-summary {
-  font-size: 15px;
+  font-size: 16px;
   color: var(--mw-text-secondary);
   line-height: 1.85;
   margin-bottom: 16px;
@@ -806,7 +824,7 @@ details[open] .info-breakdown-arrow {
 }
 
 .info-monthly-summary .point-head {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--mw-text-heading);
   display: block;
@@ -840,7 +858,7 @@ details[open] .info-breakdown-arrow {
 }
 
 .info-monthly-highlight-label {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--mw-text-heading);
   margin-bottom: 10px;
@@ -1208,7 +1226,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 /* ========== Section Title (共通) ========== */
 .section-title,
 .kpi-section-title {
-  font-size: 16px;
+  font-size: var(--mw-font-size-lg);
   font-weight: 600;
   color: var(--mw-text-heading);
   letter-spacing: 0.02em;
@@ -1326,6 +1344,14 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
     grid-template-columns: 1fr;
   }
 
+  /* ========== KPI カード（モバイル文字サイズ） ========== */
+  .info-kpi-value {
+    font-size: 36px;
+  }
+  .info-kpi-label {
+    font-size: 13px;
+  }
+
   /* ========== KPI トレンドインラインチャート ========== */
   .kpi-trend-inline {
     padding: 16px;
@@ -1353,7 +1379,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 
   .dashboard-infographic-title {
     padding-right: 0;
-    font-size: 16px;
+    font-size: 18px;
   }
 
   .info-monthly-link--corner {
