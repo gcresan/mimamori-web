@@ -245,8 +245,13 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             });
             if (!res.ok) {
                 var errText = await res.text();
-                console.error('[CV Review] HTTP error', res.status, errText.substring(0, 500));
-                showMessage('APIエラー (HTTP ' + res.status + '): レスポンスを確認してください', 'error');
+                console.error('[CV Review] HTTP error', res.status, errText.substring(0, 1000));
+                var errMsg = 'APIエラー (HTTP ' + res.status + ')';
+                try {
+                    var errJson = JSON.parse(errText);
+                    if (errJson.message) errMsg += ': ' + errJson.message;
+                } catch(_) {}
+                showMessage(errMsg, 'error');
                 elLoading.style.display = 'none';
                 return;
             }

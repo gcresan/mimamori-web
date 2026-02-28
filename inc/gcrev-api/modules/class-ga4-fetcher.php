@@ -1802,9 +1802,9 @@ class Gcrev_GA4_Fetcher {
                 $filter_expression = new FilterExpression([
                     'filter' => new Filter([
                         'field_name'    => 'eventName',
-                        'string_filter' => new StringFilter([
+                        'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter([
                             'value'      => $event_names[0],
-                            'match_type' => StringFilter\MatchType::EXACT,
+                            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
                         ]),
                     ]),
                 ]);
@@ -1814,9 +1814,9 @@ class Gcrev_GA4_Fetcher {
                     $filters[] = new FilterExpression([
                         'filter' => new Filter([
                             'field_name'    => 'eventName',
-                            'string_filter' => new StringFilter([
+                            'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter([
                                 'value'      => $name,
-                                'match_type' => StringFilter\MatchType::EXACT,
+                                'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
                             ]),
                         ]),
                     ]);
