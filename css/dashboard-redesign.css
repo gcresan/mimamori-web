@@ -3592,10 +3592,35 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   color: var(--mw-text-heading) !important;
 }
 
+/* ========== KPI Trend Hint ========== */
+.kpi-trend-inline-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--mw-text-tertiary, #999);
+  cursor: help;
+  white-space: nowrap;
+  margin-left: auto;
+  padding-left: 12px;
+}
+.kpi-trend-inline-hint svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+.kpi-trend-inline-hint-text {
+  opacity: 0.8;
+}
+@media (max-width: 480px) {
+  .kpi-trend-inline-hint-text {
+    display: none;
+  }
+}
+
 /* ========== Drilldown Popover ========== */
 .drilldown-popover {
-  position: absolute;
-  z-index: 100;
+  position: fixed;
+  z-index: 10000;
   background: #fff;
   border: 1px solid #e5e5e5;
   border-radius: 10px;
@@ -3709,8 +3734,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
     height: 280px;
   }
   .drilldown-popover {
-    left: 50% !important;
-    transform: translateX(-50%);
+    min-width: 160px;
   }
 }
 

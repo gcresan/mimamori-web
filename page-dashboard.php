@@ -554,7 +554,10 @@ if ($infographic) {
         <span class="kpi-trend-inline-icon" id="kpiTrendIcon">👥</span>
         <span id="kpiTrendTitleText">訪問数 — 過去12ヶ月の推移</span>
       </h3>
-      <span class="kpi-trend-inline-meta">直近12ヶ月</span>
+      <span class="kpi-trend-inline-hint" title="各月の点をクリックすると、内訳データを確認できます">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11ZM8 5a.75.75 0 1 1 0-1.5A.75.75 0 0 1 8 5Zm-.75 1.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-1.5 0v-3.5Z"/></svg>
+        <span class="kpi-trend-inline-hint-text">各月の点をクリックで詳細を表示</span>
+      </span>
     </div>
     <div class="kpi-trend-inline-body">
       <div class="kpi-trend-loading active" id="kpiTrendLoading">
@@ -1146,7 +1149,7 @@ foreach ($highlight_items as $highlight):
                     if (!elements.length) return;
                     var idx = elements[0].index;
                     var month = json.labels[idx];
-                    showDrilldownPopover(evt, month);
+                    showDrilldownPopover(month, elements[0].element);
                 },
                 plugins: {
                     legend: { display: false },
@@ -1182,18 +1185,57 @@ foreach ($highlight_items as $highlight):
     var _ddCache     = {};
     var _ddMonth     = null;
 
-    function showDrilldownPopover(evt, month) {
+    /**
+     * ポップオーバー位置計算ユーティリティ（再利用可能）
+     * @param {HTMLElement} popover  表示するポップオーバー要素
+     * @param {number}      anchorX  アンカーのビューポートX座標
+     * @param {number}      anchorY  アンカーのビューポートY座標
+     * @param {Object}      [opts]   { gap:number, prefer:'right'|'left' }
+     */
+    function positionPopover(popover, anchorX, anchorY, opts) {
+        opts = opts || {};
+        var gap    = opts.gap    || 10;
+        var prefer = opts.prefer || 'right';
+        var margin = 8;
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+
+        popover.style.display = 'block';
+        var popW = popover.offsetWidth;
+        var popH = popover.offsetHeight;
+
+        // 水平: 基本は右、はみ出すなら左に反転
+        var left;
+        if (prefer === 'right') {
+            left = anchorX + gap;
+            if (left + popW > vw - margin) left = anchorX - popW - gap;
+        } else {
+            left = anchorX - popW - gap;
+            if (left < margin) left = anchorX + gap;
+        }
+        left = Math.max(margin, Math.min(left, vw - popW - margin));
+
+        // 垂直: アンカーを中心にクランプ
+        var top = anchorY - popH / 2;
+        top = Math.max(margin, Math.min(top, vh - popH - margin));
+
+        popover.style.position = 'fixed';
+        popover.style.left = left + 'px';
+        popover.style.top  = top  + 'px';
+    }
+
+    function showDrilldownPopover(month, pointEl) {
         _ddMonth = month;
         var parts = month.split('-');
         ddPopTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月';
 
-        var chartRect = chartWrap.getBoundingClientRect();
-        var x = evt.native.clientX - chartRect.left;
-        var y = evt.native.clientY - chartRect.top;
+        // Chart.js ポイント座標 → ビューポート座標に変換
+        var canvas = kpiTrendChart.canvas;
+        var rect   = canvas.getBoundingClientRect();
+        var vpX    = rect.left + (pointEl.x / canvas.width)  * rect.width;
+        var vpY    = rect.top  + (pointEl.y / canvas.height) * rect.height;
 
-        ddPopover.style.left = Math.min(x, chartRect.width - 180) + 'px';
-        ddPopover.style.top  = Math.max(y - 150, 0) + 'px';
-        ddPopover.style.display = 'block';
+        positionPopover(ddPopover, vpX, vpY, { gap: 12, prefer: 'right' });
     }
 
     // ポップオーバー外クリックで閉じる
