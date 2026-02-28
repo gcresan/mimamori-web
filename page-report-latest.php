@@ -433,7 +433,12 @@ get_header();
 
         <!-- 📋 総評 -->
         <div class="report-section">
-            <h2 class="section-title">📋 <?php echo esc_html($year . '年' . $month . '月'); ?>の総評</h2>
+            <h2 class="section-title">📋 <?php echo esc_html($year . '年' . $month . '月'); ?>の総評
+              <button type="button" class="ask-ai-btn"
+                onclick="window.GCREV.chat.openWithPrompt('今月の総評を見て、最も重要な気づきと次にやることを教えて')">
+                🤖 AIに聞く
+              </button>
+            </h2>
             <div class="section-content">
                 <?php if (!empty($monthly_report['summary'])): ?>
                 <div class="highlight-box">
@@ -448,7 +453,12 @@ get_header();
 
         <!-- ✅ 良かった点（成果） -->
         <div class="report-section">
-            <h2 class="section-title">✅ 良かった点（成果）</h2>
+            <h2 class="section-title">✅ 良かった点（成果）
+              <button type="button" class="ask-ai-btn"
+                onclick="window.GCREV.chat.openWithPrompt('この「良かった点（成果）」を踏まえて、次に伸ばすべきポイントは？')">
+                🤖 AIに聞く
+              </button>
+            </h2>
             <div class="section-content<?php echo $is_easy_mode ? '' : ' list-box'; ?>">
                 <?php if (!empty($monthly_report['good_points']) && is_array($monthly_report['good_points'])): ?>
                     <?php if ($is_easy_mode): ?>
@@ -488,7 +498,12 @@ get_header();
 
         <!-- ⚠️ 改善が必要な点（課題） -->
         <div class="report-section">
-            <h2 class="section-title">⚠️ 改善が必要な点（課題）</h2>
+            <h2 class="section-title">⚠️ 改善が必要な点（課題）
+              <button type="button" class="ask-ai-btn"
+                onclick="window.GCREV.chat.openWithPrompt('この「改善が必要な点（課題）」の原因と、最短で効く改善を3つ提案して')">
+                🤖 AIに聞く
+              </button>
+            </h2>
             <div class="section-content<?php echo $is_easy_mode ? '' : ' list-box'; ?>">
                 <?php if (!empty($monthly_report['improvement_points']) && is_array($monthly_report['improvement_points'])): ?>
                     <?php if ($is_easy_mode): ?>

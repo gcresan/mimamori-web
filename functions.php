@@ -845,12 +845,69 @@ add_action('wp_enqueue_scripts', function() {
         '1.3.0'
     );
 
+    // --- クイックプロンプト（2モード×3カテゴリ） ---
+    $quick_prompts = [
+        'beginner' => [
+            'status'  => [
+                '今月、いちばん大事なことを1つだけ教えて',
+                '今の数字は良い？悪い？かんたんに教えて',
+                '良いところと気をつけたいところを1つずつ教えて',
+                '先月と比べて、何が変わった？（短く）',
+                '今月の結果を、子どもでも分かるくらい簡単に説明して',
+            ],
+            'action'  => [
+                '今日30分でできる改善を1つ教えて',
+                'まず何からやればいい？（1つだけ）',
+                '問い合わせを増やすために、いま一番やるべきことは？',
+                'サイトで直すなら、どのページを直すのが効果的？',
+                '次の一歩を3つ教えて（かんたんに）',
+            ],
+            'trouble' => [
+                'やってみたけど成果が出ない。原因をやさしく教えて',
+                'アクセスが増えない理由を、むずかしい言葉なしで教えて',
+                '問い合わせが増えないのは、何が原因か考えて',
+                'どこがボトルネック？（集客／ページ内容／導線のどれ？）',
+                '次は何を変えたらいい？（1つだけ）',
+            ],
+        ],
+        'standard' => [
+            'status'  => [
+                '今月の良い兆しと注意点を3つずつ教えて',
+                '先月からの変化を重要度順に3つまとめて',
+                '数字の変化の原因を仮説で整理して',
+                '流入（検索/マップ/参照）別に状況を要約して',
+                '成果と課題の"本質"を1つずつ挙げて',
+            ],
+            'action'  => [
+                '今月やるべきことを優先順位つきで3つ提案して',
+                '即効性/中期/やらない を分けて改善案を出して',
+                '問い合わせを増やすための改善を3つ、効果順に',
+                'SEOで伸ばすなら、どのページをどう直すべき？',
+                '最小工数で最大効果が出そうな一手は？',
+            ],
+            'trouble' => [
+                '施策をやったが伸びない。原因を切り分けて（集客/導線/内容）',
+                '仮説→検証の形で次に試すことを提案して',
+                '数字が悪化した要因を時系列で推定して',
+                '成果が出ない原因として"よくある罠"をチェックして',
+                '改善が効いたか判断する指標と観察期間を提案して',
+            ],
+        ],
+    ];
+    $quick_prompts = apply_filters( 'mw_quick_prompts', $quick_prompts );
+
+    // 初期モード: report_output_mode が 'easy' なら beginner、それ以外は standard
+    $user_output_mode   = get_user_meta( get_current_user_id(), 'report_output_mode', true ) ?: 'normal';
+    $initial_prompt_mode = ( $user_output_mode === 'easy' ) ? 'beginner' : 'standard';
+
     wp_localize_script( 'mw-ai-chat', 'mwChatConfig', [
-        'apiUrl'           => rest_url( 'mimamori/v1/ai-chat' ),
-        'voiceUrl'         => rest_url( 'mimamori/v1/voice-transcribe' ),
-        'nonce'            => wp_create_nonce( 'wp_rest' ),
-        'paymentActive'    => gcrev_is_payment_active(),
-        'paymentStatusUrl' => home_url( '/payment-status/' ),
+        'apiUrl'            => rest_url( 'mimamori/v1/ai-chat' ),
+        'voiceUrl'          => rest_url( 'mimamori/v1/voice-transcribe' ),
+        'nonce'             => wp_create_nonce( 'wp_rest' ),
+        'paymentActive'     => gcrev_is_payment_active(),
+        'paymentStatusUrl'  => home_url( '/payment-status/' ),
+        'quickPrompts'      => $quick_prompts,
+        'initialPromptMode' => $initial_prompt_mode,
     ] );
 });
 

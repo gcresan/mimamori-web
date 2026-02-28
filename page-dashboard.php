@@ -437,6 +437,48 @@ if ($infographic) {
     <span class="icon" aria-hidden="true">📊</span><?php echo esc_html($year . '年' . $month); ?>月の状態
   </h2>
 
+  <?php
+  // --- おめでとうメッセージ判定 ---
+  $congrats_score_diff   = (int)($infographic['score_diff'] ?? 0);
+  $congrats_kpi          = $infographic['kpi'] ?? [];
+  $congrats_improved     = 0;
+  $congrats_improved_labels = [];
+  $congrats_label_map    = ['visits' => '訪問数', 'cv' => '問合せ数', 'meo' => 'マップ表示'];
+  foreach (['visits', 'cv', 'meo'] as $ck) {
+      $cd = (int)($congrats_kpi[$ck]['diff'] ?? 0);
+      $cv = (int)($congrats_kpi[$ck]['value'] ?? 0);
+      if ($cd > 0 && $cv >= 5) {
+          $congrats_improved++;
+          $congrats_improved_labels[] = $congrats_label_map[$ck];
+      }
+  }
+  $show_congrats = ($congrats_score_diff > 0 && $congrats_improved >= 1)
+                || ($congrats_improved >= 2);
+
+  if ($show_congrats):
+      if ($congrats_score_diff > 0 && $congrats_improved >= 2) {
+          $congrats_icon  = '🏆';
+          $congrats_title = '素晴らしい改善です！';
+          $congrats_text  = 'スコアも主要指標も改善しています。やった施策が数字に反映されています。';
+      } elseif ($congrats_score_diff > 0) {
+          $congrats_icon  = '🎉';
+          $congrats_title = 'スコアが改善しています！';
+          $congrats_text  = sprintf('いい感じです！前月よりスコアが +%d 改善しました。この調子で次の一手を進めましょう。', $congrats_score_diff);
+      } else {
+          $congrats_icon  = '📈';
+          $congrats_title = '改善が数字に表れています！';
+          $congrats_text  = implode('・', $congrats_improved_labels) . ' が前月より改善しました。成果が出ています。';
+      }
+  ?>
+  <div class="info-congrats">
+    <span class="info-congrats-icon" aria-hidden="true"><?php echo $congrats_icon; ?></span>
+    <div class="info-congrats-body">
+      <div class="info-congrats-title"><?php echo esc_html($congrats_title); ?></div>
+      <div class="info-congrats-text"><?php echo esc_html($congrats_text); ?></div>
+    </div>
+  </div>
+  <?php endif; ?>
+
   <!-- スコア + KPI 横並びエリア -->
   <div class="info-top-row">
     <!-- スコア -->
@@ -613,7 +655,10 @@ if ($infographic) {
           <span class="info-monthly-pin">📌</span>
           <span>結論サマリー</span>
         </div>
-        <!-- ボタンは外枠右上へ移動したため、ここには置かない -->
+        <button type="button" class="ask-ai-btn"
+          onclick="window.GCREV.chat.openWithPrompt('今月の月次レポート結果を見て、いちばん重要な気づきと次にやることを3つ教えて')">
+          🤖 AIに聞く
+        </button>
       </div>
 
       <div class="info-monthly-summary">
@@ -632,9 +677,9 @@ $next_action = !empty($infographic['action'])
     : ($highlights['opportunity'] ?? '改善施策を検討');
 
 $highlight_items = [
-    ['label' => '📈 今月うまくいっていること',  'value' => $highlights['most_important'] ?? '新規ユーザー獲得', 'key' => 'most_important'],
-    ['label' => '⚠️ 今いちばん気をつけたい点',  'value' => $highlights['top_issue'] ?? 'コンバージョン改善',    'key' => 'top_issue'],
-    ['label' => '🎯 次にやるとよいこと',         'value' => $next_action,                                       'key' => 'opportunity'],
+    ['label' => '📈 今月うまくいっていること',  'value' => $highlights['most_important'] ?? '新規ユーザー獲得', 'key' => 'most_important', 'ai_prompt' => 'この「良かった点」を踏まえて、次に伸ばすべきポイントは？'],
+    ['label' => '⚠️ 今いちばん気をつけたい点',  'value' => $highlights['top_issue'] ?? 'コンバージョン改善',    'key' => 'top_issue',       'ai_prompt' => 'この「課題」の原因と、最短で効く改善を3つ提案して'],
+    ['label' => '🎯 次にやるとよいこと',         'value' => $next_action,                                       'key' => 'opportunity',     'ai_prompt' => 'この「次にやること」を具体的な手順に分解して教えて'],
 ];
 
 foreach ($highlight_items as $highlight):
@@ -648,6 +693,11 @@ foreach ($highlight_items as $highlight):
         <div class="info-monthly-highlight-value">
             <?php echo esc_html($highlight['value']); ?>
         </div>
+        <button type="button" class="ask-ai-btn ask-ai-btn--sm"
+          onclick="window.GCREV.chat.openWithPrompt(this.dataset.prompt)"
+          data-prompt="<?php echo esc_attr($highlight['ai_prompt']); ?>">
+          🤖 AIに聞く
+        </button>
 
         <?php if ($detail && (!empty($detail['fact']) || !empty($detail['causes']) || !empty($detail['actions']))): ?>
         <details class="highlight-detail-accordion" id="<?php echo $detail_id; ?>">

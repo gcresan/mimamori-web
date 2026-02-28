@@ -289,7 +289,7 @@
    ========================================================== */
 
 /* ==========================================================
-   Quick Questions — grouped
+   Quick Questions — 2モード×3カテゴリ
    ========================================================== */
 .mw-chat-quick {
   padding: 12px 16px;
@@ -301,19 +301,69 @@
   flex-shrink: 0;
 }
 
-.mw-chat-quick__group {
+/* --- Mode Tabs (初心者向け / 通常) --- */
+.mw-chat-quick__mode-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  background: var(--mw-border);
+  border-radius: 8px;
+  padding: 2px;
 }
-
-.mw-chat-quick__label {
-  font-size: 11.5px;
+.mw-chat-quick__mode-tab {
+  flex: 1;
+  padding: 5px 10px;
+  font-size: 12px;
   font-weight: 600;
+  font-family: inherit;
   color: var(--mw-text-ter);
-  letter-spacing: 0.02em;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.mw-chat-quick__mode-tab.is-active {
+  background: var(--mw-bg);
+  color: var(--mw-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.mw-chat-quick__mode-tab:hover:not(.is-active) {
+  color: var(--mw-text-sub);
 }
 
+/* --- Category Tabs (今どうなってる？ / 次に何する？ / うまくいかない…) --- */
+.mw-chat-quick__cat-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--mw-border);
+  padding-bottom: 0;
+}
+.mw-chat-quick__cat-tab {
+  flex: 1;
+  padding: 6px 4px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--mw-text-ter);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+}
+.mw-chat-quick__cat-tab.is-active {
+  color: var(--mw-teal);
+  border-bottom-color: var(--mw-teal);
+  font-weight: 600;
+}
+.mw-chat-quick__cat-tab:hover:not(.is-active) {
+  color: var(--mw-text-sub);
+}
+
+/* --- Chips --- */
 .mw-chat-quick__chips {
   display: flex;
   flex-wrap: wrap;
@@ -325,30 +375,19 @@
   border: 1px solid var(--mw-border);
   border-radius: 16px;
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--mw-text-sub);
   cursor: pointer;
   transition: all 0.2s;
-  white-space: nowrap;
+  white-space: normal;
   font-family: inherit;
   line-height: 1.4;
+  text-align: left;
 }
 .mw-chat-quick__chip:hover {
   background: var(--mw-teal);
   color: #fff;
   border-color: var(--mw-teal);
-}
-
-/* Primary chip (まずはここから) */
-.mw-chat-quick__chip--primary {
-  background: var(--mw-teal);
-  color: #fff;
-  border-color: var(--mw-teal);
-  font-weight: 600;
-}
-.mw-chat-quick__chip--primary:hover {
-  background: var(--mw-primary);
-  border-color: var(--mw-primary);
 }
 
 /* ==========================================================
@@ -741,29 +780,24 @@
   }
   .mw-chat--modal .mw-chat-header { border-radius: 0; }
 
-  /* モバイル: クイック質問をコンパクトな横スクロールに変更 */
+  /* モバイル: クイックプロンプト調整 */
   .mw-chat-quick {
     padding: 8px 12px;
-    flex-direction: row;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
     gap: 6px;
-    scrollbar-width: none;         /* Firefox */
   }
-  .mw-chat-quick::-webkit-scrollbar {
-    display: none;                  /* Chrome/Safari */
+  .mw-chat-quick__mode-tabs {
+    gap: 2px;
   }
-  .mw-chat-quick__group {
-    flex-direction: row;
-    gap: 6px;
-    flex-shrink: 0;
+  .mw-chat-quick__mode-tab {
+    font-size: 11px;
+    padding: 4px 8px;
   }
-  .mw-chat-quick__label {
-    display: none;                  /* カテゴリラベルを非表示 */
+  .mw-chat-quick__cat-tab {
+    font-size: 10.5px;
+    padding: 5px 2px 6px;
   }
   .mw-chat-quick__chips {
-    flex-wrap: nowrap;
-    gap: 6px;
+    gap: 5px;
   }
   .mw-chat-quick__chip {
     padding: 5px 10px;

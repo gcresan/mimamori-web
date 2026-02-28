@@ -905,6 +905,96 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   opacity: 0.95;
 }
 
+/* ========== Congratulations Banner ========== */
+.info-congrats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  animation: congrats-fade-in 0.5s ease-out;
+}
+@keyframes congrats-fade-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.info-congrats-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.info-congrats-body {
+  flex: 1;
+  min-width: 0;
+}
+.info-congrats-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #166534;
+  margin-bottom: 2px;
+}
+.info-congrats-text {
+  font-size: 13px;
+  color: #15803d;
+  line-height: 1.5;
+}
+
+/* ========== 「AIに聞く」ボタン ========== */
+.ask-ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  background: rgba(74, 109, 124, 0.08);
+  color: #4a6d7c;
+  border: 1px solid rgba(74, 109, 124, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ask-ai-btn:hover {
+  background: rgba(74, 109, 124, 0.16);
+  color: #3a5a6a;
+}
+/* 小サイズ（ハイライトカード内） */
+.ask-ai-btn--sm {
+  padding: 4px 10px;
+  font-size: 11px;
+  margin-top: 8px;
+}
+/* section-title 内の配置 */
+.section-title .ask-ai-btn {
+  margin-left: auto;
+  vertical-align: middle;
+}
+
+@media (max-width: 768px) {
+  .info-congrats {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .info-congrats-icon {
+    font-size: 24px;
+  }
+  .info-congrats-title {
+    font-size: 13px;
+  }
+  .info-congrats-text {
+    font-size: 12px;
+  }
+  .ask-ai-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+}
+
 /* ========== KPI Trend Inline Chart ========== */
 .kpi-trend-inline {
   margin-top: 24px;
@@ -1878,6 +1968,9 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   padding-bottom: 12px;
   letter-spacing: 0.02em;
   border-bottom: 2px solid var(--mw-border-light);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .section-content {
   font-size: 15px;

@@ -18,6 +18,7 @@
      ============================ */
   var STORAGE_KEY_HISTORY  = 'mw_chat_history';
   var STORAGE_KEY_VIEW     = 'mw_chat_viewMode';
+  var STORAGE_KEY_PROMPT_MODE = 'mw_chat_promptMode';
   var MAX_PERSISTED_MESSAGES = 50;
 
   var state = {
@@ -35,6 +36,12 @@
      Config (from wp_localize_script)
      ============================ */
   var config = window.mwChatConfig || {};
+
+  /* ============================
+     Quick Prompt State
+     ============================ */
+  var promptMode = 'beginner';  // 'beginner' | 'standard'
+  var promptCat  = 'status';    // 'status' | 'action' | 'trouble'
 
   /* ============================
      DOM references (populated on init)
@@ -1188,6 +1195,87 @@
   }
 
   /* ============================
+     Quick Prompt — Tab Switching & Chip Rendering
+     ============================ */
+
+  /** localStorage からモードを復元 */
+  function restorePromptMode() {
+    try {
+      var saved = localStorage.getItem(STORAGE_KEY_PROMPT_MODE);
+      if (saved === 'beginner' || saved === 'standard') return saved;
+    } catch (e) {}
+    return config.initialPromptMode || 'beginner';
+  }
+
+  /** モードタブの is-active を更新 */
+  function updateModeTabs() {
+    if (!els.quickArea) return;
+    var tabs = els.quickArea.querySelectorAll('.mw-chat-quick__mode-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].getAttribute('data-mode') === promptMode) {
+        tabs[i].classList.add('is-active');
+      } else {
+        tabs[i].classList.remove('is-active');
+      }
+    }
+  }
+
+  /** カテゴリタブの is-active を更新 */
+  function updateCatTabs() {
+    if (!els.quickArea) return;
+    var tabs = els.quickArea.querySelectorAll('.mw-chat-quick__cat-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      if (tabs[i].getAttribute('data-cat') === promptCat) {
+        tabs[i].classList.add('is-active');
+      } else {
+        tabs[i].classList.remove('is-active');
+      }
+    }
+  }
+
+  /** チップを動的に描画 */
+  function renderQuickChips() {
+    var container = document.getElementById('mwChatQuickChips');
+    if (!container) return;
+
+    var prompts = config.quickPrompts;
+    if (!prompts || !prompts[promptMode] || !prompts[promptMode][promptCat]) {
+      container.innerHTML = '';
+      return;
+    }
+
+    var items = prompts[promptMode][promptCat];
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      html += '<button type="button" class="mw-chat-quick__chip" data-question="'
+            + escapeAttr(items[i]) + '">'
+            + escapeHtmlStr(items[i]) + '</button>';
+    }
+    container.innerHTML = html;
+  }
+
+  /** HTML属性エスケープ */
+  function escapeAttr(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** HTMLテキストエスケープ */
+  function escapeHtmlStr(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** クイックプロンプト初期化 */
+  function initQuickPrompts() {
+    promptMode = restorePromptMode();
+    promptCat  = 'status';
+    updateModeTabs();
+    updateCatTabs();
+    renderQuickChips();
+  }
+
+  /* ============================
      Event Binding
      ============================ */
   function bindEvents() {
@@ -1220,13 +1308,41 @@
       switchViewMode('closed');
     });
 
-    // Quick question chips (event delegation) — 押下で即送信
+    // Quick prompt — モードタブ切替（event delegation）
     els.quickArea.addEventListener('click', function (e) {
+      // モードタブ
+      var modeTab = e.target.closest('.mw-chat-quick__mode-tab');
+      if (modeTab) {
+        var newMode = modeTab.getAttribute('data-mode');
+        if (newMode && newMode !== promptMode) {
+          promptMode = newMode;
+          updateModeTabs();
+          renderQuickChips();
+          try { localStorage.setItem(STORAGE_KEY_PROMPT_MODE, promptMode); } catch (ex) {}
+        }
+        return;
+      }
+
+      // カテゴリタブ
+      var catTab = e.target.closest('.mw-chat-quick__cat-tab');
+      if (catTab) {
+        var newCat = catTab.getAttribute('data-cat');
+        if (newCat && newCat !== promptCat) {
+          promptCat = newCat;
+          updateCatTabs();
+          renderQuickChips();
+        }
+        return;
+      }
+
+      // チップ — 入力欄にテキスト挿入（即送信ではなく挿入のみ）
       var chip = e.target.closest('.mw-chat-quick__chip');
       if (!chip) return;
       var q = chip.getAttribute('data-question');
-      if (q && !state.isLoading) {
-        sendMessage(q);
+      if (q && !state.isLoading && els.textarea) {
+        els.textarea.value = q;
+        autoResize(els.textarea);
+        els.textarea.focus();
       }
     });
 
@@ -1297,6 +1413,7 @@
 
     initVoice();
     bindEvents();
+    initQuickPrompts();
 
     // セッション復元: 前ページの会話履歴をDOMに再描画
     var hadHistory = restoreSession();
@@ -1311,6 +1428,20 @@
   /* ============================
      Expose public API
      ============================ */
+  /**
+   * チャットを開いて入力欄にプロンプトをセットする（送信はしない）
+   * 「AIに聞く」ボタンから呼ばれる。
+   * @param {string} text — 入力欄にセットするテキスト
+   */
+  function openWithPrompt(text) {
+    switchViewMode('normal');
+    if (els.textarea) {
+      els.textarea.value = text || '';
+      autoResize(els.textarea);
+      setTimeout(function () { els.textarea.focus(); }, 300);
+    }
+  }
+
   window.GCREV = window.GCREV || {};
   window.GCREV.chat = {
     switchViewMode:        switchViewMode,
@@ -1318,7 +1449,8 @@
     appendUserMessage:     appendUserMessage,
     appendAssistantMessage: appendAssistantMessage,
     setLoading:            setLoading,
-    setError:              setError
+    setError:              setError,
+    openWithPrompt:        openWithPrompt
   };
 
   document.addEventListener('DOMContentLoaded', init);

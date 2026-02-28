@@ -56,39 +56,23 @@ if ( ! defined( 'ABSPATH' ) ) {
       </div>
     </div>
 
-    <!-- Quick Questions — grouped by usage order (B) -->
+    <!-- Quick Questions — 2モード×3カテゴリ（JSで動的描画） -->
     <div class="mw-chat-quick">
-      <div class="mw-chat-quick__group">
-        <div class="mw-chat-quick__label"><?php echo esc_html( "\xF0\x9F\x9F\xA2 まずはここから" ); ?></div>
-        <div class="mw-chat-quick__chips">
-          <button type="button" class="mw-chat-quick__chip mw-chat-quick__chip--primary"
-                  data-question="<?php echo esc_attr( '今月やることを3つ教えて' ); ?>">
-            <?php echo esc_html( '今月やることを3つ' ); ?>
-          </button>
-        </div>
+      <div class="mw-chat-quick__mode-tabs">
+        <button type="button" class="mw-chat-quick__mode-tab"
+                data-mode="beginner"><?php echo esc_html( '初心者向け' ); ?></button>
+        <button type="button" class="mw-chat-quick__mode-tab"
+                data-mode="standard"><?php echo esc_html( '通常' ); ?></button>
       </div>
-      <div class="mw-chat-quick__group">
-        <div class="mw-chat-quick__label"><?php echo esc_html( "\xF0\x9F\x93\x8A 状況を知りたいとき" ); ?></div>
-        <div class="mw-chat-quick__chips">
-          <button type="button" class="mw-chat-quick__chip"
-                  data-question="<?php echo esc_attr( 'この数字は良いですか？' ); ?>">
-            <?php echo esc_html( 'この数字は良いですか？' ); ?>
-          </button>
-          <button type="button" class="mw-chat-quick__chip"
-                  data-question="<?php echo esc_attr( '先月と比べてどうですか？' ); ?>">
-            <?php echo esc_html( '先月と比べてどう？' ); ?>
-          </button>
-        </div>
+      <div class="mw-chat-quick__cat-tabs">
+        <button type="button" class="mw-chat-quick__cat-tab"
+                data-cat="status"><?php echo esc_html( '今どうなってる？' ); ?></button>
+        <button type="button" class="mw-chat-quick__cat-tab"
+                data-cat="action"><?php echo esc_html( '次に何する？' ); ?></button>
+        <button type="button" class="mw-chat-quick__cat-tab"
+                data-cat="trouble"><?php echo esc_html( 'うまくいかない…' ); ?></button>
       </div>
-      <div class="mw-chat-quick__group">
-        <div class="mw-chat-quick__label"><?php echo esc_html( "\xF0\x9F\x9B\xA0 改善したいとき" ); ?></div>
-        <div class="mw-chat-quick__chips">
-          <button type="button" class="mw-chat-quick__chip"
-                  data-question="<?php echo esc_attr( 'このページの改善点を教えて' ); ?>">
-            <?php echo esc_html( 'このページの改善点' ); ?>
-          </button>
-        </div>
-      </div>
+      <div class="mw-chat-quick__chips" id="mwChatQuickChips"></div>
     </div>
 
     <!-- Messages -->
