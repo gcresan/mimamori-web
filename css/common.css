@@ -145,7 +145,7 @@
   align-items: center;
   gap: 12px;
   padding: 11px 20px;
-  color: var(--mw-client-accent, #333333);
+  color: #333333;
   text-decoration: none;
   font-size: 15px;
   transition: all 0.2s ease;
@@ -153,11 +153,11 @@
 }
 .sidebar-nav .nav-link:hover {
   background: #F2F1EC;
-  color: var(--mw-client-accent, #333333);
+  color: #333333;
 }
 .sidebar-nav .nav-link.active {
   background: rgba(47, 58, 74, 0.12);
-  color: var(--mw-client-accent, #333333);
+  color: #333333;
   font-weight: 600;
 }
 .sidebar-nav .nav-link.active::before {
