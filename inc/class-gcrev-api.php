@@ -6078,8 +6078,8 @@ PROMPT;
                 'total_events' => $result['total_events'],
             ], 200);
 
-        } catch (\Exception $e) {
-            error_log('[GCREV] rest_get_cv_review error: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            error_log('[GCREV] rest_get_cv_review error: ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
             return new WP_REST_Response([
                 'success' => false,
                 'message' => 'GA4データの取得に失敗しました: ' . $e->getMessage(),

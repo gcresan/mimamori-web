@@ -238,9 +238,18 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         updateBulkState();
 
         try {
-            var res = await fetch(API_BASE + 'cv-review?month=' + encodeURIComponent(currentMonth), {
+            var fetchUrl = API_BASE + 'cv-review?month=' + encodeURIComponent(currentMonth);
+            console.log('[CV Review] Fetching:', fetchUrl);
+            var res = await fetch(fetchUrl, {
                 headers: { 'X-WP-Nonce': NONCE }
             });
+            if (!res.ok) {
+                var errText = await res.text();
+                console.error('[CV Review] HTTP error', res.status, errText.substring(0, 500));
+                showMessage('APIエラー (HTTP ' + res.status + '): レスポンスを確認してください', 'error');
+                elLoading.style.display = 'none';
+                return;
+            }
             var data = await res.json();
 
             elLoading.style.display = 'none';

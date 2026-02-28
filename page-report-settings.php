@@ -241,17 +241,6 @@ get_header();
         </div>
     </div>
 
-    <!-- CV設定ページへの案内 -->
-    <div style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:16px 20px; margin-bottom:20px;">
-        <p style="margin:0; color:#0369a1; font-size:14px;">
-            📊 CVイベントの設定・手動CV入力は
-            <a href="<?php echo esc_url(home_url('/analysis/cv-settings/')); ?>" style="font-weight:600;">CV設定ページ</a>
-            に移動しました。CVログの精査は
-            <a href="<?php echo esc_url(home_url('/analysis/cv-review/')); ?>" style="font-weight:600;">CVログ精査ページ</a>
-            をご利用ください。
-        </p>
-    </div>
-
 </div>
 
 <script>
