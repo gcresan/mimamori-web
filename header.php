@@ -127,6 +127,16 @@
                         <span>お問い合わせの数</span>
                         </a>
                      </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
+                        <span>CVログ精査</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/cv-settings/'); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
+                        <span>CV設定</span>
+                        </a>
+                     </li>
                   </ul>
                </li>
 

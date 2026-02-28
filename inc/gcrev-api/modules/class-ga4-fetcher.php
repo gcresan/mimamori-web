@@ -1758,4 +1758,136 @@ class Gcrev_GA4_Fetcher {
             ],
         ];
     }
+
+    /**
+     * CVイベントの詳細グループデータを取得
+     *
+     * GA4 Data API はイベント単位の生データを返せないため、
+     * dateHourMinute + pagePath + sessionSourceMedium + deviceCategory + country
+     * の組み合わせごとに eventCount を集計したデータを返す。
+     *
+     * @param string   $property_id GA4プロパティID
+     * @param string   $start       開始日 (YYYY-MM-DD)
+     * @param string   $end         終了日 (YYYY-MM-DD)
+     * @param string[] $event_names フィルタするイベント名の配列
+     * @return array   ['rows' => [...], 'total_events' => int]
+     */
+    public function fetch_cv_event_detail(
+        string $property_id,
+        string $start,
+        string $end,
+        array  $event_names
+    ): array {
+        $this->prepare_ga4_call();
+
+        $client = new BetaAnalyticsDataClient();
+
+        $dimensions = [
+            new Dimension(['name' => 'dateHourMinute']),
+            new Dimension(['name' => 'eventName']),
+            new Dimension(['name' => 'pagePath']),
+            new Dimension(['name' => 'sessionSourceMedium']),
+            new Dimension(['name' => 'deviceCategory']),
+            new Dimension(['name' => 'country']),
+        ];
+
+        $metrics = [
+            new Metric(['name' => 'eventCount']),
+        ];
+
+        // eventNameフィルタ構築
+        $filter_expression = null;
+        if ( ! empty( $event_names ) ) {
+            if ( count( $event_names ) === 1 ) {
+                $filter_expression = new FilterExpression([
+                    'filter' => new Filter([
+                        'field_name'    => 'eventName',
+                        'string_filter' => new StringFilter([
+                            'value'      => $event_names[0],
+                            'match_type' => StringFilter\MatchType::EXACT,
+                        ]),
+                    ]),
+                ]);
+            } else {
+                $filters = [];
+                foreach ( $event_names as $name ) {
+                    $filters[] = new FilterExpression([
+                        'filter' => new Filter([
+                            'field_name'    => 'eventName',
+                            'string_filter' => new StringFilter([
+                                'value'      => $name,
+                                'match_type' => StringFilter\MatchType::EXACT,
+                            ]),
+                        ]),
+                    ]);
+                }
+                $filter_expression = new FilterExpression([
+                    'or_group' => new FilterExpressionList([
+                        'expressions' => $filters,
+                    ]),
+                ]);
+            }
+        }
+
+        $request_params = [
+            'property'    => 'properties/' . $property_id,
+            'date_ranges' => [ new DateRange([ 'start_date' => $start, 'end_date' => $end ]) ],
+            'dimensions'  => $dimensions,
+            'metrics'     => $metrics,
+            'order_bys'   => [
+                new OrderBy([
+                    'dimension' => new OrderBy\DimensionOrderBy([
+                        'dimension_name' => 'dateHourMinute',
+                    ]),
+                    'desc' => true,
+                ]),
+            ],
+            'limit' => 10000,
+        ];
+
+        if ( $filter_expression !== null ) {
+            $request_params['dimension_filter'] = $filter_expression;
+        }
+
+        $request  = new RunReportRequest( $request_params );
+        $response = $client->runReport( $request );
+
+        $rows         = [];
+        $total_events = 0;
+
+        foreach ( $response->getRows() as $row ) {
+            $dim_vals = $row->getDimensionValues();
+            $met_vals = $row->getMetricValues();
+
+            $dateHourMinute = $dim_vals[0]->getValue();
+            $eventName      = $dim_vals[1]->getValue();
+            $pagePath       = $dim_vals[2]->getValue();
+            $sourceMedium   = $dim_vals[3]->getValue();
+            $deviceCategory = $dim_vals[4]->getValue();
+            $country        = $dim_vals[5]->getValue();
+            $eventCount     = (int) ( $met_vals[0]->getValue() ?? 0 );
+
+            // ハッシュ生成: GA4行を一意に識別
+            $hash = md5( $eventName . $dateHourMinute . $pagePath . $sourceMedium . $deviceCategory . $country );
+
+            $rows[] = [
+                'row_hash'         => $hash,
+                'event_name'       => $eventName,
+                'date_hour_minute' => $dateHourMinute,
+                'page_path'        => $pagePath,
+                'source_medium'    => $sourceMedium,
+                'device_category'  => $deviceCategory,
+                'country'          => $country,
+                'event_count'      => $eventCount,
+            ];
+
+            $total_events += $eventCount;
+        }
+
+        return [
+            'rows'         => $rows,
+            'total_events' => $total_events,
+        ];
+    }
+
 }

@@ -3917,6 +3917,7 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
 add_action('after_setup_theme', function () {
     gcrev_actual_cv_create_table();
     gcrev_cv_routes_create_table();
+    gcrev_cv_review_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -3973,6 +3974,41 @@ function gcrev_actual_cv_create_table(): void {
         UNIQUE KEY user_date_route (user_id, cv_date, route),
         KEY user_date (user_id, cv_date),
         KEY route (route)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta($sql);
+}
+
+// ----------------------------
+// CVログ精査テーブル作成
+// ----------------------------
+function gcrev_cv_review_create_table(): void {
+    global $wpdb;
+
+    $table = $wpdb->prefix . 'gcrev_cv_review';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        year_month VARCHAR(7) NOT NULL,
+        row_hash VARCHAR(32) NOT NULL,
+        event_name VARCHAR(100) NOT NULL DEFAULT '',
+        date_hour_minute VARCHAR(12) NOT NULL DEFAULT '',
+        page_path VARCHAR(500) NOT NULL DEFAULT '',
+        source_medium VARCHAR(200) NOT NULL DEFAULT '',
+        device_category VARCHAR(50) NOT NULL DEFAULT '',
+        country VARCHAR(100) NOT NULL DEFAULT '',
+        event_count INT NOT NULL DEFAULT 1,
+        status TINYINT(1) NOT NULL DEFAULT 0,
+        memo VARCHAR(500) NULL,
+        updated_by BIGINT(20) UNSIGNED NULL,
+        updated_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY user_month_hash (user_id, year_month, row_hash),
+        KEY user_month (user_id, year_month),
+        KEY status (status)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

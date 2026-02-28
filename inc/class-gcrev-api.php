@@ -456,6 +456,31 @@ class Gcrev_Insight_API {
                 ]
             ]
         ]);
+
+        // ===== CVログ精査 REST API =====
+        register_rest_route('gcrev/v1', '/cv-review', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_cv_review' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+            'args'                => [
+                'month' => [
+                    'required'          => true,
+                    'validate_callback' => function($param) {
+                        return preg_match('/^\d{4}-\d{2}$/', $param);
+                    }
+                ]
+            ]
+        ]);
+        register_rest_route('gcrev/v1', '/cv-review/update', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_update_cv_review' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/cv-review/bulk-update', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_bulk_update_cv_review' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
     }
 
     // =========================================================
@@ -5983,6 +6008,280 @@ PROMPT;
         set_transient($cache_key, $result, DAY_IN_SECONDS);
 
         return $result;
+    }
+
+    // =========================================================
+    // CVログ精査
+    // =========================================================
+
+    /**
+     * GET /gcrev/v1/cv-review?month=YYYY-MM
+     * GA4 CVイベント詳細を取得し、DB保存済みステータスとマージ
+     */
+    public function rest_get_cv_review(WP_REST_Request $request): WP_REST_Response {
+        $user_id = get_current_user_id();
+        $month   = sanitize_text_field($request->get_param('month'));
+
+        // CVイベント名を取得
+        $routes = $this->get_enabled_cv_routes($user_id);
+        $event_names = array_map(fn($r) => $r['route_key'], $routes);
+
+        // 電話タップイベントも追加
+        $phone_event = get_user_meta($user_id, '_gcrev_phone_event_name', true);
+        if ($phone_event && !in_array($phone_event, $event_names, true)) {
+            $event_names[] = $phone_event;
+        }
+
+        if (empty($event_names)) {
+            return new WP_REST_Response([
+                'success' => true,
+                'rows'    => [],
+                'total_events' => 0,
+                'message' => 'CVイベントが設定されていません。CV設定ページから設定してください。',
+            ], 200);
+        }
+
+        // Transientキャッシュ（30分）
+        $cache_key = "gcrev_cvreview_{$user_id}_{$month}";
+        $cached = get_transient($cache_key);
+
+        if ($cached !== false && is_array($cached)) {
+            // キャッシュヒットでもDB statusは最新をマージ
+            $merged = $this->merge_cv_review_statuses($cached['rows'], $user_id, $month);
+            return new WP_REST_Response([
+                'success'      => true,
+                'rows'         => $merged,
+                'total_events' => $cached['total_events'],
+            ], 200);
+        }
+
+        try {
+            $config = $this->config->get_user_config($user_id);
+            $ga4_id = $config['ga4_id'];
+
+            // 月の開始日・終了日
+            $dt = new \DateTime($month . '-01');
+            $start = $dt->format('Y-m-d');
+            $end   = $dt->format('Y-m-t');
+
+            $result = $this->ga4->fetch_cv_event_detail($ga4_id, $start, $end, $event_names);
+
+            // キャッシュ保存（GA4生データ）
+            set_transient($cache_key, $result, 1800); // 30分
+
+            // DBステータスマージ
+            $merged = $this->merge_cv_review_statuses($result['rows'], $user_id, $month);
+
+            return new WP_REST_Response([
+                'success'      => true,
+                'rows'         => $merged,
+                'total_events' => $result['total_events'],
+            ], 200);
+
+        } catch (\Exception $e) {
+            error_log('[GCREV] rest_get_cv_review error: ' . $e->getMessage());
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'GA4データの取得に失敗しました: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /gcrev/v1/cv-review/update
+     * 1行のステータス・メモを更新（UPSERT）
+     */
+    public function rest_update_cv_review(WP_REST_Request $request): WP_REST_Response {
+        global $wpdb;
+        $params  = $request->get_json_params();
+        $user_id = get_current_user_id();
+
+        $month           = sanitize_text_field($params['month'] ?? '');
+        $row_hash        = sanitize_text_field($params['row_hash'] ?? '');
+        $status          = isset($params['status']) ? (int)$params['status'] : null;
+        $memo            = isset($params['memo']) ? sanitize_text_field($params['memo']) : null;
+        $event_name      = sanitize_text_field($params['event_name'] ?? '');
+        $date_hour_minute = sanitize_text_field($params['date_hour_minute'] ?? '');
+        $page_path       = sanitize_text_field($params['page_path'] ?? '');
+        $source_medium   = sanitize_text_field($params['source_medium'] ?? '');
+        $device_category = sanitize_text_field($params['device_category'] ?? '');
+        $country         = sanitize_text_field($params['country'] ?? '');
+        $event_count     = isset($params['event_count']) ? (int)$params['event_count'] : 1;
+
+        // バリデーション
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return new WP_REST_Response(['success' => false, 'message' => '月の形式が不正です'], 400);
+        }
+        if (!preg_match('/^[a-f0-9]{32}$/', $row_hash)) {
+            return new WP_REST_Response(['success' => false, 'message' => 'ハッシュが不正です'], 400);
+        }
+        if ($status !== null && !in_array($status, [0, 1, 2], true)) {
+            return new WP_REST_Response(['success' => false, 'message' => 'ステータスが不正です'], 400);
+        }
+
+        $table = $wpdb->prefix . 'gcrev_cv_review';
+        $now   = current_time('mysql');
+
+        // 既存行チェック
+        $existing_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table} WHERE user_id = %d AND year_month = %s AND row_hash = %s",
+            $user_id, $month, $row_hash
+        ));
+
+        if ($existing_id) {
+            // UPDATE
+            $update_data = ['updated_by' => $user_id, 'updated_at' => $now];
+            $update_format = ['%d', '%s'];
+
+            if ($status !== null) {
+                $update_data['status'] = $status;
+                $update_format[] = '%d';
+            }
+            if ($memo !== null) {
+                $update_data['memo'] = $memo;
+                $update_format[] = '%s';
+            }
+
+            $wpdb->update($table, $update_data, ['id' => (int)$existing_id], $update_format, ['%d']);
+        } else {
+            // INSERT
+            $wpdb->insert($table, [
+                'user_id'          => $user_id,
+                'year_month'       => $month,
+                'row_hash'         => $row_hash,
+                'event_name'       => $event_name,
+                'date_hour_minute' => $date_hour_minute,
+                'page_path'        => $page_path,
+                'source_medium'    => $source_medium,
+                'device_category'  => $device_category,
+                'country'          => $country,
+                'event_count'      => $event_count,
+                'status'           => $status ?? 0,
+                'memo'             => $memo ?? '',
+                'updated_by'       => $user_id,
+                'updated_at'       => $now,
+            ], ['%d','%s','%s','%s','%s','%s','%s','%s','%s','%d','%d','%s','%d','%s']);
+        }
+
+        return new WP_REST_Response(['success' => true], 200);
+    }
+
+    /**
+     * POST /gcrev/v1/cv-review/bulk-update
+     * 複数行の一括ステータス更新
+     */
+    public function rest_bulk_update_cv_review(WP_REST_Request $request): WP_REST_Response {
+        global $wpdb;
+        $params  = $request->get_json_params();
+        $user_id = get_current_user_id();
+
+        $month = sanitize_text_field($params['month'] ?? '');
+        $items = $params['items'] ?? [];
+
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return new WP_REST_Response(['success' => false, 'message' => '月の形式が不正です'], 400);
+        }
+        if (!is_array($items) || empty($items)) {
+            return new WP_REST_Response(['success' => false, 'message' => '更新データがありません'], 400);
+        }
+
+        $table = $wpdb->prefix . 'gcrev_cv_review';
+        $now   = current_time('mysql');
+        $updated = 0;
+
+        foreach ($items as $item) {
+            $row_hash = sanitize_text_field($item['row_hash'] ?? '');
+            $status   = isset($item['status']) ? (int)$item['status'] : 0;
+
+            if (!preg_match('/^[a-f0-9]{32}$/', $row_hash)) continue;
+            if (!in_array($status, [0, 1, 2], true)) continue;
+
+            // 既存行チェック
+            $existing_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$table} WHERE user_id = %d AND year_month = %s AND row_hash = %s",
+                $user_id, $month, $row_hash
+            ));
+
+            if ($existing_id) {
+                $wpdb->update($table,
+                    ['status' => $status, 'updated_by' => $user_id, 'updated_at' => $now],
+                    ['id' => (int)$existing_id],
+                    ['%d', '%d', '%s'],
+                    ['%d']
+                );
+            } else {
+                // ディメンション値を含める
+                $event_name      = sanitize_text_field($item['event_name'] ?? '');
+                $date_hour_minute = sanitize_text_field($item['date_hour_minute'] ?? '');
+                $page_path       = sanitize_text_field($item['page_path'] ?? '');
+                $source_medium   = sanitize_text_field($item['source_medium'] ?? '');
+                $device_category = sanitize_text_field($item['device_category'] ?? '');
+                $country         = sanitize_text_field($item['country'] ?? '');
+                $event_count     = isset($item['event_count']) ? (int)$item['event_count'] : 1;
+
+                $wpdb->insert($table, [
+                    'user_id'          => $user_id,
+                    'year_month'       => $month,
+                    'row_hash'         => $row_hash,
+                    'event_name'       => $event_name,
+                    'date_hour_minute' => $date_hour_minute,
+                    'page_path'        => $page_path,
+                    'source_medium'    => $source_medium,
+                    'device_category'  => $device_category,
+                    'country'          => $country,
+                    'event_count'      => $event_count,
+                    'status'           => $status,
+                    'memo'             => '',
+                    'updated_by'       => $user_id,
+                    'updated_at'       => $now,
+                ], ['%d','%s','%s','%s','%s','%s','%s','%s','%s','%d','%d','%s','%d','%s']);
+            }
+            $updated++;
+        }
+
+        return new WP_REST_Response(['success' => true, 'updated' => $updated], 200);
+    }
+
+    /**
+     * GA4行データにDB保存済みのstatus/memoをマージ
+     */
+    private function merge_cv_review_statuses(array $rows, int $user_id, string $month): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_cv_review';
+
+        // テーブル存在チェック
+        if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+            // テーブル未作成: status=0, memo='' で返す
+            return array_map(function($row) {
+                $row['status'] = 0;
+                $row['memo']   = '';
+                return $row;
+            }, $rows);
+        }
+
+        // このユーザー・月のレビュー済みデータを全取得
+        $saved = $wpdb->get_results($wpdb->prepare(
+            "SELECT row_hash, status, memo FROM {$table} WHERE user_id = %d AND year_month = %s",
+            $user_id, $month
+        ), ARRAY_A);
+
+        $saved_map = [];
+        foreach ($saved as $s) {
+            $saved_map[$s['row_hash']] = $s;
+        }
+
+        // マージ
+        return array_map(function($row) use ($saved_map) {
+            $hash = $row['row_hash'];
+            if (isset($saved_map[$hash])) {
+                $row['status'] = (int)$saved_map[$hash]['status'];
+                $row['memo']   = $saved_map[$hash]['memo'] ?? '';
+            } else {
+                $row['status'] = 0;
+                $row['memo']   = '';
+            }
+            return $row;
+        }, $rows);
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
