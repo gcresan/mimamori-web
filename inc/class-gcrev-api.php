@@ -4881,7 +4881,7 @@ PROMPT;
 
         // この月にレビュー済み（status!=0）の行が1件でもあるか
         $review_count = (int)$wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND year_month = %s AND status != 0",
+            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND `year_month` = %s AND status != 0",
             $user_id, $year_month
         ));
 
@@ -4891,7 +4891,7 @@ PROMPT;
 
         // status=1（有効CV）の行を取得
         $valid_rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT date_hour_minute FROM {$table} WHERE user_id = %d AND year_month = %s AND status = 1",
+            "SELECT date_hour_minute FROM {$table} WHERE user_id = %d AND `year_month` = %s AND status = 1",
             $user_id, $year_month
         ), ARRAY_A);
 
@@ -6210,7 +6210,7 @@ PROMPT;
 
         // 既存行チェック
         $existing_id = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$table} WHERE user_id = %d AND year_month = %s AND row_hash = %s",
+            "SELECT id FROM {$table} WHERE user_id = %d AND `year_month` = %s AND row_hash = %s",
             $user_id, $month, $row_hash
         ));
 
@@ -6230,7 +6230,7 @@ PROMPT;
 
             $wpdb->update($table, $update_data, ['id' => (int)$existing_id], $update_format, ['%d']);
         } else {
-            // INSERT
+            // INSERT — $wpdb->insert() は自動でバッククォート付与
             $wpdb->insert($table, [
                 'user_id'          => $user_id,
                 'year_month'       => $month,
@@ -6296,7 +6296,7 @@ PROMPT;
 
             // 既存行チェック
             $existing_id = $wpdb->get_var($wpdb->prepare(
-                "SELECT id FROM {$table} WHERE user_id = %d AND year_month = %s AND row_hash = %s",
+                "SELECT id FROM {$table} WHERE user_id = %d AND `year_month` = %s AND row_hash = %s",
                 $user_id, $month, $row_hash
             ));
 
@@ -6391,7 +6391,7 @@ PROMPT;
         $sql_body = "(
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
             user_id BIGINT(20) UNSIGNED NOT NULL,
-            year_month VARCHAR(7) NOT NULL,
+            `year_month` VARCHAR(7) NOT NULL,
             row_hash VARCHAR(32) NOT NULL,
             event_name VARCHAR(100) NOT NULL DEFAULT '',
             date_hour_minute VARCHAR(12) NOT NULL DEFAULT '',
@@ -6405,8 +6405,8 @@ PROMPT;
             updated_by BIGINT(20) UNSIGNED NULL,
             updated_at DATETIME NOT NULL,
             PRIMARY KEY  (id),
-            UNIQUE KEY user_month_hash (user_id, year_month, row_hash),
-            KEY user_month (user_id, year_month),
+            UNIQUE KEY user_month_hash (user_id, `year_month`, row_hash),
+            KEY user_month (user_id, `year_month`),
             KEY status (status)
         ) {$charset_collate};";
 
@@ -6510,7 +6510,7 @@ PROMPT;
 
         // このユーザー・月のレビュー済みデータを全取得
         $saved = $wpdb->get_results($wpdb->prepare(
-            "SELECT row_hash, status, memo FROM {$table} WHERE user_id = %d AND year_month = %s",
+            "SELECT row_hash, status, memo FROM {$table} WHERE user_id = %d AND `year_month` = %s",
             $user_id, $month
         ), ARRAY_A);
 

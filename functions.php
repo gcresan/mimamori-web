@@ -3992,7 +3992,7 @@ function gcrev_cv_review_create_table(): void {
     $sql = "CREATE TABLE {$table} (
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        year_month VARCHAR(7) NOT NULL,
+        `year_month` VARCHAR(7) NOT NULL,
         row_hash VARCHAR(32) NOT NULL,
         event_name VARCHAR(100) NOT NULL DEFAULT '',
         date_hour_minute VARCHAR(12) NOT NULL DEFAULT '',
@@ -4006,8 +4006,8 @@ function gcrev_cv_review_create_table(): void {
         updated_by BIGINT(20) UNSIGNED NULL,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
-        UNIQUE KEY user_month_hash (user_id, year_month, row_hash),
-        KEY user_month (user_id, year_month),
+        UNIQUE KEY user_month_hash (user_id, `year_month`, row_hash),
+        KEY user_month (user_id, `year_month`),
         KEY status (status)
     ) {$charset_collate};";
 
