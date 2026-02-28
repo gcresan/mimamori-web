@@ -487,6 +487,11 @@
       }
     };
 
+    // セクションコンテキスト（「AIに聞く」ボタンから抽出）
+    if (opts.sectionContext) {
+      body.sectionContext = opts.sectionContext;
+    }
+
     // API call
     fetch(config.apiUrl, {
       method: 'POST',
@@ -1432,8 +1437,9 @@
    * チャットを開いてメッセージを自動送信する。
    * 「AIに聞く」ボタンから呼ばれる。
    * @param {string} text — 送信するメッセージテキスト
+   * @param {Object} [sectionContext] — セクションコンテキスト（「AIに聞く」ボタン周辺のテキスト情報）
    */
-  function openWithPrompt(text) {
+  function openWithPrompt(text, sectionContext) {
     // 決済未完了なら payment-status へリダイレクト（FABと同じチェック）
     if (!config.paymentActive && config.paymentStatusUrl) {
       window.location.href = config.paymentStatusUrl;
@@ -1447,9 +1453,71 @@
 
     // チャットのopen transitionが完了してからメッセージを送信
     // switchViewMode の CSS transition が 300ms なのでそれ以降に実行
+    var sendOpts = sectionContext ? { sectionContext: sectionContext } : undefined;
     setTimeout(function () {
-      sendMessage(text);
+      sendMessage(text, sendOpts);
     }, 350);
+  }
+
+  /* ============================
+     Section Context Extraction for [data-ai-ask] buttons
+     ============================ */
+
+  /**
+   * 「AIに聞く」ボタンの親セクションからコンテキストテキストを抽出する。
+   * data-ai-section 属性を持つ最寄りの祖先要素を探し、
+   * その中のタイトル・本文テキストを構造化オブジェクトとして返す。
+   *
+   * @param {HTMLElement} btn — クリックされた [data-ai-ask] ボタン
+   * @returns {Object|null} { sectionType, sectionTitle, sectionBody, pageType }
+   */
+  function extractSectionContext(btn) {
+    var container = btn.closest('[data-ai-section]');
+    if (!container) return null;
+
+    var sectionType = container.getAttribute('data-ai-section') || '';
+
+    // セクションタイトル: 最初の見出し要素のテキスト
+    var headingEl = container.querySelector(
+      '.section-title, .info-monthly-title, .info-monthly-highlight-label'
+    );
+    var sectionTitle = headingEl ? headingEl.textContent.trim() : '';
+
+    // セクション本文: コンテンツコンテナのテキスト
+    var bodyEl = container.querySelector(
+      '.section-content, .info-monthly-summary, .info-monthly-highlight-value'
+    );
+    var sectionBody = bodyEl ? bodyEl.textContent.trim() : '';
+
+    // ハイライト詳細アコーディオンの中身も含める（fact/causes/actions）
+    var detailEl = container.querySelector('.highlight-detail-body');
+    if (detailEl) {
+      var detailText = detailEl.textContent.trim();
+      if (detailText) {
+        sectionBody += '\n' + detailText;
+      }
+    }
+
+    // 長すぎるテキストは切り詰め（APIペイロード肥大化防止）
+    if (sectionBody.length > 2000) {
+      sectionBody = sectionBody.substring(0, 2000) + '…';
+    }
+
+    // ページ種別判定（URLベース）
+    var path = window.location.pathname;
+    var pageType = 'unknown';
+    if (path.indexOf('/dashboard') !== -1) {
+      pageType = 'dashboard';
+    } else if (path.indexOf('/report') !== -1) {
+      pageType = 'report';
+    }
+
+    return {
+      sectionType:  sectionType,
+      sectionTitle: sectionTitle,
+      sectionBody:  sectionBody,
+      pageType:     pageType
+    };
   }
 
   /* ============================
@@ -1461,9 +1529,21 @@
       if (!btn) return;
 
       e.preventDefault();
-      var prompt = btn.getAttribute('data-ai-prompt') || '';
-      if (prompt) {
-        openWithPrompt(prompt);
+
+      // セクションコンテキストの抽出を試みる
+      var ctx = extractSectionContext(btn);
+
+      if (ctx && ctx.sectionBody) {
+        // コンテキスト付き: data-ai-instruction を指示として使用
+        var instruction = btn.getAttribute('data-ai-instruction')
+          || 'このレポート内容をもとに、なぜこうなっているのか、背景に考えられる要因、今すぐ取れる具体的な改善アクションを教えてください';
+        openWithPrompt(instruction, ctx);
+      } else {
+        // フォールバック: 従来の data-ai-prompt（data-ai-section がない旧マークアップ対応）
+        var prompt = btn.getAttribute('data-ai-prompt') || '';
+        if (prompt) {
+          openWithPrompt(prompt);
+        }
       }
     });
   }

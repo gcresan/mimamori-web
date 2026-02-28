@@ -649,14 +649,14 @@ if ($infographic) {
 
   <!-- 結論サマリー + ハイライト（インフォ内に統合） -->
   <?php if (!empty($monthly_report)): ?>
-    <div class="info-monthly">
+    <div class="info-monthly" data-ai-section="summary">
       <div class="info-monthly-head">
         <div class="info-monthly-title">
           <span class="info-monthly-pin">📌</span>
           <span>結論サマリー</span>
         </div>
         <button type="button" class="ask-ai-btn" data-ai-ask
-          data-ai-prompt="今月の月次レポート結果を見て、いちばん重要な気づきと次にやることを3つ教えて">
+          data-ai-instruction="今月の月次レポート結果を見て、いちばん重要な気づきと次にやることを3つ教えて">
           <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
         </button>
       </div>
@@ -677,16 +677,22 @@ $next_action = !empty($infographic['action'])
     : ($highlights['opportunity'] ?? '改善施策を検討');
 
 $highlight_items = [
-    ['label' => '📈 今月うまくいっていること',  'value' => $highlights['most_important'] ?? '新規ユーザー獲得', 'key' => 'most_important', 'ai_prompt' => 'この「良かった点」を踏まえて、次に伸ばすべきポイントは？'],
-    ['label' => '⚠️ 今いちばん気をつけたい点',  'value' => $highlights['top_issue'] ?? 'コンバージョン改善',    'key' => 'top_issue',       'ai_prompt' => 'この「課題」の原因と、最短で効く改善を3つ提案して'],
-    ['label' => '🎯 次にやるとよいこと',         'value' => $next_action,                                       'key' => 'opportunity',     'ai_prompt' => 'この「次にやること」を具体的な手順に分解して教えて'],
+    ['label' => '📈 今月うまくいっていること',  'value' => $highlights['most_important'] ?? '新規ユーザー獲得', 'key' => 'most_important', 'ai_instruction' => 'この「良かった点」を踏まえて、次に伸ばすべきポイントは？'],
+    ['label' => '⚠️ 今いちばん気をつけたい点',  'value' => $highlights['top_issue'] ?? 'コンバージョン改善',    'key' => 'top_issue',       'ai_instruction' => 'この「課題」の原因と、最短で効く改善を3つ提案して'],
+    ['label' => '🎯 次にやるとよいこと',         'value' => $next_action,                                       'key' => 'opportunity',     'ai_instruction' => 'この「次にやること」を具体的な手順に分解して教えて'],
+];
+
+$section_type_map = [
+    'most_important' => 'highlight_good',
+    'top_issue'      => 'highlight_issue',
+    'opportunity'    => 'highlight_action',
 ];
 
 foreach ($highlight_items as $highlight):
     $detail    = $highlight_details[$highlight['key']] ?? null;
     $detail_id = 'highlight-detail-' . esc_attr($highlight['key']);
 ?>
-    <div class="info-monthly-highlight-item">
+    <div class="info-monthly-highlight-item" data-ai-section="<?php echo esc_attr( $section_type_map[ $highlight['key'] ] ?? 'highlight' ); ?>">
         <div class="info-monthly-highlight-label">
             <?php echo esc_html($highlight['label']); ?>
         </div>
@@ -694,7 +700,7 @@ foreach ($highlight_items as $highlight):
             <?php echo esc_html($highlight['value']); ?>
         </div>
         <button type="button" class="ask-ai-btn ask-ai-btn--sm" data-ai-ask
-          data-ai-prompt="<?php echo esc_attr($highlight['ai_prompt']); ?>">
+          data-ai-instruction="<?php echo esc_attr($highlight['ai_instruction']); ?>">
           <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
         </button>
 

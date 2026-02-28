@@ -2260,7 +2260,8 @@ function mimamori_build_context_blocks(
     array  $intent_result,
     array  $sources,
     array  $current_page,
-    int    $user_id
+    int    $user_id,
+    ?array $section_context = null
 ): string {
     $blocks   = [];
     $ref_list = [];
@@ -2299,6 +2300,31 @@ function mimamori_build_context_blocks(
     ];
     if ( isset( $intent_hints[ $intent ] ) ) {
         $blocks[] = '【質問の意図】' . $intent_hints[ $intent ];
+    }
+
+    // --- Block 2.5: セクションコンテキスト（「AIに聞く」ボタンから渡されたレポートセクション内容） ---
+    if ( $section_context !== null && $section_context['sectionBody'] !== '' ) {
+        $section_label_map = [
+            'summary'          => '結論サマリー',
+            'highlight_good'   => '今月うまくいっていること（ハイライト）',
+            'highlight_issue'  => '今いちばん気をつけたい点（ハイライト）',
+            'highlight_action' => '次にやるとよいこと（ハイライト）',
+            'report_summary'   => '総評',
+            'report_good'      => '良かった点（成果）',
+            'report_issue'     => '改善が必要な点（課題）',
+        ];
+        $section_label = $section_label_map[ $section_context['sectionType'] ]
+                       ?? ( $section_context['sectionTitle'] ?: 'レポートセクション' );
+
+        $section_block  = "【ユーザーが確認中のレポートセクション】\n";
+        $section_block .= "セクション名: {$section_label}\n";
+        if ( $section_context['sectionTitle'] !== '' && $section_context['sectionTitle'] !== $section_label ) {
+            $section_block .= "見出し: {$section_context['sectionTitle']}\n";
+        }
+        $section_block .= "表示内容:\n{$section_context['sectionBody']}";
+
+        $blocks[]   = $section_block;
+        $ref_list[] = 'ユーザーが閲覧中のレポートセクション内容';
     }
 
     // --- Block 3: ページ文脈情報 ---
@@ -3733,13 +3759,34 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     // コンテキスト構築
     $input = mimamori_build_chat_context( $data );
 
+    // セクションコンテキスト（「AIに聞く」ボタンからのセクション抽出テキスト）
+    $section_context = null;
+    if ( isset( $data['sectionContext'] ) && is_array( $data['sectionContext'] ) ) {
+        $section_context = [
+            'sectionType'  => sanitize_text_field( $data['sectionContext']['sectionType'] ?? '' ),
+            'sectionTitle' => sanitize_text_field( $data['sectionContext']['sectionTitle'] ?? '' ),
+            'sectionBody'  => sanitize_textarea_field( $data['sectionContext']['sectionBody'] ?? '' ),
+            'pageType'     => sanitize_text_field( $data['sectionContext']['pageType'] ?? '' ),
+        ];
+        // 空のコンテキストは無視
+        if ( $section_context['sectionBody'] === '' ) {
+            $section_context = null;
+        }
+    }
+
     // --- 意図補正 + データソースの自動解決 ---
     $current_page    = ( isset( $data['currentPage'] ) && is_array( $data['currentPage'] ) )
                        ? $data['currentPage']
                        : [];
 
-    $page_type   = mimamori_detect_page_type( $current_page );
-    $intent      = mimamori_rewrite_intent( $message, $page_type );
+    $page_type = mimamori_detect_page_type( $current_page );
+
+    // セクションコンテキストがある場合、本文も意図検出に含める
+    $intent_text = $message;
+    if ( $section_context !== null ) {
+        $intent_text .= ' ' . $section_context['sectionBody'];
+    }
+    $intent      = mimamori_rewrite_intent( $intent_text, $page_type );
     $intent_type = $intent['intent'] ?? 'general';
     $sources     = mimamori_resolve_data_sources( $intent, false, false );
 
@@ -3748,23 +3795,34 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
         $sources['use_analytics'] = true;
     }
 
+    // セクションコンテキストがある場合もアナリティクスを強制有効化
+    if ( $section_context !== null ) {
+        $sources['use_analytics'] = true;
+    }
+
     $user_id = get_current_user_id();
 
     // ログ: 質問分類
     error_log( sprintf(
-        '[みまもりAI] Chat request | intent=%s | page_type=%s | analytics=%s | user=%d',
-        $intent_type, $page_type, $sources['use_analytics'] ? 'yes' : 'no', $user_id
+        '[みまもりAI] Chat request | intent=%s | page_type=%s | analytics=%s | section=%s | user=%d',
+        $intent_type, $page_type, $sources['use_analytics'] ? 'yes' : 'no',
+        $section_context ? $section_context['sectionType'] : 'none', $user_id
     ) );
 
     // システムプロンプト + 意図補正コンテキスト
     $instructions    = mimamori_get_system_prompt();
-    $context_blocks  = mimamori_build_context_blocks( $page_type, $intent, $sources, $current_page, $user_id );
+    $context_blocks  = mimamori_build_context_blocks( $page_type, $intent, $sources, $current_page, $user_id, $section_context );
     if ( $context_blocks !== '' ) {
         $instructions .= $context_blocks;
     }
 
     // === 確定的プランナー: 国/都市/source等の特定クエリを自動実行 ===
-    $flex_queries = mimamori_build_deterministic_queries( $message, $intent_type );
+    // セクションコンテキストがある場合、本文のキーワードもクエリ対象に含める
+    $deterministic_text = $message;
+    if ( $section_context !== null ) {
+        $deterministic_text .= ' ' . $section_context['sectionBody'];
+    }
+    $flex_queries = mimamori_build_deterministic_queries( $deterministic_text, $intent_type );
 
     if ( ! empty( $flex_queries ) ) {
         // フレキシブルクエリが必要 → アナリティクスも強制ON

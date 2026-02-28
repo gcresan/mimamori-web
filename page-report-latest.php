@@ -432,10 +432,10 @@ get_header();
     <div class="report-content">
 
         <!-- 📋 総評 -->
-        <div class="report-section">
+        <div class="report-section" data-ai-section="report_summary">
             <h2 class="section-title">📋 <?php echo esc_html($year . '年' . $month . '月'); ?>の総評
               <button type="button" class="ask-ai-btn" data-ai-ask
-                data-ai-prompt="今月の総評を見て、最も重要な気づきと次にやることを教えて">
+                data-ai-instruction="今月の総評を見て、最も重要な気づきと次にやることを教えて">
                 <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
               </button>
             </h2>
@@ -452,10 +452,10 @@ get_header();
         </div>
 
         <!-- ✅ 良かった点（成果） -->
-        <div class="report-section">
+        <div class="report-section" data-ai-section="report_good">
             <h2 class="section-title">✅ 良かった点（成果）
               <button type="button" class="ask-ai-btn" data-ai-ask
-                data-ai-prompt="この「良かった点（成果）」を踏まえて、次に伸ばすべきポイントは？">
+                data-ai-instruction="この「良かった点（成果）」を踏まえて、次に伸ばすべきポイントは？">
                 <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
               </button>
             </h2>
@@ -497,10 +497,10 @@ get_header();
         </div>
 
         <!-- ⚠️ 改善が必要な点（課題） -->
-        <div class="report-section">
+        <div class="report-section" data-ai-section="report_issue">
             <h2 class="section-title">⚠️ 改善が必要な点（課題）
               <button type="button" class="ask-ai-btn" data-ai-ask
-                data-ai-prompt="この「改善が必要な点（課題）」の原因と、最短で効く改善を3つ提案して">
+                data-ai-instruction="この「改善が必要な点（課題）」の原因と、最短で効く改善を3つ提案して">
                 <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
               </button>
             </h2>
