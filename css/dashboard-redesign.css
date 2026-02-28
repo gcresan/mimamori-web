@@ -74,7 +74,7 @@
   --mw-border-light: #D5D9DE;         /* 旧 #E2E6EA → 少し濃く */
 
   /* ===== クライアントアクセント — ロゴ下クライアント名の色 ===== */
-  --mw-client-accent: #2B2B2B;        /* sidebar-user-name と同一 */
+  --mw-client-accent: #333333;        /* クライアント名テキストと同一 */
 }
 
 /* ========== Body ========== */
@@ -3709,7 +3709,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   align-items: center;
   gap: 5px;
   font-size: 16px;
-  color: var(--mw-client-accent, #2B2B2B);
+  color: var(--mw-client-accent, #333333);
   cursor: pointer;
   white-space: nowrap;
   margin-left: auto;
