@@ -6046,8 +6046,9 @@ PROMPT;
         $cached = get_transient($cache_key);
 
         if ($cached !== false && is_array($cached)) {
-            // キャッシュヒットでもDB statusは最新をマージ
-            $merged = $this->merge_cv_review_statuses($cached['rows'], $user_id, $month);
+            // キャッシュヒットでも重複統合 + DB statusマージを適用
+            $deduped = $this->dedup_cv_review_rows($cached['rows']);
+            $merged  = $this->merge_cv_review_statuses($deduped, $user_id, $month);
             return new WP_REST_Response([
                 'success'      => true,
                 'rows'         => $merged,
@@ -6247,11 +6248,11 @@ PROMPT;
     }
 
     /**
-     * 同一 dateHourMinute + eventName の行を統合
+     * 同一 dateHourMinute + eventName の行を統合（1CV としてカウント）
      *
-     * GA4 は pagePath / sourceMedium / deviceCategory / country が異なる行を
-     * 別レコードとして返すが、同じ分に発生した同一イベントは 1CV として扱いたい。
-     * event_count を合算し、他ディメンションはカンマ区切りで連結する。
+     * GA4 は pagePath / sourceMedium 等が異なると別行で返すが、
+     * 同じ分に発生した同一イベントは 1回のCV として扱う。
+     * event_count は常に 1 にし、page_path は "/" より具体的なパスを優先する。
      * row_hash は md5(eventName + dateHourMinute) で再生成する。
      */
     private function dedup_cv_review_rows(array $rows): array {
@@ -6261,35 +6262,32 @@ PROMPT;
             $key = $row['event_name'] . '_' . $row['date_hour_minute'];
 
             if (!isset($grouped[$key])) {
-                // 新しいハッシュ: eventName + dateHourMinute のみで一意化
-                $row['row_hash'] = md5($row['event_name'] . $row['date_hour_minute']);
-                $row['_pages']   = [$row['page_path']];
-                $row['_sources'] = [$row['source_medium']];
-                $row['_devices'] = [$row['device_category']];
-                $row['_countries'] = [$row['country']];
-                $grouped[$key]   = $row;
+                $row['row_hash']    = md5($row['event_name'] . $row['date_hour_minute']);
+                $row['event_count'] = 1; // 常に1CV
+                $grouped[$key]      = $row;
             } else {
-                // 既存グループに統合
-                $grouped[$key]['event_count'] += $row['event_count'];
-                $grouped[$key]['_pages'][]     = $row['page_path'];
-                $grouped[$key]['_sources'][]   = $row['source_medium'];
-                $grouped[$key]['_devices'][]   = $row['device_category'];
-                $grouped[$key]['_countries'][] = $row['country'];
+                // page_path: "/" だけより具体的なパスを優先
+                $current_page = $grouped[$key]['page_path'];
+                $new_page     = $row['page_path'];
+                if ($current_page === '/' && $new_page !== '/') {
+                    $grouped[$key]['page_path'] = $new_page;
+                } elseif ($current_page !== '/' && $new_page !== '/' && $new_page !== $current_page) {
+                    // 両方具体的なら長い方（より詳細なパス）を優先
+                    if (strlen($new_page) > strlen($current_page)) {
+                        $grouped[$key]['page_path'] = $new_page;
+                    }
+                }
+
+                // source_medium: 空や (direct) / (none) より具体的なものを優先
+                $current_src = $grouped[$key]['source_medium'];
+                $new_src     = $row['source_medium'];
+                if (strpos($current_src, '(direct)') !== false && strpos($new_src, '(direct)') === false && $new_src !== '') {
+                    $grouped[$key]['source_medium'] = $new_src;
+                }
             }
         }
 
-        // 一時配列を整形して返却
-        $result = [];
-        foreach ($grouped as $row) {
-            $row['page_path']       = implode(', ', array_unique($row['_pages']));
-            $row['source_medium']   = implode(', ', array_unique($row['_sources']));
-            $row['device_category'] = implode(', ', array_unique($row['_devices']));
-            $row['country']         = implode(', ', array_unique($row['_countries']));
-            unset($row['_pages'], $row['_sources'], $row['_devices'], $row['_countries']);
-            $result[] = $row;
-        }
-
-        return $result;
+        return array_values($grouped);
     }
 
     /**
