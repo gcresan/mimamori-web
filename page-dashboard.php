@@ -1187,36 +1187,39 @@ foreach ($highlight_items as $highlight):
 
     /**
      * ポップオーバー位置計算ユーティリティ（再利用可能）
-     * @param {HTMLElement} popover  表示するポップオーバー要素
-     * @param {number}      anchorX  アンカーのビューポートX座標
-     * @param {number}      anchorY  アンカーのビューポートY座標
-     * @param {Object}      [opts]   { gap:number, prefer:'right'|'left' }
+     * position:fixed でビューポート基準に配置。
+     *
+     * @param {HTMLElement} popover   表示するポップオーバー要素
+     * @param {number}      anchorX   アンカーのビューポートX座標
+     * @param {number}      anchorY   アンカーのビューポートY座標
+     * @param {Object}      [opts]
+     *   offsetX  : 水平オフセット（正=右）default 10
+     *   offsetY  : 垂直オフセット（負=上）default -10
      */
     function positionPopover(popover, anchorX, anchorY, opts) {
         opts = opts || {};
-        var gap    = opts.gap    || 10;
-        var prefer = opts.prefer || 'right';
+        var ox     = opts.offsetX != null ? opts.offsetX : 10;
+        var oy     = opts.offsetY != null ? opts.offsetY : -10;
         var margin = 8;
-        var vw = window.innerWidth;
-        var vh = window.innerHeight;
+        var vw     = window.innerWidth;
+        var vh     = window.innerHeight;
 
         popover.style.display = 'block';
         var popW = popover.offsetWidth;
         var popH = popover.offsetHeight;
 
         // 水平: 基本は右、はみ出すなら左に反転
-        var left;
-        if (prefer === 'right') {
-            left = anchorX + gap;
-            if (left + popW > vw - margin) left = anchorX - popW - gap;
-        } else {
-            left = anchorX - popW - gap;
-            if (left < margin) left = anchorX + gap;
+        var left = anchorX + ox;
+        if (left + popW > vw - margin) {
+            left = anchorX - popW - ox;
         }
         left = Math.max(margin, Math.min(left, vw - popW - margin));
 
-        // 垂直: アンカーを中心にクランプ
-        var top = anchorY - popH / 2;
+        // 垂直: 基本は上（oy が負）、はみ出すなら下に反転
+        var top = anchorY + oy;
+        if (top < margin) {
+            top = anchorY + Math.abs(oy);
+        }
         top = Math.max(margin, Math.min(top, vh - popH - margin));
 
         popover.style.position = 'fixed';
@@ -1229,13 +1232,34 @@ foreach ($highlight_items as $highlight):
         var parts = month.split('-');
         ddPopTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月';
 
-        // Chart.js ポイント座標 → ビューポート座標に変換
+        // ── Chart.js ポイント座標 → ビューポート座標 ──
+        // Chart.js v4 の element.x/y は CSS pixel 座標。
+        // canvas.getBoundingClientRect() の left/top を足すだけで viewport 座標になる。
+        // ※ canvas.width は CSS幅×devicePixelRatio なので割ってはいけない。
         var canvas = kpiTrendChart.canvas;
         var rect   = canvas.getBoundingClientRect();
-        var vpX    = rect.left + (pointEl.x / canvas.width)  * rect.width;
-        var vpY    = rect.top  + (pointEl.y / canvas.height) * rect.height;
+        var vpX    = rect.left + pointEl.x;
+        var vpY    = rect.top  + pointEl.y;
 
-        positionPopover(ddPopover, vpX, vpY, { gap: 12, prefer: 'right' });
+        // デバッグマーカー（アンカー位置の目視確認用・確認後に削除）
+        var marker = document.getElementById('_ddDebugMarker');
+        if (!marker) {
+            marker = document.createElement('div');
+            marker.id = '_ddDebugMarker';
+            marker.style.cssText = 'position:fixed;width:10px;height:10px;background:red;border-radius:50%;z-index:99999;pointer-events:none;box-shadow:0 0 4px red;';
+            document.body.appendChild(marker);
+        }
+        marker.style.left    = (vpX - 5) + 'px';
+        marker.style.top     = (vpY - 5) + 'px';
+        marker.style.display = 'block';
+
+        positionPopover(ddPopover, vpX, vpY, { offsetX: 10, offsetY: -10 });
+    }
+
+    function hideDrilldownPopover() {
+        ddPopover.style.display = 'none';
+        var marker = document.getElementById('_ddDebugMarker');
+        if (marker) marker.style.display = 'none';
     }
 
     // ポップオーバー外クリックで閉じる
@@ -1243,7 +1267,7 @@ foreach ($highlight_items as $highlight):
         if (ddPopover.style.display === 'block'
             && !ddPopover.contains(e.target)
             && !e.target.closest('#kpiTrendChartWrap')) {
-            ddPopover.style.display = 'none';
+            hideDrilldownPopover();
         }
     });
 
@@ -1251,7 +1275,7 @@ foreach ($highlight_items as $highlight):
     ddPopover.addEventListener('click', function(e) {
         var btn = e.target.closest('[data-dd-type]');
         if (!btn) return;
-        ddPopover.style.display = 'none';
+        hideDrilldownPopover();
         openDrilldownModal(_ddMonth, btn.dataset.ddType);
     });
 
