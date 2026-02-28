@@ -4641,7 +4641,12 @@ PROMPT;
             return $this->table_exists_cache[$table];
         }
         global $wpdb;
-        $exists = (bool)$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+        // INFORMATION_SCHEMA で正確に確認（SHOW TABLES LIKE の _ ワイルドカード問題を回避）
+        $found = $wpdb->get_var($wpdb->prepare(
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
+            DB_NAME, $table
+        ));
+        $exists = (bool)$found;
         $this->table_exists_cache[$table] = $exists;
         return $exists;
     }
@@ -4981,7 +4986,7 @@ PROMPT;
 
         $table = $wpdb->prefix . 'gcrev_cv_routes';
 
-        if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+        if (!$this->table_exists($table)) {
             error_log("[GCREV] rest_save_cv_routes: table {$table} does not exist");
             return new WP_REST_Response(['success'=>false,'message'=>'テーブルが見つかりません'], 500);
         }
@@ -5118,7 +5123,7 @@ PROMPT;
         $end = $month . '-' . str_pad((string)$days, 2, '0', STR_PAD_LEFT);
 
         $rows = [];
-        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+        if ($this->table_exists($table)) {
             $rows = $wpdb->get_results($wpdb->prepare(
                 "SELECT cv_date, route, cv_count FROM {$table}
                  WHERE user_id=%d AND cv_date BETWEEN %s AND %s ORDER BY cv_date ASC",
@@ -5167,7 +5172,7 @@ PROMPT;
 
         $table = $wpdb->prefix . 'gcrev_actual_cvs';
         // テーブル存在確認
-        if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+        if (!$this->table_exists($table)) {
             return new WP_REST_Response(['success' => false, 'message' => 'テーブルが見つかりません'], 500);
         }
 
@@ -5286,10 +5291,7 @@ PROMPT;
 
         $table = $wpdb->prefix . 'gcrev_actual_cvs';
 
-        $table_exists = $wpdb->get_var(
-            $wpdb->prepare("SHOW TABLES LIKE %s", $table)
-        );
-        if (!$table_exists) {
+        if (!$this->table_exists($table)) {
             return ['has_any' => false, 'total' => 0, 'detail' => []];
         }
 
@@ -6196,7 +6198,13 @@ PROMPT;
         $table = $wpdb->prefix . 'gcrev_cv_review';
 
         // テーブル存在チェック — 無ければ作成
-        $this->ensure_cv_review_table($table);
+        $table_error = $this->ensure_cv_review_table($table);
+        if ($table_error !== '') {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'テーブル作成に失敗しました: ' . $table_error,
+            ], 500);
+        }
 
         $now   = current_time('mysql');
 
@@ -6266,11 +6274,11 @@ PROMPT;
         $table = $wpdb->prefix . 'gcrev_cv_review';
 
         // テーブル存在チェック — 無ければ作成
-        $this->ensure_cv_review_table($table);
-        if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+        $table_error = $this->ensure_cv_review_table($table);
+        if ($table_error !== '') {
             return new WP_REST_Response([
                 'success' => false,
-                'message' => 'テーブル作成に失敗しました: ' . $wpdb->last_error,
+                'message' => 'テーブル作成に失敗しました: ' . $table_error,
             ], 500);
         }
 
@@ -6358,19 +6366,29 @@ PROMPT;
     }
 
     /**
-     * gcrev_cv_review テーブルが存在しなければ直接 CREATE TABLE する
+     * gcrev_cv_review テーブルが存在しなければ作成する
+     *
+     * @return string エラーメッセージ（空文字列=成功）
      */
-    private function ensure_cv_review_table(string $table = ''): void {
+    private function ensure_cv_review_table(string $table = ''): string {
         global $wpdb;
         if (!$table) {
             $table = $wpdb->prefix . 'gcrev_cv_review';
         }
-        if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
-            return;
+
+        // INFORMATION_SCHEMA で確認（SHOW TABLES LIKE + prepare の _ ワイルドカード問題を回避）
+        $found = $wpdb->get_var($wpdb->prepare(
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
+            DB_NAME, $table
+        ));
+        if ($found) {
+            return '';
         }
+
         error_log('[GCREV] ensure_cv_review_table: creating ' . $table);
+
         $charset_collate = $wpdb->get_charset_collate();
-        $wpdb->query("CREATE TABLE IF NOT EXISTS {$table} (
+        $sql_body = "(
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
             user_id BIGINT(20) UNSIGNED NOT NULL,
             year_month VARCHAR(7) NOT NULL,
@@ -6386,14 +6404,48 @@ PROMPT;
             memo VARCHAR(500) NULL,
             updated_by BIGINT(20) UNSIGNED NULL,
             updated_at DATETIME NOT NULL,
-            PRIMARY KEY (id),
+            PRIMARY KEY  (id),
             UNIQUE KEY user_month_hash (user_id, year_month, row_hash),
             KEY user_month (user_id, year_month),
             KEY status (status)
-        ) {$charset_collate}");
-        if ($wpdb->last_error) {
-            error_log('[GCREV] ensure_cv_review_table error: ' . $wpdb->last_error);
+        ) {$charset_collate};";
+
+        // 1) dbDelta() で試行
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta("CREATE TABLE {$table} {$sql_body}");
+
+        // 再確認
+        $found = $wpdb->get_var($wpdb->prepare(
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
+            DB_NAME, $table
+        ));
+        if ($found) {
+            error_log('[GCREV] ensure_cv_review_table: created via dbDelta');
+            // table_exists キャッシュを更新
+            $this->table_exists_cache[$table] = true;
+            return '';
         }
+
+        // 2) dbDelta 失敗 → 直接 CREATE TABLE で再試行
+        error_log('[GCREV] ensure_cv_review_table: dbDelta failed, trying direct CREATE TABLE');
+        $wpdb->query("CREATE TABLE IF NOT EXISTS {$table} {$sql_body}");
+        $create_error = $wpdb->last_error;
+
+        // 最終確認
+        $found = $wpdb->get_var($wpdb->prepare(
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s",
+            DB_NAME, $table
+        ));
+        if ($found) {
+            error_log('[GCREV] ensure_cv_review_table: created via direct CREATE TABLE');
+            // table_exists キャッシュを更新
+            $this->table_exists_cache[$table] = true;
+            return '';
+        }
+
+        $error = $create_error ?: 'テーブル作成後も INFORMATION_SCHEMA に見つかりません';
+        error_log('[GCREV] ensure_cv_review_table FAILED: ' . $error);
+        return $error;
     }
 
     /**
@@ -6446,8 +6498,8 @@ PROMPT;
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_cv_review';
 
-        // テーブル存在チェック
-        if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+        // テーブル存在チェック（INFORMATION_SCHEMA で正確に確認）
+        if (!$this->table_exists($table)) {
             // テーブル未作成: status=0, memo='' で返す
             return array_map(function($row) {
                 $row['status'] = 0;
