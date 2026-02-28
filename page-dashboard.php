@@ -655,9 +655,9 @@ if ($infographic) {
           <span class="info-monthly-pin">📌</span>
           <span>結論サマリー</span>
         </div>
-        <button type="button" class="ask-ai-btn"
-          onclick="window.GCREV.chat.openWithPrompt('今月の月次レポート結果を見て、いちばん重要な気づきと次にやることを3つ教えて')">
-          🤖 AIに聞く
+        <button type="button" class="ask-ai-btn" data-ai-ask
+          data-ai-prompt="今月の月次レポート結果を見て、いちばん重要な気づきと次にやることを3つ教えて">
+          <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
         </button>
       </div>
 
@@ -693,10 +693,9 @@ foreach ($highlight_items as $highlight):
         <div class="info-monthly-highlight-value">
             <?php echo esc_html($highlight['value']); ?>
         </div>
-        <button type="button" class="ask-ai-btn ask-ai-btn--sm"
-          onclick="window.GCREV.chat.openWithPrompt(this.dataset.prompt)"
-          data-prompt="<?php echo esc_attr($highlight['ai_prompt']); ?>">
-          🤖 AIに聞く
+        <button type="button" class="ask-ai-btn ask-ai-btn--sm" data-ai-ask
+          data-ai-prompt="<?php echo esc_attr($highlight['ai_prompt']); ?>">
+          <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
         </button>
 
         <?php if ($detail && (!empty($detail['fact']) || !empty($detail['causes']) || !empty($detail['actions']))): ?>

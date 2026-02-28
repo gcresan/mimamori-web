@@ -1429,17 +1429,42 @@
      Expose public API
      ============================ */
   /**
-   * チャットを開いて入力欄にプロンプトをセットする（送信はしない）
+   * チャットを開いてメッセージを自動送信する。
    * 「AIに聞く」ボタンから呼ばれる。
-   * @param {string} text — 入力欄にセットするテキスト
+   * @param {string} text — 送信するメッセージテキスト
    */
   function openWithPrompt(text) {
-    switchViewMode('normal');
-    if (els.textarea) {
-      els.textarea.value = text || '';
-      autoResize(els.textarea);
-      setTimeout(function () { els.textarea.focus(); }, 300);
+    // 決済未完了なら payment-status へリダイレクト（FABと同じチェック）
+    if (!config.paymentActive && config.paymentStatusUrl) {
+      window.location.href = config.paymentStatusUrl;
+      return;
     }
+
+    switchViewMode('normal');
+
+    if (!text) return;
+
+    // チャットのopen transitionが完了してからメッセージを送信
+    // switchViewMode の CSS transition が 300ms なのでそれ以降に実行
+    setTimeout(function () {
+      sendMessage(text);
+    }, 350);
+  }
+
+  /* ============================
+     Global Event Delegation for [data-ai-ask] buttons
+     ============================ */
+  function bindAskAiButtons() {
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-ai-ask]');
+      if (!btn) return;
+
+      e.preventDefault();
+      var prompt = btn.getAttribute('data-ai-prompt') || '';
+      if (prompt) {
+        openWithPrompt(prompt);
+      }
+    });
   }
 
   window.GCREV = window.GCREV || {};
@@ -1452,6 +1477,9 @@
     setError:              setError,
     openWithPrompt:        openWithPrompt
   };
+
+  // data-ai-ask のイベント委譲は DOMContentLoaded 不要（document.click）
+  bindAskAiButtons();
 
   document.addEventListener('DOMContentLoaded', init);
 })();
