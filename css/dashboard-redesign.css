@@ -72,6 +72,9 @@
   --mw-text-tertiary: #6B6B6B;        /* 旧 #888888 → 大幅に濃く（補足が読める） */
   --mw-text-body: #333333;            /* 旧 #3a3a3a → 統一 */
   --mw-border-light: #D5D9DE;         /* 旧 #E2E6EA → 少し濃く */
+
+  /* ===== クライアントアクセント — ロゴ下クライアント名の色 ===== */
+  --mw-client-accent: #2B2B2B;        /* sidebar-user-name と同一 */
 }
 
 /* ========== Body ========== */
@@ -3704,20 +3707,28 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 .kpi-trend-inline-hint {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--mw-text-tertiary, #999);
-  cursor: help;
+  gap: 5px;
+  font-size: 16px;
+  color: var(--mw-client-accent, #2B2B2B);
+  cursor: pointer;
   white-space: nowrap;
   margin-left: auto;
   padding-left: 12px;
+  transition: opacity 0.2s ease;
+}
+.kpi-trend-inline-hint:hover {
+  opacity: 0.7;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .kpi-trend-inline-hint svg {
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.8;
+  width: 18px;
+  height: 18px;
 }
 .kpi-trend-inline-hint-text {
-  opacity: 0.8;
+  opacity: 1;
 }
 @media (max-width: 480px) {
   .kpi-trend-inline-hint-text {
