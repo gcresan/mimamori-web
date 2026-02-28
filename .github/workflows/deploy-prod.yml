@@ -3,7 +3,10 @@ name: Deploy to Production
 # 手動実行のみ（GitHub Actions の "Run workflow" ボタンから）
 on:
   workflow_dispatch:
-
+  
+permissions:
+  contents: write    # タグ push に必要
+  
 jobs:
   deploy-prod:
     runs-on: ubuntu-latest
