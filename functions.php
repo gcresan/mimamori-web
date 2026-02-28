@@ -1501,7 +1501,7 @@ function mimamori_build_parsed_result( array $parsed, string $raw_text ): array 
     if ( $type === 'talk' && isset( $parsed['text'] ) ) {
         $result = [
             'type' => 'talk',
-            'text' => (string) $parsed['text'],
+            'text' => mimamori_strip_json_artifacts( (string) $parsed['text'] ),
         ];
         if ( $support_notice ) {
             $result['support_notice'] = true;
@@ -1514,7 +1514,7 @@ function mimamori_build_parsed_result( array $parsed, string $raw_text ): array 
         $sections = mimamori_normalize_sections( $parsed['sections'] ?? [] );
         $result = [
             'type'     => 'advice',
-            'summary'  => (string) $parsed['summary'],
+            'summary'  => mimamori_strip_json_artifacts( (string) $parsed['summary'] ),
             'sections' => $sections,
         ];
         if ( $support_notice ) {
@@ -1530,7 +1530,7 @@ function mimamori_build_parsed_result( array $parsed, string $raw_text ): array 
     }
     $result = [
         'type' => 'talk',
-        'text' => (string) $text,
+        'text' => mimamori_strip_json_artifacts( (string) $text ),
     ];
     if ( $support_notice ) {
         $result['support_notice'] = true;
@@ -1553,15 +1553,32 @@ function mimamori_normalize_sections( $raw_sections ): array {
         if ( ! is_array( $sec ) || empty( $sec['title'] ) ) {
             continue;
         }
-        $s = [ 'title' => (string) $sec['title'] ];
+        $s = [ 'title' => mimamori_strip_json_artifacts( (string) $sec['title'] ) ];
         if ( ! empty( $sec['items'] ) && is_array( $sec['items'] ) ) {
-            $s['items'] = array_map( 'strval', $sec['items'] );
+            $s['items'] = array_map( function ( $item ) {
+                return mimamori_strip_json_artifacts( (string) $item );
+            }, $sec['items'] );
         } elseif ( ! empty( $sec['text'] ) ) {
-            $s['text'] = (string) $sec['text'];
+            $s['text'] = mimamori_strip_json_artifacts( (string) $sec['text'] );
         }
         $sections[] = $s;
     }
     return $sections;
+}
+
+/**
+ * AI 応答テキストから末尾に混入した JSON 構造文字を除去する
+ *
+ * AI モデルが JSON 出力時に閉じ括弧 (]} など) をテキスト値の末尾に
+ * 混入させるケースがある（例: 「…対応）」]}]}」）。
+ * 2つ以上連続する ] } をテキスト末尾から除去する。
+ *
+ * @param string $text
+ * @return string
+ */
+function mimamori_strip_json_artifacts( string $text ): string {
+    // 末尾の2つ以上連続する ] } を除去（例: ]}]} , }] , ]} 等）
+    return preg_replace( '/[\]\}]{2,}\s*$/', '', $text );
 }
 
 /**
