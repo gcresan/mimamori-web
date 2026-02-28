@@ -3626,7 +3626,8 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   padding: 8px 0;
-  min-width: 170px;
+  min-width: 200px;
+  max-width: 280px;
 }
 .drilldown-popover-title {
   padding: 6px 14px 4px;
@@ -3636,7 +3637,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .drilldown-popover-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   width: 100%;
   padding: 8px 14px;
@@ -3654,6 +3655,20 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 .drilldown-popover-icon {
   font-size: 16px;
   flex-shrink: 0;
+  margin-top: 1px;
+}
+.drilldown-popover-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.drilldown-popover-help {
+  display: none;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #999;
+  font-weight: 400;
 }
 
 /* ========== Drilldown Modal ========== */

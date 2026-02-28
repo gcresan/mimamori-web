@@ -129,7 +129,7 @@ get_template_part('template-parts/analysis-help');
             <div class="digest-card-header">
                 <h3 class="digest-card-title">
                     <span>🌐</span>
-                    <span>流入元</span>
+                    <span>見つけたきっかけ</span>
                 </h3>
                 <a href="<?php echo esc_url(home_url('/mypage/analysis-source/')); ?>" class="detail-link">詳細を見る →</a>
             </div>
@@ -440,7 +440,7 @@ function updateSummaryBanner(data) {
     if (medium.length > 0) {
         const topMedium = medium[0];
         const mediumName = getMediumName(topMedium.medium || topMedium.sessionMedium || 'unknown');
-        summary.push('最も多い流入元は' + mediumName + 'です');
+        summary.push('もっとも多い「見つけたきっかけ」は' + mediumName + 'です');
     }
     
     summaryContent.innerHTML = summary.length > 0 ? summary.join('。') + '。' : 'データを分析中...';

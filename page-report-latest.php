@@ -667,7 +667,7 @@ get_header();
                 <div class="digest-card-header">
                     <h3 class="digest-card-title">
                         <span>🌐</span>
-                        <span>流入元</span>
+                        <span>見つけたきっかけ</span>
                     </h3>
                     <a href="<?php echo esc_url(home_url('/mypage/analysis-source/')); ?>" class="detail-link">詳細を見る →</a>
                 </div>

@@ -86,7 +86,7 @@ get_template_part('template-parts/analysis-help');
     <!-- 流入元別推移 -->
     <div class="chart-section">
         <div class="chart-header">
-            <h3 class="chart-title">📊 流入元別推移</h3>
+            <h3 class="chart-title">📊 見つけたきっかけ別の推移</h3>
 
         </div>
         <div class="chart-container">
@@ -97,7 +97,7 @@ get_template_part('template-parts/analysis-help');
     <!-- 流入元シェア円グラフ -->
     <div class="chart-section">
         <div class="chart-header">
-            <h3 class="chart-title">🥧 流入元シェア</h3>
+            <h3 class="chart-title">🥧 見つけたきっかけの割合</h3>
 
         </div>
         <div class="chart-container">

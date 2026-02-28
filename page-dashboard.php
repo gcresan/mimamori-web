@@ -577,13 +577,25 @@ if ($infographic) {
   <div class="drilldown-popover" id="drilldownPopover" style="display:none;">
     <div class="drilldown-popover-title" id="drilldownPopoverTitle"></div>
     <button type="button" class="drilldown-popover-item" data-dd-type="region">
-      <span class="drilldown-popover-icon">📍</span>市区町村別
+      <span class="drilldown-popover-icon">📍</span>
+      <span class="drilldown-popover-label">
+        見ている人の場所
+        <small class="drilldown-popover-help" data-help-key="region">ホームページを見ている人が、どの地域からアクセスしているかを表しています</small>
+      </span>
     </button>
     <button type="button" class="drilldown-popover-item" data-dd-type="page">
-      <span class="drilldown-popover-icon">📄</span>ランディングページ
+      <span class="drilldown-popover-icon">📄</span>
+      <span class="drilldown-popover-label">
+        訪問の入口となったページ
+        <small class="drilldown-popover-help" data-help-key="page">検索やSNS、広告などから、最初に表示されたページです</small>
+      </span>
     </button>
     <button type="button" class="drilldown-popover-item" data-dd-type="source">
-      <span class="drilldown-popover-icon">🔗</span>流入元
+      <span class="drilldown-popover-icon">🔗</span>
+      <span class="drilldown-popover-label">
+        見つけたきっかけ
+        <small class="drilldown-popover-help" data-help-key="source">検索、SNS、広告、他サイトなど、ホームページを知った経路です</small>
+      </span>
     </button>
   </div>
 
@@ -1254,6 +1266,17 @@ foreach ($highlight_items as $highlight):
         marker.style.display = 'block';
 
         positionPopover(ddPopover, vpX, vpY, { offsetX: 10, offsetY: -10 });
+
+        // 初回のみ補足説明を表示（localStorage で制御）
+        var helpEls = ddPopover.querySelectorAll('.drilldown-popover-help');
+        var helpSeen = false;
+        try { helpSeen = localStorage.getItem('mw_dd_help_seen') === '1'; } catch(e){}
+        for (var i = 0; i < helpEls.length; i++) {
+            helpEls[i].style.display = helpSeen ? 'none' : 'block';
+        }
+        if (!helpSeen) {
+            try { localStorage.setItem('mw_dd_help_seen', '1'); } catch(e){}
+        }
     }
 
     function hideDrilldownPopover() {
@@ -1280,7 +1303,7 @@ foreach ($highlight_items as $highlight):
     });
 
     function openDrilldownModal(month, type) {
-        var typeLabels = { region: '市区町村別', page: 'ランディングページ', source: '流入元' };
+        var typeLabels = { region: '見ている人の場所', page: '訪問の入口となったページ', source: '見つけたきっかけ' };
         var parts = month.split('-');
         ddModalTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月 — ' + typeLabels[type];
 

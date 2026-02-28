@@ -122,7 +122,7 @@ get_template_part('template-parts/analysis-help');
         <div class="cv-analysis-card">
             <div class="cv-analysis-header">
                 <div class="cv-analysis-title">
-                    🔍 流入元別 × CV分析
+                    🔍 見つけたきっかけ別 × CV分析
                     <span class="cv-analysis-badge important">重要</span>
                 </div>
                 <div class="cv-tab-toggle" id="sourceTabToggle" style="display:none;">
@@ -139,7 +139,7 @@ get_template_part('template-parts/analysis-help');
             <table class="cv-data-table" id="sourceCvTable">
                 <thead>
                     <tr>
-                        <th>流入元</th>
+                        <th>見つけたきっかけ</th>
                         <th class="number">セッション数</th>
                         <th class="number">CV数 <span class="help-icon" data-tip="確定CVをGA4のキーイベント比率で按分した値です">?</span></th>
                         <th class="number">CV率</th>
@@ -577,7 +577,7 @@ function renderSourceCv(data) {
     if (best) {
         document.getElementById('sourceCvInsight').style.display = 'block';
         document.getElementById('sourceCvInsightText').textContent =
-            `${best.label}経由はCV率${best.cvr.toFixed(2)}%と最も効率が良い流入元です。この経路の強化で効率的なCV獲得が可能です。`;
+            `${best.label}経由はCV率${best.cvr.toFixed(2)}%ともっとも効率が良い経路です。この「見つけたきっかけ」を強化すると、効率的なCV獲得が期待できます。`;
     }
 }
 
