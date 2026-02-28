@@ -71,6 +71,21 @@ td .status-select { width:100%; border:1px solid #e2e8f0; border-radius:4px; pad
 td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; padding:4px 6px; font-size:12px; }
 .badge-group { display:inline-block; background:#fbbf24; color:#78350f; font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; }
 
+/* Save bar */
+.cv-save-bar { display:flex; align-items:center; gap:12px; padding:12px 16px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; margin:12px 0; }
+.cv-save-bar.has-changes { background:#fffbeb; border-color:#fde68a; }
+.btn-save-cv { background:#16a34a; color:#fff; border:none; border-radius:6px; padding:10px 28px; cursor:pointer; font-size:15px; font-weight:600; transition:all 0.2s; }
+.btn-save-cv:hover { background:#15803d; }
+.btn-save-cv:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-save-cv.has-changes { background:#f59e0b; animation:pulse-save 1.5s ease-in-out infinite; }
+.btn-save-cv.has-changes:hover { background:#d97706; }
+@keyframes pulse-save { 0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,0.4); } 50% { box-shadow:0 0 0 8px rgba(245,158,11,0); } }
+.save-bar-info { font-size:13px; color:#64748b; }
+.save-bar-info strong { color:#f59e0b; }
+.cv-review-table tr.row-dirty { background:#fefce8 !important; }
+.cv-review-table tr.row-dirty td:first-child { position:relative; }
+.cv-review-table tr.row-dirty td:first-child::after { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:#f59e0b; }
+
 /* Spinner */
 .spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top:3px solid #2563eb; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -81,6 +96,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
   .summary-card { min-width:calc(50% - 8px); flex:unset; }
   .cv-review-toolbar { flex-direction:column; align-items:stretch; }
   .toolbar-right { margin-left:0; }
+  .cv-save-bar { flex-direction:column; text-align:center; }
 }
 </style>
 
@@ -124,6 +140,12 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         </div>
     </div>
 
+    <!-- 保存バー（上部） -->
+    <div class="cv-save-bar" id="saveBarTop" style="display:none;">
+        <button type="button" class="btn-save-cv" id="btnSaveTop">保存する</button>
+        <span class="save-bar-info" id="saveInfoTop">変更はありません</span>
+    </div>
+
     <!-- データテーブル -->
     <div class="cv-review-table-wrap">
         <div id="cvReviewMessage" style="display:none;"></div>
@@ -150,6 +172,12 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         </table>
     </div>
 
+    <!-- 保存バー（下部） -->
+    <div class="cv-save-bar" id="saveBarBottom" style="display:none;">
+        <button type="button" class="btn-save-cv" id="btnSaveBottom">保存する</button>
+        <span class="save-bar-info" id="saveInfoBottom">変更はありません</span>
+    </div>
+
     <!-- CVイベント未設定メッセージ -->
     <div id="cvNoConfig" style="display:none;">
         <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:24px; text-align:center;">
@@ -171,6 +199,8 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     var allRows = [];
     var currentMonth = '';
     var checkedHashes = new Set();
+    var dirtyHashes = new Set();        // 変更のある行のhash
+    var originalStatuses = {};          // 読み込み時のstatus/memo保持
 
     // Elements
     var elMonth      = document.getElementById('cvReviewMonth');
@@ -184,6 +214,14 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     var elThCheckAll = document.getElementById('thCheckAll');
     var elBulkAction = document.getElementById('bulkAction');
     var elBulkApply  = document.getElementById('btnBulkApply');
+
+    // Save bar elements
+    var elSaveBarTop    = document.getElementById('saveBarTop');
+    var elSaveBarBottom = document.getElementById('saveBarBottom');
+    var elBtnSaveTop    = document.getElementById('btnSaveTop');
+    var elBtnSaveBottom = document.getElementById('btnSaveBottom');
+    var elSaveInfoTop   = document.getElementById('saveInfoTop');
+    var elSaveInfoBottom = document.getElementById('saveInfoBottom');
 
     // Summary elements
     var sumTotal    = document.getElementById('summaryTotal');
@@ -234,7 +272,11 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         elTable.style.display = 'none';
         elMessage.style.display = 'none';
         elNoConfig.style.display = 'none';
+        elSaveBarTop.style.display = 'none';
+        elSaveBarBottom.style.display = 'none';
         checkedHashes.clear();
+        dirtyHashes.clear();
+        originalStatuses = {};
         updateBulkState();
 
         try {
@@ -272,9 +314,18 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             }
 
             allRows = data.rows || [];
+
+            // 読み込み時の状態を保持（変更検知用）
+            allRows.forEach(function(r) {
+                originalStatuses[r.row_hash] = { status: r.status, memo: r.memo || '' };
+            });
+
             renderTable();
             updateSummary(allRows);
             elTable.style.display = 'table';
+            elSaveBarTop.style.display = 'flex';
+            elSaveBarBottom.style.display = 'flex';
+            updateSaveBar();
 
         } catch(e) {
             elLoading.style.display = 'none';
@@ -403,12 +454,14 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             sel.addEventListener('change', function() {
                 var newStatus = parseInt(sel.value);
                 row.status = newStatus;
-                updateRowStatus(row, newStatus);
+                markDirty(row.row_hash);
                 // Update row class
                 tr.classList.remove('status-valid', 'status-excluded');
+                tr.classList.add('row-dirty');
                 if (newStatus === 1) tr.classList.add('status-valid');
                 if (newStatus === 2) tr.classList.add('status-excluded');
                 updateSummary(allRows);
+                updateSaveBar();
             });
             tdStatus.appendChild(sel);
             tr.appendChild(tdStatus);
@@ -424,7 +477,9 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             inp.addEventListener('blur', function() {
                 if (inp.value !== (row.memo || '')) {
                     row.memo = inp.value;
-                    updateRowMemo(row, inp.value);
+                    markDirty(row.row_hash);
+                    tr.classList.add('row-dirty');
+                    updateSaveBar();
                 }
             });
             tdMemo.appendChild(inp);
@@ -464,17 +519,73 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     }
     elBulkAction.addEventListener('change', updateBulkState);
 
-    // Bulk apply
-    elBulkApply.addEventListener('click', async function() {
+    // Bulk apply（ローカル反映のみ、保存は保存ボタンで）
+    elBulkApply.addEventListener('click', function() {
         var newStatus = parseInt(elBulkAction.value);
         if (isNaN(newStatus)) return;
 
+        var changed = 0;
+        allRows.forEach(function(r) {
+            if (checkedHashes.has(r.row_hash)) {
+                r.status = newStatus;
+                markDirty(r.row_hash);
+                changed++;
+            }
+        });
+
+        if (changed > 0) {
+            checkedHashes.clear();
+            renderTable();
+            updateSummary(allRows);
+            updateSaveBar();
+            showMessage(changed + '件の判定を変更しました。「保存する」ボタンで保存してください。', 'success');
+        }
+    });
+
+    // =========================================================
+    // 変更管理 & 保存
+    // =========================================================
+
+    // 変更をマーク
+    function markDirty(hash) {
+        dirtyHashes.add(hash);
+    }
+
+    // 保存バーの表示更新
+    function updateSaveBar() {
+        var count = dirtyHashes.size;
+        var hasChanges = count > 0;
+        var label = hasChanges
+            ? '<strong>' + count + '件</strong>の変更があります'
+            : '✅ すべて保存済みです';
+
+        elSaveInfoTop.innerHTML = label;
+        elSaveInfoBottom.innerHTML = label;
+
+        [elSaveBarTop, elSaveBarBottom].forEach(function(bar) {
+            if (hasChanges) bar.classList.add('has-changes');
+            else bar.classList.remove('has-changes');
+        });
+
+        [elBtnSaveTop, elBtnSaveBottom].forEach(function(btn) {
+            btn.disabled = !hasChanges;
+            btn.textContent = hasChanges ? '保存する（' + count + '件）' : '保存する';
+            if (hasChanges) btn.classList.add('has-changes');
+            else btn.classList.remove('has-changes');
+        });
+    }
+
+    // 全変更を一括保存
+    async function saveAllChanges() {
+        if (dirtyHashes.size === 0) return;
+
         var items = allRows
-            .filter(function(r) { return checkedHashes.has(r.row_hash); })
+            .filter(function(r) { return dirtyHashes.has(r.row_hash); })
             .map(function(r) {
                 return {
                     row_hash: r.row_hash,
-                    status: newStatus,
+                    status: r.status,
+                    memo: r.memo || '',
                     event_name: r.event_name,
                     date_hour_minute: r.date_hour_minute,
                     page_path: r.page_path,
@@ -487,8 +598,12 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 
         if (items.length === 0) return;
 
-        elBulkApply.disabled = true;
-        elBulkApply.textContent = '処理中...';
+        // ボタンを処理中に
+        [elBtnSaveTop, elBtnSaveBottom].forEach(function(btn) {
+            btn.disabled = true;
+            btn.textContent = '保存中...';
+            btn.classList.remove('has-changes');
+        });
 
         try {
             var res = await fetch(API_BASE + 'cv-review/bulk-update', {
@@ -499,69 +614,40 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             var data = await res.json();
 
             if (data.success) {
-                // ローカル更新
+                // originalStatuses を現在の状態に更新
                 allRows.forEach(function(r) {
-                    if (checkedHashes.has(r.row_hash)) r.status = newStatus;
+                    if (dirtyHashes.has(r.row_hash)) {
+                        originalStatuses[r.row_hash] = { status: r.status, memo: r.memo || '' };
+                    }
                 });
-                checkedHashes.clear();
+                dirtyHashes.clear();
                 renderTable();
-                updateSummary(allRows);
+                updateSaveBar();
+                showMessage('✅ ' + items.length + '件の変更を保存しました', 'success');
+            } else {
+                showMessage('保存に失敗しました: ' + (data.message || ''), 'error');
             }
         } catch(e) {
-            alert('一括更新に失敗しました: ' + e.message);
+            showMessage('保存に失敗しました: ' + e.message, 'error');
         }
 
-        elBulkApply.disabled = false;
-        elBulkApply.textContent = '適用';
+        [elBtnSaveTop, elBtnSaveBottom].forEach(function(btn) {
+            btn.disabled = false;
+        });
+        updateSaveBar();
+    }
+
+    // 保存ボタンのイベント
+    elBtnSaveTop.addEventListener('click', saveAllChanges);
+    elBtnSaveBottom.addEventListener('click', saveAllChanges);
+
+    // ページ離脱時の未保存警告
+    window.addEventListener('beforeunload', function(e) {
+        if (dirtyHashes.size > 0) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
     });
-
-    // Update single row status
-    async function updateRowStatus(row, newStatus) {
-        try {
-            await fetch(API_BASE + 'cv-review/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': NONCE },
-                body: JSON.stringify({
-                    month: currentMonth,
-                    row_hash: row.row_hash,
-                    status: newStatus,
-                    event_name: row.event_name,
-                    date_hour_minute: row.date_hour_minute,
-                    page_path: row.page_path,
-                    source_medium: row.source_medium,
-                    device_category: row.device_category,
-                    country: row.country,
-                    event_count: row.event_count
-                })
-            });
-        } catch(e) {
-            console.error('Status update failed:', e);
-        }
-    }
-
-    // Update single row memo
-    async function updateRowMemo(row, memo) {
-        try {
-            await fetch(API_BASE + 'cv-review/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': NONCE },
-                body: JSON.stringify({
-                    month: currentMonth,
-                    row_hash: row.row_hash,
-                    memo: memo,
-                    event_name: row.event_name,
-                    date_hour_minute: row.date_hour_minute,
-                    page_path: row.page_path,
-                    source_medium: row.source_medium,
-                    device_category: row.device_category,
-                    country: row.country,
-                    event_count: row.event_count
-                })
-            });
-        } catch(e) {
-            console.error('Memo update failed:', e);
-        }
-    }
 
     // Update summary cards
     function updateSummary(rows) {

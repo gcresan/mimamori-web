@@ -6066,7 +6066,10 @@ PROMPT;
 
             $result = $this->ga4->fetch_cv_event_detail($ga4_id, $start, $end, $event_names);
 
-            // キャッシュ保存（GA4生データ）
+            // 同一 dateHourMinute + eventName の行を統合
+            $result['rows'] = $this->dedup_cv_review_rows($result['rows']);
+
+            // キャッシュ保存（統合済みGA4データ）
             set_transient($cache_key, $result, 1800); // 30分
 
             // DBステータスマージ
@@ -6192,6 +6195,7 @@ PROMPT;
         foreach ($items as $item) {
             $row_hash = sanitize_text_field($item['row_hash'] ?? '');
             $status   = isset($item['status']) ? (int)$item['status'] : 0;
+            $memo     = sanitize_text_field($item['memo'] ?? '');
 
             if (!preg_match('/^[a-f0-9]{32}$/', $row_hash)) continue;
             if (!in_array($status, [0, 1, 2], true)) continue;
@@ -6204,9 +6208,9 @@ PROMPT;
 
             if ($existing_id) {
                 $wpdb->update($table,
-                    ['status' => $status, 'updated_by' => $user_id, 'updated_at' => $now],
+                    ['status' => $status, 'memo' => $memo, 'updated_by' => $user_id, 'updated_at' => $now],
                     ['id' => (int)$existing_id],
-                    ['%d', '%d', '%s'],
+                    ['%d', '%s', '%d', '%s'],
                     ['%d']
                 );
             } else {
@@ -6231,7 +6235,7 @@ PROMPT;
                     'country'          => $country,
                     'event_count'      => $event_count,
                     'status'           => $status,
-                    'memo'             => '',
+                    'memo'             => $memo,
                     'updated_by'       => $user_id,
                     'updated_at'       => $now,
                 ], ['%d','%s','%s','%s','%s','%s','%s','%s','%s','%d','%d','%s','%d','%s']);
@@ -6240,6 +6244,52 @@ PROMPT;
         }
 
         return new WP_REST_Response(['success' => true, 'updated' => $updated], 200);
+    }
+
+    /**
+     * 同一 dateHourMinute + eventName の行を統合
+     *
+     * GA4 は pagePath / sourceMedium / deviceCategory / country が異なる行を
+     * 別レコードとして返すが、同じ分に発生した同一イベントは 1CV として扱いたい。
+     * event_count を合算し、他ディメンションはカンマ区切りで連結する。
+     * row_hash は md5(eventName + dateHourMinute) で再生成する。
+     */
+    private function dedup_cv_review_rows(array $rows): array {
+        $grouped = [];
+
+        foreach ($rows as $row) {
+            $key = $row['event_name'] . '_' . $row['date_hour_minute'];
+
+            if (!isset($grouped[$key])) {
+                // 新しいハッシュ: eventName + dateHourMinute のみで一意化
+                $row['row_hash'] = md5($row['event_name'] . $row['date_hour_minute']);
+                $row['_pages']   = [$row['page_path']];
+                $row['_sources'] = [$row['source_medium']];
+                $row['_devices'] = [$row['device_category']];
+                $row['_countries'] = [$row['country']];
+                $grouped[$key]   = $row;
+            } else {
+                // 既存グループに統合
+                $grouped[$key]['event_count'] += $row['event_count'];
+                $grouped[$key]['_pages'][]     = $row['page_path'];
+                $grouped[$key]['_sources'][]   = $row['source_medium'];
+                $grouped[$key]['_devices'][]   = $row['device_category'];
+                $grouped[$key]['_countries'][] = $row['country'];
+            }
+        }
+
+        // 一時配列を整形して返却
+        $result = [];
+        foreach ($grouped as $row) {
+            $row['page_path']       = implode(', ', array_unique($row['_pages']));
+            $row['source_medium']   = implode(', ', array_unique($row['_sources']));
+            $row['device_category'] = implode(', ', array_unique($row['_devices']));
+            $row['country']         = implode(', ', array_unique($row['_countries']));
+            unset($row['_pages'], $row['_sources'], $row['_devices'], $row['_countries']);
+            $result[] = $row;
+        }
+
+        return $result;
     }
 
     /**
