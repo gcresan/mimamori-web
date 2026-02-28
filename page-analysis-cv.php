@@ -644,19 +644,20 @@ function translateDevice(d) {
 
 function translateChannel(ch) {
     const map = {
-        'Organic Search':    '自然検索',
+        'Organic Search':    '検索（自然）',
         'Direct':            '直接',
-        'Organic Social':    'SNS（自然）',
-        'Paid Social':       'SNS（広告）',
-        'Paid Search':       '検索広告',
-        'Referral':          '参照元',
+        'Organic Social':    'SNS',
+        'Paid Social':       'SNS広告',
+        'Paid Search':       '検索（広告）',
+        'Referral':          '他サイト',
         'Email':             'メール',
         'Display':           'ディスプレイ広告',
         'Organic Maps':      '地図検索',
         'Organic Shopping':  'ショッピング',
-        'Unassigned':        'その他',
+        'Unassigned':        '不明',
         'Cross-network':     'クロスネットワーク',
         'Affiliates':        'アフィリエイト',
+        '(other)':           'その他',
     };
     return map[ch] || ch;
 }

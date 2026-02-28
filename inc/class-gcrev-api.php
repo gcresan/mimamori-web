@@ -5763,13 +5763,42 @@ PROMPT;
 
             $items = [];
 
+            // チャネル名 日本語マップ
+            $channel_ja = [
+                'Organic Search'   => '検索（自然）',
+                'Direct'           => '直接',
+                'Referral'         => '他サイト',
+                'Organic Social'   => 'SNS',
+                'Paid Search'      => '検索（広告）',
+                'Paid Social'      => 'SNS広告',
+                'Email'            => 'メール',
+                'Display'          => 'ディスプレイ広告',
+                'Organic Maps'     => '地図検索',
+                'Organic Shopping' => 'ショッピング',
+                'Unassigned'       => '不明',
+                'Cross-network'    => 'クロスネットワーク',
+                'Affiliates'       => 'アフィリエイト',
+                '(other)'         => 'その他',
+            ];
+
+            // 指標名 日本語マップ
+            $metric_ja = [
+                'sessions'  => 'セッション数',
+                'users'     => 'ユーザー数',
+                'pageViews' => '表示回数',
+            ];
+
             switch ( $type ) {
                 case 'region':
                     $raw = $this->ga4->fetch_region_details( $ga4_id, $start, $end );
                     $raw = array_slice( $raw, 0, 10 );
                     foreach ( $raw as $r ) {
+                        $region_name = $r['region'] ?: '';
+                        if ( $region_name === '' || $region_name === '(not set)' ) {
+                            $region_name = '（不明）';
+                        }
                         $items[] = [
-                            'label' => $r['region'] ?: '(not set)',
+                            'label' => $region_name,
                             'value' => (int) ( $r[ $metric ] ?? $r['sessions'] ),
                         ];
                     }
@@ -5781,6 +5810,9 @@ PROMPT;
                     $raw = array_slice( $raw, 0, 10 );
                     foreach ( $raw as $p ) {
                         $display = $p['title'] ?: $p['page'];
+                        if ( $display === '(not set)' || $display === '' ) {
+                            $display = '（不明なページ）';
+                        }
                         if ( mb_strlen( $display ) > 30 ) {
                             $display = mb_substr( $display, 0, 30 ) . '…';
                         }
@@ -5796,20 +5828,24 @@ PROMPT;
                     $raw = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
                     $channels = array_slice( $raw['channels'] ?? [], 0, 10 );
                     foreach ( $channels as $ch ) {
+                        $ch_name = $ch['channel'] ?: '（不明）';
                         $items[] = [
-                            'label' => $ch['channel'] ?: '(unknown)',
+                            'label' => $channel_ja[ $ch_name ] ?? $ch_name,
                             'value' => (int) ( $ch[ $metric ] ?? $ch['sessions'] ),
                         ];
                     }
                     break;
             }
 
+            $metric_label = $metric_ja[ $metric ] ?? $metric;
+
             $result = [
-                'success' => true,
-                'month'   => $month,
-                'type'    => $type,
-                'metric'  => $metric,
-                'items'   => $items,
+                'success'      => true,
+                'month'        => $month,
+                'type'         => $type,
+                'metric'       => $metric,
+                'metric_label' => $metric_label,
+                'items'        => $items,
             ];
 
             set_transient( $cache_key, $result, 86400 );

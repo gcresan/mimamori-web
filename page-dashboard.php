@@ -1352,6 +1352,7 @@ foreach ($highlight_items as $highlight):
         ddChartWrap.innerHTML = '<canvas id="drilldownChart"></canvas>';
         var labels = json.items.map(function(i) { return i.label; });
         var values = json.items.map(function(i) { return i.value; });
+        var metricLabel = json.metric_label || json.metric || '';
 
         var barColors = [
             '#3D6B6E','#5A8A8D','#7BA9AC','#9CC8CB','#B5574B',
@@ -1363,6 +1364,7 @@ foreach ($highlight_items as $highlight):
             data: {
                 labels: labels,
                 datasets: [{
+                    label: metricLabel,
                     data: values,
                     backgroundColor: barColors.slice(0, values.length),
                     borderRadius: 4,
@@ -1377,13 +1379,17 @@ foreach ($highlight_items as $highlight):
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: function(ctx) { return ctx.parsed.x.toLocaleString(); }
+                            title: function(ctx) { return ctx[0].label; },
+                            label: function(ctx) {
+                                return metricLabel + ': ' + ctx.parsed.x.toLocaleString();
+                            }
                         }
                     }
                 },
                 scales: {
                     x: {
                         beginAtZero: true,
+                        title: { display: true, text: metricLabel, font: { size: 11 }, color: '#999' },
                         ticks: { callback: function(v) { return v.toLocaleString(); } }
                     },
                     y: {
