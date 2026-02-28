@@ -431,6 +431,31 @@ class Gcrev_Insight_API {
                 ]
             ]
         ]);
+
+        // ===== ダッシュボードドリルダウン用エンドポイント =====
+        register_rest_route('gcrev/v1', '/dashboard/drilldown', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_dashboard_drilldown' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+            'args'                => [
+                'month' => [
+                    'required'          => true,
+                    'validate_callback' => function($param) {
+                        return preg_match('/^\d{4}-\d{2}$/', $param);
+                    }
+                ],
+                'type'  => [
+                    'required'          => true,
+                    'validate_callback' => function($param) {
+                        return in_array($param, ['region', 'page', 'source']);
+                    }
+                ],
+                'metric' => [
+                    'required' => false,
+                    'default'  => 'sessions',
+                ]
+            ]
+        ]);
     }
 
     // =========================================================
@@ -5700,6 +5725,98 @@ PROMPT;
 
         } catch (\Exception $e) {
             error_log("[GCREV][Trend] Error: " . $e->getMessage());
+            return new \WP_REST_Response(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * REST callback: /gcrev/v1/dashboard/drilldown?month=YYYY-MM&type=region|page|source
+     * 指定月の内訳データ（TOP10）を返す
+     */
+    public function rest_get_dashboard_drilldown(\WP_REST_Request $request): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
+            }
+
+            $month  = $request->get_param('month');    // "2026-01"
+            $type   = $request->get_param('type');     // "region"|"page"|"source"
+            $metric = $request->get_param('metric') ?? 'sessions';
+
+            $config  = $this->config->get_user_config( $user_id );
+            $ga4_id  = $config['ga4_id'] ?? '';
+            if ( empty( $ga4_id ) ) {
+                return new \WP_REST_Response(['success' => false, 'message' => 'GA4 未設定'], 400);
+            }
+
+            // 月 → 日付範囲
+            $start = $month . '-01';
+            $end   = date('Y-m-t', strtotime( $start ));
+
+            // キャッシュ（24時間）
+            $cache_key = "gcrev_drilldown_{$user_id}_{$month}_{$type}";
+            $cached = get_transient( $cache_key );
+            if ( $cached !== false && is_array( $cached ) ) {
+                return new \WP_REST_Response( $cached, 200 );
+            }
+
+            $items = [];
+
+            switch ( $type ) {
+                case 'region':
+                    $raw = $this->ga4->fetch_region_details( $ga4_id, $start, $end );
+                    $raw = array_slice( $raw, 0, 10 );
+                    foreach ( $raw as $r ) {
+                        $items[] = [
+                            'label' => $r['region'] ?: '(not set)',
+                            'value' => (int) ( $r[ $metric ] ?? $r['sessions'] ),
+                        ];
+                    }
+                    break;
+
+                case 'page':
+                    $site_url = $config['gsc_url'] ?? '';
+                    $raw = $this->ga4->fetch_page_details( $ga4_id, $start, $end, $site_url );
+                    $raw = array_slice( $raw, 0, 10 );
+                    foreach ( $raw as $p ) {
+                        $display = $p['title'] ?: $p['page'];
+                        if ( mb_strlen( $display ) > 30 ) {
+                            $display = mb_substr( $display, 0, 30 ) . '…';
+                        }
+                        $items[] = [
+                            'label' => $display,
+                            'value' => (int) ( $p['pageViews'] ?? 0 ),
+                        ];
+                    }
+                    $metric = 'pageViews';
+                    break;
+
+                case 'source':
+                    $raw = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
+                    $channels = array_slice( $raw['channels'] ?? [], 0, 10 );
+                    foreach ( $channels as $ch ) {
+                        $items[] = [
+                            'label' => $ch['channel'] ?: '(unknown)',
+                            'value' => (int) ( $ch[ $metric ] ?? $ch['sessions'] ),
+                        ];
+                    }
+                    break;
+            }
+
+            $result = [
+                'success' => true,
+                'month'   => $month,
+                'type'    => $type,
+                'metric'  => $metric,
+                'items'   => $items,
+            ];
+
+            set_transient( $cache_key, $result, 86400 );
+            return new \WP_REST_Response( $result, 200 );
+
+        } catch ( \Exception $e ) {
+            error_log( '[GCREV][Drilldown] Error: ' . $e->getMessage() );
             return new \WP_REST_Response(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }

@@ -570,6 +570,44 @@ if ($infographic) {
     </div>
   </div>
 
+  <!-- ドリルダウンポップオーバー -->
+  <div class="drilldown-popover" id="drilldownPopover" style="display:none;">
+    <div class="drilldown-popover-title" id="drilldownPopoverTitle"></div>
+    <button type="button" class="drilldown-popover-item" data-dd-type="region">
+      <span class="drilldown-popover-icon">📍</span>市区町村別
+    </button>
+    <button type="button" class="drilldown-popover-item" data-dd-type="page">
+      <span class="drilldown-popover-icon">📄</span>ランディングページ
+    </button>
+    <button type="button" class="drilldown-popover-item" data-dd-type="source">
+      <span class="drilldown-popover-icon">🔗</span>流入元
+    </button>
+  </div>
+
+  <!-- ドリルダウンモーダル -->
+  <div class="drilldown-modal-overlay" id="drilldownOverlay" style="display:none;">
+    <div class="drilldown-modal">
+      <div class="drilldown-modal-header">
+        <h3 class="drilldown-modal-title" id="drilldownModalTitle"></h3>
+        <button type="button" class="drilldown-modal-close" id="drilldownModalClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="drilldown-modal-body">
+        <div class="drilldown-modal-loading" id="drilldownLoading">
+          <div class="kpi-trend-skeleton"></div>
+        </div>
+        <div class="drilldown-modal-chart" id="drilldownChartWrap" style="display:none;">
+          <canvas id="drilldownChart"></canvas>
+        </div>
+        <div class="drilldown-modal-empty" id="drilldownEmpty" style="display:none;">
+          データがありません
+        </div>
+        <div class="drilldown-modal-error" id="drilldownError" style="display:none;">
+          データを取得できませんでした
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 採点の内訳（breakdown） -->
   <?php
   $breakdown = $infographic['breakdown'] ?? null;
@@ -1091,6 +1129,8 @@ foreach ($highlight_items as $highlight):
                     borderWidth: 2,
                     pointBackgroundColor: pointBg,
                     pointRadius: pointR,
+                    pointHitRadius: 15,
+                    pointHoverRadius: 7,
                     tension: 0.3,
                     fill: true,
                     backgroundColor: 'rgba(59,130,246,0.08)',
@@ -1099,12 +1139,22 @@ foreach ($highlight_items as $highlight):
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                onHover: function(evt, elements) {
+                    evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+                },
+                onClick: function(evt, elements) {
+                    if (!elements.length) return;
+                    var idx = elements[0].index;
+                    var month = json.labels[idx];
+                    showDrilldownPopover(evt, month);
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
                             title: function(ctx){ return json.labels[ctx[0].dataIndex]; },
-                            label: function(ctx){ return label + ': ' + ctx.parsed.y.toLocaleString(); }
+                            label: function(ctx){ return label + ': ' + ctx.parsed.y.toLocaleString(); },
+                            afterLabel: function(){ return 'クリックして詳細を表示'; }
                         }
                     }
                 },
@@ -1117,6 +1167,163 @@ foreach ($highlight_items as $highlight):
             }
         });
     }
+
+    // --- ドリルダウン ---
+    var ddPopover    = document.getElementById('drilldownPopover');
+    var ddPopTitle   = document.getElementById('drilldownPopoverTitle');
+    var ddOverlay    = document.getElementById('drilldownOverlay');
+    var ddModalTitle = document.getElementById('drilldownModalTitle');
+    var ddLoading    = document.getElementById('drilldownLoading');
+    var ddChartWrap  = document.getElementById('drilldownChartWrap');
+    var ddEmpty      = document.getElementById('drilldownEmpty');
+    var ddError      = document.getElementById('drilldownError');
+    var ddClose      = document.getElementById('drilldownModalClose');
+    var ddChart      = null;
+    var _ddCache     = {};
+    var _ddMonth     = null;
+
+    function showDrilldownPopover(evt, month) {
+        _ddMonth = month;
+        var parts = month.split('-');
+        ddPopTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月';
+
+        var chartRect = chartWrap.getBoundingClientRect();
+        var x = evt.native.clientX - chartRect.left;
+        var y = evt.native.clientY - chartRect.top;
+
+        ddPopover.style.left = Math.min(x, chartRect.width - 180) + 'px';
+        ddPopover.style.top  = Math.max(y - 150, 0) + 'px';
+        ddPopover.style.display = 'block';
+    }
+
+    // ポップオーバー外クリックで閉じる
+    document.addEventListener('click', function(e) {
+        if (ddPopover.style.display === 'block'
+            && !ddPopover.contains(e.target)
+            && !e.target.closest('#kpiTrendChartWrap')) {
+            ddPopover.style.display = 'none';
+        }
+    });
+
+    // メニュー項目クリック → モーダル表示
+    ddPopover.addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-dd-type]');
+        if (!btn) return;
+        ddPopover.style.display = 'none';
+        openDrilldownModal(_ddMonth, btn.dataset.ddType);
+    });
+
+    function openDrilldownModal(month, type) {
+        var typeLabels = { region: '市区町村別', page: 'ランディングページ', source: '流入元' };
+        var parts = month.split('-');
+        ddModalTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月 — ' + typeLabels[type];
+
+        ddLoading.style.display   = 'block';
+        ddChartWrap.style.display = 'none';
+        ddEmpty.style.display     = 'none';
+        ddError.style.display     = 'none';
+        ddOverlay.style.display   = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        var cacheKey = month + '_' + type;
+        if (_ddCache[cacheKey]) {
+            renderDrilldownChart(_ddCache[cacheKey]);
+            return;
+        }
+
+        fetch(restBase + 'dashboard/drilldown?month=' + encodeURIComponent(month)
+              + '&type=' + encodeURIComponent(type), {
+            headers: { 'X-WP-Nonce': nonce },
+            credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+            if (json.success && json.items && json.items.length) {
+                _ddCache[cacheKey] = json;
+                renderDrilldownChart(json);
+            } else if (json.success && (!json.items || !json.items.length)) {
+                ddLoading.style.display = 'none';
+                ddEmpty.style.display   = 'block';
+            } else {
+                ddLoading.style.display = 'none';
+                ddError.style.display   = 'block';
+            }
+        })
+        .catch(function() {
+            ddLoading.style.display = 'none';
+            ddError.style.display   = 'block';
+        });
+    }
+
+    function renderDrilldownChart(json) {
+        ddLoading.style.display   = 'none';
+        ddChartWrap.style.display = 'block';
+        if (ddChart) { ddChart.destroy(); ddChart = null; }
+
+        ddChartWrap.innerHTML = '<canvas id="drilldownChart"></canvas>';
+        var labels = json.items.map(function(i) { return i.label; });
+        var values = json.items.map(function(i) { return i.value; });
+
+        var barColors = [
+            '#3D6B6E','#5A8A8D','#7BA9AC','#9CC8CB','#B5574B',
+            '#C97A6F','#D49D94','#DFBFB8','#A8A29E','#C5BFB9'
+        ];
+
+        ddChart = new Chart('drilldownChart', {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: barColors.slice(0, values.length),
+                    borderRadius: 4,
+                    barPercentage: 0.7
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) { return ctx.parsed.x.toLocaleString(); }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { callback: function(v) { return v.toLocaleString(); } }
+                    },
+                    y: {
+                        ticks: {
+                            font: { size: 12 },
+                            callback: function(value) {
+                                var lbl = this.getLabelForValue(value);
+                                return lbl.length > 20 ? lbl.substring(0, 20) + '…' : lbl;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // モーダル閉じる
+    function closeDrilldownModal() {
+        ddOverlay.style.display = 'none';
+        document.body.style.overflow = '';
+        if (ddChart) { ddChart.destroy(); ddChart = null; }
+    }
+    ddClose.addEventListener('click', closeDrilldownModal);
+    ddOverlay.addEventListener('click', function(e) {
+        if (e.target === ddOverlay) closeDrilldownModal();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && ddOverlay.style.display === 'flex') closeDrilldownModal();
+    });
 })();
 
 // --- ハイライト詳細アコーディオン: aria-expanded 同期 ---
