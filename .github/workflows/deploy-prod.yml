@@ -1,0 +1,105 @@
+name: Deploy to Production
+
+# 手動実行のみ（GitHub Actions の "Run workflow" ボタンから）
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # タグ・履歴を全取得（差分コミット解析に必要）
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.PROD_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync
+        env:
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='.sass-cache' \
+            --exclude='.DS_Store' \
+            --exclude='config.rb' \
+            ./ root@${PROD_SSH_HOST}:${PROD_DEPLOY_PATH}
+
+      - name: Post update notifications to prod
+        env:
+          PROD_URL: ${{ secrets.MIMAMORI_SITE_URL }}
+          INGEST_TOKEN: ${{ secrets.MIMAMORI_UPDATES_INGEST_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # 前回の本番デプロイタグを取得
+          LAST_TAG=$(git tag -l 'prod-deploy-*' --sort=-creatordate | head -n 1)
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous prod-deploy tag found. Posting last 10 qualifying commits."
+            RANGE="HEAD~10..HEAD"
+          else
+            echo "Last prod deploy tag: $LAST_TAG"
+            RANGE="${LAST_TAG}..HEAD"
+          fi
+
+          # 対象コミットを走査し、feat:/fix:/style: を本番に POST
+          POSTED=0
+          git log "$RANGE" --pretty=format:"%H %s" --reverse | while IFS= read -r line; do
+            SHA=$(echo "$line" | cut -d' ' -f1)
+            MSG=$(echo "$line" | cut -d' ' -f2-)
+
+            # feat: / fix: / style: プレフィックスのみ対象
+            if ! echo "$MSG" | grep -qE '^(feat|fix|style)(\(|:)'; then
+              continue
+            fi
+
+            # カテゴリ判定
+            if echo "$MSG" | grep -qE '^feat(\(|:)'; then
+              CATEGORY="feature"
+            elif echo "$MSG" | grep -qE '^fix(\(|:)'; then
+              CATEGORY="fix"
+            elif echo "$MSG" | grep -qE '^style(\(|:)'; then
+              CATEGORY="improvement"
+            else
+              CATEGORY="other"
+            fi
+
+            # prefix 除去
+            TITLE=$(echo "$MSG" | head -n 1 | sed -E 's/^(feat|fix|style)(\([^)]*\))?:\s*//')
+            VERSION="${SHA:0:7}"
+
+            PAYLOAD=$(jq -n \
+              --arg title "$TITLE" \
+              --arg category "$CATEGORY" \
+              --arg version "$VERSION" \
+              --arg content "Commit: ${SHA}" \
+              '{title: $title, category: $category, version: $version, content: $content}')
+
+            echo "→ Prod: $TITLE ($CATEGORY)"
+            curl -sf -X POST \
+              "${PROD_URL}/wp-json/mimamori/v1/updates/ingest" \
+              -H "Content-Type: application/json" \
+              -H "X-Mimamori-Ingest-Token: ${INGEST_TOKEN}" \
+              -d "$PAYLOAD" || echo "⚠ Prod post failed for: $TITLE (non-fatal)"
+
+            POSTED=$((POSTED + 1))
+          done
+
+          echo "✅ Posted update notifications to production."
+
+      - name: Tag this deployment
+        run: |
+          TAG="prod-deploy-$(date -u +'%Y%m%d-%H%M%S')"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "✅ Tagged deployment: $TAG"
