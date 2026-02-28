@@ -526,6 +526,88 @@ button.info-kpi-item {
   color: var(--mw-primary-blue);
 }
 
+/* ========== KPI Card — Loading State ========== */
+.info-kpi-item.is-kpi-loading [data-kpi-role="value"] {
+  background: linear-gradient(90deg, var(--mw-bg-tertiary) 25%, var(--mw-border-light) 50%, var(--mw-bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: mw-shimmer 1.5s infinite;
+  border-radius: 6px;
+  color: transparent;
+  min-width: 60px;
+  min-height: 46px;
+}
+.info-kpi-item.is-kpi-loading [data-kpi-role="diff"] {
+  background: linear-gradient(90deg, var(--mw-bg-tertiary) 25%, var(--mw-border-light) 50%, var(--mw-bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: mw-shimmer 1.5s infinite;
+  border-radius: 4px;
+  color: transparent;
+  min-width: 50px;
+  min-height: 16px;
+}
+
+/* Loading text + spinner */
+.info-kpi-loading-text {
+  font-size: 11px;
+  color: var(--mw-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+.info-kpi-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--mw-border-light);
+  border-top-color: var(--mw-primary-blue);
+  border-radius: 50%;
+  animation: kpi-spin 0.8s linear infinite;
+}
+@keyframes kpi-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Fade-in on value arrival */
+.info-kpi-item.is-kpi-loaded [data-kpi-role="value"],
+.info-kpi-item.is-kpi-loaded [data-kpi-role="diff"] {
+  animation: kpi-fade-in 0.4s ease;
+}
+@keyframes kpi-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ========== KPI Card — Error State ========== */
+.info-kpi-item.is-kpi-error [data-kpi-role="value"] {
+  font-size: 13px;
+  color: var(--mw-text-tertiary);
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+}
+.info-kpi-retry-btn {
+  font-size: 11px;
+  color: var(--mw-primary-blue);
+  background: none;
+  border: 1px solid var(--mw-primary-blue);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-top: 2px;
+  font-family: inherit;
+}
+.info-kpi-retry-btn:hover {
+  background: rgba(61, 107, 110, 0.08);
+}
+
+/* Timeout warning */
+.info-kpi-timeout-text {
+  font-size: 10px;
+  color: var(--mw-accent-attention);
+  margin-top: 2px;
+}
+
 /* ========== Summary Text ========== */
 .info-summary {
   display: flex;

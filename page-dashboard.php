@@ -925,16 +925,83 @@ foreach ($highlight_items as $highlight):
     updateInfoKpi('cv', currCv, currCv - prevCv);
 
     <?php else: ?>
-    // --- キャッシュミス: REST API で非同期取得（ページは即座に表示済み） ---
+    // --- キャッシュミス: REST API で非同期取得（スケルトン＋スピナー表示） ---
     (function(){
         var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
         var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
 
-        // KPI値にローディング表示（不透明度は変えず、テキストで明示）
-        document.querySelectorAll('.info-kpi-value').forEach(function(el){
-            el.dataset.originalText = el.textContent;
-            el.textContent = '---';
+        // visits/cv のみローディング表示（MEOはinfographic由来で正しいのでスキップ）
+        var kpiKeys = ['visits', 'cv'];
+        kpiKeys.forEach(function(key){
+            var card = document.querySelector('[data-kpi-key="' + key + '"]');
+            if (!card) return;
+            var valEl  = card.querySelector('[data-kpi-role="value"]');
+            var diffEl = card.querySelector('[data-kpi-role="diff"]');
+            if (valEl) {
+                valEl.dataset.originalText = valEl.textContent;
+                valEl.textContent = '\u8aad\u307f\u8fbc\u307f\u4e2d'; // 読み込み中（CSS shimmerで透明化）
+            }
+            if (diffEl) {
+                diffEl.dataset.originalText = diffEl.textContent;
+                diffEl.textContent = '';
+            }
+            card.classList.add('is-kpi-loading');
+            card.setAttribute('aria-busy', 'true');
+            // スピナー＋「読み込み中…」テキスト
+            var loadEl = document.createElement('span');
+            loadEl.className = 'info-kpi-loading-text';
+            loadEl.innerHTML = '<span class="info-kpi-spinner"></span>\u8aad\u307f\u8fbc\u307f\u4e2d\u2026';
+            loadEl.dataset.kpiRole = 'loading-indicator';
+            card.appendChild(loadEl);
         });
+
+        // タイムアウト警告（8秒後）
+        var timeoutId = setTimeout(function(){
+            kpiKeys.forEach(function(key){
+                var card = document.querySelector('[data-kpi-key="' + key + '"]');
+                if (!card || !card.classList.contains('is-kpi-loading')) return;
+                if (card.querySelector('.info-kpi-timeout-text')) return;
+                var el = document.createElement('span');
+                el.className = 'info-kpi-timeout-text';
+                el.textContent = '\u6642\u9593\u304c\u304b\u304b\u3063\u3066\u3044\u307e\u3059\u2026'; // 時間がかかっています…
+                card.appendChild(el);
+            });
+        }, 8000);
+
+        // ローディング解除＋フェードイン
+        function finishCard(key){
+            var card = document.querySelector('[data-kpi-key="' + key + '"]');
+            if (!card) return;
+            card.classList.remove('is-kpi-loading');
+            card.classList.add('is-kpi-loaded');
+            card.setAttribute('aria-busy', 'false');
+            var els = card.querySelectorAll('[data-kpi-role="loading-indicator"], .info-kpi-timeout-text');
+            els.forEach(function(e){ e.remove(); });
+        }
+
+        // エラー表示＋再取得ボタン
+        function errorCard(key){
+            var card = document.querySelector('[data-kpi-key="' + key + '"]');
+            if (!card) return;
+            card.classList.remove('is-kpi-loading');
+            card.classList.add('is-kpi-error');
+            card.setAttribute('aria-busy', 'false');
+            var els = card.querySelectorAll('[data-kpi-role="loading-indicator"], .info-kpi-timeout-text');
+            els.forEach(function(e){ e.remove(); });
+            var valEl = card.querySelector('[data-kpi-role="value"]');
+            if (valEl) valEl.textContent = '\u53d6\u5f97\u306b\u5931\u6557\u3057\u307e\u3057\u305f'; // 取得に失敗しました
+            var diffEl = card.querySelector('[data-kpi-role="diff"]');
+            if (diffEl) diffEl.textContent = '';
+            var retryBtn = document.createElement('button');
+            retryBtn.type = 'button';
+            retryBtn.className = 'info-kpi-retry-btn';
+            retryBtn.textContent = '\u518d\u53d6\u5f97'; // 再取得
+            retryBtn.addEventListener('click', function(e){
+                e.stopPropagation();
+                location.reload();
+            });
+            card.appendChild(retryBtn);
+        }
 
         Promise.all([
             fetch(restBase + 'dashboard/kpi?period=prev-month', {
@@ -946,25 +1013,27 @@ foreach ($highlight_items as $highlight):
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); })
         ]).then(function(results){
+            clearTimeout(timeoutId);
             var curr = results[0].success ? results[0].data : null;
             var prev = results[1].success ? results[1].data : null;
-            if(!curr) return;
+            if (!curr) {
+                kpiKeys.forEach(function(k){ errorCard(k); });
+                return;
+            }
 
             var cS = parseInt(String(curr.sessions || 0).replace(/,/g, ''), 10);
             var pS = prev ? parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10) : 0;
             updateInfoKpi('visits', cS, cS - pS);
+            finishCard('visits');
 
             var cC = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
             var pC = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
             updateInfoKpi('cv', cC, cC - pC);
+            finishCard('cv');
         }).catch(function(err){
+            clearTimeout(timeoutId);
             console.error('[GCREV] KPI async fetch error:', err);
-            // エラー時は保存していた元テキストに戻す
-            document.querySelectorAll('.info-kpi-value').forEach(function(el){
-                if (el.dataset.originalText) {
-                    el.textContent = el.dataset.originalText;
-                }
-            });
+            kpiKeys.forEach(function(k){ errorCard(k); });
         });
     })();
     <?php endif; ?>
