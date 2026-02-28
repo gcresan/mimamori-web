@@ -1440,7 +1440,8 @@
       return;
     }
 
-    switchViewMode('normal');
+    // 最大化（panel）で開く — FABと同じサイズ
+    switchViewMode('panel');
 
     if (!text) return;
 
