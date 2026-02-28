@@ -484,8 +484,8 @@ if ($infographic) {
     <!-- スコア -->
     <div class="info-score">
       <div class="info-score-circle">
+        <span class="info-score-label">100点中</span>
         <span class="info-score-value"><?php echo esc_html((string)($infographic['score'] ?? 0)); ?></span>
-        <span class="info-score-label">/ 100</span>
       </div>
 
       <?php
@@ -501,6 +501,8 @@ if ($infographic) {
       <?php if (!empty($infographic['status'])): ?>
         <span class="info-score-status"><?php echo esc_html($infographic['status']); ?></span>
       <?php endif; ?>
+
+      <button type="button" class="info-score-breakdown-link" id="scoreBreakdownOpen">内訳を見る</button>
     </div>
 
     <!-- KPI -->
@@ -627,7 +629,80 @@ if ($infographic) {
   <?php
   $breakdown = $infographic['breakdown'] ?? null;
   $has_breakdown = is_array($breakdown) && !empty($breakdown);
+  $bd_icons = [
+    'traffic' => '👥',
+    'cv'      => '🎯',
+    'gsc'     => '🔍',
+    'meo'     => '📍',
+  ];
+  $bd_labels = [
+    'traffic' => 'サイトに来た人の数',
+    'cv'      => '問い合わせ・申込み',
+    'gsc'     => '検索結果からクリックされた数',
+    'meo'     => '地図検索からの表示数',
+  ];
+  $sbd_hints = [
+    'traffic' => 'サイトへの訪問者数が多いほど高スコア',
+    'cv'      => 'お問い合わせや申込みの件数で評価',
+    'gsc'     => 'Google検索結果でのクリック数を評価',
+    'meo'     => 'Googleマップでの表示回数を評価',
+  ];
   ?>
+
+  <!-- スコア内訳モーダル -->
+  <div class="score-breakdown-overlay" id="scoreBreakdownOverlay" style="display:none;">
+    <div class="score-breakdown-modal">
+      <div class="score-breakdown-modal-header">
+        <h3 class="score-breakdown-modal-title">スコア内訳</h3>
+        <button type="button" class="score-breakdown-modal-close" id="scoreBreakdownClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="score-breakdown-modal-body">
+        <div class="score-breakdown-total">
+          <span class="score-breakdown-total-label">100点中</span>
+          <span class="score-breakdown-total-value"><?php echo esc_html((string)($infographic['score'] ?? 0)); ?></span>
+          <span class="score-breakdown-total-unit">点</span>
+        </div>
+
+        <?php if ($has_breakdown): ?>
+          <div class="score-breakdown-list">
+            <?php
+            foreach ($breakdown as $sbd_key => $sbd):
+              if (!is_array($sbd)) continue;
+              $sbd_label   = esc_html($bd_labels[$sbd_key] ?? $sbd['label'] ?? $sbd_key);
+              $sbd_points  = (int)($sbd['points'] ?? 0);
+              $sbd_max     = (int)($sbd['max'] ?? 25);
+              $sbd_pct     = (float)($sbd['pct'] ?? 0);
+              $sbd_icon    = $bd_icons[$sbd_key] ?? '📊';
+              $sbd_hint    = $sbd_hints[$sbd_key] ?? '';
+              $sbd_bar_pct = $sbd_max > 0 ? min(100, ($sbd_points / $sbd_max) * 100) : 0;
+              $sbd_pct_class = $sbd_pct > 0 ? 'positive' : ($sbd_pct < 0 ? 'negative' : 'neutral');
+              $sbd_pct_text  = ($sbd_pct > 0 ? '+' : '') . number_format($sbd_pct, 1) . '%';
+            ?>
+              <div class="score-breakdown-item">
+                <div class="score-breakdown-item-header">
+                  <span class="score-breakdown-item-icon"><?php echo $sbd_icon; ?></span>
+                  <span class="score-breakdown-item-label"><?php echo $sbd_label; ?></span>
+                  <span class="score-breakdown-item-points"><?php echo esc_html("{$sbd_points}/{$sbd_max}"); ?></span>
+                </div>
+                <div class="score-breakdown-item-bar-wrap">
+                  <div class="score-breakdown-item-bar" style="width:<?php echo esc_attr((string)$sbd_bar_pct); ?>%"></div>
+                </div>
+                <div class="score-breakdown-item-meta">
+                  <span class="score-breakdown-item-pct <?php echo esc_attr($sbd_pct_class); ?>">前月比 <?php echo esc_html($sbd_pct_text); ?></span>
+                  <?php if ($sbd_hint): ?>
+                    <span class="score-breakdown-item-hint"><?php echo esc_html($sbd_hint); ?></span>
+                  <?php endif; ?>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php else: ?>
+          <p class="score-breakdown-empty">内訳は集計中です</p>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+
   <details class="info-breakdown-details">
     <summary class="info-breakdown-toggle">
       <span class="info-breakdown-toggle-icon">📋</span>
@@ -649,18 +724,6 @@ if ($infographic) {
           </thead>
           <tbody>
           <?php
-          $bd_icons = [
-            'traffic' => '👥',
-            'cv'      => '🎯',
-            'gsc'     => '🔍',
-            'meo'     => '📍',
-          ];
-          $bd_labels = [
-            'traffic' => 'サイトに来た人の数',
-            'cv'      => '問い合わせ・申込み',
-            'gsc'     => '検索結果からクリックされた数',
-            'meo'     => '地図検索からの表示数',
-          ];
           foreach ($breakdown as $bd_key => $bd):
             if (!is_array($bd)) continue;
 
@@ -1498,6 +1561,32 @@ foreach ($highlight_items as $highlight):
         det.addEventListener('toggle', function(){
             summary.setAttribute('aria-expanded', det.open ? 'true' : 'false');
         });
+    });
+})();
+
+// --- スコア内訳モーダル ---
+(function(){
+    var openBtn  = document.getElementById('scoreBreakdownOpen');
+    var overlay  = document.getElementById('scoreBreakdownOverlay');
+    var closeBtn = document.getElementById('scoreBreakdownClose');
+    if (!openBtn || !overlay || !closeBtn) return;
+
+    function openModal() {
+        overlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    function closeModal() {
+        overlay.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    openBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closeModal();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && overlay.style.display === 'flex') closeModal();
     });
 })();
 </script>
