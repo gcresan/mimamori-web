@@ -611,6 +611,19 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
                 headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': NONCE },
                 body: JSON.stringify({ month: currentMonth, items: items })
             });
+
+            if (!res.ok) {
+                var errText = await res.text();
+                console.error('[CV Review] Save HTTP error', res.status, errText.substring(0, 1000));
+                var errMsg = '保存に失敗しました (HTTP ' + res.status + ')';
+                try {
+                    var errJson = JSON.parse(errText);
+                    if (errJson.message) errMsg = errJson.message;
+                } catch(_) {}
+                showMessage(errMsg, 'error');
+                return;
+            }
+
             var data = await res.json();
 
             if (data.success) {
@@ -623,11 +636,14 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
                 dirtyHashes.clear();
                 renderTable();
                 updateSaveBar();
-                showMessage('✅ ' + items.length + '件の変更を保存しました', 'success');
+                var msg = '✅ ' + data.updated + '件の変更を保存しました';
+                if (data.errors > 0) msg += '（' + data.errors + '件エラー）';
+                showMessage(msg, 'success');
             } else {
-                showMessage('保存に失敗しました: ' + (data.message || ''), 'error');
+                showMessage('保存に失敗しました: ' + (data.message || '不明なエラー'), 'error');
             }
         } catch(e) {
+            console.error('[CV Review] Save failed:', e);
             showMessage('保存に失敗しました: ' + e.message, 'error');
         }
 

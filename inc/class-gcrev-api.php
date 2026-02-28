@@ -4744,6 +4744,17 @@ PROMPT;
                 'breakdown_manual' => [],
                 'has_overrides'    => false,
             ];
+
+            // CVレビュー結果があれば上書き
+            $reviewed = $this->get_reviewed_cv_data($year_month, $user_id);
+            if ($reviewed !== null) {
+                $result['source'] = 'reviewed';
+                $result['total']  = $reviewed['total'];
+                // 日別データをレビュー結果でマージ
+                $result['daily'] = array_merge($empty_daily, $reviewed['daily']);
+                $result['components']['reviewed_total'] = $reviewed['total'];
+            }
+
             $this->effective_cv_cache[$cache_key] = $result;
             set_transient($transient_key, $result, 2 * HOUR_IN_SECONDS);
             return $result;
@@ -4831,9 +4842,68 @@ PROMPT;
             'breakdown_manual' => $breakdown_manual,
             'has_overrides'    => true,
         ];
+
+        // CVレビュー結果があれば上書き
+        $reviewed = $this->get_reviewed_cv_data($year_month, $user_id);
+        if ($reviewed !== null) {
+            $result['source'] = 'reviewed';
+            $result['total']  = $reviewed['total'];
+            // 日別データをレビュー結果でマージ
+            $result['daily'] = array_merge($empty_daily, $reviewed['daily']);
+            $result['components']['reviewed_total'] = $reviewed['total'];
+        }
+
         $this->effective_cv_cache[$cache_key] = $result;
         set_transient($transient_key, $result, 2 * HOUR_IN_SECONDS);
         return $result;
+    }
+
+    /**
+     * CVログ精査テーブルから有効CV数を取得
+     *
+     * gcrev_cv_review で status=1（有効CV）の行数をカウント。
+     * 1行＝1CV（event_count は常に1）。date_hour_minute から日別集計も行う。
+     *
+     * @return array|null レビューデータがなければ null。あれば ['total'=>int, 'daily'=>[date=>count]]
+     */
+    private function get_reviewed_cv_data(string $year_month, int $user_id): ?array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_cv_review';
+
+        if (!$this->table_exists($table)) {
+            return null;
+        }
+
+        // この月にレビュー済み（status!=0）の行が1件でもあるか
+        $review_count = (int)$wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND year_month = %s AND status != 0",
+            $user_id, $year_month
+        ));
+
+        if ($review_count === 0) {
+            return null; // レビュー未実施
+        }
+
+        // status=1（有効CV）の行を取得
+        $valid_rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT date_hour_minute FROM {$table} WHERE user_id = %d AND year_month = %s AND status = 1",
+            $user_id, $year_month
+        ), ARRAY_A);
+
+        // 日別集計: "202601150930" → "2026-01-15"
+        $daily = [];
+        foreach ($valid_rows as $row) {
+            $dhm = $row['date_hour_minute'];
+            if (strlen($dhm) >= 8) {
+                $date = substr($dhm, 0, 4) . '-' . substr($dhm, 4, 2) . '-' . substr($dhm, 6, 2);
+                $daily[$date] = ($daily[$date] ?? 0) + 1;
+            }
+        }
+
+        return [
+            'total' => count($valid_rows),
+            'daily' => $daily,
+        ];
     }
 
     private function check_has_actual_cv(string $year_month, int $user_id): bool {
@@ -6190,8 +6260,26 @@ PROMPT;
         }
 
         $table = $wpdb->prefix . 'gcrev_cv_review';
-        $now   = current_time('mysql');
+
+        // テーブル存在チェック — 無ければ作成を試みる
+        if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+            error_log('[GCREV] cv-review bulk-update: table not found, attempting creation');
+            if (function_exists('gcrev_cv_review_create_table')) {
+                gcrev_cv_review_create_table();
+            }
+            // 再チェック
+            if (!$wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table))) {
+                error_log('[GCREV] cv-review bulk-update: table creation failed');
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => 'データベーステーブルが見つかりません。管理者にお問い合わせください。',
+                ], 500);
+            }
+        }
+
+        $now     = current_time('mysql');
         $updated = 0;
+        $errors  = 0;
 
         foreach ($items as $item) {
             $row_hash = sanitize_text_field($item['row_hash'] ?? '');
@@ -6208,12 +6296,18 @@ PROMPT;
             ));
 
             if ($existing_id) {
-                $wpdb->update($table,
+                $result = $wpdb->update($table,
                     ['status' => $status, 'memo' => $memo, 'updated_by' => $user_id, 'updated_at' => $now],
                     ['id' => (int)$existing_id],
                     ['%d', '%s', '%d', '%s'],
                     ['%d']
                 );
+                if ($result === false) {
+                    error_log("[GCREV] cv-review UPDATE failed: hash={$row_hash}, error=" . $wpdb->last_error);
+                    $errors++;
+                } else {
+                    $updated++;
+                }
             } else {
                 // ディメンション値を含める
                 $event_name      = sanitize_text_field($item['event_name'] ?? '');
@@ -6224,7 +6318,7 @@ PROMPT;
                 $country         = sanitize_text_field($item['country'] ?? '');
                 $event_count     = isset($item['event_count']) ? (int)$item['event_count'] : 1;
 
-                $wpdb->insert($table, [
+                $result = $wpdb->insert($table, [
                     'user_id'          => $user_id,
                     'year_month'       => $month,
                     'row_hash'         => $row_hash,
@@ -6240,11 +6334,30 @@ PROMPT;
                     'updated_by'       => $user_id,
                     'updated_at'       => $now,
                 ], ['%d','%s','%s','%s','%s','%s','%s','%s','%s','%d','%d','%s','%d','%s']);
+                if ($result === false) {
+                    error_log("[GCREV] cv-review INSERT failed: hash={$row_hash}, error=" . $wpdb->last_error);
+                    $errors++;
+                } else {
+                    $updated++;
+                }
             }
-            $updated++;
         }
 
-        return new WP_REST_Response(['success' => true, 'updated' => $updated], 200);
+        // 有効CV保存後はダッシュボード系キャッシュも無効化
+        if ($updated > 0) {
+            delete_transient("gcrev_effcv_{$user_id}_{$month}");
+            delete_transient("gcrev_dash_{$user_id}_previousMonth");
+            delete_transient("gcrev_dash_{$user_id}_twoMonthsAgo");
+        }
+
+        if ($errors > 0 && $updated === 0) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => "保存に失敗しました（{$errors}件のエラー）",
+            ], 500);
+        }
+
+        return new WP_REST_Response(['success' => true, 'updated' => $updated, 'errors' => $errors], 200);
     }
 
     /**
