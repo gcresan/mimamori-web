@@ -222,8 +222,8 @@ get_template_part('template-parts/analysis-help');
                     <th>PV</th>
                     <th>平均滞在時間</th>
                     <th>直帰率</th>
-                    <th>CV数</th>
-                    <th>CVR</th>
+                    <th>ゴール数</th>
+                    <th>達成率</th>
                     <th>変動</th>
                     <th>シェア</th>
                 </tr>
@@ -981,7 +981,7 @@ function exportTableData() {
     }
     
     // CSV生成
-    const headers = ['順位', '地域', 'セッション', '割合', 'PV', '平均滞在時間', '直帰率', 'CV数', 'CVR', '変動'];
+    const headers = ['順位', '地域', 'セッション', '割合', 'PV', '平均滞在時間', '直帰率', 'ゴール数', '達成率', '変動'];
     const totalSessions = currentData.regions_detail.reduce((sum, r) => sum + (r.sessions || 0), 0);
     
     const rows = currentData.regions_detail.slice(0, 20).map((region, index) => {

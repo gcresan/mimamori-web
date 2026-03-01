@@ -4089,7 +4089,7 @@ class Gcrev_Insight_API {
     public function calc_monthly_health_score(array $curr, array $prev, array $opt = []): array {
         $dimensions = [
             'traffic' => ['label' => 'サイトに来た人の数',       'max' => 25],
-            'cv'      => ['label' => '問い合わせ・申込み',      'max' => 25],
+            'cv'      => ['label' => 'ゴール（問い合わせ・申込みなど）', 'max' => 25],
             'gsc'     => ['label' => '検索結果からクリックされた数', 'max' => 25],
             'meo'     => ['label' => '地図検索からの表示数',     'max' => 25],
         ];
@@ -4969,9 +4969,9 @@ PROMPT;
             $user_id = get_current_user_id();
         }
 
-        // 最大10件バリデーション
-        if (count($routes) > 10) {
-            return new WP_REST_Response(['success'=>false,'message'=>'キーイベントは最大10件まで設定できます'], 400);
+        // 最大20件バリデーション
+        if (count($routes) > 20) {
+            return new WP_REST_Response(['success'=>false,'message'=>'ゴールは最大20件まで設定できます'], 400);
         }
 
         // 設定済みイベントのみ使用フラグ & 電話タップイベント名
@@ -6249,7 +6249,7 @@ PROMPT;
                 'success' => true,
                 'rows'    => [],
                 'total_events' => 0,
-                'message' => 'CVイベントが設定されていません。CV設定ページから設定してください。',
+                'message' => 'ゴールが設定されていません。ゴールの数え方設定ページから設定してください。',
             ], 200);
         }
 

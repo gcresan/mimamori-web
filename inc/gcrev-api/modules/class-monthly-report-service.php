@@ -112,7 +112,7 @@ class Gcrev_Monthly_Report_Service {
 
         $defaults = [
             'most_important' => '新規ユーザー獲得',
-            'top_issue'      => 'コンバージョン改善',
+            'top_issue'      => 'ゴール改善',
             'opportunity'    => '地域施策見直し',
         ];
 

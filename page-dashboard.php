@@ -402,7 +402,7 @@ if ($infographic) {
     } else {
         $highlights = [
             'most_important' => '新規ユーザー獲得',
-            'top_issue'      => 'コンバージョン改善',
+            'top_issue'      => 'ゴール改善',
             'opportunity'    => '地域施策見直し',
         ];
     }
@@ -443,7 +443,7 @@ if ($infographic) {
   $congrats_kpi          = $infographic['kpi'] ?? [];
   $congrats_improved     = 0;
   $congrats_improved_labels = [];
-  $congrats_label_map    = ['visits' => '訪問数', 'cv' => '問合せ数', 'meo' => 'マップ表示'];
+  $congrats_label_map    = ['visits' => '訪問数', 'cv' => 'ゴール数', 'meo' => 'マップ表示'];
   foreach (['visits', 'cv', 'meo'] as $ck) {
       $cd = (int)($congrats_kpi[$ck]['diff'] ?? 0);
       $cv = (int)($congrats_kpi[$ck]['value'] ?? 0);
@@ -512,7 +512,7 @@ if ($infographic) {
         <?php
         $kpi_items = [
           'visits' => ['label' => '訪問数',   'icon' => '👥', 'metric' => 'sessions'],
-          'cv'     => ['label' => '問合せ数', 'icon' => '🎯', 'metric' => 'cv'],
+          'cv'     => ['label' => 'ゴール数', 'icon' => '🎯', 'metric' => 'cv'],
           'meo'    => ['label' => 'Googleマップでの表示回数',  'icon' => '📍', 'metric' => 'meo'],
         ];
         $first_kpi = true;
@@ -637,13 +637,13 @@ if ($infographic) {
   ];
   $bd_labels = [
     'traffic' => 'サイトに来た人の数',
-    'cv'      => '問い合わせ・申込み',
+    'cv'      => 'ゴール（問い合わせ・申込みなど）',
     'gsc'     => '検索結果からクリックされた数',
     'meo'     => '地図検索からの表示数',
   ];
   $sbd_hints = [
     'traffic' => 'サイトへの訪問者数が多いほど高スコア',
-    'cv'      => 'お問い合わせや申込みの件数で評価',
+    'cv'      => 'ゴールの達成件数で評価',
     'gsc'     => 'Google検索結果でのクリック数を評価',
     'meo'     => 'Googleマップでの表示回数を評価',
   ];
@@ -747,7 +747,7 @@ $next_action = !empty($infographic['action'])
 
 $highlight_items = [
     ['label' => '📈 今月うまくいっていること',  'value' => $highlights['most_important'] ?? '新規ユーザー獲得', 'key' => 'most_important', 'ai_instruction' => 'この「良かった点」を踏まえて、次に伸ばすべきポイントは？'],
-    ['label' => '⚠️ 今いちばん気をつけたい点',  'value' => $highlights['top_issue'] ?? 'コンバージョン改善',    'key' => 'top_issue',       'ai_instruction' => 'この「課題」の原因と、最短で効く改善を3つ提案して'],
+    ['label' => '⚠️ 今いちばん気をつけたい点',  'value' => $highlights['top_issue'] ?? 'ゴール改善',    'key' => 'top_issue',       'ai_instruction' => 'この「課題」の原因と、最短で効く改善を3つ提案して'],
     ['label' => '🎯 次にやるとよいこと',         'value' => $next_action,                                       'key' => 'opportunity',     'ai_instruction' => 'この「次にやること」を具体的な手順に分解して教えて'],
 ];
 

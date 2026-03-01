@@ -1,6 +1,6 @@
 <?php
 /*
-Template Name: CV設定
+Template Name: ゴール設定
 */
 
 if (!is_user_logged_in()) {
@@ -12,14 +12,14 @@ $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
 
 // ページタイトル設定
-set_query_var('gcrev_page_title', '問い合わせの数え方設定');
+set_query_var('gcrev_page_title', 'ゴールの数え方設定');
 
 // パンくず設定
 $breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
 $breadcrumb .= '<span>›</span>';
 $breadcrumb .= '<a href="' . esc_url(home_url('/analysis/')) . '">分析</a>';
 $breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>問い合わせの数え方設定</strong>';
+$breadcrumb .= '<strong>ゴールの数え方設定</strong>';
 set_query_var('gcrev_breadcrumb', $breadcrumb);
 
 get_header();
@@ -167,10 +167,10 @@ get_header();
     <div class="settings-card">
         <h2>
             <span>⚙️</span>
-            <span>キーイベント設定</span>
+            <span>ゴール設定</span>
         </h2>
         <p class="cv-settings-description">
-            お問い合わせとしてカウントするGA4イベント（キーイベント）を設定します。
+            ゴールとは、このホームページで「達成したい成果」を示す指標です。問い合わせだけでなく、電話タップやページ到達などもゴールとして設定できます。ここでは、ゴールとしてカウントするGA4イベントを設定します。
         </p>
 
         <input type="hidden" id="cv-settings-user" value="<?php echo esc_attr($user_id); ?>">
@@ -188,14 +188,14 @@ get_header();
                 <tbody id="cv-routes-rows"></tbody>
             </table>
             <div style="margin-bottom:16px;">
-                <button type="button" class="btn-outline" id="btn-add-cv-route" data-gcrev-ignore-unsaved="1" style="font-size:13px;">＋ キーイベントを追加</button>
+                <button type="button" class="btn-outline" id="btn-add-cv-route" data-gcrev-ignore-unsaved="1" style="font-size:13px;">＋ ゴールを追加</button>
                 <span id="cv-routes-count" class="cv-routes-count"></span>
             </div>
 
             <div class="form-group">
                 <label for="cv-only-configured" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
                     <input type="checkbox" id="cv-only-configured" data-gcrev-ignore-unsaved="1">
-                    <span>設定したキーイベント以外はCV分析に含めない</span>
+                    <span>設定したゴール以外はゴール分析に含めない</span>
                 </label>
             </div>
 
@@ -374,7 +374,7 @@ function attachSuggest(input) {
             if (ev.is_key_event) {
                 var badge = document.createElement('span');
                 badge.className = 'key-badge';
-                badge.textContent = 'キーイベント';
+                badge.textContent = 'ゴール';
                 metaSpan.appendChild(badge);
             }
             if (ev.count > 0) {
@@ -473,7 +473,7 @@ function addRouteRow(eventName, label, order) {
     if (!tbody) return;
     var currentCount = tbody.querySelectorAll('tr').length;
     if (currentCount >= MAX_ROUTES) {
-        alert('キーイベントは最大' + MAX_ROUTES + '件まで設定できます');
+        alert('ゴールは最大' + MAX_ROUTES + '件まで設定できます');
         return;
     }
     var tr = document.createElement('tr');

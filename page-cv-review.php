@@ -1,6 +1,6 @@
 <?php
 /*
-Template Name: CVログ精査
+Template Name: ゴールの確認
 */
 
 if (!is_user_logged_in()) {
@@ -9,12 +9,12 @@ if (!is_user_logged_in()) {
 }
 
 // パンくず設定
-set_query_var('gcrev_page_title', '問い合わせの実数調整');
+set_query_var('gcrev_page_title', 'ゴールの確認（手動調整）');
 $breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
 $breadcrumb .= '<span>›</span>';
 $breadcrumb .= '<a href="' . esc_url(home_url('/dashboard/')) . '">全体のようす</a>';
 $breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>問い合わせの実数調整</strong>';
+$breadcrumb .= '<strong>ゴールの確認（手動調整）</strong>';
 set_query_var('gcrev_breadcrumb', $breadcrumb);
 
 get_header();
@@ -180,8 +180,8 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     <!-- CVイベント未設定メッセージ -->
     <div id="cvNoConfig" style="display:none;">
         <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:24px; text-align:center;">
-            <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">キーイベントが設定されていません</p>
-            <p style="margin:0;"><a href="<?php echo esc_url(home_url('/analysis/cv-settings/')); ?>" style="color:#2563eb; font-weight:600;">問い合わせの数え方設定ページ</a>から設定してください。</p>
+            <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">ゴールが設定されていません</p>
+            <p style="margin:0;"><a href="<?php echo esc_url(home_url('/analysis/cv-settings/')); ?>" style="color:#2563eb; font-weight:600;">ゴールの数え方設定ページ</a>から設定してください。</p>
         </div>
     </div>
 

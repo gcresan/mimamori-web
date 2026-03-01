@@ -121,8 +121,8 @@ get_template_part('template-parts/analysis-help');
                     <th>PV</th>
                     <th>平均滞在時間</th>
                     <th>直帰率</th>
-                    <th>CV数</th>
-                    <th>CVR</th>
+                    <th>ゴール数</th>
+                    <th>達成率</th>
                 </tr>
             </thead>
             <tbody id="detailTableBody">
@@ -682,7 +682,7 @@ function exportTableData() {
     }
     
     // CSV生成
-    const headers = ['参照元', 'セッション', 'PV', '平均滞在時間', '直帰率', 'CV数', 'CVR'];
+    const headers = ['参照元', 'セッション', 'PV', '平均滞在時間', '直帰率', 'ゴール数', '達成率'];
     const rows = currentData.sources_detail.map(source => [
         `${source.source} / ${source.medium}`,
         source.sessions,

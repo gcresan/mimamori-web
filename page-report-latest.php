@@ -417,7 +417,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">CV数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span></span>
+                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span></span>
                 <div class="kpi-icon" style="background: rgba(61,139,110,0.1);">🎉</div>
             </div>
             <div class="kpi-value" id="kpi-conversions">-</div>

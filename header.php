@@ -134,7 +134,7 @@
                      </li>
                      <li class="nav-item">
                         <a href="<?php echo home_url('/analysis/analysis-cv/'); ?>" class="nav-link <?php echo is_page('analysis-cv') ? 'active' : ''; ?>">
-                        <span>お問い合わせ分析</span>
+                        <span>ゴール分析</span>
                         </a>
                      </li>
                   </ul>
@@ -160,12 +160,12 @@
                      </li>
                      <li class="nav-item">
                         <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
-                        <span>問い合わせの実数調整</span>
+                        <span>ゴールの確認（手動調整）</span>
                         </a>
                      </li>
                      <li class="nav-item">
                         <a href="<?php echo home_url('/analysis/cv-settings/'); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
-                        <span>問い合わせの数え方設定</span>
+                        <span>ゴールの数え方設定</span>
                         </a>
                      </li>
                   </ul>

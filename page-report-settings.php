@@ -120,13 +120,13 @@ get_header();
 
         <div class="form-group">
             <label for="input-issue">課題</label>
-            <textarea id="input-issue" placeholder="例：問い合わせ数の増加、コンバージョン率向上"><?php echo esc_textarea($saved_issue); ?></textarea>
+            <textarea id="input-issue" placeholder="例：ゴール達成数の増加、ゴール達成率の向上"><?php echo esc_textarea($saved_issue); ?></textarea>
         </div>
 
         <div class="form-row">
             <div class="form-group">
                 <label for="input-goal-monthly">今月の目標</label>
-                <input type="text" id="input-goal-monthly" placeholder="例：CV数を前月比110%に" value="<?php echo esc_attr($saved_goal_monthly); ?>">
+                <input type="text" id="input-goal-monthly" placeholder="例：ゴール数を前月比110%に" value="<?php echo esc_attr($saved_goal_monthly); ?>">
             </div>
             <div class="form-group">
                 <label for="input-focus-numbers">注目している指標</label>
@@ -141,7 +141,7 @@ get_header();
 
         <div class="form-group">
             <label for="input-goal-main">主要目標</label>
-            <textarea id="input-goal-main" placeholder="例：年間で問い合わせ数を200件に到達"><?php echo esc_textarea($saved_goal_main); ?></textarea>
+            <textarea id="input-goal-main" placeholder="例：年間でゴール達成数を200件に到達"><?php echo esc_textarea($saved_goal_main); ?></textarea>
         </div>
 
         <div class="form-group">

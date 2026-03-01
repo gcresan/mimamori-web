@@ -858,14 +858,14 @@ add_action('wp_enqueue_scripts', function() {
             'action'  => [
                 '今日30分でできる改善を1つ教えて',
                 'まず何からやればいい？（1つだけ）',
-                '問い合わせを増やすために、いま一番やるべきことは？',
+                'ゴール達成を増やすために、いま一番やるべきことは？',
                 'サイトで直すなら、どのページを直すのが効果的？',
                 '次の一歩を3つ教えて（かんたんに）',
             ],
             'trouble' => [
                 'やってみたけど成果が出ない。原因をやさしく教えて',
                 'アクセスが増えない理由を、むずかしい言葉なしで教えて',
-                '問い合わせが増えないのは、何が原因か考えて',
+                'ゴール達成が増えないのは、何が原因か考えて',
                 'どこがボトルネック？（集客／ページ内容／導線のどれ？）',
                 '次は何を変えたらいい？（1つだけ）',
             ],
@@ -881,7 +881,7 @@ add_action('wp_enqueue_scripts', function() {
             'action'  => [
                 '今月やるべきことを優先順位つきで3つ提案して',
                 '即効性/中期/やらない を分けて改善案を出して',
-                '問い合わせを増やすための改善を3つ、効果順に',
+                'ゴール達成を増やすための改善を3つ、効果順に',
                 'SEOで伸ばすなら、どのページをどう直すべき？',
                 '最小工数で最大効果が出そうな一手は？',
             ],
@@ -990,7 +990,7 @@ function mimamori_get_system_prompt(): string {
   絶対に使ってはいけない言葉と言い換え例：
   × CTR → ○「検索結果でクリックされた割合」
   × セッション → ○「サイトへの訪問回数」
-  × コンバージョン/CV → ○「お問い合わせや申込みなどの成果」
+  × コンバージョン/CV → ○「ゴール（問い合わせや申込みなどの成果）」
   × 直帰率 → ○「1ページだけ見てすぐ帰った人の割合」
   × エンゲージメント → ○「しっかり見てくれた人の割合」
   × インプレッション → ○「検索結果に表示された回数」
@@ -1820,13 +1820,13 @@ function mimamori_get_page_context( array $current_page ): string {
     $contexts = [
         '/mypage/dashboard/'         => 'ダッシュボード（月次KPIサマリー）',
         '/mypage/analysis/source/'   => '流入元分析（チャネル別・参照元別のアクセス内訳）',
-        '/mypage/analysis/page/'     => 'ページ別分析（各ページのPV・滞在時間・CVR）',
+        '/mypage/analysis/page/'     => 'ページ別分析（各ページのPV・滞在時間・達成率）',
         '/mypage/analysis/keywords/' => 'キーワード分析（検索クエリ・表示回数・CTR・順位）',
-        '/mypage/analysis/region/'   => '地域別分析（都道府県ごとのアクセス・CV）',
+        '/mypage/analysis/region/'   => '地域別分析（都道府県ごとのアクセス・ゴール）',
         '/mypage/analysis/device/'   => 'デバイス別分析（PC / スマホ / タブレットの比率）',
         '/mypage/analysis/age/'      => '年齢層分析（訪問者の年齢層分布）',
         '/mypage/report/'            => '月次レポート（AI生成の詳細分析レポート）',
-        '/mypage/actual-cv/'         => '実績CV入力（問い合わせ・電話等の実績登録）',
+        '/mypage/actual-cv/'         => 'ゴール実績入力（問い合わせ・電話等の実績登録）',
     ];
 
     foreach ( $contexts as $slug => $desc ) {
@@ -1914,7 +1914,7 @@ function mimamori_get_analytics_digest( int $user_id ): string {
                     [ 'label' => 'セッション',       'key' => 'sessions',    'raw' => '_sessions' ],
                     [ 'label' => 'ユーザー',         'key' => 'users',       'raw' => '_users' ],
                     [ 'label' => '新規ユーザー',     'key' => 'newUsers',    'raw' => '_newUsers' ],
-                    [ 'label' => 'コンバージョン',   'key' => 'conversions', 'raw' => '_conversions' ],
+                    [ 'label' => 'ゴール',           'key' => 'conversions', 'raw' => '_conversions' ],
                 ];
 
                 $prev_arr = ( is_array( $previous ) && ! is_wp_error( $previous ) ) ? $previous : [];
@@ -2286,7 +2286,7 @@ function mimamori_build_context_blocks(
     // --- Block 1: ページ種別の宣言 ---
     $page_type_labels = [
         'report_dashboard' => 'レポート / ダッシュボード画面（月次サマリー・KPI・ふりかえり）',
-        'analysis_detail'  => '詳細分析画面（流入元・キーワード・ページ別・地域・デバイス・CV等）',
+        'analysis_detail'  => '詳細分析画面（流入元・キーワード・ページ別・地域・デバイス・ゴール等）',
         'settings'         => '設定画面（GA4/GSC連携・レポート設定など）',
         'unknown'          => 'その他のページ',
     ];
@@ -2301,7 +2301,7 @@ function mimamori_build_context_blocks(
             . "ユーザーが見ている画面はレポート・分析ツール（みまもりウェブ管理画面）です。\n"
             . "この画面自体のUI/デザイン/使い勝手の改善は絶対に提案しないでください。\n"
             . "ユーザーの質問は「このレポート/分析結果を踏まえ、クライアントのWebサイト（ホームページ）をどう改善すべきか」として解釈してください。\n"
-            . "改善対象 = クライアントのWebサイト（集客・問い合わせ増加のためのホームページ改善）です。";
+            . "改善対象 = クライアントのWebサイト（集客・ゴール達成増加のためのホームページ改善）です。";
     } elseif ( $target === 'settings' ) {
         $blocks[] = "【回答の対象について】\n"
             . "ユーザーは設定画面を見ています。\n"
@@ -2425,12 +2425,12 @@ function mimamori_get_planner_prompt( string $intent = 'general' ): string {
 今日の日付: {$today}
 
 利用可能なクエリタイプ:
-- daily_traffic: 日別アクセス推移（PV/セッション/ユーザー/CV の日別データ）
+- daily_traffic: 日別アクセス推移（PV/セッション/ユーザー/ゴール の日別データ）
 - page_breakdown: ページ別PVランキング（どのページが何回見られたか）
 - device_breakdown: デバイス別統計（PC/スマホ/タブレットの内訳）
 - device_daily: デバイス×日別のセッション推移
-- channel_breakdown: 流入チャネル/参照元別（検索/直接/SNS等）のセッション・CV
-- region_breakdown: 地域（都道府県）別のセッション・CV
+- channel_breakdown: 流入チャネル/参照元別（検索/直接/SNS等）のセッション・ゴール
+- region_breakdown: 地域（都道府県）別のセッション・ゴール
 - gsc_keywords: Google検索キーワード詳細（どんな言葉で検索されたか・表示回数・クリック数・順位、上位200件）
 
 ルール:
@@ -2952,7 +2952,7 @@ function mimamori_format_device_breakdown( array $data, string $range, ?array $p
     }
 
     $lines   = [ '▼ デバイス別アクセス（' . $range . '）' ];
-    $lines[] = 'デバイス | セッション | シェア | PV | 直帰率 | CV' . ( $prev_data ? ' | 前期比(セッション)' : '' );
+    $lines[] = 'デバイス | セッション | シェア | PV | 直帰率 | ゴール' . ( $prev_data ? ' | 前期比(セッション)' : '' );
 
     foreach ( $data as $d ) {
         if ( ! is_array( $d ) ) {
@@ -3036,7 +3036,7 @@ function mimamori_format_channel_breakdown( array $data, string $range, ?array $
     // チャネル別
     if ( ! empty( $data['channels'] ) && is_array( $data['channels'] ) ) {
         $lines   = [ '▼ 流入チャネル別（' . $range . '）' ];
-        $lines[] = 'チャネル | セッション | PV | CV' . ( $prev_data ? ' | 前期比(セッション)' : '' );
+        $lines[] = 'チャネル | セッション | PV | ゴール' . ( $prev_data ? ' | 前期比(セッション)' : '' );
 
         $count = min( count( $data['channels'] ), 10 );
         for ( $i = 0; $i < $count; $i++ ) {
@@ -3110,7 +3110,7 @@ function mimamori_format_region_breakdown( array $data, string $range, ?array $p
     }
 
     $lines   = [ '▼ 地域別アクセス（' . $range . '・上位15件）' ];
-    $lines[] = '地域 | セッション | ユーザー | PV | CV' . ( $prev_data ? ' | 前期比(セッション)' : '' );
+    $lines[] = '地域 | セッション | ユーザー | PV | ゴール' . ( $prev_data ? ' | 前期比(セッション)' : '' );
 
     $items = is_array( $data ) ? array_values( $data ) : [];
     $count = min( count( $items ), 15 );

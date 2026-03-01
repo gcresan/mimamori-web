@@ -191,7 +191,7 @@ class Gcrev_Report_Generator {
            - セッション → 「ホームページに来てくれた人の数」
            - PV → 「見られたページの数」
            - 直帰率 → 「1ページだけ見て帰った人の割合」
-           - CVR → 「来てくれた人のうち問い合わせしてくれた割合」
+           - CVR → 「来てくれた人のうちゴールを達成してくれた割合」
            - エンゲージメント率 → 「じっくり見てくれた人の割合」
            - オーガニック検索 → 「Google検索から来た人」
            - インプレッション → 「検索結果に表示された回数」
@@ -1068,7 +1068,7 @@ class Gcrev_Report_Generator {
                 (string)$label,
                 number_format($contact_prev),
                 $this->pct_change($contact_prev, $contact_two),
-                'CVR：' . number_format($cvr_prev, 2) . '%'
+                'ゴール達成率：' . number_format($cvr_prev, 2) . '%'
             );
         }
         if ($download) {

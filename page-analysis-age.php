@@ -112,8 +112,8 @@ get_template_part('template-parts/analysis-help');
                 <th>平均滞在時間</th>
                 <th>直帰率</th>
                 <th>エンゲージメント率</th>
-                <th>CV数</th>
-                <th>CVR</th>
+                <th>ゴール数</th>
+                <th>達成率</th>
             </tr>
         </thead>
         <tbody id="genderDetailTableBody">
@@ -147,8 +147,8 @@ get_template_part('template-parts/analysis-help');
                     <th>平均滞在時間</th>
                     <th>直帰率</th>
                     <th>エンゲージメント率</th>
-                    <th>CV数</th>
-                    <th>CVR</th>
+                    <th>ゴール数</th>
+                    <th>達成率</th>
                 </tr>
             </thead>
             <tbody id="detailTableBody">
@@ -798,7 +798,7 @@ function exportTableData() {
     const totalSessions = currentData.age_demographics.reduce((sum, item) => sum + (item.sessions || 0), 0);
     
     // CSV生成
-    const headers = ['年齢層', 'セッション', '割合', 'PV', '平均滞在時間', '直帰率', 'エンゲージメント率', 'CV数', 'CVR'];
+    const headers = ['年齢層', 'セッション', '割合', 'PV', '平均滞在時間', '直帰率', 'エンゲージメント率', 'ゴール数', '達成率'];
     const rows = currentData.age_demographics.map(age => {
         const sessions = age.sessions || 0;
         const percent = totalSessions > 0 ? (sessions / totalSessions * 100).toFixed(1) : 0;
@@ -850,7 +850,7 @@ function exportGenderTableData() {
         return;
     }
 
-    const headers = ['性別', 'セッション', '割合', 'PV', '平均滞在時間', '直帰率', 'エンゲージメント率', 'CV数', 'CVR'];
+    const headers = ['性別', 'セッション', '割合', 'PV', '平均滞在時間', '直帰率', 'エンゲージメント率', 'ゴール数', '達成率'];
     const rows = summary.map(r => ([
         r.label,
         r.sessions,
