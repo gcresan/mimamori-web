@@ -105,7 +105,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     <!-- サマリーカード -->
     <div class="cv-review-summary" id="cvReviewSummary">
         <div class="summary-card"><div class="summary-label">GA4 合計</div><div class="summary-value" id="summaryTotal">-</div></div>
-        <div class="summary-card"><div class="summary-label">有効CV</div><div class="summary-value summary-valid" id="summaryValid">-</div></div>
+        <div class="summary-card"><div class="summary-label">有効</div><div class="summary-value summary-valid" id="summaryValid">-</div></div>
         <div class="summary-card"><div class="summary-label">除外</div><div class="summary-value summary-excluded" id="summaryExcluded">-</div></div>
         <div class="summary-card"><div class="summary-label">未判定</div><div class="summary-value summary-pending" id="summaryPending">-</div></div>
         <div class="summary-card"><div class="summary-label">グループ数</div><div class="summary-value" id="summaryGroups">-</div></div>
@@ -123,7 +123,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             <select id="filterStatus">
                 <option value="all">すべて</option>
                 <option value="0">未判定</option>
-                <option value="1">有効CV</option>
+                <option value="1">有効</option>
                 <option value="2">除外</option>
             </select>
         </div>
@@ -131,7 +131,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             <label><input type="checkbox" id="checkAll"> 全選択</label>
             <select id="bulkAction">
                 <option value="">一括操作...</option>
-                <option value="1">&rarr; 有効CV</option>
+                <option value="1">&rarr; 有効</option>
                 <option value="2">&rarr; 除外</option>
                 <option value="0">&rarr; 未判定に戻す</option>
             </select>
@@ -180,8 +180,8 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     <!-- CVイベント未設定メッセージ -->
     <div id="cvNoConfig" style="display:none;">
         <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:24px; text-align:center;">
-            <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">CVイベントが設定されていません</p>
-            <p style="margin:0;"><a href="<?php echo esc_url(home_url('/analysis/cv-settings/')); ?>" style="color:#2563eb; font-weight:600;">CV設定ページ</a>から設定してください。</p>
+            <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">問い合わせイベントが設定されていません</p>
+            <p style="margin:0;"><a href="<?php echo esc_url(home_url('/analysis/cv-settings/')); ?>" style="color:#2563eb; font-weight:600;">問い合わせの数え方設定ページ</a>から設定してください。</p>
         </div>
     </div>
 
@@ -443,7 +443,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             tdStatus.className = 'col-status';
             var sel = document.createElement('select');
             sel.className = 'status-select';
-            [{v:0,l:'未判定'},{v:1,l:'有効CV'},{v:2,l:'除外'}].forEach(function(o) {
+            [{v:0,l:'未判定'},{v:1,l:'有効'},{v:2,l:'除外'}].forEach(function(o) {
                 var opt = document.createElement('option');
                 opt.value = o.v;
                 opt.textContent = o.l;
