@@ -368,8 +368,10 @@ if ($infographic && is_array($infographic)) {
             unset($bd_gsc);
         }
 
-        // score 再計算（常にv2ロジックで再スコアリング）
-        // breakdown の curr/prev から指標を再抽出し、calc_monthly_health_score v2 で再計算
+        } // end if (!empty($kpi_curr))
+
+        // === score 再計算（常にv2ロジックで再スコアリング） ===
+        // KPIライブデータ有無に関わらず、最新の breakdown curr/prev で v2 再計算
         $re_curr = [];
         $re_prev = [];
         foreach (['traffic', 'cv', 'gsc', 'meo'] as $rk) {
@@ -386,7 +388,6 @@ if ($infographic && is_array($infographic)) {
         $infographic['status']     = $re_health['status'];
         $infographic['breakdown']  = $re_health['breakdown'];
         $infographic['components'] = $re_health['components'];
-        } // end if (!empty($kpi_curr))
     } catch (\Throwable $e) {
         error_log('[GCREV] page-dashboard infographic override error: ' . $e->getMessage());
     }
