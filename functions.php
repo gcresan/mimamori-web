@@ -4841,6 +4841,90 @@ function gcrev_activate_contract( int $user_id, string $activated_by = '' ): voi
 }
 
 // --------------------------------------------------
+// アカウント情報 — AJAX ハンドラ
+// --------------------------------------------------
+
+/**
+ * ユーザー情報（事業者名・担当者名・メール）保存
+ */
+add_action( 'wp_ajax_gcrev_save_account_info', function () {
+    if ( ! check_ajax_referer( 'gcrev_account_info', 'nonce', false ) ) {
+        wp_send_json_error( '不正なリクエストです' );
+    }
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( 'ログインが必要です' );
+    }
+
+    $user_id = get_current_user_id();
+    $company = sanitize_text_field( wp_unslash( $_POST['company'] ?? '' ) );
+    $person  = sanitize_text_field( wp_unslash( $_POST['person']  ?? '' ) );
+    $email   = sanitize_email( wp_unslash( $_POST['email'] ?? '' ) );
+
+    if ( empty( $company ) || empty( $person ) ) {
+        wp_send_json_error( '事業者名と担当者名は必須です' );
+    }
+    if ( ! is_email( $email ) ) {
+        wp_send_json_error( '有効なメールアドレスを入力してください' );
+    }
+
+    // メールアドレスの重複チェック（自分以外）
+    $existing = get_user_by( 'email', $email );
+    if ( $existing && $existing->ID !== $user_id ) {
+        wp_send_json_error( 'このメールアドレスは既に使用されています' );
+    }
+
+    $result = wp_update_user( [
+        'ID'         => $user_id,
+        'first_name' => $person,
+        'last_name'  => $company,
+        'user_email' => $email,
+    ] );
+
+    if ( is_wp_error( $result ) ) {
+        wp_send_json_error( $result->get_error_message() );
+    }
+
+    wp_send_json_success();
+} );
+
+/**
+ * パスワード変更
+ */
+add_action( 'wp_ajax_gcrev_change_password', function () {
+    if ( ! check_ajax_referer( 'gcrev_account_info', 'nonce', false ) ) {
+        wp_send_json_error( '不正なリクエストです' );
+    }
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( 'ログインが必要です' );
+    }
+
+    $user = wp_get_current_user();
+    $current_pw = $_POST['current_password'] ?? '';
+    $new_pw     = $_POST['new_password']     ?? '';
+
+    if ( empty( $current_pw ) || empty( $new_pw ) ) {
+        wp_send_json_error( 'すべての項目を入力してください' );
+    }
+
+    if ( strlen( $new_pw ) < 8 ) {
+        wp_send_json_error( '新しいパスワードは8文字以上で入力してください' );
+    }
+
+    // 現在のパスワード検証
+    if ( ! wp_check_password( $current_pw, $user->user_pass, $user->ID ) ) {
+        wp_send_json_error( '現在のパスワードが正しくありません' );
+    }
+
+    wp_set_password( $new_pw, $user->ID );
+
+    // パスワード変更後のセッション維持
+    wp_set_current_user( $user->ID );
+    wp_set_auth_cookie( $user->ID, true );
+
+    wp_send_json_success();
+} );
+
+// --------------------------------------------------
 // 既存ユーザー移行 v2（一回限り）
 // 旧3値（active/subscription_pending/installment_pending）→ 新1値（paid）
 // 旧 active or subscription_pending → paid（どちらかのチェックがONだった）
