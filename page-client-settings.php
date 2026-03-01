@@ -999,6 +999,17 @@ get_header();
                 generatedText = json.generated_text;
                 genPreview.textContent = generatedText;
                 genPreview.style.display = 'block';
+
+                // 自動反映: 既存テキストがあれば追記、なければ上書き
+                var existing = detailTextarea.value.trim();
+                if (existing) {
+                    detailTextarea.value = existing + '\n\n---\n\n' + generatedText;
+                } else {
+                    detailTextarea.value = generatedText;
+                }
+                detailCount.textContent = detailTextarea.value.length;
+
+                // 反映ボタンも表示（再反映用）
                 genApply.classList.add('visible');
             } else {
                 alert('生成に失敗しました: ' + (json.message || ''));
@@ -1012,18 +1023,16 @@ get_header();
         }
     });
 
-    // 反映: 上書き
+    // 反映: 上書き（再反映用）
     btnOverwrite.addEventListener('click', function() {
         if (!generatedText) return;
-        var existing = detailTextarea.value.trim();
-        if (existing && !confirm('既存の詳細ペルソナを上書きしますか？')) return;
         detailTextarea.value = generatedText;
         detailCount.textContent = generatedText.length;
         overlay.style.display = 'none';
-        showToast('詳細ペルソナを反映しました');
+        showToast('詳細ペルソナを上書きで反映しました');
     });
 
-    // 反映: 追記
+    // 反映: 追記（再反映用）
     btnAppend.addEventListener('click', function() {
         if (!generatedText) return;
         var existing = detailTextarea.value.trim();
@@ -1034,7 +1043,7 @@ get_header();
         }
         detailCount.textContent = detailTextarea.value.length;
         overlay.style.display = 'none';
-        showToast('詳細ペルソナを追記しました');
+        showToast('詳細ペルソナを追記で反映しました');
     });
 
     // === 保存処理 ===
