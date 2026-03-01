@@ -5075,7 +5075,11 @@ PROMPT;
     /**
      * REST: GA4キーイベント一覧取得（設定画面サジェスト用）
      *
-     * Admin API でキーイベント定義、Data API で発火実績を取得し突合。
+     * 3段階で候補を収集し突合:
+     *   1) Admin API → キーイベント定義一覧（確実）
+     *   2) Data API keyEvents → キーイベント発火実績（当月〜過去90日）
+     *   3) Data API eventCount → 全イベント一覧（フォールバック）
+     *
      * フォールバックキャッシュ（wp_options）で取得失敗時も空にしない。
      */
     public function rest_get_ga4_key_events(WP_REST_Request $request): WP_REST_Response {
@@ -5083,64 +5087,117 @@ PROMPT;
         if (!current_user_can('manage_options') && $user_id !== get_current_user_id()) {
             $user_id = get_current_user_id();
         }
-        $month = sanitize_text_field($request->get_param('month') ?? date('Y-m'));
 
-        // --- キャッシュキー ---
-        $cache_key    = "gcrev_ga4_kevt_list_{$user_id}_{$month}";
+        // --- キャッシュキー（月に依存しない。候補リストは汎用） ---
+        $cache_key    = "gcrev_ga4_kevt_suggest_{$user_id}";
         $fallback_key = "gcrev_ga4_kevt_fb_{$user_id}";
         $ts_key       = "gcrev_ga4_kevt_ts_{$user_id}";
 
+        // --- 旧形式キャッシュの無効化 ---
+        // 旧キー（月別）を削除
+        $month_now = date('Y-m');
+        delete_transient("gcrev_ga4_kevt_list_{$user_id}_{$month_now}");
+
         // --- Transient キャッシュ確認（6h） ---
         $cached = get_transient($cache_key);
-        if ($cached !== false && is_array($cached)) {
-            return new WP_REST_Response([
-                'success'    => true,
-                'source'     => 'cache',
-                'events'     => $cached,
-                'fetched_at' => get_option($ts_key, ''),
-            ], 200);
+        if ($cached !== false && is_array($cached) && !empty($cached)) {
+            // 新形式チェック（最初の要素に 'name' キーがあること）
+            $first = reset($cached);
+            if (is_array($first) && isset($first['name'])) {
+                return new WP_REST_Response([
+                    'success'    => true,
+                    'source'     => 'cache',
+                    'events'     => $cached,
+                    'fetched_at' => get_option($ts_key, ''),
+                ], 200);
+            }
+            // 旧形式 → 無効化
+            delete_transient($cache_key);
         }
 
         try {
             $config      = $this->config->get_user_config($user_id);
             $property_id = $config['ga4_id'];
 
-            // 日付範囲（当月）
-            $dt    = new \DateTime($month . '-01');
-            $start = $month . '-01';
-            $end   = $month . '-' . str_pad((string)(int)$dt->format('t'), 2, '0', STR_PAD_LEFT);
+            // 日付範囲: 過去90日（月初でも候補が出るように）
+            $today = new \DateTime('now', wp_timezone());
+            $end   = $today->format('Y-m-d');
+            $start = (clone $today)->modify('-90 days')->format('Y-m-d');
 
-            // 1) Admin API: キーイベント定義一覧（失敗しても続行）
+            // ========================================
+            // 1) Admin API: キーイベント定義一覧（確実）
+            // ========================================
             $key_event_defs = [];
             try {
                 $defs = $this->ga4->fetch_ga4_key_event_definitions($property_id);
                 foreach ($defs as $d) {
                     $key_event_defs[$d['event_name']] = true;
                 }
+                error_log("[GCREV] Admin API key event defs OK: " . count($key_event_defs) . " events");
             } catch (\Exception $e) {
-                error_log("[GCREV] ga4 key event defs (non-fatal): " . $e->getMessage());
+                error_log("[GCREV] Admin API key event defs FAILED (non-fatal): " . $e->getMessage());
             }
 
-            // 2) Data API: 発火実績（既存ロジック）
-            $event_counts = $this->ga4->fetch_ga4_key_events($property_id, $start, $end);
+            // ========================================
+            // 2) Data API: keyEvents メトリクス（過去90日）
+            // ========================================
+            $key_event_counts = [];
+            try {
+                $key_event_counts = $this->ga4->fetch_ga4_key_events($property_id, $start, $end);
+            } catch (\Exception $e) {
+                error_log("[GCREV] Data API keyEvents FAILED (non-fatal): " . $e->getMessage());
+            }
 
-            // 3) 突合
+            // ========================================
+            // 3) Data API: eventCount（全イベント）— 1) & 2) が空の場合のフォールバック
+            // ========================================
+            $all_event_counts = [];
+            if (empty($key_event_defs) && empty($key_event_counts)) {
+                try {
+                    $all_event_counts = $this->ga4->fetch_ga4_all_event_names($property_id, $start, $end);
+                    error_log("[GCREV] Data API eventCount fallback: " . count($all_event_counts) . " events");
+                } catch (\Exception $e) {
+                    error_log("[GCREV] Data API eventCount FAILED: " . $e->getMessage());
+                }
+            }
+
+            // ========================================
+            // 4) 突合・マージ
+            // ========================================
+            $seen   = [];
             $merged = [];
-            foreach ($event_counts as $name => $count) {
+
+            // 4a) keyEvents 結果
+            foreach ($key_event_counts as $name => $count) {
                 $merged[] = [
                     'name'         => $name,
-                    'is_key_event' => isset($key_event_defs[$name]),
+                    'is_key_event' => isset($key_event_defs[$name]) || true,  // keyEvents に出る＝キーイベント
                     'count'        => (int) $count,
                 ];
+                $seen[$name] = true;
             }
-            // Admin API にしかないもの（まだ発火していないキーイベント）
+
+            // 4b) Admin API にしかないもの（まだ発火していないキーイベント）
             foreach ($key_event_defs as $name => $_) {
-                if (!isset($event_counts[$name])) {
+                if (!isset($seen[$name])) {
                     $merged[] = [
                         'name'         => $name,
                         'is_key_event' => true,
                         'count'        => 0,
                     ];
+                    $seen[$name] = true;
+                }
+            }
+
+            // 4c) eventCount フォールバック（全イベント）
+            foreach ($all_event_counts as $name => $count) {
+                if (!isset($seen[$name])) {
+                    $merged[] = [
+                        'name'         => $name,
+                        'is_key_event' => false,
+                        'count'        => (int) $count,
+                    ];
+                    $seen[$name] = true;
                 }
             }
 
@@ -5168,14 +5225,18 @@ PROMPT;
             error_log("[GCREV] rest_get_ga4_key_events ERROR: " . $e->getMessage());
 
             // フォールバック: 最後に成功したキャッシュを返す
-            $fallback = get_option("gcrev_ga4_kevt_fb_{$user_id}", []);
-            if (!empty($fallback)) {
-                return new WP_REST_Response([
-                    'success'    => true,
-                    'source'     => 'stale-cache',
-                    'events'     => $fallback,
-                    'fetched_at' => get_option("gcrev_ga4_kevt_ts_{$user_id}", ''),
-                ], 200);
+            $fallback = get_option($fallback_key, []);
+            if (!empty($fallback) && is_array($fallback)) {
+                // 旧形式チェック
+                $first = reset($fallback);
+                if (is_array($first) && isset($first['name'])) {
+                    return new WP_REST_Response([
+                        'success'    => true,
+                        'source'     => 'stale-cache',
+                        'events'     => $fallback,
+                        'fetched_at' => get_option($ts_key, ''),
+                    ], 200);
+                }
             }
 
             return new WP_REST_Response([

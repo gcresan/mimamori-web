@@ -1027,6 +1027,41 @@ class Gcrev_GA4_Fetcher {
     }
 
     /**
+     * GA4 Data API: 全イベント名と発火回数を取得（eventCount メトリクス）
+     *
+     * keyEvents メトリクスが空（月初等）の場合のフォールバックとして使用。
+     *
+     * @return array [eventName => count, ...]
+     */
+    public function fetch_ga4_all_event_names(string $property_id, string $start, string $end): array {
+
+        $this->prepare_ga4_call();
+        $client = new BetaAnalyticsDataClient();
+
+        $request = new RunReportRequest([
+            'property'    => 'properties/' . $property_id,
+            'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
+            'dimensions'  => [ new Dimension(['name' => 'eventName']) ],
+            'metrics'     => [ new Metric(['name' => 'eventCount']) ],
+            'limit'       => 200,
+        ]);
+
+        $response = $client->runReport($request);
+
+        $out = [];
+        foreach ($response->getRows() as $row) {
+            $name = (string)($row->getDimensionValues()[0]->getValue() ?? '');
+            $val  = (int)($row->getMetricValues()[0]->getValue() ?? 0);
+            if ($name !== '') {
+                $out[$name] = $val;
+            }
+        }
+
+        arsort($out);
+        return $out;
+    }
+
+    /**
      * GA4 Admin API: プロパティに登録されたキーイベント定義一覧を取得
      *
      * @param  string $property_id GA4 プロパティ ID
