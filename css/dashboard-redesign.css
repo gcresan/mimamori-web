@@ -233,6 +233,10 @@ h3 { font-size: 19px; font-weight: 600; }
   color: var(--mw-primary-blue);
 }
 
+/* 仮想メニュー（子メニュー領域）の背景色 — 常時表示 */
+.sidebar-nav .nav-submenu {
+  background-color: #f5f7f7;
+}
 .sidebar-nav .nav-submenu .nav-link {
   padding: 9px 24px 9px 52px;
   font-size: 14px;
