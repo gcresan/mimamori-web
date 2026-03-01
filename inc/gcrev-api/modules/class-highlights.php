@@ -79,8 +79,8 @@ class Gcrev_Highlights {
         $target_area = null;
         $is_easy_mode = false;
         if ($user_id) {
-            $target_text = (string) get_user_meta($user_id, 'report_target', true);
-            $target_area = Gcrev_Area_Detector::detect($target_text);
+            $client_settings = gcrev_get_client_settings($user_id);
+            $target_area = gcrev_detect_area_from_client_settings($client_settings);
             $output_mode = (string) get_user_meta($user_id, 'report_output_mode', true);
             $is_easy_mode = ($output_mode === 'easy');
         }

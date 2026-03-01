@@ -158,6 +158,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'save_client_info' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev_insights/v1', '/save-client-settings', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'save_client_settings' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         // 生成回数取得エンドポイント
         register_rest_route('gcrev_insights/v1', '/report/generation-count', [
             'methods'             => 'GET',
@@ -1370,15 +1375,14 @@ class Gcrev_Insight_API {
         $user_id = get_current_user_id();
         $params  = $request->get_json_params();
 
-        update_user_meta($user_id, 'report_site_url',         esc_url_raw($params['site_url'] ?? ''));
-        update_user_meta($user_id, 'report_target',           sanitize_text_field($params['target'] ?? ''));
+        // 月次戦略情報のみ保存（site_url / target はクライアント設定へ移管済み）
         update_user_meta($user_id, 'report_issue',            sanitize_text_field($params['issue'] ?? ''));
         update_user_meta($user_id, 'report_goal_monthly',     sanitize_text_field($params['goal_monthly'] ?? ''));
         update_user_meta($user_id, 'report_focus_numbers',    sanitize_text_field($params['focus_numbers'] ?? ''));
         update_user_meta($user_id, 'report_current_state',    sanitize_text_field($params['current_state'] ?? ''));
         update_user_meta($user_id, 'report_goal_main',        sanitize_text_field($params['goal_main'] ?? ''));
         update_user_meta($user_id, 'report_additional_notes', sanitize_text_field($params['additional_notes'] ?? ''));
-        
+
         // 出力モードの保存
         $output_mode = $params['output_mode'] ?? 'normal';
         if (!in_array($output_mode, ['normal', 'easy'], true)) {
@@ -1390,9 +1394,73 @@ class Gcrev_Insight_API {
 
         return new WP_REST_Response([
             'success' => true,
-            'message' => 'クライアント情報を保存しました',
+            'message' => '月次レポート設定を保存しました',
         ], 200);
     }
+
+    /**
+     * クライアント固定設定を保存
+     */
+    public function save_client_settings(WP_REST_Request $request): WP_REST_Response {
+        $user_id = get_current_user_id();
+        $params  = $request->get_json_params();
+
+        // URL バリデーション
+        $site_url = esc_url_raw($params['site_url'] ?? '');
+        if (empty($site_url)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => '対象サイトURLは必須です',
+            ], 400);
+        }
+
+        // 商圏タイプ バリデーション
+        $valid_area_types = ['nationwide', 'prefecture', 'city', 'custom', ''];
+        $area_type = sanitize_text_field($params['area_type'] ?? '');
+        if (!in_array($area_type, $valid_area_types, true)) {
+            $area_type = '';
+        }
+
+        update_user_meta($user_id, 'gcrev_client_site_url',      $site_url);
+        update_user_meta($user_id, 'gcrev_client_area_type',      $area_type);
+        update_user_meta($user_id, 'gcrev_client_area_pref',      sanitize_text_field($params['area_pref'] ?? ''));
+        update_user_meta($user_id, 'gcrev_client_area_city',      sanitize_text_field($params['area_city'] ?? ''));
+        update_user_meta($user_id, 'gcrev_client_area_custom',    sanitize_text_field($params['area_custom'] ?? ''));
+        update_user_meta($user_id, 'gcrev_client_industry',       sanitize_text_field($params['industry'] ?? ''));
+        update_user_meta($user_id, 'gcrev_client_business_type',  sanitize_text_field($params['business_type'] ?? ''));
+
+        error_log("[GCREV] Client settings saved for user_id={$user_id}, site_url={$site_url}");
+
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => 'クライアント設定を保存しました',
+        ], 200);
+    }
+
+    /**
+     * AIレポート生成用のクライアント情報を構築（クライアント設定 + 月次設定を統合）
+     *
+     * @param int $user_id ユーザーID
+     * @return array client_info 配列
+     */
+    private function build_client_info_for_report(int $user_id): array {
+        $client = gcrev_get_client_settings($user_id);
+
+        return [
+            'site_url'         => $client['site_url'],
+            'area_label'       => gcrev_get_client_area_label($client),
+            'industry'         => $client['industry'],
+            'business_type'    => $client['business_type'],
+            'issue'            => get_user_meta($user_id, 'report_issue', true),
+            'goal_monthly'     => get_user_meta($user_id, 'report_goal_monthly', true),
+            'focus_numbers'    => get_user_meta($user_id, 'report_focus_numbers', true),
+            'current_state'    => get_user_meta($user_id, 'report_current_state', true),
+            'goal_main'        => get_user_meta($user_id, 'report_goal_main', true),
+            'additional_notes' => get_user_meta($user_id, 'report_additional_notes', true),
+            'output_mode'      => get_user_meta($user_id, 'report_output_mode', true) ?: 'normal',
+        ];
+    }
+
     /**
      * 今月のレポート生成回数を取得
      */
@@ -1451,25 +1519,24 @@ class Gcrev_Insight_API {
 
         $prev_data   = $params['previous_month'] ?? null;
         $two_data    = $params['two_months_ago'] ?? null;
-        $client_info = $params['client_info']    ?? [];
         $year_month  = $params['year_month']     ?? null;
 
-        if (!is_array($prev_data) || !is_array($two_data) || !is_array($client_info)) {
+        if (!is_array($prev_data) || !is_array($two_data)) {
             return new WP_REST_Response([
                 'success' => false,
                 'message' => 'リクエストデータが不正です',
             ], 400);
         }
 
+        // クライアント設定 + 月次設定をサーバー側で統合構築
+        $client_info = $this->build_client_info_for_report($user_id);
+
         try {
             error_log("[GCREV] Generating new report for user_id={$user_id}");
 
-            // -------------------------------------------------
-            // 追加仕様：ターゲットエリア（都道府県）の判定
-            // - client_info['target'] に「全国」が含まれる場合は null
-            // - それ以外で都道府県名が含まれる場合、その都道府県名
-            // -------------------------------------------------
-            $target_area = $this->generator->detect_target_area((string)($client_info['target'] ?? ''));
+            // ターゲットエリア（都道府県）の判定 — クライアント設定から取得
+            $client_settings = gcrev_get_client_settings($user_id);
+            $target_area = gcrev_detect_area_from_client_settings($client_settings);
 
             // -------------------------------------------------
             // 追加仕様：Key events 取得（お問い合わせ / 資料DL 等）
@@ -1810,22 +1877,14 @@ class Gcrev_Insight_API {
                 continue;
             }
 
-            // クライアント情報取得
-            $client_info = [
-                'site_url'      => get_user_meta( $user_id, 'report_site_url', true ),
-                'target'        => get_user_meta( $user_id, 'report_target', true ),
-                'issue'         => get_user_meta( $user_id, 'report_issue', true ),
-                'goal_monthly'  => get_user_meta( $user_id, 'report_goal_monthly', true ),
-                'focus_numbers' => get_user_meta( $user_id, 'report_focus_numbers', true ),
-                'current_state' => get_user_meta( $user_id, 'report_current_state', true ),
-                'goal_main'     => get_user_meta( $user_id, 'report_goal_main', true ),
-            ];
+            // クライアント情報取得（クライアント設定 + 月次設定を統合）
+            $client_info = $this->build_client_info_for_report( $user_id );
 
-            // 必須項目チェック
-            if ( empty( $client_info['site_url'] ) || empty( $client_info['target'] ) ) {
-                error_log( "[GCREV] auto_generate: user_id={$user_id} missing client info, skipping." );
+            // 必須項目チェック（クライアント設定のサイトURL）
+            if ( empty( $client_info['site_url'] ) ) {
+                error_log( "[GCREV] auto_generate: user_id={$user_id} missing client site_url, skipping." );
                 if ( $log_id > 0 ) {
-                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Missing client info' );
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Missing client site_url' );
                 }
                 continue;
             }
@@ -1857,7 +1916,11 @@ class Gcrev_Insight_API {
                     'components' => $eff_auto['components'],
                 ];
 
-                $report_html = $this->generator->generate_report_multi_pass( $prev_data, $two_data, $client_info );
+                // ターゲットエリア判定（クライアント設定から）
+                $auto_client_settings = gcrev_get_client_settings( $user_id );
+                $auto_target_area = gcrev_detect_area_from_client_settings( $auto_client_settings );
+
+                $report_html = $this->generator->generate_report_multi_pass( $prev_data, $two_data, $client_info, $auto_target_area );
 
                 // === 初心者向けモード：全文リライト（Markdown出力） ===
                 $auto_beginner_md = '';
@@ -2222,21 +2285,13 @@ class Gcrev_Insight_API {
             ];
         }
 
-        // クライアント情報取得
-        $client_info = [
-            'site_url'      => get_user_meta($user_id, 'report_site_url', true),
-            'target'        => get_user_meta($user_id, 'report_target', true),
-            'issue'         => get_user_meta($user_id, 'report_issue', true),
-            'goal_monthly'  => get_user_meta($user_id, 'report_goal_monthly', true),
-            'focus_numbers' => get_user_meta($user_id, 'report_focus_numbers', true),
-            'current_state' => get_user_meta($user_id, 'report_current_state', true),
-            'goal_main'     => get_user_meta($user_id, 'report_goal_main', true),
-        ];
+        // クライアント情報取得（クライアント設定 + 月次設定を統合）
+        $client_info = $this->build_client_info_for_report($user_id);
 
         if (empty($client_info['site_url'])) {
             return [
                 'success' => false,
-                'message' => 'クライアント情報が未設定です'
+                'message' => 'クライアント設定のサイトURLが未設定です'
             ];
         }
 
@@ -2261,8 +2316,9 @@ class Gcrev_Insight_API {
             $prev_data = $this->fetch_dashboard_data_internal($config, 'previousMonth');
             $two_data = $this->fetch_dashboard_data_internal($config, 'twoMonthsAgo');
 
-            // ターゲットエリア判定
-            $target_area = $this->generator->detect_target_area((string)($client_info['target'] ?? ''));
+            // ターゲットエリア判定（クライアント設定から）
+            $manual_client_settings = gcrev_get_client_settings($user_id);
+            $target_area = gcrev_detect_area_from_client_settings($manual_client_settings);
 
             // -------------------------------------------------
             // 追加：実質CV判定 → client_info に注入（AIレポート生成で使用）

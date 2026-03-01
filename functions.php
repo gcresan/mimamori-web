@@ -2344,6 +2344,57 @@ function mimamori_build_context_blocks(
         $ref_list[] = 'ユーザーが閲覧中のレポートセクション内容';
     }
 
+    // --- Block 2.7: クライアント設定コンテキスト（常に付与） ---
+    $client_settings_ctx = gcrev_get_client_settings( $user_id );
+    if ( ! empty( $client_settings_ctx['site_url'] ) ) {
+        $client_block  = "【クライアント情報（固定設定）】\n";
+        $client_block .= "対象サイト: {$client_settings_ctx['site_url']}\n";
+        $area_label_ctx = gcrev_get_client_area_label( $client_settings_ctx );
+        if ( $area_label_ctx !== '' ) {
+            $client_block .= "商圏・対応エリア: {$area_label_ctx}\n";
+        }
+        if ( ! empty( $client_settings_ctx['industry'] ) ) {
+            $client_block .= "業種・業態: {$client_settings_ctx['industry']}\n";
+        }
+        if ( ! empty( $client_settings_ctx['business_type'] ) ) {
+            $btype_labels = [
+                'visit'       => '来店型',
+                'non_visit'   => '非来店型',
+                'reservation' => '予約制',
+                'ec'          => 'ECサイト',
+                'other'       => 'その他',
+            ];
+            $btype_val   = $client_settings_ctx['business_type'];
+            $btype_label = $btype_labels[ $btype_val ] ?? $btype_val;
+            $client_block .= "ビジネス形態: {$btype_label}\n";
+        }
+        $blocks[]   = $client_block;
+        $ref_list[] = 'クライアント設定（対象サイト・商圏・業種）';
+    }
+
+    // --- Block 2.8: 月次レポート設定（当月分が存在する場合のみ） ---
+    $monthly_fields = [
+        'report_issue'            => '課題',
+        'report_goal_monthly'     => '今月の目標',
+        'report_focus_numbers'    => '注目している指標',
+        'report_current_state'    => '現状の取り組み',
+        'report_goal_main'        => '主要目標',
+        'report_additional_notes' => 'その他留意事項',
+    ];
+    $monthly_parts = [];
+    foreach ( $monthly_fields as $meta_key => $label ) {
+        $val = get_user_meta( $user_id, $meta_key, true );
+        if ( ! empty( $val ) ) {
+            $monthly_parts[] = "{$label}: {$val}";
+        }
+    }
+    if ( ! empty( $monthly_parts ) ) {
+        $monthly_block  = "【今月の戦略情報（月次レポート設定より）】\n";
+        $monthly_block .= implode( "\n", $monthly_parts );
+        $blocks[]   = $monthly_block;
+        $ref_list[] = '今月の月次レポート設定（課題・目標等）';
+    }
+
     // --- Block 3: ページ文脈情報 ---
     if ( ! empty( $sources['use_page_context'] ) ) {
         $page_ctx = mimamori_get_page_context( $current_page );
@@ -5402,6 +5453,118 @@ function gcrev_breadcrumb( string $current, ?string $parent = null ): string {
 }
 
 // ========================================
+// クライアント設定ヘルパー関数
+// ========================================
+
+/**
+ * クライアント固定設定を取得する（1箇所で集約）
+ *
+ * @param int $user_id ユーザーID（省略時 = 現在のユーザー）
+ * @return array
+ */
+function gcrev_get_client_settings( int $user_id = 0 ): array {
+    if ( $user_id === 0 ) {
+        $user_id = get_current_user_id();
+    }
+
+    $settings = [
+        'site_url'      => get_user_meta( $user_id, 'gcrev_client_site_url', true ),
+        'area_type'     => get_user_meta( $user_id, 'gcrev_client_area_type', true ),
+        'area_pref'     => get_user_meta( $user_id, 'gcrev_client_area_pref', true ),
+        'area_city'     => get_user_meta( $user_id, 'gcrev_client_area_city', true ),
+        'area_custom'   => get_user_meta( $user_id, 'gcrev_client_area_custom', true ),
+        'industry'      => get_user_meta( $user_id, 'gcrev_client_industry', true ),
+        'business_type' => get_user_meta( $user_id, 'gcrev_client_business_type', true ),
+    ];
+
+    // 旧データからのフォールバック（未移行ユーザー対応）
+    if ( empty( $settings['site_url'] ) ) {
+        $legacy_url = get_user_meta( $user_id, 'report_site_url', true );
+        if ( ! empty( $legacy_url ) ) {
+            $settings['site_url'] = $legacy_url;
+        }
+    }
+
+    return $settings;
+}
+
+/**
+ * 商圏設定から表示用ラベルを生成
+ *
+ * @param array $settings gcrev_get_client_settings() の戻り値
+ * @return string 例: "全国", "愛媛県", "東京都 渋谷区, 新宿区"
+ */
+function gcrev_get_client_area_label( array $settings ): string {
+    $type = $settings['area_type'] ?? '';
+
+    switch ( $type ) {
+        case 'nationwide':
+            return '全国';
+
+        case 'prefecture':
+            return $settings['area_pref'] ?? '';
+
+        case 'city':
+            $pref = $settings['area_pref'] ?? '';
+            $city = $settings['area_city'] ?? '';
+            if ( $pref && $city ) {
+                return $pref . ' ' . $city;
+            }
+            return $pref ?: $city;
+
+        case 'custom':
+            return $settings['area_custom'] ?? '';
+
+        default:
+            // 旧データフォールバック: report_target から推定
+            return '';
+    }
+}
+
+/**
+ * クライアント設定から都道府県名を返す（エリア分析用）
+ *
+ * @param array $settings gcrev_get_client_settings() の戻り値
+ * @return string|null 都道府県名 or null（全国 / 判定不能時）
+ */
+function gcrev_detect_area_from_client_settings( array $settings ): ?string {
+    $type = $settings['area_type'] ?? '';
+
+    switch ( $type ) {
+        case 'nationwide':
+            return null;
+
+        case 'prefecture':
+            $pref = $settings['area_pref'] ?? '';
+            return $pref !== '' ? $pref : null;
+
+        case 'city':
+            $pref = $settings['area_pref'] ?? '';
+            return $pref !== '' ? $pref : null;
+
+        case 'custom':
+            // 自由入力テキストからエリア検出を試みる
+            $custom = $settings['area_custom'] ?? '';
+            if ( $custom !== '' && class_exists( 'Gcrev_Area_Detector' ) ) {
+                return Gcrev_Area_Detector::detect( $custom );
+            }
+            return null;
+
+        default:
+            // 旧データフォールバック
+            $legacy_target = '';
+            $user_id = get_current_user_id();
+            if ( $user_id ) {
+                $legacy_target = (string) get_user_meta( $user_id, 'report_target', true );
+            }
+            if ( $legacy_target !== '' && class_exists( 'Gcrev_Area_Detector' ) ) {
+                return Gcrev_Area_Detector::detect( $legacy_target );
+            }
+            return null;
+    }
+}
+
+// ========================================
 // 固定ページ自動作成（月次レポート階層）
 // ========================================
 add_action( 'init', function() {
@@ -5436,5 +5599,40 @@ add_action( 'init', function() {
     }
 
     update_option( 'gcrev_pages_report_archive_created', 1 );
+}, 20 );
+
+// ========================================
+// 固定ページ自動作成（クライアント設定）
+// ========================================
+add_action( 'init', function() {
+    if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    if ( get_option( 'gcrev_pages_client_settings_created' ) ) {
+        return;
+    }
+
+    // 親ページ「account」のIDを取得
+    $parent_page = get_page_by_path( 'account' );
+    $parent_id   = $parent_page ? $parent_page->ID : 0;
+
+    // 「client-settings」ページが存在しなければ作成
+    $cs_page = get_page_by_path( 'account/client-settings' );
+    if ( ! $cs_page ) {
+        $page_id = wp_insert_post( [
+            'post_type'     => 'page',
+            'post_title'    => 'クライアント設定',
+            'post_name'     => 'client-settings',
+            'post_status'   => 'publish',
+            'post_parent'   => $parent_id,
+            'post_content'  => '',
+            'page_template' => 'page-client-settings.php',
+        ] );
+        if ( ! is_wp_error( $page_id ) ) {
+            update_post_meta( $page_id, '_wp_page_template', 'page-client-settings.php' );
+        }
+    }
+
+    update_option( 'gcrev_pages_client_settings_created', 1 );
 }, 20 );
 

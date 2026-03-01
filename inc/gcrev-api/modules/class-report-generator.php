@@ -255,7 +255,9 @@ class Gcrev_Report_Generator {
 
         # クライアント情報
         - サイトURL: {$client['site_url']}
-        - 主要ターゲット: {$client['target']}
+        - 商圏・対応エリア: {$client['area_label']}
+        - 業種・業態: {$client['industry']}
+        - ビジネス形態: {$client['business_type']}
         - ターゲットエリア（都道府県）: {$area_label}
         - 課題: {$client['issue']}
         - 今月の目標: {$client['goal_monthly']}

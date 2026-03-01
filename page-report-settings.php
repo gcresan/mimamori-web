@@ -18,9 +18,7 @@ set_query_var('gcrev_page_title', '月次レポート設定');
 // パンくず設定
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート設定', '各種設定'));
 
-// 保存済みの設定を取得
-$saved_site_url      = get_user_meta($user_id, 'report_site_url',      true) ?: '';
-$saved_target        = get_user_meta($user_id, 'report_target',        true) ?: '';
+// 保存済みの設定を取得（月次戦略情報のみ）
 $saved_issue         = get_user_meta($user_id, 'report_issue',         true) ?: '';
 $saved_goal_monthly  = get_user_meta($user_id, 'report_goal_monthly',  true) ?: '';
 $saved_goal_main     = get_user_meta($user_id, 'report_goal_main',     true) ?: '';
@@ -28,10 +26,9 @@ $saved_focus_numbers = get_user_meta($user_id, 'report_focus_numbers', true) ?: 
 $saved_current_state = get_user_meta($user_id, 'report_current_state', true) ?: '';
 $saved_output_mode   = get_user_meta($user_id, 'report_output_mode',   true) ?: 'normal';
 
-// WP-Membersからサイト URL を取得（初期値用）
-$default_site_url = get_user_meta($user_id, 'weisite_url', true) ?: '';
-// 優先順位：保存済み > WP-Members
-$initial_site_url = $saved_site_url ?: $default_site_url;
+// クライアント設定の有無チェック（未設定時のガイダンス用）
+$client_settings = gcrev_get_client_settings($user_id);
+$has_client_url  = !empty($client_settings['site_url']);
 
 get_header();
 ?>
@@ -93,25 +90,26 @@ get_header();
     </div>
     <?php endif; ?>
 
-    <!-- レポート情報の設定 -->
+    <?php if ( ! $has_client_url ): ?>
+    <div class="gcrev-notice-prev2" id="client-settings-notice" style="background: #FFF7ED; border-left-color: #F59E0B;">
+        <span class="notice-icon">⚠️</span>
+        <div class="notice-text">
+            <strong>クライアント設定が未設定です。</strong><br>
+            AIレポートを生成するには、先に<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#B45309;font-weight:600;">クライアント設定</a>でサイトURLを登録してください。
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- 月次レポート設定 -->
     <div class="settings-card">
         <h2>
             <span>📋</span>
-            <span>レポート情報の設定</span>
+            <span>今月の戦略情報</span>
         </h2>
         <p>
-            AIレポート生成のためのクライアント情報を入力してください。入力内容は保存され、次回以降も利用できます。
+            AIレポート生成のために、今月の課題・目標・取り組み等を入力してください。<br>
+            サイトURLや商圏などの基本情報は<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#3D8B6E;font-weight:600;">クライアント設定</a>で設定できます。
         </p>
-
-        <div class="form-group">
-            <label for="input-site-url">サイトURL <span class="required">*</span></label>
-            <input type="url" id="input-site-url" placeholder="https://example.com" value="<?php echo esc_attr($initial_site_url); ?>">
-        </div>
-
-        <div class="form-group">
-            <label for="input-target">主要ターゲット <span class="required">*</span></label>
-            <input type="text" id="input-target" placeholder="例：30代〜40代のファミリー層" value="<?php echo esc_attr($saved_target); ?>">
-        </div>
 
         <div class="form-group">
             <label for="input-issue">課題</label>
@@ -333,12 +331,6 @@ function displayGenerationCount(data) {
 async function saveClientInfo() {
     const data = getClientInputs();
 
-    // バリデーション
-    if (!data.site_url || !data.target) {
-        showError('サイトURLと主要ターゲットは必須項目です。');
-        return;
-    }
-
     hideError();
     showLoading('情報を保存中...', '');
 
@@ -363,7 +355,7 @@ async function saveClientInfo() {
             hasUnsavedChanges = false;
             document.getElementById('btn-save').classList.remove('has-changes');
 
-            alert('✅ クライアント情報を保存しました！');
+            alert('✅ 月次レポート設定を保存しました！');
         } else {
             throw new Error(json.message || '保存に失敗しました');
         }
@@ -386,12 +378,6 @@ async function generateReport() {
     }
 
     const clientData = getClientInputs();
-
-    // バリデーション
-    if (!clientData.site_url || !clientData.target) {
-        showError('サイトURLと主要ターゲットは必須項目です。');
-        return;
-    }
 
     hideError();
     showLoading('レポートを生成しています...', 'GA4の設定を確認中...');
@@ -478,7 +464,6 @@ async function callGenerateReport(prevData, twoData, clientData) {
         body: JSON.stringify({
             previous_month: prevData,
             two_months_ago: twoData,
-            client_info: clientData,
             year_month: year_month  // 前月の年月を明示的に指定
         })
     });
@@ -508,8 +493,6 @@ function getClientInputs() {
     }
 
     return {
-        site_url: getValue('input-site-url'),
-        target: getValue('input-target'),
         issue: getValue('input-issue'),
         goal_monthly: getValue('input-goal-monthly'),
         focus_numbers: getValue('input-focus-numbers'),
