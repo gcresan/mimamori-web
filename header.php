@@ -71,22 +71,17 @@
          <?php endif; ?>
       </div>
       <nav class="sidebar-nav">
-         <!-- B. ホームページ（GA / GSC）-->
          <div class="nav-section">
-            <div class="nav-section-title">概要</div>
             <ul class="nav-menu">
+               <!-- 全体のようす（単独） -->
                <li class="nav-item">
                   <a href="<?php echo home_url('/dashboard/'); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3C6 3 2.7 5.9 1.5 10c1.2 4.1 4.5 7 8.5 7s7.3-2.9 8.5-7C17.3 5.9 14 3 10 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
                   <span>全体のようす</span>
                   </a>
                </li>
-            </ul>
-         </div>
-         <div class="nav-section">
-            <div class="nav-section-title">分析</div>
-            <ul class="nav-menu">
-               <!-- 最新月次レポート（独立リンク） -->
+
+               <!-- 最新月次レポート（単独） -->
                <li class="nav-item">
                   <a href="<?php echo home_url('/report/report-latest/'); ?>" class="nav-link <?php echo is_page('report-latest') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 2.5V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 11h5M7.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
@@ -139,35 +134,41 @@
                      </li>
                      <li class="nav-item">
                         <a href="<?php echo home_url('/analysis/analysis-cv/'); ?>" class="nav-link <?php echo is_page('analysis-cv') ? 'active' : ''; ?>">
-                        <span>お問い合わせの数</span>
+                        <span>お問い合わせ分析</span>
                         </a>
                      </li>
                   </ul>
                </li>
 
-            </ul>
-         </div>
-         <!-- 各種設定 -->
-         <div class="nav-section">
-            <div class="nav-section-title">各種設定</div>
-            <ul class="nav-menu">
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/report/report-settings/'); ?>" class="nav-link <?php echo is_page('report-settings') ? 'active' : ''; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 2.5V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="12" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M10 10v-1M10 14v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
-                  <span>AIレポート設定</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5h14M3 10h14M3 15h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M15 13l2 2-2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                  <span>問い合わせの実数調整</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/analysis/cv-settings/'); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
+               <!-- 各種設定（折りたたみ親） -->
+               <?php
+               $settings_pages = array('report-settings','cv-review','cv-settings');
+               $settings_child_active = false;
+               foreach ($settings_pages as $_sp) { if (is_page($_sp)) { $settings_child_active = true; break; } }
+               ?>
+               <li class="nav-item nav-item-collapsible<?php echo $settings_child_active ? ' child-active' : ''; ?>">
+                  <button type="button" class="nav-link nav-link-toggle<?php echo $settings_child_active ? ' active' : ''; ?>" id="navToggleSettings" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-                  <span>問い合わせの数え方設定</span>
-                  </a>
+                  <span>各種設定</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuSettings">
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/report/report-settings/'); ?>" class="nav-link <?php echo is_page('report-settings') ? 'active' : ''; ?>">
+                        <span>AIレポート設定</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
+                        <span>問い合わせの実数調整</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/analysis/cv-settings/'); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
+                        <span>問い合わせの数え方設定</span>
+                        </a>
+                     </li>
+                  </ul>
                </li>
             </ul>
          </div>
