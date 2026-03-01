@@ -180,7 +180,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     <!-- CVイベント未設定メッセージ -->
     <div id="cvNoConfig" style="display:none;">
         <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:24px; text-align:center;">
-            <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">問い合わせイベントが設定されていません</p>
+            <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">キーイベントが設定されていません</p>
             <p style="margin:0;"><a href="<?php echo esc_url(home_url('/analysis/cv-settings/')); ?>" style="color:#2563eb; font-weight:600;">問い合わせの数え方設定ページ</a>から設定してください。</p>
         </div>
     </div>
