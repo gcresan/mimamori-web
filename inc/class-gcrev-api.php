@@ -4150,45 +4150,285 @@ class Gcrev_Insight_API {
      * @return string
      */
     private function score_to_status(int $score): string {
-        if ($score >= 75) return '安定しています';
+        if ($score >= 70) return '安定しています';
         if ($score >= 50) return '改善傾向です';
+        if ($score >= 35) return 'もう少しです';
         return '要注意です';
     }
 
+    // ---------------------------------------------------------
+    // スコアリング v2 — 4コンポーネント制ヘルパー
+    // ---------------------------------------------------------
+
     /**
-     * 月次ヘルススコアを計算
+     * 過去3〜6ヶ月のインフォグラフィックから各観点の中央値を算出
      *
-     * 4観点（流入/成果/検索/地図）×各25点＝100点満点
-     *
-     * @param array $curr 当月の指標（キー: traffic, cv, gsc, meo）
-     * @param array $prev 前月の指標（同上）
-     * @param array $opt  オプション（将来の業種別差し替え用、現在は未使用）
-     * @return array {score:int, status:string, breakdown:array}
+     * @param int $user_id   ユーザーID
+     * @param int $year      対象年
+     * @param int $month     対象月
+     * @param int $lookback  遡る月数（デフォルト6）
+     * @return array|null    ['traffic'=>float, ...] or null（3ヶ月未満の場合）
      */
-    public function calc_monthly_health_score(array $curr, array $prev, array $opt = []): array {
+    private function get_historical_medians(int $user_id, int $year, int $month, int $lookback = 6): ?array {
+        $values = ['traffic' => [], 'cv' => [], 'gsc' => [], 'meo' => []];
+        $dt = new \DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month), wp_timezone());
+
+        for ($i = 1; $i <= $lookback; $i++) {
+            $past = $dt->modify("-{$i} months");
+            $ig = $this->get_monthly_infographic((int)$past->format('Y'), (int)$past->format('n'), $user_id);
+            if (!$ig || empty($ig['breakdown'])) {
+                continue;
+            }
+            foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
+                if (isset($ig['breakdown'][$key]['curr'])) {
+                    $values[$key][] = (float)$ig['breakdown'][$key]['curr'];
+                }
+            }
+        }
+
+        // 最低3ヶ月分のデータが必要
+        $min_count = min(array_map('count', $values));
+        if ($min_count < 3) {
+            return null;
+        }
+
+        $medians = [];
+        foreach ($values as $key => $arr) {
+            sort($arr);
+            $n = count($arr);
+            $medians[$key] = ($n % 2 === 0)
+                ? ($arr[$n / 2 - 1] + $arr[$n / 2]) / 2
+                : $arr[(int)floor($n / 2)];
+        }
+        return $medians;
+    }
+
+    /**
+     * Achievement（実績）コンポーネント — 中央値比較（50pt満点）
+     *
+     * 各観点12.5pt × 4 = 50pt
+     * 中央値以上なら満点、以下なら比率に応じて減点
+     * 中央値データがない場合は前月比フォールバック
+     *
+     * @return array ['points'=>int, 'details'=>array]
+     */
+    private function calc_achievement_component(array $curr, ?array $medians, array $prev): array {
+        $details = [];
+        $total   = 0.0;
+        $per_dim = 12.5;
+
+        if ($medians === null) {
+            // フォールバック: 前月比ベースで柔らかめに配点
+            foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
+                $c = (float)($curr[$key] ?? 0);
+                $p = (float)($prev[$key] ?? 0);
+                if ((int)$c === 0) {
+                    $details[$key] = ['points' => 0, 'max' => $per_dim, 'ratio' => null, 'fallback' => true];
+                    continue;
+                }
+                $pct = $this->calc_pct_change($c, $p);
+                if ($pct >= 5.0)       $pts = $per_dim;      // 12.5
+                elseif ($pct >= -5.0)  $pts = $per_dim * 0.86; // ~10.75
+                elseif ($pct >= -15.0) $pts = $per_dim * 0.7;  // ~8.75
+                else                   $pts = $per_dim * 0.5;  // 6.25
+                $total += $pts;
+                $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => null, 'fallback' => true];
+            }
+        } else {
+            foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
+                $c = (float)($curr[$key] ?? 0);
+                $m = (float)($medians[$key] ?? 0);
+                if ((int)$c === 0) {
+                    $details[$key] = ['points' => 0, 'max' => $per_dim, 'ratio' => 0];
+                    continue;
+                }
+                if ($m <= 0) {
+                    // median=0, curr>0 → 満点
+                    $total += $per_dim;
+                    $details[$key] = ['points' => $per_dim, 'max' => $per_dim, 'ratio' => null];
+                    continue;
+                }
+                $ratio = $c / $m;
+                if ($ratio >= 1.0)      $pts = $per_dim;       // 12.5
+                elseif ($ratio >= 0.8)  $pts = $per_dim * 0.8;  // 10
+                elseif ($ratio >= 0.6)  $pts = $per_dim * 0.6;  // 7.5
+                elseif ($ratio >= 0.4)  $pts = $per_dim * 0.4;  // 5
+                else                    $pts = $per_dim * 0.2;  // 2.5
+                $total += $pts;
+                $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => round($ratio, 2)];
+            }
+        }
+
+        return [
+            'points'  => (int)round($total),
+            'max'     => 50,
+            'label'   => '実績（中央値比較）',
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Growth（成長）コンポーネント — 前月比（30pt満点）
+     *
+     * ±5%以内のデッドゾーンは満点扱い（現状維持を評価）
+     * 各観点7.5pt × 4 = 30pt
+     *
+     * @return array ['points'=>int, 'details'=>array]
+     */
+    private function calc_growth_component(array $curr, array $prev): array {
+        $details = [];
+        $total   = 0.0;
+        $per_dim = 7.5;
+
+        foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
+            $c = (float)($curr[$key] ?? 0);
+            $p = (float)($prev[$key] ?? 0);
+            if ((int)$c === 0) {
+                $details[$key] = ['points' => 0, 'max' => $per_dim, 'pct' => 0, 'zone' => 'zero'];
+                continue;
+            }
+            $pct = $this->calc_pct_change($c, $p);
+            if ($pct > 10.0) {
+                $pts = $per_dim;       // 7.5
+                $zone = 'high';
+            } elseif ($pct > 5.0) {
+                $pts = $per_dim * 0.93; // ~7.0
+                $zone = 'mid';
+            } elseif ($pct >= -5.0) {
+                $pts = $per_dim;       // 7.5 — デッドゾーン = 満点
+                $zone = 'dead';
+            } elseif ($pct >= -15.0) {
+                $pts = $per_dim * 0.53; // ~4.0
+                $zone = 'soft_decline';
+            } else {
+                $pts = $per_dim * 0.13; // ~1.0
+                $zone = 'hard_decline';
+            }
+            $total += $pts;
+            $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'pct' => round($pct, 1), 'zone' => $zone];
+        }
+
+        return [
+            'points'  => (int)round($total),
+            'max'     => 30,
+            'label'   => '成長（前月比）',
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Stability（安定性）コンポーネント — 急落ペナルティ（10pt満点）
+     *
+     * -20%超の急落がなければ満点
+     *
+     * @return array ['points'=>int, 'drops'=>int]
+     */
+    private function calc_stability_component(array $curr, array $prev): array {
+        $drops   = 0;
+        $has_any = false;
+
+        foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
+            $c = (float)($curr[$key] ?? 0);
+            $p = (float)($prev[$key] ?? 0);
+            if ((int)$c === 0) {
+                continue;
+            }
+            $has_any = true;
+            $pct = $this->calc_pct_change($c, $p);
+            if ($pct < -20.0) {
+                $drops++;
+            }
+        }
+
+        if (!$has_any) {
+            $points = 0;
+        } elseif ($drops === 0) {
+            $points = 10;
+        } elseif ($drops === 1) {
+            $points = 6;
+        } else {
+            $points = 2;
+        }
+
+        return [
+            'points' => $points,
+            'max'    => 10,
+            'label'  => '安定性',
+            'drops'  => $drops,
+        ];
+    }
+
+    /**
+     * Action Bonus（行動ボーナス）コンポーネント — 設定充実度（10pt満点）
+     *
+     * クライアント設定・月次レポート設定の入力状況を評価
+     * 各項目2pt × 5 = 10pt
+     *
+     * @return array ['points'=>int, 'checks'=>array]
+     */
+    private function calc_action_bonus_component(int $user_id): array {
+        $checks = [];
+        $points = 0;
+
+        $client = gcrev_get_client_settings($user_id);
+
+        $items = [
+            ['key' => 'site_url',            'label' => 'サイトURL',   'value' => $client['site_url'] ?? ''],
+            ['key' => 'area_type',           'label' => '商圏',       'value' => $client['area_type'] ?? ''],
+            ['key' => 'industry_category',   'label' => '業種',       'value' => $client['industry_category'] ?? ''],
+            ['key' => 'report_issue',        'label' => '今月の課題',  'value' => get_user_meta($user_id, 'report_issue', true)],
+            ['key' => 'report_goal_monthly', 'label' => '今月の目標',  'value' => get_user_meta($user_id, 'report_goal_monthly', true)],
+        ];
+
+        foreach ($items as $item) {
+            $ok = !empty($item['value']);
+            if ($ok) {
+                $points += 2;
+            }
+            $checks[] = ['label' => $item['label'], 'ok' => $ok];
+        }
+
+        return [
+            'points' => min(10, $points),
+            'max'    => 10,
+            'label'  => '行動ボーナス',
+            'checks' => $checks,
+        ];
+    }
+
+    /**
+     * 月次ヘルススコアを計算（v2: 4コンポーネント制）
+     *
+     * Achievement(50) + Growth(30) + Stability(10) + ActionBonus(10) = 100点
+     * フロア: 最低35点（全指標0の場合は0点）
+     *
+     * @param array $curr    当月の指標（キー: traffic, cv, gsc, meo）
+     * @param array $prev    前月の指標（同上）
+     * @param array $opt     オプション（将来用、現在は未使用）
+     * @param int   $user_id ユーザーID（0=中央値/ActionBonus無効）
+     * @param int   $year    対象年（0=中央値無効）
+     * @param int   $month   対象月（0=中央値無効）
+     * @return array {score:int, status:string, breakdown:array, components:array}
+     */
+    public function calc_monthly_health_score(array $curr, array $prev, array $opt = [], int $user_id = 0, int $year = 0, int $month = 0): array {
+
+        // --- 1) 後方互換 breakdown（旧形式: 4観点 × curr/prev/pct/points/max） ---
         $dimensions = [
             'traffic' => ['label' => 'サイトに来た人の数',       'max' => 25],
             'cv'      => ['label' => 'ゴール（問い合わせ・申込みなど）', 'max' => 25],
             'gsc'     => ['label' => '検索結果からクリックされた数', 'max' => 25],
             'meo'     => ['label' => '地図検索からの表示数',     'max' => 25],
         ];
-
         $breakdown = [];
-        $total = 0;
-
         foreach ($dimensions as $key => $dim) {
             $c = (float)($curr[$key] ?? 0);
             $p = (float)($prev[$key] ?? 0);
-
             $pct    = $this->calc_pct_change($c, $p);
             $points = $this->pct_to_points($pct, $dim['max']);
-
-            // ★ 共通ルール：当月実数が0なら、その観点は必ず0点
             if ((int)$c === 0) {
                 $points = 0;
-                $pct    = 0; // 表示を落ち着かせたい場合（任意）
+                $pct    = 0;
             }
-
             $breakdown[$key] = [
                 'label'  => $dim['label'],
                 'curr'   => $c,
@@ -4197,15 +4437,44 @@ class Gcrev_Insight_API {
                 'points' => $points,
                 'max'    => $dim['max'],
             ];
-            $total += $points;
         }
 
-        $score = max(0, min(100, $total));
+        // --- 2) 4コンポーネント計算 ---
+        $medians = ($user_id > 0 && $year > 0 && $month > 0)
+            ? $this->get_historical_medians($user_id, $year, $month)
+            : null;
+
+        $achievement = $this->calc_achievement_component($curr, $medians, $prev);
+        $growth      = $this->calc_growth_component($curr, $prev);
+        $stability   = $this->calc_stability_component($curr, $prev);
+        $action      = ($user_id > 0)
+            ? $this->calc_action_bonus_component($user_id)
+            : ['points' => 0, 'max' => 10, 'label' => '行動ボーナス', 'checks' => []];
+
+        $raw_total = $achievement['points'] + $growth['points'] + $stability['points'] + $action['points'];
+
+        // --- 3) フロア適用（最低35点）。全観点0なら0点 ---
+        $has_any_data = false;
+        foreach (['traffic', 'cv', 'gsc', 'meo'] as $k) {
+            if ((int)($curr[$k] ?? 0) > 0) {
+                $has_any_data = true;
+                break;
+            }
+        }
+        $score = $has_any_data ? max(35, min(100, $raw_total)) : 0;
+
+        $components = [
+            'achievement' => $achievement,
+            'growth'      => $growth,
+            'stability'   => $stability,
+            'action'      => $action,
+        ];
 
         return [
-            'score'     => $score,
-            'status'    => $this->score_to_status($score),
-            'breakdown' => $breakdown,
+            'score'      => $score,
+            'status'     => $this->score_to_status($score),
+            'breakdown'  => $breakdown,
+            'components' => $components,
         ];
     }
 
@@ -4309,13 +4578,21 @@ class Gcrev_Insight_API {
         $curr_metrics = $this->extract_score_metrics($prev_data, $user_id, $meo_curr);
         $prev_metrics = $this->extract_score_metrics($two_data,  $user_id, $meo_prev);
 
-        // ===== 3) ヘルススコア計算（PHP固定ロジック） =====
-        $health = $this->calc_monthly_health_score($curr_metrics, $prev_metrics);
+        // ===== 3) 対象年月をパース（中央値取得・score_diff用） =====
+        $ig_year  = 0;
+        $ig_month = 0;
+        if ($prev_start !== '') {
+            $ig_year  = (int)substr($prev_start, 0, 4);
+            $ig_month = (int)substr($prev_start, 5, 2);
+        }
+
+        // ===== 4) ヘルススコア計算（v2: 4コンポーネント制） =====
+        $health = $this->calc_monthly_health_score($curr_metrics, $prev_metrics, [], $user_id, $ig_year, $ig_month);
 
         error_log("[GCREV] generate_infographic_json: Health score calculated: score={$health['score']}, status={$health['status']}");
         error_log("[GCREV] generate_infographic_json: Metrics curr=" . wp_json_encode($curr_metrics) . " prev=" . wp_json_encode($prev_metrics));
 
-        // ===== 4) KPI実数値と差分 =====
+        // ===== 5) KPI実数値と差分 =====
         // 実質CVがclient_infoに含まれている場合はそれを優先
         $effective_cv_info = $client_info['effective_cv'] ?? null;
         $cv_value = $curr_metrics['cv'];
@@ -4342,11 +4619,26 @@ class Gcrev_Insight_API {
             ],
         ];
 
-        // ===== 5) 前月スコアとの差分（前月インフォグラフィックがあれば） =====
+        // ===== 6) 前月スコアとの差分（score_diff） =====
         $score_diff = 0;
-        // score_diff は保存後に呼び出し側で上書き可能だが、ここでは0をデフォルトにする
+        if ($ig_year > 0 && $ig_month > 0 && $user_id > 0) {
+            try {
+                $prev_ig_dt = (new \DateTimeImmutable(sprintf('%04d-%02d-01', $ig_year, $ig_month), wp_timezone()))
+                    ->modify('-1 month');
+                $prev_ig = $this->get_monthly_infographic(
+                    (int)$prev_ig_dt->format('Y'),
+                    (int)$prev_ig_dt->format('n'),
+                    $user_id
+                );
+                if ($prev_ig && isset($prev_ig['score'])) {
+                    $score_diff = $health['score'] - (int)$prev_ig['score'];
+                }
+            } catch (\Exception $sd_e) {
+                error_log("[GCREV] generate_infographic_json: score_diff error: " . $sd_e->getMessage());
+            }
+        }
 
-        // ===== 6) AI で summary / action のみ生成 =====
+        // ===== 7) AI で summary / action のみ生成 =====
         $summary = '';
         $action  = '';
 
@@ -4361,7 +4653,7 @@ class Gcrev_Insight_API {
             // AI失敗でもスコアは保存する（summary/actionは空になる）
         }
 
-        // ===== 7) 最終JSON組み立て =====
+        // ===== 8) 最終JSON組み立て =====
         return [
             'score'      => $health['score'],
             'score_diff' => $score_diff,
@@ -4370,6 +4662,7 @@ class Gcrev_Insight_API {
             'summary'    => $summary,
             'action'     => $action,
             'breakdown'  => $health['breakdown'],
+            'components' => $health['components'] ?? null,
         ];
     }
 

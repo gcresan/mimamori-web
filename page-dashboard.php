@@ -368,16 +368,37 @@ if ($infographic && is_array($infographic)) {
             unset($bd_gsc);
         }
 
-        // score 再計算（全観点の points を合算）
-        $new_score_total = 0;
-        foreach ($infographic['breakdown'] as $bk => $bv) {
-            if (is_array($bv) && isset($bv['points'])) {
-                $new_score_total += (int)$bv['points'];
+        // score 再計算
+        // components がある場合（v2）: 4コンポーネントの合計 + フロア35
+        // components がない場合（旧）: breakdown points 合計
+        if (!empty($infographic['components'])) {
+            // v2: components の合計（※ action bonus はサーバー側で計算済みの値をそのまま使用）
+            $comp_total = 0;
+            foreach ($infographic['components'] as $comp_key => $comp_val) {
+                if (is_array($comp_val) && isset($comp_val['points'])) {
+                    $comp_total += (int)$comp_val['points'];
+                }
             }
+            // フロア適用（最低35）。ただし全指標0なら0
+            $has_live_data = false;
+            foreach ($infographic['breakdown'] as $bk => $bv) {
+                if (is_array($bv) && (int)($bv['curr'] ?? 0) > 0) { $has_live_data = true; break; }
+            }
+            $infographic['score'] = $has_live_data ? max(35, min(100, $comp_total)) : 0;
+        } else {
+            // 旧形式: breakdown の points 合算
+            $new_score_total = 0;
+            foreach ($infographic['breakdown'] as $bk => $bv) {
+                if (is_array($bv) && isset($bv['points'])) {
+                    $new_score_total += (int)$bv['points'];
+                }
+            }
+            $infographic['score'] = max(0, min(100, $new_score_total));
         }
-        $infographic['score'] = max(0, min(100, $new_score_total));
-        if ($infographic['score'] >= 75) $infographic['status'] = '安定しています';
+        // ステータス更新（v2閾値）
+        if ($infographic['score'] >= 70) $infographic['status'] = '安定しています';
         elseif ($infographic['score'] >= 50) $infographic['status'] = '改善傾向です';
+        elseif ($infographic['score'] >= 35) $infographic['status'] = 'もう少しです';
         else $infographic['status'] = '要注意です';
         } // end if (!empty($kpi_curr))
     } catch (\Throwable $e) {
@@ -622,8 +643,10 @@ if ($infographic) {
 
   <!-- 採点の内訳（breakdown） -->
   <?php
-  $breakdown = $infographic['breakdown'] ?? null;
-  $has_breakdown = is_array($breakdown) && !empty($breakdown);
+  $breakdown  = $infographic['breakdown'] ?? null;
+  $components = $infographic['components'] ?? null;
+  $has_breakdown  = is_array($breakdown) && !empty($breakdown);
+  $has_components = is_array($components) && !empty($components);
   $bd_icons = [
     'traffic' => '👥',
     'cv'      => '🎯',
@@ -636,11 +659,11 @@ if ($infographic) {
     'gsc'     => '検索結果からクリックされた数',
     'meo'     => '地図検索からの表示数',
   ];
-  $sbd_hints = [
-    'traffic' => 'サイトへの訪問者数が多いほど高スコア',
-    'cv'      => 'ゴールの達成件数で評価',
-    'gsc'     => 'Google検索結果でのクリック数を評価',
-    'meo'     => 'Googleマップでの表示回数を評価',
+  $comp_icons = [
+    'achievement' => '📊',
+    'growth'      => '📈',
+    'stability'   => "\u{1F6E1}\u{FE0F}",
+    'action'      => '⭐',
   ];
   ?>
 
@@ -659,7 +682,117 @@ if ($infographic) {
           <span class="score-breakdown-total-label">100点中</span>
         </div>
 
-        <?php if ($has_breakdown): ?>
+        <?php if ($has_components): ?>
+          <!-- v2: 4コンポーネント表示 -->
+          <div class="score-comp-list">
+          <?php foreach ($components as $comp_key => $comp):
+            if (!is_array($comp)) continue;
+            $c_points = (int)($comp['points'] ?? 0);
+            $c_max    = (int)($comp['max'] ?? 0);
+            $c_label  = esc_html($comp['label'] ?? $comp_key);
+            $c_icon   = $comp_icons[$comp_key] ?? '📊';
+            $c_bar_pct = $c_max > 0 ? min(100, ($c_points / $c_max) * 100) : 0;
+          ?>
+            <div class="score-comp-card">
+              <div class="score-comp-header">
+                <span class="score-comp-icon"><?php echo $c_icon; ?></span>
+                <span class="score-comp-label"><?php echo $c_label; ?></span>
+                <span class="score-comp-pts"><?php echo esc_html("{$c_points} / {$c_max}pt"); ?></span>
+              </div>
+              <div class="score-comp-bar">
+                <div class="score-comp-bar-fill" style="width:<?php echo esc_attr((string)$c_bar_pct); ?>%"></div>
+              </div>
+
+              <?php if ($comp_key === 'achievement' && !empty($comp['details'])): ?>
+                <details class="score-comp-details">
+                  <summary>内訳を見る</summary>
+                  <div class="score-comp-details-body">
+                    <?php foreach ($comp['details'] as $dim_key => $dim):
+                      $d_icon   = $bd_icons[$dim_key] ?? '📊';
+                      $d_label  = $bd_labels[$dim_key] ?? $dim_key;
+                      $d_pts    = $dim['points'] ?? 0;
+                      $d_max    = $dim['max'] ?? 12.5;
+                      $d_ratio  = $dim['ratio'] ?? null;
+                      $d_fb     = !empty($dim['fallback']);
+                      $ratio_text = '';
+                      if ($d_ratio !== null) {
+                          $ratio_text = '（中央値の' . number_format($d_ratio * 100, 0) . '%）';
+                      } elseif ($d_fb) {
+                          $ratio_text = '（前月比フォールバック）';
+                      }
+                    ?>
+                      <div class="score-comp-dim-row">
+                        <span class="score-comp-dim-icon"><?php echo $d_icon; ?></span>
+                        <span class="score-comp-dim-label"><?php echo esc_html($d_label); ?></span>
+                        <span class="score-comp-dim-pts"><?php echo esc_html("{$d_pts}/{$d_max}"); ?></span>
+                        <?php if ($ratio_text): ?>
+                          <span class="score-comp-dim-note"><?php echo esc_html($ratio_text); ?></span>
+                        <?php endif; ?>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                </details>
+              <?php endif; ?>
+
+              <?php if ($comp_key === 'growth' && !empty($comp['details'])): ?>
+                <details class="score-comp-details">
+                  <summary>内訳を見る</summary>
+                  <div class="score-comp-details-body">
+                    <?php foreach ($comp['details'] as $dim_key => $dim):
+                      $d_icon  = $bd_icons[$dim_key] ?? '📊';
+                      $d_label = $bd_labels[$dim_key] ?? $dim_key;
+                      $d_pts   = $dim['points'] ?? 0;
+                      $d_max   = $dim['max'] ?? 7.5;
+                      $d_pct   = $dim['pct'] ?? 0;
+                      $d_zone  = $dim['zone'] ?? '';
+                      $pct_sign = $d_pct > 0 ? '+' : '';
+                      $zone_label = '';
+                      if ($d_zone === 'dead')  $zone_label = '安定（デッドゾーン）';
+                      if ($d_zone === 'zero')  $zone_label = 'データなし';
+                    ?>
+                      <div class="score-comp-dim-row">
+                        <span class="score-comp-dim-icon"><?php echo $d_icon; ?></span>
+                        <span class="score-comp-dim-label"><?php echo esc_html($d_label); ?></span>
+                        <span class="score-comp-dim-pct"><?php echo esc_html("{$pct_sign}" . number_format((float)$d_pct, 1) . '%'); ?></span>
+                        <span class="score-comp-dim-pts"><?php echo esc_html("{$d_pts}/{$d_max}"); ?></span>
+                        <?php if ($zone_label): ?>
+                          <span class="score-comp-dim-note"><?php echo esc_html($zone_label); ?></span>
+                        <?php endif; ?>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                </details>
+              <?php endif; ?>
+
+              <?php if ($comp_key === 'stability'): ?>
+                <div class="score-comp-inline-note">
+                  <?php
+                  $drops = (int)($comp['drops'] ?? 0);
+                  if ($drops === 0) {
+                      echo '<span class="score-comp-check-ok">急落なし ✓</span>';
+                  } else {
+                      echo '<span class="score-comp-check-ng">' . esc_html("{$drops}観点で急落（-20%超）") . '</span>';
+                  }
+                  ?>
+                </div>
+              <?php endif; ?>
+
+              <?php if ($comp_key === 'action' && !empty($comp['checks'])): ?>
+                <div class="score-comp-checklist">
+                  <?php foreach ($comp['checks'] as $check): ?>
+                    <span class="score-comp-check-item <?php echo $check['ok'] ? 'is-ok' : 'is-ng'; ?>">
+                      <?php echo $check['ok'] ? '✓' : '✗'; ?>
+                      <?php echo esc_html($check['label']); ?>
+                    </span>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+          </div>
+
+        <?php elseif ($has_breakdown): ?>
+          <!-- 旧形式: テーブル表示（後方互換） -->
           <div class="score-breakdown-table-wrap">
             <table class="info-breakdown-table" role="table">
               <thead>
