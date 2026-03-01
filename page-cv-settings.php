@@ -77,12 +77,6 @@ get_header();
     margin-left: 8px;
 }
 
-.phone-event-note {
-    font-size: 12px;
-    color: var(--mw-text-secondary);
-    margin-top: 4px;
-}
-
 /* ===== サジェストUI ===== */
 .suggest-wrapper {
     position: relative;
@@ -205,15 +199,6 @@ get_header();
                 </label>
             </div>
 
-            <div class="form-group" id="phone-event-row" style="display:none;">
-                <label for="phone-event-name">電話タップのGA4イベント名（常に加算）</label>
-                <div class="suggest-wrapper">
-                    <input type="text" id="phone-event-name" placeholder="例: phone_tap" data-gcrev-ignore-unsaved="1">
-                    <span class="suggest-spinner" style="display:none;">読み込み中…</span>
-                </div>
-                <small class="phone-event-note">上のチェックがONでも、ここで指定した電話タップイベントは常にCV合計に加算されます</small>
-            </div>
-
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" id="btn-save-cv-routes" data-gcrev-ignore-unsaved="1">💾 設定を保存</button>
             </div>
@@ -229,7 +214,7 @@ const wpNonce  = '<?php echo wp_create_nonce('wp_rest'); ?>';
 const userId   = <?php echo (int) $user_id; ?>;
 
 // 最大ルート数
-const MAX_ROUTES = 5;
+const MAX_ROUTES = 20;
 
 // ===== GA4イベント候補（拡張版） =====
 var GA4_EVENTS_CACHE = [];
@@ -239,9 +224,6 @@ var ga4EventsError   = false;
 // ===== ページ読み込み時の初期化 =====
 document.addEventListener('DOMContentLoaded', function() {
     initCvRoutesUI();
-    // 電話タップ入力欄にもサジェストを付与
-    var phoneInput = document.getElementById('phone-event-name');
-    if (phoneInput) { attachSuggest(phoneInput); }
 });
 
 // --- Dirty tracking: 変更があったらボタンを青くする ---
@@ -461,21 +443,13 @@ async function initCvRoutesUI() {
             renderCvRoutesEditor(json.data);
             updateRoutesCount();
         }
-        // チェックボックス・電話タップ設定の復元
+        // チェックボックスの復元（デフォルト: ON）
         var chk = document.getElementById('cv-only-configured');
-        var phoneRow = document.getElementById('phone-event-row');
-        var phoneInput = document.getElementById('phone-event-name');
         if (chk) {
-            chk.checked = !!json.cv_only_configured;
-            if (phoneRow) phoneRow.style.display = chk.checked ? 'block' : 'none';
+            chk.checked = (json.cv_only_configured == null) ? true : !!json.cv_only_configured;
             chk.addEventListener('change', function() {
-                if (phoneRow) phoneRow.style.display = chk.checked ? 'block' : 'none';
                 markDirty('btn-save-cv-routes');
             });
-        }
-        if (phoneInput) {
-            phoneInput.value = json.phone_event_name || '';
-            phoneInput.addEventListener('input', function() { markDirty('btn-save-cv-routes'); });
         }
     } catch (e) {
         console.error('CV routes load error', e);
@@ -633,7 +607,6 @@ document.getElementById('btn-save-cv-routes')?.addEventListener('click', async f
                 user_id: userId,
                 routes: routes,
                 cv_only_configured: !!document.getElementById('cv-only-configured')?.checked,
-                phone_event_name: (document.getElementById('phone-event-name')?.value || '').trim(),
             }),
             cache: 'no-store'
         });
