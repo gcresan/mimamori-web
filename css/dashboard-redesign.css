@@ -241,6 +241,9 @@ h3 { font-size: 19px; font-weight: 600; }
   padding: 9px 24px 9px 52px;
   font-size: 14px;
 }
+.sidebar-nav .nav-submenu .nav-link:hover {
+  color: var(--mw-primary-blue);
+}
 
 /* 折りたたみトグル（集客のようす） */
 .nav-link-toggle {
