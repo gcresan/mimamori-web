@@ -5125,7 +5125,8 @@ PROMPT;
             $start = (clone $today)->modify('-90 days')->format('Y-m-d');
 
             // ========================================
-            // 1) Admin API: キーイベント定義一覧（確実）
+            // 1) Admin API: キーイベント定義一覧
+            //    GA4プロパティに登録された全キーイベント（発火有無に関係なく）
             // ========================================
             $key_event_defs = [];
             try {
@@ -5140,56 +5141,61 @@ PROMPT;
 
             // ========================================
             // 2) Data API: keyEvents メトリクス（過去90日）
+            //    実際にキーイベントとして発火したもの + 件数
             // ========================================
             $key_event_counts = [];
             try {
                 $key_event_counts = $this->ga4->fetch_ga4_key_events($property_id, $start, $end);
+                error_log("[GCREV] Data API keyEvents OK: " . count($key_event_counts) . " events");
             } catch (\Exception $e) {
                 error_log("[GCREV] Data API keyEvents FAILED (non-fatal): " . $e->getMessage());
             }
 
             // ========================================
-            // 3) Data API: eventCount（全イベント）— 1) & 2) が空の場合のフォールバック
+            // 3) Data API: eventCount（全イベント一覧 + 発火回数）
+            //    Admin API が使えない場合でも候補を提供するために常に取得
             // ========================================
             $all_event_counts = [];
-            if (empty($key_event_defs) && empty($key_event_counts)) {
-                try {
-                    $all_event_counts = $this->ga4->fetch_ga4_all_event_names($property_id, $start, $end);
-                    error_log("[GCREV] Data API eventCount fallback: " . count($all_event_counts) . " events");
-                } catch (\Exception $e) {
-                    error_log("[GCREV] Data API eventCount FAILED: " . $e->getMessage());
-                }
+            try {
+                $all_event_counts = $this->ga4->fetch_ga4_all_event_names($property_id, $start, $end);
+                error_log("[GCREV] Data API eventCount OK: " . count($all_event_counts) . " events");
+            } catch (\Exception $e) {
+                error_log("[GCREV] Data API eventCount FAILED (non-fatal): " . $e->getMessage());
             }
 
             // ========================================
             // 4) 突合・マージ
+            //    キーイベント判定の優先度:
+            //      a) Admin API に定義あり → 確実にキーイベント
+            //      b) keyEvents メトリクスで値あり → キーイベント
+            //      c) どちらにもない → 通常イベント
             // ========================================
             $seen   = [];
             $merged = [];
 
-            // 4a) keyEvents 結果
-            foreach ($key_event_counts as $name => $count) {
+            // キーイベント名のセット（Admin API + keyEvents 結果を統合）
+            $is_key = $key_event_defs; // Admin API 分
+            foreach ($key_event_counts as $name => $_) {
+                $is_key[$name] = true;  // keyEvents に出る = キーイベント
+            }
+
+            // 4a) キーイベント（Admin API 定義 + keyEvents 発火）を先に追加
+            foreach ($is_key as $name => $_) {
+                $count = 0;
+                if (isset($key_event_counts[$name])) {
+                    $count = (int) $key_event_counts[$name];
+                } elseif (isset($all_event_counts[$name])) {
+                    $count = (int) $all_event_counts[$name];
+                }
                 $merged[] = [
                     'name'         => $name,
-                    'is_key_event' => isset($key_event_defs[$name]) || true,  // keyEvents に出る＝キーイベント
-                    'count'        => (int) $count,
+                    'is_key_event' => true,
+                    'count'        => $count,
                 ];
                 $seen[$name] = true;
             }
 
-            // 4b) Admin API にしかないもの（まだ発火していないキーイベント）
-            foreach ($key_event_defs as $name => $_) {
-                if (!isset($seen[$name])) {
-                    $merged[] = [
-                        'name'         => $name,
-                        'is_key_event' => true,
-                        'count'        => 0,
-                    ];
-                    $seen[$name] = true;
-                }
-            }
-
-            // 4c) eventCount フォールバック（全イベント）
+            // 4b) その他の全イベント（キーイベント以外）
             foreach ($all_event_counts as $name => $count) {
                 if (!isset($seen[$name])) {
                     $merged[] = [
