@@ -148,7 +148,7 @@
                ?>
                <li class="nav-item nav-item-collapsible<?php echo $settings_child_active ? ' child-active' : ''; ?>">
                   <button type="button" class="nav-link nav-link-toggle<?php echo $settings_child_active ? ' active' : ''; ?>" id="navToggleSettings" aria-expanded="true">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.5"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                   <span>各種設定</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
@@ -434,6 +434,22 @@
             $u = wp_get_current_user();
             $company = $u->last_name ?: $u->display_name;
             ?>
+
+         <!-- クライアント名・サイトURL -->
+         <div class="topbar-user-info">
+            <div class="topbar-user-name"><?php echo esc_html( $company ); ?> 様</div>
+            <?php
+            $tb_site_url = get_user_meta( $u->ID, 'report_site_url', true )
+                         ?: get_user_meta( $u->ID, 'weisite_url', true );
+            if ( $tb_site_url ) :
+               $tb_display_url = preg_replace( '#^https?://#', '', untrailingslashit( $tb_site_url ) );
+            ?>
+            <div class="topbar-user-plan">
+               <a href="<?php echo esc_url( $tb_site_url ); ?>" target="_blank" rel="noopener noreferrer"
+                  style="color: inherit; text-decoration: none;"><?php echo esc_html( $tb_display_url ); ?></a>
+            </div>
+            <?php endif; ?>
+         </div>
 
          <!-- アップデート通知ベル -->
          <div class="updates-bell" id="updatesBell">
