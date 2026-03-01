@@ -368,38 +368,24 @@ if ($infographic && is_array($infographic)) {
             unset($bd_gsc);
         }
 
-        // score 再計算
-        // components がある場合（v2）: 4コンポーネントの合計 + フロア35
-        // components がない場合（旧）: breakdown points 合計
-        if (!empty($infographic['components'])) {
-            // v2: components の合計（※ action bonus はサーバー側で計算済みの値をそのまま使用）
-            $comp_total = 0;
-            foreach ($infographic['components'] as $comp_key => $comp_val) {
-                if (is_array($comp_val) && isset($comp_val['points'])) {
-                    $comp_total += (int)$comp_val['points'];
-                }
-            }
-            // フロア適用（最低35）。ただし全指標0なら0
-            $has_live_data = false;
-            foreach ($infographic['breakdown'] as $bk => $bv) {
-                if (is_array($bv) && (int)($bv['curr'] ?? 0) > 0) { $has_live_data = true; break; }
-            }
-            $infographic['score'] = $has_live_data ? max(35, min(100, $comp_total)) : 0;
-        } else {
-            // 旧形式: breakdown の points 合算
-            $new_score_total = 0;
-            foreach ($infographic['breakdown'] as $bk => $bv) {
-                if (is_array($bv) && isset($bv['points'])) {
-                    $new_score_total += (int)$bv['points'];
-                }
-            }
-            $infographic['score'] = max(0, min(100, $new_score_total));
+        // score 再計算（常にv2ロジックで再スコアリング）
+        // breakdown の curr/prev から指標を再抽出し、calc_monthly_health_score v2 で再計算
+        $re_curr = [];
+        $re_prev = [];
+        foreach (['traffic', 'cv', 'gsc', 'meo'] as $rk) {
+            $re_curr[$rk] = (float)($infographic['breakdown'][$rk]['curr'] ?? 0);
+            $re_prev[$rk] = (float)($infographic['breakdown'][$rk]['prev'] ?? 0);
         }
-        // ステータス更新（v2閾値）
-        if ($infographic['score'] >= 70) $infographic['status'] = '安定しています';
-        elseif ($infographic['score'] >= 50) $infographic['status'] = '改善傾向です';
-        elseif ($infographic['score'] >= 35) $infographic['status'] = 'もう少しです';
-        else $infographic['status'] = '要注意です';
+        $re_health = $gcrev_api->calc_monthly_health_score(
+            $re_curr, $re_prev, [],
+            $user_id,
+            (int)$prev_month_start->format('Y'),
+            (int)$prev_month_start->format('n')
+        );
+        $infographic['score']      = $re_health['score'];
+        $infographic['status']     = $re_health['status'];
+        $infographic['breakdown']  = $re_health['breakdown'];
+        $infographic['components'] = $re_health['components'];
         } // end if (!empty($kpi_curr))
     } catch (\Throwable $e) {
         error_log('[GCREV] page-dashboard infographic override error: ' . $e->getMessage());
