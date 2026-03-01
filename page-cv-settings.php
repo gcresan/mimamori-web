@@ -351,7 +351,18 @@ function attachSuggest(input) {
             return;
         }
 
-        var items = GA4_EVENTS_CACHE;
+        // 既に設定済みのイベント名を収集（この入力欄自身の値は除く）
+        var usedNames = {};
+        document.querySelectorAll('#cv-routes-rows input[data-field="route_key"]').forEach(function(inp) {
+            if (inp !== input) {
+                var v = inp.value.trim();
+                if (v) usedNames[v] = true;
+            }
+        });
+
+        var items = GA4_EVENTS_CACHE.filter(function(e) {
+            return !usedNames[e.name];  // 設定済みを除外
+        });
         if (filter) {
             var f = filter.toLowerCase();
             items = items.filter(function(e) { return e.name.toLowerCase().indexOf(f) !== -1; });
@@ -425,10 +436,8 @@ function attachSuggest(input) {
             allItems.forEach(function(el, i) { el.classList.toggle('highlighted', i === highlightIdx); });
         } else if (e.key === 'Enter' && highlightIdx >= 0 && allItems[highlightIdx]) {
             e.preventDefault();
-            input.value = GA4_EVENTS_CACHE.filter(function(ev) {
-                var f = input.value.toLowerCase();
-                return !f || ev.name.toLowerCase().indexOf(f) !== -1;
-            })[highlightIdx]?.name || '';
+            var selectedName = allItems[highlightIdx].querySelector('.event-name');
+            input.value = selectedName ? selectedName.textContent : '';
             dropdown.classList.remove('open');
             input.dispatchEvent(new Event('change', { bubbles: true }));
         } else if (e.key === 'Escape') {

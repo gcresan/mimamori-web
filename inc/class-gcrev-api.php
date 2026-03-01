@@ -5088,20 +5088,14 @@ PROMPT;
             $user_id = get_current_user_id();
         }
 
-        // --- キャッシュキー（月に依存しない。候補リストは汎用） ---
-        $cache_key    = "gcrev_ga4_kevt_suggest_{$user_id}";
-        $fallback_key = "gcrev_ga4_kevt_fb_{$user_id}";
-        $ts_key       = "gcrev_ga4_kevt_ts_{$user_id}";
-
-        // --- 旧形式キャッシュの無効化 ---
-        // 旧キー（月別）を削除
-        $month_now = date('Y-m');
-        delete_transient("gcrev_ga4_kevt_list_{$user_id}_{$month_now}");
+        // --- キャッシュキー（v2: eventCount 常時取得版） ---
+        $cache_key    = "gcrev_ga4_kevt_v2_{$user_id}";
+        $fallback_key = "gcrev_ga4_kevt_fb2_{$user_id}";
+        $ts_key       = "gcrev_ga4_kevt_ts2_{$user_id}";
 
         // --- Transient キャッシュ確認（6h） ---
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached) && !empty($cached)) {
-            // 新形式チェック（最初の要素に 'name' キーがあること）
             $first = reset($cached);
             if (is_array($first) && isset($first['name'])) {
                 return new WP_REST_Response([
@@ -5111,8 +5105,6 @@ PROMPT;
                     'fetched_at' => get_option($ts_key, ''),
                 ], 200);
             }
-            // 旧形式 → 無効化
-            delete_transient($cache_key);
         }
 
         try {
