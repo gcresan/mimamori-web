@@ -5791,6 +5791,36 @@ function gcrev_get_client_settings( int $user_id = 0 ): array {
         $subcategory = is_array( $decoded ) ? $decoded : [];
     }
 
+    // --- ペルソナ配列フィールド（JSON / array 両対応） ---
+    $persona_array_keys = [
+        'gcrev_client_persona_age_ranges',
+        'gcrev_client_persona_genders',
+        'gcrev_client_persona_attributes',
+        'gcrev_client_persona_decision_factors',
+    ];
+    $persona_arrays = [];
+    foreach ( $persona_array_keys as $mk ) {
+        $raw = get_user_meta( $user_id, $mk, true );
+        if ( is_array( $raw ) ) {
+            $persona_arrays[ $mk ] = $raw;
+        } elseif ( is_string( $raw ) && $raw !== '' ) {
+            $decoded = json_decode( $raw, true );
+            $persona_arrays[ $mk ] = is_array( $decoded ) ? $decoded : [];
+        } else {
+            $persona_arrays[ $mk ] = [];
+        }
+    }
+
+    // 参考URL（JSON配列: [{url, note}, ...]）
+    $ref_urls_raw = get_user_meta( $user_id, 'gcrev_client_persona_reference_urls', true );
+    $ref_urls     = [];
+    if ( is_array( $ref_urls_raw ) ) {
+        $ref_urls = $ref_urls_raw;
+    } elseif ( is_string( $ref_urls_raw ) && $ref_urls_raw !== '' ) {
+        $decoded = json_decode( $ref_urls_raw, true );
+        $ref_urls = is_array( $decoded ) ? $decoded : [];
+    }
+
     $settings = [
         'site_url'              => get_user_meta( $user_id, 'gcrev_client_site_url', true ),
         'area_type'             => get_user_meta( $user_id, 'gcrev_client_area_type', true ),
@@ -5801,6 +5831,14 @@ function gcrev_get_client_settings( int $user_id = 0 ): array {
         'industry_subcategory'  => $subcategory,
         'industry_detail'       => get_user_meta( $user_id, 'gcrev_client_industry_detail', true ),
         'business_type'         => get_user_meta( $user_id, 'gcrev_client_business_type', true ),
+        // ペルソナ
+        'persona_age_ranges'       => $persona_arrays['gcrev_client_persona_age_ranges'],
+        'persona_genders'          => $persona_arrays['gcrev_client_persona_genders'],
+        'persona_attributes'       => $persona_arrays['gcrev_client_persona_attributes'],
+        'persona_decision_factors' => $persona_arrays['gcrev_client_persona_decision_factors'],
+        'persona_one_liner'        => get_user_meta( $user_id, 'gcrev_client_persona_one_liner', true ) ?: '',
+        'persona_detail_text'      => get_user_meta( $user_id, 'gcrev_client_persona_detail_text', true ) ?: '',
+        'persona_reference_urls'   => $ref_urls,
     ];
 
     // --- 旧データからのフォールバック（未移行ユーザー対応） ---

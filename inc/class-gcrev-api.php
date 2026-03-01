@@ -163,6 +163,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'save_client_settings' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev_insights/v1', '/generate-persona', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'generate_persona' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         // 生成回数取得エンドポイント
         register_rest_route('gcrev_insights/v1', '/report/generation-count', [
             'methods'             => 'GET',
@@ -1452,12 +1457,210 @@ class Gcrev_Insight_API {
 
         update_user_meta($user_id, 'gcrev_client_business_type',  sanitize_text_field($params['business_type'] ?? ''));
 
+        // --- ペルソナ: 配列フィールド（年齢層 / 性別 / 属性 / 意思決定） ---
+        $persona_array_fields = [
+            'persona_age_ranges'       => 'gcrev_client_persona_age_ranges',
+            'persona_genders'          => 'gcrev_client_persona_genders',
+            'persona_attributes'       => 'gcrev_client_persona_attributes',
+            'persona_decision_factors' => 'gcrev_client_persona_decision_factors',
+        ];
+        foreach ($persona_array_fields as $param_key => $meta_key) {
+            $raw = $params[$param_key] ?? [];
+            $clean = [];
+            if (is_array($raw)) {
+                foreach ($raw as $v) {
+                    $v = sanitize_text_field($v);
+                    if ($v !== '' && mb_strlen($v) <= 64) {
+                        $clean[] = $v;
+                    }
+                }
+            }
+            update_user_meta($user_id, $meta_key, $clean);
+        }
+
+        // ペルソナ: ひとこと（200文字）
+        $one_liner = sanitize_text_field($params['persona_one_liner'] ?? '');
+        if (mb_strlen($one_liner) > 200) { $one_liner = mb_substr($one_liner, 0, 200); }
+        update_user_meta($user_id, 'gcrev_client_persona_one_liner', $one_liner);
+
+        // ペルソナ: 詳細テキスト（4000文字、改行保持）
+        $detail_text = sanitize_textarea_field($params['persona_detail_text'] ?? '');
+        if (mb_strlen($detail_text) > 4000) { $detail_text = mb_substr($detail_text, 0, 4000); }
+        update_user_meta($user_id, 'gcrev_client_persona_detail_text', $detail_text);
+
+        // ペルソナ: 参考URL（最大5件）
+        $ref_urls_raw = $params['persona_reference_urls'] ?? [];
+        $ref_urls = [];
+        if (is_array($ref_urls_raw)) {
+            $count = 0;
+            foreach ($ref_urls_raw as $item) {
+                if ($count >= 5) break;
+                if (!is_array($item)) continue;
+                $url  = esc_url_raw($item['url'] ?? '');
+                $note = sanitize_text_field($item['note'] ?? '');
+                if (empty($url)) continue;
+                if (mb_strlen($url) > 2048)  { $url  = mb_substr($url, 0, 2048); }
+                if (mb_strlen($note) > 120)  { $note = mb_substr($note, 0, 120); }
+                $ref_urls[] = ['url' => $url, 'note' => $note];
+                $count++;
+            }
+        }
+        update_user_meta($user_id, 'gcrev_client_persona_reference_urls', $ref_urls);
+
         error_log("[GCREV] Client settings saved for user_id={$user_id}, site_url={$site_url}");
 
         return new WP_REST_Response([
             'success' => true,
             'message' => 'クライアント設定を保存しました',
         ], 200);
+    }
+
+    /**
+     * AI で詳細ペルソナを生成
+     */
+    public function generate_persona(WP_REST_Request $request): WP_REST_Response {
+        $user_id = get_current_user_id();
+
+        // 連打防止（30秒）
+        $throttle_key = 'gcrev_persona_gen_' . $user_id;
+        if (get_transient($throttle_key)) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => '連続生成はできません。30秒後に再度お試しください。',
+            ], 429);
+        }
+        set_transient($throttle_key, 1, 30);
+
+        $params  = $request->get_json_params();
+        $context = $params['context'] ?? [];
+
+        // コンテキスト情報の組み立て
+        $industry_category    = sanitize_text_field($context['industry_category'] ?? '');
+        $industry_subcategory = $context['industry_subcategory'] ?? [];
+        $industry_label       = sanitize_text_field($context['industry_label'] ?? '');
+        $age_ranges           = $context['persona_age_ranges'] ?? [];
+        $genders              = $context['persona_genders'] ?? [];
+        $attributes           = $context['persona_attributes'] ?? [];
+        $decision_factors     = $context['persona_decision_factors'] ?? [];
+        $one_liner            = sanitize_text_field($context['persona_one_liner'] ?? '');
+        $ref_urls             = $context['reference_urls'] ?? [];
+        $extra                = $context['extra'] ?? [];
+
+        // プロンプト構築
+        $prompt_parts = [];
+        $prompt_parts[] = "あなたはWeb集客・マーケティングのペルソナ設計の専門家です。";
+        $prompt_parts[] = "以下の情報をもとに、この事業者が想定すべき「典型的な見込み客ペルソナ」を作成してください。";
+        $prompt_parts[] = "";
+
+        // 業種・業態
+        if ($industry_label) {
+            $prompt_parts[] = "【業種・業態】" . $industry_label;
+        }
+
+        // 簡易ペルソナ情報
+        if (!empty($age_ranges)) {
+            $prompt_parts[] = "【想定年齢層】" . implode(', ', array_map('sanitize_text_field', $age_ranges));
+        }
+        if (!empty($genders)) {
+            $prompt_parts[] = "【想定性別】" . implode(', ', array_map('sanitize_text_field', $genders));
+        }
+        if (!empty($attributes)) {
+            $prompt_parts[] = "【ターゲット属性】" . implode(', ', array_map('sanitize_text_field', $attributes));
+        }
+        if (!empty($decision_factors)) {
+            $prompt_parts[] = "【検討・意思決定の特徴】" . implode(', ', array_map('sanitize_text_field', $decision_factors));
+        }
+        if ($one_liner) {
+            $prompt_parts[] = "【ひとこと補足】" . $one_liner;
+        }
+
+        // 参考URL
+        if (!empty($ref_urls) && is_array($ref_urls)) {
+            $url_lines = [];
+            foreach ($ref_urls as $idx => $ru) {
+                if (!is_array($ru)) continue;
+                $u = sanitize_text_field($ru['url'] ?? '');
+                $n = sanitize_text_field($ru['note'] ?? '');
+                if ($u) {
+                    $url_lines[] = ($idx + 1) . ". " . $u . ($n ? " （意図: {$n}）" : '');
+                }
+            }
+            if (!empty($url_lines)) {
+                $prompt_parts[] = "【参考URL】";
+                $prompt_parts[] = implode("\n", $url_lines);
+            }
+        }
+
+        // 追加情報
+        if (!empty($extra) && is_array($extra)) {
+            $extra_lines = [];
+            $extra_labels = [
+                'service'             => '主なサービス・商品',
+                'price_range'         => '価格帯',
+                'area'                => '対応エリア',
+                'competitor_features' => '競合との違い・強み',
+                'avoid_notes'         => '避けたい表現・方針',
+            ];
+            foreach ($extra_labels as $key => $label) {
+                $val = sanitize_text_field($extra[$key] ?? '');
+                if ($val) {
+                    $extra_lines[] = "・{$label}: {$val}";
+                }
+            }
+            if (!empty($extra_lines)) {
+                $prompt_parts[] = "";
+                $prompt_parts[] = "【追加情報】";
+                $prompt_parts[] = implode("\n", $extra_lines);
+            }
+        }
+
+        $prompt_parts[] = "";
+        $prompt_parts[] = "---";
+        $prompt_parts[] = "以下のフォーマットで、800〜1600字程度の詳細ペルソナを出力してください。";
+        $prompt_parts[] = "テンプレート的な表現は避け、この業種・条件に固有の具体的な人物像を描写してください。";
+        $prompt_parts[] = "";
+        $prompt_parts[] = "■ 基本プロフィール";
+        $prompt_parts[] = "年齢・性別・職業・家族構成・居住エリアなど";
+        $prompt_parts[] = "";
+        $prompt_parts[] = "■ 日常と課題";
+        $prompt_parts[] = "普段の生活・仕事の中で感じている不満や課題";
+        $prompt_parts[] = "";
+        $prompt_parts[] = "■ 情報収集の行動パターン";
+        $prompt_parts[] = "どのように検索し、比較し、意思決定するか";
+        $prompt_parts[] = "";
+        $prompt_parts[] = "■ このサービスに求めること";
+        $prompt_parts[] = "期待する価値、不安に思うこと、決め手になる要素";
+        $prompt_parts[] = "";
+        $prompt_parts[] = "■ 響くメッセージ・表現";
+        $prompt_parts[] = "この人に刺さるキーワードや訴求ポイント";
+
+        $prompt = implode("\n", $prompt_parts);
+
+        try {
+            $result = $this->ai->call_gemini_api($prompt);
+
+            if (empty($result)) {
+                delete_transient($throttle_key);
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => 'AIからの応答が空でした。時間をおいて再度お試しください。',
+                ], 500);
+            }
+
+            return new WP_REST_Response([
+                'success'        => true,
+                'generated_text' => $result,
+                'generated_at'   => current_time('Y-m-d H:i:s'),
+            ], 200);
+
+        } catch (\Exception $e) {
+            delete_transient($throttle_key);
+            error_log("[GCREV] Persona generation failed for user_id={$user_id}: " . $e->getMessage());
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'ペルソナ生成中にエラーが発生しました: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
