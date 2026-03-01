@@ -1065,7 +1065,7 @@ JSON例: {"type":"advice","summary":"...","sections":[...],"support_notice":true
 ## 共通ルール
 1. 必ず有効なJSONのみを返す（JSON以外の文字を前後に絶対付けない）
 2. 専門用語は一切使わない（上の言い換え表に従う）
-3. データが不十分な場合は「推測ですが」と明記する
+3. データが不十分な場合、ビジネス上の仮説は「推測ですが」と明記してよいが、ページ名やURLなどGA4で確認可能な事実を推測で答えてはいけない
 4. やさしい口調で、初心者に寄り添う伴走感を大切にする
 5. advice の sections は最大3つ、各 items も最大3つ（短くまとめる）
 6. 回答は必ず完結させる（途中で切れるぐらいなら短くする）
@@ -1130,14 +1130,35 @@ JSON例: {"type":"advice","summary":"...","sections":[...],"support_notice":true
 - 「スパムまたはbotアクセスの可能性があります」と注記する（断定ではなく可能性として）
 - 最後に、次に確認すべきGA4レポート（参照元/メディア、ランディングページ等）を提案する
 
-## ページへの言及ルール
-ページについて回答するとき、必ず**ページタイトル**で言及すること。
-順位番号やURLパスだけで伝えるのは禁止。
-  良い例：「一番見られているのは『施工事例 | ○○工務店』で、月に95回見られています」
-  良い例：「『お問い合わせ』ページへのアクセスが先月より増えています」
-  悪い例：「1位が95回の見られ方です」
-  悪い例：「/works/ が最もアクセスが多いです」
-データにタイトルとURLの両方がある場合は、タイトルを主体にし、必要に応じてURLを補足する程度にする。
+## ページへの言及ルール（最重要 — ハルシネーション絶対禁止）
+ページ名・ページURL・人気ページ・よく見られているページについて回答するときは、以下のルールを厳守すること。
+
+### 鉄則: 実データに存在するページだけを回答する
+- 「人気のページは？」「よく見られているページは？」等の質問には、**このプロンプトに付与されたページ別アクセスデータに載っているページだけ**を回答する
+- データに存在しないページ名を**絶対に作り出さない・推測しない・例示しない**
+- 業種の一般論から「ありがちなページ名」を想像して答えることは**厳禁**（例: 工務店だから「施工事例」があるはず → 禁止）
+- 「〜だと思います」「〜の可能性があります」「〜があるかもしれません」でページ名を推測することも**禁止**
+
+### ページデータがある場合の回答ルール
+ページ別アクセスデータが提供されている場合:
+1. **ページタイトル**を主体にして言及する（順位番号やURLパスだけは禁止）
+2. **ページURL（パス）も必ず併記する**（ユーザーがすぐ確認できるように）
+3. **閲覧数（PV）も必ず含める**
+4. 回答フォーマット例:
+  良い例：「一番よく見られているのは『○○サービス紹介』ページです（URL: /service/、月間95回閲覧）」
+  良い例：「『お問い合わせ』ページ（/contact/）が月に30回見られています」
+  悪い例：「1位が95回の見られ方です」（タイトル・URL・PVの3点が揃っていない）
+
+### ページデータがない場合の回答ルール
+ページ別データが付与されていない場合:
+- 「現在、ページ別のアクセスデータを確認できませんでした。」と正直に伝える
+- 曖昧な例示や一般的なページ名を出すことは**絶対に禁止**
+- 「〜というページがあるはずです」のような推測も**禁止**
+
+### URL・アドレスを聞かれた場合
+- ページ別データにURLが含まれていれば、そのURLをそのまま返す
+- 「教えられません」「わかりません」は、データにURLが存在する場合は**禁止**
+- データにURLが存在しない場合のみ「ページ別データが取得できていないためURLをお伝えできません」と返す
 PROMPT;
 }
 
@@ -1940,6 +1961,31 @@ function mimamori_get_analytics_digest( int $user_id ): string {
                 }
                 if ( isset( $current['engagementRate'] ) ) {
                     $lines[] = '・エンゲージメント率: ' . $current['engagementRate'];
+                }
+            }
+
+            // --- GA4 ページ別アクセス（上位10件） ---
+            $page_data = $ga4->fetch_page_details( $ga4_id, $start_str, $end_str, $gsc_url );
+            if ( is_array( $page_data ) && ! is_wp_error( $page_data ) && ! empty( $page_data ) ) {
+                $pages = array_values( $page_data );
+                if ( ! empty( $pages ) && is_array( $pages[0] ?? null ) ) {
+                    $lines[] = '';
+                    $lines[] = '【ページ別アクセス（直近28日間・上位10件）】';
+                    $page_count = min( count( $pages ), 10 );
+                    for ( $i = 0; $i < $page_count; $i++ ) {
+                        $p     = $pages[ $i ];
+                        $title = $p['title'] ?? '';
+                        $path  = $p['page'] ?? $p['pagePath'] ?? $p['path'] ?? '?';
+                        $pv    = $p['pageViews'] ?? $p['screenPageViews'] ?? $p['pv'] ?? 0;
+                        $se    = $p['sessions'] ?? 0;
+                        $br    = $p['bounceRate'] ?? '-';
+                        $display_title = ( $title !== '' && $title !== '(not set)' ) ? $title : $path;
+                        $lines[] = '  ' . ( $i + 1 ) . '. ' . $display_title
+                            . '（URL: ' . $path
+                            . ' / PV: ' . $pv
+                            . ' / セッション: ' . $se
+                            . ' / 直帰率: ' . $br . '）';
+                    }
                 }
             }
         }
@@ -3370,6 +3416,22 @@ function mimamori_build_deterministic_queries( string $message, string $intent_t
         ];
     }
 
+    // ページ別アクセス（人気ページ・よく見られているページ等）
+    $page_kw = [ '人気のページ', '人気ページ', 'よく見られ', 'アクセスの多いページ', 'アクセスが多いページ',
+                 'pvの多い', 'pvが多い', 'どのページ', 'ページ別', 'ページランキング',
+                 'ページアドレス', 'ページurl', 'ページのurl', 'urlを教え', 'urlは',
+                 'アドレスを教え', 'アドレスは', '閲覧数', '見られている' ];
+    if ( mimamori_has_keyword( $msg, $page_kw ) ) {
+        $queries[] = [
+            'label'      => 'page_breakdown',
+            'dimensions' => [ 'pageTitle', 'pagePath' ],
+            'metrics'    => [ 'screenPageViews', 'sessions', 'bounceRate', 'averageSessionDuration' ],
+            'start'      => $date_range['start'],
+            'end'        => $date_range['end'],
+            'limit'      => 20,
+        ];
+    }
+
     // 「どこから」「訪問」系の包括パターン（国もソースも含みうる → 両方取得）
     $where_from_kw = [ 'どこからの訪問', 'どこからのアクセス', 'どこからの流入',
                        'どこから来て', 'アクセス元', '訪問元' ];
@@ -3727,6 +3789,7 @@ function mimamori_format_flexible_results_for_ai( array $flex_results, array $an
             'city_breakdown'    => '都市別アクセス',
             'source_medium'     => '参照元/メディア別アクセス',
             'landing_page'      => 'ランディングページ別アクセス',
+            'page_breakdown'    => 'ページ別アクセス',
         ];
         $title = $title_map[ $label ] ?? $label;
 
@@ -3739,6 +3802,7 @@ function mimamori_format_flexible_results_for_ai( array $flex_results, array $an
                 'country' => '国', 'city' => '都市', 'region' => '地域',
                 'sessionSource' => '参照元', 'sessionMedium' => 'メディア',
                 'landingPagePlusQueryString' => 'ランディングページ',
+                'pageTitle' => 'ページタイトル', 'pagePath' => 'URL',
             ];
             $header_parts[] = $dim_labels[ $d ] ?? $d;
         }
