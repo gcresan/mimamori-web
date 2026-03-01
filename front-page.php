@@ -47,6 +47,16 @@ $page_title = trim( wp_title('', false) );
     /* ロゴ — 1.5倍 */
     body.login .logo { text-align: center; margin-bottom: 30px; }
     body.login .logo img { max-width: 225px !important; width: auto; height: auto; }
+    body.login .logo-subcatch {
+        margin: 8px 0 0;
+        font-size: 10.5px;
+        font-weight: 400;
+        color: #333333;
+        text-align: center;
+        letter-spacing: 0.18em;
+        line-height: 1;
+        font-family: 'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
+    }
 
     /* WP-Members wrapper — 幅100% 強制 */
     body.login #wpmem_login,
@@ -151,6 +161,7 @@ $page_title = trim( wp_title('', false) );
     <div class="login-container">
         <div class="logo">
             <img src="<?php echo esc_url( get_template_directory_uri() ); ?>/images/common/logo.png" alt="みまもりウェブ">
+            <p class="logo-subcatch">みまもるから、次が見える。</p>
         </div>
 
         <?php
