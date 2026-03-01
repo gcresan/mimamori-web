@@ -42,10 +42,7 @@ $installment_url = gcrev_get_installment_url( $user_id );
 // --------------------------------------------------
 set_query_var( 'gcrev_page_title', 'お支払い手続き' );
 
-$breadcrumb  = '<a href="' . esc_url( home_url('/') ) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<span>お支払い手続き</span>';
-set_query_var( 'gcrev_breadcrumb', $breadcrumb );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'お支払い手続き', 'お申込み' ) );
 
 get_header();
 ?>

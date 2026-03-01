@@ -1,8 +1,9 @@
 <?php /*Template Name: ユーザープロフィールページ */ ?>
-<?php get_header(); ?>
-        <div class="breadcrumb">
-            <a href="<?php echo home_url(); ?>/dashboard">ダッシュボード</a> &gt; アカウント設定
-        </div>
+<?php
+set_query_var('gcrev_page_title', 'アカウント設定');
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('アカウント設定', 'アカウント'));
+get_header();
+?>
 <div class="welcome">
     <h1>⚙️ アカウント設定</h1>
     <p>こちらから前月と前々月のデータを比較したレポートを生成できます。</p>

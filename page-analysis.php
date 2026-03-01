@@ -14,13 +14,8 @@ $user_id = $current_user->ID;
 // ページタイトル設定（修正）
 set_query_var('gcrev_page_title', '集客分析');
 
-// パンくず設定（修正）
-$breadcrumb = '<a href="' . home_url() . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="#">ホームページ</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>集客分析</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+// パンくず設定
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('集客分析', '集客のようす'));
 
 get_header();
 ?>

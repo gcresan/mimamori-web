@@ -12,12 +12,7 @@
 // ページタイトル・パンくず設定（header.php が使用）
 set_query_var('gcrev_page_title', 'お申込み（モニター価格）');
 
-$breadcrumb  = '<a href="' . esc_url(home_url('/')) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . esc_url(home_url('/apply/')) . '">お申込み</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<span>モニター価格</span>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('モニター価格', 'お申込み'));
 
 get_header();
 ?>

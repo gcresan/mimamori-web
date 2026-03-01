@@ -15,13 +15,8 @@ $user_id = $current_user->ID;
 set_query_var('gcrev_page_title', 'よく見られているページ');
 set_query_var('gcrev_page_subtitle', 'どのページがよく読まれているかが分かります。');
 
-// パンくず設定（HTML準拠：ホーム > ホームページ > ページ）
-$breadcrumb = '<a href="' . home_url() . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="#">ホームページ</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>よく見られているページ</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+// パンくず設定
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('よく見られているページ', '集客のようす'));
 
 get_header();
 ?>

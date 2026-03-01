@@ -15,13 +15,8 @@ $user_id = $current_user->ID;
 set_query_var('gcrev_page_title', 'どんな言葉で探された？');
 set_query_var('gcrev_page_subtitle', '検索で使われた言葉が分かります。');
 
-// パンくず設定（HTML準拠：ホーム > ホームページ > キーワード）
-$breadcrumb = '<a href="' . home_url() . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="#">ホームページ</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>どんな言葉で探された？</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+// パンくず設定
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('どんな言葉で探された？', '集客のようす'));
 
 get_header();
 ?>

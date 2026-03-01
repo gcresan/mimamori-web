@@ -11,12 +11,7 @@
 // ページタイトル・パンくず設定（header.php が使用）
 set_query_var('gcrev_page_title', 'お申込み（制作込みプラン）');
 
-$breadcrumb  = '<a href="' . esc_url(home_url('/')) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . esc_url(home_url('/apply/')) . '">お申込み</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<span>制作込みプラン</span>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('制作込みプラン', 'お申込み'));
 
 get_header();
 ?>

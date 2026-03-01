@@ -11,12 +11,7 @@
 // ページタイトル・パンくず設定（header.php が使用）
 set_query_var('gcrev_page_title', 'お申込み（伴走運用プラン）');
 
-$breadcrumb  = '<a href="' . esc_url(home_url('/')) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . esc_url(home_url('/apply/')) . '">お申込み</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<span>伴走運用プラン</span>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('伴走運用プラン', 'お申込み'));
 
 get_header();
 ?>

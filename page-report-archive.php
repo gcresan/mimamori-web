@@ -16,12 +16,7 @@ set_query_var( 'gcrev_page_title', '過去の月次レポート一覧' );
 set_query_var( 'gcrev_page_subtitle', '保存された月次レポートを月ごとに確認できます。' );
 
 // パンくず
-$breadcrumb  = '<a href="' . esc_url( home_url( '/mypage/dashboard/' ) ) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<span>月次レポート</span>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>過去の月次レポート一覧</strong>';
-set_query_var( 'gcrev_breadcrumb', $breadcrumb );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '過去の月次レポート一覧', '月次レポート' ) );
 
 // ========================================
 // レポート一覧取得（CPT: gcrev_report）

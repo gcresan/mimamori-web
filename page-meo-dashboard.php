@@ -14,13 +14,8 @@ $user_id = $current_user->ID;
 // ページタイトル設定
 set_query_var('gcrev_page_title', 'MEOダッシュボード');
 
-// パンくず設定（HTMLデザインに合わせる）
-$breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . esc_url(home_url()) . '">MEO</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>ダッシュボード</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+// パンくず設定
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('MEOダッシュボード', 'MEO'));
 
 // ===== GBP接続状態判定（class-gcrev-api.php経由） =====
 global $gcrev_api_instance;

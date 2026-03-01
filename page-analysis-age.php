@@ -16,14 +16,7 @@ set_query_var('gcrev_page_title', '見ている人の年代');
 set_query_var('gcrev_page_subtitle', 'ホームページを見ている人の年齢層が分かります。');
 
 // パンくず設定
-$breadcrumb = '<a href="' . home_url() . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="#">ホームページ</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . home_url() . '/analysis/">集客分析</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>見ている人の年代</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('見ている人の年代', '集客のようす'));
 
 get_header();
 ?>

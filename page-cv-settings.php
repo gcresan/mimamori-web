@@ -15,12 +15,7 @@ $user_id = $current_user->ID;
 set_query_var('gcrev_page_title', 'ゴールの数え方設定');
 
 // パンくず設定
-$breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . esc_url(home_url('/analysis/')) . '">分析</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>ゴールの数え方設定</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('ゴールの数え方設定', '各種設定'));
 
 get_header();
 ?>

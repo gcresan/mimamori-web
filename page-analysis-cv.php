@@ -15,12 +15,7 @@ $user_id = $current_user->ID;
 set_query_var('gcrev_page_title', 'ゴール分析');
 
 // パンくず設定
-$breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . esc_url(home_url('/analysis/')) . '">分析</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>ゴール分析</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('ゴール分析', '集客のようす'));
 
 get_header();
 ?>

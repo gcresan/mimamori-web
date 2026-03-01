@@ -16,14 +16,7 @@ set_query_var('gcrev_page_title', 'スマホとパソコンの割合');
 set_query_var('gcrev_page_subtitle', 'スマホとパソコン、どちらで見られているかが分かります。');
 
 // パンくず設定
-$breadcrumb = '<a href="' . home_url() . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="#">ホームページ</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . home_url() . '/analysis/">集客分析</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>スマホとパソコンの割合</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('スマホとパソコンの割合', '集客のようす'));
 
 get_header();
 ?>

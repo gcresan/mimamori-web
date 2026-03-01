@@ -10,12 +10,7 @@ if (!is_user_logged_in()) {
 
 // パンくず設定
 set_query_var('gcrev_page_title', 'ゴールの確認（手動調整）');
-$breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="' . esc_url(home_url('/dashboard/')) . '">全体のようす</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>ゴールの確認（手動調整）</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('ゴールの確認（手動調整）', '各種設定'));
 
 get_header();
 ?>

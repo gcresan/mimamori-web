@@ -1,8 +1,9 @@
 <?php /*Template Name: サービスページ */ ?>
-<?php get_header(); ?>
-        <div class="breadcrumb">
-            <a href="<?php echo home_url(); ?>/dashboard">ダッシュボード</a> &gt; 伴走サポート
-        </div>
+<?php
+set_query_var('gcrev_page_title', '伴走支援プラン');
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('伴走支援プラン', 'オプションサービス'));
+get_header();
+?>
 <div class="welcome">
     <h1>伴走支援プラン</h1>
 

@@ -51,23 +51,12 @@ if ($is_archive_view) {
     $display_ym = $prev_month_start->format('Y年n月');
     set_query_var('gcrev_page_title', $display_ym . ' 月次レポート');
     set_query_var('gcrev_page_subtitle', $display_ym . 'のアクセス状況や反応をまとめたレポートです。');
-
-    $breadcrumb = '<a href="' . esc_url(home_url('/mypage/dashboard/')) . '">ホーム</a>';
-    $breadcrumb .= '<span>›</span>';
-    $breadcrumb .= '<a href="' . esc_url(home_url('/report/report-archive/')) . '">月次レポート</a>';
-    $breadcrumb .= '<span>›</span>';
-    $breadcrumb .= '<strong>' . esc_html($display_ym) . '</strong>';
+    set_query_var('gcrev_breadcrumb', gcrev_breadcrumb($display_ym, '月次レポート'));
 } else {
     set_query_var('gcrev_page_title', '最新月次レポート');
     set_query_var('gcrev_page_subtitle', '今月のアクセス状況や反応を、わかりやすくまとめています。');
-
-    $breadcrumb = '<a href="' . esc_url(home_url('/mypage/dashboard/')) . '">ホーム</a>';
-    $breadcrumb .= '<span>›</span>';
-    $breadcrumb .= '<span>月次レポート</span>';
-    $breadcrumb .= '<span>›</span>';
-    $breadcrumb .= '<strong>最新月次レポート</strong>';
+    set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('最新月次レポート', '月次レポート'));
 }
-set_query_var('gcrev_breadcrumb', $breadcrumb);
 
 // 月次AIレポート取得
 $year  = (int)$prev_month_start->format('Y');

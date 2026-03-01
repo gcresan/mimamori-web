@@ -5374,6 +5374,34 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 }
 
 // ========================================
+// パンくず共通生成関数
+// ========================================
+/**
+ * パンくず HTML を生成する。
+ *
+ * 共通ルール:
+ *   ホーム（リンク） › 親カテゴリ（クリック不可テキスト） › 現在ページ
+ * 例外:
+ *   $parent が null の場合は 2 階層（ホーム › 現在ページ）
+ *
+ * @param string      $current  現在ページ名
+ * @param string|null $parent   親カテゴリ名（null で省略）
+ * @return string パンくず HTML
+ */
+function gcrev_breadcrumb( string $current, ?string $parent = null ): string {
+    $sep = '<span>›</span>';
+    $bc  = '<a href="' . esc_url( home_url( '/mypage/dashboard/' ) ) . '">ホーム</a>';
+
+    if ( $parent !== null ) {
+        $bc .= $sep . '<span>' . esc_html( $parent ) . '</span>';
+    }
+
+    $bc .= $sep . '<strong>' . esc_html( $current ) . '</strong>';
+
+    return $bc;
+}
+
+// ========================================
 // 固定ページ自動作成（月次レポート階層）
 // ========================================
 add_action( 'init', function() {

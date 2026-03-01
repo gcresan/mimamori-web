@@ -42,11 +42,7 @@ if ($payload) {
 // --------------------------------------------------
 set_query_var('gcrev_page_title', 'お申込み完了');
 
-$breadcrumb = '<a href="' . esc_url(home_url('/')) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-
-$breadcrumb .= '<span>お申込み完了</span>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('お申込み完了', 'お申込み'));
 
 get_header();
 ?>

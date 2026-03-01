@@ -15,13 +15,8 @@ $user_id = $current_user->ID;
 set_query_var('gcrev_page_title', '全体のようす');
 set_query_var('gcrev_page_subtitle', 'このホームページが、今どんな状態かをひと目で確認できます。');
 
-// パンくず設定
-$breadcrumb = '<a href="' . home_url() . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="#">ホームページ</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>全体のようす</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+// パンくず設定（ダッシュボードは2階層: ホーム › 全体のようす）
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('全体のようす'));
 
 // 前月・前々月の日付範囲を計算
 $tz = wp_timezone();

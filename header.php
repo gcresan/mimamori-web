@@ -187,7 +187,7 @@
                   <ul class="nav-submenu" id="navSubmenuSettings">
                      <li class="nav-item">
                         <a href="<?php echo home_url('/report/report-settings/'); ?>" class="nav-link <?php echo is_page('report-settings') ? 'active' : ''; ?>">
-                        <span>AIレポート設定</span>
+                        <span>月次レポート設定</span>
                         </a>
                      </li>
                      <li class="nav-item">

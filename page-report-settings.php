@@ -1,6 +1,6 @@
 <?php
 /*
-Template Name: AIレポート設定
+Template Name: 月次レポート設定
 */
 
 if (!is_user_logged_in()) {
@@ -13,15 +13,10 @@ $user_id = $current_user->ID;
 $is_admin = current_user_can('manage_options'); // 管理者判定
 
 // ページタイトル設定
-set_query_var('gcrev_page_title', 'AIレポート設定');
+set_query_var('gcrev_page_title', '月次レポート設定');
 
 // パンくず設定
-$breadcrumb = '<a href="' . home_url() . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<a href="#">設定</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>AIレポート設定</strong>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート設定', '各種設定'));
 
 // 保存済みの設定を取得
 $saved_site_url      = get_user_meta($user_id, 'report_site_url',      true) ?: '';
