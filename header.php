@@ -40,6 +40,7 @@
             <a href="<?php echo esc_url( home_url() ); ?>">
                <img src="<?php echo esc_url( get_template_directory_uri() . '/images/common/logo.png' ); ?>" width="518" height="341" alt="みまもりウェブ">
             </a>
+            <p class="logo-subcatch">みまもるから、次が見える。</p>
          </div>
          <?php if ( is_user_logged_in() ) :
             $u = wp_get_current_user();
