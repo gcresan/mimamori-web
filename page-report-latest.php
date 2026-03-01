@@ -15,29 +15,61 @@ $user_id = $current_user->ID;
 $report_output_mode = get_user_meta($user_id, 'report_output_mode', true) ?: 'normal';
 $is_easy_mode = ($report_output_mode === 'easy');
 
-// ページタイトル設定（★ダッシュボードではなくレポート用に修正）
-set_query_var('gcrev_page_title', '最新月次レポート');
-set_query_var('gcrev_page_subtitle', '今月のアクセス状況や反応を、わかりやすくまとめています。');
-
-// パンくず設定（★参照HTMLに合わせてレポート用に修正）
-$breadcrumb = '<a href="' . esc_url(home_url('/mypage/dashboard/')) . '">ホーム</a>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<span>AIレポート</span>';
-$breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<span>最新月次レポート</span>';
-set_query_var('gcrev_breadcrumb', $breadcrumb);
-
 // ========================================
-// 日付計算（page-dashboard.php と同一ロジック）
+// 日付計算（ymパラメータ対応）
 // ========================================
 $tz = wp_timezone();
-$prev_month_start = new DateTimeImmutable('first day of last month', $tz);
-$prev_month_end   = new DateTimeImmutable('last day of last month', $tz);
+$is_archive_view = false; // 過去月表示かどうか
 
-$prev_prev_month_start = new DateTimeImmutable('first day of 2 months ago', $tz);
-$prev_prev_month_end   = new DateTimeImmutable('last day of 2 months ago', $tz);
+// ?ym=YYYY-MM パラメータで過去月のレポートを表示可能
+$ym_param = isset($_GET['ym']) ? sanitize_text_field($_GET['ym']) : '';
+if ($ym_param && preg_match('/^\d{4}-\d{2}$/', $ym_param)) {
+    // 指定年月のレポートを表示
+    $prev_month_start = new DateTimeImmutable($ym_param . '-01', $tz);
+    $prev_month_end   = new DateTimeImmutable($prev_month_start->format('Y-m-t'), $tz);
 
-// 月次AIレポート取得（page-dashboard.php と同一）
+    // 比較期間: 指定月の前月
+    $prev_prev_month_start = $prev_month_start->modify('first day of last month');
+    $prev_prev_month_end   = $prev_month_start->modify('last day of last month');
+
+    // 最新月（先月）と比較して、過去月表示かどうか判定
+    $latest_month = new DateTimeImmutable('first day of last month', $tz);
+    if ($prev_month_start->format('Y-m') !== $latest_month->format('Y-m')) {
+        $is_archive_view = true;
+    }
+} else {
+    // デフォルト: 前月（既存動作）
+    $prev_month_start = new DateTimeImmutable('first day of last month', $tz);
+    $prev_month_end   = new DateTimeImmutable('last day of last month', $tz);
+
+    $prev_prev_month_start = new DateTimeImmutable('first day of 2 months ago', $tz);
+    $prev_prev_month_end   = new DateTimeImmutable('last day of 2 months ago', $tz);
+}
+
+// ページタイトル・パンくず設定
+if ($is_archive_view) {
+    $display_ym = $prev_month_start->format('Y年n月');
+    set_query_var('gcrev_page_title', $display_ym . ' 月次レポート');
+    set_query_var('gcrev_page_subtitle', $display_ym . 'のアクセス状況や反応をまとめたレポートです。');
+
+    $breadcrumb = '<a href="' . esc_url(home_url('/mypage/dashboard/')) . '">ホーム</a>';
+    $breadcrumb .= '<span>›</span>';
+    $breadcrumb .= '<a href="' . esc_url(home_url('/report/report-archive/')) . '">月次レポート</a>';
+    $breadcrumb .= '<span>›</span>';
+    $breadcrumb .= '<strong>' . esc_html($display_ym) . '</strong>';
+} else {
+    set_query_var('gcrev_page_title', '最新月次レポート');
+    set_query_var('gcrev_page_subtitle', '今月のアクセス状況や反応を、わかりやすくまとめています。');
+
+    $breadcrumb = '<a href="' . esc_url(home_url('/mypage/dashboard/')) . '">ホーム</a>';
+    $breadcrumb .= '<span>›</span>';
+    $breadcrumb .= '<span>月次レポート</span>';
+    $breadcrumb .= '<span>›</span>';
+    $breadcrumb .= '<strong>最新月次レポート</strong>';
+}
+set_query_var('gcrev_breadcrumb', $breadcrumb);
+
+// 月次AIレポート取得
 $year  = (int)$prev_month_start->format('Y');
 $month = (int)$prev_month_start->format('n');
 
@@ -328,10 +360,32 @@ get_header();
 <style>
 /* page-report-latest — Page-specific overrides only */
 /* All shared styles are in css/dashboard-redesign.css */
+.rpt-back-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 16px 0 8px 24px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--mw-primary-blue, #3D6B6E);
+    background: rgba(61,107,110,0.06);
+    border: 1px solid rgba(61,107,110,0.12);
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.15s;
+}
+.rpt-back-nav:hover {
+    background: rgba(61,107,110,0.12);
+    text-decoration: none;
+    color: var(--mw-primary-blue, #3D6B6E);
+}
 </style>
 
 <!-- コンテンツエリア -->
 <div class="content-area">
+    <?php if ($is_archive_view) : ?>
+    <a href="<?php echo esc_url(home_url('/report/report-archive/')); ?>" class="rpt-back-nav">← 一覧に戻る</a>
+    <?php endif; ?>
     <!-- ローディングオーバーレイ -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">

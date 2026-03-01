@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // サイドバー アコーディオンメニュー（常に1つだけ開く）
+    // ※ navToggleReport（月次レポート）は常時展開のため含めない
     (function() {
         var menuIds = ['navToggleAnalysis', 'navToggleSettings', 'navToggleSupport', 'navToggleOption', 'navToggleAccount'];
         var items = [];

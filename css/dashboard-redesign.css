@@ -271,6 +271,14 @@ h3 { font-size: 19px; font-weight: 600; }
 .nav-item-collapsible.collapsed .nav-submenu {
   display: none;
 }
+/* 月次レポート: 常時展開（accordion から独立） */
+.nav-item-always-open .nav-submenu {
+  display: block !important;
+}
+.nav-item-always-open .nav-toggle-arrow {
+  transform: rotate(0deg) !important;
+  opacity: 0.3;
+}
 
 /* ========== Main Wrapper ========== */
 .main-content {

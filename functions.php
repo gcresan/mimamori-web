@@ -5373,3 +5373,40 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
     }
 }
 
+// ========================================
+// 固定ページ自動作成（月次レポート階層）
+// ========================================
+add_action( 'init', function() {
+    // 管理者のみ・初回チェック
+    if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    // 既に作成済みならスキップ
+    if ( get_option( 'gcrev_pages_report_archive_created' ) ) {
+        return;
+    }
+
+    // 親ページ「report」のIDを取得
+    $parent_page = get_page_by_path( 'report' );
+    $parent_id   = $parent_page ? $parent_page->ID : 0;
+
+    // 「report-archive」ページが存在しなければ作成
+    $archive_page = get_page_by_path( 'report/report-archive' );
+    if ( ! $archive_page ) {
+        $page_id = wp_insert_post( [
+            'post_type'    => 'page',
+            'post_title'   => '過去の月次レポート一覧',
+            'post_name'    => 'report-archive',
+            'post_status'  => 'publish',
+            'post_parent'  => $parent_id,
+            'post_content' => '',
+            'page_template' => 'page-report-archive.php',
+        ] );
+        if ( ! is_wp_error( $page_id ) ) {
+            update_post_meta( $page_id, '_wp_page_template', 'page-report-archive.php' );
+        }
+    }
+
+    update_option( 'gcrev_pages_report_archive_created', 1 );
+}, 20 );
+

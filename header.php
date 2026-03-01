@@ -72,12 +72,15 @@
       </div>
       <?php
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ analysis ---
+      $report_pages   = array('report-latest','report-archive');
       $analysis_pages = array('analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
       $settings_pages = array('report-settings','cv-review','cv-settings');
       $support_pages  = array('faq','tutorials','inquiry');
       $option_pages   = array('service','improvement-request','training','ad-consulting','meeting-reservation');
       $account_pages  = array('account-info','client-settings','ga-gsc-connection','meo-connection','notifications');
 
+      $report_child_active = false;
+      foreach ($report_pages as $_p) { if (is_page($_p)) { $report_child_active = true; break; } }
       $analysis_child_active = false;
       foreach ($analysis_pages as $_p) { if (is_page($_p)) { $analysis_child_active = true; break; } }
       $settings_child_active = false;
@@ -107,12 +110,25 @@
                   </a>
                </li>
 
-               <!-- 最新月次レポート（単独） -->
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/report/report-latest/'); ?>" class="nav-link <?php echo is_page('report-latest') ? 'active' : ''; ?>">
+               <!-- 月次レポート（常時展開の親メニュー） -->
+               <li class="nav-item nav-item-collapsible nav-item-always-open<?php echo $report_child_active ? ' child-active' : ''; ?>" data-menu-key="report">
+                  <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="nav-link nav-link-toggle<?php echo $report_child_active ? ' child-active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 2.5V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 11h5M7.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-                  <span>最新月次レポート</span>
+                  <span>月次レポート</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </a>
+                  <ul class="nav-submenu" id="navSubmenuReport">
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="nav-link <?php echo is_page('report-latest') ? 'active' : ''; ?>">
+                        <span>最新月次レポート</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url(home_url('/report/report-archive/')); ?>" class="nav-link <?php echo is_page('report-archive') ? 'active' : ''; ?>">
+                        <span>過去の月次レポート一覧</span>
+                        </a>
+                     </li>
+                  </ul>
                </li>
 
                <!-- 集客のようす（折りたたみ親） -->
