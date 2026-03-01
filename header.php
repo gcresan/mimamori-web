@@ -418,20 +418,12 @@
             }
             echo esc_html($page_title);
             ?></h1>
-         <?php
-         $page_subtitle = get_query_var('gcrev_page_subtitle');
-         if ($page_subtitle):
-         ?>
-         <p class="page-subtitle"><?php echo esc_html($page_subtitle); ?></p>
-         <?php endif; ?>
       </div>
       <div class="topbar-right">
          <?php if ( is_user_logged_in() ) :
             $u = wp_get_current_user();
             $company = $u->last_name ?: $u->display_name;
             ?>
-
-         <a href="<?php echo home_url('/report/report-settings/'); ?>" class="report-setting-btn">AIレポート設定</a>
 
          <!-- アップデート通知ベル -->
          <div class="updates-bell" id="updatesBell">

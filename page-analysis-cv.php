@@ -12,15 +12,14 @@ $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
 
 // ページタイトル設定
-set_query_var('gcrev_page_title', 'お問い合わせの数');
-set_query_var('gcrev_page_subtitle', 'ホームページからのお問い合わせが、何件あったかを確認できます。');
+set_query_var('gcrev_page_title', 'お問い合わせ分析');
 
 // パンくず設定
 $breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
 $breadcrumb .= '<span>›</span>';
 $breadcrumb .= '<a href="' . esc_url(home_url('/analysis/')) . '">分析</a>';
 $breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>お問い合わせの数</strong>';
+$breadcrumb .= '<strong>お問い合わせ分析</strong>';
 set_query_var('gcrev_breadcrumb', $breadcrumb);
 
 get_header();
@@ -58,7 +57,7 @@ get_template_part('template-parts/analysis-help');
         <summary>この分析の見方・計算方法</summary>
         <div class="cv-methodology-content">
             <strong>「お問い合わせ」ってなに？</strong>
-            <p>お問い合わせ（コンバージョン）とは、電話・予約・フォーム送信など「成果につながったアクション」のことです。<br>
+            <p>お問い合わせとは、電話・予約・フォーム送信など「成果につながったアクション」のことです。<br>
             このページでは、その成果が<strong>どこから来た人によるものか</strong>を分析しています。</p>
 
             <strong>なぜGA4（Googleアナリティクス）の数字と違うの？</strong>
