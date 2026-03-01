@@ -76,7 +76,7 @@
       $settings_pages = array('report-settings','cv-review','cv-settings');
       $support_pages  = array('faq','tutorials','inquiry');
       $option_pages   = array('service','improvement-request','training','ad-consulting','meeting-reservation');
-      $account_pages  = array('plan','contract','billing','period','client-settings','ga-gsc-connection','meo-connection','notifications');
+      $account_pages  = array('account-info','client-settings','ga-gsc-connection','meo-connection','notifications');
 
       $analysis_child_active = false;
       foreach ($analysis_pages as $_p) { if (is_page($_p)) { $analysis_child_active = true; break; } }
@@ -379,23 +379,8 @@
                   </button>
                   <ul class="nav-submenu" id="navSubmenuAccount">
                      <li class="nav-item">
-                        <a href="<?php echo home_url('/account/plan/'); ?>" class="nav-link <?php echo is_page('plan') ? 'active' : ''; ?>">
-                        <span>プラン確認</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/contract/'); ?>" class="nav-link <?php echo is_page('contract') ? 'active' : ''; ?>">
-                        <span>契約状況</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/billing/'); ?>" class="nav-link <?php echo is_page('billing') ? 'active' : ''; ?>">
-                        <span>請求情報</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/period/'); ?>" class="nav-link <?php echo is_page('period') ? 'active' : ''; ?>">
-                        <span>利用期間</span>
+                        <a href="<?php echo home_url('/account/account-info/'); ?>" class="nav-link <?php echo is_page('account-info') ? 'active' : ''; ?>">
+                        <span>アカウント情報</span>
                         </a>
                      </li>
                      <li class="nav-item">

@@ -4750,6 +4750,97 @@ function gcrev_is_payment_active( int $user_id = 0 ): bool {
 }
 
 // --------------------------------------------------
+// 契約ステータス管理
+// --------------------------------------------------
+
+/**
+ * ユーザーの契約ステータスを返す。
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ * @return string 'none' | 'active' | 'canceled'
+ */
+function gcrev_get_contract_status( int $user_id = 0 ): string {
+    if ( $user_id <= 0 ) {
+        $user_id = get_current_user_id();
+    }
+    if ( $user_id <= 0 ) {
+        return 'none';
+    }
+    $status = get_user_meta( $user_id, 'gcrev_contract_status', true );
+    if ( in_array( $status, [ 'active', 'canceled' ], true ) ) {
+        return $status;
+    }
+    return 'none';
+}
+
+/**
+ * ユーザーの契約日付情報を返す。
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ * @return array{status:string, start_at:string, last_renewed_at:string, next_renewal_at:string, cancellable_at:string}
+ */
+function gcrev_get_contract_dates( int $user_id = 0 ): array {
+    if ( $user_id <= 0 ) {
+        $user_id = get_current_user_id();
+    }
+    return [
+        'status'          => gcrev_get_contract_status( $user_id ),
+        'start_at'        => (string) get_user_meta( $user_id, 'gcrev_contract_start_at', true ),
+        'last_renewed_at' => (string) get_user_meta( $user_id, 'gcrev_last_renewed_at', true ),
+        'next_renewal_at' => (string) get_user_meta( $user_id, 'gcrev_next_renewal_at', true ),
+        'cancellable_at'  => (string) get_user_meta( $user_id, 'gcrev_cancellable_at', true ),
+    ];
+}
+
+/**
+ * 契約を開始（有効化）する。冪等：既に start_at がセット済みならスキップ。
+ *
+ * @param int    $user_id       対象ユーザーID
+ * @param string $activated_by  操作者の説明（例: 'admin:123'）
+ */
+function gcrev_activate_contract( int $user_id, string $activated_by = '' ): void {
+    // 冪等チェック — 既に開始済みならスキップ
+    $existing = get_user_meta( $user_id, 'gcrev_contract_start_at', true );
+    if ( ! empty( $existing ) ) {
+        return;
+    }
+
+    $tz  = wp_timezone();
+    $now = new DateTimeImmutable( 'now', $tz );
+
+    $start_at       = $now->format( 'Y-m-d H:i:s' );
+    $next_renewal   = $now->modify( '+1 month' )->format( 'Y-m-d' );
+    $cancellable_at = $now->modify( '+3 months' )->format( 'Y-m-d' );
+
+    update_user_meta( $user_id, 'gcrev_contract_start_at',  $start_at );
+    update_user_meta( $user_id, 'gcrev_last_renewed_at',    $start_at );
+    update_user_meta( $user_id, 'gcrev_next_renewal_at',    $next_renewal );
+    update_user_meta( $user_id, 'gcrev_cancellable_at',     $cancellable_at );
+    update_user_meta( $user_id, 'gcrev_contract_status',    'active' );
+
+    // 監査ログ
+    $log = json_decode( (string) get_user_meta( $user_id, 'gcrev_contract_audit_log', true ), true );
+    if ( ! is_array( $log ) ) {
+        $log = [];
+    }
+    $log[] = [
+        'action' => 'activate',
+        'at'     => $start_at,
+        'by'     => $activated_by,
+    ];
+    update_user_meta( $user_id, 'gcrev_contract_audit_log', wp_json_encode( $log, JSON_UNESCAPED_UNICODE ) );
+
+    error_log( sprintf(
+        '[GCREV Contract] activated user=%d by=%s start=%s next_renewal=%s cancellable=%s',
+        $user_id,
+        $activated_by,
+        $start_at,
+        $next_renewal,
+        $cancellable_at
+    ) );
+}
+
+// --------------------------------------------------
 // 既存ユーザー移行 v2（一回限り）
 // 旧3値（active/subscription_pending/installment_pending）→ 新1値（paid）
 // 旧 active or subscription_pending → paid（どちらかのチェックがONだった）
@@ -4921,6 +5012,37 @@ function gcrev_render_payment_status_fields( $user ) {
                 </span>
                 <?php endif; ?>
             </td>
+        </tr>
+        <?php
+        // --- 契約日付（読み取り専用） ---
+        $c_dates  = gcrev_get_contract_dates( $user->ID );
+        $c_status = $c_dates['status'];
+        $status_labels = [
+            'active'   => [ 'label' => '利用中',   'color' => '#3D8B6E', 'bg' => 'rgba(61,139,110,0.08)' ],
+            'canceled' => [ 'label' => '解約済み', 'color' => '#C0392B', 'bg' => '#FDF0EE' ],
+            'none'     => [ 'label' => '未開始',   'color' => '#888',    'bg' => '#f0f0f0' ],
+        ];
+        $s = $status_labels[ $c_status ] ?? $status_labels['none'];
+        ?>
+        <tr>
+            <th>契約ステータス</th>
+            <td>
+                <span style="display:inline-block; padding:4px 12px; border-radius:12px; font-size:13px; font-weight:600; color:<?php echo esc_attr( $s['color'] ); ?>; background:<?php echo esc_attr( $s['bg'] ); ?>;">
+                    <?php echo esc_html( $s['label'] ); ?>
+                </span>
+            </td>
+        </tr>
+        <tr>
+            <th>契約開始日</th>
+            <td><?php echo $c_dates['start_at'] ? esc_html( $c_dates['start_at'] ) : '—'; ?></td>
+        </tr>
+        <tr>
+            <th>次回更新日</th>
+            <td><?php echo $c_dates['next_renewal_at'] ? esc_html( $c_dates['next_renewal_at'] ) : '—'; ?></td>
+        </tr>
+        <tr>
+            <th>解約可能日</th>
+            <td><?php echo $c_dates['cancellable_at'] ? esc_html( $c_dates['cancellable_at'] ) : '—'; ?></td>
         </tr>
     </table>
     <script>
@@ -5099,11 +5221,18 @@ function gcrev_save_payment_status_fields( int $user_id ) {
         delete_user_meta( $user_id, 'gcrev_initial_payment_completed' );
     }
 
-    // サブスクリプション決済完了
+    // サブスクリプション決済完了 + 契約開始トリガー
+    $old_sub_completed = ( get_user_meta( $user_id, 'gcrev_subscription_payment_completed', true ) === '1' );
     if ( ! empty( $_POST['gcrev_subscription_payment_completed'] ) ) {
         update_user_meta( $user_id, 'gcrev_subscription_payment_completed', '1' );
+        // OFF → ON の遷移時のみ契約開始（冪等: activate_contract 内で二重実行を防止）
+        if ( ! $old_sub_completed ) {
+            $admin_id = get_current_user_id();
+            gcrev_activate_contract( $user_id, 'admin:' . $admin_id );
+        }
     } else {
         delete_user_meta( $user_id, 'gcrev_subscription_payment_completed' );
+        // 注意: 日付はリセットしない（契約履歴を保持）
     }
 
 }
