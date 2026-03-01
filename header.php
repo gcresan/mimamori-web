@@ -96,7 +96,7 @@
                foreach ($analysis_pages as $_ap) { if (is_page($_ap)) { $analysis_child_active = true; break; } }
                ?>
                <li class="nav-item nav-item-collapsible<?php echo $analysis_child_active ? ' child-active' : ''; ?>">
-                  <button type="button" class="nav-link nav-link-toggle<?php echo $analysis_child_active ? ' active' : ''; ?>" id="navToggleAnalysis" aria-expanded="true">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleAnalysis" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 10h14M10 3v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="5" cy="5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="5" cy="15" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="15" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg></span>
                   <span>集客のようす</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
@@ -147,7 +147,7 @@
                foreach ($settings_pages as $_sp) { if (is_page($_sp)) { $settings_child_active = true; break; } }
                ?>
                <li class="nav-item nav-item-collapsible<?php echo $settings_child_active ? ' child-active' : ''; ?>">
-                  <button type="button" class="nav-link nav-link-toggle<?php echo $settings_child_active ? ' active' : ''; ?>" id="navToggleSettings" aria-expanded="true">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleSettings" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.5"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                   <span>各種設定</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
@@ -299,7 +299,7 @@
                foreach ($support_pages as $_sup) { if (is_page($_sup)) { $support_child_active = true; break; } }
                ?>
                <li class="nav-item nav-item-collapsible<?php echo $support_child_active ? ' child-active' : ''; ?>">
-                  <button type="button" class="nav-link nav-link-toggle<?php echo $support_child_active ? ' active' : ''; ?>" id="navToggleSupport" aria-expanded="true">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleSupport" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg></span>
                   <span>サポート・問い合わせ</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
@@ -330,7 +330,7 @@
                foreach ($option_pages as $_op) { if (is_page($_op)) { $option_child_active = true; break; } }
                ?>
                <li class="nav-item nav-item-collapsible<?php echo $option_child_active ? ' child-active' : ''; ?>">
-                  <button type="button" class="nav-link nav-link-toggle<?php echo $option_child_active ? ' active' : ''; ?>" id="navToggleOption" aria-expanded="true">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleOption" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 4 12 14.01l-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                   <span>オプションサービス</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
@@ -371,7 +371,7 @@
                foreach ($account_pages as $_ac) { if (is_page($_ac)) { $account_child_active = true; break; } }
                ?>
                <li class="nav-item nav-item-collapsible<?php echo $account_child_active ? ' child-active' : ''; ?>">
-                  <button type="button" class="nav-link nav-link-toggle<?php echo $account_child_active ? ' active' : ''; ?>" id="navToggleAccount" aria-expanded="true">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleAccount" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.5"/></svg></span>
                   <span>アカウント</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
