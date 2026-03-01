@@ -242,7 +242,11 @@ h3 { font-size: 19px; font-weight: 600; }
   font-size: 14px;
 }
 .sidebar-nav .nav-submenu .nav-link:hover {
+  background: #e9ebeb;
   color: var(--mw-primary-blue);
+}
+.sidebar-nav .nav-submenu .nav-link.active {
+  background: #e9ebeb;
 }
 
 /* 折りたたみトグル（集客のようす） */
