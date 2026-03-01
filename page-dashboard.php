@@ -653,7 +653,7 @@ if ($infographic) {
   <div class="score-breakdown-overlay" id="scoreBreakdownOverlay" style="display:none;">
     <div class="score-breakdown-modal">
       <div class="score-breakdown-modal-header">
-        <h3 class="score-breakdown-modal-title">スコア内訳</h3>
+        <h3 class="score-breakdown-modal-title">採点の内訳</h3>
         <button type="button" class="score-breakdown-modal-close" id="scoreBreakdownClose" aria-label="閉じる">&times;</button>
       </div>
       <div class="score-breakdown-modal-body">
@@ -664,37 +664,50 @@ if ($infographic) {
         </div>
 
         <?php if ($has_breakdown): ?>
-          <div class="score-breakdown-list">
-            <?php
-            foreach ($breakdown as $sbd_key => $sbd):
-              if (!is_array($sbd)) continue;
-              $sbd_label   = esc_html($bd_labels[$sbd_key] ?? $sbd['label'] ?? $sbd_key);
-              $sbd_points  = (int)($sbd['points'] ?? 0);
-              $sbd_max     = (int)($sbd['max'] ?? 25);
-              $sbd_pct     = (float)($sbd['pct'] ?? 0);
-              $sbd_icon    = $bd_icons[$sbd_key] ?? '📊';
-              $sbd_hint    = $sbd_hints[$sbd_key] ?? '';
-              $sbd_bar_pct = $sbd_max > 0 ? min(100, ($sbd_points / $sbd_max) * 100) : 0;
-              $sbd_pct_class = $sbd_pct > 0 ? 'positive' : ($sbd_pct < 0 ? 'negative' : 'neutral');
-              $sbd_pct_text  = ($sbd_pct > 0 ? '+' : '') . number_format($sbd_pct, 1) . '%';
-            ?>
-              <div class="score-breakdown-item">
-                <div class="score-breakdown-item-header">
-                  <span class="score-breakdown-item-icon"><?php echo $sbd_icon; ?></span>
-                  <span class="score-breakdown-item-label"><?php echo $sbd_label; ?></span>
-                  <span class="score-breakdown-item-points"><?php echo esc_html("{$sbd_points}/{$sbd_max}"); ?></span>
-                </div>
-                <div class="score-breakdown-item-bar-wrap">
-                  <div class="score-breakdown-item-bar" style="width:<?php echo esc_attr((string)$sbd_bar_pct); ?>%"></div>
-                </div>
-                <div class="score-breakdown-item-meta">
-                  <span class="score-breakdown-item-pct <?php echo esc_attr($sbd_pct_class); ?>">前月比 <?php echo esc_html($sbd_pct_text); ?></span>
-                  <?php if ($sbd_hint): ?>
-                    <span class="score-breakdown-item-hint"><?php echo esc_html($sbd_hint); ?></span>
-                  <?php endif; ?>
-                </div>
-              </div>
-            <?php endforeach; ?>
+          <div class="score-breakdown-table-wrap">
+            <table class="info-breakdown-table" role="table">
+              <thead>
+                <tr>
+                  <th>観点</th>
+                  <th>当月</th>
+                  <th>先月</th>
+                  <th>前月比</th>
+                  <th>配点</th>
+                </tr>
+              </thead>
+              <tbody>
+              <?php
+              foreach ($breakdown as $bd_key => $bd):
+                if (!is_array($bd)) continue;
+
+                $bd_label  = esc_html($bd_labels[$bd_key] ?? $bd['label'] ?? $bd_key);
+                $bd_curr   = number_format((float)($bd['curr'] ?? 0));
+                $bd_prev   = number_format((float)($bd['prev'] ?? 0));
+                $bd_pct    = (float)($bd['pct'] ?? 0);
+                $bd_points = (int)($bd['points'] ?? 0);
+                $bd_max    = (int)($bd['max'] ?? 25);
+                $bd_icon   = $bd_icons[$bd_key] ?? '📊';
+
+                $pct_class = $bd_pct > 0 ? 'positive' : ($bd_pct < 0 ? 'negative' : 'neutral');
+                $pct_text  = ($bd_pct > 0 ? '+' : '') . number_format($bd_pct, 1) . '%';
+
+                $bar_pct = $bd_max > 0 ? min(100, ($bd_points / $bd_max) * 100) : 0;
+              ?>
+                <tr>
+                  <td><span class="bd-icon"><?php echo $bd_icon; ?></span><?php echo $bd_label; ?></td>
+                  <td class="bd-num"><?php echo esc_html($bd_curr); ?></td>
+                  <td class="bd-num bd-prev"><?php echo esc_html($bd_prev); ?></td>
+                  <td class="bd-num <?php echo esc_attr($pct_class); ?>"><?php echo esc_html($pct_text); ?></td>
+                  <td class="bd-score-cell">
+                    <div class="bd-score-bar-wrap">
+                      <div class="bd-score-bar" style="width:<?php echo esc_attr((string)$bar_pct); ?>%"></div>
+                    </div>
+                    <span class="bd-score-text"><?php echo esc_html("{$bd_points}/{$bd_max}"); ?></span>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
           </div>
         <?php else: ?>
           <p class="score-breakdown-empty">内訳は集計中です</p>
@@ -702,66 +715,6 @@ if ($infographic) {
       </div>
     </div>
   </div>
-
-  <details class="info-breakdown-details">
-    <summary class="info-breakdown-toggle">
-      <span class="info-breakdown-toggle-icon">📋</span>
-      <span>採点の内訳を見る</span>
-      <span class="info-breakdown-arrow" aria-hidden="true">▾</span>
-    </summary>
-
-    <?php if ($has_breakdown): ?>
-      <div class="info-breakdown-body">
-        <table class="info-breakdown-table" role="table">
-          <thead>
-            <tr>
-              <th>観点</th>
-              <th>当月</th>
-              <th>先月</th>
-              <th>前月比</th>
-              <th>配点</th>
-            </tr>
-          </thead>
-          <tbody>
-          <?php
-          foreach ($breakdown as $bd_key => $bd):
-            if (!is_array($bd)) continue;
-
-            $bd_label  = esc_html($bd_labels[$bd_key] ?? $bd['label'] ?? $bd_key);
-            $bd_curr   = number_format((float)($bd['curr'] ?? 0));
-            $bd_prev   = number_format((float)($bd['prev'] ?? 0));
-            $bd_pct    = (float)($bd['pct'] ?? 0);
-            $bd_points = (int)($bd['points'] ?? 0);
-            $bd_max    = (int)($bd['max'] ?? 25);
-            $bd_icon   = $bd_icons[$bd_key] ?? '📊';
-
-            $pct_class = $bd_pct > 0 ? 'positive' : ($bd_pct < 0 ? 'negative' : 'neutral');
-            $pct_text  = ($bd_pct > 0 ? '+' : '') . number_format($bd_pct, 1) . '%';
-
-            $bar_pct = $bd_max > 0 ? min(100, ($bd_points / $bd_max) * 100) : 0;
-          ?>
-            <tr>
-              <td><span class="bd-icon"><?php echo $bd_icon; ?></span><?php echo $bd_label; ?></td>
-              <td class="bd-num"><?php echo esc_html($bd_curr); ?></td>
-              <td class="bd-num bd-prev"><?php echo esc_html($bd_prev); ?></td>
-              <td class="bd-num <?php echo esc_attr($pct_class); ?>"><?php echo esc_html($pct_text); ?></td>
-              <td class="bd-score-cell">
-                <div class="bd-score-bar-wrap">
-                  <div class="bd-score-bar" style="width:<?php echo esc_attr((string)$bar_pct); ?>%"></div>
-                </div>
-                <span class="bd-score-text"><?php echo esc_html("{$bd_points}/{$bd_max}"); ?></span>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    <?php else: ?>
-      <div class="info-breakdown-body">
-        <p class="info-breakdown-empty">内訳は集計中です</p>
-      </div>
-    <?php endif; ?>
-  </details>
 
   <!-- 結論サマリー + ハイライト（インフォ内に統合） -->
   <?php if (!empty($monthly_report)): ?>
