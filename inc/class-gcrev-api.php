@@ -5088,10 +5088,10 @@ PROMPT;
             $user_id = get_current_user_id();
         }
 
-        // --- キャッシュキー（v2: eventCount 常時取得版） ---
-        $cache_key    = "gcrev_ga4_kevt_v2_{$user_id}";
-        $fallback_key = "gcrev_ga4_kevt_fb2_{$user_id}";
-        $ts_key       = "gcrev_ga4_kevt_ts2_{$user_id}";
+        // --- キャッシュキー（v3: Throwable catch + Admin API タイムアウト修正版） ---
+        $cache_key    = "gcrev_ga4_kevt_v3_{$user_id}";
+        $fallback_key = "gcrev_ga4_kevt_fb3_{$user_id}";
+        $ts_key       = "gcrev_ga4_kevt_ts3_{$user_id}";
 
         // --- Transient キャッシュ確認（6h） ---
         $cached = get_transient($cache_key);
@@ -5127,8 +5127,8 @@ PROMPT;
                     $key_event_defs[$d['event_name']] = true;
                 }
                 error_log("[GCREV] Admin API key event defs OK: " . count($key_event_defs) . " events");
-            } catch (\Exception $e) {
-                error_log("[GCREV] Admin API key event defs FAILED (non-fatal): " . $e->getMessage());
+            } catch (\Throwable $e) {
+                error_log("[GCREV] Admin API key event defs FAILED (non-fatal): " . get_class($e) . ": " . $e->getMessage());
             }
 
             // ========================================
@@ -5139,8 +5139,8 @@ PROMPT;
             try {
                 $key_event_counts = $this->ga4->fetch_ga4_key_events($property_id, $start, $end);
                 error_log("[GCREV] Data API keyEvents OK: " . count($key_event_counts) . " events");
-            } catch (\Exception $e) {
-                error_log("[GCREV] Data API keyEvents FAILED (non-fatal): " . $e->getMessage());
+            } catch (\Throwable $e) {
+                error_log("[GCREV] Data API keyEvents FAILED (non-fatal): " . get_class($e) . ": " . $e->getMessage());
             }
 
             // ========================================
@@ -5151,8 +5151,8 @@ PROMPT;
             try {
                 $all_event_counts = $this->ga4->fetch_ga4_all_event_names($property_id, $start, $end);
                 error_log("[GCREV] Data API eventCount OK: " . count($all_event_counts) . " events");
-            } catch (\Exception $e) {
-                error_log("[GCREV] Data API eventCount FAILED (non-fatal): " . $e->getMessage());
+            } catch (\Throwable $e) {
+                error_log("[GCREV] Data API eventCount FAILED (non-fatal): " . get_class($e) . ": " . $e->getMessage());
             }
 
             // ========================================
@@ -5219,8 +5219,8 @@ PROMPT;
                 'fetched_at' => $now,
             ], 200);
 
-        } catch (\Exception $e) {
-            error_log("[GCREV] rest_get_ga4_key_events ERROR: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            error_log("[GCREV] rest_get_ga4_key_events ERROR: " . get_class($e) . ": " . $e->getMessage());
 
             // フォールバック: 最後に成功したキャッシュを返す
             $fallback = get_option($fallback_key, []);

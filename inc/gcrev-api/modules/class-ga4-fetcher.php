@@ -1069,12 +1069,22 @@ class Gcrev_GA4_Fetcher {
      */
     public function fetch_ga4_key_event_definitions(string $property_id): array {
 
+        // クラスが存在しない場合は即座に空配列を返す（Admin APIライブラリ未インストール時）
+        if (!class_exists('\Google\Service\GoogleAnalyticsAdmin')) {
+            error_log("[GCREV] GoogleAnalyticsAdmin class not found — Admin API skipped");
+            return [];
+        }
+
         $sa_path = $this->config->get_service_account_path();
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $sa_path);
 
         $client = new \Google_Client();
         $client->setAuthConfig($sa_path);
         $client->addScope('https://www.googleapis.com/auth/analytics.readonly');
+
+        // HTTPタイムアウト設定（5秒）— API未有効化時のハング防止
+        $httpClient = new \GuzzleHttp\Client(['timeout' => 5, 'connect_timeout' => 3]);
+        $client->setHttpClient($httpClient);
 
         $admin  = new \Google\Service\GoogleAnalyticsAdmin($client);
         $parent = 'properties/' . $property_id;
