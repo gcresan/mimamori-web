@@ -457,9 +457,14 @@ h3 { font-size: 19px; font-weight: 600; }
   color: var(--mw-primary-blue);
 }
 
+.info-score-unit {
+  font-size: 18px;
+  font-weight: 600;
+  margin-left: 1px;
+}
 .info-score-label {
-  margin-bottom: 2px;
-  font-size: 14px;
+  margin-top: 2px;
+  font-size: 12px;
   color: var(--mw-text-secondary);
 }
 
@@ -4000,6 +4005,11 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   font-size: 16px;
   font-weight: 600;
   color: var(--mw-text-secondary);
+}
+.score-breakdown-total-sep {
+  font-size: 16px;
+  color: var(--mw-text-tertiary, #999);
+  margin: 0 2px;
 }
 
 /* Breakdown table inside modal */

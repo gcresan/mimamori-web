@@ -484,8 +484,8 @@ if ($infographic) {
     <!-- スコア -->
     <div class="info-score">
       <div class="info-score-circle">
+        <span class="info-score-value"><?php echo esc_html((string)($infographic['score'] ?? 0)); ?><span class="info-score-unit">点</span></span>
         <span class="info-score-label">100点中</span>
-        <span class="info-score-value"><?php echo esc_html((string)($infographic['score'] ?? 0)); ?></span>
       </div>
 
       <?php
@@ -502,7 +502,7 @@ if ($infographic) {
         <span class="info-score-status"><?php echo esc_html($infographic['status']); ?></span>
       <?php endif; ?>
 
-      <button type="button" class="info-score-breakdown-link" id="scoreBreakdownOpen">内訳を見る</button>
+      <button type="button" class="info-score-breakdown-link" id="scoreBreakdownOpen">採点の内訳を見る</button>
     </div>
 
     <!-- KPI -->
@@ -658,9 +658,10 @@ if ($infographic) {
       </div>
       <div class="score-breakdown-modal-body">
         <div class="score-breakdown-total">
-          <span class="score-breakdown-total-label">100点中</span>
           <span class="score-breakdown-total-value"><?php echo esc_html((string)($infographic['score'] ?? 0)); ?></span>
           <span class="score-breakdown-total-unit">点</span>
+          <span class="score-breakdown-total-sep">/</span>
+          <span class="score-breakdown-total-label">100点中</span>
         </div>
 
         <?php if ($has_breakdown): ?>
