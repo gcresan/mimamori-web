@@ -94,6 +94,7 @@
 
       // 子がアクティブなグループを開く。なければデフォルト 'analysis'
       $sidebar_active_group = 'analysis';
+      if ($report_child_active)   $sidebar_active_group = 'report';
       if ($settings_child_active) $sidebar_active_group = 'settings';
       if ($support_child_active)  $sidebar_active_group = 'support';
       if ($option_child_active)   $sidebar_active_group = 'option';
@@ -110,13 +111,13 @@
                   </a>
                </li>
 
-               <!-- 月次レポート（常時展開の親メニュー） -->
-               <li class="nav-item nav-item-collapsible nav-item-always-open<?php echo $report_child_active ? ' child-active' : ''; ?>" data-menu-key="report">
-                  <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="nav-link nav-link-toggle<?php echo $report_child_active ? ' child-active' : ''; ?>">
+               <!-- 月次レポート（折りたたみ親） -->
+               <li class="nav-item nav-item-collapsible<?php echo $report_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'report' ? ' collapsed' : ''; ?>" data-menu-key="report">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleReport" aria-expanded="<?php echo $sidebar_active_group === 'report' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 2.5V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 11h5M7.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
                   <span>月次レポート</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
-                  </a>
+                  </button>
                   <ul class="nav-submenu" id="navSubmenuReport">
                      <li class="nav-item">
                         <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="nav-link <?php echo is_page('report-latest') ? 'active' : ''; ?>">
