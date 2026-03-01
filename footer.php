@@ -30,8 +30,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // サイドバー折りたたみトグル（集客のようす・各種設定）
-    ['navToggleAnalysis', 'navToggleSettings'].forEach(function(id) {
+    // サイドバー折りたたみトグル
+    ['navToggleAnalysis', 'navToggleSettings', 'navToggleSupport', 'navToggleOption', 'navToggleAccount'].forEach(function(id) {
         var btn = document.getElementById(id);
         if (btn) {
             btn.addEventListener('click', function() {

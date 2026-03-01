@@ -170,8 +170,6 @@
                      </li>
                   </ul>
                </li>
-            </ul>
-         </div>
          <!-- C. MEO（Googleビジネス） -->
 <!--          <div class="nav-section">
             <div class="nav-section-title">MEO（Googleビジネス）</div>
@@ -294,120 +292,135 @@
 
             </ul>
          </div> -->
-         <!-- G. サポート・問い合わせ -->
-<!--          <div class="nav-section">
-            <div class="nav-section-title">サポート・問い合わせ</div>
-            <ul class="nav-menu">
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/faq/'); ?>" class="nav-link">
-                  <span class="nav-icon">❓</span>
-                  <span>よくある質問</span>
-                  </a>
+         <!-- G. サポート・問い合わせ（折りたたみ親） -->
+               <?php
+               $support_pages = array('faq','tutorials','inquiry');
+               $support_child_active = false;
+               foreach ($support_pages as $_sup) { if (is_page($_sup)) { $support_child_active = true; break; } }
+               ?>
+               <li class="nav-item nav-item-collapsible<?php echo $support_child_active ? ' child-active' : ''; ?>">
+                  <button type="button" class="nav-link nav-link-toggle<?php echo $support_child_active ? ' active' : ''; ?>" id="navToggleSupport" aria-expanded="true">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg></span>
+                  <span>サポート・問い合わせ</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuSupport">
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/faq/'); ?>" class="nav-link <?php echo is_page('faq') ? 'active' : ''; ?>">
+                        <span>よくある質問</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/tutorials/'); ?>" class="nav-link <?php echo is_page('tutorials') ? 'active' : ''; ?>">
+                        <span>使い方ガイド</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/inquiry/'); ?>" class="nav-link <?php echo is_page('inquiry') ? 'active' : ''; ?>">
+                        <span>問い合わせ</span>
+                        </a>
+                     </li>
+                  </ul>
                </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/tutorials/'); ?>" class="nav-link">
-                  <span class="nav-icon">📚</span>
-                  <span>使い方ガイド</span>
-                  </a>
+
+               <!-- H. オプションサービス（折りたたみ親） -->
+               <?php
+               $option_pages = array('service','improvement-request','training','ad-consulting','meeting-reservation');
+               $option_child_active = false;
+               foreach ($option_pages as $_op) { if (is_page($_op)) { $option_child_active = true; break; } }
+               ?>
+               <li class="nav-item nav-item-collapsible<?php echo $option_child_active ? ' child-active' : ''; ?>">
+                  <button type="button" class="nav-link nav-link-toggle<?php echo $option_child_active ? ' active' : ''; ?>" id="navToggleOption" aria-expanded="true">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 4 12 14.01l-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span>オプションサービス</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuOption">
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/service/'); ?>" class="nav-link <?php echo is_page('service') ? 'active' : ''; ?>">
+                        <span>伴走サポート</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/improvement-request/'); ?>" class="nav-link <?php echo is_page('improvement-request') ? 'active' : ''; ?>">
+                        <span>改善依頼</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/training/'); ?>" class="nav-link <?php echo is_page('training') ? 'active' : ''; ?>">
+                        <span>研修申込み</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/ad-consulting/'); ?>" class="nav-link <?php echo is_page('ad-consulting') ? 'active' : ''; ?>">
+                        <span>広告相談</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/meeting-reservation/'); ?>" class="nav-link <?php echo is_page('meeting-reservation') ? 'active' : ''; ?>">
+                        <span>打ち合わせ予約</span>
+                        </a>
+                     </li>
+                  </ul>
                </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/inquiry/'); ?>" class="nav-link">
-                  <span class="nav-icon">✉️</span>
-                  <span>問い合わせ</span>
-                  </a>
+
+               <!-- I. アカウント（折りたたみ親） -->
+               <?php
+               $account_pages = array('plan','contract','billing','period','client-settings','ga-gsc-connection','meo-connection','notifications');
+               $account_child_active = false;
+               foreach ($account_pages as $_ac) { if (is_page($_ac)) { $account_child_active = true; break; } }
+               ?>
+               <li class="nav-item nav-item-collapsible<?php echo $account_child_active ? ' child-active' : ''; ?>">
+                  <button type="button" class="nav-link nav-link-toggle<?php echo $account_child_active ? ' active' : ''; ?>" id="navToggleAccount" aria-expanded="true">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.5"/></svg></span>
+                  <span>アカウント</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuAccount">
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/plan/'); ?>" class="nav-link <?php echo is_page('plan') ? 'active' : ''; ?>">
+                        <span>プラン確認</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/contract/'); ?>" class="nav-link <?php echo is_page('contract') ? 'active' : ''; ?>">
+                        <span>契約状況</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/billing/'); ?>" class="nav-link <?php echo is_page('billing') ? 'active' : ''; ?>">
+                        <span>請求情報</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/period/'); ?>" class="nav-link <?php echo is_page('period') ? 'active' : ''; ?>">
+                        <span>利用期間</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/client-settings/'); ?>" class="nav-link <?php echo is_page('client-settings') ? 'active' : ''; ?>">
+                        <span>クライアント設定</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/ga-gsc-connection/'); ?>" class="nav-link <?php echo is_page('ga-gsc-connection') ? 'active' : ''; ?>">
+                        <span>GA / GSC連携</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/meo-connection/'); ?>" class="nav-link <?php echo is_page('meo-connection') ? 'active' : ''; ?>">
+                        <span>MEO連携</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/notifications/'); ?>" class="nav-link <?php echo is_page('notifications') ? 'active' : ''; ?>">
+                        <span>通知設定</span>
+                        </a>
+                     </li>
+                  </ul>
                </li>
             </ul>
-         </div> -->
-         <!-- H. オプションサービス -->
-<!--          <div class="nav-section">
-            <div class="nav-section-title">オプションサービス</div>
-            <ul class="nav-menu">
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/service/'); ?>" class="nav-link">
-                  <span class="nav-icon">🚀</span>
-                  <span>伴走サポート</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/improvement-request/'); ?>" class="nav-link">
-                  <span class="nav-icon">🔧</span>
-                  <span>改善依頼</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/training/'); ?>" class="nav-link">
-                  <span class="nav-icon">🎓</span>
-                  <span>研修申込み</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/ad-consulting/'); ?>" class="nav-link">
-                  <span class="nav-icon">📢</span>
-                  <span>広告相談</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/meeting-reservation/'); ?>" class="nav-link">
-                  <span class="nav-icon">📅</span>
-                  <span>打ち合わせ予約</span>
-                  </a>
-               </li>
-            </ul>
-         </div> -->
-         <!-- I. アカウント -->
-<!--          <div class="nav-section">
-            <div class="nav-section-title">アカウント</div>
-            <ul class="nav-menu">
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/account/plan/'); ?>" class="nav-link">
-                  <span class="nav-icon">⚙️</span>
-                  <span>プラン確認</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/account/contract/'); ?>" class="nav-link">
-                  <span class="nav-icon">📋</span>
-                  <span>契約状況</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/account/billing/'); ?>" class="nav-link">
-                  <span class="nav-icon">💳</span>
-                  <span>請求情報</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/account/period/'); ?>" class="nav-link">
-                  <span class="nav-icon">📆</span>
-                  <span>利用期間</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/account/client-settings/'); ?>" class="nav-link">
-                  <span class="nav-icon">🏢</span>
-                  <span>クライアント設定</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/account/ga-gsc-connection/'); ?>" class="nav-link">
-                  <span class="nav-icon">🔌</span>
-                  <span>GA / GSC連携</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/account/meo-connection/'); ?>" class="nav-link">
-                  <span class="nav-icon">📍</span>
-                  <span>MEO連携</span>
-                  </a>
-               </li>
-               <li class="nav-item">
-                  <a href="<?php echo home_url('/account/notifications/'); ?>" class="nav-link">
-                  <span class="nav-icon">🔔</span>
-                  <span>通知設定</span>
-                  </a>
-               </li>
-            </ul>
-         </div> -->
+         </div>
       </nav>
    </aside>
    <!-- メインコンテンツ -->
