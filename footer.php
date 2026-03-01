@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // サイドバー アコーディオンメニュー（常に1つだけ開く）
+    // サイドバー アコーディオンメニュー（トグル式：クリックで開閉）
     (function() {
         var menuIds = ['navToggleReport', 'navToggleAnalysis', 'navToggleSettings', 'navToggleSupport', 'navToggleOption', 'navToggleAccount'];
         var items = [];
@@ -43,32 +43,23 @@ document.addEventListener('DOMContentLoaded', function() {
             items.push({ btn: btn, li: li, key: li.getAttribute('data-menu-key') || id });
         });
 
-        // 現在開いているキーを特定（PHPで1つだけ collapsed なし）
-        var activeKey = null;
-        items.forEach(function(item) {
-            if (!item.li.classList.contains('collapsed')) {
-                activeKey = item.key;
-            }
-        });
-        if (!activeKey && items.length) activeKey = items[0].key; // fallback: 先頭
-
         items.forEach(function(item) {
             item.btn.addEventListener('click', function() {
-                // 既に開いている親をクリック → 閉じない（常に1つは開いている）
-                if (activeKey === item.key) return;
+                var isOpen = !item.li.classList.contains('collapsed');
 
-                // 現在開いているメニューを閉じる
-                items.forEach(function(other) {
-                    if (other.key === activeKey) {
+                if (isOpen) {
+                    // 開いている → 閉じる
+                    item.li.classList.add('collapsed');
+                    item.btn.setAttribute('aria-expanded', 'false');
+                } else {
+                    // 他を全て閉じてから開く
+                    items.forEach(function(other) {
                         other.li.classList.add('collapsed');
                         other.btn.setAttribute('aria-expanded', 'false');
-                    }
-                });
-
-                // クリックしたメニューを開く
-                item.li.classList.remove('collapsed');
-                item.btn.setAttribute('aria-expanded', 'true');
-                activeKey = item.key;
+                    });
+                    item.li.classList.remove('collapsed');
+                    item.btn.setAttribute('aria-expanded', 'true');
+                }
             });
         });
     })();
