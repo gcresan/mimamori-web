@@ -752,16 +752,47 @@ if ($infographic) {
               <?php endif; ?>
 
               <?php if ($comp_key === 'stability'): ?>
+                <?php $stab_drops = (int)($comp['drops'] ?? 0); ?>
+                <?php if (!empty($comp['details'])): ?>
+                <details class="score-comp-details">
+                  <summary><?php echo $stab_drops === 0 ? '急落なし ✓' : esc_html("{$stab_drops}観点で急落（-20%超）"); ?></summary>
+                  <div class="score-comp-details-body">
+                    <?php foreach ($comp['details'] as $dim_key => $dim):
+                      $d_icon  = $bd_icons[$dim_key] ?? '📊';
+                      $d_label = $bd_labels[$dim_key] ?? $dim_key;
+                      $d_pct   = (float)($dim['pct'] ?? 0);
+                      $d_drop  = !empty($dim['drop']);
+                      $d_zero  = !empty($dim['zero']);
+                      $pct_sign = $d_pct > 0 ? '+' : '';
+                      if ($d_zero) {
+                          $status_text = 'データなし';
+                          $status_class = 'score-comp-dim-note';
+                      } elseif ($d_drop) {
+                          $status_text = '急落 ⚠';
+                          $status_class = 'score-comp-check-ng';
+                      } else {
+                          $status_text = '安定 ✓';
+                          $status_class = 'score-comp-check-ok';
+                      }
+                    ?>
+                      <div class="score-comp-dim-row">
+                        <span class="score-comp-dim-icon"><?php echo $d_icon; ?></span>
+                        <span class="score-comp-dim-label"><?php echo esc_html($d_label); ?></span>
+                        <?php if (!$d_zero): ?>
+                          <span class="score-comp-dim-pct"><?php echo esc_html("{$pct_sign}" . number_format($d_pct, 1) . '%'); ?></span>
+                        <?php endif; ?>
+                        <span class="<?php echo esc_attr($status_class); ?>"><?php echo esc_html($status_text); ?></span>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                </details>
+                <?php else: ?>
                 <div class="score-comp-inline-note">
-                  <?php
-                  $drops = (int)($comp['drops'] ?? 0);
-                  if ($drops === 0) {
-                      echo '<span class="score-comp-check-ok">急落なし ✓</span>';
-                  } else {
-                      echo '<span class="score-comp-check-ng">' . esc_html("{$drops}観点で急落（-20%超）") . '</span>';
-                  }
-                  ?>
+                  <?php echo $stab_drops === 0
+                      ? '<span class="score-comp-check-ok">急落なし ✓</span>'
+                      : '<span class="score-comp-check-ng">' . esc_html("{$stab_drops}観点で急落（-20%超）") . '</span>'; ?>
                 </div>
+                <?php endif; ?>
               <?php endif; ?>
 
               <?php if ($comp_key === 'action' && !empty($comp['checks'])): ?>

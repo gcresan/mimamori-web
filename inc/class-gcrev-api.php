@@ -4326,18 +4326,22 @@ class Gcrev_Insight_API {
     private function calc_stability_component(array $curr, array $prev): array {
         $drops   = 0;
         $has_any = false;
+        $details = [];
 
         foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
             $c = (float)($curr[$key] ?? 0);
             $p = (float)($prev[$key] ?? 0);
             if ((int)$c === 0) {
+                $details[$key] = ['pct' => 0, 'drop' => false, 'zero' => true];
                 continue;
             }
             $has_any = true;
             $pct = $this->calc_pct_change($c, $p);
-            if ($pct < -20.0) {
+            $is_drop = $pct < -20.0;
+            if ($is_drop) {
                 $drops++;
             }
+            $details[$key] = ['pct' => round($pct, 1), 'drop' => $is_drop, 'zero' => false];
         }
 
         if (!$has_any) {
@@ -4351,10 +4355,11 @@ class Gcrev_Insight_API {
         }
 
         return [
-            'points' => $points,
-            'max'    => 10,
-            'label'  => '安定性',
-            'drops'  => $drops,
+            'points'  => $points,
+            'max'     => 10,
+            'label'   => '安定性',
+            'drops'   => $drops,
+            'details' => $details,
         ];
     }
 
