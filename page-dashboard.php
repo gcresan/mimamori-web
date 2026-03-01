@@ -581,25 +581,25 @@ if ($infographic) {
   <!-- ドリルダウンポップオーバー -->
   <div class="drilldown-popover" id="drilldownPopover" style="display:none;">
     <div class="drilldown-popover-title" id="drilldownPopoverTitle"></div>
-    <button type="button" class="drilldown-popover-item" data-dd-type="region">
+    <button type="button" class="drilldown-popover-item" data-dd-type="region" id="ddItem_region">
       <span class="drilldown-popover-icon">📍</span>
       <span class="drilldown-popover-label">
-        見ている人の場所
-        <small class="drilldown-popover-help" data-help-key="region">ホームページを見ている人が、どの地域からアクセスしているかを表しています</small>
+        <span id="ddLabel_region">見ている人の場所</span>
+        <small class="drilldown-popover-help" data-help-key="region" id="ddHelp_region">ホームページを見ている人が、どの地域からアクセスしているかを表しています</small>
       </span>
     </button>
-    <button type="button" class="drilldown-popover-item" data-dd-type="page">
+    <button type="button" class="drilldown-popover-item" data-dd-type="page" id="ddItem_page">
       <span class="drilldown-popover-icon">📄</span>
       <span class="drilldown-popover-label">
-        訪問の入口となったページ
-        <small class="drilldown-popover-help" data-help-key="page">検索やSNS、広告などから、最初に表示されたページです</small>
+        <span id="ddLabel_page">訪問の入口となったページ</span>
+        <small class="drilldown-popover-help" data-help-key="page" id="ddHelp_page">検索やSNS、広告などから、最初に表示されたページです</small>
       </span>
     </button>
-    <button type="button" class="drilldown-popover-item" data-dd-type="source">
+    <button type="button" class="drilldown-popover-item" data-dd-type="source" id="ddItem_source">
       <span class="drilldown-popover-icon">🔗</span>
       <span class="drilldown-popover-label">
-        見つけたきっかけ
-        <small class="drilldown-popover-help" data-help-key="source">検索、SNS、広告、他サイトなど、ホームページを知った経路です</small>
+        <span id="ddLabel_source">見つけたきっかけ</span>
+        <small class="drilldown-popover-help" data-help-key="source" id="ddHelp_source">検索、SNS、広告、他サイトなど、ホームページを知った経路です</small>
       </span>
     </button>
   </div>
@@ -1429,6 +1429,29 @@ foreach ($highlight_items as $highlight):
     var _ddCache     = {};
     var _ddMonth     = null;
 
+    // ── 指標別ポップオーバーラベル定義 ──
+    var _ddLabels = {
+        sessions: {
+            region: { label: '見ている人の場所',       help: 'ホームページを見ている人が、どの地域からアクセスしているかを表しています' },
+            page:   { label: '訪問の入口となったページ', help: '検索やSNS、広告などから、最初に表示されたページです' },
+            source: { label: '見つけたきっかけ',        help: '検索、SNS、広告、他サイトなど、ホームページを知った経路です' }
+        },
+        cv: {
+            region: { label: 'ゴールが発生した地域',     help: 'ゴール（お問い合わせなど）が発生したユーザーの地域です' },
+            page:   { label: 'ゴールに至った入口ページ',  help: 'ゴールにつながった最初のページです' },
+            source: { label: 'ゴールに至ったきっかけ',    help: 'ゴールにつながった流入経路です' }
+        },
+        meo: {
+            region: { label: 'Googleマップで表示された地域', help: 'Googleマップでお店の情報が表示されたユーザーのエリアです' }
+        }
+    };
+    // 指標ごとのポップオーバー表示項目
+    var _ddVisibleTypes = {
+        sessions: ['region', 'page', 'source'],
+        cv:       ['region', 'page', 'source'],
+        meo:      ['region']
+    };
+
     /**
      * ポップオーバー位置計算ユーティリティ（再利用可能）
      * position:fixed でビューポート基準に配置。
@@ -1475,6 +1498,23 @@ foreach ($highlight_items as $highlight):
         _ddMonth = month;
         var parts = month.split('-');
         ddPopTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月';
+
+        // ── 指標に応じてポップオーバー項目を切り替え ──
+        var ddMetric = _activeMetric || 'sessions';
+        var visibleTypes = _ddVisibleTypes[ddMetric] || _ddVisibleTypes.sessions;
+        var ddLabelsMap  = _ddLabels[ddMetric] || _ddLabels.sessions;
+
+        ['region', 'page', 'source'].forEach(function(t) {
+            var item = document.getElementById('ddItem_' + t);
+            if (!item) return;
+            item.style.display = visibleTypes.indexOf(t) >= 0 ? '' : 'none';
+
+            var lbl     = ddLabelsMap[t] || _ddLabels.sessions[t];
+            var elLabel = document.getElementById('ddLabel_' + t);
+            var elHelp  = document.getElementById('ddHelp_' + t);
+            if (elLabel) elLabel.textContent = lbl.label;
+            if (elHelp)  elHelp.textContent  = lbl.help;
+        });
 
         // ── Chart.js ポイント座標 → ビューポート座標 ──
         // Chart.js v4 の element.x/y は CSS pixel 座標。
@@ -1535,9 +1575,12 @@ foreach ($highlight_items as $highlight):
     });
 
     function openDrilldownModal(month, type) {
-        var typeLabels = { region: '見ている人の場所', page: '訪問の入口となったページ', source: '見つけたきっかけ' };
+        var metric = _activeMetric || 'sessions';
+        var metricLabels = _ddLabels[metric] || _ddLabels.sessions;
+        var typeLabel = (metricLabels[type] || _ddLabels.sessions[type]).label;
+
         var parts = month.split('-');
-        ddModalTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月 — ' + typeLabels[type];
+        ddModalTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月 — ' + typeLabel;
 
         ddLoading.style.display   = 'block';
         ddChartWrap.style.display = 'none';
@@ -1546,14 +1589,15 @@ foreach ($highlight_items as $highlight):
         ddOverlay.style.display   = 'flex';
         document.body.style.overflow = 'hidden';
 
-        var cacheKey = month + '_' + type;
+        var cacheKey = month + '_' + type + '_' + metric;
         if (_ddCache[cacheKey]) {
             renderDrilldownChart(_ddCache[cacheKey]);
             return;
         }
 
         fetch(restBase + 'dashboard/drilldown?month=' + encodeURIComponent(month)
-              + '&type=' + encodeURIComponent(type), {
+              + '&type=' + encodeURIComponent(type)
+              + '&metric=' + encodeURIComponent(metric), {
             headers: { 'X-WP-Nonce': nonce },
             credentials: 'same-origin'
         })

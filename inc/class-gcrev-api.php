@@ -463,6 +463,9 @@ class Gcrev_Insight_API {
                 'metric' => [
                     'required' => false,
                     'default'  => 'sessions',
+                    'validate_callback' => function($param) {
+                        return in_array($param, ['sessions', 'cv', 'meo']);
+                    }
                 ]
             ]
         ]);
@@ -6571,8 +6574,20 @@ PROMPT;
             $start = $month . '-01';
             $end   = date('Y-m-t', strtotime( $start ));
 
-            // キャッシュ（24時間）
-            $cache_key = "gcrev_drilldown_{$user_id}_{$month}_{$type}";
+            // MEO は region のみ対応（page/source は無意味）
+            if ( $metric === 'meo' && $type !== 'region' ) {
+                return new \WP_REST_Response([
+                    'success'      => true,
+                    'month'        => $month,
+                    'type'         => $type,
+                    'metric'       => $metric,
+                    'metric_label' => '',
+                    'items'        => [],
+                ], 200);
+            }
+
+            // キャッシュ（24時間）— metric ごとに分離
+            $cache_key = "gcrev_drilldown_{$user_id}_{$month}_{$type}_{$metric}";
             $cached = get_transient( $cache_key );
             if ( $cached !== false && is_array( $cached ) ) {
                 return new \WP_REST_Response( $cached, 200 );
@@ -6600,9 +6615,13 @@ PROMPT;
 
             // 指標名 日本語マップ
             $metric_ja = [
-                'sessions'  => 'セッション数',
-                'users'     => 'ユーザー数',
-                'pageViews' => '表示回数',
+                'sessions'    => 'セッション数',
+                'users'       => 'ユーザー数',
+                'pageViews'   => '表示回数',
+                'cv'          => 'ゴール数',
+                'conversions' => 'ゴール数',
+                'keyEvents'   => 'ゴール数',
+                'meo'         => 'セッション数',
             ];
 
             // 都道府県・地域名 英→日マップ（GA4は英語で返すため）
@@ -6636,6 +6655,12 @@ PROMPT;
             switch ( $type ) {
                 case 'region':
                     $raw = $this->ga4->fetch_region_details( $ga4_id, $start, $end );
+                    // CV の場合は conversions 降順で再ソート（GA4は sessions 降順）
+                    if ( $metric === 'cv' ) {
+                        usort( $raw, function( $a, $b ) {
+                            return ( $b['conversions'] ?? 0 ) - ( $a['conversions'] ?? 0 );
+                        });
+                    }
                     $raw = array_slice( $raw, 0, 10 );
                     foreach ( $raw as $r ) {
                         $region_name = $r['region'] ?: '';
@@ -6644,43 +6669,85 @@ PROMPT;
                         } else {
                             $region_name = $region_ja[ $region_name ] ?? $region_name;
                         }
+                        $value = $metric === 'cv'
+                            ? (int) ( $r['conversions'] ?? 0 )
+                            : (int) ( $r['sessions'] ?? 0 );
                         $items[] = [
                             'label' => $region_name,
-                            'value' => (int) ( $r[ $metric ] ?? $r['sessions'] ),
+                            'value' => $value,
                         ];
                     }
+                    if ( $metric === 'cv' ) { $metric = 'conversions'; }
                     break;
 
                 case 'page':
-                    $site_url = $config['gsc_url'] ?? '';
-                    $raw = $this->ga4->fetch_page_details( $ga4_id, $start, $end, $site_url );
-                    $raw = array_slice( $raw, 0, 10 );
-                    foreach ( $raw as $p ) {
-                        $display = $p['title'] ?: $p['page'];
-                        if ( $display === '(not set)' || $display === '' ) {
-                            $display = '（不明なページ）';
+                    if ( $metric === 'cv' ) {
+                        // CV: fetch_page_details は conversions を返さないため
+                        //     fetch_cv_by_dimension('pagePath') を使用
+                        $client   = new BetaAnalyticsDataClient(['credentials' => $this->service_account_path]);
+                        $property = 'properties/' . $ga4_id;
+                        $raw_cv   = $this->fetch_cv_by_dimension( $client, $property, 'pagePath', $start, $end );
+                        // keyEvents 降順で再ソート
+                        usort( $raw_cv, function( $a, $b ) {
+                            return ( $b['keyEvents'] ?? 0 ) - ( $a['keyEvents'] ?? 0 );
+                        });
+                        $raw_cv = array_slice( $raw_cv, 0, 10 );
+                        foreach ( $raw_cv as $row ) {
+                            $display = $row['dimension'] ?: '（不明なページ）';
+                            if ( $display === '(not set)' || $display === '' ) {
+                                $display = '（不明なページ）';
+                            }
+                            if ( mb_strlen( $display ) > 30 ) {
+                                $display = mb_substr( $display, 0, 30 ) . '…';
+                            }
+                            $items[] = [
+                                'label' => $display,
+                                'value' => (int) ( $row['keyEvents'] ?? 0 ),
+                            ];
                         }
-                        if ( mb_strlen( $display ) > 30 ) {
-                            $display = mb_substr( $display, 0, 30 ) . '…';
+                        $metric = 'keyEvents';
+                    } else {
+                        $site_url = $config['gsc_url'] ?? '';
+                        $raw = $this->ga4->fetch_page_details( $ga4_id, $start, $end, $site_url );
+                        $raw = array_slice( $raw, 0, 10 );
+                        foreach ( $raw as $p ) {
+                            $display = $p['title'] ?: $p['page'];
+                            if ( $display === '(not set)' || $display === '' ) {
+                                $display = '（不明なページ）';
+                            }
+                            if ( mb_strlen( $display ) > 30 ) {
+                                $display = mb_substr( $display, 0, 30 ) . '…';
+                            }
+                            $items[] = [
+                                'label' => $display,
+                                'value' => (int) ( $p['pageViews'] ?? 0 ),
+                            ];
                         }
-                        $items[] = [
-                            'label' => $display,
-                            'value' => (int) ( $p['pageViews'] ?? 0 ),
-                        ];
+                        $metric = 'pageViews';
                     }
-                    $metric = 'pageViews';
                     break;
 
                 case 'source':
                     $raw = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
-                    $channels = array_slice( $raw['channels'] ?? [], 0, 10 );
+                    $channels = $raw['channels'] ?? [];
+                    // CV の場合は conversions 降順で再ソート
+                    if ( $metric === 'cv' ) {
+                        usort( $channels, function( $a, $b ) {
+                            return ( $b['conversions'] ?? 0 ) - ( $a['conversions'] ?? 0 );
+                        });
+                    }
+                    $channels = array_slice( $channels, 0, 10 );
                     foreach ( $channels as $ch ) {
                         $ch_name = $ch['channel'] ?: '（不明）';
+                        $value = $metric === 'cv'
+                            ? (int) ( $ch['conversions'] ?? 0 )
+                            : (int) ( $ch['sessions'] ?? 0 );
                         $items[] = [
                             'label' => $channel_ja[ $ch_name ] ?? $ch_name,
-                            'value' => (int) ( $ch[ $metric ] ?? $ch['sessions'] ),
+                            'value' => $value,
                         ];
                     }
+                    if ( $metric === 'cv' ) { $metric = 'conversions'; }
                     break;
             }
 
