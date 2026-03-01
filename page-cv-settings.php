@@ -82,6 +82,88 @@ get_header();
     color: var(--mw-text-secondary);
     margin-top: 4px;
 }
+
+/* ===== サジェストUI ===== */
+.suggest-wrapper {
+    position: relative;
+}
+.suggest-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: #fff;
+    border: 1px solid var(--mw-border-light);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    max-height: 220px;
+    overflow-y: auto;
+    display: none;
+    margin-top: 2px;
+}
+.suggest-dropdown.open {
+    display: block;
+}
+.suggest-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.suggest-item:hover,
+.suggest-item.highlighted {
+    background: #f0f4f5;
+}
+.suggest-item .event-name {
+    font-family: monospace;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.suggest-item .suggest-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.suggest-item .key-badge {
+    font-size: 10px;
+    color: #3D6B6E;
+    background: #e8f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-weight: 600;
+}
+.suggest-item .event-count {
+    font-size: 11px;
+    color: #999;
+    white-space: nowrap;
+}
+.suggest-empty {
+    padding: 8px 12px;
+    color: #999;
+    font-size: 12px;
+}
+.suggest-spinner {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: #999;
+    pointer-events: none;
+}
+.suggest-error-msg {
+    font-size: 12px;
+    color: #C0392B;
+    margin-top: 4px;
+}
 </style>
 
 <!-- コンテンツエリア -->
@@ -125,15 +207,16 @@ get_header();
 
             <div class="form-group" id="phone-event-row" style="display:none;">
                 <label for="phone-event-name">電話タップのGA4イベント名（常に加算）</label>
-                <input type="text" id="phone-event-name" list="ga4-key-events-list" placeholder="例: phone_tap" data-gcrev-ignore-unsaved="1">
+                <div class="suggest-wrapper">
+                    <input type="text" id="phone-event-name" placeholder="例: phone_tap" data-gcrev-ignore-unsaved="1">
+                    <span class="suggest-spinner" style="display:none;">読み込み中…</span>
+                </div>
                 <small class="phone-event-note">上のチェックがONでも、ここで指定した電話タップイベントは常にCV合計に加算されます</small>
             </div>
 
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" id="btn-save-cv-routes" data-gcrev-ignore-unsaved="1">💾 設定を保存</button>
             </div>
-
-            <datalist id="ga4-key-events-list"></datalist>
         </div>
     </div>
 
@@ -145,87 +228,245 @@ const restBase = '<?php echo esc_js(trailingslashit(rest_url('gcrev_insights/v1'
 const wpNonce  = '<?php echo wp_create_nonce('wp_rest'); ?>';
 const userId   = <?php echo (int) $user_id; ?>;
 
-// GA4キーイベント候補
-let GA4_KEY_EVENTS = {};
-
 // 最大ルート数
 const MAX_ROUTES = 5;
+
+// ===== GA4イベント候補（拡張版） =====
+var GA4_EVENTS_CACHE = [];
+var ga4EventsLoading = false;
+var ga4EventsError   = false;
 
 // ===== ページ読み込み時の初期化 =====
 document.addEventListener('DOMContentLoaded', function() {
     initCvRoutesUI();
+    // 電話タップ入力欄にもサジェストを付与
+    var phoneInput = document.getElementById('phone-event-name');
+    if (phoneInput) { attachSuggest(phoneInput); }
 });
 
 // --- Dirty tracking: 変更があったらボタンを青くする ---
 function markDirty(btnId) {
-    const btn = document.getElementById(btnId);
+    var btn = document.getElementById(btnId);
     if (!btn) return;
     btn.style.backgroundColor = '#3D6B6E';
     btn.style.borderColor = '#3D6B6E';
     btn.style.color = '#fff';
 }
 function markClean(btnId) {
-    const btn = document.getElementById(btnId);
+    var btn = document.getElementById(btnId);
     if (!btn) return;
     btn.style.backgroundColor = '';
     btn.style.borderColor = '';
     btn.style.color = '';
 }
 
-// ===== GA4キーイベント候補を取得してdatalist生成 =====
-async function fetchGa4KeyEvents() {
-    try {
-        const res = await fetch(restBase + 'ga4-key-events?user_id=' + userId + '&_=' + Date.now(), {
-            headers: { 'X-WP-Nonce': wpNonce }
-        });
-        if (!res.ok) return;
-        const json = await res.json();
-        if (json.success && json.data) {
-            GA4_KEY_EVENTS = json.data;
-            const dl = document.getElementById('ga4-key-events-list');
-            if (dl) {
-                dl.innerHTML = '';
-                Object.keys(GA4_KEY_EVENTS).forEach(name => {
-                    const opt = document.createElement('option');
-                    opt.value = name;
-                    opt.textContent = name + ' (' + GA4_KEY_EVENTS[name] + '件)';
-                    dl.appendChild(opt);
-                });
+// ===== GA4イベント候補取得（指数バックオフリトライ付き） =====
+async function fetchGa4Events(retries) {
+    if (typeof retries === 'undefined') retries = 3;
+    ga4EventsLoading = true;
+    ga4EventsError   = false;
+    updateAllSpinners(true);
+
+    for (var attempt = 0; attempt < retries; attempt++) {
+        try {
+            var controller = new AbortController();
+            var tid = setTimeout(function() { controller.abort(); }, 10000);
+
+            var res = await fetch(
+                restBase + 'ga4-key-events?user_id=' + userId + '&_=' + Date.now(),
+                { headers: { 'X-WP-Nonce': wpNonce }, signal: controller.signal }
+            );
+            clearTimeout(tid);
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+
+            var json = await res.json();
+            if (json.success && Array.isArray(json.events)) {
+                GA4_EVENTS_CACHE = json.events;
+                ga4EventsLoading = false;
+                ga4EventsError   = false;
+                updateAllSpinners(false);
+                clearSuggestErrors();
+                return;
+            }
+            throw new Error('Unexpected response');
+        } catch (e) {
+            console.warn('[GCREV] GA4 events fetch attempt ' + (attempt + 1) + ' failed:', e.message);
+            if (attempt < retries - 1) {
+                await new Promise(function(r) { setTimeout(r, 1000 * Math.pow(2, attempt)); });
             }
         }
-    } catch (e) {
-        console.error('GA4 key events load error', e);
     }
+    // 全リトライ失敗
+    ga4EventsLoading = false;
+    ga4EventsError   = true;
+    updateAllSpinners(false);
+    showSuggestErrors();
+}
+
+// ===== スピナー表示制御 =====
+function updateAllSpinners(show) {
+    document.querySelectorAll('.suggest-spinner').forEach(function(el) {
+        el.style.display = show ? 'inline' : 'none';
+    });
+}
+
+// ===== エラーメッセージ表示 =====
+function showSuggestErrors() {
+    // 既存のエラーがなければ追加
+    document.querySelectorAll('.suggest-wrapper').forEach(function(w) {
+        if (!w.querySelector('.suggest-error-msg')) {
+            var msg = document.createElement('div');
+            msg.className = 'suggest-error-msg';
+            msg.textContent = '候補の取得に失敗しました。しばらくして再試行してください。';
+            w.parentNode.insertBefore(msg, w.nextSibling);
+        }
+    });
+}
+function clearSuggestErrors() {
+    document.querySelectorAll('.suggest-error-msg').forEach(function(el) { el.remove(); });
+}
+
+// ===== カスタムサジェストUI =====
+function attachSuggest(input) {
+    var wrapper = input.closest('.suggest-wrapper');
+    if (!wrapper) return;
+
+    var dropdown = wrapper.querySelector('.suggest-dropdown');
+    if (!dropdown) {
+        dropdown = document.createElement('div');
+        dropdown.className = 'suggest-dropdown';
+        wrapper.appendChild(dropdown);
+    }
+
+    var highlightIdx = -1;
+
+    function renderDropdown(filter) {
+        dropdown.innerHTML = '';
+        highlightIdx = -1;
+
+        if (ga4EventsLoading) {
+            dropdown.innerHTML = '<div class="suggest-empty">読み込み中…</div>';
+            dropdown.classList.add('open');
+            return;
+        }
+
+        var items = GA4_EVENTS_CACHE;
+        if (filter) {
+            var f = filter.toLowerCase();
+            items = items.filter(function(e) { return e.name.toLowerCase().indexOf(f) !== -1; });
+        }
+
+        if (items.length === 0) {
+            var emptyText = GA4_EVENTS_CACHE.length === 0
+                ? (ga4EventsError ? '候補の取得に失敗しました' : '候補なし')
+                : '一致する候補がありません';
+            dropdown.innerHTML = '<div class="suggest-empty">' + emptyText + '</div>';
+            dropdown.classList.add('open');
+            return;
+        }
+
+        items.forEach(function(ev, i) {
+            var div = document.createElement('div');
+            div.className = 'suggest-item';
+            div.dataset.index = i;
+
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'event-name';
+            nameSpan.textContent = ev.name;
+            div.appendChild(nameSpan);
+
+            var metaSpan = document.createElement('span');
+            metaSpan.className = 'suggest-meta';
+            if (ev.is_key_event) {
+                var badge = document.createElement('span');
+                badge.className = 'key-badge';
+                badge.textContent = 'キーイベント';
+                metaSpan.appendChild(badge);
+            }
+            if (ev.count > 0) {
+                var cnt = document.createElement('span');
+                cnt.className = 'event-count';
+                cnt.textContent = ev.count + '件';
+                metaSpan.appendChild(cnt);
+            }
+            div.appendChild(metaSpan);
+
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                input.value = ev.name;
+                dropdown.classList.remove('open');
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            dropdown.appendChild(div);
+        });
+
+        dropdown.classList.add('open');
+    }
+
+    input.addEventListener('focus', function() { renderDropdown(input.value); });
+    input.addEventListener('input', function() { renderDropdown(input.value); });
+    input.addEventListener('blur', function() {
+        setTimeout(function() { dropdown.classList.remove('open'); }, 200);
+    });
+    input.addEventListener('keydown', function(e) {
+        var allItems = dropdown.querySelectorAll('.suggest-item');
+        if (!allItems.length) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightIdx = Math.min(highlightIdx + 1, allItems.length - 1);
+            allItems.forEach(function(el, i) { el.classList.toggle('highlighted', i === highlightIdx); });
+            if (allItems[highlightIdx]) allItems[highlightIdx].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightIdx = Math.max(highlightIdx - 1, 0);
+            allItems.forEach(function(el, i) { el.classList.toggle('highlighted', i === highlightIdx); });
+        } else if (e.key === 'Enter' && highlightIdx >= 0 && allItems[highlightIdx]) {
+            e.preventDefault();
+            input.value = GA4_EVENTS_CACHE.filter(function(ev) {
+                var f = input.value.toLowerCase();
+                return !f || ev.name.toLowerCase().indexOf(f) !== -1;
+            })[highlightIdx]?.name || '';
+            dropdown.classList.remove('open');
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (e.key === 'Escape') {
+            dropdown.classList.remove('open');
+        }
+    });
 }
 
 // ===== ルート設定UIの初期化 =====
 async function initCvRoutesUI() {
-    await fetchGa4KeyEvents();
+    // GA4イベント候補をバックグラウンドで取得開始
+    fetchGa4Events();
+
     try {
-        const res = await fetch(restBase + 'actual-cv/routes?_=' + Date.now(), {
+        var res = await fetch(restBase + 'actual-cv/routes?_=' + Date.now(), {
             headers: { 'X-WP-Nonce': wpNonce }
         });
         if (!res.ok) return;
-        const json = await res.json();
+        var json = await res.json();
         if (json.success && Array.isArray(json.data)) {
             renderCvRoutesEditor(json.data);
             updateRoutesCount();
         }
         // チェックボックス・電話タップ設定の復元
-        const chk = document.getElementById('cv-only-configured');
-        const phoneRow = document.getElementById('phone-event-row');
-        const phoneInput = document.getElementById('phone-event-name');
+        var chk = document.getElementById('cv-only-configured');
+        var phoneRow = document.getElementById('phone-event-row');
+        var phoneInput = document.getElementById('phone-event-name');
         if (chk) {
             chk.checked = !!json.cv_only_configured;
             if (phoneRow) phoneRow.style.display = chk.checked ? 'block' : 'none';
-            chk.addEventListener('change', () => {
+            chk.addEventListener('change', function() {
                 if (phoneRow) phoneRow.style.display = chk.checked ? 'block' : 'none';
                 markDirty('btn-save-cv-routes');
             });
         }
         if (phoneInput) {
             phoneInput.value = json.phone_event_name || '';
-            phoneInput.addEventListener('input', () => markDirty('btn-save-cv-routes'));
+            phoneInput.addEventListener('input', function() { markDirty('btn-save-cv-routes'); });
         }
     } catch (e) {
         console.error('CV routes load error', e);
@@ -234,10 +475,10 @@ async function initCvRoutesUI() {
 
 // ===== ルートエディタ描画 =====
 function renderCvRoutesEditor(routes) {
-    const tbody = document.getElementById('cv-routes-rows');
+    var tbody = document.getElementById('cv-routes-rows');
     if (!tbody) return;
     tbody.innerHTML = '';
-    routes.forEach((r, i) => {
+    routes.forEach(function(r, i) {
         addRouteRow(r.route_key, r.label, i + 1);
     });
     markClean('btn-save-cv-routes');
@@ -245,29 +486,36 @@ function renderCvRoutesEditor(routes) {
 
 // ===== 1行追加 =====
 function addRouteRow(eventName, label, order) {
-    const tbody = document.getElementById('cv-routes-rows');
+    var tbody = document.getElementById('cv-routes-rows');
     if (!tbody) return;
-    const currentCount = tbody.querySelectorAll('tr').length;
+    var currentCount = tbody.querySelectorAll('tr').length;
     if (currentCount >= MAX_ROUTES) {
         alert('キーイベントは最大' + MAX_ROUTES + '件まで設定できます');
         return;
     }
-    const tr = document.createElement('tr');
+    var tr = document.createElement('tr');
     tr.draggable = true;
     tr.innerHTML =
         '<td class="drag-handle" title="ドラッグで並べ替え">⠿</td>' +
-        '<td><input type="text" list="ga4-key-events-list" value="' + escAttr(eventName || '') + '" data-field="route_key" placeholder="GA4イベント名を入力..." data-gcrev-ignore-unsaved="1" style="font-family:monospace;font-size:13px;"></td>' +
+        '<td><div class="suggest-wrapper">' +
+            '<input type="text" value="' + escAttr(eventName || '') + '" data-field="route_key" placeholder="GA4イベント名を入力..." data-gcrev-ignore-unsaved="1" style="font-family:monospace;font-size:13px;" autocomplete="off">' +
+            '<span class="suggest-spinner" style="' + (ga4EventsLoading ? '' : 'display:none;') + '">読み込み中…</span>' +
+        '</div></td>' +
         '<td><input type="text" value="' + escAttr(label || '') + '" data-field="label" placeholder="表示ラベル" data-gcrev-ignore-unsaved="1"></td>' +
         '<td style="text-align:center;"><button type="button" class="btn-remove-route" style="background:none;border:none;cursor:pointer;font-size:16px;color:#C0392B;" title="削除">✕</button></td>';
 
+    // サジェストUIをアタッチ
+    var rkInput = tr.querySelector('input[data-field="route_key"]');
+    if (rkInput) { attachSuggest(rkInput); }
+
     // 変更検知
-    tr.querySelectorAll('input').forEach(inp => {
-        inp.addEventListener('change', () => markDirty('btn-save-cv-routes'));
-        inp.addEventListener('input', () => markDirty('btn-save-cv-routes'));
+    tr.querySelectorAll('input').forEach(function(inp) {
+        inp.addEventListener('change', function() { markDirty('btn-save-cv-routes'); });
+        inp.addEventListener('input', function() { markDirty('btn-save-cv-routes'); });
     });
 
     // 削除ボタン
-    tr.querySelector('.btn-remove-route').addEventListener('click', () => {
+    tr.querySelector('.btn-remove-route').addEventListener('click', function() {
         tr.remove();
         markDirty('btn-save-cv-routes');
         updateRoutesCount();
@@ -281,41 +529,41 @@ function addRouteRow(eventName, label, order) {
 }
 
 // ===== ドラッグ＆ドロップ並べ替え =====
-let dragSrcRow = null;
+var dragSrcRow = null;
 
 function setupRowDragEvents(tr) {
-    tr.addEventListener('dragstart', (e) => {
+    tr.addEventListener('dragstart', function(e) {
         dragSrcRow = tr;
         tr.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
     });
-    tr.addEventListener('dragend', () => {
+    tr.addEventListener('dragend', function() {
         tr.classList.remove('dragging');
-        document.querySelectorAll('#cv-routes-rows tr.drag-over').forEach(r => r.classList.remove('drag-over'));
+        document.querySelectorAll('#cv-routes-rows tr.drag-over').forEach(function(r) { r.classList.remove('drag-over'); });
         dragSrcRow = null;
     });
-    tr.addEventListener('dragover', (e) => {
+    tr.addEventListener('dragover', function(e) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         if (dragSrcRow && dragSrcRow !== tr) {
             tr.classList.add('drag-over');
         }
     });
-    tr.addEventListener('dragleave', () => {
+    tr.addEventListener('dragleave', function() {
         tr.classList.remove('drag-over');
     });
-    tr.addEventListener('drop', (e) => {
+    tr.addEventListener('drop', function(e) {
         e.preventDefault();
         tr.classList.remove('drag-over');
         if (!dragSrcRow || dragSrcRow === tr) return;
-        const tbody = tr.parentNode;
-        const rows = [...tbody.querySelectorAll('tr')];
-        const fromIdx = rows.indexOf(dragSrcRow);
-        const toIdx = rows.indexOf(tr);
+        var parentTbody = tr.parentNode;
+        var rows = Array.from(parentTbody.querySelectorAll('tr'));
+        var fromIdx = rows.indexOf(dragSrcRow);
+        var toIdx = rows.indexOf(tr);
         if (fromIdx < toIdx) {
-            tbody.insertBefore(dragSrcRow, tr.nextSibling);
+            parentTbody.insertBefore(dragSrcRow, tr.nextSibling);
         } else {
-            tbody.insertBefore(dragSrcRow, tr);
+            parentTbody.insertBefore(dragSrcRow, tr);
         }
         markDirty('btn-save-cv-routes');
     });
@@ -323,32 +571,32 @@ function setupRowDragEvents(tr) {
 
 // ===== カウンター更新 =====
 function updateRoutesCount() {
-    const tbody = document.getElementById('cv-routes-rows');
-    const counter = document.getElementById('cv-routes-count');
+    var tbody = document.getElementById('cv-routes-rows');
+    var counter = document.getElementById('cv-routes-count');
     if (!tbody || !counter) return;
-    const count = tbody.querySelectorAll('tr').length;
+    var count = tbody.querySelectorAll('tr').length;
     counter.textContent = count + ' / ' + MAX_ROUTES + ' 件';
-    const addBtn = document.getElementById('btn-add-cv-route');
+    var addBtn = document.getElementById('btn-add-cv-route');
     if (addBtn) addBtn.disabled = count >= MAX_ROUTES;
 }
 
 // ===== 追加ボタン =====
-document.getElementById('btn-add-cv-route')?.addEventListener('click', () => {
+document.getElementById('btn-add-cv-route')?.addEventListener('click', function() {
     addRouteRow('', '', 0);
     markDirty('btn-save-cv-routes');
 });
 
 // ===== 保存ボタン =====
-document.getElementById('btn-save-cv-routes')?.addEventListener('click', async () => {
-    const rows = document.querySelectorAll('#cv-routes-rows tr');
-    const routes = [];
-    let hasError = false;
+document.getElementById('btn-save-cv-routes')?.addEventListener('click', async function() {
+    var rows = document.querySelectorAll('#cv-routes-rows tr');
+    var routes = [];
+    var hasError = false;
 
-    rows.forEach((tr, i) => {
-        const rkInput = tr.querySelector('input[data-field="route_key"]');
-        const li = tr.querySelector('input[data-field="label"]');
+    rows.forEach(function(tr, i) {
+        var rkInput = tr.querySelector('input[data-field="route_key"]');
+        var li = tr.querySelector('input[data-field="label"]');
         if (!rkInput) return;
-        const rk = rkInput.value.trim();
+        var rk = rkInput.value.trim();
         if (!rk) { hasError = true; return; }
         routes.push({
             route_key: rk,
@@ -363,13 +611,13 @@ document.getElementById('btn-save-cv-routes')?.addEventListener('click', async (
         return;
     }
 
-    const btn = document.getElementById('btn-save-cv-routes');
-    const origText = btn.textContent;
+    var btn = document.getElementById('btn-save-cv-routes');
+    var origText = btn.textContent;
     btn.textContent = '保存中...';
     btn.disabled = true;
 
     try {
-        const res = await fetch(restBase + 'actual-cv/routes', {
+        var res = await fetch(restBase + 'actual-cv/routes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': wpNonce },
             body: JSON.stringify({
@@ -382,28 +630,28 @@ document.getElementById('btn-save-cv-routes')?.addEventListener('click', async (
         });
 
         if (!res.ok) {
-            const errText = await res.text();
+            var errText = await res.text();
             console.error('[GCREV] Save routes HTTP error:', res.status, errText);
             btn.textContent = '❌ HTTP ' + res.status;
-            setTimeout(() => { btn.textContent = origText; }, 3000);
+            setTimeout(function() { btn.textContent = origText; }, 3000);
             return;
         }
 
-        const json = await res.json();
+        var json = await res.json();
         if (json.success) {
             btn.textContent = '✅ 保存完了';
             markClean('btn-save-cv-routes');
             // 設定を再読み込み
             await initCvRoutesUI();
-            setTimeout(() => { btn.textContent = origText; }, 1500);
+            setTimeout(function() { btn.textContent = origText; }, 1500);
         } else {
             btn.textContent = '❌ ' + (json.message || '保存失敗');
-            setTimeout(() => { btn.textContent = origText; }, 3000);
+            setTimeout(function() { btn.textContent = origText; }, 3000);
         }
     } catch (e) {
         console.error('[GCREV] Save routes error:', e);
         btn.textContent = '❌ エラー';
-        setTimeout(() => { btn.textContent = origText; }, 2000);
+        setTimeout(function() { btn.textContent = origText; }, 2000);
     } finally {
         btn.disabled = false;
     }
@@ -412,7 +660,7 @@ document.getElementById('btn-save-cv-routes')?.addEventListener('click', async (
 // ===== ユーティリティ: HTML属性エスケープ =====
 function escAttr(str) {
     if (!str) return '';
-    const d = document.createElement('div');
+    var d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML.replace(/"/g, '&quot;');
 }

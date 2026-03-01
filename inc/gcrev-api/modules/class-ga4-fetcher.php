@@ -998,7 +998,7 @@ class Gcrev_GA4_Fetcher {
 
     public function fetch_ga4_key_events(string $property_id, string $start, string $end): array {
 
-        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
+        $this->prepare_ga4_call();
         $client = new BetaAnalyticsDataClient();
 
         $request = new RunReportRequest([
@@ -1024,6 +1024,47 @@ class Gcrev_GA4_Fetcher {
         arsort($out);
 
         return $out; // [eventName => count]
+    }
+
+    /**
+     * GA4 Admin API: プロパティに登録されたキーイベント定義一覧を取得
+     *
+     * @param  string $property_id GA4 プロパティ ID
+     * @return array  [['event_name' => string, 'counting_method' => string], ...]
+     */
+    public function fetch_ga4_key_event_definitions(string $property_id): array {
+
+        $sa_path = $this->config->get_service_account_path();
+        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $sa_path);
+
+        $client = new \Google_Client();
+        $client->setAuthConfig($sa_path);
+        $client->addScope('https://www.googleapis.com/auth/analytics.readonly');
+
+        $admin  = new \Google\Service\GoogleAnalyticsAdmin($client);
+        $parent = 'properties/' . $property_id;
+
+        $key_events = [];
+        $pageToken  = null;
+
+        do {
+            $params = ['pageSize' => 200];
+            if ($pageToken) {
+                $params['pageToken'] = $pageToken;
+            }
+            $resp = $admin->properties_keyEvents->listPropertiesKeyEvents($parent, $params);
+
+            foreach ($resp->getKeyEvents() as $ke) {
+                $key_events[] = [
+                    'event_name'      => $ke->getEventName(),
+                    'counting_method' => $ke->getCountingMethod(),
+                ];
+            }
+
+            $pageToken = $resp->getNextPageToken();
+        } while ($pageToken);
+
+        return $key_events;
     }
 
     /**
