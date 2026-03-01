@@ -77,6 +77,48 @@ get_header();
     outline: none; border-color: #3D8B6E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
 }
 
+/* 業種・業態セレクト */
+.industry-group { margin-bottom: 16px; }
+.industry-group label {
+    display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 4px;
+}
+.industry-group select,
+.industry-group input[type="text"] {
+    width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px;
+    font-size: 14px; line-height: 1.5; transition: border-color .2s;
+    background: #fff;
+}
+.industry-group select:focus,
+.industry-group input[type="text"]:focus {
+    outline: none; border-color: #3D8B6E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
+}
+.industry-group select:disabled {
+    background: #f1f5f9; color: #94a3b8; cursor: not-allowed;
+}
+
+/* 業態チェックボックスグリッド */
+.subcategory-grid {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
+    min-height: 36px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 8px;
+    background: #fafafa;
+}
+.subcategory-grid.disabled { background: #f1f5f9; pointer-events: none; opacity: .5; }
+.subcategory-grid .subcategory-item {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 16px;
+    cursor: pointer; font-size: 13px; transition: all .2s; user-select: none;
+}
+.subcategory-grid .subcategory-item:hover { border-color: #94a3b8; background: #f8fafc; }
+.subcategory-grid .subcategory-item.checked {
+    border-color: #3D8B6E; background: #f0fdf4; color: #166534;
+}
+.subcategory-grid .subcategory-item input[type="checkbox"] {
+    accent-color: #3D8B6E; width: 14px; height: 14px; margin: 0;
+}
+.subcategory-placeholder {
+    color: #94a3b8; font-size: 13px; padding: 4px 0;
+}
+
 /* ビジネス形態 */
 .btype-options { display: flex; flex-wrap: wrap; gap: 8px; }
 .btype-option {
@@ -250,9 +292,48 @@ get_header();
         <!-- クライアント情報 -->
         <div class="cs-section">
             <h2 class="cs-section-title"><span class="icon">🏢</span> クライアント情報（任意）</h2>
-            <div class="form-group">
-                <label for="cs-industry">業種・業態</label>
-                <input type="text" id="cs-industry" placeholder="例：歯科医院、美容室、工務店、ECショップ" value="<?php echo esc_attr( $settings['industry'] ?? '' ); ?>">
+
+            <?php
+            $industry_master   = gcrev_get_industry_master();
+            $saved_category    = $settings['industry_category'] ?? '';
+            $saved_subcategory = $settings['industry_subcategory'] ?? [];
+            $saved_detail      = $settings['industry_detail'] ?? '';
+            ?>
+
+            <!-- 業種（大分類） -->
+            <div class="industry-group">
+                <label for="cs-industry-category">業種（任意）</label>
+                <select id="cs-industry-category">
+                    <option value="">選択してください</option>
+                    <?php foreach ( $industry_master as $cat_val => $cat_data ): ?>
+                    <option value="<?php echo esc_attr( $cat_val ); ?>" <?php selected( $saved_category, $cat_val ); ?>><?php echo esc_html( $cat_data['label'] ); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- 業態（小分類 — 複数選択） -->
+            <div class="industry-group">
+                <label>業態（任意）</label>
+                <div class="subcategory-grid <?php echo empty( $saved_category ) ? 'disabled' : ''; ?>" id="subcategoryGrid">
+                    <?php if ( empty( $saved_category ) ): ?>
+                        <span class="subcategory-placeholder">業種を選択してください</span>
+                    <?php else:
+                        $subs = $industry_master[ $saved_category ]['subcategories'] ?? [];
+                        foreach ( $subs as $sub_val => $sub_label ):
+                            $is_checked = in_array( $sub_val, $saved_subcategory, true );
+                    ?>
+                        <label class="subcategory-item <?php echo $is_checked ? 'checked' : ''; ?>">
+                            <input type="checkbox" value="<?php echo esc_attr( $sub_val ); ?>" <?php checked( $is_checked ); ?>>
+                            <?php echo esc_html( $sub_label ); ?>
+                        </label>
+                    <?php endforeach; endif; ?>
+                </div>
+            </div>
+
+            <!-- 詳細 -->
+            <div class="industry-group">
+                <label for="cs-industry-detail">詳細（任意）</label>
+                <input type="text" id="cs-industry-detail" maxlength="160" placeholder="例：小児歯科 / 外壁塗装 / 相続 / ランチ営業中心 など" value="<?php echo esc_attr( $saved_detail ); ?>">
             </div>
 
             <div class="form-group">
@@ -292,6 +373,9 @@ get_header();
     const restBase = '<?php echo esc_js( trailingslashit( rest_url( 'gcrev_insights/v1' ) ) ); ?>';
     const wpNonce  = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
 
+    // === 業種マスターデータ（PHP→JS） ===
+    var industryMaster = <?php echo wp_json_encode( $industry_master, JSON_UNESCAPED_UNICODE ); ?>;
+
     // === 商圏タイプ切替 ===
     const areaOptions = document.querySelectorAll('#areaTypeOptions .area-type-option');
     const subFields   = document.querySelectorAll('.area-sub-field');
@@ -319,6 +403,48 @@ get_header();
         updateAreaType(checkedRadio.value);
     }
 
+    // === 業種 → 業態 カスケード ===
+    var categorySelect   = document.getElementById('cs-industry-category');
+    var subcategoryGrid  = document.getElementById('subcategoryGrid');
+
+    function renderSubcategories(catValue, checkedValues) {
+        subcategoryGrid.innerHTML = '';
+        if (!catValue || !industryMaster[catValue]) {
+            subcategoryGrid.classList.add('disabled');
+            subcategoryGrid.innerHTML = '<span class="subcategory-placeholder">業種を選択してください</span>';
+            return;
+        }
+        subcategoryGrid.classList.remove('disabled');
+        var subs = industryMaster[catValue].subcategories;
+        for (var subVal in subs) {
+            if (!subs.hasOwnProperty(subVal)) continue;
+            var isChecked = checkedValues.indexOf(subVal) !== -1;
+            var lbl = document.createElement('label');
+            lbl.className = 'subcategory-item' + (isChecked ? ' checked' : '');
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = subVal;
+            cb.checked = isChecked;
+            cb.addEventListener('change', function() {
+                this.parentElement.classList.toggle('checked', this.checked);
+            });
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(' ' + subs[subVal]));
+            subcategoryGrid.appendChild(lbl);
+        }
+    }
+
+    categorySelect.addEventListener('change', function() {
+        renderSubcategories(this.value, []);
+    });
+
+    // 業態チェックボックスの初期クリックイベント（PHP レンダリング分）
+    subcategoryGrid.querySelectorAll('.subcategory-item input[type="checkbox"]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            this.parentElement.classList.toggle('checked', this.checked);
+        });
+    });
+
     // === ビジネス形態切替 ===
     var btypeOptions = document.querySelectorAll('#btypeOptions .btype-option');
     btypeOptions.forEach(function(opt) {
@@ -336,7 +462,6 @@ get_header();
             alert('対象サイトURLは必須です。');
             return;
         }
-        // 簡易URLバリデーション
         if (!/^https?:\/\/.+/.test(siteUrl)) {
             alert('URLの形式が正しくありません。https:// から入力してください。');
             return;
@@ -355,7 +480,14 @@ get_header();
 
         var areaCity   = document.getElementById('cs-city-input').value.trim();
         var areaCustom = document.getElementById('cs-area-custom').value.trim();
-        var industry   = document.getElementById('cs-industry').value.trim();
+
+        // 業種3項目
+        var industryCategory = categorySelect.value;
+        var industrySubcategory = [];
+        subcategoryGrid.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
+            industrySubcategory.push(cb.value);
+        });
+        var industryDetail = document.getElementById('cs-industry-detail').value.trim();
 
         var businessType = '';
         var btRadio = document.querySelector('input[name="business_type"]:checked');
@@ -373,20 +505,21 @@ get_header();
                     'X-WP-Nonce': wpNonce
                 },
                 body: JSON.stringify({
-                    site_url:      siteUrl,
-                    area_type:     areaType,
-                    area_pref:     areaPref,
-                    area_city:     areaCity,
-                    area_custom:   areaCustom,
-                    industry:      industry,
-                    business_type: businessType
+                    site_url:               siteUrl,
+                    area_type:              areaType,
+                    area_pref:              areaPref,
+                    area_city:              areaCity,
+                    area_custom:            areaCustom,
+                    industry_category:      industryCategory,
+                    industry_subcategory:   industrySubcategory,
+                    industry_detail:        industryDetail,
+                    business_type:          businessType
                 })
             });
 
             var json = await res.json();
             if (res.ok && json.success) {
                 showToast('クライアント設定を保存しました');
-                // 移行バナーを非表示
                 var banner = document.querySelector('.migration-banner');
                 if (banner) banner.style.display = 'none';
             } else {

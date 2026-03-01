@@ -5457,6 +5457,255 @@ function gcrev_breadcrumb( string $current, ?string $parent = null ): string {
 // ========================================
 
 /**
+ * 業種（大分類）→ 業態（小分類）のマスターデータ
+ *
+ * @return array [ 'category_value' => [ 'label' => '日本語', 'subcategories' => [ 'value' => 'label', ... ] ], ... ]
+ */
+function gcrev_get_industry_master(): array {
+    return [
+        'medical_healthcare' => [
+            'label' => '医療・ヘルスケア',
+            'subcategories' => [
+                'dentistry'         => '歯科医院',
+                'clinic_general'    => '医院・クリニック',
+                'obgyn'             => '産婦人科',
+                'pediatrics'        => '小児科',
+                'ophthalmology'     => '眼科',
+                'dermatology'       => '皮膚科',
+                'orthopedics'       => '整形外科',
+                'psychiatry'        => '心療内科・精神科',
+                'veterinary'        => '動物病院',
+                'osteopathic_clinic'=> '接骨院・整骨院',
+                'acupuncture'       => '鍼灸院',
+                'chiropractic'      => '整体・カイロ',
+                'nursing_facility'  => '介護施設',
+                'home_care'         => '訪問介護・訪問看護',
+                'other_medical'     => 'その他（医療）',
+            ],
+        ],
+        'professional_services' => [
+            'label' => '士業・専門サービス',
+            'subcategories' => [
+                'lawyer'                   => '弁護士',
+                'judicial_scrivener'       => '司法書士',
+                'administrative_scrivener' => '行政書士',
+                'labor_consultant'         => '社会保険労務士',
+                'tax_accounting'           => '税理士・会計',
+                'patent_attorney'          => '弁理士',
+                'sme_consultant'           => '中小企業診断士',
+                'management_consulting'    => 'コンサル（経営）',
+                'it_consulting'            => 'コンサル（IT）',
+                'marketing_consulting'     => 'コンサル（マーケ）',
+                'other_professional'       => 'その他（士業）',
+            ],
+        ],
+        'construction_realestate_home' => [
+            'label' => '建築・不動産・住まい',
+            'subcategories' => [
+                'architect_office'     => '建築設計事務所',
+                'builder'              => '工務店',
+                'house_maker'          => 'ハウスメーカー',
+                'renovation'           => 'リフォーム・リノベ',
+                'real_estate'          => '不動産会社',
+                'property_management'  => '賃貸管理',
+                'exterior'             => '外構・エクステリア',
+                'facility_work'        => '設備工事（電気/水道/空調）',
+                'interior_work'        => '内装工事',
+                'demolition'           => '解体',
+                'other_home'           => 'その他（住まい）',
+            ],
+        ],
+        'food_beverage' => [
+            'label' => '飲食・食品',
+            'subcategories' => [
+                'restaurant'         => 'レストラン',
+                'cafe'               => 'カフェ・喫茶',
+                'izakaya'            => '居酒屋',
+                'bar'                => 'バー',
+                'ramen'              => 'ラーメン',
+                'japanese_food'      => '和食',
+                'western_food'       => '洋食',
+                'chinese_food'       => '中華',
+                'takeout_delivery'   => 'テイクアウト/デリバリー',
+                'food_truck'         => 'キッチンカー',
+                'food_manufacturing' => '食品製造',
+                'other_food'         => 'その他（飲食）',
+            ],
+        ],
+        'retail_ec' => [
+            'label' => '小売・EC',
+            'subcategories' => [
+                'retail_store'     => '小売（実店舗）',
+                'ec_own'           => 'EC（自社）',
+                'ec_marketplace'   => 'EC（モール）',
+                'apparel_retail'   => 'アパレル販売',
+                'goods_gift'       => '雑貨・ギフト',
+                'furniture_retail' => '家具・インテリア販売',
+                'florist'          => '花屋',
+                'pet_retail'       => 'ペット用品販売',
+                'other_retail'     => 'その他（小売）',
+            ],
+        ],
+        'beauty_fashion' => [
+            'label' => '美容・ファッション',
+            'subcategories' => [
+                'hair_salon'    => '美容室',
+                'barber'        => '理容室',
+                'nail'          => 'ネイル',
+                'esthetic'      => 'エステ',
+                'hair_removal'  => '脱毛',
+                'eyelash'       => 'アイラッシュ',
+                'stylist'       => 'パーソナルカラー/スタイリスト',
+                'other_beauty'  => 'その他（美容）',
+            ],
+        ],
+        'education_school' => [
+            'label' => '教育・スクール',
+            'subcategories' => [
+                'cram_school'        => '学習塾',
+                'prep_school'        => '予備校',
+                'online_school'      => 'オンラインスクール',
+                'license_school'     => '資格スクール',
+                'programming_school' => 'プログラミングスクール',
+                'english_school'     => '英会話',
+                'music_school'       => '音楽教室',
+                'sports_school'      => 'スポーツ教室',
+                'childcare'          => '保育園・幼稚園',
+                'training_hrd'       => '研修・人材育成',
+                'other_education'    => 'その他（教育）',
+            ],
+        ],
+        'it_web_creative' => [
+            'label' => 'IT・Web・クリエイティブ',
+            'subcategories' => [
+                'web_production'       => 'Web制作',
+                'system_development'   => 'システム開発',
+                'app_development'      => 'アプリ開発',
+                'saas'                 => 'SaaS提供',
+                'video_production'     => '動画制作',
+                'photography'          => '写真撮影',
+                'design'               => 'デザイン',
+                'ad_agency'            => '広告代理店',
+                'sns_agency'           => 'SNS運用代行',
+                'writing_editing'      => 'ライター/編集',
+                'other_it_creative'    => 'その他（IT/制作）',
+            ],
+        ],
+        'service_business' => [
+            'label' => 'サービス業（店舗・非店舗）',
+            'subcategories' => [
+                'cleaning'           => '清掃',
+                'house_cleaning'     => 'ハウスクリーニング',
+                'housekeeping'       => '家事代行',
+                'handyman'           => '便利屋',
+                'repair_maintenance' => '修理・メンテナンス',
+                'rental'             => 'レンタル',
+                'event_management'   => 'イベント運営',
+                'ceremonial'         => '冠婚葬祭',
+                'photo_studio'       => '写真スタジオ',
+                'other_service'      => 'その他（サービス）',
+            ],
+        ],
+        'tourism_leisure' => [
+            'label' => '観光・レジャー',
+            'subcategories' => [
+                'hotel'              => 'ホテル',
+                'ryokan'             => '旅館',
+                'vacation_rental'    => '民泊',
+                'tourist_attraction' => '観光施設',
+                'hot_springs'        => '温泉施設',
+                'leisure_facility'   => 'レジャー施設',
+                'travel_agency'      => '旅行代理店',
+                'other_tourism'      => 'その他（観光）',
+            ],
+        ],
+        'logistics_transport' => [
+            'label' => '物流・運送',
+            'subcategories' => [
+                'transportation'  => '運送',
+                'delivery'        => '配送',
+                'light_cargo'     => '軽貨物',
+                'warehouse'       => '倉庫',
+                'moving'          => '引越し',
+                'other_logistics' => 'その他（物流）',
+            ],
+        ],
+        'manufacturing' => [
+            'label' => '製造・ものづくり',
+            'subcategories' => [
+                'manufacturing_general' => '製造業（一般）',
+                'metal_processing'      => '金属加工',
+                'wood_furniture'        => '木工・家具製造',
+                'printing'              => '印刷',
+                'manufacturing_food'    => '食品製造',
+                'oem'                   => 'OEM/受託製造',
+                'other_manufacturing'   => 'その他（製造）',
+            ],
+        ],
+        'primary_industry' => [
+            'label' => '農業・水産・一次産業',
+            'subcategories' => [
+                'agriculture'     => '農業',
+                'livestock'       => '畜産',
+                'fishery'         => '水産',
+                'farm_shop'       => '直売所',
+                'sixth_industry'  => '6次産業化',
+                'other_primary'   => 'その他（一次産業）',
+            ],
+        ],
+        'public_nonprofit' => [
+            'label' => '公共・団体・非営利',
+            'subcategories' => [
+                'local_government'     => '自治体',
+                'university'           => '大学・教育機関',
+                'public_organization'  => '公的団体',
+                'npo'                  => 'NPO法人',
+                'association'          => '一般社団法人',
+                'union_association'    => '協会・組合',
+                'other_public'         => 'その他（団体）',
+            ],
+        ],
+        'other' => [
+            'label' => 'その他',
+            'subcategories' => [
+                'other' => 'その他',
+            ],
+        ],
+    ];
+}
+
+/**
+ * 業種・業態の value から日本語ラベルを返す
+ *
+ * @param string $category    業種 value
+ * @param array  $subcategories 業態 value 配列（複数可）
+ * @return string  例: "医療・ヘルスケア（歯科医院, 小児科）"
+ */
+function gcrev_get_industry_label( string $category, array $subcategories = [] ): string {
+    $master = gcrev_get_industry_master();
+    if ( empty( $category ) || ! isset( $master[ $category ] ) ) {
+        return '';
+    }
+
+    $label = $master[ $category ]['label'];
+
+    if ( ! empty( $subcategories ) ) {
+        $sub_labels = [];
+        $sub_map    = $master[ $category ]['subcategories'] ?? [];
+        foreach ( $subcategories as $sub_val ) {
+            if ( isset( $sub_map[ $sub_val ] ) ) {
+                $sub_labels[] = $sub_map[ $sub_val ];
+            }
+        }
+        if ( ! empty( $sub_labels ) ) {
+            $label .= '（' . implode( ', ', $sub_labels ) . '）';
+        }
+    }
+
+    return $label;
+}
+
+/**
  * クライアント固定設定を取得する（1箇所で集約）
  *
  * @param int $user_id ユーザーID（省略時 = 現在のユーザー）
@@ -5467,22 +5716,55 @@ function gcrev_get_client_settings( int $user_id = 0 ): array {
         $user_id = get_current_user_id();
     }
 
+    // 業態（小分類）は JSON 配列で保存
+    $subcategory_raw = get_user_meta( $user_id, 'gcrev_client_industry_subcategory', true );
+    $subcategory     = [];
+    if ( is_array( $subcategory_raw ) ) {
+        $subcategory = $subcategory_raw;
+    } elseif ( is_string( $subcategory_raw ) && $subcategory_raw !== '' ) {
+        $decoded = json_decode( $subcategory_raw, true );
+        $subcategory = is_array( $decoded ) ? $decoded : [];
+    }
+
     $settings = [
-        'site_url'      => get_user_meta( $user_id, 'gcrev_client_site_url', true ),
-        'area_type'     => get_user_meta( $user_id, 'gcrev_client_area_type', true ),
-        'area_pref'     => get_user_meta( $user_id, 'gcrev_client_area_pref', true ),
-        'area_city'     => get_user_meta( $user_id, 'gcrev_client_area_city', true ),
-        'area_custom'   => get_user_meta( $user_id, 'gcrev_client_area_custom', true ),
-        'industry'      => get_user_meta( $user_id, 'gcrev_client_industry', true ),
-        'business_type' => get_user_meta( $user_id, 'gcrev_client_business_type', true ),
+        'site_url'              => get_user_meta( $user_id, 'gcrev_client_site_url', true ),
+        'area_type'             => get_user_meta( $user_id, 'gcrev_client_area_type', true ),
+        'area_pref'             => get_user_meta( $user_id, 'gcrev_client_area_pref', true ),
+        'area_city'             => get_user_meta( $user_id, 'gcrev_client_area_city', true ),
+        'area_custom'           => get_user_meta( $user_id, 'gcrev_client_area_custom', true ),
+        'industry_category'     => get_user_meta( $user_id, 'gcrev_client_industry_category', true ),
+        'industry_subcategory'  => $subcategory,
+        'industry_detail'       => get_user_meta( $user_id, 'gcrev_client_industry_detail', true ),
+        'business_type'         => get_user_meta( $user_id, 'gcrev_client_business_type', true ),
     ];
 
-    // 旧データからのフォールバック（未移行ユーザー対応）
+    // --- 旧データからのフォールバック（未移行ユーザー対応） ---
+    // site_url
     if ( empty( $settings['site_url'] ) ) {
         $legacy_url = get_user_meta( $user_id, 'report_site_url', true );
         if ( ! empty( $legacy_url ) ) {
             $settings['site_url'] = $legacy_url;
         }
+    }
+
+    // 旧 gcrev_client_industry（単一テキスト） → industry_detail にフォールバック
+    if ( empty( $settings['industry_category'] ) && empty( $settings['industry_detail'] ) ) {
+        $legacy_industry = get_user_meta( $user_id, 'gcrev_client_industry', true );
+        if ( ! empty( $legacy_industry ) ) {
+            $settings['industry_detail'] = $legacy_industry;
+        }
+    }
+
+    // 後方互換: industry キーも提供（AI プロンプト等で参照される場合）
+    $settings['industry'] = gcrev_get_industry_label(
+        $settings['industry_category'],
+        $settings['industry_subcategory']
+    );
+    // ラベルが空で detail がある場合は detail をそのまま使う
+    if ( empty( $settings['industry'] ) && ! empty( $settings['industry_detail'] ) ) {
+        $settings['industry'] = $settings['industry_detail'];
+    } elseif ( ! empty( $settings['industry'] ) && ! empty( $settings['industry_detail'] ) ) {
+        $settings['industry'] .= ' / ' . $settings['industry_detail'];
     }
 
     return $settings;

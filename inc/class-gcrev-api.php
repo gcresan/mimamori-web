@@ -1426,7 +1426,30 @@ class Gcrev_Insight_API {
         update_user_meta($user_id, 'gcrev_client_area_pref',      sanitize_text_field($params['area_pref'] ?? ''));
         update_user_meta($user_id, 'gcrev_client_area_city',      sanitize_text_field($params['area_city'] ?? ''));
         update_user_meta($user_id, 'gcrev_client_area_custom',    sanitize_text_field($params['area_custom'] ?? ''));
-        update_user_meta($user_id, 'gcrev_client_industry',       sanitize_text_field($params['industry'] ?? ''));
+
+        // 業種（大分類）— 64文字以内
+        $category = sanitize_text_field($params['industry_category'] ?? '');
+        if (mb_strlen($category) > 64) { $category = mb_substr($category, 0, 64); }
+        update_user_meta($user_id, 'gcrev_client_industry_category', $category);
+
+        // 業態（小分類）— 配列、各 value 64文字以内
+        $subcategory_raw = $params['industry_subcategory'] ?? [];
+        $subcategory = [];
+        if (is_array($subcategory_raw)) {
+            foreach ($subcategory_raw as $v) {
+                $v = sanitize_text_field($v);
+                if ($v !== '' && mb_strlen($v) <= 64) {
+                    $subcategory[] = $v;
+                }
+            }
+        }
+        update_user_meta($user_id, 'gcrev_client_industry_subcategory', $subcategory);
+
+        // 詳細 — 160文字以内
+        $detail = sanitize_text_field($params['industry_detail'] ?? '');
+        if (mb_strlen($detail) > 160) { $detail = mb_substr($detail, 0, 160); }
+        update_user_meta($user_id, 'gcrev_client_industry_detail', $detail);
+
         update_user_meta($user_id, 'gcrev_client_business_type',  sanitize_text_field($params['business_type'] ?? ''));
 
         error_log("[GCREV] Client settings saved for user_id={$user_id}, site_url={$site_url}");
