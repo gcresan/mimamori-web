@@ -86,12 +86,27 @@
          <div class="nav-section">
             <div class="nav-section-title">分析</div>
             <ul class="nav-menu">
+               <!-- 最新月次レポート（独立リンク） -->
                <li class="nav-item">
                   <a href="<?php echo home_url('/report/report-latest/'); ?>" class="nav-link <?php echo is_page('report-latest') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 2.5V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 11h5M7.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
                   <span>最新月次レポート</span>
                   </a>
-                  <ul class="nav-submenu">
+               </li>
+
+               <!-- 集客のようす（折りたたみ親） -->
+               <?php
+               $analysis_pages = array('analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
+               $analysis_child_active = false;
+               foreach ($analysis_pages as $_ap) { if (is_page($_ap)) { $analysis_child_active = true; break; } }
+               ?>
+               <li class="nav-item nav-item-collapsible<?php echo $analysis_child_active ? ' child-active' : ''; ?>">
+                  <button type="button" class="nav-link nav-link-toggle<?php echo $analysis_child_active ? ' active' : ''; ?>" id="navToggleAnalysis" aria-expanded="true">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 10h14M10 3v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="5" cy="5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="5" cy="15" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="15" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg></span>
+                  <span>集客のようす</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuAnalysis">
                      <li class="nav-item">
                         <a href="<?php echo home_url('/analysis/analysis-device/'); ?>" class="nav-link <?php echo is_page('analysis-device') ? 'active' : ''; ?>">
                         <span>スマホとパソコンの割合</span>
@@ -127,20 +142,24 @@
                         <span>お問い合わせの数</span>
                         </a>
                      </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
-                        <span>CVログ精査</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/analysis/cv-settings/'); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
-                        <span>CV設定</span>
-                        </a>
-                     </li>
                   </ul>
                </li>
 
+               <!-- CVログ精査（独立リンク） -->
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 5h14M3 10h14M3 15h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M15 13l2 2-2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span>CVログ精査</span>
+                  </a>
+               </li>
 
+               <!-- CV設定（独立リンク） -->
+               <li class="nav-item">
+                  <a href="<?php echo home_url('/analysis/cv-settings/'); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+                  <span>CV設定</span>
+                  </a>
+               </li>
             </ul>
          </div>
          <!-- C. MEO（Googleビジネス） -->

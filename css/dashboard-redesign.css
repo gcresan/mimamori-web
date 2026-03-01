@@ -238,6 +238,29 @@ h3 { font-size: 19px; font-weight: 600; }
   font-size: 14px;
 }
 
+/* 折りたたみトグル（集客のようす） */
+.nav-link-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: #333333;
+}
+.nav-toggle-arrow {
+  margin-left: auto;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+.nav-item-collapsible.collapsed .nav-toggle-arrow {
+  transform: rotate(-90deg);
+}
+.nav-item-collapsible.collapsed .nav-submenu {
+  display: none;
+}
+
 /* ========== Main Wrapper ========== */
 .main-content {
   background: var(--mw-bg-secondary);

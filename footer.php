@@ -29,6 +29,16 @@ document.addEventListener('DOMContentLoaded', function() {
             sidebarOverlay.classList.remove('active');
         });
     }
+
+    // 集客のようす 折りたたみトグル
+    var navToggleBtn = document.getElementById('navToggleAnalysis');
+    if (navToggleBtn) {
+        navToggleBtn.addEventListener('click', function() {
+            var parent = this.closest('.nav-item-collapsible');
+            var isCollapsed = parent.classList.toggle('collapsed');
+            this.setAttribute('aria-expanded', !isCollapsed);
+        });
+    }
 // 期間切替ボタン（ダッシュボード専用）
 // ダッシュボードのKPI期間切替だけ有効化（分析ページと干渉させない）
 if (typeof updateKPIData === 'function') {

@@ -40,7 +40,7 @@ get_header();
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
             <div class="spinner"></div>
-            <p>CV分析データを取得中...</p>
+            <p>お問い合わせ分析データを取得中...</p>
         </div>
     </div>
 
@@ -57,8 +57,8 @@ get_template_part('template-parts/analysis-help');
     <details class="cv-methodology-details">
         <summary>この分析の見方・計算方法</summary>
         <div class="cv-methodology-content">
-            <strong>「CV」ってなに？</strong>
-            <p>CV（コンバージョン）とは、お問い合わせ・電話・予約など「成果につながったアクション」のことです。<br>
+            <strong>「お問い合わせ」ってなに？</strong>
+            <p>お問い合わせ（コンバージョン）とは、電話・予約・フォーム送信など「成果につながったアクション」のことです。<br>
             このページでは、その成果が<strong>どこから来た人によるものか</strong>を分析しています。</p>
 
             <strong>なぜGA4（Googleアナリティクス）の数字と違うの？</strong>
@@ -69,10 +69,10 @@ get_template_part('template-parts/analysis-help');
             <ul>
                 <li>まず、実際に届いた問い合わせ件数（手動で入力した確定値）を「正しい数」として使います</li>
                 <li>次に「検索から何%、SNSから何%」というGA4の割合だけを借りて、確定値を振り分けます</li>
-                <li>そのため、<strong>各項目の合計は実際のCV件数とピッタリ一致</strong>します</li>
+                <li>そのため、<strong>各項目の合計は実際のお問い合わせ件数とピッタリ一致</strong>します</li>
             </ul>
             <div class="cv-methodology-caveat">
-                手動のCV入力がまだの場合や、GA4のデータが取れない場合は、GA4の数値をそのまま表示します。
+                手動のお問い合わせ入力がまだの場合や、GA4のデータが取れない場合は、GA4の数値をそのまま表示します。
             </div>
         </div>
     </details>
@@ -80,19 +80,19 @@ get_template_part('template-parts/analysis-help');
     <!-- ② CVサマリー -->
     <div class="cv-summary-grid" id="cvSummaryGrid">
         <div class="cv-summary-card">
-            <div class="cv-summary-label">今月のCV数</div>
+            <div class="cv-summary-label">今月のお問い合わせ数</div>
             <div class="cv-summary-value" id="cvTotalValue">-<span class="cv-summary-unit">件</span></div>
             <div class="cv-summary-change neutral" id="cvTotalChange">-</div>
             <div class="cv-summary-comment" id="cvTotalComment">データを読み込み中...</div>
         </div>
         <div class="cv-summary-card">
-            <div class="cv-summary-label">CV率</div>
+            <div class="cv-summary-label">お問い合わせ率</div>
             <div class="cv-summary-value" id="cvRateValue">-<span class="cv-summary-unit">%</span></div>
             <div class="cv-summary-change neutral" id="cvRateChange">-</div>
             <div class="cv-summary-comment" id="cvRateComment">データを読み込み中...</div>
         </div>
         <div class="cv-summary-card highlight" id="cvBestCard">
-            <div class="cv-summary-label">最もCV貢献した項目</div>
+            <div class="cv-summary-label">最もお問い合わせに貢献した項目</div>
             <div class="cv-summary-value" id="cvBestValue" style="font-size: 32px;">-</div>
             <div class="cv-summary-change neutral" id="cvBestBadge">-</div>
             <div class="cv-summary-comment" id="cvBestComment">データを読み込み中...</div>
@@ -102,7 +102,7 @@ get_template_part('template-parts/analysis-help');
     <!-- CV構成比較（手動オーバーライド時のみ表示） -->
     <div class="cv-compare-box" id="cvCompareBox" style="display:none;">
         <div class="cv-compare-item">
-            <div class="cv-compare-item-label">📝 手動入力CV</div>
+            <div class="cv-compare-item-label">📝 手動入力お問い合わせ</div>
             <div class="cv-compare-item-value" id="cvActualTotal">-</div>
         </div>
         <div class="cv-compare-divider"></div>
@@ -112,7 +112,7 @@ get_template_part('template-parts/analysis-help');
         </div>
         <div class="cv-compare-divider"></div>
         <div class="cv-compare-item">
-            <div class="cv-compare-item-label">🎯 確定CV合計</div>
+            <div class="cv-compare-item-label">🎯 確定お問い合わせ合計</div>
             <div class="cv-compare-item-value" id="cvEffectiveTotal" style="color:#3D6B6E;">-</div>
         </div>
     </div>
@@ -122,11 +122,11 @@ get_template_part('template-parts/analysis-help');
         <div class="cv-analysis-card">
             <div class="cv-analysis-header">
                 <div class="cv-analysis-title">
-                    🔍 見つけたきっかけ別 × CV分析
+                    🔍 見つけたきっかけ別 × お問い合わせ分析
                     <span class="cv-analysis-badge important">重要</span>
                 </div>
                 <div class="cv-tab-toggle" id="sourceTabToggle" style="display:none;">
-                    <button class="cv-tab-btn active" data-mode="realloc">再配分CV</button>
+                    <button class="cv-tab-btn active" data-mode="realloc">再配分お問い合わせ</button>
                     <button class="cv-tab-btn" data-mode="ga4">GA4値（参考）</button>
                 </div>
             </div>
@@ -141,8 +141,8 @@ get_template_part('template-parts/analysis-help');
                     <tr>
                         <th>見つけたきっかけ</th>
                         <th class="number">セッション数</th>
-                        <th class="number">CV数 <span class="help-icon" data-tip="確定CVをGA4のキーイベント比率で按分した値です">?</span></th>
-                        <th class="number">CV率</th>
+                        <th class="number">お問い合わせ数 <span class="help-icon" data-tip="確定お問い合わせ数をGA4のキーイベント比率で按分した値です">?</span></th>
+                        <th class="number">お問い合わせ率</th>
                     </tr>
                 </thead>
                 <tbody id="sourceCvTableBody">
@@ -161,11 +161,11 @@ get_template_part('template-parts/analysis-help');
         <div class="cv-analysis-card">
             <div class="cv-analysis-header">
                 <div class="cv-analysis-title">
-                    📱 デバイス別 × CV分析
+                    📱 デバイス別 × お問い合わせ分析
                     <span class="cv-analysis-badge recommend">改善ポイント</span>
                 </div>
                 <div class="cv-tab-toggle" id="deviceTabToggle" style="display:none;">
-                    <button class="cv-tab-btn active" data-mode="realloc">再配分CV</button>
+                    <button class="cv-tab-btn active" data-mode="realloc">再配分お問い合わせ</button>
                     <button class="cv-tab-btn" data-mode="ga4">GA4値（参考）</button>
                 </div>
             </div>
@@ -245,7 +245,7 @@ async function loadCvData(period) {
         const result = await response.json();
 
         if (!result.success) {
-            throw new Error(result.message || 'CV分析データの取得に失敗しました');
+            throw new Error(result.message || 'お問い合わせ分析データの取得に失敗しました');
         }
 
         currentCvData = result.data;
@@ -261,7 +261,7 @@ async function loadCvData(period) {
 
     } catch (error) {
         console.error('CV分析データ取得エラー:', error);
-        alert('CV分析データの取得に失敗しました。もう一度お試しください。');
+        alert('お問い合わせ分析データの取得に失敗しました。もう一度お試しください。');
     } finally {
         hideLoading();
     }
@@ -336,7 +336,7 @@ function renderCvSummary(data) {
     document.getElementById('cvRateComment').textContent =
         cvr >= 3 ? '業界平均を上回る良好な数値です' :
         cvr >= 1 ? '業界平均程度の数値です' :
-        'CV率改善の余地があります';
+        'お問い合わせ率改善の余地があります';
 
     // 最もCV貢献した項目
     const bestSource = findBestCvSource(data);
@@ -345,7 +345,7 @@ function renderCvSummary(data) {
     bestBadge.className = 'cv-summary-change up';
     bestBadge.style.background = '#3D6B6E';
     bestBadge.style.color = '#fff';
-    bestBadge.textContent = 'CV率 ' + bestSource.cvr.toFixed(1) + '%';
+    bestBadge.textContent = 'お問い合わせ率 ' + bestSource.cvr.toFixed(1) + '%';
     document.getElementById('cvBestComment').textContent = bestSource.comment;
 }
 
@@ -359,7 +359,7 @@ function findBestCvSource(data) {
             best = {
                 label: translateChannel(s.label),
                 cvr: cvr,
-                comment: translateChannel(s.label) + '経由は高いCV率を実現'
+                comment: translateChannel(s.label) + '経由は高いお問い合わせ率を実現'
             };
         }
     });
@@ -372,7 +372,7 @@ function findBestCvSource(data) {
                 best = {
                     label: translateDevice(d.label),
                     cvr: cvr,
-                    comment: translateDevice(d.label) + 'からのCV率が最も高い'
+                    comment: translateDevice(d.label) + 'からのお問い合わせ率が最も高い'
                 };
             }
         });
@@ -429,7 +429,7 @@ function renderDeviceCv(data) {
                 <div class="cv-data-item" style="border-left-color:${color}">
                     <div class="cv-data-item-label">${icon} ${d.label}</div>
                     <div class="cv-data-item-value">${fmtNum(d.allocatedCv)}件</div>
-                    <div class="cv-data-item-sub">CV率: ${d.cvr.toFixed(1)}% | セッション: ${fmtNum(d.sessions)}</div>
+                    <div class="cv-data-item-sub">お問い合わせ率: ${d.cvr.toFixed(1)}% | セッション: ${fmtNum(d.sessions)}</div>
                 </div>
             `;
         }).join('');
@@ -458,14 +458,14 @@ function renderDeviceCv(data) {
             const totalSessions = deviceData.reduce((s,d) => s + d.sessions, 0) || 1;
             const mobileShare = mobile.sessions / totalSessions * 100;
             if (mobileShare > 50 && mobile.cvr < desktop.cvr) {
-                insight = `スマホ流入が全体の${mobileShare.toFixed(0)}%を占めますがCV率はPCより低い状態です。スマホでの電話ボタン常時表示やフォーム入力の簡略化でCV率向上が期待できます。`;
+                insight = `スマホ流入が全体の${mobileShare.toFixed(0)}%を占めますがお問い合わせ率はPCより低い状態です。スマホでの電話ボタン常時表示やフォーム入力の簡略化でお問い合わせ率向上が期待できます。`;
             } else if (mobile.cvr > desktop.cvr) {
-                insight = `スマホのCV率がPCを上回っています。モバイルファーストの施策が功を奏しています。`;
+                insight = `スマホのお問い合わせ率がPCを上回っています。モバイルファーストの施策が功を奏しています。`;
             } else {
-                insight = `PC・スマホともにCV率は同等です。各デバイスに適したCTA配置で更なる改善が見込めます。`;
+                insight = `PC・スマホともにお問い合わせ率は同等です。各デバイスに適したCTA配置で更なる改善が見込めます。`;
             }
         } else {
-            insight = 'デバイス別のCV分析結果です。各デバイスに適したCTA配置でCV率改善が見込めます。';
+            insight = 'デバイス別のお問い合わせ分析結果です。各デバイスに適したCTA配置でお問い合わせ率改善が見込めます。';
         }
         document.getElementById('deviceCvInsightText').textContent = insight;
     } else {
@@ -491,14 +491,14 @@ function renderDeviceCvChart(deviceData) {
             labels,
             datasets: [
                 {
-                    label: 'CV数',
+                    label: 'お問い合わせ数',
                     data: cvData,
                     backgroundColor: bgColors,
                     borderRadius: 8,
                     yAxisID: 'y',
                 },
                 {
-                    label: 'CV率(%)',
+                    label: 'お問い合わせ率(%)',
                     data: cvrData,
                     type: 'line',
                     borderColor: '#B5574B',
@@ -516,8 +516,8 @@ function renderDeviceCvChart(deviceData) {
                 legend: { position: 'top', labels: { boxWidth: 12, padding: 15, font: { size: 13, weight: '600' } } },
             },
             scales: {
-                y:  { beginAtZero: true, position: 'left',  title: { display: true, text: 'CV数' }, grid: { color: '#f3f4f6' } },
-                y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'CV率(%)' }, grid: { drawOnChartArea: false } },
+                y:  { beginAtZero: true, position: 'left',  title: { display: true, text: 'お問い合わせ数' }, grid: { color: '#f3f4f6' } },
+                y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'お問い合わせ率(%)' }, grid: { drawOnChartArea: false } },
             }
         }
     });
@@ -577,7 +577,7 @@ function renderSourceCv(data) {
     if (best) {
         document.getElementById('sourceCvInsight').style.display = 'block';
         document.getElementById('sourceCvInsightText').textContent =
-            `${best.label}経由はCV率${best.cvr.toFixed(2)}%ともっとも効率が良い経路です。この「見つけたきっかけ」を強化すると、効率的なCV獲得が期待できます。`;
+            `${best.label}経由はお問い合わせ率${best.cvr.toFixed(2)}%ともっとも効率が良い経路です。この「見つけたきっかけ」を強化すると、効率的なお問い合わせ獲得が期待できます。`;
     }
 }
 
@@ -596,14 +596,14 @@ function renderSourceCvChart(sourceData) {
             labels: sourceData.map(s => s.label),
             datasets: [
                 {
-                    label: 'CV数',
+                    label: 'お問い合わせ数',
                     data: sourceData.map(s => s.allocatedCv),
                     backgroundColor: bgColors,
                     borderRadius: 8,
                     yAxisID: 'y',
                 },
                 {
-                    label: 'CV率(%)',
+                    label: 'お問い合わせ率(%)',
                     data: sourceData.map(s => s.cvr),
                     type: 'line',
                     borderColor: '#B5574B',
@@ -617,8 +617,8 @@ function renderSourceCvChart(sourceData) {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 15, font: { size: 13, weight: '600' } } } },
             scales: {
-                y:  { beginAtZero: true, position: 'left',  title: { display: true, text: 'CV数' }, grid: { color: '#f3f4f6' } },
-                y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'CV率(%)' }, grid: { drawOnChartArea: false } },
+                y:  { beginAtZero: true, position: 'left',  title: { display: true, text: 'お問い合わせ数' }, grid: { color: '#f3f4f6' } },
+                y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'お問い合わせ率(%)' }, grid: { drawOnChartArea: false } },
             }
         }
     });
