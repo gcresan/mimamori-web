@@ -12,14 +12,14 @@ $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
 
 // ページタイトル設定
-set_query_var('gcrev_page_title', 'CV設定');
+set_query_var('gcrev_page_title', '問い合わせの数え方設定');
 
 // パンくず設定
 $breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
 $breadcrumb .= '<span>›</span>';
 $breadcrumb .= '<a href="' . esc_url(home_url('/analysis/')) . '">分析</a>';
 $breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>CV設定</strong>';
+$breadcrumb .= '<strong>問い合わせの数え方設定</strong>';
 set_query_var('gcrev_breadcrumb', $breadcrumb);
 
 get_header();

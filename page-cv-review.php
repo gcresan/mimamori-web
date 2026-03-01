@@ -9,13 +9,12 @@ if (!is_user_logged_in()) {
 }
 
 // パンくず設定
-set_query_var('gcrev_page_title', 'CVログ精査');
-set_query_var('gcrev_page_subtitle', 'GA4コンバージョンイベントの精査');
+set_query_var('gcrev_page_title', '問い合わせの実数調整');
 $breadcrumb = '<a href="' . esc_url(home_url()) . '">ホーム</a>';
 $breadcrumb .= '<span>›</span>';
 $breadcrumb .= '<a href="' . esc_url(home_url('/dashboard/')) . '">全体のようす</a>';
 $breadcrumb .= '<span>›</span>';
-$breadcrumb .= '<strong>CVログ精査</strong>';
+$breadcrumb .= '<strong>問い合わせの実数調整</strong>';
 set_query_var('gcrev_breadcrumb', $breadcrumb);
 
 get_header();
