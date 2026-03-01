@@ -5589,7 +5589,6 @@ function gcrev_get_industry_master(): array {
                 'sns_agency'           => 'SNS運用代行',
                 'writing_editing'      => 'ライター/編集',
                 'web_consulting'       => 'Webコンサルティング',
-                'consulting'           => 'コンサルティング',
                 'other_it_creative'    => 'その他（IT/制作）',
             ],
         ],
