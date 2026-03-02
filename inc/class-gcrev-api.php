@@ -5494,6 +5494,225 @@ PROMPT;
         ];
     }
 
+    /**
+     * source_medium 文字列 → 日本語チャネル名にマッピング
+     * cv_review の source_medium は "google / organic" 形式
+     */
+    private function map_source_medium_to_channel(string $source_medium): string {
+        $parts  = array_map( 'trim', explode( '/', $source_medium, 2 ) );
+        $source = strtolower( $parts[0] ?? '' );
+        $medium = strtolower( $parts[1] ?? '' );
+
+        if ( $source === '(direct)' && ( $medium === '(none)' || $medium === '(not set)' || $medium === '' ) ) {
+            return '直接';
+        }
+        if ( $medium === 'organic' ) {
+            return '検索（自然）';
+        }
+        if ( in_array( $medium, [ 'cpc', 'ppc', 'paid', 'paidsearch' ], true ) ) {
+            return '検索（広告）';
+        }
+        if ( in_array( $medium, [ 'social', 'social-network', 'social_network' ], true ) ) {
+            return 'SNS';
+        }
+        if ( $medium === 'referral' ) {
+            return '他サイト';
+        }
+        if ( $medium === 'email' ) {
+            return 'メール';
+        }
+        if ( in_array( $medium, [ 'display', 'cpm', 'banner' ], true ) ) {
+            return 'ディスプレイ広告';
+        }
+        if ( $source === '(not set)' || ( $source === '' && $medium === '' ) ) {
+            return '（不明）';
+        }
+        // 地図検索
+        if ( strpos( $source, 'google' ) !== false && strpos( $medium, 'maps' ) !== false ) {
+            return '地図検索';
+        }
+
+        return trim( $source_medium );
+    }
+
+    /**
+     * 確定CV（cv_review status=1）のドリルダウン内訳を取得
+     *
+     * @param int    $user_id
+     * @param string $year_month  "YYYY-MM"
+     * @param string $type        "region"|"page"|"source"
+     * @param array  $region_ja   英→日 地域名マップ
+     * @param string $ga4_id      GA4プロパティID（region の再配分用）
+     * @param string $start       月初日
+     * @param string $end         月末日
+     * @return array  [ items => [...], metric_key => string ]
+     */
+    private function get_confirmed_cv_drilldown(
+        int    $user_id,
+        string $year_month,
+        string $type,
+        array  $region_ja,
+        string $ga4_id,
+        string $start,
+        string $end
+    ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_cv_review';
+        $items = [];
+
+        // cv_review テーブルが存在しない場合は空
+        if ( ! $this->table_exists( $table ) ) {
+            return [ 'items' => [], 'metric_key' => 'conversions' ];
+        }
+
+        switch ( $type ) {
+
+            // ── 地域（region）──
+            // cv_review は country のみ（都道府県なし）のため、GA4 地域データを重みとして再配分
+            case 'region':
+                // 確定CV合計
+                $confirmed_total = (int) $wpdb->get_var( $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND year_month = %s AND status = 1",
+                    $user_id, $year_month
+                ) );
+                if ( $confirmed_total === 0 ) {
+                    return [ 'items' => [], 'metric_key' => 'conversions' ];
+                }
+
+                // GA4 地域別 conversions を取得（重みとして使用）
+                $raw = $this->ga4->fetch_region_details( $ga4_id, $start, $end );
+                $total_ga4_cv = 0;
+                foreach ( $raw as $r ) {
+                    $total_ga4_cv += (int) ( $r['conversions'] ?? 0 );
+                }
+
+                if ( $total_ga4_cv > 0 ) {
+                    // GA4 conversions 比率で確定CV を按分
+                    $allocated = [];
+                    foreach ( $raw as $r ) {
+                        $cv = (int) ( $r['conversions'] ?? 0 );
+                        if ( $cv <= 0 ) continue;
+                        $region_name = $r['region'] ?: '';
+                        if ( $region_name === '' || $region_name === '(not set)' ) {
+                            $region_name = '（不明）';
+                        } else {
+                            $region_name = $region_ja[ $region_name ] ?? $region_name;
+                        }
+                        $allocated[ $region_name ] = $cv / $total_ga4_cv;
+                    }
+
+                    // 最大剰余法で按分
+                    $result = [];
+                    $floor_total = 0;
+                    $remainders  = [];
+                    foreach ( $allocated as $name => $ratio ) {
+                        $exact = $confirmed_total * $ratio;
+                        $floor = (int) floor( $exact );
+                        $floor_total += $floor;
+                        $remainders[ $name ] = [ 'floor' => $floor, 'remainder' => $exact - $floor ];
+                    }
+                    $leftover = $confirmed_total - $floor_total;
+                    // 剰余の大きい順に +1
+                    uasort( $remainders, function( $a, $b ) {
+                        return $b['remainder'] <=> $a['remainder'];
+                    });
+                    foreach ( $remainders as $name => &$r ) {
+                        $r['final'] = $r['floor'];
+                        if ( $leftover > 0 ) {
+                            $r['final']++;
+                            $leftover--;
+                        }
+                    }
+                    unset( $r );
+
+                    // 最終値で items 構築（0除外、降順）
+                    $temp = [];
+                    foreach ( $remainders as $name => $data ) {
+                        if ( $data['final'] > 0 ) {
+                            $temp[] = [ 'label' => $name, 'value' => $data['final'] ];
+                        }
+                    }
+                    usort( $temp, function( $a, $b ) { return $b['value'] - $a['value']; } );
+                    $items = array_slice( $temp, 0, 10 );
+                }
+                return [ 'items' => $items, 'metric_key' => 'conversions' ];
+
+            // ── 入口ページ（page）──
+            // cv_review の page_path を直接集計。/thanks/ /confirm/ 等を除外、0件非表示
+            case 'page':
+                $exclude_patterns = [ '/thanks', '/confirm', '/complete', '/finish', '/done' ];
+                $exclude_sql = '';
+                $prepare_args = [ $user_id, $year_month ];
+                foreach ( $exclude_patterns as $pattern ) {
+                    $exclude_sql .= ' AND page_path NOT LIKE %s';
+                    $prepare_args[] = '%' . $wpdb->esc_like( $pattern ) . '%';
+                }
+
+                $sql = "SELECT page_path, SUM(event_count) AS cv_count
+                        FROM {$table}
+                        WHERE user_id = %d AND year_month = %s AND status = 1
+                        {$exclude_sql}
+                        GROUP BY page_path
+                        HAVING cv_count > 0
+                        ORDER BY cv_count DESC
+                        LIMIT 10";
+
+                $rows = $wpdb->get_results(
+                    $wpdb->prepare( $sql, ...$prepare_args ),
+                    ARRAY_A
+                );
+
+                foreach ( $rows as $row ) {
+                    $display = $row['page_path'] ?: '（不明なページ）';
+                    if ( $display === '(not set)' || $display === '' ) {
+                        $display = '（不明なページ）';
+                    }
+                    if ( mb_strlen( $display ) > 30 ) {
+                        $display = mb_substr( $display, 0, 30 ) . '…';
+                    }
+                    $items[] = [
+                        'label' => $display,
+                        'value' => (int) $row['cv_count'],
+                    ];
+                }
+                return [ 'items' => $items, 'metric_key' => 'conversions' ];
+
+            // ── 流入元（source）──
+            // cv_review の source_medium を集計し、チャネル名にマッピング
+            case 'source':
+                $rows = $wpdb->get_results( $wpdb->prepare(
+                    "SELECT source_medium, SUM(event_count) AS cv_count
+                     FROM {$table}
+                     WHERE user_id = %d AND year_month = %s AND status = 1
+                     GROUP BY source_medium
+                     ORDER BY cv_count DESC",
+                    $user_id, $year_month
+                ), ARRAY_A );
+
+                // チャネル名にマッピングし、同一チャネルを集約
+                $channel_totals = [];
+                foreach ( $rows as $row ) {
+                    $ch_name = $this->map_source_medium_to_channel( $row['source_medium'] ?? '' );
+                    $channel_totals[ $ch_name ] = ( $channel_totals[ $ch_name ] ?? 0 ) + (int) $row['cv_count'];
+                }
+                // 降順ソート
+                arsort( $channel_totals );
+                $channel_totals = array_slice( $channel_totals, 0, 10, true );
+
+                foreach ( $channel_totals as $ch_name => $count ) {
+                    if ( $count > 0 ) {
+                        $items[] = [
+                            'label' => $ch_name,
+                            'value' => $count,
+                        ];
+                    }
+                }
+                return [ 'items' => $items, 'metric_key' => 'conversions' ];
+        }
+
+        return [ 'items' => [], 'metric_key' => 'conversions' ];
+    }
+
     private function check_has_actual_cv(string $year_month, int $user_id): bool {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_actual_cvs';
@@ -6652,61 +6871,34 @@ PROMPT;
                 'Okinawa'   => '沖縄県',
             ];
 
-            switch ( $type ) {
-                case 'region':
-                    $raw = $this->ga4->fetch_region_details( $ga4_id, $start, $end );
-                    // CV の場合は conversions 降順で再ソート（GA4は sessions 降順）
-                    if ( $metric === 'cv' ) {
-                        usort( $raw, function( $a, $b ) {
-                            return ( $b['conversions'] ?? 0 ) - ( $a['conversions'] ?? 0 );
-                        });
-                    }
-                    $raw = array_slice( $raw, 0, 10 );
-                    foreach ( $raw as $r ) {
-                        $region_name = $r['region'] ?: '';
-                        if ( $region_name === '' || $region_name === '(not set)' ) {
-                            $region_name = '（不明）';
-                        } else {
-                            $region_name = $region_ja[ $region_name ] ?? $region_name;
-                        }
-                        $value = $metric === 'cv'
-                            ? (int) ( $r['conversions'] ?? 0 )
-                            : (int) ( $r['sessions'] ?? 0 );
-                        $items[] = [
-                            'label' => $region_name,
-                            'value' => $value,
-                        ];
-                    }
-                    if ( $metric === 'cv' ) { $metric = 'conversions'; }
-                    break;
-
-                case 'page':
-                    if ( $metric === 'cv' ) {
-                        // CV: fetch_page_details は conversions を返さないため
-                        //     fetch_cv_by_dimension('pagePath') を使用
-                        $client   = new BetaAnalyticsDataClient(['credentials' => $this->service_account_path]);
-                        $property = 'properties/' . $ga4_id;
-                        $raw_cv   = $this->fetch_cv_by_dimension( $client, $property, 'pagePath', $start, $end );
-                        // keyEvents 降順で再ソート
-                        usort( $raw_cv, function( $a, $b ) {
-                            return ( $b['keyEvents'] ?? 0 ) - ( $a['keyEvents'] ?? 0 );
-                        });
-                        $raw_cv = array_slice( $raw_cv, 0, 10 );
-                        foreach ( $raw_cv as $row ) {
-                            $display = $row['dimension'] ?: '（不明なページ）';
-                            if ( $display === '(not set)' || $display === '' ) {
-                                $display = '（不明なページ）';
-                            }
-                            if ( mb_strlen( $display ) > 30 ) {
-                                $display = mb_substr( $display, 0, 30 ) . '…';
+            // ── ゴール数（CV）は確定CVデータ（cv_review status=1）を使用 ──
+            if ( $metric === 'cv' ) {
+                $cv_result = $this->get_confirmed_cv_drilldown(
+                    $user_id, $month, $type, $region_ja, $ga4_id, $start, $end
+                );
+                $items  = $cv_result['items'];
+                $metric = $cv_result['metric_key'];
+            } else {
+                // ── 訪問数 / MEO は従来どおりGA4データを使用 ──
+                switch ( $type ) {
+                    case 'region':
+                        $raw = $this->ga4->fetch_region_details( $ga4_id, $start, $end );
+                        $raw = array_slice( $raw, 0, 10 );
+                        foreach ( $raw as $r ) {
+                            $region_name = $r['region'] ?: '';
+                            if ( $region_name === '' || $region_name === '(not set)' ) {
+                                $region_name = '（不明）';
+                            } else {
+                                $region_name = $region_ja[ $region_name ] ?? $region_name;
                             }
                             $items[] = [
-                                'label' => $display,
-                                'value' => (int) ( $row['keyEvents'] ?? 0 ),
+                                'label' => $region_name,
+                                'value' => (int) ( $r['sessions'] ?? 0 ),
                             ];
                         }
-                        $metric = 'keyEvents';
-                    } else {
+                        break;
+
+                    case 'page':
                         $site_url = $config['gsc_url'] ?? '';
                         $raw = $this->ga4->fetch_page_details( $ga4_id, $start, $end, $site_url );
                         $raw = array_slice( $raw, 0, 10 );
@@ -6724,31 +6916,20 @@ PROMPT;
                             ];
                         }
                         $metric = 'pageViews';
-                    }
-                    break;
+                        break;
 
-                case 'source':
-                    $raw = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
-                    $channels = $raw['channels'] ?? [];
-                    // CV の場合は conversions 降順で再ソート
-                    if ( $metric === 'cv' ) {
-                        usort( $channels, function( $a, $b ) {
-                            return ( $b['conversions'] ?? 0 ) - ( $a['conversions'] ?? 0 );
-                        });
-                    }
-                    $channels = array_slice( $channels, 0, 10 );
-                    foreach ( $channels as $ch ) {
-                        $ch_name = $ch['channel'] ?: '（不明）';
-                        $value = $metric === 'cv'
-                            ? (int) ( $ch['conversions'] ?? 0 )
-                            : (int) ( $ch['sessions'] ?? 0 );
-                        $items[] = [
-                            'label' => $channel_ja[ $ch_name ] ?? $ch_name,
-                            'value' => $value,
-                        ];
-                    }
-                    if ( $metric === 'cv' ) { $metric = 'conversions'; }
-                    break;
+                    case 'source':
+                        $raw = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
+                        $channels = array_slice( $raw['channels'] ?? [], 0, 10 );
+                        foreach ( $channels as $ch ) {
+                            $ch_name = $ch['channel'] ?: '（不明）';
+                            $items[] = [
+                                'label' => $channel_ja[ $ch_name ] ?? $ch_name,
+                                'value' => (int) ( $ch['sessions'] ?? 0 ),
+                            ];
+                        }
+                        break;
+                }
             }
 
             $metric_label = $metric_ja[ $metric ] ?? $metric;
