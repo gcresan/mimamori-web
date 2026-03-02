@@ -976,6 +976,29 @@ add_action( 'wp_enqueue_scripts', function () {
     );
 } );
 
+/**
+ * ============================================================
+ * Chart.js 凡例ソロ切替プラグイン
+ *
+ * assets/js/gcrev-legend-solo.js
+ * 凡例クリックで「選んだ項目だけ表示」する挙動を全チャートに自動適用。
+ * Chart.js が無いページでは自動スキップ。
+ * ============================================================
+ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_user_logged_in() ) {
+        return;
+    }
+
+    wp_enqueue_script(
+        'gcrev-legend-solo',
+        get_template_directory_uri() . '/assets/js/gcrev-legend-solo.js',
+        [],
+        '1.0.0',
+        true
+    );
+} );
+
 // ============================================================
 // みまもりAI チャット — REST API + OpenAI 連携 (Phase 2)
 // ※ 後でクラスファイルに切り出し可能な構造にしている
