@@ -115,8 +115,12 @@
             var legendOpts = chart.options.plugins && chart.options.plugins.legend;
             if (!legendOpts || legendOpts.display === false) return;
 
-            // 既に個別 onClick が設定されているチャートはスキップ
-            if (legendOpts.onClick) return;
+            // 既に個別 onClick が「ユーザー定義で」設定されているチャートはスキップ
+            // ※ chart.options は Chart.js デフォルトをマージ済みのため、
+            //    chart.config._config（ユーザー指定の生コンフィグ）を確認する
+            var rawCfg    = chart.config._config || {};
+            var rawLegend = rawCfg.options && rawCfg.options.plugins && rawCfg.options.plugins.legend;
+            if (rawLegend && typeof rawLegend.onClick === 'function') return;
 
             var type = chart.config.type;
             var isDoughnutPie = (type === 'doughnut' || type === 'pie');
