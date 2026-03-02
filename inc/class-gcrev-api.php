@@ -5576,6 +5576,7 @@ PROMPT;
             ) );
             $has_review = ( $review_count > 0 );
         }
+        error_log( "[GCREV][Drilldown DEBUG] get_confirmed_cv_drilldown: type={$type}, has_review=" . ( $has_review ? 'true' : 'false' ) . ", review_count={$review_count}, site_url={$site_url}" );
 
         // 除外パターン（入口ページ用）
         $page_exclude = [ '/thanks', '/confirm', '/complete', '/finish', '/done' ];
@@ -5633,6 +5634,7 @@ PROMPT;
                     );
                     // サイトURL正規化（末尾スラッシュ除去）
                     $base_url = $site_url ? rtrim( $site_url, '/' ) : '';
+                    error_log( "[GCREV][Drilldown DEBUG] page(cv_review): base_url={$base_url}, rows_count=" . count( $rows ) );
                     foreach ( $rows as $row ) {
                         $path = $row['page_path'] ?: '';
                         if ( $path === '' || $path === '(not set)' ) {
@@ -5788,6 +5790,7 @@ PROMPT;
                 $name = $channel_ja[ $raw_label ] ?? $raw_label;
             } elseif ( $label_key === 'dimension' ) {
                 $base_url = $site_url ? rtrim( $site_url, '/' ) : '';
+                error_log( "[GCREV][Drilldown DEBUG] reallocate dimension: base_url={$base_url}, raw_label={$raw_label}" );
                 if ( $base_url !== '' ) {
                     $name = $base_url . $raw_label;
                 } else {
@@ -6926,12 +6929,14 @@ PROMPT;
             }
 
             // キャッシュ（24時間）— metric ごとに分離
-            // v3: フォールバック按分ロジック追加に伴い旧キャッシュ無効化
-            $cache_key = "gcrev_dd4_{$user_id}_{$month}_{$type}_{$metric}";
+            // v5: ページラベル絶対URL化に伴い旧キャッシュ無効化
+            $cache_key = "gcrev_dd5_{$user_id}_{$month}_{$type}_{$metric}";
             $cached = get_transient( $cache_key );
             if ( $cached !== false && is_array( $cached ) ) {
+                error_log( "[GCREV][Drilldown DEBUG] CACHE HIT: key={$cache_key}" );
                 return new \WP_REST_Response( $cached, 200 );
             }
+            error_log( "[GCREV][Drilldown DEBUG] CACHE MISS: key={$cache_key}" );
 
             $items = [];
 
@@ -6994,12 +6999,14 @@ PROMPT;
 
             // ── ゴール数（CV）は確定CVデータ（cv_review status=1）を使用 ──
             $site_url = $config['gsc_url'] ?? '';
+            error_log( "[GCREV][Drilldown DEBUG] user_id={$user_id}, metric={$metric}, type={$type}, site_url={$site_url}" );
             if ( $metric === 'cv' ) {
                 $cv_result = $this->get_confirmed_cv_drilldown(
                     $user_id, $month, $type, $region_ja, $ga4_id, $start, $end, $site_url
                 );
                 $items  = $cv_result['items'];
                 $metric = $cv_result['metric_key'];
+                error_log( "[GCREV][Drilldown DEBUG] cv_result items=" . wp_json_encode( array_slice( $items, 0, 3 ), JSON_UNESCAPED_UNICODE ) );
             } else {
                 // ── 訪問数 / MEO は従来どおりGA4データを使用 ──
                 switch ( $type ) {
