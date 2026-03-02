@@ -15,7 +15,7 @@ $user_id      = $current_user->ID;
 set_query_var( 'gcrev_page_title', 'アカウント情報' );
 
 // パンくず
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'アカウント情報', 'アカウント' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'アカウント情報' ) );
 
 // --- ① 契約プランデータ ---
 $steps      = gcrev_get_payment_steps( $user_id );

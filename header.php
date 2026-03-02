@@ -75,10 +75,9 @@
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ analysis ---
       $report_pages   = array('report-latest','report-archive');
       $analysis_pages = array('analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
-      $settings_pages = array('report-settings','cv-review','cv-settings');
+      $settings_pages = array('report-settings','cv-review','cv-settings','client-settings','ga-gsc-connection','meo-connection','notifications');
       $support_pages  = array('faq','tutorials','inquiry');
       $option_pages   = array('service','improvement-request','training','ad-consulting','meeting-reservation');
-      $account_pages  = array('account-info','client-settings','ga-gsc-connection','meo-connection','notifications');
 
       $report_child_active = false;
       foreach ($report_pages as $_p) { if (is_page($_p)) { $report_child_active = true; break; } }
@@ -90,16 +89,12 @@
       foreach ($support_pages as $_p) { if (is_page($_p)) { $support_child_active = true; break; } }
       $option_child_active = false;
       foreach ($option_pages as $_p) { if (is_page($_p)) { $option_child_active = true; break; } }
-      $account_child_active = false;
-      foreach ($account_pages as $_p) { if (is_page($_p)) { $account_child_active = true; break; } }
-
       // 子がアクティブなグループを開く。なければデフォルト 'analysis'
       $sidebar_active_group = 'analysis';
       if ($report_child_active)   $sidebar_active_group = 'report';
       if ($settings_child_active) $sidebar_active_group = 'settings';
       if ($support_child_active)  $sidebar_active_group = 'support';
       if ($option_child_active)   $sidebar_active_group = 'option';
-      if ($account_child_active)  $sidebar_active_group = 'account';
       ?>
       <nav class="sidebar-nav">
          <div class="nav-section">
@@ -200,6 +195,21 @@
                      <li class="nav-item">
                         <a href="<?php echo home_url('/analysis/cv-settings/'); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
                         <span>ゴールの数え方設定</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/client-settings/'); ?>" class="nav-link <?php echo is_page('client-settings') ? 'active' : ''; ?>">
+                        <span>クライアント設定</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/meo-connection/'); ?>" class="nav-link <?php echo is_page('meo-connection') ? 'active' : ''; ?>">
+                        <span>MEO連携</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo home_url('/account/notifications/'); ?>" class="nav-link <?php echo is_page('notifications') ? 'active' : ''; ?>">
+                        <span>通知設定</span>
                         </a>
                      </li>
                   </ul>
@@ -388,41 +398,6 @@
                   </ul>
                </li>
 
-               <!-- I. アカウント（折りたたみ親） -->
-               <li class="nav-item nav-item-collapsible<?php echo $account_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'account' ? ' collapsed' : ''; ?>" data-menu-key="account">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleAccount" aria-expanded="<?php echo $sidebar_active_group === 'account' ? 'true' : 'false'; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.5"/></svg></span>
-                  <span>アカウント</span>
-                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
-                  </button>
-                  <ul class="nav-submenu" id="navSubmenuAccount">
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/account-info/'); ?>" class="nav-link <?php echo is_page('account-info') ? 'active' : ''; ?>">
-                        <span>アカウント情報</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/client-settings/'); ?>" class="nav-link <?php echo is_page('client-settings') ? 'active' : ''; ?>">
-                        <span>クライアント設定</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/ga-gsc-connection/'); ?>" class="nav-link <?php echo is_page('ga-gsc-connection') ? 'active' : ''; ?>">
-                        <span>GA / GSC連携</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/meo-connection/'); ?>" class="nav-link <?php echo is_page('meo-connection') ? 'active' : ''; ?>">
-                        <span>MEO連携</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/notifications/'); ?>" class="nav-link <?php echo is_page('notifications') ? 'active' : ''; ?>">
-                        <span>通知設定</span>
-                        </a>
-                     </li>
-                  </ul>
-               </li>
             </ul>
          </div>
       </nav>
@@ -487,10 +462,33 @@
             </div>
          </div>
 
-         <div class="logout">
-            <a href="<?php echo wp_logout_url( home_url('/login/') ); ?>" class="logout-btn">
-            ログアウト
-            </a>
+         <!-- アカウントメニュー -->
+         <div class="account-menu" id="accountMenu">
+            <button class="account-menu-btn" type="button" aria-label="アカウントメニュー">
+               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+               </svg>
+            </button>
+            <div class="account-dropdown" id="accountDropdown">
+               <div class="account-dropdown-header">
+                  <span class="account-dropdown-title"><?php echo esc_html( $company ); ?> 様</span>
+               </div>
+               <ul class="account-dropdown-list">
+                  <li>
+                     <a href="<?php echo esc_url( home_url( '/account/account-info/' ) ); ?>" class="account-dropdown-item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <span>アカウント情報</span>
+                     </a>
+                  </li>
+                  <li>
+                     <a href="<?php echo esc_url( wp_logout_url( home_url( '/login/' ) ) ); ?>" class="account-dropdown-item account-dropdown-logout">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        <span>ログアウト</span>
+                     </a>
+                  </li>
+               </ul>
+            </div>
          </div>
          <?php endif; ?>
       </div>

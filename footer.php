@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // サイドバー アコーディオンメニュー（トグル式：クリックで開閉）
     (function() {
-        var menuIds = ['navToggleReport', 'navToggleAnalysis', 'navToggleSettings', 'navToggleSupport', 'navToggleOption', 'navToggleAccount'];
+        var menuIds = ['navToggleReport', 'navToggleAnalysis', 'navToggleSettings', 'navToggleSupport', 'navToggleOption'];
         var items = [];
 
         menuIds.forEach(function(id) {

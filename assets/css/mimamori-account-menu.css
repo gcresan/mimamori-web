@@ -1,0 +1,124 @@
+/* ========================================
+   Account Menu - Header Dropdown
+   v1.0.0
+   ======================================== */
+
+/* ---------- Menu Button ---------- */
+.account-menu {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.account-menu-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    padding: 6px;
+    color: #666660;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+.account-menu-btn:hover {
+    background: #EEEDEA;
+    color: #2B2B2B;
+}
+/* 開閉が視覚的に分かる */
+.account-menu.open .account-menu-btn {
+    background: #EEEDEA;
+    color: #2B2B2B;
+}
+
+/* ---------- Dropdown Container ---------- */
+.account-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 220px;
+    background: #FAF9F6;
+    border: 1px solid #E5E3DC;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(47, 58, 74, 0.12);
+    z-index: 3000;
+    overflow: hidden;
+}
+.account-dropdown.open {
+    display: block;
+}
+
+/* ---------- Dropdown Header ---------- */
+.account-dropdown-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid #E5E3DC;
+}
+.account-dropdown-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #2B2B2B;
+    display: block;
+}
+
+/* ---------- Dropdown List ---------- */
+.account-dropdown-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+}
+
+/* ---------- Dropdown Item ---------- */
+.account-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #2B2B2B;
+    text-decoration: none;
+    transition: background 0.1s;
+}
+.account-dropdown-item:hover {
+    background: #F5F4F0;
+}
+.account-dropdown-item svg {
+    flex-shrink: 0;
+}
+
+/* ログアウト: 赤系で視覚的区別 */
+.account-dropdown-logout {
+    color: #B5574B;
+    border-top: 1px solid #EEEDEA;
+    margin-top: 4px;
+    padding-top: 12px;
+}
+.account-dropdown-logout:hover {
+    background: #FDF0EE;
+}
+
+/* ========================================
+   Mobile (<768px): bottom-sheet style
+   ======================================== */
+@media (max-width: 768px) {
+    .account-dropdown {
+        position: fixed;
+        top: auto;
+        right: 8px;
+        left: 8px;
+        bottom: 8px;
+        width: auto;
+        border-radius: 12px;
+    }
+    .account-menu-btn {
+        padding: 4px;
+    }
+    .account-menu-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+}

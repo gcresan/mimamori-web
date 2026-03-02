@@ -16,7 +16,7 @@ set_query_var( 'gcrev_page_title', 'クライアント設定' );
 set_query_var( 'gcrev_page_subtitle', 'AIレポートやAI相談で使用する、クライアントの基本情報を設定します。' );
 
 // パンくず
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'クライアント設定', 'アカウント' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'クライアント設定', '各種設定' ) );
 
 // 現在の設定を取得
 $settings = gcrev_get_client_settings( $user_id );

@@ -1,7 +1,7 @@
 <?php /*Template Name: ユーザープロフィールページ */ ?>
 <?php
 set_query_var('gcrev_page_title', 'アカウント設定');
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('アカウント設定', 'アカウント'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('アカウント設定'));
 get_header();
 ?>
 <div class="welcome">

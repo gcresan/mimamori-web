@@ -947,6 +947,35 @@ add_action( 'wp_enqueue_scripts', function () {
     ] );
 } );
 
+/**
+ * ============================================================
+ * みまもりウェブ - アカウントメニュードロップダウン
+ *
+ * assets/js/mimamori-account-menu.js
+ * assets/css/mimamori-account-menu.css
+ * ============================================================
+ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_user_logged_in() ) {
+        return;
+    }
+
+    wp_enqueue_script(
+        'mw-account-menu',
+        get_template_directory_uri() . '/assets/js/mimamori-account-menu.js',
+        [],
+        '1.0.0',
+        true
+    );
+
+    wp_enqueue_style(
+        'mw-account-menu',
+        get_template_directory_uri() . '/assets/css/mimamori-account-menu.css',
+        [],
+        '1.0.0'
+    );
+} );
+
 // ============================================================
 // みまもりAI チャット — REST API + OpenAI 連携 (Phase 2)
 // ※ 後でクラスファイルに切り出し可能な構造にしている
