@@ -6930,13 +6930,12 @@ PROMPT;
 
             // キャッシュ（24時間）— metric ごとに分離
             // v5: ページラベル絶対URL化に伴い旧キャッシュ無効化
-            $cache_key = "gcrev_dd5_{$user_id}_{$month}_{$type}_{$metric}";
+            $cache_key = "gcrev_dd6_{$user_id}_{$month}_{$type}_{$metric}";
             $cached = get_transient( $cache_key );
             if ( $cached !== false && is_array( $cached ) ) {
-                error_log( "[GCREV][Drilldown DEBUG] CACHE HIT: key={$cache_key}" );
+                $cached['_debug'] = 'CACHE HIT: ' . $cache_key;
                 return new \WP_REST_Response( $cached, 200 );
             }
-            error_log( "[GCREV][Drilldown DEBUG] CACHE MISS: key={$cache_key}" );
 
             $items = [];
 
@@ -7070,11 +7069,15 @@ PROMPT;
                 'metric'       => $metric,
                 'metric_label' => $metric_label,
                 'items'        => $items,
+                '_debug'       => "FRESH | site_url={$site_url} | cache_key={$cache_key}",
             ];
 
             // items がある場合のみキャッシュ（空結果はキャッシュしない → 再試行可能に）
             if ( ! empty( $items ) ) {
-                set_transient( $cache_key, $result, 86400 );
+                // _debug はキャッシュに含めない
+                $cache_data = $result;
+                unset( $cache_data['_debug'] );
+                set_transient( $cache_key, $cache_data, 86400 );
             }
             return new \WP_REST_Response( $result, 200 );
 
