@@ -6913,8 +6913,8 @@ PROMPT;
             }
 
             // キャッシュ（24時間）— metric ごとに分離
-            // v2: 確定CVベース切替に伴い旧キャッシュ無効化
-            $cache_key = "gcrev_dd2_{$user_id}_{$month}_{$type}_{$metric}";
+            // v3: フォールバック按分ロジック追加に伴い旧キャッシュ無効化
+            $cache_key = "gcrev_dd3_{$user_id}_{$month}_{$type}_{$metric}";
             $cached = get_transient( $cache_key );
             if ( $cached !== false && is_array( $cached ) ) {
                 return new \WP_REST_Response( $cached, 200 );
@@ -7051,7 +7051,10 @@ PROMPT;
                 'items'        => $items,
             ];
 
-            set_transient( $cache_key, $result, 86400 );
+            // items がある場合のみキャッシュ（空結果はキャッシュしない → 再試行可能に）
+            if ( ! empty( $items ) ) {
+                set_transient( $cache_key, $result, 86400 );
+            }
             return new \WP_REST_Response( $result, 200 );
 
         } catch ( \Exception $e ) {
