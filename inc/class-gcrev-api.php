@@ -5551,7 +5551,8 @@ PROMPT;
         array  $region_ja,
         string $ga4_id,
         string $start,
-        string $end
+        string $end,
+        string $site_url = ''
     ): array {
         global $wpdb;
         $review_table = $wpdb->prefix . 'gcrev_cv_review';
@@ -5630,13 +5631,19 @@ PROMPT;
                         ),
                         ARRAY_A
                     );
+                    // サイトURL正規化（末尾スラッシュ除去）
+                    $base_url = $site_url ? rtrim( $site_url, '/' ) : '';
                     foreach ( $rows as $row ) {
-                        $display = $row['page_path'] ?: '（不明なページ）';
-                        if ( $display === '(not set)' || $display === '' ) {
+                        $path = $row['page_path'] ?: '';
+                        if ( $path === '' || $path === '(not set)' ) {
                             $display = '（不明なページ）';
+                        } elseif ( $base_url !== '' ) {
+                            $display = $base_url . $path;
+                        } else {
+                            $display = $path;
                         }
-                        if ( mb_strlen( $display ) > 30 ) {
-                            $display = mb_substr( $display, 0, 30 ) . '…';
+                        if ( mb_strlen( $display ) > 60 ) {
+                            $display = mb_substr( $display, 0, 60 ) . '…';
                         }
                         $items[] = [ 'label' => $display, 'value' => (int) $row['cv_count'] ];
                     }
@@ -5666,13 +5673,13 @@ PROMPT;
                     foreach ( $ga4_rows as $r ) { $total_ke += (int) ( $r['keyEvents'] ?? 0 ); }
 
                     if ( $total_ke > 0 ) {
-                        $items = $this->reallocate_to_items( $ga4_rows, 'dimension', 'keyEvents', $total_ke, $confirmed_total, null, 30 );
+                        $items = $this->reallocate_to_items( $ga4_rows, 'dimension', 'keyEvents', $total_ke, $confirmed_total, null, 30, $site_url );
                     } else {
                         // keyEvents がすべて0の場合は sessions で按分
                         $total_sess = 0;
                         foreach ( $ga4_rows as $r ) { $total_sess += (int) ( $r['sessions'] ?? 0 ); }
                         if ( $total_sess > 0 ) {
-                            $items = $this->reallocate_to_items( $ga4_rows, 'dimension', 'sessions', $total_sess, $confirmed_total, null, 30 );
+                            $items = $this->reallocate_to_items( $ga4_rows, 'dimension', 'sessions', $total_sess, $confirmed_total, null, 30, $site_url );
                         }
                     }
                 }
@@ -5750,7 +5757,8 @@ PROMPT;
         int    $weight_total,
         int    $confirmed_total,
         ?array $label_map = null,
-        int    $max_rows  = 50
+        int    $max_rows  = 50,
+        string $site_url  = ''
     ): array {
         if ( $weight_total <= 0 || $confirmed_total <= 0 ) return [];
 
@@ -5779,9 +5787,14 @@ PROMPT;
             } elseif ( $label_key === 'channel' ) {
                 $name = $channel_ja[ $raw_label ] ?? $raw_label;
             } elseif ( $label_key === 'dimension' ) {
-                $name = $raw_label;
-                if ( mb_strlen( $name ) > 30 ) {
-                    $name = mb_substr( $name, 0, 30 ) . '…';
+                $base_url = $site_url ? rtrim( $site_url, '/' ) : '';
+                if ( $base_url !== '' ) {
+                    $name = $base_url . $raw_label;
+                } else {
+                    $name = $raw_label;
+                }
+                if ( mb_strlen( $name ) > 60 ) {
+                    $name = mb_substr( $name, 0, 60 ) . '…';
                 }
             } else {
                 $name = $raw_label;
@@ -6914,7 +6927,7 @@ PROMPT;
 
             // キャッシュ（24時間）— metric ごとに分離
             // v3: フォールバック按分ロジック追加に伴い旧キャッシュ無効化
-            $cache_key = "gcrev_dd3_{$user_id}_{$month}_{$type}_{$metric}";
+            $cache_key = "gcrev_dd4_{$user_id}_{$month}_{$type}_{$metric}";
             $cached = get_transient( $cache_key );
             if ( $cached !== false && is_array( $cached ) ) {
                 return new \WP_REST_Response( $cached, 200 );
@@ -6980,9 +6993,10 @@ PROMPT;
             ];
 
             // ── ゴール数（CV）は確定CVデータ（cv_review status=1）を使用 ──
+            $site_url = $config['gsc_url'] ?? '';
             if ( $metric === 'cv' ) {
                 $cv_result = $this->get_confirmed_cv_drilldown(
-                    $user_id, $month, $type, $region_ja, $ga4_id, $start, $end
+                    $user_id, $month, $type, $region_ja, $ga4_id, $start, $end, $site_url
                 );
                 $items  = $cv_result['items'];
                 $metric = $cv_result['metric_key'];
