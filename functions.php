@@ -3926,6 +3926,9 @@ function mimamori_format_flexible_results_for_ai( array $flex_results, array $an
 /**
  * REST API ハンドラー: POST /mimamori/v1/ai-chat
  *
+ * 内部処理は mimamori_process_chat_with_trace() に委譲。
+ * REST レスポンスの形式は従来と同一。
+ *
  * @param WP_REST_Request $request
  * @return WP_REST_Response
  */
@@ -3940,6 +3943,66 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
         ], 400 );
     }
 
+    $result = mimamori_process_chat_with_trace( $data, get_current_user_id() );
+
+    if ( ! $result['success'] ) {
+        $status = str_contains( $result['error'] ?? '', 'API' ) ? 502 : 500;
+        return new WP_REST_Response( [
+            'success' => false,
+            'message' => $result['error'],
+        ], $status );
+    }
+
+    return new WP_REST_Response( [
+        'success' => true,
+        'data'    => [
+            'message' => [
+                'role'       => 'assistant',
+                'content'    => $result['raw_text'],
+                'structured' => $result['structured'],
+            ],
+        ],
+    ], 200 );
+}
+
+/**
+ * チャット処理を実行し、トレース付き結果を返す。
+ *
+ * REST ハンドラーからも、QAバッチ（WP-CLI）からも呼び出し可能。
+ * 中間データ（意図分類・クエリ・コンテキスト等）を trace として返す。
+ *
+ * @param  array $data    ['message', 'history', 'currentPage', 'sectionContext']
+ * @param  int   $user_id WordPress ユーザーID（CLI用に明示指定）
+ * @return array {
+ *   success: bool,
+ *   raw_text: string,
+ *   structured: array,
+ *   error: string|null,
+ *   trace: array,
+ * }
+ */
+function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
+
+    $message = sanitize_textarea_field( $data['message'] ?? '' );
+
+    // トレース初期化
+    $trace = [
+        'intent'                => [],
+        'page_type'             => '',
+        'sources'               => [],
+        'context_blocks'        => '',
+        'deterministic_queries' => [],
+        'flex_results'          => [],
+        'flex_text'             => '',
+        'anomaly_results'       => [],
+        'digest'                => '',
+        'planner_queries'       => [],
+        'enrichment_data'       => [],
+        'enrichment_text'       => '',
+        'instructions_length'   => 0,
+        'model'                 => '',
+    ];
+
     // コンテキスト構築
     $input = mimamori_build_chat_context( $data );
 
@@ -3952,20 +4015,19 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
             'sectionBody'  => sanitize_textarea_field( $data['sectionContext']['sectionBody'] ?? '' ),
             'pageType'     => sanitize_text_field( $data['sectionContext']['pageType'] ?? '' ),
         ];
-        // 空のコンテキストは無視
         if ( $section_context['sectionBody'] === '' ) {
             $section_context = null;
         }
     }
 
     // --- 意図補正 + データソースの自動解決 ---
-    $current_page    = ( isset( $data['currentPage'] ) && is_array( $data['currentPage'] ) )
-                       ? $data['currentPage']
-                       : [];
+    $current_page = ( isset( $data['currentPage'] ) && is_array( $data['currentPage'] ) )
+                    ? $data['currentPage']
+                    : [];
 
     $page_type = mimamori_detect_page_type( $current_page );
+    $trace['page_type'] = $page_type;
 
-    // セクションコンテキストがある場合、本文も意図検出に含める
     $intent_text = $message;
     if ( $section_context !== null ) {
         $intent_text .= ' ' . $section_context['sectionBody'];
@@ -3974,17 +4036,16 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     $intent_type = $intent['intent'] ?? 'general';
     $sources     = mimamori_resolve_data_sources( $intent, false, false );
 
+    $trace['intent']  = $intent;
+    $trace['sources'] = $sources;
+
     // 分析系意図ではアナリティクスを強制有効化
     if ( in_array( $intent_type, [ 'reason_analysis', 'site_improvement' ], true ) ) {
         $sources['use_analytics'] = true;
     }
-
-    // セクションコンテキストがある場合もアナリティクスを強制有効化
     if ( $section_context !== null ) {
         $sources['use_analytics'] = true;
     }
-
-    $user_id = get_current_user_id();
 
     // ログ: 質問分類
     error_log( sprintf(
@@ -3994,22 +4055,26 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     ) );
 
     // システムプロンプト + 意図補正コンテキスト
-    $instructions    = mimamori_get_system_prompt();
-    $context_blocks  = mimamori_build_context_blocks( $page_type, $intent, $sources, $current_page, $user_id, $section_context );
+    $instructions   = mimamori_get_system_prompt();
+    $context_blocks = mimamori_build_context_blocks( $page_type, $intent, $sources, $current_page, $user_id, $section_context );
     if ( $context_blocks !== '' ) {
         $instructions .= $context_blocks;
     }
+    $trace['context_blocks'] = $context_blocks;
 
     // === 確定的プランナー: 国/都市/source等の特定クエリを自動実行 ===
-    // セクションコンテキストがある場合、本文のキーワードもクエリ対象に含める
     $deterministic_text = $message;
     if ( $section_context !== null ) {
         $deterministic_text .= ' ' . $section_context['sectionBody'];
     }
     $flex_queries = mimamori_build_deterministic_queries( $deterministic_text, $intent_type );
+    $trace['deterministic_queries'] = $flex_queries;
+
+    $flex_results    = [];
+    $anomaly_results = [];
+    $flex_text       = '';
 
     if ( ! empty( $flex_queries ) ) {
-        // フレキシブルクエリが必要 → アナリティクスも強制ON
         $sources['use_analytics'] = true;
 
         $flex_results    = mimamori_execute_flexible_queries( $flex_queries, $user_id );
@@ -4020,8 +4085,16 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
             $instructions .= "\n\n" . $flex_text;
         }
     }
+    $trace['flex_results']    = $flex_results;
+    $trace['anomaly_results'] = $anomaly_results;
+    $trace['flex_text']       = $flex_text;
 
     // === 2パス: 追加データの動的取得（AI プランナー） ===
+    $digest          = '';
+    $planner_queries = [];
+    $enrichment_data = [];
+    $enrichment_text = '';
+
     if ( ! empty( $sources['use_analytics'] ) ) {
         $digest          = mimamori_get_analytics_digest( $user_id );
         $planner_queries = mimamori_call_planner_pass( $message, $digest, $intent_type );
@@ -4037,9 +4110,15 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
             }
         }
     }
+    $trace['digest']          = $digest;
+    $trace['planner_queries'] = $planner_queries;
+    $trace['enrichment_data'] = $enrichment_data;
+    $trace['enrichment_text'] = $enrichment_text;
 
     // OpenAI 回答呼び出し
     $model = defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini';
+    $trace['model']              = $model;
+    $trace['instructions_length'] = mb_strlen( $instructions );
 
     $result = mimamori_call_openai_responses_api( [
         'model'             => $model,
@@ -4049,30 +4128,25 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
     ] );
 
     if ( is_wp_error( $result ) ) {
-        $err_code = $result->get_error_code();
-        $status   = ( $err_code === 'no_api_key' ) ? 500 : 502;
-
-        // エラーメッセージは mimamori_call_openai_responses_api() 内で
-        // 管理者向け/一般向けに分岐済み
-        return new WP_REST_Response( [
-            'success' => false,
-            'message' => $result->get_error_message(),
-        ], $status );
+        return [
+            'success'    => false,
+            'raw_text'   => '',
+            'structured' => [],
+            'error'      => $result->get_error_message(),
+            'trace'      => $trace,
+        ];
     }
 
     $raw_text   = $result['text'];
     $structured = mimamori_parse_ai_response( $raw_text );
 
-    return new WP_REST_Response( [
-        'success' => true,
-        'data'    => [
-            'message' => [
-                'role'       => 'assistant',
-                'content'    => $raw_text,
-                'structured' => $structured,
-            ],
-        ],
-    ], 200 );
+    return [
+        'success'    => true,
+        'raw_text'   => $raw_text,
+        'structured' => $structured,
+        'error'      => null,
+        'trace'      => $trace,
+    ];
 }
 
 
@@ -5537,6 +5611,14 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
     if ( file_exists( $gcrev_cli_path ) ) {
         require_once $gcrev_cli_path;
         WP_CLI::add_command( 'gcrev', 'Gcrev_CLI' );
+    }
+
+    $qa_gen_path = get_template_directory() . '/inc/gcrev-api/utils/class-qa-question-generator.php';
+    $qa_cli_path = get_template_directory() . '/inc/cli/class-mimamori-qa-cli.php';
+    if ( file_exists( $qa_gen_path ) && file_exists( $qa_cli_path ) ) {
+        require_once $qa_gen_path;
+        require_once $qa_cli_path;
+        WP_CLI::add_command( 'mimamori', 'Mimamori_QA_CLI' );
     }
 }
 
