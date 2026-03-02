@@ -6806,7 +6806,8 @@ PROMPT;
             }
 
             // キャッシュ（24時間）— metric ごとに分離
-            $cache_key = "gcrev_drilldown_{$user_id}_{$month}_{$type}_{$metric}";
+            // v2: 確定CVベース切替に伴い旧キャッシュ無効化
+            $cache_key = "gcrev_dd2_{$user_id}_{$month}_{$type}_{$metric}";
             $cached = get_transient( $cache_key );
             if ( $cached !== false && is_array( $cached ) ) {
                 return new \WP_REST_Response( $cached, 200 );
