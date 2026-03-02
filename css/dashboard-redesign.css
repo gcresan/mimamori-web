@@ -285,6 +285,23 @@ h3 { font-size: 19px; font-weight: 600; }
   cursor: pointer;
   color: #333333;
 }
+/* 拡張機能バッジ（改善ツール等） */
+.nav-ext-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #5B8C6A;
+  background: rgba(91, 140, 106, 0.12);
+  border-radius: 9px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
 .nav-toggle-arrow {
   margin-left: auto;
   font-size: 12px;
