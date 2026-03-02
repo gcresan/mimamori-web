@@ -1182,6 +1182,35 @@ JSON例: {"type":"advice","summary":"...","sections":[...],"support_notice":true
 - 「スパムまたはbotアクセスの可能性があります」と注記する（断定ではなく可能性として）
 - 最後に、次に確認すべきGA4レポート（参照元/メディア、ランディングページ等）を提案する
 
+## 回答テンプレ（データ分析時の必須構造）
+データに基づく分析を求められ、かつデータが正常に取得できている場合は、以下の5段構成を必ず守ること:
+
+1. 結論（何が起きているか / 何をすべきか — 1〜2文）
+2. 根拠（期間 + 主要数値。「直近28日のデータを見ると〜」のように具体的に引用）
+3. 解釈（断言できる事実と仮説を明確に分ける。仮説は「推測ですが」と前置き）
+4. 次のアクション（具体的に3つまで。「今すぐできること」を優先）
+5. 補足（必要な場合のみ。確認質問を入れる場合はここに1つだけ）
+
+この順序を「結論→根拠→解釈→アクション→補足」と覚えること。
+talk形式でもadvice形式でもこの順序に従うこと。
+
+## データ取得失敗時の回答テンプレ
+コンテキストにデータが付与されていない、またはデータの取得に失敗した場合は、以下の構成にすること:
+
+1. 状況説明（何のデータが取得できなかったか、端的に）
+2. 考えられる原因（1〜2つ。断言しない）
+3. 確認手順（お客様自身で確認できること。設定変更が必要なら support_notice: true）
+4. 確認質問（1つだけ）
+
+最重要: 数値を一切出さない。推測でデータを作り出すことは絶対に禁止。
+
+## プロフィール反映ルール
+コンテキストに【クライアントプロフィール】ブロックが含まれている場合:
+- 回答冒頭に、プロフィール情報を踏まえた前提を1行だけ入れる
+  例:「（前提：建築設計事務所／問い合わせ増が目標）」
+- プロフィール情報が空のフィールドは一切言及しない（推測・捏造禁止）
+- 成長ステージやゴール種別が設定されていれば、改善提案の優先度付けに活用する
+
 ## ページへの言及ルール（最重要 — ハルシネーション絶対禁止）
 ページ名・ページURL・人気ページ・よく見られているページについて回答するときは、以下のルールを厳守すること。
 
@@ -2470,6 +2499,33 @@ function mimamori_build_context_blocks(
         $ref_list[] = 'クライアント設定（対象サイト・商圏・業種）';
     }
 
+    // --- Block 2.5: クライアントプロフィール ---
+    $profile_parts = [];
+    if ( ! empty( $client_settings_ctx['stage'] ) ) {
+        $stage_labels = [
+            'launch'    => '立ち上げ期（開設〜半年）',
+            'awareness' => '認知拡大期（半年〜1年）',
+            'growth'    => '安定成長期（1〜3年）',
+            'mature'    => '成熟期（3年以上）',
+            'renewal'   => 'リニューアル直後',
+        ];
+        $stage_display = $stage_labels[ $client_settings_ctx['stage'] ] ?? $client_settings_ctx['stage'];
+        $profile_parts[] = "成長ステージ: {$stage_display}";
+    }
+    if ( ! empty( $client_settings_ctx['main_conversions'] ) ) {
+        $profile_parts[] = "主なゴール種別: {$client_settings_ctx['main_conversions']}";
+    }
+    $goal_main = get_user_meta( $user_id, 'report_goal_main', true );
+    if ( ! empty( $goal_main ) ) {
+        $profile_parts[] = "主要目標: {$goal_main}";
+    }
+    if ( ! empty( $profile_parts ) ) {
+        $profile_block  = "【クライアントプロフィール】\n";
+        $profile_block .= implode( "\n", $profile_parts );
+        $blocks[]   = $profile_block;
+        $ref_list[] = 'クライアントプロフィール（成長段階・ゴール種別）';
+    }
+
     // --- Block 2.8: 月次レポート設定（当月分が存在する場合のみ） ---
     $monthly_fields = [
         'report_issue'            => '課題',
@@ -3611,6 +3667,170 @@ function mimamori_extract_date_range( string $message ): array {
     return [ 'start' => $d28, 'end' => $today->format( 'Y-m-d' ) ];
 }
 
+// =========================================================
+// ParamResolver — 確認質問ゲート
+// =========================================================
+
+/**
+ * 不足パラメータを検出し、確認質問を返す。
+ *
+ * データフェッチ・OpenAI 呼び出しの前に呼ぶ。
+ * 必須パラメータが揃っていなければ確認質問を返し、
+ * API コスト 0 で応答を返す。
+ *
+ * @param  string  $message         ユーザーメッセージ
+ * @param  string  $intent_type     意図タイプ（mimamori_rewrite_intent の結果）
+ * @param  ?array  $section_context セクションコンテキスト（AIに聞くボタン由来）
+ * @param  array   $history         会話履歴
+ * @return ?array  null = パラメータ十分（通過）、array = { missing, response }
+ */
+function mimamori_resolve_params(
+    string $message,
+    string $intent_type,
+    ?array $section_context,
+    array  $history = []
+): ?array {
+    $msg = mb_strtolower( $message );
+
+    // --- バイパス条件 ---
+
+    // 1) パラメータ不要な意図タイプ
+    if ( in_array( $intent_type, [ 'how_to', 'general', 'site_improvement' ], true ) ) {
+        return null;
+    }
+
+    // 2) セクションコンテキストあり（「AIに聞く」ボタン由来 → コンテキスト提供済み）
+    if ( $section_context !== null ) {
+        return null;
+    }
+
+    // 3) フォローアップ（会話2往復以上 → 文脈あり）
+    if ( count( $history ) >= 2 ) {
+        return null;
+    }
+
+    // 4) 挨拶・感謝パターン
+    $greeting_kw = [ 'こんにちは', 'こんばんは', 'おはよう', 'ありがとう', 'お疲れ', 'よろしく', 'はじめまして' ];
+    foreach ( $greeting_kw as $kw ) {
+        if ( mb_strpos( $msg, $kw ) !== false ) {
+            return null;
+        }
+    }
+
+    // --- パラメータ存在判定 ---
+
+    // 期間キーワード
+    $period_kw = [
+        '今月', '先月', '前月', '昨日', '今日', '今週', '先週', '前週',
+        '今年', '昨年', '前年', '去年', '同月',
+        '直近', '過去', '最近',
+    ];
+    // 日付パターン（YYYY年M月、M月D日、M/D 等）
+    $has_date_pattern = (bool) preg_match( '/\d{1,2}\s*月|\d{4}\s*[年\/\-]\s*\d|\d{1,2}\/\d{1,2}/', $msg );
+    $has_period = $has_date_pattern || mimamori_has_keyword( $msg, $period_kw );
+
+    // メトリクスキーワード
+    $metric_groups = [
+        'access'     => [ 'アクセス', 'pv', 'ページビュー', 'セッション', 'ユーザー', '訪問', '閲覧' ],
+        'search'     => [ '検索', 'キーワード', 'クエリ', '順位', 'ctr', 'クリック', '表示回数' ],
+        'conversion' => [ 'ゴール', '問い合わせ', 'cv', '成果', '申込', 'コンバージョン' ],
+        'engagement' => [ '直帰', '離脱', '滞在', 'エンゲージメント' ],
+        'source'     => [ '流入', '参照元', 'ソース', 'チャネル', 'メディア', 'sns', 'direct', '広告' ],
+        'device'     => [ 'デバイス', 'スマホ', 'モバイル', 'パソコン', 'pc', 'タブレット' ],
+        'region'     => [ '地域', 'エリア', '都道府県', '国', '都市', 'どこから', '海外' ],
+        'page'       => [ 'ページ', 'ランディング', 'lp', '人気', 'よく見', 'url' ],
+    ];
+    $has_metric = false;
+    foreach ( $metric_groups as $group_kw ) {
+        if ( mimamori_has_keyword( $msg, $group_kw ) ) {
+            $has_metric = true;
+            break;
+        }
+    }
+
+    // 比較先キーワード
+    $comparison_kw = [ '前月', '先月', '前年', '去年', '昨年', '同月', '前週', '先週' ];
+    $has_comparison = mimamori_has_keyword( $msg, $comparison_kw );
+
+    // 比較キーワード（Type B 判定用）
+    $is_comparison_intent = mimamori_has_keyword( $msg, [ '比較', '比べ', '前月比', '前年比', '増えた', '減った', '変化' ] );
+
+    // --- 質問タイプ別に必須パラメータを判定 ---
+
+    $missing = [];
+
+    if ( $intent_type === 'reason_analysis' ) {
+        // Type C: 原因・異常分析 — period は望ましいが、ブロックまではしない
+        // reason_analysis は文脈から推測可能なことが多いのでゲート緩め
+        return null;
+    }
+
+    if ( $is_comparison_intent ) {
+        // Type B: 比較質問
+        if ( ! $has_period && ! $has_comparison ) {
+            $missing[] = 'period';
+        }
+        if ( ! $has_comparison ) {
+            $missing[] = 'comparison_target';
+        }
+    } else {
+        // Type A: 数値質問
+        if ( ! $has_period ) {
+            $missing[] = 'period';
+        }
+        if ( ! $has_metric ) {
+            $missing[] = 'metric';
+        }
+    }
+
+    // パラメータ十分 → 通過
+    if ( empty( $missing ) ) {
+        return null;
+    }
+
+    // --- 確認質問を構築 ---
+    $questions = [];
+
+    if ( in_array( 'period', $missing, true ) ) {
+        $questions[] = "■ どの期間のデータを見ましょうか？\n"
+                     . "① 今月\n"
+                     . "② 先月\n"
+                     . "③ 直近28日間\n"
+                     . "④ 期間を指定したい（例: 2025年9月）";
+    }
+
+    if ( in_array( 'metric', $missing, true ) ) {
+        $questions[] = "■ どの数字について知りたいですか？\n"
+                     . "① アクセス数（訪問回数）\n"
+                     . "② 検索の状況（検索キーワード・順位）\n"
+                     . "③ ゴール数（お問い合わせ等の成果）\n"
+                     . "④ 流入元の内訳（どこから来ているか）";
+    }
+
+    if ( in_array( 'comparison_target', $missing, true ) ) {
+        $questions[] = "■ 何と比較しましょうか？\n"
+                     . "① 前月と比較\n"
+                     . "② 前年同月と比較";
+    }
+
+    // 最大2つに制限
+    $questions = array_slice( $questions, 0, 2 );
+
+    $intro = count( $questions ) > 1
+        ? "もう少し教えていただけますか？\n\n"
+        : "";
+
+    $response = [
+        'type' => 'talk',
+        'text' => $intro . implode( "\n\n", $questions ) . "\n\n番号か、知りたい内容を教えてください😊",
+    ];
+
+    return [
+        'missing'  => $missing,
+        'response' => $response,
+    ];
+}
+
 /**
  * フレキシブルクエリを実行する
  *
@@ -4038,6 +4258,20 @@ function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
 
     $trace['intent']  = $intent;
     $trace['sources'] = $sources;
+
+    // === ParamResolver: 確認質問ゲート ===
+    $history_arr = $data['history'] ?? [];
+    $param_gate  = mimamori_resolve_params( $message, $intent_type, $section_context, $history_arr );
+    if ( $param_gate !== null ) {
+        $trace['param_gate'] = $param_gate['missing'];
+        return [
+            'success'    => true,
+            'raw_text'   => wp_json_encode( $param_gate['response'], JSON_UNESCAPED_UNICODE ),
+            'structured' => $param_gate['response'],
+            'error'      => null,
+            'trace'      => $trace,
+        ];
+    }
 
     // 分析系意図ではアナリティクスを強制有効化
     if ( in_array( $intent_type, [ 'reason_analysis', 'site_improvement' ], true ) ) {
@@ -5965,6 +6199,9 @@ function gcrev_get_client_settings( int $user_id = 0 ): array {
         'industry_subcategory'  => $subcategory,
         'industry_detail'       => get_user_meta( $user_id, 'gcrev_client_industry_detail', true ),
         'business_type'         => get_user_meta( $user_id, 'gcrev_client_business_type', true ),
+        // 成長ステージ・ゴール種別
+        'stage'                 => get_user_meta( $user_id, 'gcrev_client_stage', true ) ?: '',
+        'main_conversions'      => get_user_meta( $user_id, 'gcrev_client_main_conversions', true ) ?: '',
         // ペルソナ
         'persona_age_ranges'       => $persona_arrays['gcrev_client_persona_age_ranges'],
         'persona_genders'          => $persona_arrays['gcrev_client_persona_genders'],

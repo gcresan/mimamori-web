@@ -1460,6 +1460,16 @@ class Gcrev_Insight_API {
 
         update_user_meta($user_id, 'gcrev_client_business_type',  sanitize_text_field($params['business_type'] ?? ''));
 
+        // --- 成長ステージ（200文字以内） ---
+        $stage = sanitize_text_field( $params['stage'] ?? '' );
+        if ( mb_strlen( $stage ) > 200 ) { $stage = mb_substr( $stage, 0, 200 ); }
+        update_user_meta( $user_id, 'gcrev_client_stage', $stage );
+
+        // --- ゴール種別（300文字以内） ---
+        $main_conversions = sanitize_text_field( $params['main_conversions'] ?? '' );
+        if ( mb_strlen( $main_conversions ) > 300 ) { $main_conversions = mb_substr( $main_conversions, 0, 300 ); }
+        update_user_meta( $user_id, 'gcrev_client_main_conversions', $main_conversions );
+
         // --- ペルソナ: 配列フィールド（年齢層 / 性別 / 属性 / 意思決定） ---
         $persona_array_fields = [
             'persona_age_ranges'       => 'gcrev_client_persona_age_ranges',

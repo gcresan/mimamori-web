@@ -498,6 +498,34 @@ get_header();
                     <?php endforeach; ?>
                 </div>
             </div>
+
+            <!-- 成長ステージ -->
+            <div class="form-group">
+                <label for="cs-stage">成長ステージ</label>
+                <?php
+                $stage_val = $settings['stage'] ?? '';
+                $stage_options = [
+                    ''             => '— 選択してください —',
+                    'launch'       => '立ち上げ期（開設〜半年）',
+                    'awareness'    => '認知拡大期（半年〜1年）',
+                    'growth'       => '安定成長期（1〜3年）',
+                    'mature'       => '成熟期（3年以上）',
+                    'renewal'      => 'リニューアル直後',
+                ];
+                ?>
+                <select id="cs-stage" class="cs-select">
+                    <?php foreach ( $stage_options as $val => $label ): ?>
+                    <option value="<?php echo esc_attr( $val ); ?>" <?php selected( $stage_val, $val ); ?>><?php echo esc_html( $label ); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- ゴール種別 -->
+            <div class="form-group">
+                <label for="cs-main-conversions">ゴール種別（カンマ区切り）</label>
+                <input type="text" id="cs-main-conversions" class="cs-input" value="<?php echo esc_attr( $settings['main_conversions'] ?? '' ); ?>" placeholder="例: お問い合わせフォーム, 電話タップ, 来店予約">
+                <p class="field-hint">サイトの主なゴール（コンバージョン）を入力してください。AIが改善提案の優先度付けに活用します。</p>
+            </div>
         </div>
 
         <!-- ===== (A) 簡易ペルソナ ===== -->
@@ -1084,6 +1112,9 @@ get_header();
         var btRadio = document.querySelector('input[name="business_type"]:checked');
         if (btRadio) businessType = btRadio.value;
 
+        var stageVal = document.getElementById('cs-stage') ? document.getElementById('cs-stage').value : '';
+        var mainConversions = document.getElementById('cs-main-conversions') ? document.getElementById('cs-main-conversions').value.trim() : '';
+
         // ペルソナフィールド
         var personaAgeRanges      = collectChecked('persona-age');
         var personaGenders        = collectChecked('persona-gender');
@@ -1114,6 +1145,8 @@ get_header();
                     industry_subcategory:   industrySubcategory,
                     industry_detail:        industryDetail,
                     business_type:          businessType,
+                    stage:                  stageVal,
+                    main_conversions:       mainConversions,
                     persona_age_ranges:       personaAgeRanges,
                     persona_genders:          personaGenders,
                     persona_attributes:       personaAttributes,

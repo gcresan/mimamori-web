@@ -20,6 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   FALSE_NEGATIVE   データあるのに「不明」と回答            (minor)
  *   EMPTY_RESPONSE   回答が空/極短                          (major)
  *   TIMEOUT          API タイムアウト                       (critical)
+ *   PARAM_GATE       ParamResolver が確認質問を返した         (info)
  *   UNKNOWN          上記に該当しない低スコア                (minor)
  *
  * @package GCREV_INSIGHT
@@ -127,6 +128,16 @@ class Mimamori_QA_Triage {
                 'category' => 'PARAM_MISS',
                 'severity' => 'major',
                 'reason'   => "Category={$category} but no queries generated and no digest",
+            ];
+        }
+
+        // --- PARAM_GATE (info — スコアには影響しない) ---
+        $param_gate = $trace['param_gate'] ?? [];
+        if ( ! empty( $param_gate ) ) {
+            $findings[] = [
+                'category' => 'PARAM_GATE',
+                'severity' => 'info',
+                'reason'   => 'ParamResolver confirmation: ' . implode( ', ', $param_gate ),
             ];
         }
 
