@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  * - cases.jsonl にインクリメンタル書き出し
  * - 失敗時はリトライ1回
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Mimamori_QA_Runner {

@@ -15,7 +15,7 @@ if ( class_exists('Gcrev_Crypto') ) { return; }
  * 鍵: wp-config.php の GCREV_ENCRYPTION_KEY 定数（Base64エンコード済み 32バイト鍵）
  * 生成: php -r "echo base64_encode(sodium_crypto_secretbox_keygen());"
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.1.0
  */
 class Gcrev_Crypto {

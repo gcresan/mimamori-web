@@ -14,7 +14,7 @@ if ( class_exists( 'Gcrev_Cron_Logger' ) ) { return; }
  *   - gcrev_cron_logs         … ジョブ単位の開始/終了/ステータス
  *   - gcrev_cron_log_details  … ユーザー単位の処理結果
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Gcrev_Cron_Logger {

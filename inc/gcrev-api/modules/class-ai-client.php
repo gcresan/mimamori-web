@@ -19,7 +19,7 @@ if ( class_exists('Gcrev_AI_Client') ) { return; }
  *   - レポートHTML の正規化・セクション抽出 → Report Generator (Step3)
  *   - プロンプト構築 → Report Generator (Step3)
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.0.0
  */
 class Gcrev_AI_Client {

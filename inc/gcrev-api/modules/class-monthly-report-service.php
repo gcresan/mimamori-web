@@ -10,7 +10,7 @@
  * 依存: Gcrev_Highlights（NLP抽出）
  * 注: CPT (gcrev_report) への読み取りのみ。書き込みは Gcrev_Report_Repository が担当。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 if ( ! defined('ABSPATH') ) { exit; }

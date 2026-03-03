@@ -6,7 +6,7 @@
  * 既存クライアント限定。最低契約期間3ヶ月。
  * ログイン不要の公開ページ。プランは1つのみ（プリセレクト）。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 // ページタイトル・パンくず設定（header.php が使用）

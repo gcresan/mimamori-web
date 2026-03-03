@@ -14,7 +14,7 @@ if ( class_exists( 'Gcrev_DB_Optimizer' ) ) { return; }
  *
  * 冪等: 既存インデックスがあればスキップ。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Gcrev_DB_Optimizer {

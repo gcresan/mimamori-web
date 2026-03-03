@@ -5,7 +5,7 @@
  * 会話本体は1つの共通コンポーネント。
  * CSS クラス切替で closed / normal / panel / modal を表現。
  *
- * @package GCREV_Insight
+ * @package Mimamori_Web
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

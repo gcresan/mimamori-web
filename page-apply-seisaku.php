@@ -5,7 +5,7 @@
  * 制作込み 2年プラン / 1年プラン の申込ページ。
  * ログイン不要の公開ページ。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 // ページタイトル・パンくず設定（header.php が使用）

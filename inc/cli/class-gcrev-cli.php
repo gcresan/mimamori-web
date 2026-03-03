@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   wp gcrev migrate-tokens                     … 平文→暗号化トークン移行
  *   wp gcrev rate-limit-status                  … レートリミッターの現在値
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.1.0
  */
 class Gcrev_CLI {

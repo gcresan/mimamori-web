@@ -29,7 +29,7 @@ use Google\Analytics\Data\V1beta\StringFilter;
  *   - キーイベント取得・選定
  *   - 分析ページ用: ページ詳細 / 地域詳細 / ソースデータ
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.0.0
  */
 class Gcrev_GA4_Fetcher {

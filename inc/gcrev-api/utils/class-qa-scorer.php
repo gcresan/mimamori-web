@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   honesty          20点  データなし時に断言していないか
  *   structure        20点  JSON構造・禁止用語チェック
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Mimamori_QA_Scorer {

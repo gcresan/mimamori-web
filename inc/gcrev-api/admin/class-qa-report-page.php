@@ -19,7 +19,7 @@ if ( class_exists( 'Gcrev_QA_Report_Page' ) ) { return; }
  *   D. ケース詳細モーダル
  *   E. Failures Top 10
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Gcrev_QA_Report_Page {

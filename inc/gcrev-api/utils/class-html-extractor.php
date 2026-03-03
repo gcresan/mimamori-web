@@ -5,7 +5,7 @@
  * レポートHTMLからセクション別テキスト/リスト/innerHTMLを抽出する静的ユーティリティ。
  * Step4.5 で Gcrev_Highlights から昇格。Highlights / Monthly_Report_Service 等が共有利用する。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 if ( ! defined('ABSPATH') ) { exit; }

@@ -1,8 +1,8 @@
-# CLAUDE.md — GCREV INSIGHT WordPress Theme
+# CLAUDE.md — みまもりウェブ WordPress Theme
 
 ## Overview
 
-WordPress テーマ「GCREV INSIGHT」。GA4/GSC/GBP データを集約し、クライアント向けダッシュボード・分析・月次レポートを提供する SaaS 型テーマ。
+WordPress テーマ「みまもりウェブ」。GA4/GSC/GBP データを集約し、クライアント向けダッシュボード・分析・月次レポートを提供する SaaS 型テーマ。
 
 ## Architecture
 

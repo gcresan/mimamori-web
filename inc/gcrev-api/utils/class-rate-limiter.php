@@ -17,7 +17,7 @@ if ( class_exists('Gcrev_Rate_Limiter') ) { return; }
  *   - 閾値に達したら sleep() で待機（ブロッキング）
  *   - Transient の TTL は60秒（自動で古いカウントが消える）
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.1.0
  */
 class Gcrev_Rate_Limiter {

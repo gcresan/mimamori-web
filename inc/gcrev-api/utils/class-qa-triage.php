@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   FOLLOWUP_FAIL    マルチターン後もデータ取得失敗           (major)
  *   UNKNOWN          上記に該当しない低スコア                (minor)
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Mimamori_QA_Triage {

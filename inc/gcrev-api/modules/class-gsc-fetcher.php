@@ -17,7 +17,7 @@ use Google\Service\Webmasters\SearchAnalyticsQueryRequest;
  * 責務:
  *   - Search Console API を使った検索パフォーマンスデータの取得
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.0.0
  */
 class Gcrev_GSC_Fetcher {

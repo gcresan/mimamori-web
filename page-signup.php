@@ -4,7 +4,7 @@
  *
  * 旧申込ページ。/apply/ へ 301 リダイレクト。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 wp_safe_redirect( home_url('/apply/'), 301 );
 exit;

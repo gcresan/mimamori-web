@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   summary.md          カテゴリ別平均点・失敗分布
  *   failures_top10.md   低スコア上位10件の詳細
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Mimamori_QA_Report_Writer {

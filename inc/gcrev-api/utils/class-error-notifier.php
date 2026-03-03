@@ -17,7 +17,7 @@ if ( class_exists( 'Gcrev_Error_Notifier' ) ) { return; }
  *   gcrev_notify_recipient      … メールアドレス
  *   gcrev_notify_error_threshold … 通知を送るエラー数の閾値
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Gcrev_Error_Notifier {

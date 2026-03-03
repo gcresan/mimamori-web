@@ -20,7 +20,7 @@ if ( class_exists('Gcrev_Date_Helper') ) { return; }
  *   - calculate_period_dates()      : 分析ページ用の期間計算（Asia/Tokyo 固定）
  *   - calculate_comparison_dates()  : 分析ページ用の比較期間
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.0.0
  */
 class Gcrev_Date_Helper {

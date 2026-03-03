@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   wp mimamori qa:list                                             最近のQA実行一覧
  *   wp mimamori qa:show  --run=YYYYMMDD_HHMMSS                     特定実行の詳細表示
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Mimamori_QA_CLI {

@@ -5,7 +5,7 @@
  * 更新情報（リリースノート）REST API
  * - 一覧取得・未読件数・既読管理・ingest（GitHub Actions用）
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 declare(strict_types=1);

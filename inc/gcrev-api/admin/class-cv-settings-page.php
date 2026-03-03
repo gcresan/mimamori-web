@@ -16,7 +16,7 @@ if ( class_exists('Gcrev_CV_Settings_Page') ) { return; }
  *   {prefix}gcrev_cv_routes テーブル（route_key, label, enabled, sort_order）
  *   user_meta: _gcrev_cv_only_configured, _gcrev_phone_event_name
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.2.0
  */
 class Gcrev_CV_Settings_Page {

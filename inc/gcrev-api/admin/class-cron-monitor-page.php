@@ -15,7 +15,7 @@ if ( class_exists( 'Gcrev_Cron_Monitor_Page' ) ) { return; }
  *   B. 実行履歴テーブル（直近50件）
  *   C. テナント一覧（全テナントの設定・データ状況）
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Gcrev_Cron_Monitor_Page {

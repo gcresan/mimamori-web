@@ -20,7 +20,7 @@ if ( class_exists('Gcrev_Payment_Settings_Page') ) { return; }
  *   gcrev_url_subscribe_2y_normal  — サブスク決済URL（2年通常）
  *   gcrev_url_subscribe_monitor    — サブスク決済URL（モニター）
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 class Gcrev_Payment_Settings_Page {
 

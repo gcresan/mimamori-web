@@ -23,7 +23,7 @@ if ( class_exists('Gcrev_Config') ) { return; }
  *   GCREV_GCP_PROJECT_ID    … GCP プロジェクトID（省略時は SA JSON から自動取得）
  *   GCREV_GCP_LOCATION      … Vertex AI リージョン（省略時は GEMINI_LOCATION env → 'us-central1'）
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.0.0
  */
 class Gcrev_Config {

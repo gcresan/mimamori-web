@@ -11,7 +11,7 @@
  * ★ サブスク決済ボタンは表示しない（文言のみ）
  * ★ 分割決済ボタンは 1y/2y で URL を切り替える
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 if ( ! is_user_logged_in() ) {

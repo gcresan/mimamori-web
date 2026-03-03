@@ -20,7 +20,7 @@ if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) { return; }
  *
  * スロット割り当て: user_id % スロット数
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Gcrev_Prefetch_Scheduler {

@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   page       20%  ページ系（人気ページ/LP/設定）
  *   general    10%  初心者質問（用語、見方、改善提案）
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Mimamori_QA_Question_Generator {

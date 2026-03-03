@@ -5,7 +5,7 @@
  * レポート CPT (gcrev_report) の CRUD 操作を担当するモジュール。
  * Step3-A で class-gcrev-api.php から分離。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 if ( ! defined('ABSPATH') ) { exit; }

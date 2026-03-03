@@ -7,7 +7,7 @@
  *
  * 依存: Gcrev_Config, Gcrev_Area_Detector（静的util）
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 if ( ! defined('ABSPATH') ) { exit; }

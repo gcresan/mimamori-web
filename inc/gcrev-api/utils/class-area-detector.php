@@ -6,7 +6,7 @@
  * Step4.5 で Gcrev_Report_Generator から分離。
  * Generator / Highlights の両方がこのクラスを参照し、循環依存を解消する。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 if ( ! defined('ABSPATH') ) { exit; }

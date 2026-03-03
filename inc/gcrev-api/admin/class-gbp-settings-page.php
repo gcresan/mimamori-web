@@ -16,7 +16,7 @@ if ( class_exists('Gcrev_GBP_Settings_Page') ) { return; }
  *   gcrev_gbp_client_id
  *   gcrev_gbp_client_secret
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   2.1.0
  */
 class Gcrev_GBP_Settings_Page {

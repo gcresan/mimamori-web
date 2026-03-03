@@ -5,7 +5,7 @@
  * マルチパスセクション生成・HTMLレイアウト組み立て・ヘルパーメソッド群。
  * Step3-B で class-gcrev-api.php から分離。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 
 if ( ! defined('ABSPATH') ) { exit; }

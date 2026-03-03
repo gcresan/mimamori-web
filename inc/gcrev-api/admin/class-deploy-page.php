@@ -22,7 +22,7 @@ if ( class_exists( 'Gcrev_Deploy_Page' ) ) { return; }
  *   MIMAMORI_SNAPSHOT_DIR     = '/home/kusanagi/mimamori-dev/snapshots'
  *   MIMAMORI_SCRIPTS_DIR      = '/home/kusanagi/mimamori-dev/scripts'
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.1.0
  */
 class Gcrev_Deploy_Page {

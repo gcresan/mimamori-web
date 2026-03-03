@@ -14,7 +14,7 @@ if ( class_exists('Gcrev_Client_Management_Page') ) { return; }
  * - クライアント別キャッシュ削除
  * - クライアント別レポート全削除
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  */
 class Gcrev_Client_Management_Page {
 

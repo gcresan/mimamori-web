@@ -12,7 +12,7 @@ if ( class_exists( 'Gcrev_Notification_Settings_Page' ) ) { return; }
  * 管理画面「みまもりウェブ > 通知設定」ページ。
  * Cron エラー通知の有効/無効、送信先、閾値を設定する。
  *
- * @package GCREV_INSIGHT
+ * @package Mimamori_Web
  * @since   3.0.0
  */
 class Gcrev_Notification_Settings_Page {
