@@ -5852,7 +5852,10 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
     if ( file_exists( $qa_gen_path ) && file_exists( $qa_cli_path ) ) {
         require_once $qa_gen_path;
         require_once $qa_cli_path;
-        WP_CLI::add_command( 'mimamori', 'Mimamori_QA_CLI' );
+        $qa_cli = new Mimamori_QA_CLI();
+        WP_CLI::add_command( 'mimamori qa run',  [ $qa_cli, 'qa_run' ] );
+        WP_CLI::add_command( 'mimamori qa list', [ $qa_cli, 'qa_list' ] );
+        WP_CLI::add_command( 'mimamori qa show', [ $qa_cli, 'qa_show' ] );
     }
 }
 
