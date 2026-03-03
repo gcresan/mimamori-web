@@ -21,6 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *   EMPTY_RESPONSE   回答が空/極短                          (major)
  *   TIMEOUT          API タイムアウト                       (critical)
  *   PARAM_GATE       ParamResolver が確認質問を返した         (info)
+ *   FOLLOWUP_FAIL    マルチターン後もデータ取得失敗           (major)
  *   UNKNOWN          上記に該当しない低スコア                (minor)
  *
  * @package GCREV_INSIGHT
@@ -139,6 +140,22 @@ class Mimamori_QA_Triage {
                 'severity' => 'info',
                 'reason'   => 'ParamResolver confirmation: ' . implode( ', ', $param_gate ),
             ];
+        }
+
+        // --- FOLLOWUP_FAIL: マルチターン後もデータ取得に失敗 ---
+        $is_followup = $case['is_followup'] ?? false;
+        if ( $is_followup ) {
+            $planner_queries   = $trace['planner_queries'] ?? [];
+            $followup_resolved = $trace['followup_resolved'] ?? null;
+
+            // フォローアップ解決後もクエリ生成ゼロ & ダイジェスト空 → パイプライン未動作
+            if ( empty( $det_queries ) && $flex_count === 0 && empty( $planner_queries ) && $digest_len === 0 ) {
+                $findings[] = [
+                    'category' => 'FOLLOWUP_FAIL',
+                    'severity' => 'major',
+                    'reason'   => 'Multi-turn follow-up: no queries generated. resolved=' . ( $followup_resolved ?? 'null' ),
+                ];
+            }
         }
 
         // --- WRONG_PERIOD ---

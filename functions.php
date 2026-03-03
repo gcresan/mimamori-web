@@ -3832,6 +3832,121 @@ function mimamori_resolve_params(
 }
 
 /**
+ * フォローアップコンテキスト解決
+ *
+ * 確認質問（ParamResolver）への短い回答（"1", "①", "今月" 等）を検出し、
+ * 会話履歴から元の質問を復元して「実効メッセージ」を合成する。
+ *
+ * 実効メッセージ = 元の質問 + 番号→テキスト解決済み回答
+ * 例: "検索キーワードのトップ5は？ 今月"
+ *
+ * データ取得パイプライン（意図分類・確定クエリ・プランナー）が
+ * 現在メッセージ "1" だけでは機能しない問題を解決する。
+ *
+ * @param  string $message  現在のユーザーメッセージ
+ * @param  array  $history  会話履歴 [{ role, content }, ...]
+ * @return string|null      実効メッセージ（解決不要なら null）
+ */
+function mimamori_resolve_followup_context( string $message, array $history ): ?string {
+    $msg = trim( $message );
+
+    // 長いメッセージは独立した質問 → 解決不要
+    if ( mb_strlen( $msg ) > 30 ) {
+        return null;
+    }
+
+    // 履歴が2件未満 → フォローアップではない
+    if ( count( $history ) < 2 ) {
+        return null;
+    }
+
+    // --- 直前のアシスタントメッセージ（確認質問）を取得 ---
+    $last_assistant_content = '';
+    for ( $i = count( $history ) - 1; $i >= 0; $i-- ) {
+        if ( ( $history[ $i ]['role'] ?? '' ) === 'assistant' ) {
+            $last_assistant_content = $history[ $i ]['content'] ?? '';
+            break;
+        }
+    }
+
+    if ( $last_assistant_content === '' ) {
+        return null;
+    }
+
+    // JSON文字列の場合はデコードして text を取得
+    if ( mb_substr( $last_assistant_content, 0, 1 ) === '{' ) {
+        $decoded = json_decode( $last_assistant_content, true );
+        if ( is_array( $decoded ) && isset( $decoded['text'] ) ) {
+            $last_assistant_content = $decoded['text'];
+        }
+    }
+
+    // 確認質問パターン（■ + ①②③④）の検出
+    if ( mb_strpos( $last_assistant_content, '■' ) === false
+         || ! preg_match( '/[①②③④]/u', $last_assistant_content ) ) {
+        return null;
+    }
+
+    // --- 元のユーザー質問を取得（最初のユーザーメッセージ） ---
+    $original_question = '';
+    for ( $i = 0; $i < count( $history ); $i++ ) {
+        if ( ( $history[ $i ]['role'] ?? '' ) === 'user' ) {
+            $original_question = trim( $history[ $i ]['content'] ?? '' );
+            break;
+        }
+    }
+
+    if ( $original_question === '' ) {
+        return null;
+    }
+
+    // --- 番号回答の解決 ---
+    $resolved = mimamori_resolve_numbered_answer( $msg, $last_assistant_content );
+
+    // 解決できなかった場合でも元の質問 + 現メッセージを合成
+    return $original_question . ' ' . $resolved;
+}
+
+/**
+ * 確認質問の番号回答をテキストに変換する
+ *
+ * "1" / "①" / "１" → 確認質問テキストから対応する選択肢テキストを抽出
+ *
+ * @param  string $answer          ユーザーの回答（"1", "①", "今月" 等）
+ * @param  string $clarification   AIの確認質問テキスト
+ * @return string 解決済みテキスト
+ */
+function mimamori_resolve_numbered_answer( string $answer, string $clarification ): string {
+    // 半角/全角/丸数字を統一
+    $normalized = str_replace(
+        [ '①', '②', '③', '④', '⑤', '１', '２', '３', '４', '５' ],
+        [ '1',  '2',  '3',  '4',  '5',  '1',  '2',  '3',  '4',  '5' ],
+        trim( $answer )
+    );
+
+    // 番号のみ（1〜5）の場合 → 対応選択肢テキストを抽出
+    if ( preg_match( '/^[1-5]$/', $normalized ) ) {
+        $num = (int) $normalized;
+
+        // 確認質問から選択肢テキストを抽出
+        $circled = [ '①', '②', '③', '④', '⑤' ];
+        if ( preg_match_all( '/[①②③④⑤]\s*(.+)/u', $clarification, $matches ) ) {
+            $options = $matches[1];
+            if ( isset( $options[ $num - 1 ] ) ) {
+                // 括弧内の補足を除去して本文のみ取得
+                $option_text = trim( $options[ $num - 1 ] );
+                $option_text = preg_replace( '/（.+?）$/', '', $option_text );
+                $option_text = preg_replace( '/\(.+?\)$/', '', $option_text );
+                return trim( $option_text );
+            }
+        }
+    }
+
+    // 番号以外（"今月", "先月" 等のテキスト回答）→ そのまま返す
+    return $answer;
+}
+
+/**
  * フレキシブルクエリを実行する
  *
  * @param array $flex_queries  mimamori_build_deterministic_queries() の返り値
@@ -4221,10 +4336,20 @@ function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
         'enrichment_text'       => '',
         'instructions_length'   => 0,
         'model'                 => '',
+        'followup_resolved'     => null,
     ];
 
     // コンテキスト構築
     $input = mimamori_build_chat_context( $data );
+
+    // === フォローアップコンテキスト解決 ===
+    // 確認質問への短い回答（"1", "①", "今月"等）を検出し、
+    // 元の質問と合成して「実効メッセージ」を生成する。
+    // データ取得パイプラインのみ使用（OpenAI入力は元メッセージのまま）。
+    $effective_message = mimamori_resolve_followup_context( $message, $data['history'] ?? [] );
+    if ( $effective_message !== null ) {
+        $trace['followup_resolved'] = $effective_message;
+    }
 
     // セクションコンテキスト（「AIに聞く」ボタンからのセクション抽出テキスト）
     $section_context = null;
@@ -4248,7 +4373,7 @@ function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
     $page_type = mimamori_detect_page_type( $current_page );
     $trace['page_type'] = $page_type;
 
-    $intent_text = $message;
+    $intent_text = $effective_message ?? $message;
     if ( $section_context !== null ) {
         $intent_text .= ' ' . $section_context['sectionBody'];
     }
@@ -4297,7 +4422,7 @@ function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
     $trace['context_blocks'] = $context_blocks;
 
     // === 確定的プランナー: 国/都市/source等の特定クエリを自動実行 ===
-    $deterministic_text = $message;
+    $deterministic_text = $effective_message ?? $message;
     if ( $section_context !== null ) {
         $deterministic_text .= ' ' . $section_context['sectionBody'];
     }
@@ -4331,7 +4456,7 @@ function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
 
     if ( ! empty( $sources['use_analytics'] ) ) {
         $digest          = mimamori_get_analytics_digest( $user_id );
-        $planner_queries = mimamori_call_planner_pass( $message, $digest, $intent_type );
+        $planner_queries = mimamori_call_planner_pass( $effective_message ?? $message, $digest, $intent_type );
 
         if ( ! empty( $planner_queries ) ) {
             $enrichment_data = mimamori_fetch_enrichment_data( $planner_queries, $user_id );

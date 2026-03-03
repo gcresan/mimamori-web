@@ -83,7 +83,10 @@ class Mimamori_QA_Runner {
     }
 
     /**
-     * 1問を実行する（リトライ1回付き）。
+     * 1問を実行する（リトライ1回 + マルチターン自動フォローアップ付き）。
+     *
+     * ParamResolver が確認質問を返した場合、自動でフォローアップ回答を
+     * 生成して Turn 2 を実行する。これにより実データ回答の品質もテストできる。
      *
      * @param  array $question 質問データ
      * @return array 結果
@@ -106,7 +109,111 @@ class Mimamori_QA_Runner {
             }
         }
 
+        // === マルチターン: PARAM_GATE 検出時に自動フォローアップ ===
+        $param_gate = $result['trace']['param_gate'] ?? [];
+        if ( $result['success'] && ! empty( $param_gate ) ) {
+            $followup = $this->build_followup( $question, $result );
+            if ( $followup !== null ) {
+                WP_CLI::log( sprintf(
+                    '[%s] PARAM_GATE detected (missing: %s) → auto follow-up',
+                    $question['id'],
+                    implode( ', ', $param_gate )
+                ) );
+                usleep( 1000 * 1000 ); // 1秒待機
+
+                $turn2_result = $this->call_chat( $followup );
+
+                // Turn 2 失敗時にリトライ1回
+                if ( ! $turn2_result['success'] ) {
+                    usleep( 1000 * 1000 );
+                    $turn2_result = $this->call_chat( $followup );
+                }
+
+                // Turn 1 データを保存、Turn 2 を主結果として返す
+                $turn2_result['turn1'] = [
+                    'raw_text'    => $result['raw_text'],
+                    'structured'  => $result['structured'],
+                    'trace'       => $this->slim_trace( $result['trace'] ?? [] ),
+                    'duration_ms' => $result['duration_ms'],
+                ];
+                $turn2_result['is_followup']  = true;
+                $turn2_result['duration_ms'] += $result['duration_ms'];
+                $turn2_result['started_at']   = $result['started_at'];
+
+                return $turn2_result;
+            }
+        }
+
         return $result;
+    }
+
+    /**
+     * PARAM_GATE 結果から自動フォローアップ質問を構築する。
+     *
+     * missing パラメータに基づいてシミュレーション回答を生成し、
+     * 会話履歴付きの新しい質問データを返す。
+     *
+     * @param  array $question 元の質問データ
+     * @param  array $result   Turn 1 の結果
+     * @return array|null      フォローアップ質問データ（構築不能なら null）
+     */
+    private function build_followup( array $question, array $result ): ?array {
+        $missing  = $result['trace']['param_gate'] ?? [];
+        $raw_text = $result['raw_text'] ?? '';
+
+        if ( empty( $missing ) || $raw_text === '' ) {
+            return null;
+        }
+
+        // 確認質問テキストを取得（JSONの場合はデコード）
+        $clarification_text = $raw_text;
+        if ( mb_substr( $raw_text, 0, 1 ) === '{' ) {
+            $decoded = json_decode( $raw_text, true );
+            if ( is_array( $decoded ) && isset( $decoded['text'] ) ) {
+                $clarification_text = $decoded['text'];
+            }
+        }
+
+        // シミュレーション回答を構築
+        // 標準マッピング: period→①(今月), metric→②(検索), comparison→①(前月)
+        $answer_parts = [];
+        foreach ( $missing as $param ) {
+            switch ( $param ) {
+                case 'period':
+                    $answer_parts[] = '①';
+                    break;
+                case 'metric':
+                    // 元の質問カテゴリに基づく選択
+                    $cat = $question['category'] ?? '';
+                    $answer_parts[] = ( $cat === 'kpi' ) ? '②' : '①';
+                    break;
+                case 'comparison_target':
+                    $answer_parts[] = '①';
+                    break;
+            }
+        }
+
+        if ( empty( $answer_parts ) ) {
+            return null;
+        }
+
+        $followup_answer = implode( ' ', $answer_parts );
+
+        // 会話履歴を構築
+        $history = [
+            [ 'role' => 'user',      'content' => $question['message'] ],
+            [ 'role' => 'assistant', 'content' => $clarification_text ],
+        ];
+
+        return [
+            'id'              => $question['id'] . '_t2',
+            'category'        => $question['category'],
+            'message'         => $followup_answer,
+            'page_type'       => $question['page_type'],
+            'current_page'    => $question['current_page'],
+            'history'         => $history,
+            'section_context' => null,
+        ];
     }
 
     /**
@@ -199,6 +306,9 @@ class Mimamori_QA_Runner {
             'trace'       => $this->slim_trace( $case['trace'] ?? [] ),
             'started_at'  => $case['started_at'],
             'ended_at'    => $case['ended_at'],
+            // マルチターン情報
+            'is_followup' => $case['is_followup'] ?? false,
+            'turn1'       => $case['turn1'] ?? null,
         ];
 
         $json = wp_json_encode( $slim_case, JSON_UNESCAPED_UNICODE );
@@ -232,6 +342,9 @@ class Mimamori_QA_Runner {
             'flex_text'             => $trace['flex_text'] ?? '',
             'enrichment_text'       => $trace['enrichment_text'] ?? '',
             'context_blocks'        => $trace['context_blocks'] ?? '',
+            // マルチターン用
+            'param_gate'            => $trace['param_gate'] ?? [],
+            'followup_resolved'     => $trace['followup_resolved'] ?? null,
         ];
     }
 }

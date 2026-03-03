@@ -39,6 +39,7 @@ class Gcrev_QA_Report_Page {
         'WRONG_PERIOD'   => 'major',
         'EMPTY_RESPONSE' => 'major',
         'JSON_BROKEN'    => 'major',
+        'FOLLOWUP_FAIL'  => 'major',
         'FALSE_NEGATIVE' => 'minor',
         'JARGON'         => 'minor',
         'PARAM_GATE'     => 'info',
@@ -56,6 +57,7 @@ class Gcrev_QA_Report_Page {
         'JSON_BROKEN'    => 'AI応答のJSON抽出正規表現を確認。構造化パーサーのエラーハンドリングを改善。',
         'FALSE_NEGATIVE' => 'データ存在判定ロジックを確認。digest/flex_textが空でないのに「不明」応答のケースを調査。',
         'JARGON'         => 'システムプロンプトの用語変換ルールを更新。禁止用語リストを拡張。',
+        'FOLLOWUP_FAIL'  => 'フォローアップ解決ロジックを確認。mimamori_resolve_followup_context()の番号解析パターンとクエリビルダのキーワードマッチを調査。',
         'PARAM_GATE'     => '情報不足により確認質問を返却。ParamResolver確認質問のしきい値を調整。',
         'UNKNOWN'        => '個別調査が必要。スコア詳細を確認して根本原因を特定。',
     ];
@@ -589,8 +591,12 @@ class Gcrev_QA_Report_Page {
             }
             echo '</td>';
 
-            // 質問
-            echo '<td style="font-size:13px;">' . esc_html( $this->truncate( $question, 60 ) ) . '</td>';
+            // 質問（マルチターンの場合は 2-turn バッジ表示）
+            $is_followup   = ! empty( $case['is_followup'] );
+            $followup_badge = $is_followup
+                ? '<span style="font-size:10px;padding:1px 4px;background:#dbeafe;color:#1d4ed8;border-radius:3px;margin-right:4px;white-space:nowrap;">2-turn</span>'
+                : '';
+            echo '<td style="font-size:13px;">' . $followup_badge . esc_html( $this->truncate( $question, 60 ) ) . '</td>';
 
             // カテゴリ
             echo '<td><span style="font-size:12px;padding:2px 6px;background:#f1f5f9;border-radius:3px;">' . esc_html( $category ) . '</span></td>';

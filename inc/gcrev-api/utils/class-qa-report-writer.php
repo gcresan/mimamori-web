@@ -185,6 +185,9 @@ class Mimamori_QA_Report_Writer {
                 'triage'      => $r['triage'] ?? [],
                 'started_at'  => $r['started_at'] ?? '',
                 'ended_at'    => $r['ended_at'] ?? '',
+                // マルチターン情報
+                'is_followup' => $r['is_followup'] ?? false,
+                'turn1'       => $r['turn1'] ?? null,
             ], JSON_UNESCAPED_UNICODE );
         }
 
@@ -272,6 +275,23 @@ class Mimamori_QA_Report_Writer {
                 $pct = $total > 0 ? ( $cnt / $total ) * 100 : 0;
                 $md .= sprintf( "| %s | %d | %.1f%% |\n", $type, $cnt, $pct );
             }
+            $md .= "\n";
+        }
+
+        // Multi-Turn Follow-up Stats
+        $mt_count  = 0;
+        $mt_scores = [];
+        foreach ( $results as $r ) {
+            if ( ! empty( $r['is_followup'] ) ) {
+                $mt_count++;
+                $mt_scores[] = $r['score']['total'] ?? 0;
+            }
+        }
+        if ( $mt_count > 0 ) {
+            $mt_avg = array_sum( $mt_scores ) / $mt_count;
+            $md .= "## Multi-Turn Follow-up\n\n";
+            $md .= sprintf( "- **Triggered**: %d / %d questions\n", $mt_count, $total );
+            $md .= sprintf( "- **Avg Score (Turn 2)**: %.1f\n", $mt_avg );
             $md .= "\n";
         }
 
