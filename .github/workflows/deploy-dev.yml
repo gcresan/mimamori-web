@@ -27,3 +27,16 @@ jobs:
             --exclude='.DS_Store' \
             --exclude='config.rb' \
             ./ root@162.43.35.237:/home/kusanagi/mimamori-dev/DocumentRoot/wp-content/themes/mimamori/
+
+      - name: Setup scripts symlinks
+        run: |
+          ssh root@162.43.35.237 'bash -s' <<'REMOTE'
+          THEME_SCRIPTS="/home/kusanagi/mimamori-dev/DocumentRoot/wp-content/themes/mimamori/scripts"
+          DEST="/home/kusanagi/mimamori-dev/scripts"
+          mkdir -p "$DEST"
+          for f in "$THEME_SCRIPTS"/*.sh; do
+            name=$(basename "$f")
+            ln -sf "$f" "$DEST/$name"
+            chmod +x "$f"
+          done
+          REMOTE
