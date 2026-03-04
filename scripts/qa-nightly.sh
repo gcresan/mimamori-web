@@ -20,6 +20,7 @@ set -euo pipefail
 # --- 固定パス ---
 WP_ROOT="/home/kusanagi/mimamori-dev/DocumentRoot"
 WP_CLI="/opt/kusanagi/php/bin/php /opt/kusanagi/bin/wp"
+WP_CONFIG="${WP_ROOT}/../wp-config.php"
 LOCK_FILE="/tmp/mimamori-qa-nightly.lock"
 QA_RUNS_DIR="${WP_ROOT}/wp-content/uploads/mimamori/qa_runs"
 LOG_DIR="/home/kusanagi/mimamori-dev/logs"
@@ -39,13 +40,14 @@ log() {
 }
 
 # --- 環境チェック ---
-if [ ! -f "${WP_ROOT}/wp-config.php" ]; then
-    log "ERROR: WordPress not found at ${WP_ROOT}"
+# KUSANAGI: wp-config.php は DocumentRoot の親ディレクトリに配置
+if [ ! -f "${WP_CONFIG}" ]; then
+    log "ERROR: wp-config.php not found at ${WP_CONFIG}"
     exit 1
 fi
 
 # Dev 環境チェック（wp-config.php に MIMAMORI_ENV が development であること）
-ENV_CHECK=$(grep -c "MIMAMORI_ENV.*development" "${WP_ROOT}/../wp-config.php" 2>/dev/null || true)
+ENV_CHECK=$(grep -c "MIMAMORI_ENV.*development" "${WP_CONFIG}" 2>/dev/null || true)
 if [ "${ENV_CHECK}" -eq 0 ]; then
     log "SKIP: Not a development environment. QA nightly runs only on Dev."
     exit 0
