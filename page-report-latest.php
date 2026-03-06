@@ -65,34 +65,89 @@ $month = (int)$prev_month_start->format('n');
 $gcrev_api      = new Gcrev_Insight_API(false);
 $monthly_report = $gcrev_api->get_monthly_ai_report($year, $month, $user_id);
 
-// === Effective CV（CVチャート + CV数表示用） ===
-$effective_cv_json = '{}';
-try {
-    $prev_year_month = $prev_month_start->format('Y-m');
-    $effective_cv_data = $gcrev_api->get_effective_cv_monthly($prev_year_month, $user_id);
-    $effective_cv_json = wp_json_encode([
-        'source'     => $effective_cv_data['source'],
-        'total'      => $effective_cv_data['total'],
-        'daily'      => $effective_cv_data['daily'],
-        'has_actual' => ($effective_cv_data['source'] !== 'ga4'),
-        'components' => $effective_cv_data['components'],
-    ], JSON_UNESCAPED_UNICODE);
-} catch (\Throwable $e) {
-    error_log('[GCREV] page-report-latest effective CV error: ' . $e->getMessage());
-}
-
-// === KPIスナップショット（保存済みがあれば使う） ===
-$kpi_snapshot_json = 'null';
-if ( $monthly_report && ! empty( $monthly_report['id'] ) ) {
-    $snapshot_raw = get_post_meta( (int) $monthly_report['id'], '_gcrev_kpi_snapshot_json', true );
-    if ( $snapshot_raw ) {
-        $kpi_snapshot_json = $snapshot_raw; // 既にJSON文字列
-    }
-}
-
 // レポート対象期間の日付（JS に渡す）
 $report_start_date = $prev_month_start->format('Y-m-d');
 $report_end_date   = $prev_month_end->format('Y-m-d');
+
+// === KPIスナップショット（保存済みがあれば使う） ===
+$kpi_snapshot_json  = 'null';
+$snapshot_data      = null;
+$has_full_snapshot  = false;
+$snapshot_error     = '';
+$report_post_id     = ( $monthly_report && ! empty( $monthly_report['id'] ) ) ? (int) $monthly_report['id'] : 0;
+
+// 管理者による手動リフレッシュ（?refresh=1）
+$force_refresh = ( isset( $_GET['refresh'] ) && $_GET['refresh'] === '1' && current_user_can( 'manage_options' ) );
+if ( $force_refresh && $report_post_id > 0 ) {
+    delete_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json' );
+}
+
+if ( $report_post_id > 0 ) {
+    // 1. 保存済みスナップショットを読み込み
+    if ( ! $force_refresh ) {
+        $snapshot_raw = get_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', true );
+        if ( $snapshot_raw ) {
+            $snapshot_data = json_decode( $snapshot_raw, true );
+            if ( is_array( $snapshot_data ) && isset( $snapshot_data['pageViews'] ) ) {
+                $kpi_snapshot_json = $snapshot_raw;
+                $has_full_snapshot = true;
+            }
+        }
+    }
+
+    // 2. スナップショットなし → 一度だけGA4 APIから取得して保存（バックフィル）
+    if ( ! $has_full_snapshot ) {
+        try {
+            $backfill_data = $gcrev_api->get_dashboard_kpi_by_dates(
+                $report_start_date,
+                $report_end_date,
+                $user_id
+            );
+            if ( is_array( $backfill_data ) && isset( $backfill_data['pageViews'] ) ) {
+                $backfill_data['snapshot_version']  = 1;
+                $backfill_data['snapshot_saved_at'] = ( new DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+                $json_str = wp_json_encode( $backfill_data, JSON_UNESCAPED_UNICODE );
+                update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', $json_str );
+                $kpi_snapshot_json = $json_str;
+                $snapshot_data     = $backfill_data;
+                $has_full_snapshot  = true;
+                error_log( "[GCREV] page-report-latest: Backfilled KPI snapshot for report_id={$report_post_id}" );
+            }
+        } catch ( \Throwable $e ) {
+            $snapshot_error = $e->getMessage();
+            error_log( '[GCREV] page-report-latest: KPI backfill error: ' . $e->getMessage() );
+        }
+    }
+}
+
+// === Effective CV（CVチャート + CV数表示用） ===
+$effective_cv_json = '{}';
+if ( $has_full_snapshot && ! empty( $snapshot_data['effective_cv'] ) ) {
+    // スナップショットから取得（API呼び出し不要）
+    $eff = $snapshot_data['effective_cv'];
+    $effective_cv_json = wp_json_encode([
+        'source'     => $eff['source'] ?? 'ga4',
+        'total'      => $eff['total'] ?? 0,
+        'daily'      => $eff['daily'] ?? [],
+        'has_actual' => ( ( $eff['source'] ?? 'ga4' ) !== 'ga4' ),
+        'components' => $eff['components'] ?? [],
+    ], JSON_UNESCAPED_UNICODE);
+} else {
+    // スナップショットなし → API取得（レポート未生成 or バックフィル失敗時のフォールバック）
+    try {
+        $prev_year_month   = $prev_month_start->format('Y-m');
+        $effective_cv_data = $gcrev_api->get_effective_cv_monthly( $prev_year_month, $user_id );
+        $effective_cv_json = wp_json_encode([
+            'source'     => $effective_cv_data['source'],
+            'total'      => $effective_cv_data['total'],
+            'daily'      => $effective_cv_data['daily'],
+            'has_actual' => ( $effective_cv_data['source'] !== 'ga4' ),
+            'components' => $effective_cv_data['components'],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch ( \Throwable $e ) {
+        error_log( '[GCREV] page-report-latest effective CV error: ' . $e->getMessage() );
+    }
+}
 
 // ========================================
 // ヘルパー関数（page-dashboard.php と同一）
@@ -408,6 +463,28 @@ get_header();
             <span class="period-value"><?php echo esc_html($prev_prev_month_start->format('Y年n月')); ?>（<?php echo esc_html($prev_prev_month_start->format('n/1')); ?> - <?php echo esc_html($prev_prev_month_end->format('n/t')); ?>）</span>
         </div>
     </div>
+
+    <?php
+    // 管理者向け: スナップショット情報 + 再取得ボタン
+    if ( current_user_can( 'manage_options' ) && $report_post_id > 0 ) :
+        $refresh_url = add_query_arg( 'refresh', '1' );
+        if ( $ym_param ) {
+            $refresh_url = add_query_arg( [ 'ym' => $ym_param, 'refresh' => '1' ], home_url( '/report/report-latest/' ) );
+        }
+        $snap_ver  = $has_full_snapshot ? ( $snapshot_data['snapshot_version'] ?? '?' ) : '-';
+        $snap_at   = $has_full_snapshot ? ( $snapshot_data['snapshot_saved_at'] ?? '-' ) : '-';
+    ?>
+    <div class="rpt-admin-toolbar" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:6px 12px;background:#f8f9fa;border-radius:6px;font-size:12px;color:#888;">
+        <span>Snapshot: v<?php echo esc_html( $snap_ver ); ?> / <?php echo esc_html( $snap_at ); ?></span>
+        <a href="<?php echo esc_url( $refresh_url ); ?>" class="rpt-admin-refresh-btn" style="display:inline-flex;align-items:center;gap:3px;padding:3px 10px;font-size:11px;font-weight:600;color:#3D6B6E;background:rgba(61,107,110,0.08);border:1px solid rgba(61,107,110,0.2);border-radius:4px;text-decoration:none;" onclick="return confirm('GA4 APIからデータを再取得します。よろしいですか？');">データ再取得</a>
+    </div>
+    <?php endif; ?>
+
+    <?php if ( $snapshot_error && current_user_can( 'manage_options' ) ) : ?>
+    <div style="margin-bottom:12px;padding:10px 14px;background:#fff3e0;border-left:3px solid #e65100;border-radius:4px;font-size:13px;color:#e65100;">
+        KPIスナップショットの自動保存に失敗しました: <?php echo esc_html( $snapshot_error ); ?>
+    </div>
+    <?php endif; ?>
 
     <!-- 3) KPIサマリーカード -->
     <div class="kpi-grid" id="kpiGrid">

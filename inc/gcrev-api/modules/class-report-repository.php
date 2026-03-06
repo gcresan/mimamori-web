@@ -110,8 +110,15 @@ class Gcrev_Report_Repository {
         if ( $post_id <= 0 || empty( $kpi_data ) ) {
             return;
         }
+        // バージョン・保存日時を補完（呼び出し元で設定済みならそのまま）
+        if ( ! isset( $kpi_data['snapshot_version'] ) ) {
+            $kpi_data['snapshot_version'] = 1;
+        }
+        if ( ! isset( $kpi_data['snapshot_saved_at'] ) ) {
+            $kpi_data['snapshot_saved_at'] = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        }
         update_post_meta( $post_id, '_gcrev_kpi_snapshot_json', wp_json_encode( $kpi_data, JSON_UNESCAPED_UNICODE ) );
-        error_log( "[GCREV] KPI snapshot saved for post_id={$post_id}" );
+        error_log( "[GCREV] KPI snapshot saved for post_id={$post_id}, version={$kpi_data['snapshot_version']}" );
     }
 
     /**

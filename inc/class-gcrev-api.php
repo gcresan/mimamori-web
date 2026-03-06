@@ -6627,6 +6627,10 @@ PROMPT;
                 $snapshot['trends']['conversions'] = $cv_trend;
             }
 
+            // スナップショットバージョン・保存日時
+            $snapshot['snapshot_version']  = 1;
+            $snapshot['snapshot_saved_at'] = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+
             $this->repo->save_kpi_snapshot( $post_id, $snapshot );
         } catch ( \Throwable $e ) {
             error_log( "[GCREV] save_kpi_snapshot_for_report error: " . $e->getMessage() );
