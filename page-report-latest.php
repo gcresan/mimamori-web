@@ -616,9 +616,10 @@ get_header();
     <div class="kpi-grid" id="kpiGrid">
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">見られた回数 <span class="kpi-term">（ページビュー）</span></span>
+                <span class="kpi-title">見られた回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（ページビュー）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,107,110,0.08);">👁️</div>
             </div>
+            <div class="kpi-info-tip">ホームページの各ページが何回見られたかの合計です。同じ人が何ページも見ると、その分だけ数が増えます。</div>
             <div class="kpi-value" id="kpi-pageviews">-</div>
             <div class="kpi-change" id="kpi-pageviews-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-pageviews"></canvas></div>
@@ -626,9 +627,10 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">訪問回数 <span class="kpi-term">（セッション）</span></span>
+                <span class="kpi-title">訪問回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（セッション）</span></span>
                 <div class="kpi-icon" style="background: rgba(212,168,66,0.12);">🎯</div>
             </div>
+            <div class="kpi-info-tip">ホームページに誰かが来た回数です。1人が朝と夜に来たら「2回」とカウントされます。</div>
             <div class="kpi-value" id="kpi-sessions">-</div>
             <div class="kpi-change" id="kpi-sessions-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-sessions"></canvas></div>
@@ -636,9 +638,10 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">見に来た人の数 <span class="kpi-term">（ユーザー）</span></span>
+                <span class="kpi-title">見に来た人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（ユーザー）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,139,110,0.1);">👥</div>
             </div>
+            <div class="kpi-info-tip">ホームページを見に来た人数です。同じ人が何回来ても「1人」としてカウントされます。</div>
             <div class="kpi-value" id="kpi-users">-</div>
             <div class="kpi-change" id="kpi-users-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-users"></canvas></div>
@@ -646,9 +649,10 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">はじめての人の数 <span class="kpi-term">（新規ユーザー）</span></span>
+                <span class="kpi-title">はじめての人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（新規ユーザー）</span></span>
                 <div class="kpi-icon" style="background: rgba(78,130,133,0.1);">✨</div>
             </div>
+            <div class="kpi-info-tip">この期間にはじめてホームページを訪れた人の数です。新しいお客様候補がどれだけ増えたかがわかります。</div>
             <div class="kpi-value" id="kpi-newusers">-</div>
             <div class="kpi-change" id="kpi-newusers-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-newusers"></canvas></div>
@@ -656,9 +660,10 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">また来てくれた人 <span class="kpi-term">（リピーター）</span></span>
+                <span class="kpi-title">また来てくれた人 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（リピーター）</span></span>
                 <div class="kpi-icon" style="background: rgba(181,87,75,0.08);">🔁</div>
             </div>
+            <div class="kpi-info-tip">以前にもホームページを見たことがある人の数です。多いほど「また見たい」と思われている証拠です。</div>
             <div class="kpi-value" id="kpi-returning">-</div>
             <div class="kpi-change" id="kpi-returning-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-returning"></canvas></div>
@@ -666,9 +671,10 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">しっかり見られた時間 <span class="kpi-term">（平均滞在時間）</span></span>
+                <span class="kpi-title">しっかり見られた時間 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（平均滞在時間）</span></span>
                 <div class="kpi-icon" style="background: rgba(212,168,66,0.15);">⏱️</div>
             </div>
+            <div class="kpi-info-tip">訪問者がホームページに滞在した平均時間です。長いほど内容に興味を持って読んでもらえています。</div>
             <div class="kpi-value" id="kpi-duration">-</div>
             <div class="kpi-change" id="kpi-duration-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-duration"></canvas></div>
@@ -676,9 +682,10 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span> <span class="kpi-term">（コンバージョン）</span></span>
+                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span> <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（コンバージョン）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,139,110,0.1);">🎉</div>
             </div>
+            <div class="kpi-info-tip">お問い合わせや申込みなど、ホームページの目標が達成された回数です。この数が増えると、ホームページが成果につながっています。</div>
             <div class="kpi-value" id="kpi-conversions">-</div>
             <div class="kpi-change" id="kpi-conversions-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-conversions"></canvas></div>
@@ -1599,6 +1606,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnGenerateReport) {
         btnGenerateReport.addEventListener('click', generateMonthlyReport);
     }
+
+    // KPI インフォボタン — クリックで説明表示トグル
+    document.querySelectorAll('.kpi-info-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var card = btn.closest('.kpi-card');
+            var wasOpen = card.classList.contains('info-open');
+            // 他のカードを閉じる
+            document.querySelectorAll('.kpi-card.info-open').forEach(function(c) {
+                c.classList.remove('info-open');
+            });
+            // トグル
+            if (!wasOpen) card.classList.add('info-open');
+        });
+    });
+    // カード外クリックで閉じる
+    document.addEventListener('click', function() {
+        document.querySelectorAll('.kpi-card.info-open').forEach(function(c) {
+            c.classList.remove('info-open');
+        });
+    });
 });
 </script>
 
