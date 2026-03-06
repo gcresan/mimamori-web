@@ -49,25 +49,20 @@ if ($ym_param && preg_match('/^\d{4}-\d{2}$/', $ym_param)) {
 // ========================================
 // 全レポート年月リスト取得（年月切り替えUI用）
 // ========================================
-$all_report_yms = [];
-$ym_query = get_posts([
-    'post_type'      => 'gcrev_report',
-    'posts_per_page' => -1,
-    'post_status'    => 'publish',
-    'fields'         => 'ids',
-    'meta_query'     => [
-        ['key' => '_gcrev_user_id', 'value' => $user_id],
-        ['key' => '_gcrev_is_current', 'value' => 1],
-    ],
-]);
-foreach ( $ym_query as $pid ) {
-    $ym_val = get_post_meta( $pid, '_gcrev_year_month', true );
-    if ( $ym_val && preg_match( '/^\d{4}-\d{2}$/', $ym_val ) ) {
-        $all_report_yms[] = $ym_val;
-    }
-}
-$all_report_yms = array_unique( $all_report_yms );
-rsort( $all_report_yms ); // 降順（新しい月が先）
+global $wpdb;
+$all_report_yms = $wpdb->get_col( $wpdb->prepare(
+    "SELECT DISTINCT ym.meta_value
+     FROM {$wpdb->postmeta} ym
+     INNER JOIN {$wpdb->posts} p
+         ON p.ID = ym.post_id AND p.post_type = 'gcrev_report' AND p.post_status = 'publish'
+     INNER JOIN {$wpdb->postmeta} uid
+         ON uid.post_id = ym.post_id AND uid.meta_key = '_gcrev_user_id' AND uid.meta_value = %s
+     INNER JOIN {$wpdb->postmeta} cur
+         ON cur.post_id = ym.post_id AND cur.meta_key = '_gcrev_is_current' AND cur.meta_value = '1'
+     WHERE ym.meta_key = '_gcrev_year_month'
+     ORDER BY ym.meta_value DESC",
+    $user_id
+) );
 
 // 年別にグループ化
 $report_years = [];
