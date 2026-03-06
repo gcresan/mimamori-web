@@ -89,6 +89,20 @@ if ( $report_post_id > 0 ) {
         if ( $snapshot_raw ) {
             $snapshot_data = json_decode( $snapshot_raw, true );
             if ( is_array( $snapshot_data ) && isset( $snapshot_data['pageViews'] ) ) {
+                // マイグレーション: pages/keywords がラップされていたら展開して再保存
+                $needs_resave = false;
+                if ( isset( $snapshot_data['pages']['pages'] ) ) {
+                    $snapshot_data['pages'] = $snapshot_data['pages']['pages'];
+                    $needs_resave = true;
+                }
+                if ( isset( $snapshot_data['keywords']['keywords'] ) ) {
+                    $snapshot_data['keywords'] = $snapshot_data['keywords']['keywords'];
+                    $needs_resave = true;
+                }
+                if ( $needs_resave ) {
+                    $snapshot_raw = wp_json_encode( $snapshot_data, JSON_UNESCAPED_UNICODE );
+                    update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', $snapshot_raw );
+                }
                 $kpi_snapshot_json = $snapshot_raw;
                 $has_full_snapshot = true;
             }

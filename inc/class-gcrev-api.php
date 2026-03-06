@@ -2498,8 +2498,8 @@ class Gcrev_Insight_API {
             'medium'  => $medium,
             'geo_region' => $geo_region,
             'age'     => $age,
-            'pages'   => $ga4_pages,
-            'keywords' => $gsc_data,
+            'pages'   => $ga4_pages['pages'] ?? [],
+            'keywords' => $gsc_data['keywords'] ?? [],
 
             'channels_summary'      => $source_analysis['channels_summary'] ?? [],
             'sources_detail'        => $source_analysis['sources_detail'] ?? [],
