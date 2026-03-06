@@ -616,7 +616,7 @@ get_header();
     <div class="kpi-grid" id="kpiGrid">
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">見られた回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（ページビュー）</span></span>
+                <span class="kpi-title">見られた回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（ページビュー）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,107,110,0.08);">👁️</div>
             </div>
             <div class="kpi-info-tip">ホームページの各ページが何回見られたかの合計です。同じ人が何ページも見ると、その分だけ数が増えます。</div>
@@ -627,7 +627,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">訪問回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（セッション）</span></span>
+                <span class="kpi-title">訪問回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（セッション）</span></span>
                 <div class="kpi-icon" style="background: rgba(212,168,66,0.12);">🎯</div>
             </div>
             <div class="kpi-info-tip">ホームページに誰かが来た回数です。1人が朝と夜に来たら「2回」とカウントされます。</div>
@@ -638,7 +638,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">見に来た人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（ユーザー）</span></span>
+                <span class="kpi-title">見に来た人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（ユーザー）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,139,110,0.1);">👥</div>
             </div>
             <div class="kpi-info-tip">ホームページを見に来た人数です。同じ人が何回来ても「1人」としてカウントされます。</div>
@@ -649,7 +649,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">はじめての人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（新規ユーザー）</span></span>
+                <span class="kpi-title">はじめての人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（新規ユーザー）</span></span>
                 <div class="kpi-icon" style="background: rgba(78,130,133,0.1);">✨</div>
             </div>
             <div class="kpi-info-tip">この期間にはじめてホームページを訪れた人の数です。新しいお客様候補がどれだけ増えたかがわかります。</div>
@@ -660,7 +660,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">また来てくれた人 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（リピーター）</span></span>
+                <span class="kpi-title">また来てくれた人 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（リピーター）</span></span>
                 <div class="kpi-icon" style="background: rgba(181,87,75,0.08);">🔁</div>
             </div>
             <div class="kpi-info-tip">以前にもホームページを見たことがある人の数です。多いほど「また見たい」と思われている証拠です。</div>
@@ -671,7 +671,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">しっかり見られた時間 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（平均滞在時間）</span></span>
+                <span class="kpi-title">しっかり見られた時間 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（平均滞在時間）</span></span>
                 <div class="kpi-icon" style="background: rgba(212,168,66,0.15);">⏱️</div>
             </div>
             <div class="kpi-info-tip">訪問者がホームページに滞在した平均時間です。長いほど内容に興味を持って読んでもらえています。</div>
@@ -682,7 +682,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span> <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="5" r="0.8" fill="currentColor"/></svg></button><span class="kpi-term">（コンバージョン）</span></span>
+                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span> <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（コンバージョン）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,139,110,0.1);">🎉</div>
             </div>
             <div class="kpi-info-tip">お問い合わせや申込みなど、ホームページの目標が達成された回数です。この数が増えると、ホームページが成果につながっています。</div>
