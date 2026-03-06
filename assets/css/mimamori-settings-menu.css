@@ -11,8 +11,8 @@
 }
 
 .settings-menu-btn {
-    background: #D97706;
-    border: 1px solid #D97706;
+    background: #1a1a1a;
+    border: 1px solid #1a1a1a;
     cursor: pointer;
     padding: 6px 14px;
     color: #fff;
@@ -27,14 +27,14 @@
     white-space: nowrap;
 }
 .settings-menu-btn:hover {
-    background: #B45309;
-    border-color: #B45309;
+    background: #000;
+    border-color: #000;
     color: #fff;
-    box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 .settings-menu.open .settings-menu-btn {
-    background: #92400E;
-    border-color: #92400E;
+    background: #000;
+    border-color: #000;
     color: #fff;
 }
 .settings-menu-btn svg {
