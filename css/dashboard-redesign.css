@@ -284,6 +284,7 @@ h3 { font-size: 19px; font-weight: 600; }
   background: none;
   border: none;
   font: inherit;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
   color: #333333;
