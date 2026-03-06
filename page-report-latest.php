@@ -8,6 +8,9 @@ if (!is_user_logged_in()) {
     exit;
 }
 
+// === パフォーマンス計測 ===
+$_perf = [ 'start' => microtime(true) ];
+
 $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
 
@@ -45,6 +48,8 @@ if ($ym_param && preg_match('/^\d{4}-\d{2}$/', $ym_param)) {
     $prev_prev_month_start = new DateTimeImmutable('first day of 2 months ago', $tz);
     $prev_prev_month_end   = new DateTimeImmutable('last day of 2 months ago', $tz);
 }
+
+$_perf['date_calc'] = microtime(true);
 
 // ========================================
 // 全レポート年月リスト取得（年月切り替えUI用）
@@ -89,12 +94,17 @@ set_query_var('gcrev_page_title', '月次レポート');
 set_query_var('gcrev_page_subtitle', $display_ym . 'のアクセス状況や反応をまとめたレポートです。');
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート'));
 
+$_perf['ym_query'] = microtime(true);
+
 // 月次AIレポート取得
 $year  = (int)$prev_month_start->format('Y');
 $month = (int)$prev_month_start->format('n');
 
 $gcrev_api      = new Gcrev_Insight_API(false);
+$_perf['api_construct'] = microtime(true);
+
 $monthly_report = $gcrev_api->get_monthly_ai_report($year, $month, $user_id);
+$_perf['report_fetch'] = microtime(true);
 
 // レポート対象期間の日付（JS に渡す）
 $report_start_date = $prev_month_start->format('Y-m-d');
@@ -157,6 +167,8 @@ if ( $report_post_id > 0 ) {
         }
     }
 }
+
+$_perf['snapshot'] = microtime(true);
 
 // === Effective CV（CVチャート + CV数表示用） ===
 $effective_cv_json = '{}';
@@ -429,6 +441,8 @@ if ($monthly_report) {
     // サイトURL
     $site_url = home_url('/');
 }
+
+$_perf['php_done'] = microtime(true);
 
 get_header();
 ?>
@@ -1601,4 +1615,21 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<?php
+// === パフォーマンス計測結果 ===
+$_perf['end'] = microtime(true);
+$_s = $_perf['start'];
+$_fmt = function($label, $from, $to) { return sprintf('  %-20s %6.0f ms', $label, ($to - $from) * 1000); };
+echo "\n<!-- PERF TIMING (report-latest)\n";
+echo $_fmt('日付計算',       $_s,                     $_perf['date_calc']) . "\n";
+echo $_fmt('年月リストSQL',  $_perf['date_calc'],     $_perf['ym_query']) . "\n";
+echo $_fmt('API construct',  $_perf['ym_query'],      $_perf['api_construct']) . "\n";
+echo $_fmt('レポート取得',   $_perf['api_construct'],  $_perf['report_fetch']) . "\n";
+echo $_fmt('スナップショット', $_perf['report_fetch'], $_perf['snapshot']) . "\n";
+echo $_fmt('PHP残り処理',    $_perf['snapshot'],       $_perf['php_done']) . "\n";
+echo sprintf("  %-20s %6.0f ms\n", '== PHP合計 ==', ($_perf['php_done'] - $_s) * 1000);
+echo sprintf("  %-20s %6.0f ms\n", '== 全体 ==', ($_perf['end'] - $_s) * 1000);
+echo sprintf("  backfill実行: %s\n", $has_full_snapshot ? 'NO (snapshot済)' : 'YES (APIフォールバック)');
+echo "-->\n";
+?>
 <?php get_footer(); ?>
