@@ -69,13 +69,17 @@ $monthly_report = $gcrev_api->get_monthly_ai_report($year, $month, $user_id);
 $report_start_date = $prev_month_start->format('Y-m-d');
 $report_end_date   = $prev_month_end->format('Y-m-d');
 
-// === KPIスナップショット（保存済みデータのみ使用 — API再取得なし） ===
+// === KPIスナップショット ===
+// 保存済みスナップショットを読み込み。
+// 未保存の場合のみ一度だけGA4 APIから取得して固定保存（移行用）。
+// 保存済みスナップショットは上書きしない（確定帳票として不変）。
 $kpi_snapshot_json  = 'null';
 $snapshot_data      = null;
 $has_full_snapshot  = false;
 $report_post_id     = ( $monthly_report && ! empty( $monthly_report['id'] ) ) ? (int) $monthly_report['id'] : 0;
 
 if ( $report_post_id > 0 ) {
+    // 1. 保存済みスナップショットを読み込み
     $snapshot_raw = get_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', true );
     if ( $snapshot_raw ) {
         $snapshot_data = json_decode( $snapshot_raw, true );
@@ -98,11 +102,35 @@ if ( $report_post_id > 0 ) {
             $has_full_snapshot = true;
         }
     }
+
+    // 2. 未保存 → 一度だけ取得して固定保存（スナップショット機能追加前のレポート移行用）
+    if ( ! $has_full_snapshot ) {
+        try {
+            $backfill_data = $gcrev_api->get_dashboard_kpi_by_dates(
+                $report_start_date,
+                $report_end_date,
+                $user_id
+            );
+            if ( is_array( $backfill_data ) && isset( $backfill_data['pageViews'] ) ) {
+                $backfill_data['snapshot_version']  = 1;
+                $backfill_data['snapshot_saved_at'] = ( new DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+                $json_str = wp_json_encode( $backfill_data, JSON_UNESCAPED_UNICODE );
+                update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', $json_str );
+                $kpi_snapshot_json = $json_str;
+                $snapshot_data     = $backfill_data;
+                $has_full_snapshot  = true;
+                error_log( "[GCREV] page-report-latest: Migrated KPI snapshot for report_id={$report_post_id}" );
+            }
+        } catch ( \Throwable $e ) {
+            error_log( '[GCREV] page-report-latest: KPI migration error: ' . $e->getMessage() );
+        }
+    }
 }
 
-// === Effective CV（CVチャート + CV数表示用 — スナップショットから取得のみ） ===
+// === Effective CV（CVチャート + CV数表示用） ===
 $effective_cv_json = '{}';
 if ( $has_full_snapshot && ! empty( $snapshot_data['effective_cv'] ) ) {
+    // スナップショットから取得（API呼び出しなし）
     $eff = $snapshot_data['effective_cv'];
     $effective_cv_json = wp_json_encode([
         'source'     => $eff['source'] ?? 'ga4',
