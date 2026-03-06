@@ -448,41 +448,60 @@ get_header();
 
 /* === 年月切り替えUI === */
 .rpt-ym-switcher {
-    max-width: 960px;
-    margin: 0 auto 16px;
-    padding: 0 24px;
-}
-.rpt-year-tabs {
     display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
+    align-items: center;
+    gap: 16px;
+    padding: 0 24px;
+    margin-bottom: 16px;
 }
-.rpt-year-btn {
-    padding: 6px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    border: 1px solid #d0d5dd;
+/* 年ナビ：〈 2026年 〉 */
+.rpt-year-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+.rpt-year-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    color: var(--mw-primary-blue, #3D6B6E);
+    background: none;
+    border: 1px solid transparent;
     border-radius: 6px;
-    background: #fff;
-    color: #555;
-    cursor: pointer;
     text-decoration: none;
     transition: all 0.15s;
+    cursor: pointer;
+    line-height: 1;
 }
-.rpt-year-btn:hover {
-    background: #f5f5f5;
+.rpt-year-arrow:hover {
+    background: rgba(61,107,110,0.08);
+    border-color: rgba(61,107,110,0.15);
     text-decoration: none;
-    color: #555;
+    color: var(--mw-primary-blue, #3D6B6E);
 }
-.rpt-year-btn.active {
-    background: var(--mw-primary-blue, #3D6B6E);
-    color: #fff;
-    border-color: var(--mw-primary-blue, #3D6B6E);
+.rpt-year-arrow.disabled {
+    color: #ccc;
+    pointer-events: none;
+    cursor: default;
 }
+.rpt-year-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: #2c3e50;
+    min-width: 60px;
+    text-align: center;
+    user-select: none;
+}
+/* 月ボタン群 */
 .rpt-month-tabs {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    align-items: center;
 }
 .rpt-month-btn {
     min-width: 52px;
@@ -510,7 +529,7 @@ get_header();
     font-weight: 600;
 }
 @media (max-width: 768px) {
-    .rpt-ym-switcher { padding: 0 16px; }
+    .rpt-ym-switcher { flex-wrap: wrap; padding: 0 16px; gap: 10px; }
     .rpt-month-btn { min-width: 44px; padding: 6px 10px; font-size: 12px; }
 }
 </style>
@@ -518,26 +537,38 @@ get_header();
 <!-- コンテンツエリア -->
 <div class="content-area">
 
-    <!-- 年月切り替えUI -->
-    <?php if ( ! empty( $report_years ) ) : ?>
-    <div class="rpt-ym-switcher">
-        <?php if ( count( $report_years ) > 1 ) : ?>
-        <div class="rpt-year-tabs">
-            <?php foreach ( $report_years as $y => $months ) :
-                $is_active_year = ( $y === $current_year );
-                // 年ボタンクリック → その年の最新月を表示
-                $latest_m_in_year = max( $months );
-                $year_url = add_query_arg( 'ym', sprintf( '%04d-%02d', $y, $latest_m_in_year ), home_url( '/report/report-latest/' ) );
-            ?>
-            <a href="<?php echo esc_url( $year_url ); ?>"
-               class="rpt-year-btn<?php echo $is_active_year ? ' active' : ''; ?>"><?php echo esc_html( $y ); ?>年</a>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
+    <!-- 年月切り替えUI：〈 2026年 〉 [1月] [2月] ... -->
+    <?php if ( ! empty( $report_years ) ) :
+        // 前年・翌年の算出
+        $available_years = array_keys( $report_years );
+        $cur_idx   = array_search( $current_year, $available_years, true );
+        $prev_year = ( $cur_idx !== false && $cur_idx + 1 < count( $available_years ) ) ? $available_years[ $cur_idx + 1 ] : null; // 降順なので+1が前年
+        $next_year = ( $cur_idx !== false && $cur_idx - 1 >= 0 ) ? $available_years[ $cur_idx - 1 ] : null; // -1が翌年
 
+        $prev_year_url = $prev_year ? add_query_arg( 'ym', sprintf( '%04d-%02d', $prev_year, max( $report_years[ $prev_year ] ) ), home_url( '/report/report-latest/' ) ) : '';
+        $next_year_url = $next_year ? add_query_arg( 'ym', sprintf( '%04d-%02d', $next_year, max( $report_years[ $next_year ] ) ), home_url( '/report/report-latest/' ) ) : '';
+    ?>
+    <div class="rpt-ym-switcher">
+        <!-- 年ナビ -->
+        <div class="rpt-year-nav">
+            <?php if ( $prev_year_url ) : ?>
+            <a href="<?php echo esc_url( $prev_year_url ); ?>" class="rpt-year-arrow" title="<?php echo esc_attr( $prev_year ); ?>年">&#8249;</a>
+            <?php else : ?>
+            <span class="rpt-year-arrow disabled">&#8249;</span>
+            <?php endif; ?>
+
+            <span class="rpt-year-label"><?php echo esc_html( $current_year ); ?>年</span>
+
+            <?php if ( $next_year_url ) : ?>
+            <a href="<?php echo esc_url( $next_year_url ); ?>" class="rpt-year-arrow" title="<?php echo esc_attr( $next_year ); ?>年">&#8250;</a>
+            <?php else : ?>
+            <span class="rpt-year-arrow disabled">&#8250;</span>
+            <?php endif; ?>
+        </div>
+
+        <!-- 月ボタン群 -->
         <div class="rpt-month-tabs">
             <?php
-            // 選択中の年の月リストを表示
             $months_for_year = $report_years[ $current_year ] ?? [];
             foreach ( $months_for_year as $m ) :
                 $is_active_month = ( $m === $current_month );
