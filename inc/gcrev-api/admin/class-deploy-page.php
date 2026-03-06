@@ -206,11 +206,12 @@ class Gcrev_Deploy_Page {
             return 'ERROR: script not in whitelist';
         }
 
-        $scripts_dir = rtrim( MIMAMORI_SCRIPTS_DIR, '/' );
-        $script_path = realpath( $scripts_dir . '/' . $script );
+        $scripts_dir      = rtrim( MIMAMORI_SCRIPTS_DIR, '/' );
+        $scripts_dir_real = realpath( $scripts_dir );
+        $script_path      = realpath( $scripts_dir . '/' . $script );
 
-        // パストラバーサル防止
-        if ( ! $script_path || strpos( $script_path, $scripts_dir ) !== 0 ) {
+        // パストラバーサル防止（realpath 同士で比較）
+        if ( ! $scripts_dir_real || ! $script_path || strpos( $script_path, $scripts_dir_real ) !== 0 ) {
             return 'ERROR: invalid script path';
         }
 
