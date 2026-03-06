@@ -15,7 +15,7 @@ use Google\Analytics\Data\V1beta\OrderBy;
 use Google\Analytics\Data\V1beta\FilterExpression;
 use Google\Analytics\Data\V1beta\Filter;
 use Google\Analytics\Data\V1beta\FilterExpressionList;
-use Google\Analytics\Data\V1beta\StringFilter;
+use Google\Analytics\Data\V1beta\Filter\StringFilter;
 
 /**
  * Gcrev_GA4_Fetcher
