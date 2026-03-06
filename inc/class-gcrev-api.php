@@ -1790,6 +1790,21 @@ class Gcrev_Insight_API {
         // クライアント設定 + 月次設定をサーバー側で統合構築
         $client_info = $this->build_client_info_for_report($user_id);
 
+        // 海外アクセス除外：サーバー側でフィルタ付きデータを再取得
+        if ( ! empty( $client_info['exclude_foreign'] ) ) {
+            try {
+                $config = $this->config->get_user_config( $user_id );
+                $this->ga4->set_country_filter( 'Japan' );
+                $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
+                $two_data  = $this->fetch_dashboard_data_internal( $config, 'twoMonthsAgo' );
+                $this->ga4->set_country_filter( null );
+                file_put_contents('/tmp/gcrev-country-filter.log', date('Y-m-d H:i:s') . " generate_report: refetched with country filter for user_id={$user_id}\n", FILE_APPEND);
+            } catch ( \Throwable $e ) {
+                $this->ga4->set_country_filter( null );
+                file_put_contents('/tmp/gcrev-country-filter.log', date('Y-m-d H:i:s') . " generate_report: refetch FAILED — " . $e->getMessage() . "\n", FILE_APPEND);
+            }
+        }
+
         try {
             error_log("[GCREV] Generating new report for user_id={$user_id}");
 
