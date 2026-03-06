@@ -159,7 +159,7 @@
 .sidebar-nav .nav-link.active {
   background: rgba(47, 58, 74, 0.12);
   color: #333333;
-  font-weight: 600;
+  font-weight: 700;
 }
 .sidebar-nav .nav-link.active::before {
   content: "";
