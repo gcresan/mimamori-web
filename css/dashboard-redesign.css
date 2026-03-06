@@ -2134,28 +2134,31 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   color: #999;
   letter-spacing: 0;
 }
-/* インフォボタン (i) */
+/* インフォボタン (?) */
 .kpi-info-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: none;
-  background: none;
-  color: #bbb;
+  background: #eee;
+  border-radius: 50%;
+  color: #888;
   cursor: pointer;
   vertical-align: middle;
-  margin-left: 2px;
-  transition: color 0.15s;
+  margin-left: 4px;
+  transition: background 0.15s, color 0.15s;
   flex-shrink: 0;
 }
 .kpi-info-btn:hover {
-  color: #888;
+  background: #ddd;
+  color: #555;
 }
 .kpi-card.info-open .kpi-info-btn {
-  color: var(--mw-primary-blue);
+  background: var(--mw-primary-blue);
+  color: #fff;
 }
 /* ツールチップ（説明文） */
 .kpi-info-tip {
