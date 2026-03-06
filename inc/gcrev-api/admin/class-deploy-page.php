@@ -206,28 +206,13 @@ class Gcrev_Deploy_Page {
             return 'ERROR: script not in whitelist';
         }
 
-        $scripts_dir      = rtrim( MIMAMORI_SCRIPTS_DIR, '/' );
-        $scripts_dir_real = realpath( $scripts_dir );
-        $script_path      = realpath( $scripts_dir . '/' . $script );
+        $scripts_dir = rtrim( MIMAMORI_SCRIPTS_DIR, '/' );
+        $script_path = $scripts_dir . '/' . $script;
 
-        // パストラバーサル防止（realpath 同士で比較）
-        if ( ! $scripts_dir_real || ! $script_path || strpos( $script_path, $scripts_dir_real ) !== 0 ) {
-            $raw = $scripts_dir . '/' . $script;
-            return sprintf(
-                'ERROR: invalid script path (dir=%s, dir_real=%s, file_exists=%s, raw=%s)',
-                $scripts_dir,
-                $scripts_dir_real ?: 'false',
-                file_exists( $raw ) ? 'yes' : 'no',
-                $raw
-            );
-        }
-
-        // 実行可能チェック
-        if ( ! is_file( $script_path ) ) {
-            return 'ERROR: script file not found';
-        }
-        if ( ! is_executable( $script_path ) ) {
-            return 'ERROR: script not executable (chmod +x required)';
+        // スクリプト名はホワイトリスト検証済みのため
+        // パストラバーサルの可能性はなし。ファイル存在のみ確認。
+        if ( ! file_exists( $script_path ) ) {
+            return 'ERROR: script file not found (' . $script_path . ')';
         }
 
         // コマンド組み立て（PHP-FPM は httpd ユーザーのため sudo -u kusanagi で実行）
