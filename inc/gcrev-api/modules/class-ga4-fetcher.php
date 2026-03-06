@@ -56,29 +56,20 @@ class Gcrev_GA4_Fetcher {
      * @param ?string $country 国名（GA4 の country ディメンション値、例: 'Japan'）
      */
     public function set_country_filter( ?string $country ): void {
-        $logfile = '/tmp/gcrev-country-filter.log';
         if ( $country === null ) {
             $this->country_filter = null;
-            file_put_contents($logfile, date('Y-m-d H:i:s') . " set_country_filter: cleared\n", FILE_APPEND);
             return;
         }
-        try {
-            $sf = new \Google\Analytics\Data\V1beta\Filter\StringFilter([
-                'value'      => $country,
-                'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
-            ]);
-            $filter = new Filter([
+        $sf = new \Google\Analytics\Data\V1beta\Filter\StringFilter([
+            'value'      => $country,
+            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+        ]);
+        $this->country_filter = new FilterExpression([
+            'filter' => new Filter([
                 'field_name'    => 'country',
                 'string_filter' => $sf,
-            ]);
-            $this->country_filter = new FilterExpression([
-                'filter' => $filter,
-            ]);
-            file_put_contents($logfile, date('Y-m-d H:i:s') . " set_country_filter: OK — country={$country}, class=" . get_class($this->country_filter) . ", sf_class=" . get_class($sf) . "\n", FILE_APPEND);
-        } catch ( \Throwable $e ) {
-            file_put_contents($logfile, date('Y-m-d H:i:s') . " set_country_filter: FAILED — " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n", FILE_APPEND);
-            $this->country_filter = null;
-        }
+            ]),
+        ]);
     }
 
     /**
@@ -88,12 +79,9 @@ class Gcrev_GA4_Fetcher {
      * @param array &$params RunReportRequest のコンストラクタに渡す配列
      */
     private function apply_country_filter( array &$params ): void {
-        $logfile = '/tmp/gcrev-country-filter.log';
         if ( $this->country_filter === null ) {
-            file_put_contents($logfile, date('Y-m-d H:i:s') . " apply_country_filter: SKIPPED (null)\n", FILE_APPEND);
             return;
         }
-        file_put_contents($logfile, date('Y-m-d H:i:s') . " apply_country_filter: APPLYING\n", FILE_APPEND);
         if ( isset( $params['dimension_filter'] ) ) {
             $params['dimension_filter'] = new FilterExpression([
                 'and_group' => new FilterExpressionList([
