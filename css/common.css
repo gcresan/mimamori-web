@@ -148,6 +148,7 @@
   color: #333333;
   text-decoration: none;
   font-size: 15px;
+  font-weight: 700;
   transition: all 0.2s ease;
   position: relative;
 }
@@ -187,10 +188,12 @@
 .sidebar-nav .nav-submenu {
   list-style: none;
   margin-top: 2px;
+  background-color: #fff;
 }
 .sidebar-nav .nav-submenu .nav-link {
   padding: 9px 20px 9px 52px;
   font-size: 14px;
+  font-weight: 500;
 }
 
 /* かんたん解説（リテラシー低め向け） */
