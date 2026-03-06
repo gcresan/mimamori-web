@@ -222,13 +222,8 @@
                         </a>
                      </li>
                      <li class="nav-item">
-                        <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
-                        <span>ゴールの確認（手動調整）</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/analysis/cv-settings/'); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
-                        <span>ゴールの数え方設定</span>
+                        <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo (is_page('cv-review') || is_page('cv-settings')) ? 'active' : ''; ?>">
+                        <span>ゴール関連設定</span>
                         </a>
                      </li>
                      <li class="nav-item">
@@ -475,6 +470,40 @@
                   style="color: inherit; text-decoration: none;"><?php echo esc_html( $tb_display_url ); ?></a>
             </div>
             <?php endif; ?>
+         </div>
+
+         <!-- 重要設定ドロップダウン -->
+         <div class="settings-menu" id="settingsMenu">
+            <button class="settings-menu-btn" type="button" aria-label="重要設定">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+               </svg>
+               <span class="settings-menu-label">重要設定</span>
+               <span class="settings-menu-arrow" aria-hidden="true">&#9662;</span>
+            </button>
+            <div class="settings-dropdown" id="settingsDropdown">
+               <ul class="settings-dropdown-list">
+                  <li>
+                     <a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" class="settings-dropdown-item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <span>クライアント設定</span>
+                     </a>
+                  </li>
+                  <li>
+                     <a href="<?php echo esc_url( home_url( '/report/report-settings/' ) ); ?>" class="settings-dropdown-item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z"/><path d="M12.5 2.5V6H16"/><path d="M7.5 11h5M7.5 14h3"/></svg>
+                        <span>月次レポート設定</span>
+                     </a>
+                  </li>
+                  <li>
+                     <a href="<?php echo esc_url( home_url( '/analysis/cv-review/' ) ); ?>" class="settings-dropdown-item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
+                        <span>ゴール関連設定</span>
+                     </a>
+                  </li>
+               </ul>
+            </div>
          </div>
 
          <!-- アップデート通知ベル -->

@@ -1,6 +1,6 @@
 <?php
 /*
-Template Name: ゴールの確認
+Template Name: ゴール関連設定
 */
 
 if (!is_user_logged_in()) {
@@ -8,16 +8,46 @@ if (!is_user_logged_in()) {
     exit;
 }
 
+$current_user = wp_get_current_user();
+$user_id = $current_user->ID;
+
 // パンくず設定
-set_query_var('gcrev_page_title', 'ゴールの確認（手動調整）');
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('ゴールの確認（手動調整）', '各種設定'));
+set_query_var('gcrev_page_title', 'ゴール関連設定');
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('ゴール関連設定', '各種設定'));
 
 get_header();
 ?>
 
 <style>
-/* page-cv-review — Page-specific overrides only */
-/* All shared styles are in css/dashboard-redesign.css */
+/* ===== Goal Tabs ===== */
+.goal-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 24px;
+}
+.goal-tab {
+    background: none;
+    border: none;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+.goal-tab:hover {
+    color: #334155;
+}
+.goal-tab.active {
+    color: #3D6B6E;
+    border-bottom-color: #3D6B6E;
+}
+
+/* ===== Tab 1: CV Review ===== */
 
 /* CV Review Summary */
 .cv-review-summary { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
@@ -84,8 +114,142 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 .spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top:3px solid #2563eb; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
+/* ===== Tab 2: CV Settings ===== */
+
+.cv-settings-description {
+    font-size: 14px;
+    color: var(--mw-text-secondary);
+    margin-bottom: 20px;
+    line-height: 1.7;
+}
+
+.cv-routes-table .drag-handle {
+    cursor: grab;
+    text-align: center;
+    color: #aaa;
+    font-size: 18px;
+    user-select: none;
+}
+.cv-routes-table .drag-handle:active {
+    cursor: grabbing;
+}
+.cv-routes-table tr.dragging {
+    opacity: 0.4;
+}
+.cv-routes-table tr.drag-over {
+    border-top: 2px solid var(--mw-primary-blue);
+}
+
+.cv-routes-table input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--mw-border-light);
+    border-radius: 6px;
+    font-size: 13px;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+.cv-routes-table input[type="text"]:focus {
+    border-color: var(--mw-primary-blue);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(61, 107, 110, 0.12);
+}
+.cv-routes-table input[data-field="route_key"] {
+    font-family: monospace;
+}
+
+.cv-routes-count {
+    font-size: 12px;
+    color: #666666;
+    margin-left: 8px;
+}
+
+/* ===== サジェストUI ===== */
+.suggest-wrapper {
+    position: relative;
+}
+.suggest-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: #fff;
+    border: 1px solid var(--mw-border-light);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    max-height: 220px;
+    overflow-y: auto;
+    display: none;
+    margin-top: 2px;
+}
+.suggest-dropdown.open {
+    display: block;
+}
+.suggest-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.suggest-item:hover,
+.suggest-item.highlighted {
+    background: #f0f4f5;
+}
+.suggest-item .event-name {
+    font-family: monospace;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.suggest-item .suggest-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.suggest-item .key-badge {
+    font-size: 10px;
+    color: #3D6B6E;
+    background: #e8f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-weight: 600;
+}
+.suggest-item .event-count {
+    font-size: 11px;
+    color: #999;
+    white-space: nowrap;
+}
+.suggest-empty {
+    padding: 8px 12px;
+    color: #999;
+    font-size: 12px;
+}
+.suggest-spinner {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: #999;
+    pointer-events: none;
+}
+.suggest-error-msg {
+    font-size: 12px;
+    color: #C0392B;
+    margin-top: 4px;
+}
+
 /* Responsive */
 @media (max-width:768px) {
+  .goal-tabs { overflow-x: auto; }
+  .goal-tab { padding: 10px 16px; font-size: 13px; }
   .cv-review-summary { flex-direction:row; flex-wrap:wrap; }
   .summary-card { min-width:calc(50% - 8px); flex:unset; }
   .cv-review-toolbar { flex-direction:column; align-items:stretch; }
@@ -97,92 +261,189 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 <!-- コンテンツエリア -->
 <div class="content-area">
 
-    <!-- サマリーカード -->
-    <div class="cv-review-summary" id="cvReviewSummary">
-        <div class="summary-card"><div class="summary-label">GA4 合計</div><div class="summary-value" id="summaryTotal">-</div></div>
-        <div class="summary-card"><div class="summary-label">有効</div><div class="summary-value summary-valid" id="summaryValid">-</div></div>
-        <div class="summary-card"><div class="summary-label">除外</div><div class="summary-value summary-excluded" id="summaryExcluded">-</div></div>
-        <div class="summary-card"><div class="summary-label">未判定</div><div class="summary-value summary-pending" id="summaryPending">-</div></div>
-        <div class="summary-card"><div class="summary-label">グループ数</div><div class="summary-value" id="summaryGroups">-</div></div>
+    <!-- タブナビゲーション -->
+    <div class="goal-tabs">
+        <button type="button" class="goal-tab active" data-tab="review">ゴールの確認（手動調整）</button>
+        <button type="button" class="goal-tab" data-tab="settings">ゴールの数え方設定</button>
     </div>
 
-    <!-- ツールバー -->
-    <div class="cv-review-toolbar">
-        <div class="toolbar-left">
-            <button type="button" id="btnPrevMonth" class="btn-month-nav">&#9664;</button>
-            <input type="month" id="cvReviewMonth" value="">
-            <button type="button" id="btnNextMonth" class="btn-month-nav">&#9654;</button>
-            <button type="button" id="btnLoadData" class="btn-load">読み込む</button>
+    <!-- ===== Tab 1: ゴールの確認（手動調整） ===== -->
+    <div class="goal-tab-content" id="tab-review">
+
+        <!-- サマリーカード -->
+        <div class="cv-review-summary" id="cvReviewSummary">
+            <div class="summary-card"><div class="summary-label">GA4 合計</div><div class="summary-value" id="summaryTotal">-</div></div>
+            <div class="summary-card"><div class="summary-label">有効</div><div class="summary-value summary-valid" id="summaryValid">-</div></div>
+            <div class="summary-card"><div class="summary-label">除外</div><div class="summary-value summary-excluded" id="summaryExcluded">-</div></div>
+            <div class="summary-card"><div class="summary-label">未判定</div><div class="summary-value summary-pending" id="summaryPending">-</div></div>
+            <div class="summary-card"><div class="summary-label">グループ数</div><div class="summary-value" id="summaryGroups">-</div></div>
         </div>
-        <div class="toolbar-center">
-            <select id="filterStatus">
-                <option value="all">すべて</option>
-                <option value="0">未判定</option>
-                <option value="1">有効</option>
-                <option value="2">除外</option>
-            </select>
+
+        <!-- ツールバー -->
+        <div class="cv-review-toolbar">
+            <div class="toolbar-left">
+                <button type="button" id="btnPrevMonth" class="btn-month-nav">&#9664;</button>
+                <input type="month" id="cvReviewMonth" value="">
+                <button type="button" id="btnNextMonth" class="btn-month-nav">&#9654;</button>
+                <button type="button" id="btnLoadData" class="btn-load">読み込む</button>
+            </div>
+            <div class="toolbar-center">
+                <select id="filterStatus">
+                    <option value="all">すべて</option>
+                    <option value="0">未判定</option>
+                    <option value="1">有効</option>
+                    <option value="2">除外</option>
+                </select>
+            </div>
+            <div class="toolbar-right">
+                <label><input type="checkbox" id="checkAll"> 全選択</label>
+                <select id="bulkAction">
+                    <option value="">一括操作...</option>
+                    <option value="1">&rarr; 有効</option>
+                    <option value="2">&rarr; 除外</option>
+                    <option value="0">&rarr; 未判定に戻す</option>
+                </select>
+                <button type="button" id="btnBulkApply" class="btn-bulk" disabled>適用</button>
+            </div>
         </div>
-        <div class="toolbar-right">
-            <label><input type="checkbox" id="checkAll"> 全選択</label>
-            <select id="bulkAction">
-                <option value="">一括操作...</option>
-                <option value="1">&rarr; 有効</option>
-                <option value="2">&rarr; 除外</option>
-                <option value="0">&rarr; 未判定に戻す</option>
-            </select>
-            <button type="button" id="btnBulkApply" class="btn-bulk" disabled>適用</button>
+
+        <!-- 保存バー（上部） -->
+        <div class="cv-save-bar" id="saveBarTop" style="display:none;">
+            <button type="button" class="btn-save-cv" id="btnSaveTop">保存する</button>
+            <span class="save-bar-info" id="saveInfoTop">変更はありません</span>
         </div>
+
+        <!-- データテーブル -->
+        <div class="cv-review-table-wrap">
+            <div id="cvReviewMessage" style="display:none;"></div>
+            <div id="cvReviewLoading" style="display:none; text-align:center; padding:40px;">
+                <div class="spinner"></div>
+                <p>GA4データを取得中...</p>
+            </div>
+            <table class="cv-review-table" id="cvReviewTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th class="col-check"><input type="checkbox" id="thCheckAll"></th>
+                        <th class="col-datetime">日時</th>
+                        <th class="col-event">イベント名</th>
+                        <th class="col-count">件数</th>
+                        <th class="col-page">ページ</th>
+                        <th class="col-source">流入元</th>
+                        <th class="col-device">デバイス</th>
+                        <th class="col-country">国</th>
+                        <th class="col-status">判定</th>
+                        <th class="col-memo">メモ</th>
+                    </tr>
+                </thead>
+                <tbody id="cvReviewBody"></tbody>
+            </table>
+        </div>
+
+        <!-- 保存バー（下部） -->
+        <div class="cv-save-bar" id="saveBarBottom" style="display:none;">
+            <button type="button" class="btn-save-cv" id="btnSaveBottom">保存する</button>
+            <span class="save-bar-info" id="saveInfoBottom">変更はありません</span>
+        </div>
+
+        <!-- CVイベント未設定メッセージ -->
+        <div id="cvNoConfig" style="display:none;">
+            <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:24px; text-align:center;">
+                <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">ゴールが設定されていません</p>
+                <p style="margin:0;"><a href="javascript:void(0)" id="linkToSettingsTab" style="color:#2563eb; font-weight:600;">ゴールの数え方設定</a>から設定してください。</p>
+            </div>
+        </div>
+
     </div>
 
-    <!-- 保存バー（上部） -->
-    <div class="cv-save-bar" id="saveBarTop" style="display:none;">
-        <button type="button" class="btn-save-cv" id="btnSaveTop">保存する</button>
-        <span class="save-bar-info" id="saveInfoTop">変更はありません</span>
-    </div>
+    <!-- ===== Tab 2: ゴールの数え方設定 ===== -->
+    <div class="goal-tab-content" id="tab-settings" style="display:none;">
 
-    <!-- データテーブル -->
-    <div class="cv-review-table-wrap">
-        <div id="cvReviewMessage" style="display:none;"></div>
-        <div id="cvReviewLoading" style="display:none; text-align:center; padding:40px;">
-            <div class="spinner"></div>
-            <p>GA4データを取得中...</p>
+        <!-- キーイベント設定 -->
+        <div class="settings-card">
+            <h2>
+                <span>ゴール設定</span>
+            </h2>
+            <p class="cv-settings-description">
+                ゴールとは、このホームページで「達成したい成果」を示す指標です。問い合わせだけでなく、電話タップやページ到達などもゴールとして設定できます。ここでは、ゴールとしてカウントするGA4イベントを設定します。
+            </p>
+
+            <input type="hidden" id="cv-settings-user" value="<?php echo esc_attr($user_id); ?>">
+
+            <div id="cv-routes-editor">
+                <table class="actual-cv-table cv-routes-table" style="margin-bottom:16px;">
+                    <thead>
+                        <tr>
+                            <th style="width:36px;"></th>
+                            <th>GA4イベント名</th>
+                            <th>表示ラベル</th>
+                            <th style="width:60px;">削除</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cv-routes-rows"></tbody>
+                </table>
+                <div style="margin-bottom:16px;">
+                    <button type="button" class="btn-outline" id="btn-add-cv-route" data-gcrev-ignore-unsaved="1" style="font-size:13px;">+ ゴールを追加</button>
+                    <span id="cv-routes-count" class="cv-routes-count"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cv-only-configured" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" id="cv-only-configured" data-gcrev-ignore-unsaved="1">
+                        <span>設定したゴール以外はゴール分析に含めない</span>
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="btn-save-cv-routes" data-gcrev-ignore-unsaved="1">設定を保存</button>
+                </div>
+            </div>
         </div>
-        <table class="cv-review-table" id="cvReviewTable" style="display:none;">
-            <thead>
-                <tr>
-                    <th class="col-check"><input type="checkbox" id="thCheckAll"></th>
-                    <th class="col-datetime">日時</th>
-                    <th class="col-event">イベント名</th>
-                    <th class="col-count">件数</th>
-                    <th class="col-page">ページ</th>
-                    <th class="col-source">流入元</th>
-                    <th class="col-device">デバイス</th>
-                    <th class="col-country">国</th>
-                    <th class="col-status">判定</th>
-                    <th class="col-memo">メモ</th>
-                </tr>
-            </thead>
-            <tbody id="cvReviewBody"></tbody>
-        </table>
-    </div>
 
-    <!-- 保存バー（下部） -->
-    <div class="cv-save-bar" id="saveBarBottom" style="display:none;">
-        <button type="button" class="btn-save-cv" id="btnSaveBottom">保存する</button>
-        <span class="save-bar-info" id="saveInfoBottom">変更はありません</span>
-    </div>
-
-    <!-- CVイベント未設定メッセージ -->
-    <div id="cvNoConfig" style="display:none;">
-        <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:24px; text-align:center;">
-            <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">ゴールが設定されていません</p>
-            <p style="margin:0;"><a href="<?php echo esc_url(home_url('/analysis/cv-settings/')); ?>" style="color:#2563eb; font-weight:600;">ゴールの数え方設定ページ</a>から設定してください。</p>
-        </div>
     </div>
 
 </div>
 
 <script>
+// ===== タブ切り替え =====
+(function() {
+    'use strict';
+
+    var tabs = document.querySelectorAll('.goal-tab');
+    var contents = document.querySelectorAll('.goal-tab-content');
+
+    function switchTab(tabId) {
+        tabs.forEach(function(t) {
+            t.classList.toggle('active', t.dataset.tab === tabId);
+        });
+        contents.forEach(function(c) {
+            c.style.display = c.id === 'tab-' + tabId ? '' : 'none';
+        });
+        history.replaceState(null, '', '#' + tabId);
+    }
+
+    tabs.forEach(function(t) {
+        t.addEventListener('click', function() {
+            switchTab(t.dataset.tab);
+        });
+    });
+
+    // "ゴールの数え方設定" リンク（未設定メッセージ内）
+    var linkToSettings = document.getElementById('linkToSettingsTab');
+    if (linkToSettings) {
+        linkToSettings.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchTab('settings');
+        });
+    }
+
+    // URL hash で初期タブを決定
+    var hash = location.hash.replace('#', '');
+    if (hash === 'settings') {
+        switchTab('settings');
+    }
+})();
+
+// ===== Tab 1: ゴールの確認（手動調整） =====
 (function(){
     'use strict';
 
@@ -193,8 +454,8 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     var allRows = [];
     var currentMonth = '';
     var checkedHashes = new Set();
-    var dirtyHashes = new Set();        // 変更のある行のhash
-    var originalStatuses = {};          // 読み込み時のstatus/memo保持
+    var dirtyHashes = new Set();
+    var originalStatuses = {};
 
     // Elements
     var elMonth      = document.getElementById('cvReviewMonth');
@@ -496,7 +757,6 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
                 : allRows.filter(function(r) { return r.status === parseInt(filterVal); });
             filtered.forEach(function(r) { checkedHashes.add(r.row_hash); });
         }
-        // Update checkboxes
         elBody.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
             cb.checked = checked;
         });
@@ -513,7 +773,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     }
     elBulkAction.addEventListener('change', updateBulkState);
 
-    // Bulk apply（ローカル反映のみ、保存は保存ボタンで）
+    // Bulk apply
     elBulkApply.addEventListener('click', function() {
         var newStatus = parseInt(elBulkAction.value);
         if (isNaN(newStatus)) return;
@@ -536,22 +796,17 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         }
     });
 
-    // =========================================================
     // 変更管理 & 保存
-    // =========================================================
-
-    // 変更をマーク
     function markDirty(hash) {
         dirtyHashes.add(hash);
     }
 
-    // 保存バーの表示更新
     function updateSaveBar() {
         var count = dirtyHashes.size;
         var hasChanges = count > 0;
         var label = hasChanges
             ? '<strong>' + count + '件</strong>の変更があります'
-            : '✅ すべて保存済みです';
+            : 'すべて保存済みです';
 
         elSaveInfoTop.innerHTML = label;
         elSaveInfoBottom.innerHTML = label;
@@ -569,7 +824,6 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         });
     }
 
-    // 全変更を一括保存
     async function saveAllChanges() {
         if (dirtyHashes.size === 0) return;
 
@@ -592,7 +846,6 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 
         if (items.length === 0) return;
 
-        // ボタンを処理中に
         [elBtnSaveTop, elBtnSaveBottom].forEach(function(btn) {
             btn.disabled = true;
             btn.textContent = '保存中...';
@@ -621,7 +874,6 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             var data = await res.json();
 
             if (data.success) {
-                // originalStatuses を現在の状態に更新
                 allRows.forEach(function(r) {
                     if (dirtyHashes.has(r.row_hash)) {
                         originalStatuses[r.row_hash] = { status: r.status, memo: r.memo || '' };
@@ -630,7 +882,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
                 dirtyHashes.clear();
                 renderTable();
                 updateSaveBar();
-                var msg = '✅ ' + data.updated + '件の変更を保存しました';
+                var msg = data.updated + '件の変更を保存しました';
                 if (data.errors > 0) msg += '（' + data.errors + '件エラー）';
                 showMessage(msg, 'success');
             } else {
@@ -647,7 +899,6 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         updateSaveBar();
     }
 
-    // 保存ボタンのイベント
     elBtnSaveTop.addEventListener('click', saveAllChanges);
     elBtnSaveBottom.addEventListener('click', saveAllChanges);
 
@@ -676,6 +927,431 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
     // Init
     document.addEventListener('DOMContentLoaded', init);
 })();
+
+// ===== Tab 2: ゴールの数え方設定 =====
+
+// グローバル変数
+const restBase = '<?php echo esc_js(trailingslashit(rest_url('gcrev_insights/v1'))); ?>';
+const wpNonce  = '<?php echo wp_create_nonce('wp_rest'); ?>';
+const userId   = <?php echo (int) $user_id; ?>;
+
+// 最大ルート数
+const MAX_ROUTES = 20;
+
+// GA4イベント候補
+var GA4_EVENTS_CACHE = [];
+var ga4EventsLoading = false;
+var ga4EventsError   = false;
+
+// ページ読み込み時の初期化
+document.addEventListener('DOMContentLoaded', function() {
+    initCvRoutesUI();
+});
+
+// Dirty tracking
+function markCvSettingsDirty(btnId) {
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.style.backgroundColor = '#3D6B6E';
+    btn.style.borderColor = '#3D6B6E';
+    btn.style.color = '#fff';
+}
+function markCvSettingsClean(btnId) {
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.style.backgroundColor = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+}
+
+// GA4イベント候補取得（指数バックオフリトライ付き）
+async function fetchGa4Events(retries) {
+    if (typeof retries === 'undefined') retries = 3;
+    ga4EventsLoading = true;
+    ga4EventsError   = false;
+    updateAllSpinners(true);
+
+    for (var attempt = 0; attempt < retries; attempt++) {
+        try {
+            var controller = new AbortController();
+            var tid = setTimeout(function() { controller.abort(); }, 10000);
+
+            var res = await fetch(
+                restBase + 'ga4-key-events?user_id=' + userId + '&_=' + Date.now(),
+                { headers: { 'X-WP-Nonce': wpNonce }, signal: controller.signal }
+            );
+            clearTimeout(tid);
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+
+            var json = await res.json();
+            if (json.success && Array.isArray(json.events)) {
+                GA4_EVENTS_CACHE = json.events;
+                ga4EventsLoading = false;
+                ga4EventsError   = false;
+                updateAllSpinners(false);
+                clearSuggestErrors();
+                return;
+            }
+            throw new Error('Unexpected response');
+        } catch (e) {
+            console.warn('[GCREV] GA4 events fetch attempt ' + (attempt + 1) + ' failed:', e.message);
+            if (attempt < retries - 1) {
+                await new Promise(function(r) { setTimeout(r, 1000 * Math.pow(2, attempt)); });
+            }
+        }
+    }
+    ga4EventsLoading = false;
+    ga4EventsError   = true;
+    updateAllSpinners(false);
+    showSuggestErrors();
+}
+
+function updateAllSpinners(show) {
+    document.querySelectorAll('.suggest-spinner').forEach(function(el) {
+        el.style.display = show ? 'inline' : 'none';
+    });
+}
+
+function showSuggestErrors() {
+    document.querySelectorAll('.suggest-wrapper').forEach(function(w) {
+        if (!w.querySelector('.suggest-error-msg')) {
+            var msg = document.createElement('div');
+            msg.className = 'suggest-error-msg';
+            msg.textContent = '候補の取得に失敗しました。しばらくして再試行してください。';
+            w.parentNode.insertBefore(msg, w.nextSibling);
+        }
+    });
+}
+function clearSuggestErrors() {
+    document.querySelectorAll('.suggest-error-msg').forEach(function(el) { el.remove(); });
+}
+
+function attachSuggest(input) {
+    var wrapper = input.closest('.suggest-wrapper');
+    if (!wrapper) return;
+
+    var dropdown = wrapper.querySelector('.suggest-dropdown');
+    if (!dropdown) {
+        dropdown = document.createElement('div');
+        dropdown.className = 'suggest-dropdown';
+        wrapper.appendChild(dropdown);
+    }
+
+    var highlightIdx = -1;
+
+    function renderDropdown(filter) {
+        dropdown.innerHTML = '';
+        highlightIdx = -1;
+
+        if (ga4EventsLoading) {
+            dropdown.innerHTML = '<div class="suggest-empty">読み込み中…</div>';
+            dropdown.classList.add('open');
+            return;
+        }
+
+        var usedNames = {};
+        document.querySelectorAll('#cv-routes-rows input[data-field="route_key"]').forEach(function(inp) {
+            if (inp !== input) {
+                var v = inp.value.trim();
+                if (v) usedNames[v] = true;
+            }
+        });
+
+        var items = GA4_EVENTS_CACHE.filter(function(e) {
+            return !usedNames[e.name];
+        });
+        if (filter) {
+            var f = filter.toLowerCase();
+            items = items.filter(function(e) { return e.name.toLowerCase().indexOf(f) !== -1; });
+        }
+
+        if (items.length === 0) {
+            var emptyText = GA4_EVENTS_CACHE.length === 0
+                ? (ga4EventsError ? '候補の取得に失敗しました' : '候補なし')
+                : '一致する候補がありません';
+            dropdown.innerHTML = '<div class="suggest-empty">' + emptyText + '</div>';
+            dropdown.classList.add('open');
+            return;
+        }
+
+        items.forEach(function(ev, i) {
+            var div = document.createElement('div');
+            div.className = 'suggest-item';
+            div.dataset.index = i;
+
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'event-name';
+            nameSpan.textContent = ev.name;
+            div.appendChild(nameSpan);
+
+            var metaSpan = document.createElement('span');
+            metaSpan.className = 'suggest-meta';
+            if (ev.is_key_event) {
+                var badge = document.createElement('span');
+                badge.className = 'key-badge';
+                badge.textContent = 'ゴール';
+                metaSpan.appendChild(badge);
+            }
+            if (ev.count > 0) {
+                var cnt = document.createElement('span');
+                cnt.className = 'event-count';
+                cnt.textContent = ev.count + '件';
+                metaSpan.appendChild(cnt);
+            }
+            div.appendChild(metaSpan);
+
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                input.value = ev.name;
+                dropdown.classList.remove('open');
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            dropdown.appendChild(div);
+        });
+
+        dropdown.classList.add('open');
+    }
+
+    input.addEventListener('focus', function() { renderDropdown(input.value); });
+    input.addEventListener('input', function() { renderDropdown(input.value); });
+    input.addEventListener('blur', function() {
+        setTimeout(function() { dropdown.classList.remove('open'); }, 200);
+    });
+    input.addEventListener('keydown', function(e) {
+        var allItems = dropdown.querySelectorAll('.suggest-item');
+        if (!allItems.length) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightIdx = Math.min(highlightIdx + 1, allItems.length - 1);
+            allItems.forEach(function(el, i) { el.classList.toggle('highlighted', i === highlightIdx); });
+            if (allItems[highlightIdx]) allItems[highlightIdx].scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightIdx = Math.max(highlightIdx - 1, 0);
+            allItems.forEach(function(el, i) { el.classList.toggle('highlighted', i === highlightIdx); });
+        } else if (e.key === 'Enter' && highlightIdx >= 0 && allItems[highlightIdx]) {
+            e.preventDefault();
+            var selectedName = allItems[highlightIdx].querySelector('.event-name');
+            input.value = selectedName ? selectedName.textContent : '';
+            dropdown.classList.remove('open');
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (e.key === 'Escape') {
+            dropdown.classList.remove('open');
+        }
+    });
+}
+
+// ルート設定UIの初期化
+async function initCvRoutesUI() {
+    fetchGa4Events();
+
+    try {
+        var res = await fetch(restBase + 'actual-cv/routes?_=' + Date.now(), {
+            headers: { 'X-WP-Nonce': wpNonce }
+        });
+        if (!res.ok) return;
+        var json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+            renderCvRoutesEditor(json.data);
+            updateRoutesCount();
+        }
+        var chk = document.getElementById('cv-only-configured');
+        if (chk) {
+            chk.checked = (json.cv_only_configured == null) ? true : !!json.cv_only_configured;
+            chk.addEventListener('change', function() {
+                markCvSettingsDirty('btn-save-cv-routes');
+            });
+        }
+    } catch (e) {
+        console.error('CV routes load error', e);
+    }
+}
+
+function renderCvRoutesEditor(routes) {
+    var tbody = document.getElementById('cv-routes-rows');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    routes.forEach(function(r, i) {
+        addRouteRow(r.route_key, r.label, i + 1);
+    });
+    markCvSettingsClean('btn-save-cv-routes');
+}
+
+function addRouteRow(eventName, label, order) {
+    var tbody = document.getElementById('cv-routes-rows');
+    if (!tbody) return;
+    var currentCount = tbody.querySelectorAll('tr').length;
+    if (currentCount >= MAX_ROUTES) {
+        alert('ゴールは最大' + MAX_ROUTES + '件まで設定できます');
+        return;
+    }
+    var tr = document.createElement('tr');
+    tr.draggable = true;
+    tr.innerHTML =
+        '<td class="drag-handle" title="ドラッグで並べ替え">&#10495;</td>' +
+        '<td><div class="suggest-wrapper">' +
+            '<input type="text" value="' + escAttr(eventName || '') + '" data-field="route_key" placeholder="GA4イベント名を入力..." data-gcrev-ignore-unsaved="1" style="font-family:monospace;font-size:13px;" autocomplete="off">' +
+            '<span class="suggest-spinner" style="' + (ga4EventsLoading ? '' : 'display:none;') + '">読み込み中…</span>' +
+        '</div></td>' +
+        '<td><input type="text" value="' + escAttr(label || '') + '" data-field="label" placeholder="表示ラベル" data-gcrev-ignore-unsaved="1"></td>' +
+        '<td style="text-align:center;"><button type="button" class="btn-remove-route" style="background:none;border:none;cursor:pointer;font-size:16px;color:#C0392B;" title="削除">&times;</button></td>';
+
+    var rkInput = tr.querySelector('input[data-field="route_key"]');
+    if (rkInput) { attachSuggest(rkInput); }
+
+    tr.querySelectorAll('input').forEach(function(inp) {
+        inp.addEventListener('change', function() { markCvSettingsDirty('btn-save-cv-routes'); });
+        inp.addEventListener('input', function() { markCvSettingsDirty('btn-save-cv-routes'); });
+    });
+
+    tr.querySelector('.btn-remove-route').addEventListener('click', function() {
+        tr.remove();
+        markCvSettingsDirty('btn-save-cv-routes');
+        updateRoutesCount();
+    });
+
+    setupRowDragEvents(tr);
+
+    tbody.appendChild(tr);
+    updateRoutesCount();
+}
+
+// ドラッグ＆ドロップ並べ替え
+var dragSrcRow = null;
+
+function setupRowDragEvents(tr) {
+    tr.addEventListener('dragstart', function(e) {
+        dragSrcRow = tr;
+        tr.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    tr.addEventListener('dragend', function() {
+        tr.classList.remove('dragging');
+        document.querySelectorAll('#cv-routes-rows tr.drag-over').forEach(function(r) { r.classList.remove('drag-over'); });
+        dragSrcRow = null;
+    });
+    tr.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (dragSrcRow && dragSrcRow !== tr) {
+            tr.classList.add('drag-over');
+        }
+    });
+    tr.addEventListener('dragleave', function() {
+        tr.classList.remove('drag-over');
+    });
+    tr.addEventListener('drop', function(e) {
+        e.preventDefault();
+        tr.classList.remove('drag-over');
+        if (!dragSrcRow || dragSrcRow === tr) return;
+        var parentTbody = tr.parentNode;
+        var rows = Array.from(parentTbody.querySelectorAll('tr'));
+        var fromIdx = rows.indexOf(dragSrcRow);
+        var toIdx = rows.indexOf(tr);
+        if (fromIdx < toIdx) {
+            parentTbody.insertBefore(dragSrcRow, tr.nextSibling);
+        } else {
+            parentTbody.insertBefore(dragSrcRow, tr);
+        }
+        markCvSettingsDirty('btn-save-cv-routes');
+    });
+}
+
+function updateRoutesCount() {
+    var tbody = document.getElementById('cv-routes-rows');
+    var counter = document.getElementById('cv-routes-count');
+    if (!tbody || !counter) return;
+    var count = tbody.querySelectorAll('tr').length;
+    counter.textContent = count + ' / ' + MAX_ROUTES + ' 件';
+    var addBtn = document.getElementById('btn-add-cv-route');
+    if (addBtn) addBtn.disabled = count >= MAX_ROUTES;
+}
+
+// 追加ボタン
+document.getElementById('btn-add-cv-route')?.addEventListener('click', function() {
+    addRouteRow('', '', 0);
+    markCvSettingsDirty('btn-save-cv-routes');
+});
+
+// 保存ボタン
+document.getElementById('btn-save-cv-routes')?.addEventListener('click', async function() {
+    var rows = document.querySelectorAll('#cv-routes-rows tr');
+    var routes = [];
+    var hasError = false;
+
+    rows.forEach(function(tr, i) {
+        var rkInput = tr.querySelector('input[data-field="route_key"]');
+        var li = tr.querySelector('input[data-field="label"]');
+        if (!rkInput) return;
+        var rk = rkInput.value.trim();
+        if (!rk) { hasError = true; return; }
+        routes.push({
+            route_key: rk,
+            label: (li ? li.value.trim() : '') || rk,
+            enabled: 1,
+            sort_order: i + 1
+        });
+    });
+
+    if (hasError) {
+        alert('GA4イベント名が空の行があります。入力するか、行を削除してください。');
+        return;
+    }
+
+    var btn = document.getElementById('btn-save-cv-routes');
+    var origText = btn.textContent;
+    btn.textContent = '保存中...';
+    btn.disabled = true;
+
+    try {
+        var res = await fetch(restBase + 'actual-cv/routes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': wpNonce },
+            body: JSON.stringify({
+                user_id: userId,
+                routes: routes,
+                cv_only_configured: !!document.getElementById('cv-only-configured')?.checked,
+            }),
+            cache: 'no-store'
+        });
+
+        if (!res.ok) {
+            var errText = await res.text();
+            console.error('[GCREV] Save routes HTTP error:', res.status, errText);
+            btn.textContent = 'HTTP ' + res.status;
+            setTimeout(function() { btn.textContent = origText; }, 3000);
+            return;
+        }
+
+        var json = await res.json();
+        if (json.success) {
+            btn.textContent = '保存完了';
+            markCvSettingsClean('btn-save-cv-routes');
+            await initCvRoutesUI();
+            setTimeout(function() { btn.textContent = origText; }, 1500);
+        } else {
+            btn.textContent = (json.message || '保存失敗');
+            setTimeout(function() { btn.textContent = origText; }, 3000);
+        }
+    } catch (e) {
+        console.error('[GCREV] Save routes error:', e);
+        btn.textContent = 'エラー';
+        setTimeout(function() { btn.textContent = origText; }, 2000);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// HTML属性エスケープ
+function escAttr(str) {
+    if (!str) return '';
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML.replace(/"/g, '&quot;');
+}
 </script>
 
 <?php get_footer(); ?>
