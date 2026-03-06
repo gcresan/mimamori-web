@@ -8,8 +8,6 @@ if (!is_user_logged_in()) {
     exit;
 }
 
-// === パフォーマンス計測 ===
-$_perf = [ 'start' => microtime(true) ];
 
 $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
@@ -48,8 +46,6 @@ if ($ym_param && preg_match('/^\d{4}-\d{2}$/', $ym_param)) {
     $prev_prev_month_start = new DateTimeImmutable('first day of 2 months ago', $tz);
     $prev_prev_month_end   = new DateTimeImmutable('last day of 2 months ago', $tz);
 }
-
-$_perf['date_calc'] = microtime(true);
 
 // ========================================
 // 全レポート年月リスト取得（年月切り替えUI用）
@@ -94,17 +90,12 @@ set_query_var('gcrev_page_title', '月次レポート');
 set_query_var('gcrev_page_subtitle', $display_ym . 'のアクセス状況や反応をまとめたレポートです。');
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート'));
 
-$_perf['ym_query'] = microtime(true);
-
 // 月次AIレポート取得
 $year  = (int)$prev_month_start->format('Y');
 $month = (int)$prev_month_start->format('n');
 
 $gcrev_api      = new Gcrev_Insight_API(false);
-$_perf['api_construct'] = microtime(true);
-
 $monthly_report = $gcrev_api->get_monthly_ai_report($year, $month, $user_id);
-$_perf['report_fetch'] = microtime(true);
 
 // レポート対象期間の日付（JS に渡す）
 $report_start_date = $prev_month_start->format('Y-m-d');
@@ -117,23 +108,13 @@ $report_end_date   = $prev_month_end->format('Y-m-d');
 $kpi_snapshot_json  = 'null';
 $snapshot_data      = null;
 $has_full_snapshot  = false;
-$_snap_debug        = [ 'post_id' => 0, 'raw_len' => 0, 'decode_ok' => false, 'has_pv' => false, 'backfill_ran' => false ];
 $report_post_id     = ( $monthly_report && ! empty( $monthly_report['id'] ) ) ? (int) $monthly_report['id'] : 0;
-$_snap_debug['post_id'] = $report_post_id;
 
 if ( $report_post_id > 0 ) {
     // 1. 保存済みスナップショットを読み込み
-    $_perf['snap_read_start'] = microtime(true);
     $snapshot_raw = get_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', true );
-    $_perf['snap_read_done'] = microtime(true);
-    $_snap_debug['raw_len'] = strlen( $snapshot_raw ?: '' );
-
     if ( $snapshot_raw ) {
         $snapshot_data = json_decode( $snapshot_raw, true );
-        $_snap_debug['decode_ok'] = is_array( $snapshot_data );
-        $_snap_debug['has_pv'] = isset( $snapshot_data['pageViews'] );
-        $_snap_debug['keys'] = is_array( $snapshot_data ) ? implode( ',', array_slice( array_keys( $snapshot_data ), 0, 5 ) ) : 'N/A';
-
         if ( is_array( $snapshot_data ) && isset( $snapshot_data['pageViews'] ) ) {
             // マイグレーション: pages/keywords がラップされていたら展開して再保存
             $needs_resave = false;
@@ -156,8 +137,6 @@ if ( $report_post_id > 0 ) {
 
     // 2. 未保存 → 一度だけ取得して固定保存（スナップショット機能追加前のレポート移行用）
     if ( ! $has_full_snapshot ) {
-        $_snap_debug['backfill_ran'] = true;
-        $_perf['backfill_start'] = microtime(true);
         try {
             $backfill_data = $gcrev_api->get_dashboard_kpi_by_dates(
                 $report_start_date,
@@ -168,23 +147,17 @@ if ( $report_post_id > 0 ) {
                 $backfill_data['snapshot_version']  = 1;
                 $backfill_data['snapshot_saved_at'] = ( new DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
                 $json_str = wp_json_encode( $backfill_data, JSON_UNESCAPED_UNICODE );
-                $save_result = update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', wp_slash( $json_str ) );
-                $_snap_debug['save_result'] = $save_result;
-                $_snap_debug['save_len'] = strlen( $json_str );
+                update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', wp_slash( $json_str ) );
                 $kpi_snapshot_json = $json_str;
                 $snapshot_data     = $backfill_data;
                 $has_full_snapshot  = true;
-                error_log( "[GCREV] page-report-latest: Migrated KPI snapshot for report_id={$report_post_id}, len=" . strlen($json_str) . ", save_result=" . var_export($save_result, true) );
+                error_log( "[GCREV] page-report-latest: Migrated KPI snapshot for report_id={$report_post_id}" );
             }
         } catch ( \Throwable $e ) {
             error_log( '[GCREV] page-report-latest: KPI migration error: ' . $e->getMessage() );
-            $_snap_debug['error'] = $e->getMessage();
         }
-        $_perf['backfill_done'] = microtime(true);
     }
 }
-
-$_perf['snapshot'] = microtime(true);
 
 // === Effective CV（CVチャート + CV数表示用） ===
 $effective_cv_json = '{}';
@@ -457,8 +430,6 @@ if ($monthly_report) {
     // サイトURL
     $site_url = home_url('/');
 }
-
-$_perf['php_done'] = microtime(true);
 
 get_header();
 ?>
@@ -1631,46 +1602,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<?php
-// === パフォーマンス計測結果（画面表示） ===
-$_perf['end'] = microtime(true);
-$_s = $_perf['start'];
-if ( current_user_can( 'manage_options' ) ) :
-?>
-<div style="position:fixed;bottom:10px;right:10px;z-index:99999;background:#1a1a2e;color:#0f0;font-family:monospace;font-size:11px;padding:12px 16px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.5);max-width:420px;line-height:1.6;">
-  <div style="font-weight:bold;color:#fff;margin-bottom:4px;">PERF TIMING (report-latest)</div>
-  <div>日付計算 .......... <?php printf('%d ms', ($_perf['date_calc'] - $_s) * 1000); ?></div>
-  <div>年月リストSQL ..... <?php printf('%d ms', ($_perf['ym_query'] - $_perf['date_calc']) * 1000); ?></div>
-  <div>API construct ...... <?php printf('%d ms', ($_perf['api_construct'] - $_perf['ym_query']) * 1000); ?></div>
-  <div>レポート取得 ...... <?php printf('%d ms', ($_perf['report_fetch'] - $_perf['api_construct']) * 1000); ?></div>
-  <?php if ( isset( $_perf['snap_read_start'] ) ) : ?>
-  <div>  DB読込 ........... <?php printf('%d ms', ($_perf['snap_read_done'] - $_perf['snap_read_start']) * 1000); ?></div>
-  <?php endif; ?>
-  <?php if ( $_snap_debug['backfill_ran'] && isset( $_perf['backfill_start'] ) ) : ?>
-  <div style="color:#f55;font-weight:bold;">  Backfill(API) .... <?php printf('%d ms', ($_perf['backfill_done'] - $_perf['backfill_start']) * 1000); ?></div>
-  <?php endif; ?>
-  <div style="<?php echo ($_perf['snapshot'] - $_perf['report_fetch']) * 1000 > 100 ? 'color:#f55;' : ''; ?>">スナップショット計 . <?php printf('%d ms', ($_perf['snapshot'] - $_perf['report_fetch']) * 1000); ?></div>
-  <div>PHP残り処理 ....... <?php printf('%d ms', ($_perf['php_done'] - $_perf['snapshot']) * 1000); ?></div>
-  <hr style="border:none;border-top:1px solid #333;margin:4px 0;">
-  <div style="color:#ff0;font-weight:bold;">PHP合計 ........... <?php printf('%d ms', ($_perf['php_done'] - $_s) * 1000); ?></div>
-  <div style="color:#ff0;">全体 .............. <?php printf('%d ms', ($_perf['end'] - $_s) * 1000); ?></div>
-  <hr style="border:none;border-top:1px solid #333;margin:4px 0;">
-  <div style="color:#aaa;">post_id: <?php echo $_snap_debug['post_id']; ?></div>
-  <div style="color:#aaa;">DB snapshot: <?php echo $_snap_debug['raw_len']; ?> bytes</div>
-  <div style="color:<?php echo $_snap_debug['decode_ok'] ? '#0f0' : '#f55'; ?>;">json_decode: <?php echo $_snap_debug['decode_ok'] ? 'OK' : 'FAIL'; ?></div>
-  <div style="color:<?php echo $_snap_debug['has_pv'] ? '#0f0' : '#f55'; ?>;">pageViews key: <?php echo $_snap_debug['has_pv'] ? 'YES' : 'NO'; ?></div>
-  <div style="color:#aaa;">keys: <?php echo esc_html( $_snap_debug['keys'] ?? 'N/A' ); ?></div>
-  <?php if ( $_snap_debug['backfill_ran'] ) : ?>
-  <div style="color:#f55;">BACKFILL実行!</div>
-  <?php if ( isset( $_snap_debug['save_result'] ) ) : ?>
-  <div style="color:#aaa;">save: <?php echo var_export( $_snap_debug['save_result'], true ); ?> (<?php echo $_snap_debug['save_len'] ?? '?'; ?> bytes)</div>
-  <?php endif; ?>
-  <?php if ( isset( $_snap_debug['error'] ) ) : ?>
-  <div style="color:#f55;">err: <?php echo esc_html( $_snap_debug['error'] ); ?></div>
-  <?php endif; ?>
-  <?php else : ?>
-  <div style="color:#0f0;">snapshot読込のみ（API呼出なし）</div>
-  <?php endif; ?>
-</div>
-<?php endif; ?>
 <?php get_footer(); ?>
