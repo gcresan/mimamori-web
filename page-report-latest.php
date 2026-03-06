@@ -1616,20 +1616,23 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <?php
-// === パフォーマンス計測結果 ===
+// === パフォーマンス計測結果（画面表示） ===
 $_perf['end'] = microtime(true);
 $_s = $_perf['start'];
-$_fmt = function($label, $from, $to) { return sprintf('  %-20s %6.0f ms', $label, ($to - $from) * 1000); };
-echo "\n<!-- PERF TIMING (report-latest)\n";
-echo $_fmt('日付計算',       $_s,                     $_perf['date_calc']) . "\n";
-echo $_fmt('年月リストSQL',  $_perf['date_calc'],     $_perf['ym_query']) . "\n";
-echo $_fmt('API construct',  $_perf['ym_query'],      $_perf['api_construct']) . "\n";
-echo $_fmt('レポート取得',   $_perf['api_construct'],  $_perf['report_fetch']) . "\n";
-echo $_fmt('スナップショット', $_perf['report_fetch'], $_perf['snapshot']) . "\n";
-echo $_fmt('PHP残り処理',    $_perf['snapshot'],       $_perf['php_done']) . "\n";
-echo sprintf("  %-20s %6.0f ms\n", '== PHP合計 ==', ($_perf['php_done'] - $_s) * 1000);
-echo sprintf("  %-20s %6.0f ms\n", '== 全体 ==', ($_perf['end'] - $_s) * 1000);
-echo sprintf("  backfill実行: %s\n", $has_full_snapshot ? 'NO (snapshot済)' : 'YES (APIフォールバック)');
-echo "-->\n";
+if ( current_user_can( 'manage_options' ) ) :
 ?>
+<div style="position:fixed;bottom:10px;right:10px;z-index:99999;background:#1a1a2e;color:#0f0;font-family:monospace;font-size:12px;padding:12px 16px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.5);max-width:360px;line-height:1.6;">
+  <div style="font-weight:bold;color:#fff;margin-bottom:4px;">PERF TIMING (report-latest)</div>
+  <div>日付計算 .......... <?php printf('%d ms', ($_perf['date_calc'] - $_s) * 1000); ?></div>
+  <div>年月リストSQL ..... <?php printf('%d ms', ($_perf['ym_query'] - $_perf['date_calc']) * 1000); ?></div>
+  <div style="<?php echo ($_perf['api_construct'] - $_perf['ym_query']) * 1000 > 100 ? 'color:#f55;' : ''; ?>">API construct ...... <?php printf('%d ms', ($_perf['api_construct'] - $_perf['ym_query']) * 1000); ?></div>
+  <div style="<?php echo ($_perf['report_fetch'] - $_perf['api_construct']) * 1000 > 100 ? 'color:#f55;' : ''; ?>">レポート取得 ...... <?php printf('%d ms', ($_perf['report_fetch'] - $_perf['api_construct']) * 1000); ?></div>
+  <div style="<?php echo ($_perf['snapshot'] - $_perf['report_fetch']) * 1000 > 100 ? 'color:#f55;' : ''; ?>">スナップショット ... <?php printf('%d ms', ($_perf['snapshot'] - $_perf['report_fetch']) * 1000); ?></div>
+  <div>PHP残り処理 ....... <?php printf('%d ms', ($_perf['php_done'] - $_perf['snapshot']) * 1000); ?></div>
+  <hr style="border:none;border-top:1px solid #333;margin:4px 0;">
+  <div style="color:#ff0;font-weight:bold;">PHP合計 ........... <?php printf('%d ms', ($_perf['php_done'] - $_s) * 1000); ?></div>
+  <div style="color:#ff0;">全体 .............. <?php printf('%d ms', ($_perf['end'] - $_s) * 1000); ?></div>
+  <div style="color:<?php echo $has_full_snapshot ? '#0f0' : '#f55'; ?>;">backfill: <?php echo $has_full_snapshot ? 'NO (snapshot済)' : 'YES (API呼出!)'; ?></div>
+</div>
+<?php endif; ?>
 <?php get_footer(); ?>
