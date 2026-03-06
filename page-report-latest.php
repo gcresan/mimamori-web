@@ -81,6 +81,19 @@ try {
     error_log('[GCREV] page-report-latest effective CV error: ' . $e->getMessage());
 }
 
+// === KPIスナップショット（保存済みがあれば使う） ===
+$kpi_snapshot_json = 'null';
+if ( $monthly_report && ! empty( $monthly_report['id'] ) ) {
+    $snapshot_raw = get_post_meta( (int) $monthly_report['id'], '_gcrev_kpi_snapshot_json', true );
+    if ( $snapshot_raw ) {
+        $kpi_snapshot_json = $snapshot_raw; // 既にJSON文字列
+    }
+}
+
+// レポート対象期間の日付（JS に渡す）
+$report_start_date = $prev_month_start->format('Y-m-d');
+$report_end_date   = $prev_month_end->format('Y-m-d');
+
 // ========================================
 // ヘルパー関数（page-dashboard.php と同一）
 // ========================================
@@ -837,13 +850,30 @@ get_header();
 // Effective CV データ（PHP → JS）
 const effectiveCvData = <?php echo $effective_cv_json ?? '{}'; ?>;
 
+// レポート対象期間の日付（PHP → JS）
+const reportStartDate = '<?php echo esc_js( $report_start_date ); ?>';
+const reportEndDate   = '<?php echo esc_js( $report_end_date ); ?>';
+
+// KPIスナップショット（保存済みがあればここに入る）
+const kpiSnapshot = <?php echo $kpi_snapshot_json; ?>;
+
 let sparklineCharts = {};
 
-// KPIデータ取得（dashboard同一エンドポイント）
-function updateKPIData(period) {
+// KPIデータ取得（レポート対象期間の start_date/end_date で取得）
+function updateKPIData() {
+    // スナップショットがあればAPI呼び出し不要
+    if (kpiSnapshot) {
+        console.log('KPI Data from snapshot:', kpiSnapshot);
+        updateKPIDisplay(kpiSnapshot);
+        return;
+    }
+
     showLoading();
 
-    const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>?period=' + period;
+    // レポート対象期間を start_date / end_date で指定
+    const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>'
+        + '?start_date=' + encodeURIComponent(reportStartDate)
+        + '&end_date=' + encodeURIComponent(reportEndDate);
 
     fetch(apiUrl, {
         method: 'GET',
@@ -1048,7 +1078,21 @@ function hideLoading() {
 let charts = {};
 
 function loadAnalysisData() {
-    const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>?period=prev-month';
+    // スナップショットに集客分析データがあればAPI呼び出し不要
+    if (kpiSnapshot) {
+        updateDeviceList(kpiSnapshot.devices || []);
+        updateAgeList(kpiSnapshot.age || []);
+        updateMediumList(kpiSnapshot.medium || []);
+        updateRegionList(kpiSnapshot.geo_region || []);
+        updatePagesList(kpiSnapshot.pages || []);
+        updateKeywordsList(kpiSnapshot.keywords || []);
+        return;
+    }
+
+    // レポート対象期間で取得
+    const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>'
+        + '?start_date=' + encodeURIComponent(reportStartDate)
+        + '&end_date=' + encodeURIComponent(reportEndDate);
 
     fetch(apiUrl, {
         method: 'GET',
@@ -1399,8 +1443,8 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Chart.js not loaded');
         return;
     }
-    // KPIデータ取得（前月固定 = dashboard初期表示と同じ）
-    updateKPIData('prev-month');
+    // KPIデータ取得（レポート対象期間で取得）
+    updateKPIData();
 
     // 集客分析データ取得（常に表示）
     loadAnalysisData();

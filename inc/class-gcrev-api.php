@@ -228,7 +228,22 @@ class Gcrev_Insight_API {
                     'validate_callback' => function($param) {
                         return in_array($param, ['0', '1']);
                     }
-                ]
+                ],
+                // 任意の日付範囲指定（月次レポートの過去閲覧時に使用）
+                'start_date' => [
+                    'required'          => false,
+                    'validate_callback' => function($param) {
+                        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $param);
+                    },
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
+                'end_date' => [
+                    'required'          => false,
+                    'validate_callback' => function($param) {
+                        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $param);
+                    },
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
             ]
         ]);
 
@@ -1852,7 +1867,12 @@ class Gcrev_Insight_API {
 
             // === 手動生成時も履歴保存 ===
             $highlights = $this->highlights_mod->extract_highlights_from_html($report_html, $user_id);
-            $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown);
+            $saved_post_id = $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown);
+
+            // === KPIスナップショット保存 ===
+            if ( $saved_post_id > 0 ) {
+                $this->save_kpi_snapshot_for_report( $saved_post_id, $prev_data, $user_id, $year_month );
+            }
 
             // === インフォグラフィックJSON生成・保存 ===
             try {
@@ -2174,7 +2194,12 @@ class Gcrev_Insight_API {
 
                 // 保存（source=auto）
                 $highlights = $this->highlights_mod->extract_highlights_from_html( $report_html, $user_id );
-                $this->repo->save_report_to_history( $user_id, $report_html, $client_info, 'auto', null, $highlights, $auto_beginner_md );
+                $saved_post_id = $this->repo->save_report_to_history( $user_id, $report_html, $client_info, 'auto', null, $highlights, $auto_beginner_md );
+
+                // === KPIスナップショット保存 ===
+                if ( $saved_post_id > 0 ) {
+                    $this->save_kpi_snapshot_for_report( $saved_post_id, $prev_data, $user_id, $auto_ym );
+                }
 
                 // === インフォグラフィックJSON生成・保存 ===
                 try {
@@ -2408,6 +2433,119 @@ class Gcrev_Insight_API {
     }
 
     /**
+     * 任意の日付範囲でKPIデータを取得する（月次レポートの過去閲覧時に使用）
+     *
+     * @param string $start_date 開始日 (Y-m-d)
+     * @param string $end_date   終了日 (Y-m-d)
+     * @param int    $user_id    ユーザーID
+     * @return array KPIデータ
+     */
+    public function get_dashboard_kpi_by_dates( string $start_date, string $end_date, int $user_id ): array {
+        $config = $this->config->get_user_config( $user_id );
+
+        $ga4_id  = $config['ga4_id'];
+        $gsc_url = $config['gsc_url'];
+        $site_url = $config['site_url'] ?? '';
+
+        // 比較期間（同日数の直前期間）
+        $comparison = $this->dates->get_comparison_range( $start_date, $end_date );
+
+        // GA4 データ取得
+        $ga4_pages   = $this->ga4->fetch_ga4_data( $ga4_id, $start_date, $end_date, $site_url );
+        $ga4_summary = $this->ga4->fetch_ga4_summary( $ga4_id, $start_date, $end_date );
+        $ga4_prev    = $this->ga4->fetch_ga4_summary( $ga4_id, $comparison['start'], $comparison['end'] );
+        $daily       = $this->ga4->fetch_ga4_daily_series( $ga4_id, $start_date, $end_date );
+
+        $devices    = $this->ga4->fetch_ga4_breakdown( $ga4_id, $start_date, $end_date, 'deviceCategory', 'sessions' );
+        $medium     = $this->ga4->fetch_ga4_breakdown( $ga4_id, $start_date, $end_date, 'sessionMedium', 'sessions' );
+        $geo_region = $this->ga4->fetch_ga4_breakdown( $ga4_id, $start_date, $end_date, 'region', 'sessions' );
+        $age        = $this->ga4->fetch_ga4_age_breakdown( $ga4_id, $start_date, $end_date );
+
+        $gsc_data = $this->gsc->fetch_gsc_data( $gsc_url, $start_date, $end_date );
+        $trends   = $this->build_trends( $ga4_summary, $ga4_prev );
+
+        // 流入元分析データ
+        $source_analysis = [ 'channels_summary' => [], 'sources_detail' => [], 'channels_daily_series' => [] ];
+        try {
+            $source_current  = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $start_date, $end_date );
+            $source_previous = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $comparison['start'], $comparison['end'] );
+            $source_analysis = $this->format_source_analysis_data( $source_current, $source_previous );
+        } catch ( \Exception $e ) {
+            error_log( '[GCREV] get_dashboard_kpi_by_dates source error: ' . $e->getMessage() );
+        }
+
+        $result = [
+            'current_period' => [
+                'start' => $start_date,
+                'end'   => $end_date,
+            ],
+            'comparison_period' => [
+                'start' => $comparison['start'],
+                'end'   => $comparison['end'],
+            ],
+
+            'pageViews'      => $ga4_summary['pageViews'],
+            'sessions'       => $ga4_summary['sessions'],
+            'users'          => $ga4_summary['users'],
+            'newUsers'       => $ga4_summary['newUsers'],
+            'returningUsers' => $ga4_summary['returningUsers'],
+            'avgDuration'    => $ga4_summary['avgDuration'],
+            'conversions'    => $ga4_summary['conversions'] ?? '0',
+
+            'trends'  => $trends,
+            'daily'   => $daily,
+            'devices' => $devices,
+            'medium'  => $medium,
+            'geo_region' => $geo_region,
+            'age'     => $age,
+            'pages'   => $ga4_pages,
+            'keywords' => $gsc_data,
+
+            'channels_summary'      => $source_analysis['channels_summary'] ?? [],
+            'sources_detail'        => $source_analysis['sources_detail'] ?? [],
+            'channels_daily_series' => $source_analysis['channels_daily_series'] ?? [],
+        ];
+
+        // 実質CVの注入（月単位判定: 月初～月末の範囲であれば適用）
+        $tz = wp_timezone();
+        $start_dt = new \DateTimeImmutable( $start_date, $tz );
+        $end_dt   = new \DateTimeImmutable( $end_date, $tz );
+        if ( $start_dt->format('d') === '01' && $end_dt->format('Y-m-d') === $end_dt->format('Y-m-t') ) {
+            $year_month = $start_dt->format('Y-m');
+            $effective  = $this->get_effective_cv_monthly( $year_month, $user_id );
+
+            $result['conversions'] = (string) $effective['total'];
+            $result['cv_source']   = $effective['source'];
+            $result['cv_detail']   = $effective['breakdown_manual'] ?? [];
+            $result['ga4_cv']      = $effective['components']['ga4_total'];
+            $result['effective_cv'] = $effective;
+
+            // CV 増減（前月比）
+            $comp_ym = $start_dt->modify( 'first day of last month' )->format('Y-m');
+            $comp_effective = $this->get_effective_cv_monthly( $comp_ym, $user_id );
+            $cur = (float) $effective['total'];
+            $prv = (float) $comp_effective['total'];
+
+            if ( abs( $prv ) < 0.0001 ) {
+                $cv_trend = ( abs( $cur ) < 0.0001 )
+                    ? [ 'value' => 0, 'text' => '±0.0%', 'color' => '#666' ]
+                    : [ 'value' => 100, 'text' => '+∞', 'color' => '#3b82f6' ];
+            } else {
+                $val  = ( ( $cur - $prv ) / $prv ) * 100.0;
+                $text = ( $val > 0 ? '+' : '' ) . number_format( $val, 1 ) . '%';
+                $color = $val > 0 ? '#3b82f6' : ( $val < 0 ? '#ef4444' : '#666' );
+                $cv_trend = [ 'value' => $val, 'text' => $text, 'color' => $color ];
+            }
+            if ( ! isset( $result['trends'] ) ) {
+                $result['trends'] = [];
+            }
+            $result['trends']['conversions'] = $cv_trend;
+        }
+
+        return $result;
+    }
+
+    /**
      * KPIレスポンスに実質CVデータを注入する
      * period が月単位（prev-month/prev-prev-month）の場合のみ適用
      */
@@ -2614,7 +2752,12 @@ class Gcrev_Insight_API {
 
             // 履歴保存
             $highlights = $this->highlights_mod->extract_highlights_from_html($report_html, $user_id);
-            $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown2);
+            $saved_post_id = $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown2);
+
+            // === KPIスナップショット保存 ===
+            if ( $saved_post_id > 0 ) {
+                $this->save_kpi_snapshot_for_report( $saved_post_id, $prev_data, $user_id, $year_month );
+            }
 
             // === インフォグラフィックJSON生成・保存 ===
             try {
@@ -2656,10 +2799,17 @@ class Gcrev_Insight_API {
     public function rest_get_dashboard_kpi(WP_REST_Request $request): WP_REST_Response {
         $period      = $request->get_param('period') ?? 'prev-month';
         $cache_first = $request->get_param('cache_first') ?? '0';
+        $start_date  = $request->get_param('start_date');
+        $end_date    = $request->get_param('end_date');
         $user_id     = get_current_user_id();
 
         try {
-            $kpi_data = $this->get_dashboard_kpi($period, $user_id, (int)$cache_first);
+            // start_date / end_date が指定されている場合は日付範囲で取得
+            if ( $start_date && $end_date ) {
+                $kpi_data = $this->get_dashboard_kpi_by_dates( $start_date, $end_date, $user_id );
+            } else {
+                $kpi_data = $this->get_dashboard_kpi($period, $user_id, (int)$cache_first);
+            }
 
             return new WP_REST_Response([
                 'success' => true,
@@ -6416,6 +6566,71 @@ PROMPT;
             'has_actual' => ($eff['source'] !== 'ga4'),
             'ga4_cv'     => $eff['components']['ga4_total'] ?? ($ga4_cv ?? 0),
         ];
+    }
+
+    /**
+     * レポート保存後にKPIスナップショットを保存する
+     *
+     * fetch_dashboard_data_internal() の結果（$prev_data）から
+     * KPIカード＋集客分析カードに必要なデータを抽出して保存する。
+     *
+     * @param int    $post_id    保存されたレポートのpost ID
+     * @param array  $prev_data  fetch_dashboard_data_internal() の結果
+     * @param int    $user_id    ユーザーID
+     * @param string|null $year_month 対象年月 (Y-m)
+     */
+    private function save_kpi_snapshot_for_report( int $post_id, array $prev_data, int $user_id, ?string $year_month ): void {
+        try {
+            $snapshot = [
+                'pageViews'      => $prev_data['pageViews'] ?? 0,
+                'sessions'       => $prev_data['sessions'] ?? 0,
+                'users'          => $prev_data['users'] ?? 0,
+                'newUsers'       => $prev_data['newUsers'] ?? 0,
+                'returningUsers' => $prev_data['returningUsers'] ?? 0,
+                'avgDuration'    => $prev_data['avgDuration'] ?? 0,
+                'conversions'    => $prev_data['conversions'] ?? '0',
+                'trends'         => $prev_data['trends'] ?? [],
+                'daily'          => $prev_data['daily'] ?? [],
+                'devices'        => $prev_data['devices'] ?? [],
+                'medium'         => $prev_data['medium'] ?? [],
+                'geo_region'     => $prev_data['geo_region'] ?? [],
+                'age'            => $prev_data['age'] ?? [],
+                'pages'          => $prev_data['pages'] ?? [],
+                'keywords'       => $prev_data['keywords'] ?? [],
+            ];
+
+            // 実質CVがある場合は注入
+            if ( $year_month ) {
+                $eff = $this->get_effective_cv_monthly( $year_month, $user_id );
+                $snapshot['conversions'] = (string) $eff['total'];
+                $snapshot['cv_source']   = $eff['source'];
+                $snapshot['effective_cv'] = $eff;
+
+                // CV 増減
+                $tz = wp_timezone();
+                $comp_ym = ( new \DateTimeImmutable( $year_month . '-01', $tz ) )
+                    ->modify( 'first day of last month' )
+                    ->format( 'Y-m' );
+                $comp_eff = $this->get_effective_cv_monthly( $comp_ym, $user_id );
+                $cur = (float) $eff['total'];
+                $prv = (float) $comp_eff['total'];
+                if ( abs( $prv ) < 0.0001 ) {
+                    $cv_trend = ( abs( $cur ) < 0.0001 )
+                        ? [ 'value' => 0, 'text' => '±0.0%', 'color' => '#666' ]
+                        : [ 'value' => 100, 'text' => '+∞', 'color' => '#3b82f6' ];
+                } else {
+                    $val   = ( ( $cur - $prv ) / $prv ) * 100.0;
+                    $text  = ( $val > 0 ? '+' : '' ) . number_format( $val, 1 ) . '%';
+                    $color = $val > 0 ? '#3b82f6' : ( $val < 0 ? '#ef4444' : '#666' );
+                    $cv_trend = [ 'value' => $val, 'text' => $text, 'color' => $color ];
+                }
+                $snapshot['trends']['conversions'] = $cv_trend;
+            }
+
+            $this->repo->save_kpi_snapshot( $post_id, $snapshot );
+        } catch ( \Throwable $e ) {
+            error_log( "[GCREV] save_kpi_snapshot_for_report error: " . $e->getMessage() );
+        }
     }
 
     /**

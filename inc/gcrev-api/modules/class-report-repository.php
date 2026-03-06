@@ -30,7 +30,7 @@ class Gcrev_Report_Repository {
      * @param string|null $year_month  保存対象年月（nullの場合は現在の年月）
      * @param array       $highlights  ハイライトデータ（外部で生成済み）
      */
-    public function save_report_to_history(int $user_id, string $html, array $client_info, string $source = 'auto', ?string $year_month = null, array $highlights = [], string $beginner_markdown = ''): void {
+    public function save_report_to_history(int $user_id, string $html, array $client_info, string $source = 'auto', ?string $year_month = null, array $highlights = [], string $beginner_markdown = ''): int {
 
         $tz = wp_timezone();
         $now = new DateTimeImmutable('now', $tz);
@@ -62,7 +62,7 @@ class Gcrev_Report_Repository {
 
         if (is_wp_error($post_id) || $post_id === 0) {
             error_log("[GCREV] Failed to save report to history for user_id={$user_id}");
-            return;
+            return 0;
         }
 
         // メタデータ保存
@@ -96,6 +96,22 @@ class Gcrev_Report_Repository {
         update_post_meta($post_id, '_gcrev_is_current', 1);
 
         error_log("[GCREV] Report saved to history: post_id={$post_id}, user_id={$user_id}, year_month={$year_month}, version={$new_version}, source={$source}");
+
+        return $post_id;
+    }
+
+    /**
+     * レポートにKPIスナップショットを保存する
+     *
+     * @param int   $post_id  レポートの投稿ID
+     * @param array $kpi_data KPIデータ（pageViews, sessions, users 等）
+     */
+    public function save_kpi_snapshot( int $post_id, array $kpi_data ): void {
+        if ( $post_id <= 0 || empty( $kpi_data ) ) {
+            return;
+        }
+        update_post_meta( $post_id, '_gcrev_kpi_snapshot_json', wp_json_encode( $kpi_data, JSON_UNESCAPED_UNICODE ) );
+        error_log( "[GCREV] KPI snapshot saved for post_id={$post_id}" );
     }
 
     /**
