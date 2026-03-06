@@ -120,8 +120,8 @@
                </li>
 
                <!-- 集客のようす（折りたたみ親） -->
-               <li class="nav-item nav-item-collapsible<?php echo $analysis_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'analysis' ? ' collapsed' : ''; ?>" data-menu-key="analysis">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleAnalysis" aria-expanded="<?php echo $sidebar_active_group === 'analysis' ? 'true' : 'false'; ?>">
+               <li class="nav-item nav-item-collapsible<?php echo $analysis_child_active ? ' child-active' : ''; ?>" data-menu-key="analysis">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleAnalysis" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 10h14M10 3v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="5" cy="5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="5" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="5" cy="15" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="15" r="1.5" stroke="currentColor" stroke-width="1.2"/></svg></span>
                   <span>集客のようす</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
@@ -166,8 +166,8 @@
                </li>
 
                <!-- 改善ツール（拡張機能）（折りたたみ親） -->
-               <li class="nav-item nav-item-collapsible<?php echo $tools_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'tools' ? ' collapsed' : ''; ?>" data-menu-key="tools">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleTools" aria-expanded="<?php echo $sidebar_active_group === 'tools' ? 'true' : 'false'; ?>">
+               <li class="nav-item nav-item-collapsible<?php echo $tools_child_active ? ' child-active' : ''; ?>" data-menu-key="tools">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleTools" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20.7 4.561a5.5 5.5 0 0 0-7.778 0l-.354.353a.5.5 0 0 0 0 .707l2.828 2.829a.5.5 0 0 0 .707 0l.354-.354a5.5 5.5 0 0 0 0-7.778v.243Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.56 5.56l-7.4 7.4a2 2 0 0 0-.5.83l-1.12 3.91a.5.5 0 0 0 .62.62l3.91-1.12a2 2 0 0 0 .83-.5l7.4-7.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                   <span>改善ツール</span>
                   <span class="nav-ext-badge" aria-label="拡張機能">拡張</span>
@@ -209,28 +209,13 @@
                </li>
 
                <!-- 各種設定（折りたたみ親） -->
-               <li class="nav-item nav-item-collapsible<?php echo $settings_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'settings' ? ' collapsed' : ''; ?>" data-menu-key="settings">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleSettings" aria-expanded="<?php echo $sidebar_active_group === 'settings' ? 'true' : 'false'; ?>">
+               <li class="nav-item nav-item-collapsible<?php echo $settings_child_active ? ' child-active' : ''; ?>" data-menu-key="settings">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleSettings" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="1.5"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                   <span>各種設定</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuSettings">
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/report/report-settings/'); ?>" class="nav-link <?php echo is_page('report-settings') ? 'active' : ''; ?>">
-                        <span>月次レポート設定</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/analysis/cv-review/'); ?>" class="nav-link <?php echo (is_page('cv-review') || is_page('cv-settings')) ? 'active' : ''; ?>">
-                        <span>ゴール関連設定</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/account/client-settings/'); ?>" class="nav-link <?php echo is_page('client-settings') ? 'active' : ''; ?>">
-                        <span>クライアント設定</span>
-                        </a>
-                     </li>
                      <li class="nav-item">
                         <a href="<?php echo home_url('/account/meo-connection/'); ?>" class="nav-link <?php echo is_page('meo-connection') ? 'active' : ''; ?>">
                         <span>MEO連携</span>
@@ -366,8 +351,8 @@
             </ul>
          </div> -->
          <!-- G. サポート・問い合わせ（折りたたみ親） -->
-               <li class="nav-item nav-item-collapsible<?php echo $support_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'support' ? ' collapsed' : ''; ?>" data-menu-key="support">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleSupport" aria-expanded="<?php echo $sidebar_active_group === 'support' ? 'true' : 'false'; ?>">
+               <li class="nav-item nav-item-collapsible<?php echo $support_child_active ? ' child-active' : ''; ?>" data-menu-key="support">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleSupport" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg></span>
                   <span>サポート・問い合わせ</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
@@ -392,8 +377,8 @@
                </li>
 
                <!-- H. オプションサービス（折りたたみ親） -->
-               <li class="nav-item nav-item-collapsible<?php echo $option_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'option' ? ' collapsed' : ''; ?>" data-menu-key="option">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleOption" aria-expanded="<?php echo $sidebar_active_group === 'option' ? 'true' : 'false'; ?>">
+               <li class="nav-item nav-item-collapsible<?php echo $option_child_active ? ' child-active' : ''; ?>" data-menu-key="option">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleOption" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 4 12 14.01l-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                   <span>オプションサービス</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
