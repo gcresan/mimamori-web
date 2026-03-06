@@ -524,8 +524,14 @@ class Gcrev_Insight_API {
     /**
      * 海外アクセス除外が有効ならGA4国フィルタを設定し、状態を返す。
      * 呼び出し後は必ず restore_country_filter() で元に戻すこと。
+     *
+     * 再入可能: 外側の呼び出しで既にフィルタが設定済みの場合は false を返し、
+     * restore_country_filter(false) で解除されないようにする。
      */
     private function maybe_set_country_filter( int $user_id ): bool {
+        if ( $this->ga4->has_country_filter() ) {
+            return false; // 外側で既に設定済み — 内側では解除しない
+        }
         if ( $this->is_exclude_foreign( $user_id ) ) {
             $this->ga4->set_country_filter( 'Japan' );
             return true;
@@ -797,6 +803,9 @@ class Gcrev_Insight_API {
 
         $user_id = get_current_user_id();
 
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
         try {
             $config = $this->config->get_user_config($user_id);
             $dates  = $this->dates->get_kpi_dates();
@@ -814,6 +823,8 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
@@ -2448,6 +2459,11 @@ class Gcrev_Insight_API {
             $user_id = get_current_user_id();
         }
 
+        // 海外アクセス除外フィルタ（inject_effective_cv_into_kpi まで維持）
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
+
         // 期間変換
         $range_map = [
             'last30'         => 'last30',
@@ -2482,9 +2498,9 @@ class Gcrev_Insight_API {
         //    ここに到達 = キャッシュ無し確定。二重チェックは安全側に倒す。
         $request = new WP_REST_Request('GET', '/gcrev_insights/v1/dashboard');
         $request->set_param('range', $range);
-        
+
         $response = $this->get_dashboard_data($request);
-        
+
         if ($response instanceof WP_REST_Response) {
             $data = $response->get_data();
             $result = $data['data'] ?? [];
@@ -2498,6 +2514,10 @@ class Gcrev_Insight_API {
             return $result;
         }
         return [];
+
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
     }
 
     /**
@@ -3199,6 +3219,8 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
     /**
@@ -3796,7 +3818,8 @@ class Gcrev_Insight_API {
         error_log("[GCREV] get_source_analysis: period={$period}, range={$start_date} to {$end_date}");
         
         // キャッシュキー
-        $cache_key = "gcrev_source_{$user_id}_{$period}_" . md5("{$start_date}_{$end_date}");
+        $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+        $cache_key = "gcrev_source_{$user_id}_{$period}_" . md5("{$start_date}_{$end_date}") . $filter_sfx;
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             error_log("[GCREV] Cache HIT: {$cache_key}");
@@ -6799,6 +6822,9 @@ PROMPT;
         $period  = $request->get_param('period') ?? 'prev-month';
         $user_id = get_current_user_id();
 
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
         error_log("[GCREV] REST get_cv_analysis: user_id={$user_id}, period={$period}");
 
         try {
@@ -6815,7 +6841,8 @@ PROMPT;
             $comp_end   = $comparison['end'];
 
             // キャッシュ
-            $cache_key = "gcrev_cv_analysis_{$user_id}_{$period}_" . md5("{$start}_{$end}");
+            $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            $cache_key = "gcrev_cv_analysis_{$user_id}_{$period}_" . md5("{$start}_{$end}") . $filter_sfx;
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
                 // キャッシュでもeffective CVだけ再計算（入力変更即時反映のため）
@@ -6942,6 +6969,8 @@ PROMPT;
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
