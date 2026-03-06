@@ -58,17 +58,24 @@ class Gcrev_GA4_Fetcher {
     public function set_country_filter( ?string $country ): void {
         if ( $country === null ) {
             $this->country_filter = null;
+            error_log('[GCREV] set_country_filter: cleared');
             return;
         }
-        $this->country_filter = new FilterExpression([
-            'filter' => new Filter([
-                'field_name'    => 'country',
-                'string_filter' => new StringFilter([
-                    'value'      => $country,
-                    'match_type' => StringFilter\MatchType::EXACT,
+        try {
+            $this->country_filter = new FilterExpression([
+                'filter' => new Filter([
+                    'field_name'    => 'country',
+                    'string_filter' => new StringFilter([
+                        'value'      => $country,
+                        'match_type' => StringFilter\MatchType::EXACT,
+                    ]),
                 ]),
-            ]),
-        ]);
+            ]);
+            error_log('[GCREV] set_country_filter: set to ' . $country . ' — filter class=' . get_class($this->country_filter));
+        } catch ( \Throwable $e ) {
+            error_log('[GCREV] set_country_filter FAILED: ' . $e->getMessage());
+            $this->country_filter = null;
+        }
     }
 
     /**
@@ -79,8 +86,10 @@ class Gcrev_GA4_Fetcher {
      */
     private function apply_country_filter( array &$params ): void {
         if ( $this->country_filter === null ) {
+            error_log('[GCREV] apply_country_filter: SKIPPED (filter is null)');
             return;
         }
+        error_log('[GCREV] apply_country_filter: APPLYING country filter');
         if ( isset( $params['dimension_filter'] ) ) {
             $params['dimension_filter'] = new FilterExpression([
                 'and_group' => new FilterExpressionList([

@@ -2708,6 +2708,7 @@ class Gcrev_Insight_API {
 
             // 海外アクセス除外フィルタ
             $exclude_foreign_manual = !empty($client_info['exclude_foreign']);
+            error_log("[GCREV] generate_monthly_report_manual: exclude_foreign=" . var_export($client_info['exclude_foreign'] ?? null, true) . ", will_filter=" . ($exclude_foreign_manual ? 'YES' : 'NO'));
             if ($exclude_foreign_manual) {
                 $this->ga4->set_country_filter('Japan');
             }
