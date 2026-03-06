@@ -117,7 +117,7 @@ class Gcrev_Report_Repository {
         if ( ! isset( $kpi_data['snapshot_saved_at'] ) ) {
             $kpi_data['snapshot_saved_at'] = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         }
-        update_post_meta( $post_id, '_gcrev_kpi_snapshot_json', wp_json_encode( $kpi_data, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $post_id, '_gcrev_kpi_snapshot_json', wp_slash( wp_json_encode( $kpi_data, JSON_UNESCAPED_UNICODE ) ) );
         error_log( "[GCREV] KPI snapshot saved for post_id={$post_id}, version={$kpi_data['snapshot_version']}" );
     }
 

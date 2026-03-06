@@ -147,7 +147,7 @@ if ( $report_post_id > 0 ) {
             }
             if ( $needs_resave ) {
                 $snapshot_raw = wp_json_encode( $snapshot_data, JSON_UNESCAPED_UNICODE );
-                update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', $snapshot_raw );
+                update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', wp_slash( $snapshot_raw ) );
             }
             $kpi_snapshot_json = $snapshot_raw;
             $has_full_snapshot = true;
@@ -168,7 +168,7 @@ if ( $report_post_id > 0 ) {
                 $backfill_data['snapshot_version']  = 1;
                 $backfill_data['snapshot_saved_at'] = ( new DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
                 $json_str = wp_json_encode( $backfill_data, JSON_UNESCAPED_UNICODE );
-                $save_result = update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', $json_str );
+                $save_result = update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', wp_slash( $json_str ) );
                 $_snap_debug['save_result'] = $save_result;
                 $_snap_debug['save_len'] = strlen( $json_str );
                 $kpi_snapshot_json = $json_str;
