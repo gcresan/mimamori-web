@@ -73,6 +73,20 @@ class Gcrev_GA4_Fetcher {
     }
 
     /**
+     * 国フィルタが設定されているかどうかを返す。
+     */
+    public function has_country_filter(): bool {
+        return $this->country_filter !== null;
+    }
+
+    /**
+     * 現在の国フィルタ FilterExpression を返す（未設定なら null）。
+     */
+    public function get_country_filter(): ?FilterExpression {
+        return $this->country_filter;
+    }
+
+    /**
      * RunReportRequest のパラメータ配列に国フィルタを適用する。
      * 既存の dimension_filter がある場合は AND 結合する。
      *
@@ -1191,7 +1205,7 @@ class Gcrev_GA4_Fetcher {
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
         $client = new BetaAnalyticsDataClient();
 
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
             'dimensions'  => [
@@ -1200,7 +1214,9 @@ class Gcrev_GA4_Fetcher {
             ],
             'metrics'     => [ new Metric(['name' => 'keyEvents']) ],
             'limit'       => 10000,
-        ]);
+        ];
+        $this->apply_country_filter( $params );
+        $request = new RunReportRequest($params);
 
         $response = $client->runReport($request);
 

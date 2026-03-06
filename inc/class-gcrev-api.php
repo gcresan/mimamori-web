@@ -514,8 +514,37 @@ class Gcrev_Insight_API {
     // =========================================================
     // キャッシュ
     // =========================================================
+    /**
+     * 海外アクセス除外設定の判定
+     */
+    private function is_exclude_foreign( int $user_id ): bool {
+        return get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
+    }
+
+    /**
+     * 海外アクセス除外が有効ならGA4国フィルタを設定し、状態を返す。
+     * 呼び出し後は必ず restore_country_filter() で元に戻すこと。
+     */
+    private function maybe_set_country_filter( int $user_id ): bool {
+        if ( $this->is_exclude_foreign( $user_id ) ) {
+            $this->ga4->set_country_filter( 'Japan' );
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 国フィルタを解除する（maybe_set_country_filter の対）
+     */
+    private function restore_country_filter( bool $was_set ): void {
+        if ( $was_set ) {
+            $this->ga4->set_country_filter( null );
+        }
+    }
+
     private function cache_key_dashboard(int $user_id, string $range): string {
-        return "gcrev_dash_{$user_id}_{$range}";
+        $suffix = $this->ga4->has_country_filter() ? '_jp' : '';
+        return "gcrev_dash_{$user_id}_{$range}{$suffix}";
     }
 
     private function dashboard_cache_get(int $user_id, string $range): ?array {
@@ -668,42 +697,45 @@ class Gcrev_Insight_API {
         $user_id = get_current_user_id();
         $range   = (string)($request->get_param('range') ?: 'last30');
 
-        $cached = $this->dashboard_cache_get($user_id, $range);
-        if ($cached) {
-            
-            // キャッシュに流入元データがない場合は追加してキャッシュ更新
-            if (!isset($cached['channels_summary'])) {
-                try {
-                    $config = $this->config->get_user_config($user_id);
-                    $dates = $this->dates->get_date_range($range);
-                    $comparison = $this->dates->get_comparison_range($dates['start'], $dates['end']);
-
-                    $source_current = $this->ga4->fetch_source_data_from_ga4($config['ga4_id'], $dates['start'], $dates['end']);
-                    $source_previous = $this->ga4->fetch_source_data_from_ga4($config['ga4_id'], $comparison['start'], $comparison['end']);
-                    $source_analysis = $this->format_source_analysis_data($source_current, $source_previous);
-
-                    $cached['channels_summary'] = $source_analysis['channels_summary'] ?? [];
-                    $cached['sources_detail'] = $source_analysis['sources_detail'] ?? [];
-                    $cached['channels_daily_series'] = $source_analysis['channels_daily_series'] ?? [];
-
-                    // キャッシュに書き戻す（次回以降GA4 API不要）
-                    $this->dashboard_cache_set($user_id, $range, $cached);
-                } catch (\Exception $e) {
-                    error_log("[GCREV] ERROR adding source data to cache: " . $e->getMessage());
-                    $cached['channels_summary'] = [];
-                    $cached['sources_detail'] = [];
-                    $cached['channels_daily_series'] = [];
-                }
-            }
-            
-            return new WP_REST_Response([
-                'success' => true,
-                'data'    => $cached,
-                'cached'  => true,
-            ], 200);
-        }
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
 
         try {
+            $cached = $this->dashboard_cache_get($user_id, $range);
+            if ($cached) {
+
+                // キャッシュに流入元データがない場合は追加してキャッシュ更新
+                if (!isset($cached['channels_summary'])) {
+                    try {
+                        $config = $this->config->get_user_config($user_id);
+                        $dates = $this->dates->get_date_range($range);
+                        $comparison = $this->dates->get_comparison_range($dates['start'], $dates['end']);
+
+                        $source_current = $this->ga4->fetch_source_data_from_ga4($config['ga4_id'], $dates['start'], $dates['end']);
+                        $source_previous = $this->ga4->fetch_source_data_from_ga4($config['ga4_id'], $comparison['start'], $comparison['end']);
+                        $source_analysis = $this->format_source_analysis_data($source_current, $source_previous);
+
+                        $cached['channels_summary'] = $source_analysis['channels_summary'] ?? [];
+                        $cached['sources_detail'] = $source_analysis['sources_detail'] ?? [];
+                        $cached['channels_daily_series'] = $source_analysis['channels_daily_series'] ?? [];
+
+                        // キャッシュに書き戻す（次回以降GA4 API不要）
+                        $this->dashboard_cache_set($user_id, $range, $cached);
+                    } catch (\Exception $e) {
+                        error_log("[GCREV] ERROR adding source data to cache: " . $e->getMessage());
+                        $cached['channels_summary'] = [];
+                        $cached['sources_detail'] = [];
+                        $cached['channels_daily_series'] = [];
+                    }
+                }
+
+                return new WP_REST_Response([
+                    'success' => true,
+                    'data'    => $cached,
+                    'cached'  => true,
+                ], 200);
+            }
+
             $config = $this->config->get_user_config($user_id);
 
             $data   = $this->fetch_dashboard_data_internal($config, $range);
@@ -753,6 +785,8 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => $front_msg,
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
@@ -1790,17 +1824,18 @@ class Gcrev_Insight_API {
         // クライアント設定 + 月次設定をサーバー側で統合構築
         $client_info = $this->build_client_info_for_report($user_id);
 
-        // 海外アクセス除外：サーバー側でフィルタ付きデータを再取得
-        if ( ! empty( $client_info['exclude_foreign'] ) ) {
+        // 海外アクセス除外：KPI・CV双方にフィルタ適用（finally で解除）
+        $report_filter_set = ! empty( $client_info['exclude_foreign'] );
+        if ( $report_filter_set ) {
             try {
                 $config = $this->config->get_user_config( $user_id );
                 $this->ga4->set_country_filter( 'Japan' );
                 $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
                 $two_data  = $this->fetch_dashboard_data_internal( $config, 'twoMonthsAgo' );
-                $this->ga4->set_country_filter( null );
             } catch ( \Throwable $e ) {
                 $this->ga4->set_country_filter( null );
                 error_log( '[GCREV] generate_report: country filter refetch failed: ' . $e->getMessage() );
+                $report_filter_set = false;
             }
         }
 
@@ -1931,6 +1966,8 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $report_filter_set );
         }
     }
 
@@ -2181,7 +2218,7 @@ class Gcrev_Insight_API {
                 // 前月・前々月データ取得
                 $config    = $this->config->get_user_config( $user_id );
 
-                // 海外アクセス除外フィルタ
+                // 海外アクセス除外フィルタ（CV取得まで維持、finally で解除）
                 $exclude_foreign_auto = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
                 if ( $exclude_foreign_auto ) {
                     $this->ga4->set_country_filter( 'Japan' );
@@ -2189,11 +2226,6 @@ class Gcrev_Insight_API {
 
                 $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
                 $two_data  = $this->fetch_dashboard_data_internal( $config, 'twoMonthsAgo' );
-
-                // フィルタ解除
-                if ( $exclude_foreign_auto ) {
-                    $this->ga4->set_country_filter( null );
-                }
 
                 // 実質CV注入
                 $auto_ym  = ( new DateTimeImmutable( 'first day of last month', $tz ) )->format( 'Y-m' );
@@ -2257,6 +2289,11 @@ class Gcrev_Insight_API {
                 error_log( "[GCREV] auto_generate: ERROR user_id={$user_id}: " . $e->getMessage() );
                 if ( $log_id > 0 ) {
                     Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'error', $e->getMessage() );
+                }
+            } finally {
+                // 海外アクセス除外フィルタ解除（次ユーザーへの影響を防止）
+                if ( $exclude_foreign_auto ) {
+                    $this->ga4->set_country_filter( null );
                 }
             }
         }
@@ -2478,6 +2515,11 @@ class Gcrev_Insight_API {
         $gsc_url = $config['gsc_url'];
         $site_url = $config['site_url'] ?? '';
 
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
+
         // 比較期間（同日数の直前期間）
         $comparison = $this->dates->get_comparison_range( $start_date, $end_date );
 
@@ -2574,6 +2616,10 @@ class Gcrev_Insight_API {
         }
 
         return $result;
+
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
     }
 
     /**
@@ -2720,7 +2766,7 @@ class Gcrev_Insight_API {
             // 既存のgenerate_reportロジックを呼び出し
             $config = $this->config->get_user_config($user_id);
 
-            // 海外アクセス除外フィルタ
+            // 海外アクセス除外フィルタ（CV取得まで維持、finally で解除）
             $exclude_foreign_manual = !empty($client_info['exclude_foreign']);
             if ($exclude_foreign_manual) {
                 $this->ga4->set_country_filter('Japan');
@@ -2729,11 +2775,6 @@ class Gcrev_Insight_API {
             // 前月・前々月データ取得
             $prev_data = $this->fetch_dashboard_data_internal($config, 'previousMonth');
             $two_data = $this->fetch_dashboard_data_internal($config, 'twoMonthsAgo');
-
-            // フィルタ解除
-            if ($exclude_foreign_manual) {
-                $this->ga4->set_country_filter(null);
-            }
 
             // ターゲットエリア判定（クライアント設定から）
             $manual_client_settings = gcrev_get_client_settings($user_id);
@@ -2832,6 +2873,11 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => 'レポートの生成に失敗しました: ' . $e->getMessage()
             ];
+        } finally {
+            // 海外アクセス除外フィルタ解除
+            if ( $exclude_foreign_manual ) {
+                $this->ga4->set_country_filter( null );
+            }
         }
     }
 
@@ -2844,6 +2890,9 @@ class Gcrev_Insight_API {
         $start_date  = $request->get_param('start_date');
         $end_date    = $request->get_param('end_date');
         $user_id     = get_current_user_id();
+
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
 
         try {
             // start_date / end_date が指定されている場合は日付範囲で取得
@@ -2864,6 +2913,8 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
@@ -2925,6 +2976,9 @@ class Gcrev_Insight_API {
         }
         $user_id = get_current_user_id();
 
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
         error_log("[GCREV] REST get_source_analysis: user_id={$user_id}, period={$period}");
 
         try {
@@ -2946,30 +3000,36 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
     /**
      * REST API: 地域別アクセス分析データ取得
      */
     public function rest_get_region_analysis(\WP_REST_Request $request): \WP_REST_Response {
-        try {
-            $user_id = get_current_user_id();
-            if (!$user_id) {
-                return new \WP_REST_Response(['error' => 'ログインが必要です'], 401);
-            }
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new \WP_REST_Response(['error' => 'ログインが必要です'], 401);
+        }
 
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
             $period = $request->get_param('period') ?? 'prev-month';
-            
+
             // ユーザー設定取得
             $config = $this->config->get_user_config($user_id);
             $ga4_id = $config['ga4_id'];
-            
+
             // 期間計算
             $dates = $this->dates->calculate_period_dates($period);
             $comparison = $this->dates->calculate_comparison_dates($period);
 
             // キャッシュ
-            $cache_key = "gcrev_region_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}");
+            $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            $cache_key = "gcrev_region_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
                 error_log("[GCREV] Region analysis cache HIT: {$cache_key}");
@@ -3000,6 +3060,8 @@ class Gcrev_Insight_API {
             return new \WP_REST_Response([
                 'error' => $e->getMessage()
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
@@ -3007,11 +3069,15 @@ class Gcrev_Insight_API {
      * REST API: 地域別 月別推移データ取得（直近12ヶ月）
      */
     public function rest_get_region_trend(\WP_REST_Request $request): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new \WP_REST_Response(['error' => 'ログインが必要です'], 401);
+        }
+
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
         try {
-            $user_id = get_current_user_id();
-            if (!$user_id) {
-                return new \WP_REST_Response(['error' => 'ログインが必要です'], 401);
-            }
 
             $area   = $request->get_param('area');
             $months = (int)($request->get_param('months') ?? 12);
@@ -3058,6 +3124,8 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'error'   => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
@@ -3066,12 +3134,15 @@ class Gcrev_Insight_API {
      * パターン: rest_get_region_analysis と同一
      */
     public function rest_get_page_analysis(\WP_REST_Request $request): \WP_REST_Response {
-        try {
-            $user_id = get_current_user_id();
-            if (!$user_id) {
-                return new \WP_REST_Response(['error' => 'ログインが必要です'], 401);
-            }
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new \WP_REST_Response(['error' => 'ログインが必要です'], 401);
+        }
 
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
             $period = $request->get_param('period') ?? 'prev-month';
 
             // ユーザー設定取得
@@ -3084,7 +3155,8 @@ class Gcrev_Insight_API {
             $comparison = $this->dates->calculate_comparison_dates($period);
 
             // キャッシュ
-            $cache_key = "gcrev_page_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}");
+            $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            $cache_key = "gcrev_page_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
                 error_log("[GCREV] Page analysis cache HIT: {$cache_key}");
@@ -5362,8 +5434,9 @@ PROMPT;
             $daily[$year_month . '-' . str_pad((string)$d, 2, '0', STR_PAD_LEFT)] = 0;
         }
 
-        // キャッシュ確認（6時間）
-        $cache_key = "gcrev_ga4cv_{$user_id}_{$year_month}";
+        // 国フィルタ状態をキャッシュキーに反映
+        $filter_suffix = $this->ga4->has_country_filter() ? '_jp' : '';
+        $cache_key = "gcrev_ga4cv_{$user_id}_{$year_month}{$filter_suffix}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             return $cached;
@@ -5377,6 +5450,12 @@ PROMPT;
             $request->setDateRanges([(new DateRange())->setStartDate($start)->setEndDate($end)]);
             $request->setDimensions([(new Dimension())->setName('date')]);
             $request->setMetrics([(new Metric())->setName('keyEvents')]);
+
+            // 国フィルタ適用（GA4 Fetcher と同じフィルタを使用）
+            $country_filter = $this->ga4->get_country_filter();
+            if ( $country_filter !== null ) {
+                $request->setDimensionFilter( $country_filter );
+            }
 
             foreach ($client->runReport($request)->getRows() as $row) {
                 $dr = $row->getDimensionValues()[0]->getValue();
@@ -5396,7 +5475,8 @@ PROMPT;
      * @return array [eventName => [YYYY-MM-DD => count, ...], ...]
      */
     public function get_ga4_key_events_daily(string $year_month, int $user_id): array {
-        $cache_key = "gcrev_ga4kevt_daily_{$user_id}_{$year_month}";
+        $filter_suffix = $this->ga4->has_country_filter() ? '_jp' : '';
+        $cache_key = "gcrev_ga4kevt_daily_{$user_id}_{$year_month}{$filter_suffix}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             return $cached;
@@ -5494,14 +5574,17 @@ PROMPT;
      * - オーバーライド設定あり → 手動値優先イベント + GA4残りイベント
      */
     public function get_effective_cv_monthly(string $year_month, int $user_id): array {
+        // 国フィルタ状態をキャッシュキーに反映
+        $filter_suffix = $this->ga4->has_country_filter() ? '_jp' : '';
+
         // インスタンスキャッシュ（同一リクエスト内の重複計算を防止）
-        $cache_key = "{$year_month}_{$user_id}";
+        $cache_key = "{$year_month}_{$user_id}{$filter_suffix}";
         if (isset($this->effective_cv_cache[$cache_key])) {
             return $this->effective_cv_cache[$cache_key];
         }
 
         // トランジェントキャッシュ（リクエスト間で共有、2時間）
-        $transient_key = "gcrev_effcv_{$user_id}_{$year_month}";
+        $transient_key = "gcrev_effcv_{$user_id}_{$year_month}{$filter_suffix}";
         $transient = get_transient($transient_key);
         if ($transient !== false && is_array($transient)) {
             $this->effective_cv_cache[$cache_key] = $transient;
@@ -6895,6 +6978,12 @@ PROMPT;
                 )->setDesc(true)
             ]);
 
+            // 国フィルタ適用
+            $country_filter = $this->ga4->get_country_filter();
+            if ( $country_filter !== null ) {
+                $request->setDimensionFilter( $country_filter );
+            }
+
             $response = $client->runReport($request);
             $items = [];
 
@@ -7142,12 +7231,15 @@ PROMPT;
      * REST callback: /gcrev/v1/dashboard/trends?metric=sessions|cv|meo
      */
     public function rest_get_metric_trend(\WP_REST_Request $request): \WP_REST_Response {
-        try {
-            $user_id = get_current_user_id();
-            if (!$user_id) {
-                return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
-            }
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
+        }
 
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
             $metric = $request->get_param('metric');
             $result = $this->get_monthly_metric_trend($user_id, $metric, 12);
 
@@ -7156,6 +7248,8 @@ PROMPT;
         } catch (\Exception $e) {
             error_log("[GCREV][Trend] Error: " . $e->getMessage());
             return new \WP_REST_Response(['success' => false, 'message' => $e->getMessage()], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
@@ -7164,12 +7258,15 @@ PROMPT;
      * 指定月の内訳データ（TOP10）を返す
      */
     public function rest_get_dashboard_drilldown(\WP_REST_Request $request): \WP_REST_Response {
-        try {
-            $user_id = get_current_user_id();
-            if ( ! $user_id ) {
-                return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
-            }
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
+        }
 
+        // 海外アクセス除外フィルタ
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
             $month  = $request->get_param('month');    // "2026-01"
             $type   = $request->get_param('type');     // "region"|"page"|"source"
             $metric = $request->get_param('metric') ?? 'sessions';
@@ -7198,7 +7295,8 @@ PROMPT;
 
             // キャッシュ（24時間）— metric ごとに分離
             // v5: ページラベル絶対URL化に伴い旧キャッシュ無効化
-            $cache_key = "gcrev_dd6_{$user_id}_{$month}_{$type}_{$metric}";
+            $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            $cache_key = "gcrev_dd6_{$user_id}_{$month}_{$type}_{$metric}{$filter_sfx}";
             $cached = get_transient( $cache_key );
             if ( $cached !== false && is_array( $cached ) ) {
                 return new \WP_REST_Response( $cached, 200 );
@@ -7345,6 +7443,8 @@ PROMPT;
         } catch ( \Exception $e ) {
             error_log( '[GCREV][Drilldown] Error: ' . $e->getMessage() );
             return new \WP_REST_Response(['success' => false, 'message' => $e->getMessage()], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
@@ -7360,7 +7460,8 @@ PROMPT;
 
         // キャッシュ（cronが毎日更新するため24時間）
         $current_month = date('Y-m');
-        $cache_key = "gcrev_trend_{$user_id}_{$metric}_{$current_month}";
+        $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+        $cache_key = "gcrev_trend_{$user_id}_{$metric}_{$current_month}{$filter_sfx}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             return $cached;
