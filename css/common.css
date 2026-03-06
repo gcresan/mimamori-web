@@ -191,9 +191,10 @@
   background-color: #fff;
 }
 .sidebar-nav .nav-submenu .nav-link {
-  padding: 9px 20px 9px 52px;
-  font-size: 14px;
-  font-weight: 500;
+  padding: 7px 20px 7px 56px;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: #555;
 }
 
 /* かんたん解説（リテラシー低め向け） */
