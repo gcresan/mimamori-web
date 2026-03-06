@@ -69,75 +69,40 @@ $monthly_report = $gcrev_api->get_monthly_ai_report($year, $month, $user_id);
 $report_start_date = $prev_month_start->format('Y-m-d');
 $report_end_date   = $prev_month_end->format('Y-m-d');
 
-// === KPIスナップショット（保存済みがあれば使う） ===
+// === KPIスナップショット（保存済みデータのみ使用 — API再取得なし） ===
 $kpi_snapshot_json  = 'null';
 $snapshot_data      = null;
 $has_full_snapshot  = false;
-$snapshot_error     = '';
 $report_post_id     = ( $monthly_report && ! empty( $monthly_report['id'] ) ) ? (int) $monthly_report['id'] : 0;
 
-// 管理者による手動リフレッシュ（?refresh=1）
-$force_refresh = ( isset( $_GET['refresh'] ) && $_GET['refresh'] === '1' && current_user_can( 'manage_options' ) );
-if ( $force_refresh && $report_post_id > 0 ) {
-    delete_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json' );
-}
-
 if ( $report_post_id > 0 ) {
-    // 1. 保存済みスナップショットを読み込み
-    if ( ! $force_refresh ) {
-        $snapshot_raw = get_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', true );
-        if ( $snapshot_raw ) {
-            $snapshot_data = json_decode( $snapshot_raw, true );
-            if ( is_array( $snapshot_data ) && isset( $snapshot_data['pageViews'] ) ) {
-                // マイグレーション: pages/keywords がラップされていたら展開して再保存
-                $needs_resave = false;
-                if ( isset( $snapshot_data['pages']['pages'] ) ) {
-                    $snapshot_data['pages'] = $snapshot_data['pages']['pages'];
-                    $needs_resave = true;
-                }
-                if ( isset( $snapshot_data['keywords']['keywords'] ) ) {
-                    $snapshot_data['keywords'] = $snapshot_data['keywords']['keywords'];
-                    $needs_resave = true;
-                }
-                if ( $needs_resave ) {
-                    $snapshot_raw = wp_json_encode( $snapshot_data, JSON_UNESCAPED_UNICODE );
-                    update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', $snapshot_raw );
-                }
-                $kpi_snapshot_json = $snapshot_raw;
-                $has_full_snapshot = true;
+    $snapshot_raw = get_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', true );
+    if ( $snapshot_raw ) {
+        $snapshot_data = json_decode( $snapshot_raw, true );
+        if ( is_array( $snapshot_data ) && isset( $snapshot_data['pageViews'] ) ) {
+            // マイグレーション: pages/keywords がラップされていたら展開して再保存
+            $needs_resave = false;
+            if ( isset( $snapshot_data['pages']['pages'] ) ) {
+                $snapshot_data['pages'] = $snapshot_data['pages']['pages'];
+                $needs_resave = true;
             }
-        }
-    }
-
-    // 2. スナップショットなし → 一度だけGA4 APIから取得して保存（バックフィル）
-    if ( ! $has_full_snapshot ) {
-        try {
-            $backfill_data = $gcrev_api->get_dashboard_kpi_by_dates(
-                $report_start_date,
-                $report_end_date,
-                $user_id
-            );
-            if ( is_array( $backfill_data ) && isset( $backfill_data['pageViews'] ) ) {
-                $backfill_data['snapshot_version']  = 1;
-                $backfill_data['snapshot_saved_at'] = ( new DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
-                $json_str = wp_json_encode( $backfill_data, JSON_UNESCAPED_UNICODE );
-                update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', $json_str );
-                $kpi_snapshot_json = $json_str;
-                $snapshot_data     = $backfill_data;
-                $has_full_snapshot  = true;
-                error_log( "[GCREV] page-report-latest: Backfilled KPI snapshot for report_id={$report_post_id}" );
+            if ( isset( $snapshot_data['keywords']['keywords'] ) ) {
+                $snapshot_data['keywords'] = $snapshot_data['keywords']['keywords'];
+                $needs_resave = true;
             }
-        } catch ( \Throwable $e ) {
-            $snapshot_error = $e->getMessage();
-            error_log( '[GCREV] page-report-latest: KPI backfill error: ' . $e->getMessage() );
+            if ( $needs_resave ) {
+                $snapshot_raw = wp_json_encode( $snapshot_data, JSON_UNESCAPED_UNICODE );
+                update_post_meta( $report_post_id, '_gcrev_kpi_snapshot_json', $snapshot_raw );
+            }
+            $kpi_snapshot_json = $snapshot_raw;
+            $has_full_snapshot = true;
         }
     }
 }
 
-// === Effective CV（CVチャート + CV数表示用） ===
+// === Effective CV（CVチャート + CV数表示用 — スナップショットから取得のみ） ===
 $effective_cv_json = '{}';
 if ( $has_full_snapshot && ! empty( $snapshot_data['effective_cv'] ) ) {
-    // スナップショットから取得（API呼び出し不要）
     $eff = $snapshot_data['effective_cv'];
     $effective_cv_json = wp_json_encode([
         'source'     => $eff['source'] ?? 'ga4',
@@ -146,21 +111,6 @@ if ( $has_full_snapshot && ! empty( $snapshot_data['effective_cv'] ) ) {
         'has_actual' => ( ( $eff['source'] ?? 'ga4' ) !== 'ga4' ),
         'components' => $eff['components'] ?? [],
     ], JSON_UNESCAPED_UNICODE);
-} else {
-    // スナップショットなし → API取得（レポート未生成 or バックフィル失敗時のフォールバック）
-    try {
-        $prev_year_month   = $prev_month_start->format('Y-m');
-        $effective_cv_data = $gcrev_api->get_effective_cv_monthly( $prev_year_month, $user_id );
-        $effective_cv_json = wp_json_encode([
-            'source'     => $effective_cv_data['source'],
-            'total'      => $effective_cv_data['total'],
-            'daily'      => $effective_cv_data['daily'],
-            'has_actual' => ( $effective_cv_data['source'] !== 'ga4' ),
-            'components' => $effective_cv_data['components'],
-        ], JSON_UNESCAPED_UNICODE);
-    } catch ( \Throwable $e ) {
-        error_log( '[GCREV] page-report-latest effective CV error: ' . $e->getMessage() );
-    }
 }
 
 // ========================================
@@ -479,24 +429,16 @@ get_header();
     </div>
 
     <?php
-    // 管理者向け: スナップショット情報 + 再取得ボタン
+    // 管理者向け: スナップショット情報表示（読み取り専用）
     if ( current_user_can( 'manage_options' ) && $report_post_id > 0 ) :
-        $refresh_url = add_query_arg( 'refresh', '1' );
-        if ( $ym_param ) {
-            $refresh_url = add_query_arg( [ 'ym' => $ym_param, 'refresh' => '1' ], home_url( '/report/report-latest/' ) );
-        }
         $snap_ver  = $has_full_snapshot ? ( $snapshot_data['snapshot_version'] ?? '?' ) : '-';
         $snap_at   = $has_full_snapshot ? ( $snapshot_data['snapshot_saved_at'] ?? '-' ) : '-';
     ?>
     <div class="rpt-admin-toolbar" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:6px 12px;background:#f8f9fa;border-radius:6px;font-size:12px;color:#888;">
         <span>Snapshot: v<?php echo esc_html( $snap_ver ); ?> / <?php echo esc_html( $snap_at ); ?></span>
-        <a href="<?php echo esc_url( $refresh_url ); ?>" class="rpt-admin-refresh-btn" style="display:inline-flex;align-items:center;gap:3px;padding:3px 10px;font-size:11px;font-weight:600;color:#3D6B6E;background:rgba(61,107,110,0.08);border:1px solid rgba(61,107,110,0.2);border-radius:4px;text-decoration:none;" onclick="return confirm('GA4 APIからデータを再取得します。よろしいですか？');">データ再取得</a>
-    </div>
-    <?php endif; ?>
-
-    <?php if ( $snapshot_error && current_user_can( 'manage_options' ) ) : ?>
-    <div style="margin-bottom:12px;padding:10px 14px;background:#fff3e0;border-left:3px solid #e65100;border-radius:4px;font-size:13px;color:#e65100;">
-        KPIスナップショットの自動保存に失敗しました: <?php echo esc_html( $snapshot_error ); ?>
+        <?php if ( ! $has_full_snapshot ) : ?>
+        <span style="color:#e65100;">⚠ スナップショット未保存（レポート生成前のデータ）</span>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -941,53 +883,17 @@ get_header();
 // Effective CV データ（PHP → JS）
 const effectiveCvData = <?php echo $effective_cv_json ?? '{}'; ?>;
 
-// レポート対象期間の日付（PHP → JS）
-const reportStartDate = '<?php echo esc_js( $report_start_date ); ?>';
-const reportEndDate   = '<?php echo esc_js( $report_end_date ); ?>';
-
-// KPIスナップショット（保存済みがあればここに入る）
+// KPIスナップショット（保存済みデータのみ — API再取得なし）
 const kpiSnapshot = <?php echo $kpi_snapshot_json; ?>;
 
 let sparklineCharts = {};
 
-// KPIデータ取得（レポート対象期間の start_date/end_date で取得）
+// KPIデータ表示（保存済みスナップショットのみ — API再取得なし）
 function updateKPIData() {
-    // スナップショットがあればAPI呼び出し不要
     if (kpiSnapshot) {
-        console.log('KPI Data from snapshot:', kpiSnapshot);
         updateKPIDisplay(kpiSnapshot);
-        return;
     }
-
-    showLoading();
-
-    // レポート対象期間を start_date / end_date で指定
-    const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>'
-        + '?start_date=' + encodeURIComponent(reportStartDate)
-        + '&end_date=' + encodeURIComponent(reportEndDate);
-
-    fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-WP-Nonce': '<?php echo wp_create_nonce("wp_rest"); ?>'
-        },
-        credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(result => {
-        console.log('KPI Data received:', result);
-        if (result.success && result.data) {
-            updateKPIDisplay(result.data);
-        } else {
-            throw new Error(result.message || 'データ取得失敗');
-        }
-        hideLoading();
-    })
-    .catch(error => {
-        console.error('Error fetching KPI data:', error);
-        hideLoading();
-    });
+    // スナップショットなし → KPI欄はデフォルトの「-」のまま表示
 }
 
 // KPI表示更新（dashboard同一 + CV数追加）
@@ -1169,7 +1075,7 @@ function hideLoading() {
 let charts = {};
 
 function loadAnalysisData() {
-    // スナップショットに集客分析データがあればAPI呼び出し不要
+    // 保存済みスナップショットのみ使用（API再取得なし）
     if (kpiSnapshot) {
         updateDeviceList(kpiSnapshot.devices || []);
         updateAgeList(kpiSnapshot.age || []);
@@ -1177,37 +1083,15 @@ function loadAnalysisData() {
         updateRegionList(kpiSnapshot.geo_region || []);
         updatePagesList(kpiSnapshot.pages || []);
         updateKeywordsList(kpiSnapshot.keywords || []);
-        return;
+    } else {
+        // スナップショット未保存 → 「データなし」を表示
+        updateDeviceList([]);
+        updateAgeList([]);
+        updateMediumList([]);
+        updateRegionList([]);
+        updatePagesList([]);
+        updateKeywordsList([]);
     }
-
-    // レポート対象期間で取得
-    const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>'
-        + '?start_date=' + encodeURIComponent(reportStartDate)
-        + '&end_date=' + encodeURIComponent(reportEndDate);
-
-    fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-WP-Nonce': '<?php echo wp_create_nonce("wp_rest"); ?>'
-        },
-        credentials: 'same-origin'
-    })
-    .then(r => r.json())
-    .then(result => {
-        if (!result?.success || !result?.data) return;
-        const data = result.data;
-
-        updateDeviceList(data.devices || []);
-        updateAgeList(data.age || []);
-        updateMediumList(data.medium || []);
-        updateRegionList(data.geo_region || []);
-        updatePagesList(data.pages || []);
-        updateKeywordsList(data.keywords || []);
-    })
-    .catch(err => {
-        console.error('集客分析データ取得エラー:', err);
-    });
 }
 
 // ----- デバイス別リスト更新 -----
