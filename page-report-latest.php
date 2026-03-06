@@ -46,17 +46,53 @@ if ($ym_param && preg_match('/^\d{4}-\d{2}$/', $ym_param)) {
     $prev_prev_month_end   = new DateTimeImmutable('last day of 2 months ago', $tz);
 }
 
-// ページタイトル・パンくず設定
-if ($is_archive_view) {
-    $display_ym = $prev_month_start->format('Y年n月');
-    set_query_var('gcrev_page_title', $display_ym . ' 月次レポート');
-    set_query_var('gcrev_page_subtitle', $display_ym . 'のアクセス状況や反応をまとめたレポートです。');
-    set_query_var('gcrev_breadcrumb', gcrev_breadcrumb($display_ym, '月次レポート'));
-} else {
-    set_query_var('gcrev_page_title', '最新月次レポート');
-    set_query_var('gcrev_page_subtitle', '今月のアクセス状況や反応を、わかりやすくまとめています。');
-    set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('最新月次レポート', '月次レポート'));
+// ========================================
+// 全レポート年月リスト取得（年月切り替えUI用）
+// ========================================
+$all_report_yms = [];
+$ym_query = get_posts([
+    'post_type'      => 'gcrev_report',
+    'posts_per_page' => -1,
+    'post_status'    => 'publish',
+    'fields'         => 'ids',
+    'meta_query'     => [
+        ['key' => '_gcrev_user_id', 'value' => $user_id],
+        ['key' => '_gcrev_is_current', 'value' => 1],
+    ],
+]);
+foreach ( $ym_query as $pid ) {
+    $ym_val = get_post_meta( $pid, '_gcrev_year_month', true );
+    if ( $ym_val && preg_match( '/^\d{4}-\d{2}$/', $ym_val ) ) {
+        $all_report_yms[] = $ym_val;
+    }
 }
+$all_report_yms = array_unique( $all_report_yms );
+rsort( $all_report_yms ); // 降順（新しい月が先）
+
+// 年別にグループ化
+$report_years = [];
+foreach ( $all_report_yms as $ym_v ) {
+    $y = (int) substr( $ym_v, 0, 4 );
+    $m = (int) substr( $ym_v, 5, 2 );
+    $report_years[ $y ][] = $m;
+}
+// 年を降順、月を昇順にソート
+krsort( $report_years );
+foreach ( $report_years as &$months ) {
+    sort( $months );
+}
+unset( $months );
+
+// 現在選択中の年月
+$current_ym = $prev_month_start->format('Y-m');
+$current_year  = (int) $prev_month_start->format('Y');
+$current_month = (int) $prev_month_start->format('n');
+
+// ページタイトル・パンくず設定
+$display_ym = $prev_month_start->format('Y年n月');
+set_query_var('gcrev_page_title', '月次レポート');
+set_query_var('gcrev_page_subtitle', $display_ym . 'のアクセス状況や反応をまとめたレポートです。');
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート'));
 
 // 月次AIレポート取得
 $year  = (int)$prev_month_start->format('Y');
@@ -409,32 +445,111 @@ get_header();
 <style>
 /* page-report-latest — Page-specific overrides only */
 /* All shared styles are in css/dashboard-redesign.css */
-.rpt-back-nav {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin: 16px 0 8px 24px;
-    padding: 6px 14px;
-    font-size: 13px;
-    color: var(--mw-primary-blue, #3D6B6E);
-    background: rgba(61,107,110,0.06);
-    border: 1px solid rgba(61,107,110,0.12);
-    border-radius: 6px;
-    text-decoration: none;
-    transition: background 0.15s;
+
+/* === 年月切り替えUI === */
+.rpt-ym-switcher {
+    max-width: 960px;
+    margin: 0 auto 16px;
+    padding: 0 24px;
 }
-.rpt-back-nav:hover {
-    background: rgba(61,107,110,0.12);
+.rpt-year-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.rpt-year-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
     text-decoration: none;
+    transition: all 0.15s;
+}
+.rpt-year-btn:hover {
+    background: #f5f5f5;
+    text-decoration: none;
+    color: #555;
+}
+.rpt-year-btn.active {
+    background: var(--mw-primary-blue, #3D6B6E);
+    color: #fff;
+    border-color: var(--mw-primary-blue, #3D6B6E);
+}
+.rpt-month-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.rpt-month-btn {
+    min-width: 52px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid #e0e4ea;
+    border-radius: 20px;
+    background: #fff;
+    color: #555;
+    text-decoration: none;
+    text-align: center;
+    transition: all 0.15s;
+}
+.rpt-month-btn:hover {
+    background: rgba(61,107,110,0.08);
+    border-color: rgba(61,107,110,0.3);
     color: var(--mw-primary-blue, #3D6B6E);
+    text-decoration: none;
+}
+.rpt-month-btn.active {
+    background: var(--mw-primary-blue, #3D6B6E);
+    color: #fff;
+    border-color: var(--mw-primary-blue, #3D6B6E);
+    font-weight: 600;
+}
+@media (max-width: 768px) {
+    .rpt-ym-switcher { padding: 0 16px; }
+    .rpt-month-btn { min-width: 44px; padding: 6px 10px; font-size: 12px; }
 }
 </style>
 
 <!-- コンテンツエリア -->
 <div class="content-area">
-    <?php if ($is_archive_view) : ?>
-    <a href="<?php echo esc_url(home_url('/report/report-archive/')); ?>" class="rpt-back-nav">← 一覧に戻る</a>
+
+    <!-- 年月切り替えUI -->
+    <?php if ( ! empty( $report_years ) ) : ?>
+    <div class="rpt-ym-switcher">
+        <?php if ( count( $report_years ) > 1 ) : ?>
+        <div class="rpt-year-tabs">
+            <?php foreach ( $report_years as $y => $months ) :
+                $is_active_year = ( $y === $current_year );
+                // 年ボタンクリック → その年の最新月を表示
+                $latest_m_in_year = max( $months );
+                $year_url = add_query_arg( 'ym', sprintf( '%04d-%02d', $y, $latest_m_in_year ), home_url( '/report/report-latest/' ) );
+            ?>
+            <a href="<?php echo esc_url( $year_url ); ?>"
+               class="rpt-year-btn<?php echo $is_active_year ? ' active' : ''; ?>"><?php echo esc_html( $y ); ?>年</a>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <div class="rpt-month-tabs">
+            <?php
+            // 選択中の年の月リストを表示
+            $months_for_year = $report_years[ $current_year ] ?? [];
+            foreach ( $months_for_year as $m ) :
+                $is_active_month = ( $m === $current_month );
+                $month_url = add_query_arg( 'ym', sprintf( '%04d-%02d', $current_year, $m ), home_url( '/report/report-latest/' ) );
+            ?>
+            <a href="<?php echo esc_url( $month_url ); ?>"
+               class="rpt-month-btn<?php echo $is_active_month ? ' active' : ''; ?>"><?php echo esc_html( $m ); ?>月</a>
+            <?php endforeach; ?>
+        </div>
+    </div>
     <?php endif; ?>
+
     <!-- ローディングオーバーレイ -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
