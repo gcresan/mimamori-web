@@ -1798,7 +1798,16 @@ class Gcrev_Insight_API {
                 $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
                 $two_data  = $this->fetch_dashboard_data_internal( $config, 'twoMonthsAgo' );
                 $this->ga4->set_country_filter( null );
-                file_put_contents('/tmp/gcrev-country-filter.log', date('Y-m-d H:i:s') . " generate_report: refetched with country filter for user_id={$user_id}\n", FILE_APPEND);
+                // デバッグ: フィルタ後のサマリー値をログ
+                $summary = $prev_data['ga4_summary'] ?? [];
+                $geo     = $prev_data['geo_region'] ?? $prev_data['geo'] ?? [];
+                $geo_top3 = array_slice($geo, 0, 3);
+                file_put_contents('/tmp/gcrev-country-filter.log', date('Y-m-d H:i:s') . " generate_report: refetched OK user_id={$user_id}"
+                    . " PV=" . ($summary['page_views'] ?? '?')
+                    . " Sessions=" . ($summary['sessions'] ?? '?')
+                    . " Users=" . ($summary['users'] ?? '?')
+                    . " GeoTop3=" . wp_json_encode($geo_top3, JSON_UNESCAPED_UNICODE)
+                    . "\n", FILE_APPEND);
             } catch ( \Throwable $e ) {
                 $this->ga4->set_country_filter( null );
                 file_put_contents('/tmp/gcrev-country-filter.log', date('Y-m-d H:i:s') . " generate_report: refetch FAILED — " . $e->getMessage() . "\n", FILE_APPEND);
