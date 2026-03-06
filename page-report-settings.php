@@ -24,7 +24,8 @@ $saved_goal_monthly  = get_user_meta($user_id, 'report_goal_monthly',  true) ?: 
 $saved_goal_main     = get_user_meta($user_id, 'report_goal_main',     true) ?: '';
 $saved_focus_numbers = get_user_meta($user_id, 'report_focus_numbers', true) ?: '';
 $saved_current_state = get_user_meta($user_id, 'report_current_state', true) ?: '';
-$saved_output_mode   = get_user_meta($user_id, 'report_output_mode',   true) ?: 'normal';
+$saved_output_mode      = get_user_meta($user_id, 'report_output_mode',      true) ?: 'normal';
+$saved_exclude_foreign  = get_user_meta($user_id, 'report_exclude_foreign',  true) ?: '';
 
 // クライアント設定の有無チェック（未設定時のガイダンス用）
 $client_settings = gcrev_get_client_settings($user_id);
@@ -141,6 +142,16 @@ get_header();
             <label for="input-additional-notes">その他留意事項</label>
             <textarea id="input-additional-notes" placeholder="レポート生成時に考慮してほしい事項を記入してください(任意)&#10;例：12月にキャンペーンを実施、サイトリニューアルを予定、季節要因など"><?php echo esc_textarea(get_user_meta($user_id, 'report_additional_notes', true)); ?></textarea>
             <small class="form-text">季節要因、キャンペーン情報、サイト変更などを記入すると、より的確な分析が可能です</small>
+        </div>
+
+        <!-- 海外アクセス除外 -->
+        <div class="form-group" style="margin-top: 24px;">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+                <input type="checkbox" id="exclude-foreign-traffic" style="width: 18px; height: 18px; accent-color: var(--mw-primary-blue, #2563EB);"
+                       <?php checked($saved_exclude_foreign, '1'); ?>>
+                <span>海外アクセスを除外してレポートを作成する</span>
+            </label>
+            <small class="form-text" style="display: block; margin-top: 4px; margin-left: 26px; color: #888; font-size: 12px;">ONにすると、日本以外の国からのアクセスを除外してレポートを生成します</small>
         </div>
 
         <!-- 出力モード選択 -->
@@ -492,6 +503,10 @@ function getClientInputs() {
         }
     }
 
+    // 海外アクセス除外チェック
+    var excludeForeignEl = document.getElementById('exclude-foreign-traffic');
+    var excludeForeign = (excludeForeignEl && excludeForeignEl.checked) ? '1' : '';
+
     return {
         issue: getValue('input-issue'),
         goal_monthly: getValue('input-goal-monthly'),
@@ -499,7 +514,8 @@ function getClientInputs() {
         current_state: getValue('input-current-state'),
         goal_main: getValue('input-goal-main'),
         additional_notes: getValue('input-additional-notes'),
-        output_mode: outputMode
+        output_mode: outputMode,
+        exclude_foreign: excludeForeign
     };
 }
 

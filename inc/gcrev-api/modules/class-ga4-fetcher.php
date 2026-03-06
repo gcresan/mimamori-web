@@ -39,11 +39,60 @@ class Gcrev_GA4_Fetcher {
      */
     private $config;
 
+    /** @var ?FilterExpression 国フィルタ（set_country_filter で設定） */
+    private ?FilterExpression $country_filter = null;
+
     /**
      * @param Gcrev_Config $config
      */
     public function __construct( Gcrev_Config $config ) {
         $this->config = $config;
+    }
+
+    /**
+     * 国フィルタを設定する。レポート生成時に海外アクセスを除外するために使用。
+     * null を渡すとフィルタを解除する。
+     *
+     * @param ?string $country 国名（GA4 の country ディメンション値、例: 'Japan'）
+     */
+    public function set_country_filter( ?string $country ): void {
+        if ( $country === null ) {
+            $this->country_filter = null;
+            return;
+        }
+        $this->country_filter = new FilterExpression([
+            'filter' => new Filter([
+                'field_name'    => 'country',
+                'string_filter' => new StringFilter([
+                    'value'      => $country,
+                    'match_type' => StringFilter\MatchType::EXACT,
+                ]),
+            ]),
+        ]);
+    }
+
+    /**
+     * RunReportRequest のパラメータ配列に国フィルタを適用する。
+     * 既存の dimension_filter がある場合は AND 結合する。
+     *
+     * @param array &$params RunReportRequest のコンストラクタに渡す配列
+     */
+    private function apply_country_filter( array &$params ): void {
+        if ( $this->country_filter === null ) {
+            return;
+        }
+        if ( isset( $params['dimension_filter'] ) ) {
+            $params['dimension_filter'] = new FilterExpression([
+                'and_group' => new FilterExpressionList([
+                    'expressions' => [
+                        $params['dimension_filter'],
+                        $this->country_filter,
+                    ],
+                ]),
+            ]);
+        } else {
+            $params['dimension_filter'] = $this->country_filter;
+        }
     }
 
     /**
@@ -63,10 +112,10 @@ class Gcrev_GA4_Fetcher {
 
         $client = new BetaAnalyticsDataClient();
 
-        $request = new RunReportRequest([
+        $params = [
             'property' => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
-            'dimensions' => [ 
+            'dimensions' => [
                 new Dimension(['name' => 'pagePath']),
                 new Dimension(['name' => 'pageTitle'])  // 実際のページタイトル（<title>タグ）を取得
             ],
@@ -76,7 +125,9 @@ class Gcrev_GA4_Fetcher {
                 new Metric(['name' => 'engagedSessions']),
             ],
             'limit' => 200,
-        ]);
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
 
         $response = $client->runReport($request);
 
@@ -154,7 +205,7 @@ class Gcrev_GA4_Fetcher {
 
         $client = new BetaAnalyticsDataClient();
 
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
             'metrics'     => [
@@ -168,7 +219,9 @@ class Gcrev_GA4_Fetcher {
                 new Metric(['name' => 'keyEvents']),  // CV数（GA4キーイベント）
             ],
             'limit' => 1,
-        ]);
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
 
         $response = $client->runReport($request);
         $rows = $response->getRows();
@@ -250,7 +303,7 @@ class Gcrev_GA4_Fetcher {
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
         $client = new BetaAnalyticsDataClient();
 
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $series_start_str, 'end_date' => $series_end_str]) ],
             'dimensions'  => [ new Dimension(['name' => 'date']) ],
@@ -263,11 +316,13 @@ class Gcrev_GA4_Fetcher {
                 new Metric(['name' => 'keyEvents']),  // CV数（GA4キーイベント）
             ],
             'limit' => 100,
-        ]);
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
 
         $response = $client->runReport($request);
 
-        
+
         $rows = [];
 
         foreach ($response->getRows() as $row) {
@@ -334,7 +389,7 @@ class Gcrev_GA4_Fetcher {
             putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
             $client = new BetaAnalyticsDataClient();
 
-            $request = new RunReportRequest([
+            $params = [
                 'property'    => 'properties/' . $property_id,
                 'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
                 'dimensions'  => [ new Dimension(['name' => 'userAgeBracket']) ],
@@ -345,7 +400,9 @@ class Gcrev_GA4_Fetcher {
                     new Metric(['name' => 'keyEvents']),
                 ],
                 'limit' => 50,
-            ]);
+            ];
+            $this->apply_country_filter($params);
+            $request = new RunReportRequest($params);
 
             $response = $client->runReport($request);
 
@@ -408,7 +465,7 @@ class Gcrev_GA4_Fetcher {
             putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
             $client = new BetaAnalyticsDataClient();
             
-            $request = new RunReportRequest([
+            $params = [
                 'property'    => 'properties/' . $property_id,
                 'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
                 'dimensions'  => [ new Dimension(['name' => 'userAgeBracket']) ],
@@ -422,8 +479,10 @@ class Gcrev_GA4_Fetcher {
                     new Metric(['name' => 'keyEvents']), // コンバージョン
                 ],
                 'limit'       => 50,
-            ]);
-            
+            ];
+            $this->apply_country_filter($params);
+            $request = new RunReportRequest($params);
+
             $response = $client->runReport($request);
             
             $demographics = [];
@@ -498,7 +557,7 @@ class Gcrev_GA4_Fetcher {
             // - 直帰率: bounceRate（※このプロジェクトでは従来ロジックに合わせて *100 して返す）
             // - エンゲージメント率: engagementRate（※同上）
             // - CV: keyEvents（年齢別詳細と同じ）
-            $request = new RunReportRequest([
+            $params_cross = [
                 'property'    => 'properties/' . $property_id,
                 'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
                 'dimensions'  => [
@@ -514,7 +573,9 @@ class Gcrev_GA4_Fetcher {
                     new Metric(['name' => 'keyEvents']),
                 ],
                 'limit'       => 500,
-            ]);
+            ];
+            $this->apply_country_filter($params_cross);
+            $request = new RunReportRequest($params_cross);
 
             $response = $client->runReport($request);
 
@@ -636,13 +697,15 @@ class Gcrev_GA4_Fetcher {
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
         $client = new BetaAnalyticsDataClient();
 
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
             'dimensions'  => [ new Dimension(['name' => $dimension]) ],
             'metrics'     => [ new Metric(['name' => $metric]) ],
             'limit'       => 10,
-        ]);
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
 
         $response = $client->runReport($request);
 
@@ -699,7 +762,7 @@ class Gcrev_GA4_Fetcher {
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
         $client = new BetaAnalyticsDataClient();
         
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
             'dimensions'  => [ new Dimension(['name' => 'deviceCategory']) ],
@@ -712,10 +775,12 @@ class Gcrev_GA4_Fetcher {
                 new Metric(['name' => 'conversions']),
             ],
             'limit'       => 10,
-        ]);
-        
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
+
         $response = $client->runReport($request);
-        
+
         $devices = [];
         $total_sessions = 0;
         
@@ -774,7 +839,7 @@ class Gcrev_GA4_Fetcher {
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
         $client = new BetaAnalyticsDataClient();
         
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
             'dimensions'  => [
@@ -789,10 +854,12 @@ class Gcrev_GA4_Fetcher {
                     ])
                 ])
             ],
-        ]);
-        
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
+
         $response = $client->runReport($request);
-        
+
         // データ構造: date => { mobile: n, desktop: n, tablet: n }
         $data_by_date = [];
         
@@ -1001,13 +1068,15 @@ class Gcrev_GA4_Fetcher {
         $this->prepare_ga4_call();
         $client = new BetaAnalyticsDataClient();
 
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
             'dimensions'  => [ new Dimension(['name' => 'eventName']) ],
             'metrics'     => [ new Metric(['name' => 'keyEvents']) ],
             'limit'       => 100,
-        ]);
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
 
         $response = $client->runReport($request);
 
@@ -1242,7 +1311,7 @@ class Gcrev_GA4_Fetcher {
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
         $client = new BetaAnalyticsDataClient();
 
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
             'dimensions'  => [
@@ -1265,7 +1334,9 @@ class Gcrev_GA4_Fetcher {
                     'desc' => true
                 ])
             ],
-        ]);
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
 
         $response = $client->runReport($request);
 
@@ -1397,7 +1468,7 @@ class Gcrev_GA4_Fetcher {
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
         $client = new BetaAnalyticsDataClient();
         
-        $request = new RunReportRequest([
+        $params = [
             'property'    => 'properties/' . $property_id,
             'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
             'dimensions'  => [ new Dimension(['name' => 'region']) ],
@@ -1418,10 +1489,12 @@ class Gcrev_GA4_Fetcher {
                     'desc' => true
                 ])
             ]
-        ]);
-        
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
+
         $response = $client->runReport($request);
-        
+
         $regions = [];
         $total_sessions = 0;
         
@@ -1569,7 +1642,7 @@ class Gcrev_GA4_Fetcher {
         ];
         
         // 1. チャネルグループ別集計
-        $request_channels = new RunReportRequest([
+        $params_channels = [
             'property' => 'properties/' . $property_id,
             'date_ranges' => [
                 new DateRange([
@@ -1596,8 +1669,10 @@ class Gcrev_GA4_Fetcher {
                 ])
             ],
             'limit' => 10
-        ]);
-        
+        ];
+        $this->apply_country_filter($params_channels);
+        $request_channels = new RunReportRequest($params_channels);
+
         $response_channels = $client->runReport($request_channels);
         
         foreach ($response_channels->getRows() as $row) {
@@ -1620,7 +1695,7 @@ class Gcrev_GA4_Fetcher {
         }
         
         // 2. 参照元 / メディア別詳細（TOP10）
-        $request_sources = new RunReportRequest([
+        $params_sources = [
             'property' => 'properties/' . $property_id,
             'date_ranges' => [
                 new DateRange([
@@ -1648,8 +1723,10 @@ class Gcrev_GA4_Fetcher {
                 ])
             ],
             'limit' => 10
-        ]);
-        
+        ];
+        $this->apply_country_filter($params_sources);
+        $request_sources = new RunReportRequest($params_sources);
+
         $response_sources = $client->runReport($request_sources);
         
         foreach ($response_sources->getRows() as $row) {
@@ -1674,7 +1751,7 @@ class Gcrev_GA4_Fetcher {
         }
         
         // 3. 日別推移（主要チャネルのみ）
-        $request_daily = new RunReportRequest([
+        $params_daily = [
             'property' => 'properties/' . $property_id,
             'date_ranges' => [
                 new DateRange([
@@ -1697,8 +1774,10 @@ class Gcrev_GA4_Fetcher {
                     'desc' => false
                 ])
             ],
-        ]);
-        
+        ];
+        $this->apply_country_filter($params_daily);
+        $request_daily = new RunReportRequest($params_daily);
+
         $response_daily = $client->runReport($request_daily);
         
         $daily_data = [];

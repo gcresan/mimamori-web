@@ -1413,7 +1413,11 @@ class Gcrev_Insight_API {
         }
         update_user_meta($user_id, 'report_output_mode', $output_mode);
 
-        error_log("[GCREV] Client info saved for user_id={$user_id}, output_mode={$output_mode}");
+        // 海外アクセス除外設定の保存
+        $exclude_foreign = ($params['exclude_foreign'] ?? '') === '1' ? '1' : '';
+        update_user_meta($user_id, 'report_exclude_foreign', $exclude_foreign);
+
+        error_log("[GCREV] Client info saved for user_id={$user_id}, output_mode={$output_mode}, exclude_foreign={$exclude_foreign}");
 
         return new WP_REST_Response([
             'success' => true,
@@ -1710,8 +1714,9 @@ class Gcrev_Insight_API {
             'focus_numbers'    => get_user_meta($user_id, 'report_focus_numbers', true),
             'current_state'    => get_user_meta($user_id, 'report_current_state', true),
             'goal_main'        => get_user_meta($user_id, 'report_goal_main', true),
-            'additional_notes' => get_user_meta($user_id, 'report_additional_notes', true),
-            'output_mode'      => get_user_meta($user_id, 'report_output_mode', true) ?: 'normal',
+            'additional_notes'  => get_user_meta($user_id, 'report_additional_notes', true),
+            'output_mode'       => get_user_meta($user_id, 'report_output_mode', true) ?: 'normal',
+            'exclude_foreign'   => get_user_meta($user_id, 'report_exclude_foreign', true) === '1',
         ];
     }
 
@@ -2161,8 +2166,20 @@ class Gcrev_Insight_API {
             try {
                 // 前月・前々月データ取得
                 $config    = $this->config->get_user_config( $user_id );
+
+                // 海外アクセス除外フィルタ
+                $exclude_foreign_auto = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
+                if ( $exclude_foreign_auto ) {
+                    $this->ga4->set_country_filter( 'Japan' );
+                }
+
                 $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
                 $two_data  = $this->fetch_dashboard_data_internal( $config, 'twoMonthsAgo' );
+
+                // フィルタ解除
+                if ( $exclude_foreign_auto ) {
+                    $this->ga4->set_country_filter( null );
+                }
 
                 // 実質CV注入
                 $auto_ym  = ( new DateTimeImmutable( 'first day of last month', $tz ) )->format( 'Y-m' );
@@ -2689,9 +2706,20 @@ class Gcrev_Insight_API {
             // 既存のgenerate_reportロジックを呼び出し
             $config = $this->config->get_user_config($user_id);
 
+            // 海外アクセス除外フィルタ
+            $exclude_foreign_manual = !empty($client_info['exclude_foreign']);
+            if ($exclude_foreign_manual) {
+                $this->ga4->set_country_filter('Japan');
+            }
+
             // 前月・前々月データ取得
             $prev_data = $this->fetch_dashboard_data_internal($config, 'previousMonth');
             $two_data = $this->fetch_dashboard_data_internal($config, 'twoMonthsAgo');
+
+            // フィルタ解除
+            if ($exclude_foreign_manual) {
+                $this->ga4->set_country_filter(null);
+            }
 
             // ターゲットエリア判定（クライアント設定から）
             $manual_client_settings = gcrev_get_client_settings($user_id);

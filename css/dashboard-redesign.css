@@ -2174,6 +2174,21 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 .kpi-card.info-open .kpi-info-tip {
   display: block;
 }
+
+/* 海外アクセス除外バッジ */
+.report-notice-info {
+  background: #EFF6FF;
+  border-left: 4px solid #3B82F6;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #1E40AF;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .kpi-icon {
   width: 44px;
   height: 44px;

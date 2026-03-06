@@ -612,6 +612,20 @@ get_header();
     </div>
     <?php endif; ?>
 
+    <?php
+    // 海外アクセス除外バッジ
+    if ( $report_post_id > 0 ) {
+        $rpt_client_json = get_post_meta( $report_post_id, '_gcrev_client_info_json', true );
+        $rpt_client_data = $rpt_client_json ? json_decode( $rpt_client_json, true ) : [];
+        if ( ! empty( $rpt_client_data['exclude_foreign'] ) ) : ?>
+    <div class="report-notice-info">
+        <span>🌏</span>
+        <span>このレポートは海外アクセスを除外して生成されています（日本国内のみ）</span>
+    </div>
+        <?php endif;
+    }
+    ?>
+
     <!-- 3) KPIサマリーカード -->
     <div class="kpi-grid" id="kpiGrid">
         <div class="kpi-card">

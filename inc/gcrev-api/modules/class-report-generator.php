@@ -173,7 +173,13 @@ class Gcrev_Report_Generator {
          // 出力モード取得
         $output_mode = $client['output_mode'] ?? 'normal';
         $is_easy_mode = ($output_mode === 'easy');
-        
+
+        // 海外アクセス除外時の注記
+        $foreign_note = '';
+        if (!empty($client['exclude_foreign'])) {
+            $foreign_note = "\n⚠️ 重要：このレポートのデータは「日本国内からのアクセスのみ」に絞り込まれています。海外からのアクセスは除外されています。この点をレポート内で明記してください。";
+        }
+
         // 初心者向けモード用の追加指示
         $mode_instruction = '';
         if ($is_easy_mode) {
@@ -265,7 +271,7 @@ class Gcrev_Report_Generator {
         - 現状: {$client['current_state']}
         - 主要目標: {$client['goal_main']}
         - その他留意事項: {$client['additional_notes']}
-
+        {$foreign_note}
         # 前々月データ（比較基準）
         PROMPT;
         $prompt .= "\n" . $this->format_data_for_prompt($two);
