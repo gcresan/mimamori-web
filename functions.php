@@ -972,7 +972,7 @@ add_action( 'wp_enqueue_scripts', function () {
         'mw-settings-menu',
         get_template_directory_uri() . '/assets/css/mimamori-settings-menu.css',
         [],
-        '1.0.1'
+        '1.0.2'
     );
 } );
 
