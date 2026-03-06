@@ -140,14 +140,6 @@ get_header();
 .cs-actions .btn-save:hover { background: #2d6b54; }
 .cs-actions .btn-save:disabled { background: #94a3b8; cursor: not-allowed; }
 
-/* 旧データ移行バナー */
-.migration-banner {
-    background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 8px;
-    padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #9A3412;
-    display: flex; align-items: flex-start; gap: 8px;
-}
-.migration-banner .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-
 /* トースト */
 .cs-toast {
     position: fixed; top: 20px; right: 20px; z-index: 10000;
@@ -305,16 +297,6 @@ get_header();
 
     <!-- トースト通知 -->
     <div class="cs-toast" id="csToast"></div>
-
-    <?php if ( ! $has_new_settings && ( ! empty( $settings['site_url'] ) || ! empty( $legacy_target ) ) ): ?>
-    <div class="migration-banner">
-        <span class="icon">💡</span>
-        <div>
-            以前の「月次レポート設定」で入力されたサイトURLやターゲット情報を引き継いでいます。<br>
-            内容を確認のうえ「保存する」を押してください。
-        </div>
-    </div>
-    <?php endif; ?>
 
     <!-- 対象サイト -->
     <div class="settings-card">
@@ -1160,8 +1142,6 @@ get_header();
             var json = await res.json();
             if (res.ok && json.success) {
                 showToast('クライアント設定を保存しました');
-                var banner = document.querySelector('.migration-banner');
-                if (banner) banner.style.display = 'none';
             } else {
                 alert('保存に失敗しました: ' + (json.message || ''));
             }

@@ -7571,6 +7571,12 @@ PROMPT;
             ], ['%d','%s','%s','%s','%s','%s','%s','%s','%s','%d','%d','%s','%d','%s']);
         }
 
+        // CV変更後はダッシュボード系キャッシュを無効化
+        delete_transient("gcrev_effcv_{$user_id}_{$month}");
+        delete_transient("gcrev_dash_{$user_id}_previousMonth");
+        delete_transient("gcrev_dash_{$user_id}_twoMonthsAgo");
+        delete_transient("gcrev_trend_{$user_id}_cv_" . date('Y-m'));
+
         return new WP_REST_Response(['success' => true], 200);
     }
 
@@ -7675,6 +7681,7 @@ PROMPT;
             delete_transient("gcrev_effcv_{$user_id}_{$month}");
             delete_transient("gcrev_dash_{$user_id}_previousMonth");
             delete_transient("gcrev_dash_{$user_id}_twoMonthsAgo");
+            delete_transient("gcrev_trend_{$user_id}_cv_" . date('Y-m'));
         }
 
         if ($errors > 0 && $updated === 0) {
