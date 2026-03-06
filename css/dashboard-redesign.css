@@ -206,6 +206,9 @@ h3 { font-size: 19px; font-weight: 600; }
   gap: 10px;
   transition: all 0.2s ease;
 }
+.sidebar-nav .nav-link.nav-link-toggle {
+  font-weight: 700;
+}
 
 .sidebar-nav .nav-link:hover {
   background: var(--mw-bg-secondary);
