@@ -212,7 +212,14 @@ class Gcrev_Deploy_Page {
 
         // パストラバーサル防止（realpath 同士で比較）
         if ( ! $scripts_dir_real || ! $script_path || strpos( $script_path, $scripts_dir_real ) !== 0 ) {
-            return 'ERROR: invalid script path';
+            $raw = $scripts_dir . '/' . $script;
+            return sprintf(
+                'ERROR: invalid script path (dir=%s, dir_real=%s, file_exists=%s, raw=%s)',
+                $scripts_dir,
+                $scripts_dir_real ?: 'false',
+                file_exists( $raw ) ? 'yes' : 'no',
+                $raw
+            );
         }
 
         // 実行可能チェック
