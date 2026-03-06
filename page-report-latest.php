@@ -616,7 +616,7 @@ get_header();
     <div class="kpi-grid" id="kpiGrid">
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">ページビュー</span>
+                <span class="kpi-title">見られた回数 <span class="kpi-term">（ページビュー）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,107,110,0.08);">👁️</div>
             </div>
             <div class="kpi-value" id="kpi-pageviews">-</div>
@@ -626,7 +626,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">セッション</span>
+                <span class="kpi-title">訪問回数 <span class="kpi-term">（セッション）</span></span>
                 <div class="kpi-icon" style="background: rgba(212,168,66,0.12);">🎯</div>
             </div>
             <div class="kpi-value" id="kpi-sessions">-</div>
@@ -636,7 +636,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">ユーザー</span>
+                <span class="kpi-title">見に来た人の数 <span class="kpi-term">（ユーザー）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,139,110,0.1);">👥</div>
             </div>
             <div class="kpi-value" id="kpi-users">-</div>
@@ -646,7 +646,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">新規ユーザー</span>
+                <span class="kpi-title">はじめての人の数 <span class="kpi-term">（新規ユーザー）</span></span>
                 <div class="kpi-icon" style="background: rgba(78,130,133,0.1);">✨</div>
             </div>
             <div class="kpi-value" id="kpi-newusers">-</div>
@@ -656,7 +656,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">リピーター</span>
+                <span class="kpi-title">また来てくれた人 <span class="kpi-term">（リピーター）</span></span>
                 <div class="kpi-icon" style="background: rgba(181,87,75,0.08);">🔁</div>
             </div>
             <div class="kpi-value" id="kpi-returning">-</div>
@@ -666,7 +666,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">平均滞在時間</span>
+                <span class="kpi-title">しっかり見られた時間 <span class="kpi-term">（平均滞在時間）</span></span>
                 <div class="kpi-icon" style="background: rgba(212,168,66,0.15);">⏱️</div>
             </div>
             <div class="kpi-value" id="kpi-duration">-</div>
@@ -676,7 +676,7 @@ get_header();
 
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span></span>
+                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span> <span class="kpi-term">（コンバージョン）</span></span>
                 <div class="kpi-icon" style="background: rgba(61,139,110,0.1);">🎉</div>
             </div>
             <div class="kpi-value" id="kpi-conversions">-</div>

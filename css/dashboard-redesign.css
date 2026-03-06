@@ -2125,6 +2125,13 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   color: var(--mw-text-secondary);
   font-weight: 600;
   letter-spacing: 0.03em;
+  line-height: 1.4;
+}
+.kpi-term {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: #999;
+  letter-spacing: 0;
 }
 .kpi-icon {
   width: 44px;
