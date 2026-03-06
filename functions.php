@@ -4316,7 +4316,7 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
  *   trace: array,
  * }
  */
-function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
+function mimamori_process_chat_with_trace( array $data, int $user_id, array $overrides = [] ): array {
 
     $message = sanitize_textarea_field( $data['message'] ?? '' );
 
@@ -4427,6 +4427,13 @@ function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
         $deterministic_text .= ' ' . $section_context['sectionBody'];
     }
     $flex_queries = mimamori_build_deterministic_queries( $deterministic_text, $intent_type );
+    // QA改善ループ用: クエリ取得件数を増加
+    if ( ! empty( $overrides['context_boost'] ) ) {
+        foreach ( $flex_queries as &$fq ) {
+            $fq['limit'] = (int) ( ( $fq['limit'] ?? 20 ) * 1.5 );
+        }
+        unset( $fq );
+    }
     $trace['deterministic_queries'] = $flex_queries;
 
     $flex_results    = [];
@@ -4474,17 +4481,28 @@ function mimamori_process_chat_with_trace( array $data, int $user_id ): array {
     $trace['enrichment_data'] = $enrichment_data;
     $trace['enrichment_text'] = $enrichment_text;
 
+    // QA改善ループ用: プロンプト補遺を追記
+    if ( ! empty( $overrides['prompt_addendum'] ) ) {
+        $instructions .= "\n\n" . $overrides['prompt_addendum'];
+    }
+
     // OpenAI 回答呼び出し
-    $model = defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini';
+    $model = $overrides['model'] ?? ( defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini' );
     $trace['model']              = $model;
     $trace['instructions_length'] = mb_strlen( $instructions );
+    $trace['overrides']           = array_diff_key( $overrides, [ 'prompt_addendum' => 1 ] );
 
-    $result = mimamori_call_openai_responses_api( [
+    $payload = [
         'model'             => $model,
         'instructions'      => $instructions,
         'input'             => $input,
-        'max_output_tokens' => 2048,
-    ] );
+        'max_output_tokens' => (int) ( $overrides['max_output_tokens'] ?? 2048 ),
+    ];
+    if ( isset( $overrides['temperature'] ) ) {
+        $payload['temperature'] = (float) $overrides['temperature'];
+    }
+
+    $result = mimamori_call_openai_responses_api( $payload );
 
     if ( is_wp_error( $result ) ) {
         return [

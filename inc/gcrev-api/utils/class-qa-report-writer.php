@@ -399,6 +399,39 @@ class Mimamori_QA_Report_Writer {
     // =========================================================
 
     /**
+     * 改善サマリーを meta.json に追記する。
+     *
+     * 既存 meta.json を読み込み、improve キーを追加して上書きする。
+     *
+     * @param string $out_dir  QA実行出力ディレクトリ
+     * @param array  $summary  改善サマリーデータ
+     */
+    public function append_improve_meta( string $out_dir, array $summary ): void {
+        $meta_path = trailingslashit( $out_dir ) . 'meta.json';
+
+        if ( ! file_exists( $meta_path ) ) return;
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        $raw = file_get_contents( $meta_path );
+        if ( $raw === false ) return;
+
+        $meta = json_decode( $raw, true );
+        if ( ! is_array( $meta ) ) return;
+
+        $meta['improve'] = [
+            'below_pass'        => $summary['below_pass'] ?? 0,
+            'passed_count'      => $summary['passed_count'] ?? 0,
+            'still_below'       => $summary['still_below'] ?? 0,
+            'avg_initial_score' => $summary['avg_initial_score'] ?? 0,
+            'avg_final_score'   => $summary['avg_final_score'] ?? 0,
+            'avg_revisions'     => $summary['avg_revisions'] ?? 0,
+            'config'            => $summary['config'] ?? [],
+        ];
+
+        $this->write_file( $meta_path, wp_json_encode( $meta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT ) );
+    }
+
+    /**
      * ファイルを書き出す。
      *
      * @param string $path    ファイルパス

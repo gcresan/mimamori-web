@@ -202,6 +202,339 @@ class Mimamori_QA_CLI {
     }
 
     // =========================================================
+    // qa:improve — 自動改善ループ
+    // =========================================================
+
+    /**
+     * QA実行結果の未合格ケースに対して自動改善ループを実行する。
+     *
+     * ## OPTIONS
+     *
+     * --run=<run_id>
+     * : 対象QA実行ID（YYYYMMDD_HHMMSS 形式、必須）
+     *
+     * --user_id=<id>
+     * : GA4設定済みユーザーID（必須）
+     *
+     * [--pass-score=<score>]
+     * : 合格点（デフォルト: 100）
+     *
+     * [--max-revisions=<n>]
+     * : 最大試行回数（デフォルト: 5）
+     *
+     * [--pass-mode=<mode>]
+     * : 合格判定モード: total_score / no_critical（デフォルト: total_score）
+     *
+     * [--min-improvement=<n>]
+     * : 最小改善幅（デフォルト: 2）
+     *
+     * [--case=<case_id>]
+     * : 特定ケースのみ改善（省略時は全未合格ケース）
+     *
+     * [--dry-run]
+     * : 改善案の生成のみ（再実行しない）
+     *
+     * [--sleep=<ms>]
+     * : リクエスト間スリープ(ms)（デフォルト: 2000）
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:improve --run=20260306_030000 --user_id=1
+     *     wp mimamori qa:improve --run=20260306_030000 --user_id=1 --dry-run
+     *     wp mimamori qa:improve --run=20260306_030000 --user_id=1 --pass-score=95 --pass-mode=no_critical
+     *     wp mimamori qa:improve --run=20260306_030000 --user_id=1 --case=qa_003 --max-revisions=3
+     *
+     * @subcommand qa:improve
+     * @param array $args       Positional arguments.
+     * @param array $assoc_args Named arguments.
+     */
+    public function qa_improve( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+
+        // --- パラメータ解析 ---
+        $user_id         = $this->require_user_id( $assoc_args );
+        $run_id          = $assoc_args['run'] ?? '';
+        $pass_score      = (int) ( $assoc_args['pass-score'] ?? 100 );
+        $max_revisions   = (int) ( $assoc_args['max-revisions'] ?? 5 );
+        $pass_mode       = $assoc_args['pass-mode'] ?? 'total_score';
+        $min_improvement = (int) ( $assoc_args['min-improvement'] ?? 2 );
+        $target_case     = $assoc_args['case'] ?? null;
+        $dry_run         = isset( $assoc_args['dry-run'] );
+        $sleep_ms        = (int) ( $assoc_args['sleep'] ?? 2000 );
+
+        if ( $run_id === '' ) {
+            WP_CLI::error( '--run=<YYYYMMDD_HHMMSS> is required.' );
+        }
+
+        if ( ! in_array( $pass_mode, [ 'total_score', 'no_critical' ], true ) ) {
+            WP_CLI::error( '--pass-mode must be "total_score" or "no_critical".' );
+        }
+
+        // --- セーフティチェック ---
+        $this->safety_checks( $user_id );
+
+        // --- 既存 QA 結果読み込み ---
+        $out_dir   = $this->get_output_dir( sanitize_file_name( $run_id ) );
+        $jsonl_path = $out_dir . '/cases.jsonl';
+
+        if ( ! file_exists( $jsonl_path ) ) {
+            WP_CLI::error( "Run not found: {$run_id}" );
+        }
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        $lines = file( $jsonl_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
+        if ( empty( $lines ) ) {
+            WP_CLI::error( 'No cases found in cases.jsonl.' );
+        }
+
+        $cases = [];
+        foreach ( $lines as $line ) {
+            $c = json_decode( $line, true );
+            if ( is_array( $c ) ) {
+                $cases[] = $c;
+            }
+        }
+
+        WP_CLI::log( '=== Mimamori QA Auto-Improve ===' );
+        WP_CLI::log( sprintf(
+            'Run: %s | User: %d | Pass: %d (%s) | Max Rev: %d | Dry-run: %s',
+            $run_id, $user_id, $pass_score, $pass_mode, $max_revisions, $dry_run ? 'yes' : 'no'
+        ) );
+
+        // --- 未合格ケース抽出 ---
+        $below = [];
+        foreach ( $cases as $c ) {
+            $case_id = $c['id'] ?? '';
+            $total   = $c['score']['total'] ?? 0;
+
+            if ( $target_case !== null && $case_id !== $target_case ) {
+                continue;
+            }
+
+            if ( $total < $pass_score ) {
+                // question データを復元
+                $c['question'] = [
+                    'id'              => $c['id'] ?? '',
+                    'category'        => $c['category'] ?? '',
+                    'message'         => $c['message'] ?? '',
+                    'page_type'       => $c['page_type'] ?? '',
+                    'current_page'    => $this->restore_current_page( $c['page_type'] ?? '' ),
+                    'history'         => [],
+                    'section_context' => null,
+                ];
+                $below[] = $c;
+            }
+        }
+
+        if ( empty( $below ) ) {
+            WP_CLI::success( 'All cases already pass. Nothing to improve.' );
+            return;
+        }
+
+        WP_CLI::log( sprintf( 'Found %d cases below pass score (%d).', count( $below ), $pass_score ) );
+
+        // --- QAクラス読み込み + 改善ループ実行 ---
+        $this->load_qa_classes();
+
+        $runner   = new Mimamori_QA_Runner( $user_id, $sleep_ms );
+        $improver = new Mimamori_QA_Improver( $runner, [
+            'pass_score'      => $pass_score,
+            'pass_mode'       => $pass_mode,
+            'max_revisions'   => $max_revisions,
+            'min_improvement' => $min_improvement,
+            'stale_limit'     => 2,
+            'dry_run'         => $dry_run,
+            'sleep_ms'        => $sleep_ms,
+        ] );
+
+        $store    = new Mimamori_QA_Revision_Store( $out_dir );
+        $progress = \WP_CLI\Utils\make_progress_bar( 'Improving', count( $below ) );
+
+        $results = [];
+
+        foreach ( $below as $case ) {
+            $progress->tick();
+            $case_id = $case['id'] ?? 'unknown';
+
+            WP_CLI::log( sprintf(
+                "\n[%s] Initial score: %d — Starting improvement loop...",
+                $case_id, $case['score']['total'] ?? 0
+            ) );
+
+            try {
+                $result = $improver->improve( $case );
+            } catch ( \Throwable $e ) {
+                WP_CLI::warning( sprintf( '[%s] Error: %s', $case_id, $e->getMessage() ) );
+                $result = [
+                    'revisions'     => [],
+                    'stop_reason'   => 'error',
+                    'passed'        => false,
+                    'initial_score' => $case['score']['total'] ?? 0,
+                    'final_score'   => $case['score']['total'] ?? 0,
+                ];
+            }
+
+            $results[ $case_id ] = $result;
+
+            // 保存
+            $store->save_case( $case_id, $result['revisions'], $result['stop_reason'] );
+
+            $status = $result['passed'] ? 'PASSED' : 'NOT PASSED';
+            $rev_count = count( $result['revisions'] );
+            WP_CLI::log( sprintf(
+                '[%s] %s — Score: %d → %d (%d revisions, stop: %s)',
+                $case_id, $status,
+                $result['initial_score'], $result['final_score'],
+                $rev_count, $result['stop_reason']
+            ) );
+        }
+
+        $progress->finish();
+
+        // --- サマリー生成・保存 ---
+        $summary = $this->build_improve_summary( $run_id, $results, $cases, [
+            'pass_score'    => $pass_score,
+            'pass_mode'     => $pass_mode,
+            'max_revisions' => $max_revisions,
+            'dry_run'       => $dry_run,
+        ] );
+        $store->save_summary( $summary );
+
+        // --- レポート生成・保存 ---
+        $report = $this->render_improve_report( $summary, $results );
+        $store->save_report( $report );
+
+        // --- CLI サマリー表示 ---
+        WP_CLI::log( '' );
+        WP_CLI::log( '=== Improvement Summary ===' );
+        WP_CLI::log( sprintf( 'Total cases: %d | Below pass: %d', $summary['total_cases'], $summary['below_pass'] ) );
+        WP_CLI::log( sprintf( 'Passed: %d | Still below: %d', $summary['passed_count'], $summary['still_below'] ) );
+        WP_CLI::log( sprintf( 'Avg initial: %.1f | Avg final: %.1f | Avg revisions: %.1f',
+            $summary['avg_initial_score'], $summary['avg_final_score'], $summary['avg_revisions']
+        ) );
+
+        if ( ! empty( $summary['stop_reasons'] ) ) {
+            WP_CLI::log( '' );
+            WP_CLI::log( 'Stop Reasons:' );
+            foreach ( $summary['stop_reasons'] as $reason => $cnt ) {
+                WP_CLI::log( sprintf( '  %-20s %d', $reason, $cnt ) );
+            }
+        }
+
+        WP_CLI::success( sprintf( 'Improvement complete. Output: %s', $store->get_dir() ) );
+    }
+
+    /**
+     * ページタイプからcurrent_pageを復元する。
+     */
+    private function restore_current_page( string $page_type ): array {
+        $domain = 'https://dev.mimamori-web.jp';
+        return match ( $page_type ) {
+            'report_dashboard' => [ 'url' => $domain . '/mypage/dashboard/', 'title' => 'ダッシュボード' ],
+            'analysis_detail'  => [ 'url' => $domain . '/mypage/analysis/', 'title' => '分析' ],
+            default            => [ 'url' => $domain . '/mypage/', 'title' => 'マイページ' ],
+        };
+    }
+
+    /**
+     * 改善サマリーを構築する。
+     */
+    private function build_improve_summary( string $run_id, array $results, array $all_cases, array $config ): array {
+        $passed_count    = 0;
+        $initial_scores  = [];
+        $final_scores    = [];
+        $rev_counts      = [];
+        $stop_reasons    = [];
+
+        foreach ( $results as $r ) {
+            if ( $r['passed'] ) $passed_count++;
+            $initial_scores[] = $r['initial_score'];
+            $final_scores[]   = $r['final_score'];
+            $rev_counts[]     = count( $r['revisions'] );
+
+            $reason = $r['stop_reason'];
+            $stop_reasons[ $reason ] = ( $stop_reasons[ $reason ] ?? 0 ) + 1;
+        }
+
+        $n = count( $results );
+
+        return [
+            'run_id'             => $run_id,
+            'improve_started_at' => wp_date( 'Y-m-d H:i:s' ),
+            'config'             => $config,
+            'total_cases'        => count( $all_cases ),
+            'below_pass'         => $n,
+            'improved'           => $n,
+            'passed_count'       => $passed_count,
+            'still_below'        => $n - $passed_count,
+            'avg_initial_score'  => $n > 0 ? array_sum( $initial_scores ) / $n : 0,
+            'avg_final_score'    => $n > 0 ? array_sum( $final_scores ) / $n : 0,
+            'avg_revisions'      => $n > 0 ? array_sum( $rev_counts ) / $n : 0,
+            'stop_reasons'       => $stop_reasons,
+        ];
+    }
+
+    /**
+     * 改善レポート（Markdown）を生成する。
+     */
+    private function render_improve_report( array $summary, array $results ): string {
+        $md = "# AI品質改善レポート\n\n";
+        $md .= sprintf( "- 実行日: %s\n", $summary['improve_started_at'] );
+        $md .= sprintf( "- 対象run: %s\n", $summary['run_id'] );
+        $md .= sprintf( "- 合格基準: %d点（%s モード）\n", $summary['config']['pass_score'], $summary['config']['pass_mode'] );
+        if ( $summary['config']['dry_run'] ) {
+            $md .= "- **dry-run モード（実行なし）**\n";
+        }
+        $md .= "\n## サマリー\n\n";
+        $md .= "| 項目 | 値 |\n|---|---|\n";
+        $md .= sprintf( "| 対象ケース | %d / %d |\n", $summary['below_pass'], $summary['total_cases'] );
+        $md .= sprintf( "| 合格到達 | %d (%.1f%%) |\n", $summary['passed_count'],
+            $summary['below_pass'] > 0 ? ( $summary['passed_count'] / $summary['below_pass'] ) * 100 : 0 );
+        $md .= sprintf( "| 未到達 | %d |\n", $summary['still_below'] );
+        $md .= sprintf( "| 平均初回スコア | %.1f |\n", $summary['avg_initial_score'] );
+        $md .= sprintf( "| 平均最終スコア | %.1f |\n", $summary['avg_final_score'] );
+        $md .= sprintf( "| 平均試行回数 | %.1f |\n", $summary['avg_revisions'] );
+
+        $md .= "\n## 停止理由\n\n";
+        $md .= "| 理由 | 件数 |\n|---|---|\n";
+        foreach ( $summary['stop_reasons'] as $reason => $cnt ) {
+            $md .= sprintf( "| %s | %d |\n", $reason, $cnt );
+        }
+
+        $md .= "\n## ケース別推移\n\n";
+
+        foreach ( $results as $case_id => $r ) {
+            $icon = $r['passed'] ? '✅' : '❌';
+            $md .= sprintf( "### %s (%s) %s\n\n", $case_id, $r['stop_reason'], $icon );
+            $md .= "| Rev | Total | Data | Period | Honesty | Structure | 変更 |\n";
+            $md .= "|-----|-------|------|--------|---------|-----------|------|\n";
+
+            foreach ( $r['revisions'] as $rev ) {
+                $changes_str = ! empty( $rev['changes'] ) ? implode( ', ', $rev['changes'] ) : '—';
+                if ( mb_strlen( $changes_str ) > 40 ) {
+                    $changes_str = mb_strimwidth( $changes_str, 0, 40, '…' );
+                }
+                $md .= sprintf( "| %d | %d | %d | %d | %d | %d | %s |\n",
+                    $rev['revision_no'],
+                    $rev['score_total'],
+                    $rev['data_integrity'],
+                    $rev['period_accuracy'],
+                    $rev['honesty'],
+                    $rev['structure'],
+                    $changes_str
+                );
+            }
+
+            if ( ! $r['passed'] && ! empty( $r['revisions'] ) ) {
+                $last = end( $r['revisions'] );
+                $md .= sprintf( "\n停止理由: %s\n", $r['stop_reason'] );
+            }
+            $md .= "\n";
+        }
+
+        return $md;
+    }
+
+    // =========================================================
     // qa:list — 最近の QA 実行一覧
     // =========================================================
 
@@ -376,6 +709,10 @@ class Mimamori_QA_CLI {
             $base . '/utils/class-qa-scorer.php',
             $base . '/utils/class-qa-triage.php',
             $base . '/utils/class-qa-report-writer.php',
+            $base . '/utils/class-qa-diagnosis.php',
+            $base . '/utils/class-qa-prompt-tuner.php',
+            $base . '/utils/class-qa-revision-store.php',
+            $base . '/modules/class-qa-improver.php',
         ];
 
         foreach ( $files as $file ) {

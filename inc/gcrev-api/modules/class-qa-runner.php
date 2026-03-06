@@ -217,12 +217,25 @@ class Mimamori_QA_Runner {
     }
 
     /**
-     * mimamori_process_chat_with_trace() を呼び出す。
+     * 1問を再実行するパブリックメソッド（改善ループ用）。
      *
-     * @param  array $question 質問データ
+     * @param  array $question  質問データ
+     * @param  array $overrides プロンプト・パラメータのオーバーライド
      * @return array 結果
      */
-    private function call_chat( array $question ): array {
+    public function execute_single( array $question, array $overrides = [] ): array {
+        $this->check_rate_limit();
+        $result = $this->call_chat( $question, $overrides );
+
+        if ( ! $result['success'] ) {
+            usleep( 1000 * 1000 );
+            $result = $this->call_chat( $question, $overrides );
+        }
+
+        return $result;
+    }
+
+    private function call_chat( array $question, array $overrides = [] ): array {
         $started_at = wp_date( 'Y-m-d H:i:s' );
         $start_time = microtime( true );
 
@@ -234,7 +247,7 @@ class Mimamori_QA_Runner {
         ];
 
         try {
-            $chat_result = mimamori_process_chat_with_trace( $data, $this->user_id );
+            $chat_result = mimamori_process_chat_with_trace( $data, $this->user_id, $overrides );
         } catch ( \Throwable $e ) {
             $elapsed = (int) ( ( microtime( true ) - $start_time ) * 1000 );
             return [

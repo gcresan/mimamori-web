@@ -163,11 +163,13 @@ class Gcrev_QA_Report_Page {
 
             <?php $this->render_failures_section( $selected ); ?>
 
+            <?php $this->render_improve_section( $selected ); ?>
+
             <?php $this->render_case_detail_modal(); ?>
         </div>
         <?php
 
-        $this->render_inline_scripts();
+        $this->render_inline_scripts( $selected );
     }
 
     // =========================================================
@@ -658,6 +660,116 @@ class Gcrev_QA_Report_Page {
     }
 
     // =========================================================
+    // F. 改善ループ結果
+    // =========================================================
+
+    private function render_improve_section( string $run_id ): void {
+        $improve_dir = $this->get_run_dir( $run_id ) . '/improvements';
+        $summary_path = $improve_dir . '/improve_summary.json';
+
+        if ( ! file_exists( $summary_path ) ) {
+            return;
+        }
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        $raw = file_get_contents( $summary_path );
+        if ( $raw === false ) return;
+        $summary = json_decode( $raw, true );
+        if ( ! is_array( $summary ) ) return;
+
+        $pass_score = $summary['config']['pass_score'] ?? 100;
+        $pass_mode  = $summary['config']['pass_mode'] ?? 'total_score';
+
+        echo '<h2>自動改善ループ結果</h2>';
+        echo '<div class="gcrev-qa-cards">';
+
+        // Card: 合格率
+        $below   = $summary['below_pass'] ?? 0;
+        $passed  = $summary['passed_count'] ?? 0;
+        $rate    = $below > 0 ? round( ( $passed / $below ) * 100, 1 ) : 0;
+        $color   = $rate >= 80 ? '#059669' : ( $rate >= 50 ? '#d97706' : '#dc2626' );
+
+        echo '<div class="gcrev-qa-card">';
+        echo '<h3>合格率</h3>';
+        echo '<div class="value" style="color:' . esc_attr( $color ) . ';">' . esc_html( $rate . '%' ) . '</div>';
+        echo '<div style="font-size:12px;color:#64748b;">' . esc_html( "{$passed} / {$below} ケース合格" ) . '</div>';
+        echo '</div>';
+
+        // Card: 平均スコア推移
+        $avg_init  = $summary['avg_initial_score'] ?? 0;
+        $avg_final = $summary['avg_final_score'] ?? 0;
+        echo '<div class="gcrev-qa-card">';
+        echo '<h3>平均スコア推移</h3>';
+        echo '<div class="value">' . esc_html( number_format( $avg_init, 1 ) . ' → ' . number_format( $avg_final, 1 ) ) . '</div>';
+        echo '<div style="font-size:12px;color:#64748b;">+' . esc_html( number_format( $avg_final - $avg_init, 1 ) ) . '点改善</div>';
+        echo '</div>';
+
+        // Card: 平均試行回数
+        $avg_rev = $summary['avg_revisions'] ?? 0;
+        echo '<div class="gcrev-qa-card">';
+        echo '<h3>平均試行回数</h3>';
+        echo '<div class="value">' . esc_html( number_format( $avg_rev, 1 ) ) . '</div>';
+        echo '<div style="font-size:12px;color:#64748b;">最大' . esc_html( $summary['config']['max_revisions'] ?? 5 ) . '回</div>';
+        echo '</div>';
+
+        // Card: 合格基準
+        echo '<div class="gcrev-qa-card">';
+        echo '<h3>合格基準</h3>';
+        echo '<div class="value" style="font-size:22px;">' . esc_html( $pass_score . '点' ) . '</div>';
+        echo '<div style="font-size:12px;color:#64748b;">' . esc_html( $pass_mode ) . '</div>';
+        echo '</div>';
+
+        echo '</div>'; // cards
+
+        // 停止理由テーブル
+        $reasons = $summary['stop_reasons'] ?? [];
+        if ( ! empty( $reasons ) ) {
+            echo '<table class="widefat striped" style="max-width:400px;margin:12px 0;">';
+            echo '<thead><tr><th>停止理由</th><th>件数</th></tr></thead><tbody>';
+            foreach ( $reasons as $reason => $cnt ) {
+                echo '<tr><td>' . esc_html( $reason ) . '</td><td>' . esc_html( (string) $cnt ) . '</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+
+        // 改善レポート MD
+        $report_path = $improve_dir . '/improve_report.md';
+        if ( file_exists( $report_path ) ) {
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+            $report_md = file_get_contents( $report_path );
+            if ( $report_md !== false && $report_md !== '' ) {
+                echo '<details style="margin:16px 0;">';
+                echo '<summary style="cursor:pointer;font-weight:600;color:#334155;">改善レポート詳細を表示</summary>';
+                echo '<div class="qa-failures-md" style="margin-top:8px;">';
+                echo $this->simple_markdown_to_html( $report_md ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- simple_markdown_to_html uses esc_html internally
+                echo '</div>';
+                echo '</details>';
+            }
+        }
+
+        echo '<hr />';
+    }
+
+    /**
+     * 改善履歴データを読み込む。
+     *
+     * @param  string $run_id  実行ID
+     * @param  string $case_id ケースID
+     * @return array|null
+     */
+    private function load_improvement( string $run_id, string $case_id ): ?array {
+        $path = $this->get_run_dir( $run_id ) . '/improvements/' . sanitize_file_name( $case_id ) . '.json';
+
+        if ( ! file_exists( $path ) ) return null;
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        $raw = file_get_contents( $path );
+        if ( $raw === false ) return null;
+
+        return json_decode( $raw, true );
+    }
+
+    // =========================================================
     // インラインスタイル
     // =========================================================
 
@@ -775,15 +887,39 @@ class Gcrev_QA_Report_Page {
     // インライン JavaScript
     // =========================================================
 
-    private function render_inline_scripts(): void {
+    private function render_inline_scripts( string $selected_run = '' ): void {
         // FAILURE_ADVICE を JS に渡す
         $advice_json = wp_json_encode( self::FAILURE_ADVICE, JSON_UNESCAPED_UNICODE );
         $severity_json = wp_json_encode( self::TRIAGE_SEVERITY, JSON_UNESCAPED_UNICODE );
+
+        // 改善データをロード（存在すれば）
+        $improve_data = [];
+        if ( $selected_run !== '' ) {
+            $improve_dir = $this->get_run_dir( $selected_run ) . '/improvements';
+            if ( is_dir( $improve_dir ) ) {
+                $files = glob( $improve_dir . '/qa_*.json' );
+                if ( is_array( $files ) ) {
+                    foreach ( $files as $f ) {
+                        $case_id = pathinfo( $f, PATHINFO_FILENAME );
+                        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+                        $raw = file_get_contents( $f );
+                        if ( $raw !== false ) {
+                            $data = json_decode( $raw, true );
+                            if ( is_array( $data ) ) {
+                                $improve_data[ $case_id ] = $data;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        $improve_json = wp_json_encode( $improve_data, JSON_UNESCAPED_UNICODE );
         ?>
         <script>
         (function() {
             var FAILURE_ADVICE  = <?php echo $advice_json; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>;
             var TRIAGE_SEVERITY = <?php echo $severity_json; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>;
+            var IMPROVE_DATA    = <?php echo $improve_json; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>;
 
             var SEVERITY_COLORS = {
                 critical: '#dc2626',
@@ -933,6 +1069,55 @@ class Gcrev_QA_Report_Page {
                         }
                     }
                     html += '</ul></div>';
+                    html += '</div>';
+                }
+
+                // 改善履歴
+                var caseId = c.id || '';
+                var improveInfo = IMPROVE_DATA[caseId];
+                if (improveInfo && improveInfo.revisions && improveInfo.revisions.length > 0) {
+                    html += '<div class="qa-modal-section">';
+                    html += '<h3>改善ループ履歴</h3>';
+
+                    // ステータスバッジ
+                    var stopReason = improveInfo.stop_reason || '';
+                    var isPassed = (stopReason === 'passed' || stopReason === 'passed_no_critical' || stopReason === 'already_passed');
+                    var badgeColor = isPassed ? '#059669' : '#d97706';
+                    var badgeText = isPassed ? 'PASSED' : stopReason;
+                    html += '<div style="margin-bottom:10px;">';
+                    html += '<span style="display:inline-block;padding:3px 10px;font-size:12px;font-weight:600;color:#fff;background:' + badgeColor + ';border-radius:4px;">' + escHtml(badgeText) + '</span>';
+                    html += '<span style="margin-left:8px;font-size:13px;color:#64748b;">' + escHtml(improveInfo.initial_score + ' → ' + improveInfo.final_score) + ' (' + improveInfo.revisions.length + ' revisions)</span>';
+                    html += '</div>';
+
+                    // リビジョンテーブル
+                    html += '<table style="border-collapse:collapse;width:100%;font-size:12px;margin:8px 0;">';
+                    html += '<thead><tr style="background:#f8fafc;">';
+                    html += '<th style="border:1px solid #e2e8f0;padding:5px 8px;">Rev</th>';
+                    html += '<th style="border:1px solid #e2e8f0;padding:5px 8px;">Total</th>';
+                    html += '<th style="border:1px solid #e2e8f0;padding:5px 8px;">Data</th>';
+                    html += '<th style="border:1px solid #e2e8f0;padding:5px 8px;">Period</th>';
+                    html += '<th style="border:1px solid #e2e8f0;padding:5px 8px;">Honesty</th>';
+                    html += '<th style="border:1px solid #e2e8f0;padding:5px 8px;">Structure</th>';
+                    html += '<th style="border:1px solid #e2e8f0;padding:5px 8px;">変更</th>';
+                    html += '</tr></thead><tbody>';
+
+                    for (var ri = 0; ri < improveInfo.revisions.length; ri++) {
+                        var rev = improveInfo.revisions[ri];
+                        var totalColor = getScoreColor(rev.score_total || 0);
+                        var changes = (rev.changes || []).join(', ') || '—';
+                        if (changes.length > 50) changes = changes.substring(0, 47) + '...';
+                        html += '<tr>';
+                        html += '<td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:center;">' + rev.revision_no + '</td>';
+                        html += '<td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:center;font-weight:600;color:' + totalColor + ';">' + (rev.score_total || 0) + '</td>';
+                        html += '<td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:center;">' + (rev.data_integrity || 0) + '/40</td>';
+                        html += '<td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:center;">' + (rev.period_accuracy || 0) + '/20</td>';
+                        html += '<td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:center;">' + (rev.honesty || 0) + '/20</td>';
+                        html += '<td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:center;">' + (rev.structure || 0) + '/20</td>';
+                        html += '<td style="border:1px solid #e2e8f0;padding:4px 8px;font-size:11px;">' + escHtml(changes) + '</td>';
+                        html += '</tr>';
+                    }
+
+                    html += '</tbody></table>';
                     html += '</div>';
                 }
 
