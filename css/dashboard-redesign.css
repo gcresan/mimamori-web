@@ -2143,7 +2143,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   height: 18px;
   padding: 0;
   border: none;
-  background: #eee;
+  background: none;
   border-radius: 50%;
   color: #888;
   cursor: pointer;
@@ -2153,7 +2153,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   flex-shrink: 0;
 }
 .kpi-info-btn:hover {
-  background: #ddd;
+  background: none;
   color: #555;
 }
 .kpi-card.info-open .kpi-info-btn {
