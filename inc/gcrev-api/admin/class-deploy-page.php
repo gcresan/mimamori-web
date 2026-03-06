@@ -215,14 +215,16 @@ class Gcrev_Deploy_Page {
             return 'ERROR: script file not found (' . $script_path . ')';
         }
 
-        // シンボリックリンクの場合は実体パスを解決
-        $resolved = is_link( $script_path ) ? readlink( $script_path ) : $script_path;
-        if ( ! $resolved || ! file_exists( $resolved ) ) {
-            return 'ERROR: script symlink target not found';
+        // シンボリックリンクの場合は実体パスを解決して実行
+        if ( is_link( $script_path ) ) {
+            $script_path = readlink( $script_path );
+            if ( ! $script_path || ! file_exists( $script_path ) ) {
+                return 'ERROR: script symlink target not found';
+            }
         }
 
         // コマンド組み立て（PHP-FPM は httpd ユーザーのため sudo -u kusanagi で実行）
-        $cmd = sprintf( 'sudo -u kusanagi /bin/bash %s', escapeshellarg( $resolved ) );
+        $cmd = sprintf( 'sudo -u kusanagi %s', escapeshellarg( $script_path ) );
         foreach ( $args as $arg ) {
             $cmd .= ' ' . escapeshellarg( (string) $arg );
         }
