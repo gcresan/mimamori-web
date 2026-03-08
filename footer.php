@@ -1,7 +1,7 @@
     </main>
 </div><!-- .app-container -->
 
-<?php if ( is_user_logged_in() ) : ?>
+<?php if ( is_user_logged_in() && ( ! function_exists( 'mimamori_can' ) || mimamori_can( 'ai_chat' ) ) ) : ?>
     <?php get_template_part( 'template-parts/mimamori-ai-chat' ); ?>
 <?php endif; ?>
 

@@ -830,6 +830,11 @@ add_action('wp_enqueue_scripts', function() {
         return;
     }
 
+    // ベーシックプランはAIチャットを一切読み込まない
+    if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat' ) ) {
+        return;
+    }
+
     wp_enqueue_script(
         'mw-ai-chat',
         get_template_directory_uri() . '/assets/js/mimamori-ai-chat.js',
@@ -906,6 +911,7 @@ add_action('wp_enqueue_scripts', function() {
         'nonce'             => wp_create_nonce( 'wp_rest' ),
         'paymentActive'     => gcrev_is_payment_active(),
         'paymentStatusUrl'  => home_url( '/payment-status/' ),
+        'serviceTier'       => gcrev_get_service_tier(),
         'quickPrompts'      => $quick_prompts,
         'initialPromptMode' => $initial_prompt_mode,
     ] );
@@ -1041,7 +1047,17 @@ add_action( 'rest_api_init', function () {
         'methods'             => 'POST',
         'callback'            => 'mimamori_handle_ai_chat_request',
         'permission_callback' => function () {
-            return is_user_logged_in();
+            if ( ! is_user_logged_in() ) {
+                return false;
+            }
+            if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat' ) ) {
+                return new WP_Error(
+                    'tier_insufficient',
+                    'AIチャットはAIサポートプランでご利用いただけます。',
+                    [ 'status' => 403 ]
+                );
+            }
+            return true;
         },
     ] );
 
@@ -1049,7 +1065,17 @@ add_action( 'rest_api_init', function () {
         'methods'             => 'POST',
         'callback'            => 'mimamori_handle_voice_transcribe',
         'permission_callback' => function () {
-            return is_user_logged_in();
+            if ( ! is_user_logged_in() ) {
+                return false;
+            }
+            if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_voice' ) ) {
+                return new WP_Error(
+                    'tier_insufficient',
+                    '音声入力はAIサポートプランでご利用いただけます。',
+                    [ 'status' => 403 ]
+                );
+            }
+            return true;
         },
     ] );
 } );
@@ -5056,6 +5082,101 @@ function gcrev_get_valid_plan_ids(): array {
     return array_keys( gcrev_get_plan_definitions() );
 }
 
+// --------------------------------------------------
+// サービスティア（プランベースアクセス制御）
+// --------------------------------------------------
+
+/**
+ * サービスティア定義を返す。
+ *
+ * @return array<string, array{name:string, monthly:int, description:string}>
+ */
+function gcrev_get_service_tier_definitions(): array {
+    return [
+        'basic' => [
+            'name'        => 'ベーシックプラン',
+            'monthly'     => 5500,
+            'description' => 'AIがホームページの状態を見て、毎月レポートをお届け',
+        ],
+        'ai_support' => [
+            'name'        => 'AIサポートプラン',
+            'monthly'     => 11000,
+            'description' => 'AIが状態を見て＋改善アドバイスまで提供',
+        ],
+    ];
+}
+
+/**
+ * 有効なティアIDリストを返す。
+ *
+ * @return string[]
+ */
+function gcrev_get_valid_service_tiers(): array {
+    return array_keys( gcrev_get_service_tier_definitions() );
+}
+
+/**
+ * ユーザーのサービスティアを取得する。
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ * @return string 'basic' | 'ai_support'
+ */
+function gcrev_get_service_tier( int $user_id = 0 ): string {
+    if ( $user_id <= 0 ) {
+        $user_id = get_current_user_id();
+    }
+    if ( $user_id <= 0 ) {
+        return 'basic';
+    }
+    // 管理者は常に最上位
+    if ( user_can( $user_id, 'manage_options' ) ) {
+        return 'ai_support';
+    }
+    $tier = get_user_meta( $user_id, 'gcrev_service_tier', true );
+    if ( in_array( $tier, gcrev_get_valid_service_tiers(), true ) ) {
+        return $tier;
+    }
+    return 'basic';
+}
+
+/**
+ * フィーチャー権限チェック。
+ *
+ * ティア階層: basic(0) < ai_support(1)
+ * 上位ティアは下位の全機能を包含する。
+ *
+ * @param  string $feature  機能キー（例: 'ai_chat', 'dashboard_highlights'）
+ * @param  int    $user_id  0 の場合はログイン中ユーザー
+ * @return bool
+ */
+function mimamori_can( string $feature, int $user_id = 0 ): bool {
+    $tier_hierarchy = [ 'basic' => 0, 'ai_support' => 1 ];
+
+    $feature_map = [
+        // AI機能（ai_support のみ）
+        'ai_chat'              => 'ai_support',
+        'ai_ask_button'        => 'ai_support',
+        'ai_voice'             => 'ai_support',
+        'dashboard_highlights' => 'ai_support',
+        'report_good_points'   => 'ai_support',
+        'report_improvements'  => 'ai_support',
+        'report_consideration' => 'ai_support',
+        'report_next_actions'  => 'ai_support',
+        // コア機能（両プラン）
+        'dashboard'            => 'basic',
+        'report_summary'       => 'basic',
+        'report_kpi'           => 'basic',
+        'analysis_basic'       => 'basic',
+    ];
+
+    $required_tier  = $feature_map[ $feature ] ?? 'ai_support';
+    $user_tier      = gcrev_get_service_tier( $user_id );
+    $user_level     = $tier_hierarchy[ $user_tier ] ?? 0;
+    $required_level = $tier_hierarchy[ $required_tier ] ?? 0;
+
+    return $user_level >= $required_level;
+}
+
 /**
  * サンクスページURL（固定ページ: 親=signup / 子=thanks → /signup/thanks/）
  */
@@ -5872,6 +5993,83 @@ function gcrev_render_test_operation_field( $user ) {
         </tr>
     </table>
     <?php
+}
+
+// --------------------------------------------------
+// WP管理画面 — サービスティア選択
+// --------------------------------------------------
+add_action( 'edit_user_profile', 'gcrev_render_service_tier_field' );
+add_action( 'show_user_profile', 'gcrev_render_service_tier_field' );
+
+function gcrev_render_service_tier_field( $user ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    if ( user_can( $user->ID, 'manage_options' ) ) {
+        return;
+    }
+
+    $current_tier = gcrev_get_service_tier( $user->ID );
+    $tier_defs    = gcrev_get_service_tier_definitions();
+    ?>
+    <h3>サービスティア</h3>
+    <table class="form-table" role="presentation">
+        <tr>
+            <th><label for="gcrev_service_tier">プラン</label></th>
+            <td>
+                <select id="gcrev_service_tier" name="gcrev_service_tier">
+                    <?php foreach ( $tier_defs as $tier_id => $tier_info ): ?>
+                    <option value="<?php echo esc_attr( $tier_id ); ?>"
+                            <?php selected( $current_tier, $tier_id ); ?>>
+                        <?php echo esc_html( $tier_info['name'] ); ?>
+                        (¥<?php echo esc_html( number_format( $tier_info['monthly'] ) ); ?>/月~)
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="description">
+                    ベーシック: AIがデータを見てレポート作成（総評・スコア・KPI）<br>
+                    AIサポート: 上記＋改善アドバイス・AIチャット・ネクストアクション
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <th>現在のティア</th>
+            <td>
+                <?php
+                $badge_styles = [
+                    'basic'      => [ 'color' => '#666',    'bg' => '#f0f0f0',               'label' => 'ベーシック' ],
+                    'ai_support' => [ 'color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)',   'label' => 'AIサポート' ],
+                ];
+                $bs = $badge_styles[ $current_tier ] ?? $badge_styles['basic'];
+                ?>
+                <span style="display:inline-block; padding:4px 12px; border-radius:12px; font-size:13px; font-weight:600; color:<?php echo esc_attr( $bs['color'] ); ?>; background:<?php echo esc_attr( $bs['bg'] ); ?>;">
+                    <?php echo esc_html( $bs['label'] ); ?>
+                </span>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+
+// Save handler
+add_action( 'edit_user_profile_update', 'gcrev_save_service_tier_field' );
+add_action( 'personal_options_update',  'gcrev_save_service_tier_field' );
+
+function gcrev_save_service_tier_field( int $user_id ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    if ( user_can( $user_id, 'manage_options' ) ) {
+        return;
+    }
+
+    $tier = isset( $_POST['gcrev_service_tier'] )
+        ? sanitize_text_field( wp_unslash( $_POST['gcrev_service_tier'] ) )
+        : 'basic';
+    if ( ! in_array( $tier, gcrev_get_valid_service_tiers(), true ) ) {
+        $tier = 'basic';
+    }
+    update_user_meta( $user_id, 'gcrev_service_tier', $tier );
 }
 
 // --------------------------------------------------

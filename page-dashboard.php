@@ -11,6 +11,10 @@ if (!is_user_logged_in()) {
 $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
 
+// サービスティア判定
+$can_ai         = mimamori_can( 'ai_chat', $user_id );
+$can_highlights = mimamori_can( 'dashboard_highlights', $user_id );
+
 // ページタイトル設定
 set_query_var('gcrev_page_title', '全体のようす');
 set_query_var('gcrev_page_subtitle', 'このホームページが、今どんな状態かをひと目で確認できます。');
@@ -871,10 +875,12 @@ if ($infographic) {
           <span class="info-monthly-pin">📌</span>
           <span>結論サマリー</span>
         </div>
+        <?php if ($can_ai): ?>
         <button type="button" class="ask-ai-btn" data-ai-ask
           data-ai-instruction="今月の月次レポート結果を見て、いちばん重要な気づきと次にやることを3つ教えて">
           <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
         </button>
+        <?php endif; ?>
       </div>
 
       <div class="info-monthly-summary">
@@ -886,6 +892,7 @@ if ($infographic) {
       </div>
 
 
+<?php if ($can_highlights): ?>
 <div class="info-monthly-highlights">
 <?php
 $next_action = !empty($infographic['action'])
@@ -961,6 +968,16 @@ foreach ($highlight_items as $highlight):
     </div>
 <?php endforeach; ?>
 </div>
+<?php else: ?>
+<!-- ベーシックプラン: ロック表示 -->
+<div class="plan-locked-section">
+    <div class="plan-locked-overlay">
+        <div class="plan-locked-icon">&#x1F512;</div>
+        <p class="plan-locked-message">AIサポートプランで、改善ポイントや<br>次にやるべきことのアドバイスが見られます</p>
+        <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
+    </div>
+</div>
+<?php endif; ?>
 
     </div>
 

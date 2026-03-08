@@ -12,6 +12,13 @@ if (!is_user_logged_in()) {
 $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
 
+// サービスティア判定
+$can_ai              = mimamori_can( 'ai_chat', $user_id );
+$can_good_points     = mimamori_can( 'report_good_points', $user_id );
+$can_improvements    = mimamori_can( 'report_improvements', $user_id );
+$can_consideration   = mimamori_can( 'report_consideration', $user_id );
+$can_next_actions    = mimamori_can( 'report_next_actions', $user_id );
+
 // 出力モード判定（初心者向けモードかどうか）
 $report_output_mode = get_user_meta($user_id, 'report_output_mode', true) ?: 'normal';
 $is_easy_mode = ($report_output_mode === 'easy');
@@ -714,10 +721,12 @@ get_header();
         <!-- 📋 総評 -->
         <div class="report-section" data-ai-section="report_summary">
             <h2 class="section-title">📋 <?php echo esc_html($year . '年' . $month . '月'); ?>の総評
+              <?php if ($can_ai): ?>
               <button type="button" class="ask-ai-btn" data-ai-ask
                 data-ai-instruction="今月の総評を見て、最も重要な気づきと次にやることを教えて">
                 <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
               </button>
+              <?php endif; ?>
             </h2>
             <div class="section-content">
                 <?php if (!empty($monthly_report['summary'])): ?>
@@ -732,12 +741,15 @@ get_header();
         </div>
 
         <!-- ✅ 良かった点（成果） -->
+        <?php if ($can_good_points): ?>
         <div class="report-section" data-ai-section="report_good">
             <h2 class="section-title">✅ 良かった点（成果）
+              <?php if ($can_ai): ?>
               <button type="button" class="ask-ai-btn" data-ai-ask
                 data-ai-instruction="この「良かった点（成果）」を踏まえて、次に伸ばすべきポイントは？">
                 <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
               </button>
+              <?php endif; ?>
             </h2>
             <div class="section-content<?php echo $is_easy_mode ? '' : ' list-box'; ?>">
                 <?php if (!empty($monthly_report['good_points']) && is_array($monthly_report['good_points'])): ?>
@@ -775,14 +787,27 @@ get_header();
                 <?php endif; ?>
             </div>
         </div>
+        <?php else: ?>
+        <div class="report-section plan-locked-section" data-ai-section="report_good">
+            <h2 class="section-title">✅ 良かった点（成果）</h2>
+            <div class="plan-locked-overlay">
+                <div class="plan-locked-icon">&#x1F512;</div>
+                <p class="plan-locked-message">AIサポートプランで詳しい分析が見られます</p>
+                <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- ⚠️ 改善が必要な点（課題） -->
+        <?php if ($can_improvements): ?>
         <div class="report-section" data-ai-section="report_issue">
             <h2 class="section-title">⚠️ 改善が必要な点（課題）
+              <?php if ($can_ai): ?>
               <button type="button" class="ask-ai-btn" data-ai-ask
                 data-ai-instruction="この「改善が必要な点（課題）」の原因と、最短で効く改善を3つ提案して">
                 <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
               </button>
+              <?php endif; ?>
             </h2>
             <div class="section-content<?php echo $is_easy_mode ? '' : ' list-box'; ?>">
                 <?php if (!empty($monthly_report['improvement_points']) && is_array($monthly_report['improvement_points'])): ?>
@@ -820,8 +845,19 @@ get_header();
                 <?php endif; ?>
             </div>
         </div>
+        <?php else: ?>
+        <div class="report-section plan-locked-section" data-ai-section="report_issue">
+            <h2 class="section-title">⚠️ 改善が必要な点（課題）</h2>
+            <div class="plan-locked-overlay">
+                <div class="plan-locked-icon">&#x1F512;</div>
+                <p class="plan-locked-message">AIサポートプランで課題と対策が見られます</p>
+                <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- 💡 考察とインサイト -->
+        <?php if ($can_consideration): ?>
         <div class="report-section">
             <h2 class="section-title">💡 考察とインサイト</h2>
             <div class="section-content">
@@ -832,8 +868,19 @@ get_header();
                 <?php endif; ?>
             </div>
         </div>
+        <?php else: ?>
+        <div class="report-section plan-locked-section">
+            <h2 class="section-title">💡 考察とインサイト</h2>
+            <div class="plan-locked-overlay">
+                <div class="plan-locked-icon">&#x1F512;</div>
+                <p class="plan-locked-message">AIサポートプランで詳しい考察が見られます</p>
+                <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- 🎯 ネクストアクション（優先度順） -->
+        <?php if ($can_next_actions): ?>
         <div class="report-section">
             <h2 class="section-title">🎯 ネクストアクション（優先度順）</h2>
             <?php if (!empty($monthly_report['next_actions']) && is_array($monthly_report['next_actions'])): ?>
@@ -895,6 +942,16 @@ get_header();
             </div>
             <?php endif; ?>
         </div>
+        <?php else: ?>
+        <div class="report-section plan-locked-section">
+            <h2 class="section-title">🎯 ネクストアクション（優先度順）</h2>
+            <div class="plan-locked-overlay">
+                <div class="plan-locked-icon">&#x1F512;</div>
+                <p class="plan-locked-message">AIサポートプランで具体的なアクションプランが見られます</p>
+                <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
+            </div>
+        </div>
+        <?php endif; ?>
 
     </div><!-- .report-content -->
 

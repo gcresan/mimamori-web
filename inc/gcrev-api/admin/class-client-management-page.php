@@ -203,6 +203,7 @@ class Gcrev_Client_Management_Page {
                     <th>ユーザー</th>
                     <th>メール</th>
                     <th>サイトURL</th>
+                    <th>ティア</th>
                     <th>状態</th>
                     <th style="text-align: center;">キャッシュ</th>
                     <th style="text-align: center;">レポート</th>
@@ -233,6 +234,18 @@ class Gcrev_Client_Management_Page {
                             </a>
                         <?php else : ?>
                             <span style="color: #999;">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php
+                        $tier = function_exists( 'gcrev_get_service_tier' ) ? gcrev_get_service_tier( $uid ) : 'basic';
+                        $tier_defs = function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : [];
+                        $tier_name = $tier_defs[ $tier ]['name'] ?? $tier;
+                        if ( $tier === 'ai_support' ) :
+                        ?>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#2563EB; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.2); border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
+                        <?php else : ?>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#6B7280; background:#f5f5f5; border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
                         <?php endif; ?>
                     </td>
                     <td>

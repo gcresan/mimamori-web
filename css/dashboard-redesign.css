@@ -4331,6 +4331,52 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   }
 }
 
+/* ========== Plan Locked Sections ========== */
+.plan-locked-section {
+  position: relative;
+}
+.plan-locked-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #f0f1f3 100%);
+  border: 1px dashed var(--mw-border-medium, #D1D5DB);
+  border-radius: var(--mw-radius-sm, 8px);
+  text-align: center;
+  min-height: 120px;
+}
+.plan-locked-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+.plan-locked-message {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mw-text-secondary, #6B7280);
+  line-height: 1.7;
+  margin: 0 0 16px;
+}
+.plan-locked-link {
+  display: inline-block;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--mw-accent, #3B82F6);
+  border-radius: 20px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.2s;
+}
+.plan-locked-link:hover {
+  background: var(--mw-accent-hover, #2563EB);
+  transform: translateY(-1px);
+  color: #fff;
+  text-decoration: none;
+}
+
 /* ========== Print ========== */
 @media print {
   .page-header .action-btns { display: none; }
@@ -4339,4 +4385,5 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   .drilldown-popover,
   .drilldown-modal-overlay,
   .score-breakdown-overlay { display: none !important; }
+  .plan-locked-overlay { display: none !important; }
 }
