@@ -156,12 +156,13 @@
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 10px 20px;
+        padding: 11px 20px;
         color: $text-secondary;
         text-decoration: none;
         font-size: 14px;
-        transition: all 0.2s ease;
+        transition: all 0.25s ease;
         position: relative;
+        letter-spacing: 0.02em;
     }
 
     .nav-link:hover {
@@ -208,13 +209,13 @@
 /* かんたん解説（リテラシー低め向け） */
 .help-lead {
     margin: 12px 0 20px;
-    padding: 12px 14px;
+    padding: 14px 16px;
     background: $bg-info;
     border: 1px solid $border-color;
-    border-radius: 10px;
+    border-radius: $border-radius;
     color: $text-secondary;
     font-size: 16px;
-    line-height: 1.6;
+    line-height: 1.75;
 }
 .help-lead strong { color: $text-primary; }
 
@@ -398,15 +399,15 @@
 }
 
 .period-btn {
-    padding: 8px 20px;
+    padding: 9px 22px;
     border: none;
     background: transparent;
-    border-radius: 6px;
+    border-radius: $border-radius-md;
     font-size: 14px;
     font-weight: 500;
     color: $text-secondary;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.25s ease;
 }
 
 .period-btn:hover {

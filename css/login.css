@@ -1,5 +1,5 @@
 .login {
-  font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  font-family: 'Noto Sans JP', 'Zen Kaku Gothic New', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
   background: #F2F1EC;
   color: #2B2B2B;
   line-height: 1.6;
@@ -20,7 +20,7 @@
   margin: 60px auto;
   padding: 40px;
   background: #FAF9F6;
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: 0 2px 8px rgba(43, 43, 43, 0.06);
 }
 .login .logo {
@@ -67,7 +67,7 @@
   width: 100% !important;
   padding: 12px;
   border: 1px solid #E5E3DC;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 14px;
   display: block;
 }
@@ -96,7 +96,7 @@
   background: #2F3A4A;
   color: #FAF9F6;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -135,7 +135,7 @@
   margin-top: 30px;
   padding: 15px;
   background: #EEEDEA;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 12px;
   color: #8C8A85;
   text-align: center;

@@ -188,15 +188,15 @@
 }
 .dashboard .kpi-card {
   background: #FAF9F6;
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: 14px;
+  padding: 26px;
   box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
   transition: all 0.3s ease;
   border: 1px solid #E5E3DC;
 }
 .dashboard .kpi-card:hover {
   box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
 }
 .dashboard .kpi-card-header {
   display: flex;
@@ -256,9 +256,9 @@
 }
 .dashboard .section {
   background: #FAF9F6;
-  border-radius: 12px;
-  padding: 28px;
-  margin-bottom: 24px;
+  border-radius: 14px;
+  padding: 30px;
+  margin-bottom: 28px;
   box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
   border: 1px solid #E5E3DC;
 }
@@ -350,10 +350,17 @@
   }
 }
 @media (max-width: 768px) {
-  /* トップバー / パンくず → common.css のモバイルスタイルを継承 */
+  .dashboard .topbar {
+    padding: 12px 16px;
+  }
+  .dashboard .page-title {
+    font-size: 18px;
+  }
   .dashboard .content-area {
-    padding: 16px 12px;
-    overflow-x: hidden;
+    padding: 16px;
+  }
+  .dashboard .breadcrumb {
+    padding: 12px 16px;
   }
   .dashboard .user-menu span {
     display: none;
@@ -371,13 +378,9 @@
   }
   .dashboard .period-selector {
     width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
   .dashboard .period-btn {
     flex: 1;
-    font-size: 12px;
-    padding: 6px 10px;
   }
 }
 .dashboard .content-area .period-info-bar {
@@ -476,13 +479,13 @@
 .dashboard .content-area .kpi-card {
   background: #FAF9F6;
   border: 1px solid #E5E3DC;
-  border-radius: 12px;
-  padding: 20px;
-  transition: all 0.2s;
+  border-radius: 14px;
+  padding: 22px;
+  transition: all 0.25s ease;
 }
 .dashboard .content-area .kpi-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
 }
 .dashboard .content-area .kpi-card-header {
   display: flex;
@@ -530,9 +533,9 @@
 .dashboard .content-area .monthly-section {
   background: #FAF9F6;
   border: 1px solid #E5E3DC;
-  border-radius: 12px;
-  padding: 28px;
-  margin-bottom: 24px;
+  border-radius: 14px;
+  padding: 30px;
+  margin-bottom: 28px;
 }
 .dashboard .content-area .monthly-section-title {
   font-size: 20px;
@@ -651,10 +654,10 @@
 .dashboard .content-area .btn {
   display: inline-block;
   padding: 12px 32px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 600;
   text-decoration: none;
-  transition: all 0.2s;
+  transition: all 0.25s ease;
   border: none;
   cursor: pointer;
 }
@@ -703,7 +706,7 @@
   margin: 80px auto;
   padding: 40px;
   background: #FAF9F6;
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: 0 2px 8px rgba(43, 43, 43, 0.06);
 }
 .register .logo {
@@ -733,7 +736,7 @@
   width: 100%;
   padding: 12px;
   border: 1px solid #E5E3DC;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 14px;
 }
 .register input[type="email"]:focus,
@@ -747,7 +750,7 @@
   background: #2F3A4A;
   color: #FAF9F6;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -772,7 +775,7 @@
   margin-top: 30px;
   padding: 15px;
   background: #EEEDEA;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 12px;
   color: #8C8A85;
   text-align: center;
@@ -785,7 +788,7 @@
 }
 .account .card {
   background: #FAF9F6;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 30px;
   box-shadow: 0 2px 8px rgba(43, 43, 43, 0.06);
   margin-bottom: 30px;
@@ -811,7 +814,7 @@
   width: 100%;
   padding: 12px;
   border: 1px solid #E5E3DC;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 14px;
 }
 .account .form-group input:disabled {
@@ -827,7 +830,7 @@
 .account .info-display {
   background: #F5F4F0;
   padding: 15px;
-  border-radius: 4px;
+  border-radius: 6px;
   margin-bottom: 20px;
 }
 .account .info-display strong {
@@ -844,7 +847,7 @@
   background: #2F3A4A;
   color: #FAF9F6;
   text-decoration: none;
-  border-radius: 4px;
+  border-radius: 6px;
   transition: background 0.3s;
   font-size: 14px;
   border: none;
@@ -911,7 +914,7 @@
   align-items: center;
   padding: 15px;
   background: #F5F4F0;
-  border-radius: 4px;
+  border-radius: 6px;
   margin-bottom: 15px;
 }
 .account .notification-label {
@@ -929,7 +932,7 @@
   padding: 15px;
   background: #EDF3EF;
   border-left: 4px solid #5B8A72;
-  border-radius: 4px;
+  border-radius: 6px;
   margin-bottom: 20px;
   color: #3A5C49;
 }

@@ -187,8 +187,8 @@
 
     .kpi-card {
         background: $bg-card;
-        border-radius: 12px;
-        padding: 24px;
+        border-radius: 14px;
+        padding: 26px;
         box-shadow: $shadow-sm;
         transition: all 0.3s ease;
         border: 1px solid $border-color;
@@ -196,7 +196,7 @@
 
     .kpi-card:hover {
         box-shadow: $shadow-lg;
-        transform: translateY(-2px);
+        transform: translateY(-1px);
     }
 
     .kpi-card-header {
@@ -266,9 +266,9 @@
     /* セクション */
     .section {
         background: $bg-card;
-        border-radius: 12px;
-        padding: 28px;
-        margin-bottom: 24px;
+        border-radius: 14px;
+        padding: 30px;
+        margin-bottom: 28px;
         box-shadow: $shadow-sm;
         border: 1px solid $border-color;
     }
@@ -549,14 +549,14 @@
     .content-area .kpi-card {
         background: $bg-card;
         border: 1px solid $border-color;
-        border-radius: 12px;
-        padding: 20px;
-        transition: all 0.2s;
+        border-radius: 14px;
+        padding: 22px;
+        transition: all 0.25s ease;
     }
 
     .content-area .kpi-card:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        transform: translateY(-1px);
     }
 
     .content-area .kpi-card-header {
@@ -616,9 +616,9 @@
     .content-area .monthly-section {
         background: $bg-card;
         border: 1px solid $border-color;
-        border-radius: 12px;
-        padding: 28px;
-        margin-bottom: 24px;
+        border-radius: 14px;
+        padding: 30px;
+        margin-bottom: 28px;
     }
 
     .content-area .monthly-section-title {
@@ -771,10 +771,10 @@
     .content-area .btn {
         display: inline-block;
         padding: 12px 32px;
-        border-radius: 8px;
+        border-radius: $border-radius;
         font-weight: 600;
         text-decoration: none;
-        transition: all 0.2s;
+        transition: all 0.25s ease;
         border: none;
         cursor: pointer;
     }

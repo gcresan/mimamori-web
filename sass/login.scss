@@ -19,12 +19,12 @@ $border-color: #E5E3DC;
 
 $shadow-md: 0 2px 8px rgba(43, 43, 43, 0.06);
 
-$border-radius: 8px;
-$border-radius-sm: 4px;
+$border-radius: 10px;
+$border-radius-sm: 6px;
 
 .login {
     // body.login に直接適用
-    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+    font-family: 'Noto Sans JP', 'Zen Kaku Gothic New', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif;
     background: $bg-light;
     color: $text-primary;
     line-height: 1.6;
