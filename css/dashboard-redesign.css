@@ -365,6 +365,7 @@ h3 { font-size: 20px; font-weight: 700; }
 
 .topbar .page-title {
   font-size: 24px;
+  font-weight: 800;
   color: var(--mw-text-heading);
 }
 

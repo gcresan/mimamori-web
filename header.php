@@ -420,11 +420,6 @@
    <main class="main-content">
    <!-- トップバー -->
    <div class="topbar">
-      <div class="topbar-logo">
-         <a href="<?php echo esc_url( home_url() ); ?>">
-            <img src="<?php echo esc_url( get_template_directory_uri() . '/images/common/logo.png' ); ?>" alt="<?php echo esc_attr( 'みまもりウェブ' ); ?>">
-         </a>
-      </div>
       <div class="topbar-left">
          <button class="menu-toggle" id="menuToggle">☰</button>
          <h1 class="page-title"><?php
