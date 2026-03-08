@@ -237,8 +237,8 @@
 }
 .topbar .page-title {
   font-size: 24px;
-  font-weight: 700;
-  color: #2B2B2B;
+  font-weight: 900;
+  color: #000;
 }
 .topbar .topbar-right {
   display: flex;
