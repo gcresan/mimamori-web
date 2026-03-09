@@ -1141,7 +1141,7 @@ foreach ($highlight_items as $highlight):
             <summary class="highlight-detail-toggle"
                      aria-expanded="false"
                      aria-controls="<?php echo $detail_id; ?>-body">
-                <span>ℹ️ 詳しく見る</span>
+                <span>詳しく見る</span>
                 <span class="highlight-detail-arrow" aria-hidden="true">▾</span>
             </summary>
             <div class="highlight-detail-body" id="<?php echo $detail_id; ?>-body" role="region">
