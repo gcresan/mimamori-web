@@ -5,6 +5,32 @@
 // page-service.php — 伴走サポートプラン LP
 // ===========================
 
+// ===========================
+// layout.scss の旧 .service スタイルを上書き
+// main の max-width / margin が sidebar レイアウトを壊すのをリセット
+// ===========================
+.service {
+  main.main-content {
+    max-width: none;
+    margin: 0;
+    margin-left: 260px;
+    width: calc(100% - 260px);
+    padding: 0;
+  }
+
+  // layout.scss の section { padding: 60px 20px } を上書き
+  section {
+    padding: 0;
+  }
+}
+
+@media screen and (max-width: 1024px) {
+  .service main.main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
 .service .content-area {
 
   // ===========================
