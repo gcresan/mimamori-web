@@ -8697,6 +8697,50 @@ PROMPT;
         ];
     }
 
+    /**
+     * クライアント設定からドメインを解決する（旧キー含むフォールバック）
+     *
+     * 優先順:
+     *  1. gcrev_client_site_url（新クライアント設定）
+     *  2. report_site_url（旧レポート設定）
+     *  3. weisite_url（レガシー WP-Members）
+     *
+     * URL からドメイン部分のみを抽出して返す。
+     *
+     * @param int $user_id ユーザーID
+     * @return string ドメイン文字列（取得できない場合は空文字）
+     */
+    private function rank_tracker_resolve_domain( int $user_id ): string {
+        $url = get_user_meta( $user_id, 'gcrev_client_site_url', true );
+
+        if ( empty( $url ) ) {
+            $url = get_user_meta( $user_id, 'report_site_url', true );
+        }
+        if ( empty( $url ) ) {
+            $url = get_user_meta( $user_id, 'weisite_url', true );
+        }
+        if ( empty( $url ) ) {
+            return '';
+        }
+
+        $url = trim( $url );
+
+        // URL からドメイン部分を抽出（https://example.com/path → example.com）
+        $parsed = wp_parse_url( $url );
+        if ( ! empty( $parsed['host'] ) ) {
+            return strtolower( $parsed['host'] );
+        }
+
+        // スキームがない場合（example.com/path のようなケース）
+        $parsed = wp_parse_url( 'https://' . $url );
+        if ( ! empty( $parsed['host'] ) ) {
+            return strtolower( $parsed['host'] );
+        }
+
+        // パースできない場合はそのまま返す
+        return strtolower( $url );
+    }
+
     // =========================================================
     // 順位トラッキング — ユーザー向けキーワード管理 REST
     // =========================================================
@@ -8753,7 +8797,7 @@ PROMPT;
         unset( $row );
 
         $count = count( $rows );
-        $default_domain = get_user_meta( $user_id, 'gcrev_client_site_url', true );
+        $default_domain = $this->rank_tracker_resolve_domain( $user_id );
 
         return new \WP_REST_Response([
             'success' => true,
@@ -8762,7 +8806,7 @@ PROMPT;
                 'count'          => $count,
                 'limit'          => self::RANK_KEYWORD_LIMIT,
                 'can_add'        => $count < self::RANK_KEYWORD_LIMIT,
-                'default_domain' => $default_domain ?: '',
+                'default_domain' => $default_domain,
             ],
         ]);
     }
@@ -8789,9 +8833,9 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードを入力してください。' ], 400 );
         }
 
-        // target_domain: 未指定時は user_meta から自動取得
+        // target_domain: 未指定時はクライアント設定から自動取得（旧キー含むフォールバック）
         if ( $target_domain === '' ) {
-            $target_domain = get_user_meta( $user_id, 'gcrev_client_site_url', true );
+            $target_domain = $this->rank_tracker_resolve_domain( $user_id );
         }
         if ( $target_domain === '' ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => '対象ドメインが設定されていません。管理者にお問い合わせください。' ], 400 );
