@@ -589,6 +589,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_fetch_my_keyword_rank' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/monthly-trend', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_rank_tracker_monthly_trend' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
     }
 
     // =========================================================
@@ -8331,6 +8336,87 @@ PROMPT;
     }
 
     /**
+     * GET /rank-tracker/monthly-trend
+     * 半年間（6ヶ月）の月別順位推移を返す。各月の最終週のデータを代表値とする。
+     */
+    public function rest_get_rank_tracker_monthly_trend( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $user_id    = get_current_user_id();
+        $keyword_id = absint( $request->get_param( 'keyword_id' ) ?? 0 );
+
+        if ( $keyword_id <= 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'keyword_id が必要です。' ], 400 );
+        }
+
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+
+        // キーワードが本人のものか確認
+        $kw = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, keyword FROM {$kw_table} WHERE id = %d AND user_id = %d",
+            $keyword_id, $user_id
+        ), ARRAY_A );
+
+        if ( ! $kw ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードが見つかりません。' ], 404 );
+        }
+
+        // 6ヶ月前の月初を起点とする
+        $tz    = wp_timezone();
+        $since = ( new \DateTimeImmutable( 'first day of -5 months', $tz ) )->format( 'Y-m-01' );
+
+        // 各月×デバイスの最終データを取得（自己結合）
+        $results = $wpdb->get_results( $wpdb->prepare(
+            "SELECT r.device,
+                    DATE_FORMAT(r.fetched_at, '%%Y-%%m') AS ym,
+                    r.rank_group,
+                    r.is_ranked
+             FROM {$res_table} r
+             INNER JOIN (
+                 SELECT device,
+                        DATE_FORMAT(fetched_at, '%%Y-%%m') AS ym,
+                        MAX(fetched_at) AS max_fetched
+                 FROM {$res_table}
+                 WHERE keyword_id = %d AND fetched_at >= %s
+                 GROUP BY device, DATE_FORMAT(fetched_at, '%%Y-%%m')
+             ) latest ON r.device = latest.device
+                      AND DATE_FORMAT(r.fetched_at, '%%Y-%%m') = latest.ym
+                      AND r.fetched_at = latest.max_fetched
+             WHERE r.keyword_id = %d AND r.fetched_at >= %s
+             ORDER BY r.fetched_at ASC",
+            $keyword_id, $since, $keyword_id, $since
+        ), ARRAY_A );
+
+        // 6ヶ月分のラベル配列を生成
+        $months = [];
+        $dt     = new \DateTimeImmutable( $since, $tz );
+        for ( $i = 0; $i < 6; $i++ ) {
+            $months[] = $dt->modify( "+{$i} months" )->format( 'Y-m' );
+        }
+
+        // デバイス × 月でグルーピング
+        $trend = [ 'desktop' => [], 'mobile' => [] ];
+        foreach ( $results as $r ) {
+            $device = $r['device'];
+            $ym     = $r['ym'];
+            $trend[ $device ][ $ym ] = [
+                'rank'      => $r['is_ranked'] ? (int) $r['rank_group'] : null,
+                'is_ranked' => (bool) $r['is_ranked'],
+            ];
+        }
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'data'    => [
+                'keyword' => $kw['keyword'],
+                'months'  => $months,
+                'trend'   => $trend,
+            ],
+        ]);
+    }
+
+    /**
      * GET /rank-tracker/keywords（管理者用）
      */
     public function rest_get_rank_tracker_keywords( \WP_REST_Request $request ): \WP_REST_Response {
@@ -8939,7 +9025,51 @@ PROMPT;
 
         $new_id = (int) $wpdb->insert_id;
 
+        // 新規追加時: 検索ボリューム・SEO難易度を自動取得
+        if ( $new_id > 0 && $this->dataforseo && Gcrev_DataForSEO_Client::is_configured() ) {
+            $this->auto_fetch_keyword_metrics_single( $new_id, $keyword, $location_code, 'ja' );
+        }
+
         return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'id' => $new_id ] ] );
+    }
+
+    /**
+     * 単一キーワードの検索ボリューム・SEO難易度を自動取得
+     *
+     * @param int    $keyword_id    キーワードID
+     * @param string $keyword_text  キーワードテキスト
+     * @param int    $location_code ロケーションコード
+     * @param string $language_code 言語コード
+     */
+    private function auto_fetch_keyword_metrics_single( int $keyword_id, string $keyword_text, int $location_code, string $language_code ): void {
+        global $wpdb;
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+        $tz  = wp_timezone();
+        $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+
+        // 検索ボリューム取得
+        $vol_data = $this->dataforseo->fetch_search_volume( [ $keyword_text ], $location_code, $language_code );
+        if ( ! is_wp_error( $vol_data ) && isset( $vol_data[ $keyword_text ] ) ) {
+            $v = $vol_data[ $keyword_text ];
+            $wpdb->update( $kw_table, [
+                'search_volume'     => $v['search_volume'],
+                'competition'       => $v['competition'],
+                'cpc'               => $v['cpc'],
+                'volume_fetched_at' => $now,
+                'updated_at'        => $now,
+            ], [ 'id' => $keyword_id ] );
+        }
+
+        // SEO難易度取得
+        $diff_data = $this->dataforseo->fetch_keyword_difficulty( [ $keyword_text ], $location_code, $language_code );
+        if ( ! is_wp_error( $diff_data ) && isset( $diff_data[ $keyword_text ] ) ) {
+            $d = $diff_data[ $keyword_text ];
+            $wpdb->update( $kw_table, [
+                'keyword_difficulty'    => $d['keyword_difficulty'],
+                'difficulty_fetched_at' => $now,
+                'updated_at'            => $now,
+            ], [ 'id' => $keyword_id ] );
+        }
     }
 
     /**
