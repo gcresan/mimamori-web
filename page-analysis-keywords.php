@@ -95,11 +95,11 @@ get_template_part('template-parts/analysis-help');
                 <tr>
                     <th>順位</th>
                     <th>キーワード</th>
-                    <th>クリック数</th>
-                    <th>表示回数</th>
-                    <th>CTR（クリック率）</th>
-                    <th>平均掲載順位</th>
-                    <th>順位変動</th>
+                    <th class="sortable sort-desc" data-sort-key="_clicks" onclick="toggleSort('_clicks', this)">クリック数<span class="sort-icon"><span class="arrow-up">▲</span><span class="arrow-down">▼</span></span></th>
+                    <th class="sortable" data-sort-key="_impressions" onclick="toggleSort('_impressions', this)">表示回数<span class="sort-icon"><span class="arrow-up">▲</span><span class="arrow-down">▼</span></span></th>
+                    <th class="sortable" data-sort-key="_ctr" onclick="toggleSort('_ctr', this)">CTR（クリック率）<span class="sort-icon"><span class="arrow-up">▲</span><span class="arrow-down">▼</span></span></th>
+                    <th class="sortable" data-sort-key="_position" onclick="toggleSort('_position', this)">平均掲載順位<span class="sort-icon"><span class="arrow-up">▲</span><span class="arrow-down">▼</span></span></th>
+                    <th class="sortable" data-sort-key="positionChange" onclick="toggleSort('positionChange', this)">順位変動<span class="sort-icon"><span class="arrow-up">▲</span><span class="arrow-down">▼</span></span></th>
                 </tr>
             </thead>
             <tbody id="keywordTableBody">
@@ -123,6 +123,8 @@ let filteredKeywords = [];        // フィルタ/ソート後
 let currentPage = 1;              // ペジネーション現在ページ
 const perPage = 20;               // 1ページあたりの表示件数
 let currentPeriod = null;         // 期間セレクター連動ガード
+let sortKey = '_clicks';          // 現在のソートカラム
+let sortDir = 'desc';             // 'asc' | 'desc'
 
 // ===== period-selector モジュール連携（device と同一パターン） =====
 (function bindPeriodSelector() {
@@ -259,6 +261,9 @@ function applyFilter() {
         );
     }
 
+    // カラムソート
+    keywords = sortKeywords(keywords, sortKey, sortDir);
+
     filteredKeywords = keywords;
     currentPage = 1;
     renderTable();
@@ -267,7 +272,52 @@ function applyFilter() {
 
 function resetFilter() {
     document.getElementById('filterSearch').value = '';
+    sortKey = '_clicks';
+    sortDir = 'desc';
+    updateSortHeaders();
     applyFilter();
+}
+
+/**
+ * 配列を指定カラム・方向でソート
+ */
+function sortKeywords(arr, key, dir) {
+    return arr.sort(function(a, b) {
+        var valA = a[key];
+        var valB = b[key];
+        if (valA == null || isNaN(valA)) valA = -Infinity;
+        if (valB == null || isNaN(valB)) valB = -Infinity;
+        var cmp = (typeof valA === 'string')
+            ? valA.localeCompare(valB, 'ja')
+            : valA - valB;
+        return dir === 'asc' ? cmp : -cmp;
+    });
+}
+
+/**
+ * テーブルヘッダーをクリックしたときのソート切替
+ */
+function toggleSort(key, thEl) {
+    if (sortKey === key) {
+        sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+        sortKey = key;
+        sortDir = 'desc';
+    }
+    updateSortHeaders();
+    applyFilter();
+}
+
+/**
+ * <th> のアクティブ表示を更新
+ */
+function updateSortHeaders() {
+    document.querySelectorAll('#keywordTable thead th.sortable').forEach(function(th) {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sortKey === sortKey) {
+            th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+    });
 }
 
 // ===== テーブル描画（HTML準拠列構成） =====
