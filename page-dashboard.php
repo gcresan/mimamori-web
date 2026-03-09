@@ -241,6 +241,193 @@ get_header();
   .setup-guide-desc br { display: none; }
 }
 
+/* ============================================================
+   Dashboard Rank Tracker Widget (.drt-)
+   ============================================================ */
+.drt-section { margin-top: 40px; }
+.drt-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 12px;
+}
+.drt-header__title {
+    font-size: 18px; font-weight: 700; color: #1a1a1a;
+    display: flex; align-items: center; gap: 8px;
+}
+.drt-header__actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.drt-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: 1px solid #d0d5dd; border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    background: #fff; color: #344054; transition: all 0.15s; white-space: nowrap;
+    text-decoration: none;
+}
+.drt-btn:hover { background: #f9fafb; border-color: #98a2b3; }
+.drt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.drt-btn--primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+.drt-btn--primary:hover { background: #1d4ed8; }
+.drt-btn--primary:disabled { background: #93b4f5; border-color: #93b4f5; }
+.drt-btn__icon { font-size: 14px; }
+.drt-help { font-size: 13px; color: #6b7280; margin-bottom: 16px; line-height: 1.6; }
+/* Device toggle */
+.drt-device-toggle {
+    display: inline-flex; background: #f2f4f7; border-radius: 8px; padding: 3px; margin-bottom: 16px;
+}
+.drt-device-btn {
+    padding: 6px 18px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500;
+    cursor: pointer; background: transparent; color: #667085; transition: all 0.2s;
+}
+.drt-device-btn.active {
+    background: #fff; color: #1a1a1a; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+/* Summary cards */
+.drt-summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.drt-summary-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+    border-left: 4px solid #e5e7eb;
+}
+.drt-summary-card--gold  { border-left-color: #f59e0b; }
+.drt-summary-card--blue  { border-left-color: #3b82f6; }
+.drt-summary-card--green { border-left-color: #22c55e; }
+.drt-summary-card--red   { border-left-color: #ef4444; }
+.drt-summary-card__dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.drt-summary-card__dot--gold  { background: #f59e0b; }
+.drt-summary-card__dot--blue  { background: #3b82f6; }
+.drt-summary-card__dot--green { background: #22c55e; }
+.drt-summary-card__dot--red   { background: #ef4444; }
+.drt-summary-card__label { font-size: 12px; color: #6b7280; flex: 1; }
+.drt-summary-card__count { font-size: 18px; font-weight: 700; color: #1a1a1a; min-width: 28px; text-align: right; }
+.drt-summary-card__unit  { font-size: 11px; font-weight: 400; color: #9ca3af; }
+/* Table */
+.drt-table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+.drt-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.drt-table { width: 100%; border-collapse: collapse; }
+.drt-table th {
+    background: #f9fafb; font-size: 11px; font-weight: 600; color: #6b7280;
+    padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+}
+.drt-table td {
+    padding: 12px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #1a1a1a; vertical-align: middle;
+}
+.drt-table tr:last-child td { border-bottom: none; }
+.drt-table tr:hover td { background: #fafbfc; }
+.drt-table td:first-child { position: relative; padding-left: 16px; }
+.drt-rank-accent { position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; }
+.drt-rank-accent--gold  { background: #f59e0b; }
+.drt-rank-accent--blue  { background: #3b82f6; }
+.drt-rank-accent--green { background: #22c55e; }
+.drt-rank-accent--red   { background: #ef4444; }
+.drt-kw-name { font-weight: 600; font-size: 13px; color: #1a1a1a; margin-bottom: 2px; }
+.drt-kw-meta { display: flex; gap: 10px; flex-wrap: wrap; }
+.drt-kw-meta-item { font-size: 10px; color: #9ca3af; }
+.drt-kw-meta-item strong { color: #6b7280; font-weight: 600; }
+.drt-rank { font-weight: 700; font-size: 15px; color: #1a1a1a; }
+.drt-rank--out { font-size: 11px; font-weight: 600; color: #ef4444; }
+.drt-rank--na  { font-size: 11px; color: #d1d5db; }
+.drt-rank-unit { font-size: 10px; font-weight: 400; color: #9ca3af; }
+.drt-rank-change { font-size: 10px; font-weight: 600; margin-top: 1px; }
+.drt-rank-change--up   { color: #16a34a; }
+.drt-rank-change--down { color: #ef4444; }
+.drt-pc-diff {
+    display: inline-block; font-size: 9px; color: #f59e0b; background: #fffbeb;
+    border: 1px solid #fde68a; border-radius: 4px; padding: 1px 4px; margin-left: 3px; white-space: nowrap;
+}
+.drt-daily { font-size: 12px; font-weight: 500; text-align: center; min-width: 42px; white-space: nowrap; }
+.drt-daily--out { color: #ef4444; font-size: 10px; }
+.drt-daily--na  { color: #d1d5db; }
+.drt-action-link {
+    display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: #2563eb;
+    cursor: pointer; text-decoration: none; padding: 3px 0; border: none; background: none; white-space: nowrap;
+}
+.drt-action-link:hover { color: #1d4ed8; text-decoration: underline; }
+.drt-action-link__icon { font-size: 13px; }
+.drt-empty { text-align: center; padding: 40px 20px; color: #9ca3af; }
+.drt-empty__icon { font-size: 32px; margin-bottom: 8px; }
+.drt-empty__text { font-size: 14px; color: #6b7280; }
+.drt-loading { text-align: center; padding: 32px; color: #9ca3af; font-size: 13px; }
+.drt-footer { text-align: center; margin-top: 16px; }
+.drt-footer__link {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+    color: #2563eb; text-decoration: none; font-weight: 500;
+}
+.drt-footer__link:hover { text-decoration: underline; }
+/* SERP Modal */
+.drt-modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4); z-index: 10000;
+    display: none; justify-content: center; align-items: flex-start;
+    padding: 60px 20px; overflow-y: auto;
+}
+.drt-modal-overlay.active { display: flex; }
+.drt-modal {
+    background: #fff; border-radius: 14px; width: 100%; max-width: 720px;
+    max-height: calc(100vh - 120px); overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.drt-modal__header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 22px; border-bottom: 1px solid #e5e7eb;
+    position: sticky; top: 0; background: #fff; z-index: 1; border-radius: 14px 14px 0 0;
+}
+.drt-modal__title { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+.drt-modal__close {
+    width: 30px; height: 30px; border: none; background: #f3f4f6; border-radius: 8px;
+    cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; color: #6b7280;
+}
+.drt-modal__close:hover { background: #e5e7eb; }
+.drt-modal__body { padding: 0; }
+.drt-serp-table { width: 100%; border-collapse: collapse; }
+.drt-serp-table th {
+    font-size: 12px; font-weight: 600; color: #6b7280;
+    padding: 10px 16px; text-align: left; border-bottom: 1px solid #e5e7eb; background: #f9fafb;
+}
+.drt-serp-table td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 13px; vertical-align: top; }
+.drt-serp-table tr:last-child td { border-bottom: none; }
+.drt-serp-rank { font-weight: 700; font-size: 15px; color: #2563eb; text-align: center; min-width: 36px; }
+.drt-serp-title { font-weight: 600; color: #1a1a1a; margin-bottom: 2px; line-height: 1.4; }
+.drt-serp-url { font-size: 12px; color: #2563eb; word-break: break-all; }
+.drt-serp-desc {
+    font-size: 12px; color: #9ca3af; margin-top: 4px; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* Progress overlay */
+.drt-progress-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); z-index: 10002; display: none; justify-content: center; align-items: center;
+}
+.drt-progress-overlay.active { display: flex; }
+.drt-progress-box {
+    background: #fff; border-radius: 16px; padding: 28px 36px;
+    min-width: 300px; max-width: 440px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.drt-progress-title { font-size: 15px; font-weight: 700; color: #1a1a1a; margin-bottom: 14px; }
+.drt-progress-bar-wrap { width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+.drt-progress-bar {
+    height: 100%; background: linear-gradient(90deg, #2563eb, #60a5fa); border-radius: 4px;
+    width: 0%; transition: width 0.3s ease;
+}
+.drt-progress-bar--indeterminate { width: 30%; animation: drt-progress-slide 1.5s infinite ease-in-out; }
+@keyframes drt-progress-slide {
+    0%   { transform: translateX(-100%); }
+    50%  { transform: translateX(200%); }
+    100% { transform: translateX(-100%); }
+}
+.drt-progress-text { font-size: 13px; color: #6b7280; margin-bottom: 4px; }
+.drt-progress-sub  { font-size: 11px; color: #9ca3af; }
+/* Toast */
+.drt-toast {
+    position: fixed; bottom: 24px; right: 24px; background: #1a1a1a; color: #fff;
+    padding: 12px 18px; border-radius: 10px; font-size: 13px; z-index: 10001;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateY(12px);
+    transition: opacity 0.3s, transform 0.3s; max-width: 380px; line-height: 1.5;
+}
+.drt-toast.show { opacity: 1; transform: translateY(0); }
+.drt-toast--error { background: #ef4444; }
+/* Responsive */
+@media (max-width: 768px) {
+    .drt-header { flex-direction: column; align-items: flex-start; }
+    .drt-summary-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
 </style>
 
 <!-- Chart.js -->
@@ -1068,8 +1255,105 @@ foreach ($highlight_items as $highlight):
 </section>
 <?php endif; ?>
 
+<!-- ============================================================
+     計測キーワードランキング（ダッシュボード版）
+     ============================================================ -->
+<section class="drt-section" id="drtSection">
+    <div class="drt-header">
+        <div class="drt-header__title">
+            &#x1F4C8; 計測キーワードランキング
+        </div>
+        <div class="drt-header__actions">
+            <button class="drt-btn drt-btn--primary" id="drtFetchAllBtn">
+                <span class="drt-btn__icon">&#x1F504;</span>
+                最新の情報を見る
+            </button>
+        </div>
+    </div>
 
+    <div class="drt-help">
+        Google で検索した時に、あなたのホームページが<strong>何番目に表示されるか</strong>をチェックしています。
+        数字が小さいほど上位表示されています。「<strong>圏外</strong>」は100位以内に表示されなかったことを意味します。
+    </div>
 
+    <div class="drt-device-toggle" id="drtDeviceToggle">
+        <button class="drt-device-btn active" data-device="mobile">スマホ</button>
+        <button class="drt-device-btn" data-device="desktop">PC</button>
+    </div>
+
+    <div class="drt-summary-cards" id="drtSummaryCards">
+        <div class="drt-summary-card drt-summary-card--gold">
+            <span class="drt-summary-card__dot drt-summary-card__dot--gold"></span>
+            <span class="drt-summary-card__label">1位〜3位</span>
+            <span class="drt-summary-card__count" id="drtSummary13">-<span class="drt-summary-card__unit">件</span></span>
+        </div>
+        <div class="drt-summary-card drt-summary-card--blue">
+            <span class="drt-summary-card__dot drt-summary-card__dot--blue"></span>
+            <span class="drt-summary-card__label">4位〜10位</span>
+            <span class="drt-summary-card__count" id="drtSummary410">-<span class="drt-summary-card__unit">件</span></span>
+        </div>
+        <div class="drt-summary-card drt-summary-card--green">
+            <span class="drt-summary-card__dot drt-summary-card__dot--green"></span>
+            <span class="drt-summary-card__label">11位〜20位</span>
+            <span class="drt-summary-card__count" id="drtSummary1120">-<span class="drt-summary-card__unit">件</span></span>
+        </div>
+        <div class="drt-summary-card drt-summary-card--red">
+            <span class="drt-summary-card__dot drt-summary-card__dot--red"></span>
+            <span class="drt-summary-card__label">圏外(20位以下)</span>
+            <span class="drt-summary-card__count" id="drtSummaryOut">-<span class="drt-summary-card__unit">件</span></span>
+        </div>
+    </div>
+
+    <div id="drtTableWrap">
+        <div class="drt-loading" id="drtLoading">データを取得中...</div>
+        <div class="drt-empty" id="drtEmptyState" style="display:none;">
+            <div class="drt-empty__icon">&#x1F50D;</div>
+            <div class="drt-empty__text">計測キーワードが登録されていません</div>
+            <div style="color:#9ca3af; font-size:12px; margin-top:6px;">
+                <a href="<?php echo esc_url(home_url('/mypage/rank-tracker/')); ?>" style="color:#2563eb;">検索順位チェック</a>ページからキーワードを追加できます。
+            </div>
+        </div>
+        <div class="drt-table-wrap" id="drtTableContainer" style="display:none;">
+            <div class="drt-table-scroll">
+                <table class="drt-table" id="drtTable">
+                    <thead id="drtTableHead"></thead>
+                    <tbody id="drtTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="drt-footer" id="drtFooter" style="display:none;">
+        <a href="<?php echo esc_url(home_url('/mypage/rank-tracker/')); ?>" class="drt-footer__link">
+            検索順位チェックの詳細ページへ &#x2192;
+        </a>
+    </div>
+</section>
+
+<!-- SERP Top modal (dashboard) -->
+<div class="drt-modal-overlay" id="drtSerpModal">
+    <div class="drt-modal">
+        <div class="drt-modal__header">
+            <div class="drt-modal__title" id="drtSerpModalTitle">上位ランキング</div>
+            <button class="drt-modal__close" id="drtSerpModalClose">&times;</button>
+        </div>
+        <div class="drt-modal__body" id="drtSerpModalBody">
+            <div class="drt-loading">読み込み中...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress overlay (dashboard fetch) -->
+<div class="drt-progress-overlay" id="drtProgressOverlay">
+    <div class="drt-progress-box">
+        <div class="drt-progress-title" id="drtProgressTitle">最新の順位を取得中...</div>
+        <div class="drt-progress-bar-wrap">
+            <div class="drt-progress-bar drt-progress-bar--indeterminate" id="drtProgressBar"></div>
+        </div>
+        <div class="drt-progress-text" id="drtProgressText">キーワードの順位を取得しています...</div>
+        <div class="drt-progress-sub" id="drtProgressSub">しばらくお待ちください</div>
+    </div>
+</div>
 
 </div><!-- .content-area -->
 
@@ -1749,6 +2033,402 @@ foreach ($highlight_items as $highlight):
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && overlay.style.display === 'flex') closeModal();
     });
+})();
+</script>
+
+<!-- ダッシュボード版 キーワードランキング JS -->
+<script>
+(function(){
+    'use strict';
+
+    var restBase = '<?php echo esc_url(rest_url('gcrev/v1/')); ?>';
+    var wpNonce  = '<?php echo esc_js(wp_create_nonce('wp_rest')); ?>';
+    var drtDevice = 'mobile';
+    var drtRankData = [];
+    var drtDateLabels = [];
+    var drtDateKeys = [];
+    var drtSummary = {};
+
+    // Init
+    document.addEventListener('DOMContentLoaded', function() {
+        fetchDrtRankings();
+    });
+
+    // =========================================================
+    // Device toggle
+    // =========================================================
+    document.getElementById('drtDeviceToggle').addEventListener('click', function(e) {
+        var btn = e.target.closest('.drt-device-btn');
+        if (!btn) return;
+        drtDevice = btn.dataset.device;
+        document.querySelectorAll('#drtDeviceToggle .drt-device-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.device === drtDevice);
+        });
+        renderDrtSummary();
+        renderDrtTable();
+    });
+
+    // =========================================================
+    // Fetch All (refresh)
+    // =========================================================
+    document.getElementById('drtFetchAllBtn').addEventListener('click', function() {
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="drt-btn__icon">&#x23F3;</span> 取得中...';
+        drtShowProgress(true);
+
+        fetch(restBase + 'rank-tracker/fetch-all', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="drt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+            if (json.success && json.data) {
+                drtShowProgressComplete(json.data.fetched || 0);
+                setTimeout(function() {
+                    drtShowProgress(false);
+                    drtShowToast((json.data.fetched || 0) + '件のキーワードの最新順位を取得しました。');
+                    fetchDrtRankings();
+                }, 1200);
+            } else {
+                drtShowProgress(false);
+                drtShowToast(json.message || '取得に失敗しました。', 'error');
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="drt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+            drtShowProgress(false);
+            drtShowToast('通信エラーが発生しました。', 'error');
+        });
+    });
+
+    // =========================================================
+    // Fetch rankings
+    // =========================================================
+    function fetchDrtRankings() {
+        document.getElementById('drtLoading').style.display = 'block';
+        document.getElementById('drtEmptyState').style.display = 'none';
+        document.getElementById('drtTableContainer').style.display = 'none';
+        document.getElementById('drtFooter').style.display = 'none';
+
+        fetch(restBase + 'rank-tracker/rankings', {
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+            document.getElementById('drtLoading').style.display = 'none';
+            if (json.success && json.data) {
+                drtRankData = json.data.keywords || [];
+                drtDateLabels = json.data.dates || [];
+                drtDateKeys = json.data.date_keys || [];
+                drtSummary = json.data.summary || {};
+                renderDrtSummary();
+                renderDrtTable();
+            }
+        })
+        .catch(function(err) {
+            document.getElementById('drtLoading').style.display = 'none';
+            console.error('[DRT]', err);
+        });
+    }
+
+    // =========================================================
+    // Summary — render
+    // =========================================================
+    function renderDrtSummary() {
+        var s = drtSummary[drtDevice] || { rank_1_3: 0, rank_4_10: 0, rank_11_20: 0, rank_out: 0 };
+        drtSetCount('drtSummary13', s.rank_1_3);
+        drtSetCount('drtSummary410', s.rank_4_10);
+        drtSetCount('drtSummary1120', s.rank_11_20);
+        drtSetCount('drtSummaryOut', s.rank_out);
+    }
+
+    function drtSetCount(id, val) {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = val + '<span class="drt-summary-card__unit">件</span>';
+    }
+
+    // =========================================================
+    // Rankings table — render
+    // =========================================================
+    function renderDrtTable() {
+        var emptyState = document.getElementById('drtEmptyState');
+        var container = document.getElementById('drtTableContainer');
+        var thead = document.getElementById('drtTableHead');
+        var tbody = document.getElementById('drtTableBody');
+        var footer = document.getElementById('drtFooter');
+
+        if (!drtRankData || drtRankData.length === 0) {
+            emptyState.style.display = 'block';
+            container.style.display = 'none';
+            footer.style.display = 'none';
+            return;
+        }
+
+        emptyState.style.display = 'none';
+        container.style.display = 'block';
+        footer.style.display = 'block';
+
+        // Header
+        var hHtml = '<tr>';
+        hHtml += '<th>キーワード</th>';
+        hHtml += '<th>現在</th>';
+        hHtml += '<th>前回</th>';
+        for (var d = 0; d < drtDateLabels.length; d++) {
+            hHtml += '<th style="text-align:center;">' + drtDateLabels[d] + '</th>';
+        }
+        hHtml += '<th>操作</th>';
+        hHtml += '</tr>';
+        thead.innerHTML = hHtml;
+
+        // Body
+        var html = '';
+        for (var i = 0; i < drtRankData.length; i++) {
+            var kw = drtRankData[i];
+            var dev = kw[drtDevice];
+            var otherDev = kw[drtDevice === 'mobile' ? 'desktop' : 'mobile'];
+            var daily = kw.daily ? kw.daily[drtDevice] : {};
+            var accent = drtGetAccent(dev);
+
+            html += '<tr>';
+
+            // Keyword + volume
+            html += '<td>';
+            html += '<div class="drt-rank-accent ' + accent + '"></div>';
+            html += '<div class="drt-kw-name">' + drtEsc(kw.keyword) + '</div>';
+            if (kw.search_volume != null) {
+                html += '<div class="drt-kw-meta"><span class="drt-kw-meta-item">Vol: <strong>' + drtFmt(kw.search_volume) + '</strong></span></div>';
+            }
+            html += '</td>';
+
+            // Current rank
+            html += '<td>';
+            html += drtFormatCurrent(dev);
+            if (dev && otherDev && drtHasBigDiff(dev, otherDev)) {
+                html += '<span class="drt-pc-diff">' + (drtDevice === 'mobile' ? 'PC' : 'SP') + 'と差あり</span>';
+            }
+            html += '</td>';
+
+            // Previous rank
+            html += '<td>' + drtFormatPrev(dev) + '</td>';
+
+            // Daily columns (7 days)
+            if (drtDateKeys) {
+                for (var d = 0; d < drtDateKeys.length; d++) {
+                    var dayData = daily ? daily[drtDateKeys[d]] : null;
+                    html += '<td class="drt-daily">' + drtFormatDaily(dayData) + '</td>';
+                }
+            }
+
+            // Action
+            html += '<td>';
+            html += '<button class="drt-action-link" data-kw-id="' + kw.keyword_id + '">';
+            html += '<span class="drt-action-link__icon">&#x1F4CA;</span> 上位ランキングを見る';
+            html += '</button>';
+            html += '</td>';
+
+            html += '</tr>';
+        }
+
+        tbody.innerHTML = html;
+    }
+
+    // =========================================================
+    // Format helpers
+    // =========================================================
+    function drtGetAccent(dev) {
+        if (!dev || !dev.is_ranked) return 'drt-rank-accent--red';
+        var r = dev.rank_group;
+        if (r <= 3) return 'drt-rank-accent--gold';
+        if (r <= 10) return 'drt-rank-accent--blue';
+        if (r <= 20) return 'drt-rank-accent--green';
+        return 'drt-rank-accent--red';
+    }
+
+    function drtFormatCurrent(dev) {
+        if (!dev) return '<span class="drt-rank--na">-</span>';
+        if (!dev.is_ranked) return '<span class="drt-rank--out">圏外</span>';
+        var html = '<span class="drt-rank">' + dev.rank_group + '<span class="drt-rank-unit">位</span></span>';
+        if (dev.change != null && dev.change !== 0) {
+            html += '<div class="drt-rank-change ' + (dev.change > 0 ? 'drt-rank-change--up' : 'drt-rank-change--down') + '">';
+            if (dev.change === 999) html += '&#x2191; NEW';
+            else if (dev.change === -999) html += '&#x2193; 圏外';
+            else if (dev.change > 0) html += '&#x2191; ' + dev.change;
+            else html += '&#x2193; ' + Math.abs(dev.change);
+            html += '</div>';
+        }
+        return html;
+    }
+
+    function drtFormatPrev(dev) {
+        if (!dev || dev.change == null) return '<span class="drt-rank--na">-</span>';
+        if (dev.change === 999) return '<span class="drt-rank--out">圏外</span>';
+        if (dev.change === -999) return '<span class="drt-rank--na">-</span>';
+        if (dev.is_ranked && dev.change != null) {
+            var prev = dev.rank_group + dev.change;
+            if (prev > 0 && prev <= 100) {
+                return '<span class="drt-rank">' + prev + '<span class="drt-rank-unit">位</span></span>';
+            }
+        }
+        return '<span class="drt-rank--na">-</span>';
+    }
+
+    function drtFormatDaily(dayData) {
+        if (!dayData) return '<span class="drt-daily--na">-</span>';
+        if (!dayData.is_ranked) return '<span class="drt-daily--out">圏外</span>';
+        return dayData.rank + '位';
+    }
+
+    function drtHasBigDiff(a, b) {
+        if (!a || !b) return false;
+        if (!a.is_ranked && !b.is_ranked) return false;
+        if (a.is_ranked !== b.is_ranked) return true;
+        if (a.is_ranked && b.is_ranked) return Math.abs(a.rank_group - b.rank_group) >= 3;
+        return false;
+    }
+
+    function drtFmt(n) {
+        if (n == null) return '-';
+        return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function drtEsc(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // =========================================================
+    // SERP Modal
+    // =========================================================
+    document.getElementById('drtTableWrap').addEventListener('click', function(e) {
+        var btn = e.target.closest('.drt-action-link');
+        if (!btn) return;
+        drtOpenSerpModal(parseInt(btn.dataset.kwId, 10));
+    });
+
+    function drtOpenSerpModal(keywordId) {
+        var modal = document.getElementById('drtSerpModal');
+        var body = document.getElementById('drtSerpModalBody');
+        var title = document.getElementById('drtSerpModalTitle');
+
+        var kw = null;
+        for (var i = 0; i < drtRankData.length; i++) {
+            if (drtRankData[i].keyword_id == keywordId) { kw = drtRankData[i]; break; }
+        }
+        title.textContent = (kw ? '「' + kw.keyword + '」' : '') + ' 上位ランキング (' + (drtDevice === 'mobile' ? 'スマホ' : 'PC') + ')';
+        body.innerHTML = '<div class="drt-loading">上位サイトを取得中...</div>';
+        modal.classList.add('active');
+
+        fetch(restBase + 'rank-tracker/serp-top?keyword_id=' + encodeURIComponent(keywordId) + '&device=' + encodeURIComponent(drtDevice), {
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(r) {
+            if (!r.ok) return r.json().then(function(ej) { throw new Error(ej.message || 'HTTP ' + r.status); });
+            return r.json();
+        })
+        .then(function(json) {
+            if (json.success && json.data && json.data.items) {
+                body.innerHTML = drtBuildSerpTable(json.data.items);
+            } else {
+                body.innerHTML = '<div class="drt-loading" style="color:#ef4444;">' + drtEsc(json.message || 'データの取得に失敗しました。') + '</div>';
+            }
+        })
+        .catch(function(err) {
+            body.innerHTML = '<div class="drt-loading" style="color:#ef4444;">' + drtEsc(err.message || '通信エラーが発生しました。') + '</div>';
+        });
+    }
+
+    function drtBuildSerpTable(items) {
+        if (!items || items.length === 0) {
+            return '<div class="drt-loading">上位サイトのデータがありません。</div>';
+        }
+        var html = '<table class="drt-serp-table"><thead><tr>';
+        html += '<th style="text-align:center;">順位</th>';
+        html += '<th>サイト情報</th>';
+        html += '</tr></thead><tbody>';
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            html += '<tr>';
+            html += '<td class="drt-serp-rank">' + item.rank + '</td>';
+            html += '<td>';
+            html += '<div class="drt-serp-title">' + drtEsc(item.title) + '</div>';
+            html += '<a class="drt-serp-url" href="' + drtEsc(item.url) + '" target="_blank" rel="noopener">' + drtEsc(item.url) + '</a>';
+            if (item.description) {
+                html += '<div class="drt-serp-desc">' + drtEsc(item.description) + '</div>';
+            }
+            html += '</td>';
+            html += '</tr>';
+        }
+        html += '</tbody></table>';
+        return html;
+    }
+
+    // Close modal
+    document.getElementById('drtSerpModalClose').addEventListener('click', function() {
+        document.getElementById('drtSerpModal').classList.remove('active');
+    });
+    document.getElementById('drtSerpModal').addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('active');
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var m = document.getElementById('drtSerpModal');
+            if (m && m.classList.contains('active')) m.classList.remove('active');
+        }
+    });
+
+    // =========================================================
+    // Progress overlay
+    // =========================================================
+    function drtShowProgress(show) {
+        var overlay = document.getElementById('drtProgressOverlay');
+        if (!overlay) return;
+        if (show) {
+            var barEl = document.getElementById('drtProgressBar');
+            if (barEl) { barEl.style.width = '0%'; barEl.classList.add('drt-progress-bar--indeterminate'); }
+            document.getElementById('drtProgressTitle').textContent = '最新の順位を取得中...';
+            document.getElementById('drtProgressText').textContent = 'キーワードの順位を取得しています...';
+            document.getElementById('drtProgressSub').textContent = '1キーワードあたり数秒かかります。しばらくお待ちください。';
+            overlay.classList.add('active');
+        } else {
+            overlay.classList.remove('active');
+        }
+    }
+
+    function drtShowProgressComplete(count) {
+        document.getElementById('drtProgressTitle').textContent = '取得完了!';
+        document.getElementById('drtProgressText').textContent = count + '件のキーワードの最新順位を取得しました。';
+        document.getElementById('drtProgressSub').textContent = '';
+        var barEl = document.getElementById('drtProgressBar');
+        if (barEl) { barEl.classList.remove('drt-progress-bar--indeterminate'); barEl.style.width = '100%'; }
+    }
+
+    // =========================================================
+    // Toast
+    // =========================================================
+    function drtShowToast(msg, type) {
+        var existing = document.querySelector('.drt-toast');
+        if (existing) existing.remove();
+        var toast = document.createElement('div');
+        toast.className = 'drt-toast' + (type === 'error' ? ' drt-toast--error' : '');
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() { toast.classList.add('show'); });
+        });
+        setTimeout(function() {
+            toast.classList.remove('show');
+            setTimeout(function() { toast.remove(); }, 300);
+        }, 3000);
+    }
 })();
 </script>
 
