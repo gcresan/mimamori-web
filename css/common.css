@@ -474,16 +474,6 @@
   box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 
-/* 期間表示テキスト */
-.period-display {
-  font-size: 14px;
-  color: #666660;
-  margin-bottom: 24px;
-}
-
-.period-display strong {
-  color: #2B2B2B;
-  font-weight: 600;
-}
+/* 期間表示テキスト — dashboard-redesign.css の .period-display に統一済み (2026-03) */
 
 /*# sourceMappingURL=common.css.map */

@@ -823,6 +823,14 @@ add_action('wp_enqueue_scripts', function() {
         '1.0.0'
     );
 
+    wp_enqueue_script(
+        'gcrev-period-display',
+        get_template_directory_uri() . '/assets/js/period-display.js',
+        [],
+        '2.0.0',
+        true
+    );
+
 });
 
 /**

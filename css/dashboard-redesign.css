@@ -407,45 +407,7 @@ h3 { font-size: 20px; font-weight: 700; }
   margin: 0 auto;
 }
 
-/* ========== Period Info Bar → 参照テンプレの period-selector スタイル ========== */
-.period-info-bar {
-  background: var(--mw-bg-secondary);
-  border: 1px solid var(--mw-border-light);
-  border-radius: var(--mw-radius-sm);
-  padding: 12px 16px;
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 14px;
-  color: var(--mw-text-secondary);
-  flex-wrap: wrap;
-}
-
-.period-info-bar .period-label {
-  font-weight: 600;
-  color: var(--mw-text-primary);
-  min-width: 100px;
-  margin-right: 0;
-  font-size: 14px;
-}
-
-.period-info-bar strong {
-  color: var(--mw-text-secondary);
-  font-weight: 400;
-}
-
-.period-info-bar > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.period-info-bar > div + div::before {
-  content: "｜";
-  color: var(--mw-text-tertiary);
-  margin: 0 8px;
-}
+/* ========== Period Info Bar — .period-info に統一済み (2026-03) ========== */
 
 /* ========== Dashboard Infographic → 参照テンプレの status-summary スタイル ========== */
 .dashboard-infographic {
@@ -1426,18 +1388,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
     flex-shrink: 0;
   }
 
-  /* ========== 期間情報バー ========== */
-  .period-info-bar {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 12px;
-    gap: 8px;
-    font-size: 13px;
-  }
-
-  .period-info-bar > div + div::before {
-    display: none;
-  }
+  /* ========== 期間情報バー — .period-info に統一済み (2026-03) ========== */
 
   /* ========== サマリー ========== */
   .info-summary { font-size: 14px; gap: 6px; }
@@ -1684,18 +1635,17 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   height: 24px;
   background: var(--mw-border-light);
 }
+/* .period-display は .period-info と同一デザインに統一 */
 .period-display {
-  font-size: 14px;
-  color: var(--mw-text-secondary);
-  margin-bottom: 24px;
-  padding: 12px 16px;
-  background: var(--mw-bg-secondary);
+  background: var(--mw-bg-primary);
   border: 1px solid var(--mw-border-light);
-  border-radius: var(--mw-radius-sm);
-}
-.period-display strong {
-  color: var(--mw-text-primary);
-  font-weight: 600;
+  border-radius: var(--mw-radius-md);
+  padding: 22px 26px;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
 }
 
 /* ========== Period Selector (gcrev-period-selector) ========== */
@@ -3612,7 +3562,8 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   .kpi-grid {
     grid-template-columns: 1fr;
   }
-  .period-info {
+  .period-info,
+  .period-display {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -3896,7 +3847,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 
 /* その他 layout.css で #333 がハードコードされている要素 */
-.dashboard .period-info-bar strong,
+.dashboard .period-info strong,
 .dashboard .info-item strong,
 .dashboard .consideration-content strong {
   color: var(--mw-text-heading);

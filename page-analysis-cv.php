@@ -272,8 +272,17 @@ function updatePeriodDisplay(data) {
     const c = data.current_period;
     const p = data.comparison_period;
     const fmt = (s, e) => (!s || !e) ? '-' : s.replace(/-/g, '/') + ' 〜 ' + e.replace(/-/g, '/');
-    let html = '<strong>分析対象期間：</strong>' + fmt(c.start, c.end);
-    if (p) html += ' <span style="margin:0 8px;color:#888888;">|</span><strong>比較期間：</strong>' + fmt(p.start, p.end);
+    let html =
+      '<div class="period-item">' +
+        '<span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>' +
+        '<span class="period-value">' + fmt(c.start, c.end) + '</span>' +
+      '</div>';
+    if (p) html +=
+      '<div class="period-divider"></div>' +
+      '<div class="period-item">' +
+        '<span class="period-label-v2">&#x1F4CA; 比較期間：</span>' +
+        '<span class="period-value">' + fmt(p.start, p.end) + '</span>' +
+      '</div>';
     el.innerHTML = html;
 }
 

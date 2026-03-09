@@ -98,17 +98,21 @@
     const compareLabel = info.compareLabel;
 
     let html =
-      "<strong>分析対象期間:</strong> " +
-      (currentLabel || (current ? fmt(current.start, current.end) : "-"));
+      '<div class="period-item">' +
+        '<span class="period-label-v2">\u{1F4C5} 分析対象期間：</span>' +
+        '<span class="period-value">' + (currentLabel || (current ? fmt(current.start, current.end) : "-")) + '</span>' +
+      '</div>';
 
     const hasCompare =
       !!compareLabel || !!(compare && compare.start && compare.end);
 
     if (hasCompare) {
       html +=
-        ' <span style="margin: 0 8px; color: #9ca3af;">|</span> ' +
-        "<strong>比較期間:</strong> " +
-        (compareLabel || fmt(compare.start, compare.end));
+        '<div class="period-divider"></div>' +
+        '<div class="period-item">' +
+          '<span class="period-label-v2">\u{1F4CA} 比較期間：</span>' +
+          '<span class="period-value">' + (compareLabel || fmt(compare.start, compare.end)) + '</span>' +
+        '</div>';
     }
 
     log('Setting innerHTML:', html);

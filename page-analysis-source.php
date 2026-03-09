@@ -757,12 +757,20 @@ function updatePeriodDisplay(payload) {
         return String(start).replace(/-/g, '/') + ' 〜 ' + String(end).replace(/-/g, '/');
     };
 
-    let html = '<strong>分析対象期間：</strong>' + (currentLabel || (currentPeriodObj ? fmt(currentPeriodObj.start, currentPeriodObj.end) : '-'));
+    let html =
+      '<div class="period-item">' +
+        '<span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>' +
+        '<span class="period-value">' + (currentLabel || (currentPeriodObj ? fmt(currentPeriodObj.start, currentPeriodObj.end) : '-')) + '</span>' +
+      '</div>';
 
     const hasCompare = !!(compareLabel || (comparePeriodObj && comparePeriodObj.start && comparePeriodObj.end));
     if (hasCompare) {
-        html += ' <span style="margin: 0 8px; color: #888888;">|</span> ' +
-                '<strong>比較期間：</strong>' + (compareLabel || fmt(comparePeriodObj.start, comparePeriodObj.end));
+      html +=
+        '<div class="period-divider"></div>' +
+        '<div class="period-item">' +
+          '<span class="period-label-v2">&#x1F4CA; 比較期間：</span>' +
+          '<span class="period-value">' + (compareLabel || fmt(comparePeriodObj.start, comparePeriodObj.end)) + '</span>' +
+        '</div>';
     }
 
     el.innerHTML = html;

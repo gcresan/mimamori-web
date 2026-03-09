@@ -244,13 +244,21 @@ function updatePeriodDisplay(payload) {
   const currentText = currentLabel || (current ? formatPeriod(current.start, current.end) : '');
   if (!currentText) return;
 
-  let html = '<strong>分析対象期間：</strong>' + currentText;
+  let html =
+    '<div class="period-item">' +
+      '<span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>' +
+      '<span class="period-value">' + currentText + '</span>' +
+    '</div>';
 
   // 比較期間は「ある時だけ」表示（従来通り）
   const compareText = compareLabel || (comparison ? formatPeriod(comparison.start, comparison.end) : '');
   if (compareText) {
-    html += ' <span style="margin: 0 8px; color: #888888;">|</span> '
-         +  '<strong>比較期間：</strong>' + compareText;
+    html +=
+      '<div class="period-divider"></div>' +
+      '<div class="period-item">' +
+        '<span class="period-label-v2">&#x1F4CA; 比較期間：</span>' +
+        '<span class="period-value">' + compareText + '</span>' +
+      '</div>';
   }
 
   el.innerHTML = html;

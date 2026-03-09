@@ -431,9 +431,12 @@ async function loadRegionData(period) {
  */
 function updatePeriodDisplay(displayText) {
     const elem = document.getElementById('periodDisplay');
-    if (elem) {
-        elem.textContent = `分析対象期間: ${displayText}`;
-    }
+    if (!elem) return;
+    elem.innerHTML =
+      '<div class="period-item">' +
+        '<span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>' +
+        '<span class="period-value">' + (displayText || '-') + '</span>' +
+      '</div>';
 }
 
 let regionMapChart = null;

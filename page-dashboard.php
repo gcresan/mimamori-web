@@ -613,15 +613,16 @@ if ($infographic) {
 ?>
 
 
-    <!-- 期間表示バー -->
-    <div class="period-info-bar">
-        <div>
-            <span class="period-label">分析期間</span>
-            <strong><?php echo $prev_month_start->format('Y年n月'); ?>（<?php echo $prev_month_start->format('Y/n/1'); ?> ～ <?php echo $prev_month_end->format('Y/n/t'); ?>）</strong>
+    <!-- 期間表示 -->
+    <div class="period-info">
+        <div class="period-item">
+            <span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>
+            <span class="period-value"><?php echo esc_html( $prev_month_start->format('Y年n月') ); ?>（<?php echo esc_html( $prev_month_start->format('n/1') ); ?> - <?php echo esc_html( $prev_month_end->format('n/t') ); ?>）</span>
         </div>
-        <div>
-            <span class="period-label">比較期間</span>
-            <strong><?php echo $prev_prev_month_start->format('Y年n月'); ?>（<?php echo $prev_prev_month_start->format('Y/n/1'); ?> ～ <?php echo $prev_prev_month_end->format('Y/n/t'); ?>）</strong>
+        <div class="period-divider"></div>
+        <div class="period-item">
+            <span class="period-label-v2">&#x1F4CA; 比較期間：</span>
+            <span class="period-value"><?php echo esc_html( $prev_prev_month_start->format('Y年n月') ); ?>（<?php echo esc_html( $prev_prev_month_start->format('n/1') ); ?> - <?php echo esc_html( $prev_prev_month_end->format('n/t') ); ?>）</span>
         </div>
     </div>
 <?php if ($infographic): ?>

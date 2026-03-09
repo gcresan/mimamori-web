@@ -507,12 +507,16 @@ get_header();
             <button class="period-btn active" data-period="prev-month">前月</button>
             <button class="period-btn" data-period="last30">直近30日</button>
         </div>
-        <div id="meo-period-display" style="font-size: 14px; color: #555555;">
-            <span style="font-weight: 600;">分析対象期間：</span>
-            <span id="meo-period-current">読み込み中...</span>
-            <span style="margin: 0 12px; color: #D0D5DA;">|</span>
-            <span style="font-weight: 600;">比較期間：</span>
-            <span id="meo-period-compare">読み込み中...</span>
+        <div class="period-info" id="meo-period-display">
+            <div class="period-item">
+                <span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>
+                <span class="period-value" id="meo-period-current">読み込み中...</span>
+            </div>
+            <div class="period-divider"></div>
+            <div class="period-item">
+                <span class="period-label-v2">&#x1F4CA; 比較期間：</span>
+                <span class="period-value" id="meo-period-compare">読み込み中...</span>
+            </div>
         </div>
     </div>
 
