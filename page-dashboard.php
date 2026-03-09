@@ -244,7 +244,14 @@ get_header();
 /* ============================================================
    Dashboard Rank Tracker Widget (.drt-)
    ============================================================ */
-.drt-section { margin-top: 40px; }
+.drt-section {
+    margin-top: 40px;
+    background: #fff;
+    border: 1px solid #E5E3DC;
+    border-radius: 14px;
+    padding: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
 .drt-header {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 16px; flex-wrap: wrap; gap: 12px;
@@ -282,7 +289,7 @@ get_header();
 /* Summary cards */
 .drt-summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
 .drt-summary-card {
-    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
     padding: 14px 16px; display: flex; align-items: center; gap: 12px;
     border-left: 4px solid #e5e7eb;
 }
@@ -424,6 +431,7 @@ get_header();
 .drt-toast--error { background: #ef4444; }
 /* Responsive */
 @media (max-width: 768px) {
+    .drt-section { padding: 20px 16px; }
     .drt-header { flex-direction: column; align-items: flex-start; }
     .drt-summary-cards { grid-template-columns: repeat(2, 1fr); }
 }
