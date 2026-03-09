@@ -4713,7 +4713,7 @@ function gcrev_rank_keywords_create_table(): void {
         user_id BIGINT(20) UNSIGNED NOT NULL,
         keyword VARCHAR(255) NOT NULL,
         target_domain VARCHAR(255) NOT NULL,
-        location_code INT NOT NULL DEFAULT 1009312,
+        location_code INT NOT NULL DEFAULT 2392,
         language_code VARCHAR(10) NOT NULL DEFAULT 'ja',
         enabled TINYINT(1) NOT NULL DEFAULT 1,
         sort_order INT NOT NULL DEFAULT 0,
@@ -4733,6 +4733,15 @@ function gcrev_rank_keywords_create_table(): void {
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta($sql);
+
+    // 旧デフォルト location_code(1009312) → 正しいJapan全国コード(2392) に移行
+    $migrated = get_option( 'gcrev_rank_kw_location_migrated', false );
+    if ( ! $migrated ) {
+        $wpdb->query(
+            "UPDATE {$table} SET location_code = 2392 WHERE location_code = 1009312"
+        );
+        update_option( 'gcrev_rank_kw_location_migrated', true );
+    }
 }
 
 function gcrev_rank_results_create_table(): void {

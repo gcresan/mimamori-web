@@ -75,7 +75,7 @@ class Gcrev_DataForSEO_Client {
         $post_data = [
             [
                 'keyword'       => 'test',
-                'location_code' => 1009312, // Japan
+                'location_code' => 2392, // Japan
                 'language_code' => 'ja',
                 'device'        => 'desktop',
                 'os'            => 'windows',
@@ -116,11 +116,11 @@ class Gcrev_DataForSEO_Client {
      *
      * @param string $keyword       検索キーワード
      * @param string $device        'desktop' or 'mobile'
-     * @param int    $location_code ロケーションコード（デフォルト: Japan 1009312）
+     * @param int    $location_code ロケーションコード（デフォルト: Japan 2392）
      * @param string $language_code 言語コード（デフォルト: 'ja'）
      * @return array SERP items 配列。失敗時は WP_Error
      */
-    public function fetch_serp( string $keyword, string $device = 'desktop', int $location_code = 1009312, string $language_code = 'ja' ) {
+    public function fetch_serp( string $keyword, string $device = 'desktop', int $location_code = 2392, string $language_code = 'ja' ) {
         if ( ! self::is_configured() ) {
             return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
         }
@@ -273,11 +273,11 @@ class Gcrev_DataForSEO_Client {
      * Google Ads Search Volume API でキーワードの検索ボリューム・競合性・CPC を取得
      *
      * @param array  $keywords       キーワード配列（最大1000件）
-     * @param int    $location_code  ロケーションコード（デフォルト: Japan 1009312）
+     * @param int    $location_code  ロケーションコード（デフォルト: Japan 2392）
      * @param string $language_code  言語コード（デフォルト: 'ja'）
      * @return array|WP_Error [ 'keyword' => { search_volume, competition, cpc } ] 形式
      */
-    public function fetch_search_volume( array $keywords, int $location_code = 1009312, string $language_code = 'ja' ) {
+    public function fetch_search_volume( array $keywords, int $location_code = 2392, string $language_code = 'ja' ) {
         if ( ! self::is_configured() ) {
             return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
         }
@@ -341,11 +341,11 @@ class Gcrev_DataForSEO_Client {
      * DataForSEO Labs Bulk Keyword Difficulty API でキーワードの SEO 難易度を取得
      *
      * @param array  $keywords       キーワード配列（最大1000件）
-     * @param int    $location_code  ロケーションコード（デフォルト: Japan 1009312）
+     * @param int    $location_code  ロケーションコード（デフォルト: Japan 2392）
      * @param string $language_code  言語コード（デフォルト: 'ja'）
      * @return array|WP_Error [ 'keyword' => { keyword_difficulty } ] 形式
      */
-    public function fetch_keyword_difficulty( array $keywords, int $location_code = 1009312, string $language_code = 'ja' ) {
+    public function fetch_keyword_difficulty( array $keywords, int $location_code = 2392, string $language_code = 'ja' ) {
         if ( ! self::is_configured() ) {
             return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
         }

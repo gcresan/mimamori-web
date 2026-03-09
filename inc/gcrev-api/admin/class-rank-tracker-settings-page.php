@@ -93,7 +93,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
             case 'add_keyword':
                 $keyword       = sanitize_text_field( wp_unslash( $_POST['keyword'] ?? '' ) );
                 $target_domain = sanitize_text_field( wp_unslash( $_POST['target_domain'] ?? '' ) );
-                $location_code = absint( $_POST['location_code'] ?? 1009312 );
+                $location_code = absint( $_POST['location_code'] ?? 2392 );
                 $memo          = sanitize_text_field( wp_unslash( $_POST['memo'] ?? '' ) );
 
                 if ( $keyword !== '' && $target_domain !== '' && $user_id > 0 ) {
@@ -117,7 +117,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
                 $kw_id         = absint( $_POST['keyword_id'] ?? 0 );
                 $keyword       = sanitize_text_field( wp_unslash( $_POST['keyword'] ?? '' ) );
                 $target_domain = sanitize_text_field( wp_unslash( $_POST['target_domain'] ?? '' ) );
-                $location_code = absint( $_POST['location_code'] ?? 1009312 );
+                $location_code = absint( $_POST['location_code'] ?? 2392 );
                 $memo          = sanitize_text_field( wp_unslash( $_POST['memo'] ?? '' ) );
 
                 if ( $kw_id > 0 && $keyword !== '' && $target_domain !== '' ) {
@@ -416,7 +416,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
 
         // ロケーションコード一覧
         $locations = [
-            1009312 => '日本（全国）',
+            2392    => '日本（全国）',
             1009283 => '東京都',
             1009303 => '大阪府',
             1009269 => '愛知県',
@@ -499,7 +499,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
                             <td>
                                 <select id="location_code" name="location_code">
                                     <?php foreach ( $locations as $code => $label ) : ?>
-                                        <option value="<?php echo esc_attr( $code ); ?>" <?php selected( (int)( $edit_kw['location_code'] ?? 1009312 ), $code ); ?>>
+                                        <option value="<?php echo esc_attr( $code ); ?>" <?php selected( (int)( $edit_kw['location_code'] ?? 2392 ), $code ); ?>>
                                             <?php echo esc_html( $label ); ?>
                                         </option>
                                     <?php endforeach; ?>

@@ -584,6 +584,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_delete_my_keyword' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/my-keywords/(?P<id>\d+)/fetch', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_fetch_my_keyword_rank' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
     }
 
     // =========================================================
@@ -8205,7 +8210,8 @@ PROMPT;
                 $p = $prev[ $device ] ?? null;
 
                 if ( ! $l ) {
-                    $entry[ $device ] = [ 'rank_group' => null, 'rank_absolute' => null, 'change' => null, 'url' => null, 'is_ranked' => false ];
+                    // データ未取得の場合は null を返す（UIで「未取得」と「圏外」を区別するため）
+                    $entry[ $device ] = null;
                     continue;
                 }
 
@@ -8360,7 +8366,7 @@ PROMPT;
 
         $keyword       = sanitize_text_field( $request->get_param('keyword') ?? '' );
         $target_domain = sanitize_text_field( $request->get_param('target_domain') ?? '' );
-        $location_code = absint( $request->get_param('location_code') ?? 1009312 );
+        $location_code = absint( $request->get_param('location_code') ?? 2392 );
         $language_code = sanitize_text_field( $request->get_param('language_code') ?? 'ja' );
         $enabled       = absint( $request->get_param('enabled') ?? 1 );
         $sort_order    = absint( $request->get_param('sort_order') ?? 0 );
@@ -8824,7 +8830,7 @@ PROMPT;
         $id            = absint( $request->get_param('id') ?? 0 );
         $keyword       = sanitize_text_field( $request->get_param('keyword') ?? '' );
         $target_domain = sanitize_text_field( $request->get_param('target_domain') ?? '' );
-        $location_code = absint( $request->get_param('location_code') ?? 1009312 );
+        $location_code = absint( $request->get_param('location_code') ?? 2392 );
         $memo          = sanitize_text_field( $request->get_param('memo') ?? '' );
         $enabled       = $request->get_param('enabled');
 
@@ -8939,6 +8945,66 @@ PROMPT;
         $wpdb->delete( $res_table, [ 'keyword_id' => $id ], [ '%d' ] );
 
         return new \WP_REST_Response( [ 'success' => true ] );
+    }
+
+    /**
+     * POST /rank-tracker/my-keywords/{id}/fetch
+     * ログインユーザーが自分のキーワードの順位を手動取得
+     * レート制限: 1キーワードにつき1日1回
+     */
+    public function rest_fetch_my_keyword_rank( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '順位取得サービスが利用できません。管理者にお問い合わせください。' ], 503 );
+        }
+
+        global $wpdb;
+        $user_id   = get_current_user_id();
+        $id        = absint( $request['id'] );
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+
+        // 自分のキーワードか確認
+        $kw = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$kw_table} WHERE id = %d AND user_id = %d",
+            $id, $user_id
+        ), ARRAY_A );
+
+        if ( ! $kw ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードが見つかりません。' ], 404 );
+        }
+
+        // レート制限: 同じキーワードに対して今日既に取得済みならスキップ
+        $tz    = wp_timezone();
+        $today = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d' );
+        $already_today = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$res_table}
+             WHERE keyword_id = %d AND DATE(fetched_at) = %s",
+            $id, $today
+        ) );
+
+        if ( $already_today > 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '本日は既に取得済みです。翌日以降に再度お試しください。' ], 429 );
+        }
+
+        // DataForSEO API 呼び出し（desktop + mobile）
+        $results = $this->dataforseo->fetch_rankings_for_keyword(
+            $kw['keyword'],
+            $kw['target_domain'],
+            (int) $kw['location_code'],
+            $kw['language_code']
+        );
+
+        // DB に保存
+        $saved = $this->save_rank_results( $kw, $results );
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'data'    => [
+                'keyword' => $kw['keyword'],
+                'results' => $results,
+                'saved'   => $saved,
+            ],
+        ]);
     }
 
     /**

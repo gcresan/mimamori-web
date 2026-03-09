@@ -371,6 +371,18 @@ get_header();
 .kw-action-btn--delete:hover {
     background: #FFF0F0;
 }
+.kw-action-btn--fetch {
+    color: #2271b1;
+    border-color: #2271b1;
+    font-weight: 600;
+}
+.kw-action-btn--fetch:hover {
+    background: #f0f6fc;
+}
+.kw-action-btn--fetch:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
 
 /* SEO難易度バッジ */
 .difficulty-badge {
@@ -646,15 +658,19 @@ get_header();
             // PC順位
             if (kw.latest_desktop && kw.latest_desktop.is_ranked) {
                 html += '<td><span class="rank-value">' + kw.latest_desktop.rank_group + '<span style="font-size:12px;font-weight:400;color:#8A8A8A;">位</span></span></td>';
-            } else {
+            } else if (kw.latest_desktop && !kw.latest_desktop.is_ranked) {
                 html += '<td><span class="rank-value--out">圏外</span></td>';
+            } else {
+                html += '<td><span style="color:#aaa;">未取得</span></td>';
             }
 
             // SP順位
             if (kw.latest_mobile && kw.latest_mobile.is_ranked) {
                 html += '<td><span class="rank-value">' + kw.latest_mobile.rank_group + '<span style="font-size:12px;font-weight:400;color:#8A8A8A;">位</span></span></td>';
-            } else {
+            } else if (kw.latest_mobile && !kw.latest_mobile.is_ranked) {
                 html += '<td><span class="rank-value--out">圏外</span></td>';
+            } else {
+                html += '<td><span style="color:#aaa;">未取得</span></td>';
             }
 
             // 検索ボリューム
@@ -669,6 +685,10 @@ get_header();
 
             // 操作ボタン
             html += '<td style="white-space:nowrap;">';
+            // 未取得の場合は「取得」ボタンを表示
+            if (!kw.latest_desktop && !kw.latest_mobile) {
+                html += '<button class="kw-action-btn kw-action-btn--fetch" id="fetchBtn' + kw.id + '" onclick="fetchKeywordRank(' + kw.id + ')">取得</button>';
+            }
             html += '<button class="kw-action-btn" onclick="startEdit(' + kw.id + ')">編集</button>';
             html += '<button class="kw-action-btn kw-action-btn--delete" onclick="deleteKeyword(' + kw.id + ', \'' + escHtml(kw.keyword).replace(/'/g, "\\'") + '\')">削除</button>';
             html += '</td>';
@@ -828,6 +848,44 @@ get_header();
     };
 
     // =========================================================
+    // キーワード管理 — 手動順位取得
+    // =========================================================
+    window.fetchKeywordRank = function(id) {
+        var btn = document.getElementById('fetchBtn' + id);
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '取得中...';
+        }
+
+        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords/' + id + '/fetch', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success) {
+                fetchMyKeywords();
+                fetchRankings(currentRange);
+            } else {
+                alert(json.message || '順位の取得に失敗しました。');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '取得';
+                }
+            }
+        })
+        .catch(function(err) {
+            console.error('[KW Fetch]', err);
+            alert('通信エラーが発生しました。');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '取得';
+            }
+        });
+    };
+
+    // =========================================================
     // データ取得（ランキング）
     // =========================================================
     function fetchRankings(range) {
@@ -936,7 +994,10 @@ get_header();
     // フォーマッター
     // =========================================================
     function formatRank(device) {
-        if (!device || !device.is_ranked) {
+        if (!device) {
+            return '<span style="color:#aaa;">未取得</span>';
+        }
+        if (!device.is_ranked) {
             return '<span class="rank-value--out">圏外</span>';
         }
         return '<span class="rank-value">' + device.rank_group + '<span style="font-size:12px;font-weight:400;color:#8A8A8A;">位</span></span>';
@@ -1063,9 +1124,9 @@ get_header();
 
         for (var i = 0; i < rankData.length; i++) {
             var kw = rankData[i];
-            var dRank  = (kw.desktop && kw.desktop.is_ranked) ? kw.desktop.rank_group : '圏外';
+            var dRank  = kw.desktop ? (kw.desktop.is_ranked ? kw.desktop.rank_group : '圏外') : '未取得';
             var dChange = (kw.desktop && kw.desktop.change != null) ? kw.desktop.change : '';
-            var mRank  = (kw.mobile && kw.mobile.is_ranked) ? kw.mobile.rank_group : '圏外';
+            var mRank  = kw.mobile ? (kw.mobile.is_ranked ? kw.mobile.rank_group : '圏外') : '未取得';
             var mChange = (kw.mobile && kw.mobile.change != null) ? kw.mobile.change : '';
             var vol = kw.search_volume != null ? kw.search_volume : '';
             var diff = kw.keyword_difficulty != null ? kw.keyword_difficulty : '';
