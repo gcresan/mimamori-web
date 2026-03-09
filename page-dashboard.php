@@ -270,9 +270,9 @@ get_header();
 }
 .drt-btn:hover { background: #f9fafb; border-color: #98a2b3; }
 .drt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.drt-btn--primary { background: #2563eb; color: #fff; border-color: #2563eb; }
-.drt-btn--primary:hover { background: #1d4ed8; }
-.drt-btn--primary:disabled { background: #93b4f5; border-color: #93b4f5; }
+.drt-btn--primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.drt-btn--primary:hover { background: #333; }
+.drt-btn--primary:disabled { background: #999; border-color: #999; }
 .drt-btn__icon { font-size: 14px; }
 .drt-help { font-size: 13px; color: #6b7280; margin-bottom: 16px; line-height: 1.6; }
 /* Device toggle */
@@ -343,10 +343,10 @@ get_header();
 .drt-daily--out { color: #ef4444; font-size: 10px; }
 .drt-daily--na  { color: #d1d5db; }
 .drt-action-link {
-    display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: #2563eb;
+    display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: #2EC4B6;
     cursor: pointer; text-decoration: none; padding: 3px 0; border: none; background: none; white-space: nowrap;
 }
-.drt-action-link:hover { color: #1d4ed8; text-decoration: underline; }
+.drt-action-link:hover { color: #25A89C; text-decoration: underline; }
 .drt-action-link__icon { font-size: 13px; }
 .drt-empty { text-align: center; padding: 40px 20px; color: #9ca3af; }
 .drt-empty__icon { font-size: 32px; margin-bottom: 8px; }
@@ -355,7 +355,7 @@ get_header();
 .drt-footer { text-align: center; margin-top: 16px; }
 .drt-footer__link {
     display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
-    color: #2563eb; text-decoration: none; font-weight: 500;
+    color: #2EC4B6; text-decoration: none; font-weight: 500;
 }
 .drt-footer__link:hover { text-decoration: underline; }
 /* SERP Modal */
@@ -389,9 +389,9 @@ get_header();
 }
 .drt-serp-table td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 13px; vertical-align: top; }
 .drt-serp-table tr:last-child td { border-bottom: none; }
-.drt-serp-rank { font-weight: 700; font-size: 15px; color: #2563eb; text-align: center; min-width: 36px; }
+.drt-serp-rank { font-weight: 700; font-size: 15px; color: #2EC4B6; text-align: center; min-width: 36px; }
 .drt-serp-title { font-weight: 600; color: #1a1a1a; margin-bottom: 2px; line-height: 1.4; }
-.drt-serp-url { font-size: 12px; color: #2563eb; word-break: break-all; }
+.drt-serp-url { font-size: 12px; color: #2EC4B6; word-break: break-all; }
 .drt-serp-desc {
     font-size: 12px; color: #9ca3af; margin-top: 4px; line-height: 1.4;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -409,7 +409,7 @@ get_header();
 .drt-progress-title { font-size: 15px; font-weight: 700; color: #1a1a1a; margin-bottom: 14px; }
 .drt-progress-bar-wrap { width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
 .drt-progress-bar {
-    height: 100%; background: linear-gradient(90deg, #2563eb, #60a5fa); border-radius: 4px;
+    height: 100%; background: linear-gradient(90deg, #2EC4B6, #7FE2D8); border-radius: 4px;
     width: 0%; transition: width 0.3s ease;
 }
 .drt-progress-bar--indeterminate { width: 30%; animation: drt-progress-slide 1.5s infinite ease-in-out; }
@@ -1332,7 +1332,7 @@ foreach ($highlight_items as $highlight):
             <div class="drt-empty__icon">&#x1F50D;</div>
             <div class="drt-empty__text">計測キーワードが登録されていません</div>
             <div style="color:#9ca3af; font-size:12px; margin-top:6px;">
-                <a href="<?php echo esc_url(home_url('/mypage/rank-tracker/')); ?>" style="color:#2563eb;">検索順位チェック</a>ページからキーワードを追加できます。
+                <a href="<?php echo esc_url(home_url('/mypage/rank-tracker/')); ?>" style="color:#2EC4B6;">検索順位チェック</a>ページからキーワードを追加できます。
             </div>
         </div>
         <div class="drt-table-wrap" id="drtTableContainer" style="display:none;">

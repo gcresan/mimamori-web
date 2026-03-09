@@ -1017,7 +1017,7 @@ details[open] .info-breakdown-arrow {
 .info-monthly-highlight-value {
   font-size: 18px;
   font-weight: 700;
-  color: var(--mw-primary-blue);
+  color: #1a1a1a;
   line-height: 1.5;
 }
 
