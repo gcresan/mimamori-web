@@ -6,19 +6,19 @@
 
 /* --- Component root & CSS custom properties --- */
 .mw-chat {
-  --mw-primary: #4a6d7c;
-  --mw-teal: #7db5b3;
+  --mw-primary: #2EC4B6;
+  --mw-teal: #36D1C4;
   --mw-bg: #ffffff;
-  --mw-bg-sub: #f8f8f7;
-  --mw-bg-ter: #f0f0ee;
-  --mw-text: #1a202c;
-  --mw-text-sub: #4a5568;
-  --mw-text-ter: #718096;
-  --mw-border: #ddd9d5;
-  --mw-border-md: #d5d2ce;
-  --mw-danger: #e74c3c;
-  --mw-shadow-float: 0 6px 20px rgba(0,0,0,0.10);
-  --mw-shadow-modal: 0 8px 32px rgba(0,0,0,0.14);
+  --mw-bg-sub: #F7FAFA;
+  --mw-bg-ter: #EDF5F4;
+  --mw-text: #2B3A3B;
+  --mw-text-sub: #3D4F50;
+  --mw-text-ter: #6B7878;
+  --mw-border: #DEE5E4;
+  --mw-border-md: #C8D5D3;
+  --mw-danger: #C95A4F;
+  --mw-shadow-float: 0 8px 24px rgba(0,0,0,0.08);
+  --mw-shadow-modal: 0 10px 36px rgba(0,0,0,0.10);
 
   font-family: 'Noto Sans JP', 'Zen Kaku Gothic New', 'Hiragino Sans', sans-serif;
   line-height: 1.7;
@@ -56,7 +56,7 @@
 
 .mw-chat-fab:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(74, 109, 124, 0.25);
+  box-shadow: 0 8px 24px rgba(46, 196, 182, 0.25);
 }
 
 .mw-chat-fab__icon { font-size: 24px; line-height: 1; }
@@ -266,7 +266,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 10px 16px;
-  background: #f0faf8;
+  background: #EDF5F4;
   border-bottom: 1px solid var(--mw-border);
   font-size: 12px;
   color: var(--mw-text-sub);
@@ -676,7 +676,7 @@
 .mw-chat-input__textarea:focus {
   outline: none;
   border-color: var(--mw-teal);
-  box-shadow: 0 0 0 3px rgba(125, 181, 179, 0.1);
+  box-shadow: 0 0 0 3px rgba(46, 196, 182, 0.12);
 }
 .mw-chat-input__textarea::placeholder {
   color: var(--mw-text-ter);
@@ -825,7 +825,7 @@
   gap: 10px;
   margin-top: 10px;
   padding: 14px 16px;
-  background: linear-gradient(135deg, #f0f7fa 0%, #e8f4f0 100%);
+  background: linear-gradient(135deg, #F0FAF9 0%, #E8F6F4 100%);
   border: 1px solid var(--mw-teal);
   border-radius: 10px;
   font-size: 13px;
