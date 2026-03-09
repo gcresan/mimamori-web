@@ -452,7 +452,7 @@ get_header();
          =========================== -->
     <div class="kw-management" id="kwManagement">
         <div class="kw-management__header">
-            <div class="kw-management__title">順位を確認したい言葉</div>
+            <div class="kw-management__title">順位を確認したいキーワード</div>
             <div class="kw-management__count">
                 登録数 <strong id="kwCount">-</strong> / <strong id="kwLimit">5</strong>
             </div>
@@ -508,7 +508,7 @@ get_header();
         <div class="rank-empty-state" id="rankEmptyState" style="display:none;">
             <div class="rank-empty-state__icon">&#x1F50D;</div>
             <div class="rank-empty-state__text">キーワードが登録されていません</div>
-            <div style="color:#aaa; font-size:13px;">上の「順位を確認したい言葉」にキーワードを追加すると、検索順位が表示されます。</div>
+            <div style="color:#aaa; font-size:13px;">上の「順位を確認したいキーワード」にキーワードを追加すると、検索順位が表示されます。</div>
         </div>
         <table class="rank-table" id="rankTable" style="display:none;">
             <thead>
