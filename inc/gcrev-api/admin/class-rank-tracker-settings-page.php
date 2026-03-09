@@ -273,6 +273,62 @@ class Gcrev_Rank_Tracker_Settings_Page {
                 }
                 break;
 
+            case 'fetch_metrics':
+                if ( $user_id > 0 && class_exists( 'Gcrev_DataForSEO_Client' ) && Gcrev_DataForSEO_Client::is_configured() ) {
+                    $keywords = $wpdb->get_results( $wpdb->prepare(
+                        "SELECT id, keyword, location_code, language_code
+                         FROM {$kw_table}
+                         WHERE user_id = %d AND enabled = 1
+                         ORDER BY id ASC",
+                        $user_id
+                    ), ARRAY_A );
+
+                    if ( ! empty( $keywords ) ) {
+                        $config  = new Gcrev_Config();
+                        $client  = new Gcrev_DataForSEO_Client( $config );
+                        $kw_texts = array_column( $keywords, 'keyword' );
+                        $loc      = (int) $keywords[0]['location_code'];
+                        $lang     = $keywords[0]['language_code'] ?: 'ja';
+
+                        // 検索ボリューム
+                        $vol_data = $client->fetch_search_volume( $kw_texts, $loc, $lang );
+                        if ( ! is_wp_error( $vol_data ) ) {
+                            foreach ( $keywords as $kw ) {
+                                $v = $vol_data[ $kw['keyword'] ] ?? null;
+                                if ( $v ) {
+                                    $wpdb->update( $kw_table, [
+                                        'search_volume'     => $v['search_volume'],
+                                        'competition'       => $v['competition'],
+                                        'cpc'               => $v['cpc'],
+                                        'volume_fetched_at' => $now,
+                                        'updated_at'        => $now,
+                                    ], [ 'id' => (int) $kw['id'] ] );
+                                }
+                            }
+                        }
+
+                        // SEO難易度
+                        $diff_data = $client->fetch_keyword_difficulty( $kw_texts, $loc, $lang );
+                        if ( ! is_wp_error( $diff_data ) ) {
+                            foreach ( $keywords as $kw ) {
+                                $d = $diff_data[ $kw['keyword'] ] ?? null;
+                                if ( $d ) {
+                                    $wpdb->update( $kw_table, [
+                                        'keyword_difficulty'    => $d['keyword_difficulty'],
+                                        'difficulty_fetched_at' => $now,
+                                        'updated_at'            => $now,
+                                    ], [ 'id' => (int) $kw['id'] ] );
+                                }
+                            }
+                        }
+
+                        $redirect_args['msg'] = 'metrics_updated';
+                    }
+                } else {
+                    $redirect_args['msg'] = 'not_configured';
+                }
+                break;
+
             case 'test_connection':
                 if ( class_exists( 'Gcrev_DataForSEO_Client' ) ) {
                     $config = new Gcrev_Config();
@@ -315,6 +371,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
             'toggled'        => '✅ 有効/無効を切り替えました。',
             'fetched'        => '✅ 順位データを取得しました。',
             'fetched_all'    => '✅ 一括取得完了（' . absint( $_GET['fetched'] ?? 0 ) . '件）',
+            'metrics_updated' => '✅ 検索ボリューム・SEO難易度を更新しました。',
             'not_configured' => '⚠️ DataForSEO API が未設定です。wp-config.php を確認してください。',
             'conn_ok'        => '✅ ' . esc_html( urldecode( $_GET['conn_msg'] ?? '' ) ),
             'conn_fail'      => '❌ ' . esc_html( urldecode( $_GET['conn_msg'] ?? '' ) ),
@@ -473,7 +530,13 @@ class Gcrev_Rank_Tracker_Settings_Page {
                             <?php wp_nonce_field('gcrev_rank_tracker_action', '_gcrev_rank_tracker_nonce'); ?>
                             <input type="hidden" name="gcrev_action" value="manual_fetch_all">
                             <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $selected_user ); ?>">
-                            <button type="submit" class="button" onclick="return confirm('全キーワードの順位を取得します。API使用量が発生します。よろしいですか？');">🔄 一括取得</button>
+                            <button type="submit" class="button" onclick="return confirm('全キーワードの順位を取得します。API使用量が発生します。よろしいですか？');">順位取得</button>
+                        </form>
+                        <form method="post" style="display:inline; margin-left:8px;">
+                            <?php wp_nonce_field('gcrev_rank_tracker_action', '_gcrev_rank_tracker_nonce'); ?>
+                            <input type="hidden" name="gcrev_action" value="fetch_metrics">
+                            <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $selected_user ); ?>">
+                            <button type="submit" class="button" onclick="return confirm('検索ボリューム・SEO難易度を更新します。API使用量が発生します。よろしいですか？');">指標更新</button>
                         </form>
                     <?php endif; ?>
                 </h2>
@@ -490,6 +553,8 @@ class Gcrev_Rank_Tracker_Settings_Page {
                                 <th>地域</th>
                                 <th>PC順位</th>
                                 <th>SP順位</th>
+                                <th>検索Vol</th>
+                                <th>難易度</th>
                                 <th>有効</th>
                                 <th>メモ</th>
                                 <th>最終取得</th>
@@ -505,6 +570,22 @@ class Gcrev_Rank_Tracker_Settings_Page {
                                 <td><?php echo esc_html( $locations[ (int) $kw['location_code'] ] ?? $kw['location_code'] ); ?></td>
                                 <td><?php echo $kw['latest_desktop'] !== null ? esc_html( $kw['latest_desktop'] ) . '位' : '<span style="color:#999;">—</span>'; ?></td>
                                 <td><?php echo $kw['latest_mobile'] !== null ? esc_html( $kw['latest_mobile'] ) . '位' : '<span style="color:#999;">—</span>'; ?></td>
+                                <td><?php echo $kw['search_volume'] !== null ? esc_html( number_format( (int) $kw['search_volume'] ) ) : '<span style="color:#999;">—</span>'; ?></td>
+                                <td><?php
+                                    $diff = $kw['keyword_difficulty'] ?? null;
+                                    if ( $diff !== null ) {
+                                        $d = (int) $diff;
+                                        if ( $d <= 33 ) {
+                                            echo '<span style="color:#065F46;font-weight:600;">低 ' . esc_html( $d ) . '</span>';
+                                        } elseif ( $d <= 66 ) {
+                                            echo '<span style="color:#92400E;font-weight:600;">中 ' . esc_html( $d ) . '</span>';
+                                        } else {
+                                            echo '<span style="color:#991B1B;font-weight:600;">高 ' . esc_html( $d ) . '</span>';
+                                        }
+                                    } else {
+                                        echo '<span style="color:#999;">—</span>';
+                                    }
+                                ?></td>
                                 <td>
                                     <form method="post" style="display:inline;">
                                         <?php wp_nonce_field('gcrev_rank_tracker_action', '_gcrev_rank_tracker_nonce'); ?>

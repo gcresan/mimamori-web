@@ -559,6 +559,31 @@ class Gcrev_Insight_API {
                 return current_user_can('manage_options');
             },
         ]);
+        // 管理者用：検索ボリューム・SEO難易度の手動取得
+        register_rest_route('gcrev/v1', '/rank-tracker/fetch-metrics', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_fetch_rank_tracker_metrics' ],
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
+        ]);
+
+        // ユーザー向けキーワード管理（自分のキーワードのみ）
+        register_rest_route('gcrev/v1', '/rank-tracker/my-keywords', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_my_keywords' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/my-keywords', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_my_keyword' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/my-keywords/(?P<id>\d+)', [
+            'methods'             => 'DELETE',
+            'callback'            => [ $this, 'rest_delete_my_keyword' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
     }
 
     // =========================================================
@@ -8101,9 +8126,10 @@ PROMPT;
         $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
         $res_table = $wpdb->prefix . 'gcrev_rank_results';
 
-        // 有効キーワード取得
+        // 有効キーワード取得（検索ボリューム・難易度含む）
         $keywords = $wpdb->get_results( $wpdb->prepare(
-            "SELECT id, keyword, target_domain, location_code, memo
+            "SELECT id, keyword, target_domain, location_code, memo,
+                    search_volume, keyword_difficulty, competition
              FROM {$kw_table}
              WHERE user_id = %d AND enabled = 1
              ORDER BY sort_order ASC, id ASC",
@@ -8163,12 +8189,15 @@ PROMPT;
 
             // データ組み立て
             $entry = [
-                'keyword_id' => $kw_id,
-                'keyword'    => $kw['keyword'],
-                'memo'       => $kw['memo'] ?? '',
-                'desktop'    => null,
-                'mobile'     => null,
-                'fetched_at' => null,
+                'keyword_id'         => $kw_id,
+                'keyword'            => $kw['keyword'],
+                'memo'               => $kw['memo'] ?? '',
+                'search_volume'      => $kw['search_volume'] !== null ? (int) $kw['search_volume'] : null,
+                'keyword_difficulty' => $kw['keyword_difficulty'] !== null ? (int) $kw['keyword_difficulty'] : null,
+                'competition'        => $kw['competition'] ?? null,
+                'desktop'            => null,
+                'mobile'             => null,
+                'fetched_at'         => null,
             ];
 
             foreach ( ['desktop', 'mobile'] as $device ) {
@@ -8666,6 +8695,436 @@ PROMPT;
             'avg_mobile'  => null,
             'improved'    => 0,
         ];
+    }
+
+    // =========================================================
+    // 順位トラッキング — ユーザー向けキーワード管理 REST
+    // =========================================================
+
+    /** ユーザーあたりキーワード上限 */
+    private const RANK_KEYWORD_LIMIT = 5;
+
+    /**
+     * GET /rank-tracker/my-keywords
+     * ログインユーザー自身のキーワード一覧（上限情報付き）
+     */
+    public function rest_get_my_keywords( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_rank_keywords';
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, keyword, target_domain, location_code, enabled, memo,
+                    search_volume, keyword_difficulty, competition, cpc,
+                    volume_fetched_at, difficulty_fetched_at,
+                    created_at, updated_at
+             FROM {$table}
+             WHERE user_id = %d
+             ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        // 各キーワードの最新順位も取得
+        foreach ( $rows as &$row ) {
+            $row['id']      = (int) $row['id'];
+            $row['enabled'] = (bool) $row['enabled'];
+            $row['search_volume']      = $row['search_volume'] !== null ? (int) $row['search_volume'] : null;
+            $row['keyword_difficulty'] = $row['keyword_difficulty'] !== null ? (int) $row['keyword_difficulty'] : null;
+            $row['cpc'] = $row['cpc'] !== null ? (float) $row['cpc'] : null;
+
+            foreach ( ['desktop', 'mobile'] as $device ) {
+                $latest = $wpdb->get_row( $wpdb->prepare(
+                    "SELECT rank_group, is_ranked, fetched_at
+                     FROM {$res_table}
+                     WHERE keyword_id = %d AND device = %s
+                     ORDER BY fetched_at DESC LIMIT 1",
+                    $row['id'], $device
+                ), ARRAY_A );
+
+                $row[ "latest_{$device}" ] = $latest ? [
+                    'rank_group' => $latest['is_ranked'] ? (int) $latest['rank_group'] : null,
+                    'is_ranked'  => (bool) $latest['is_ranked'],
+                    'fetched_at' => substr( $latest['fetched_at'], 0, 10 ),
+                ] : null;
+            }
+        }
+        unset( $row );
+
+        $count = count( $rows );
+        $default_domain = get_user_meta( $user_id, 'gcrev_client_site_url', true );
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'data'    => [
+                'keywords'       => $rows,
+                'count'          => $count,
+                'limit'          => self::RANK_KEYWORD_LIMIT,
+                'can_add'        => $count < self::RANK_KEYWORD_LIMIT,
+                'default_domain' => $default_domain ?: '',
+            ],
+        ]);
+    }
+
+    /**
+     * POST /rank-tracker/my-keywords
+     * ログインユーザーのキーワード追加/更新（5件制限付き）
+     */
+    public function rest_save_my_keyword( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        $id            = absint( $request->get_param('id') ?? 0 );
+        $keyword       = sanitize_text_field( $request->get_param('keyword') ?? '' );
+        $target_domain = sanitize_text_field( $request->get_param('target_domain') ?? '' );
+        $location_code = absint( $request->get_param('location_code') ?? 1009312 );
+        $memo          = sanitize_text_field( $request->get_param('memo') ?? '' );
+        $enabled       = $request->get_param('enabled');
+
+        // keyword は必須
+        if ( $keyword === '' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードを入力してください。' ], 400 );
+        }
+
+        // target_domain: 未指定時は user_meta から自動取得
+        if ( $target_domain === '' ) {
+            $target_domain = get_user_meta( $user_id, 'gcrev_client_site_url', true );
+        }
+        if ( $target_domain === '' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '対象ドメインが設定されていません。管理者にお問い合わせください。' ], 400 );
+        }
+
+        $tz  = wp_timezone();
+        $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+
+        if ( $id > 0 ) {
+            // 更新: 自分のキーワードか確認
+            $existing = $wpdb->get_row( $wpdb->prepare(
+                "SELECT id FROM {$table} WHERE id = %d AND user_id = %d",
+                $id, $user_id
+            ) );
+            if ( ! $existing ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードが見つかりません。' ], 404 );
+            }
+
+            // ユーザーは keyword と memo のみ編集可能（target_domain / location_code は変更不可）
+            $update_data = [
+                'keyword'    => $keyword,
+                'memo'       => $memo,
+                'updated_at' => $now,
+            ];
+
+            // enabled の切り替え（明示的に渡された場合のみ）
+            if ( $enabled !== null ) {
+                $update_data['enabled'] = $enabled ? 1 : 0;
+            }
+
+            $wpdb->update( $table, $update_data, [ 'id' => $id, 'user_id' => $user_id ] );
+
+            return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'id' => $id ] ] );
+        }
+
+        // 新規追加: 件数チェック
+        $current_count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d",
+            $user_id
+        ) );
+
+        if ( $current_count >= self::RANK_KEYWORD_LIMIT ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => 'キーワードは最大' . self::RANK_KEYWORD_LIMIT . '件まで登録できます。不要なキーワードを削除してから追加してください。',
+            ], 400 );
+        }
+
+        // 重複チェック
+        $dup = $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table}
+             WHERE user_id = %d AND keyword = %s AND location_code = %d",
+            $user_id, $keyword, $location_code
+        ) );
+        if ( (int) $dup > 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'このキーワードは既に登録されています。' ], 400 );
+        }
+
+        $wpdb->insert( $table, [
+            'user_id'       => $user_id,
+            'keyword'       => $keyword,
+            'target_domain' => $target_domain,
+            'location_code' => $location_code,
+            'language_code' => 'ja',
+            'enabled'       => 1,
+            'sort_order'    => 0,
+            'memo'          => $memo,
+            'created_at'    => $now,
+            'updated_at'    => $now,
+        ] );
+
+        $new_id = (int) $wpdb->insert_id;
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'id' => $new_id ] ] );
+    }
+
+    /**
+     * DELETE /rank-tracker/my-keywords/{id}
+     * ログインユーザー自身のキーワードを削除（結果データも削除）
+     */
+    public function rest_delete_my_keyword( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $user_id = get_current_user_id();
+        $id      = absint( $request['id'] );
+        $table   = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        // 自分のキーワードか確認
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id FROM {$table} WHERE id = %d AND user_id = %d",
+            $id, $user_id
+        ) );
+        if ( ! $existing ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードが見つかりません。' ], 404 );
+        }
+
+        $wpdb->delete( $table, [ 'id' => $id, 'user_id' => $user_id ] );
+
+        // 関連する結果データも削除
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+        $wpdb->delete( $res_table, [ 'keyword_id' => $id ], [ '%d' ] );
+
+        return new \WP_REST_Response( [ 'success' => true ] );
+    }
+
+    /**
+     * POST /rank-tracker/fetch-metrics（管理者用 — 検索ボリューム + SEO難易度 手動取得）
+     */
+    public function rest_fetch_rank_tracker_metrics( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->dataforseo ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'DataForSEO クライアントが利用できません。' ], 500 );
+        }
+
+        if ( ! Gcrev_DataForSEO_Client::is_configured() ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'DataForSEO API が未設定です。' ], 400 );
+        }
+
+        $user_id = absint( $request->get_param('user_id') ?? 0 );
+        if ( $user_id <= 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'user_id が必要です。' ], 400 );
+        }
+
+        global $wpdb;
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        $keywords = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, keyword, location_code, language_code
+             FROM {$kw_table}
+             WHERE user_id = %d AND enabled = 1
+             ORDER BY id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        if ( empty( $keywords ) ) {
+            return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'updated' => 0 ] ] );
+        }
+
+        $kw_texts = array_column( $keywords, 'keyword' );
+        $loc      = (int) $keywords[0]['location_code'];
+        $lang     = $keywords[0]['language_code'] ?: 'ja';
+
+        $tz  = wp_timezone();
+        $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+        $updated = 0;
+
+        // 検索ボリューム取得
+        $vol_data = $this->dataforseo->fetch_search_volume( $kw_texts, $loc, $lang );
+        if ( ! is_wp_error( $vol_data ) ) {
+            foreach ( $keywords as $kw ) {
+                $v = $vol_data[ $kw['keyword'] ] ?? null;
+                if ( $v ) {
+                    $wpdb->update( $kw_table, [
+                        'search_volume'     => $v['search_volume'],
+                        'competition'       => $v['competition'],
+                        'cpc'               => $v['cpc'],
+                        'volume_fetched_at' => $now,
+                        'updated_at'        => $now,
+                    ], [ 'id' => (int) $kw['id'] ] );
+                    $updated++;
+                }
+            }
+        }
+
+        // SEO難易度取得
+        $diff_data = $this->dataforseo->fetch_keyword_difficulty( $kw_texts, $loc, $lang );
+        if ( ! is_wp_error( $diff_data ) ) {
+            foreach ( $keywords as $kw ) {
+                $d = $diff_data[ $kw['keyword'] ] ?? null;
+                if ( $d ) {
+                    $wpdb->update( $kw_table, [
+                        'keyword_difficulty'    => $d['keyword_difficulty'],
+                        'difficulty_fetched_at' => $now,
+                        'updated_at'            => $now,
+                    ], [ 'id' => (int) $kw['id'] ] );
+                }
+            }
+        }
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'updated' => $updated ] ] );
+    }
+
+    // =========================================================
+    // 順位トラッキング — 月次キーワード指標 Cron
+    // =========================================================
+
+    /** キーワード指標チャンク制限 */
+    public const KEYWORD_METRICS_CHUNK_LIMIT = 5;
+
+    /**
+     * 月次キーワード指標取得のエントリポイント（検索ボリューム + SEO難易度）
+     */
+    public function auto_fetch_keyword_metrics(): void {
+        $lock_key = 'gcrev_lock_keyword_metrics';
+        $lock_ttl = 7200; // 2h
+
+        if ( get_transient( $lock_key ) ) {
+            error_log( '[GCREV][KeywordMetrics] Lock is active, skipping' );
+            return;
+        }
+        set_transient( $lock_key, 1, $lock_ttl );
+
+        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+            Gcrev_Cron_Logger::start( 'keyword_metrics' );
+        }
+
+        error_log( '[GCREV][KeywordMetrics] Starting monthly keyword metrics fetch' );
+
+        // チャンク処理開始
+        wp_schedule_single_event( time() + 5, 'gcrev_keyword_metrics_chunk_event', [ 0, self::KEYWORD_METRICS_CHUNK_LIMIT ] );
+    }
+
+    /**
+     * キーワード指標チャンク処理（5ユーザーずつ）
+     */
+    public function keyword_metrics_chunk( int $offset, int $limit ): void {
+        global $wpdb;
+
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        // 有効キーワードを持つユーザーを取得（チャンク）
+        $user_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT DISTINCT user_id FROM {$kw_table}
+             WHERE enabled = 1
+             ORDER BY user_id ASC
+             LIMIT %d OFFSET %d",
+            $limit, $offset
+        ) );
+
+        if ( empty( $user_ids ) ) {
+            // 完了
+            delete_transient( 'gcrev_lock_keyword_metrics' );
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::finish( 'keyword_metrics' );
+            }
+            error_log( '[GCREV][KeywordMetrics] Monthly metrics fetch completed' );
+            return;
+        }
+
+        if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
+            error_log( '[GCREV][KeywordMetrics] DataForSEO not configured, aborting' );
+            delete_transient( 'gcrev_lock_keyword_metrics' );
+            return;
+        }
+
+        $tz  = wp_timezone();
+        $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+        $current_month = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m' );
+
+        foreach ( $user_ids as $uid ) {
+            $uid = (int) $uid;
+
+            $keywords = $wpdb->get_results( $wpdb->prepare(
+                "SELECT id, keyword, location_code, language_code, volume_fetched_at
+                 FROM {$kw_table}
+                 WHERE user_id = %d AND enabled = 1
+                 ORDER BY id ASC",
+                $uid
+            ), ARRAY_A );
+
+            if ( empty( $keywords ) ) {
+                continue;
+            }
+
+            // 今月既に取得済みのキーワードを除外
+            $to_fetch = [];
+            $skipped  = 0;
+            foreach ( $keywords as $kw ) {
+                if ( ! empty( $kw['volume_fetched_at'] ) && substr( $kw['volume_fetched_at'], 0, 7 ) === $current_month ) {
+                    $skipped++;
+                    continue;
+                }
+                $to_fetch[] = $kw;
+            }
+
+            if ( empty( $to_fetch ) ) {
+                error_log( "[GCREV][KeywordMetrics] User {$uid}: all {$skipped} keywords already fetched this month" );
+                continue;
+            }
+
+            $kw_texts = array_column( $to_fetch, 'keyword' );
+            $loc      = (int) $to_fetch[0]['location_code'];
+            $lang     = $to_fetch[0]['language_code'] ?: 'ja';
+
+            $fetched_count = 0;
+
+            // 検索ボリューム
+            $vol_data = $this->dataforseo->fetch_search_volume( $kw_texts, $loc, $lang );
+            if ( ! is_wp_error( $vol_data ) ) {
+                foreach ( $to_fetch as $kw ) {
+                    $v = $vol_data[ $kw['keyword'] ] ?? null;
+                    if ( $v ) {
+                        $wpdb->update( $kw_table, [
+                            'search_volume'     => $v['search_volume'],
+                            'competition'       => $v['competition'],
+                            'cpc'               => $v['cpc'],
+                            'volume_fetched_at' => $now,
+                            'updated_at'        => $now,
+                        ], [ 'id' => (int) $kw['id'] ] );
+                        $fetched_count++;
+                    }
+                }
+            } else {
+                error_log( "[GCREV][KeywordMetrics] User {$uid}: search_volume error: " . $vol_data->get_error_message() );
+            }
+
+            // SEO難易度
+            $diff_data = $this->dataforseo->fetch_keyword_difficulty( $kw_texts, $loc, $lang );
+            if ( ! is_wp_error( $diff_data ) ) {
+                foreach ( $to_fetch as $kw ) {
+                    $d = $diff_data[ $kw['keyword'] ] ?? null;
+                    if ( $d ) {
+                        $wpdb->update( $kw_table, [
+                            'keyword_difficulty'    => $d['keyword_difficulty'],
+                            'difficulty_fetched_at' => $now,
+                            'updated_at'            => $now,
+                        ], [ 'id' => (int) $kw['id'] ] );
+                    }
+                }
+            } else {
+                error_log( "[GCREV][KeywordMetrics] User {$uid}: keyword_difficulty error: " . $diff_data->get_error_message() );
+            }
+
+            error_log( "[GCREV][KeywordMetrics] User {$uid}: fetched={$fetched_count}, skipped_this_month={$skipped}" );
+
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::log_user( 'keyword_metrics', $uid, 'ok' );
+            }
+        }
+
+        // 次のチャンクをスケジュール
+        $next_offset = $offset + $limit;
+        wp_schedule_single_event( time() + 10, 'gcrev_keyword_metrics_chunk_event', [ $next_offset, $limit ] );
+        error_log( "[GCREV][KeywordMetrics] Chunk done (offset={$offset}), next scheduled at offset={$next_offset}" );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

@@ -25,6 +25,10 @@ class Gcrev_Bootstrap {
         add_action('gcrev_rank_fetch_weekly_event', [__CLASS__, 'on_rank_fetch_weekly_event']);
         add_action('gcrev_rank_fetch_chunk_event', [__CLASS__, 'on_rank_fetch_chunk_event'], 10, 2);
 
+        // キーワード指標（月次 — 検索ボリューム + SEO難易度）
+        add_action('gcrev_keyword_metrics_monthly_event', [__CLASS__, 'on_keyword_metrics_monthly']);
+        add_action('gcrev_keyword_metrics_chunk_event', [__CLASS__, 'on_keyword_metrics_chunk'], 10, 2);
+
         // スロット別プリフェッチ
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
             $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
@@ -34,8 +38,8 @@ class Gcrev_Bootstrap {
             }
         }
 
-        // weekly スケジュール追加
-        add_filter('cron_schedules', [__CLASS__, 'add_weekly_schedule']);
+        // weekly / monthly スケジュール追加
+        add_filter('cron_schedules', [__CLASS__, 'add_custom_schedules']);
 
         // schedule (initで「未登録なら登録」※現状と同じ)
         add_action('init', [__CLASS__, 'maybe_schedule_events']);
@@ -174,6 +178,24 @@ class Gcrev_Bootstrap {
     }
 
     /**
+     * キーワード指標 — 月次フェッチイベント（検索ボリューム + SEO難易度）
+     */
+    public static function on_keyword_metrics_monthly(): void {
+        error_log('[GCREV] gcrev_keyword_metrics_monthly_event triggered');
+        $api = new Gcrev_Insight_API(false);
+        $api->auto_fetch_keyword_metrics();
+    }
+
+    /**
+     * キーワード指標 — チャンクフェッチイベント
+     */
+    public static function on_keyword_metrics_chunk( $offset, $limit ): void {
+        error_log("[GCREV] gcrev_keyword_metrics_chunk_event triggered: offset={$offset}, limit={$limit}");
+        $api = new Gcrev_Insight_API(false);
+        $api->keyword_metrics_chunk( (int) $offset, (int) $limit );
+    }
+
+    /**
      * スロット別プリフェッチ日次イベント
      */
     public static function on_prefetch_slot_event(): void {
@@ -228,16 +250,25 @@ class Gcrev_Bootstrap {
 
         // 順位トラッキング: 週1回（月曜 05:00）
         self::schedule_weekly_if_missing('gcrev_rank_fetch_weekly_event', 'next monday 05:00:00');
+
+        // キーワード指標: 月1回（1日 06:00）
+        self::schedule_monthly_if_missing('gcrev_keyword_metrics_monthly_event', 'first day of next month 06:00:00');
     }
 
     /**
-     * weekly スケジュール定義
+     * weekly / monthly スケジュール定義
      */
-    public static function add_weekly_schedule( array $schedules ): array {
+    public static function add_custom_schedules( array $schedules ): array {
         if ( ! isset( $schedules['weekly'] ) ) {
             $schedules['weekly'] = [
                 'interval' => WEEK_IN_SECONDS,
                 'display'  => '週1回',
+            ];
+        }
+        if ( ! isset( $schedules['monthly'] ) ) {
+            $schedules['monthly'] = [
+                'interval' => 30 * DAY_IN_SECONDS,
+                'display'  => '月1回',
             ];
         }
         return $schedules;
@@ -265,6 +296,17 @@ class Gcrev_Bootstrap {
         error_log('[GCREV] Scheduled ' . $hook . ' (weekly) at ' . $dt->format('Y-m-d H:i:s T'));
     }
 
+    private static function schedule_monthly_if_missing(string $hook, string $when): void {
+        if (wp_next_scheduled($hook)) {
+            return;
+        }
+        $tz = wp_timezone();
+        $dt = new DateTimeImmutable($when, $tz);
+
+        wp_schedule_event($dt->getTimestamp(), 'monthly', $hook);
+        error_log('[GCREV] Scheduled ' . $hook . ' (monthly) at ' . $dt->format('Y-m-d H:i:s T'));
+    }
+
     // =========================================================
     // 任意：イベント掃除（テーマ切替時）
     // =========================================================
@@ -275,10 +317,12 @@ class Gcrev_Bootstrap {
             'gcrev_monthly_report_finalize_event',
             'gcrev_cron_log_cleanup_event',
             'gcrev_rank_fetch_weekly_event',
+            'gcrev_keyword_metrics_monthly_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',
             // 'gcrev_rank_fetch_chunk_event',
+            // 'gcrev_keyword_metrics_chunk_event',
         ];
 
         foreach ($hooks as $hook) {

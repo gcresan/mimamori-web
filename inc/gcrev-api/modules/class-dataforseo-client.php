@@ -266,6 +266,141 @@ class Gcrev_DataForSEO_Client {
     }
 
     // =========================================================
+    // 検索ボリューム取得
+    // =========================================================
+
+    /**
+     * Google Ads Search Volume API でキーワードの検索ボリューム・競合性・CPC を取得
+     *
+     * @param array  $keywords       キーワード配列（最大1000件）
+     * @param int    $location_code  ロケーションコード（デフォルト: Japan 1009312）
+     * @param string $language_code  言語コード（デフォルト: 'ja'）
+     * @return array|WP_Error [ 'keyword' => { search_volume, competition, cpc } ] 形式
+     */
+    public function fetch_search_volume( array $keywords, int $location_code = 1009312, string $language_code = 'ja' ) {
+        if ( ! self::is_configured() ) {
+            return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
+        }
+
+        if ( empty( $keywords ) ) {
+            return [];
+        }
+
+        // レートリミット（検索ボリュームは API 側 12回/分制限のため安全マージン）
+        if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
+            Gcrev_Rate_Limiter::check_and_wait( 'dataforseo_kw', 10 );
+        }
+
+        $post_data = [
+            [
+                'keywords'      => array_values( $keywords ),
+                'location_code' => $location_code,
+                'language_code' => $language_code,
+            ]
+        ];
+
+        $response = $this->api_request( '/keywords_data/google_ads/search_volume/live', $post_data );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $status_code = (int) ( $response['status_code'] ?? 0 );
+        if ( $status_code !== 20000 ) {
+            $msg = $response['status_message'] ?? 'Unknown error';
+            error_log( "[GCREV][DataForSEO] search_volume API error: {$msg} (code: {$status_code})" );
+            return new \WP_Error( 'api_error', $msg );
+        }
+
+        $tasks = $response['tasks'] ?? [];
+        if ( empty( $tasks ) || empty( $tasks[0]['result'] ) ) {
+            return new \WP_Error( 'no_result', '検索ボリューム API 応答にデータが含まれていません。' );
+        }
+
+        $results = [];
+        foreach ( $tasks[0]['result'] as $item ) {
+            $kw = $item['keyword'] ?? '';
+            if ( $kw === '' ) {
+                continue;
+            }
+            $results[ $kw ] = [
+                'search_volume' => $item['search_volume'] ?? null,
+                'competition'   => $item['competition'] ?? null,
+                'cpc'           => $item['cpc'] ?? null,
+            ];
+        }
+
+        return $results;
+    }
+
+    // =========================================================
+    // SEO 難易度取得
+    // =========================================================
+
+    /**
+     * DataForSEO Labs Bulk Keyword Difficulty API でキーワードの SEO 難易度を取得
+     *
+     * @param array  $keywords       キーワード配列（最大1000件）
+     * @param int    $location_code  ロケーションコード（デフォルト: Japan 1009312）
+     * @param string $language_code  言語コード（デフォルト: 'ja'）
+     * @return array|WP_Error [ 'keyword' => { keyword_difficulty } ] 形式
+     */
+    public function fetch_keyword_difficulty( array $keywords, int $location_code = 1009312, string $language_code = 'ja' ) {
+        if ( ! self::is_configured() ) {
+            return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
+        }
+
+        if ( empty( $keywords ) ) {
+            return [];
+        }
+
+        // レートリミット
+        if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
+            Gcrev_Rate_Limiter::check_and_wait( 'dataforseo_kw', 10 );
+        }
+
+        $post_data = [
+            [
+                'keywords'      => array_values( $keywords ),
+                'location_code' => $location_code,
+                'language_code' => $language_code,
+            ]
+        ];
+
+        $response = $this->api_request( '/dataforseo_labs/google/bulk_keyword_difficulty/live', $post_data );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $status_code = (int) ( $response['status_code'] ?? 0 );
+        if ( $status_code !== 20000 ) {
+            $msg = $response['status_message'] ?? 'Unknown error';
+            error_log( "[GCREV][DataForSEO] keyword_difficulty API error: {$msg} (code: {$status_code})" );
+            return new \WP_Error( 'api_error', $msg );
+        }
+
+        $tasks = $response['tasks'] ?? [];
+        if ( empty( $tasks ) || empty( $tasks[0]['result'] ) ) {
+            return new \WP_Error( 'no_result', 'SEO難易度 API 応答にデータが含まれていません。' );
+        }
+
+        $results = [];
+        $items = $tasks[0]['result'][0]['items'] ?? [];
+        foreach ( $items as $item ) {
+            $kw = $item['keyword'] ?? '';
+            if ( $kw === '' ) {
+                continue;
+            }
+            $results[ $kw ] = [
+                'keyword_difficulty' => $item['keyword_difficulty'] ?? null,
+            ];
+        }
+
+        return $results;
+    }
+
+    // =========================================================
     // HTTP リクエスト（内部）
     // =========================================================
 
