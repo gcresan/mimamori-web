@@ -4764,16 +4764,50 @@ function gcrev_rank_results_create_table(): void {
         api_source VARCHAR(30) NOT NULL DEFAULT 'dataforseo',
         fetch_mode VARCHAR(20) NOT NULL DEFAULT 'weekly_batch',
         iso_year_week CHAR(8) NOT NULL,
+        fetch_date DATE NULL,
         fetched_at DATETIME NOT NULL,
         created_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
-        UNIQUE KEY kw_device_week (keyword_id, device, iso_year_week),
+        UNIQUE KEY kw_device_date (keyword_id, device, fetch_date),
         KEY user_fetched (user_id, fetched_at),
         KEY keyword_id (keyword_id)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta($sql);
+
+    // Migration: 旧 UNIQUE KEY kw_device_week → kw_device_date への移行
+    gcrev_rank_results_migrate_to_daily();
+}
+
+/**
+ * rank_results テーブルを日次対応に移行
+ * - fetch_date カラムを既存データに反映
+ * - 旧 UNIQUE KEY kw_device_week を削除
+ */
+function gcrev_rank_results_migrate_to_daily(): void {
+    global $wpdb;
+
+    $table = $wpdb->prefix . 'gcrev_rank_results';
+    $option_key = 'gcrev_rank_results_daily_migrated';
+
+    if ( get_option( $option_key ) ) {
+        return;
+    }
+
+    // fetch_date を fetched_at から埋める（NULLの行のみ）
+    $wpdb->query(
+        "UPDATE {$table} SET fetch_date = DATE(fetched_at) WHERE fetch_date IS NULL"
+    );
+
+    // 旧ユニークキーが残っていれば削除
+    $indexes = $wpdb->get_results( "SHOW INDEX FROM {$table} WHERE Key_name = 'kw_device_week'" );
+    if ( ! empty( $indexes ) ) {
+        $wpdb->query( "ALTER TABLE {$table} DROP INDEX kw_device_week" );
+    }
+
+    update_option( $option_key, '1' );
+    error_log( '[GCREV] rank_results: migrated to daily (fetch_date)' );
 }
 
 // ----------------------------

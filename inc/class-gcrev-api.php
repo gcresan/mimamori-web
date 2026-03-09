@@ -8236,13 +8236,13 @@ PROMPT;
                 // 最新
                 $l = ! empty( $history ) ? $history[0] : null;
 
-                // 前回（最新と異なる iso_year_week のもの）
+                // 前回（最新と異なる日付のもの）
                 $p = null;
                 if ( $l ) {
-                    $latest_week = ( new \DateTimeImmutable( $l['fetched_at'], $tz ) )->format( 'o-W' );
+                    $latest_date = substr( $l['fetched_at'], 0, 10 );
                     foreach ( $history as $h ) {
-                        $h_week = ( new \DateTimeImmutable( $h['fetched_at'], $tz ) )->format( 'o-W' );
-                        if ( $h_week !== $latest_week ) {
+                        $h_date = substr( $h['fetched_at'], 0, 10 );
+                        if ( $h_date !== $latest_date ) {
                             $p = $h;
                             break;
                         }
@@ -8653,7 +8653,7 @@ PROMPT;
     public const RANK_FETCH_CHUNK_LIMIT = 5;
 
     /**
-     * 週次自動取得のエントリポイント（Cron コールバック）
+     * 日次自動取得のエントリポイント（Cron コールバック）
      */
     public function auto_fetch_rankings(): void {
         $lock_key = 'gcrev_lock_rank_fetch';
@@ -8679,7 +8679,7 @@ PROMPT;
             "SELECT COUNT(*) FROM {$kw_table} WHERE enabled = 1 AND target_domain != ''"
         );
         $api_calls = $total_keywords * 2; // desktop + mobile
-        error_log( "[GCREV][RankTracker] Starting weekly fetch: {$total_keywords} keywords, estimated {$api_calls} API calls" );
+        error_log( "[GCREV][RankTracker] Starting daily fetch: {$total_keywords} keywords, estimated {$api_calls} API calls" );
 
         // チャンク処理開始
         wp_schedule_single_event( time() + 5, 'gcrev_rank_fetch_chunk_event', [ 0, self::RANK_FETCH_CHUNK_LIMIT ] );
@@ -8709,7 +8709,7 @@ PROMPT;
             if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                 Gcrev_Cron_Logger::finish( 'rank_fetch' );
             }
-            error_log( '[GCREV][RankTracker] Weekly fetch completed' );
+            error_log( '[GCREV][RankTracker] Daily fetch completed' );
             return;
         }
 
@@ -8719,9 +8719,9 @@ PROMPT;
             return;
         }
 
-        $tz             = wp_timezone();
-        $now            = new \DateTimeImmutable( 'now', $tz );
-        $iso_year_week  = $now->format( 'o-W' ); // ISO 8601 year-week
+        $tz          = wp_timezone();
+        $now         = new \DateTimeImmutable( 'now', $tz );
+        $fetch_date  = $now->format( 'Y-m-d' );
 
         foreach ( $user_ids as $uid ) {
             $uid = (int) $uid;
@@ -8736,15 +8736,15 @@ PROMPT;
             foreach ( $keywords as $kw ) {
                 $kw_id = (int) $kw['id'];
 
-                // ISO週重複チェック
+                // 日次重複チェック（当日分が既にあればスキップ）
                 $already = $wpdb->get_var( $wpdb->prepare(
                     "SELECT COUNT(*) FROM {$res_table}
-                     WHERE keyword_id = %d AND iso_year_week = %s",
-                    $kw_id, $iso_year_week
+                     WHERE keyword_id = %d AND fetch_date = %s",
+                    $kw_id, $fetch_date
                 ) );
 
                 if ( (int) $already > 0 ) {
-                    continue; // 今週分は取得済み
+                    continue; // 本日分は取得済み
                 }
 
                 // DataForSEO API 呼び出し
@@ -8784,10 +8784,12 @@ PROMPT;
     private function save_rank_results( array $kw, array $results, string $fetch_mode = 'weekly_batch' ): array {
         global $wpdb;
 
-        $res_table = $wpdb->prefix . 'gcrev_rank_results';
-        $tz        = wp_timezone();
-        $now       = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
-        $iso_week  = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'o-W' );
+        $res_table   = $wpdb->prefix . 'gcrev_rank_results';
+        $tz          = wp_timezone();
+        $now_dt      = new \DateTimeImmutable( 'now', $tz );
+        $now         = $now_dt->format( 'Y-m-d H:i:s' );
+        $iso_week    = $now_dt->format( 'o-W' );
+        $fetch_date  = $now_dt->format( 'Y-m-d' );
 
         $saved = [];
 
@@ -8807,8 +8809,8 @@ PROMPT;
             $sql = $wpdb->prepare(
                 "INSERT INTO {$res_table}
                  (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain,
-                  is_ranked, serp_type, api_source, fetch_mode, iso_year_week, fetched_at, created_at)
-                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s, %s)
+                  is_ranked, serp_type, api_source, fetch_mode, iso_year_week, fetch_date, fetched_at, created_at)
+                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s, %s, %s)
                  ON DUPLICATE KEY UPDATE
                   rank_group    = VALUES(rank_group),
                   rank_absolute = VALUES(rank_absolute),
@@ -8825,6 +8827,7 @@ PROMPT;
                 'dataforseo',
                 $fetch_mode,
                 $iso_week,
+                $fetch_date,
                 $now,
                 $now
             );
@@ -9576,6 +9579,16 @@ PROMPT;
 
             $saved = $this->save_rank_results( $kw, $results, 'manual_live' );
             $fetched++;
+
+            // 検索ボリューム・難易度が未取得のキーワードは自動補完
+            if ( $kw['search_volume'] === null || $kw['keyword_difficulty'] === null ) {
+                $this->auto_fetch_keyword_metrics_single(
+                    (int) $kw['id'],
+                    $kw['keyword'],
+                    (int) $kw['location_code'],
+                    $kw['language_code'] ?: 'ja'
+                );
+            }
 
             $results_all[] = [
                 'keyword_id' => (int) $kw['id'],

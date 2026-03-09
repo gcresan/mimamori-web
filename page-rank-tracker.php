@@ -604,6 +604,66 @@ get_header();
     font-size: 14px;
 }
 
+/* --- Progress overlay (bulk fetch) --- */
+.rt-progress-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 10002;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+.rt-progress-overlay.active { display: flex; }
+.rt-progress-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 40px;
+    min-width: 340px;
+    max-width: 480px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.rt-progress-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 16px;
+}
+.rt-progress-bar-wrap {
+    width: 100%;
+    height: 10px;
+    background: #e5e7eb;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+.rt-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #2563eb, #60a5fa);
+    border-radius: 5px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+.rt-progress-bar--indeterminate {
+    width: 30%;
+    animation: rt-progress-slide 1.5s infinite ease-in-out;
+}
+@keyframes rt-progress-slide {
+    0%   { transform: translateX(-100%); }
+    50%  { transform: translateX(200%); }
+    100% { transform: translateX(-100%); }
+}
+.rt-progress-text {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+.rt-progress-sub {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .rt-header { flex-direction: column; align-items: flex-start; }
@@ -734,6 +794,18 @@ get_header();
             <div class="rt-quota__item">計測中: <strong id="quotaUsed" style="color:#2563eb;">0</strong></div>
             <div class="rt-quota__item rt-quota__item--remaining">残り枠: <strong id="quotaRemaining">5</strong></div>
         </div>
+    </div>
+</div>
+
+<!-- Progress overlay (bulk fetch) -->
+<div class="rt-progress-overlay" id="progressOverlay">
+    <div class="rt-progress-box">
+        <div class="rt-progress-title" id="progressTitle">最新の順位を取得中...</div>
+        <div class="rt-progress-bar-wrap">
+            <div class="rt-progress-bar rt-progress-bar--indeterminate" id="progressBar"></div>
+        </div>
+        <div class="rt-progress-text" id="progressText">キーワードの順位を取得しています...</div>
+        <div class="rt-progress-sub" id="progressSub">しばらくお待ちください</div>
     </div>
 </div>
 
@@ -1026,6 +1098,10 @@ get_header();
         btn.disabled = true;
         btn.innerHTML = '<span class="rt-btn__icon">&#x23F3;</span> 最新情報を取得中...';
 
+        // プログレスオーバーレイ表示
+        var kwCount = myKeywords.filter(function(k) { return k.enabled; }).length || '?';
+        showProgress(true, kwCount);
+
         fetch('/wp-json/gcrev/v1/rank-tracker/fetch-all', {
             method: 'POST',
             headers: { 'X-WP-Nonce': wpNonce },
@@ -1038,20 +1114,61 @@ get_header();
 
             if (json.success && json.data) {
                 var cnt = json.data.fetched || 0;
-                showToast(cnt + '件のキーワードの最新順位を取得しました。');
-                fetchMyKeywords();
-                fetchRankings();
+                showProgressComplete(cnt);
+                setTimeout(function() {
+                    showProgress(false);
+                    showToast(cnt + '件のキーワードの最新順位を取得しました。');
+                    fetchMyKeywords();
+                    fetchRankings();
+                }, 1200);
             } else {
+                showProgress(false);
                 showToast(json.message || '取得に失敗しました。', 'error');
             }
         })
         .catch(function(err) {
             btn.disabled = false;
             btn.innerHTML = '<span class="rt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+            showProgress(false);
             console.error('[FetchAll]', err);
             showToast('通信エラーが発生しました。', 'error');
         });
     };
+
+    function showProgress(show, kwCount) {
+        var overlay = document.getElementById('progressOverlay');
+        if (!overlay) return;
+        if (show) {
+            var titleEl = document.getElementById('progressTitle');
+            var textEl = document.getElementById('progressText');
+            var subEl = document.getElementById('progressSub');
+            var barEl = document.getElementById('progressBar');
+            if (titleEl) titleEl.textContent = '最新の順位を取得中...';
+            if (textEl) textEl.textContent = kwCount + '件のキーワードの順位を取得しています...';
+            if (subEl) subEl.textContent = '1キーワードあたり数秒かかります。しばらくお待ちください。';
+            if (barEl) {
+                barEl.style.width = '0%';
+                barEl.classList.add('rt-progress-bar--indeterminate');
+            }
+            overlay.classList.add('active');
+        } else {
+            overlay.classList.remove('active');
+        }
+    }
+
+    function showProgressComplete(count) {
+        var titleEl = document.getElementById('progressTitle');
+        var textEl = document.getElementById('progressText');
+        var subEl = document.getElementById('progressSub');
+        var barEl = document.getElementById('progressBar');
+        if (titleEl) titleEl.textContent = '取得完了!';
+        if (textEl) textEl.textContent = count + '件のキーワードの最新順位を取得しました。';
+        if (subEl) subEl.textContent = '';
+        if (barEl) {
+            barEl.classList.remove('rt-progress-bar--indeterminate');
+            barEl.style.width = '100%';
+        }
+    }
 
     // =========================================================
     // SERP Top modal
@@ -1061,28 +1178,43 @@ get_header();
         var body = document.getElementById('serpModalBody');
         var title = document.getElementById('serpModalTitle');
 
+        if (!modal || !body || !title) {
+            console.error('[SerpTop] Modal elements not found');
+            return;
+        }
+
         // Find keyword name
-        var kw = rankData.find(function(k) { return k.keyword_id === keywordId; });
+        var kw = null;
+        for (var i = 0; i < rankData.length; i++) {
+            if (rankData[i].keyword_id == keywordId) { kw = rankData[i]; break; }
+        }
         title.textContent = (kw ? '「' + kw.keyword + '」' : '') + ' 上位ランキング (' + (currentDevice === 'mobile' ? 'スマホ' : 'PC') + ')';
 
         body.innerHTML = '<div class="rt-loading">上位サイトを取得中...</div>';
         modal.classList.add('active');
 
-        fetch('/wp-json/gcrev/v1/rank-tracker/serp-top?keyword_id=' + keywordId + '&device=' + currentDevice, {
+        fetch('/wp-json/gcrev/v1/rank-tracker/serp-top?keyword_id=' + encodeURIComponent(keywordId) + '&device=' + encodeURIComponent(currentDevice), {
             headers: { 'X-WP-Nonce': wpNonce },
             credentials: 'same-origin'
         })
-        .then(function(res) { return res.json(); })
+        .then(function(res) {
+            if (!res.ok) {
+                return res.json().then(function(errJson) {
+                    throw new Error(errJson.message || 'HTTP ' + res.status);
+                });
+            }
+            return res.json();
+        })
         .then(function(json) {
             if (json.success && json.data && json.data.items) {
                 body.innerHTML = buildSerpTable(json.data.items);
             } else {
-                body.innerHTML = '<div class="rt-loading" style="color:#ef4444;">' + (json.message || 'データの取得に失敗しました。') + '</div>';
+                body.innerHTML = '<div class="rt-loading" style="color:#ef4444;">' + escHtml(json.message || 'データの取得に失敗しました。') + '</div>';
             }
         })
         .catch(function(err) {
             console.error('[SerpTop]', err);
-            body.innerHTML = '<div class="rt-loading" style="color:#ef4444;">通信エラーが発生しました。</div>';
+            body.innerHTML = '<div class="rt-loading" style="color:#ef4444;">' + escHtml(err.message || '通信エラーが発生しました。') + '</div>';
         });
     };
 

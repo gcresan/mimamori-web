@@ -21,8 +21,9 @@ class Gcrev_Bootstrap {
         // Cron Log クリーンアップ
         add_action('gcrev_cron_log_cleanup_event', [__CLASS__, 'on_cron_log_cleanup']);
 
-        // 順位トラッキング（週次）
-        add_action('gcrev_rank_fetch_weekly_event', [__CLASS__, 'on_rank_fetch_weekly_event']);
+        // 順位トラッキング（日次）
+        add_action('gcrev_rank_fetch_daily_event', [__CLASS__, 'on_rank_fetch_daily_event']);
+        add_action('gcrev_rank_fetch_weekly_event', [__CLASS__, 'on_rank_fetch_weekly_event']); // 後方互換
         add_action('gcrev_rank_fetch_chunk_event', [__CLASS__, 'on_rank_fetch_chunk_event'], 10, 2);
 
         // キーワード指標（月次 — 検索ボリューム + SEO難易度）
@@ -160,10 +161,19 @@ class Gcrev_Bootstrap {
     }
 
     /**
-     * 順位トラッキング — 週次フェッチイベント
+     * 順位トラッキング — 日次フェッチイベント
+     */
+    public static function on_rank_fetch_daily_event(): void {
+        error_log('[GCREV] gcrev_rank_fetch_daily_event triggered');
+        $api = new Gcrev_Insight_API(false);
+        $api->auto_fetch_rankings();
+    }
+
+    /**
+     * 順位トラッキング — 旧週次フェッチ（後方互換: 日次に転送）
      */
     public static function on_rank_fetch_weekly_event(): void {
-        error_log('[GCREV] gcrev_rank_fetch_weekly_event triggered');
+        error_log('[GCREV] gcrev_rank_fetch_weekly_event triggered (legacy → forwarding to daily)');
         $api = new Gcrev_Insight_API(false);
         $api->auto_fetch_rankings();
     }
@@ -248,8 +258,14 @@ class Gcrev_Bootstrap {
         // Cron log cleanup (tomorrow 02:00)
         self::schedule_daily_if_missing('gcrev_cron_log_cleanup_event', 'tomorrow 02:00:00');
 
-        // 順位トラッキング: 週1回（月曜 05:00）
-        self::schedule_weekly_if_missing('gcrev_rank_fetch_weekly_event', 'next monday 05:00:00');
+        // 順位トラッキング: 毎晩 03:30
+        self::schedule_daily_if_missing('gcrev_rank_fetch_daily_event', 'tomorrow 03:30:00');
+
+        // 旧週次イベントを解除（日次に移行済み）
+        $old_ts = wp_next_scheduled('gcrev_rank_fetch_weekly_event');
+        if ( $old_ts ) {
+            wp_unschedule_event( $old_ts, 'gcrev_rank_fetch_weekly_event' );
+        }
 
         // キーワード指標: 月1回（1日 06:00）
         self::schedule_monthly_if_missing('gcrev_keyword_metrics_monthly_event', 'first day of next month 06:00:00');
@@ -316,6 +332,7 @@ class Gcrev_Bootstrap {
             'gcrev_monthly_report_generate_event',
             'gcrev_monthly_report_finalize_event',
             'gcrev_cron_log_cleanup_event',
+            'gcrev_rank_fetch_daily_event',
             'gcrev_rank_fetch_weekly_event',
             'gcrev_keyword_metrics_monthly_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
