@@ -592,6 +592,19 @@ get_header();
         </div>
     </div>
 
+    <!-- レポート生成プリローダー -->
+    <div class="report-preloader-overlay" id="reportPreloader">
+        <div class="report-preloader">
+            <div class="report-preloader__icon">📊</div>
+            <h3 class="report-preloader__title">レポートを生成しています</h3>
+            <p class="report-preloader__step" id="preloaderStep">準備しています...</p>
+            <div class="report-preloader__bar-wrap">
+                <div class="report-preloader__bar" id="preloaderBar"></div>
+            </div>
+            <p class="report-preloader__percent"><span id="preloaderPercent">0</span>%</p>
+        </div>
+    </div>
+
     <!-- 2) period-info（参照HTML準拠 / dashboard同一ロジック） -->
     <div class="period-info">
         <div class="period-item">
@@ -1590,14 +1603,104 @@ function escapeHtml(str) {
 }
 
 // =============================================
-// 月次AIレポート生成機能（dashboard同一）
+// レポート生成プリローダー制御
+// =============================================
+const reportPreloaderSteps = [
+    { at:  0, text: '準備しています...' },
+    { at:  5, text: 'GA4の設定を確認しています...' },
+    { at: 12, text: 'レポート生成を開始しています...' },
+    { at: 25, text: 'アクセスデータを取得しています...' },
+    { at: 40, text: '前月のデータを分析しています...' },
+    { at: 55, text: 'AIコメントを生成しています...' },
+    { at: 70, text: 'レポートを組み立てています...' },
+    { at: 85, text: '仕上げ処理をしています...' },
+    { at: 93, text: '表示を準備しています...' },
+];
+
+let preloaderTimer = null;
+let preloaderCurrent = 0;
+
+function showReportPreloader() {
+    const overlay = document.getElementById('reportPreloader');
+    if (overlay) overlay.classList.add('active');
+    preloaderCurrent = 0;
+    updatePreloaderUI(0, reportPreloaderSteps[0].text);
+    startPreloaderProgress();
+}
+
+function hideReportPreloader() {
+    stopPreloaderProgress();
+    const overlay = document.getElementById('reportPreloader');
+    if (overlay) overlay.classList.remove('active');
+}
+
+function updatePreloaderUI(percent, stepText) {
+    const bar = document.getElementById('preloaderBar');
+    const num = document.getElementById('preloaderPercent');
+    const step = document.getElementById('preloaderStep');
+    if (bar) bar.style.width = percent + '%';
+    if (num) num.textContent = Math.round(percent);
+    if (step && stepText) step.textContent = stepText;
+}
+
+function getStepText(percent) {
+    let text = reportPreloaderSteps[0].text;
+    for (let i = reportPreloaderSteps.length - 1; i >= 0; i--) {
+        if (percent >= reportPreloaderSteps[i].at) {
+            text = reportPreloaderSteps[i].text;
+            break;
+        }
+    }
+    return text;
+}
+
+function startPreloaderProgress() {
+    stopPreloaderProgress();
+    preloaderTimer = setInterval(function() {
+        if (preloaderCurrent >= 93) {
+            // 93% で一旦停止（実処理完了待ち）
+            stopPreloaderProgress();
+            return;
+        }
+        // 序盤は速く、中盤からゆるやかに
+        var increment;
+        if (preloaderCurrent < 20) {
+            increment = 1.2 + Math.random() * 0.8;
+        } else if (preloaderCurrent < 50) {
+            increment = 0.6 + Math.random() * 0.6;
+        } else if (preloaderCurrent < 80) {
+            increment = 0.3 + Math.random() * 0.4;
+        } else {
+            increment = 0.1 + Math.random() * 0.2;
+        }
+        preloaderCurrent = Math.min(preloaderCurrent + increment, 93);
+        updatePreloaderUI(preloaderCurrent, getStepText(preloaderCurrent));
+    }, 300);
+}
+
+function stopPreloaderProgress() {
+    if (preloaderTimer) {
+        clearInterval(preloaderTimer);
+        preloaderTimer = null;
+    }
+}
+
+function finishPreloader() {
+    return new Promise(function(resolve) {
+        stopPreloaderProgress();
+        updatePreloaderUI(100, '完了しました！');
+        setTimeout(resolve, 800);
+    });
+}
+
+// =============================================
+// 月次AIレポート生成機能
 // =============================================
 async function generateMonthlyReport() {
     const btn = document.getElementById('btn-generate-report');
     const statusDiv = document.getElementById('report-generation-status');
-    if (!btn || !statusDiv) return;
+    if (!btn) return;
 
-    showLoading();
     btn.disabled = true;
     btn.style.opacity = '0.6';
     btn.style.cursor = 'not-allowed';
@@ -1605,7 +1708,7 @@ async function generateMonthlyReport() {
     const wpNonce = '<?php echo wp_create_nonce("wp_rest"); ?>';
 
     try {
-        // Step 0: GA4プロパティ設定チェック
+        // Step 0: GA4プロパティ設定チェック（プリローダー表示前に軽量チェック）
         const checkUrl = '<?php echo rest_url("gcrev/v1/report/check-prev2-data"); ?>';
         const checkRes = await fetch(checkUrl, {
             headers: { 'X-WP-Nonce': wpNonce },
@@ -1614,7 +1717,6 @@ async function generateMonthlyReport() {
         if (checkRes.ok) {
             const checkJson = await checkRes.json();
             if (checkJson.code === 'NO_PREV2_DATA') {
-                hideLoading();
                 btn.disabled = false;
                 btn.style.opacity = '1';
                 btn.style.cursor = 'pointer';
@@ -1623,7 +1725,8 @@ async function generateMonthlyReport() {
             }
         }
 
-        statusDiv.style.display = 'block';
+        // チェック通過 → プリローダー表示
+        showReportPreloader();
 
         const apiUrl = '<?php echo rest_url("gcrev/v1/report/generate-manual"); ?>';
         const response = await fetch(apiUrl, {
@@ -1639,7 +1742,7 @@ async function generateMonthlyReport() {
         const result = await response.json();
 
         if (result.success) {
-            alert('✅ レポートの生成が完了しました！');
+            await finishPreloader();
             location.reload();
         } else {
             if (result.code === 'NO_PREV2_DATA') {
@@ -1648,12 +1751,12 @@ async function generateMonthlyReport() {
             throw new Error(result.message || 'レポート生成に失敗しました');
         }
     } catch (error) {
-        hideLoading();
+        hideReportPreloader();
         alert('❌ エラー: ' + error.message);
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.style.cursor = 'pointer';
-        statusDiv.style.display = 'none';
+        if (statusDiv) statusDiv.style.display = 'none';
     }
 }
 
