@@ -692,7 +692,7 @@ if ($infographic) {
       $dash_offset   = $circumference * (1 - $score_pct / 100);
       $score_diff = (int)($infographic['score_diff'] ?? 0);
       $diff_class = $score_diff > 0 ? 'positive' : ($score_diff < 0 ? 'negative' : 'neutral');
-      $diff_icon  = $score_diff > 0 ? '▲' : ($score_diff < 0 ? '▼' : '→');
+      $diff_icon  = $score_diff > 0 ? '↑' : ($score_diff < 0 ? '↓' : '→');
       $diff_text  = $score_diff > 0 ? '+' . $score_diff : (string)$score_diff;
       ?>
       <div class="info-score-gauge">
@@ -738,7 +738,7 @@ if ($infographic) {
           $kpi_diff = (int)($kpi['diff'] ?? 0);
 
           $kpi_diff_class = $kpi_diff > 0 ? 'positive' : ($kpi_diff < 0 ? 'negative' : 'neutral');
-          $kpi_diff_icon  = $kpi_diff > 0 ? '▲' : ($kpi_diff < 0 ? '▼' : '→');
+          $kpi_diff_icon  = $kpi_diff > 0 ? '↑' : ($kpi_diff < 0 ? '↓' : '→');
           $kpi_diff_text  = $kpi_diff > 0 ? '+' . number_format($kpi_diff) : number_format($kpi_diff);
           $is_first_active = $first_kpi ? ' is-active' : '';
           $aria_pressed    = $first_kpi ? 'true' : 'false';
@@ -1390,7 +1390,7 @@ foreach ($highlight_items as $highlight):
         var diffEl = el.querySelector('[data-kpi-role="diff"]');
         if(valEl) valEl.textContent = fmt(value);
         if(diffEl){
-            var icon = diff > 0 ? '▲' : (diff < 0 ? '▼' : '→');
+            var icon = diff > 0 ? '↑' : (diff < 0 ? '↓' : '→');
             var cls  = diff > 0 ? 'positive' : (diff < 0 ? 'negative' : 'neutral');
             diffEl.textContent = icon + ' ' + (diff > 0 ? '+' : '') + fmt(diff);
             diffEl.className = 'info-kpi-diff ' + cls;

@@ -339,7 +339,7 @@ function updateSummaryCards(data) {
     const cards = channels_summary.map(channel => {
         const config = channelConfig[channel.channel] || { icon: '📊', bg: '#f3f4f6', color: '#888888' };
         const changeClass = channel.change_percent > 0 ? 'positive' : channel.change_percent < 0 ? 'negative' : 'neutral';
-        const changeSymbol = channel.change_percent > 0 ? '▲' : channel.change_percent < 0 ? '▼' : '━';
+        const changeSymbol = channel.change_percent > 0 ? '↑' : channel.change_percent < 0 ? '↓' : '→';
         
         return `
 <div class="summary-card">

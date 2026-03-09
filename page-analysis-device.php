@@ -379,10 +379,10 @@ function updateDeviceCard(deviceType, current, prev) {
         changePercent = ((sessions - prevSessions) / prevSessions) * 100;
         if (changePercent > 0) {
             changeClass = 'positive';
-            changeSymbol = '▲';
+            changeSymbol = '↑';
         } else if (changePercent < 0) {
             changeClass = 'negative';
-            changeSymbol = '▼';
+            changeSymbol = '↓';
         }
     }
     

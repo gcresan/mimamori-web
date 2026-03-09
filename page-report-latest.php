@@ -1221,10 +1221,10 @@ function updateChangeIndicator(elementId, trendData) {
 
     if (trendData.value > 0) {
         element.classList.add('positive');
-        element.innerHTML = '<span>▲</span><span>' + trendData.text + '</span>';
+        element.innerHTML = '<span>↑</span><span>' + trendData.text + '</span>';
     } else if (trendData.value < 0) {
         element.classList.add('negative');
-        element.innerHTML = '<span>▼</span><span>' + trendData.text.replace('-', '') + '</span>';
+        element.innerHTML = '<span>↓</span><span>' + trendData.text.replace('-', '') + '</span>';
     } else {
         element.classList.add('neutral');
         element.innerHTML = '<span>→</span><span>' + trendData.text + '</span>';

@@ -354,10 +354,10 @@ function updateSummaryCards(data) {
         let changeSymbol = '';
         if (changePercent > 0) {
             changeClass = 'positive';
-            changeSymbol = '▲';
+            changeSymbol = '↑';
         } else if (changePercent < 0) {
             changeClass = 'negative';
-            changeSymbol = '▼';
+            changeSymbol = '↓';
         }
         
         return `
