@@ -409,11 +409,11 @@ h3 { font-size: 20px; font-weight: 700; }
 
 /* ========== Period Info Bar → 参照テンプレの period-selector スタイル ========== */
 .period-info-bar {
-  background: var(--mw-bg-primary);
+  background: var(--mw-bg-secondary);
   border: 1px solid var(--mw-border-light);
-  border-radius: var(--mw-radius-md);
-  padding: 22px 26px;
-  margin-bottom: 36px;
+  border-radius: var(--mw-radius-sm);
+  padding: 12px 16px;
+  margin-bottom: 24px;
   display: flex;
   align-items: center;
   gap: 16px;
