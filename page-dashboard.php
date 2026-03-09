@@ -1287,7 +1287,7 @@ foreach ($highlight_items as $highlight):
         </div>
         <div class="drt-header__actions">
             <button class="drt-btn drt-btn--primary" id="drtFetchAllBtn">
-                <span class="drt-btn__icon">&#x1F504;</span>
+                <span class="drt-btn__icon">&#x21BB;</span>
                 最新の情報を見る
             </button>
         </div>
@@ -2096,7 +2096,7 @@ foreach ($highlight_items as $highlight):
     document.getElementById('drtFetchAllBtn').addEventListener('click', function() {
         var btn = this;
         btn.disabled = true;
-        btn.innerHTML = '<span class="drt-btn__icon">&#x23F3;</span> 取得中...';
+        btn.innerHTML = '<span class="drt-btn__icon">&#x22EF;</span> 取得中...';
         drtShowProgress(true);
 
         fetch(restBase + 'rank-tracker/fetch-all', {
@@ -2107,7 +2107,7 @@ foreach ($highlight_items as $highlight):
         .then(function(r) { return r.json(); })
         .then(function(json) {
             btn.disabled = false;
-            btn.innerHTML = '<span class="drt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+            btn.innerHTML = '<span class="drt-btn__icon">&#x21BB;</span> 最新の情報を見る';
             if (json.success && json.data) {
                 drtShowProgressComplete(json.data.fetched || 0);
                 setTimeout(function() {
@@ -2122,7 +2122,7 @@ foreach ($highlight_items as $highlight):
         })
         .catch(function() {
             btn.disabled = false;
-            btn.innerHTML = '<span class="drt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+            btn.innerHTML = '<span class="drt-btn__icon">&#x21BB;</span> 最新の情報を見る';
             drtShowProgress(false);
             drtShowToast('通信エラーが発生しました。', 'error');
         });

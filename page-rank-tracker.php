@@ -691,11 +691,11 @@ get_header();
         </div>
         <div class="rt-header__actions">
             <button class="rt-btn rt-btn--primary" id="fetchAllBtn" onclick="fetchAllKeywords()">
-                <span class="rt-btn__icon">&#x1F504;</span>
+                <span class="rt-btn__icon">&#x21BB;</span>
                 最新の情報を見る
             </button>
             <button class="rt-btn" id="exportCsvBtn" onclick="exportRankCsv()" style="display:none;">
-                <span class="rt-btn__icon">&#x2B07;</span>
+                <span class="rt-btn__icon">&#x2193;</span>
                 CSV ダウンロード
             </button>
         </div>
@@ -1096,7 +1096,7 @@ get_header();
     window.fetchAllKeywords = function() {
         var btn = document.getElementById('fetchAllBtn');
         btn.disabled = true;
-        btn.innerHTML = '<span class="rt-btn__icon">&#x23F3;</span> 最新情報を取得中...';
+        btn.innerHTML = '<span class="rt-btn__icon">&#x22EF;</span> 最新情報を取得中...';
 
         // プログレスオーバーレイ表示
         var kwCount = myKeywords.filter(function(k) { return k.enabled; }).length || '?';
@@ -1110,7 +1110,7 @@ get_header();
         .then(function(res) { return res.json(); })
         .then(function(json) {
             btn.disabled = false;
-            btn.innerHTML = '<span class="rt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+            btn.innerHTML = '<span class="rt-btn__icon">&#x21BB;</span> 最新の情報を見る';
 
             if (json.success && json.data) {
                 var cnt = json.data.fetched || 0;
@@ -1128,7 +1128,7 @@ get_header();
         })
         .catch(function(err) {
             btn.disabled = false;
-            btn.innerHTML = '<span class="rt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+            btn.innerHTML = '<span class="rt-btn__icon">&#x21BB;</span> 最新の情報を見る';
             showProgress(false);
             console.error('[FetchAll]', err);
             showToast('通信エラーが発生しました。', 'error');
