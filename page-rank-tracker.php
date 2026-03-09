@@ -22,547 +22,595 @@ get_header();
 ?>
 
 <style>
-/* page-rank-tracker — Page-specific styles */
-.rank-summary-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
-    margin-bottom: 28px;
-}
-.rank-summary-card {
-    background: #FAF9F6;
-    border: 1px solid #E8E4DF;
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-}
-.rank-summary-card__value {
-    font-size: 32px;
-    font-weight: 800;
-    color: #2F3A4A;
-    line-height: 1.1;
-}
-.rank-summary-card__label {
-    font-size: 13px;
-    color: #8A8A8A;
-    margin-top: 6px;
-}
-.rank-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: #FAF9F6;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid #E8E4DF;
-}
-.rank-table th {
-    background: #F5F3EF;
-    font-size: 12px;
-    font-weight: 600;
-    color: #8A8A8A;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 14px 16px;
-    text-align: left;
-    border-bottom: 1px solid #E8E4DF;
-    white-space: nowrap;
-    cursor: pointer;
-    user-select: none;
-}
-.rank-table th:hover {
-    color: #2F3A4A;
-}
-.rank-table th .sort-indicator {
-    margin-left: 4px;
-    opacity: 0.4;
-}
-.rank-table th.sort-asc .sort-indicator,
-.rank-table th.sort-desc .sort-indicator {
-    opacity: 1;
-}
-.rank-table td {
-    padding: 14px 16px;
-    border-bottom: 1px solid #E8E4DF;
-    font-size: 14px;
-    color: #2B2B2B;
-    vertical-align: middle;
-}
-.rank-table tr:last-child td {
-    border-bottom: none;
-}
-.rank-table tr:hover td {
-    background: rgba(47,58,74,0.03);
-}
-.rank-table tr.kw-disabled td {
-    opacity: 0.45;
-    background: #f5f5f5;
-}
-.rank-value {
-    font-weight: 700;
-    font-size: 18px;
-}
-.rank-value--out {
-    color: #d63638;
-    font-size: 13px;
-    font-weight: 600;
-}
-.rank-change {
-    font-size: 13px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-.rank-change--up {
-    color: #0a7b0a;
-}
-.rank-change--down {
-    color: #d63638;
-}
-.rank-change--same {
-    color: #8A8A8A;
-}
-.rank-url {
-    font-size: 12px;
-    color: #8A8A8A;
-    max-width: 240px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.rank-keyword-name {
-    font-weight: 600;
-    color: #2B2B2B;
-}
-.rank-keyword-memo {
-    font-size: 12px;
-    color: #8A8A8A;
-    margin-top: 2px;
-}
-.rank-empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: #8A8A8A;
-}
-.rank-empty-state__icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-}
-.rank-empty-state__text {
-    font-size: 16px;
-    margin-bottom: 8px;
-}
-.rank-export-btn {
-    display: inline-block;
-    padding: 8px 16px;
-    background: #2F3A4A;
-    color: #FAF9F6;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
-    text-decoration: none;
-    margin-bottom: 16px;
-}
-.rank-export-btn:hover {
-    background: #3D4D61;
-}
-/* 期間セレクター */
-.rank-range-selector {
+/* ============================================================
+   page-rank-tracker v2 — Clean card-based layout
+   ============================================================ */
+
+/* --- Header bar --- */
+.rt-header {
     display: flex;
-    gap: 8px;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 24px;
-    background: #F5F3EF;
-    padding: 4px;
-    border-radius: 8px;
-    width: fit-content;
+    flex-wrap: wrap;
+    gap: 12px;
 }
-.rank-range-btn {
-    padding: 8px 18px;
+.rt-header__title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.rt-header__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.rt-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    background: #fff;
+    color: #344054;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.rt-btn:hover { background: #f9fafb; border-color: #98a2b3; }
+.rt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rt-btn--primary {
+    background: #2563eb;
+    color: #fff;
+    border-color: #2563eb;
+}
+.rt-btn--primary:hover { background: #1d4ed8; }
+.rt-btn--primary:disabled { background: #93b4f5; border-color: #93b4f5; }
+.rt-btn__icon { font-size: 15px; }
+
+/* --- Device toggle --- */
+.rt-device-toggle {
+    display: inline-flex;
+    background: #f2f4f7;
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 20px;
+}
+.rt-device-btn {
+    padding: 7px 20px;
     border: none;
-    background: transparent;
     border-radius: 6px;
     font-size: 13px;
     font-weight: 500;
-    color: #8A8A8A;
     cursor: pointer;
-    transition: all 0.25s ease;
+    background: transparent;
+    color: #667085;
+    transition: all 0.2s;
 }
-.rank-range-btn:hover {
-    background: rgba(47,58,74,0.06);
-    color: #2F3A4A;
-}
-.rank-range-btn.active {
-    background: #FAF9F6;
-    color: #2B2B2B;
+.rt-device-btn.active {
+    background: #fff;
+    color: #1a1a1a;
     font-weight: 600;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
-/* ソート */
-.sortable { cursor: pointer; }
-.sortable:hover { color: #2F3A4A; }
 
-/* ============================
-   キーワード管理セクション
-   ============================ */
-.kw-management {
-    background: #FAF9F6;
-    border: 1px solid #E8E4DF;
+/* --- Summary cards --- */
+.rt-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+}
+@media (max-width: 768px) {
+    .rt-summary-cards { grid-template-columns: repeat(2, 1fr); }
+}
+.rt-summary-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-left: 4px solid #e5e7eb;
+}
+.rt-summary-card--gold   { border-left-color: #f59e0b; }
+.rt-summary-card--blue   { border-left-color: #3b82f6; }
+.rt-summary-card--green  { border-left-color: #22c55e; }
+.rt-summary-card--red    { border-left-color: #ef4444; }
+.rt-summary-card__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.rt-summary-card__dot--gold  { background: #f59e0b; }
+.rt-summary-card__dot--blue  { background: #3b82f6; }
+.rt-summary-card__dot--green { background: #22c55e; }
+.rt-summary-card__dot--red   { background: #ef4444; }
+.rt-summary-card__label {
+    font-size: 13px;
+    color: #6b7280;
+    flex: 1;
+}
+.rt-summary-card__count {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    min-width: 32px;
+    text-align: right;
+}
+.rt-summary-card__unit {
+    font-size: 12px;
+    font-weight: 400;
+    color: #9ca3af;
+}
+
+/* --- Rankings table --- */
+.rt-table-wrap {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 32px;
+}
+.rt-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.rt-table th {
+    background: #f9fafb;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+.rt-table td {
+    padding: 14px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 14px;
+    color: #1a1a1a;
+    vertical-align: middle;
+}
+.rt-table tr:last-child td { border-bottom: none; }
+.rt-table tr:hover td { background: #fafbfc; }
+
+/* Left accent bar */
+.rt-table td:first-child {
+    position: relative;
+    padding-left: 20px;
+}
+.rt-rank-accent {
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    border-radius: 2px;
+}
+.rt-rank-accent--gold  { background: #f59e0b; }
+.rt-rank-accent--blue  { background: #3b82f6; }
+.rt-rank-accent--green { background: #22c55e; }
+.rt-rank-accent--red   { background: #ef4444; }
+.rt-rank-accent--gray  { background: #d1d5db; }
+
+/* Keyword cell */
+.rt-kw-name {
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 4px;
+}
+.rt-kw-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.rt-kw-meta-item {
+    font-size: 11px;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+.rt-kw-meta-item strong {
+    color: #6b7280;
+    font-weight: 600;
+}
+
+/* Rank value */
+.rt-rank {
+    font-weight: 700;
+    font-size: 16px;
+    color: #1a1a1a;
+}
+.rt-rank--out {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ef4444;
+}
+.rt-rank--na {
+    font-size: 12px;
+    color: #d1d5db;
+}
+.rt-rank-unit {
+    font-size: 11px;
+    font-weight: 400;
+    color: #9ca3af;
+}
+.rt-rank-change {
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+.rt-rank-change--up   { color: #16a34a; }
+.rt-rank-change--down { color: #ef4444; }
+.rt-rank-change--same { color: #d1d5db; }
+
+/* Daily cell (compact) */
+.rt-daily {
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    min-width: 48px;
+}
+.rt-daily--out { color: #ef4444; font-size: 11px; }
+.rt-daily--na  { color: #d1d5db; }
+
+/* PC差分インジケーター */
+.rt-pc-diff {
+    display: inline-block;
+    font-size: 10px;
+    color: #f59e0b;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
+/* SEO Difficulty badge */
+.rt-diff-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+.rt-diff-badge--low    { background: #dcfce7; color: #166534; }
+.rt-diff-badge--medium { background: #fef3c7; color: #92400e; }
+.rt-diff-badge--high   { background: #fee2e2; color: #991b1b; }
+
+/* Actions column */
+.rt-action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: #2563eb;
+    cursor: pointer;
+    text-decoration: none;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    white-space: nowrap;
+}
+.rt-action-link:hover { color: #1d4ed8; text-decoration: underline; }
+.rt-action-link__icon { font-size: 14px; }
+
+/* Toggle switch */
+.rt-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+}
+.rt-toggle input { opacity: 0; width: 0; height: 0; }
+.rt-toggle__slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #d1d5db;
+    border-radius: 22px;
+    transition: 0.2s;
+}
+.rt-toggle__slider::before {
+    content: '';
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.2s;
+}
+.rt-toggle input:checked + .rt-toggle__slider { background: #2563eb; }
+.rt-toggle input:checked + .rt-toggle__slider::before { transform: translateX(18px); }
+
+/* --- Keyword management section --- */
+.rt-kw-section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
     border-radius: 12px;
     padding: 24px;
     margin-bottom: 32px;
 }
-.kw-management__header {
+.rt-kw-section__header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
 }
-.kw-management__title {
+.rt-kw-section__title {
     font-size: 17px;
     font-weight: 700;
-    color: #2F3A4A;
-}
-.kw-management__count {
-    font-size: 14px;
-    color: #8A8A8A;
-}
-.kw-management__count strong {
-    color: #2F3A4A;
-    font-weight: 700;
-}
-.kw-add-form {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px;
-    align-items: end;
-    margin-bottom: 20px;
-    padding: 16px;
-    background: #fff;
-    border: 1px solid #E8E4DF;
-    border-radius: 8px;
-}
-@media (max-width: 768px) {
-    .kw-add-form {
-        grid-template-columns: 1fr;
-    }
-}
-.kw-add-form label {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    color: #8A8A8A;
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.kw-add-form input[type="text"] {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #E8E4DF;
-    border-radius: 6px;
-    font-size: 14px;
-    color: #2B2B2B;
-    background: #FAF9F6;
-    box-sizing: border-box;
-}
-.kw-add-form input[type="text"]:focus {
-    outline: none;
-    border-color: #2F3A4A;
-}
-.kw-add-form__btn {
-    padding: 10px 20px;
-    background: #2F3A4A;
-    color: #FAF9F6;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    height: fit-content;
-}
-.kw-add-form__btn:hover {
-    background: #3D4D61;
-}
-.kw-add-form__btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-}
-.kw-limit-msg {
-    background: #FFF3CD;
-    border: 1px solid #FFD166;
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-size: 13px;
-    color: #856404;
-    margin-bottom: 16px;
-}
-.kw-edit-cancel {
-    padding: 10px 16px;
-    background: #E8E4DF;
-    color: #2F3A4A;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-    margin-left: 8px;
+    color: #1a1a1a;
 }
 
-/* キーワード管理テーブル */
-.kw-mgmt-table {
+/* Keyword management table */
+.rt-kw-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
 }
-.kw-mgmt-table th {
-    background: #F5F3EF;
+.rt-kw-table th {
     font-size: 12px;
     font-weight: 600;
-    color: #8A8A8A;
+    color: #6b7280;
     padding: 10px 12px;
     text-align: left;
-    border-bottom: 1px solid #E8E4DF;
+    border-bottom: 1px solid #e5e7eb;
     white-space: nowrap;
 }
-.kw-mgmt-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #E8E4DF;
+.rt-kw-table td {
+    padding: 12px;
+    border-bottom: 1px solid #f3f4f6;
     vertical-align: middle;
+    font-size: 14px;
 }
-.kw-mgmt-table tr:last-child td {
-    border-bottom: none;
+.rt-kw-table tr:last-child td { border-bottom: none; }
+
+.rt-kw-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
 }
-.kw-mgmt-table tr.kw-disabled td {
-    opacity: 0.5;
-    background: #f9f9f7;
-}
-.kw-toggle-btn {
-    padding: 4px 10px;
-    border: 1px solid #E8E4DF;
-    border-radius: 4px;
-    font-size: 12px;
+.rt-kw-order-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fff;
     cursor: pointer;
+    font-size: 14px;
+    color: #6b7280;
+}
+.rt-kw-order-btn:hover { background: #f9fafb; }
+.rt-kw-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    background: #fff;
+    color: #ef4444;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+}
+.rt-kw-delete-btn:hover { background: #fef2f2; }
+
+/* --- Footer quota --- */
+.rt-quota {
+    display: flex;
+    gap: 24px;
+    padding: 16px 0;
+    font-size: 14px;
+    color: #6b7280;
+}
+.rt-quota strong {
+    color: #1a1a1a;
+    font-weight: 700;
+}
+.rt-quota__item--remaining strong { color: #22c55e; }
+
+/* --- Add form --- */
+.rt-add-form {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+    padding: 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+.rt-add-form__input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 6px;
+    font-size: 14px;
     background: #fff;
 }
-.kw-toggle-btn--active {
-    color: #0a7b0a;
-    border-color: #0a7b0a;
+.rt-add-form__input:focus { outline: none; border-color: #2563eb; }
+
+/* --- Empty state --- */
+.rt-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
 }
-.kw-toggle-btn--paused {
-    color: #d63638;
-    border-color: #d63638;
+.rt-empty__icon { font-size: 40px; margin-bottom: 12px; }
+.rt-empty__text { font-size: 15px; color: #6b7280; }
+
+/* --- Modal --- */
+.rt-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 10000;
+    display: none;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 60px 20px;
+    overflow-y: auto;
 }
-.kw-action-btn {
-    padding: 4px 10px;
-    border: 1px solid #E8E4DF;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
+.rt-modal-overlay.active { display: flex; }
+.rt-modal {
     background: #fff;
-    color: #2F3A4A;
-    margin-left: 4px;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 720px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
 }
-.kw-action-btn:hover {
-    background: #F5F3EF;
+.rt-modal__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1;
+    border-radius: 14px 14px 0 0;
 }
-.kw-action-btn--delete {
-    color: #d63638;
-    border-color: #d63638;
+.rt-modal__title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
 }
-.kw-action-btn--delete:hover {
-    background: #FFF0F0;
+.rt-modal__close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
 }
-.kw-action-btn--fetch {
-    color: #2271b1;
-    border-color: #2271b1;
-    font-weight: 600;
-}
-.kw-action-btn--fetch:hover {
-    background: #f0f6fc;
-}
-.kw-action-btn--fetch:disabled {
-    opacity: 0.6;
-    cursor: wait;
+.rt-modal__close:hover { background: #e5e7eb; }
+.rt-modal__body {
+    padding: 0;
 }
 
-/* SEO難易度バッジ */
-.difficulty-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
+/* SERP table inside modal */
+.rt-serp-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.rt-serp-table th {
     font-size: 12px;
     font-weight: 600;
+    color: #6b7280;
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+.rt-serp-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 13px;
+    vertical-align: top;
+}
+.rt-serp-table tr:last-child td { border-bottom: none; }
+.rt-serp-rank {
+    font-weight: 700;
+    font-size: 15px;
+    color: #2563eb;
+    text-align: center;
+    min-width: 36px;
+}
+.rt-serp-title {
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 2px;
     line-height: 1.4;
 }
-.difficulty-badge--low {
-    background: #D1FAE5;
-    color: #065F46;
-}
-.difficulty-badge--medium {
-    background: #FEF3C7;
-    color: #92400E;
-}
-.difficulty-badge--high {
-    background: #FEE2E2;
-    color: #991B1B;
-}
-
-/* 検索ボリューム */
-.volume-value {
-    font-weight: 600;
-    font-size: 13px;
-    color: #2F3A4A;
-}
-
-/* Live取得ボタン */
-.kw-action-btn--live-fetch {
-    color: #0a7b0a;
-    border-color: #0a7b0a;
-    font-weight: 600;
-}
-.kw-action-btn--live-fetch:hover {
-    background: #f0faf0;
-}
-.kw-action-btn--live-fetch:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    color: #8A8A8A;
-    border-color: #E8E4DF;
-}
-.kw-action-btn--live-fetch:disabled:hover {
-    background: #fff;
-}
-
-/* 手動取得 quota */
-.kw-fetch-quota {
+.rt-serp-url {
     font-size: 12px;
-    color: #8A8A8A;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #E8E4DF;
+    color: #2563eb;
+    word-break: break-all;
 }
-.kw-fetch-quota__count {
-    font-weight: 600;
-    color: #2F3A4A;
-}
-.kw-fetch-quota__note {
+.rt-serp-desc {
+    font-size: 12px;
+    color: #9ca3af;
     margin-top: 4px;
-    font-size: 11px;
-    color: #aaa;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
-/* トースト通知 */
-.fetch-toast {
+/* --- Toast --- */
+.rt-toast {
     position: fixed;
     bottom: 24px;
     right: 24px;
-    background: #2F3A4A;
-    color: #FAF9F6;
+    background: #1a1a1a;
+    color: #fff;
     padding: 14px 20px;
-    border-radius: 8px;
+    border-radius: 10px;
     font-size: 14px;
-    z-index: 10000;
+    z-index: 10001;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     opacity: 0;
     transform: translateY(12px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition: opacity 0.3s, transform 0.3s;
     max-width: 400px;
     line-height: 1.5;
 }
-.fetch-toast.show {
-    opacity: 1;
-    transform: translateY(0);
-}
-.fetch-toast--error {
-    background: #d63638;
+.rt-toast.show { opacity: 1; transform: translateY(0); }
+.rt-toast--error { background: #ef4444; }
+
+/* --- Help lead --- */
+.rt-help {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 20px;
+    line-height: 1.6;
 }
 
-/* ============================
-   半年推移アコーディオン
-   ============================ */
-.rank-row--clickable {
-    cursor: pointer;
-    transition: background 0.15s ease;
-}
-.rank-row--clickable:hover td {
-    background: rgba(47,58,74,0.05);
-}
-.rank-row--clickable td:first-child::before {
-    content: '▶';
-    display: inline-block;
-    font-size: 10px;
-    margin-right: 6px;
-    color: #8A8A8A;
-    transition: transform 0.2s ease;
-}
-.rank-row--clickable.expanded td:first-child::before {
-    transform: rotate(90deg);
-}
-.rank-trend-row td {
-    padding: 0 !important;
-    border-bottom: 1px solid #E8E4DF;
-    background: #F5F3EF;
-}
-.rank-trend-wrap {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.35s ease;
-}
-.rank-trend-wrap.open {
-    max-height: 300px;
-}
-.rank-trend-inner {
-    padding: 16px 20px 20px;
-}
-.rank-trend-inner__title {
-    font-size: 13px;
-    font-weight: 600;
-    color: #2F3A4A;
-    margin-bottom: 10px;
-}
-.rank-trend-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-}
-.rank-trend-table th {
-    background: #EDE9E3;
-    font-size: 12px;
-    font-weight: 600;
-    color: #8A8A8A;
-    padding: 8px 12px;
+/* --- Loading overlay --- */
+.rt-loading {
     text-align: center;
-    border: 1px solid #E0DCD6;
-    white-space: nowrap;
-    cursor: default;
+    padding: 40px;
+    color: #9ca3af;
+    font-size: 14px;
 }
-.rank-trend-table th:first-child {
-    text-align: left;
-    width: 60px;
-}
-.rank-trend-table td {
-    padding: 8px 12px;
-    text-align: center;
-    border: 1px solid #E0DCD6;
-    font-weight: 600;
-    vertical-align: middle;
-    background: #FAF9F6;
-}
-.rank-trend-table td:first-child {
-    text-align: left;
-    font-weight: 600;
-    color: #2F3A4A;
-    background: #F5F3EF;
-}
-.rank-trend-note {
-    font-size: 11px;
-    color: #aaa;
-    margin-top: 8px;
-}
-.rank-trend-loading {
-    text-align: center;
-    padding: 20px;
-    color: #8A8A8A;
-    font-size: 13px;
+
+/* Responsive */
+@media (max-width: 768px) {
+    .rt-header { flex-direction: column; align-items: flex-start; }
+    .rt-table-wrap { overflow-x: auto; }
+    .rt-kw-section { padding: 16px; }
+    .rt-add-form { flex-direction: column; }
+    .rt-quota { flex-direction: column; gap: 8px; }
 }
 </style>
 
@@ -576,120 +624,129 @@ get_header();
         </div>
     </div>
 
-    <!-- 期間セレクター -->
-    <div class="rank-range-selector" id="rankRangeSelector">
-        <button class="rank-range-btn" data-range="4w">4週間</button>
-        <button class="rank-range-btn active" data-range="8w">8週間</button>
-        <button class="rank-range-btn" data-range="12w">12週間</button>
-        <button class="rank-range-btn" data-range="26w">半年</button>
-        <button class="rank-range-btn" data-range="52w">1年</button>
+    <!-- Header -->
+    <div class="rt-header">
+        <div class="rt-header__title">
+            <span>&#x1F4C8;</span> 計測キーワードランキング
+        </div>
+        <div class="rt-header__actions">
+            <button class="rt-btn rt-btn--primary" id="fetchAllBtn" onclick="fetchAllKeywords()">
+                <span class="rt-btn__icon">&#x1F504;</span>
+                最新の情報を見る
+            </button>
+            <button class="rt-btn" id="exportCsvBtn" onclick="exportRankCsv()" style="display:none;">
+                <span class="rt-btn__icon">&#x2B07;</span>
+                CSV ダウンロード
+            </button>
+        </div>
     </div>
 
-    <!-- このページの見方（初心者向け） -->
-    <div class="help-lead">
-        Google で検索した時に、あなたのホームページが<strong>何番目に表示されるか</strong>をチェックしています。<br>
+    <!-- Help -->
+    <div class="rt-help">
+        Google で検索した時に、あなたのホームページが<strong>何番目に表示されるか</strong>をチェックしています。
         数字が小さいほど上位表示されています。「<strong>圏外</strong>」は100位以内に表示されなかったことを意味します。
     </div>
 
-    <!-- サマリーカード -->
-    <div class="rank-summary-cards" id="rankSummary">
-        <div class="rank-summary-card">
-            <div class="rank-summary-card__value" id="summaryTotal">--</div>
-            <div class="rank-summary-card__label">追跡キーワード数</div>
+    <!-- Device toggle -->
+    <div class="rt-device-toggle" id="deviceToggle">
+        <button class="rt-device-btn active" data-device="mobile" onclick="switchDevice('mobile')">スマホ</button>
+        <button class="rt-device-btn" data-device="desktop" onclick="switchDevice('desktop')">PC</button>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="rt-summary-cards" id="summaryCards">
+        <div class="rt-summary-card rt-summary-card--gold">
+            <span class="rt-summary-card__dot rt-summary-card__dot--gold"></span>
+            <span class="rt-summary-card__label">1位〜3位</span>
+            <span class="rt-summary-card__count" id="summary13">0<span class="rt-summary-card__unit">件</span></span>
         </div>
-        <div class="rank-summary-card">
-            <div class="rank-summary-card__value" id="summaryDesktop">--</div>
-            <div class="rank-summary-card__label">PC 平均順位</div>
+        <div class="rt-summary-card rt-summary-card--blue">
+            <span class="rt-summary-card__dot rt-summary-card__dot--blue"></span>
+            <span class="rt-summary-card__label">4位〜10位</span>
+            <span class="rt-summary-card__count" id="summary410">0<span class="rt-summary-card__unit">件</span></span>
         </div>
-        <div class="rank-summary-card">
-            <div class="rank-summary-card__value" id="summaryMobile">--</div>
-            <div class="rank-summary-card__label">スマホ 平均順位</div>
+        <div class="rt-summary-card rt-summary-card--green">
+            <span class="rt-summary-card__dot rt-summary-card__dot--green"></span>
+            <span class="rt-summary-card__label">11位〜20位</span>
+            <span class="rt-summary-card__count" id="summary1120">0<span class="rt-summary-card__unit">件</span></span>
         </div>
-        <div class="rank-summary-card">
-            <div class="rank-summary-card__value" id="summaryImproved">--</div>
-            <div class="rank-summary-card__label">順位改善</div>
+        <div class="rt-summary-card rt-summary-card--red">
+            <span class="rt-summary-card__dot rt-summary-card__dot--red"></span>
+            <span class="rt-summary-card__label">圏外(20位以下)</span>
+            <span class="rt-summary-card__count" id="summaryOut">0<span class="rt-summary-card__unit">件</span></span>
+        </div>
+    </div>
+
+    <!-- Rankings table -->
+    <div id="rankTableWrap">
+        <div class="rt-empty" id="rankEmptyState" style="display:none;">
+            <div class="rt-empty__icon">&#x1F50D;</div>
+            <div class="rt-empty__text">キーワードが登録されていません</div>
+            <div style="color:#9ca3af; font-size:13px; margin-top:8px;">下の「計測キーワード」セクションからキーワードを追加すると、検索順位が表示されます。</div>
+        </div>
+        <div class="rt-table-wrap" id="rankTableContainer" style="display:none;">
+            <table class="rt-table" id="rankTable">
+                <thead id="rankTableHead"></thead>
+                <tbody id="rankTableBody"></tbody>
+            </table>
         </div>
     </div>
 
     <!-- ===========================
          キーワード管理セクション
          =========================== -->
-    <div class="kw-management" id="kwManagement">
-        <div class="kw-management__header">
-            <div class="kw-management__title">順位を確認したいキーワード</div>
-            <div class="kw-management__count">
-                登録数 <strong id="kwCount">-</strong> / <strong id="kwLimit">5</strong>
+    <div class="rt-kw-section" id="kwSection">
+        <div class="rt-kw-section__header">
+            <div class="rt-kw-section__title">計測キーワード</div>
+            <button class="rt-btn rt-btn--primary" id="kwAddBtn" onclick="showAddForm()">
+                <span class="rt-btn__icon">+</span> 作成
+            </button>
+        </div>
+
+        <!-- Add form (hidden by default) -->
+        <div id="kwFormWrap" style="display:none;">
+            <div class="rt-add-form">
+                <input type="text" class="rt-add-form__input" id="kwInput" placeholder="キーワードを入力（例: 愛媛 ホームページ制作）" maxlength="255">
+                <button class="rt-btn rt-btn--primary" id="kwSubmitBtn" onclick="submitKeyword()">追加する</button>
+                <button class="rt-btn" id="kwCancelBtn" onclick="cancelAdd()">キャンセル</button>
             </div>
         </div>
 
-        <!-- 上限メッセージ（5件到達時のみ表示） -->
-        <div class="kw-limit-msg" id="kwLimitMsg" style="display:none;">
-            上限の<span id="kwLimitNum">5</span>件に達しているため、新しいキーワードを追加できません。不要なキーワードを削除してから追加してください。
-        </div>
-
-        <!-- 追加/編集フォーム -->
-        <div id="kwFormWrap">
-            <div class="kw-add-form" id="kwAddForm">
-                <div>
-                    <label for="kwInput">キーワード</label>
-                    <input type="text" id="kwInput" placeholder="例: 愛媛 ホームページ制作" maxlength="255">
-                </div>
-                <div style="display:flex;align-items:end;">
-                    <button class="kw-add-form__btn" id="kwSubmitBtn" onclick="submitKeyword()">追加する</button>
-                    <button class="kw-edit-cancel" id="kwCancelBtn" style="display:none;" onclick="cancelEdit()">キャンセル</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- キーワード管理テーブル -->
-        <div id="kwMgmtTableWrap" style="display:none;">
-            <table class="kw-mgmt-table">
+        <!-- Keyword management table -->
+        <div id="kwTableWrap" style="display:none;">
+            <table class="rt-kw-table">
                 <thead>
                     <tr>
-                        <th>キーワード</th>
-                        <th>状態</th>
-                        <th>PC順位</th>
-                        <th>スマホ順位</th>
-                        <th>検索ボリューム</th>
-                        <th>SEO難易度</th>
-                        <th>操作</th>
+                        <th>名前</th>
+                        <th>作成日時</th>
+                        <th style="text-align:right;">操作</th>
+                        <th>ランキング計測</th>
+                        <th>AIO診断</th>
                     </tr>
                 </thead>
-                <tbody id="kwMgmtBody"></tbody>
+                <tbody id="kwTableBody"></tbody>
             </table>
-            <!-- 手動取得 quota 表示 -->
-            <div class="kw-fetch-quota" id="kwFetchQuota" style="display:none;">
-                <div>最新順位の手動取得: 本日 <span class="kw-fetch-quota__count" id="kwFetchUsed">0</span> / <span class="kw-fetch-quota__count" id="kwFetchLimit">5</span> 回使用済み</div>
-                <div class="kw-fetch-quota__note">通常は週1回自動で更新されます。必要な場合のみ手動で最新順位を取得できます。</div>
-            </div>
+        </div>
+
+        <!-- Quota -->
+        <div class="rt-quota" id="kwQuota" style="display:none;">
+            <div class="rt-quota__item">計測上限: <strong id="quotaLimit">5</strong></div>
+            <div class="rt-quota__item">計測中: <strong id="quotaUsed" style="color:#2563eb;">0</strong></div>
+            <div class="rt-quota__item rt-quota__item--remaining">残り枠: <strong id="quotaRemaining">5</strong></div>
         </div>
     </div>
+</div>
 
-    <!-- CSV エクスポート -->
-    <button class="rank-export-btn" id="exportCsvBtn" onclick="exportRankCsv()" style="display:none;">CSVダウンロード</button>
-
-    <!-- ランキングテーブル -->
-    <div id="rankTableWrap">
-        <div class="rank-empty-state" id="rankEmptyState" style="display:none;">
-            <div class="rank-empty-state__icon">&#x1F50D;</div>
-            <div class="rank-empty-state__text">キーワードが登録されていません</div>
-            <div style="color:#aaa; font-size:13px;">上の「順位を確認したいキーワード」にキーワードを追加すると、検索順位が表示されます。</div>
+<!-- SERP Top modal -->
+<div class="rt-modal-overlay" id="serpModal">
+    <div class="rt-modal">
+        <div class="rt-modal__header">
+            <div class="rt-modal__title" id="serpModalTitle">上位ランキング</div>
+            <button class="rt-modal__close" onclick="closeSerpModal()">&times;</button>
         </div>
-        <table class="rank-table" id="rankTable" style="display:none;">
-            <thead>
-                <tr>
-                    <th class="sortable" data-sort-key="keyword" onclick="toggleSort('keyword')">キーワード <span class="sort-indicator">&updownarrow;</span></th>
-                    <th class="sortable" data-sort-key="desktop" onclick="toggleSort('desktop')">PC順位 <span class="sort-indicator">&updownarrow;</span></th>
-                    <th class="sortable" data-sort-key="desktop_change" onclick="toggleSort('desktop_change')">PC変動 <span class="sort-indicator">&updownarrow;</span></th>
-                    <th class="sortable" data-sort-key="mobile" onclick="toggleSort('mobile')">スマホ順位 <span class="sort-indicator">&updownarrow;</span></th>
-                    <th class="sortable" data-sort-key="mobile_change" onclick="toggleSort('mobile_change')">スマホ変動 <span class="sort-indicator">&updownarrow;</span></th>
-                    <th class="sortable" data-sort-key="search_volume" onclick="toggleSort('search_volume')">検索数 <span class="sort-indicator">&updownarrow;</span></th>
-                    <th class="sortable" data-sort-key="keyword_difficulty" onclick="toggleSort('keyword_difficulty')">難易度 <span class="sort-indicator">&updownarrow;</span></th>
-                    <th class="sortable" data-sort-key="fetched_at" onclick="toggleSort('fetched_at')">最終取得日 <span class="sort-indicator">&updownarrow;</span></th>
-                </tr>
-            </thead>
-            <tbody id="rankTableBody"></tbody>
-        </table>
+        <div class="rt-modal__body" id="serpModalBody">
+            <div class="rt-loading">読み込み中...</div>
+        </div>
     </div>
 </div>
 
@@ -700,43 +757,375 @@ get_header();
     'use strict';
 
     var wpNonce = '<?php echo esc_js( wp_create_nonce('wp_rest') ); ?>';
-    var currentRange = '8w';
-    var rankData = [];
-    var sortKey = 'keyword';
-    var sortDir = 'asc';
+    var currentDevice = 'mobile'; // 初期表示はスマホ
 
-    // キーワード管理状態
+    // Data
+    var rankData = [];
+    var dateLabels = [];
+    var dateKeys = [];
+    var summaryData = {};
+
+    // Keyword management
     var myKeywords = [];
     var kwLimit = 5;
     var kwCanAdd = true;
     var kwDefaultDomain = '';
-    var editingId = 0; // 0 = 追加モード, >0 = 編集モード
+    var editingId = 0;
     var manualFetchLimit = { daily_used: 0, daily_limit: 5, daily_remaining: 5, is_admin: false };
 
-    // 半年推移アコーディオン状態
-    var expandedKeywordId = 0;
-    var trendCache = {};
-
     // =========================================================
-    // 初期ロード
+    // Init
     // =========================================================
     document.addEventListener('DOMContentLoaded', function() {
         fetchMyKeywords();
-        fetchRankings(currentRange);
-
-        // 期間ボタン
-        document.querySelectorAll('.rank-range-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.rank-range-btn').forEach(function(b) { b.classList.remove('active'); });
-                btn.classList.add('active');
-                currentRange = btn.dataset.range;
-                fetchRankings(currentRange);
-            });
-        });
+        fetchRankings();
     });
 
     // =========================================================
-    // キーワード管理 — データ取得
+    // Device toggle
+    // =========================================================
+    window.switchDevice = function(device) {
+        currentDevice = device;
+        document.querySelectorAll('.rt-device-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.device === device);
+        });
+        renderSummary();
+        renderTable();
+    };
+
+    // =========================================================
+    // Rankings — fetch
+    // =========================================================
+    function fetchRankings() {
+        showLoading(true);
+
+        fetch('/wp-json/gcrev/v1/rank-tracker/rankings', {
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            showLoading(false);
+            if (json.success && json.data) {
+                rankData = json.data.keywords || [];
+                dateLabels = json.data.dates || [];
+                dateKeys = json.data.date_keys || [];
+                summaryData = json.data.summary || {};
+                renderSummary();
+                renderTable();
+            }
+        })
+        .catch(function(err) {
+            showLoading(false);
+            console.error('[RankTracker]', err);
+        });
+    }
+
+    // =========================================================
+    // Summary — render
+    // =========================================================
+    function renderSummary() {
+        var s = summaryData[currentDevice] || { rank_1_3: 0, rank_4_10: 0, rank_11_20: 0, rank_out: 0 };
+        setText('summary13', s.rank_1_3);
+        setText('summary410', s.rank_4_10);
+        setText('summary1120', s.rank_11_20);
+        setText('summaryOut', s.rank_out);
+    }
+
+    function setText(id, val) {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = val + '<span class="rt-summary-card__unit">件</span>';
+    }
+
+    // =========================================================
+    // Rankings table — render
+    // =========================================================
+    function renderTable() {
+        var emptyState = document.getElementById('rankEmptyState');
+        var container = document.getElementById('rankTableContainer');
+        var thead = document.getElementById('rankTableHead');
+        var tbody = document.getElementById('rankTableBody');
+        var exportBtn = document.getElementById('exportCsvBtn');
+
+        if (!rankData || rankData.length === 0) {
+            emptyState.style.display = 'block';
+            container.style.display = 'none';
+            exportBtn.style.display = 'none';
+            return;
+        }
+
+        emptyState.style.display = 'none';
+        container.style.display = 'block';
+        exportBtn.style.display = 'inline-flex';
+
+        // Build header
+        var hHtml = '<tr>';
+        hHtml += '<th>キーワード</th>';
+        hHtml += '<th>現在</th>';
+        hHtml += '<th>前回</th>';
+        for (var d = 0; d < dateLabels.length; d++) {
+            hHtml += '<th style="text-align:center;">' + dateLabels[d] + '</th>';
+        }
+        hHtml += '<th>操作</th>';
+        hHtml += '</tr>';
+        thead.innerHTML = hHtml;
+
+        // Build body
+        var html = '';
+        for (var i = 0; i < rankData.length; i++) {
+            var kw = rankData[i];
+            var dev = kw[currentDevice];
+            var otherDev = kw[currentDevice === 'mobile' ? 'desktop' : 'mobile'];
+            var daily = kw.daily ? kw.daily[currentDevice] : {};
+
+            // Determine accent color based on current rank
+            var accent = getAccentClass(dev);
+
+            html += '<tr>';
+
+            // Keyword + volume + difficulty
+            html += '<td>';
+            html += '<div class="rt-rank-accent ' + accent + '"></div>';
+            html += '<div class="rt-kw-name">' + escHtml(kw.keyword) + '</div>';
+            html += '<div class="rt-kw-meta">';
+            // Search volume
+            if (kw.search_volume != null) {
+                html += '<span class="rt-kw-meta-item">Vol: <strong>' + numberFormat(kw.search_volume) + '</strong></span>';
+            }
+            // SEO difficulty
+            if (kw.keyword_difficulty != null) {
+                html += '<span class="rt-kw-meta-item">難易度: ' + formatDifficultyBadge(kw.keyword_difficulty) + '</span>';
+            }
+            html += '</div>';
+            html += '</td>';
+
+            // Current rank
+            html += '<td>';
+            html += formatCurrentRank(dev);
+            // PC diff indicator
+            if (dev && otherDev && hasBigDiff(dev, otherDev)) {
+                html += '<span class="rt-pc-diff">' + (currentDevice === 'mobile' ? 'PC' : 'SP') + 'と差あり</span>';
+            }
+            html += '</td>';
+
+            // Previous rank (use change to infer)
+            html += '<td>' + formatPrevRank(dev) + '</td>';
+
+            // Daily columns (7 days)
+            if (dateKeys) {
+                for (var d = 0; d < dateKeys.length; d++) {
+                    var dayData = daily ? daily[dateKeys[d]] : null;
+                    html += '<td class="rt-daily">' + formatDailyRank(dayData) + '</td>';
+                }
+            }
+
+            // Actions
+            html += '<td>';
+            html += '<button class="rt-action-link" onclick="openSerpModal(' + kw.keyword_id + ')">';
+            html += '<span class="rt-action-link__icon">&#x1F4CA;</span> 上位ランキングを見る';
+            html += '</button>';
+            html += '</td>';
+
+            html += '</tr>';
+        }
+
+        tbody.innerHTML = html;
+    }
+
+    // =========================================================
+    // Format helpers
+    // =========================================================
+    function getAccentClass(dev) {
+        if (!dev || !dev.is_ranked) return 'rt-rank-accent--red';
+        var r = dev.rank_group;
+        if (r <= 3) return 'rt-rank-accent--gold';
+        if (r <= 10) return 'rt-rank-accent--blue';
+        if (r <= 20) return 'rt-rank-accent--green';
+        return 'rt-rank-accent--red';
+    }
+
+    function formatCurrentRank(dev) {
+        if (!dev) return '<span class="rt-rank--na">-</span>';
+        if (!dev.is_ranked) return '<span class="rt-rank--out">圏外</span>';
+        var html = '<span class="rt-rank">' + dev.rank_group + '<span class="rt-rank-unit">位</span></span>';
+        if (dev.change != null && dev.change !== 0) {
+            html += '<div class="rt-rank-change ' + (dev.change > 0 ? 'rt-rank-change--up' : 'rt-rank-change--down') + '">';
+            if (dev.change === 999) {
+                html += '&#x2191; NEW';
+            } else if (dev.change === -999) {
+                html += '&#x2193; 圏外';
+            } else if (dev.change > 0) {
+                html += '&#x2191; ' + dev.change;
+            } else {
+                html += '&#x2193; ' + Math.abs(dev.change);
+            }
+            html += '</div>';
+        }
+        return html;
+    }
+
+    function formatPrevRank(dev) {
+        if (!dev || dev.change == null) return '<span class="rt-rank--na">-</span>';
+        // Infer previous rank from current + change
+        if (dev.change === 999) return '<span class="rt-rank--out">圏外</span>';
+        if (dev.change === -999 && dev.is_ranked) return '<span class="rt-rank--na">-</span>';
+        if (!dev.is_ranked && dev.change === -999) {
+            // Current is out, change is -999, previous was ranked (unknown exact)
+            return '<span class="rt-rank--na">-</span>';
+        }
+        if (dev.is_ranked && dev.change != null) {
+            var prev = dev.rank_group + dev.change; // change = prev - current
+            if (prev > 0 && prev <= 100) {
+                return '<span class="rt-rank">' + prev + '<span class="rt-rank-unit">位</span></span>';
+            }
+        }
+        return '<span class="rt-rank--na">-</span>';
+    }
+
+    function formatDailyRank(dayData) {
+        if (!dayData) return '<span class="rt-daily--na">-</span>';
+        if (!dayData.is_ranked) return '<span class="rt-daily--out">圏外</span>';
+        return dayData.rank + '位';
+    }
+
+    function formatDifficultyBadge(val) {
+        if (val == null) return '<span style="color:#d1d5db;">-</span>';
+        var v = parseInt(val, 10);
+        if (v <= 33) return '<span class="rt-diff-badge rt-diff-badge--low">' + v + '（低）</span>';
+        if (v <= 66) return '<span class="rt-diff-badge rt-diff-badge--medium">' + v + '（中）</span>';
+        return '<span class="rt-diff-badge rt-diff-badge--high">' + v + '（高）</span>';
+    }
+
+    function hasBigDiff(a, b) {
+        if (!a || !b) return false;
+        if (!a.is_ranked && !b.is_ranked) return false;
+        if (a.is_ranked !== b.is_ranked) return true; // one ranked, other not
+        if (a.is_ranked && b.is_ranked) {
+            return Math.abs(a.rank_group - b.rank_group) >= 3;
+        }
+        return false;
+    }
+
+    function numberFormat(n) {
+        if (n == null) return '-';
+        return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // =========================================================
+    // Fetch All keywords (bulk)
+    // =========================================================
+    window.fetchAllKeywords = function() {
+        var btn = document.getElementById('fetchAllBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="rt-btn__icon">&#x23F3;</span> 最新情報を取得中...';
+
+        fetch('/wp-json/gcrev/v1/rank-tracker/fetch-all', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="rt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+
+            if (json.success && json.data) {
+                var cnt = json.data.fetched || 0;
+                showToast(cnt + '件のキーワードの最新順位を取得しました。');
+                fetchMyKeywords();
+                fetchRankings();
+            } else {
+                showToast(json.message || '取得に失敗しました。', 'error');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="rt-btn__icon">&#x1F504;</span> 最新の情報を見る';
+            console.error('[FetchAll]', err);
+            showToast('通信エラーが発生しました。', 'error');
+        });
+    };
+
+    // =========================================================
+    // SERP Top modal
+    // =========================================================
+    window.openSerpModal = function(keywordId) {
+        var modal = document.getElementById('serpModal');
+        var body = document.getElementById('serpModalBody');
+        var title = document.getElementById('serpModalTitle');
+
+        // Find keyword name
+        var kw = rankData.find(function(k) { return k.keyword_id === keywordId; });
+        title.textContent = (kw ? '「' + kw.keyword + '」' : '') + ' 上位ランキング (' + (currentDevice === 'mobile' ? 'スマホ' : 'PC') + ')';
+
+        body.innerHTML = '<div class="rt-loading">上位サイトを取得中...</div>';
+        modal.classList.add('active');
+
+        fetch('/wp-json/gcrev/v1/rank-tracker/serp-top?keyword_id=' + keywordId + '&device=' + currentDevice, {
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success && json.data && json.data.items) {
+                body.innerHTML = buildSerpTable(json.data.items);
+            } else {
+                body.innerHTML = '<div class="rt-loading" style="color:#ef4444;">' + (json.message || 'データの取得に失敗しました。') + '</div>';
+            }
+        })
+        .catch(function(err) {
+            console.error('[SerpTop]', err);
+            body.innerHTML = '<div class="rt-loading" style="color:#ef4444;">通信エラーが発生しました。</div>';
+        });
+    };
+
+    window.closeSerpModal = function() {
+        document.getElementById('serpModal').classList.remove('active');
+    };
+
+    // Close on overlay click
+    document.addEventListener('click', function(e) {
+        if (e.target.id === 'serpModal') {
+            closeSerpModal();
+        }
+    });
+
+    function buildSerpTable(items) {
+        if (!items || items.length === 0) {
+            return '<div class="rt-loading">上位サイトのデータがありません。</div>';
+        }
+        var html = '<table class="rt-serp-table"><thead><tr>';
+        html += '<th style="text-align:center;">順位</th>';
+        html += '<th>サイト情報</th>';
+        html += '</tr></thead><tbody>';
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            html += '<tr>';
+            html += '<td class="rt-serp-rank">' + item.rank + '</td>';
+            html += '<td>';
+            html += '<div class="rt-serp-title">' + escHtml(item.title) + '</div>';
+            html += '<a class="rt-serp-url" href="' + escHtml(item.url) + '" target="_blank" rel="noopener">' + escHtml(item.url) + '</a>';
+            if (item.description) {
+                html += '<div class="rt-serp-desc">' + escHtml(item.description) + '</div>';
+            }
+            html += '</td>';
+            html += '</tr>';
+        }
+
+        html += '</tbody></table>';
+        return html;
+    }
+
+    // =========================================================
+    // Keyword management — data
     // =========================================================
     function fetchMyKeywords() {
         fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
@@ -762,149 +1151,125 @@ get_header();
     }
 
     // =========================================================
-    // キーワード管理 — 描画
+    // Keyword management — render
     // =========================================================
     function renderKwManagement() {
-        var countEl = document.getElementById('kwCount');
-        var limitEl = document.getElementById('kwLimit');
-        var limitMsg = document.getElementById('kwLimitMsg');
-        var formWrap = document.getElementById('kwFormWrap');
-        var tableWrap = document.getElementById('kwMgmtTableWrap');
-        var tbody = document.getElementById('kwMgmtBody');
-        var limitNumEl = document.getElementById('kwLimitNum');
+        var tableWrap = document.getElementById('kwTableWrap');
+        var tbody = document.getElementById('kwTableBody');
+        var quota = document.getElementById('kwQuota');
+        var addBtn = document.getElementById('kwAddBtn');
 
-        countEl.textContent = myKeywords.length;
-        limitEl.textContent = kwLimit;
-        limitNumEl.textContent = kwLimit;
+        var enabledCount = myKeywords.filter(function(k) { return k.enabled; }).length;
 
-        // 上限チェック
+        // Add button visibility
         if (!kwCanAdd && editingId === 0) {
-            limitMsg.style.display = 'block';
-            formWrap.style.display = 'none';
+            addBtn.style.display = 'none';
         } else {
-            limitMsg.style.display = 'none';
-            formWrap.style.display = 'block';
+            addBtn.style.display = 'inline-flex';
         }
 
-        // テーブル描画
         if (myKeywords.length === 0) {
             tableWrap.style.display = 'none';
+            quota.style.display = 'none';
             return;
         }
 
         tableWrap.style.display = 'block';
-        var html = '';
+        quota.style.display = 'flex';
 
+        // Quota
+        document.getElementById('quotaLimit').textContent = kwLimit;
+        document.getElementById('quotaUsed').textContent = enabledCount;
+        document.getElementById('quotaRemaining').textContent = kwLimit - enabledCount;
+
+        // Table
+        var html = '';
         for (var i = 0; i < myKeywords.length; i++) {
             var kw = myKeywords[i];
-            var isEnabled = kw.enabled;
-            var rowClass = isEnabled ? '' : ' class="kw-disabled"';
+            var created = kw.created_at ? formatDateTime(kw.created_at) : '-';
 
-            html += '<tr' + rowClass + '>';
+            html += '<tr>';
 
-            // キーワード
-            html += '<td><div class="rank-keyword-name">' + escHtml(kw.keyword) + '</div></td>';
+            // Name
+            html += '<td><strong>' + escHtml(kw.keyword) + '</strong></td>';
 
-            // 状態トグル
-            if (isEnabled) {
-                html += '<td><button class="kw-toggle-btn kw-toggle-btn--active" onclick="toggleKeyword(' + kw.id + ', false)">有効</button></td>';
-            } else {
-                html += '<td><button class="kw-toggle-btn kw-toggle-btn--paused" onclick="toggleKeyword(' + kw.id + ', true)">停止中</button></td>';
-            }
+            // Created at
+            html += '<td style="color:#6b7280; font-size:13px;">' + created + '</td>';
 
-            // PC順位
-            if (kw.latest_desktop && kw.latest_desktop.is_ranked) {
-                html += '<td><span class="rank-value">' + kw.latest_desktop.rank_group + '<span style="font-size:12px;font-weight:400;color:#8A8A8A;">位</span></span></td>';
-            } else if (kw.latest_desktop && !kw.latest_desktop.is_ranked) {
-                html += '<td><span class="rank-value--out">圏外</span></td>';
-            } else {
-                html += '<td><span style="color:#aaa;">未取得</span></td>';
-            }
+            // Actions (reorder + delete)
+            html += '<td style="text-align:right;">';
+            html += '<div class="rt-kw-actions" style="justify-content:flex-end;">';
+            html += '<button class="rt-kw-order-btn" onclick="reorderKeyword(' + kw.id + ', \'up\')" title="上に移動">&#x2191;</button>';
+            html += '<button class="rt-kw-order-btn" onclick="reorderKeyword(' + kw.id + ', \'down\')" title="下に移動">&#x2193;</button>';
+            html += '<button class="rt-kw-delete-btn" onclick="deleteKeyword(' + kw.id + ', \'' + escHtml(kw.keyword).replace(/'/g, "\\'") + '\')">&#x1F5D1; 削除</button>';
+            html += '</div>';
+            html += '</td>';
 
-            // SP順位
-            if (kw.latest_mobile && kw.latest_mobile.is_ranked) {
-                html += '<td><span class="rank-value">' + kw.latest_mobile.rank_group + '<span style="font-size:12px;font-weight:400;color:#8A8A8A;">位</span></span></td>';
-            } else if (kw.latest_mobile && !kw.latest_mobile.is_ranked) {
-                html += '<td><span class="rank-value--out">圏外</span></td>';
-            } else {
-                html += '<td><span style="color:#aaa;">未取得</span></td>';
-            }
+            // Ranking toggle
+            html += '<td>';
+            html += '<label class="rt-toggle">';
+            html += '<input type="checkbox"' + (kw.enabled ? ' checked' : '') + ' onchange="toggleKeyword(' + kw.id + ', this.checked)">';
+            html += '<span class="rt-toggle__slider"></span>';
+            html += '</label>';
+            html += '</td>';
 
-            // 検索ボリューム
-            if (kw.search_volume != null) {
-                html += '<td><span class="volume-value">' + numberFormat(kw.search_volume) + '</span></td>';
-            } else {
-                html += '<td><span style="color:#aaa;font-size:12px;">未取得</span></td>';
-            }
-
-            // SEO難易度
-            html += '<td>' + formatDifficulty(kw.keyword_difficulty) + '</td>';
-
-            // 操作ボタン
-            html += '<td style="white-space:nowrap;">';
-            // 手動取得ボタン（有効なキーワードのみ表示）
-            if (isEnabled) {
-                var btnLabel = (!kw.latest_desktop && !kw.latest_mobile) ? '取得' : '更新';
-                var canFetch = kw.can_manual_fetch;
-                var disabledAttr = canFetch ? '' : ' disabled';
-                var tooltip = '';
-                if (!canFetch) {
-                    if (kw.manual_fetched_today) {
-                        tooltip = ' title="本日すでに取得済み"';
-                    } else {
-                        tooltip = ' title="本日の取得上限に達しました"';
-                    }
-                }
-                html += '<button class="kw-action-btn kw-action-btn--live-fetch" id="fetchBtn' + kw.id + '"' + disabledAttr + tooltip + ' onclick="fetchKeywordRankLive(' + kw.id + ')">' + btnLabel + '</button>';
-            }
-            html += '<button class="kw-action-btn" onclick="startEdit(' + kw.id + ')">編集</button>';
-            html += '<button class="kw-action-btn kw-action-btn--delete" onclick="deleteKeyword(' + kw.id + ', \'' + escHtml(kw.keyword).replace(/'/g, "\\'") + '\')">削除</button>';
+            // AIO toggle (placeholder — shows enabled state for now)
+            html += '<td>';
+            html += '<label class="rt-toggle">';
+            html += '<input type="checkbox"' + (kw.enabled ? ' checked' : '') + ' onchange="toggleKeyword(' + kw.id + ', this.checked)">';
+            html += '<span class="rt-toggle__slider"></span>';
+            html += '</label>';
             html += '</td>';
 
             html += '</tr>';
         }
 
         tbody.innerHTML = html;
+    }
 
-        // quota 表示の更新
-        var quotaEl = document.getElementById('kwFetchQuota');
-        if (quotaEl && myKeywords.length > 0) {
-            quotaEl.style.display = manualFetchLimit.is_admin ? 'none' : 'block';
-            document.getElementById('kwFetchUsed').textContent = manualFetchLimit.daily_used;
-            document.getElementById('kwFetchLimit').textContent = manualFetchLimit.daily_limit;
-        }
+    function formatDateTime(str) {
+        if (!str) return '-';
+        // "2026-03-05 12:09:00" → "2026年03月05日 12:09"
+        var d = str.replace(/-/g, '/');
+        var dt = new Date(d);
+        if (isNaN(dt.getTime())) return str;
+        var y = dt.getFullYear();
+        var m = ('0' + (dt.getMonth() + 1)).slice(-2);
+        var day = ('0' + dt.getDate()).slice(-2);
+        var h = ('0' + dt.getHours()).slice(-2);
+        var min = ('0' + dt.getMinutes()).slice(-2);
+        return y + '年' + m + '月' + day + '日 ' + h + ':' + min;
     }
 
     // =========================================================
-    // キーワード管理 — 追加/編集
+    // Keyword management — actions
     // =========================================================
+    window.showAddForm = function() {
+        document.getElementById('kwFormWrap').style.display = 'block';
+        document.getElementById('kwInput').focus();
+    };
+
+    window.cancelAdd = function() {
+        editingId = 0;
+        document.getElementById('kwInput').value = '';
+        document.getElementById('kwSubmitBtn').textContent = '追加する';
+        document.getElementById('kwFormWrap').style.display = 'none';
+    };
+
     window.submitKeyword = function() {
         var kwInput = document.getElementById('kwInput');
         var keyword = kwInput.value.trim();
-
-        if (!keyword) {
-            alert('キーワードを入力してください。');
-            return;
-        }
+        if (!keyword) { alert('キーワードを入力してください。'); return; }
 
         var submitBtn = document.getElementById('kwSubmitBtn');
         submitBtn.disabled = true;
 
-        var body = {
-            keyword: keyword,
-            target_domain: kwDefaultDomain
-        };
-
-        if (editingId > 0) {
-            body.id = editingId;
-        }
+        var body = { keyword: keyword, target_domain: kwDefaultDomain };
+        if (editingId > 0) body.id = editingId;
 
         fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
             method: 'POST',
-            headers: {
-                'X-WP-Nonce': wpNonce,
-                'Content-Type': 'application/json'
-            },
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(body)
         })
@@ -914,10 +1279,10 @@ get_header();
             if (json.success) {
                 kwInput.value = '';
                 editingId = 0;
-                document.getElementById('kwSubmitBtn').textContent = '追加する';
-                document.getElementById('kwCancelBtn').style.display = 'none';
+                document.getElementById('kwFormWrap').style.display = 'none';
                 fetchMyKeywords();
-                fetchRankings(currentRange); // ランキングも更新
+                fetchRankings();
+                showToast('キーワードを追加しました。');
             } else {
                 alert(json.message || 'エラーが発生しました。');
             }
@@ -929,73 +1294,29 @@ get_header();
         });
     };
 
-    window.startEdit = function(id) {
-        var kw = myKeywords.find(function(k) { return k.id === id; });
-        if (!kw) return;
-
-        editingId = id;
-        document.getElementById('kwInput').value = kw.keyword;
-        document.getElementById('kwSubmitBtn').textContent = '更新する';
-        document.getElementById('kwCancelBtn').style.display = 'inline-block';
-
-        // 上限で非表示になっているフォームを表示
-        document.getElementById('kwFormWrap').style.display = 'block';
-        document.getElementById('kwLimitMsg').style.display = 'none';
-
-        // フォームにスクロール
-        document.getElementById('kwAddForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    };
-
-    window.cancelEdit = function() {
-        editingId = 0;
-        document.getElementById('kwInput').value = '';
-        document.getElementById('kwSubmitBtn').textContent = '追加する';
-        document.getElementById('kwCancelBtn').style.display = 'none';
-        renderKwManagement(); // 上限メッセージ等を再表示
-    };
-
-    // =========================================================
-    // キーワード管理 — 状態切り替え
-    // =========================================================
     window.toggleKeyword = function(id, enable) {
         var kw = myKeywords.find(function(k) { return k.id === id; });
         if (!kw) return;
 
         fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
             method: 'POST',
-            headers: {
-                'X-WP-Nonce': wpNonce,
-                'Content-Type': 'application/json'
-            },
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({
-                id: id,
-                keyword: kw.keyword,
-                enabled: enable ? 1 : 0
-            })
+            body: JSON.stringify({ id: id, keyword: kw.keyword, enabled: enable ? 1 : 0 })
         })
         .then(function(res) { return res.json(); })
         .then(function(json) {
             if (json.success) {
                 fetchMyKeywords();
-                fetchRankings(currentRange);
+                fetchRankings();
             } else {
                 alert(json.message || 'エラーが発生しました。');
             }
-        })
-        .catch(function(err) {
-            console.error('[KW Toggle]', err);
-            alert('通信エラーが発生しました。');
         });
     };
 
-    // =========================================================
-    // キーワード管理 — 削除
-    // =========================================================
     window.deleteKeyword = function(id, keyword) {
-        if (!confirm('「' + keyword + '」を削除しますか？\nこのキーワードの順位履歴も削除されます。')) {
-            return;
-        }
+        if (!confirm('「' + keyword + '」を削除しますか？\nこのキーワードの順位履歴も削除されます。')) return;
 
         fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords/' + id, {
             method: 'DELETE',
@@ -1006,536 +1327,60 @@ get_header();
         .then(function(json) {
             if (json.success) {
                 fetchMyKeywords();
-                fetchRankings(currentRange);
+                fetchRankings();
+                showToast('キーワードを削除しました。');
             } else {
                 alert(json.message || '削除に失敗しました。');
             }
-        })
-        .catch(function(err) {
-            console.error('[KW Delete]', err);
-            alert('通信エラーが発生しました。');
         });
     };
 
-    // =========================================================
-    // キーワード管理 — 手動 Live 順位取得
-    // =========================================================
-    window.fetchKeywordRankLive = function(id) {
-        var btn = document.getElementById('fetchBtn' + id);
-        var origLabel = btn ? btn.textContent : '取得';
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = '取得中...';
-        }
-
-        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords/' + id + '/fetch', {
+    window.reorderKeyword = function(id, direction) {
+        fetch('/wp-json/gcrev/v1/rank-tracker/reorder', {
             method: 'POST',
-            headers: { 'X-WP-Nonce': wpNonce },
-            credentials: 'same-origin'
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ keyword_id: id, direction: direction })
         })
         .then(function(res) { return res.json(); })
         .then(function(json) {
-            if (json.success && json.data) {
-                var d = json.data;
-                // トースト通知: 結果表示
-                var msg = '「' + escHtml(d.keyword) + '」の順位を取得しました。';
-                var r = d.results || {};
-                var parts = [];
-                if (r.desktop) {
-                    parts.push('PC: ' + (r.desktop.is_ranked ? r.desktop.rank_group + '位' : '圏外'));
-                }
-                if (r.mobile) {
-                    parts.push('スマホ: ' + (r.mobile.is_ranked ? r.mobile.rank_group + '位' : '圏外'));
-                }
-                if (parts.length > 0) {
-                    msg += '\n' + parts.join(' / ');
-                }
-                showToast(msg, 'success');
-
-                // 推移キャッシュ無効化
-                delete trendCache[id];
-
-                // quota 更新
-                if (d.rate_limit) {
-                    manualFetchLimit = d.rate_limit;
-                }
-
+            if (json.success) {
                 fetchMyKeywords();
-                fetchRankings(currentRange);
-            } else {
-                showToast(json.message || '順位の取得に失敗しました。', 'error');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = origLabel;
-                }
-            }
-        })
-        .catch(function(err) {
-            console.error('[KW LiveFetch]', err);
-            showToast('通信エラーが発生しました。', 'error');
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = origLabel;
+                fetchRankings();
             }
         });
     };
 
     // =========================================================
-    // トースト通知
-    // =========================================================
-    function showToast(message, type) {
-        // 既存トーストがあれば削除
-        var existing = document.querySelector('.fetch-toast');
-        if (existing) existing.remove();
-
-        var toast = document.createElement('div');
-        toast.className = 'fetch-toast' + (type === 'error' ? ' fetch-toast--error' : '');
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        // フェードイン
-        requestAnimationFrame(function() {
-            toast.classList.add('show');
-        });
-
-        // 4秒後にフェードアウト
-        setTimeout(function() {
-            toast.classList.remove('show');
-            setTimeout(function() {
-                if (toast.parentNode) toast.parentNode.removeChild(toast);
-            }, 300);
-        }, 4000);
-    }
-
-    // =========================================================
-    // データ取得（ランキング）
-    // =========================================================
-    function fetchRankings(range) {
-        showLoading(true);
-
-        fetch('/wp-json/gcrev/v1/rank-tracker/rankings?range=' + range, {
-            headers: { 'X-WP-Nonce': wpNonce },
-            credentials: 'same-origin'
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            showLoading(false);
-            if (json.success && json.data) {
-                rankData = json.data.keywords || [];
-                renderSummary(json.data.summary || {});
-                renderTable();
-            } else {
-                rankData = [];
-                renderSummary({});
-                renderTable();
-            }
-        })
-        .catch(function(err) {
-            showLoading(false);
-            console.error('[RankTracker]', err);
-            rankData = [];
-            renderSummary({});
-            renderTable();
-        });
-    }
-
-    // =========================================================
-    // サマリー描画
-    // =========================================================
-    function renderSummary(s) {
-        document.getElementById('summaryTotal').textContent = s.total != null ? s.total : '0';
-
-        var desktopEl = document.getElementById('summaryDesktop');
-        if (s.avg_desktop != null) {
-            desktopEl.textContent = s.avg_desktop + '位';
-            desktopEl.style.fontSize = '';
-        } else {
-            desktopEl.textContent = '未取得';
-            desktopEl.style.fontSize = '16px';
-        }
-
-        var mobileEl = document.getElementById('summaryMobile');
-        if (s.avg_mobile != null) {
-            mobileEl.textContent = s.avg_mobile + '位';
-            mobileEl.style.fontSize = '';
-        } else {
-            mobileEl.textContent = '未取得';
-            mobileEl.style.fontSize = '16px';
-        }
-
-        document.getElementById('summaryImproved').textContent = s.improved != null ? s.improved + '件' : '0件';
-    }
-
-    // =========================================================
-    // テーブル描画
-    // =========================================================
-    function renderTable() {
-        var emptyState = document.getElementById('rankEmptyState');
-        var table      = document.getElementById('rankTable');
-        var tbody      = document.getElementById('rankTableBody');
-        var exportBtn  = document.getElementById('exportCsvBtn');
-
-        if (!rankData || rankData.length === 0) {
-            emptyState.style.display = 'block';
-            table.style.display = 'none';
-            exportBtn.style.display = 'none';
-            return;
-        }
-
-        emptyState.style.display = 'none';
-        table.style.display = 'table';
-        exportBtn.style.display = 'inline-block';
-
-        // ソート
-        var sorted = sortRankData(rankData, sortKey, sortDir);
-
-        var html = '';
-        for (var i = 0; i < sorted.length; i++) {
-            var kw = sorted[i];
-            var isExpanded = (expandedKeywordId === kw.keyword_id);
-            var expandedClass = isExpanded ? ' expanded' : '';
-
-            // クリック可能なデータ行
-            html += '<tr class="rank-row--clickable' + expandedClass + '" onclick="toggleTrendAccordion(' + kw.keyword_id + ')">';
-
-            // キーワード
-            html += '<td><div class="rank-keyword-name">' + escHtml(kw.keyword) + '</div></td>';
-
-            // Desktop
-            html += '<td>' + formatRank(kw.desktop) + '</td>';
-            html += '<td>' + formatChange(kw.desktop) + '</td>';
-
-            // Mobile
-            html += '<td>' + formatRank(kw.mobile) + '</td>';
-            html += '<td>' + formatChange(kw.mobile) + '</td>';
-
-            // 検索ボリューム
-            if (kw.search_volume != null) {
-                html += '<td><span class="volume-value">' + numberFormat(kw.search_volume) + '</span></td>';
-            } else {
-                html += '<td><span style="color:#aaa;font-size:12px;">未取得</span></td>';
-            }
-
-            // SEO難易度
-            html += '<td>' + formatDifficulty(kw.keyword_difficulty) + '</td>';
-
-            // 最終取得日
-            html += '<td>' + (kw.fetched_at || '<span style="color:#aaa;">未取得</span>') + '</td>';
-
-            html += '</tr>';
-
-            // 推移アコーディオン行（常に出力、表示/非表示はCSS max-heightで制御）
-            html += '<tr class="rank-trend-row">';
-            html += '<td colspan="8">';
-            html += '<div class="rank-trend-wrap' + (isExpanded ? ' open' : '') + '" id="trendWrap' + kw.keyword_id + '">';
-            if (isExpanded) {
-                html += buildTrendContent(kw.keyword_id);
-            }
-            html += '</div>';
-            html += '</td></tr>';
-        }
-
-        tbody.innerHTML = html;
-        updateSortHeaders();
-    }
-
-    // =========================================================
-    // フォーマッター
-    // =========================================================
-    function formatRank(device) {
-        if (!device) {
-            return '<span style="color:#aaa;">未取得</span>';
-        }
-        if (!device.is_ranked) {
-            return '<span class="rank-value--out">圏外</span>';
-        }
-        return '<span class="rank-value">' + device.rank_group + '<span style="font-size:12px;font-weight:400;color:#8A8A8A;">位</span></span>';
-    }
-
-    function formatChange(device) {
-        if (!device || device.change == null) {
-            return '<span class="rank-change rank-change--same">-</span>';
-        }
-        var c = device.change;
-        if (c === 999) {
-            return '<span class="rank-change rank-change--up">&uarr; NEW</span>';
-        }
-        if (c === -999) {
-            return '<span class="rank-change rank-change--down">&darr; 圏外</span>';
-        }
-        if (c > 0) {
-            return '<span class="rank-change rank-change--up">&uarr; ' + c + '</span>';
-        }
-        if (c < 0) {
-            return '<span class="rank-change rank-change--down">&darr; ' + Math.abs(c) + '</span>';
-        }
-        return '<span class="rank-change rank-change--same">&rarr; 0</span>';
-    }
-
-    function formatDifficulty(val) {
-        if (val == null) {
-            return '<span style="color:#aaa;font-size:12px;">未取得</span>';
-        }
-        var v = parseInt(val, 10);
-        if (v <= 33) {
-            return '<span class="difficulty-badge difficulty-badge--low">低 ' + v + '</span>';
-        }
-        if (v <= 66) {
-            return '<span class="difficulty-badge difficulty-badge--medium">中 ' + v + '</span>';
-        }
-        return '<span class="difficulty-badge difficulty-badge--high">高 ' + v + '</span>';
-    }
-
-    function numberFormat(n) {
-        if (n == null) return '&#8212;';
-        return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    }
-
-    // =========================================================
-    // 半年推移アコーディオン
-    // =========================================================
-    window.toggleTrendAccordion = function(keywordId) {
-        if (expandedKeywordId === keywordId) {
-            // 閉じる
-            var wrap = document.getElementById('trendWrap' + keywordId);
-            if (wrap) wrap.classList.remove('open');
-            expandedKeywordId = 0;
-
-            // 矢印クラス更新
-            document.querySelectorAll('.rank-row--clickable.expanded').forEach(function(row) {
-                row.classList.remove('expanded');
-            });
-            return;
-        }
-
-        // 既に開いている行を閉じる
-        if (expandedKeywordId > 0) {
-            var prevWrap = document.getElementById('trendWrap' + expandedKeywordId);
-            if (prevWrap) prevWrap.classList.remove('open');
-            document.querySelectorAll('.rank-row--clickable.expanded').forEach(function(row) {
-                row.classList.remove('expanded');
-            });
-        }
-
-        expandedKeywordId = keywordId;
-
-        // 対象行を展開状態にする
-        var clickedRow = null;
-        document.querySelectorAll('.rank-row--clickable').forEach(function(row) {
-            if (row.getAttribute('onclick') && row.getAttribute('onclick').indexOf(keywordId) !== -1) {
-                row.classList.add('expanded');
-                clickedRow = row;
-            }
-        });
-
-        var wrap = document.getElementById('trendWrap' + keywordId);
-        if (!wrap) return;
-
-        // キャッシュにあればそのまま表示
-        if (trendCache[keywordId]) {
-            wrap.innerHTML = buildTrendTableHtml(trendCache[keywordId]);
-            requestAnimationFrame(function() { wrap.classList.add('open'); });
-        } else {
-            // ローディング表示
-            wrap.innerHTML = '<div class="rank-trend-loading">読み込み中...</div>';
-            requestAnimationFrame(function() { wrap.classList.add('open'); });
-            fetchMonthlyTrend(keywordId);
-        }
-    };
-
-    function fetchMonthlyTrend(keywordId) {
-        fetch('/wp-json/gcrev/v1/rank-tracker/monthly-trend?keyword_id=' + keywordId, {
-            headers: { 'X-WP-Nonce': wpNonce },
-            credentials: 'same-origin'
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            if (json.success && json.data) {
-                trendCache[keywordId] = json.data;
-            } else {
-                trendCache[keywordId] = { months: [], trend: { desktop: {}, mobile: {} } };
-            }
-            // まだ展開中なら表示更新
-            if (expandedKeywordId === keywordId) {
-                var wrap = document.getElementById('trendWrap' + keywordId);
-                if (wrap) {
-                    wrap.innerHTML = buildTrendTableHtml(trendCache[keywordId]);
-                }
-            }
-        })
-        .catch(function(err) {
-            console.error('[MonthlyTrend]', err);
-            var wrap = document.getElementById('trendWrap' + keywordId);
-            if (wrap) {
-                wrap.innerHTML = '<div class="rank-trend-loading" style="color:#d63638;">データの取得に失敗しました。</div>';
-            }
-        });
-    }
-
-    function buildTrendContent(keywordId) {
-        if (trendCache[keywordId]) {
-            return buildTrendTableHtml(trendCache[keywordId]);
-        }
-        // まだキャッシュなし → 非同期で取得
-        fetchMonthlyTrend(keywordId);
-        return '<div class="rank-trend-loading">読み込み中...</div>';
-    }
-
-    function buildTrendTableHtml(data) {
-        var months = data.months || [];
-        var trend  = data.trend || {};
-        var desktop = trend.desktop || {};
-        var mobile  = trend.mobile || {};
-
-        if (months.length === 0) {
-            return '<div class="rank-trend-inner"><div class="rank-trend-loading">推移データがありません。</div></div>';
-        }
-
-        var html = '<div class="rank-trend-inner">';
-        html += '<div class="rank-trend-inner__title">📊 半年間の順位推移</div>';
-        html += '<table class="rank-trend-table"><thead><tr>';
-        html += '<th></th>';
-        for (var i = 0; i < months.length; i++) {
-            var parts = months[i].split('-');
-            html += '<th>' + parseInt(parts[1], 10) + '月</th>';
-        }
-        html += '</tr></thead><tbody>';
-
-        // PC行
-        html += '<tr><td>PC</td>';
-        for (var i = 0; i < months.length; i++) {
-            html += '<td>' + formatTrendCell(desktop[months[i]]) + '</td>';
-        }
-        html += '</tr>';
-
-        // スマホ行
-        html += '<tr><td>スマホ</td>';
-        for (var i = 0; i < months.length; i++) {
-            html += '<td>' + formatTrendCell(mobile[months[i]]) + '</td>';
-        }
-        html += '</tr>';
-
-        html += '</tbody></table>';
-        html += '<div class="rank-trend-note">※ 各月の最終週の順位を表示</div>';
-        html += '</div>';
-        return html;
-    }
-
-    function formatTrendCell(cell) {
-        if (!cell) return '<span style="color:#ccc;">-</span>';
-        if (!cell.is_ranked) return '<span style="color:#d63638;font-size:12px;">圏外</span>';
-        var rank = cell.rank;
-        var color = '#2B2B2B';
-        if (rank <= 10) color = '#0a7b0a';
-        else if (rank <= 20) color = '#2271b1';
-        else if (rank <= 50) color = '#2B2B2B';
-        else color = '#d63638';
-        return '<span style="color:' + color + ';">' + rank + '位</span>';
-    }
-
-    // =========================================================
-    // ソート
-    // =========================================================
-    window.toggleSort = function(key) {
-        if (sortKey === key) {
-            sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-            sortKey = key;
-            sortDir = (key === 'keyword' || key === 'fetched_at') ? 'asc' : 'asc';
-        }
-        renderTable();
-    };
-
-    function sortRankData(data, key, dir) {
-        var sorted = data.slice();
-        sorted.sort(function(a, b) {
-            var va = getSortValue(a, key);
-            var vb = getSortValue(b, key);
-
-            if (va == null && vb == null) return 0;
-            if (va == null) return 1;
-            if (vb == null) return -1;
-
-            var cmp = 0;
-            if (typeof va === 'string') {
-                cmp = va.localeCompare(vb, 'ja');
-            } else {
-                cmp = va - vb;
-            }
-            return dir === 'asc' ? cmp : -cmp;
-        });
-        return sorted;
-    }
-
-    function getSortValue(kw, key) {
-        switch (key) {
-            case 'keyword':
-                return kw.keyword || '';
-            case 'desktop':
-                return (kw.desktop && kw.desktop.is_ranked) ? kw.desktop.rank_group : 9999;
-            case 'desktop_change':
-                return (kw.desktop && kw.desktop.change != null) ? kw.desktop.change : -9999;
-            case 'mobile':
-                return (kw.mobile && kw.mobile.is_ranked) ? kw.mobile.rank_group : 9999;
-            case 'mobile_change':
-                return (kw.mobile && kw.mobile.change != null) ? kw.mobile.change : -9999;
-            case 'search_volume':
-                return kw.search_volume != null ? kw.search_volume : -1;
-            case 'keyword_difficulty':
-                return kw.keyword_difficulty != null ? kw.keyword_difficulty : -1;
-            case 'fetched_at':
-                return kw.fetched_at || '';
-            default:
-                return '';
-        }
-    }
-
-    function updateSortHeaders() {
-        document.querySelectorAll('.rank-table th.sortable').forEach(function(th) {
-            th.classList.remove('sort-asc', 'sort-desc');
-            var indicator = th.querySelector('.sort-indicator');
-            if (indicator) indicator.textContent = '\u21C5';
-
-            if (th.dataset.sortKey === sortKey) {
-                th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
-                if (indicator) indicator.textContent = sortDir === 'asc' ? '\u2191' : '\u2193';
-            }
-        });
-    }
-
-    // =========================================================
-    // CSV エクスポート
+    // CSV export
     // =========================================================
     window.exportRankCsv = function() {
         if (!rankData || rankData.length === 0) return;
 
         var bom = '\uFEFF';
-        var header = 'キーワード,PC順位,PC変動,スマホ順位,スマホ変動,検索ボリューム,SEO難易度,最終取得日\n';
+        var headerCols = ['キーワード', '検索ボリューム', 'SEO難易度', 'スマホ順位', 'PC順位', '最終取得日'];
+        var header = headerCols.join(',') + '\n';
         var rows = '';
 
         for (var i = 0; i < rankData.length; i++) {
             var kw = rankData[i];
-            var dRank  = kw.desktop ? (kw.desktop.is_ranked ? kw.desktop.rank_group : '圏外') : '未取得';
-            var dChange = (kw.desktop && kw.desktop.change != null) ? kw.desktop.change : '';
-            var mRank  = kw.mobile ? (kw.mobile.is_ranked ? kw.mobile.rank_group : '圏外') : '未取得';
-            var mChange = (kw.mobile && kw.mobile.change != null) ? kw.mobile.change : '';
+            var mRank = kw.mobile ? (kw.mobile.is_ranked ? kw.mobile.rank_group : '圏外') : '未取得';
+            var dRank = kw.desktop ? (kw.desktop.is_ranked ? kw.desktop.rank_group : '圏外') : '未取得';
             var vol = kw.search_volume != null ? kw.search_volume : '';
             var diff = kw.keyword_difficulty != null ? kw.keyword_difficulty : '';
 
             rows += '"' + escapeCsv(kw.keyword) + '",';
-            rows += dRank + ',';
-            rows += dChange + ',';
-            rows += mRank + ',';
-            rows += mChange + ',';
             rows += vol + ',';
             rows += diff + ',';
+            rows += mRank + ',';
+            rows += dRank + ',';
             rows += (kw.fetched_at || '') + '\n';
         }
 
         var blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
         var link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'rank-tracker-' + new Date().toISOString().slice(0,10) + '.csv';
+        link.download = 'rank-tracker-' + new Date().toISOString().slice(0, 10) + '.csv';
         link.click();
     };
 
@@ -1544,24 +1389,33 @@ get_header();
     }
 
     // =========================================================
-    // ユーティリティ
+    // Toast
+    // =========================================================
+    function showToast(message, type) {
+        var existing = document.querySelector('.rt-toast');
+        if (existing) existing.remove();
+
+        var toast = document.createElement('div');
+        toast.className = 'rt-toast' + (type === 'error' ? ' rt-toast--error' : '');
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        requestAnimationFrame(function() { toast.classList.add('show'); });
+
+        setTimeout(function() {
+            toast.classList.remove('show');
+            setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
+        }, 4000);
+    }
+
+    // =========================================================
+    // Utilities
     // =========================================================
     function showLoading(show) {
         var overlay = document.getElementById('loadingOverlay');
         if (overlay) {
-            if (show) {
-                overlay.classList.add('active');
-            } else {
-                overlay.classList.remove('active');
-            }
+            if (show) overlay.classList.add('active');
+            else overlay.classList.remove('active');
         }
-    }
-
-    function escHtml(str) {
-        if (!str) return '';
-        var div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
     }
 })();
 </script>
