@@ -4762,6 +4762,7 @@ function gcrev_rank_results_create_table(): void {
         is_ranked TINYINT(1) NOT NULL DEFAULT 0,
         serp_type VARCHAR(30) NOT NULL DEFAULT 'organic',
         api_source VARCHAR(30) NOT NULL DEFAULT 'dataforseo',
+        fetch_mode VARCHAR(20) NOT NULL DEFAULT 'weekly_batch',
         iso_year_week CHAR(8) NOT NULL,
         fetched_at DATETIME NOT NULL,
         created_at DATETIME NOT NULL,

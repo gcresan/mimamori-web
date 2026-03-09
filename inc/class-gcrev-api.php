@@ -8611,11 +8611,12 @@ PROMPT;
     /**
      * 取得結果を DB に保存
      *
-     * @param array $kw      キーワードレコード
-     * @param array $results fetch_rankings_for_keyword() の返り値
+     * @param array  $kw         キーワードレコード
+     * @param array  $results    fetch_rankings_for_keyword() の返り値
+     * @param string $fetch_mode 'weekly_batch' | 'manual_live'
      * @return array 保存結果
      */
-    private function save_rank_results( array $kw, array $results ): array {
+    private function save_rank_results( array $kw, array $results, string $fetch_mode = 'weekly_batch' ): array {
         global $wpdb;
 
         $res_table = $wpdb->prefix . 'gcrev_rank_results';
@@ -8632,42 +8633,35 @@ PROMPT;
                 continue;
             }
 
-            $data = [
-                'keyword_id'    => (int) $kw['id'],
-                'user_id'       => (int) $kw['user_id'],
-                'device'        => $device,
-                'rank_group'    => $r['is_ranked'] ? $r['rank_group'] : null,
-                'rank_absolute' => $r['is_ranked'] ? $r['rank_absolute'] : null,
-                'found_url'     => $r['found_url'],
-                'found_domain'  => $r['found_domain'],
-                'is_ranked'     => $r['is_ranked'] ? 1 : 0,
-                'serp_type'     => $r['serp_type'] ?? 'organic',
-                'api_source'    => 'dataforseo',
-                'iso_year_week' => $iso_week,
-                'fetched_at'    => $now,
-                'created_at'    => $now,
-            ];
-
-            // UNIQUE KEY kw_device_week で重複防止（INSERT IGNORE パターン）
-            $rg  = $data['rank_group'] !== null ? $wpdb->prepare( '%d', $data['rank_group'] ) : 'NULL';
-            $ra  = $data['rank_absolute'] !== null ? $wpdb->prepare( '%d', $data['rank_absolute'] ) : 'NULL';
-            $url = $data['found_url'] !== null ? $wpdb->prepare( '%s', $data['found_url'] ) : "''";
-            $dom = $data['found_domain'] !== null ? $wpdb->prepare( '%s', $data['found_domain'] ) : "''";
+            $rg  = $r['is_ranked'] ? $wpdb->prepare( '%d', $r['rank_group'] ) : 'NULL';
+            $ra  = $r['is_ranked'] ? $wpdb->prepare( '%d', $r['rank_absolute'] ) : 'NULL';
+            $url = $r['found_url'] !== null ? $wpdb->prepare( '%s', $r['found_url'] ) : "''";
+            $dom = $r['found_domain'] !== null ? $wpdb->prepare( '%s', $r['found_domain'] ) : "''";
 
             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $sql = $wpdb->prepare(
-                "INSERT IGNORE INTO {$res_table}
-                 (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain, is_ranked, serp_type, api_source, iso_year_week, fetched_at, created_at)
-                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s)",
-                $data['keyword_id'],
-                $data['user_id'],
-                $data['device'],
-                $data['is_ranked'],
-                $data['serp_type'],
-                $data['api_source'],
-                $data['iso_year_week'],
-                $data['fetched_at'],
-                $data['created_at']
+                "INSERT INTO {$res_table}
+                 (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain,
+                  is_ranked, serp_type, api_source, fetch_mode, iso_year_week, fetched_at, created_at)
+                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s, %s)
+                 ON DUPLICATE KEY UPDATE
+                  rank_group    = VALUES(rank_group),
+                  rank_absolute = VALUES(rank_absolute),
+                  found_url     = VALUES(found_url),
+                  found_domain  = VALUES(found_domain),
+                  is_ranked     = VALUES(is_ranked),
+                  fetch_mode    = VALUES(fetch_mode),
+                  fetched_at    = VALUES(fetched_at)",
+                (int) $kw['id'],
+                (int) $kw['user_id'],
+                $device,
+                $r['is_ranked'] ? 1 : 0,
+                $r['serp_type'] ?? 'organic',
+                'dataforseo',
+                $fetch_mode,
+                $iso_week,
+                $now,
+                $now
             );
 
             $result = $wpdb->query( $sql );
@@ -8756,14 +8750,18 @@ PROMPT;
 
     /**
      * GET /rank-tracker/my-keywords
-     * ログインユーザー自身のキーワード一覧（上限情報付き）
+     * ログインユーザー自身のキーワード一覧（上限情報 + 手動取得 quota 付き）
      */
     public function rest_get_my_keywords( \WP_REST_Request $request ): \WP_REST_Response {
         global $wpdb;
 
-        $user_id = get_current_user_id();
-        $table   = $wpdb->prefix . 'gcrev_rank_keywords';
+        $user_id   = get_current_user_id();
+        $table     = $wpdb->prefix . 'gcrev_rank_keywords';
         $res_table = $wpdb->prefix . 'gcrev_rank_results';
+        $is_admin  = current_user_can( 'manage_options' );
+
+        $tz    = wp_timezone();
+        $today = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d' );
 
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, keyword, target_domain, location_code, enabled, memo,
@@ -8775,6 +8773,20 @@ PROMPT;
              ORDER BY sort_order ASC, id ASC",
             $user_id
         ), ARRAY_A );
+
+        // 本日の手動取得済みキーワード ID 一覧を事前取得
+        $fetched_today_ids = [];
+        if ( ! $is_admin ) {
+            $fetched_rows = $wpdb->get_col( $wpdb->prepare(
+                "SELECT DISTINCT keyword_id FROM {$res_table}
+                 WHERE user_id = %d AND DATE(fetched_at) = %s AND fetch_mode = 'manual_live'",
+                $user_id, $today
+            ) );
+            $fetched_today_ids = array_map( 'intval', $fetched_rows );
+        }
+
+        // per-user: 本日の手動取得使用数
+        $daily_used = $is_admin ? 0 : count( $fetched_today_ids );
 
         // 各キーワードの最新順位も取得
         foreach ( $rows as &$row ) {
@@ -8799,6 +8811,12 @@ PROMPT;
                     'fetched_at' => substr( $latest['fetched_at'], 0, 10 ),
                 ] : null;
             }
+
+            // 手動取得可否
+            $manual_fetched_today = in_array( $row['id'], $fetched_today_ids, true );
+            $row['manual_fetched_today'] = $manual_fetched_today;
+            $row['can_manual_fetch'] = $row['enabled']
+                && ( $is_admin || ( ! $manual_fetched_today && $daily_used < self::MANUAL_FETCH_DAILY_LIMIT ) );
         }
         unset( $row );
 
@@ -8813,6 +8831,12 @@ PROMPT;
                 'limit'          => self::RANK_KEYWORD_LIMIT,
                 'can_add'        => $count < self::RANK_KEYWORD_LIMIT,
                 'default_domain' => $default_domain,
+                'manual_fetch_limit' => [
+                    'daily_used'      => $daily_used,
+                    'daily_limit'     => self::MANUAL_FETCH_DAILY_LIMIT,
+                    'daily_remaining' => $is_admin ? 999 : max( 0, self::MANUAL_FETCH_DAILY_LIMIT - $daily_used ),
+                    'is_admin'        => $is_admin,
+                ],
             ],
         ]);
     }
@@ -8947,10 +8971,17 @@ PROMPT;
         return new \WP_REST_Response( [ 'success' => true ] );
     }
 
+    /** 一般ユーザーの手動取得 日次上限 */
+    private const MANUAL_FETCH_DAILY_LIMIT = 5;
+
     /**
      * POST /rank-tracker/my-keywords/{id}/fetch
-     * ログインユーザーが自分のキーワードの順位を手動取得
-     * レート制限: 1キーワードにつき1日1回
+     * ログインユーザーが自分のキーワードの順位を手動 Live 取得
+     *
+     * レート制限:
+     *  - per-keyword: 1日1回（manual_live のみカウント）
+     *  - per-user:    1日5回（manual_live のみカウント）
+     *  - 管理者:      制限なし
      */
     public function rest_fetch_my_keyword_rank( \WP_REST_Request $request ): \WP_REST_Response {
         if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
@@ -8962,6 +8993,7 @@ PROMPT;
         $id        = absint( $request['id'] );
         $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
         $res_table = $wpdb->prefix . 'gcrev_rank_results';
+        $is_admin  = current_user_can( 'manage_options' );
 
         // 自分のキーワードか確認
         $kw = $wpdb->get_row( $wpdb->prepare(
@@ -8973,17 +9005,38 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードが見つかりません。' ], 404 );
         }
 
-        // レート制限: 同じキーワードに対して今日既に取得済みならスキップ
+        // 停止中キーワードは取得不可
+        if ( ! (bool) $kw['enabled'] ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '停止中のキーワードは取得できません。' ], 400 );
+        }
+
         $tz    = wp_timezone();
         $today = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d' );
-        $already_today = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$res_table}
-             WHERE keyword_id = %d AND DATE(fetched_at) = %s",
-            $id, $today
-        ) );
 
-        if ( $already_today > 0 ) {
-            return new \WP_REST_Response( [ 'success' => false, 'message' => '本日は既に取得済みです。翌日以降に再度お試しください。' ], 429 );
+        // --- レート制限（管理者はバイパス） ---
+        if ( ! $is_admin ) {
+            // per-keyword: このキーワードは本日すでに手動取得済みか
+            $kw_today = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$res_table}
+                 WHERE keyword_id = %d AND DATE(fetched_at) = %s AND fetch_mode = 'manual_live'",
+                $id, $today
+            ) );
+            if ( $kw_today > 0 ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'このキーワードは本日すでに手動取得済みです。' ], 429 );
+            }
+
+            // per-user: 本日の手動取得回数
+            $user_today = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(DISTINCT keyword_id) FROM {$res_table}
+                 WHERE user_id = %d AND DATE(fetched_at) = %s AND fetch_mode = 'manual_live'",
+                $user_id, $today
+            ) );
+            if ( $user_today >= self::MANUAL_FETCH_DAILY_LIMIT ) {
+                return new \WP_REST_Response( [
+                    'success' => false,
+                    'message' => sprintf( '本日の手動取得上限（%d回/日）に達しました。', self::MANUAL_FETCH_DAILY_LIMIT ),
+                ], 429 );
+            }
         }
 
         // DataForSEO API 呼び出し（desktop + mobile）
@@ -8994,8 +9047,23 @@ PROMPT;
             $kw['language_code']
         );
 
-        // DB に保存
-        $saved = $this->save_rank_results( $kw, $results );
+        // DB に保存（fetch_mode = 'manual_live'）
+        $saved = $this->save_rank_results( $kw, $results, 'manual_live' );
+
+        // ログ出力
+        $desktop_rank = isset( $results['desktop']['rank_group'] ) ? $results['desktop']['rank_group'] : '圏外';
+        $mobile_rank  = isset( $results['mobile']['rank_group'] )  ? $results['mobile']['rank_group']  : '圏外';
+        error_log( sprintf(
+            '[GCREV][RankTracker][ManualFetch] user=%d keyword_id=%d keyword="%s" desktop=%s mobile=%s',
+            $user_id, $id, $kw['keyword'], $desktop_rank, $mobile_rank
+        ) );
+
+        // 現在のユーザー日次使用数を算出（今回分を含む）
+        $daily_used = $is_admin ? 0 : (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(DISTINCT keyword_id) FROM {$res_table}
+             WHERE user_id = %d AND DATE(fetched_at) = %s AND fetch_mode = 'manual_live'",
+            $user_id, $today
+        ) );
 
         return new \WP_REST_Response([
             'success' => true,
@@ -9003,6 +9071,12 @@ PROMPT;
                 'keyword' => $kw['keyword'],
                 'results' => $results,
                 'saved'   => $saved,
+                'rate_limit' => [
+                    'daily_used'      => $daily_used,
+                    'daily_limit'     => self::MANUAL_FETCH_DAILY_LIMIT,
+                    'daily_remaining' => $is_admin ? 999 : max( 0, self::MANUAL_FETCH_DAILY_LIMIT - $daily_used ),
+                    'is_admin'        => $is_admin,
+                ],
             ],
         ]);
     }

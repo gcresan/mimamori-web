@@ -173,7 +173,8 @@ class Gcrev_Rank_Tracker_Settings_Page {
 
                         // save_rank_results は API クラスの private メソッドなので
                         // ここでは直接 INSERT する
-                        $iso_week = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'o-W' );
+                        $iso_week   = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'o-W' );
+                        $fetch_mode = 'manual_live';
 
                         foreach ( ['desktop', 'mobile'] as $device ) {
                             $r = $results[ $device ] ?? null;
@@ -186,15 +187,25 @@ class Gcrev_Rank_Tracker_Settings_Page {
 
                             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
                             $sql = $wpdb->prepare(
-                                "INSERT IGNORE INTO {$res_table}
-                                 (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain, is_ranked, serp_type, api_source, iso_year_week, fetched_at, created_at)
-                                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s)",
+                                "INSERT INTO {$res_table}
+                                 (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain,
+                                  is_ranked, serp_type, api_source, fetch_mode, iso_year_week, fetched_at, created_at)
+                                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s, %s)
+                                 ON DUPLICATE KEY UPDATE
+                                  rank_group    = VALUES(rank_group),
+                                  rank_absolute = VALUES(rank_absolute),
+                                  found_url     = VALUES(found_url),
+                                  found_domain  = VALUES(found_domain),
+                                  is_ranked     = VALUES(is_ranked),
+                                  fetch_mode    = VALUES(fetch_mode),
+                                  fetched_at    = VALUES(fetched_at)",
                                 (int) $kw['id'],
                                 (int) $kw['user_id'],
                                 $device,
                                 $r['is_ranked'] ? 1 : 0,
                                 $r['serp_type'] ?? 'organic',
                                 'dataforseo',
+                                $fetch_mode,
                                 $iso_week,
                                 $now,
                                 $now
@@ -216,19 +227,13 @@ class Gcrev_Rank_Tracker_Settings_Page {
                         $user_id
                     ), ARRAY_A );
 
-                    $config   = new Gcrev_Config();
-                    $client   = new Gcrev_DataForSEO_Client( $config );
-                    $iso_week = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'o-W' );
-                    $fetched  = 0;
+                    $config     = new Gcrev_Config();
+                    $client     = new Gcrev_DataForSEO_Client( $config );
+                    $iso_week   = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'o-W' );
+                    $fetch_mode = 'manual_live';
+                    $fetched    = 0;
 
                     foreach ( $keywords as $kw ) {
-                        // 重複チェック
-                        $already = (int) $wpdb->get_var( $wpdb->prepare(
-                            "SELECT COUNT(*) FROM {$res_table} WHERE keyword_id = %d AND iso_year_week = %s",
-                            (int) $kw['id'], $iso_week
-                        ) );
-                        if ( $already > 0 ) { continue; }
-
                         $results = $client->fetch_rankings_for_keyword(
                             $kw['keyword'],
                             $kw['target_domain'],
@@ -247,15 +252,25 @@ class Gcrev_Rank_Tracker_Settings_Page {
 
                             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
                             $sql = $wpdb->prepare(
-                                "INSERT IGNORE INTO {$res_table}
-                                 (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain, is_ranked, serp_type, api_source, iso_year_week, fetched_at, created_at)
-                                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s)",
+                                "INSERT INTO {$res_table}
+                                 (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain,
+                                  is_ranked, serp_type, api_source, fetch_mode, iso_year_week, fetched_at, created_at)
+                                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s, %s)
+                                 ON DUPLICATE KEY UPDATE
+                                  rank_group    = VALUES(rank_group),
+                                  rank_absolute = VALUES(rank_absolute),
+                                  found_url     = VALUES(found_url),
+                                  found_domain  = VALUES(found_domain),
+                                  is_ranked     = VALUES(is_ranked),
+                                  fetch_mode    = VALUES(fetch_mode),
+                                  fetched_at    = VALUES(fetched_at)",
                                 (int) $kw['id'],
                                 (int) $kw['user_id'],
                                 $device,
                                 $r['is_ranked'] ? 1 : 0,
                                 $r['serp_type'] ?? 'organic',
                                 'dataforseo',
+                                $fetch_mode,
                                 $iso_week,
                                 $now,
                                 $now

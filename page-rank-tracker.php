@@ -412,6 +412,69 @@ get_header();
     font-size: 13px;
     color: #2F3A4A;
 }
+
+/* Live取得ボタン */
+.kw-action-btn--live-fetch {
+    color: #0a7b0a;
+    border-color: #0a7b0a;
+    font-weight: 600;
+}
+.kw-action-btn--live-fetch:hover {
+    background: #f0faf0;
+}
+.kw-action-btn--live-fetch:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    color: #8A8A8A;
+    border-color: #E8E4DF;
+}
+.kw-action-btn--live-fetch:disabled:hover {
+    background: #fff;
+}
+
+/* 手動取得 quota */
+.kw-fetch-quota {
+    font-size: 12px;
+    color: #8A8A8A;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #E8E4DF;
+}
+.kw-fetch-quota__count {
+    font-weight: 600;
+    color: #2F3A4A;
+}
+.kw-fetch-quota__note {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #aaa;
+}
+
+/* トースト通知 */
+.fetch-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #2F3A4A;
+    color: #FAF9F6;
+    padding: 14px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    max-width: 400px;
+    line-height: 1.5;
+}
+.fetch-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+.fetch-toast--error {
+    background: #d63638;
+}
 </style>
 
 <!-- コンテンツエリア -->
@@ -509,6 +572,11 @@ get_header();
                 </thead>
                 <tbody id="kwMgmtBody"></tbody>
             </table>
+            <!-- 手動取得 quota 表示 -->
+            <div class="kw-fetch-quota" id="kwFetchQuota" style="display:none;">
+                <div>最新順位の手動取得: 本日 <span class="kw-fetch-quota__count" id="kwFetchUsed">0</span> / <span class="kw-fetch-quota__count" id="kwFetchLimit">5</span> 回使用済み</div>
+                <div class="kw-fetch-quota__note">通常は週1回自動で更新されます。必要な場合のみ手動で最新順位を取得できます。</div>
+            </div>
         </div>
     </div>
 
@@ -558,6 +626,7 @@ get_header();
     var kwCanAdd = true;
     var kwDefaultDomain = '';
     var editingId = 0; // 0 = 追加モード, >0 = 編集モード
+    var manualFetchLimit = { daily_used: 0, daily_limit: 5, daily_remaining: 5, is_admin: false };
 
     // =========================================================
     // 初期ロード
@@ -592,6 +661,9 @@ get_header();
                 kwLimit = json.data.limit || 5;
                 kwCanAdd = json.data.can_add;
                 kwDefaultDomain = json.data.default_domain || '';
+                if (json.data.manual_fetch_limit) {
+                    manualFetchLimit = json.data.manual_fetch_limit;
+                }
                 renderKwManagement();
             }
         })
@@ -685,9 +757,20 @@ get_header();
 
             // 操作ボタン
             html += '<td style="white-space:nowrap;">';
-            // 未取得の場合は「取得」ボタンを表示
-            if (!kw.latest_desktop && !kw.latest_mobile) {
-                html += '<button class="kw-action-btn kw-action-btn--fetch" id="fetchBtn' + kw.id + '" onclick="fetchKeywordRank(' + kw.id + ')">取得</button>';
+            // 手動取得ボタン（有効なキーワードのみ表示）
+            if (isEnabled) {
+                var btnLabel = (!kw.latest_desktop && !kw.latest_mobile) ? '取得' : '更新';
+                var canFetch = kw.can_manual_fetch;
+                var disabledAttr = canFetch ? '' : ' disabled';
+                var tooltip = '';
+                if (!canFetch) {
+                    if (kw.manual_fetched_today) {
+                        tooltip = ' title="本日すでに取得済み"';
+                    } else {
+                        tooltip = ' title="本日の取得上限に達しました"';
+                    }
+                }
+                html += '<button class="kw-action-btn kw-action-btn--live-fetch" id="fetchBtn' + kw.id + '"' + disabledAttr + tooltip + ' onclick="fetchKeywordRankLive(' + kw.id + ')">' + btnLabel + '</button>';
             }
             html += '<button class="kw-action-btn" onclick="startEdit(' + kw.id + ')">編集</button>';
             html += '<button class="kw-action-btn kw-action-btn--delete" onclick="deleteKeyword(' + kw.id + ', \'' + escHtml(kw.keyword).replace(/'/g, "\\'") + '\')">削除</button>';
@@ -697,6 +780,14 @@ get_header();
         }
 
         tbody.innerHTML = html;
+
+        // quota 表示の更新
+        var quotaEl = document.getElementById('kwFetchQuota');
+        if (quotaEl && myKeywords.length > 0) {
+            quotaEl.style.display = manualFetchLimit.is_admin ? 'none' : 'block';
+            document.getElementById('kwFetchUsed').textContent = manualFetchLimit.daily_used;
+            document.getElementById('kwFetchLimit').textContent = manualFetchLimit.daily_limit;
+        }
     }
 
     // =========================================================
@@ -848,10 +939,11 @@ get_header();
     };
 
     // =========================================================
-    // キーワード管理 — 手動順位取得
+    // キーワード管理 — 手動 Live 順位取得
     // =========================================================
-    window.fetchKeywordRank = function(id) {
+    window.fetchKeywordRankLive = function(id) {
         var btn = document.getElementById('fetchBtn' + id);
+        var origLabel = btn ? btn.textContent : '取得';
         if (btn) {
             btn.disabled = true;
             btn.textContent = '取得中...';
@@ -864,26 +956,74 @@ get_header();
         })
         .then(function(res) { return res.json(); })
         .then(function(json) {
-            if (json.success) {
+            if (json.success && json.data) {
+                var d = json.data;
+                // トースト通知: 結果表示
+                var msg = '「' + escHtml(d.keyword) + '」の順位を取得しました。';
+                var r = d.results || {};
+                var parts = [];
+                if (r.desktop) {
+                    parts.push('PC: ' + (r.desktop.is_ranked ? r.desktop.rank_group + '位' : '圏外'));
+                }
+                if (r.mobile) {
+                    parts.push('スマホ: ' + (r.mobile.is_ranked ? r.mobile.rank_group + '位' : '圏外'));
+                }
+                if (parts.length > 0) {
+                    msg += '\n' + parts.join(' / ');
+                }
+                showToast(msg, 'success');
+
+                // quota 更新
+                if (d.rate_limit) {
+                    manualFetchLimit = d.rate_limit;
+                }
+
                 fetchMyKeywords();
                 fetchRankings(currentRange);
             } else {
-                alert(json.message || '順位の取得に失敗しました。');
+                showToast(json.message || '順位の取得に失敗しました。', 'error');
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = '取得';
+                    btn.textContent = origLabel;
                 }
             }
         })
         .catch(function(err) {
-            console.error('[KW Fetch]', err);
-            alert('通信エラーが発生しました。');
+            console.error('[KW LiveFetch]', err);
+            showToast('通信エラーが発生しました。', 'error');
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = '取得';
+                btn.textContent = origLabel;
             }
         });
     };
+
+    // =========================================================
+    // トースト通知
+    // =========================================================
+    function showToast(message, type) {
+        // 既存トーストがあれば削除
+        var existing = document.querySelector('.fetch-toast');
+        if (existing) existing.remove();
+
+        var toast = document.createElement('div');
+        toast.className = 'fetch-toast' + (type === 'error' ? ' fetch-toast--error' : '');
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        // フェードイン
+        requestAnimationFrame(function() {
+            toast.classList.add('show');
+        });
+
+        // 4秒後にフェードアウト
+        setTimeout(function() {
+            toast.classList.remove('show');
+            setTimeout(function() {
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
+            }, 300);
+        }, 4000);
+    }
 
     // =========================================================
     // データ取得（ランキング）
