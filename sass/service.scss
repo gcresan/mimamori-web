@@ -1,0 +1,630 @@
+@charset "UTF-8";
+@import "set";
+
+// ===========================
+// page-service.php — 伴走サポートプラン LP
+// ===========================
+
+.service .content-area {
+
+  // ===========================
+  // 共通セクション
+  // ===========================
+  .sv-section {
+    padding: 56px 0;
+    &:first-child { padding-top: 0; }
+  }
+
+  .sv-section__title {
+    font-size: 22px;
+    font-weight: 800;
+    color: $secondary-color;
+    text-align: center;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+  .sv-section__subtitle {
+    font-size: 14px;
+    color: $text-secondary;
+    text-align: center;
+    margin-bottom: 36px;
+  }
+
+  // ===========================
+  // ファーストビュー
+  // ===========================
+  .sv-hero {
+    text-align: center;
+    padding: 48px 20px 56px;
+    background: linear-gradient(180deg, $bg-card 0%, $bg-light 100%);
+    border-radius: $border-radius;
+    border: 1px solid $border-color;
+    margin-bottom: 8px;
+  }
+
+  .sv-hero__label {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    color: $text-secondary;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .sv-hero__heading {
+    font-size: 26px;
+    font-weight: 800;
+    color: $secondary-color;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    @include responsive('md') {
+      font-size: 22px;
+    }
+  }
+
+  .sv-hero__brand {
+    font-size: 36px;
+    font-weight: 900;
+    color: $primary-color;
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+    @include responsive('md') {
+      font-size: 28px;
+    }
+  }
+
+  .sv-hero__sub {
+    font-size: 15px;
+    color: $text-secondary;
+    margin-bottom: 32px;
+    line-height: 1.7;
+  }
+
+  .sv-hero__actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .sv-btn {
+    display: inline-block;
+    padding: 12px 28px;
+    border-radius: $border-radius-sm;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+
+    &--primary {
+      background: $primary-color;
+      color: #fff;
+      &:hover { background: $primary-hover; transform: translateY(-1px); }
+    }
+
+    &--outline {
+      background: transparent;
+      color: $primary-color;
+      border: 1.5px solid $primary-color;
+      &:hover { background: $primary-color; color: #fff; }
+    }
+  }
+
+  // ===========================
+  // よくある悩み
+  // ===========================
+  .sv-pain {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    @include responsive('sm') {
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+  }
+
+  .sv-pain__item {
+    background: $bg-card;
+    border: 1px solid $border-color;
+    border-radius: $border-radius-md;
+    padding: 20px 16px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: $text-primary;
+    line-height: 1.5;
+
+    span {
+      display: block;
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+  }
+
+  // ===========================
+  // できること
+  // ===========================
+  .sv-features {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    @include responsive('md') {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    @include responsive('sm') {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .sv-feature {
+    background: $bg-card;
+    border: 1px solid $border-color;
+    border-radius: $border-radius-md;
+    padding: 24px 16px;
+    text-align: center;
+
+    &__icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+    &__title {
+      font-size: 15px;
+      font-weight: 700;
+      color: $secondary-color;
+      margin-bottom: 8px;
+    }
+    &__desc {
+      font-size: 13px;
+      color: $text-secondary;
+      line-height: 1.6;
+    }
+  }
+
+  // ===========================
+  // プラン比較表（最重要）
+  // ===========================
+  .sv-plans-section {
+    background: $bg-card;
+    border: 1px solid $border-color;
+    border-radius: $border-radius;
+    padding: 48px 32px;
+    @include responsive('md') {
+      padding: 36px 16px;
+    }
+  }
+
+  // --- デスクトップ: テーブル形式 ---
+  .sv-plan-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+    table-layout: fixed;
+
+    @include responsive('md') {
+      display: none; // スマホではカード型に切り替え
+    }
+
+    th, td {
+      padding: 14px 16px;
+      text-align: center;
+      border-bottom: 1px solid $border-color;
+      vertical-align: middle;
+    }
+
+    // ヘッダー行
+    thead th {
+      background: $bg-kpi;
+      font-weight: 600;
+      color: $text-secondary;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      padding: 12px 16px;
+
+      &:first-child {
+        text-align: left;
+        width: 36%;
+        border-radius: $border-radius-sm 0 0 0;
+      }
+      &:last-child {
+        border-radius: 0 $border-radius-sm 0 0;
+      }
+    }
+
+    // プラン名ヘッダー
+    .sv-plan-header {
+      background: $bg-card;
+      padding: 20px 12px;
+      border-bottom: 2px solid $border-color;
+
+      &:first-child {
+        background: transparent;
+        border-bottom: 2px solid $border-color;
+      }
+    }
+
+    .sv-plan-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: $secondary-color;
+      margin-bottom: 6px;
+    }
+
+    .sv-plan-price {
+      font-size: 22px;
+      font-weight: 800;
+      color: $primary-color;
+      line-height: 1.2;
+
+      small {
+        font-size: 12px;
+        font-weight: 500;
+        color: $text-secondary;
+      }
+    }
+
+    .sv-plan-tagline {
+      font-size: 11px;
+      color: $text-muted;
+      margin-top: 4px;
+    }
+
+    // おすすめバッジ
+    .sv-plan-header--recommended {
+      background: lighten($primary-color, 54%);
+      border-bottom-color: $primary-color;
+      position: relative;
+
+      .sv-plan-name {
+        color: $primary-color;
+      }
+    }
+
+    .sv-recommended-badge {
+      display: inline-block;
+      background: $primary-color;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    // 伴走プラン
+    .sv-plan-header--premium {
+      background: #F5F0EA;
+      border-bottom-color: #C9A84C;
+    }
+
+    // カテゴリ行
+    .sv-category-row td {
+      background: $bg-kpi;
+      font-weight: 700;
+      font-size: 13px;
+      color: $secondary-color;
+      text-align: left;
+      padding: 10px 16px;
+      border-bottom: 1px solid $border-color;
+    }
+
+    // データ行
+    tbody td {
+      background: $bg-card;
+      font-size: 14px;
+    }
+    tbody td:first-child {
+      text-align: left;
+      font-weight: 500;
+      color: $text-primary;
+    }
+
+    // ○×アイコン
+    .sv-check {
+      color: $success-color;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .sv-cross {
+      color: $neutral-color;
+      font-size: 16px;
+    }
+
+    // おすすめ列のハイライト
+    .sv-col-recommended {
+      background: lighten($primary-color, 56%) !important;
+    }
+
+    // 最終行
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+  }
+
+  // --- スマホ: カード形式 ---
+  .sv-plan-cards {
+    display: none;
+    @include responsive('md') {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+  }
+
+  .sv-plan-card {
+    border: 1.5px solid $border-color;
+    border-radius: $border-radius;
+    overflow: hidden;
+
+    &--recommended {
+      border-color: $primary-color;
+      box-shadow: $shadow-md;
+    }
+
+    &--premium {
+      border-color: #C9A84C;
+    }
+  }
+
+  .sv-plan-card__header {
+    padding: 20px 16px;
+    background: $bg-kpi;
+    text-align: center;
+
+    .sv-plan-card--recommended & {
+      background: lighten($primary-color, 54%);
+    }
+    .sv-plan-card--premium & {
+      background: #F5F0EA;
+    }
+  }
+
+  .sv-plan-card__badge {
+    display: inline-block;
+    background: $primary-color;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+
+  .sv-plan-card__name {
+    font-size: 17px;
+    font-weight: 700;
+    color: $secondary-color;
+    margin-bottom: 4px;
+
+    .sv-plan-card--recommended & {
+      color: $primary-color;
+    }
+  }
+
+  .sv-plan-card__price {
+    font-size: 24px;
+    font-weight: 800;
+    color: $primary-color;
+    small {
+      font-size: 12px;
+      font-weight: 500;
+      color: $text-secondary;
+    }
+  }
+
+  .sv-plan-card__tagline {
+    font-size: 11px;
+    color: $text-muted;
+    margin-top: 2px;
+  }
+
+  .sv-plan-card__body {
+    padding: 16px;
+  }
+
+  .sv-plan-card__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+
+    li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid $border-color;
+      font-size: 13px;
+      color: $text-primary;
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+
+    .sv-check {
+      color: $success-color;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .sv-cross {
+      color: $neutral-color;
+      font-size: 14px;
+    }
+  }
+
+  // --- 補足文 ---
+  .sv-plan-notes {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: $bg-info;
+    border-radius: $border-radius-sm;
+    border-left: 3px solid $primary-color;
+
+    li {
+      font-size: 13px;
+      color: $text-secondary;
+      line-height: 1.7;
+      margin-bottom: 4px;
+      list-style: none;
+      padding-left: 16px;
+      position: relative;
+
+      &:before {
+        content: '※';
+        position: absolute;
+        left: 0;
+        color: $text-muted;
+      }
+
+      &:last-child { margin-bottom: 0; }
+    }
+  }
+
+  // ===========================
+  // 導入フロー
+  // ===========================
+  .sv-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  .sv-flow__step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    position: relative;
+    padding-bottom: 28px;
+
+    &:last-child {
+      padding-bottom: 0;
+      .sv-flow__line { display: none; }
+    }
+  }
+
+  .sv-flow__num {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    background: $primary-color;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+  }
+
+  .sv-flow__line {
+    position: absolute;
+    left: 17px;
+    top: 36px;
+    width: 2px;
+    bottom: 0;
+    background: $border-color;
+  }
+
+  .sv-flow__content {
+    flex: 1;
+    padding-top: 6px;
+  }
+
+  .sv-flow__title {
+    font-size: 15px;
+    font-weight: 700;
+    color: $secondary-color;
+    margin-bottom: 2px;
+  }
+
+  .sv-flow__desc {
+    font-size: 13px;
+    color: $text-secondary;
+    line-height: 1.5;
+  }
+
+  // ===========================
+  // FAQ
+  // ===========================
+  .sv-faq {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  .sv-faq__item {
+    border-bottom: 1px solid $border-color;
+
+    &:last-child { border-bottom: none; }
+  }
+
+  .sv-faq__q {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 0;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    user-select: none;
+    transition: color 0.2s;
+
+    &:hover { color: $primary-color; }
+
+    span {
+      font-size: 12px;
+      color: $text-muted;
+      transition: transform 0.25s ease;
+    }
+  }
+
+  .sv-faq__a {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    font-size: 13px;
+    color: $text-secondary;
+    line-height: 1.7;
+    padding: 0 0 0 0;
+  }
+
+  .sv-faq__item.active {
+    .sv-faq__q span { transform: rotate(180deg); }
+    .sv-faq__a {
+      max-height: 200px;
+      padding-bottom: 18px;
+    }
+  }
+
+  // ===========================
+  // CTA
+  // ===========================
+  .sv-cta {
+    text-align: center;
+    padding: 48px 20px;
+    background: $bg-kpi;
+    border-radius: $border-radius;
+    border: 1px solid $border-color;
+  }
+
+  .sv-cta__heading {
+    font-size: 20px;
+    font-weight: 800;
+    color: $secondary-color;
+    margin-bottom: 24px;
+    line-height: 1.5;
+    @include responsive('md') {
+      font-size: 17px;
+    }
+  }
+
+}

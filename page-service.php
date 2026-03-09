@@ -1,372 +1,333 @@
 <?php /*Template Name: サービスページ */ ?>
 <?php
-set_query_var('gcrev_page_title', '伴走支援プラン');
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('伴走支援プラン', 'オプションサービス'));
+set_query_var('gcrev_page_title', '伴走サポート');
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('伴走サポート', 'オプションサービス'));
 get_header();
 ?>
-<div class="welcome">
-    <h1>伴走支援プラン</h1>
 
-</div>
+<div class="content-area">
 
-        <!-- 伴走支援プラン -->
-        <div class="comparison-table-wrapper">
-            <table class="comparison-table">
+    <!-- =============================
+         1. ファーストビュー
+         ============================= -->
+    <section class="sv-section">
+        <div class="sv-hero">
+            <div class="sv-hero__label">Web運用伴走サポートサービス</div>
+            <h1 class="sv-hero__heading">ホームページを作って終わりにしない、<br>運用伴走サポート</h1>
+            <div class="sv-hero__brand">みまもりウェブ</div>
+            <p class="sv-hero__sub">見える化・分析・改善・伴走で、ホームページを育てる仕組みを。</p>
+            <div class="sv-hero__actions">
+                <a href="<?php echo esc_url( home_url('/inquiry/') ); ?>" class="sv-btn sv-btn--primary">まずは相談する</a>
+                <a href="#plans" class="sv-btn sv-btn--outline">プランを見る</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- =============================
+         2. よくある悩み
+         ============================= -->
+    <section class="sv-section">
+        <h2 class="sv-section__title">こんなお悩みありませんか？</h2>
+        <div class="sv-pain">
+            <div class="sv-pain__item"><span>📊</span>効果が<br>見えていない</div>
+            <div class="sv-pain__item"><span>🔧</span>改善方法が<br>わからない</div>
+            <div class="sv-pain__item"><span>💬</span>相談できる人が<br>いない</div>
+            <div class="sv-pain__item"><span>⏸️</span>更新が<br>止まっている</div>
+            <div class="sv-pain__item"><span>🌐</span>ホームページを<br>活かしきれていない</div>
+        </div>
+    </section>
+
+    <!-- =============================
+         3. みまもりウェブでできること
+         ============================= -->
+    <section class="sv-section">
+        <h2 class="sv-section__title">みまもりウェブでできること</h2>
+        <p class="sv-section__subtitle">4つの柱で、ホームページの成果を最大化します</p>
+        <div class="sv-features">
+            <div class="sv-feature">
+                <div class="sv-feature__icon">👁️</div>
+                <div class="sv-feature__title">見える化</div>
+                <div class="sv-feature__desc">アクセス状況をダッシュボードでいつでも確認。数字の見方に迷いません。</div>
+            </div>
+            <div class="sv-feature">
+                <div class="sv-feature__icon">🤖</div>
+                <div class="sv-feature__title">AI分析</div>
+                <div class="sv-feature__desc">AIが自動でデータを分析。毎月のレポートと改善ポイントを提案します。</div>
+            </div>
+            <div class="sv-feature">
+                <div class="sv-feature__icon">💡</div>
+                <div class="sv-feature__title">改善提案</div>
+                <div class="sv-feature__desc">何をすればいいか具体的にアドバイス。優先順位もわかります。</div>
+            </div>
+            <div class="sv-feature">
+                <div class="sv-feature__icon">🤝</div>
+                <div class="sv-feature__title">伴走支援</div>
+                <div class="sv-feature__desc">専門スタッフが一緒に考え、改善を継続的にサポートします。</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =============================
+         4. プラン比較表（最重要）
+         ============================= -->
+    <section class="sv-section" id="plans">
+        <h2 class="sv-section__title">プラン比較</h2>
+        <p class="sv-section__subtitle">ご状況に合わせて、3つのプランからお選びいただけます</p>
+
+        <div class="sv-plans-section">
+
+            <!-- デスクトップ: テーブル形式 -->
+            <table class="sv-plan-table">
                 <thead>
                     <tr>
-                        <th>機能 / プラン</th>
-                        <th class="plan-light">
-                            <div class="plan-name">ライト</div>
-                            <div class="plan-price">5,000<span class="currency">円/月</span></div>
-                            <div class="plan-note">初回2週間無料</div>
+                        <th class="sv-plan-header">&nbsp;</th>
+                        <th class="sv-plan-header">
+                            <div class="sv-plan-name">ベーシックプラン</div>
+                            <div class="sv-plan-price">5,500<small>円/月（税込）</small></div>
+                            <div class="sv-plan-tagline">まず始めたい方に</div>
                         </th>
-                        <th class="plan-standard">
-                            <div class="plan-name">
-                                スタンダード
-                                <span class="recommended-badge">🏆 おすすめ</span>
-                            </div>
-                            <div class="plan-price">60,000<span class="currency">円/月</span></div>
-                            <div class="plan-note">初月50,000円</div>
+                        <th class="sv-plan-header sv-plan-header--recommended">
+                            <div class="sv-recommended-badge">おすすめ</div>
+                            <div class="sv-plan-name">AIサポートプラン</div>
+                            <div class="sv-plan-price">11,000<small>円/月（税込）</small></div>
+                            <div class="sv-plan-tagline">AIの力で改善を加速</div>
                         </th>
-                        <th class="plan-master">
-                            <div class="plan-name">マスター</div>
-                            <div class="plan-price">300,000<span class="currency">円/月</span></div>
-                            <div class="plan-note">6ヶ月契約〜</div>
+                        <th class="sv-plan-header sv-plan-header--premium">
+                            <div class="sv-plan-name">伴走プラン</div>
+                            <div class="sv-plan-price">33,000<small>円/月（税込）</small></div>
+                            <div class="sv-plan-tagline">手厚い専門支援</div>
                         </th>
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- みまもりウェブ -->
-                    <tr class="category-row">
-                        <td colspan="4"><strong>みまもりウェブ</strong>（閲覧無制限）</td>
+                    <tr>
+                        <td>サイトの見える化</td>
+                        <td><span class="sv-check">◯</span></td>
+                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
+                        <td><span class="sv-check">◯</span></td>
                     </tr>
                     <tr>
-                        <td class="sub-item">ダッシュボード利用</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
+                        <td>アクセスダッシュボード</td>
+                        <td><span class="sv-check">◯</span></td>
+                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
+                        <td><span class="sv-check">◯</span></td>
                     </tr>
                     <tr>
-                        <td class="sub-item">月次AIレポート自動配信</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
+                        <td>AI分析レポート</td>
+                        <td><span class="sv-cross">—</span></td>
+                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
+                        <td><span class="sv-check">◯</span></td>
                     </tr>
                     <tr>
-                        <td class="sub-item">異常検知アラート(メール通知)</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
+                        <td>AI改善提案</td>
+                        <td><span class="sv-cross">—</span></td>
+                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
+                        <td><span class="sv-check">◯</span></td>
                     </tr>
                     <tr>
-                        <td class="sub-item">データエクスポート機能</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-
-                    <!-- 伴走支援 -->
-                    <tr class="category-row">
-                        <td colspan="4"><strong>伴走支援</strong></td>
+                        <td>AIチャット相談</td>
+                        <td><span class="sv-cross">—</span></td>
+                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
+                        <td><span class="sv-check">◯</span></td>
                     </tr>
                     <tr>
-                        <td>オンラインMTG（月1回・60分）</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
+                        <td>定期ミーティング</td>
+                        <td><span class="sv-cross">—</span></td>
+                        <td class="sv-col-recommended"><span class="sv-cross">—</span></td>
+                        <td><span class="sv-check">◯</span></td>
                     </tr>
                     <tr>
-                        <td>人による分析レポート作成</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-                    <tr>
-                        <td>軽微なページ改善（月1件まで）</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-                    <tr>
-                        <td>改善テーマ整理・優先順位付け</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-                    <tr>
-                        <td>Slack / Teamsでの質問対応</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-
-                    <!-- マスター限定 -->
-                    <tr class="category-row">
-                        <td colspan="4"><strong>マスター限定機能</strong></td>
-                    </tr>
-                    <tr>
-                        <td>戦略MTG（月2回・各90分）</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-                    <tr>
-                        <td>大幅改修を含む施策実行支援</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-                    <tr>
-                        <td>優先対応（48時間以内返信保証）</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-                    <tr>
-                        <td>実践研修パッケージ込み</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
-                    </tr>
-                    <tr>
-                        <td>Web責任者代行（月間20時間まで）</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="cross-mark">✕</td>
-                        <td class="check-mark">◯</td>
+                        <td>専門スタッフの伴走支援</td>
+                        <td><span class="sv-cross">—</span></td>
+                        <td class="sv-col-recommended"><span class="sv-cross">—</span></td>
+                        <td><span class="sv-check">◯</span></td>
                     </tr>
                 </tbody>
             </table>
 
-                    <!-- オプション: 広告運用代行 -->
-        <div class="bl option">
-            <h3>
-                📢 オプション:広告運用代行サービス
-            </h3>
-            <p>
-                <strong>対象媒体:</strong> Google / Yahoo / Facebook / Instagram / Twitter / LINE / YouTube / TikTok<br>
-                <strong>実績:</strong> 100社以上の運用実績。戦略提案 → アカウント設定 → 運用 → 分析までをトータルサポート。<br>
-                <strong>初期設定費用:</strong> 30,000円<br>
-                <strong>月額代行手数料:</strong> 20,000円〜<br>
-                <strong>月額運用手数料:</strong> 広告費により変動します。詳しくはお問い合わせください。<br>
-                <em>※広告費は別途お客様負担となります。</em>
-            </p>
+            <!-- スマホ: カード形式 -->
+            <div class="sv-plan-cards">
+
+                <!-- ベーシック -->
+                <div class="sv-plan-card">
+                    <div class="sv-plan-card__header">
+                        <div class="sv-plan-card__name">ベーシックプラン</div>
+                        <div class="sv-plan-card__price">5,500<small>円/月（税込）</small></div>
+                        <div class="sv-plan-card__tagline">まず始めたい方に</div>
+                    </div>
+                    <div class="sv-plan-card__body">
+                        <ul class="sv-plan-card__list">
+                            <li>サイトの見える化<span class="sv-check">◯</span></li>
+                            <li>アクセスダッシュボード<span class="sv-check">◯</span></li>
+                            <li>AI分析レポート<span class="sv-cross">—</span></li>
+                            <li>AI改善提案<span class="sv-cross">—</span></li>
+                            <li>AIチャット相談<span class="sv-cross">—</span></li>
+                            <li>定期ミーティング<span class="sv-cross">—</span></li>
+                            <li>専門スタッフの伴走支援<span class="sv-cross">—</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- AIサポート（おすすめ） -->
+                <div class="sv-plan-card sv-plan-card--recommended">
+                    <div class="sv-plan-card__header">
+                        <div class="sv-plan-card__badge">おすすめ</div>
+                        <div class="sv-plan-card__name">AIサポートプラン</div>
+                        <div class="sv-plan-card__price">11,000<small>円/月（税込）</small></div>
+                        <div class="sv-plan-card__tagline">AIの力で改善を加速</div>
+                    </div>
+                    <div class="sv-plan-card__body">
+                        <ul class="sv-plan-card__list">
+                            <li>サイトの見える化<span class="sv-check">◯</span></li>
+                            <li>アクセスダッシュボード<span class="sv-check">◯</span></li>
+                            <li>AI分析レポート<span class="sv-check">◯</span></li>
+                            <li>AI改善提案<span class="sv-check">◯</span></li>
+                            <li>AIチャット相談<span class="sv-check">◯</span></li>
+                            <li>定期ミーティング<span class="sv-cross">—</span></li>
+                            <li>専門スタッフの伴走支援<span class="sv-cross">—</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 伴走プラン -->
+                <div class="sv-plan-card sv-plan-card--premium">
+                    <div class="sv-plan-card__header">
+                        <div class="sv-plan-card__name">伴走プラン</div>
+                        <div class="sv-plan-card__price">33,000<small>円/月（税込）</small></div>
+                        <div class="sv-plan-card__tagline">手厚い専門支援</div>
+                    </div>
+                    <div class="sv-plan-card__body">
+                        <ul class="sv-plan-card__list">
+                            <li>サイトの見える化<span class="sv-check">◯</span></li>
+                            <li>アクセスダッシュボード<span class="sv-check">◯</span></li>
+                            <li>AI分析レポート<span class="sv-check">◯</span></li>
+                            <li>AI改善提案<span class="sv-check">◯</span></li>
+                            <li>AIチャット相談<span class="sv-check">◯</span></li>
+                            <li>定期ミーティング<span class="sv-check">◯</span></li>
+                            <li>専門スタッフの伴走支援<span class="sv-check">◯</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 補足 -->
+            <ul class="sv-plan-notes">
+                <li>このサービスはホームページ制作費を含みません</li>
+                <li>既存サイトを活用する運用支援サービスです</li>
+                <li>必要に応じてプラン変更が可能です</li>
+                <li>ページ改修などの作業は別途費用になる場合があります</li>
+            </ul>
+
         </div>
+    </section>
 
-        <!-- 補助金情報 -->
-        <div class="bl hojyokin">
-            <p>
-                💡 <strong>補助金活用の可能性:</strong> IT導入補助金・小規模事業者持続化補助金等の対象になる可能性があります。審査結果は状況により異なりますので、詳しくはご相談ください。
-            </p>
-    
+    <!-- =============================
+         5. 導入フロー
+         ============================= -->
+    <section class="sv-section">
+        <h2 class="sv-section__title">導入の流れ</h2>
+        <p class="sv-section__subtitle">5つのステップで、かんたんにスタートできます</p>
+
+        <div class="sv-flow">
+            <div class="sv-flow__step">
+                <div class="sv-flow__num">1</div>
+                <div class="sv-flow__line"></div>
+                <div class="sv-flow__content">
+                    <div class="sv-flow__title">お問い合わせ</div>
+                    <div class="sv-flow__desc">まずはお気軽にご相談ください。</div>
+                </div>
+            </div>
+            <div class="sv-flow__step">
+                <div class="sv-flow__num">2</div>
+                <div class="sv-flow__line"></div>
+                <div class="sv-flow__content">
+                    <div class="sv-flow__title">ヒアリング</div>
+                    <div class="sv-flow__desc">現状のお悩みや目標をお伺いします。</div>
+                </div>
+            </div>
+            <div class="sv-flow__step">
+                <div class="sv-flow__num">3</div>
+                <div class="sv-flow__line"></div>
+                <div class="sv-flow__content">
+                    <div class="sv-flow__title">初期設定</div>
+                    <div class="sv-flow__desc">アクセス解析の接続やダッシュボードの準備を行います。</div>
+                </div>
+            </div>
+            <div class="sv-flow__step">
+                <div class="sv-flow__num">4</div>
+                <div class="sv-flow__line"></div>
+                <div class="sv-flow__content">
+                    <div class="sv-flow__title">見える化スタート</div>
+                    <div class="sv-flow__desc">データの可視化が始まり、現状が一目でわかるようになります。</div>
+                </div>
+            </div>
+            <div class="sv-flow__step">
+                <div class="sv-flow__num">5</div>
+                <div class="sv-flow__content">
+                    <div class="sv-flow__title">改善提案・運用開始</div>
+                    <div class="sv-flow__desc">分析結果をもとに、改善サイクルがスタートします。</div>
+                </div>
+            </div>
         </div>
-    </div>
+    </section>
 
+    <!-- =============================
+         6. FAQ
+         ============================= -->
+    <section class="sv-section">
+        <h2 class="sv-section__title">よくある質問</h2>
 
-        
-        <!-- 実践研修ラインナップ -->
-        <section class="training" id="training">
-            <h2 class="section-title">実践研修ラインナップ</h2>
-            <p class="section-subtitle">実データを使って学ぶ、社内に残るスキルアップ研修</p>
-            
-            <div class="training-grid">
-                <!-- 研修① -->
-                <div class="training-card">
-                    <div class="training-number">①</div>
-                    <h3>Web運用改善研修</h3>
-                    <div class="price">価格目安：15〜20万円（全3回）</div>
-                    <ul>
-                        <li>GA4の見方と基本操作</li>
-                        <li>KPI設計と目標設定</li>
-                        <li>改善テーマの抽出方法</li>
-                        <li>30日アクションプラン作成</li>
-                    </ul>
+        <div class="sv-faq">
+            <div class="sv-faq__item">
+                <div class="sv-faq__q" onclick="this.parentElement.classList.toggle('active')">
+                    今あるホームページでも使えますか？
+                    <span>▼</span>
                 </div>
-                
-                <!-- 研修② -->
-                <div class="training-card">
-                    <div class="training-number">②</div>
-                    <h3>SNS運用戦略研修</h3>
-                    <div class="price">価格目安：10〜15万円（全2回）</div>
-                    <ul>
-                        <li>SNSの目的と役割の整理</li>
-                        <li>投稿設計とコンテンツ企画</li>
-                        <li>運用ルールとチェック体制</li>
-                        <li>効果測定と改善サイクル</li>
-                    </ul>
-                </div>
-                
-                <!-- 研修③ -->
-                <div class="training-card">
-                    <div class="training-number">③</div>
-                    <h3>AI業務効率化研修</h3>
-                    <div class="price">価格目安：12〜18万円（全3回）</div>
-                    <ul>
-                        <li>生成AI活用の基礎</li>
-                        <li>資料作成の自動化</li>
-                        <li>コンテンツ制作の効率化</li>
-                        <li>業務プロセスの見直し</li>
-                    </ul>
-                </div>
-                
-                <!-- 研修④ -->
-                <div class="training-card">
-                    <div class="training-number">④</div>
-                    <h3>フルパック研修</h3>
-                    <div class="price">価格目安：35〜55万円（全8回）</div>
-                    <ul>
-                        <li>上記①②③すべての内容</li>
-                        <li>90日改善ロードマップ作成</li>
-                        <li>チーム体制構築支援</li>
-                        <li>6ヶ月間のフォローアップ</li>
-                    </ul>
+                <div class="sv-faq__a">
+                    はい、既存のホームページをそのまま活用いただけます。Googleアナリティクス（GA4）とSearch Consoleの接続ができれば、すぐに見える化を始められます。
                 </div>
             </div>
-            
-            <p style="text-align: center; margin-top: 30px; color: #888888; font-size: 14px;">
-                🎓 研修は全てオンライン実施。録画提供・資料配布で復習も可能です。
-            </p>
-        </section>
-        
-        <!-- INSIGHT × 研修 × 伴走の強み -->
-        <section class="strengths" id="strengths">
-            <h2 class="section-title">INSIGHT × 研修 × 伴走の強み</h2>
-            <p class="section-subtitle">ツールと人のハイブリッド支援で、確実に成果を出す</p>
-            
-            <div class="strength-grid">
-                <div class="strength-card">
-                    <h3>💻 実データを使う</h3>
-                    <p>座学ではなく、自社のダッシュボードを見ながら学ぶ。現場で即活用できるスキルが身につきます。</p>
+            <div class="sv-faq__item">
+                <div class="sv-faq__q" onclick="this.parentElement.classList.toggle('active')">
+                    Web担当者がいなくても大丈夫ですか？
+                    <span>▼</span>
                 </div>
-                <div class="strength-card">
-                    <h3>📐 判断基準が残る</h3>
-                    <p>「なぜこの施策を優先するのか」の判断軸を社内に定着。担当者が変わっても継続できます。</p>
-                </div>
-                <div class="strength-card">
-                    <h3>🤝 ツールと人の両輪</h3>
-                    <p>自動化できる部分はツールに任せ、戦略と判断は人が支援。最適なバランスで伴走します。</p>
-                </div>
-                <div class="strength-card">
-                    <h3>🏠 内製化できる</h3>
-                    <p>研修とダッシュボードで、社内だけで運用できる体制を構築。外注依存から脱却できます。</p>
-                </div>
-                <div class="strength-card">
-                    <h3>👨‍💼 属人化しない</h3>
-                    <p>ダッシュボードとドキュメントで情報を可視化。担当者依存のリスクを軽減します。</p>
+                <div class="sv-faq__a">
+                    はい、大丈夫です。専門知識がなくてもわかりやすいダッシュボードとレポートをご提供しています。伴走プランなら専門スタッフが一緒に考えますので、安心してお任せいただけます。
                 </div>
             </div>
-        </section>
-        
-        <!-- 導入の流れ -->
-        <section class="flow" id="flow">
-            <h2 class="section-title">導入の流れ</h2>
-            <p class="section-subtitle">最短2週間でスタート可能</p>
-            
-            <div class="flow-steps">
-                <div class="flow-step">
-                    <div class="flow-number">1</div>
-                    <div class="flow-content">
-                        <h3>無料相談（30分）</h3>
-                        <p>現状のWeb施策やお悩みをヒアリング。みまもりウェブがどう役立つかご提案します。</p>
-                    </div>
+            <div class="sv-faq__item">
+                <div class="sv-faq__q" onclick="this.parentElement.classList.toggle('active')">
+                    途中でプラン変更できますか？
+                    <span>▼</span>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-number">2</div>
-                    <div class="flow-content">
-                        <h3>詳細ヒアリング（60分）</h3>
-                        <p>GA4・Search Consoleの接続状況、現在の課題、目標を詳しく確認します。</p>
-                    </div>
-                </div>
-                <div class="flow-step">
-                    <div class="flow-number">3</div>
-                    <div class="flow-content">
-                        <h3>トライアル（2週間）</h3>
-                        <p>実際にダッシュボードを使っていただき、使い勝手や効果を体験。</p>
-                    </div>
-                </div>
-                <div class="flow-step">
-                    <div class="flow-number">4</div>
-                    <div class="flow-content">
-                        <h3>研修実施（必要に応じて）</h3>
-                        <p>選択された研修プログラムを実施。実データを使った実践的な内容です。</p>
-                    </div>
-                </div>
-                <div class="flow-step">
-                    <div class="flow-number">5</div>
-                    <div class="flow-content">
-                        <h3>伴走開始</h3>
-                        <p>月次MTGと日常的な質問対応で、継続的な改善をサポートします。</p>
-                    </div>
+                <div class="sv-faq__a">
+                    はい、いつでもプラン変更が可能です。まずはベーシックプランから始めて、必要に応じてアップグレードされる方が多いです。
                 </div>
             </div>
-        </section>
-        
-        <!-- よくある質問 -->
-        <section class="faq" id="faq">
-            <h2 class="section-title">よくある質問</h2>
-            
-            <div class="faq-list">
-                <div class="faq-item">
-                    <div class="faq-question" onclick="toggleFAQ(this)">
-                        補助金は使えますか？
-                        <span>▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        IT導入補助金、小規模事業者持続化補助金などの対象となる場合があります。ただし、審査結果や補助対象範囲は申請時の状況により異なるため、詳細はご相談ください。申請サポートも承ります。
-                    </div>
+            <div class="sv-faq__item">
+                <div class="sv-faq__q" onclick="this.parentElement.classList.toggle('active')">
+                    どのプランから始めるのがおすすめですか？
+                    <span>▼</span>
                 </div>
-                
-                <div class="faq-item">
-                    <div class="faq-question" onclick="toggleFAQ(this)">
-                        途中で解約はできますか？
-                        <span>▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        ライト・スタンダードプランは月単位で解約可能です（前月末までに通知）。マスタープランは6ヶ月の最低契約期間がございますが、以降は月単位で解約できます。
-                    </div>
-                </div>
-                
-                <div class="faq-item">
-                    <div class="faq-question" onclick="toggleFAQ(this)">
-                        地方でも対応できますか？
-                        <span>▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        はい、全国対応しております。MTGや研修は全てオンライン（Zoom等）で実施しますので、場所を問わずご利用いただけます。むしろ地方企業のためのサービスです。
-                    </div>
-                </div>
-                
-                <div class="faq-item">
-                    <div class="faq-question" onclick="toggleFAQ(this)">
-                        対面での支援は可能ですか？
-                        <span>▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        基本はオンラインですが、マスタープランの場合、別途費用で訪問対応も可能です（交通費・宿泊費は実費）。キックオフや重要な戦略会議など、必要に応じてご相談ください。
-                    </div>
-                </div>
-                
-                <div class="faq-item">
-                    <div class="faq-question" onclick="toggleFAQ(this)">
-                        GA4やSearch Consoleの設定が不安です
-                        <span>▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        初期設定のサポートも含まれていますのでご安心ください。未導入の場合も、導入から支援いたします（スタンダード・マスタープラン）。
-                    </div>
-                </div>
-                
-                <div class="faq-item">
-                    <div class="faq-question" onclick="toggleFAQ(this)">
-                        研修だけの単発依頼は可能ですか？
-                        <span>▼</span>
-                    </div>
-                    <div class="faq-answer">
-                        はい、研修のみの単発依頼も可能です。ただし、ダッシュボードと組み合わせることで効果が最大化するため、セット利用を推奨しております。
-                    </div>
+                <div class="sv-faq__a">
+                    まずはAIサポートプランがおすすめです。AIによる分析レポートと改善提案が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、伴走プランをご検討ください。
                 </div>
             </div>
-        </section>
-        
+        </div>
+    </section>
 
+    <!-- =============================
+         7. CTA
+         ============================= -->
+    <section class="sv-section">
+        <div class="sv-cta">
+            <h2 class="sv-cta__heading">まずは今のホームページの<br>状況確認から始めませんか？</h2>
+            <a href="<?php echo esc_url( home_url('/inquiry/') ); ?>" class="sv-btn sv-btn--primary">お問い合わせする</a>
+        </div>
+    </section>
+
+</div>
 
 <?php get_footer(); ?>
