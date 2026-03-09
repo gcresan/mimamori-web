@@ -71,8 +71,8 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
     $color = match($color_mode) {
         'white'  => '#ffffff',
         'green'  => '#16a34a',
-        'red'    => '#B5574B',
-        'blue'   => '#3D6B6E',
+        'red'    => '#C95A4F',
+        'blue'   => '#2EC4B6',
         'orange' => '#ea580c',
         default  => '#111827'
     };
@@ -113,10 +113,10 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
         $keywords = [
             '増加' => '#16a34a',
             '改善' => '#16a34a',
-            '減少' => '#B5574B',
-            '悪化' => '#B5574B',
-            '前月比' => '#3D6B6E',
-            '前年比' => '#3D6B6E',
+            '減少' => '#C95A4F',
+            '悪化' => '#C95A4F',
+            '前月比' => '#2EC4B6',
+            '前年比' => '#2EC4B6',
         ];
         foreach ($keywords as $kw => $kw_color) {
             $text = preg_replace(
@@ -212,7 +212,7 @@ get_header();
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: #3D6B6E;
+  background: #2EC4B6;
   color: #fff;
   border-radius: 50%;
   font-size: 13px;
@@ -224,7 +224,7 @@ get_header();
   width: fit-content;
   margin: 0 auto;
   padding: 14px 36px;
-  background: #3D6B6E;
+  background: #2EC4B6;
   color: #fff !important;
   font-size: 16px;
   font-weight: 600;
@@ -233,7 +233,7 @@ get_header();
   transition: background 0.2s;
 }
 .setup-guide-btn:hover {
-  background: #346062;
+  background: #25A89C;
 }
 @media (max-width: 600px) {
   .dashboard-setup-guide { padding: 32px 20px; }
@@ -685,17 +685,31 @@ if ($infographic) {
   <div class="info-top-row">
     <!-- スコア -->
     <div class="info-score">
-      <div class="info-score-circle">
-        <span class="info-score-value"><?php echo esc_html((string)($infographic['score'] ?? 0)); ?><span class="info-score-unit">点</span></span>
-        <span class="info-score-label">100点中</span>
-      </div>
-
       <?php
+      $score_val   = (int)($infographic['score'] ?? 0);
+      $score_pct   = max(0, min(100, $score_val));
+      $circumference = 326.73; // 2 * π * 52
+      $dash_offset   = $circumference * (1 - $score_pct / 100);
       $score_diff = (int)($infographic['score_diff'] ?? 0);
       $diff_class = $score_diff > 0 ? 'positive' : ($score_diff < 0 ? 'negative' : 'neutral');
       $diff_icon  = $score_diff > 0 ? '▲' : ($score_diff < 0 ? '▼' : '→');
       $diff_text  = $score_diff > 0 ? '+' . $score_diff : (string)$score_diff;
       ?>
+      <div class="info-score-gauge">
+        <svg viewBox="0 0 120 120" class="score-svg">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--mw-bg-tertiary)" stroke-width="10" />
+          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--mw-primary-blue)" stroke-width="10"
+                  stroke-linecap="round"
+                  stroke-dasharray="<?php echo esc_attr($circumference); ?>"
+                  stroke-dashoffset="<?php echo esc_attr($dash_offset); ?>"
+                  class="score-progress" transform="rotate(-90 60 60)" />
+        </svg>
+        <div class="score-center-text">
+          <span class="info-score-value"><?php echo esc_html((string)$score_val); ?><span class="info-score-unit">点</span></span>
+          <span class="info-score-label">100点中</span>
+        </div>
+      </div>
+
       <span class="info-score-diff <?php echo esc_attr($diff_class); ?>">
         <?php echo esc_html($diff_icon . ' ' . $diff_text); ?>
       </span>
@@ -1668,7 +1682,7 @@ foreach ($highlight_items as $highlight):
         });
         var dataLen = json.values.length;
         var pointBg = json.values.map(function(v, i){
-            return i === dataLen - 1 ? '#B5574B' : '#3D6B6E';
+            return i === dataLen - 1 ? '#C95A4F' : '#2EC4B6';
         });
         var pointR = json.values.map(function(v, i){
             return i === dataLen - 1 ? 6 : 3;
@@ -1681,7 +1695,7 @@ foreach ($highlight_items as $highlight):
                 datasets: [{
                     label: label,
                     data: json.values,
-                    borderColor: '#3D6B6E',
+                    borderColor: '#2EC4B6',
                     borderWidth: 2,
                     pointBackgroundColor: pointBg,
                     pointRadius: pointR,
@@ -1689,7 +1703,7 @@ foreach ($highlight_items as $highlight):
                     pointHoverRadius: 7,
                     tension: 0.3,
                     fill: true,
-                    backgroundColor: 'rgba(59,130,246,0.08)',
+                    backgroundColor: 'rgba(46,196,182,0.08)',
                 }]
             },
             options: {
@@ -1940,8 +1954,8 @@ foreach ($highlight_items as $highlight):
         var metricLabel = json.metric_label || json.metric || '';
 
         var barColors = [
-            '#3D6B6E','#5A8A8D','#7BA9AC','#9CC8CB','#B5574B',
-            '#C97A6F','#D49D94','#DFBFB8','#A8A29E','#C5BFB9'
+            '#2EC4B6','#56D4C8','#7FE2D8','#A8EDE5','#C95A4F',
+            '#D4756A','#DFA192','#E8C5BE','#A8A29E','#C5BFB9'
         ];
 
         ddChart = new Chart('drilldownChart', {

@@ -75,7 +75,7 @@ get_header();
             </p>
             <a href="<?php echo esc_url($gcrev_api->gbp_get_auth_url($user_id)); ?>"
                class="btn btn-primary btn-lg"
-               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #3D6B6E; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #2EC4B6; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
                 🔄 Googleビジネスプロフィールと再接続
             </a>
         <?php else: ?>
@@ -88,7 +88,7 @@ get_header();
             </p>
             <a href="<?php echo esc_url($gcrev_api->gbp_get_auth_url($user_id)); ?>"
                class="btn btn-primary btn-lg"
-               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #3D6B6E; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #2EC4B6; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
                 📍 Googleビジネスプロフィールと接続
             </a>
         <?php endif; ?>
@@ -134,7 +134,7 @@ get_header();
                 <div style="text-align: center;">
                     <button onclick="gcrevSubmitManualLocation()"
                             id="manual-loc-btn"
-                            style="padding: 12px 32px; background: #3D6B6E; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                            style="padding: 12px 32px; background: #2EC4B6; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
                         設定
                     </button>
                 </div>
@@ -195,8 +195,8 @@ get_header();
                     html += '    <div style="font-size: 11px; color: #999; margin-top: 4px;">ID: ' + escHtml(loc.location_id) + '</div>';
                     html += '  </div>';
                     html += '  <button onclick="gcrevSelectLocation(\'' + escAttr(loc.location_id) + '\', \'' + escAttr(loc.title) + '\', \'' + escAttr(loc.address) + '\', this)"';
-                    html += '    style="padding: 10px 24px; background: #3D6B6E; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"';
-                    html += '    onmouseover="this.style.background=\'#346062\'" onmouseout="this.style.background=\'#3D6B6E\'">';
+                    html += '    style="padding: 10px 24px; background: #2EC4B6; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"';
+                    html += '    onmouseover="this.style.background=\'#25A89C\'" onmouseout="this.style.background=\'#2EC4B6\'">';
                     html += '    この店舗を設定';
                     html += '  </button>';
                     html += '</div>';
@@ -244,7 +244,7 @@ get_header();
                 msgEl.textContent = 'エラー: ' + error.message;
                 btn.disabled = false;
                 btn.textContent = 'この店舗を設定';
-                btn.style.background = '#3D6B6E';
+                btn.style.background = '#2EC4B6';
             }
         };
 
@@ -316,8 +316,8 @@ get_header();
         <!-- 自動取得ボタン -->
         <div style="margin-bottom: 16px;">
             <button id="meo-auto-fetch-btn" onclick="gcrevAutoFetchLocation()"
-                    style="padding: 10px 24px; background: #3D6B6E; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
-                    onmouseover="this.style.background='#346062'" onmouseout="this.style.background='#3D6B6E'">
+                    style="padding: 10px 24px; background: #2EC4B6; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
+                    onmouseover="this.style.background='#25A89C'" onmouseout="this.style.background='#2EC4B6'">
                 📍 GBPから自動取得
             </button>
         </div>
@@ -332,7 +332,7 @@ get_header();
                 <input type="text" id="meo-location-id-input"
                        placeholder="例：12345678901234567"
                        style="flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
-                       onfocus="this.style.borderColor='#3D6B6E'" onblur="this.style.borderColor='#D0D5DA'">
+                       onfocus="this.style.borderColor='#2EC4B6'" onblur="this.style.borderColor='#D0D5DA'">
                 <button id="meo-set-location-btn" onclick="gcrevSetManualLocationId()"
                         style="padding: 10px 24px; background: #D4A842; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
                         onmouseover="this.style.background='#B8941E'" onmouseout="this.style.background='#D4A842'">
@@ -378,7 +378,7 @@ get_header();
                     msgEl.textContent = result.message || 'ロケーションが見つかりません。';
                     btn.disabled = false;
                     btn.textContent = '📍 GBPから自動取得';
-                    btn.style.background = '#3D6B6E';
+                    btn.style.background = '#2EC4B6';
                     return;
                 }
 
@@ -392,7 +392,7 @@ get_header();
                     html += '    <div style="font-size: 12px; color: #666;">' + escHtml(loc.address) + '</div>';
                     html += '  </div>';
                     html += '  <button onclick="gcrevSelectPendingLocation(\'' + escAttr(loc.location_id) + '\', \'' + escAttr(loc.title) + '\', \'' + escAttr(loc.address) + '\', this)"';
-                    html += '    style="padding: 8px 20px; background: #3D6B6E; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">';
+                    html += '    style="padding: 8px 20px; background: #2EC4B6; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">';
                     html += '    選択';
                     html += '  </button>';
                     html += '</div>';
@@ -407,7 +407,7 @@ get_header();
                 msgEl.textContent = 'エラー: ' + error.message;
                 btn.disabled = false;
                 btn.textContent = '📍 GBPから自動取得';
-                btn.style.background = '#3D6B6E';
+                btn.style.background = '#2EC4B6';
             }
         };
 
@@ -738,10 +738,10 @@ get_header();
     function changeHtml(current, previous) {
         if (previous === 0 || previous === null || previous === undefined) {
             if (current === 0) return '<span style="color:#666666;">→ 0.0%</span>';
-            return '<span style="color:#3D6B6E;">NEW</span>';
+            return '<span style="color:#2EC4B6;">NEW</span>';
         }
         var pct = ((current - previous) / previous * 100).toFixed(1);
-        if (pct > 0) return '<span style="color:#3D8B6E;">↑ +' + pct + '%</span>';
+        if (pct > 0) return '<span style="color:#2EBD8E;">↑ +' + pct + '%</span>';
         if (pct < 0) return '<span style="color:#C0392B;">↓ ' + pct + '%</span>';
         return '<span style="color:#666666;">→ 0.0%</span>';
     }
@@ -836,14 +836,14 @@ get_header();
                     {
                         label: '検索での表示',
                         data: searchData,
-                        borderColor: '#3D6B6E',
+                        borderColor: '#2EC4B6',
                         backgroundColor: 'rgba(59,130,246,0.08)',
                         fill: true, tension: 0.3, pointRadius: 2
                     },
                     {
                         label: 'マップでの表示',
                         data: mapData,
-                        borderColor: '#3D8B6E',
+                        borderColor: '#2EBD8E',
                         backgroundColor: 'rgba(16,185,129,0.08)',
                         fill: true, tension: 0.3, pointRadius: 2
                     }
@@ -871,7 +871,7 @@ get_header();
             m.website_clicks || 0,
             m.booking_clicks || 0
         ];
-        var colors = ['#D4A842', '#B5574B', '#4E8285', '#B5574B'];
+        var colors = ['#D4A842', '#C95A4F', '#36D1C4', '#C95A4F'];
 
         if (actionsChart) actionsChart.destroy();
 

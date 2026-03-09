@@ -107,7 +107,7 @@ get_template_part('template-parts/analysis-help');
         <div class="cv-compare-divider"></div>
         <div class="cv-compare-item">
             <div class="cv-compare-item-label">🎯 確定ゴール合計</div>
-            <div class="cv-compare-item-value" id="cvEffectiveTotal" style="color:#3D6B6E;">-</div>
+            <div class="cv-compare-item-value" id="cvEffectiveTotal" style="color:#2EC4B6;">-</div>
         </div>
     </div>
 
@@ -337,7 +337,7 @@ function renderCvSummary(data) {
     document.getElementById('cvBestValue').textContent = bestSource.label;
     const bestBadge = document.getElementById('cvBestBadge');
     bestBadge.className = 'cv-summary-change up';
-    bestBadge.style.background = '#3D6B6E';
+    bestBadge.style.background = '#2EC4B6';
     bestBadge.style.color = '#fff';
     bestBadge.textContent = 'ゴール達成率 ' + bestSource.cvr.toFixed(1) + '%';
     document.getElementById('cvBestComment').textContent = bestSource.comment;
@@ -398,7 +398,7 @@ function renderDeviceCv(data) {
 
     function renderGrid(useRealloc) {
         const icons = { 'mobile': '📱', 'desktop': '💻', 'tablet': '📟' };
-        const colors = { 'mobile': '#3D6B6E', 'desktop': '#3D8B6E', 'tablet': '#D4A842' };
+        const colors = { 'mobile': '#2EC4B6', 'desktop': '#2EBD8E', 'tablet': '#D4A842' };
 
         const deviceData = useRealloc ? rows.map(r => ({
             dimension: r.label,
@@ -418,7 +418,7 @@ function renderDeviceCv(data) {
 
         const gridHtml = deviceData.map(d => {
             const icon = icons[d.dimension.toLowerCase()] || '📱';
-            const color = colors[d.dimension.toLowerCase()] || '#3D6B6E';
+            const color = colors[d.dimension.toLowerCase()] || '#2EC4B6';
             return `
                 <div class="cv-data-item" style="border-left-color:${color}">
                     <div class="cv-data-item-label">${icon} ${d.label}</div>
@@ -475,7 +475,7 @@ function renderDeviceCvChart(deviceData) {
     const cvData = deviceData.map(d => d.allocatedCv);
     const cvrData = deviceData.map(d => d.cvr);
     const bgColors = deviceData.map(d => {
-        const c = { 'mobile': '#3D6B6E', 'desktop': '#3D8B6E', 'tablet': '#D4A842' };
+        const c = { 'mobile': '#2EC4B6', 'desktop': '#2EBD8E', 'tablet': '#D4A842' };
         return c[d.dimension.toLowerCase()] || '#888888';
     });
 
@@ -495,9 +495,9 @@ function renderDeviceCvChart(deviceData) {
                     label: 'ゴール達成率(%)',
                     data: cvrData,
                     type: 'line',
-                    borderColor: '#B5574B',
+                    borderColor: '#C95A4F',
                     backgroundColor: 'rgba(239,68,68,0.1)',
-                    pointBackgroundColor: '#B5574B',
+                    pointBackgroundColor: '#C95A4F',
                     tension: 0.4,
                     yAxisID: 'y1',
                 }
@@ -580,7 +580,7 @@ function renderSourceCvChart(sourceData) {
     if (sourceCvChart) sourceCvChart.destroy();
 
     const bgColors = sourceData.map((_, i) => {
-        const palette = ['#3D6B6E','#3D8B6E','#D4A842','#B5574B','#7A6FA0','#B5574B','#4E8285','#6BAA5E'];
+        const palette = ['#2EC4B6','#2EBD8E','#D4A842','#C95A4F','#7A6FA0','#C95A4F','#36D1C4','#6BAA5E'];
         return palette[i % palette.length];
     });
 
@@ -600,8 +600,8 @@ function renderSourceCvChart(sourceData) {
                     label: 'ゴール達成率(%)',
                     data: sourceData.map(s => s.cvr),
                     type: 'line',
-                    borderColor: '#B5574B',
-                    pointBackgroundColor: '#B5574B',
+                    borderColor: '#C95A4F',
+                    pointBackgroundColor: '#C95A4F',
                     tension: 0.4,
                     yAxisID: 'y1',
                 }

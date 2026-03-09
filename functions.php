@@ -558,13 +558,13 @@ add_action( 'login_enqueue_scripts', function () {
     .login input[type="text"]:focus,
     .login input[type="email"]:focus,
     .login input[type="password"]:focus {
-        border-color: #3D6B6E !important;
-        box-shadow: 0 0 0 1px #3D6B6E !important;
+        border-color: #2EC4B6 !important;
+        box-shadow: 0 0 0 1px #2EC4B6 !important;
     }
     /* ボタン（テーマカラー） */
     .login .button-primary,
     .wp-core-ui .button-primary {
-        background: #2F3A4A !important;
+        background: #2EC4B6 !important;
         border: none !important;
         border-radius: 4px !important;
         box-shadow: none !important;
@@ -589,18 +589,18 @@ add_action( 'login_enqueue_scripts', function () {
         color: #8C8A85 !important;
     }
     #backtoblog a:hover {
-        color: #3D6B6E !important;
+        color: #2EC4B6 !important;
     }
     /* メッセージボックスのアクセントカラー */
     .login .message,
     .login .success {
-        border-left-color: #3D6B6E !important;
+        border-left-color: #2EC4B6 !important;
     }
     .login a {
-        color: #3D6B6E !important;
+        color: #2EC4B6 !important;
     }
     .login a:hover {
-        color: #346062 !important;
+        color: #25A89C !important;
     }
     </style>
     <?php
@@ -5977,7 +5977,7 @@ function gcrev_render_payment_status_fields( $user ) {
             <th>現在のステータス</th>
             <td>
                 <?php if ( $is_paid ): ?>
-                <span style="display:inline-block; padding:4px 12px; border-radius:12px; font-size:13px; font-weight:600; color:#3D8B6E; background:rgba(61,139,110,0.08);">
+                <span style="display:inline-block; padding:4px 12px; border-radius:12px; font-size:13px; font-weight:600; color:#2EBD8E; background:rgba(46,189,142,0.08);">
                     ✅ 利用中
                 </span>
                 <?php else: ?>
@@ -5992,7 +5992,7 @@ function gcrev_render_payment_status_fields( $user ) {
         $c_dates  = gcrev_get_contract_dates( $user->ID );
         $c_status = $c_dates['status'];
         $status_labels = [
-            'active'   => [ 'label' => '利用中',   'color' => '#3D8B6E', 'bg' => 'rgba(61,139,110,0.08)' ],
+            'active'   => [ 'label' => '利用中',   'color' => '#2EBD8E', 'bg' => 'rgba(46,189,142,0.08)' ],
             'canceled' => [ 'label' => '解約済み', 'color' => '#C0392B', 'bg' => '#FDF0EE' ],
             'none'     => [ 'label' => '未開始',   'color' => '#888',    'bg' => '#f0f0f0' ],
         ];

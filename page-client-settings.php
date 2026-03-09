@@ -54,8 +54,8 @@ get_header();
     cursor: pointer; transition: border-color .2s, background .2s;
 }
 .area-type-option:hover { border-color: #94a3b8; }
-.area-type-option.selected { border-color: #3D8B6E; background: #f0fdf4; }
-.area-type-option input[type="radio"] { margin-top: 2px; accent-color: #3D8B6E; }
+.area-type-option.selected { border-color: #2EBD8E; background: #f0fdf4; }
+.area-type-option input[type="radio"] { margin-top: 2px; accent-color: #2EBD8E; }
 .area-type-option label { cursor: pointer; font-size: 14px; line-height: 1.5; }
 .area-type-option label strong { display: block; font-size: 14px; }
 .area-type-option label span { font-size: 12px; color: #64748b; }
@@ -74,7 +74,7 @@ get_header();
 .area-sub-field select:focus,
 .area-sub-field input:focus,
 .area-sub-field textarea:focus {
-    outline: none; border-color: #3D8B6E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
+    outline: none; border-color: #2EBD8E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
 }
 
 /* 業種・業態セレクト */
@@ -90,7 +90,7 @@ get_header();
 }
 .industry-group select:focus,
 .industry-group input[type="text"]:focus {
-    outline: none; border-color: #3D8B6E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
+    outline: none; border-color: #2EBD8E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
 }
 .industry-group select:disabled {
     background: #f1f5f9; color: #94a3b8; cursor: not-allowed;
@@ -110,10 +110,10 @@ get_header();
 }
 .subcategory-grid .subcategory-item:hover { border-color: #94a3b8; background: #f8fafc; }
 .subcategory-grid .subcategory-item.checked {
-    border-color: #3D8B6E; background: #f0fdf4; color: #166534;
+    border-color: #2EBD8E; background: #f0fdf4; color: #166534;
 }
 .subcategory-grid .subcategory-item input[type="checkbox"] {
-    accent-color: #3D8B6E; width: 14px; height: 14px; margin: 0;
+    accent-color: #2EBD8E; width: 14px; height: 14px; margin: 0;
 }
 .subcategory-placeholder {
     color: #94a3b8; font-size: 13px; padding: 4px 0;
@@ -127,13 +127,13 @@ get_header();
     cursor: pointer; font-size: 13px; transition: all .2s;
 }
 .btype-option:hover { border-color: #94a3b8; }
-.btype-option.selected { border-color: #3D8B6E; background: #f0fdf4; color: #166534; }
-.btype-option input[type="radio"] { accent-color: #3D8B6E; }
+.btype-option.selected { border-color: #2EBD8E; background: #f0fdf4; color: #166534; }
+.btype-option input[type="radio"] { accent-color: #2EBD8E; }
 
 /* 保存ボタン */
 .cs-actions { margin-top: 24px; display: flex; gap: 12px; }
 .cs-actions .btn-save {
-    padding: 10px 32px; background: #3D8B6E; color: #fff; border: none;
+    padding: 10px 32px; background: #2EBD8E; color: #fff; border: none;
     border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
     transition: background .2s;
 }
@@ -161,8 +161,8 @@ get_header();
     cursor: pointer; font-size: 13px; transition: all .2s; user-select: none;
 }
 .persona-grid .subcategory-item:hover { border-color: #94a3b8; background: #f8fafc; }
-.persona-grid .subcategory-item.checked { border-color: #3D8B6E; background: #f0fdf4; color: #166534; }
-.persona-grid .subcategory-item input[type="checkbox"] { accent-color: #3D8B6E; width: 14px; height: 14px; margin: 0; }
+.persona-grid .subcategory-item.checked { border-color: #2EBD8E; background: #f0fdf4; color: #166534; }
+.persona-grid .subcategory-item input[type="checkbox"] { accent-color: #2EBD8E; width: 14px; height: 14px; margin: 0; }
 .persona-section-desc { font-size: 13px; color: #64748b; margin: -8px 0 16px; }
 
 /* 参考URL */
@@ -176,7 +176,7 @@ get_header();
     padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
     font-size: 13px; transition: border-color .2s;
 }
-.ref-url-row input:focus { outline: none; border-color: #3D8B6E; box-shadow: 0 0 0 3px rgba(61,139,110,.12); }
+.ref-url-row input:focus { outline: none; border-color: #2EBD8E; box-shadow: 0 0 0 3px rgba(61,139,110,.12); }
 .ref-url-remove {
     width: 28px; height: 28px; border: none; background: #fee2e2; color: #dc2626;
     border-radius: 50%; cursor: pointer; font-size: 16px; line-height: 1;
@@ -190,12 +190,12 @@ get_header();
     background: transparent; color: #475569; font-size: 13px; cursor: pointer;
     transition: all .2s; margin-top: 4px;
 }
-.btn-add-ref-url:hover { border-color: #3D8B6E; color: #3D8B6E; }
+.btn-add-ref-url:hover { border-color: #2EBD8E; color: #2EBD8E; }
 
 /* AI生成ボタン */
 .btn-generate-persona {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 18px; border: 1px solid #3D8B6E; border-radius: 8px;
+    padding: 8px 18px; border: 1px solid #2EBD8E; border-radius: 8px;
     background: #f0fdf4; color: #166534; font-size: 13px; font-weight: 600;
     cursor: pointer; transition: all .2s; margin-top: 8px;
 }
@@ -242,13 +242,13 @@ get_header();
 }
 .persona-gen-extra input:focus,
 .persona-gen-extra textarea:focus {
-    outline: none; border-color: #3D8B6E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
+    outline: none; border-color: #2EBD8E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
 }
 .persona-gen-actions {
     display: flex; gap: 8px; margin-bottom: 16px;
 }
 .btn-persona-gen {
-    padding: 9px 20px; background: #3D8B6E; color: #fff; border: none;
+    padding: 9px 20px; background: #2EBD8E; color: #fff; border: none;
     border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
     transition: background .2s; display: inline-flex; align-items: center; gap: 6px;
 }
@@ -268,9 +268,9 @@ get_header();
     padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
     cursor: pointer; transition: all .2s;
 }
-.btn-apply-overwrite { background: #3D8B6E; color: #fff; border: none; }
+.btn-apply-overwrite { background: #2EBD8E; color: #fff; border: none; }
 .btn-apply-overwrite:hover { background: #2d6b54; }
-.btn-apply-append { background: #fff; color: #3D8B6E; border: 1px solid #3D8B6E; }
+.btn-apply-append { background: #fff; color: #2EBD8E; border: 1px solid #2EBD8E; }
 .btn-apply-append:hover { background: #f0fdf4; }
 
 /* ペルソナ詳細テキストエリア */
@@ -280,7 +280,7 @@ get_header();
     transition: border-color .2s; box-sizing: border-box;
 }
 #cs-persona-detail:focus {
-    outline: none; border-color: #3D8B6E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
+    outline: none; border-color: #2EBD8E; box-shadow: 0 0 0 3px rgba(61,139,110,.12);
 }
 .char-count { font-size: 12px; color: #94a3b8; text-align: right; margin-top: 2px; }
 

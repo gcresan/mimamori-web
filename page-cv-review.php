@@ -43,8 +43,8 @@ get_header();
     color: #334155;
 }
 .goal-tab.active {
-    color: #3D6B6E;
-    border-bottom-color: #3D6B6E;
+    color: #2EC4B6;
+    border-bottom-color: #2EC4B6;
 }
 
 /* ===== Tab 1: CV Review ===== */
@@ -214,7 +214,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 }
 .suggest-item .key-badge {
     font-size: 10px;
-    color: #3D6B6E;
+    color: #2EC4B6;
     background: #e8f0f0;
     padding: 2px 6px;
     border-radius: 4px;
@@ -952,8 +952,8 @@ document.addEventListener('DOMContentLoaded', function() {
 function markCvSettingsDirty(btnId) {
     var btn = document.getElementById(btnId);
     if (!btn) return;
-    btn.style.backgroundColor = '#3D6B6E';
-    btn.style.borderColor = '#3D6B6E';
+    btn.style.backgroundColor = '#2EC4B6';
+    btn.style.borderColor = '#2EC4B6';
     btn.style.color = '#fff';
 }
 function markCvSettingsClean(btnId) {

@@ -410,7 +410,7 @@ function updateAgeDistributionChart(data) {
                 label: 'セッション数',
                 data: sessions,
                 backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                borderColor: '#3D6B6E',
+                borderColor: '#2EC4B6',
                 borderWidth: 1,
                 borderRadius: 6
             }]
@@ -516,14 +516,14 @@ const otherData = gender_age_cross.map(item => {
                     label: '男性',
                     data: maleData,
                     backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                    borderColor: '#3D6B6E',
+                    borderColor: '#2EC4B6',
                     borderWidth: 1
                 },
                 {
                     label: '女性',
                     data: femaleData,
                     backgroundColor: 'rgba(236, 72, 153, 0.8)',
-                    borderColor: '#B5574B',
+                    borderColor: '#C95A4F',
                     borderWidth: 1
                 },
                 {

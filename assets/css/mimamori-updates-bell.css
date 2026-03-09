@@ -1,6 +1,6 @@
 /* ========================================
    Updates Bell - Notification Dropdown
-   テーマカラー準拠: #2F3A4A / #B5574B / #FAF9F6 / #E5E3DC
+   テーマカラー準拠: #2EC4B6 / #C95A4F / #FAF9F6 / #E5E3DC
    v1.0.0
    ======================================== */
 
@@ -34,7 +34,7 @@
   position: absolute;
   top: 2px;
   right: 2px;
-  background: #B5574B;
+  background: #C95A4F;
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -111,7 +111,7 @@
 /* Unread: 左ボーダー + 薄い背景 */
 .updates-item.is-unread {
   background: #F0EFE9;
-  border-left: 3px solid #2F3A4A;
+  border-left: 3px solid #C8D5D3;
   padding-left: 13px;  /* 16 - 3 border */
 }
 
@@ -138,11 +138,11 @@
 }
 .updates-cat-improvement {
   background: #E8EDF3;
-  color: #2F3A4A;
+  color: #2B3A3B;
 }
 .updates-cat-fix {
   background: #FDF0EE;
-  color: #B5574B;
+  color: #C95A4F;
 }
 .updates-cat-other {
   background: #EEEDEA;

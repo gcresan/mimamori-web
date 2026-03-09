@@ -76,13 +76,13 @@ input {
 }
 input:focus {
   outline: none;
-  border-color: #2F3A4A;
+  border-color: #C8D5D3;
 }
 
 .buttons {
   width: 100%;
   padding: 14px;
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
   border: none;
   border-radius: 6px;
@@ -101,7 +101,7 @@ input:focus {
   font-size: 14px;
 }
 .links a {
-  color: #2F3A4A;
+  color: #2B3A3B;
   text-decoration: none;
 }
 .links a:hover {

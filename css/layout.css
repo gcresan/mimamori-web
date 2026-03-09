@@ -46,7 +46,7 @@
   right: 20px;
   display: inline-flex;
   align-items: center;
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6 !important;
   padding: 10px 18px;
   border-radius: 6px;
@@ -94,7 +94,7 @@
   color: #666660;
 }
 .dashboard .monthly-summary-section {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
   padding: 32px;
   border-radius: 12px;
@@ -178,7 +178,7 @@
 }
 .dashboard .period-btn.active {
   background: #FAF9F6;
-  color: #2F3A4A;
+  color: #2B3A3B;
   box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 .dashboard .kpi-grid {
@@ -223,7 +223,7 @@
 .dashboard .kpi-value {
   font-size: 32px;
   font-weight: 700;
-  color: #2F3A4A;
+  color: #2B3A3B;
   margin-bottom: 8px;
 }
 .dashboard .kpi-change {
@@ -240,7 +240,7 @@
   background: #EDF3EF;
 }
 .dashboard .kpi-change.negative {
-  color: #B5574B;
+  color: #C95A4F;
   background: rgba(181, 87, 75, 0.08);
 }
 .dashboard .kpi-sparkline {
@@ -293,7 +293,7 @@
   background: #EDF3EF;
 }
 .dashboard .info-item.negative {
-  border-left: 3px solid #B5574B;
+  border-left: 3px solid #C95A4F;
   background: rgba(181, 87, 75, 0.06);
 }
 .dashboard .info-item strong {
@@ -399,7 +399,7 @@
   margin-right: 8px;
 }
 .dashboard .content-area .monthly-summary-section {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
   padding: 32px;
   border-radius: 12px;
@@ -466,9 +466,9 @@
   border-color: #dad7cd;
 }
 .dashboard .content-area .period-btn.active {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
-  border-color: #2F3A4A;
+  border-color: #C8D5D3;
 }
 .dashboard .content-area .kpi-grid {
   display: grid;
@@ -502,7 +502,7 @@
 .dashboard .content-area .kpi-value {
   font-size: 28px;
   font-weight: 700;
-  color: #2F3A4A;
+  color: #2B3A3B;
   margin-bottom: 4px;
 }
 .dashboard .content-area .kpi-change {
@@ -515,7 +515,7 @@
   color: #5B8A72;
 }
 .dashboard .content-area .kpi-change.negative {
-  color: #B5574B;
+  color: #C95A4F;
 }
 .dashboard .content-area .kpi-icon {
   width: 48px;
@@ -567,11 +567,11 @@
 }
 .dashboard .content-area .monthly-list-item.negative {
   background: rgba(181, 87, 75, 0.06);
-  border-left: 4px solid #B5574B;
+  border-left: 4px solid #C95A4F;
   color: #2B2B2B;
 }
 .dashboard .content-area .monthly-list-item.negative strong {
-  color: #B5574B !important;
+  color: #C95A4F !important;
 }
 .dashboard .content-area .monthly-consideration {
   background: #F5F4F0;
@@ -612,7 +612,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
   border-radius: 50%;
   font-weight: 700;
@@ -662,7 +662,7 @@
   cursor: pointer;
 }
 .dashboard .content-area .btn-primary {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
 }
 .dashboard .content-area .btn-primary:hover {
@@ -742,12 +742,12 @@
 .register input[type="email"]:focus,
 .register input[type="password"]:focus {
   outline: none;
-  border-color: #2F3A4A;
+  border-color: #C8D5D3;
 }
 .register .btn-primary {
   width: 100%;
   padding: 14px;
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
   border: none;
   border-radius: 6px;
@@ -765,7 +765,7 @@
   font-size: 14px;
 }
 .register .links a {
-  color: #2F3A4A;
+  color: #2B3A3B;
   text-decoration: none;
 }
 .register .links a:hover {
@@ -797,7 +797,7 @@
   font-size: 20px;
   margin-bottom: 20px;
   color: #2B2B2B;
-  border-bottom: 2px solid #2F3A4A;
+  border-bottom: 2px solid #C8D5D3;
   padding-bottom: 10px;
 }
 .account .form-group {
@@ -844,7 +844,7 @@
 .account .btn {
   display: inline-block;
   padding: 12px 24px;
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
   text-decoration: none;
   border-radius: 6px;
@@ -864,7 +864,7 @@
   background: #726F6A;
 }
 .account .btn-danger {
-  background: #B5574B;
+  background: #C95A4F;
 }
 .account .btn-danger:hover {
   background: #9C4940;
@@ -1001,7 +1001,7 @@
 }
 .service .bl.hojyokin {
   background: #F5F4F0;
-  border-left: 4px solid #2F3A4A;
+  border-left: 4px solid #C8D5D3;
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 32px;
@@ -1038,10 +1038,10 @@
 .service .plan-card:hover {
   transform: translateY(-8px);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-  border-color: #2F3A4A;
+  border-color: #C8D5D3;
 }
 .service .plan-card.featured {
-  border-color: #2F3A4A;
+  border-color: #C8D5D3;
   border-width: 3px;
   background: rgba(47, 58, 74, 0.03);
 }
@@ -1050,7 +1050,7 @@
   top: -15px;
   left: 50%;
   transform: translateX(-50%);
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #fff;
   padding: 5px 20px;
   border-radius: 20px;
@@ -1065,7 +1065,7 @@
 }
 .service .plan-price {
   font-size: 36px;
-  color: #2F3A4A;
+  color: #2B3A3B;
   margin-bottom: 10px;
   font-weight: 700;
 }
@@ -1097,7 +1097,7 @@
   font-weight: 700;
 }
 .service .plan-cta {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
   padding: 15px 35px;
   border-radius: 30px;
@@ -1230,7 +1230,7 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
 }
 .service .flow-number {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #fff;
   width: 60px;
   height: 60px;
@@ -1485,7 +1485,7 @@
   transition: all 0.3s ease;
 }
 .service .btn-primary {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #FAF9F6;
   box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
 }
@@ -1495,8 +1495,8 @@
 }
 .service .btn-secondary {
   background: #FAF9F6;
-  color: #2F3A4A;
-  border: 2px solid #2F3A4A;
+  color: #2B3A3B;
+  border: 2px solid #C8D5D3;
 }
 .service .btn-secondary:hover {
   background: #F2F1EC;

@@ -95,7 +95,7 @@ $rest_nonce = wp_create_nonce('wp_rest');
     width: 18px;
     height: 18px;
     border: 2px solid #e2e8f0;
-    border-top-color: #3D6B6E;
+    border-top-color: #2EC4B6;
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
     margin-right: 8px;
@@ -128,7 +128,7 @@ $rest_nonce = wp_create_nonce('wp_rest');
     height: 18px;
     border-radius: 50%;
     background: rgba(78,130,133,0.1);
-    color: #3D6B6E;
+    color: #2EC4B6;
     font-size: 10px;
     flex-shrink: 0;
 }
@@ -473,7 +473,7 @@ function updateTop10Chart(data) {
 
     // 背景色の配列を生成（選択状態で色が変わる）
     const defaultBg = 'rgba(59, 130, 246, 0.8)';
-    const defaultBorder = '#3D6B6E';
+    const defaultBorder = '#2EC4B6';
 
     top10Chart = new Chart(ctx, {
         type: 'bar',
@@ -555,7 +555,7 @@ function updateBarStyles(activeIndex) {
             ds.borderWidth[i]     = 2;
         } else {
             ds.backgroundColor[i] = activeIndex >= 0 ? 'rgba(59, 130, 246, 0.45)' : 'rgba(59, 130, 246, 0.8)';
-            ds.borderColor[i]     = '#3D6B6E';
+            ds.borderColor[i]     = '#2EC4B6';
             ds.borderWidth[i]     = 1;
         }
     }
@@ -641,12 +641,12 @@ function renderTrendChart(container, labels, values, jaName) {
             datasets: [{
                 label: jaName + ' セッション',
                 data: values,
-                borderColor: '#3D6B6E',
+                borderColor: '#2EC4B6',
                 backgroundColor: 'rgba(59, 130, 246, 0.10)',
                 fill: true,
                 tension: 0.3,
                 pointRadius: 4,
-                pointBackgroundColor: '#3D6B6E',
+                pointBackgroundColor: '#2EC4B6',
                 pointHoverRadius: 6
             }]
         },

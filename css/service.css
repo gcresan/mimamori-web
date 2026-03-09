@@ -68,7 +68,7 @@
 .service .content-area .sv-hero__brand {
   font-size: 36px;
   font-weight: 900;
-  color: #2F3A4A;
+  color: #2B3A3B;
   margin-bottom: 16px;
   letter-spacing: 1px;
 }
@@ -101,7 +101,7 @@
   transition: all 0.2s ease;
 }
 .service .content-area .sv-btn--primary {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #fff;
 }
 .service .content-area .sv-btn--primary:hover {
@@ -110,11 +110,11 @@
 }
 .service .content-area .sv-btn--outline {
   background: transparent;
-  color: #2F3A4A;
-  border: 1.5px solid #2F3A4A;
+  color: #2B3A3B;
+  border: 1.5px solid #C8D5D3;
 }
 .service .content-area .sv-btn--outline:hover {
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #fff;
 }
 .service .content-area .sv-pain {
@@ -244,7 +244,7 @@
 .service .content-area .sv-plan-table .sv-plan-price {
   font-size: 22px;
   font-weight: 800;
-  color: #2F3A4A;
+  color: #2B3A3B;
   line-height: 1.2;
 }
 .service .content-area .sv-plan-table .sv-plan-price small {
@@ -259,15 +259,15 @@
 }
 .service .content-area .sv-plan-table .sv-plan-header--recommended {
   background: #bac4d3;
-  border-bottom-color: #2F3A4A;
+  border-bottom-color: #C8D5D3;
   position: relative;
 }
 .service .content-area .sv-plan-table .sv-plan-header--recommended .sv-plan-name {
-  color: #2F3A4A;
+  color: #2B3A3B;
 }
 .service .content-area .sv-plan-table .sv-recommended-badge {
   display: inline-block;
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #fff;
   font-size: 10px;
   font-weight: 600;
@@ -329,7 +329,7 @@
   overflow: hidden;
 }
 .service .content-area .sv-plan-card--recommended {
-  border-color: #2F3A4A;
+  border-color: #C8D5D3;
   box-shadow: 0 2px 8px rgba(43, 43, 43, 0.06);
 }
 .service .content-area .sv-plan-card--premium {
@@ -348,7 +348,7 @@
 }
 .service .content-area .sv-plan-card__badge {
   display: inline-block;
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #fff;
   font-size: 10px;
   font-weight: 600;
@@ -363,12 +363,12 @@
   margin-bottom: 4px;
 }
 .sv-plan-card--recommended .service .content-area .sv-plan-card__name {
-  color: #2F3A4A;
+  color: #2B3A3B;
 }
 .service .content-area .sv-plan-card__price {
   font-size: 24px;
   font-weight: 800;
-  color: #2F3A4A;
+  color: #2B3A3B;
 }
 .service .content-area .sv-plan-card__price small {
   font-size: 12px;
@@ -414,7 +414,7 @@
   padding: 16px 20px;
   background: #F5F4F0;
   border-radius: 6px;
-  border-left: 3px solid #2F3A4A;
+  border-left: 3px solid #C8D5D3;
 }
 .service .content-area .sv-plan-notes li {
   font-size: 13px;
@@ -458,7 +458,7 @@
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  background: #2F3A4A;
+  background: #2EC4B6;
   color: #fff;
   border-radius: 50%;
   display: flex;
@@ -515,7 +515,7 @@
   transition: color 0.2s;
 }
 .service .content-area .sv-faq__q:hover {
-  color: #2F3A4A;
+  color: #2B3A3B;
 }
 .service .content-area .sv-faq__q span {
   font-size: 12px;

@@ -122,7 +122,7 @@ get_header();
 }
 .suggest-item .key-badge {
     font-size: 10px;
-    color: #3D6B6E;
+    color: #2EC4B6;
     background: #e8f0f0;
     padding: 2px 6px;
     border-radius: 4px;
@@ -225,8 +225,8 @@ document.addEventListener('DOMContentLoaded', function() {
 function markDirty(btnId) {
     var btn = document.getElementById(btnId);
     if (!btn) return;
-    btn.style.backgroundColor = '#3D6B6E';
-    btn.style.borderColor = '#3D6B6E';
+    btn.style.backgroundColor = '#2EC4B6';
+    btn.style.borderColor = '#2EC4B6';
     btn.style.color = '#fff';
 }
 function markClean(btnId) {

@@ -73,7 +73,7 @@ get_header();
             <button type="button" class="btn-refresh" onclick="clearMyCache()">
                 🔄 自分のキャッシュを削除
             </button>
-            <button type="button" class="btn-refresh" style="background:#B5574B;" onmouseover="this.style.background='#9C4940'" onmouseout="this.style.background='#B5574B'" onclick="clearAllCache()">
+            <button type="button" class="btn-refresh" style="background:#C95A4F;" onmouseover="this.style.background='#9C4940'" onmouseout="this.style.background='#C95A4F'" onclick="clearAllCache()">
                 🗑 全ユーザーのキャッシュを削除
             </button>
         </div>
@@ -109,7 +109,7 @@ get_header();
         </h2>
         <p>
             AIレポート生成のために、今月の課題・目標・取り組み等を入力してください。<br>
-            サイトURLや商圏などの基本情報は<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#3D8B6E;font-weight:600;">クライアント設定</a>で設定できます。
+            サイトURLや商圏などの基本情報は<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#2EBD8E;font-weight:600;">クライアント設定</a>で設定できます。
         </p>
 
         <div class="form-group">
@@ -326,13 +326,13 @@ function displayGenerationCount(data) {
 
     // 色変更
     if (data.remaining === 0) {
-        remainingCount.style.color = '#B5574B';
+        remainingCount.style.color = '#C95A4F';
         remainingCount.textContent = '（上限到達）';
         generateBtn.disabled = true;
     } else if (data.remaining <= 2) {
         remainingCount.style.color = '#ea580c';
     } else {
-        remainingCount.style.color = '#3D8B6E';
+        remainingCount.style.color = '#2EBD8E';
     }
 
     infoBox.style.display = 'flex';

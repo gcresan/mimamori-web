@@ -211,8 +211,8 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
     $color = match($color_mode) {
         'white'  => '#ffffff',
         'green'  => '#16a34a',
-        'red'    => '#B5574B',
-        'blue'   => '#3D6B6E',
+        'red'    => '#C95A4F',
+        'blue'   => '#2EC4B6',
         'orange' => '#ea580c',
         default  => '#111827'
     };
@@ -242,8 +242,8 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
     if ($color_mode !== 'white') {
         $keywords = [
             '増加' => '#16a34a', '改善' => '#16a34a',
-            '減少' => '#B5574B', '悪化' => '#B5574B',
-            '前月比' => '#3D6B6E', '前年比' => '#3D6B6E',
+            '減少' => '#C95A4F', '悪化' => '#C95A4F',
+            '前月比' => '#2EC4B6', '前年比' => '#2EC4B6',
         ];
         foreach ($keywords as $kw => $kw_color) {
             $text = preg_replace(
@@ -471,7 +471,7 @@ get_header();
     width: 28px;
     height: 28px;
     font-size: 14px;
-    color: var(--mw-primary-blue, #3D6B6E);
+    color: var(--mw-primary-blue, #2EC4B6);
     background: none;
     border: 1px solid transparent;
     border-radius: 6px;
@@ -484,7 +484,7 @@ get_header();
     background: rgba(61,107,110,0.08);
     border-color: rgba(61,107,110,0.15);
     text-decoration: none;
-    color: var(--mw-primary-blue, #3D6B6E);
+    color: var(--mw-primary-blue, #2EC4B6);
 }
 .rpt-year-arrow.disabled {
     color: #ccc;
@@ -522,13 +522,13 @@ get_header();
 .rpt-month-btn:hover {
     background: rgba(61,107,110,0.08);
     border-color: rgba(61,107,110,0.3);
-    color: var(--mw-primary-blue, #3D6B6E);
+    color: var(--mw-primary-blue, #2EC4B6);
     text-decoration: none;
 }
 .rpt-month-btn.active {
-    background: var(--mw-primary-blue, #3D6B6E);
+    background: var(--mw-primary-blue, #2EC4B6);
     color: #fff;
-    border-color: var(--mw-primary-blue, #3D6B6E);
+    border-color: var(--mw-primary-blue, #2EC4B6);
     font-weight: 600;
 }
 @media (max-width: 768px) {
@@ -1179,15 +1179,15 @@ function updateKPIDisplay(data) {
         if (data.cv_source === 'hybrid') {
             cvSourceLabel.textContent = '（GA4+手動）';
             cvSourceLabel.style.display = 'inline';
-            cvSourceLabel.style.color = '#3D8B6E';
+            cvSourceLabel.style.color = '#2EBD8E';
         } else if (data.cv_source === 'actual_plus_phone') {
             cvSourceLabel.textContent = '（実質+電話タップ）';
             cvSourceLabel.style.display = 'inline';
-            cvSourceLabel.style.color = '#3D8B6E';
+            cvSourceLabel.style.color = '#2EBD8E';
         } else if (data.cv_source === 'actual') {
             cvSourceLabel.textContent = '（実質）';
             cvSourceLabel.style.display = 'inline';
-            cvSourceLabel.style.color = '#3D8B6E';
+            cvSourceLabel.style.color = '#2EBD8E';
         } else {
             cvSourceLabel.textContent = '';
             cvSourceLabel.style.display = 'none';
@@ -1234,11 +1234,11 @@ function updateChangeIndicator(elementId, trendData) {
 // スパークライン更新（dashboard同一）
 function updateSparklines(dailyData) {
     const sparklineConfigs = [
-        { id: 'sparkline-pageviews', data: dailyData.pageViews, color: '#3D6B6E' },
+        { id: 'sparkline-pageviews', data: dailyData.pageViews, color: '#2EC4B6' },
         { id: 'sparkline-sessions', data: dailyData.sessions, color: '#D4A842' },
-        { id: 'sparkline-users', data: dailyData.users, color: '#3D8B6E' },
-        { id: 'sparkline-newusers', data: dailyData.newUsers, color: '#4E8285' },
-        { id: 'sparkline-returning', data: dailyData.returning, color: '#B5574B' },
+        { id: 'sparkline-users', data: dailyData.users, color: '#2EBD8E' },
+        { id: 'sparkline-newusers', data: dailyData.newUsers, color: '#36D1C4' },
+        { id: 'sparkline-returning', data: dailyData.returning, color: '#C95A4F' },
         { id: 'sparkline-duration', data: dailyData.duration, color: '#f97316' }
     ];
     // CV用スパークライン: effective CV daily がある場合はそれで上書き
@@ -1252,10 +1252,10 @@ function updateSparklines(dailyData) {
         sparklineConfigs.push({
             id: 'sparkline-conversions',
             data: { labels: cvLabels, values: cvValues },
-            color: '#3D8B6E'
+            color: '#2EBD8E'
         });
     } else if (dailyData.conversions) {
-        sparklineConfigs.push({ id: 'sparkline-conversions', data: dailyData.conversions, color: '#3D8B6E' });
+        sparklineConfigs.push({ id: 'sparkline-conversions', data: dailyData.conversions, color: '#2EBD8E' });
     }
 
     sparklineConfigs.forEach(config => {
@@ -1504,7 +1504,7 @@ function createDeviceChart(devices) {
     if (!devices || devices.length === 0) return;
 
     const labels = [], data = [];
-    const colors = ['#3D6B6E', '#3D8B6E', '#D4A842', '#B5574B', '#8b5cf6'];
+    const colors = ['#2EC4B6', '#2EBD8E', '#D4A842', '#C95A4F', '#8b5cf6'];
     devices.slice(0, 5).forEach(item => {
         labels.push(getDeviceName(item.device || 'unknown'));
         const c = typeof item.count === 'string' ? parseInt(item.count.replace(/,/g, '')) : (item.count || 0);
@@ -1536,7 +1536,7 @@ function createAgeChart(ageData) {
 
     charts.age = new Chart(ctx, {
         type: 'bar',
-        data: { labels, datasets: [{ data, backgroundColor: '#3D8B6E', borderRadius: 4 }] },
+        data: { labels, datasets: [{ data, backgroundColor: '#2EBD8E', borderRadius: 4 }] },
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => formatNumber(c.parsed.x) + ' sessions' } } },
@@ -1560,7 +1560,7 @@ function createMediumChart(medium) {
 
     charts.medium = new Chart(ctx, {
         type: 'bar',
-        data: { labels, datasets: [{ data, backgroundColor: '#3D6B6E', borderRadius: 4 }] },
+        data: { labels, datasets: [{ data, backgroundColor: '#2EC4B6', borderRadius: 4 }] },
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => formatNumber(c.parsed.x) + ' sessions' } } },

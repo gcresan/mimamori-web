@@ -167,12 +167,12 @@ class Gcrev_Client_Management_Page {
      */
     private function render_bulk_actions(): void {
         ?>
-        <div style="margin: 16px 0; padding: 16px; background: #fff; border: 1px solid #c3c4c7; border-left: 4px solid #B5574B;">
+        <div style="margin: 16px 0; padding: 16px; background: #fff; border: 1px solid #c3c4c7; border-left: 4px solid #C95A4F;">
             <h3 style="margin: 0 0 8px;">⚠️ 一括操作</h3>
             <form method="post" style="display: inline;" onsubmit="return confirm('全クライアントのキャッシュを削除します。よろしいですか？');">
                 <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
                 <input type="hidden" name="gcrev_action" value="clear_all_cache">
-                <button type="submit" class="button" style="color: #B5574B; border-color: #B5574B;">
+                <button type="submit" class="button" style="color: #C95A4F; border-color: #C95A4F;">
                     🗑 全クライアントのキャッシュを一括削除
                 </button>
             </form>
@@ -252,21 +252,21 @@ class Gcrev_Client_Management_Page {
                         <?php if ( $is_test ) : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#c0392b; background:#fdf0ee; border:1px solid #e8c4bf; border-radius:3px;">テスト運用</span>
                         <?php elseif ( $is_paid ) : ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#3D8B6E; background:rgba(61,139,110,0.08); border-radius:3px;">利用中</span>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#2EBD8E; background:rgba(46,189,142,0.08); border-radius:3px;">利用中</span>
                         <?php else : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#999; background:#f5f5f5; border-radius:3px;">手続中</span>
                         <?php endif; ?>
                     </td>
                     <td style="text-align: center;">
                         <?php if ( $cache_cnt > 0 ) : ?>
-                            <span style="font-weight: 600; color: #3D6B6E;"><?php echo esc_html( $cache_cnt ); ?></span>件
+                            <span style="font-weight: 600; color: #2EC4B6;"><?php echo esc_html( $cache_cnt ); ?></span>件
                         <?php else : ?>
                             <span style="color: #999;">0</span>
                         <?php endif; ?>
                     </td>
                     <td style="text-align: center;">
                         <?php if ( $report_cnt > 0 ) : ?>
-                            <span style="font-weight: 600; color: #3D6B6E;"><?php echo esc_html( $report_cnt ); ?></span>件
+                            <span style="font-weight: 600; color: #2EC4B6;"><?php echo esc_html( $report_cnt ); ?></span>件
                         <?php else : ?>
                             <span style="color: #999;">0</span>
                         <?php endif; ?>
@@ -286,7 +286,7 @@ class Gcrev_Client_Management_Page {
                             <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
                             <input type="hidden" name="gcrev_action" value="delete_user_reports">
                             <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $uid ); ?>">
-                            <button type="submit" class="button button-small" style="color: #B5574B;" title="レポート全削除">🗑 レポート</button>
+                            <button type="submit" class="button button-small" style="color: #C95A4F;" title="レポート全削除">🗑 レポート</button>
                         </form>
                         <?php endif; ?>
 
