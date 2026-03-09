@@ -21,6 +21,10 @@ class Gcrev_Bootstrap {
         // Cron Log クリーンアップ
         add_action('gcrev_cron_log_cleanup_event', [__CLASS__, 'on_cron_log_cleanup']);
 
+        // 順位トラッキング（週次）
+        add_action('gcrev_rank_fetch_weekly_event', [__CLASS__, 'on_rank_fetch_weekly_event']);
+        add_action('gcrev_rank_fetch_chunk_event', [__CLASS__, 'on_rank_fetch_chunk_event'], 10, 2);
+
         // スロット別プリフェッチ
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
             $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
@@ -29,6 +33,9 @@ class Gcrev_Bootstrap {
                 add_action( "gcrev_prefetch_chunk_slot_{$i}_event", [__CLASS__, 'on_prefetch_chunk_slot_event'], 10, 3 );
             }
         }
+
+        // weekly スケジュール追加
+        add_filter('cron_schedules', [__CLASS__, 'add_weekly_schedule']);
 
         // schedule (initで「未登録なら登録」※現状と同じ)
         add_action('init', [__CLASS__, 'maybe_schedule_events']);
@@ -78,6 +85,12 @@ class Gcrev_Bootstrap {
             if ( file_exists( $qa_report_path ) ) {
                 require_once $qa_report_path;
                 (new Gcrev_QA_Report_Page())->register();
+            }
+
+            $rank_tracker_path = __DIR__ . '/admin/class-rank-tracker-settings-page.php';
+            if ( file_exists( $rank_tracker_path ) ) {
+                require_once $rank_tracker_path;
+                (new Gcrev_Rank_Tracker_Settings_Page())->register();
             }
 
             // デプロイ管理画面（Dev 環境のみ）
@@ -143,6 +156,24 @@ class Gcrev_Bootstrap {
     }
 
     /**
+     * 順位トラッキング — 週次フェッチイベント
+     */
+    public static function on_rank_fetch_weekly_event(): void {
+        error_log('[GCREV] gcrev_rank_fetch_weekly_event triggered');
+        $api = new Gcrev_Insight_API(false);
+        $api->auto_fetch_rankings();
+    }
+
+    /**
+     * 順位トラッキング — チャンクフェッチイベント
+     */
+    public static function on_rank_fetch_chunk_event( $offset, $limit ): void {
+        error_log("[GCREV] gcrev_rank_fetch_chunk_event triggered: offset={$offset}, limit={$limit}");
+        $api = new Gcrev_Insight_API(false);
+        $api->rank_fetch_chunk( (int) $offset, (int) $limit );
+    }
+
+    /**
      * スロット別プリフェッチ日次イベント
      */
     public static function on_prefetch_slot_event(): void {
@@ -194,6 +225,22 @@ class Gcrev_Bootstrap {
 
         // Cron log cleanup (tomorrow 02:00)
         self::schedule_daily_if_missing('gcrev_cron_log_cleanup_event', 'tomorrow 02:00:00');
+
+        // 順位トラッキング: 週1回（月曜 05:00）
+        self::schedule_weekly_if_missing('gcrev_rank_fetch_weekly_event', 'next monday 05:00:00');
+    }
+
+    /**
+     * weekly スケジュール定義
+     */
+    public static function add_weekly_schedule( array $schedules ): array {
+        if ( ! isset( $schedules['weekly'] ) ) {
+            $schedules['weekly'] = [
+                'interval' => WEEK_IN_SECONDS,
+                'display'  => '週1回',
+            ];
+        }
+        return $schedules;
     }
 
     private static function schedule_daily_if_missing(string $hook, string $when): void {
@@ -207,6 +254,17 @@ class Gcrev_Bootstrap {
         error_log('[GCREV] Scheduled ' . $hook . ' at ' . $dt->format('Y-m-d H:i:s T'));
     }
 
+    private static function schedule_weekly_if_missing(string $hook, string $when): void {
+        if (wp_next_scheduled($hook)) {
+            return;
+        }
+        $tz = wp_timezone();
+        $dt = new DateTimeImmutable($when, $tz);
+
+        wp_schedule_event($dt->getTimestamp(), 'weekly', $hook);
+        error_log('[GCREV] Scheduled ' . $hook . ' (weekly) at ' . $dt->format('Y-m-d H:i:s T'));
+    }
+
     // =========================================================
     // 任意：イベント掃除（テーマ切替時）
     // =========================================================
@@ -216,9 +274,11 @@ class Gcrev_Bootstrap {
             'gcrev_monthly_report_generate_event',
             'gcrev_monthly_report_finalize_event',
             'gcrev_cron_log_cleanup_event',
+            'gcrev_rank_fetch_weekly_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',
+            // 'gcrev_rank_fetch_chunk_event',
         ];
 
         foreach ($hooks as $hook) {

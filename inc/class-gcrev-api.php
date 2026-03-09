@@ -78,6 +78,9 @@ class Gcrev_Insight_API {
     // Step5: Dashboard Service（ここに追加）
     private Gcrev_Dashboard_Service $dashboard_service;
 
+    // Step6: DataForSEO Client（順位トラッキング）
+    private ?Gcrev_DataForSEO_Client $dataforseo = null;
+
     private string $service_account_path = '';
 
     // ===== キャッシュ設定 =====
@@ -118,6 +121,11 @@ class Gcrev_Insight_API {
 
         // Step5（これを追加）
         $this->dashboard_service = new Gcrev_Dashboard_Service($this->report_service);
+
+        // Step6: DataForSEO（定数が未設定でもインスタンスは作成、API呼び出し時にチェック）
+        if ( class_exists( 'Gcrev_DataForSEO_Client' ) ) {
+            $this->dataforseo = new Gcrev_DataForSEO_Client( $this->config );
+        }
 
         if ($register_routes) {
             add_action('rest_api_init', [ $this, 'register_routes' ]);
@@ -508,6 +516,48 @@ class Gcrev_Insight_API {
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_bulk_update_cv_review' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
+        // =========================================================
+        // 順位トラッキング（Rank Tracker）
+        // =========================================================
+        register_rest_route('gcrev/v1', '/rank-tracker/rankings', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_rank_tracker_rankings' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/history', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_rank_tracker_history' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/keywords', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_rank_tracker_keywords' ],
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
+        ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/keywords', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_rank_tracker_keyword' ],
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
+        ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/keywords/(?P<id>\d+)', [
+            'methods'             => 'DELETE',
+            'callback'            => [ $this, 'rest_delete_rank_tracker_keyword' ],
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
+        ]);
+        register_rest_route('gcrev/v1', '/rank-tracker/fetch', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_fetch_rank_tracker' ],
+            'permission_callback' => function() {
+                return current_user_can('manage_options');
+            },
         ]);
     }
 
@@ -8032,6 +8082,590 @@ PROMPT;
             }
             return $row;
         }, $rows);
+    }
+
+    // =========================================================
+    // 順位トラッキング — REST コールバック
+    // =========================================================
+
+    /**
+     * GET /rank-tracker/rankings
+     * ログインユーザーの最新キーワード順位一覧（前回比含む）
+     */
+    public function rest_get_rank_tracker_rankings( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $user_id = get_current_user_id();
+        $range   = sanitize_text_field( $request->get_param('range') ?? '4w' );
+
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+
+        // 有効キーワード取得
+        $keywords = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, keyword, target_domain, location_code, memo
+             FROM {$kw_table}
+             WHERE user_id = %d AND enabled = 1
+             ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        if ( empty( $keywords ) ) {
+            return new \WP_REST_Response([
+                'success' => true,
+                'data'    => [ 'keywords' => [], 'summary' => $this->rank_tracker_empty_summary() ],
+            ]);
+        }
+
+        $keyword_ids = array_column( $keywords, 'id' );
+        $placeholders = implode( ',', array_fill( 0, count( $keyword_ids ), '%d' ) );
+
+        $output = [];
+        $desktop_ranks = [];
+        $mobile_ranks  = [];
+        $improved_count = 0;
+
+        foreach ( $keywords as $kw ) {
+            $kw_id = (int) $kw['id'];
+
+            // 最新の結果（desktop / mobile）
+            $latest = [];
+            foreach ( ['desktop', 'mobile'] as $device ) {
+                $row = $wpdb->get_row( $wpdb->prepare(
+                    "SELECT rank_group, rank_absolute, found_url, is_ranked, iso_year_week, fetched_at
+                     FROM {$res_table}
+                     WHERE keyword_id = %d AND device = %s
+                     ORDER BY fetched_at DESC
+                     LIMIT 1",
+                    $kw_id, $device
+                ), ARRAY_A );
+
+                $latest[ $device ] = $row;
+            }
+
+            // 前回の結果（変動計算用）
+            $prev = [];
+            foreach ( ['desktop', 'mobile'] as $device ) {
+                if ( empty( $latest[ $device ]['iso_year_week'] ) ) {
+                    $prev[ $device ] = null;
+                    continue;
+                }
+                $row = $wpdb->get_row( $wpdb->prepare(
+                    "SELECT rank_group, is_ranked
+                     FROM {$res_table}
+                     WHERE keyword_id = %d AND device = %s AND iso_year_week < %s
+                     ORDER BY fetched_at DESC
+                     LIMIT 1",
+                    $kw_id, $device, $latest[ $device ]['iso_year_week']
+                ), ARRAY_A );
+                $prev[ $device ] = $row;
+            }
+
+            // データ組み立て
+            $entry = [
+                'keyword_id' => $kw_id,
+                'keyword'    => $kw['keyword'],
+                'memo'       => $kw['memo'] ?? '',
+                'desktop'    => null,
+                'mobile'     => null,
+                'fetched_at' => null,
+            ];
+
+            foreach ( ['desktop', 'mobile'] as $device ) {
+                $l = $latest[ $device ];
+                $p = $prev[ $device ] ?? null;
+
+                if ( ! $l ) {
+                    $entry[ $device ] = [ 'rank_group' => null, 'rank_absolute' => null, 'change' => null, 'url' => null, 'is_ranked' => false ];
+                    continue;
+                }
+
+                $rank_group = $l['is_ranked'] ? (int) $l['rank_group'] : null;
+                $change     = null;
+
+                if ( $p && $l['is_ranked'] && $p['is_ranked'] ) {
+                    // change: 正 = 改善（前回より小さい = 順位上昇）, 負 = 悪化
+                    $change = (int) $p['rank_group'] - (int) $l['rank_group'];
+                } elseif ( $p && $l['is_ranked'] && ! $p['is_ranked'] ) {
+                    // 前回圏外 → 今回ランクイン = 改善
+                    $change = 999;
+                } elseif ( $p && ! $l['is_ranked'] && $p['is_ranked'] ) {
+                    // 前回ランクイン → 今回圏外 = 悪化
+                    $change = -999;
+                }
+
+                $entry[ $device ] = [
+                    'rank_group'    => $rank_group,
+                    'rank_absolute' => $l['is_ranked'] ? (int) $l['rank_absolute'] : null,
+                    'change'        => $change,
+                    'url'           => $l['found_url'] ?? null,
+                    'is_ranked'     => (bool) $l['is_ranked'],
+                ];
+
+                // 集計用
+                if ( $l['is_ranked'] && $rank_group !== null ) {
+                    if ( $device === 'desktop' ) {
+                        $desktop_ranks[] = $rank_group;
+                    } else {
+                        $mobile_ranks[] = $rank_group;
+                    }
+                }
+
+                if ( $change !== null && $change > 0 ) {
+                    $improved_count++;
+                }
+
+                if ( ! $entry['fetched_at'] && ! empty( $l['fetched_at'] ) ) {
+                    $entry['fetched_at'] = substr( $l['fetched_at'], 0, 10 );
+                }
+            }
+
+            $output[] = $entry;
+        }
+
+        $summary = [
+            'total'       => count( $keywords ),
+            'avg_desktop' => count( $desktop_ranks ) > 0 ? round( array_sum( $desktop_ranks ) / count( $desktop_ranks ), 1 ) : null,
+            'avg_mobile'  => count( $mobile_ranks ) > 0 ? round( array_sum( $mobile_ranks ) / count( $mobile_ranks ), 1 ) : null,
+            'improved'    => $improved_count,
+        ];
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'data'    => [ 'keywords' => $output, 'summary' => $summary ],
+        ]);
+    }
+
+    /**
+     * GET /rank-tracker/history
+     * キーワード別の週次推移データ
+     */
+    public function rest_get_rank_tracker_history( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $user_id    = get_current_user_id();
+        $keyword_id = absint( $request->get_param('keyword_id') ?? 0 );
+        $range      = sanitize_text_field( $request->get_param('range') ?? '12w' );
+
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        // キーワードが自分のものか確認
+        $kw = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, keyword FROM {$kw_table} WHERE id = %d AND user_id = %d",
+            $keyword_id, $user_id
+        ), ARRAY_A );
+
+        if ( ! $kw ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードが見つかりません。' ], 404 );
+        }
+
+        // 週数からデータ取得期間計算
+        $weeks = $this->rank_tracker_parse_range( $range );
+        $tz    = wp_timezone();
+        $since = ( new \DateTimeImmutable( "now", $tz ) )->modify( "-{$weeks} weeks" )->format( 'Y-m-d H:i:s' );
+
+        $results = $wpdb->get_results( $wpdb->prepare(
+            "SELECT device, rank_group, rank_absolute, is_ranked, iso_year_week, fetched_at
+             FROM {$res_table}
+             WHERE keyword_id = %d AND fetched_at >= %s
+             ORDER BY fetched_at ASC",
+            $keyword_id, $since
+        ), ARRAY_A );
+
+        // デバイス × 週でグルーピング
+        $history = [ 'desktop' => [], 'mobile' => [] ];
+        foreach ( $results as $r ) {
+            $device = $r['device'];
+            $week   = $r['iso_year_week'];
+            $history[ $device ][ $week ] = [
+                'rank_group'    => $r['is_ranked'] ? (int) $r['rank_group'] : null,
+                'rank_absolute' => $r['is_ranked'] ? (int) $r['rank_absolute'] : null,
+                'is_ranked'     => (bool) $r['is_ranked'],
+                'fetched_at'    => $r['fetched_at'],
+            ];
+        }
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'data'    => [
+                'keyword' => $kw['keyword'],
+                'history' => $history,
+            ],
+        ]);
+    }
+
+    /**
+     * GET /rank-tracker/keywords（管理者用）
+     */
+    public function rest_get_rank_tracker_keywords( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $user_id = absint( $request->get_param('user_id') ?? 0 );
+        if ( $user_id <= 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'user_id が必要です。' ], 400 );
+        }
+
+        $table = $wpdb->prefix . 'gcrev_rank_keywords';
+        $rows  = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE user_id = %d ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $rows ] );
+    }
+
+    /**
+     * POST /rank-tracker/keywords（管理者用 — 追加/更新）
+     */
+    public function rest_save_rank_tracker_keyword( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $table   = $wpdb->prefix . 'gcrev_rank_keywords';
+        $user_id = absint( $request->get_param('user_id') ?? 0 );
+        $id      = absint( $request->get_param('id') ?? 0 );
+
+        if ( $user_id <= 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'user_id が必要です。' ], 400 );
+        }
+
+        $keyword       = sanitize_text_field( $request->get_param('keyword') ?? '' );
+        $target_domain = sanitize_text_field( $request->get_param('target_domain') ?? '' );
+        $location_code = absint( $request->get_param('location_code') ?? 1009312 );
+        $language_code = sanitize_text_field( $request->get_param('language_code') ?? 'ja' );
+        $enabled       = absint( $request->get_param('enabled') ?? 1 );
+        $sort_order    = absint( $request->get_param('sort_order') ?? 0 );
+        $memo          = sanitize_text_field( $request->get_param('memo') ?? '' );
+
+        if ( $keyword === '' || $target_domain === '' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'keyword と target_domain は必須です。' ], 400 );
+        }
+
+        $tz  = wp_timezone();
+        $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+
+        if ( $id > 0 ) {
+            // 更新
+            $wpdb->update( $table, [
+                'keyword'       => $keyword,
+                'target_domain' => $target_domain,
+                'location_code' => $location_code,
+                'language_code' => $language_code,
+                'enabled'       => $enabled ? 1 : 0,
+                'sort_order'    => $sort_order,
+                'memo'          => $memo,
+                'updated_at'    => $now,
+            ], [ 'id' => $id, 'user_id' => $user_id ], null, [ '%d', '%d' ] );
+        } else {
+            // 新規
+            $wpdb->insert( $table, [
+                'user_id'       => $user_id,
+                'keyword'       => $keyword,
+                'target_domain' => $target_domain,
+                'location_code' => $location_code,
+                'language_code' => $language_code,
+                'enabled'       => $enabled ? 1 : 0,
+                'sort_order'    => $sort_order,
+                'memo'          => $memo,
+                'created_at'    => $now,
+                'updated_at'    => $now,
+            ] );
+            $id = (int) $wpdb->insert_id;
+        }
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'id' => $id ] ] );
+    }
+
+    /**
+     * DELETE /rank-tracker/keywords/{id}（管理者用）
+     */
+    public function rest_delete_rank_tracker_keyword( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $id    = absint( $request['id'] );
+        $table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        $deleted = $wpdb->delete( $table, [ 'id' => $id ], [ '%d' ] );
+
+        if ( $deleted ) {
+            // 関連する結果データも削除
+            $res_table = $wpdb->prefix . 'gcrev_rank_results';
+            $wpdb->delete( $res_table, [ 'keyword_id' => $id ], [ '%d' ] );
+        }
+
+        return new \WP_REST_Response( [ 'success' => (bool) $deleted ] );
+    }
+
+    /**
+     * POST /rank-tracker/fetch（管理者用 — 手動フェッチ）
+     */
+    public function rest_fetch_rank_tracker( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->dataforseo ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'DataForSEO クライアントが利用できません。' ], 500 );
+        }
+
+        if ( ! Gcrev_DataForSEO_Client::is_configured() ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'DataForSEO API が未設定です。' ], 400 );
+        }
+
+        $keyword_id = absint( $request->get_param('keyword_id') ?? 0 );
+
+        if ( $keyword_id <= 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'keyword_id が必要です。' ], 400 );
+        }
+
+        global $wpdb;
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+        $kw = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$kw_table} WHERE id = %d",
+            $keyword_id
+        ), ARRAY_A );
+
+        if ( ! $kw ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'キーワードが見つかりません。' ], 404 );
+        }
+
+        $results = $this->dataforseo->fetch_rankings_for_keyword(
+            $kw['keyword'],
+            $kw['target_domain'],
+            (int) $kw['location_code'],
+            $kw['language_code']
+        );
+
+        // DB に保存
+        $saved = $this->save_rank_results( $kw, $results );
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'data'    => [
+                'keyword' => $kw['keyword'],
+                'results' => $results,
+                'saved'   => $saved,
+            ],
+        ]);
+    }
+
+    // =========================================================
+    // 順位トラッキング — Cron
+    // =========================================================
+
+    /** 順位フェッチチャンク制限 */
+    public const RANK_FETCH_CHUNK_LIMIT = 5;
+
+    /**
+     * 週次自動取得のエントリポイント（Cron コールバック）
+     */
+    public function auto_fetch_rankings(): void {
+        $lock_key = 'gcrev_lock_rank_fetch';
+        $lock_ttl = 7200; // 2h
+
+        // ロック取得
+        if ( get_transient( $lock_key ) ) {
+            error_log( '[GCREV][RankTracker] Lock is active, skipping' );
+            return;
+        }
+        set_transient( $lock_key, 1, $lock_ttl );
+
+        // Cron ログ開始
+        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+            Gcrev_Cron_Logger::start( 'rank_fetch' );
+        }
+
+        global $wpdb;
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        // 事前見積もり
+        $total_keywords = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$kw_table} WHERE enabled = 1 AND target_domain != ''"
+        );
+        $api_calls = $total_keywords * 2; // desktop + mobile
+        error_log( "[GCREV][RankTracker] Starting weekly fetch: {$total_keywords} keywords, estimated {$api_calls} API calls" );
+
+        // チャンク処理開始
+        wp_schedule_single_event( time() + 5, 'gcrev_rank_fetch_chunk_event', [ 0, self::RANK_FETCH_CHUNK_LIMIT ] );
+    }
+
+    /**
+     * チャンク処理コールバック（5ユーザーずつ）
+     */
+    public function rank_fetch_chunk( int $offset, int $limit ): void {
+        global $wpdb;
+
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+
+        // 有効キーワードを持つユーザーを取得（チャンク）
+        $user_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT DISTINCT user_id FROM {$kw_table}
+             WHERE enabled = 1 AND target_domain != ''
+             ORDER BY user_id ASC
+             LIMIT %d OFFSET %d",
+            $limit, $offset
+        ) );
+
+        if ( empty( $user_ids ) ) {
+            // 完了
+            delete_transient( 'gcrev_lock_rank_fetch' );
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::finish( 'rank_fetch' );
+            }
+            error_log( '[GCREV][RankTracker] Weekly fetch completed' );
+            return;
+        }
+
+        if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
+            error_log( '[GCREV][RankTracker] DataForSEO not configured, aborting' );
+            delete_transient( 'gcrev_lock_rank_fetch' );
+            return;
+        }
+
+        $tz             = wp_timezone();
+        $now            = new \DateTimeImmutable( 'now', $tz );
+        $iso_year_week  = $now->format( 'o-W' ); // ISO 8601 year-week
+
+        foreach ( $user_ids as $uid ) {
+            $uid = (int) $uid;
+
+            $keywords = $wpdb->get_results( $wpdb->prepare(
+                "SELECT * FROM {$kw_table}
+                 WHERE user_id = %d AND enabled = 1 AND target_domain != ''
+                 ORDER BY sort_order ASC, id ASC",
+                $uid
+            ), ARRAY_A );
+
+            foreach ( $keywords as $kw ) {
+                $kw_id = (int) $kw['id'];
+
+                // ISO週重複チェック
+                $already = $wpdb->get_var( $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$res_table}
+                     WHERE keyword_id = %d AND iso_year_week = %s",
+                    $kw_id, $iso_year_week
+                ) );
+
+                if ( (int) $already > 0 ) {
+                    continue; // 今週分は取得済み
+                }
+
+                // DataForSEO API 呼び出し
+                $results = $this->dataforseo->fetch_rankings_for_keyword(
+                    $kw['keyword'],
+                    $kw['target_domain'],
+                    (int) $kw['location_code'],
+                    $kw['language_code']
+                );
+
+                $this->save_rank_results( $kw, $results );
+            }
+
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::log_user( 'rank_fetch', $uid, 'ok' );
+            }
+        }
+
+        // 次のチャンクをスケジュール
+        $next_offset = $offset + $limit;
+        wp_schedule_single_event( time() + 10, 'gcrev_rank_fetch_chunk_event', [ $next_offset, $limit ] );
+        error_log( "[GCREV][RankTracker] Chunk done (offset={$offset}), next scheduled at offset={$next_offset}" );
+    }
+
+    // =========================================================
+    // 順位トラッキング — ヘルパー
+    // =========================================================
+
+    /**
+     * 取得結果を DB に保存
+     *
+     * @param array $kw      キーワードレコード
+     * @param array $results fetch_rankings_for_keyword() の返り値
+     * @return array 保存結果
+     */
+    private function save_rank_results( array $kw, array $results ): array {
+        global $wpdb;
+
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+        $tz        = wp_timezone();
+        $now       = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+        $iso_week  = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'o-W' );
+
+        $saved = [];
+
+        foreach ( ['desktop', 'mobile'] as $device ) {
+            $r = $results[ $device ] ?? null;
+            if ( ! $r || isset( $r['error'] ) ) {
+                $saved[ $device ] = false;
+                continue;
+            }
+
+            $data = [
+                'keyword_id'    => (int) $kw['id'],
+                'user_id'       => (int) $kw['user_id'],
+                'device'        => $device,
+                'rank_group'    => $r['is_ranked'] ? $r['rank_group'] : null,
+                'rank_absolute' => $r['is_ranked'] ? $r['rank_absolute'] : null,
+                'found_url'     => $r['found_url'],
+                'found_domain'  => $r['found_domain'],
+                'is_ranked'     => $r['is_ranked'] ? 1 : 0,
+                'serp_type'     => $r['serp_type'] ?? 'organic',
+                'api_source'    => 'dataforseo',
+                'iso_year_week' => $iso_week,
+                'fetched_at'    => $now,
+                'created_at'    => $now,
+            ];
+
+            // UNIQUE KEY kw_device_week で重複防止（INSERT IGNORE パターン）
+            $rg  = $data['rank_group'] !== null ? $wpdb->prepare( '%d', $data['rank_group'] ) : 'NULL';
+            $ra  = $data['rank_absolute'] !== null ? $wpdb->prepare( '%d', $data['rank_absolute'] ) : 'NULL';
+            $url = $data['found_url'] !== null ? $wpdb->prepare( '%s', $data['found_url'] ) : "''";
+            $dom = $data['found_domain'] !== null ? $wpdb->prepare( '%s', $data['found_domain'] ) : "''";
+
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $sql = $wpdb->prepare(
+                "INSERT IGNORE INTO {$res_table}
+                 (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain, is_ranked, serp_type, api_source, iso_year_week, fetched_at, created_at)
+                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s)",
+                $data['keyword_id'],
+                $data['user_id'],
+                $data['device'],
+                $data['is_ranked'],
+                $data['serp_type'],
+                $data['api_source'],
+                $data['iso_year_week'],
+                $data['fetched_at'],
+                $data['created_at']
+            );
+
+            $result = $wpdb->query( $sql );
+            $saved[ $device ] = $result !== false;
+        }
+
+        return $saved;
+    }
+
+    /**
+     * 範囲文字列を週数に変換
+     */
+    private function rank_tracker_parse_range( string $range ): int {
+        $map = [
+            '4w'  => 4,
+            '8w'  => 8,
+            '12w' => 12,
+            '26w' => 26,  // 半年
+            '52w' => 52,  // 1年
+        ];
+        return $map[ $range ] ?? 12;
+    }
+
+    /**
+     * 空のサマリー
+     */
+    private function rank_tracker_empty_summary(): array {
+        return [
+            'total'       => 0,
+            'avg_desktop' => null,
+            'avg_mobile'  => null,
+            'improved'    => 0,
+        ];
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

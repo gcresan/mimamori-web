@@ -738,6 +738,14 @@ if ( file_exists( $gcrev_dashboard_service ) ) {
 }
 
 // ========================================
+// Step6: DataForSEO クライアント
+// ========================================
+$gcrev_dataforseo_client = $gcrev_modules_path . 'class-dataforseo-client.php';
+if ( file_exists( $gcrev_dataforseo_client ) ) {
+    require_once $gcrev_dataforseo_client;
+}
+
+// ========================================
 // Updates API（更新情報ベル通知）
 // ========================================
 $mimamori_updates_api = $gcrev_modules_path . 'class-updates-api.php';
@@ -4591,6 +4599,8 @@ add_action('after_setup_theme', function () {
     gcrev_actual_cv_create_table();
     gcrev_cv_routes_create_table();
     gcrev_cv_review_create_table();
+    gcrev_rank_keywords_create_table();
+    gcrev_rank_results_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -4682,6 +4692,68 @@ function gcrev_cv_review_create_table(): void {
         UNIQUE KEY user_month_hash (user_id, `year_month`, row_hash),
         KEY user_month (user_id, `year_month`),
         KEY status (status)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta($sql);
+}
+
+// =========================================
+// 順位トラッキング: DB テーブル作成
+// =========================================
+
+function gcrev_rank_keywords_create_table(): void {
+    global $wpdb;
+
+    $table = $wpdb->prefix . 'gcrev_rank_keywords';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        keyword VARCHAR(255) NOT NULL,
+        target_domain VARCHAR(255) NOT NULL,
+        location_code INT NOT NULL DEFAULT 1009312,
+        language_code VARCHAR(10) NOT NULL DEFAULT 'ja',
+        enabled TINYINT(1) NOT NULL DEFAULT 1,
+        sort_order INT NOT NULL DEFAULT 0,
+        memo VARCHAR(500) DEFAULT '',
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY user_keyword_loc (user_id, keyword, location_code),
+        KEY user_enabled (user_id, enabled)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta($sql);
+}
+
+function gcrev_rank_results_create_table(): void {
+    global $wpdb;
+
+    $table = $wpdb->prefix . 'gcrev_rank_results';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        keyword_id BIGINT(20) UNSIGNED NOT NULL,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        device VARCHAR(10) NOT NULL,
+        rank_group SMALLINT UNSIGNED NULL,
+        rank_absolute SMALLINT UNSIGNED NULL,
+        found_url VARCHAR(512) NULL,
+        found_domain VARCHAR(255) NULL,
+        is_ranked TINYINT(1) NOT NULL DEFAULT 0,
+        serp_type VARCHAR(30) NOT NULL DEFAULT 'organic',
+        api_source VARCHAR(30) NOT NULL DEFAULT 'dataforseo',
+        iso_year_week CHAR(8) NOT NULL,
+        fetched_at DATETIME NOT NULL,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY kw_device_week (keyword_id, device, iso_year_week),
+        KEY user_fetched (user_id, fetched_at),
+        KEY keyword_id (keyword_id)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
