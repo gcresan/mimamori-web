@@ -616,6 +616,30 @@ get_header();
 }
 .meo-retry-btn:hover { background: #f9fafb; }
 
+/* MEO History Table */
+.meo-history-wrap {
+    margin-top: 20px; background: #fff; border: 1px solid #e5e7eb;
+    border-radius: 12px; padding: 20px;
+}
+.meo-history-title {
+    font-weight: 600; font-size: 15px; color: #1a1a1a; margin-bottom: 12px;
+}
+.meo-history-table { width: 100%; border-collapse: collapse; }
+.meo-history-table th {
+    background: #f9fafb; font-size: 11px; font-weight: 600; color: #6b7280;
+    padding: 10px 14px; text-align: center; border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+}
+.meo-history-table th:first-child { text-align: left; }
+.meo-history-table td {
+    padding: 12px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #1a1a1a;
+    vertical-align: middle; text-align: center;
+}
+.meo-history-table td:first-child { text-align: left; font-size: 12px; }
+.meo-history-table tr:last-child td { border-bottom: none; }
+.meo-trend-up { color: #16a34a; font-weight: 600; font-size: 11px; }
+.meo-trend-down { color: #dc2626; font-weight: 600; font-size: 11px; }
+.meo-trend-same { color: #9ca3af; font-size: 11px; }
+
 /* Responsive */
 @media (max-width: 768px) {
     .drt-section { padding: 20px 16px; }
@@ -1517,6 +1541,20 @@ foreach ($highlight_items as $highlight):
     <!-- メトリクスカード 4枚 -->
     <div class="meo-metrics-cards" id="meoMetricsCards"></div>
 
+    <!-- 週次履歴テーブル -->
+    <div class="meo-history-wrap" id="meoHistoryWrap" style="display:none;">
+        <div class="meo-history-title">&#x1F4CA; 週次推移</div>
+        <div class="meo-help" style="margin-bottom:8px;">
+            <span style="color:#6b7280; font-size:12px;">毎週月曜日に自動計測しています。</span>
+        </div>
+        <div class="meo-table-scroll">
+            <table class="meo-history-table">
+                <thead id="meoHistoryHead"></thead>
+                <tbody id="meoHistoryBody"></tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- 店舗情報 -->
     <div class="meo-store-card" id="meoStoreCard" style="display:none;"></div>
 
@@ -1546,17 +1584,12 @@ foreach ($highlight_items as $highlight):
         <div class="drt-header__title">
             &#x1F4C8; 計測キーワードランキング
         </div>
-        <div class="drt-header__actions">
-            <button class="drt-btn drt-btn--primary" id="drtFetchAllBtn">
-                <span class="drt-btn__icon">&#x21BB;</span>
-                最新の情報を見る
-            </button>
-        </div>
     </div>
 
     <div class="drt-help">
         Google で検索した時に、あなたのホームページが<strong>何番目に表示されるか</strong>をチェックしています。
         数字が小さいほど上位表示されています。「<strong>圏外</strong>」は100位以内に表示されなかったことを意味します。
+        <br><span style="color:#6b7280; font-size:12px;">毎週月曜日に自動計測しています。</span>
     </div>
 
     <div class="drt-device-toggle" id="drtDeviceToggle">
@@ -2338,8 +2371,8 @@ foreach ($highlight_items as $highlight):
     var wpNonce  = '<?php echo esc_js(wp_create_nonce('wp_rest')); ?>';
     var drtDevice = 'mobile';
     var drtRankData = [];
-    var drtDateLabels = [];
-    var drtDateKeys = [];
+    var drtWeekLabels = [];
+    var drtWeekKeys = [];
 
     // SERP Modal state
     var drtSerpDevice = 'mobile';
@@ -2366,44 +2399,6 @@ foreach ($highlight_items as $highlight):
     });
 
     // =========================================================
-    // Fetch All (refresh)
-    // =========================================================
-    document.getElementById('drtFetchAllBtn').addEventListener('click', function() {
-        var btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="drt-btn__icon">&#x22EF;</span> 取得中...';
-        drtShowProgress(true);
-
-        fetch(restBase + 'rank-tracker/fetch-all', {
-            method: 'POST',
-            headers: { 'X-WP-Nonce': wpNonce },
-            credentials: 'same-origin'
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(json) {
-            btn.disabled = false;
-            btn.innerHTML = '<span class="drt-btn__icon">&#x21BB;</span> 最新の情報を見る';
-            if (json.success && json.data) {
-                drtShowProgressComplete(json.data.fetched || 0);
-                setTimeout(function() {
-                    drtShowProgress(false);
-                    drtShowToast((json.data.fetched || 0) + '件のキーワードの最新順位を取得しました。');
-                    fetchDrtRankings();
-                }, 1200);
-            } else {
-                drtShowProgress(false);
-                drtShowToast(json.message || '取得に失敗しました。', 'error');
-            }
-        })
-        .catch(function() {
-            btn.disabled = false;
-            btn.innerHTML = '<span class="drt-btn__icon">&#x21BB;</span> 最新の情報を見る';
-            drtShowProgress(false);
-            drtShowToast('通信エラーが発生しました。', 'error');
-        });
-    });
-
-    // =========================================================
     // Fetch rankings
     // =========================================================
     function fetchDrtRankings() {
@@ -2421,8 +2416,8 @@ foreach ($highlight_items as $highlight):
             document.getElementById('drtLoading').style.display = 'none';
             if (json.success && json.data) {
                 drtRankData = json.data.keywords || [];
-                drtDateLabels = json.data.dates || [];
-                drtDateKeys = json.data.date_keys || [];
+                drtWeekLabels = json.data.week_labels || [];
+                drtWeekKeys = json.data.weeks || [];
                 drtSummary = json.data.summary || {};
                 renderDrtSummary();
                 renderDrtTable();
@@ -2476,8 +2471,8 @@ foreach ($highlight_items as $highlight):
         hHtml += '<th>キーワード</th>';
         hHtml += '<th>現在</th>';
         hHtml += '<th>前回</th>';
-        for (var d = 0; d < drtDateLabels.length; d++) {
-            hHtml += '<th style="text-align:center;">' + drtDateLabels[d] + '</th>';
+        for (var d = 0; d < drtWeekLabels.length; d++) {
+            hHtml += '<th style="text-align:center;">' + drtWeekLabels[d] + '</th>';
         }
         hHtml += '<th>操作</th>';
         hHtml += '</tr>';
@@ -2489,7 +2484,7 @@ foreach ($highlight_items as $highlight):
             var kw = drtRankData[i];
             var dev = kw[drtDevice];
             var otherDev = kw[drtDevice === 'mobile' ? 'desktop' : 'mobile'];
-            var daily = kw.daily ? kw.daily[drtDevice] : {};
+            var weekly = kw.weekly ? kw.weekly[drtDevice] : {};
             var accent = drtGetAccent(dev);
 
             html += '<tr>';
@@ -2515,11 +2510,11 @@ foreach ($highlight_items as $highlight):
             // Previous rank
             html += '<td>' + drtFormatPrev(dev) + '</td>';
 
-            // Daily columns (7 days)
-            if (drtDateKeys) {
-                for (var d = 0; d < drtDateKeys.length; d++) {
-                    var dayData = daily ? daily[drtDateKeys[d]] : null;
-                    html += '<td class="drt-daily">' + drtFormatDaily(dayData) + '</td>';
+            // Weekly columns (6 weeks)
+            if (drtWeekKeys) {
+                for (var d = 0; d < drtWeekKeys.length; d++) {
+                    var weekData = weekly ? weekly[drtWeekKeys[d]] : null;
+                    html += '<td class="drt-daily">' + drtFormatDaily(weekData) + '</td>';
                 }
             }
 
@@ -2848,6 +2843,7 @@ foreach ($highlight_items as $highlight):
             btn.classList.add('active');
             currentDevice = btn.dataset.device;
             meoFetchData(currentDevice, currentKeywordId);
+            meoRenderHistory(); // デバイス切替時に履歴も再描画
         });
 
         // Keyword selector
@@ -2863,6 +2859,7 @@ foreach ($highlight_items as $highlight):
         });
 
         meoFetchData('mobile', 0);
+        meoFetchHistory();
     }
 
     // ----- Fetch Data -----
@@ -3186,6 +3183,123 @@ foreach ($highlight_items as $highlight):
         var el = document.createElement('span');
         el.textContent = str;
         return el.innerHTML;
+    }
+
+    // ----- MEO History (週次推移) -----
+    var meoHistoryData = null;
+
+    function meoFetchHistory() {
+        fetch(restBase + 'meo/history', {
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+            if (data.success && data.data) {
+                meoHistoryData = data.data;
+                meoRenderHistory();
+            }
+        })
+        .catch(function(err) {
+            console.error('[GCREV][MEO History]', err);
+        });
+    }
+
+    function meoRenderHistory() {
+        var wrap = document.getElementById('meoHistoryWrap');
+        var thead = document.getElementById('meoHistoryHead');
+        var tbody = document.getElementById('meoHistoryBody');
+
+        if (!meoHistoryData || !meoHistoryData.keywords || meoHistoryData.keywords.length === 0) {
+            wrap.style.display = 'none';
+            return;
+        }
+
+        var weeks = meoHistoryData.weeks || [];
+        var labels = meoHistoryData.week_labels || [];
+
+        if (weeks.length === 0) {
+            wrap.style.display = 'none';
+            return;
+        }
+
+        // 最初のキーワード（MEOでは通常1キーワード）のデータを使用
+        var kwData = meoHistoryData.keywords[0];
+        var weekly = kwData.weekly ? kwData.weekly[currentDevice] : {};
+
+        if (!weekly || Object.keys(weekly).length === 0) {
+            // データ蓄積中の表示
+            wrap.style.display = '';
+            thead.innerHTML = '';
+            tbody.innerHTML = '<tr><td colspan="' + (weeks.length + 1) + '" style="text-align:center;color:#9ca3af;padding:24px;">'
+                + '&#x1F4CA; データを蓄積中です。毎週月曜日に自動計測されます。</td></tr>';
+            return;
+        }
+
+        wrap.style.display = '';
+
+        // Header
+        var hHtml = '<tr><th style="min-width:140px;">指標</th>';
+        for (var i = 0; i < labels.length; i++) {
+            hHtml += '<th style="text-align:center;min-width:60px;">' + labels[i] + '</th>';
+        }
+        hHtml += '</tr>';
+        thead.innerHTML = hHtml;
+
+        // Rows for each metric
+        var metrics = [
+            { key: 'maps_rank', label: '\uD83D\uDDFA\uFE0F マップ順位', unit: '位', lower_is_better: true },
+            { key: 'finder_rank', label: '\uD83D\uDD0D 地域順位', unit: '位', lower_is_better: true },
+            { key: 'rating', label: '\u2B50 口コミ評価', unit: '', lower_is_better: false },
+            { key: 'reviews', label: '\uD83D\uDCAC 口コミ件数', unit: '件', lower_is_better: false }
+        ];
+
+        var bHtml = '';
+        for (var m = 0; m < metrics.length; m++) {
+            var met = metrics[m];
+            bHtml += '<tr>';
+            bHtml += '<td style="font-weight:500;white-space:nowrap;">' + met.label + '</td>';
+
+            var prevVal = null;
+            for (var w = 0; w < weeks.length; w++) {
+                var wData = weekly[weeks[w]];
+                var val = wData ? wData[met.key] : null;
+
+                var display = '-';
+                var trendHtml = '';
+
+                if (val !== null && val !== undefined) {
+                    if (met.key === 'rating') {
+                        display = parseFloat(val).toFixed(1);
+                    } else {
+                        display = val + '<small>' + met.unit + '</small>';
+                    }
+
+                    // Trend arrow
+                    if (prevVal !== null && prevVal !== undefined) {
+                        var diff = val - prevVal;
+                        if (diff !== 0) {
+                            var isGood = met.lower_is_better ? (diff < 0) : (diff > 0);
+                            if (isGood) {
+                                trendHtml = ' <span class="meo-trend-up">\u2191</span>';
+                            } else {
+                                trendHtml = ' <span class="meo-trend-down">\u2193</span>';
+                            }
+                        } else {
+                            trendHtml = ' <span class="meo-trend-same">\u2192</span>';
+                        }
+                    }
+                }
+
+                bHtml += '<td style="text-align:center;">' + display + trendHtml + '</td>';
+                if (val !== null && val !== undefined) {
+                    prevVal = val;
+                }
+            }
+            bHtml += '</tr>';
+        }
+
+        tbody.innerHTML = bHtml;
     }
 
     // ----- Go -----

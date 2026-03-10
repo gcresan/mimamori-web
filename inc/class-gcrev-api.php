@@ -471,6 +471,13 @@ class Gcrev_Insight_API {
             ],
         ]);
 
+        // MEO 履歴（週次推移）
+        register_rest_route('gcrev/v1', '/meo/history', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_meo_history' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== v2ダッシュボード用レポート生成 =====
         register_rest_route('gcrev/v1', '/report/generate-manual', [
             'methods'             => 'POST',
@@ -8698,13 +8705,15 @@ PROMPT;
         $tz  = wp_timezone();
         $now = new \DateTimeImmutable( 'now', $tz );
 
-        // 直近7日分の日付配列を生成（今日含む）
-        $dates = [];
-        for ( $i = 0; $i < 7; $i++ ) {
-            $dates[] = $now->modify( "-{$i} days" )->format( 'Y-m-d' );
+        // 直近6週分の ISO week 配列を生成（古い順）
+        $weeks = [];
+        for ( $i = 5; $i >= 0; $i-- ) {
+            $dt = $now->modify( "-{$i} weeks" );
+            $weeks[] = $dt->format( 'o-\WW' );  // e.g. '2025-W10'
         }
-        // 古い順に並べる
-        $dates = array_reverse( $dates );
+
+        // 週ラベル: gcrev_week_label() で「3/1週」形式
+        $week_labels = array_map( 'gcrev_week_label', $weeks );
 
         // 有効キーワード取得（検索ボリューム・上がりやすさスコア含む）
         $keywords = $wpdb->get_results( $wpdb->prepare(
@@ -8721,9 +8730,10 @@ PROMPT;
             return new \WP_REST_Response([
                 'success' => true,
                 'data'    => [
-                    'keywords' => [],
-                    'dates'    => array_map( function( $d ) { return substr( $d, 5 ); }, $dates ),
-                    'summary'  => $this->rank_tracker_empty_summary_v2(),
+                    'keywords'    => [],
+                    'weeks'       => $weeks,
+                    'week_labels' => $week_labels,
+                    'summary'     => $this->rank_tracker_empty_summary_v2(),
                 ],
             ]);
         }
@@ -8731,11 +8741,11 @@ PROMPT;
         $keyword_ids = array_column( $keywords, 'id' );
         $placeholders = implode( ',', array_fill( 0, count( $keyword_ids ), '%d' ) );
 
-        // 直近30日分のすべての結果を一括取得（forward-fill用）
-        $since = $now->modify( '-30 days' )->format( 'Y-m-d 00:00:00' );
+        // 直近45日分のすべての結果を一括取得（6週 = 42日 + バッファ）
+        $since = $now->modify( '-45 days' )->format( 'Y-m-d 00:00:00' );
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $all_results = $wpdb->get_results( $wpdb->prepare(
-            "SELECT keyword_id, device, rank_group, is_ranked, fetched_at
+            "SELECT keyword_id, device, rank_group, is_ranked, iso_year_week, fetched_at
              FROM {$res_table}
              WHERE keyword_id IN ({$placeholders}) AND fetched_at >= %s
              ORDER BY fetched_at DESC",
@@ -8766,7 +8776,7 @@ PROMPT;
                 'opportunity_reasons' => $kw['opportunity_reasons'] ? json_decode( $kw['opportunity_reasons'], true ) : null,
                 'desktop'             => null,
                 'mobile'              => null,
-                'daily'               => [ 'desktop' => [], 'mobile' => [] ],
+                'weekly'              => [ 'desktop' => [], 'mobile' => [] ],
                 'fetched_at'          => null,
             ];
 
@@ -8778,13 +8788,13 @@ PROMPT;
                 // 最新
                 $l = ! empty( $history ) ? $history[0] : null;
 
-                // 前回（最新と異なる日付のもの）
+                // 前回（最新と異なる iso_year_week のもの）
                 $p = null;
                 if ( $l ) {
-                    $latest_date = substr( $l['fetched_at'], 0, 10 );
+                    $latest_week = $l['iso_year_week'] ?? '';
                     foreach ( $history as $h ) {
-                        $h_date = substr( $h['fetched_at'], 0, 10 );
-                        if ( $h_date !== $latest_date ) {
+                        $h_week = $h['iso_year_week'] ?? '';
+                        if ( $h_week !== '' && $h_week !== $latest_week ) {
                             $p = $h;
                             break;
                         }
@@ -8816,23 +8826,31 @@ PROMPT;
                     }
                 }
 
-                // 直近7日分の daily データ（forward-fill）
-                foreach ( $dates as $date ) {
-                    $day_end = $date . ' 23:59:59';
-                    $found   = null;
+                // 直近6週分の weekly データ（forward-fill）
+                $last_found = null;
+                foreach ( $weeks as $week ) {
+                    // この週に該当するデータを探す（history は DESC 順）
+                    $found = null;
                     foreach ( $history as $h ) {
-                        if ( $h['fetched_at'] <= $day_end ) {
+                        if ( ( $h['iso_year_week'] ?? '' ) === $week ) {
                             $found = $h;
-                            break; // DESC 順なので最初にマッチしたものが最新
+                            break; // DESC 順なので最初にマッチしたものがその週の最新
                         }
                     }
+
+                    // forward-fill: この週のデータがなければ直前のデータを使う
+                    if ( ! $found && $last_found ) {
+                        $found = $last_found;
+                    }
+
                     if ( $found ) {
-                        $entry['daily'][ $device ][ $date ] = [
+                        $entry['weekly'][ $device ][ $week ] = [
                             'rank'      => $found['is_ranked'] ? (int) $found['rank_group'] : null,
                             'is_ranked' => (bool) $found['is_ranked'],
                         ];
+                        $last_found = $found;
                     } else {
-                        $entry['daily'][ $device ][ $date ] = null;
+                        $entry['weekly'][ $device ][ $week ] = null;
                     }
                 }
             }
@@ -8843,19 +8861,13 @@ PROMPT;
         // サマリー: 順位帯別件数（mobile / desktop 両方計算）
         $summary = $this->rank_tracker_build_summary_v2( $output );
 
-        // 日付表示用（MM/DD 形式）
-        $date_labels = array_map( function( $d ) {
-            $parts = explode( '-', $d );
-            return $parts[1] . '/' . $parts[2];
-        }, $dates );
-
         return new \WP_REST_Response([
             'success' => true,
             'data'    => [
-                'keywords' => $output,
-                'dates'    => $date_labels,
-                'date_keys' => $dates,
-                'summary'  => $summary,
+                'keywords'    => $output,
+                'weeks'       => $weeks,
+                'week_labels' => $week_labels,
+                'summary'     => $summary,
             ],
         ]);
     }
@@ -9393,6 +9405,394 @@ PROMPT;
             '52w' => 52,  // 1年
         ];
         return $map[ $range ] ?? 12;
+    }
+
+    // =========================================================
+    // MEO 週次バッチ取得
+    // =========================================================
+
+    /** @var int MEO チャンクサイズ */
+    private const MEO_FETCH_CHUNK_LIMIT = 5;
+
+    /**
+     * MEO 週次バッチ取得の開始
+     */
+    public function auto_fetch_meo_rankings(): void {
+        $lock_key = 'gcrev_lock_meo_fetch';
+        $lock_ttl = 7200; // 2h
+
+        if ( get_transient( $lock_key ) ) {
+            error_log( '[GCREV][MEO] Lock is active, skipping' );
+            return;
+        }
+        set_transient( $lock_key, 1, $lock_ttl );
+
+        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+            Gcrev_Cron_Logger::start( 'meo_fetch' );
+        }
+
+        error_log( '[GCREV][MEO] Starting weekly MEO fetch' );
+
+        wp_schedule_single_event( time() + 5, 'gcrev_meo_fetch_chunk_event', [ 0, self::MEO_FETCH_CHUNK_LIMIT ] );
+    }
+
+    /**
+     * MEO チャンクフェッチ
+     */
+    public function meo_fetch_chunk( int $offset, int $limit ): void {
+        global $wpdb;
+
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+        $meo_table = $wpdb->prefix . 'gcrev_meo_results';
+
+        // キーワード登録済みユーザーを取得（チャンク）
+        $user_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT DISTINCT user_id FROM {$kw_table}
+             WHERE enabled = 1 AND target_domain != ''
+             ORDER BY user_id ASC
+             LIMIT %d OFFSET %d",
+            $limit, $offset
+        ) );
+
+        if ( empty( $user_ids ) ) {
+            delete_transient( 'gcrev_lock_meo_fetch' );
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::finish( 'meo_fetch' );
+            }
+            error_log( '[GCREV][MEO] Weekly MEO fetch completed' );
+            return;
+        }
+
+        if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
+            error_log( '[GCREV][MEO] DataForSEO not configured, aborting' );
+            delete_transient( 'gcrev_lock_meo_fetch' );
+            return;
+        }
+
+        $tz       = wp_timezone();
+        $now_dt   = new \DateTimeImmutable( 'now', $tz );
+        $iso_week = $now_dt->format( 'o-\WW' );
+
+        foreach ( $user_ids as $uid ) {
+            $uid = (int) $uid;
+
+            // 座標情報の取得（手動 or 自動検出）
+            $meo_lat = (string) get_user_meta( $uid, '_gcrev_meo_lat', true );
+            $meo_lng = (string) get_user_meta( $uid, '_gcrev_meo_lng', true );
+            $meo_radius = (int) get_user_meta( $uid, '_gcrev_meo_radius', true ) ?: 1000;
+
+            if ( $meo_lat === '' || $meo_lng === '' ) {
+                if ( class_exists( 'Gcrev_City_Coordinates' ) ) {
+                    $city_coords = Gcrev_City_Coordinates::get_for_user( $uid );
+                    if ( $city_coords ) {
+                        $meo_lat    = (string) $city_coords['lat'];
+                        $meo_lng    = (string) $city_coords['lng'];
+                        $meo_radius = Gcrev_City_Coordinates::DEFAULT_RADIUS;
+                    }
+                }
+            }
+
+            // 座標が得られなければスキップ
+            if ( $meo_lat === '' || $meo_lng === '' ) {
+                continue;
+            }
+
+            // location_code
+            $settings    = function_exists('gcrev_get_client_settings') ? gcrev_get_client_settings( $uid ) : [];
+            $location_code = (int) ( $settings['location_code'] ?? 2392 );
+
+            // キーワード取得
+            $keywords = $wpdb->get_results( $wpdb->prepare(
+                "SELECT * FROM {$kw_table}
+                 WHERE user_id = %d AND enabled = 1 AND target_domain != ''
+                 ORDER BY sort_order ASC, id ASC",
+                $uid
+            ), ARRAY_A );
+
+            foreach ( $keywords as $kw ) {
+                $kw_id = (int) $kw['id'];
+
+                // 週重複チェック
+                $already = $wpdb->get_var( $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$meo_table}
+                     WHERE keyword_id = %d AND iso_year_week = %s",
+                    $kw_id, $iso_week
+                ) );
+
+                if ( (int) $already > 0 ) {
+                    continue;
+                }
+
+                $target_domain = $kw['target_domain'];
+                $zoom = Gcrev_DataForSEO_Client::radius_to_zoom( $meo_radius );
+                $coordinate_str = Gcrev_DataForSEO_Client::build_coordinate_string(
+                    (float) $meo_lat, (float) $meo_lng, $zoom
+                );
+
+                // mobile と desktop の両方で取得
+                foreach ( ['mobile', 'desktop'] as $device ) {
+                    // Maps SERP
+                    $maps_items = $this->dataforseo->fetch_maps_serp(
+                        $kw['keyword'], $device, $location_code,
+                        $kw['language_code'] ?? 'ja', $coordinate_str
+                    );
+
+                    $maps_rank  = null;
+                    $store      = null;
+                    $competitors = [];
+
+                    if ( ! is_wp_error( $maps_items ) && is_array( $maps_items ) ) {
+                        $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $target_domain );
+                        if ( $my_biz ) {
+                            $maps_rank = (int) ( $my_biz['rank_group'] ?? 0 ) ?: null;
+                            $store     = $this->meo_extract_store_info( $my_biz );
+                        }
+                        // 競合上位10件
+                        $comp_count = 0;
+                        foreach ( $maps_items as $item ) {
+                            if ( $comp_count >= 10 ) break;
+                            if ( empty( $item['title'] ) ) continue;
+                            $item_domain = $item['domain'] ?? '';
+                            $norm_item   = preg_replace( '/^www\./i', '', strtolower( $item_domain ) );
+                            $norm_target = preg_replace( '/^www\./i', '', strtolower( $target_domain ) );
+                            $is_self = ( $norm_item !== '' && $norm_item === $norm_target );
+                            $rating_obj = $item['rating'] ?? [];
+                            $competitors[] = [
+                                'title'         => $item['title'] ?? '',
+                                'rank'          => (int) ( $item['rank_group'] ?? 0 ) ?: null,
+                                'rating'        => $rating_obj['value'] ?? null,
+                                'reviews_count' => $rating_obj['votes_count'] ?? 0,
+                                'is_self'       => $is_self,
+                            ];
+                            $comp_count++;
+                        }
+                    }
+
+                    // Local Finder SERP
+                    $finder_items = $this->dataforseo->fetch_local_finder_serp(
+                        $kw['keyword'], $device, $location_code,
+                        $kw['language_code'] ?? 'ja', $coordinate_str
+                    );
+
+                    $finder_rank = null;
+                    if ( ! is_wp_error( $finder_items ) && is_array( $finder_items ) ) {
+                        $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $target_domain );
+                        if ( $my_finder ) {
+                            $finder_rank = (int) ( $my_finder['rank_group'] ?? 0 ) ?: null;
+                        }
+                    }
+
+                    $rating      = $store['rating'] ?? null;
+                    $reviews_cnt = $store['reviews_count'] ?? null;
+
+                    $this->save_meo_results(
+                        $uid, $kw_id, $device,
+                        $maps_rank, $finder_rank,
+                        $rating !== null ? (float) $rating : null,
+                        $reviews_cnt !== null ? (int) $reviews_cnt : null,
+                        $store, $competitors,
+                        $iso_week
+                    );
+                }
+            }
+
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::log_user( 'meo_fetch', $uid, 'ok' );
+            }
+        }
+
+        // 次のチャンク
+        $next_offset = $offset + $limit;
+        wp_schedule_single_event( time() + 10, 'gcrev_meo_fetch_chunk_event', [ $next_offset, $limit ] );
+        error_log( "[GCREV][MEO] Chunk done (offset={$offset}), next scheduled at offset={$next_offset}" );
+    }
+
+    /**
+     * MEO 結果を保存
+     */
+    private function save_meo_results(
+        int $user_id,
+        int $keyword_id,
+        string $device,
+        ?int $maps_rank,
+        ?int $finder_rank,
+        ?float $rating,
+        ?int $reviews_count,
+        ?array $store_data,
+        ?array $competitors_data,
+        string $iso_week
+    ): bool {
+        global $wpdb;
+
+        $table  = $wpdb->prefix . 'gcrev_meo_results';
+        $tz     = wp_timezone();
+        $now_dt = new \DateTimeImmutable( 'now', $tz );
+        $now    = $now_dt->format( 'Y-m-d H:i:s' );
+        $date   = $now_dt->format( 'Y-m-d' );
+
+        $store_json = $store_data ? wp_json_encode( $store_data, JSON_UNESCAPED_UNICODE ) : null;
+        $comp_json  = $competitors_data ? wp_json_encode( $competitors_data, JSON_UNESCAPED_UNICODE ) : null;
+
+        $maps_rank_sql   = $maps_rank !== null ? $wpdb->prepare( '%d', $maps_rank ) : 'NULL';
+        $finder_rank_sql = $finder_rank !== null ? $wpdb->prepare( '%d', $finder_rank ) : 'NULL';
+        $rating_sql      = $rating !== null ? $wpdb->prepare( '%f', $rating ) : 'NULL';
+        $reviews_sql     = $reviews_count !== null ? $wpdb->prepare( '%d', $reviews_count ) : 'NULL';
+        $store_sql       = $store_json !== null ? $wpdb->prepare( '%s', $store_json ) : 'NULL';
+        $comp_sql        = $comp_json !== null ? $wpdb->prepare( '%s', $comp_json ) : 'NULL';
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $sql = $wpdb->prepare(
+            "INSERT INTO {$table}
+             (user_id, keyword_id, device, maps_rank, finder_rank, rating, reviews_count,
+              store_data, competitors_data, iso_year_week, fetch_date, fetched_at, created_at)
+             VALUES (%d, %d, %s, {$maps_rank_sql}, {$finder_rank_sql}, {$rating_sql}, {$reviews_sql},
+                     {$store_sql}, {$comp_sql}, %s, %s, %s, %s)
+             ON DUPLICATE KEY UPDATE
+              maps_rank        = VALUES(maps_rank),
+              finder_rank      = VALUES(finder_rank),
+              rating           = VALUES(rating),
+              reviews_count    = VALUES(reviews_count),
+              store_data       = VALUES(store_data),
+              competitors_data = VALUES(competitors_data),
+              fetched_at       = VALUES(fetched_at)",
+            $user_id,
+            $keyword_id,
+            $device,
+            $iso_week,
+            $date,
+            $now,
+            $now
+        );
+
+        $result = $wpdb->query( $sql );
+        return $result !== false;
+    }
+
+    // =========================================================
+    // MEO 履歴（週次推移）
+    // =========================================================
+
+    /**
+     * GET /meo/history — 直近6週分の MEO 計測履歴
+     */
+    public function rest_get_meo_history( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+
+        $user_id = get_current_user_id();
+
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+        $meo_table = $wpdb->prefix . 'gcrev_meo_results';
+
+        $tz  = wp_timezone();
+        $now = new \DateTimeImmutable( 'now', $tz );
+
+        // 直近6週分の ISO week 配列（古い順）
+        $weeks = [];
+        for ( $i = 5; $i >= 0; $i-- ) {
+            $dt = $now->modify( "-{$i} weeks" );
+            $weeks[] = $dt->format( 'o-\WW' );
+        }
+        $week_labels = array_map( 'gcrev_week_label', $weeks );
+
+        // ユーザーのキーワード取得
+        $keywords = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, keyword FROM {$kw_table}
+             WHERE user_id = %d AND enabled = 1
+             ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        if ( empty( $keywords ) ) {
+            return new \WP_REST_Response([
+                'success' => true,
+                'data'    => [
+                    'keywords'    => [],
+                    'weeks'       => $weeks,
+                    'week_labels' => $week_labels,
+                    'latest'      => null,
+                ],
+            ]);
+        }
+
+        $keyword_ids  = array_column( $keywords, 'id' );
+        $placeholders = implode( ',', array_fill( 0, count( $keyword_ids ), '%d' ) );
+
+        // 6週分のデータを取得
+        $week_placeholders = implode( ',', array_fill( 0, count( $weeks ), '%s' ) );
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT keyword_id, device, maps_rank, finder_rank, rating, reviews_count,
+                    store_data, competitors_data, iso_year_week, fetched_at
+             FROM {$meo_table}
+             WHERE user_id = %d
+               AND keyword_id IN ({$placeholders})
+               AND iso_year_week IN ({$week_placeholders})
+             ORDER BY fetched_at DESC",
+            ...array_merge( [ $user_id ], $keyword_ids, $weeks )
+        ), ARRAY_A );
+
+        // keyword_id × device × week でグループ化
+        $grouped = [];
+        foreach ( $rows as $r ) {
+            $gkey = $r['keyword_id'] . '_' . $r['device'] . '_' . $r['iso_year_week'];
+            if ( ! isset( $grouped[ $gkey ] ) ) {
+                $grouped[ $gkey ] = $r; // DESC 順なので最初が最新
+            }
+        }
+
+        // 最新週の詳細データ用
+        $latest_week = end( $weeks );
+        $latest_data = null;
+
+        $output = [];
+        foreach ( $keywords as $kw ) {
+            $kw_id = (int) $kw['id'];
+            $entry = [
+                'keyword_id' => $kw_id,
+                'keyword'    => $kw['keyword'],
+                'weekly'     => [ 'mobile' => [], 'desktop' => [] ],
+            ];
+
+            foreach ( ['mobile', 'desktop'] as $device ) {
+                foreach ( $weeks as $week ) {
+                    $gkey = $kw_id . '_' . $device . '_' . $week;
+                    $r    = $grouped[ $gkey ] ?? null;
+
+                    if ( $r ) {
+                        $entry['weekly'][ $device ][ $week ] = [
+                            'maps_rank'   => $r['maps_rank'] !== null ? (int) $r['maps_rank'] : null,
+                            'finder_rank' => $r['finder_rank'] !== null ? (int) $r['finder_rank'] : null,
+                            'rating'      => $r['rating'] !== null ? (float) $r['rating'] : null,
+                            'reviews'     => $r['reviews_count'] !== null ? (int) $r['reviews_count'] : null,
+                        ];
+
+                        // 最新週のデータ（store_data, competitors_data）
+                        if ( $week === $latest_week && $device === 'mobile' && $r['store_data'] && ! $latest_data ) {
+                            $latest_data = [
+                                'store'       => json_decode( $r['store_data'], true ),
+                                'competitors' => $r['competitors_data'] ? json_decode( $r['competitors_data'], true ) : [],
+                                'maps_rank'   => $r['maps_rank'] !== null ? (int) $r['maps_rank'] : null,
+                                'finder_rank' => $r['finder_rank'] !== null ? (int) $r['finder_rank'] : null,
+                            ];
+                        }
+                    } else {
+                        $entry['weekly'][ $device ][ $week ] = null;
+                    }
+                }
+            }
+
+            $output[] = $entry;
+        }
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'data'    => [
+                'keywords'    => $output,
+                'weeks'       => $weeks,
+                'week_labels' => $week_labels,
+                'latest'      => $latest_data,
+            ],
+        ]);
     }
 
     /**
