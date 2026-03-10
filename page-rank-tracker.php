@@ -517,6 +517,39 @@ get_header();
     padding: 0;
 }
 
+/* --- Modal toolbar (device toggle + Google link) --- */
+.rt-modal__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px 0;
+    gap: 12px;
+}
+.rt-device-toggle--modal {
+    margin-bottom: 0;
+}
+.rt-serp-google-link {
+    font-size: 12.5px;
+    color: var(--mw-primary-blue, #568184);
+    text-decoration: none;
+    white-space: nowrap;
+    opacity: 0.75;
+    transition: opacity 0.2s;
+}
+.rt-serp-google-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+/* --- SERP note --- */
+.rt-serp-note {
+    padding: 8px 24px 12px;
+    font-size: 12px;
+    color: #8b8f96;
+    line-height: 1.7;
+    border-bottom: 1px solid #f0f0f0;
+}
+
 /* SERP table inside modal */
 .rt-serp-table {
     width: 100%;
@@ -816,6 +849,16 @@ get_header();
             <div class="rt-modal__title" id="serpModalTitle">上位ランキング</div>
             <button class="rt-modal__close" onclick="closeSerpModal()">&times;</button>
         </div>
+        <div class="rt-modal__toolbar">
+            <div class="rt-device-toggle rt-device-toggle--modal" id="serpDeviceToggle">
+                <button class="rt-device-btn active" data-device="mobile" onclick="switchSerpDevice('mobile')">スマホ</button>
+                <button class="rt-device-btn" data-device="desktop" onclick="switchSerpDevice('desktop')">PC</button>
+            </div>
+            <a class="rt-serp-google-link" id="serpGoogleLink" href="#" target="_blank" rel="noopener">Google検索結果を見る →</a>
+        </div>
+        <div class="rt-serp-note">
+            順位は、指定条件で取得した参考値です。実際のGoogle検索結果は、地域・端末・検索設定・時間帯などにより異なる場合があります。
+        </div>
         <div class="rt-modal__body" id="serpModalBody">
             <div class="rt-loading">読み込み中...</div>
         </div>
@@ -844,6 +887,10 @@ get_header();
     var kwDefaultDomain = '';
     var editingId = 0;
     var manualFetchLimit = { daily_used: 0, daily_limit: 5, daily_remaining: 5, is_admin: false };
+
+    // SERP Modal state
+    var serpModalDevice = 'mobile';
+    var serpModalKeywordId = null;
 
     // =========================================================
     // Init
@@ -1173,27 +1220,44 @@ get_header();
     // =========================================================
     // SERP Top modal
     // =========================================================
-    window.openSerpModal = function(keywordId) {
-        var modal = document.getElementById('serpModal');
-        var body = document.getElementById('serpModalBody');
-        var title = document.getElementById('serpModalTitle');
 
-        if (!modal || !body || !title) {
-            console.error('[SerpTop] Modal elements not found');
-            return;
-        }
-
-        // Find keyword name
-        var kw = null;
+    /** キーワードIDからrankDataのオブジェクトを探す */
+    function findKeywordById(keywordId) {
         for (var i = 0; i < rankData.length; i++) {
-            if (rankData[i].keyword_id == keywordId) { kw = rankData[i]; break; }
+            if (rankData[i].keyword_id == keywordId) return rankData[i];
         }
-        title.textContent = (kw ? '「' + kw.keyword + '」' : '') + ' 上位ランキング (' + (currentDevice === 'mobile' ? 'スマホ' : 'PC') + ')';
+        return null;
+    }
+
+    /** モーダルタイトルを更新 */
+    function updateSerpModalTitle() {
+        var title = document.getElementById('serpModalTitle');
+        if (!title) return;
+        var kw = findKeywordById(serpModalKeywordId);
+        title.textContent = (kw ? '「' + kw.keyword + '」' : '') + ' 上位ランキング (' + (serpModalDevice === 'mobile' ? 'スマホ' : 'PC') + ')';
+    }
+
+    /** Google検索リンクを更新 */
+    function updateSerpGoogleLink() {
+        var link = document.getElementById('serpGoogleLink');
+        if (!link) return;
+        var kw = findKeywordById(serpModalKeywordId);
+        if (kw) {
+            link.href = 'https://www.google.co.jp/search?q=' + encodeURIComponent(kw.keyword);
+            link.style.display = '';
+        } else {
+            link.style.display = 'none';
+        }
+    }
+
+    /** SERPデータをAPIから取得して表示 */
+    function fetchSerpData(keywordId, device) {
+        var body = document.getElementById('serpModalBody');
+        if (!body) return;
 
         body.innerHTML = '<div class="rt-loading">上位サイトを取得中...</div>';
-        modal.classList.add('active');
 
-        fetch('/wp-json/gcrev/v1/rank-tracker/serp-top?keyword_id=' + encodeURIComponent(keywordId) + '&device=' + encodeURIComponent(currentDevice), {
+        fetch('/wp-json/gcrev/v1/rank-tracker/serp-top?keyword_id=' + encodeURIComponent(keywordId) + '&device=' + encodeURIComponent(device), {
             headers: { 'X-WP-Nonce': wpNonce },
             credentials: 'same-origin'
         })
@@ -1216,6 +1280,41 @@ get_header();
             console.error('[SerpTop]', err);
             body.innerHTML = '<div class="rt-loading" style="color:#ef4444;">' + escHtml(err.message || '通信エラーが発生しました。') + '</div>';
         });
+    }
+
+    /** モーダルを開く — 親画面のデバイス状態を引き継ぐ */
+    window.openSerpModal = function(keywordId) {
+        var modal = document.getElementById('serpModal');
+        if (!modal) { console.error('[SerpTop] Modal not found'); return; }
+
+        // 親画面のデバイス状態を引き継ぎ
+        serpModalDevice = currentDevice;
+        serpModalKeywordId = keywordId;
+
+        // モーダル内トグルを同期
+        document.querySelectorAll('#serpDeviceToggle .rt-device-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.device === serpModalDevice);
+        });
+
+        updateSerpModalTitle();
+        updateSerpGoogleLink();
+        modal.classList.add('active');
+        fetchSerpData(keywordId, serpModalDevice);
+    };
+
+    /** モーダル内のデバイス切替 */
+    window.switchSerpDevice = function(device) {
+        if (device === serpModalDevice) return;
+        serpModalDevice = device;
+
+        // トグルの active 切替
+        document.querySelectorAll('#serpDeviceToggle .rt-device-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.device === device);
+        });
+
+        updateSerpModalTitle();
+        updateSerpGoogleLink();
+        fetchSerpData(serpModalKeywordId, device);
     };
 
     window.closeSerpModal = function() {
