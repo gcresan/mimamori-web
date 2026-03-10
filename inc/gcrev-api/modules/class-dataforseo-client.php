@@ -371,15 +371,14 @@ class Gcrev_DataForSEO_Client {
             Gcrev_Rate_Limiter::check_and_wait( 'dataforseo_kw', 10 );
         }
 
-        // keyword_overview/live はキーワード単位でタスク要素を送信
-        $post_data = [];
-        foreach ( $keywords as $kw ) {
-            $post_data[] = [
-                'keyword'       => $kw,
+        // keyword_overview/live は keywords（複数形・配列）で送信
+        $post_data = [
+            [
+                'keywords'      => array_values( $keywords ),
                 'location_code' => $location_code,
                 'language_code' => $language_code,
-            ];
-        }
+            ]
+        ];
 
         $response = $this->api_request( '/dataforseo_labs/google/keyword_overview/live', $post_data );
 
@@ -418,28 +417,26 @@ class Gcrev_DataForSEO_Client {
             if ( (int) ( $task['status_code'] ?? 0 ) !== 20000 ) {
                 continue;
             }
-            $task_result = $task['result'][0] ?? null;
-            if ( ! $task_result ) {
-                continue;
-            }
+            // keywords 配列形式: result[] に各キーワードの結果が並ぶ
+            foreach ( ( $task['result'] ?? [] ) as $task_result ) {
+                $kw = $task_result['keyword'] ?? '';
+                if ( $kw === '' ) {
+                    continue;
+                }
 
-            $kw = $task_result['keyword'] ?? '';
-            if ( $kw === '' ) {
-                continue;
-            }
+                // items[0].keyword_properties.keyword_difficulty から難易度取得
+                $item       = $task_result['items'][0] ?? null;
+                $difficulty = null;
+                if ( $item ) {
+                    $difficulty = $item['keyword_properties']['keyword_difficulty'] ?? null;
+                }
 
-            // items[0].keyword_properties.keyword_difficulty から難易度取得
-            $item       = $task_result['items'][0] ?? null;
-            $difficulty = null;
-            if ( $item ) {
-                $difficulty = $item['keyword_properties']['keyword_difficulty'] ?? null;
+                $norm        = $this->normalize_keyword( $kw );
+                $original_kw = $normalized_to_original[ $norm ] ?? $kw;
+                $results[ $original_kw ] = [
+                    'keyword_difficulty' => $difficulty,
+                ];
             }
-
-            $norm        = $this->normalize_keyword( $kw );
-            $original_kw = $normalized_to_original[ $norm ] ?? $kw;
-            $results[ $original_kw ] = [
-                'keyword_difficulty' => $difficulty,
-            ];
         }
 
         return $results;
