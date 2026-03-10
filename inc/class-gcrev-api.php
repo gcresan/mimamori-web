@@ -4081,14 +4081,17 @@ class Gcrev_Insight_API {
     }
 
     /**
-     * location_code → 地域ラベル変換
+     * location_code → 計測エリアラベル変換
+     *
+     * 将来的に location_coordinate（緯度経度）や半径指定に対応する際は
+     * この関数を拡張して「松山市駅周辺（半径1km）」等を返すようにする。
      *
      * @param int $code DataForSEO location code
      * @return string
      */
     private function meo_get_location_label( int $code ): string {
         $map = [
-            2392    => '日本全国',
+            2392    => '日本（広域）',
             1009283 => '東京都',
             1009303 => '大阪府',
             1009269 => '愛知県',

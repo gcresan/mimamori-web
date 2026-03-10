@@ -458,20 +458,24 @@ get_header();
     padding: 30px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
-.meo-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 16px; flex-wrap: wrap; gap: 12px;
-}
+.meo-header { margin-bottom: 16px; }
 .meo-header__title {
     font-size: 18px; font-weight: 700; color: #1a1a1a;
     display: flex; align-items: center; gap: 8px;
 }
-.meo-header__actions { display: flex; gap: 10px; align-items: center; }
 .meo-help { font-size: 13px; color: #6b7280; margin-bottom: 16px; line-height: 1.6; }
-/* Device toggle + region row */
-.meo-device-row {
-    display: flex; align-items: center; gap: 14px; margin-bottom: 18px; flex-wrap: wrap;
+/* Measurement conditions row */
+.meo-conditions {
+    display: flex; align-items: flex-start; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 18px;
 }
+.meo-condition-group { display: flex; flex-direction: column; gap: 4px; }
+.meo-condition-label {
+    font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.meo-condition-value { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+.meo-condition-value--sub { font-size: 11px; font-weight: 400; color: #6b7280; }
+/* Device toggle */
 .meo-device-toggle {
     display: inline-flex; background: #f2f4f7; border-radius: 8px; padding: 3px;
 }
@@ -482,13 +486,17 @@ get_header();
 .meo-device-btn.active {
     background: #fff; color: #1a1a1a; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
-.meo-region-badge {
-    font-size: 12px; color: #568184; background: #f0f7f7; border: 1px solid #d1e3e4;
-    border-radius: 20px; padding: 4px 12px; white-space: nowrap;
+/* Keyword selector with label */
+.meo-keyword-group { display: flex; flex-direction: column; gap: 4px; }
+.meo-keyword-label {
+    font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;
 }
 .meo-keyword-select {
-    font-size: 12px; color: #344054; border: 1px solid #d0d5dd; border-radius: 8px;
-    padding: 5px 10px; background: #fff; cursor: pointer; max-width: 220px;
+    font-size: 13px; color: #344054; border: 1px solid #d0d5dd; border-radius: 8px;
+    padding: 5px 10px; background: #fff; cursor: pointer; max-width: 240px; font-weight: 500;
+}
+.meo-keyword-single {
+    font-size: 13px; font-weight: 600; color: #1a1a1a;
 }
 /* Metrics cards */
 .meo-metrics-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
@@ -501,7 +509,8 @@ get_header();
 .meo-metric-card--gold   { border-left-color: #f59e0b; }
 .meo-metric-card--green  { border-left-color: #22c55e; }
 .meo-metric-icon { font-size: 20px; margin-bottom: 4px; }
-.meo-metric-label { font-size: 11px; color: #6b7280; margin-bottom: 6px; }
+.meo-metric-label { font-size: 12px; color: #1a1a1a; font-weight: 600; margin-bottom: 2px; }
+.meo-metric-sublabel { font-size: 10px; color: #9ca3af; margin-bottom: 6px; line-height: 1.3; }
 .meo-metric-value { font-size: 22px; font-weight: 700; color: #1a1a1a; line-height: 1.2; }
 .meo-metric-value small { font-size: 12px; font-weight: 400; color: #9ca3af; }
 .meo-metric-value--out { font-size: 14px; color: #ef4444; }
@@ -604,9 +613,8 @@ get_header();
     .drt-header { flex-direction: column; align-items: flex-start; }
     .drt-summary-cards { grid-template-columns: repeat(2, 1fr); }
     .meo-section { padding: 20px 16px; }
-    .meo-header { flex-direction: column; align-items: flex-start; }
     .meo-metrics-cards { grid-template-columns: repeat(2, 1fr); }
-    .meo-device-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .meo-conditions { flex-direction: column; gap: 12px; padding: 12px 14px; }
     .meo-store-grid { grid-template-columns: 1fr; gap: 4px; }
     .meo-store-label { font-weight: 600; }
     .meo-reviews-summary { flex-direction: column; align-items: flex-start; }
@@ -1462,9 +1470,6 @@ foreach ($highlight_items as $highlight):
         <div class="meo-header__title">
             &#x1F4CD; Googleマップの見え方
         </div>
-        <div class="meo-header__actions">
-            <a href="<?php echo esc_url( home_url( '/mypage/meo-dashboard/' ) ); ?>" class="drt-btn">詳しく見る &#x2192;</a>
-        </div>
     </div>
 
     <div class="meo-help">
@@ -1472,14 +1477,27 @@ foreach ($highlight_items as $highlight):
         口コミの状況、近くの競合との比較をまとめています。
     </div>
 
-    <!-- デバイストグル + 地域 + キーワード選択 -->
-    <div class="meo-device-row">
-        <div class="meo-device-toggle" id="meoDeviceToggle">
-            <button class="meo-device-btn active" data-device="mobile">スマホ</button>
-            <button class="meo-device-btn" data-device="desktop">PC</button>
+    <!-- 計測条件エリア（将来: 地点・半径・地域セレクト等を追加可能） -->
+    <div class="meo-conditions" id="meoConditions">
+        <!-- デバイス -->
+        <div class="meo-condition-group">
+            <span class="meo-condition-label">表示デバイス</span>
+            <div class="meo-device-toggle" id="meoDeviceToggle">
+                <button class="meo-device-btn active" data-device="mobile">スマホ</button>
+                <button class="meo-device-btn" data-device="desktop">PC</button>
+            </div>
         </div>
-        <span class="meo-region-badge" id="meoRegion">&#x1F4CD; 読み込み中...</span>
-        <select class="meo-keyword-select" id="meoKeywordSelect" style="display:none;"></select>
+        <!-- 計測地点 -->
+        <div class="meo-condition-group" id="meoRegionGroup">
+            <span class="meo-condition-label">計測エリア</span>
+            <span class="meo-condition-value" id="meoRegion">読み込み中...</span>
+        </div>
+        <!-- キーワード -->
+        <div class="meo-keyword-group" id="meoKeywordGroup">
+            <span class="meo-keyword-label">計測キーワード</span>
+            <span class="meo-keyword-single" id="meoKeywordSingle"></span>
+            <select class="meo-keyword-select" id="meoKeywordSelect" style="display:none;"></select>
+        </div>
     </div>
 
     <!-- メトリクスカード 4枚 -->
@@ -2794,6 +2812,7 @@ foreach ($highlight_items as $highlight):
     var meoCompetitorWrap = document.getElementById('meoCompetitorWrap');
     var meoRegion       = document.getElementById('meoRegion');
     var meoKeywordSelect = document.getElementById('meoKeywordSelect');
+    var meoKeywordSingle = document.getElementById('meoKeywordSingle');
     var meoDeviceToggle  = document.getElementById('meoDeviceToggle');
 
     if (!meoSection) return;
@@ -2853,8 +2872,13 @@ foreach ($highlight_items as $highlight):
     function meoRenderAll(data) {
         meoHideStates();
 
-        // Region
-        meoRegion.textContent = '\uD83D\uDCCD ' + (data.region || '');
+        // Region — 計測エリア表示
+        var regionText = data.region || '';
+        if (regionText && regionText !== '日本全国') {
+            meoRegion.textContent = regionText + '周辺';
+        } else {
+            meoRegion.textContent = regionText || '未設定';
+        }
 
         // Keyword selector
         meoRenderKeywords(data.keywords || []);
@@ -2886,10 +2910,22 @@ foreach ($highlight_items as $highlight):
 
     // ----- Render Keywords Selector -----
     function meoRenderKeywords(keywords) {
-        if (keywords.length <= 1) {
+        if (!keywords || keywords.length === 0) {
+            meoKeywordSingle.textContent = '未登録';
             meoKeywordSelect.style.display = 'none';
+            meoKeywordSingle.style.display = '';
             return;
         }
+
+        if (keywords.length === 1) {
+            // 1件のみ — セレクトではなくテキスト表示
+            meoKeywordSingle.textContent = keywords[0].keyword;
+            meoKeywordSelect.style.display = 'none';
+            meoKeywordSingle.style.display = '';
+            return;
+        }
+
+        // 複数キーワード — セレクター表示
         var html = '';
         keywords.forEach(function(kw) {
             html += '<option value="' + kw.id + '"' + (kw.selected ? ' selected' : '') + '>'
@@ -2897,6 +2933,7 @@ foreach ($highlight_items as $highlight):
         });
         meoKeywordSelect.innerHTML = html;
         meoKeywordSelect.style.display = '';
+        meoKeywordSingle.style.display = 'none';
     }
 
     // ----- Render Metrics Cards -----
@@ -2907,22 +2944,30 @@ foreach ($highlight_items as $highlight):
 
         var cards = [
             {
-                icon: '\uD83D\uDDFA\uFE0F', label: 'マップ順位',
+                icon: '\uD83D\uDDFA\uFE0F',
+                label: 'Googleマップ順位',
+                sublabel: 'マップアプリでの表示順',
                 value: maps.rank ? maps.rank + '<small>位</small>' : '<span class="meo-metric-value--out">圏外</span>',
                 cls: 'meo-metric-card--teal'
             },
             {
-                icon: '\uD83D\uDD0D', label: 'ローカル順位',
+                icon: '\uD83D\uDD0D',
+                label: '検索結果の地域順位',
+                sublabel: 'Google検索のローカル表示',
                 value: finder.rank ? finder.rank + '<small>位</small>' : '<span class="meo-metric-value--out">圏外</span>',
                 cls: 'meo-metric-card--blue'
             },
             {
-                icon: '\u2B50', label: '口コミ評価',
+                icon: '\u2B50',
+                label: '口コミ評価',
+                sublabel: 'Googleの平均評価',
                 value: store.rating != null ? store.rating + '<small> / 5.0</small>' : '<small>-</small>',
                 cls: 'meo-metric-card--gold'
             },
             {
-                icon: '\uD83D\uDCAC', label: '口コミ件数',
+                icon: '\uD83D\uDCAC',
+                label: '口コミ件数',
+                sublabel: 'Googleの口コミ総数',
                 value: store.reviews_count != null ? store.reviews_count + '<small>件</small>' : '<small>-</small>',
                 cls: 'meo-metric-card--green'
             }
@@ -2933,6 +2978,7 @@ foreach ($highlight_items as $highlight):
             html += '<div class="meo-metric-card ' + c.cls + '">'
                   + '<div class="meo-metric-icon">' + c.icon + '</div>'
                   + '<div class="meo-metric-label">' + c.label + '</div>'
+                  + '<div class="meo-metric-sublabel">' + c.sublabel + '</div>'
                   + '<div class="meo-metric-value">' + c.value + '</div>'
                   + '</div>';
         });
