@@ -68,7 +68,7 @@
 .service .content-area .sv-hero__brand {
   font-size: 36px;
   font-weight: 900;
-  color: #73a07b;
+  color: #677d6b;
   margin-bottom: 16px;
   letter-spacing: 1px;
 }
@@ -101,20 +101,20 @@
   transition: all 0.2s ease;
 }
 .service .content-area .sv-btn--primary {
-  background: #73a07b;
+  background: #677d6b;
   color: #fff;
 }
 .service .content-area .sv-btn--primary:hover {
-  background: #5f8a67;
+  background: #566a5a;
   transform: translateY(-1px);
 }
 .service .content-area .sv-btn--outline {
   background: transparent;
-  color: #73a07b;
-  border: 1.5px solid #73a07b;
+  color: #677d6b;
+  border: 1.5px solid #677d6b;
 }
 .service .content-area .sv-btn--outline:hover {
-  background: #73a07b;
+  background: #677d6b;
   color: #fff;
 }
 .service .content-area .sv-pain {
@@ -244,7 +244,7 @@
 .service .content-area .sv-plan-table .sv-plan-price {
   font-size: 22px;
   font-weight: 800;
-  color: #73a07b;
+  color: #677d6b;
   line-height: 1.2;
 }
 .service .content-area .sv-plan-table .sv-plan-price small {
@@ -258,16 +258,16 @@
   margin-top: 4px;
 }
 .service .content-area .sv-plan-table .sv-plan-header--recommended {
-  background: white;
-  border-bottom-color: #73a07b;
+  background: #fbfcfb;
+  border-bottom-color: #677d6b;
   position: relative;
 }
 .service .content-area .sv-plan-table .sv-plan-header--recommended .sv-plan-name {
-  color: #73a07b;
+  color: #677d6b;
 }
 .service .content-area .sv-plan-table .sv-recommended-badge {
   display: inline-block;
-  background: #73a07b;
+  background: #677d6b;
   color: #fff;
   font-size: 10px;
   font-weight: 600;
@@ -299,7 +299,7 @@
   color: #2B2B2B;
 }
 .service .content-area .sv-plan-table .sv-check {
-  color: #5B9E65;
+  color: #528C5A;
   font-size: 18px;
   font-weight: 700;
 }
@@ -329,7 +329,7 @@
   overflow: hidden;
 }
 .service .content-area .sv-plan-card--recommended {
-  border-color: #73a07b;
+  border-color: #677d6b;
   box-shadow: 0 2px 8px rgba(43, 43, 43, 0.06);
 }
 .service .content-area .sv-plan-card--premium {
@@ -341,14 +341,14 @@
   text-align: center;
 }
 .sv-plan-card--recommended .service .content-area .sv-plan-card__header {
-  background: white;
+  background: #fbfcfb;
 }
 .sv-plan-card--premium .service .content-area .sv-plan-card__header {
   background: #F5F0EA;
 }
 .service .content-area .sv-plan-card__badge {
   display: inline-block;
-  background: #73a07b;
+  background: #677d6b;
   color: #fff;
   font-size: 10px;
   font-weight: 600;
@@ -363,12 +363,12 @@
   margin-bottom: 4px;
 }
 .sv-plan-card--recommended .service .content-area .sv-plan-card__name {
-  color: #73a07b;
+  color: #677d6b;
 }
 .service .content-area .sv-plan-card__price {
   font-size: 24px;
   font-weight: 800;
-  color: #73a07b;
+  color: #677d6b;
 }
 .service .content-area .sv-plan-card__price small {
   font-size: 12px;
@@ -401,7 +401,7 @@
   border-bottom: none;
 }
 .service .content-area .sv-plan-card__list .sv-check {
-  color: #5B9E65;
+  color: #528C5A;
   font-size: 16px;
   font-weight: 700;
 }
@@ -414,7 +414,7 @@
   padding: 16px 20px;
   background: #F5F4F0;
   border-radius: 6px;
-  border-left: 3px solid #73a07b;
+  border-left: 3px solid #677d6b;
 }
 .service .content-area .sv-plan-notes li {
   font-size: 13px;
@@ -458,7 +458,7 @@
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-  background: #73a07b;
+  background: #677d6b;
   color: #fff;
   border-radius: 50%;
   display: flex;
@@ -515,7 +515,7 @@
   transition: color 0.2s;
 }
 .service .content-area .sv-faq__q:hover {
-  color: #73a07b;
+  color: #677d6b;
 }
 .service .content-area .sv-faq__q span {
   font-size: 12px;

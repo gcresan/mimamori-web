@@ -212,7 +212,7 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
         'white'  => '#ffffff',
         'green'  => '#16a34a',
         'red'    => '#C95A4F',
-        'blue'   => '#73a07b',
+        'blue'   => '#677d6b',
         'orange' => '#ea580c',
         default  => '#111827'
     };
@@ -243,7 +243,7 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
         $keywords = [
             '増加' => '#16a34a', '改善' => '#16a34a',
             '減少' => '#C95A4F', '悪化' => '#C95A4F',
-            '前月比' => '#73a07b', '前年比' => '#73a07b',
+            '前月比' => '#677d6b', '前年比' => '#677d6b',
         ];
         foreach ($keywords as $kw => $kw_color) {
             $text = preg_replace(
@@ -471,7 +471,7 @@ get_header();
     width: 28px;
     height: 28px;
     font-size: 14px;
-    color: var(--mw-primary-blue, #73a07b);
+    color: var(--mw-primary-blue, #677d6b);
     background: none;
     border: 1px solid transparent;
     border-radius: 6px;
@@ -481,10 +481,10 @@ get_header();
     line-height: 1;
 }
 .rpt-year-arrow:hover {
-    background: rgba(90,128,98,0.08);
-    border-color: rgba(90,128,98,0.15);
+    background: rgba(83,115,90,0.08);
+    border-color: rgba(83,115,90,0.15);
     text-decoration: none;
-    color: var(--mw-primary-blue, #73a07b);
+    color: var(--mw-primary-blue, #677d6b);
 }
 .rpt-year-arrow.disabled {
     color: #ccc;
@@ -520,15 +520,15 @@ get_header();
     transition: all 0.15s;
 }
 .rpt-month-btn:hover {
-    background: rgba(90,128,98,0.08);
-    border-color: rgba(90,128,98,0.3);
-    color: var(--mw-primary-blue, #73a07b);
+    background: rgba(83,115,90,0.08);
+    border-color: rgba(83,115,90,0.3);
+    color: var(--mw-primary-blue, #677d6b);
     text-decoration: none;
 }
 .rpt-month-btn.active {
-    background: var(--mw-primary-blue, #73a07b);
+    background: var(--mw-primary-blue, #677d6b);
     color: #fff;
-    border-color: var(--mw-primary-blue, #73a07b);
+    border-color: var(--mw-primary-blue, #677d6b);
     font-weight: 600;
 }
 @media (max-width: 768px) {
@@ -651,7 +651,7 @@ get_header();
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <span class="kpi-title">見られた回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（ページビュー）</span></span>
-                <div class="kpi-icon" style="background: rgba(90,128,98,0.08);">👁️</div>
+                <div class="kpi-icon" style="background: rgba(83,115,90,0.08);">👁️</div>
             </div>
             <div class="kpi-info-tip">ホームページの各ページが何回見られたかの合計です。同じ人が何ページも見ると、その分だけ数が増えます。</div>
             <div class="kpi-value" id="kpi-pageviews">-</div>
@@ -673,7 +673,7 @@ get_header();
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <span class="kpi-title">見に来た人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（ユーザー）</span></span>
-                <div class="kpi-icon" style="background: rgba(91,158,101,0.1);">👥</div>
+                <div class="kpi-icon" style="background: rgba(82,140,90,0.1);">👥</div>
             </div>
             <div class="kpi-info-tip">ホームページを見に来た人数です。同じ人が何回来ても「1人」としてカウントされます。</div>
             <div class="kpi-value" id="kpi-users">-</div>
@@ -684,7 +684,7 @@ get_header();
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <span class="kpi-title">はじめての人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（新規ユーザー）</span></span>
-                <div class="kpi-icon" style="background: rgba(100,140,110,0.1);">✨</div>
+                <div class="kpi-icon" style="background: rgba(88,125,98,0.1);">✨</div>
             </div>
             <div class="kpi-info-tip">この期間にはじめてホームページを訪れた人の数です。新しいお客様候補がどれだけ増えたかがわかります。</div>
             <div class="kpi-value" id="kpi-newusers">-</div>
@@ -717,7 +717,7 @@ get_header();
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span> <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（コンバージョン）</span></span>
-                <div class="kpi-icon" style="background: rgba(91,158,101,0.1);">🎉</div>
+                <div class="kpi-icon" style="background: rgba(82,140,90,0.1);">🎉</div>
             </div>
             <div class="kpi-info-tip">お問い合わせや申込みなど、ホームページの目標が達成された回数です。この数が増えると、ホームページが成果につながっています。</div>
             <div class="kpi-value" id="kpi-conversions">-</div>
@@ -1179,15 +1179,15 @@ function updateKPIDisplay(data) {
         if (data.cv_source === 'hybrid') {
             cvSourceLabel.textContent = '（GA4+手動）';
             cvSourceLabel.style.display = 'inline';
-            cvSourceLabel.style.color = '#5B9E65';
+            cvSourceLabel.style.color = '#528C5A';
         } else if (data.cv_source === 'actual_plus_phone') {
             cvSourceLabel.textContent = '（実質+電話タップ）';
             cvSourceLabel.style.display = 'inline';
-            cvSourceLabel.style.color = '#5B9E65';
+            cvSourceLabel.style.color = '#528C5A';
         } else if (data.cv_source === 'actual') {
             cvSourceLabel.textContent = '（実質）';
             cvSourceLabel.style.display = 'inline';
-            cvSourceLabel.style.color = '#5B9E65';
+            cvSourceLabel.style.color = '#528C5A';
         } else {
             cvSourceLabel.textContent = '';
             cvSourceLabel.style.display = 'none';
@@ -1234,10 +1234,10 @@ function updateChangeIndicator(elementId, trendData) {
 // スパークライン更新（dashboard同一）
 function updateSparklines(dailyData) {
     const sparklineConfigs = [
-        { id: 'sparkline-pageviews', data: dailyData.pageViews, color: '#73a07b' },
+        { id: 'sparkline-pageviews', data: dailyData.pageViews, color: '#677d6b' },
         { id: 'sparkline-sessions', data: dailyData.sessions, color: '#D4A842' },
-        { id: 'sparkline-users', data: dailyData.users, color: '#5B9E65' },
-        { id: 'sparkline-newusers', data: dailyData.newUsers, color: '#8bb893' },
+        { id: 'sparkline-users', data: dailyData.users, color: '#528C5A' },
+        { id: 'sparkline-newusers', data: dailyData.newUsers, color: '#7FA188' },
         { id: 'sparkline-returning', data: dailyData.returning, color: '#C95A4F' },
         { id: 'sparkline-duration', data: dailyData.duration, color: '#f97316' }
     ];
@@ -1252,10 +1252,10 @@ function updateSparklines(dailyData) {
         sparklineConfigs.push({
             id: 'sparkline-conversions',
             data: { labels: cvLabels, values: cvValues },
-            color: '#5B9E65'
+            color: '#528C5A'
         });
     } else if (dailyData.conversions) {
-        sparklineConfigs.push({ id: 'sparkline-conversions', data: dailyData.conversions, color: '#5B9E65' });
+        sparklineConfigs.push({ id: 'sparkline-conversions', data: dailyData.conversions, color: '#528C5A' });
     }
 
     sparklineConfigs.forEach(config => {
@@ -1504,7 +1504,7 @@ function createDeviceChart(devices) {
     if (!devices || devices.length === 0) return;
 
     const labels = [], data = [];
-    const colors = ['#73a07b', '#A68B5B', '#7B8EAA', '#C95A4F', '#8B7BAA'];
+    const colors = ['#677d6b', '#A68B5B', '#7B8EAA', '#C95A4F', '#8B7BAA'];
     devices.slice(0, 5).forEach(item => {
         labels.push(getDeviceName(item.device || 'unknown'));
         const c = typeof item.count === 'string' ? parseInt(item.count.replace(/,/g, '')) : (item.count || 0);
@@ -1536,7 +1536,7 @@ function createAgeChart(ageData) {
 
     charts.age = new Chart(ctx, {
         type: 'bar',
-        data: { labels, datasets: [{ data, backgroundColor: '#5B9E65', borderRadius: 4 }] },
+        data: { labels, datasets: [{ data, backgroundColor: '#528C5A', borderRadius: 4 }] },
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => formatNumber(c.parsed.x) + ' sessions' } } },
@@ -1560,7 +1560,7 @@ function createMediumChart(medium) {
 
     charts.medium = new Chart(ctx, {
         type: 'bar',
-        data: { labels, datasets: [{ data, backgroundColor: '#73a07b', borderRadius: 4 }] },
+        data: { labels, datasets: [{ data, backgroundColor: '#677d6b', borderRadius: 4 }] },
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => formatNumber(c.parsed.x) + ' sessions' } } },

@@ -75,7 +75,7 @@ get_header();
             </p>
             <a href="<?php echo esc_url($gcrev_api->gbp_get_auth_url($user_id)); ?>"
                class="btn btn-primary btn-lg"
-               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #73a07b; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #677d6b; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
                 🔄 Googleビジネスプロフィールと再接続
             </a>
         <?php else: ?>
@@ -88,7 +88,7 @@ get_header();
             </p>
             <a href="<?php echo esc_url($gcrev_api->gbp_get_auth_url($user_id)); ?>"
                class="btn btn-primary btn-lg"
-               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #73a07b; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #677d6b; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
                 📍 Googleビジネスプロフィールと接続
             </a>
         <?php endif; ?>
@@ -134,7 +134,7 @@ get_header();
                 <div style="text-align: center;">
                     <button onclick="gcrevSubmitManualLocation()"
                             id="manual-loc-btn"
-                            style="padding: 12px 32px; background: #73a07b; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                            style="padding: 12px 32px; background: #677d6b; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
                         設定
                     </button>
                 </div>
@@ -195,8 +195,8 @@ get_header();
                     html += '    <div style="font-size: 11px; color: #999; margin-top: 4px;">ID: ' + escHtml(loc.location_id) + '</div>';
                     html += '  </div>';
                     html += '  <button onclick="gcrevSelectLocation(\'' + escAttr(loc.location_id) + '\', \'' + escAttr(loc.title) + '\', \'' + escAttr(loc.address) + '\', this)"';
-                    html += '    style="padding: 10px 24px; background: #73a07b; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"';
-                    html += '    onmouseover="this.style.background=\'#5f8a67\'" onmouseout="this.style.background=\'#73a07b\'">';
+                    html += '    style="padding: 10px 24px; background: #677d6b; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"';
+                    html += '    onmouseover="this.style.background=\'#566a5a\'" onmouseout="this.style.background=\'#677d6b\'">';
                     html += '    この店舗を設定';
                     html += '  </button>';
                     html += '</div>';
@@ -244,7 +244,7 @@ get_header();
                 msgEl.textContent = 'エラー: ' + error.message;
                 btn.disabled = false;
                 btn.textContent = 'この店舗を設定';
-                btn.style.background = '#73a07b';
+                btn.style.background = '#677d6b';
             }
         };
 
@@ -316,8 +316,8 @@ get_header();
         <!-- 自動取得ボタン -->
         <div style="margin-bottom: 16px;">
             <button id="meo-auto-fetch-btn" onclick="gcrevAutoFetchLocation()"
-                    style="padding: 10px 24px; background: #73a07b; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
-                    onmouseover="this.style.background='#5f8a67'" onmouseout="this.style.background='#73a07b'">
+                    style="padding: 10px 24px; background: #677d6b; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
+                    onmouseover="this.style.background='#566a5a'" onmouseout="this.style.background='#677d6b'">
                 📍 GBPから自動取得
             </button>
         </div>
@@ -332,7 +332,7 @@ get_header();
                 <input type="text" id="meo-location-id-input"
                        placeholder="例：12345678901234567"
                        style="flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
-                       onfocus="this.style.borderColor='#73a07b'" onblur="this.style.borderColor='#D0D5DA'">
+                       onfocus="this.style.borderColor='#677d6b'" onblur="this.style.borderColor='#D0D5DA'">
                 <button id="meo-set-location-btn" onclick="gcrevSetManualLocationId()"
                         style="padding: 10px 24px; background: #D4A842; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
                         onmouseover="this.style.background='#B8941E'" onmouseout="this.style.background='#D4A842'">
@@ -378,7 +378,7 @@ get_header();
                     msgEl.textContent = result.message || 'ロケーションが見つかりません。';
                     btn.disabled = false;
                     btn.textContent = '📍 GBPから自動取得';
-                    btn.style.background = '#73a07b';
+                    btn.style.background = '#677d6b';
                     return;
                 }
 
@@ -392,7 +392,7 @@ get_header();
                     html += '    <div style="font-size: 12px; color: #666;">' + escHtml(loc.address) + '</div>';
                     html += '  </div>';
                     html += '  <button onclick="gcrevSelectPendingLocation(\'' + escAttr(loc.location_id) + '\', \'' + escAttr(loc.title) + '\', \'' + escAttr(loc.address) + '\', this)"';
-                    html += '    style="padding: 8px 20px; background: #73a07b; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">';
+                    html += '    style="padding: 8px 20px; background: #677d6b; color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">';
                     html += '    選択';
                     html += '  </button>';
                     html += '</div>';
@@ -407,7 +407,7 @@ get_header();
                 msgEl.textContent = 'エラー: ' + error.message;
                 btn.disabled = false;
                 btn.textContent = '📍 GBPから自動取得';
-                btn.style.background = '#73a07b';
+                btn.style.background = '#677d6b';
             }
         };
 
@@ -533,7 +533,7 @@ get_header();
         <div class="summary-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px;">
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(90,128,98,0.1);">🔍</div>
+                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(83,115,90,0.1);">🔍</div>
                     <div style="font-size: 13px; color: #666666; font-weight: 600;">検索での表示</div>
                 </div>
                 <div id="meo-search-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
@@ -541,7 +541,7 @@ get_header();
             </div>
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(91,158,101,0.1);">🗺️</div>
+                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(82,140,90,0.1);">🗺️</div>
                     <div style="font-size: 13px; color: #666666; font-weight: 600;">マップでの表示</div>
                 </div>
                 <div id="meo-map-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
@@ -549,7 +549,7 @@ get_header();
             </div>
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(100,140,110,0.1);">👁️</div>
+                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(88,125,98,0.1);">👁️</div>
                     <div style="font-size: 13px; color: #666666; font-weight: 600;">合計表示回数</div>
                 </div>
                 <div id="meo-total-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
@@ -742,10 +742,10 @@ get_header();
     function changeHtml(current, previous) {
         if (previous === 0 || previous === null || previous === undefined) {
             if (current === 0) return '<span style="color:#666666;">→ 0.0%</span>';
-            return '<span style="color:#73a07b;">NEW</span>';
+            return '<span style="color:#677d6b;">NEW</span>';
         }
         var pct = ((current - previous) / previous * 100).toFixed(1);
-        if (pct > 0) return '<span style="color:#5B9E65;">↑ +' + pct + '%</span>';
+        if (pct > 0) return '<span style="color:#528C5A;">↑ +' + pct + '%</span>';
         if (pct < 0) return '<span style="color:#C0392B;">↓ ' + pct + '%</span>';
         return '<span style="color:#666666;">→ 0.0%</span>';
     }
@@ -840,14 +840,14 @@ get_header();
                     {
                         label: '検索での表示',
                         data: searchData,
-                        borderColor: '#73a07b',
+                        borderColor: '#677d6b',
                         backgroundColor: 'rgba(59,130,246,0.08)',
                         fill: true, tension: 0.3, pointRadius: 2
                     },
                     {
                         label: 'マップでの表示',
                         data: mapData,
-                        borderColor: '#5B9E65',
+                        borderColor: '#528C5A',
                         backgroundColor: 'rgba(16,185,129,0.08)',
                         fill: true, tension: 0.3, pointRadius: 2
                     }
@@ -875,7 +875,7 @@ get_header();
             m.website_clicks || 0,
             m.booking_clicks || 0
         ];
-        var colors = ['#D4A842', '#C95A4F', '#8bb893', '#C95A4F'];
+        var colors = ['#D4A842', '#C95A4F', '#7FA188', '#C95A4F'];
 
         if (actionsChart) actionsChart.destroy();
 

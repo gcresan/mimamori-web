@@ -43,8 +43,8 @@ get_header();
     color: #334155;
 }
 .goal-tab.active {
-    color: #73a07b;
-    border-bottom-color: #73a07b;
+    color: #677d6b;
+    border-bottom-color: #677d6b;
 }
 
 /* ===== Tab 1: CV Review ===== */
@@ -152,7 +152,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 .cv-routes-table input[type="text"]:focus {
     border-color: var(--mw-primary-blue);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(90, 128, 98, 0.12);
+    box-shadow: 0 0 0 2px rgba(83, 115, 90, 0.12);
 }
 .cv-routes-table input[data-field="route_key"] {
     font-family: monospace;
@@ -214,7 +214,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 }
 .suggest-item .key-badge {
     font-size: 10px;
-    color: #73a07b;
+    color: #677d6b;
     background: #e8f0f0;
     padding: 2px 6px;
     border-radius: 4px;
@@ -952,8 +952,8 @@ document.addEventListener('DOMContentLoaded', function() {
 function markCvSettingsDirty(btnId) {
     var btn = document.getElementById(btnId);
     if (!btn) return;
-    btn.style.backgroundColor = '#73a07b';
-    btn.style.borderColor = '#73a07b';
+    btn.style.backgroundColor = '#677d6b';
+    btn.style.borderColor = '#677d6b';
     btn.style.color = '#fff';
 }
 function markCvSettingsClean(btnId) {

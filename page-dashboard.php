@@ -72,7 +72,7 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
         'white'  => '#ffffff',
         'green'  => '#16a34a',
         'red'    => '#C95A4F',
-        'blue'   => '#73a07b',
+        'blue'   => '#677d6b',
         'orange' => '#ea580c',
         default  => '#111827'
     };
@@ -115,8 +115,8 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
             '改善' => '#16a34a',
             '減少' => '#C95A4F',
             '悪化' => '#C95A4F',
-            '前月比' => '#73a07b',
-            '前年比' => '#73a07b',
+            '前月比' => '#677d6b',
+            '前年比' => '#677d6b',
         ];
         foreach ($keywords as $kw => $kw_color) {
             $text = preg_replace(
@@ -212,7 +212,7 @@ get_header();
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: #73a07b;
+  background: #677d6b;
   color: #fff;
   border-radius: 50%;
   font-size: 13px;
@@ -224,7 +224,7 @@ get_header();
   width: fit-content;
   margin: 0 auto;
   padding: 14px 36px;
-  background: #73a07b;
+  background: #677d6b;
   color: #fff !important;
   font-size: 16px;
   font-weight: 600;
@@ -233,7 +233,7 @@ get_header();
   transition: background 0.2s;
 }
 .setup-guide-btn:hover {
-  background: #5f8a67;
+  background: #566a5a;
 }
 @media (max-width: 600px) {
   .dashboard-setup-guide { padding: 32px 20px; }
@@ -343,10 +343,10 @@ get_header();
 .drt-daily--out { color: #ef4444; font-size: 10px; }
 .drt-daily--na  { color: #d1d5db; }
 .drt-action-link {
-    display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: #73a07b;
+    display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: #677d6b;
     cursor: pointer; text-decoration: none; padding: 3px 0; border: none; background: none; white-space: nowrap;
 }
-.drt-action-link:hover { color: #5f8a67; text-decoration: underline; }
+.drt-action-link:hover { color: #566a5a; text-decoration: underline; }
 .drt-action-link__icon { font-size: 13px; }
 .drt-empty { text-align: center; padding: 40px 20px; color: #9ca3af; }
 .drt-empty__icon { font-size: 32px; margin-bottom: 8px; }
@@ -355,7 +355,7 @@ get_header();
 .drt-footer { text-align: center; margin-top: 16px; }
 .drt-footer__link {
     display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
-    color: #73a07b; text-decoration: none; font-weight: 500;
+    color: #677d6b; text-decoration: none; font-weight: 500;
 }
 .drt-footer__link:hover { text-decoration: underline; }
 /* SERP Modal */
@@ -389,9 +389,9 @@ get_header();
 }
 .drt-serp-table td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; font-size: 13px; vertical-align: top; }
 .drt-serp-table tr:last-child td { border-bottom: none; }
-.drt-serp-rank { font-weight: 700; font-size: 15px; color: #73a07b; text-align: center; min-width: 36px; }
+.drt-serp-rank { font-weight: 700; font-size: 15px; color: #677d6b; text-align: center; min-width: 36px; }
 .drt-serp-title { font-weight: 600; color: #1a1a1a; margin-bottom: 2px; line-height: 1.4; }
-.drt-serp-url { font-size: 12px; color: #73a07b; word-break: break-all; }
+.drt-serp-url { font-size: 12px; color: #677d6b; word-break: break-all; }
 .drt-serp-desc {
     font-size: 12px; color: #9ca3af; margin-top: 4px; line-height: 1.4;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -409,7 +409,7 @@ get_header();
 .drt-progress-title { font-size: 15px; font-weight: 700; color: #1a1a1a; margin-bottom: 14px; }
 .drt-progress-bar-wrap { width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
 .drt-progress-bar {
-    height: 100%; background: linear-gradient(90deg, #73a07b, #a3c9a9); border-radius: 4px;
+    height: 100%; background: linear-gradient(90deg, #677d6b, #a3c9a9); border-radius: 4px;
     width: 0%; transition: width 0.3s ease;
 }
 .drt-progress-bar--indeterminate { width: 30%; animation: drt-progress-slide 1.5s infinite ease-in-out; }
@@ -1333,7 +1333,7 @@ foreach ($highlight_items as $highlight):
             <div class="drt-empty__icon">&#x1F50D;</div>
             <div class="drt-empty__text">計測キーワードが登録されていません</div>
             <div style="color:#9ca3af; font-size:12px; margin-top:6px;">
-                <a href="<?php echo esc_url(home_url('/mypage/rank-tracker/')); ?>" style="color:#73a07b;">検索順位チェック</a>ページからキーワードを追加できます。
+                <a href="<?php echo esc_url(home_url('/mypage/rank-tracker/')); ?>" style="color:#677d6b;">検索順位チェック</a>ページからキーワードを追加できます。
             </div>
         </div>
         <div class="drt-table-wrap" id="drtTableContainer" style="display:none;">
@@ -1683,7 +1683,7 @@ foreach ($highlight_items as $highlight):
         });
         var dataLen = json.values.length;
         var pointBg = json.values.map(function(v, i){
-            return i === dataLen - 1 ? '#C95A4F' : '#73a07b';
+            return i === dataLen - 1 ? '#C95A4F' : '#677d6b';
         });
         var pointR = json.values.map(function(v, i){
             return i === dataLen - 1 ? 6 : 3;
@@ -1696,7 +1696,7 @@ foreach ($highlight_items as $highlight):
                 datasets: [{
                     label: label,
                     data: json.values,
-                    borderColor: '#73a07b',
+                    borderColor: '#677d6b',
                     borderWidth: 2,
                     pointBackgroundColor: pointBg,
                     pointRadius: pointR,
@@ -1704,7 +1704,7 @@ foreach ($highlight_items as $highlight):
                     pointHoverRadius: 7,
                     tension: 0.3,
                     fill: true,
-                    backgroundColor: 'rgba(115,160,123,0.08)',
+                    backgroundColor: 'rgba(103,125,107,0.08)',
                 }]
             },
             options: {
@@ -1955,7 +1955,7 @@ foreach ($highlight_items as $highlight):
         var metricLabel = json.metric_label || json.metric || '';
 
         var barColors = [
-            '#73a07b','#8bb893','#a3c9a9','#bddac0','#C95A4F',
+            '#677d6b','#7FA188','#a3c9a9','#bddac0','#C95A4F',
             '#D4756A','#DFA192','#E8C5BE','#A8A29E','#C5BFB9'
         ];
 

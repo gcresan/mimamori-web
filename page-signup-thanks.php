@@ -132,7 +132,7 @@ get_header();
        target="_blank" rel="noopener noreferrer"
        style="display:inline-flex; align-items:center; justify-content:center; gap:10px;
               width:100%; max-width:480px; padding:18px 24px;
-              background:#73a07b; color:#fff; border:none; border-radius:12px;
+              background:#677d6b; color:#fff; border:none; border-radius:12px;
               font-size:17px; font-weight:700; text-decoration:none;
               box-shadow:0 4px 12px rgba(59,130,246,.3); transition:all 0.2s;">
         &#x1F4B3; 分割払い（初回決済）を行う &#x2192;
@@ -149,8 +149,8 @@ get_header();
   <?php endif; ?>
 
   <!-- 案内メッセージ -->
-  <div style="max-width: 600px; margin: 24px auto; padding: 20px 24px; background: rgba(90,128,98,0.04); border-radius: 12px; text-align: center;">
-    <p style="font-size: 15px; color: #5f8a67; line-height: 1.8; margin: 0;">
+  <div style="max-width: 600px; margin: 24px auto; padding: 20px 24px; background: rgba(83,115,90,0.04); border-radius: 12px; text-align: center;">
+    <p style="font-size: 15px; color: #566a5a; line-height: 1.8; margin: 0;">
       &#x1F4E7; ご登録のメールアドレスに確認メールをお送りしております。<br>
       内容のご確認をお願いいたします。
     </p>

@@ -252,21 +252,21 @@ class Gcrev_Client_Management_Page {
                         <?php if ( $is_test ) : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#c0392b; background:#fdf0ee; border:1px solid #e8c4bf; border-radius:3px;">テスト運用</span>
                         <?php elseif ( $is_paid ) : ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#5B9E65; background:rgba(91,158,101,0.08); border-radius:3px;">利用中</span>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#528C5A; background:rgba(82,140,90,0.08); border-radius:3px;">利用中</span>
                         <?php else : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#999; background:#f5f5f5; border-radius:3px;">手続中</span>
                         <?php endif; ?>
                     </td>
                     <td style="text-align: center;">
                         <?php if ( $cache_cnt > 0 ) : ?>
-                            <span style="font-weight: 600; color: #73a07b;"><?php echo esc_html( $cache_cnt ); ?></span>件
+                            <span style="font-weight: 600; color: #677d6b;"><?php echo esc_html( $cache_cnt ); ?></span>件
                         <?php else : ?>
                             <span style="color: #999;">0</span>
                         <?php endif; ?>
                     </td>
                     <td style="text-align: center;">
                         <?php if ( $report_cnt > 0 ) : ?>
-                            <span style="font-weight: 600; color: #73a07b;"><?php echo esc_html( $report_cnt ); ?></span>件
+                            <span style="font-weight: 600; color: #677d6b;"><?php echo esc_html( $report_cnt ); ?></span>件
                         <?php else : ?>
                             <span style="color: #999;">0</span>
                         <?php endif; ?>
