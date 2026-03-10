@@ -67,7 +67,7 @@ get_header();
     justify-content: space-between;
     margin-bottom: 20px;
     padding-bottom: 12px;
-    border-bottom: 2px solid var(--mw-primary-blue, #2EC4B6);
+    border-bottom: 2px solid var(--mw-primary-blue, #73a07b);
 }
 .acct-card-header h2 {
     font-size: 17px;
@@ -111,7 +111,7 @@ get_header();
     font-size: 13px;
     font-weight: 600;
 }
-.contract-badge--active   { color: #2EBD8E; background: rgba(61,139,110,0.08); }
+.contract-badge--active   { color: #5B9E65; background: rgba(91,158,101,0.08); }
 .contract-badge--canceled { color: #C0392B; background: #FDF0EE; }
 .contract-badge--none     { color: #888;    background: #f0f0f0; }
 
@@ -144,11 +144,11 @@ get_header();
     transition: background 0.2s, box-shadow 0.2s;
 }
 .acct-btn-primary {
-    background: var(--mw-primary-blue, #2EC4B6);
+    background: var(--mw-primary-blue, #73a07b);
     color: #fff;
 }
 .acct-btn-primary:hover {
-    background: #25A89C;
+    background: #5f8a67;
     box-shadow: 0 2px 6px rgba(0,0,0,0.12);
 }
 .acct-btn-secondary {
@@ -196,9 +196,9 @@ get_header();
     transition: border-color 0.2s;
 }
 .acct-field-input input:focus {
-    border-color: var(--mw-primary-blue, #2EC4B6);
+    border-color: var(--mw-primary-blue, #73a07b);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(61,107,110,0.12);
+    box-shadow: 0 0 0 2px rgba(90,128,98,0.12);
 }
 .acct-field-input .field-error {
     font-size: 12px;
@@ -239,9 +239,9 @@ get_header();
     transition: border-color 0.2s;
 }
 .acct-pw-wrap input:focus {
-    border-color: var(--mw-primary-blue, #2EC4B6);
+    border-color: var(--mw-primary-blue, #73a07b);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(61,107,110,0.12);
+    box-shadow: 0 0 0 2px rgba(90,128,98,0.12);
 }
 .acct-pw-toggle {
     position: absolute;
@@ -287,7 +287,7 @@ get_header();
     transform: translateX(-50%) translateY(0);
     opacity: 1;
 }
-.acct-toast--success { background: #2EBD8E; }
+.acct-toast--success { background: #5B9E65; }
 .acct-toast--error   { background: #C0392B; }
 
 /* --- レスポンシブ --- */

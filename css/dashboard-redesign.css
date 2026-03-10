@@ -7,28 +7,28 @@
 /* ========== Design Tokens (CSS Custom Properties) ========== */
 /* みまもりウェブ 新ロゴ準拠 — やさしく親しみやすいUI・安心感・寄り添い */
 :root {
-  /* ===== カラーパレット — 明るいターコイズ/ミント系 ===== */
-  --mw-primary-blue: #2EC4B6;     /* メインターコイズ */
-  --mw-primary-teal: #36D1C4;     /* サブターコイズ（やや明るい） */
+  /* ===== カラーパレット — やさしい自然なグリーン系 ===== */
+  --mw-primary-blue: #73a07b;     /* メイングリーン（自然・安心） */
+  --mw-primary-teal: #8bb893;     /* サブグリーン（やや明るい） */
   --mw-soft-gray: #8A9197;        /* ソフトグレー */
 
-  /* 背景 — 微ミント寄りの白 */
+  /* 背景 — ほんのり緑がかった白 */
   --mw-bg-primary: #FFFFFF;       /* カード背景（白） */
-  --mw-bg-secondary: #F7FAFA;     /* メイン背景（微ミント） */
-  --mw-bg-tertiary: #EDF5F4;      /* 沈み背景（ライトミント） */
+  --mw-bg-secondary: #F7FAF8;     /* メイン背景（微グリーン） */
+  --mw-bg-tertiary: #EDF3EF;      /* 沈み背景（ライトグリーン） */
 
-  /* テキスト — クールグレー系（視認性最優先） */
-  --mw-text-primary: #2B3A3B;     /* メイン文字 */
-  --mw-text-secondary: #3D4F50;   /* 補助文字 */
-  --mw-text-body: #2B3A3B;        /* 本文用 */
-  --mw-text-tertiary: #6B7878;    /* 薄い補助文字 */
+  /* テキスト — グリーン寄りニュートラル（視認性最優先） */
+  --mw-text-primary: #2B3A30;     /* メイン文字 */
+  --mw-text-secondary: #3D5045;   /* 補助文字 */
+  --mw-text-body: #2B3A30;        /* 本文用 */
+  --mw-text-tertiary: #6B7870;    /* 薄い補助文字 */
 
-  /* 境界線 — クールグレー */
-  --mw-border-light: #DEE5E4;     /* クールボーダー */
-  --mw-border-medium: #C8D5D3;    /* やや濃いボーダー */
+  /* 境界線 — グリーン寄りグレー */
+  --mw-border-light: #D8E2DA;     /* ライトボーダー */
+  --mw-border-medium: #C3D0C6;    /* やや濃いボーダー */
 
   /* アクセント */
-  --mw-accent-positive: #2EBD8E;  /* ポジティブグリーン */
+  --mw-accent-positive: #5B9E65;  /* ポジティブグリーン（くすみ） */
   --mw-accent-neutral: #8A9197;   /* ニュートラルグレー */
   --mw-accent-attention: #D4A842; /* 注意（ウォームイエロー） */
 
@@ -44,15 +44,15 @@
   --mw-radius-lg: 24px;           /* モーダル・大要素 */
 
   /* 見出し専用カラー */
-  --mw-text-heading: #1E3A3A;
+  --mw-text-heading: #1E3A2A;
 
   /* ===== フォント — やさしい太さのゴシック体 ===== */
   --mw-font-sans: 'Noto Sans JP', 'Zen Kaku Gothic New', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'BIZ UDPGothic', Meiryo, sans-serif;
   --mw-font-heading: 'Zen Kaku Gothic New', 'Noto Sans JP', 'Hiragino Sans', 'BIZ UDPGothic', Meiryo, sans-serif;
 
   /* ボタン用 */
-  --mw-btn-primary-bg: #2EC4B6;
-  --mw-btn-primary-hover: #25A89C;
+  --mw-btn-primary-bg: #73a07b;
+  --mw-btn-primary-hover: #5f8a67;
   --mw-btn-primary-text: #FFFFFF;
 
   /* ===== タイポグラフィ — 親しみ・可読性優先 ===== */
@@ -68,7 +68,7 @@
   --mw-line-height-heading: 1.5;      /* 見出し行間 */
 
   /* ===== クライアントアクセント — ロゴ下クライアント名の色 ===== */
-  --mw-client-accent: #2B3A3B;        /* クライアント名テキストと同一 */
+  --mw-client-accent: #2B3A30;        /* クライアント名テキストと同一 */
 }
 
 /* ========== Body ========== */
@@ -374,7 +374,7 @@ h3 { font-size: 20px; font-weight: 700; }
 }
 
 .topbar .topbar-right .report-setting-btn:hover {
-  background: #25A89C;
+  background: #5f8a67;
   box-shadow: var(--mw-shadow-card);
 }
 
@@ -1759,7 +1759,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .summary-card-change.positive {
   background: rgba(46, 189, 142, 0.12);
-  color: #2EBD8E;
+  color: #5B9E65;
 }
 .summary-card-change.negative {
   background: rgba(201, 90, 79, 0.1);
@@ -1927,7 +1927,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   font-weight: 500;
 }
 .data-table tbody td.page-url a {
-  color: #2EC4B6;
+  color: #73a07b;
   text-decoration: none;
 }
 .data-table tbody td.page-url a:hover {
@@ -2047,7 +2047,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .digest-list-item-change.positive {
   background: rgba(46, 189, 142, 0.12);
-  color: #2EBD8E;
+  color: #5B9E65;
 }
 .digest-list-item-change.negative {
   background: rgba(201, 90, 79, 0.1);
@@ -2178,7 +2178,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   border-radius: 8px;
 }
 .kpi-change.positive {
-  color: #2EBD8E;
+  color: #5B9E65;
   background: rgba(46, 189, 142, 0.12);
 }
 .kpi-change.negative {
@@ -2236,7 +2236,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .status-complete {
   background: rgba(46, 189, 142, 0.15);
-  color: #2EBD8E;
+  color: #5B9E65;
 }
 
 /* ========== Report Content / Sections ========== */
@@ -2436,7 +2436,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   border-left-color: var(--mw-accent-positive);
 }
 .beginner-report-item--good .beginner-report-action__label {
-  color: #2EBD8E;
+  color: #5B9E65;
 }
 .beginner-report-item--good .beginner-report-action__body {
   color: var(--mw-text-secondary);
@@ -2484,7 +2484,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .trend-badge.up {
   background: rgba(46, 189, 142, 0.12);
-  color: #2EBD8E;
+  color: #5B9E65;
 }
 .trend-badge.down {
   background: rgba(201, 90, 79, 0.1);
@@ -2913,7 +2913,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   border-radius: var(--mw-radius-sm);
   padding: 16px;
   margin-bottom: 24px;
-  color: #2EBD8E;
+  color: #5B9E65;
   font-size: 14px;
 }
 
@@ -3197,7 +3197,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .cv-summary-change.up {
   background: rgba(46, 189, 142, 0.12);
-  color: #2EBD8E;
+  color: #5B9E65;
 }
 .cv-summary-change.down {
   background: rgba(201, 90, 79, 0.1);
@@ -3255,7 +3255,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .cv-analysis-badge.recommend {
   background: rgba(46, 189, 142, 0.12);
-  color: #2EBD8E;
+  color: #5B9E65;
 }
 
 .cv-chart-area {

@@ -6,16 +6,16 @@
 
 /* --- Component root & CSS custom properties --- */
 .mw-chat {
-  --mw-primary: #2EC4B6;
-  --mw-teal: #36D1C4;
+  --mw-primary: #73a07b;
+  --mw-teal: #8bb893;
   --mw-bg: #ffffff;
-  --mw-bg-sub: #F7FAFA;
-  --mw-bg-ter: #EDF5F4;
-  --mw-text: #2B3A3B;
-  --mw-text-sub: #3D4F50;
-  --mw-text-ter: #6B7878;
-  --mw-border: #DEE5E4;
-  --mw-border-md: #C8D5D3;
+  --mw-bg-sub: #F7FAF8;
+  --mw-bg-ter: #EDF3EF;
+  --mw-text: #2B3A30;
+  --mw-text-sub: #3D5045;
+  --mw-text-ter: #6B7870;
+  --mw-border: #D8E2DA;
+  --mw-border-md: #C3D0C6;
   --mw-danger: #C95A4F;
   --mw-shadow-float: 0 8px 24px rgba(0,0,0,0.08);
   --mw-shadow-modal: 0 10px 36px rgba(0,0,0,0.10);

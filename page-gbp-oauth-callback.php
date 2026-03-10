@@ -43,7 +43,7 @@ if ( ! empty($error) ) {
                 <?php echo esc_html($error); ?>
             </p>
             <a href="<?php echo esc_url(home_url('/meo/meo-dashboard/')); ?>"
-               style="display: inline-block; padding: 14px 32px; background: #2EC4B6; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
+               style="display: inline-block; padding: 14px 32px; background: #73a07b; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
                 📍 MEOダッシュボードへ戻る
             </a>
         </div>
@@ -92,7 +92,7 @@ get_header();
             <?php echo esc_html( $result['message'] ?? 'トークンの取得に失敗しました。もう一度お試しください。' ); ?>
         </p>
         <a href="<?php echo esc_url(home_url('/meo/meo-dashboard/')); ?>"
-           style="display: inline-block; padding: 14px 32px; background: #2EC4B6; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
+           style="display: inline-block; padding: 14px 32px; background: #73a07b; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">
             📍 MEOダッシュボードへ戻る
         </a>
     </div>

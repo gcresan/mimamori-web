@@ -46,7 +46,7 @@
   right: 20px;
   display: inline-flex;
   align-items: center;
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6 !important;
   padding: 10px 18px;
   border-radius: 6px;
@@ -58,7 +58,7 @@
   z-index: 10;
 }
 .dashboard .btn-latest-report-top:hover {
-  background: #3D4B5C;
+  background: #5f8a67;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
 }
@@ -77,9 +77,24 @@
     font-size: 13px;
   }
 }
-/* .period-info-bar は .period-info に統一済み (2026-03) */
+.dashboard .period-info-bar {
+  background: #F5F4F0;
+  border: 1px solid #E5E3DC;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.dashboard .period-info-bar strong {
+  color: #2B2B2B;
+  font-weight: 600;
+}
+.dashboard .period-info-bar .period-label {
+  color: #666660;
+}
 .dashboard .monthly-summary-section {
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
   padding: 32px;
   border-radius: 12px;
@@ -163,7 +178,7 @@
 }
 .dashboard .period-btn.active {
   background: #FAF9F6;
-  color: #2B3A3B;
+  color: #73a07b;
   box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 .dashboard .kpi-grid {
@@ -208,7 +223,7 @@
 .dashboard .kpi-value {
   font-size: 32px;
   font-weight: 700;
-  color: #2B3A3B;
+  color: #73a07b;
   margin-bottom: 8px;
 }
 .dashboard .kpi-change {
@@ -221,11 +236,11 @@
   border-radius: 6px;
 }
 .dashboard .kpi-change.positive {
-  color: #5B8A72;
+  color: #5B9E65;
   background: #EDF3EF;
 }
 .dashboard .kpi-change.negative {
-  color: #C95A4F;
+  color: #B5574B;
   background: rgba(181, 87, 75, 0.08);
 }
 .dashboard .kpi-sparkline {
@@ -274,11 +289,11 @@
   line-height: 1.6;
 }
 .dashboard .info-item.positive {
-  border-left: 3px solid #5B8A72;
+  border-left: 3px solid #5B9E65;
   background: #EDF3EF;
 }
 .dashboard .info-item.negative {
-  border-left: 3px solid #C95A4F;
+  border-left: 3px solid #B5574B;
   background: rgba(181, 87, 75, 0.06);
 }
 .dashboard .info-item strong {
@@ -368,9 +383,23 @@
     flex: 1;
   }
 }
-/* .period-info-bar は .period-info に統一済み (2026-03) */
+.dashboard .content-area .period-info-bar {
+  background: #F5F4F0;
+  border: 1px solid #E5E3DC;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.dashboard .content-area .period-label {
+  color: #666660;
+  font-size: 13px;
+  margin-right: 8px;
+}
 .dashboard .content-area .monthly-summary-section {
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
   padding: 32px;
   border-radius: 12px;
@@ -433,13 +462,13 @@
   transition: all 0.2s;
 }
 .dashboard .content-area .period-btn:hover {
-  background: #F2F1EC;
+  background: #F2F4F0;
   border-color: #dad7cd;
 }
 .dashboard .content-area .period-btn.active {
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
-  border-color: #C8D5D3;
+  border-color: #73a07b;
 }
 .dashboard .content-area .kpi-grid {
   display: grid;
@@ -473,7 +502,7 @@
 .dashboard .content-area .kpi-value {
   font-size: 28px;
   font-weight: 700;
-  color: #2B3A3B;
+  color: #73a07b;
   margin-bottom: 4px;
 }
 .dashboard .content-area .kpi-change {
@@ -483,10 +512,10 @@
   gap: 4px;
 }
 .dashboard .content-area .kpi-change.positive {
-  color: #5B8A72;
+  color: #5B9E65;
 }
 .dashboard .content-area .kpi-change.negative {
-  color: #C95A4F;
+  color: #B5574B;
 }
 .dashboard .content-area .kpi-icon {
   width: 48px;
@@ -530,19 +559,19 @@
 }
 .dashboard .content-area .monthly-list-item.positive {
   background: #EDF3EF;
-  border-left: 4px solid #5B8A72;
+  border-left: 4px solid #5B9E65;
   color: #2B2B2B;
 }
 .dashboard .content-area .monthly-list-item.positive strong {
-  color: #5B8A72 !important;
+  color: #5B9E65 !important;
 }
 .dashboard .content-area .monthly-list-item.negative {
   background: rgba(181, 87, 75, 0.06);
-  border-left: 4px solid #C95A4F;
+  border-left: 4px solid #B5574B;
   color: #2B2B2B;
 }
 .dashboard .content-area .monthly-list-item.negative strong {
-  color: #C95A4F !important;
+  color: #B5574B !important;
 }
 .dashboard .content-area .monthly-consideration {
   background: #F5F4F0;
@@ -583,7 +612,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
   border-radius: 50%;
   font-weight: 700;
@@ -633,11 +662,11 @@
   cursor: pointer;
 }
 .dashboard .content-area .btn-primary {
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
 }
 .dashboard .content-area .btn-primary:hover {
-  background: #3D4B5C;
+  background: #5f8a67;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
 }
@@ -649,7 +678,10 @@
   .dashboard .content-area .kpi-grid {
     grid-template-columns: 1fr;
   }
-  /* .period-info-bar は .period-info に統一済み (2026-03) */
+  .dashboard .content-area .period-info-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
   .dashboard .content-area .monthly-summary-section {
     padding: 20px;
   }
@@ -665,7 +697,7 @@
 }
 .register body {
   font-family: 'Helvetica Neue', Arial, sans-serif;
-  background: #F2F1EC;
+  background: #F2F4F0;
   color: #2B2B2B;
   line-height: 1.6;
 }
@@ -710,12 +742,12 @@
 .register input[type="email"]:focus,
 .register input[type="password"]:focus {
   outline: none;
-  border-color: #C8D5D3;
+  border-color: #73a07b;
 }
 .register .btn-primary {
   width: 100%;
   padding: 14px;
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
   border: none;
   border-radius: 6px;
@@ -725,7 +757,7 @@
   transition: background 0.3s;
 }
 .register .btn-primary:hover {
-  background: #3D4B5C;
+  background: #5f8a67;
 }
 .register .links {
   margin-top: 20px;
@@ -733,7 +765,7 @@
   font-size: 14px;
 }
 .register .links a {
-  color: #2B3A3B;
+  color: #73a07b;
   text-decoration: none;
 }
 .register .links a:hover {
@@ -765,7 +797,7 @@
   font-size: 20px;
   margin-bottom: 20px;
   color: #2B2B2B;
-  border-bottom: 2px solid #C8D5D3;
+  border-bottom: 2px solid #73a07b;
   padding-bottom: 10px;
 }
 .account .form-group {
@@ -786,7 +818,7 @@
   font-size: 14px;
 }
 .account .form-group input:disabled {
-  background: #F2F1EC;
+  background: #F2F4F0;
   color: #8C8A85;
   cursor: not-allowed;
 }
@@ -812,7 +844,7 @@
 .account .btn {
   display: inline-block;
   padding: 12px 24px;
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
   text-decoration: none;
   border-radius: 6px;
@@ -823,7 +855,7 @@
   font-weight: 600;
 }
 .account .btn:hover {
-  background: #3D4B5C;
+  background: #5f8a67;
 }
 .account .btn-secondary {
   background: #8C8A85;
@@ -832,7 +864,7 @@
   background: #726F6A;
 }
 .account .btn-danger {
-  background: #C95A4F;
+  background: #B5574B;
 }
 .account .btn-danger:hover {
   background: #9C4940;
@@ -849,7 +881,7 @@
   height: 0;
 }
 .account .toggle-switch input:checked + .slider {
-  background-color: #5B8A72;
+  background-color: #5B9E65;
 }
 .account .toggle-switch input:checked + .slider:before {
   transform: translateX(26px);
@@ -899,10 +931,10 @@
 .account .alert {
   padding: 15px;
   background: #EDF3EF;
-  border-left: 4px solid #5B8A72;
+  border-left: 4px solid #5B9E65;
   border-radius: 6px;
   margin-bottom: 20px;
-  color: #3A5C49;
+  color: #3A5C40;
 }
 .account footer {
   background: #2B2B2B;
@@ -969,7 +1001,7 @@
 }
 .service .bl.hojyokin {
   background: #F5F4F0;
-  border-left: 4px solid #C8D5D3;
+  border-left: 4px solid #73a07b;
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 32px;
@@ -982,7 +1014,7 @@
 }
 .service .bl.hojyokin p {
   font-size: 14px;
-  color: #4A5261;
+  color: #5A7060;
   line-height: 1.8;
 }
 .service .plans {
@@ -1006,10 +1038,10 @@
 .service .plan-card:hover {
   transform: translateY(-8px);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-  border-color: #C8D5D3;
+  border-color: #73a07b;
 }
 .service .plan-card.featured {
-  border-color: #C8D5D3;
+  border-color: #73a07b;
   border-width: 3px;
   background: rgba(47, 58, 74, 0.03);
 }
@@ -1018,7 +1050,7 @@
   top: -15px;
   left: 50%;
   transform: translateX(-50%);
-  background: #2EC4B6;
+  background: #73a07b;
   color: #fff;
   padding: 5px 20px;
   border-radius: 20px;
@@ -1033,7 +1065,7 @@
 }
 .service .plan-price {
   font-size: 36px;
-  color: #2B3A3B;
+  color: #73a07b;
   margin-bottom: 10px;
   font-weight: 700;
 }
@@ -1061,11 +1093,11 @@
 }
 .service .plan-features li:before {
   content: "✓";
-  color: #5B8A72;
+  color: #5B9E65;
   font-weight: 700;
 }
 .service .plan-cta {
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
   padding: 15px 35px;
   border-radius: 30px;
@@ -1075,7 +1107,7 @@
   transition: all 0.3s;
 }
 .service .plan-cta:hover {
-  background: #3D4B5C;
+  background: #5f8a67;
   transform: translateY(-2px);
 }
 .service .training {
@@ -1149,7 +1181,7 @@
 }
 .service .strength-card {
   background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  border-left: 5px solid #5B8A72;
+  border-left: 5px solid #5B9E65;
   padding: 30px;
   border-radius: 8px;
   transition: all 0.3s;
@@ -1198,7 +1230,7 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
 }
 .service .flow-number {
-  background: #2EC4B6;
+  background: #73a07b;
   color: #fff;
   width: 60px;
   height: 60px;
@@ -1405,7 +1437,7 @@
   color: #9ca3af;
 }
 .service .check-mark {
-  color: #5B8A72;
+  color: #5B9E65;
   font-size: 20px;
   text-align: center;
 }
@@ -1453,7 +1485,7 @@
   transition: all 0.3s ease;
 }
 .service .btn-primary {
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
   box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
 }
@@ -1463,11 +1495,11 @@
 }
 .service .btn-secondary {
   background: #FAF9F6;
-  color: #2B3A3B;
-  border: 2px solid #C8D5D3;
+  color: #73a07b;
+  border: 2px solid #73a07b;
 }
 .service .btn-secondary:hover {
-  background: #F2F1EC;
+  background: #F2F4F0;
   transform: translateY(-2px);
 }
 @media (max-width: 768px) {

@@ -75,7 +75,7 @@
 .login input[type="password"]:focus,
 .login input[type="email"]:focus {
   outline: none;
-  border-color: #C8D5D3;
+  border-color: #73a07b;
 }
 .login .button_div {
   margin-top: 20px;
@@ -93,7 +93,7 @@
   margin-bottom: 20px;
   width: 100% !important;
   padding: 14px;
-  background: #2EC4B6;
+  background: #73a07b;
   color: #FAF9F6;
   border: none;
   border-radius: 6px;
@@ -105,14 +105,14 @@
 }
 .login .buttons:hover,
 .login input[type="submit"]:hover {
-  background: #3D4B5C;
+  background: #5f8a67;
 }
 .login .link-text {
   text-align: center;
   font-size: 14px;
 }
 .login .link-text a {
-  color: #2B3A3B;
+  color: #73a07b;
   text-decoration: none;
 }
 .login .link-text a:hover {

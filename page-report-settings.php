@@ -109,7 +109,7 @@ get_header();
         </h2>
         <p>
             AIレポート生成のために、今月の課題・目標・取り組み等を入力してください。<br>
-            サイトURLや商圏などの基本情報は<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#2EBD8E;font-weight:600;">クライアント設定</a>で設定できます。
+            サイトURLや商圏などの基本情報は<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#5B9E65;font-weight:600;">クライアント設定</a>で設定できます。
         </p>
 
         <div class="form-group">
@@ -332,7 +332,7 @@ function displayGenerationCount(data) {
     } else if (data.remaining <= 2) {
         remainingCount.style.color = '#ea580c';
     } else {
-        remainingCount.style.color = '#2EBD8E';
+        remainingCount.style.color = '#5B9E65';
     }
 
     infoBox.style.display = 'flex';

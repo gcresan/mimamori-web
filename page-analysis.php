@@ -754,7 +754,7 @@ function createDeviceChart(devices) {
     // データ準備
     const labels = [];
     const data = [];
-    const colors = ['#2EC4B6', '#2EBD8E', '#D4A842', '#C95A4F', '#7A6FA0'];
+    const colors = ['#73a07b', '#A68B5B', '#7B8EAA', '#C95A4F', '#8B7BAA'];
     
     devices.slice(0, 5).forEach(item => {
         const name = getDeviceName(item.device || item.deviceCategory || 'unknown');
@@ -833,7 +833,7 @@ function createAgeChart(ageData) {
             labels: labels,
             datasets: [{
                 data: data,
-                backgroundColor: '#2EBD8E',
+                backgroundColor: '#5B9E65',
                 borderRadius: 4
             }]
         },
@@ -906,7 +906,7 @@ function createMediumChart(medium) {
             labels: labels,
             datasets: [{
                 data: data,
-                backgroundColor: '#2EC4B6',
+                backgroundColor: '#73a07b',
                 borderRadius: 4
             }]
         },

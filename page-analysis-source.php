@@ -326,12 +326,12 @@ function updateSummaryCards(data) {
     
     // チャネルアイコンとカラー設定
     const channelConfig = {
-        'Direct': { icon: '🔗', bg: 'rgba(61,107,110,0.1)', color: '#2EC4B6' },
-        'Organic Search': { icon: '🔍', bg: 'rgba(61,139,110,0.1)', color: '#2EBD8E' },
+        'Direct': { icon: '🔗', bg: 'rgba(90,128,98,0.1)', color: '#73a07b' },
+        'Organic Search': { icon: '🔍', bg: 'rgba(91,158,101,0.1)', color: '#5B9E65' },
         'Referral': { icon: '🌐', bg: 'rgba(212,168,66,0.12)', color: '#D4A842' },
         'Paid Search': { icon: '💰', bg: 'rgba(181,87,75,0.08)', color: '#C95A4F' },
-        'Social': { icon: '📱', bg: 'rgba(78,130,133,0.1)', color: '#36D1C4' },
-        'Organic Social': { icon: '📱', bg: 'rgba(78,130,133,0.1)', color: '#36D1C4' },
+        'Social': { icon: '📱', bg: 'rgba(100,140,110,0.1)', color: '#8bb893' },
+        'Organic Social': { icon: '📱', bg: 'rgba(100,140,110,0.1)', color: '#8bb893' },
         'Email': { icon: '✉️', bg: 'rgba(212,168,66,0.12)', color: '#D4A842' },
         'Display': { icon: '🖼️', bg: 'rgba(181,87,75,0.08)', color: '#C95A4F' },
     };
@@ -388,12 +388,12 @@ function updateTrendChart(data) {
     
     // チャネル別色設定
     const channelColors = {
-        'Direct': '#2EC4B6',
-        'Organic Search': '#2EBD8E',
+        'Direct': '#73a07b',
+        'Organic Search': '#5B9E65',
         'Referral': '#D4A842',
         'Paid Search': '#C95A4F',
-        'Social': '#36D1C4',
-        'Organic Social': '#36D1C4',
+        'Social': '#8bb893',
+        'Organic Social': '#8bb893',
         'Email': '#D4A842',
         'Display': '#C95A4F',
     };
@@ -479,7 +479,7 @@ function updateShareChart(data) {
     const labels = [];
     const enLabels = [];
     const sessions = [];
-    const colors = ['#2EC4B6', '#2EBD8E', '#D4A842', '#C95A4F', '#36D1C4', '#7A6FA0', '#D4A842'];
+    const colors = ['#73a07b', '#A68B5B', '#7B8EAA', '#C95A4F', '#8B7BAA', '#8bb893', '#A68B5B'];
     
     channels_summary.forEach((channel, idx) => {
         labels.push(channelJa(channel.channel));
