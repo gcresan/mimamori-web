@@ -9131,7 +9131,9 @@ PROMPT;
 
         // 検索ボリューム取得
         $vol_data = $this->dataforseo->fetch_search_volume( [ $keyword_text ], $location_code, $language_code );
-        if ( ! is_wp_error( $vol_data ) && isset( $vol_data[ $keyword_text ] ) ) {
+        if ( is_wp_error( $vol_data ) ) {
+            error_log( "[GCREV][KeywordMetrics] search_volume error for '{$keyword_text}' (loc:{$location_code}): " . $vol_data->get_error_message() );
+        } elseif ( isset( $vol_data[ $keyword_text ] ) ) {
             $v = $vol_data[ $keyword_text ];
             $wpdb->update( $kw_table, [
                 'search_volume'     => $v['search_volume'],
@@ -9140,17 +9142,23 @@ PROMPT;
                 'volume_fetched_at' => $now,
                 'updated_at'        => $now,
             ], [ 'id' => $keyword_id ] );
+        } else {
+            error_log( "[GCREV][KeywordMetrics] search_volume: no match for '{$keyword_text}' in response keys: " . implode( ', ', array_keys( $vol_data ) ) );
         }
 
-        // SEO難易度取得
-        $diff_data = $this->dataforseo->fetch_keyword_difficulty( [ $keyword_text ], $location_code, $language_code );
-        if ( ! is_wp_error( $diff_data ) && isset( $diff_data[ $keyword_text ] ) ) {
+        // SEO難易度取得（Labs APIは地域コード非対応の場合があるため国レベル 2392 を使用）
+        $diff_data = $this->dataforseo->fetch_keyword_difficulty( [ $keyword_text ], 2392, $language_code );
+        if ( is_wp_error( $diff_data ) ) {
+            error_log( "[GCREV][KeywordMetrics] keyword_difficulty error for '{$keyword_text}' (loc:2392): " . $diff_data->get_error_message() );
+        } elseif ( isset( $diff_data[ $keyword_text ] ) ) {
             $d = $diff_data[ $keyword_text ];
             $wpdb->update( $kw_table, [
                 'keyword_difficulty'    => $d['keyword_difficulty'],
                 'difficulty_fetched_at' => $now,
                 'updated_at'            => $now,
             ], [ 'id' => $keyword_id ] );
+        } else {
+            error_log( "[GCREV][KeywordMetrics] keyword_difficulty: no match for '{$keyword_text}' in response keys: " . implode( ', ', array_keys( $diff_data ) ) );
         }
     }
 
@@ -9351,8 +9359,8 @@ PROMPT;
             }
         }
 
-        // SEO難易度取得
-        $diff_data = $this->dataforseo->fetch_keyword_difficulty( $kw_texts, $loc, $lang );
+        // SEO難易度取得（Labs APIは地域コード非対応の場合があるため国レベル 2392 を使用）
+        $diff_data = $this->dataforseo->fetch_keyword_difficulty( $kw_texts, 2392, $lang );
         if ( ! is_wp_error( $diff_data ) ) {
             foreach ( $keywords as $kw ) {
                 $d = $diff_data[ $kw['keyword'] ] ?? null;
@@ -9364,6 +9372,8 @@ PROMPT;
                     ], [ 'id' => (int) $kw['id'] ] );
                 }
             }
+        } else {
+            error_log( '[GCREV][KeywordMetrics] rest_fetch_metrics: keyword_difficulty error (loc:2392): ' . $diff_data->get_error_message() );
         }
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'updated' => $updated ] ] );
@@ -9493,8 +9503,8 @@ PROMPT;
                 error_log( "[GCREV][KeywordMetrics] User {$uid}: search_volume error: " . $vol_data->get_error_message() );
             }
 
-            // SEO難易度
-            $diff_data = $this->dataforseo->fetch_keyword_difficulty( $kw_texts, $loc, $lang );
+            // SEO難易度（Labs APIは地域コード非対応の場合があるため国レベル 2392 を使用）
+            $diff_data = $this->dataforseo->fetch_keyword_difficulty( $kw_texts, 2392, $lang );
             if ( ! is_wp_error( $diff_data ) ) {
                 foreach ( $to_fetch as $kw ) {
                     $d = $diff_data[ $kw['keyword'] ] ?? null;
@@ -9507,7 +9517,7 @@ PROMPT;
                     }
                 }
             } else {
-                error_log( "[GCREV][KeywordMetrics] User {$uid}: keyword_difficulty error: " . $diff_data->get_error_message() );
+                error_log( "[GCREV][KeywordMetrics] User {$uid}: keyword_difficulty error (loc:2392): " . $diff_data->get_error_message() );
             }
 
             error_log( "[GCREV][KeywordMetrics] User {$uid}: fetched={$fetched_count}, skipped_this_month={$skipped}" );
@@ -9580,8 +9590,12 @@ PROMPT;
             $saved = $this->save_rank_results( $kw, $results, 'manual_live' );
             $fetched++;
 
-            // 検索ボリューム・難易度が未取得のキーワードは自動補完
-            if ( $kw['search_volume'] === null || $kw['keyword_difficulty'] === null ) {
+            // 検索ボリューム・難易度が未取得、または30日以上経過したキーワードは自動補完
+            $needs_metrics = $kw['search_volume'] === null
+                || $kw['keyword_difficulty'] === null
+                || empty( $kw['difficulty_fetched_at'] )
+                || strtotime( $kw['difficulty_fetched_at'] ) < strtotime( '-30 days' );
+            if ( $needs_metrics ) {
                 $this->auto_fetch_keyword_metrics_single(
                     (int) $kw['id'],
                     $kw['keyword'],

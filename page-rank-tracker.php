@@ -278,18 +278,10 @@ get_header();
     white-space: nowrap;
 }
 
-/* SEO Difficulty badge */
-.rt-diff-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1.4;
-}
-.rt-diff-badge--low    { background: #dcfce7; color: #166534; }
-.rt-diff-badge--medium { background: #fef3c7; color: #92400e; }
-.rt-diff-badge--high   { background: #fee2e2; color: #991b1b; }
+/* SEO Difficulty — 5段階ドットインジケーター */
+.rt-diff-dots { display: inline-flex; gap: 2px; align-items: center; margin-right: 3px; vertical-align: middle; }
+.rt-diff-dot { width: 5px; height: 5px; border-radius: 50%; background: #d1d5db; }
+.rt-diff-label { font-size: 10px; }
 
 /* Actions column */
 .rt-action-link {
@@ -1102,12 +1094,23 @@ get_header();
         return dayData.rank + '位';
     }
 
+    // 5段階難易度インジケーター
+    // ※ ラベル分類はUI上の便宜的表示（DataForSEO公式ラベルではない）
     function formatDifficultyBadge(val) {
         if (val == null) return '<span style="color:#d1d5db;">-</span>';
         var v = parseInt(val, 10);
-        if (v <= 33) return '<span class="rt-diff-badge rt-diff-badge--low">' + v + '（低）</span>';
-        if (v <= 66) return '<span class="rt-diff-badge rt-diff-badge--medium">' + v + '（中）</span>';
-        return '<span class="rt-diff-badge rt-diff-badge--high">' + v + '（高）</span>';
+        var tier, label, color;
+        if (v <= 19)      { tier = 1; label = '易';     color = '#5B9A6B'; }
+        else if (v <= 39) { tier = 2; label = 'やや易'; color = '#7B9A4C'; }
+        else if (v <= 59) { tier = 3; label = '中';     color = '#C4943C'; }
+        else if (v <= 79) { tier = 4; label = 'やや難'; color = '#C4703C'; }
+        else              { tier = 5; label = '難';     color = '#B5574B'; }
+        var dots = '';
+        for (var i = 1; i <= 5; i++) {
+            dots += '<span class="rt-diff-dot" style="' + (i <= tier ? 'background:' + color : '') + '"></span>';
+        }
+        return '<span class="rt-diff-dots">' + dots + '</span>'
+             + '<span class="rt-diff-label" style="color:' + color + '">' + label + '(' + v + ')</span>';
     }
 
     function hasBigDiff(a, b) {

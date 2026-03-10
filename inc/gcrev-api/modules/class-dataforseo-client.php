@@ -317,13 +317,21 @@ class Gcrev_DataForSEO_Client {
             return new \WP_Error( 'no_result', '検索ボリューム API 応答にデータが含まれていません。' );
         }
 
+        // 正規化キー → 元キーワード のマップを構築
+        $normalized_to_original = [];
+        foreach ( $keywords as $orig_kw ) {
+            $normalized_to_original[ $this->normalize_keyword( $orig_kw ) ] = $orig_kw;
+        }
+
         $results = [];
         foreach ( $tasks[0]['result'] as $item ) {
             $kw = $item['keyword'] ?? '';
             if ( $kw === '' ) {
                 continue;
             }
-            $results[ $kw ] = [
+            $norm = $this->normalize_keyword( $kw );
+            $original_kw = $normalized_to_original[ $norm ] ?? $kw;
+            $results[ $original_kw ] = [
                 'search_volume' => $item['search_volume'] ?? null,
                 'competition'   => $item['competition'] ?? null,
                 'cpc'           => $item['cpc'] ?? null,
@@ -385,6 +393,12 @@ class Gcrev_DataForSEO_Client {
             return new \WP_Error( 'no_result', 'SEO難易度 API 応答にデータが含まれていません。' );
         }
 
+        // 正規化キー → 元キーワード のマップを構築
+        $normalized_to_original = [];
+        foreach ( $keywords as $orig_kw ) {
+            $normalized_to_original[ $this->normalize_keyword( $orig_kw ) ] = $orig_kw;
+        }
+
         $results = [];
         $items = $tasks[0]['result'][0]['items'] ?? [];
         foreach ( $items as $item ) {
@@ -392,12 +406,36 @@ class Gcrev_DataForSEO_Client {
             if ( $kw === '' ) {
                 continue;
             }
-            $results[ $kw ] = [
+            // レスポンスのキーワードを正規化して、元のキーワードテキストにマッピング
+            $norm = $this->normalize_keyword( $kw );
+            $original_kw = $normalized_to_original[ $norm ] ?? $kw;
+            $results[ $original_kw ] = [
                 'keyword_difficulty' => $item['keyword_difficulty'] ?? null,
             ];
         }
 
         return $results;
+    }
+
+    // =========================================================
+    // キーワード正規化（内部）
+    // =========================================================
+
+    /**
+     * キーワードテキストを正規化する（レスポンス照合用）
+     *
+     * DataForSEO API はレスポンスでキーワードの表記を微妙に変える場合がある
+     * （全角/半角スペース、大文字/小文字など）ため、正規化して比較する。
+     *
+     * @param string $kw キーワードテキスト
+     * @return string 正規化済みキーワード
+     */
+    private function normalize_keyword( string $kw ): string {
+        $kw = mb_strtolower( trim( $kw ), 'UTF-8' );
+        // 全角スペースを半角に統一
+        $kw = str_replace( "\xE3\x80\x80", ' ', $kw );
+        // 連続空白を単一半角スペースに
+        return preg_replace( '/\s+/u', ' ', $kw );
     }
 
     // =========================================================
