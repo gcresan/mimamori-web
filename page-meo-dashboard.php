@@ -654,12 +654,11 @@ get_header();
 
 <!-- ===== 基準地点の設定（GBP接続状態に関係なく常に表示） ===== -->
 <div style="background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; cursor: pointer;" onclick="document.getElementById('meo-coord-body').style.display = document.getElementById('meo-coord-body').style.display === 'none' ? '' : 'none'; this.querySelector('.meo-coord-toggle').textContent = document.getElementById('meo-coord-body').style.display === 'none' ? '▶' : '▼';">
+    <div style="margin-bottom: 16px;">
         <div style="font-size: 18px; font-weight: 700; color: #2C3E40;">⚙️ MEO計測の基準地点</div>
-        <span class="meo-coord-toggle" style="font-size: 14px; color: #9ca3af; transition: transform 0.2s;"><?php echo $has_meo_coordinate ? '▶' : '▼'; ?></span>
     </div>
 
-    <div id="meo-coord-body" style="<?php echo $has_meo_coordinate ? 'display:none;' : ''; ?>">
+    <div id="meo-coord-body">
         <?php if ($has_meo_coordinate): ?>
         <div style="background: #f0fdf4; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #16a34a; display: flex; align-items: center; gap: 8px;">
             <span>✅</span>
