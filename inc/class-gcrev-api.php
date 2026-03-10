@@ -9129,12 +9129,16 @@ PROMPT;
         $tz  = wp_timezone();
         $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
 
+        // [DEBUG] メトリクス取得開始
+        error_log( "[GCREV][KeywordMetrics][DEBUG] === START auto_fetch_keyword_metrics_single === kw_id={$keyword_id}, kw='{$keyword_text}', loc={$location_code}, lang={$language_code}" );
+
         // 検索ボリューム取得
         $vol_data = $this->dataforseo->fetch_search_volume( [ $keyword_text ], $location_code, $language_code );
         if ( is_wp_error( $vol_data ) ) {
-            error_log( "[GCREV][KeywordMetrics] search_volume error for '{$keyword_text}' (loc:{$location_code}): " . $vol_data->get_error_message() );
+            error_log( "[GCREV][KeywordMetrics][DEBUG] search_volume FAILED: " . $vol_data->get_error_message() );
         } elseif ( isset( $vol_data[ $keyword_text ] ) ) {
             $v = $vol_data[ $keyword_text ];
+            error_log( "[GCREV][KeywordMetrics][DEBUG] search_volume OK: vol=" . ( $v['search_volume'] ?? 'null' ) . ", comp=" . ( $v['competition'] ?? 'null' ) . ", cpc=" . ( $v['cpc'] ?? 'null' ) );
             $wpdb->update( $kw_table, [
                 'search_volume'     => $v['search_volume'],
                 'competition'       => $v['competition'],
@@ -9143,23 +9147,28 @@ PROMPT;
                 'updated_at'        => $now,
             ], [ 'id' => $keyword_id ] );
         } else {
-            error_log( "[GCREV][KeywordMetrics] search_volume: no match for '{$keyword_text}' in response keys: " . implode( ', ', array_keys( $vol_data ) ) );
+            error_log( "[GCREV][KeywordMetrics][DEBUG] search_volume NO MATCH: kw='{$keyword_text}', response_keys=[" . implode( ', ', array_keys( $vol_data ) ) . "]" );
         }
 
         // SEO難易度取得（Labs APIは地域コード非対応の場合があるため国レベル 2392 を使用）
+        error_log( "[GCREV][KeywordMetrics][DEBUG] Calling fetch_keyword_difficulty with kw='{$keyword_text}', loc=2392, lang={$language_code}" );
         $diff_data = $this->dataforseo->fetch_keyword_difficulty( [ $keyword_text ], 2392, $language_code );
         if ( is_wp_error( $diff_data ) ) {
-            error_log( "[GCREV][KeywordMetrics] keyword_difficulty error for '{$keyword_text}' (loc:2392): " . $diff_data->get_error_message() );
+            error_log( "[GCREV][KeywordMetrics][DEBUG] keyword_difficulty FAILED: " . $diff_data->get_error_message() );
         } elseif ( isset( $diff_data[ $keyword_text ] ) ) {
             $d = $diff_data[ $keyword_text ];
-            $wpdb->update( $kw_table, [
+            error_log( "[GCREV][KeywordMetrics][DEBUG] keyword_difficulty OK: difficulty=" . ( $d['keyword_difficulty'] ?? 'null' ) );
+            $updated = $wpdb->update( $kw_table, [
                 'keyword_difficulty'    => $d['keyword_difficulty'],
                 'difficulty_fetched_at' => $now,
                 'updated_at'            => $now,
             ], [ 'id' => $keyword_id ] );
+            error_log( "[GCREV][KeywordMetrics][DEBUG] DB update result: " . ( $updated !== false ? "rows={$updated}" : "FAILED: " . $wpdb->last_error ) );
         } else {
-            error_log( "[GCREV][KeywordMetrics] keyword_difficulty: no match for '{$keyword_text}' in response keys: " . implode( ', ', array_keys( $diff_data ) ) );
+            error_log( "[GCREV][KeywordMetrics][DEBUG] keyword_difficulty NO MATCH: kw='{$keyword_text}', response_keys=[" . implode( ', ', array_keys( $diff_data ) ) . "]" );
         }
+
+        error_log( "[GCREV][KeywordMetrics][DEBUG] === END auto_fetch_keyword_metrics_single ===" );
     }
 
     /**
@@ -9595,6 +9604,7 @@ PROMPT;
                 || $kw['keyword_difficulty'] === null
                 || empty( $kw['difficulty_fetched_at'] )
                 || strtotime( $kw['difficulty_fetched_at'] ) < strtotime( '-30 days' );
+            error_log( "[GCREV][KeywordMetrics][DEBUG] fetch-all kw='{$kw['keyword']}': sv=" . var_export( $kw['search_volume'], true ) . ", kd=" . var_export( $kw['keyword_difficulty'], true ) . ", diff_at=" . ( $kw['difficulty_fetched_at'] ?? 'null' ) . ", needs_metrics=" . ( $needs_metrics ? 'YES' : 'NO' ) );
             if ( $needs_metrics ) {
                 $this->auto_fetch_keyword_metrics_single(
                     (int) $kw['id'],

@@ -375,10 +375,32 @@ class Gcrev_DataForSEO_Client {
             ]
         ];
 
+        // [DEBUG] リクエスト内容をログ出力
+        error_log( '[GCREV][DataForSEO][DEBUG] keyword_difficulty REQUEST: endpoint=/dataforseo_labs/google/bulk_keyword_difficulty/live, keywords=' . implode( ', ', $keywords ) . ', loc=' . $location_code . ', lang=' . $language_code );
+
         $response = $this->api_request( '/dataforseo_labs/google/bulk_keyword_difficulty/live', $post_data );
 
         if ( is_wp_error( $response ) ) {
+            error_log( '[GCREV][DataForSEO][DEBUG] keyword_difficulty WP_Error: ' . $response->get_error_message() );
             return $response;
+        }
+
+        // [DEBUG] レスポンス全体をログ出力（構造確認用）
+        error_log( '[GCREV][DataForSEO][DEBUG] keyword_difficulty RESPONSE status_code=' . ( $response['status_code'] ?? 'N/A' ) . ' status_message=' . ( $response['status_message'] ?? 'N/A' ) );
+        // タスクレベルの status も確認
+        $task0 = $response['tasks'][0] ?? [];
+        error_log( '[GCREV][DataForSEO][DEBUG] keyword_difficulty TASK[0] status_code=' . ( $task0['status_code'] ?? 'N/A' ) . ' status_message=' . ( $task0['status_message'] ?? 'N/A' ) );
+        // result 構造をダンプ
+        $result0 = $task0['result'][0] ?? null;
+        if ( $result0 ) {
+            error_log( '[GCREV][DataForSEO][DEBUG] keyword_difficulty RESULT[0] keys=' . implode( ', ', array_keys( $result0 ) ) );
+            $items_raw = $result0['items'] ?? [];
+            error_log( '[GCREV][DataForSEO][DEBUG] keyword_difficulty items count=' . count( $items_raw ) );
+            foreach ( $items_raw as $idx => $itm ) {
+                error_log( '[GCREV][DataForSEO][DEBUG] keyword_difficulty item[' . $idx . ']=' . wp_json_encode( $itm, JSON_UNESCAPED_UNICODE ) );
+            }
+        } else {
+            error_log( '[GCREV][DataForSEO][DEBUG] keyword_difficulty RESULT[0] is null/empty. Full tasks dump=' . wp_json_encode( $response['tasks'] ?? [], JSON_UNESCAPED_UNICODE ) );
         }
 
         $status_code = (int) ( $response['status_code'] ?? 0 );
