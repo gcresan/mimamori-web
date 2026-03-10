@@ -393,15 +393,9 @@ class Gcrev_DataForSEO_Client {
         }
 
         $dbg( '[keyword_overview] status=' . ( $response['status_code'] ?? 'N/A' ) );
+        // タスク全体をJSONダンプ（構造確認用）
         foreach ( ( $response['tasks'] ?? [] ) as $ti => $t ) {
-            $r0 = $t['result'][0] ?? null;
-            $kw_resp = $r0['keyword'] ?? 'N/A';
-            $item0 = $r0['items'][0] ?? null;
-            $kd = $item0['keyword_properties']['keyword_difficulty'] ?? 'null';
-            $dbg( "[keyword_overview] task[{$ti}] kw={$kw_resp} difficulty={$kd} item_keys=" . ( $item0 ? implode(',', array_keys($item0)) : 'none' ) );
-            if ( $item0 && isset( $item0['keyword_properties'] ) ) {
-                $dbg( "[keyword_overview] keyword_properties=" . wp_json_encode( $item0['keyword_properties'], JSON_UNESCAPED_UNICODE ) );
-            }
+            $dbg( "[keyword_overview] FULL task[{$ti}]=" . wp_json_encode( $t, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT ) );
         }
 
         $status_code = (int) ( $response['status_code'] ?? 0 );
