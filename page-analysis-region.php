@@ -475,7 +475,7 @@ function updateTop10Chart(data) {
     closeRegionTrendPanel();
 
     // 背景色の配列を生成（選択状態で色が変わる）
-    const defaultBg = 'rgba(59, 130, 246, 0.8)';
+    const defaultBg = 'rgba(103, 125, 107, 0.8)';
     const defaultBorder = '#677d6b';
 
     top10Chart = new Chart(ctx, {
@@ -553,11 +553,11 @@ function updateBarStyles(activeIndex) {
     const count = ds.data.length;
     for (let i = 0; i < count; i++) {
         if (i === activeIndex) {
-            ds.backgroundColor[i] = 'rgba(37, 99, 235, 1)';
-            ds.borderColor[i]     = '#1e40af';
+            ds.backgroundColor[i] = 'rgba(82, 140, 90, 1)';
+            ds.borderColor[i]     = '#3D5A42';
             ds.borderWidth[i]     = 2;
         } else {
-            ds.backgroundColor[i] = activeIndex >= 0 ? 'rgba(59, 130, 246, 0.45)' : 'rgba(59, 130, 246, 0.8)';
+            ds.backgroundColor[i] = activeIndex >= 0 ? 'rgba(103, 125, 107, 0.45)' : 'rgba(103, 125, 107, 0.8)';
             ds.borderColor[i]     = '#677d6b';
             ds.borderWidth[i]     = 1;
         }
@@ -645,7 +645,7 @@ function renderTrendChart(container, labels, values, jaName) {
                 label: jaName + ' セッション',
                 data: values,
                 borderColor: '#677d6b',
-                backgroundColor: 'rgba(59, 130, 246, 0.10)',
+                backgroundColor: 'rgba(103, 125, 107, 0.15)',
                 fill: true,
                 tension: 0.3,
                 pointRadius: 4,

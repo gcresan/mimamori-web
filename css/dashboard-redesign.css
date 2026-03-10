@@ -210,8 +210,8 @@ h3 { font-size: 20px; font-weight: 700; }
 }
 
 .sidebar-nav .nav-link.active {
-  background: rgba(46, 196, 182, 0.07);
-  color: var(--mw-primary-blue);
+  background: rgba(103, 125, 107, 0.13);
+  color: #3D4F41;
   font-weight: 600;
   border-left: 4px solid var(--mw-primary-blue);
   border-right: none;
@@ -272,8 +272,8 @@ h3 { font-size: 20px; font-weight: 700; }
   background: var(--mw-primary-blue);
 }
 .sidebar-nav .nav-submenu .nav-link.active {
-  background: rgba(46, 196, 182, 0.05);
-  color: var(--mw-primary-blue);
+  background: rgba(103, 125, 107, 0.10);
+  color: #3D4F41;
   font-weight: 500;
 }
 .sidebar-nav .nav-submenu .nav-link.active::before {
@@ -644,7 +644,7 @@ button.info-kpi-item {
 .info-kpi-item.is-active {
   border-color: var(--mw-primary-blue);
   border-bottom: 3px solid var(--mw-primary-blue);
-  background: rgba(46, 196, 182, 0.04);
+  background: rgba(103, 125, 107, 0.04);
   box-shadow: var(--mw-shadow-soft);
 }
 .info-kpi-item.is-active .info-kpi-label {
@@ -727,7 +727,7 @@ button.info-kpi-item {
   font-family: inherit;
 }
 .info-kpi-retry-btn:hover {
-  background: rgba(46, 196, 182, 0.08);
+  background: rgba(103, 125, 107, 0.08);
 }
 
 /* Timeout warning */
@@ -1169,17 +1169,17 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(46, 196, 182, 0.2);
+  box-shadow: 0 2px 6px rgba(103, 125, 107, 0.2);
   line-height: 1.4;
   letter-spacing: 0.01em;
 }
 .ask-ai-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(46, 196, 182, 0.3);
+  box-shadow: 0 4px 12px rgba(103, 125, 107, 0.3);
 }
 .ask-ai-btn:active {
   transform: translateY(0);
-  box-shadow: 0 1px 4px rgba(46, 196, 182, 0.2);
+  box-shadow: 0 1px 4px rgba(103, 125, 107, 0.2);
 }
 .ask-ai-btn:focus-visible {
   outline: 2px solid var(--mw-primary-teal);
@@ -1195,7 +1195,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   padding: 5px 12px;
   font-size: 11.5px;
   margin-top: 8px;
-  box-shadow: 0 1px 4px rgba(46, 196, 182, 0.15);
+  box-shadow: 0 1px 4px rgba(103, 125, 107, 0.15);
 }
 /* section-title 内の配置 */
 .section-title .ask-ai-btn {
@@ -1605,8 +1605,8 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 
 /* ========== Period Info / Period Display (report, analysis 共通) ========== */
 .period-info {
-  background: var(--mw-bg-primary);
-  border: 1px solid var(--mw-border-light);
+  background: var(--mw-bg-tertiary);
+  border: 1px solid var(--mw-border-medium);
   border-radius: var(--mw-radius-md);
   padding: 22px 26px;
   margin-bottom: 28px;
@@ -1637,8 +1637,8 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 /* .period-display は .period-info と同一デザインに統一 */
 .period-display {
-  background: var(--mw-bg-primary);
-  border: 1px solid var(--mw-border-light);
+  background: var(--mw-bg-tertiary);
+  border: 1px solid var(--mw-border-medium);
   border-radius: var(--mw-radius-md);
   padding: 22px 26px;
   margin-bottom: 28px;
@@ -1758,7 +1758,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   border-radius: 8px;
 }
 .summary-card-change.positive {
-  background: rgba(46, 189, 142, 0.12);
+  background: rgba(82, 140, 90, 0.12);
   color: #528C5A;
 }
 .summary-card-change.negative {
@@ -1766,7 +1766,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   color: #C95A4F;
 }
 .summary-card-change.neutral {
-  background: rgba(46, 196, 182, 0.08);
+  background: rgba(103, 125, 107, 0.08);
   color: var(--mw-primary-blue);
 }
 .summary-card-icon {
@@ -1914,7 +1914,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .data-table thead th.sortable.sort-asc,
 .data-table thead th.sortable.sort-desc {
-  background: rgba(46, 196, 182, 0.06);
+  background: rgba(103, 125, 107, 0.06);
   color: var(--mw-primary-blue);
 }
 
@@ -2046,7 +2046,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   white-space: nowrap;
 }
 .digest-list-item-change.positive {
-  background: rgba(46, 189, 142, 0.12);
+  background: rgba(82, 140, 90, 0.12);
   color: #528C5A;
 }
 .digest-list-item-change.negative {
@@ -2179,7 +2179,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .kpi-change.positive {
   color: #528C5A;
-  background: rgba(46, 189, 142, 0.12);
+  background: rgba(82, 140, 90, 0.12);
 }
 .kpi-change.negative {
   color: #C95A4F;
@@ -2187,7 +2187,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .kpi-change.neutral {
   color: var(--mw-primary-blue);
-  background: rgba(46, 196, 182, 0.08);
+  background: rgba(103, 125, 107, 0.08);
 }
 .kpi-sparkline {
   margin-top: 16px;
@@ -2235,7 +2235,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   font-weight: 600;
 }
 .status-complete {
-  background: rgba(46, 189, 142, 0.15);
+  background: rgba(82, 140, 90, 0.15);
   color: #528C5A;
 }
 
@@ -2432,7 +2432,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 
 /* BEM: --good (green accent) */
 .beginner-report-item--good .beginner-report-action {
-  background: rgba(46, 189, 142, 0.08);
+  background: rgba(82, 140, 90, 0.08);
   border-left-color: var(--mw-accent-positive);
 }
 .beginner-report-item--good .beginner-report-action__label {
@@ -2483,7 +2483,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   font-weight: 600;
 }
 .trend-badge.up {
-  background: rgba(46, 189, 142, 0.12);
+  background: rgba(82, 140, 90, 0.12);
   color: #528C5A;
 }
 .trend-badge.down {
@@ -2586,7 +2586,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 .filter-input:focus {
   outline: none;
   border-color: var(--mw-primary-blue);
-  box-shadow: 0 0 0 3px rgba(46, 196, 182, 0.08);
+  box-shadow: 0 0 0 3px rgba(103, 125, 107, 0.08);
 }
 .filter-btn {
   padding: 10px 20px;
@@ -2739,7 +2739,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 .form-group textarea:focus {
   outline: none;
   border-color: var(--mw-primary-blue);
-  box-shadow: 0 0 0 3px rgba(46, 196, 182, 0.08);
+  box-shadow: 0 0 0 3px rgba(103, 125, 107, 0.08);
 }
 .form-group textarea {
   resize: vertical;
@@ -2792,7 +2792,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .output-mode-option input[type="radio"]:checked + label {
   border-color: var(--mw-primary-blue);
-  background: rgba(46, 196, 182, 0.05);
+  background: rgba(103, 125, 107, 0.05);
 }
 .output-mode-option label strong {
   display: block;
@@ -2908,7 +2908,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   font-size: 15px;
 }
 .success-message {
-  background: rgba(46, 189, 142, 0.1);
+  background: rgba(82, 140, 90, 0.1);
   border: 2px solid var(--mw-accent-positive);
   border-radius: var(--mw-radius-sm);
   padding: 16px;
@@ -3164,7 +3164,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   box-shadow: var(--mw-shadow-float);
 }
 .cv-summary-card.highlight {
-  background: rgba(46, 196, 182, 0.04);
+  background: rgba(103, 125, 107, 0.04);
   border-color: var(--mw-primary-blue);
 }
 .cv-summary-label {
@@ -3196,7 +3196,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   margin-bottom: 16px;
 }
 .cv-summary-change.up {
-  background: rgba(46, 189, 142, 0.12);
+  background: rgba(82, 140, 90, 0.12);
   color: #528C5A;
 }
 .cv-summary-change.down {
@@ -3204,7 +3204,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   color: #C95A4F;
 }
 .cv-summary-change.neutral {
-  background: rgba(46, 196, 182, 0.08);
+  background: rgba(103, 125, 107, 0.08);
   color: var(--mw-primary-blue);
 }
 .cv-summary-comment {
@@ -3254,7 +3254,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   color: var(--mw-primary-blue);
 }
 .cv-analysis-badge.recommend {
-  background: rgba(46, 189, 142, 0.12);
+  background: rgba(82, 140, 90, 0.12);
   color: #528C5A;
 }
 
@@ -3326,7 +3326,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   font-weight: 600;
 }
 .cv-data-table tr.row-highlight {
-  background: rgba(46, 196, 182, 0.05);
+  background: rgba(103, 125, 107, 0.05);
 }
 .cv-data-table tr.row-highlight td {
   font-weight: 600;
@@ -3634,7 +3634,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .account .form-group input:focus {
   border-color: var(--mw-primary-blue);
-  box-shadow: 0 0 0 3px rgba(46, 196, 182, 0.08);
+  box-shadow: 0 0 0 3px rgba(103, 125, 107, 0.08);
   outline: none;
 }
 .account .form-note {
@@ -3720,10 +3720,10 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   background: var(--mw-bg-secondary);
 }
 .service .comparison-table thead th.plan-standard {
-  background: rgba(46, 196, 182, 0.06);
+  background: rgba(103, 125, 107, 0.06);
 }
 .service .comparison-table thead th.plan-master {
-  background: rgba(46, 196, 182, 0.1);
+  background: rgba(103, 125, 107, 0.1);
 }
 .service .comparison-table tbody tr:hover {
   background: var(--mw-bg-secondary);
@@ -3796,7 +3796,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .service .plan-card.featured {
   border-color: var(--mw-primary-blue);
-  background: rgba(46, 196, 182, 0.04);
+  background: rgba(103, 125, 107, 0.04);
 }
 .service .plan-name {
   color: var(--mw-text-heading);
@@ -4157,7 +4157,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 .score-comp-pts {
   font-size: 14px;
   font-weight: 700;
-  color: var(--mw-primary, #2563eb);
+  color: var(--mw-primary, #677d6b);
   white-space: nowrap;
 }
 .score-comp-bar {
@@ -4169,7 +4169,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .score-comp-bar-fill {
   height: 100%;
-  background: var(--mw-primary, #2563eb);
+  background: var(--mw-primary, #677d6b);
   border-radius: 3px;
   transition: width 0.4s ease;
 }
@@ -4227,7 +4227,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 }
 .score-comp-dim-pts {
   font-weight: 600;
-  color: var(--mw-primary, #2563eb);
+  color: var(--mw-primary, #677d6b);
   white-space: nowrap;
   font-size: 12px;
 }
@@ -4329,7 +4329,7 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   transition: background 0.2s, transform 0.2s;
 }
 .plan-locked-link:hover {
-  background: var(--mw-accent-hover, #2563EB);
+  background: var(--mw-accent-hover, #677d6b);
   transform: translateY(-1px);
   color: #fff;
   text-decoration: none;

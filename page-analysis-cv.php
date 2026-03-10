@@ -505,7 +505,7 @@ function renderDeviceCvChart(deviceData) {
                     data: cvrData,
                     type: 'line',
                     borderColor: '#C95A4F',
-                    backgroundColor: 'rgba(239,68,68,0.1)',
+                    backgroundColor: 'rgba(201,90,79,0.12)',
                     pointBackgroundColor: '#C95A4F',
                     tension: 0.4,
                     yAxisID: 'y1',

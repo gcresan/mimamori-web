@@ -429,7 +429,7 @@ function updateTrendChart(data) {
                     label: 'Mobile',
                     data: mobile,
                     borderColor: '#677d6b',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    backgroundColor: 'rgba(103, 125, 107, 0.15)',
                     tension: 0.4,
                     fill: true
                 },
@@ -437,7 +437,7 @@ function updateTrendChart(data) {
                     label: 'Desktop',
                     data: desktop,
                     borderColor: '#528C5A',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    backgroundColor: 'rgba(82, 140, 90, 0.12)',
                     tension: 0.4,
                     fill: true
                 },
@@ -445,7 +445,7 @@ function updateTrendChart(data) {
                     label: 'Tablet',
                     data: tablet,
                     borderColor: '#D4A842',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    backgroundColor: 'rgba(166, 139, 91, 0.12)',
                     tension: 0.4,
                     fill: true
                 }

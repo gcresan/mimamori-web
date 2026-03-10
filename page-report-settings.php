@@ -147,7 +147,7 @@ get_header();
         <!-- 海外アクセス除外 -->
         <div class="form-group" style="margin-top: 24px;">
             <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
-                <input type="checkbox" id="exclude-foreign-traffic" style="width: 18px; height: 18px; accent-color: var(--mw-primary-blue, #2563EB);"
+                <input type="checkbox" id="exclude-foreign-traffic" style="width: 18px; height: 18px; accent-color: var(--mw-primary-blue, #677d6b);"
                        <?php checked($saved_exclude_foreign, '1'); ?>>
                 <span>海外アクセスを除外してレポートを作成する</span>
             </label>

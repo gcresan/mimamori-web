@@ -65,8 +65,8 @@ get_header();
 .btn-month-nav { background:#fff; border:1px solid #cbd5e1; border-radius:4px; padding:4px 10px; cursor:pointer; font-size:14px; }
 .btn-month-nav:hover { background:#f1f5f9; }
 #cvReviewMonth { border:1px solid #cbd5e1; border-radius:4px; padding:6px 10px; font-size:14px; }
-.btn-load { background:#2563eb; color:#fff; border:none; border-radius:4px; padding:6px 16px; cursor:pointer; font-size:14px; }
-.btn-load:hover { background:#1d4ed8; }
+.btn-load { background:#677d6b; color:#fff; border:none; border-radius:4px; padding:6px 16px; cursor:pointer; font-size:14px; }
+.btn-load:hover { background:#566a5a; }
 #filterStatus, #bulkAction { border:1px solid #cbd5e1; border-radius:4px; padding:6px 8px; font-size:13px; }
 .btn-bulk { background:#6366f1; color:#fff; border:none; border-radius:4px; padding:6px 14px; cursor:pointer; font-size:13px; }
 .btn-bulk:disabled { opacity:0.5; cursor:not-allowed; }
@@ -111,7 +111,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 .cv-review-table tr.row-dirty td:first-child::after { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:#f59e0b; }
 
 /* Spinner */
-.spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top:3px solid #2563eb; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px; }
+.spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top:3px solid #677d6b; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
 /* ===== Tab 2: CV Settings ===== */
@@ -349,7 +349,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         <div id="cvNoConfig" style="display:none;">
             <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:24px; text-align:center;">
                 <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">ゴールが設定されていません</p>
-                <p style="margin:0;"><a href="javascript:void(0)" id="linkToSettingsTab" style="color:#2563eb; font-weight:600;">ゴールの数え方設定</a>から設定してください。</p>
+                <p style="margin:0;"><a href="javascript:void(0)" id="linkToSettingsTab" style="color:#677d6b; font-weight:600;">ゴールの数え方設定</a>から設定してください。</p>
             </div>
         </div>
 

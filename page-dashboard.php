@@ -1697,14 +1697,14 @@ foreach ($highlight_items as $highlight):
                     label: label,
                     data: json.values,
                     borderColor: '#677d6b',
-                    borderWidth: 2,
+                    borderWidth: 2.5,
                     pointBackgroundColor: pointBg,
                     pointRadius: pointR,
                     pointHitRadius: 15,
                     pointHoverRadius: 7,
                     tension: 0.3,
                     fill: true,
-                    backgroundColor: 'rgba(103,125,107,0.08)',
+                    backgroundColor: 'rgba(103,125,107,0.13)',
                 }]
             },
             options: {

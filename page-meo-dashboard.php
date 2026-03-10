@@ -841,14 +841,14 @@ get_header();
                         label: '検索での表示',
                         data: searchData,
                         borderColor: '#677d6b',
-                        backgroundColor: 'rgba(59,130,246,0.08)',
+                        backgroundColor: 'rgba(103,125,107,0.12)',
                         fill: true, tension: 0.3, pointRadius: 2
                     },
                     {
                         label: 'マップでの表示',
                         data: mapData,
                         borderColor: '#528C5A',
-                        backgroundColor: 'rgba(16,185,129,0.08)',
+                        backgroundColor: 'rgba(82,140,90,0.12)',
                         fill: true, tension: 0.3, pointRadius: 2
                     }
                 ]

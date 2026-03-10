@@ -134,7 +134,7 @@ get_header();
               width:100%; max-width:480px; padding:18px 24px;
               background:#677d6b; color:#fff; border:none; border-radius:12px;
               font-size:17px; font-weight:700; text-decoration:none;
-              box-shadow:0 4px 12px rgba(59,130,246,.3); transition:all 0.2s;">
+              box-shadow:0 4px 12px rgba(103,125,107,.3); transition:all 0.2s;">
         &#x1F4B3; 分割払い（初回決済）を行う &#x2192;
     </a>
     <p style="font-size:14px; color:#C0392B; margin-top:14px; line-height:1.7; font-weight:600;">

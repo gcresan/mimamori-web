@@ -243,7 +243,7 @@ class Gcrev_Client_Management_Page {
                         $tier_name = $tier_defs[ $tier ]['name'] ?? $tier;
                         if ( $tier === 'ai_support' ) :
                         ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#2563EB; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.2); border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#528C5A; background:rgba(82,140,90,0.08); border:1px solid rgba(82,140,90,0.2); border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
                         <?php else : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#6B7280; background:#f5f5f5; border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
                         <?php endif; ?>

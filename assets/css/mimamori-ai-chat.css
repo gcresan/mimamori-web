@@ -56,7 +56,7 @@
 
 .mw-chat-fab:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(46, 196, 182, 0.25);
+  box-shadow: 0 8px 24px rgba(103, 125, 107, 0.25);
 }
 
 .mw-chat-fab__icon { font-size: 24px; line-height: 1; }
@@ -676,7 +676,7 @@
 .mw-chat-input__textarea:focus {
   outline: none;
   border-color: var(--mw-teal);
-  box-shadow: 0 0 0 3px rgba(46, 196, 182, 0.12);
+  box-shadow: 0 0 0 3px rgba(103, 125, 107, 0.12);
 }
 .mw-chat-input__textarea::placeholder {
   color: var(--mw-text-ter);
