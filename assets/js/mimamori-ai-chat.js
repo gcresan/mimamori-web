@@ -546,7 +546,7 @@
      ============================ */
 
   var VOICE_MAX_DURATION = 45000;   // 最大45秒（安全制限）
-  var VOICE_SILENCE_TIMEOUT = 3000; // 沈黙3秒で認識自動停止
+  var VOICE_SILENCE_TIMEOUT = 12000; // 沈黙12秒で認識自動停止（ゆとりを持たせる）
 
   /** Audio visualization state */
   var audioCtx = null;
@@ -566,6 +566,11 @@
   var fallbackMaxTimer = null;
   var fallbackStream = null;     // MediaRecorder 用ストリーム
   var isTranscribing = false;    // Whisper API 呼び出し中
+
+  /** SpeechRecognition 自動再接続用 */
+  var voiceStoppedByUser = false;  // confirm/cancel で明示的に停止したか
+  var voiceRestartCount = 0;       // 自動再接続回数
+  var VOICE_MAX_RESTARTS = 5;      // 自動再接続上限
 
   /** 録音モードUIが表示中かどうか */
   function isInRecordingMode() {
@@ -704,6 +709,25 @@
     recognition.addEventListener('end', function () {
       state.isRecording = false;
       clearTimers();
+
+      // ユーザーが明示的に確定/キャンセルした場合 → 停止
+      if (voiceStoppedByUser || !isInRecordingMode()) {
+        stopWaveformAnimation();
+        return;
+      }
+
+      // Chrome は continuous: true でも途中で切断することがある
+      // → 録音モード中なら自動再接続を試みる
+      if (voiceRestartCount < VOICE_MAX_RESTARTS) {
+        voiceRestartCount++;
+        try {
+          recognition.start();
+          return; // 波形はそのまま維持
+        } catch (e) {
+          // 再接続失敗 → 停止して UI 維持
+        }
+      }
+
       stopWaveformAnimation();
       // 録音UIは維持 — ユーザーが ✓ or ✕ をクリックするのを待つ
     });
@@ -711,10 +735,13 @@
     recognition.addEventListener('error', function (e) {
       state.isRecording = false;
       clearTimers();
+
+      // aborted = プログラム的に stop() を呼んだ（沈黙タイマー等）
+      // → 録音UIはそのまま維持し、ユーザーの確定/キャンセルを待つ
+      if (e.error === 'aborted') return;
+
       stopWaveformAnimation();
       exitRecordingMode();
-
-      if (e.error === 'aborted') return;
 
       // not-allowed / audio-capture はハードウェア系 → フォールバックでも解決不可
       if (e.error === 'not-allowed' || e.error === 'audio-capture') {
@@ -781,6 +808,8 @@
     if (!recognition) return;
 
     voiceBuffer = '';
+    voiceStoppedByUser = false;
+    voiceRestartCount = 0;
     enterRecordingMode();
 
     try {
@@ -794,6 +823,7 @@
   }
 
   function confirmVoiceSpeech() {
+    voiceStoppedByUser = true;
     if (recognition && state.isRecording) {
       try { recognition.stop(); } catch (e) {}
     }
@@ -810,6 +840,7 @@
   }
 
   function cancelVoiceSpeech() {
+    voiceStoppedByUser = true;
     if (recognition && state.isRecording) {
       try { recognition.stop(); } catch (e) {}
     }
