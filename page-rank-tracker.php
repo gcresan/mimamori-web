@@ -1007,14 +1007,9 @@ get_header();
             html += '<div class="rt-rank-accent ' + accent + '"></div>';
             html += '<div class="rt-kw-name">' + escHtml(kw.keyword) + '</div>';
             html += '<div class="rt-kw-meta">';
-            // Search volume
-            if (kw.search_volume != null) {
-                html += '<span class="rt-kw-meta-item">Vol: <strong>' + numberFormat(kw.search_volume) + '</strong></span>';
-            }
-            // SEO difficulty
-            if (kw.keyword_difficulty != null) {
-                html += '<span class="rt-kw-meta-item">難易度: ' + formatDifficultyBadge(kw.keyword_difficulty) + '</span>';
-            }
+            // Search volume + SEO difficulty
+            html += '<span class="rt-kw-meta-item">Vol: <strong>' + (kw.search_volume != null ? numberFormat(kw.search_volume) : '-') + '</strong></span>';
+            html += '<span class="rt-kw-meta-item">難易度: ' + formatDifficultyBadge(kw.keyword_difficulty) + '</span>';
             html += '</div>';
             html += '</td>';
 

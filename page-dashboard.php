@@ -2265,12 +2265,8 @@ foreach ($highlight_items as $highlight):
             html += '<div class="drt-rank-accent ' + accent + '"></div>';
             html += '<div class="drt-kw-name">' + drtEsc(kw.keyword) + '</div>';
             html += '<div class="drt-kw-meta">';
-            if (kw.search_volume != null) {
-                html += '<span class="drt-kw-meta-item">Vol: <strong>' + drtFmt(kw.search_volume) + '</strong></span>';
-            }
-            if (kw.keyword_difficulty != null) {
-                html += '<span class="drt-kw-meta-item">難易度: ' + drtFormatDifficultyBadge(kw.keyword_difficulty) + '</span>';
-            }
+            html += '<span class="drt-kw-meta-item">Vol: <strong>' + (kw.search_volume != null ? drtFmt(kw.search_volume) : '-') + '</strong></span>';
+            html += '<span class="drt-kw-meta-item">難易度: ' + drtFormatDifficultyBadge(kw.keyword_difficulty) + '</span>';
             html += '</div>';
             html += '</td>';
 
