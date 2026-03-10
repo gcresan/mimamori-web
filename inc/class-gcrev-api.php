@@ -9129,18 +9129,10 @@ PROMPT;
         $tz  = wp_timezone();
         $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
 
-        // [DEBUG] /tmp/gcrev_debug.log に出力（KUSANAGI環境ではerror_logが効かないため）
-        $dbg = function( $msg ) { file_put_contents( '/tmp/gcrev_debug.log', date('Y-m-d H:i:s') . ' [Metrics] ' . $msg . "\n", FILE_APPEND ); };
-
-        $dbg( "=== START === kw_id={$keyword_id}, kw='{$keyword_text}', loc={$location_code}, lang={$language_code}" );
-
         // 検索ボリューム取得
         $vol_data = $this->dataforseo->fetch_search_volume( [ $keyword_text ], $location_code, $language_code );
-        if ( is_wp_error( $vol_data ) ) {
-            $dbg( "search_volume FAILED: " . $vol_data->get_error_message() );
-        } elseif ( isset( $vol_data[ $keyword_text ] ) ) {
+        if ( ! is_wp_error( $vol_data ) && isset( $vol_data[ $keyword_text ] ) ) {
             $v = $vol_data[ $keyword_text ];
-            $dbg( "search_volume OK: vol=" . ( $v['search_volume'] ?? 'null' ) . ", comp=" . ( $v['competition'] ?? 'null' ) . ", cpc=" . ( $v['cpc'] ?? 'null' ) );
             $wpdb->update( $kw_table, [
                 'search_volume'     => $v['search_volume'],
                 'competition'       => $v['competition'],
@@ -9148,29 +9140,18 @@ PROMPT;
                 'volume_fetched_at' => $now,
                 'updated_at'        => $now,
             ], [ 'id' => $keyword_id ] );
-        } else {
-            $dbg( "search_volume NO MATCH: kw='{$keyword_text}', response_keys=[" . implode( ', ', array_keys( $vol_data ) ) . "]" );
         }
 
-        // SEO難易度取得（Labs APIは地域コード非対応の場合があるため国レベル 2392 を使用）
-        $dbg( "Calling fetch_keyword_difficulty kw='{$keyword_text}', loc=2392, lang={$language_code}" );
+        // SEO難易度取得（keyword_overview/live, 国レベル 2392）
         $diff_data = $this->dataforseo->fetch_keyword_difficulty( [ $keyword_text ], 2392, $language_code );
-        if ( is_wp_error( $diff_data ) ) {
-            $dbg( "keyword_difficulty FAILED: " . $diff_data->get_error_message() );
-        } elseif ( isset( $diff_data[ $keyword_text ] ) ) {
+        if ( ! is_wp_error( $diff_data ) && isset( $diff_data[ $keyword_text ] ) ) {
             $d = $diff_data[ $keyword_text ];
-            $dbg( "keyword_difficulty OK: difficulty=" . ( $d['keyword_difficulty'] ?? 'null' ) );
-            $updated = $wpdb->update( $kw_table, [
+            $wpdb->update( $kw_table, [
                 'keyword_difficulty'    => $d['keyword_difficulty'],
                 'difficulty_fetched_at' => $now,
                 'updated_at'            => $now,
             ], [ 'id' => $keyword_id ] );
-            $dbg( "DB update result: " . ( $updated !== false ? "rows={$updated}" : "FAILED: " . $wpdb->last_error ) );
-        } else {
-            $dbg( "keyword_difficulty NO MATCH: kw='{$keyword_text}', response_keys=[" . implode( ', ', array_keys( $diff_data ) ) . "]" );
         }
-
-        $dbg( "=== END ===" );
     }
 
     /**

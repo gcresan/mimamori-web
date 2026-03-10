@@ -346,7 +346,11 @@ class Gcrev_DataForSEO_Client {
     // =========================================================
 
     /**
-     * DataForSEO Labs Bulk Keyword Difficulty API でキーワードの SEO 難易度を取得
+     * DataForSEO Labs Keyword Overview API でキーワードの SEO 難易度を取得
+     *
+     * bulk_keyword_difficulty/live は日本語ローカルキーワードで keyword_difficulty: null を
+     * 返すため、keyword_overview/live を使用する。
+     * レスポンスパス: tasks[n].result[0].items[0].keyword_properties.keyword_difficulty
      *
      * @param array  $keywords       キーワード配列（最大1000件）
      * @param int    $location_code  ロケーションコード（デフォルト: Japan 2392）
@@ -367,51 +371,27 @@ class Gcrev_DataForSEO_Client {
             Gcrev_Rate_Limiter::check_and_wait( 'dataforseo_kw', 10 );
         }
 
-        $post_data = [
-            [
-                'keywords'      => array_values( $keywords ),
+        // keyword_overview/live はキーワード単位でタスク要素を送信
+        $post_data = [];
+        foreach ( $keywords as $kw ) {
+            $post_data[] = [
+                'keyword'       => $kw,
                 'location_code' => $location_code,
                 'language_code' => $language_code,
-            ]
-        ];
-
-        // [DEBUG] /tmp/gcrev_debug.log にログ出力（KUSANAGI環境では error_log() が効かないため）
-        $dbg = function( $msg ) { file_put_contents( '/tmp/gcrev_debug.log', date('Y-m-d H:i:s') . ' ' . $msg . "\n", FILE_APPEND ); };
-
-        $dbg( 'REQUEST: endpoint=/dataforseo_labs/google/bulk_keyword_difficulty/live, keywords=' . implode( ', ', $keywords ) . ', loc=' . $location_code . ', lang=' . $language_code );
-
-        $response = $this->api_request( '/dataforseo_labs/google/bulk_keyword_difficulty/live', $post_data );
-
-        if ( is_wp_error( $response ) ) {
-            $dbg( 'WP_Error: ' . $response->get_error_message() );
-            return $response;
+            ];
         }
 
-        $dbg( 'RESPONSE status_code=' . ( $response['status_code'] ?? 'N/A' ) . ' status_message=' . ( $response['status_message'] ?? 'N/A' ) );
-        $task0 = $response['tasks'][0] ?? [];
-        $dbg( 'TASK[0] status_code=' . ( $task0['status_code'] ?? 'N/A' ) . ' status_message=' . ( $task0['status_message'] ?? 'N/A' ) );
-        $result0 = $task0['result'][0] ?? null;
-        if ( $result0 ) {
-            $dbg( 'RESULT[0] keys=' . implode( ', ', array_keys( $result0 ) ) );
-            $items_raw = $result0['items'] ?? [];
-            $dbg( 'items count=' . count( $items_raw ) );
-            foreach ( $items_raw as $idx => $itm ) {
-                $dbg( 'item[' . $idx . ']=' . wp_json_encode( $itm, JSON_UNESCAPED_UNICODE ) );
-            }
-        } else {
-            $dbg( 'RESULT[0] is null/empty. Full tasks dump=' . wp_json_encode( $response['tasks'] ?? [], JSON_UNESCAPED_UNICODE ) );
+        $response = $this->api_request( '/dataforseo_labs/google/keyword_overview/live', $post_data );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
         }
 
         $status_code = (int) ( $response['status_code'] ?? 0 );
         if ( $status_code !== 20000 ) {
             $msg = $response['status_message'] ?? 'Unknown error';
-            error_log( "[GCREV][DataForSEO] keyword_difficulty API error: {$msg} (code: {$status_code})" );
+            error_log( "[GCREV][DataForSEO] keyword_overview API error: {$msg} (code: {$status_code})" );
             return new \WP_Error( 'api_error', $msg );
-        }
-
-        $tasks = $response['tasks'] ?? [];
-        if ( empty( $tasks ) || empty( $tasks[0]['result'] ) ) {
-            return new \WP_Error( 'no_result', 'SEO難易度 API 応答にデータが含まれていません。' );
         }
 
         // 正規化キー → 元キーワード のマップを構築
@@ -421,17 +401,33 @@ class Gcrev_DataForSEO_Client {
         }
 
         $results = [];
-        $items = $tasks[0]['result'][0]['items'] ?? [];
-        foreach ( $items as $item ) {
-            $kw = $item['keyword'] ?? '';
+        $tasks = $response['tasks'] ?? [];
+        foreach ( $tasks as $task ) {
+            // タスクレベルのエラーはスキップ
+            if ( (int) ( $task['status_code'] ?? 0 ) !== 20000 ) {
+                continue;
+            }
+            $task_result = $task['result'][0] ?? null;
+            if ( ! $task_result ) {
+                continue;
+            }
+
+            $kw = $task_result['keyword'] ?? '';
             if ( $kw === '' ) {
                 continue;
             }
-            // レスポンスのキーワードを正規化して、元のキーワードテキストにマッピング
-            $norm = $this->normalize_keyword( $kw );
+
+            // items[0].keyword_properties.keyword_difficulty から難易度取得
+            $item       = $task_result['items'][0] ?? null;
+            $difficulty = null;
+            if ( $item ) {
+                $difficulty = $item['keyword_properties']['keyword_difficulty'] ?? null;
+            }
+
+            $norm        = $this->normalize_keyword( $kw );
             $original_kw = $normalized_to_original[ $norm ] ?? $kw;
             $results[ $original_kw ] = [
-                'keyword_difficulty' => $item['keyword_difficulty'] ?? null,
+                'keyword_difficulty' => $difficulty,
             ];
         }
 
