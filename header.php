@@ -76,7 +76,7 @@
       $report_pages   = array('report-latest','report-archive');
       $analysis_pages = array('analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','rank-tracker');
       $tools_pages    = array('column-support','review-survey','review-manage','gbp-posts','gbp-schedule');
-      $settings_pages = array('report-settings','cv-review','cv-settings','client-settings','ga-gsc-connection','meo-connection','notifications');
+      $settings_pages = array('report-settings','cv-review','cv-settings','client-settings','ga-gsc-connection','meo-dashboard','notifications');
       $support_pages  = array('faq','tutorials','inquiry');
       $option_pages   = array('service','improvement-request','training','ad-consulting','meeting-reservation');
 
@@ -220,8 +220,8 @@
                   </button>
                   <ul class="nav-submenu" id="navSubmenuSettings">
                      <li class="nav-item">
-                        <a href="<?php echo home_url('/account/meo-connection/'); ?>" class="nav-link <?php echo is_page('meo-connection') ? 'active' : ''; ?>">
-                        <span>MEO連携</span>
+                        <a href="<?php echo home_url('/meo/meo-dashboard/'); ?>" class="nav-link <?php echo is_page('meo-dashboard') ? 'active' : ''; ?>">
+                        <span>MEO設定</span>
                         </a>
                      </li>
                      <li class="nav-item">
