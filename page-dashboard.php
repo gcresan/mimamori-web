@@ -328,6 +328,18 @@ get_header();
 .drt-kw-meta { display: flex; gap: 10px; flex-wrap: wrap; }
 .drt-kw-meta-item { font-size: 10px; color: #9ca3af; }
 .drt-kw-meta-item strong { color: #6b7280; font-weight: 600; }
+/* SEO Difficulty badge */
+.drt-diff-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+.drt-diff-badge--low    { background: #dcfce7; color: #166534; }
+.drt-diff-badge--medium { background: #fef3c7; color: #92400e; }
+.drt-diff-badge--high   { background: #fee2e2; color: #991b1b; }
 .drt-rank { font-weight: 700; font-size: 15px; color: #1a1a1a; }
 .drt-rank--out { font-size: 11px; font-weight: 600; color: #ef4444; }
 .drt-rank--na  { font-size: 11px; color: #d1d5db; }
@@ -2248,13 +2260,18 @@ foreach ($highlight_items as $highlight):
 
             html += '<tr>';
 
-            // Keyword + volume
+            // Keyword + volume + difficulty
             html += '<td>';
             html += '<div class="drt-rank-accent ' + accent + '"></div>';
             html += '<div class="drt-kw-name">' + drtEsc(kw.keyword) + '</div>';
+            html += '<div class="drt-kw-meta">';
             if (kw.search_volume != null) {
-                html += '<div class="drt-kw-meta"><span class="drt-kw-meta-item">Vol: <strong>' + drtFmt(kw.search_volume) + '</strong></span></div>';
+                html += '<span class="drt-kw-meta-item">Vol: <strong>' + drtFmt(kw.search_volume) + '</strong></span>';
             }
+            if (kw.keyword_difficulty != null) {
+                html += '<span class="drt-kw-meta-item">難易度: ' + drtFormatDifficultyBadge(kw.keyword_difficulty) + '</span>';
+            }
+            html += '</div>';
             html += '</td>';
 
             // Current rank
@@ -2346,6 +2363,14 @@ foreach ($highlight_items as $highlight):
     function drtFmt(n) {
         if (n == null) return '-';
         return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function drtFormatDifficultyBadge(val) {
+        if (val == null) return '<span style="color:#d1d5db;">-</span>';
+        var v = parseInt(val, 10);
+        if (v <= 33) return '<span class="drt-diff-badge drt-diff-badge--low">' + v + '（低）</span>';
+        if (v <= 66) return '<span class="drt-diff-badge drt-diff-badge--medium">' + v + '（中）</span>';
+        return '<span class="drt-diff-badge drt-diff-badge--high">' + v + '（高）</span>';
     }
 
     function drtEsc(str) {
