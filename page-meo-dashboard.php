@@ -648,201 +648,201 @@ get_header();
 
     </div><!-- #meo-main-content -->
 
-    <!-- ===== 基準地点の設定 ===== -->
-    <div style="background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; cursor: pointer;" onclick="document.getElementById('meo-coord-body').style.display = document.getElementById('meo-coord-body').style.display === 'none' ? '' : 'none'; this.querySelector('.meo-coord-toggle').textContent = document.getElementById('meo-coord-body').style.display === 'none' ? '▶' : '▼';">
-            <div style="font-size: 18px; font-weight: 700; color: #2C3E40;">⚙️ MEO計測の基準地点</div>
-            <span class="meo-coord-toggle" style="font-size: 14px; color: #9ca3af; transition: transform 0.2s;"><?php echo $has_meo_coordinate ? '▶' : '▼'; ?></span>
-        </div>
+<?php endif; ?>
 
-        <div id="meo-coord-body" style="<?php echo $has_meo_coordinate ? 'display:none;' : ''; ?>">
-            <?php if ($has_meo_coordinate): ?>
-            <div style="background: #f0fdf4; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #16a34a; display: flex; align-items: center; gap: 8px;">
-                <span>✅</span>
-                <span>基準地点が設定されています：<strong><?php echo esc_html($meo_address ?: ($meo_lat . ', ' . $meo_lng)); ?></strong>（半径 <?php
-                    $radius_labels = [500 => '500m', 1000 => '1km', 3000 => '3km', 5000 => '5km', 10000 => '10km'];
-                    echo esc_html($radius_labels[$meo_radius] ?? '1km');
-                ?>）</span>
-            </div>
-            <?php else: ?>
-            <div style="background: #fffbeb; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #92400e; display: flex; align-items: center; gap: 8px;">
-                <span>💡</span>
-                <span>基準地点を設定すると、メインダッシュボードの「Googleマップの見え方」で店舗周辺の正確な順位を計測できます。</span>
-            </div>
-            <?php endif; ?>
-
-            <p style="font-size: 13px; color: #666; margin-bottom: 20px; line-height: 1.6;">
-                店舗の座標（緯度・経度）を入力してください。<a href="https://www.google.com/maps" target="_blank" rel="noopener" style="color: #568184; text-decoration: underline;">Googleマップ</a>で店舗を右クリックすると座標をコピーできます。
-            </p>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-                <div style="grid-column: 1 / -1;">
-                    <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">住所（表示用）</label>
-                    <input type="text" id="meo-coord-address"
-                           value="<?php echo esc_attr($meo_address); ?>"
-                           placeholder="例：愛媛県松山市三番町5-3-7"
-                           style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
-                           onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">緯度（latitude）</label>
-                    <input type="text" id="meo-coord-lat"
-                           value="<?php echo esc_attr($meo_lat); ?>"
-                           placeholder="例：33.8416000"
-                           style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
-                           onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">経度（longitude）</label>
-                    <input type="text" id="meo-coord-lng"
-                           value="<?php echo esc_attr($meo_lng); ?>"
-                           placeholder="例：132.7657000"
-                           style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
-                           onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
-                </div>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">計測半径</label>
-                <select id="meo-coord-radius"
-                        style="padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; cursor: pointer; min-width: 160px; background: #fff;">
-                    <option value="500" <?php selected($meo_radius, 500); ?>>500m</option>
-                    <option value="1000" <?php selected($meo_radius, 1000); ?>>1km（デフォルト）</option>
-                    <option value="3000" <?php selected($meo_radius, 3000); ?>>3km</option>
-                    <option value="5000" <?php selected($meo_radius, 5000); ?>>5km</option>
-                    <option value="10000" <?php selected($meo_radius, 10000); ?>>10km</option>
-                </select>
-            </div>
-            <div style="display: flex; align-items: center; gap: 16px;">
-                <button id="meo-coord-save-btn" onclick="gcrevSaveMeoCoordinate()"
-                        style="padding: 10px 32px; background: #568184; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
-                        onmouseover="this.style.background='#476C6F'" onmouseout="this.style.background='#568184'">
-                    基準地点を保存
-                </button>
-                <?php if ($has_meo_coordinate): ?>
-                <button id="meo-coord-clear-btn" onclick="gcrevClearMeoCoordinate()"
-                        style="padding: 10px 24px; background: #fff; color: #C0392B; border: 1px solid #fca5a5; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;"
-                        onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#fff'">
-                    座標をクリア
-                </button>
-                <?php endif; ?>
-            </div>
-            <div id="meo-coord-message" style="display: none; margin-top: 12px; padding: 10px 14px; border-radius: 8px; font-size: 13px;"></div>
-        </div>
+<!-- ===== 基準地点の設定（GBP接続状態に関係なく常に表示） ===== -->
+<div style="background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; cursor: pointer;" onclick="document.getElementById('meo-coord-body').style.display = document.getElementById('meo-coord-body').style.display === 'none' ? '' : 'none'; this.querySelector('.meo-coord-toggle').textContent = document.getElementById('meo-coord-body').style.display === 'none' ? '▶' : '▼';">
+        <div style="font-size: 18px; font-weight: 700; color: #2C3E40;">⚙️ MEO計測の基準地点</div>
+        <span class="meo-coord-toggle" style="font-size: 14px; color: #9ca3af; transition: transform 0.2s;"><?php echo $has_meo_coordinate ? '▶' : '▼'; ?></span>
     </div>
 
-    <script>
-    (function() {
-        var COORD_API = '<?php echo esc_js(rest_url("gcrev/v1/meo/coordinate")); ?>';
-        var WP_NONCE_COORD = '<?php echo esc_js(wp_create_nonce("wp_rest")); ?>';
+    <div id="meo-coord-body" style="<?php echo $has_meo_coordinate ? 'display:none;' : ''; ?>">
+        <?php if ($has_meo_coordinate): ?>
+        <div style="background: #f0fdf4; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #16a34a; display: flex; align-items: center; gap: 8px;">
+            <span>✅</span>
+            <span>基準地点が設定されています：<strong><?php echo esc_html($meo_address ?: ($meo_lat . ', ' . $meo_lng)); ?></strong>（半径 <?php
+                $radius_labels = [500 => '500m', 1000 => '1km', 3000 => '3km', 5000 => '5km', 10000 => '10km'];
+                echo esc_html($radius_labels[$meo_radius] ?? '1km');
+            ?>）</span>
+        </div>
+        <?php else: ?>
+        <div style="background: #fffbeb; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #92400e; display: flex; align-items: center; gap: 8px;">
+            <span>💡</span>
+            <span>基準地点を設定すると、メインダッシュボードの「Googleマップの見え方」で店舗周辺の正確な順位を計測できます。</span>
+        </div>
+        <?php endif; ?>
 
-        // 座標保存
-        window.gcrevSaveMeoCoordinate = async function() {
-            var lat     = document.getElementById('meo-coord-lat').value.trim();
-            var lng     = document.getElementById('meo-coord-lng').value.trim();
-            var address = document.getElementById('meo-coord-address').value.trim();
-            var radius  = parseInt(document.getElementById('meo-coord-radius').value, 10) || 1000;
-            var btn     = document.getElementById('meo-coord-save-btn');
-            var msgEl   = document.getElementById('meo-coord-message');
+        <p style="font-size: 13px; color: #666; margin-bottom: 20px; line-height: 1.6;">
+            店舗の座標（緯度・経度）を入力してください。<a href="https://www.google.com/maps" target="_blank" rel="noopener" style="color: #568184; text-decoration: underline;">Googleマップ</a>で店舗を右クリックすると座標をコピーできます。
+        </p>
 
-            // バリデーション
-            if (!lat || !lng) {
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <div style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">住所（表示用）</label>
+                <input type="text" id="meo-coord-address"
+                       value="<?php echo esc_attr($meo_address); ?>"
+                       placeholder="例：愛媛県松山市三番町5-3-7"
+                       style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
+                       onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">緯度（latitude）</label>
+                <input type="text" id="meo-coord-lat"
+                       value="<?php echo esc_attr($meo_lat); ?>"
+                       placeholder="例：33.8416000"
+                       style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
+                       onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
+            </div>
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">経度（longitude）</label>
+                <input type="text" id="meo-coord-lng"
+                       value="<?php echo esc_attr($meo_lng); ?>"
+                       placeholder="例：132.7657000"
+                       style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
+                       onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
+            </div>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">計測半径</label>
+            <select id="meo-coord-radius"
+                    style="padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; cursor: pointer; min-width: 160px; background: #fff;">
+                <option value="500" <?php selected($meo_radius, 500); ?>>500m</option>
+                <option value="1000" <?php selected($meo_radius, 1000); ?>>1km（デフォルト）</option>
+                <option value="3000" <?php selected($meo_radius, 3000); ?>>3km</option>
+                <option value="5000" <?php selected($meo_radius, 5000); ?>>5km</option>
+                <option value="10000" <?php selected($meo_radius, 10000); ?>>10km</option>
+            </select>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <button id="meo-coord-save-btn" onclick="gcrevSaveMeoCoordinate()"
+                    style="padding: 10px 32px; background: #568184; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;"
+                    onmouseover="this.style.background='#476C6F'" onmouseout="this.style.background='#568184'">
+                基準地点を保存
+            </button>
+            <?php if ($has_meo_coordinate): ?>
+            <button id="meo-coord-clear-btn" onclick="gcrevClearMeoCoordinate()"
+                    style="padding: 10px 24px; background: #fff; color: #C0392B; border: 1px solid #fca5a5; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;"
+                    onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#fff'">
+                座標をクリア
+            </button>
+            <?php endif; ?>
+        </div>
+        <div id="meo-coord-message" style="display: none; margin-top: 12px; padding: 10px 14px; border-radius: 8px; font-size: 13px;"></div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var COORD_API = '<?php echo esc_js(rest_url("gcrev/v1/meo/coordinate")); ?>';
+    var WP_NONCE_COORD = '<?php echo esc_js(wp_create_nonce("wp_rest")); ?>';
+
+    // 座標保存
+    window.gcrevSaveMeoCoordinate = async function() {
+        var lat     = document.getElementById('meo-coord-lat').value.trim();
+        var lng     = document.getElementById('meo-coord-lng').value.trim();
+        var address = document.getElementById('meo-coord-address').value.trim();
+        var radius  = parseInt(document.getElementById('meo-coord-radius').value, 10) || 1000;
+        var btn     = document.getElementById('meo-coord-save-btn');
+        var msgEl   = document.getElementById('meo-coord-message');
+
+        // バリデーション
+        if (!lat || !lng) {
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#fef2f2';
+            msgEl.style.color = '#C0392B';
+            msgEl.textContent = '緯度と経度は必須です。';
+            return;
+        }
+        var latNum = parseFloat(lat);
+        var lngNum = parseFloat(lng);
+        if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#fef2f2';
+            msgEl.style.color = '#C0392B';
+            msgEl.textContent = '緯度は -90〜90 の範囲で入力してください。';
+            return;
+        }
+        if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#fef2f2';
+            msgEl.style.color = '#C0392B';
+            msgEl.textContent = '経度は -180〜180 の範囲で入力してください。';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = '保存中...';
+        btn.style.background = '#93c5fd';
+        msgEl.style.display = 'none';
+
+        try {
+            var response = await fetch(COORD_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE_COORD },
+                credentials: 'same-origin',
+                body: JSON.stringify({ lat: latNum, lng: lngNum, address: address, radius: radius })
+            });
+            var result = await response.json();
+            if (result.success) {
                 msgEl.style.display = 'block';
-                msgEl.style.background = '#fef2f2';
-                msgEl.style.color = '#C0392B';
-                msgEl.textContent = '緯度と経度は必須です。';
-                return;
+                msgEl.style.background = '#f0fdf4';
+                msgEl.style.color = '#16a34a';
+                msgEl.textContent = '✅ ' + (result.message || '基準地点を保存しました') + '　ページをリロードします...';
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                throw new Error(result.message || '保存に失敗しました');
             }
-            var latNum = parseFloat(lat);
-            var lngNum = parseFloat(lng);
-            if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+        } catch (error) {
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#fef2f2';
+            msgEl.style.color = '#C0392B';
+            msgEl.textContent = 'エラー: ' + error.message;
+            btn.disabled = false;
+            btn.textContent = '基準地点を保存';
+            btn.style.background = '#568184';
+        }
+    };
+
+    // 座標クリア
+    window.gcrevClearMeoCoordinate = async function() {
+        if (!confirm('基準地点の設定をクリアしますか？\nクリアすると、MEO計測はエリア単位（都道府県等）に戻ります。')) {
+            return;
+        }
+        var btn   = document.getElementById('meo-coord-clear-btn');
+        var msgEl = document.getElementById('meo-coord-message');
+        btn.disabled = true;
+        btn.textContent = 'クリア中...';
+        msgEl.style.display = 'none';
+
+        try {
+            var response = await fetch(COORD_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE_COORD },
+                credentials: 'same-origin',
+                body: JSON.stringify({ clear: true })
+            });
+            var result = await response.json();
+            if (result.success) {
                 msgEl.style.display = 'block';
-                msgEl.style.background = '#fef2f2';
-                msgEl.style.color = '#C0392B';
-                msgEl.textContent = '緯度は -90〜90 の範囲で入力してください。';
-                return;
+                msgEl.style.background = '#f0fdf4';
+                msgEl.style.color = '#16a34a';
+                msgEl.textContent = '✅ 基準地点をクリアしました。ページをリロードします...';
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                throw new Error(result.message || 'クリアに失敗しました');
             }
-            if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
-                msgEl.style.display = 'block';
-                msgEl.style.background = '#fef2f2';
-                msgEl.style.color = '#C0392B';
-                msgEl.textContent = '経度は -180〜180 の範囲で入力してください。';
-                return;
-            }
-
-            btn.disabled = true;
-            btn.textContent = '保存中...';
-            btn.style.background = '#93c5fd';
-            msgEl.style.display = 'none';
-
-            try {
-                var response = await fetch(COORD_API, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE_COORD },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ lat: latNum, lng: lngNum, address: address, radius: radius })
-                });
-                var result = await response.json();
-                if (result.success) {
-                    msgEl.style.display = 'block';
-                    msgEl.style.background = '#f0fdf4';
-                    msgEl.style.color = '#16a34a';
-                    msgEl.textContent = '✅ ' + (result.message || '基準地点を保存しました') + '　ページをリロードします...';
-                    setTimeout(function() { location.reload(); }, 1500);
-                } else {
-                    throw new Error(result.message || '保存に失敗しました');
-                }
-            } catch (error) {
-                msgEl.style.display = 'block';
-                msgEl.style.background = '#fef2f2';
-                msgEl.style.color = '#C0392B';
-                msgEl.textContent = 'エラー: ' + error.message;
-                btn.disabled = false;
-                btn.textContent = '基準地点を保存';
-                btn.style.background = '#568184';
-            }
-        };
-
-        // 座標クリア
-        window.gcrevClearMeoCoordinate = async function() {
-            if (!confirm('基準地点の設定をクリアしますか？\nクリアすると、MEO計測はエリア単位（都道府県等）に戻ります。')) {
-                return;
-            }
-            var btn   = document.getElementById('meo-coord-clear-btn');
-            var msgEl = document.getElementById('meo-coord-message');
-            btn.disabled = true;
-            btn.textContent = 'クリア中...';
-            msgEl.style.display = 'none';
-
-            try {
-                var response = await fetch(COORD_API, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': WP_NONCE_COORD },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ clear: true })
-                });
-                var result = await response.json();
-                if (result.success) {
-                    msgEl.style.display = 'block';
-                    msgEl.style.background = '#f0fdf4';
-                    msgEl.style.color = '#16a34a';
-                    msgEl.textContent = '✅ 基準地点をクリアしました。ページをリロードします...';
-                    setTimeout(function() { location.reload(); }, 1500);
-                } else {
-                    throw new Error(result.message || 'クリアに失敗しました');
-                }
-            } catch (error) {
-                msgEl.style.display = 'block';
-                msgEl.style.background = '#fef2f2';
-                msgEl.style.color = '#C0392B';
-                msgEl.textContent = 'エラー: ' + error.message;
-                btn.disabled = false;
-                btn.textContent = '座標をクリア';
-            }
-        };
-    })();
-    </script>
-
-<?php endif; ?>
+        } catch (error) {
+            msgEl.style.display = 'block';
+            msgEl.style.background = '#fef2f2';
+            msgEl.style.color = '#C0392B';
+            msgEl.textContent = 'エラー: ' + error.message;
+            btn.disabled = false;
+            btn.textContent = '座標をクリア';
+        }
+    };
+})();
+</script>
 
 </div><!-- .content-area -->
 
