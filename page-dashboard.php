@@ -382,6 +382,20 @@ get_header();
 }
 .drt-modal__close:hover { background: #e5e7eb; }
 .drt-modal__body { padding: 0; }
+.drt-modal__toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 22px 0; gap: 12px;
+}
+.drt-device-toggle--modal { margin-bottom: 0; }
+.drt-serp-google-link {
+    font-size: 12.5px; color: var(--mw-primary-blue, #568184);
+    text-decoration: none; white-space: nowrap; opacity: 0.75; transition: opacity 0.2s;
+}
+.drt-serp-google-link:hover { opacity: 1; text-decoration: underline; }
+.drt-serp-note {
+    padding: 8px 22px 12px; font-size: 12px; color: #8b8f96;
+    line-height: 1.7; border-bottom: 1px solid #f0f0f0;
+}
 .drt-serp-table { width: 100%; border-collapse: collapse; }
 .drt-serp-table th {
     font-size: 12px; font-weight: 600; color: #6b7280;
@@ -1360,6 +1374,16 @@ foreach ($highlight_items as $highlight):
             <div class="drt-modal__title" id="drtSerpModalTitle">上位ランキング</div>
             <button class="drt-modal__close" id="drtSerpModalClose">&times;</button>
         </div>
+        <div class="drt-modal__toolbar">
+            <div class="drt-device-toggle drt-device-toggle--modal" id="drtSerpDeviceToggle">
+                <button class="drt-device-btn active" data-device="mobile">スマホ</button>
+                <button class="drt-device-btn" data-device="desktop">PC</button>
+            </div>
+            <a class="drt-serp-google-link" id="drtSerpGoogleLink" href="#" target="_blank" rel="noopener">Google検索結果を見る →</a>
+        </div>
+        <div class="drt-serp-note">
+            順位は、指定条件で取得した参考値です。実際のGoogle検索結果は、地域・端末・検索設定・時間帯などにより異なる場合があります。
+        </div>
         <div class="drt-modal__body" id="drtSerpModalBody">
             <div class="drt-loading">読み込み中...</div>
         </div>
@@ -2070,6 +2094,10 @@ foreach ($highlight_items as $highlight):
     var drtRankData = [];
     var drtDateLabels = [];
     var drtDateKeys = [];
+
+    // SERP Modal state
+    var drtSerpDevice = 'mobile';
+    var drtSerpKeywordId = null;
     var drtSummary = {};
 
     // Init
@@ -2336,20 +2364,42 @@ foreach ($highlight_items as $highlight):
         drtOpenSerpModal(parseInt(btn.dataset.kwId, 10));
     });
 
-    function drtOpenSerpModal(keywordId) {
-        var modal = document.getElementById('drtSerpModal');
-        var body = document.getElementById('drtSerpModalBody');
-        var title = document.getElementById('drtSerpModalTitle');
-
-        var kw = null;
+    /** キーワードIDからdrtRankDataのオブジェクトを探す */
+    function drtFindKeywordById(keywordId) {
         for (var i = 0; i < drtRankData.length; i++) {
-            if (drtRankData[i].keyword_id == keywordId) { kw = drtRankData[i]; break; }
+            if (drtRankData[i].keyword_id == keywordId) return drtRankData[i];
         }
-        title.textContent = (kw ? '「' + kw.keyword + '」' : '') + ' 上位ランキング (' + (drtDevice === 'mobile' ? 'スマホ' : 'PC') + ')';
-        body.innerHTML = '<div class="drt-loading">上位サイトを取得中...</div>';
-        modal.classList.add('active');
+        return null;
+    }
 
-        fetch(restBase + 'rank-tracker/serp-top?keyword_id=' + encodeURIComponent(keywordId) + '&device=' + encodeURIComponent(drtDevice), {
+    /** モーダルタイトルを更新 */
+    function drtUpdateSerpTitle() {
+        var title = document.getElementById('drtSerpModalTitle');
+        if (!title) return;
+        var kw = drtFindKeywordById(drtSerpKeywordId);
+        title.textContent = (kw ? '「' + kw.keyword + '」' : '') + ' 上位ランキング (' + (drtSerpDevice === 'mobile' ? 'スマホ' : 'PC') + ')';
+    }
+
+    /** Google検索リンクを更新 */
+    function drtUpdateSerpGoogleLink() {
+        var link = document.getElementById('drtSerpGoogleLink');
+        if (!link) return;
+        var kw = drtFindKeywordById(drtSerpKeywordId);
+        if (kw) {
+            link.href = 'https://www.google.co.jp/search?q=' + encodeURIComponent(kw.keyword);
+            link.style.display = '';
+        } else {
+            link.style.display = 'none';
+        }
+    }
+
+    /** SERPデータをAPIから取得して表示 */
+    function drtFetchSerpData(keywordId, device) {
+        var body = document.getElementById('drtSerpModalBody');
+        if (!body) return;
+        body.innerHTML = '<div class="drt-loading">上位サイトを取得中...</div>';
+
+        fetch(restBase + 'rank-tracker/serp-top?keyword_id=' + encodeURIComponent(keywordId) + '&device=' + encodeURIComponent(device), {
             headers: { 'X-WP-Nonce': wpNonce },
             credentials: 'same-origin'
         })
@@ -2368,6 +2418,42 @@ foreach ($highlight_items as $highlight):
             body.innerHTML = '<div class="drt-loading" style="color:#ef4444;">' + drtEsc(err.message || '通信エラーが発生しました。') + '</div>';
         });
     }
+
+    /** モーダルを開く — 親画面のデバイス状態を引き継ぐ */
+    function drtOpenSerpModal(keywordId) {
+        var modal = document.getElementById('drtSerpModal');
+        if (!modal) return;
+
+        drtSerpDevice = drtDevice;
+        drtSerpKeywordId = keywordId;
+
+        // モーダル内トグルを同期
+        document.querySelectorAll('#drtSerpDeviceToggle .drt-device-btn').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.device === drtSerpDevice);
+        });
+
+        drtUpdateSerpTitle();
+        drtUpdateSerpGoogleLink();
+        modal.classList.add('active');
+        drtFetchSerpData(keywordId, drtSerpDevice);
+    }
+
+    /** モーダル内のデバイス切替 */
+    document.getElementById('drtSerpDeviceToggle').addEventListener('click', function(e) {
+        var btn = e.target.closest('.drt-device-btn');
+        if (!btn) return;
+        var device = btn.dataset.device;
+        if (device === drtSerpDevice) return;
+        drtSerpDevice = device;
+
+        document.querySelectorAll('#drtSerpDeviceToggle .drt-device-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.device === device);
+        });
+
+        drtUpdateSerpTitle();
+        drtUpdateSerpGoogleLink();
+        drtFetchSerpData(drtSerpKeywordId, device);
+    });
 
     function drtBuildSerpTable(items) {
         if (!items || items.length === 0) {
