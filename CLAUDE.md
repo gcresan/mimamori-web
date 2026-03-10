@@ -606,9 +606,21 @@ php -l <file>
 
 ---
 
+## 付録: ページ階層（固定ページ URL 構造）
+
+- **`/mypage/` 階層は廃止済み**。全ページはルート直下（`/slug/`）で運用する。
+- 新しいページテンプレートを追加した場合は、WordPress 管理画面で固定ページを作成し、テンプレートを割り当てる。
+
+| ページ | URL | テンプレート |
+|---|---|---|
+| ダッシュボード | `/dashboard/` | `page-dashboard.php` |
+| 順位トラッキング | `/rank-tracker/` | `page-rank-tracker.php` |
+| AI検索スコア | `/aio-score/` | `page-aio-score.php` |
+| レポート | `/report-latest/` | `page-report-latest.php` |
+
 ## 付録: WP-Members
 
-- ログイン後リダイレクト先: `/mypage/dashboard/`
+- ログイン後リダイレクト先: `/dashboard/`
 - 登録: `page-register.php` → `[wpmem_form register]`
 
 ## 付録: 内部識別子（変更不可）
