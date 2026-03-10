@@ -67,6 +67,7 @@ get_header();
 <!-- コンテンツエリア -->
 <div class="content-area">
 
+<?php /* ===== GBP接続・ロケーション設定・ダッシュボード本体は一旦非表示 =====
 <?php if ( ! $is_connected || $needs_reauth ): ?>
     <!-- ===== 未接続 or 再認証必要：接続ボタンのみ表示 ===== -->
     <div style="text-align: center; padding: 80px 20px;">
@@ -649,6 +650,7 @@ get_header();
     </div><!-- #meo-main-content -->
 
 <?php endif; ?>
+===== GBP接続・ロケーション設定・ダッシュボード本体ここまで非表示 ===== */ ?>
 
 <!-- ===== 基準地点の設定（GBP接続状態に関係なく常に表示） ===== -->
 <div style="background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 24px;">
