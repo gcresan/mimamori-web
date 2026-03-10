@@ -30,6 +30,23 @@ class Gcrev_DataForSEO_Client {
     /** HTTP タイムアウト（秒） */
     private const HTTP_TIMEOUT = 60;
 
+    /**
+     * 半径(m) → DataForSEO zoom レベル マッピング
+     *
+     * Google Maps の zoom レベルで検索範囲を制御する。
+     * 将来的にグリッドスキャン等で複数ポイント計測に拡張可能。
+     */
+    private const RADIUS_ZOOM_MAP = [
+        500   => 19,
+        1000  => 17,
+        3000  => 15,
+        5000  => 14,
+        10000 => 13,
+    ];
+
+    /** デフォルト zoom（1km 相当） */
+    private const DEFAULT_ZOOM = 17;
+
     /** @var Gcrev_Config */
     private Gcrev_Config $config;
 
@@ -52,6 +69,79 @@ class Gcrev_DataForSEO_Client {
             && defined('DATAFORSEO_PASSWORD')
             && DATAFORSEO_LOGIN !== ''
             && DATAFORSEO_PASSWORD !== '';
+    }
+
+    // =========================================================
+    // 半径 / zoom 変換ヘルパー
+    // =========================================================
+
+    /**
+     * 半径（メートル）を DataForSEO の zoom レベルに変換
+     *
+     * RADIUS_ZOOM_MAP に完全一致がなければ最も近い半径の zoom を返す。
+     *
+     * @param int $radius 半径（メートル）
+     * @return int zoom レベル (3-21)
+     */
+    public static function radius_to_zoom( int $radius ): int {
+        if ( isset( self::RADIUS_ZOOM_MAP[ $radius ] ) ) {
+            return self::RADIUS_ZOOM_MAP[ $radius ];
+        }
+        $closest  = self::DEFAULT_ZOOM;
+        $min_diff = PHP_INT_MAX;
+        foreach ( self::RADIUS_ZOOM_MAP as $r => $z ) {
+            $diff = abs( $r - $radius );
+            if ( $diff < $min_diff ) {
+                $min_diff = $diff;
+                $closest  = $z;
+            }
+        }
+        return $closest;
+    }
+
+    /**
+     * 緯度・経度・zoom から DataForSEO の location_coordinate 文字列を生成
+     *
+     * @param float $lat  緯度 (-90 〜 90)
+     * @param float $lng  経度 (-180 〜 180)
+     * @param int   $zoom zoom レベル (3-21, デフォルト 17)
+     * @return string "lat,lng,{zoom}z"
+     */
+    public static function build_coordinate_string( float $lat, float $lng, int $zoom = 17 ): string {
+        $zoom = max( 3, min( 21, $zoom ) );
+        return sprintf( '%.7f,%.7f,%dz', $lat, $lng, $zoom );
+    }
+
+    /**
+     * UI 用の半径選択肢配列を返す
+     *
+     * @return array [ ['value' => 500, 'label' => '500m', 'zoom' => 19], ... ]
+     */
+    public static function get_radius_options(): array {
+        $options = [];
+        foreach ( self::RADIUS_ZOOM_MAP as $radius => $zoom ) {
+            $label = $radius >= 1000
+                ? ( $radius / 1000 ) . 'km'
+                : $radius . 'm';
+            $options[] = [
+                'value' => $radius,
+                'label' => $label,
+                'zoom'  => $zoom,
+            ];
+        }
+        return $options;
+    }
+
+    /**
+     * zoom レベルから対応する半径ラベルを返す
+     *
+     * @param int $zoom zoom レベル
+     * @return string 半径ラベル（例: '1km'）
+     */
+    public static function zoom_to_radius_label( int $zoom ): string {
+        $flip = array_flip( self::RADIUS_ZOOM_MAP );
+        $radius = $flip[ $zoom ] ?? 1000;
+        return $radius >= 1000 ? ( $radius / 1000 ) . 'km' : $radius . 'm';
     }
 
     // =========================================================
@@ -446,17 +536,22 @@ class Gcrev_DataForSEO_Client {
      * DataForSEO の Maps SERP API を使い、Google マップ検索結果を取得する。
      * 各アイテムにはビジネス名・住所・評価・口コミ数・カテゴリ等が含まれる。
      *
-     * @param string $keyword       検索キーワード
-     * @param string $device        'desktop' or 'mobile'
-     * @param int    $location_code ロケーションコード（デフォルト: Japan 2392）
-     * @param string $language_code 言語コード（デフォルト: 'ja'）
-     * @return array|WP_Error       Maps SERP items 配列
+     * $location_coordinate が指定された場合は座標ベースで検索し、
+     * $location_code は無視される（DataForSEO の排他制約）。
+     *
+     * @param string $keyword              検索キーワード
+     * @param string $device               'desktop' or 'mobile'
+     * @param int    $location_code        ロケーションコード（デフォルト: Japan 2392）
+     * @param string $language_code        言語コード（デフォルト: 'ja'）
+     * @param string $location_coordinate  座標文字列 "lat,lng,{zoom}z"（空文字なら location_code 使用）
+     * @return array|WP_Error              Maps SERP items 配列
      */
     public function fetch_maps_serp(
         string $keyword,
         string $device = 'desktop',
         int    $location_code = 2392,
-        string $language_code = 'ja'
+        string $language_code = 'ja',
+        string $location_coordinate = ''
     ) {
         if ( ! self::is_configured() ) {
             return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
@@ -469,13 +564,19 @@ class Gcrev_DataForSEO_Client {
         $post_data = [
             [
                 'keyword'       => $keyword,
-                'location_code' => $location_code,
                 'language_code' => $language_code,
                 'device'        => $device,
                 'os'            => $device === 'desktop' ? 'windows' : 'android',
                 'depth'         => 20,
             ]
         ];
+
+        // location_coordinate と location_code は排他（DataForSEO 仕様）
+        if ( $location_coordinate !== '' ) {
+            $post_data[0]['location_coordinate'] = $location_coordinate;
+        } else {
+            $post_data[0]['location_code'] = $location_code;
+        }
 
         $response = $this->api_request( '/serp/google/maps/live/advanced', $post_data );
 
@@ -508,17 +609,22 @@ class Gcrev_DataForSEO_Client {
      *
      * DataForSEO の Local Finder SERP API を使い、ローカルファインダー検索結果を取得する。
      *
-     * @param string $keyword       検索キーワード
-     * @param string $device        'desktop' or 'mobile'
-     * @param int    $location_code ロケーションコード（デフォルト: Japan 2392）
-     * @param string $language_code 言語コード（デフォルト: 'ja'）
-     * @return array|WP_Error       Local Finder SERP items 配列
+     * $location_coordinate が指定された場合は座標ベースで検索し、
+     * $location_code は無視される（DataForSEO の排他制約）。
+     *
+     * @param string $keyword              検索キーワード
+     * @param string $device               'desktop' or 'mobile'
+     * @param int    $location_code        ロケーションコード（デフォルト: Japan 2392）
+     * @param string $language_code        言語コード（デフォルト: 'ja'）
+     * @param string $location_coordinate  座標文字列 "lat,lng,{zoom}z"（空文字なら location_code 使用）
+     * @return array|WP_Error              Local Finder SERP items 配列
      */
     public function fetch_local_finder_serp(
         string $keyword,
         string $device = 'desktop',
         int    $location_code = 2392,
-        string $language_code = 'ja'
+        string $language_code = 'ja',
+        string $location_coordinate = ''
     ) {
         if ( ! self::is_configured() ) {
             return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
@@ -531,13 +637,19 @@ class Gcrev_DataForSEO_Client {
         $post_data = [
             [
                 'keyword'       => $keyword,
-                'location_code' => $location_code,
                 'language_code' => $language_code,
                 'device'        => $device,
                 'os'            => $device === 'desktop' ? 'windows' : 'android',
                 'depth'         => 20,
             ]
         ];
+
+        // location_coordinate と location_code は排他（DataForSEO 仕様）
+        if ( $location_coordinate !== '' ) {
+            $post_data[0]['location_coordinate'] = $location_coordinate;
+        } else {
+            $post_data[0]['location_code'] = $location_code;
+        }
 
         $response = $this->api_request( '/serp/google/local_finder/live/advanced', $post_data );
 

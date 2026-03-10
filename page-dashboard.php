@@ -498,6 +498,15 @@ get_header();
 .meo-keyword-single {
     font-size: 13px; font-weight: 600; color: #1a1a1a;
 }
+/* Radius selector */
+.meo-radius-group { display: flex; flex-direction: column; gap: 4px; }
+.meo-radius-label {
+    font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.meo-radius-select {
+    font-size: 13px; color: #344054; border: 1px solid #d0d5dd; border-radius: 8px;
+    padding: 5px 10px; background: #fff; cursor: pointer; max-width: 120px; font-weight: 500;
+}
 /* Metrics cards */
 .meo-metrics-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
 .meo-metric-card {
@@ -1487,10 +1496,15 @@ foreach ($highlight_items as $highlight):
                 <button class="meo-device-btn" data-device="desktop">PC</button>
             </div>
         </div>
-        <!-- 計測地点 -->
+        <!-- 基準地点 -->
         <div class="meo-condition-group" id="meoRegionGroup">
-            <span class="meo-condition-label">計測エリア</span>
+            <span class="meo-condition-label">基準地点</span>
             <span class="meo-condition-value" id="meoRegion">読み込み中...</span>
+        </div>
+        <!-- 半径（座標モード時のみ表示） -->
+        <div class="meo-radius-group" id="meoRadiusGroup" style="display:none;">
+            <span class="meo-radius-label">半径</span>
+            <select class="meo-radius-select" id="meoRadiusSelect"></select>
         </div>
         <!-- キーワード -->
         <div class="meo-keyword-group" id="meoKeywordGroup">
@@ -2814,11 +2828,15 @@ foreach ($highlight_items as $highlight):
     var meoKeywordSelect = document.getElementById('meoKeywordSelect');
     var meoKeywordSingle = document.getElementById('meoKeywordSingle');
     var meoDeviceToggle  = document.getElementById('meoDeviceToggle');
+    var meoRadiusGroup   = document.getElementById('meoRadiusGroup');
+    var meoRadiusSelect  = document.getElementById('meoRadiusSelect');
 
     if (!meoSection) return;
 
-    var currentDevice = 'mobile';
+    var currentDevice    = 'mobile';
     var currentKeywordId = 0;
+    var currentRadius    = 0;       // 0 = サーバー側デフォルト
+    var isCoordinateMode = false;
 
     // ----- Init -----
     function meoInit() {
@@ -2838,6 +2856,12 @@ foreach ($highlight_items as $highlight):
             meoFetchData(currentDevice, currentKeywordId);
         });
 
+        // Radius selector
+        meoRadiusSelect.addEventListener('change', function() {
+            currentRadius = parseInt(meoRadiusSelect.value, 10) || 0;
+            meoFetchData(currentDevice, currentKeywordId);
+        });
+
         meoFetchData('mobile', 0);
     }
 
@@ -2847,6 +2871,11 @@ foreach ($highlight_items as $highlight):
 
         var url = restBase + 'meo/rankings?device=' + encodeURIComponent(device)
                 + '&keyword_id=' + encodeURIComponent(keywordId);
+
+        // 座標モードかつ半径指定ありの場合のみ radius を送る
+        if (isCoordinateMode && currentRadius > 0) {
+            url += '&radius=' + encodeURIComponent(currentRadius);
+        }
 
         fetch(url, {
             credentials: 'same-origin',
@@ -2872,12 +2901,29 @@ foreach ($highlight_items as $highlight):
     function meoRenderAll(data) {
         meoHideStates();
 
-        // Region — 計測エリア表示
-        var regionText = data.region || '';
-        if (regionText && regionText !== '日本全国') {
-            meoRegion.textContent = regionText + '周辺';
+        // Location / 基準地点の表示
+        var loc = data.location || {};
+        isCoordinateMode = (loc.mode === 'coordinate');
+
+        if (isCoordinateMode) {
+            // 座標モード: 住所 or 座標を表示
+            meoRegion.textContent = loc.address || (loc.lat + ', ' + loc.lng);
         } else {
-            meoRegion.textContent = regionText || '未設定';
+            // location_code フォールバック: 「○○県周辺」
+            var regionText = data.region || '';
+            if (regionText && regionText !== '日本（広域）') {
+                meoRegion.textContent = regionText + '周辺';
+            } else {
+                meoRegion.textContent = regionText || '未設定';
+            }
+        }
+
+        // 半径セレクター: 座標モード時のみ表示
+        if (isCoordinateMode && data.radius_options && data.radius_options.length > 0) {
+            meoRenderRadiusOptions(data.radius_options, loc.radius || 1000);
+            meoRadiusGroup.style.display = '';
+        } else {
+            meoRadiusGroup.style.display = 'none';
         }
 
         // Keyword selector
@@ -3087,6 +3133,18 @@ foreach ($highlight_items as $highlight):
         var s = '';
         for (var i = 1; i <= 5; i++) s += (i <= r) ? '\u2605' : '\u2606';
         return s;
+    }
+
+    // ----- Render Radius Options -----
+    function meoRenderRadiusOptions(options, selectedRadius) {
+        var html = '';
+        options.forEach(function(opt) {
+            var sel = (opt.value === selectedRadius) ? ' selected' : '';
+            html += '<option value="' + opt.value + '"' + sel + '>'
+                  + meoEsc(opt.label) + '</option>';
+        });
+        meoRadiusSelect.innerHTML = html;
+        currentRadius = selectedRadius;
     }
 
     // ----- State helpers -----

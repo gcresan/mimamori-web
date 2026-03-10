@@ -412,6 +412,57 @@ class Gcrev_Insight_API {
                     'default'  => 0,
                     'type'     => 'integer',
                 ],
+                'radius' => [
+                    'required'          => false,
+                    'default'           => 0,
+                    'type'              => 'integer',
+                    'validate_callback' => function( $v ) {
+                        $v = (int) $v;
+                        return $v === 0 || in_array( $v, [ 500, 1000, 3000, 5000, 10000 ], true );
+                    },
+                ],
+            ],
+        ]);
+
+        // ===== MEO基準地点の座標保存（管理者専用） =====
+        register_rest_route('gcrev/v1', '/meo/coordinate', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_meo_coordinate' ],
+            'permission_callback' => function() {
+                return current_user_can( 'manage_options' );
+            },
+            'args'                => [
+                'user_id' => [
+                    'required' => false,
+                    'default'  => 0,
+                    'type'     => 'integer',
+                ],
+                'lat' => [
+                    'required'          => true,
+                    'validate_callback' => function( $v ) {
+                        $f = (float) $v;
+                        return $f >= -90.0 && $f <= 90.0;
+                    },
+                ],
+                'lng' => [
+                    'required'          => true,
+                    'validate_callback' => function( $v ) {
+                        $f = (float) $v;
+                        return $f >= -180.0 && $f <= 180.0;
+                    },
+                ],
+                'address' => [
+                    'required' => false,
+                    'default'  => '',
+                ],
+                'radius' => [
+                    'required'          => false,
+                    'default'           => 1000,
+                    'type'              => 'integer',
+                    'validate_callback' => function( $v ) {
+                        return in_array( (int) $v, [ 500, 1000, 3000, 5000, 10000 ], true );
+                    },
+                ],
             ],
         ]);
 
@@ -3849,9 +3900,10 @@ class Gcrev_Insight_API {
                 return new \WP_REST_Response( [ 'success' => false, 'message' => 'DataForSEO API が未設定です' ], 400 );
             }
 
-            $device     = sanitize_text_field( $request->get_param( 'device' ) ?: 'mobile' );
-            $keyword_id = absint( $request->get_param( 'keyword_id' ) );
-            $force      = absint( $request->get_param( 'force' ) );
+            $device       = sanitize_text_field( $request->get_param( 'device' ) ?: 'mobile' );
+            $keyword_id   = absint( $request->get_param( 'keyword_id' ) );
+            $force        = absint( $request->get_param( 'force' ) );
+            $radius_param = absint( $request->get_param( 'radius' ) );
 
             global $wpdb;
             $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
@@ -3893,8 +3945,36 @@ class Gcrev_Insight_API {
             $location_code = (int) ( $selected_kw['location_code'] ?: 2392 );
             $language_code = $selected_kw['language_code'] ?: 'ja';
 
-            // Transient キャッシュ
-            $cache_key = "gcrev_meo_rank_{$user_id}_{$kw_id}_{$device}";
+            // ===== 座標モード判定 =====
+            $meo_lat     = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
+            $meo_lng     = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
+            $meo_address = (string) get_user_meta( $user_id, '_gcrev_meo_address', true );
+            $meo_radius  = (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000;
+
+            // radius パラメータが明示指定されていればそちらを優先
+            $effective_radius = ( $radius_param > 0 ) ? $radius_param : $meo_radius;
+
+            // 座標が有効なら location_coordinate モード
+            $use_coordinate      = ( $meo_lat !== '' && $meo_lng !== '' );
+            $location_coordinate = '';
+            $zoom                = Gcrev_DataForSEO_Client::radius_to_zoom( $effective_radius );
+
+            if ( $use_coordinate ) {
+                $location_coordinate = Gcrev_DataForSEO_Client::build_coordinate_string(
+                    (float) $meo_lat,
+                    (float) $meo_lng,
+                    $zoom
+                );
+
+                // 半径選択を永続化（明示指定かつ保存値と異なる場合）
+                if ( $radius_param > 0 && $radius_param !== $meo_radius ) {
+                    update_user_meta( $user_id, '_gcrev_meo_radius', $radius_param );
+                }
+            }
+
+            // Transient キャッシュ（座標モード時は zoom をキーに含める）
+            $cache_suffix = $use_coordinate ? "_{$zoom}" : '';
+            $cache_key    = "gcrev_meo_rank_{$user_id}_{$kw_id}_{$device}{$cache_suffix}";
             if ( ! $force ) {
                 $cached = get_transient( $cache_key );
                 if ( $cached !== false && is_array( $cached ) ) {
@@ -3904,9 +3984,9 @@ class Gcrev_Insight_API {
                 }
             }
 
-            // DataForSEO API 呼び出し
-            $maps_items   = $this->dataforseo->fetch_maps_serp( $keyword_text, $device, $location_code, $language_code );
-            $finder_items = $this->dataforseo->fetch_local_finder_serp( $keyword_text, $device, $location_code, $language_code );
+            // DataForSEO API 呼び出し（座標ありなら location_coordinate を優先）
+            $maps_items   = $this->dataforseo->fetch_maps_serp( $keyword_text, $device, $location_code, $language_code, $location_coordinate );
+            $finder_items = $this->dataforseo->fetch_local_finder_serp( $keyword_text, $device, $location_code, $language_code, $location_coordinate );
 
             // --- Maps データ処理 ---
             $maps_rank  = null;
@@ -3966,8 +4046,12 @@ class Gcrev_Insight_API {
                 error_log( "[GCREV][MEO Rankings] Local Finder error for '{$keyword_text}': {$finder_error}" );
             }
 
-            // 地域ラベル
-            $region_label = $this->meo_get_location_label( $location_code );
+            // 地域ラベル（座標モードなら住所、フォールバックなら location_code ラベル）
+            if ( $use_coordinate ) {
+                $region_label = $meo_address ?: ( round( (float) $meo_lat, 4 ) . ', ' . round( (float) $meo_lng, 4 ) );
+            } else {
+                $region_label = $this->meo_get_location_label( $location_code );
+            }
 
             $tz  = wp_timezone();
             $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
@@ -3977,6 +4061,17 @@ class Gcrev_Insight_API {
                 'keyword'      => $keyword_text,
                 'device'       => $device,
                 'region'       => $region_label,
+                'location'     => [
+                    'mode'          => $use_coordinate ? 'coordinate' : 'location_code',
+                    'lat'           => $use_coordinate ? (float) $meo_lat : null,
+                    'lng'           => $use_coordinate ? (float) $meo_lng : null,
+                    'address'       => $use_coordinate ? $meo_address : '',
+                    'radius'        => $use_coordinate ? $effective_radius : null,
+                    'radius_label'  => $use_coordinate ? Gcrev_DataForSEO_Client::zoom_to_radius_label( $zoom ) : null,
+                    'zoom'          => $use_coordinate ? $zoom : null,
+                    'location_code' => $use_coordinate ? null : $location_code,
+                ],
+                'radius_options' => Gcrev_DataForSEO_Client::get_radius_options(),
                 'maps'         => [
                     'rank'          => $maps_rank,
                     'total_results' => is_array( $maps_items ) ? count( $maps_items ) : 0,
@@ -4081,10 +4176,75 @@ class Gcrev_Insight_API {
     }
 
     /**
+     * REST: MEO 基準地点の緯度経度を保存（管理者専用）
+     *
+     * user_meta に座標・住所・半径を保存し、該当ユーザーの MEO キャッシュを削除する。
+     * 管理者が各クライアントの店舗座標を設定するために使用。
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response
+     */
+    public function rest_save_meo_coordinate( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'ログインが必要です' ], 401 );
+        }
+
+        // 対象ユーザーID（管理者が他ユーザー分を設定する場合）
+        $target_user_id = absint( $request->get_param( 'user_id' ) ) ?: $user_id;
+
+        $lat     = round( (float) $request->get_param( 'lat' ), 7 );
+        $lng     = round( (float) $request->get_param( 'lng' ), 7 );
+        $address = sanitize_text_field( $request->get_param( 'address' ) );
+        $radius  = absint( $request->get_param( 'radius' ) ) ?: 1000;
+
+        // 許可半径値チェック
+        $allowed = [ 500, 1000, 3000, 5000, 10000 ];
+        if ( ! in_array( $radius, $allowed, true ) ) {
+            $radius = 1000;
+        }
+
+        update_user_meta( $target_user_id, '_gcrev_meo_lat', (string) $lat );
+        update_user_meta( $target_user_id, '_gcrev_meo_lng', (string) $lng );
+        update_user_meta( $target_user_id, '_gcrev_meo_address', $address );
+        update_user_meta( $target_user_id, '_gcrev_meo_radius', $radius );
+
+        // MEO キャッシュを全削除（座標変更 → 全結果が無効）
+        global $wpdb;
+        $like = $wpdb->esc_like( '_transient_gcrev_meo_rank_' . $target_user_id ) . '%';
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $like
+        ) );
+        $like_timeout = $wpdb->esc_like( '_transient_timeout_gcrev_meo_rank_' . $target_user_id ) . '%';
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $like_timeout
+        ) );
+
+        error_log( sprintf(
+            '[GCREV][MEO] Coordinate saved: user_id=%d, lat=%s, lng=%s, radius=%d, address=%s',
+            $target_user_id, $lat, $lng, $radius, $address
+        ) );
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'message' => '基準地点を保存しました',
+            'data'    => [
+                'lat'     => $lat,
+                'lng'     => $lng,
+                'address' => $address,
+                'radius'  => $radius,
+                'zoom'    => Gcrev_DataForSEO_Client::radius_to_zoom( $radius ),
+            ],
+        ], 200 );
+    }
+
+    /**
      * location_code → 計測エリアラベル変換
      *
-     * 将来的に location_coordinate（緯度経度）や半径指定に対応する際は
-     * この関数を拡張して「松山市駅周辺（半径1km）」等を返すようにする。
+     * 座標モード（location_coordinate）の場合は user_meta の address を使うため、
+     * この関数は location_code フォールバック時のみ呼ばれる。
      *
      * @param int $code DataForSEO location code
      * @return string
