@@ -2906,8 +2906,14 @@ foreach ($highlight_items as $highlight):
         isCoordinateMode = (loc.mode === 'coordinate');
 
         if (isCoordinateMode) {
-            // 座標モード: 住所 or 座標を表示
-            meoRegion.textContent = loc.address || (loc.lat + ', ' + loc.lng);
+            if (loc.source === 'city_center') {
+                // 市区町村中心部の自動検出: ラベル + (自動設定) 表示
+                meoRegion.innerHTML = meoEsc(loc.address || '')
+                    + ' <span style="font-size:11px;color:#999;font-weight:400;">(自動設定)</span>';
+            } else {
+                // 手動座標: 住所 or 座標を表示
+                meoRegion.textContent = loc.address || (loc.lat + ', ' + loc.lng);
+            }
         } else {
             // location_code フォールバック: 「○○県周辺」
             var regionText = data.region || '';
@@ -2918,9 +2924,9 @@ foreach ($highlight_items as $highlight):
             }
         }
 
-        // 半径セレクター: 座標モード時のみ表示
+        // 半径セレクター: 座標モード時のみ表示（手動・自動検出とも）
         if (isCoordinateMode && data.radius_options && data.radius_options.length > 0) {
-            meoRenderRadiusOptions(data.radius_options, loc.radius || 1000);
+            meoRenderRadiusOptions(data.radius_options, loc.radius || 3000);
             meoRadiusGroup.style.display = '';
         } else {
             meoRadiusGroup.style.display = 'none';

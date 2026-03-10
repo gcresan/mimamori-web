@@ -678,6 +678,10 @@ $gcrev_utils_opportunity_scorer = $gcrev_utils_path . 'class-opportunity-scorer.
 if ( file_exists( $gcrev_utils_opportunity_scorer ) ) {
     require_once $gcrev_utils_opportunity_scorer;
 }
+$gcrev_utils_city_coordinates = $gcrev_utils_path . 'class-city-coordinates.php';
+if ( file_exists( $gcrev_utils_city_coordinates ) ) {
+    require_once $gcrev_utils_city_coordinates;
+}
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）

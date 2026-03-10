@@ -1687,6 +1687,23 @@ class Gcrev_Insight_API {
         update_user_meta($user_id, 'gcrev_client_area_city',      sanitize_text_field($params['area_city'] ?? ''));
         update_user_meta($user_id, 'gcrev_client_area_custom',    sanitize_text_field($params['area_custom'] ?? ''));
 
+        // 商圏（市区町村）変更時：手動MEO座標が未設定ならMEOキャッシュを無効化
+        // （自動検出の市区町村中心部が変わるため）
+        $manual_lat = get_user_meta( $user_id, '_gcrev_meo_lat', true );
+        if ( empty( $manual_lat ) ) {
+            global $wpdb;
+            $like = $wpdb->esc_like( '_transient_gcrev_meo_rank_' . $user_id ) . '%';
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+                $like
+            ) );
+            $like_timeout = $wpdb->esc_like( '_transient_timeout_gcrev_meo_rank_' . $user_id ) . '%';
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+                $like_timeout
+            ) );
+        }
+
         // 業種（大分類）— 64文字以内
         $category = sanitize_text_field($params['industry_category'] ?? '');
         if (mb_strlen($category) > 64) { $category = mb_substr($category, 0, 64); }
@@ -3956,6 +3973,21 @@ class Gcrev_Insight_API {
             $meo_address = (string) get_user_meta( $user_id, '_gcrev_meo_address', true );
             $meo_radius  = (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000;
 
+            // ===== 市区町村中心部の自動検出（手動座標が未設定時） =====
+            $location_source = 'manual';
+            if ( $meo_lat === '' || $meo_lng === '' ) {
+                if ( class_exists( 'Gcrev_City_Coordinates' ) ) {
+                    $city_coords = Gcrev_City_Coordinates::get_for_user( $user_id );
+                    if ( $city_coords ) {
+                        $meo_lat         = (string) $city_coords['lat'];
+                        $meo_lng         = (string) $city_coords['lng'];
+                        $meo_address     = $city_coords['label'];
+                        $meo_radius      = Gcrev_City_Coordinates::DEFAULT_RADIUS;
+                        $location_source = 'city_center';
+                    }
+                }
+            }
+
             // radius パラメータが明示指定されていればそちらを優先
             $effective_radius = ( $radius_param > 0 ) ? $radius_param : $meo_radius;
 
@@ -3971,10 +4003,15 @@ class Gcrev_Insight_API {
                     $zoom
                 );
 
-                // 半径選択を永続化（明示指定かつ保存値と異なる場合）
-                if ( $radius_param > 0 && $radius_param !== $meo_radius ) {
+                // 半径選択を永続化（手動座標の場合のみ。自動検出時は保存しない）
+                if ( $location_source === 'manual' && $radius_param > 0 && $radius_param !== $meo_radius ) {
                     update_user_meta( $user_id, '_gcrev_meo_radius', $radius_param );
                 }
+            }
+
+            // location_source のフォールバック
+            if ( ! $use_coordinate ) {
+                $location_source = 'location_code';
             }
 
             // Transient キャッシュ（座標モード時は zoom をキーに含める）
@@ -4068,6 +4105,7 @@ class Gcrev_Insight_API {
                 'region'       => $region_label,
                 'location'     => [
                     'mode'          => $use_coordinate ? 'coordinate' : 'location_code',
+                    'source'        => $location_source,
                     'lat'           => $use_coordinate ? (float) $meo_lat : null,
                     'lng'           => $use_coordinate ? (float) $meo_lng : null,
                     'address'       => $use_coordinate ? $meo_address : '',

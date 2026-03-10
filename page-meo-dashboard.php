@@ -61,6 +61,18 @@ $meo_address = get_user_meta($user_id, '_gcrev_meo_address', true);
 $meo_radius  = (int) get_user_meta($user_id, '_gcrev_meo_radius', true) ?: 1000;
 $has_meo_coordinate = ($meo_lat !== '' && $meo_lng !== '');
 
+// ===== 市区町村中心部の自動検出（手動座標が未設定時に表示・プリフィル用） =====
+$auto_city_coords = null;
+if ( ! $has_meo_coordinate && class_exists('Gcrev_City_Coordinates') ) {
+    $auto_city_coords = Gcrev_City_Coordinates::get_for_user($user_id);
+}
+
+// フォーム表示値（手動座標 → 自動検出 → 空）
+$display_lat     = $has_meo_coordinate ? $meo_lat     : ( $auto_city_coords ? $auto_city_coords['lat'] : '' );
+$display_lng     = $has_meo_coordinate ? $meo_lng     : ( $auto_city_coords ? $auto_city_coords['lng'] : '' );
+$display_address = $has_meo_coordinate ? $meo_address : ( $auto_city_coords ? $auto_city_coords['label'] : '' );
+$display_radius  = $has_meo_coordinate ? $meo_radius  : ( $auto_city_coords ? Gcrev_City_Coordinates::DEFAULT_RADIUS : 1000 );
+
 get_header();
 ?>
 
@@ -659,18 +671,25 @@ get_header();
     </div>
 
     <div id="meo-coord-body">
-        <?php if ($has_meo_coordinate): ?>
+        <?php
+        $radius_labels = [500 => '500m', 1000 => '1km', 3000 => '3km', 5000 => '5km', 10000 => '10km'];
+        if ($has_meo_coordinate): ?>
+        <!-- 手動座標が設定済み -->
         <div style="background: #f0fdf4; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #16a34a; display: flex; align-items: center; gap: 8px;">
             <span>✅</span>
-            <span>基準地点が設定されています：<strong><?php echo esc_html($meo_address ?: ($meo_lat . ', ' . $meo_lng)); ?></strong>（半径 <?php
-                $radius_labels = [500 => '500m', 1000 => '1km', 3000 => '3km', 5000 => '5km', 10000 => '10km'];
-                echo esc_html($radius_labels[$meo_radius] ?? '1km');
-            ?>）</span>
+            <span>基準地点が手動で設定されています：<strong><?php echo esc_html($meo_address ?: ($meo_lat . ', ' . $meo_lng)); ?></strong>（半径 <?php echo esc_html($radius_labels[$meo_radius] ?? '1km'); ?>）</span>
+        </div>
+        <?php elseif ($auto_city_coords): ?>
+        <!-- 市区町村中心部を自動検出 -->
+        <div style="background: #eff6ff; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #1d4ed8; display: flex; align-items: center; gap: 8px;">
+            <span>📍</span>
+            <span>クライアント設定の商圏から自動検出：<strong><?php echo esc_html($auto_city_coords['label']); ?></strong>（半径 <?php echo esc_html($radius_labels[Gcrev_City_Coordinates::DEFAULT_RADIUS] ?? '3km'); ?>）がダッシュボードの基準地点として使用されます。下記フォームで手動調整も可能です。</span>
         </div>
         <?php else: ?>
+        <!-- 座標なし・自動検出もなし -->
         <div style="background: #fffbeb; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #92400e; display: flex; align-items: center; gap: 8px;">
             <span>💡</span>
-            <span>基準地点を設定すると、メインダッシュボードの「Googleマップの見え方」で店舗周辺の正確な順位を計測できます。</span>
+            <span>基準地点を設定すると、メインダッシュボードの「Googleマップの見え方」で店舗周辺の正確な順位を計測できます。クライアント設定で商圏（市区町村）を設定すると自動検出されます。</span>
         </div>
         <?php endif; ?>
 
@@ -682,7 +701,7 @@ get_header();
             <div style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">住所（表示用）</label>
                 <input type="text" id="meo-coord-address"
-                       value="<?php echo esc_attr($meo_address); ?>"
+                       value="<?php echo esc_attr($display_address); ?>"
                        placeholder="例：愛媛県松山市三番町5-3-7"
                        style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
                        onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
@@ -690,7 +709,7 @@ get_header();
             <div>
                 <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">緯度（latitude）</label>
                 <input type="text" id="meo-coord-lat"
-                       value="<?php echo esc_attr($meo_lat); ?>"
+                       value="<?php echo esc_attr($display_lat); ?>"
                        placeholder="例：33.8416000"
                        style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
                        onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
@@ -698,7 +717,7 @@ get_header();
             <div>
                 <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">経度（longitude）</label>
                 <input type="text" id="meo-coord-lng"
-                       value="<?php echo esc_attr($meo_lng); ?>"
+                       value="<?php echo esc_attr($display_lng); ?>"
                        placeholder="例：132.7657000"
                        style="width: 100%; padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;"
                        onfocus="this.style.borderColor='#568184'" onblur="this.style.borderColor='#D0D5DA'">
@@ -708,11 +727,11 @@ get_header();
             <label style="display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;">計測半径</label>
             <select id="meo-coord-radius"
                     style="padding: 10px 14px; border: 1px solid #D0D5DA; border-radius: 8px; font-size: 14px; outline: none; cursor: pointer; min-width: 160px; background: #fff;">
-                <option value="500" <?php selected($meo_radius, 500); ?>>500m</option>
-                <option value="1000" <?php selected($meo_radius, 1000); ?>>1km（デフォルト）</option>
-                <option value="3000" <?php selected($meo_radius, 3000); ?>>3km</option>
-                <option value="5000" <?php selected($meo_radius, 5000); ?>>5km</option>
-                <option value="10000" <?php selected($meo_radius, 10000); ?>>10km</option>
+                <option value="500" <?php selected($display_radius, 500); ?>>500m</option>
+                <option value="1000" <?php selected($display_radius, 1000); ?>>1km</option>
+                <option value="3000" <?php selected($display_radius, 3000); ?>>3km</option>
+                <option value="5000" <?php selected($display_radius, 5000); ?>>5km</option>
+                <option value="10000" <?php selected($display_radius, 10000); ?>>10km</option>
             </select>
         </div>
         <div style="display: flex; align-items: center; gap: 16px;">
