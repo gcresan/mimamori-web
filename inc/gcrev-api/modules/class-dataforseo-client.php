@@ -437,6 +437,164 @@ class Gcrev_DataForSEO_Client {
     }
 
     // =========================================================
+    // Google Maps SERP 取得
+    // =========================================================
+
+    /**
+     * Google Maps SERP を取得
+     *
+     * DataForSEO の Maps SERP API を使い、Google マップ検索結果を取得する。
+     * 各アイテムにはビジネス名・住所・評価・口コミ数・カテゴリ等が含まれる。
+     *
+     * @param string $keyword       検索キーワード
+     * @param string $device        'desktop' or 'mobile'
+     * @param int    $location_code ロケーションコード（デフォルト: Japan 2392）
+     * @param string $language_code 言語コード（デフォルト: 'ja'）
+     * @return array|WP_Error       Maps SERP items 配列
+     */
+    public function fetch_maps_serp(
+        string $keyword,
+        string $device = 'desktop',
+        int    $location_code = 2392,
+        string $language_code = 'ja'
+    ) {
+        if ( ! self::is_configured() ) {
+            return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
+        }
+
+        if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
+            Gcrev_Rate_Limiter::check_and_wait( 'dataforseo', self::RATE_LIMIT_PER_MINUTE );
+        }
+
+        $post_data = [
+            [
+                'keyword'       => $keyword,
+                'location_code' => $location_code,
+                'language_code' => $language_code,
+                'device'        => $device,
+                'os'            => $device === 'desktop' ? 'windows' : 'android',
+                'depth'         => 20,
+            ]
+        ];
+
+        $response = $this->api_request( '/serp/google/maps/live/advanced', $post_data );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $status_code = (int) ( $response['status_code'] ?? 0 );
+        if ( $status_code !== 20000 ) {
+            $msg = $response['status_message'] ?? 'Unknown error';
+            error_log( "[GCREV][DataForSEO] Maps SERP error: {$msg} (code: {$status_code})" );
+            return new \WP_Error( 'api_error', $msg );
+        }
+
+        $tasks = $response['tasks'] ?? [];
+        if ( empty( $tasks ) || empty( $tasks[0]['result'] ) ) {
+            return new \WP_Error( 'no_result', 'Maps SERP の応答にデータが含まれていません。' );
+        }
+
+        $result = $tasks[0]['result'][0];
+        return $result['items'] ?? [];
+    }
+
+    // =========================================================
+    // Google Local Finder SERP 取得
+    // =========================================================
+
+    /**
+     * Google Local Finder SERP を取得
+     *
+     * DataForSEO の Local Finder SERP API を使い、ローカルファインダー検索結果を取得する。
+     *
+     * @param string $keyword       検索キーワード
+     * @param string $device        'desktop' or 'mobile'
+     * @param int    $location_code ロケーションコード（デフォルト: Japan 2392）
+     * @param string $language_code 言語コード（デフォルト: 'ja'）
+     * @return array|WP_Error       Local Finder SERP items 配列
+     */
+    public function fetch_local_finder_serp(
+        string $keyword,
+        string $device = 'desktop',
+        int    $location_code = 2392,
+        string $language_code = 'ja'
+    ) {
+        if ( ! self::is_configured() ) {
+            return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
+        }
+
+        if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
+            Gcrev_Rate_Limiter::check_and_wait( 'dataforseo', self::RATE_LIMIT_PER_MINUTE );
+        }
+
+        $post_data = [
+            [
+                'keyword'       => $keyword,
+                'location_code' => $location_code,
+                'language_code' => $language_code,
+                'device'        => $device,
+                'os'            => $device === 'desktop' ? 'windows' : 'android',
+                'depth'         => 20,
+            ]
+        ];
+
+        $response = $this->api_request( '/serp/google/local_finder/live/advanced', $post_data );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        $status_code = (int) ( $response['status_code'] ?? 0 );
+        if ( $status_code !== 20000 ) {
+            $msg = $response['status_message'] ?? 'Unknown error';
+            error_log( "[GCREV][DataForSEO] Local Finder SERP error: {$msg} (code: {$status_code})" );
+            return new \WP_Error( 'api_error', $msg );
+        }
+
+        $tasks = $response['tasks'] ?? [];
+        if ( empty( $tasks ) || empty( $tasks[0]['result'] ) ) {
+            return new \WP_Error( 'no_result', 'Local Finder SERP の応答にデータが含まれていません。' );
+        }
+
+        $result = $tasks[0]['result'][0];
+        return $result['items'] ?? [];
+    }
+
+    // =========================================================
+    // Maps/Local Finder ビジネスマッチ
+    // =========================================================
+
+    /**
+     * Maps/Local Finder 結果からターゲットドメインのビジネスを検索
+     *
+     * organic SERP の find_domain_in_results() と同様の www./非www. 正規化でマッチ。
+     * マッチ時はアイテム全体を返す（店舗情報・評価等を含む）。
+     *
+     * @param array  $items         Maps/Local Finder items 配列
+     * @param string $target_domain ターゲットドメイン（例: 'example.com'）
+     * @return array|null マッチしたアイテム全体、見つからない場合 null
+     */
+    public function find_business_in_maps_results( array $items, string $target_domain ): ?array {
+        $normalized_target = preg_replace( '/^www\./i', '', strtolower( $target_domain ) );
+
+        foreach ( $items as $item ) {
+            $domain = $item['domain'] ?? '';
+            if ( $domain === '' ) {
+                continue;
+            }
+
+            $item_domain = preg_replace( '/^www\./i', '', strtolower( $domain ) );
+
+            if ( $item_domain === $normalized_target ) {
+                return $item;
+            }
+        }
+
+        return null;
+    }
+
+    // =========================================================
     // キーワード正規化（内部）
     // =========================================================
 

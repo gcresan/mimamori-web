@@ -389,6 +389,32 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== MEO順位データ取得（DataForSEO Maps/Local Finder SERP） =====
+        register_rest_route('gcrev/v1', '/meo/rankings', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_meo_rankings' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+            'args'                => [
+                'keyword_id' => [
+                    'required' => false,
+                    'default'  => 0,
+                    'type'     => 'integer',
+                ],
+                'device' => [
+                    'required' => false,
+                    'default'  => 'mobile',
+                    'validate_callback' => function( $v ) {
+                        return in_array( $v, [ 'mobile', 'desktop' ], true );
+                    },
+                ],
+                'force' => [
+                    'required' => false,
+                    'default'  => 0,
+                    'type'     => 'integer',
+                ],
+            ],
+        ]);
+
         // ===== v2ダッシュボード用レポート生成 =====
         register_rest_route('gcrev/v1', '/report/generate-manual', [
             'methods'             => 'POST',
@@ -3796,6 +3822,281 @@ class Gcrev_Insight_API {
             error_log("[GCREV][MEO] Error: " . $e->getMessage());
             return new \WP_REST_Response(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+
+    // =========================================================
+    // MEO順位データ取得（DataForSEO Maps / Local Finder SERP）
+    // =========================================================
+
+    /**
+     * REST: MEO順位データ取得
+     *
+     * ユーザーのランクトラッカーキーワードを使い、DataForSEO の
+     * Maps SERP / Local Finder SERP から MEO 順位・店舗情報・口コミ・競合を取得する。
+     *
+     * @param \WP_REST_Request $request
+     * @return \WP_REST_Response
+     */
+    public function rest_get_meo_rankings( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'ログインが必要です' ], 401 );
+            }
+
+            // DataForSEO 設定チェック
+            if ( ! Gcrev_DataForSEO_Client::is_configured() ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'DataForSEO API が未設定です' ], 400 );
+            }
+
+            $device     = sanitize_text_field( $request->get_param( 'device' ) ?: 'mobile' );
+            $keyword_id = absint( $request->get_param( 'keyword_id' ) );
+            $force      = absint( $request->get_param( 'force' ) );
+
+            global $wpdb;
+            $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+            // ユーザーの有効キーワード一覧を取得
+            $all_keywords = $wpdb->get_results( $wpdb->prepare(
+                "SELECT id, keyword, target_domain, location_code, language_code
+                 FROM {$kw_table}
+                 WHERE user_id = %d AND enabled = 1
+                 ORDER BY sort_order ASC, id ASC",
+                $user_id
+            ), ARRAY_A );
+
+            if ( empty( $all_keywords ) ) {
+                return new \WP_REST_Response( [
+                    'success'  => false,
+                    'message'  => 'キーワードが登録されていません',
+                    'keywords' => [],
+                ], 200 );
+            }
+
+            // 対象キーワードを決定
+            $selected_kw = null;
+            if ( $keyword_id > 0 ) {
+                foreach ( $all_keywords as $kw ) {
+                    if ( (int) $kw['id'] === $keyword_id ) {
+                        $selected_kw = $kw;
+                        break;
+                    }
+                }
+            }
+            if ( ! $selected_kw ) {
+                $selected_kw = $all_keywords[0];
+            }
+
+            $kw_id         = (int) $selected_kw['id'];
+            $keyword_text  = $selected_kw['keyword'];
+            $target_domain = $selected_kw['target_domain'];
+            $location_code = (int) ( $selected_kw['location_code'] ?: 2392 );
+            $language_code = $selected_kw['language_code'] ?: 'ja';
+
+            // Transient キャッシュ
+            $cache_key = "gcrev_meo_rank_{$user_id}_{$kw_id}_{$device}";
+            if ( ! $force ) {
+                $cached = get_transient( $cache_key );
+                if ( $cached !== false && is_array( $cached ) ) {
+                    // キーワード一覧は常に最新を付与
+                    $cached['keywords'] = $this->meo_build_keyword_list( $all_keywords, $kw_id );
+                    return new \WP_REST_Response( $cached, 200 );
+                }
+            }
+
+            // DataForSEO API 呼び出し
+            $maps_items   = $this->dataforseo->fetch_maps_serp( $keyword_text, $device, $location_code, $language_code );
+            $finder_items = $this->dataforseo->fetch_local_finder_serp( $keyword_text, $device, $location_code, $language_code );
+
+            // --- Maps データ処理 ---
+            $maps_rank  = null;
+            $store_data = null;
+            $competitors = [];
+
+            if ( ! is_wp_error( $maps_items ) && is_array( $maps_items ) ) {
+                $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $target_domain );
+
+                if ( $my_biz ) {
+                    $maps_rank  = (int) ( $my_biz['rank_group'] ?? 0 ) ?: null;
+                    $store_data = $this->meo_extract_store_info( $my_biz );
+                }
+
+                // 競合一覧（上位10件）
+                $comp_count = 0;
+                foreach ( $maps_items as $item ) {
+                    if ( $comp_count >= 10 ) break;
+                    $item_type = $item['type'] ?? '';
+                    if ( $item_type !== 'maps_search' && $item_type !== 'maps_paid' ) {
+                        // maps_search 以外のタイプもあり得るため柔軟に処理
+                        if ( empty( $item['title'] ) ) continue;
+                    }
+
+                    $item_domain = $item['domain'] ?? '';
+                    $normalized_item = preg_replace( '/^www\./i', '', strtolower( $item_domain ) );
+                    $normalized_target = preg_replace( '/^www\./i', '', strtolower( $target_domain ) );
+                    $is_self = ( $normalized_item !== '' && $normalized_item === $normalized_target );
+
+                    $rating_obj = $item['rating'] ?? [];
+                    $competitors[] = [
+                        'title'         => $item['title'] ?? '',
+                        'rank'          => (int) ( $item['rank_group'] ?? 0 ) ?: null,
+                        'rating'        => $rating_obj['value'] ?? null,
+                        'reviews_count' => $rating_obj['votes_count'] ?? 0,
+                        'is_self'       => $is_self,
+                    ];
+                    $comp_count++;
+                }
+            } else {
+                $maps_error = is_wp_error( $maps_items ) ? $maps_items->get_error_message() : '';
+                error_log( "[GCREV][MEO Rankings] Maps SERP error for '{$keyword_text}': {$maps_error}" );
+            }
+
+            // --- Local Finder データ処理 ---
+            $finder_rank  = null;
+            $finder_total = 0;
+
+            if ( ! is_wp_error( $finder_items ) && is_array( $finder_items ) ) {
+                $finder_total = count( $finder_items );
+                $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $target_domain );
+                if ( $my_finder ) {
+                    $finder_rank = (int) ( $my_finder['rank_group'] ?? 0 ) ?: null;
+                }
+            } else {
+                $finder_error = is_wp_error( $finder_items ) ? $finder_items->get_error_message() : '';
+                error_log( "[GCREV][MEO Rankings] Local Finder error for '{$keyword_text}': {$finder_error}" );
+            }
+
+            // 地域ラベル
+            $region_label = $this->meo_get_location_label( $location_code );
+
+            $tz  = wp_timezone();
+            $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+
+            $result = [
+                'success'      => true,
+                'keyword'      => $keyword_text,
+                'device'       => $device,
+                'region'       => $region_label,
+                'maps'         => [
+                    'rank'          => $maps_rank,
+                    'total_results' => is_array( $maps_items ) ? count( $maps_items ) : 0,
+                    'store'         => $store_data,
+                    'competitors'   => $competitors,
+                ],
+                'local_finder' => [
+                    'rank'          => $finder_rank,
+                    'total_results' => $finder_total,
+                ],
+                'keywords'  => $this->meo_build_keyword_list( $all_keywords, $kw_id ),
+                'cached_at' => $now,
+            ];
+
+            // 24時間キャッシュ
+            set_transient( $cache_key, $result, 86400 );
+
+            return new \WP_REST_Response( $result, 200 );
+
+        } catch ( \Exception $e ) {
+            error_log( '[GCREV][MEO Rankings] Error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * Maps SERP アイテムから店舗情報を抽出
+     *
+     * @param array $item Maps SERP アイテム
+     * @return array 店舗情報
+     */
+    private function meo_extract_store_info( array $item ): array {
+        $rating_obj = $item['rating'] ?? [];
+        $rating_dist_raw = $item['rating_distribution'] ?? [];
+
+        // rating_distribution を整形
+        $rating_dist = [];
+        if ( is_array( $rating_dist_raw ) ) {
+            for ( $i = 1; $i <= 5; $i++ ) {
+                $rating_dist[ (string) $i ] = (int) ( $rating_dist_raw[ $i ] ?? $rating_dist_raw[ (string) $i ] ?? 0 );
+            }
+        }
+
+        // 営業時間を簡易テキストに
+        $work_hours_text = '';
+        $work_hours = $item['work_hours'] ?? [];
+        if ( ! empty( $work_hours['timetable'] ) && is_array( $work_hours['timetable'] ) ) {
+            // 最初の営業日のみ表示
+            foreach ( $work_hours['timetable'] as $day => $slots ) {
+                if ( ! empty( $slots ) && is_array( $slots ) ) {
+                    $slot = $slots[0] ?? [];
+                    $open  = $slot['open']['hour'] ?? '';
+                    $close = $slot['close']['hour'] ?? '';
+                    if ( $open !== '' && $close !== '' ) {
+                        $open_min  = str_pad( (string) ( $slot['open']['minute'] ?? 0 ), 2, '0', STR_PAD_LEFT );
+                        $close_min = str_pad( (string) ( $slot['close']['minute'] ?? 0 ), 2, '0', STR_PAD_LEFT );
+                        $work_hours_text = "{$open}:{$open_min}-{$close}:{$close_min}";
+                        break;
+                    }
+                }
+            }
+        }
+        if ( empty( $work_hours_text ) && ! empty( $work_hours['current_status'] ) ) {
+            $work_hours_text = $work_hours['current_status'];
+        }
+
+        $cid = $item['cid'] ?? '';
+        $maps_url = $cid ? 'https://www.google.com/maps?cid=' . $cid : '';
+
+        return [
+            'title'               => $item['title'] ?? '',
+            'category'            => $item['category'] ?? '',
+            'address'             => $item['address'] ?? '',
+            'phone'               => $item['phone'] ?? '',
+            'rating'              => $rating_obj['value'] ?? null,
+            'reviews_count'       => (int) ( $rating_obj['votes_count'] ?? 0 ),
+            'rating_distribution' => $rating_dist,
+            'work_hours'          => $work_hours_text,
+            'url'                 => $item['url'] ?? '',
+            'cid'                 => $cid,
+            'maps_url'            => $maps_url,
+        ];
+    }
+
+    /**
+     * キーワード一覧をセレクター用に整形
+     *
+     * @param array $all_keywords キーワード行配列
+     * @param int   $selected_id  選択中のキーワードID
+     * @return array
+     */
+    private function meo_build_keyword_list( array $all_keywords, int $selected_id ): array {
+        $list = [];
+        foreach ( $all_keywords as $kw ) {
+            $list[] = [
+                'id'       => (int) $kw['id'],
+                'keyword'  => $kw['keyword'],
+                'selected' => ( (int) $kw['id'] === $selected_id ),
+            ];
+        }
+        return $list;
+    }
+
+    /**
+     * location_code → 地域ラベル変換
+     *
+     * @param int $code DataForSEO location code
+     * @return string
+     */
+    private function meo_get_location_label( int $code ): string {
+        $map = [
+            2392    => '日本全国',
+            1009283 => '東京都',
+            1009303 => '大阪府',
+            1009269 => '愛知県',
+            1009280 => '福岡県',
+            1009275 => '北海道',
+            1009271 => '愛媛県',
+        ];
+        return $map[ $code ] ?? '指定地域';
     }
 
     /**
