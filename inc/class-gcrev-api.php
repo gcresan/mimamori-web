@@ -424,28 +424,33 @@ class Gcrev_Insight_API {
             ],
         ]);
 
-        // ===== MEO基準地点の座標保存（管理者専用） =====
+        // ===== MEO基準地点の座標保存（ログインユーザー: 自分用, 管理者: 他ユーザー可） =====
         register_rest_route('gcrev/v1', '/meo/coordinate', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_save_meo_coordinate' ],
-            'permission_callback' => function() {
-                return current_user_can( 'manage_options' );
-            },
+            'permission_callback' => [ $this->config, 'check_permission' ],
             'args'                => [
                 'user_id' => [
                     'required' => false,
                     'default'  => 0,
                     'type'     => 'integer',
                 ],
+                'clear' => [
+                    'required' => false,
+                    'default'  => false,
+                    'type'     => 'boolean',
+                ],
                 'lat' => [
-                    'required'          => true,
+                    'required'          => false,
+                    'default'           => 0,
                     'validate_callback' => function( $v ) {
                         $f = (float) $v;
                         return $f >= -90.0 && $f <= 90.0;
                     },
                 ],
                 'lng' => [
-                    'required'          => true,
+                    'required'          => false,
+                    'default'           => 0,
                     'validate_callback' => function( $v ) {
                         $f = (float) $v;
                         return $f >= -180.0 && $f <= 180.0;
@@ -4193,21 +4198,13 @@ class Gcrev_Insight_API {
         // 対象ユーザーID（管理者が他ユーザー分を設定する場合）
         $target_user_id = absint( $request->get_param( 'user_id' ) ) ?: $user_id;
 
-        $lat     = round( (float) $request->get_param( 'lat' ), 7 );
-        $lng     = round( (float) $request->get_param( 'lng' ), 7 );
-        $address = sanitize_text_field( $request->get_param( 'address' ) );
-        $radius  = absint( $request->get_param( 'radius' ) ) ?: 1000;
-
-        // 許可半径値チェック
-        $allowed = [ 500, 1000, 3000, 5000, 10000 ];
-        if ( ! in_array( $radius, $allowed, true ) ) {
-            $radius = 1000;
+        // 一般ユーザーは自分の座標のみ変更可能
+        if ( $target_user_id !== $user_id && ! current_user_can( 'manage_options' ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '権限がありません' ], 403 );
         }
 
-        update_user_meta( $target_user_id, '_gcrev_meo_lat', (string) $lat );
-        update_user_meta( $target_user_id, '_gcrev_meo_lng', (string) $lng );
-        update_user_meta( $target_user_id, '_gcrev_meo_address', $address );
-        update_user_meta( $target_user_id, '_gcrev_meo_radius', $radius );
+        // クリアモード: 座標設定を削除
+        $is_clear = (bool) $request->get_param( 'clear' );
 
         // MEO キャッシュを全削除（座標変更 → 全結果が無効）
         global $wpdb;
@@ -4221,6 +4218,46 @@ class Gcrev_Insight_API {
             "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
             $like_timeout
         ) );
+
+        if ( $is_clear ) {
+            delete_user_meta( $target_user_id, '_gcrev_meo_lat' );
+            delete_user_meta( $target_user_id, '_gcrev_meo_lng' );
+            delete_user_meta( $target_user_id, '_gcrev_meo_address' );
+            delete_user_meta( $target_user_id, '_gcrev_meo_radius' );
+
+            error_log( sprintf(
+                '[GCREV][MEO] Coordinate cleared: user_id=%d',
+                $target_user_id
+            ) );
+
+            return new \WP_REST_Response( [
+                'success' => true,
+                'message' => '基準地点をクリアしました',
+            ], 200 );
+        }
+
+        $lat     = round( (float) $request->get_param( 'lat' ), 7 );
+        $lng     = round( (float) $request->get_param( 'lng' ), 7 );
+        $address = sanitize_text_field( $request->get_param( 'address' ) );
+        $radius  = absint( $request->get_param( 'radius' ) ) ?: 1000;
+
+        if ( $lat == 0.0 && $lng == 0.0 ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => '緯度・経度を入力してください',
+            ], 400 );
+        }
+
+        // 許可半径値チェック
+        $allowed = [ 500, 1000, 3000, 5000, 10000 ];
+        if ( ! in_array( $radius, $allowed, true ) ) {
+            $radius = 1000;
+        }
+
+        update_user_meta( $target_user_id, '_gcrev_meo_lat', (string) $lat );
+        update_user_meta( $target_user_id, '_gcrev_meo_lng', (string) $lng );
+        update_user_meta( $target_user_id, '_gcrev_meo_address', $address );
+        update_user_meta( $target_user_id, '_gcrev_meo_radius', $radius );
 
         error_log( sprintf(
             '[GCREV][MEO] Coordinate saved: user_id=%d, lat=%s, lng=%s, radius=%d, address=%s',
