@@ -33,7 +33,7 @@
   height: 48px;
   margin: 0 auto 16px;
   border: 4px solid #E5E3DC;
-  border-top-color: #677d6b;
+  border-top-color: #568184;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -118,7 +118,7 @@
 .report-preloader__bar {
   height: 100%;
   width: 0%;
-  background: #677d6b;
+  background: #568184;
   border-radius: 4px;
   transition: width 0.35s ease-out;
 }
@@ -126,7 +126,7 @@
 .report-preloader__percent {
   font-size: 28px;
   font-weight: 700;
-  color: #677d6b;
+  color: #568184;
   margin: 0;
   letter-spacing: -0.5px;
 }
@@ -198,7 +198,7 @@
 .logo-icon {
   width: 36px;
   height: 36px;
-  background: #677d6b;
+  background: #568184;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -241,12 +241,12 @@
   letter-spacing: 0.02em;
 }
 .sidebar-nav .nav-link:hover {
-  background: #F2F4F0;
-  color: #677d6b;
+  background: #F2F5F5;
+  color: #568184;
 }
 .sidebar-nav .nav-link.active {
   background: rgba(47, 58, 74, 0.08);
-  color: #677d6b;
+  color: #568184;
   font-weight: 600;
 }
 .sidebar-nav .nav-link.active::before {
@@ -256,7 +256,7 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: #677d6b;
+  background: #568184;
   border-radius: 0 2px 2px 0;
 }
 .sidebar-nav .nav-icon {
@@ -339,7 +339,7 @@
 .topbar .topbar-right .report-setting-btn {
   display: inline-block;
   padding: 7px 14px;
-  background: #677d6b;
+  background: #568184;
   border-radius: 6px;
   font-size: 13px;
   text-decoration: none;
@@ -347,7 +347,7 @@
   white-space: nowrap;
 }
 .topbar .topbar-right .report-setting-btn:hover {
-  background: #566a5a;
+  background: #476C6F;
 }
 .topbar .topbar-right .topbar-user-info {
   text-align: right;
@@ -379,7 +379,7 @@
   color: #FAF9F6;
 }
 .topbar .topbar-right .logout-btn:hover {
-  background: #677d6b;
+  background: #568184;
 }
 
 .user-menu {
@@ -393,14 +393,14 @@
 }
 
 .user-menu:hover {
-  background: #F2F4F0;
+  background: #F2F5F5;
 }
 
 .user-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #677d6b;
+  background: #568184;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -419,7 +419,7 @@
 }
 
 .breadcrumb a {
-  color: #677d6b;
+  color: #568184;
   text-decoration: none;
 }
 
@@ -464,7 +464,7 @@
 
 .period-btn:hover {
   background: rgba(47, 58, 74, 0.06);
-  color: #677d6b;
+  color: #568184;
 }
 
 .period-btn.active {

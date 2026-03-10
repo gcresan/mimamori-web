@@ -243,7 +243,7 @@ class Gcrev_Client_Management_Page {
                         $tier_name = $tier_defs[ $tier ]['name'] ?? $tier;
                         if ( $tier === 'ai_support' ) :
                         ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#528C5A; background:rgba(82,140,90,0.08); border:1px solid rgba(82,140,90,0.2); border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#4E8A6B; background:rgba(78,138,107,0.08); border:1px solid rgba(78,138,107,0.2); border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
                         <?php else : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#6B7280; background:#f5f5f5; border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
                         <?php endif; ?>
@@ -252,21 +252,21 @@ class Gcrev_Client_Management_Page {
                         <?php if ( $is_test ) : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#c0392b; background:#fdf0ee; border:1px solid #e8c4bf; border-radius:3px;">テスト運用</span>
                         <?php elseif ( $is_paid ) : ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#528C5A; background:rgba(82,140,90,0.08); border-radius:3px;">利用中</span>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#4E8A6B; background:rgba(78,138,107,0.08); border-radius:3px;">利用中</span>
                         <?php else : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#999; background:#f5f5f5; border-radius:3px;">手続中</span>
                         <?php endif; ?>
                     </td>
                     <td style="text-align: center;">
                         <?php if ( $cache_cnt > 0 ) : ?>
-                            <span style="font-weight: 600; color: #677d6b;"><?php echo esc_html( $cache_cnt ); ?></span>件
+                            <span style="font-weight: 600; color: #568184;"><?php echo esc_html( $cache_cnt ); ?></span>件
                         <?php else : ?>
                             <span style="color: #999;">0</span>
                         <?php endif; ?>
                     </td>
                     <td style="text-align: center;">
                         <?php if ( $report_cnt > 0 ) : ?>
-                            <span style="font-weight: 600; color: #677d6b;"><?php echo esc_html( $report_cnt ); ?></span>件
+                            <span style="font-weight: 600; color: #568184;"><?php echo esc_html( $report_cnt ); ?></span>件
                         <?php else : ?>
                             <span style="color: #999;">0</span>
                         <?php endif; ?>

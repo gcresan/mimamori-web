@@ -1158,7 +1158,7 @@
     var barW = totalW / barCount * 0.6;
     var gap = totalW / barCount * 0.4;
 
-    waveCtx.fillStyle = '#677d6b';
+    waveCtx.fillStyle = '#568184';
     for (var i = 0; i < barCount; i++) {
       var idx = Math.floor(i * bufferLength / barCount);
       var amp = dataArray[idx] / 255.0;

@@ -43,8 +43,8 @@ get_header();
     color: #334155;
 }
 .goal-tab.active {
-    color: #677d6b;
-    border-bottom-color: #677d6b;
+    color: #568184;
+    border-bottom-color: #568184;
 }
 
 /* ===== Tab 1: CV Review ===== */
@@ -65,8 +65,8 @@ get_header();
 .btn-month-nav { background:#fff; border:1px solid #cbd5e1; border-radius:4px; padding:4px 10px; cursor:pointer; font-size:14px; }
 .btn-month-nav:hover { background:#f1f5f9; }
 #cvReviewMonth { border:1px solid #cbd5e1; border-radius:4px; padding:6px 10px; font-size:14px; }
-.btn-load { background:#677d6b; color:#fff; border:none; border-radius:4px; padding:6px 16px; cursor:pointer; font-size:14px; }
-.btn-load:hover { background:#566a5a; }
+.btn-load { background:#568184; color:#fff; border:none; border-radius:4px; padding:6px 16px; cursor:pointer; font-size:14px; }
+.btn-load:hover { background:#476C6F; }
 #filterStatus, #bulkAction { border:1px solid #cbd5e1; border-radius:4px; padding:6px 8px; font-size:13px; }
 .btn-bulk { background:#6366f1; color:#fff; border:none; border-radius:4px; padding:6px 14px; cursor:pointer; font-size:13px; }
 .btn-bulk:disabled { opacity:0.5; cursor:not-allowed; }
@@ -111,7 +111,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 .cv-review-table tr.row-dirty td:first-child::after { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:#f59e0b; }
 
 /* Spinner */
-.spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top:3px solid #677d6b; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px; }
+.spinner { width:32px; height:32px; border:3px solid #e2e8f0; border-top:3px solid #568184; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 12px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 
 /* ===== Tab 2: CV Settings ===== */
@@ -152,7 +152,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 .cv-routes-table input[type="text"]:focus {
     border-color: var(--mw-primary-blue);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(83, 115, 90, 0.12);
+    box-shadow: 0 0 0 2px rgba(86, 129, 132, 0.12);
 }
 .cv-routes-table input[data-field="route_key"] {
     font-family: monospace;
@@ -214,7 +214,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 }
 .suggest-item .key-badge {
     font-size: 10px;
-    color: #677d6b;
+    color: #568184;
     background: #e8f0f0;
     padding: 2px 6px;
     border-radius: 4px;
@@ -349,7 +349,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
         <div id="cvNoConfig" style="display:none;">
             <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:24px; text-align:center;">
                 <p style="margin:0 0 12px; font-size:16px; font-weight:600; color:#92400e;">ゴールが設定されていません</p>
-                <p style="margin:0;"><a href="javascript:void(0)" id="linkToSettingsTab" style="color:#677d6b; font-weight:600;">ゴールの数え方設定</a>から設定してください。</p>
+                <p style="margin:0;"><a href="javascript:void(0)" id="linkToSettingsTab" style="color:#568184; font-weight:600;">ゴールの数え方設定</a>から設定してください。</p>
             </div>
         </div>
 
@@ -952,8 +952,8 @@ document.addEventListener('DOMContentLoaded', function() {
 function markCvSettingsDirty(btnId) {
     var btn = document.getElementById(btnId);
     if (!btn) return;
-    btn.style.backgroundColor = '#677d6b';
-    btn.style.borderColor = '#677d6b';
+    btn.style.backgroundColor = '#568184';
+    btn.style.borderColor = '#568184';
     btn.style.color = '#fff';
 }
 function markCvSettingsClean(btnId) {

@@ -6,16 +6,16 @@
 
 /* --- Component root & CSS custom properties --- */
 .mw-chat {
-  --mw-primary: #677d6b;
-  --mw-teal: #7FA188;
+  --mw-primary: #568184;
+  --mw-teal: #7AA3A6;
   --mw-bg: #ffffff;
-  --mw-bg-sub: #F5F8F6;
-  --mw-bg-ter: #E8EFE9;
-  --mw-text: #283530;
-  --mw-text-sub: #3A4D42;
-  --mw-text-ter: #5F6E64;
-  --mw-border: #C5CEC7;
-  --mw-border-md: #B0BDB3;
+  --mw-bg-sub: #F5F8F8;
+  --mw-bg-ter: #E6EEF0;
+  --mw-text: #263335;
+  --mw-text-sub: #384D50;
+  --mw-text-ter: #5D6E70;
+  --mw-border: #C3CED0;
+  --mw-border-md: #AEBCBE;
   --mw-danger: #C95A4F;
   --mw-shadow-float: 0 8px 24px rgba(0,0,0,0.08);
   --mw-shadow-modal: 0 10px 36px rgba(0,0,0,0.10);
@@ -56,7 +56,7 @@
 
 .mw-chat-fab:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(103, 125, 107, 0.25);
+  box-shadow: 0 8px 24px rgba(86, 129, 132, 0.25);
 }
 
 .mw-chat-fab__icon { font-size: 24px; line-height: 1; }
@@ -676,7 +676,7 @@
 .mw-chat-input__textarea:focus {
   outline: none;
   border-color: var(--mw-teal);
-  box-shadow: 0 0 0 3px rgba(103, 125, 107, 0.12);
+  box-shadow: 0 0 0 3px rgba(86, 129, 132, 0.12);
 }
 .mw-chat-input__textarea::placeholder {
   color: var(--mw-text-ter);

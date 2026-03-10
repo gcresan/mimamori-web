@@ -67,7 +67,7 @@ get_header();
     justify-content: space-between;
     margin-bottom: 20px;
     padding-bottom: 12px;
-    border-bottom: 2px solid var(--mw-primary-blue, #677d6b);
+    border-bottom: 2px solid var(--mw-primary-blue, #568184);
 }
 .acct-card-header h2 {
     font-size: 17px;
@@ -111,7 +111,7 @@ get_header();
     font-size: 13px;
     font-weight: 600;
 }
-.contract-badge--active   { color: #528C5A; background: rgba(82,140,90,0.08); }
+.contract-badge--active   { color: #4E8A6B; background: rgba(78,138,107,0.08); }
 .contract-badge--canceled { color: #C0392B; background: #FDF0EE; }
 .contract-badge--none     { color: #888;    background: #f0f0f0; }
 
@@ -144,11 +144,11 @@ get_header();
     transition: background 0.2s, box-shadow 0.2s;
 }
 .acct-btn-primary {
-    background: var(--mw-primary-blue, #677d6b);
+    background: var(--mw-primary-blue, #568184);
     color: #fff;
 }
 .acct-btn-primary:hover {
-    background: #566a5a;
+    background: #476C6F;
     box-shadow: 0 2px 6px rgba(0,0,0,0.12);
 }
 .acct-btn-secondary {
@@ -196,9 +196,9 @@ get_header();
     transition: border-color 0.2s;
 }
 .acct-field-input input:focus {
-    border-color: var(--mw-primary-blue, #677d6b);
+    border-color: var(--mw-primary-blue, #568184);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(83,115,90,0.12);
+    box-shadow: 0 0 0 2px rgba(86,129,132,0.12);
 }
 .acct-field-input .field-error {
     font-size: 12px;
@@ -239,9 +239,9 @@ get_header();
     transition: border-color 0.2s;
 }
 .acct-pw-wrap input:focus {
-    border-color: var(--mw-primary-blue, #677d6b);
+    border-color: var(--mw-primary-blue, #568184);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(83,115,90,0.12);
+    box-shadow: 0 0 0 2px rgba(86,129,132,0.12);
 }
 .acct-pw-toggle {
     position: absolute;
@@ -287,7 +287,7 @@ get_header();
     transform: translateX(-50%) translateY(0);
     opacity: 1;
 }
-.acct-toast--success { background: #528C5A; }
+.acct-toast--success { background: #4E8A6B; }
 .acct-toast--error   { background: #C0392B; }
 
 /* --- レスポンシブ --- */

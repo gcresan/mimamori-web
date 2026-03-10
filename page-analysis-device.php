@@ -80,7 +80,7 @@ get_template_part('template-parts/analysis-help');
                         <span>-</span>
                     </div>
                 </div>
-                <div class="summary-card-icon" style="background: rgba(83,115,90,0.1); color: #677d6b;">📱</div>
+                <div class="summary-card-icon" style="background: rgba(86,129,132,0.1); color: #568184;">📱</div>
             </div>
             <div style="font-size: 14px; color: #555555; margin-top: 12px;">
                 全体の <strong style="color: #333333;" id="mobileShare">-</strong> を占める
@@ -101,7 +101,7 @@ get_template_part('template-parts/analysis-help');
                         <span>-</span>
                     </div>
                 </div>
-                <div class="summary-card-icon" style="background: rgba(82,140,90,0.1); color: #528C5A;">💻</div>
+                <div class="summary-card-icon" style="background: rgba(78,138,107,0.1); color: #4E8A6B;">💻</div>
             </div>
             <div style="font-size: 14px; color: #555555; margin-top: 12px;">
                 全体の <strong style="color: #333333;" id="desktopShare">-</strong> を占める
@@ -428,16 +428,16 @@ function updateTrendChart(data) {
                 {
                     label: 'Mobile',
                     data: mobile,
-                    borderColor: '#677d6b',
-                    backgroundColor: 'rgba(103, 125, 107, 0.15)',
+                    borderColor: '#568184',
+                    backgroundColor: 'rgba(86, 129, 132, 0.15)',
                     tension: 0.4,
                     fill: true
                 },
                 {
                     label: 'Desktop',
                     data: desktop,
-                    borderColor: '#528C5A',
-                    backgroundColor: 'rgba(82, 140, 90, 0.12)',
+                    borderColor: '#4E8A6B',
+                    backgroundColor: 'rgba(78, 138, 107, 0.12)',
                     tension: 0.4,
                     fill: true
                 },
@@ -508,7 +508,7 @@ function updateShareChart(data) {
     
     const labels = [];
     const sessions = [];
-    const colors = ['#677d6b', '#A68B5B', '#7B8EAA'];
+    const colors = ['#568184', '#A68B5B', '#7B8EAA'];
     
     devices_detail.forEach(device => {
         const name = getDeviceLabel(device.device);

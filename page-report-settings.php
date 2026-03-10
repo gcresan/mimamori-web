@@ -109,7 +109,7 @@ get_header();
         </h2>
         <p>
             AIレポート生成のために、今月の課題・目標・取り組み等を入力してください。<br>
-            サイトURLや商圏などの基本情報は<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#528C5A;font-weight:600;">クライアント設定</a>で設定できます。
+            サイトURLや商圏などの基本情報は<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#4E8A6B;font-weight:600;">クライアント設定</a>で設定できます。
         </p>
 
         <div class="form-group">
@@ -147,7 +147,7 @@ get_header();
         <!-- 海外アクセス除外 -->
         <div class="form-group" style="margin-top: 24px;">
             <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
-                <input type="checkbox" id="exclude-foreign-traffic" style="width: 18px; height: 18px; accent-color: var(--mw-primary-blue, #677d6b);"
+                <input type="checkbox" id="exclude-foreign-traffic" style="width: 18px; height: 18px; accent-color: var(--mw-primary-blue, #568184);"
                        <?php checked($saved_exclude_foreign, '1'); ?>>
                 <span>海外アクセスを除外してレポートを作成する</span>
             </label>
@@ -332,7 +332,7 @@ function displayGenerationCount(data) {
     } else if (data.remaining <= 2) {
         remainingCount.style.color = '#ea580c';
     } else {
-        remainingCount.style.color = '#528C5A';
+        remainingCount.style.color = '#4E8A6B';
     }
 
     infoBox.style.display = 'flex';

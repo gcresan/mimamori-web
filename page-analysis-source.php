@@ -326,12 +326,12 @@ function updateSummaryCards(data) {
     
     // チャネルアイコンとカラー設定
     const channelConfig = {
-        'Direct': { icon: '🔗', bg: 'rgba(83,115,90,0.1)', color: '#677d6b' },
-        'Organic Search': { icon: '🔍', bg: 'rgba(82,140,90,0.1)', color: '#528C5A' },
+        'Direct': { icon: '🔗', bg: 'rgba(86,129,132,0.1)', color: '#568184' },
+        'Organic Search': { icon: '🔍', bg: 'rgba(78,138,107,0.1)', color: '#4E8A6B' },
         'Referral': { icon: '🌐', bg: 'rgba(212,168,66,0.12)', color: '#D4A842' },
         'Paid Search': { icon: '💰', bg: 'rgba(181,87,75,0.08)', color: '#C95A4F' },
-        'Social': { icon: '📱', bg: 'rgba(88,125,98,0.1)', color: '#7FA188' },
-        'Organic Social': { icon: '📱', bg: 'rgba(88,125,98,0.1)', color: '#7FA188' },
+        'Social': { icon: '📱', bg: 'rgba(122,163,166,0.1)', color: '#7AA3A6' },
+        'Organic Social': { icon: '📱', bg: 'rgba(122,163,166,0.1)', color: '#7AA3A6' },
         'Email': { icon: '✉️', bg: 'rgba(212,168,66,0.12)', color: '#D4A842' },
         'Display': { icon: '🖼️', bg: 'rgba(181,87,75,0.08)', color: '#C95A4F' },
     };
@@ -388,12 +388,12 @@ function updateTrendChart(data) {
     
     // チャネル別色設定
     const channelColors = {
-        'Direct': '#677d6b',
-        'Organic Search': '#528C5A',
+        'Direct': '#568184',
+        'Organic Search': '#4E8A6B',
         'Referral': '#D4A842',
         'Paid Search': '#C95A4F',
-        'Social': '#7FA188',
-        'Organic Social': '#7FA188',
+        'Social': '#7AA3A6',
+        'Organic Social': '#7AA3A6',
         'Email': '#D4A842',
         'Display': '#C95A4F',
     };
@@ -479,7 +479,7 @@ function updateShareChart(data) {
     const labels = [];
     const enLabels = [];
     const sessions = [];
-    const colors = ['#677d6b', '#A68B5B', '#7B8EAA', '#C95A4F', '#8B7BAA', '#7FA188', '#A68B5B'];
+    const colors = ['#568184', '#A68B5B', '#7B8EAA', '#C95A4F', '#8B7BAA', '#7AA3A6', '#A68B5B'];
     
     channels_summary.forEach((channel, idx) => {
         labels.push(channelJa(channel.channel));

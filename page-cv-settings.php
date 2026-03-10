@@ -60,7 +60,7 @@ get_header();
 .cv-routes-table input[type="text"]:focus {
     border-color: var(--mw-primary-blue);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(83, 115, 90, 0.12);
+    box-shadow: 0 0 0 2px rgba(86, 129, 132, 0.12);
 }
 .cv-routes-table input[data-field="route_key"] {
     font-family: monospace;
@@ -122,7 +122,7 @@ get_header();
 }
 .suggest-item .key-badge {
     font-size: 10px;
-    color: #677d6b;
+    color: #568184;
     background: #e8f0f0;
     padding: 2px 6px;
     border-radius: 4px;
@@ -225,8 +225,8 @@ document.addEventListener('DOMContentLoaded', function() {
 function markDirty(btnId) {
     var btn = document.getElementById(btnId);
     if (!btn) return;
-    btn.style.backgroundColor = '#677d6b';
-    btn.style.borderColor = '#677d6b';
+    btn.style.backgroundColor = '#568184';
+    btn.style.borderColor = '#568184';
     btn.style.color = '#fff';
 }
 function markClean(btnId) {

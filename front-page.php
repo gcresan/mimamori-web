@@ -107,7 +107,7 @@ $page_title = trim( wp_title('', false) );
     body.login input[type="password"]:focus,
     body.login input[type="email"]:focus {
         outline: none !important;
-        border-color: #677d6b !important;
+        border-color: #568184 !important;
     }
     /* Remember Me チェックボックス */
     body.login .button_div { margin-top: 20px; text-align: center; }
@@ -121,7 +121,7 @@ $page_title = trim( wp_title('', false) );
         margin-bottom: 20px !important;
         width: 100% !important;
         padding: 14px !important;
-        background: #677d6b !important;
+        background: #568184 !important;
         color: #FAF9F6 !important;
         border: none !important;
         border-radius: 4px !important;

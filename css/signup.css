@@ -17,7 +17,7 @@
     text-align: center;
     margin-bottom: 48px;
     padding: 40px 32px;
-    background: linear-gradient(135deg, #677d6b 0%, #566a5a 100%);
+    background: linear-gradient(135deg, #568184 0%, #476C6F 100%);
     border-radius: 16px;
     color: #FFFFFF;
 }
@@ -57,14 +57,14 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 .signup-plan-card.selected {
-    border-color: #677d6b;
-    background: rgba(103, 125, 107, 0.04);
+    border-color: #568184;
+    background: rgba(86, 129, 132, 0.04);
 }
 .signup-plan-badge {
     position: absolute;
     top: 16px;
     right: 16px;
-    background: #677d6b;
+    background: #568184;
     color: #FFFFFF;
     font-size: 12px;
     font-weight: 600;
@@ -80,7 +80,7 @@
 .signup-plan-price {
     font-size: 36px;
     font-weight: 700;
-    color: #677d6b;
+    color: #568184;
     margin-bottom: 8px;
     line-height: 1;
 }
@@ -101,7 +101,7 @@
     left: 16px;
     width: 24px;
     height: 24px;
-    background: #677d6b;
+    background: #568184;
     border-radius: 50%;
     color: #FFFFFF;
     text-align: center;
@@ -130,11 +130,11 @@
     margin-bottom: 0;
 }
 .signup-plan-group-header--seisaku {
-    background: linear-gradient(135deg, #677d6b 0%, #566a5a 100%);
+    background: linear-gradient(135deg, #568184 0%, #476C6F 100%);
     color: #FFFFFF;
 }
 .signup-plan-group-header--unyou {
-    background: linear-gradient(135deg, #528C5A 0%, #4A7E52 100%);
+    background: linear-gradient(135deg, #4E8A6B 0%, #4A7E52 100%);
     color: #FFFFFF;
 }
 .signup-plan-group-icon {
@@ -173,10 +173,10 @@
 .signup-plan-price-monthly strong {
     font-size: 36px;
     font-weight: 700;
-    color: #677d6b;
+    color: #568184;
 }
 .signup-plans--unyou .signup-plan-price-monthly strong {
-    color: #528C5A;
+    color: #4E8A6B;
 }
 /* 総額（小さく） */
 .signup-plan-price-total {
@@ -230,7 +230,7 @@
     content: "●";
     position: absolute;
     left: 8px;
-    color: #677d6b;
+    color: #568184;
     font-weight: bold;
 }
 .signup-terms-list strong {
@@ -273,7 +273,7 @@
     flex: 1;
 }
 .signup-consent-label a {
-    color: #677d6b;
+    color: #568184;
     text-decoration: none;
 }
 .signup-consent-label a:hover {
@@ -340,8 +340,8 @@
 .signup-form input[type="email"]:focus,
 .signup-form input[type="tel"]:focus {
     outline: none;
-    border-color: #677d6b;
-    box-shadow: 0 0 0 3px rgba(103, 125, 107, 0.10);
+    border-color: #568184;
+    box-shadow: 0 0 0 3px rgba(86, 129, 132, 0.10);
 }
 .signup-form-display {
     padding: 12px 16px;
@@ -375,8 +375,8 @@
 .content-area .mw_wp_form input[type="email"]:focus,
 .content-area .mw_wp_form input[type="tel"]:focus {
     outline: none;
-    border-color: #677d6b;
-    box-shadow: 0 0 0 3px rgba(103, 125, 107, 0.10);
+    border-color: #568184;
+    box-shadow: 0 0 0 3px rgba(86, 129, 132, 0.10);
 }
 
 /* ===================================
@@ -441,7 +441,7 @@
    6c) MW WP Form 送信ボタン余白調整（修正3）
    =================================== */
 .content-area .mw_wp_form input[type="submit"] {
-    background: #677d6b;
+    background: #568184;
     color: #FFFFFF;
     font-size: 18px;
     font-weight: 700;
@@ -450,13 +450,13 @@
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s;
-    box-shadow: 0 4px 12px rgba(103, 125, 107, 0.3);
+    box-shadow: 0 4px 12px rgba(86, 129, 132, 0.3);
     margin-top: 16px;
 }
 .content-area .mw_wp_form input[type="submit"]:hover {
-    background: #566a5a;
+    background: #476C6F;
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(103, 125, 107, 0.4);
+    box-shadow: 0 6px 16px rgba(86, 129, 132, 0.4);
 }
 .content-area .mw_wp_form input[type="submit"]:disabled {
     background: #8A9197;
@@ -494,7 +494,7 @@
     display: block;
 }
 .signup-cta-button {
-    background: #677d6b;
+    background: #568184;
     color: #FFFFFF;
     font-size: 18px;
     font-weight: 700;
@@ -503,12 +503,12 @@
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s;
-    box-shadow: 0 4px 12px rgba(103, 125, 107, 0.3);
+    box-shadow: 0 4px 12px rgba(86, 129, 132, 0.3);
 }
 .signup-cta-button:hover:not(:disabled) {
-    background: #566a5a;
+    background: #476C6F;
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(103, 125, 107, 0.4);
+    box-shadow: 0 6px 16px rgba(86, 129, 132, 0.4);
 }
 .signup-cta-button:disabled {
     background: #8A9197;
@@ -541,7 +541,7 @@
     font-size: 14px;
 }
 .signup-footer-link:hover {
-    color: #677d6b;
+    color: #568184;
     text-decoration: underline;
 }
 
@@ -554,7 +554,7 @@
     text-align: center;
     margin-bottom: 48px;
     padding: 48px 32px;
-    background: linear-gradient(135deg, #528C5A 0%, #4A7E52 100%);
+    background: linear-gradient(135deg, #4E8A6B 0%, #4A7E52 100%);
     border-radius: 16px;
     color: #FFFFFF;
 }
@@ -651,12 +651,12 @@
     transform: translateY(-2px);
 }
 .thanks-payment-btn--primary {
-    background: linear-gradient(135deg, #677d6b 0%, #566a5a 100%);
+    background: linear-gradient(135deg, #568184 0%, #476C6F 100%);
     color: #FFFFFF;
-    box-shadow: 0 4px 12px rgba(103, 125, 107, 0.3);
+    box-shadow: 0 4px 12px rgba(86, 129, 132, 0.3);
 }
 .thanks-payment-btn--primary:hover {
-    box-shadow: 0 6px 16px rgba(103, 125, 107, 0.4);
+    box-shadow: 0 6px 16px rgba(86, 129, 132, 0.4);
 }
 .thanks-payment-btn--secondary {
     background: #FFFFFF;
@@ -665,8 +665,8 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 .thanks-payment-btn--secondary:hover {
-    border-color: #677d6b;
-    box-shadow: 0 4px 12px rgba(103, 125, 107, 0.15);
+    border-color: #568184;
+    box-shadow: 0 4px 12px rgba(86, 129, 132, 0.15);
 }
 .thanks-payment-btn-icon {
     font-size: 28px;
@@ -726,17 +726,17 @@
 }
 .thanks-back-link {
     display: inline-block;
-    color: #677d6b;
+    color: #568184;
     font-size: 15px;
     font-weight: 600;
     text-decoration: none;
     padding: 12px 24px;
-    border: 2px solid #677d6b;
+    border: 2px solid #568184;
     border-radius: 8px;
     transition: all 0.2s;
 }
 .thanks-back-link:hover {
-    background: #677d6b;
+    background: #568184;
     color: #FFFFFF;
 }
 

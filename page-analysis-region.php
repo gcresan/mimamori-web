@@ -95,7 +95,7 @@ $rest_nonce = wp_create_nonce('wp_rest');
     width: 18px;
     height: 18px;
     border: 2px solid #e2e8f0;
-    border-top-color: #677d6b;
+    border-top-color: #568184;
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
     margin-right: 8px;
@@ -127,8 +127,8 @@ $rest_nonce = wp_create_nonce('wp_rest');
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: rgba(88,125,98,0.1);
-    color: #677d6b;
+    background: rgba(122,163,166,0.1);
+    color: #568184;
     font-size: 10px;
     flex-shrink: 0;
 }
@@ -475,8 +475,8 @@ function updateTop10Chart(data) {
     closeRegionTrendPanel();
 
     // 背景色の配列を生成（選択状態で色が変わる）
-    const defaultBg = 'rgba(103, 125, 107, 0.8)';
-    const defaultBorder = '#677d6b';
+    const defaultBg = 'rgba(86, 129, 132, 0.8)';
+    const defaultBorder = '#568184';
 
     top10Chart = new Chart(ctx, {
         type: 'bar',
@@ -553,12 +553,12 @@ function updateBarStyles(activeIndex) {
     const count = ds.data.length;
     for (let i = 0; i < count; i++) {
         if (i === activeIndex) {
-            ds.backgroundColor[i] = 'rgba(82, 140, 90, 1)';
+            ds.backgroundColor[i] = 'rgba(78, 138, 107, 1)';
             ds.borderColor[i]     = '#3D5A42';
             ds.borderWidth[i]     = 2;
         } else {
-            ds.backgroundColor[i] = activeIndex >= 0 ? 'rgba(103, 125, 107, 0.45)' : 'rgba(103, 125, 107, 0.8)';
-            ds.borderColor[i]     = '#677d6b';
+            ds.backgroundColor[i] = activeIndex >= 0 ? 'rgba(86, 129, 132, 0.45)' : 'rgba(86, 129, 132, 0.8)';
+            ds.borderColor[i]     = '#568184';
             ds.borderWidth[i]     = 1;
         }
     }
@@ -644,12 +644,12 @@ function renderTrendChart(container, labels, values, jaName) {
             datasets: [{
                 label: jaName + ' セッション',
                 data: values,
-                borderColor: '#677d6b',
-                backgroundColor: 'rgba(103, 125, 107, 0.15)',
+                borderColor: '#568184',
+                backgroundColor: 'rgba(86, 129, 132, 0.15)',
                 fill: true,
                 tension: 0.3,
                 pointRadius: 4,
-                pointBackgroundColor: '#677d6b',
+                pointBackgroundColor: '#568184',
                 pointHoverRadius: 6
             }]
         },

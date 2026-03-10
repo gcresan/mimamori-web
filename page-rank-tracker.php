@@ -297,7 +297,7 @@ get_header();
     align-items: center;
     gap: 4px;
     font-size: 13px;
-    color: #677d6b;
+    color: #568184;
     cursor: pointer;
     text-decoration: none;
     padding: 4px 0;
@@ -305,7 +305,7 @@ get_header();
     background: none;
     white-space: nowrap;
 }
-.rt-action-link:hover { color: #566a5a; text-decoration: underline; }
+.rt-action-link:hover { color: #476C6F; text-decoration: underline; }
 .rt-action-link__icon { font-size: 14px; }
 
 /* Toggle switch */
@@ -336,7 +336,7 @@ get_header();
     border-radius: 50%;
     transition: 0.2s;
 }
-.rt-toggle input:checked + .rt-toggle__slider { background: #677d6b; }
+.rt-toggle input:checked + .rt-toggle__slider { background: #568184; }
 .rt-toggle input:checked + .rt-toggle__slider::before { transform: translateX(18px); }
 
 /* --- Keyword management section --- */
@@ -449,7 +449,7 @@ get_header();
     font-size: 14px;
     background: #fff;
 }
-.rt-add-form__input:focus { outline: none; border-color: #677d6b; }
+.rt-add-form__input:focus { outline: none; border-color: #568184; }
 
 /* --- Empty state --- */
 .rt-empty {
@@ -541,7 +541,7 @@ get_header();
 .rt-serp-rank {
     font-weight: 700;
     font-size: 15px;
-    color: #677d6b;
+    color: #568184;
     text-align: center;
     min-width: 36px;
 }
@@ -553,7 +553,7 @@ get_header();
 }
 .rt-serp-url {
     font-size: 12px;
-    color: #677d6b;
+    color: #568184;
     word-break: break-all;
 }
 .rt-serp-desc {
@@ -640,7 +640,7 @@ get_header();
 }
 .rt-progress-bar {
     height: 100%;
-    background: linear-gradient(90deg, #677d6b, #a3c9a9);
+    background: linear-gradient(90deg, #568184, #a3c9a9);
     border-radius: 5px;
     width: 0%;
     transition: width 0.3s ease;
@@ -791,7 +791,7 @@ get_header();
         <!-- Quota -->
         <div class="rt-quota" id="kwQuota" style="display:none;">
             <div class="rt-quota__item">計測上限: <strong id="quotaLimit">5</strong></div>
-            <div class="rt-quota__item">計測中: <strong id="quotaUsed" style="color:#677d6b;">0</strong></div>
+            <div class="rt-quota__item">計測中: <strong id="quotaUsed" style="color:#568184;">0</strong></div>
             <div class="rt-quota__item rt-quota__item--remaining">残り枠: <strong id="quotaRemaining">5</strong></div>
         </div>
     </div>
