@@ -339,6 +339,7 @@ get_header();
 .drt-rank-change { font-size: 10px; font-weight: 600; margin-top: 1px; }
 .drt-rank-change--up   { color: #16a34a; }
 .drt-rank-change--down { color: #ef4444; }
+.drt-rank-change--same { color: #9ca3af; }
 .drt-pc-diff {
     display: inline-block; font-size: 9px; color: #f59e0b; background: #fffbeb;
     border: 1px solid #fde68a; border-radius: 4px; padding: 1px 4px; margin-left: 3px; white-space: nowrap;
@@ -2470,7 +2471,6 @@ foreach ($highlight_items as $highlight):
         var hHtml = '<tr>';
         hHtml += '<th>キーワード</th>';
         hHtml += '<th>現在</th>';
-        hHtml += '<th>前回</th>';
         for (var d = 0; d < drtWeekLabels.length; d++) {
             hHtml += '<th style="text-align:center;">' + drtWeekLabels[d] + '</th>';
         }
@@ -2506,9 +2506,6 @@ foreach ($highlight_items as $highlight):
                 html += '<span class="drt-pc-diff">' + (drtDevice === 'mobile' ? 'PC' : 'SP') + 'と差あり</span>';
             }
             html += '</td>';
-
-            // Previous rank
-            html += '<td>' + drtFormatPrev(dev) + '</td>';
 
             // Weekly columns (6 weeks)
             if (drtWeekKeys) {
@@ -2547,13 +2544,17 @@ foreach ($highlight_items as $highlight):
         if (!dev) return '<span class="drt-rank--na">-</span>';
         if (!dev.is_ranked) return '<span class="drt-rank--out">圏外</span>';
         var html = '<span class="drt-rank">' + dev.rank_group + '<span class="drt-rank-unit">位</span></span>';
-        if (dev.change != null && dev.change !== 0) {
-            html += '<div class="drt-rank-change ' + (dev.change > 0 ? 'drt-rank-change--up' : 'drt-rank-change--down') + '">';
-            if (dev.change === 999) html += '&#x2191; NEW';
-            else if (dev.change === -999) html += '&#x2193; 圏外';
-            else if (dev.change > 0) html += '&#x2191; ' + dev.change;
-            else html += '&#x2193; ' + Math.abs(dev.change);
-            html += '</div>';
+        if (dev.change != null) {
+            if (dev.change === 0) {
+                html += '<div class="drt-rank-change drt-rank-change--same">&#x2192;</div>';
+            } else {
+                html += '<div class="drt-rank-change ' + (dev.change > 0 ? 'drt-rank-change--up' : 'drt-rank-change--down') + '">';
+                if (dev.change === 999) html += '&#x2191; NEW';
+                else if (dev.change === -999) html += '&#x2193; 圏外';
+                else if (dev.change > 0) html += '&#x2191; ' + dev.change;
+                else html += '&#x2193; ' + Math.abs(dev.change);
+                html += '</div>';
+            }
         }
         return html;
     }

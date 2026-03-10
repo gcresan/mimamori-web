@@ -253,7 +253,7 @@ get_header();
 }
 .rt-rank-change--up   { color: #16a34a; }
 .rt-rank-change--down { color: #ef4444; }
-.rt-rank-change--same { color: #d1d5db; }
+.rt-rank-change--same { color: #9ca3af; }
 
 /* Daily cell (compact) */
 .rt-daily {
@@ -973,7 +973,6 @@ get_header();
         var hHtml = '<tr>';
         hHtml += '<th>キーワード</th>';
         hHtml += '<th>現在</th>';
-        hHtml += '<th>前回</th>';
         for (var d = 0; d < weekLabels.length; d++) {
             hHtml += '<th style="text-align:center;">' + weekLabels[d] + '</th>';
         }
@@ -1013,9 +1012,6 @@ get_header();
             }
             html += '</td>';
 
-            // Previous rank (use change to infer)
-            html += '<td>' + formatPrevRank(dev) + '</td>';
-
             // Weekly columns (6 weeks)
             if (weekKeys) {
                 for (var d = 0; d < weekKeys.length; d++) {
@@ -1053,18 +1049,22 @@ get_header();
         if (!dev) return '<span class="rt-rank--na">-</span>';
         if (!dev.is_ranked) return '<span class="rt-rank--out">圏外</span>';
         var html = '<span class="rt-rank">' + dev.rank_group + '<span class="rt-rank-unit">位</span></span>';
-        if (dev.change != null && dev.change !== 0) {
-            html += '<div class="rt-rank-change ' + (dev.change > 0 ? 'rt-rank-change--up' : 'rt-rank-change--down') + '">';
-            if (dev.change === 999) {
-                html += '&#x2191; NEW';
-            } else if (dev.change === -999) {
-                html += '&#x2193; 圏外';
-            } else if (dev.change > 0) {
-                html += '&#x2191; ' + dev.change;
+        if (dev.change != null) {
+            if (dev.change === 0) {
+                html += '<div class="rt-rank-change rt-rank-change--same">&#x2192;</div>';
             } else {
-                html += '&#x2193; ' + Math.abs(dev.change);
+                html += '<div class="rt-rank-change ' + (dev.change > 0 ? 'rt-rank-change--up' : 'rt-rank-change--down') + '">';
+                if (dev.change === 999) {
+                    html += '&#x2191; NEW';
+                } else if (dev.change === -999) {
+                    html += '&#x2193; 圏外';
+                } else if (dev.change > 0) {
+                    html += '&#x2191; ' + dev.change;
+                } else {
+                    html += '&#x2193; ' + Math.abs(dev.change);
+                }
+                html += '</div>';
             }
-            html += '</div>';
         }
         return html;
     }

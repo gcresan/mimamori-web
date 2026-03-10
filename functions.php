@@ -4882,13 +4882,8 @@ function gcrev_week_label( string $iso_week ): string {
     $dt = ( new DateTimeImmutable( 'now', $tz ) )
         ->setISODate( (int) $parts[0], (int) $parts[1], 1 ); // 1 = Monday
 
-    $month = (int) $dt->format( 'n' );
-    $day   = (int) $dt->format( 'j' );
-
-    // その月の第何週目か: 月曜日の日付から計算
-    $week_num = (int) ceil( $day / 7 );
-
-    return $month . '/' . $week_num . '週';
+    // MM/DD 形式で月曜日の日付を返す
+    return $dt->format( 'm/d' );
 }
 
 // ----------------------------
