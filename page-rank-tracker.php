@@ -1441,10 +1441,10 @@ get_header();
             html += '</label>';
             html += '</td>';
 
-            // AIO toggle (placeholder — shows enabled state for now)
+            // AIO toggle
             html += '<td>';
             html += '<label class="rt-toggle">';
-            html += '<input type="checkbox"' + (kw.enabled ? ' checked' : '') + ' onchange="toggleKeyword(' + kw.id + ', this.checked)">';
+            html += '<input type="checkbox"' + (kw.aio_enabled ? ' checked' : '') + ' onchange="toggleAio(' + kw.id + ', this.checked)">';
             html += '<span class="rt-toggle__slider"></span>';
             html += '</label>';
             html += '</td>';
@@ -1537,6 +1537,23 @@ get_header();
             if (json.success) {
                 fetchMyKeywords();
                 fetchRankings();
+            } else {
+                alert(json.message || 'エラーが発生しました。');
+            }
+        });
+    };
+
+    window.toggleAio = function(id, enable) {
+        fetch('/wp-json/gcrev/v1/aio/my-keywords', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ keyword_id: id, aio_enabled: enable ? 1 : 0 })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success) {
+                fetchMyKeywords();
             } else {
                 alert(json.message || 'エラーが発生しました。');
             }

@@ -765,6 +765,14 @@ if ( file_exists( $mimamori_updates_api ) ) {
 }
 
 // ========================================
+// Step7: AIO Service（AI検索スコア）
+// ========================================
+$gcrev_aio_service = $gcrev_modules_path . 'class-aio-service.php';
+if ( file_exists( $gcrev_aio_service ) ) {
+    require_once $gcrev_aio_service;
+}
+
+// ========================================
 // 既存のAPIクラス（入口）は最後に読み込む
 // ========================================
 $gcrev_entry = $gcrev_inc_path . 'class-gcrev-api.php';
@@ -4618,6 +4626,7 @@ add_action('after_setup_theme', function () {
     gcrev_rank_keywords_create_table();
     gcrev_rank_results_create_table();
     gcrev_meo_results_create_table();
+    gcrev_aio_results_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -4733,6 +4742,7 @@ function gcrev_rank_keywords_create_table(): void {
         location_code INT NOT NULL DEFAULT 2392,
         language_code VARCHAR(10) NOT NULL DEFAULT 'ja',
         enabled TINYINT(1) NOT NULL DEFAULT 1,
+        aio_enabled TINYINT(1) NOT NULL DEFAULT 0,
         sort_order INT NOT NULL DEFAULT 0,
         memo VARCHAR(500) DEFAULT '',
         search_volume INT UNSIGNED NULL,
@@ -4856,6 +4866,35 @@ function gcrev_meo_results_create_table(): void {
         PRIMARY KEY  (id),
         UNIQUE KEY user_kw_device_week (user_id, keyword_id, device, iso_year_week),
         KEY user_fetched (user_id, fetched_at)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+function gcrev_aio_results_create_table(): void {
+    global $wpdb;
+    $table = $wpdb->prefix . 'gcrev_aio_results';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id              BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id         BIGINT(20) UNSIGNED NOT NULL,
+        keyword_id      BIGINT(20) UNSIGNED NOT NULL,
+        provider        VARCHAR(20) NOT NULL,
+        question        VARCHAR(1000) NOT NULL,
+        question_index  TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        raw_response    MEDIUMTEXT NULL,
+        extracted_names TEXT NULL,
+        self_rank       TINYINT UNSIGNED NULL,
+        self_score      DECIMAL(3,2) NULL,
+        is_mentioned    TINYINT(1) NOT NULL DEFAULT 0,
+        fetched_at      DATETIME NOT NULL,
+        created_at      DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY kw_provider_qidx (keyword_id, provider, question_index),
+        KEY user_fetched (user_id, fetched_at),
+        KEY keyword_id (keyword_id)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

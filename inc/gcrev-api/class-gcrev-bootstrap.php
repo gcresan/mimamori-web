@@ -102,6 +102,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Rank_Tracker_Settings_Page())->register();
             }
 
+            $aio_settings_path = __DIR__ . '/admin/class-aio-settings-page.php';
+            if ( file_exists( $aio_settings_path ) ) {
+                require_once $aio_settings_path;
+                (new Gcrev_AIO_Settings_Page())->register();
+            }
+
             // デプロイ管理画面（Dev 環境のみ）
             if ( defined( 'MIMAMORI_ENV' ) && MIMAMORI_ENV === 'development' ) {
                 $deploy_page_path = __DIR__ . '/admin/class-deploy-page.php';

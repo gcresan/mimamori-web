@@ -704,6 +704,56 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_reorder_my_keywords' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+
+        // =========================================================
+        // AIOスコア（AI検索最適化スコア）
+        // =========================================================
+        register_rest_route('gcrev/v1', '/aio/summary', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_summary' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio/keyword-detail', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_keyword_detail' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio/run', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_run_aio_check' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio/run-keyword', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_run_aio_keyword' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio/my-keywords', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_my_keywords' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio/my-keywords', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_aio_keyword' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio/my-keywords/(?P<id>\d+)', [
+            'methods'             => 'DELETE',
+            'callback'            => [ $this, 'rest_delete_aio_keyword' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        // 管理者用: AIOキーワード管理
+        register_rest_route('gcrev/v1', '/aio/keywords', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_keywords_admin' ],
+            'permission_callback' => function() { return current_user_can('manage_options'); },
+        ]);
+        register_rest_route('gcrev/v1', '/aio/keywords', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_aio_keyword_admin' ],
+            'permission_callback' => function() { return current_user_can('manage_options'); },
+        ]);
     }
 
     // =========================================================
@@ -9874,7 +9924,7 @@ PROMPT;
         $today = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d' );
 
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT id, keyword, target_domain, location_code, enabled, memo,
+            "SELECT id, keyword, target_domain, location_code, enabled, aio_enabled, memo,
                     search_volume, keyword_difficulty, competition, cpc,
                     volume_fetched_at, difficulty_fetched_at,
                     opportunity_score, opportunity_reasons, opportunity_fetched_at,
@@ -9901,8 +9951,9 @@ PROMPT;
 
         // 各キーワードの最新順位も取得
         foreach ( $rows as &$row ) {
-            $row['id']      = (int) $row['id'];
-            $row['enabled'] = (bool) $row['enabled'];
+            $row['id']          = (int) $row['id'];
+            $row['enabled']     = (bool) $row['enabled'];
+            $row['aio_enabled'] = (bool) ( $row['aio_enabled'] ?? 0 );
             $row['search_volume']       = $row['search_volume'] !== null ? (int) $row['search_volume'] : null;
             $row['keyword_difficulty']  = $row['keyword_difficulty'] !== null ? (int) $row['keyword_difficulty'] : null;
             $row['cpc']                 = $row['cpc'] !== null ? (float) $row['cpc'] : null;
@@ -10723,6 +10774,255 @@ PROMPT;
 
         foreach ( $ids as $order => $id ) {
             $wpdb->update( $table, [ 'sort_order' => $order ], [ 'id' => (int) $id, 'user_id' => $user_id ] );
+        }
+
+        return new \WP_REST_Response( [ 'success' => true ] );
+    }
+
+    // =========================================================
+    // AIOスコア REST コールバック
+    // =========================================================
+
+    /**
+     * GET /aio/summary
+     * ログインユーザーの AIO スコアサマリーを返す
+     */
+    public function rest_get_aio_summary( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        try {
+            $service = new Gcrev_AIO_Service( $this->config );
+            $data    = $service->get_results_summary( $user_id );
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $data ] );
+        } catch ( \Exception $e ) {
+            error_log( '[GCREV][AIO] rest_get_aio_summary error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /aio/keyword-detail?keyword_id=N
+     * キーワード別の詳細データ（アコーディオン展開用）
+     */
+    public function rest_get_aio_keyword_detail( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id    = get_current_user_id();
+        $keyword_id = absint( $request->get_param( 'keyword_id' ) );
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_rank_keywords';
+        $owner = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT user_id FROM {$table} WHERE id = %d", $keyword_id
+        ) );
+
+        if ( $owner !== $user_id && ! current_user_can( 'manage_options' ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '権限がありません' ], 403 );
+        }
+
+        try {
+            $service = new Gcrev_AIO_Service( $this->config );
+            $data    = $service->get_keyword_detail( $keyword_id );
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $data ] );
+        } catch ( \Exception $e ) {
+            error_log( '[GCREV][AIO] rest_get_aio_keyword_detail error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * POST /aio/run
+     * 全 AIO 有効キーワードを一括計測
+     */
+    public function rest_run_aio_check( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id  = get_current_user_id();
+        $lock_key = "gcrev_lock_aio_{$user_id}";
+
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => '計測が進行中です。しばらくお待ちください。',
+            ] );
+        }
+        set_transient( $lock_key, 1, 2 * HOUR_IN_SECONDS );
+
+        try {
+            $service = new Gcrev_AIO_Service( $this->config );
+            $results = $service->run_all_keywords( $user_id );
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $results ] );
+        } catch ( \Exception $e ) {
+            error_log( '[GCREV][AIO] rest_run_aio_check error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        } finally {
+            delete_transient( $lock_key );
+        }
+    }
+
+    /**
+     * POST /aio/run-keyword
+     * 単一キーワードの AIO 計測
+     */
+    public function rest_run_aio_keyword( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id    = get_current_user_id();
+        $keyword_id = absint( $request->get_param( 'keyword_id' ) );
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_rank_keywords';
+        $owner = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT user_id FROM {$table} WHERE id = %d", $keyword_id
+        ) );
+
+        if ( $owner !== $user_id && ! current_user_can( 'manage_options' ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '権限がありません' ], 403 );
+        }
+
+        try {
+            $service = new Gcrev_AIO_Service( $this->config );
+            $result  = $service->run_aio_check( $keyword_id );
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $result ] );
+        } catch ( \Exception $e ) {
+            error_log( '[GCREV][AIO] rest_run_aio_keyword error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /aio/my-keywords
+     * ログインユーザーの AIO 有効キーワード一覧
+     */
+    public function rest_get_aio_my_keywords( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id  = get_current_user_id();
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        $keywords = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, keyword, target_domain, location_code, enabled, aio_enabled, sort_order, memo, created_at
+             FROM {$kw_table}
+             WHERE user_id = %d
+             ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $keywords ?: [] ] );
+    }
+
+    /**
+     * POST /aio/my-keywords
+     * AIO 有効/無効切替 { keyword_id, aio_enabled }
+     */
+    public function rest_save_aio_keyword( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id    = get_current_user_id();
+        $keyword_id = absint( $request->get_param( 'keyword_id' ) );
+        $aio_on     = (int) $request->get_param( 'aio_enabled' );
+
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        $affected = $wpdb->update(
+            $kw_table,
+            [ 'aio_enabled' => $aio_on ? 1 : 0 ],
+            [ 'id' => $keyword_id, 'user_id' => $user_id ],
+            [ '%d' ],
+            [ '%d', '%d' ]
+        );
+
+        if ( $affected === false ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '更新に失敗しました' ], 500 );
+        }
+
+        return new \WP_REST_Response( [ 'success' => true ] );
+    }
+
+    /**
+     * DELETE /aio/my-keywords/{id}
+     * AIO を無効にする（キーワード自体は削除しない）
+     */
+    public function rest_delete_aio_keyword( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id    = get_current_user_id();
+        $keyword_id = absint( $request['id'] );
+
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        $wpdb->update(
+            $kw_table,
+            [ 'aio_enabled' => 0 ],
+            [ 'id' => $keyword_id, 'user_id' => $user_id ],
+            [ '%d' ],
+            [ '%d', '%d' ]
+        );
+
+        return new \WP_REST_Response( [ 'success' => true ] );
+    }
+
+    /**
+     * GET /aio/keywords?user_id=N （管理者用）
+     */
+    public function rest_get_aio_keywords_admin( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id  = absint( $request->get_param( 'user_id' ) );
+        $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'user_id が必要です' ], 400 );
+        }
+
+        $keywords = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, keyword, target_domain, enabled, aio_enabled, sort_order
+             FROM {$kw_table}
+             WHERE user_id = %d
+             ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        // 会社名・別名も返す
+        $service      = new Gcrev_AIO_Service( $this->config );
+        $company_name = $service->get_company_name( $user_id );
+        $aliases      = $service->get_company_aliases( $user_id );
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'data'    => [
+                'keywords'     => $keywords ?: [],
+                'company_name' => $company_name,
+                'aliases'      => $aliases,
+            ],
+        ] );
+    }
+
+    /**
+     * POST /aio/keywords （管理者用）
+     * { user_id, keyword_id, aio_enabled } or { user_id, aliases: [...] }
+     */
+    public function rest_save_aio_keyword_admin( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = absint( $request->get_param( 'user_id' ) );
+
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'user_id が必要です' ], 400 );
+        }
+
+        // 別名更新
+        $aliases = $request->get_param( 'aliases' );
+        if ( $aliases !== null ) {
+            if ( is_string( $aliases ) ) {
+                $aliases = json_decode( $aliases, true );
+            }
+            if ( is_array( $aliases ) ) {
+                $clean = array_values( array_filter( array_map( 'sanitize_text_field', $aliases ) ) );
+                update_user_meta( $user_id, 'gcrev_aio_company_aliases', wp_json_encode( $clean, JSON_UNESCAPED_UNICODE ) );
+            }
+        }
+
+        // キーワード AIO 切替
+        $keyword_id = absint( $request->get_param( 'keyword_id' ) );
+        if ( $keyword_id ) {
+            $aio_on   = (int) $request->get_param( 'aio_enabled' );
+            $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+            $wpdb->update(
+                $kw_table,
+                [ 'aio_enabled' => $aio_on ? 1 : 0 ],
+                [ 'id' => $keyword_id, 'user_id' => $user_id ],
+                [ '%d' ],
+                [ '%d', '%d' ]
+            );
         }
 
         return new \WP_REST_Response( [ 'success' => true ] );
