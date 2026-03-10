@@ -278,10 +278,10 @@ get_header();
     white-space: nowrap;
 }
 
-/* SEO Difficulty — 5段階ドットインジケーター */
-.rt-diff-dots { display: inline-flex; gap: 2px; align-items: center; margin-right: 3px; vertical-align: middle; }
-.rt-diff-dot { width: 5px; height: 5px; border-radius: 50%; background: #d1d5db; }
-.rt-diff-label { font-size: 10px; }
+/* 上がりやすさ目安 — 5段階ドットインジケーター */
+.rt-opp-dots { display: inline-flex; gap: 2px; align-items: center; margin-right: 3px; vertical-align: middle; }
+.rt-opp-dot { width: 5px; height: 5px; border-radius: 50%; background: #d1d5db; }
+.rt-opp-label { font-size: 10px; }
 
 /* Actions column */
 .rt-action-link {
@@ -994,14 +994,13 @@ get_header();
 
             html += '<tr>';
 
-            // Keyword + volume + difficulty
+            // Keyword + volume + 上がりやすさ目安
             html += '<td>';
             html += '<div class="rt-rank-accent ' + accent + '"></div>';
             html += '<div class="rt-kw-name">' + escHtml(kw.keyword) + '</div>';
             html += '<div class="rt-kw-meta">';
-            // Search volume + SEO difficulty
             html += '<span class="rt-kw-meta-item">Vol: <strong>' + (kw.search_volume != null ? numberFormat(kw.search_volume) : '-') + '</strong></span>';
-            html += '<span class="rt-kw-meta-item">難易度: ' + formatDifficultyBadge(kw.keyword_difficulty) + '</span>';
+            html += '<span class="rt-kw-meta-item">上がりやすさ: ' + formatOpportunityBadge(kw.opportunity_score) + '</span>';
             html += '</div>';
             html += '</td>';
 
@@ -1094,23 +1093,23 @@ get_header();
         return dayData.rank + '位';
     }
 
-    // 5段階難易度インジケーター
-    // ※ ラベル分類はUI上の便宜的表示（DataForSEO公式ラベルではない）
-    function formatDifficultyBadge(val) {
+    // 上がりやすさ目安 — 5段階インジケーター
+    // SERP上位サイトの傾向をもとにした独自の参考指標
+    function formatOpportunityBadge(val) {
         if (val == null) return '<span style="color:#d1d5db;">-</span>';
         var v = parseInt(val, 10);
         var tier, label, color;
-        if (v <= 19)      { tier = 1; label = '易';     color = '#5B9A6B'; }
-        else if (v <= 39) { tier = 2; label = 'やや易'; color = '#7B9A4C'; }
-        else if (v <= 59) { tier = 3; label = '中';     color = '#C4943C'; }
-        else if (v <= 79) { tier = 4; label = 'やや難'; color = '#C4703C'; }
-        else              { tier = 5; label = '難';     color = '#B5574B'; }
+        if (v <= 19)      { tier = 1; label = 'かなり狙いやすい'; color = '#5B9A6B'; }
+        else if (v <= 39) { tier = 2; label = 'やや狙いやすい';   color = '#7B9A4C'; }
+        else if (v <= 59) { tier = 3; label = 'ふつう';           color = '#C4943C'; }
+        else if (v <= 79) { tier = 4; label = 'やや難しい';       color = '#C4703C'; }
+        else              { tier = 5; label = '難しい';           color = '#B5574B'; }
         var dots = '';
         for (var i = 1; i <= 5; i++) {
-            dots += '<span class="rt-diff-dot" style="' + (i <= tier ? 'background:' + color : '') + '"></span>';
+            dots += '<span class="rt-opp-dot" style="' + (i <= tier ? 'background:' + color : '') + '"></span>';
         }
-        return '<span class="rt-diff-dots">' + dots + '</span>'
-             + '<span class="rt-diff-label" style="color:' + color + '">' + label + '(' + v + ')</span>';
+        return '<span class="rt-opp-dots">' + dots + '</span>'
+             + '<span class="rt-opp-label" style="color:' + color + '">' + label + '</span>';
     }
 
     function hasBigDiff(a, b) {

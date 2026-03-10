@@ -8167,10 +8167,11 @@ PROMPT;
         // 古い順に並べる
         $dates = array_reverse( $dates );
 
-        // 有効キーワード取得（検索ボリューム・難易度含む）
+        // 有効キーワード取得（検索ボリューム・上がりやすさスコア含む）
         $keywords = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, keyword, target_domain, location_code, memo,
-                    search_volume, keyword_difficulty, competition
+                    search_volume, keyword_difficulty, competition,
+                    opportunity_score, opportunity_reasons
              FROM {$kw_table}
              WHERE user_id = %d AND enabled = 1
              ORDER BY sort_order ASC, id ASC",
@@ -8216,16 +8217,18 @@ PROMPT;
 
             // データ組み立て
             $entry = [
-                'keyword_id'         => $kw_id,
-                'keyword'            => $kw['keyword'],
-                'memo'               => $kw['memo'] ?? '',
-                'search_volume'      => $kw['search_volume'] !== null ? (int) $kw['search_volume'] : null,
-                'keyword_difficulty' => $kw['keyword_difficulty'] !== null ? (int) $kw['keyword_difficulty'] : null,
-                'competition'        => $kw['competition'] ?? null,
-                'desktop'            => null,
-                'mobile'             => null,
-                'daily'              => [ 'desktop' => [], 'mobile' => [] ],
-                'fetched_at'         => null,
+                'keyword_id'          => $kw_id,
+                'keyword'             => $kw['keyword'],
+                'memo'                => $kw['memo'] ?? '',
+                'search_volume'       => $kw['search_volume'] !== null ? (int) $kw['search_volume'] : null,
+                'keyword_difficulty'  => $kw['keyword_difficulty'] !== null ? (int) $kw['keyword_difficulty'] : null,
+                'competition'         => $kw['competition'] ?? null,
+                'opportunity_score'   => $kw['opportunity_score'] !== null ? (int) $kw['opportunity_score'] : null,
+                'opportunity_reasons' => $kw['opportunity_reasons'] ? json_decode( $kw['opportunity_reasons'], true ) : null,
+                'desktop'             => null,
+                'mobile'              => null,
+                'daily'               => [ 'desktop' => [], 'mobile' => [] ],
+                'fetched_at'          => null,
             ];
 
             foreach ( ['desktop', 'mobile'] as $device ) {
@@ -8935,6 +8938,7 @@ PROMPT;
             "SELECT id, keyword, target_domain, location_code, enabled, memo,
                     search_volume, keyword_difficulty, competition, cpc,
                     volume_fetched_at, difficulty_fetched_at,
+                    opportunity_score, opportunity_reasons, opportunity_fetched_at,
                     created_at, updated_at
              FROM {$table}
              WHERE user_id = %d
@@ -8960,9 +8964,11 @@ PROMPT;
         foreach ( $rows as &$row ) {
             $row['id']      = (int) $row['id'];
             $row['enabled'] = (bool) $row['enabled'];
-            $row['search_volume']      = $row['search_volume'] !== null ? (int) $row['search_volume'] : null;
-            $row['keyword_difficulty'] = $row['keyword_difficulty'] !== null ? (int) $row['keyword_difficulty'] : null;
-            $row['cpc'] = $row['cpc'] !== null ? (float) $row['cpc'] : null;
+            $row['search_volume']       = $row['search_volume'] !== null ? (int) $row['search_volume'] : null;
+            $row['keyword_difficulty']  = $row['keyword_difficulty'] !== null ? (int) $row['keyword_difficulty'] : null;
+            $row['cpc']                 = $row['cpc'] !== null ? (float) $row['cpc'] : null;
+            $row['opportunity_score']   = $row['opportunity_score'] !== null ? (int) $row['opportunity_score'] : null;
+            $row['opportunity_reasons'] = ! empty( $row['opportunity_reasons'] ) ? json_decode( $row['opportunity_reasons'], true ) : null;
 
             foreach ( ['desktop', 'mobile'] as $device ) {
                 $latest = $wpdb->get_row( $wpdb->prepare(
@@ -9582,19 +9588,34 @@ PROMPT;
             $saved = $this->save_rank_results( $kw, $results, 'manual_live' );
             $fetched++;
 
-            // 検索ボリューム・難易度が未取得、または30日以上経過したキーワードは自動補完
-            $needs_metrics = $kw['search_volume'] === null
-                || $kw['keyword_difficulty'] === null
-                || empty( $kw['difficulty_fetched_at'] )
-                || strtotime( $kw['difficulty_fetched_at'] ) < strtotime( '-30 days' );
-            file_put_contents( '/tmp/gcrev_debug.log', date('Y-m-d H:i:s') . " [fetch-all] kw='{$kw['keyword']}': sv=" . var_export( $kw['search_volume'], true ) . ", kd=" . var_export( $kw['keyword_difficulty'], true ) . ", diff_at=" . ( $kw['difficulty_fetched_at'] ?? 'null' ) . ", needs_metrics=" . ( $needs_metrics ? 'YES' : 'NO' ) . "\n", FILE_APPEND );
-            if ( $needs_metrics ) {
+            // 検索ボリュームが未取得、または30日以上経過したキーワードは自動補完
+            $needs_volume = $kw['search_volume'] === null
+                || empty( $kw['volume_fetched_at'] )
+                || strtotime( $kw['volume_fetched_at'] ) < strtotime( '-30 days' );
+            if ( $needs_volume ) {
                 $this->auto_fetch_keyword_metrics_single(
                     (int) $kw['id'],
                     $kw['keyword'],
                     (int) $kw['location_code'],
                     $kw['language_code'] ?: 'ja'
                 );
+            }
+
+            // 上がりやすさスコア: SERP items から算出（7日キャッシュ）
+            $needs_opportunity = empty( $kw['opportunity_fetched_at'] )
+                || strtotime( $kw['opportunity_fetched_at'] ) < strtotime( '-7 days' );
+            if ( $needs_opportunity && ! empty( $results['serp_items'] ) && class_exists( 'Gcrev_Opportunity_Scorer' ) ) {
+                $opp = Gcrev_Opportunity_Scorer::calculate( $results['serp_items'], $kw['keyword'] );
+                if ( $opp['score'] !== null ) {
+                    $tz_opp  = wp_timezone();
+                    $now_opp = ( new \DateTimeImmutable( 'now', $tz_opp ) )->format( 'Y-m-d H:i:s' );
+                    $wpdb->update( $kw_table, [
+                        'opportunity_score'      => $opp['score'],
+                        'opportunity_reasons'    => wp_json_encode( $opp['reasons'], JSON_UNESCAPED_UNICODE ),
+                        'opportunity_fetched_at' => $now_opp,
+                        'updated_at'             => $now_opp,
+                    ], [ 'id' => (int) $kw['id'] ] );
+                }
             }
 
             $results_all[] = [

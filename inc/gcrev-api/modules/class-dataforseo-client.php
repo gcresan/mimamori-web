@@ -174,7 +174,7 @@ class Gcrev_DataForSEO_Client {
      * @param string $target_domain ターゲットドメイン
      * @param int    $location_code ロケーションコード
      * @param string $language_code 言語コード
-     * @return array{desktop: ?array, mobile: ?array} デバイスごとの順位情報
+     * @return array{desktop: ?array, mobile: ?array, serp_items: array} デバイスごとの順位情報 + desktop SERP items
      */
     public function fetch_rankings_for_keyword(
         string $keyword,
@@ -182,7 +182,7 @@ class Gcrev_DataForSEO_Client {
         int    $location_code = 1009312,
         string $language_code = 'ja'
     ): array {
-        $results = [ 'desktop' => null, 'mobile' => null ];
+        $results = [ 'desktop' => null, 'mobile' => null, 'serp_items' => [] ];
 
         foreach ( ['desktop', 'mobile'] as $device ) {
             $items = $this->fetch_serp( $keyword, $device, $location_code, $language_code );
@@ -199,6 +199,11 @@ class Gcrev_DataForSEO_Client {
                     'error'         => $items->get_error_message(),
                 ];
                 continue;
+            }
+
+            // desktop SERP items を保持（上がりやすさスコア算出用）
+            if ( $device === 'desktop' && is_array( $items ) ) {
+                $results['serp_items'] = $items;
             }
 
             $match = $this->find_domain_in_results( $items, $target_domain );
@@ -382,19 +387,8 @@ class Gcrev_DataForSEO_Client {
 
         $response = $this->api_request( '/dataforseo_labs/google/keyword_overview/live', $post_data );
 
-        // [DEBUG] keyword_overview レスポンス確認（問題解決後に削除）
-        $dbg = function( $msg ) { file_put_contents( '/tmp/gcrev_debug.log', date('Y-m-d H:i:s') . ' ' . $msg . "\n", FILE_APPEND ); };
-        $dbg( '[keyword_overview] keywords=' . implode(', ', $keywords) . ' loc=' . $location_code );
-
         if ( is_wp_error( $response ) ) {
-            $dbg( '[keyword_overview] WP_Error: ' . $response->get_error_message() );
             return $response;
-        }
-
-        $dbg( '[keyword_overview] status=' . ( $response['status_code'] ?? 'N/A' ) );
-        // タスク全体をJSONダンプ（構造確認用）
-        foreach ( ( $response['tasks'] ?? [] ) as $ti => $t ) {
-            $dbg( "[keyword_overview] FULL task[{$ti}]=" . wp_json_encode( $t, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT ) );
         }
 
         $status_code = (int) ( $response['status_code'] ?? 0 );

@@ -674,6 +674,10 @@ $gcrev_utils_error_notifier = $gcrev_utils_path . 'class-error-notifier.php';
 if ( file_exists( $gcrev_utils_error_notifier ) ) {
     require_once $gcrev_utils_error_notifier;
 }
+$gcrev_utils_opportunity_scorer = $gcrev_utils_path . 'class-opportunity-scorer.php';
+if ( file_exists( $gcrev_utils_opportunity_scorer ) ) {
+    require_once $gcrev_utils_opportunity_scorer;
+}
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）
@@ -4732,6 +4736,9 @@ function gcrev_rank_keywords_create_table(): void {
         cpc DECIMAL(8,2) NULL,
         volume_fetched_at DATETIME NULL,
         difficulty_fetched_at DATETIME NULL,
+        opportunity_score SMALLINT UNSIGNED NULL,
+        opportunity_reasons TEXT NULL,
+        opportunity_fetched_at DATETIME NULL,
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
