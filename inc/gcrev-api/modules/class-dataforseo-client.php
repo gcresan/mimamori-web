@@ -383,8 +383,25 @@ class Gcrev_DataForSEO_Client {
 
         $response = $this->api_request( '/dataforseo_labs/google/keyword_overview/live', $post_data );
 
+        // [DEBUG] keyword_overview レスポンス確認（問題解決後に削除）
+        $dbg = function( $msg ) { file_put_contents( '/tmp/gcrev_debug.log', date('Y-m-d H:i:s') . ' ' . $msg . "\n", FILE_APPEND ); };
+        $dbg( '[keyword_overview] keywords=' . implode(', ', $keywords) . ' loc=' . $location_code );
+
         if ( is_wp_error( $response ) ) {
+            $dbg( '[keyword_overview] WP_Error: ' . $response->get_error_message() );
             return $response;
+        }
+
+        $dbg( '[keyword_overview] status=' . ( $response['status_code'] ?? 'N/A' ) );
+        foreach ( ( $response['tasks'] ?? [] ) as $ti => $t ) {
+            $r0 = $t['result'][0] ?? null;
+            $kw_resp = $r0['keyword'] ?? 'N/A';
+            $item0 = $r0['items'][0] ?? null;
+            $kd = $item0['keyword_properties']['keyword_difficulty'] ?? 'null';
+            $dbg( "[keyword_overview] task[{$ti}] kw={$kw_resp} difficulty={$kd} item_keys=" . ( $item0 ? implode(',', array_keys($item0)) : 'none' ) );
+            if ( $item0 && isset( $item0['keyword_properties'] ) ) {
+                $dbg( "[keyword_overview] keyword_properties=" . wp_json_encode( $item0['keyword_properties'], JSON_UNESCAPED_UNICODE ) );
+            }
         }
 
         $status_code = (int) ( $response['status_code'] ?? 0 );
