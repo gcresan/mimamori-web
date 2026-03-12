@@ -10873,11 +10873,15 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => '権限がありません' ], 403 );
         }
 
+        // provider パラメータ指定時は単一プロバイダーのみ実行（タイムアウト対策）
+        $provider  = sanitize_text_field( $request->get_param( 'provider' ) ?? '' );
+        $providers = $provider !== '' ? [ $provider ] : [];
+
         try {
             $service = new Gcrev_AIO_Service( $this->config );
-            $result  = $service->run_aio_check( $keyword_id );
+            $result  = $service->run_aio_check( $keyword_id, $providers );
             return new \WP_REST_Response( [ 'success' => true, 'data' => $result ] );
-        } catch ( \Exception $e ) {
+        } catch ( \Throwable $e ) {
             error_log( '[GCREV][AIO] rest_run_aio_keyword error: ' . $e->getMessage() );
             return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
         }

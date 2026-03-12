@@ -526,56 +526,79 @@ get_header();
     }
 
     // =========================================================
-    // Run AIO Check
+    // Run AIO Check — キーワード×プロバイダー単位で逐次リクエスト
     // =========================================================
+    var PROVIDERS = ['chatgpt', 'gemini', 'google_ai'];
+    var PROVIDER_LABELS = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_ai: 'Google AI' };
+
     window.runAllAio = function() {
+        if (!summaryData || !summaryData.keywords || summaryData.keywords.length === 0) {
+            showToast('計測対象のキーワードがありません', true);
+            return;
+        }
         if (!confirm('全キーワードのAI検索スコアを計測します。数分かかる場合があります。よろしいですか？')) return;
 
         var btn = document.getElementById('runAllBtn');
         btn.disabled = true;
-        showProgress(true, 'AI検索スコアを計測中…（キーワード数に応じて数分かかります）');
 
-        // サーバー側は ignore_user_abort で処理を継続するため、
-        // 接続タイムアウトでも計測自体はバックグラウンドで完了する
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 5 * 60 * 1000); // 5分
+        // キーワード × プロバイダーのジョブキューを構築
+        var jobs = [];
+        summaryData.keywords.forEach(function(kw) {
+            PROVIDERS.forEach(function(p) {
+                jobs.push({ keyword_id: kw.keyword_id, keyword: kw.keyword, provider: p });
+            });
+        });
 
-        fetch('/wp-json/gcrev/v1/aio/run', {
-            method: 'POST',
-            headers: {
-                'X-WP-Nonce': wpNonce,
-                'Content-Type': 'application/json'
-            },
-            credentials: 'same-origin',
-            signal: controller.signal
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            clearTimeout(timeoutId);
-            showProgress(false);
-            btn.disabled = false;
-            if (json.success) {
-                showToast('計測が完了しました');
+        var total = jobs.length;
+        var done  = 0;
+        var errors = [];
+
+        function runNext() {
+            if (done >= total) {
+                // 全ジョブ完了
+                showProgress(false);
+                btn.disabled = false;
                 summaryData = null;
                 fetchSummary();
-            } else {
-                showToast(json.message || 'エラーが発生しました', true);
+                if (errors.length > 0) {
+                    showToast('計測完了（' + errors.length + '件エラーあり）', true);
+                } else {
+                    showToast('計測が完了しました');
+                }
+                return;
             }
-        })
-        .catch(function(err) {
-            clearTimeout(timeoutId);
-            showProgress(false);
-            btn.disabled = false;
-            if (err.name === 'AbortError') {
-                // タイムアウトしたが、サーバー側は処理継続中の可能性が高い
-                showToast('応答待ちがタイムアウトしました。計測はバックグラウンドで進行中です。しばらく後に再読み込みしてください。');
-                // 30秒後に自動でデータ再取得
-                setTimeout(function() { summaryData = null; fetchSummary(); }, 30000);
-            } else {
-                showToast('通信エラーが発生しました', true);
-            }
-            console.error('[AIO]', err);
-        });
+
+            var job = jobs[done];
+            var label = job.keyword + ' — ' + PROVIDER_LABELS[job.provider];
+            showProgress(true, '計測中 (' + (done + 1) + '/' + total + '): ' + label);
+
+            fetch('/wp-json/gcrev/v1/aio/run-keyword', {
+                method: 'POST',
+                headers: {
+                    'X-WP-Nonce': wpNonce,
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ keyword_id: job.keyword_id, provider: job.provider })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(json) {
+                done++;
+                if (!json.success) {
+                    errors.push(label + ': ' + (json.message || 'error'));
+                    console.warn('[AIO] job error:', label, json.message);
+                }
+                runNext();
+            })
+            .catch(function(err) {
+                done++;
+                errors.push(label + ': ' + err.message);
+                console.error('[AIO] job fetch error:', label, err);
+                runNext(); // エラーでも次へ進む
+            });
+        }
+
+        runNext();
     };
 
     // =========================================================
