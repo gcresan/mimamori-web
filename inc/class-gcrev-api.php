@@ -743,6 +743,23 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_delete_aio_keyword' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        // AIレポート統合データ
+        register_rest_route('gcrev/v1', '/aio/report', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_report' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        // サイト診断
+        register_rest_route('gcrev/v1', '/aio/site-diagnosis', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_site_diagnosis' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio/site-diagnosis', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_aio_site_diagnosis' ],
+            'permission_callback' => function() { return current_user_can('manage_options'); },
+        ]);
         // 管理者用: AIOキーワード管理
         register_rest_route('gcrev/v1', '/aio/keywords', [
             'methods'             => 'GET',
@@ -11030,6 +11047,64 @@ PROMPT;
         }
 
         return new \WP_REST_Response( [ 'success' => true ] );
+    }
+
+    // =========================================================
+    // AIレポート統合エンドポイント
+    // =========================================================
+
+    /**
+     * GET /aio/report — AIレポート統合データ
+     */
+    public function rest_get_aio_report( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        // 管理者は別ユーザーを指定可
+        if ( current_user_can( 'manage_options' ) && $request->get_param( 'user_id' ) ) {
+            $user_id = absint( $request->get_param( 'user_id' ) );
+        }
+
+        try {
+            $service = new Gcrev_AIO_Service( $this->config );
+            $data    = $service->get_report_data( $user_id );
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $data ] );
+        } catch ( \Throwable $e ) {
+            error_log( '[GCREV][AIO] rest_get_aio_report error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /aio/site-diagnosis — サイト診断データ取得
+     */
+    public function rest_get_aio_site_diagnosis( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( current_user_can( 'manage_options' ) && $request->get_param( 'user_id' ) ) {
+            $user_id = absint( $request->get_param( 'user_id' ) );
+        }
+
+        $service   = new Gcrev_AIO_Service( $this->config );
+        $diagnosis = $service->get_site_diagnosis( $user_id );
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $diagnosis ] );
+    }
+
+    /**
+     * POST /aio/site-diagnosis — サイト診断データ保存（管理者のみ）
+     */
+    public function rest_save_aio_site_diagnosis( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = absint( $request->get_param( 'user_id' ) );
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'user_id は必須です' ], 400 );
+        }
+
+        $items = $request->get_param( 'items' );
+        if ( ! is_array( $items ) || empty( $items ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'items は必須です' ], 400 );
+        }
+
+        $service = new Gcrev_AIO_Service( $this->config );
+        $ok      = $service->save_site_diagnosis( $user_id, $items );
+
+        return new \WP_REST_Response( [ 'success' => $ok ] );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

@@ -4889,6 +4889,7 @@ function gcrev_aio_results_create_table(): void {
         self_rank       TINYINT UNSIGNED NULL,
         self_score      DECIMAL(3,2) NULL,
         is_mentioned    TINYINT(1) NOT NULL DEFAULT 0,
+        status          VARCHAR(30) NOT NULL DEFAULT 'not_run',
         fetched_at      DATETIME NOT NULL,
         created_at      DATETIME NOT NULL,
         PRIMARY KEY  (id),
@@ -4899,6 +4900,13 @@ function gcrev_aio_results_create_table(): void {
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql );
+
+    // 既存データの status マイグレーション（1回限り）
+    if ( ! get_option( 'gcrev_aio_status_migrated' ) ) {
+        $wpdb->query( "UPDATE {$table} SET status = 'success_mentioned' WHERE is_mentioned = 1 AND status = 'not_run'" );
+        $wpdb->query( "UPDATE {$table} SET status = 'success_not_mentioned' WHERE is_mentioned = 0 AND raw_response IS NOT NULL AND raw_response != '' AND status = 'not_run'" );
+        update_option( 'gcrev_aio_status_migrated', 1 );
+    }
 }
 
 // ----------------------------

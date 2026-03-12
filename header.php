@@ -74,7 +74,7 @@
       <?php
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ analysis ---
       $report_pages   = array('report-latest','report-archive');
-      $analysis_pages = array('analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','rank-tracker','aio-score');
+      $analysis_pages = array('analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','rank-tracker','ai-report');
       $tools_pages    = array('column-support','review-survey','review-manage','gbp-posts','gbp-schedule');
       $settings_pages = array('report-settings','cv-review','cv-settings','client-settings','ga-gsc-connection','meo-dashboard','notifications');
       $support_pages  = array('faq','tutorials','inquiry');
@@ -168,8 +168,8 @@
                         </a>
                      </li>
                      <li class="nav-item">
-                        <a href="<?php echo home_url('/aio-score/'); ?>" class="nav-link <?php echo is_page('aio-score') ? 'active' : ''; ?>">
-                        <span>AI検索スコア</span>
+                        <a href="<?php echo home_url('/ai-report/'); ?>" class="nav-link <?php echo is_page('ai-report') ? 'active' : ''; ?>">
+                        <span>AIレポート</span>
                         </a>
                      </li>
                   </ul>
