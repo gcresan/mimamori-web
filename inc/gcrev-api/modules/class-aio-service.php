@@ -198,7 +198,7 @@ class Gcrev_AIO_Service {
         try {
             $ai_client = new Gcrev_AI_Client( $this->config );
             $raw_text  = $ai_client->call_gemini_api( $question );
-        } catch ( \Exception $e ) {
+        } catch ( \Throwable $e ) {
             $empty['error'] = $e->getMessage();
             error_log( '[GCREV][AIO] Gemini query error: ' . $e->getMessage() );
             return $empty;
@@ -254,7 +254,7 @@ class Gcrev_AIO_Service {
             return $empty;
         }
 
-        $client = new Gcrev_DataForSEO_Client();
+        $client = new Gcrev_DataForSEO_Client( $this->config );
         $items  = $client->fetch_serp( $keyword, 'desktop', $location_code );
 
         if ( is_wp_error( $items ) ) {
@@ -353,7 +353,7 @@ class Gcrev_AIO_Service {
         try {
             $ai_client = new Gcrev_AI_Client( $this->config );
             $text      = $ai_client->call_gemini_api( $prompt );
-        } catch ( \Exception $e ) {
+        } catch ( \Throwable $e ) {
             error_log( '[GCREV][AIO] Gemini extract error: ' . $e->getMessage() );
             return $this->extract_companies_fallback( $response_text );
         }
@@ -570,59 +570,73 @@ PROMPT;
                 continue;
             }
 
-            $mention_count = 0;
-            $score_sum     = 0.0;
+            // プロバイダー単位でエラー分離（TypeError 等も捕捉）
+            try {
+                $mention_count = 0;
+                $score_sum     = 0.0;
 
-            foreach ( $questions as $qi => $question ) {
-                // プロバイダー別クエリ
-                $result = $this->query_provider( $provider, $question, $kw['keyword'], $company_name, $aliases, (int) $kw['location_code'] );
+                foreach ( $questions as $qi => $question ) {
+                    // プロバイダー別クエリ
+                    $result = $this->query_provider( $provider, $question, $kw['keyword'], $company_name, $aliases, (int) $kw['location_code'] );
 
-                // DB保存（UPSERT）
-                $wpdb->query( $wpdb->prepare(
-                    "INSERT INTO {$results_table}
-                     (user_id, keyword_id, provider, question, question_index,
-                      raw_response, extracted_names, self_rank, self_score, is_mentioned,
-                      fetched_at, created_at)
-                     VALUES (%d, %d, %s, %s, %d, %s, %s, %s, %s, %d, %s, %s)
-                     ON DUPLICATE KEY UPDATE
-                      raw_response = VALUES(raw_response),
-                      extracted_names = VALUES(extracted_names),
-                      self_rank = VALUES(self_rank),
-                      self_score = VALUES(self_score),
-                      is_mentioned = VALUES(is_mentioned),
-                      fetched_at = VALUES(fetched_at)",
-                    $user_id,
-                    $keyword_id,
-                    $provider,
-                    $question,
-                    $qi,
-                    $result['raw'],
-                    wp_json_encode( $result['names'], JSON_UNESCAPED_UNICODE ),
-                    $result['self_rank'],
-                    $result['self_score'],
-                    $result['is_mentioned'] ? 1 : 0,
-                    $now,
-                    $now
-                ) );
+                    // DB保存（UPSERT）— self_rank / self_score は NULL 可なので条件分岐
+                    $self_rank_sql  = $result['self_rank'] === null ? 'NULL' : $wpdb->prepare( '%d', $result['self_rank'] );
+                    $self_score_sql = $result['self_score'] === null ? 'NULL' : $wpdb->prepare( '%s', number_format( $result['self_score'], 2, '.', '' ) );
 
-                if ( $result['is_mentioned'] ) {
-                    $mention_count++;
+                    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $self_rank_sql / $self_score_sql are safe values
+                    $wpdb->query( $wpdb->prepare(
+                        "INSERT INTO {$results_table}
+                         (user_id, keyword_id, provider, question, question_index,
+                          raw_response, extracted_names, self_rank, self_score, is_mentioned,
+                          fetched_at, created_at)
+                         VALUES (%d, %d, %s, %s, %d, %s, %s, {$self_rank_sql}, {$self_score_sql}, %d, %s, %s)
+                         ON DUPLICATE KEY UPDATE
+                          raw_response = VALUES(raw_response),
+                          extracted_names = VALUES(extracted_names),
+                          self_rank = VALUES(self_rank),
+                          self_score = VALUES(self_score),
+                          is_mentioned = VALUES(is_mentioned),
+                          fetched_at = VALUES(fetched_at)",
+                        $user_id,
+                        $keyword_id,
+                        $provider,
+                        $question,
+                        $qi,
+                        $result['raw'],
+                        wp_json_encode( $result['names'], JSON_UNESCAPED_UNICODE ),
+                        $result['is_mentioned'] ? 1 : 0,
+                        $now,
+                        $now
+                    ) );
+
+                    if ( $result['is_mentioned'] ) {
+                        $mention_count++;
+                    }
+                    $score_sum += $result['self_score'];
+
+                    // Google AI は1回のみ（SERP結果は質問バリエーション不要）
+                    if ( $provider === 'google_ai' ) {
+                        break;
+                    }
                 }
-                $score_sum += $result['self_score'];
 
-                // Google AI は1回のみ（SERP結果は質問バリエーション不要）
-                if ( $provider === 'google_ai' ) {
-                    break;
-                }
+                $total = ( $provider === 'google_ai' ) ? 1 : count( $questions );
+                $summary[ $provider ] = [
+                    'visibility'    => $total > 0 ? round( ( $mention_count / $total ) * 100, 1 ) : 0,
+                    'avg_score'     => $total > 0 ? round( $score_sum / $total, 2 ) : 0,
+                    'mention_count' => $mention_count,
+                    'total_queries' => $total,
+                ];
+            } catch ( \Throwable $e ) {
+                error_log( "[GCREV][AIO] provider={$provider} keyword_id={$keyword_id} error: " . $e->getMessage() );
+                $summary[ $provider ] = [
+                    'visibility'    => 0,
+                    'avg_score'     => 0,
+                    'mention_count' => 0,
+                    'total_queries' => 0,
+                    'error'         => $e->getMessage(),
+                ];
             }
-
-            $total = ( $provider === 'google_ai' ) ? 1 : count( $questions );
-            $summary[ $provider ] = [
-                'visibility'    => $total > 0 ? round( ( $mention_count / $total ) * 100, 1 ) : 0,
-                'avg_score'     => $total > 0 ? round( $score_sum / $total, 2 ) : 0,
-                'mention_count' => $mention_count,
-                'total_queries' => $total,
-            ];
         }
 
         return [
@@ -673,6 +687,9 @@ PROMPT;
         if ( empty( $keywords ) ) {
             return [ 'keywords' => [], 'message' => 'AIO 有効なキーワードがありません' ];
         }
+
+        // 長時間実行: キーワード数 × プロバイダー数 × 質問数分の API コールが発生する
+        @set_time_limit( max( 300, count( $keywords ) * 180 ) );
 
         $results = [];
         foreach ( $keywords as $kw ) {
