@@ -208,9 +208,10 @@ class Gcrev_DataForSEO_Client {
      * @param string $device        'desktop' or 'mobile'
      * @param int    $location_code ロケーションコード（デフォルト: Japan 2392）
      * @param string $language_code 言語コード（デフォルト: 'ja'）
-     * @return array SERP items 配列。失敗時は WP_Error
+     * @param bool   $include_meta  true の場合、items だけでなく meta 情報も返す
+     * @return array|WP_Error SERP items 配列（$include_meta=true 時は連想配列）。失敗時は WP_Error
      */
-    public function fetch_serp( string $keyword, string $device = 'desktop', int $location_code = 2392, string $language_code = 'ja' ) {
+    public function fetch_serp( string $keyword, string $device = 'desktop', int $location_code = 2392, string $language_code = 'ja', bool $include_meta = false ) {
         if ( ! self::is_configured() ) {
             return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
         }
@@ -250,7 +251,28 @@ class Gcrev_DataForSEO_Client {
         }
 
         $result = $tasks[0]['result'][0];
-        return $result['items'] ?? [];
+        $items  = $result['items'] ?? [];
+
+        if ( ! $include_meta ) {
+            return $items;
+        }
+
+        // メタ情報付きで返す（AIO デバッグ・診断用）
+        $item_types = [];
+        foreach ( $items as $item ) {
+            $t = $item['type'] ?? 'unknown';
+            $item_types[ $t ] = ( $item_types[ $t ] ?? 0 ) + 1;
+        }
+
+        return [
+            'items'            => $items,
+            'item_types'       => $item_types,
+            'total_items'      => count( $items ),
+            'keyword'          => $result['keyword'] ?? $keyword,
+            'language_code'    => $result['language_code'] ?? $language_code,
+            'location_code'    => $result['location_code'] ?? $location_code,
+            'se_results_count' => $result['se_results_count'] ?? 0,
+        ];
     }
 
     // =========================================================

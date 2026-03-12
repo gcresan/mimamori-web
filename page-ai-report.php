@@ -208,6 +208,7 @@ get_header();
 .air-status--parse_failed          { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .air-status--unsupported           { background: var(--mw-bg-tertiary); color: var(--mw-text-tertiary); }
 .air-status--no_answer             { background: rgba(150,150,150,0.1); color: #999; }
+.air-status--no_ai_overview        { background: rgba(37,99,235,0.08); color: #2563eb; }
 
 /* 競合バーチャート */
 .air-competitor-list { list-style: none; padding: 0; margin: 0; }
@@ -601,7 +602,7 @@ get_header();
     var reportData = null;
 
     var PROVIDERS = ['chatgpt', 'gemini', 'google_ai'];
-    var PROVIDER_LABELS = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_ai: 'Google AIモード' };
+    var PROVIDER_LABELS = { chatgpt: 'ChatGPT', gemini: 'Gemini', google_ai: 'Google AI概要 β' };
     var STATUS_ICONS = {
         success_mentioned:     '✅',
         success_not_mentioned: '—',
@@ -609,7 +610,8 @@ get_header();
         fetch_failed:          '⚠️',
         parse_failed:          '⚠️',
         unsupported:           '🚫',
-        no_answer:             '💬'
+        no_answer:             '💬',
+        no_ai_overview:        'ℹ️'
     };
     var PRIORITY_LABELS = { high: '高', medium: '中', low: '低' };
 
@@ -801,6 +803,9 @@ get_header();
                     + '</span>';
                 if (d.avg_rank !== null && d.avg_rank > 0) {
                     html += '<br><span style="font-size:11px;color:var(--mw-text-tertiary);">平均' + d.avg_rank + '位</span>';
+                }
+                if (d.status === 'no_ai_overview') {
+                    html += '<br><span style="font-size:10px;color:var(--mw-text-tertiary);">日本語未対応の可能性</span>';
                 }
                 html += '</td>';
                 if (d.last_fetched && (!lastFetched || d.last_fetched > lastFetched)) {

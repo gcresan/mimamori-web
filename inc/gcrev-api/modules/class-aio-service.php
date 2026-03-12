@@ -232,11 +232,19 @@ class Gcrev_AIO_Service {
     /**
      * DataForSEO の SERP API から AI Overview アイテムを取得
      *
+     * ステータス分類:
+     *  - 'ok'                 : AI Overview あり、企業名抽出成功
+     *  - 'no_ai_overview'     : SERPは取得できたが AI Overview が含まれていなかった
+     *  - 'no_data'            : API から結果なし
+     *  - 'lang_unsupported'   : 日本語等の非対応言語（AI Overview が出現しない可能性）
+     *  - 'api_error'          : DataForSEO API エラー
+     *  - 'not_configured'     : DataForSEO 未設定
+     *
      * @param string   $keyword       検索キーワード
      * @param string   $company_name  自社名
      * @param string[] $aliases       自社別名リスト
      * @param int      $location_code ロケーションコード
-     * @return array{raw: string, names: string[], self_rank: ?int, self_score: float, is_mentioned: bool}
+     * @return array{raw: string, names: string[], self_rank: ?int, self_score: float, is_mentioned: bool, error: ?string, status: string, serp_meta: ?array}
      */
     public function query_google_ai( string $keyword, string $company_name, array $aliases, int $location_code = 2392 ): array {
         $empty = [
@@ -247,27 +255,49 @@ class Gcrev_AIO_Service {
             'is_mentioned' => false,
             'error'        => null,
             'status'       => 'no_data',
+            'serp_meta'    => null,
         ];
 
         if ( ! class_exists( 'Gcrev_DataForSEO_Client' ) || ! Gcrev_DataForSEO_Client::is_configured() ) {
-            $empty['error'] = 'DataForSEO API が未設定です';
+            $empty['error']  = 'DataForSEO API が未設定です';
+            $empty['status'] = 'not_configured';
             return $empty;
         }
 
-        $client = new Gcrev_DataForSEO_Client( $this->config );
-        $items  = $client->fetch_serp( $keyword, 'desktop', $location_code );
+        $client   = new Gcrev_DataForSEO_Client( $this->config );
+        $response = $client->fetch_serp( $keyword, 'desktop', $location_code, 'ja', true );
 
-        if ( is_wp_error( $items ) ) {
-            $empty['error'] = $items->get_error_message();
-            error_log( '[GCREV][AIO] Google AI SERP error: ' . $items->get_error_message() );
+        if ( is_wp_error( $response ) ) {
+            $empty['error']  = $response->get_error_message();
+            $empty['status'] = 'api_error';
+            error_log( '[GCREV][AIO] Google AI SERP error: ' . $response->get_error_message() );
             return $empty;
         }
 
-        // AI Overview アイテムを抽出
-        $ai_texts = [];
+        // include_meta=true なので連想配列
+        $items     = $response['items'] ?? [];
+        $serp_meta = [
+            'item_types'       => $response['item_types'] ?? [],
+            'total_items'      => $response['total_items'] ?? 0,
+            'language_code'    => $response['language_code'] ?? 'ja',
+            'location_code'    => $response['location_code'] ?? $location_code,
+            'se_results_count' => $response['se_results_count'] ?? 0,
+        ];
+
+        // SERP は取得できたが結果が空
+        if ( empty( $items ) ) {
+            $empty['serp_meta'] = $serp_meta;
+            $empty['status']    = 'no_data';
+            return $empty;
+        }
+
+        // AI Overview / Featured Snippet / Answer Box を抽出
+        $ai_texts    = [];
+        $ai_types_found = [];
         foreach ( $items as $item ) {
             $type = $item['type'] ?? '';
             if ( $type === 'ai_overview' || $type === 'featured_snippet' || $type === 'answer_box' ) {
+                $ai_types_found[] = $type;
                 $text = $item['description'] ?? $item['text'] ?? '';
                 if ( $text !== '' ) {
                     $ai_texts[] = $text;
@@ -284,8 +314,31 @@ class Gcrev_AIO_Service {
             }
         }
 
+        $serp_meta['ai_types_found'] = array_unique( $ai_types_found );
+
         if ( empty( $ai_texts ) ) {
-            // AI Overview が見つからなかった
+            // SERP は返ったが AI Overview が無い
+            // 日本語 + AI Overview 無しの場合は言語非対応の可能性を示唆
+            $has_organic = isset( $serp_meta['item_types']['organic'] );
+            if ( $has_organic && $serp_meta['total_items'] > 0 ) {
+                // オーガニック結果はあるが AI Overview が無い → 言語/地域で AI Overview 未提供
+                $empty['status']    = 'no_ai_overview';
+                $empty['serp_meta'] = $serp_meta;
+                $empty['raw']       = wp_json_encode( [
+                    'note'       => 'SERP取得成功・AI Overview未検出',
+                    'item_types' => $serp_meta['item_types'],
+                    'total'      => $serp_meta['total_items'],
+                ], JSON_UNESCAPED_UNICODE );
+                error_log( sprintf(
+                    '[GCREV][AIO] Google AI: keyword="%s" — AI Overview not found in SERP. Item types: %s',
+                    $keyword,
+                    wp_json_encode( $serp_meta['item_types'] )
+                ) );
+                return $empty;
+            }
+
+            $empty['serp_meta'] = $serp_meta;
+            $empty['status']    = 'no_data';
             return $empty;
         }
 
@@ -305,6 +358,7 @@ class Gcrev_AIO_Service {
             'is_mentioned' => $self_rank !== null,
             'error'        => null,
             'status'       => 'ok',
+            'serp_meta'    => $serp_meta,
         ];
     }
 
@@ -1110,7 +1164,24 @@ PROMPT;
             return 'fetch_failed';
         }
 
-        // Google AI の no_data ステータス
+        // Google AI の詳細ステータス分類
+        if ( $provider === 'google_ai' && isset( $result['status'] ) ) {
+            switch ( $result['status'] ) {
+                case 'not_configured':
+                    return 'unsupported';
+                case 'api_error':
+                    return 'fetch_failed';
+                case 'no_ai_overview':
+                    return 'no_ai_overview';
+                case 'no_data':
+                    return 'no_answer';
+                case 'ok':
+                    // 下へ fall-through して名前チェック
+                    break;
+            }
+        }
+
+        // Google AI 以外の no_data ステータス
         if ( isset( $result['status'] ) && $result['status'] === 'no_data' ) {
             return 'no_answer';
         }
@@ -1142,6 +1213,7 @@ PROMPT;
         'parse_failed'          => '解析失敗',
         'unsupported'           => '対応外',
         'no_answer'             => '回答なし',
+        'no_ai_overview'        => 'AI概要なし',
     ];
 
     /**
@@ -1201,7 +1273,7 @@ PROMPT;
             'provider_notes' => [
                 'chatgpt'   => '質問文に地域名を含めた一般傾向ベースの参考値',
                 'gemini'    => '質問文に地域名を含めた参考計測値',
-                'google_ai' => '地域コード指定によるSERP結果。地域文脈が考慮されています',
+                'google_ai' => 'Google検索のAI概要（AI Overview）を取得。日本語では AI概要 が表示されないケースが多く、「AI概要なし」となる場合があります',
             ],
         ];
     }
@@ -1328,7 +1400,7 @@ PROMPT;
                     $ref['status'] = 'success_mentioned';
                 } else {
                     $statuses = $ref['_statuses'] ?? [];
-                    $priority_order = [ 'fetch_failed', 'parse_failed', 'no_answer', 'unsupported', 'success_not_mentioned' ];
+                    $priority_order = [ 'fetch_failed', 'parse_failed', 'no_answer', 'no_ai_overview', 'unsupported', 'success_not_mentioned' ];
                     $ref['status'] = 'success_not_mentioned';
                     foreach ( $priority_order as $s ) {
                         if ( in_array( $s, $statuses, true ) ) {
