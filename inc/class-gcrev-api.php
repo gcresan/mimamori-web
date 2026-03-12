@@ -10847,7 +10847,7 @@ PROMPT;
             $service = new Gcrev_AIO_Service( $this->config );
             $results = $service->run_all_keywords( $user_id );
             return new \WP_REST_Response( [ 'success' => true, 'data' => $results ] );
-        } catch ( \Exception $e ) {
+        } catch ( \Throwable $e ) {
             error_log( '[GCREV][AIO] rest_run_aio_check error: ' . $e->getMessage() );
             return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
         } finally {

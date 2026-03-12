@@ -209,8 +209,8 @@ class Gcrev_AIO_Service {
             return $empty;
         }
 
-        // 2パス目: 企業名抽出（Gemini で抽出）
-        $names = $this->extract_companies_via_gemini( $raw_text );
+        // 2パス目: 企業名抽出（ChatGPT で抽出 — Gemini より高速・低コスト）
+        $names = $this->extract_companies_via_chatgpt( $raw_text );
 
         $self_rank  = $this->find_self_rank( $names, $company_name, $aliases );
         $self_score = $this->rank_to_score( $self_rank );
@@ -688,12 +688,21 @@ PROMPT;
             return [ 'keywords' => [], 'message' => 'AIO 有効なキーワードがありません' ];
         }
 
-        // 長時間実行: キーワード数 × プロバイダー数 × 質問数分の API コールが発生する
-        @set_time_limit( max( 300, count( $keywords ) * 180 ) );
+        // 長時間実行: 接続切断でもスクリプトを継続し、十分な実行時間を確保
+        @ignore_user_abort( true );
+        @set_time_limit( 0 );
 
         $results = [];
         foreach ( $keywords as $kw ) {
-            $results[] = $this->run_aio_check( (int) $kw['id'] );
+            try {
+                $results[] = $this->run_aio_check( (int) $kw['id'] );
+            } catch ( \Throwable $e ) {
+                error_log( '[GCREV][AIO] run_all_keywords keyword_id=' . $kw['id'] . ' error: ' . $e->getMessage() );
+                $results[] = [
+                    'keyword_id' => (int) $kw['id'],
+                    'error'      => $e->getMessage(),
+                ];
+            }
         }
 
         return [ 'keywords' => $results ];

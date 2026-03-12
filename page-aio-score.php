@@ -533,7 +533,12 @@ get_header();
 
         var btn = document.getElementById('runAllBtn');
         btn.disabled = true;
-        showProgress(true, 'AI検索スコアを計測中...');
+        showProgress(true, 'AI検索スコアを計測中…（キーワード数に応じて数分かかります）');
+
+        // サーバー側は ignore_user_abort で処理を継続するため、
+        // 接続タイムアウトでも計測自体はバックグラウンドで完了する
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function() { controller.abort(); }, 5 * 60 * 1000); // 5分
 
         fetch('/wp-json/gcrev/v1/aio/run', {
             method: 'POST',
@@ -541,15 +546,16 @@ get_header();
                 'X-WP-Nonce': wpNonce,
                 'Content-Type': 'application/json'
             },
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            signal: controller.signal
         })
         .then(function(res) { return res.json(); })
         .then(function(json) {
+            clearTimeout(timeoutId);
             showProgress(false);
             btn.disabled = false;
             if (json.success) {
                 showToast('計測が完了しました');
-                // リロードしてデータ反映
                 summaryData = null;
                 fetchSummary();
             } else {
@@ -557,9 +563,17 @@ get_header();
             }
         })
         .catch(function(err) {
+            clearTimeout(timeoutId);
             showProgress(false);
             btn.disabled = false;
-            showToast('通信エラーが発生しました', true);
+            if (err.name === 'AbortError') {
+                // タイムアウトしたが、サーバー側は処理継続中の可能性が高い
+                showToast('応答待ちがタイムアウトしました。計測はバックグラウンドで進行中です。しばらく後に再読み込みしてください。');
+                // 30秒後に自動でデータ再取得
+                setTimeout(function() { summaryData = null; fetchSummary(); }, 30000);
+            } else {
+                showToast('通信エラーが発生しました', true);
+            }
             console.error('[AIO]', err);
         });
     };
