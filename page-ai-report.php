@@ -1,7 +1,7 @@
 <?php
 /**
- * Template Name: AIレポート
- * Description: AI検索・AI回答に対するサイトの伝わりやすさ・掲載状況を可視化するレポートページ
+ * Template Name: AI検索対策
+ * Description: AI検索・AI回答に対するサイトの伝わりやすさ・掲載状況を可視化するページ
  */
 
 if ( ! is_user_logged_in() ) {
@@ -9,9 +9,9 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-set_query_var( 'gcrev_page_title', 'AIレポート' );
+set_query_var( 'gcrev_page_title', 'AI検索対策' );
 set_query_var( 'gcrev_page_subtitle', 'AIに自社がどれだけ伝わりやすいか、言及されやすいかを確認できます。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'AIレポート', '集客のようす' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'AI検索対策', '集客のようす' ) );
 
 get_header();
 ?>

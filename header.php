@@ -169,7 +169,7 @@
                      </li>
                      <li class="nav-item">
                         <a href="<?php echo home_url('/ai-report/'); ?>" class="nav-link <?php echo is_page('ai-report') ? 'active' : ''; ?>">
-                        <span>AIレポート</span>
+                        <span>AI検索対策</span>
                         </a>
                      </li>
                   </ul>
