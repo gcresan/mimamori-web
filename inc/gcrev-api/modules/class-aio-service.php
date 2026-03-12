@@ -1099,12 +1099,21 @@ PROMPT;
         $mention_stats  = $this->calc_mention_stats( $mention_matrix );
         $diagnosis_score = $this->calc_diagnosis_score( $diagnosis );
 
-        // 改善優先度
+        // 改善優先度（diagnosis_score が null の場合は mention_rate のみで判定）
         $priority = 'low';
-        if ( $diagnosis_score < 40 || $mention_stats['rate'] < 20 ) {
-            $priority = 'high';
-        } elseif ( $diagnosis_score < 70 || $mention_stats['rate'] < 50 ) {
-            $priority = 'medium';
+        if ( $diagnosis_score === null ) {
+            // 未診断時は掲載率のみで判定
+            if ( $mention_stats['rate'] < 20 ) {
+                $priority = 'high';
+            } elseif ( $mention_stats['rate'] < 50 ) {
+                $priority = 'medium';
+            }
+        } else {
+            if ( $diagnosis_score < 40 || $mention_stats['rate'] < 20 ) {
+                $priority = 'high';
+            } elseif ( $diagnosis_score < 70 || $mention_stats['rate'] < 50 ) {
+                $priority = 'medium';
+            }
         }
 
         return [
@@ -1349,9 +1358,20 @@ PROMPT;
      * @param array $items
      * @return bool
      */
-    public function save_site_diagnosis( int $user_id, array $items ): bool {
+    /**
+     * サイト診断データを保存
+     *
+     * @param int   $user_id
+     * @param array $items        診断項目配列
+     * @param array $crawled_urls クロールしたURL配列（自動診断時のみ）
+     * @return bool
+     */
+    public function save_site_diagnosis( int $user_id, array $items, array $crawled_urls = [] ): bool {
         $tz  = wp_timezone();
         $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+
+        $valid_statuses = [ 'ok', 'caution', 'not_addressed', 'unknown', 'fetch_failed' ];
+        $valid_sources  = [ 'manual', 'auto', 'default' ];
 
         $sanitized_items = [];
         foreach ( $items as $item ) {
@@ -1360,24 +1380,59 @@ PROMPT;
                 continue;
             }
             $status = sanitize_text_field( $item['status'] ?? 'not_addressed' );
-            if ( ! in_array( $status, [ 'ok', 'caution', 'not_addressed' ], true ) ) {
+            if ( ! in_array( $status, $valid_statuses, true ) ) {
                 $status = 'not_addressed';
             }
-            $sanitized_items[] = [
+            $source = sanitize_text_field( $item['source'] ?? 'manual' );
+            if ( ! in_array( $source, $valid_sources, true ) ) {
+                $source = 'manual';
+            }
+
+            $sanitized_item = [
                 'key'     => $key,
                 'label'   => self::DIAGNOSIS_ITEMS[ $key ],
                 'status'  => $status,
                 'score'   => max( 0, min( 10, absint( $item['score'] ?? 0 ) ) ),
                 'comment' => sanitize_text_field( $item['comment'] ?? '' ),
-                'source'  => sanitize_text_field( $item['source'] ?? 'manual' ),
+                'source'  => $source,
+            ];
+
+            // エビデンス（自動診断時）
+            if ( isset( $item['evidence'] ) && is_array( $item['evidence'] ) ) {
+                $sanitized_item['evidence'] = [
+                    'found'   => array_map( 'sanitize_text_field', (array) ( $item['evidence']['found'] ?? [] ) ),
+                    'missing' => array_map( 'sanitize_text_field', (array) ( $item['evidence']['missing'] ?? [] ) ),
+                ];
+            }
+
+            // 診断日時
+            if ( ! empty( $item['diagnosed_at'] ) ) {
+                $sanitized_item['diagnosed_at'] = sanitize_text_field( $item['diagnosed_at'] );
+            }
+
+            $sanitized_items[] = $sanitized_item;
+        }
+
+        // クロールURL
+        $sanitized_urls = [];
+        foreach ( $crawled_urls as $cu ) {
+            $sanitized_urls[] = [
+                'url'    => esc_url_raw( $cu['url'] ?? '' ),
+                'status' => absint( $cu['status'] ?? 0 ),
+                'title'  => sanitize_text_field( $cu['title'] ?? '' ),
             ];
         }
 
+        $version = ! empty( $crawled_urls ) ? 2 : 1;
+
         $data = [
-            'version'    => 1,
+            'version'    => $version,
             'updated_at' => $now,
             'items'      => $sanitized_items,
         ];
+        if ( $version === 2 ) {
+            $data['crawled_urls'] = $sanitized_urls;
+        }
 
         return (bool) update_user_meta(
             $user_id,
@@ -1389,10 +1444,22 @@ PROMPT;
     /**
      * 診断スコアを計算（10項目の平均 × 10）
      */
-    private function calc_diagnosis_score( array $diagnosis ): int {
+    private function calc_diagnosis_score( array $diagnosis ): ?int {
         $items = $diagnosis['items'] ?? [];
         if ( empty( $items ) ) {
-            return 0;
+            return null;
+        }
+
+        // 未診断（全てdefault）の場合は null を返す
+        $all_default = true;
+        foreach ( $items as $item ) {
+            if ( ( $item['source'] ?? 'default' ) !== 'default' ) {
+                $all_default = false;
+                break;
+            }
+        }
+        if ( $all_default ) {
+            return null;
         }
 
         $total = 0;
@@ -1510,6 +1577,19 @@ PROMPT;
      */
     public function generate_improvement_actions( int $user_id, array $diagnosis ): array {
         $items   = $diagnosis['items'] ?? [];
+
+        // 未診断（全てdefault）の場合は空配列を返す（偽陽性防止）
+        $all_default = true;
+        foreach ( $items as $item ) {
+            if ( ( $item['source'] ?? 'default' ) !== 'default' ) {
+                $all_default = false;
+                break;
+            }
+        }
+        if ( $all_default ) {
+            return [];
+        }
+
         $actions = [];
 
         // 各診断項目から改善提案を生成
@@ -1593,5 +1673,1048 @@ PROMPT;
         } );
 
         return $actions;
+    }
+
+    // =========================================================
+    // サイト診断実行エンジン（クロール + 解析）
+    // =========================================================
+
+    /**
+     * クライアントのサイトURLを解決
+     */
+    private function resolve_site_url( int $user_id ): string {
+        $settings = gcrev_get_client_settings( $user_id );
+        $url = $settings['site_url'] ?? '';
+
+        if ( empty( $url ) ) {
+            $url = get_user_meta( $user_id, 'report_site_url', true );
+        }
+        if ( empty( $url ) ) {
+            $url = get_user_meta( $user_id, 'weisite_url', true );
+        }
+
+        return $url ? trailingslashit( esc_url_raw( $url ) ) : '';
+    }
+
+    /**
+     * サイトをクロールして HTML を取得
+     *
+     * @param string $site_url サイトトップURL
+     * @return array [ 'crawled_urls' => [...], 'errors' => [...] ]
+     */
+    private function crawl_site( string $site_url ): array {
+        $crawled = [];
+        $errors  = [];
+        $host    = wp_parse_url( $site_url, PHP_URL_HOST );
+
+        // ホームページ取得
+        $home_result = $this->fetch_page( $site_url );
+        $crawled[] = $home_result;
+
+        if ( $home_result['status'] < 200 || $home_result['status'] >= 400 ) {
+            $errors[] = $site_url . ' returned ' . $home_result['status'];
+            return [ 'crawled_urls' => $crawled, 'errors' => $errors ];
+        }
+
+        // ホームから内部リンクを収集
+        $discovered = $this->discover_internal_links( $home_result['html'], $site_url, $host );
+
+        // 優先スラッグでスコアリング・ソート
+        $priority_slugs = [
+            'service', 'about', 'faq', 'price', 'pricing', 'company',
+            'flow', 'works', 'case', 'staff', 'contact', 'access',
+            'voice', 'portfolio', 'blog', 'news',
+        ];
+
+        usort( $discovered, function ( $a, $b ) use ( $priority_slugs ) {
+            $score_a = $this->slug_priority_score( $a, $priority_slugs );
+            $score_b = $this->slug_priority_score( $b, $priority_slugs );
+            return $score_b - $score_a;
+        } );
+
+        // 最大5サブページを取得
+        $fetched_count = 0;
+        foreach ( $discovered as $url ) {
+            if ( $fetched_count >= 5 ) {
+                break;
+            }
+            $result = $this->fetch_page( $url );
+            $crawled[] = $result;
+            $fetched_count++;
+
+            if ( $result['status'] < 200 || $result['status'] >= 400 ) {
+                $errors[] = $url . ' returned ' . $result['status'];
+            }
+        }
+
+        return [ 'crawled_urls' => $crawled, 'errors' => $errors ];
+    }
+
+    /**
+     * 1ページを取得
+     */
+    private function fetch_page( string $url ): array {
+        $res = wp_remote_get( $url, [
+            'timeout'             => 10,
+            'redirection'         => 3,
+            'user-agent'          => 'MimamoriDiag/1.0',
+            'limit_response_size' => 512000, // 500KB
+        ] );
+
+        if ( is_wp_error( $res ) ) {
+            return [
+                'url'    => $url,
+                'status' => 0,
+                'title'  => '',
+                'html'   => '',
+            ];
+        }
+
+        $code = wp_remote_retrieve_response_code( $res );
+        $html = wp_remote_retrieve_body( $res );
+
+        // 文字コード変換
+        $html = $this->ensure_utf8( $html );
+
+        // タイトル抽出
+        $title = '';
+        if ( preg_match( '/<title[^>]*>([^<]+)<\/title>/is', $html, $m ) ) {
+            $title = trim( html_entity_decode( $m[1], ENT_QUOTES, 'UTF-8' ) );
+        }
+
+        return [
+            'url'    => $url,
+            'status' => $code,
+            'title'  => $title,
+            'html'   => $html,
+        ];
+    }
+
+    /**
+     * UTF-8 に変換
+     */
+    private function ensure_utf8( string $html ): string {
+        // charset 指定を確認
+        if ( preg_match( '/charset=["\']?([a-zA-Z0-9_-]+)/i', $html, $m ) ) {
+            $charset = strtolower( $m[1] );
+            if ( $charset !== 'utf-8' && $charset !== 'utf8' ) {
+                $converted = @mb_convert_encoding( $html, 'UTF-8', $charset );
+                if ( $converted !== false ) {
+                    return $converted;
+                }
+            }
+        }
+
+        // 自動検出
+        $detected = mb_detect_encoding( $html, [ 'UTF-8', 'SJIS', 'EUC-JP', 'ISO-8859-1' ], true );
+        if ( $detected && $detected !== 'UTF-8' ) {
+            $converted = @mb_convert_encoding( $html, 'UTF-8', $detected );
+            if ( $converted !== false ) {
+                return $converted;
+            }
+        }
+
+        return $html;
+    }
+
+    /**
+     * ホームページの HTML から同ドメイン内部リンクを収集
+     */
+    private function discover_internal_links( string $html, string $site_url, string $host ): array {
+        $links = [];
+        $seen  = [ rtrim( $site_url, '/' ) => true ];
+
+        // 除外パターン
+        $exclude_patterns = [
+            '/wp-admin/', '/wp-login', '/feed/', '/wp-content/',
+            '/wp-includes/', '/wp-json/', '/xmlrpc.php',
+        ];
+        $exclude_extensions = [ '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.pdf', '.zip', '.css', '.js' ];
+
+        libxml_use_internal_errors( true );
+        $dom = new \DOMDocument();
+        @$dom->loadHTML( '<?xml encoding="UTF-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
+        $xpath = new \DOMXPath( $dom );
+
+        $anchors = $xpath->query( '//a[@href]' );
+        if ( $anchors ) {
+            foreach ( $anchors as $a ) {
+                $href = trim( $a->getAttribute( 'href' ) );
+                if ( $href === '' || $href[0] === '#' || strpos( $href, 'mailto:' ) === 0 || strpos( $href, 'tel:' ) === 0 || strpos( $href, 'javascript:' ) === 0 ) {
+                    continue;
+                }
+
+                // 相対パスを絶対URLに変換
+                if ( strpos( $href, 'http' ) !== 0 ) {
+                    $href = rtrim( $site_url, '/' ) . '/' . ltrim( $href, '/' );
+                }
+
+                // クエリ文字列・アンカー除去
+                $href = strtok( $href, '?#' );
+                $href = trailingslashit( $href );
+
+                // 同ドメインチェック
+                $parsed_host = wp_parse_url( $href, PHP_URL_HOST );
+                if ( $parsed_host !== $host ) {
+                    continue;
+                }
+
+                // 除外チェック
+                $path = wp_parse_url( $href, PHP_URL_PATH ) ?? '/';
+                $skip = false;
+                foreach ( $exclude_patterns as $pat ) {
+                    if ( strpos( $path, $pat ) !== false ) {
+                        $skip = true;
+                        break;
+                    }
+                }
+                if ( ! $skip ) {
+                    foreach ( $exclude_extensions as $ext ) {
+                        if ( substr( strtolower( $path ), -strlen( $ext ) ) === $ext ) {
+                            $skip = true;
+                            break;
+                        }
+                    }
+                }
+                if ( $skip ) {
+                    continue;
+                }
+
+                $normalized = rtrim( $href, '/' );
+                if ( isset( $seen[ $normalized ] ) ) {
+                    continue;
+                }
+                $seen[ $normalized ] = true;
+                $links[] = $href;
+            }
+        }
+        libxml_clear_errors();
+
+        return $links;
+    }
+
+    /**
+     * URLのスラッグ優先度スコア
+     */
+    private function slug_priority_score( string $url, array $priority_slugs ): int {
+        $path = strtolower( wp_parse_url( $url, PHP_URL_PATH ) ?? '' );
+        foreach ( $priority_slugs as $i => $slug ) {
+            if ( strpos( $path, '/' . $slug ) !== false ) {
+                return count( $priority_slugs ) - $i;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * 1ページの HTML からシグナルを抽出
+     */
+    private function extract_page_signals( string $html, string $url ): array {
+        $signals = [
+            'url'              => $url,
+            'title'            => '',
+            'meta_description' => '',
+            'h1'               => [],
+            'headings'         => [],
+            'json_ld'          => [],
+            'body_text'        => '',
+            'internal_links'   => [],
+            'has_breadcrumbs'  => false,
+            'word_count'       => 0,
+        ];
+
+        if ( empty( $html ) ) {
+            return $signals;
+        }
+
+        libxml_use_internal_errors( true );
+        $dom = new \DOMDocument();
+        @$dom->loadHTML( '<?xml encoding="UTF-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
+        $xpath = new \DOMXPath( $dom );
+
+        // title
+        $title_nodes = $xpath->query( '//title' );
+        if ( $title_nodes && $title_nodes->length > 0 ) {
+            $signals['title'] = trim( $title_nodes->item( 0 )->textContent );
+        }
+
+        // meta description
+        $meta_nodes = $xpath->query( '//meta[@name="description"]' );
+        if ( $meta_nodes && $meta_nodes->length > 0 ) {
+            $signals['meta_description'] = trim( $meta_nodes->item( 0 )->getAttribute( 'content' ) );
+        }
+
+        // headings
+        for ( $level = 1; $level <= 6; $level++ ) {
+            $h_nodes = $xpath->query( '//h' . $level );
+            if ( $h_nodes ) {
+                foreach ( $h_nodes as $h ) {
+                    $text = trim( $h->textContent );
+                    if ( $text === '' ) {
+                        continue;
+                    }
+                    $signals['headings'][] = [ 'level' => $level, 'text' => $text ];
+                    if ( $level === 1 ) {
+                        $signals['h1'][] = $text;
+                    }
+                }
+            }
+        }
+
+        // JSON-LD
+        $scripts = $xpath->query( '//script[@type="application/ld+json"]' );
+        if ( $scripts ) {
+            foreach ( $scripts as $script ) {
+                $json = json_decode( trim( $script->textContent ), true );
+                if ( is_array( $json ) ) {
+                    $signals['json_ld'][] = $json;
+                }
+            }
+        }
+
+        // body text（script, style, nav, footer を除去）
+        $body_nodes = $xpath->query( '//body' );
+        if ( $body_nodes && $body_nodes->length > 0 ) {
+            $body = $body_nodes->item( 0 );
+            $clone = $body->cloneNode( true );
+
+            // 不要要素を除去
+            foreach ( [ 'script', 'style', 'nav', 'footer', 'header' ] as $tag ) {
+                $removes = [];
+                foreach ( $clone->getElementsByTagName( $tag ) as $el ) {
+                    $removes[] = $el;
+                }
+                foreach ( $removes as $el ) {
+                    $el->parentNode->removeChild( $el );
+                }
+            }
+
+            $text = trim( $clone->textContent );
+            $text = preg_replace( '/\s+/', ' ', $text );
+            $signals['body_text']  = mb_substr( $text, 0, 5000 );
+            $signals['word_count'] = mb_strlen( $text );
+        }
+
+        // internal links
+        $host = wp_parse_url( $url, PHP_URL_HOST );
+        $anchors = $xpath->query( '//a[@href]' );
+        if ( $anchors ) {
+            foreach ( $anchors as $a ) {
+                $href = trim( $a->getAttribute( 'href' ) );
+                $link_host = wp_parse_url( $href, PHP_URL_HOST );
+                if ( $link_host === $host || ( $link_host === null && strpos( $href, '/' ) === 0 ) ) {
+                    $signals['internal_links'][] = $href;
+                }
+            }
+            $signals['internal_links'] = array_unique( $signals['internal_links'] );
+        }
+
+        // breadcrumbs
+        $breadcrumb_navs = $xpath->query( '//nav[contains(@class, "breadcrumb")]' );
+        if ( $breadcrumb_navs && $breadcrumb_navs->length > 0 ) {
+            $signals['has_breadcrumbs'] = true;
+        }
+        if ( ! $signals['has_breadcrumbs'] ) {
+            foreach ( $signals['json_ld'] as $ld ) {
+                $type = $ld['@type'] ?? '';
+                if ( $type === 'BreadcrumbList' || ( isset( $ld['@graph'] ) && is_array( $ld['@graph'] ) ) ) {
+                    if ( $type === 'BreadcrumbList' ) {
+                        $signals['has_breadcrumbs'] = true;
+                    }
+                    if ( isset( $ld['@graph'] ) ) {
+                        foreach ( $ld['@graph'] as $item ) {
+                            if ( ( $item['@type'] ?? '' ) === 'BreadcrumbList' ) {
+                                $signals['has_breadcrumbs'] = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        libxml_clear_errors();
+        return $signals;
+    }
+
+    /**
+     * 10項目のルールベース診断を実行
+     */
+    private function analyze_diagnosis_item( string $key, array $all_signals, array $client_settings ): array {
+        $tz  = wp_timezone();
+        $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'c' );
+
+        $result = [
+            'key'          => $key,
+            'label'        => self::DIAGNOSIS_ITEMS[ $key ] ?? $key,
+            'status'       => 'not_addressed',
+            'score'        => 0,
+            'comment'      => '',
+            'source'       => 'auto',
+            'evidence'     => [ 'found' => [], 'missing' => [] ],
+            'diagnosed_at' => $now,
+        ];
+
+        // ページ取得がゼロの場合
+        $valid_pages = array_filter( $all_signals, function ( $s ) {
+            return ! empty( $s['body_text'] );
+        } );
+        if ( empty( $valid_pages ) ) {
+            $result['status']  = 'fetch_failed';
+            $result['comment'] = 'ページの取得に失敗したため診断できません。';
+            return $result;
+        }
+
+        $home = $all_signals[0] ?? [];
+
+        switch ( $key ) {
+            case 'service_clarity':
+                $result = $this->diagnose_service_clarity( $result, $all_signals, $home );
+                break;
+            case 'locality':
+                $result = $this->diagnose_locality( $result, $all_signals, $home, $client_settings );
+                break;
+            case 'expertise':
+                $result = $this->diagnose_expertise( $result, $all_signals );
+                break;
+            case 'track_record':
+                $result = $this->diagnose_track_record( $result, $all_signals );
+                break;
+            case 'faq':
+                $result = $this->diagnose_faq( $result, $all_signals );
+                break;
+            case 'pricing':
+                $result = $this->diagnose_pricing( $result, $all_signals );
+                break;
+            case 'company_info':
+                $result = $this->diagnose_company_info( $result, $all_signals );
+                break;
+            case 'heading_structure':
+                $result = $this->diagnose_heading_structure( $result, $all_signals );
+                break;
+            case 'uniqueness':
+                $result = $this->diagnose_uniqueness( $result, $all_signals );
+                break;
+            case 'internal_links':
+                $result = $this->diagnose_internal_links( $result, $all_signals, $home );
+                break;
+        }
+
+        // ステータスをスコアから決定
+        if ( $result['status'] !== 'fetch_failed' ) {
+            if ( $result['score'] >= 8 ) {
+                $result['status'] = 'ok';
+            } elseif ( $result['score'] >= 4 ) {
+                $result['status'] = 'caution';
+            } else {
+                $result['status'] = 'not_addressed';
+            }
+        }
+
+        return $result;
+    }
+
+    // --- 各診断項目の個別ロジック ---
+
+    private function diagnose_service_clarity( array $r, array $all_signals, array $home ): array {
+        $score = 0;
+
+        // meta description
+        $meta = $home['meta_description'] ?? '';
+        if ( mb_strlen( $meta ) >= 50 ) {
+            $score += 3;
+            $r['evidence']['found'][] = 'メタディスクリプション: ' . mb_strlen( $meta ) . '文字';
+        } elseif ( ! empty( $meta ) ) {
+            $score += 1;
+            $r['evidence']['found'][] = 'メタディスクリプション: ' . mb_strlen( $meta ) . '文字（短め）';
+        } else {
+            $r['evidence']['missing'][] = 'メタディスクリプション未設定';
+        }
+
+        // h1 にサービス関連ワード
+        $h1_texts = $home['h1'] ?? [];
+        $h1_joined = implode( ' ', $h1_texts );
+        if ( ! empty( $h1_texts ) ) {
+            $score += 2;
+            $r['evidence']['found'][] = 'h1: 「' . mb_substr( $h1_joined, 0, 50 ) . '」';
+        } else {
+            $r['evidence']['missing'][] = 'トップページにh1なし';
+        }
+
+        // 本文の充実度
+        $body_len = $home['word_count'] ?? 0;
+        if ( $body_len >= 1000 ) {
+            $score += 3;
+            $r['evidence']['found'][] = 'トップページ本文: 約' . number_format( $body_len ) . '文字';
+        } elseif ( $body_len >= 300 ) {
+            $score += 2;
+            $r['evidence']['found'][] = 'トップページ本文: 約' . number_format( $body_len ) . '文字（やや少なめ）';
+        } else {
+            $r['evidence']['missing'][] = 'トップページの本文が少ない（約' . number_format( $body_len ) . '文字）';
+        }
+
+        // サービスページの存在
+        foreach ( $all_signals as $s ) {
+            $path = strtolower( wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '' );
+            if ( strpos( $path, '/service' ) !== false || strpos( $path, '/menu' ) !== false ) {
+                $score += 2;
+                $r['evidence']['found'][] = 'サービスページ検出: ' . $s['url'];
+                break;
+            }
+        }
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? 'サービス内容が明確に記載されています。'
+            : ( $score >= 4 ? 'サービス説明はありますが、より具体的にすると効果的です。' : 'サービス内容の記載が不足しています。' );
+        return $r;
+    }
+
+    private function diagnose_locality( array $r, array $all_signals, array $home, array $settings ): array {
+        $score = 0;
+        $area_pref = $settings['area_pref'] ?? '';
+        $area_city = $settings['area_city'] ?? '';
+
+        if ( empty( $area_pref ) && empty( $area_city ) ) {
+            $r['score'] = 5;
+            $r['comment'] = 'クライアント設定にエリア情報がないため、地域性の評価は限定的です。';
+            $r['evidence']['missing'][] = 'クライアント設定にエリア未設定';
+            return $r;
+        }
+
+        $search_terms = array_filter( [ $area_pref, $area_city ] );
+
+        foreach ( $all_signals as $s ) {
+            $title = $s['title'] ?? '';
+            $h1    = implode( ' ', $s['h1'] ?? [] );
+            $body  = $s['body_text'] ?? '';
+            $url_label = wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '/';
+
+            foreach ( $search_terms as $term ) {
+                if ( empty( $term ) ) continue;
+
+                // タイトルに含まれるか
+                if ( mb_strpos( $title, $term ) !== false ) {
+                    $score += 2;
+                    $r['evidence']['found'][] = '「' . $term . '」がタイトルに含まれる（' . $url_label . '）';
+                }
+                // h1に含まれるか
+                if ( mb_strpos( $h1, $term ) !== false ) {
+                    $score += 2;
+                    $r['evidence']['found'][] = '「' . $term . '」がh1に含まれる（' . $url_label . '）';
+                }
+                // 本文中の出現回数
+                $count = mb_substr_count( $body, $term );
+                if ( $count > 0 ) {
+                    $score += min( 2, $count );
+                    $r['evidence']['found'][] = '「' . $term . '」が本文中に' . $count . '回出現（' . $url_label . '）';
+                }
+            }
+        }
+
+        // 重複を除去
+        $r['evidence']['found'] = array_values( array_unique( $r['evidence']['found'] ) );
+
+        if ( $score === 0 ) {
+            $r['evidence']['missing'][] = '設定エリア（' . implode( '・', $search_terms ) . '）がサイト内に見つかりません';
+        }
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? '地域情報が適切に記載されています。'
+            : ( $score >= 4 ? '地域情報はありますが、より多くのページに記載すると効果的です。' : '地域情報の記載が不足しています。' );
+        return $r;
+    }
+
+    private function diagnose_expertise( array $r, array $all_signals ): array {
+        $score = 0;
+        $keywords = [ '資格', '認定', '免許', '国家資格', '経験', '受賞', '表彰', '専門', '認証', '登録', '許可', '年の実績' ];
+
+        foreach ( $all_signals as $s ) {
+            $body = $s['body_text'] ?? '';
+            $url_label = wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '/';
+
+            foreach ( $keywords as $kw ) {
+                if ( mb_strpos( $body, $kw ) !== false ) {
+                    $score += 1;
+                    $r['evidence']['found'][] = '「' . $kw . '」を検出（' . $url_label . '）';
+                }
+            }
+
+            // JSON-LD で Organization / Person
+            foreach ( $s['json_ld'] ?? [] as $ld ) {
+                $type = $ld['@type'] ?? '';
+                if ( in_array( $type, [ 'Organization', 'Person', 'ProfessionalService' ], true ) ) {
+                    $score += 2;
+                    $r['evidence']['found'][] = 'JSON-LD ' . $type . ' 検出（' . $url_label . '）';
+                }
+            }
+        }
+
+        $r['evidence']['found'] = array_values( array_unique( $r['evidence']['found'] ) );
+        if ( empty( $r['evidence']['found'] ) ) {
+            $r['evidence']['missing'][] = '専門性・信頼性を示すキーワードが見つかりません';
+        }
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? '専門性・信頼性の情報が充実しています。'
+            : ( $score >= 4 ? '専門性の記載はありますが、さらに充実させると効果的です。' : '専門性・信頼性を示す情報が不足しています。' );
+        return $r;
+    }
+
+    private function diagnose_track_record( array $r, array $all_signals ): array {
+        $score = 0;
+        $keywords = [ '実績', '事例', 'お客様の声', '導入事例', 'ポートフォリオ', '施工例', '制作実績' ];
+
+        // 実績ページの存在
+        foreach ( $all_signals as $s ) {
+            $path = strtolower( wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '' );
+            if ( preg_match( '/(works|case|voice|portfolio|results|jisseki)/', $path ) ) {
+                $score += 3;
+                $r['evidence']['found'][] = '実績ページ検出: ' . $s['url'];
+            }
+        }
+
+        // キーワード + 数値パターン
+        foreach ( $all_signals as $s ) {
+            $body = $s['body_text'] ?? '';
+            $url_label = wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '/';
+
+            foreach ( $keywords as $kw ) {
+                if ( mb_strpos( $body, $kw ) !== false ) {
+                    $score += 1;
+                    $r['evidence']['found'][] = '「' . $kw . '」を検出（' . $url_label . '）';
+                }
+            }
+
+            // 数値 + 件/社/年 パターン
+            if ( preg_match( '/[0-9,]+\s*(件|社|年|棟|台|回|名)/u', $body, $m ) ) {
+                $score += 2;
+                $r['evidence']['found'][] = '数値実績「' . mb_substr( $m[0], 0, 20 ) . '」検出（' . $url_label . '）';
+            }
+        }
+
+        $r['evidence']['found'] = array_values( array_unique( $r['evidence']['found'] ) );
+        if ( empty( $r['evidence']['found'] ) ) {
+            $r['evidence']['missing'][] = '実績・事例に関する情報が見つかりません';
+        }
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? '実績情報が充実しています。'
+            : ( $score >= 4 ? '実績情報はありますが、具体的な数字や事例を追加すると効果的です。' : '実績・事例の掲載が不足しています。' );
+        return $r;
+    }
+
+    private function diagnose_faq( array $r, array $all_signals ): array {
+        $score = 0;
+
+        // FAQ ページの存在
+        $faq_page_found = false;
+        foreach ( $all_signals as $s ) {
+            $path = strtolower( wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '' );
+            if ( strpos( $path, '/faq' ) !== false || strpos( $path, '/question' ) !== false ) {
+                $faq_page_found = true;
+                $score += 3;
+                $r['evidence']['found'][] = 'FAQページ検出: ' . $s['url'];
+            }
+        }
+
+        // JSON-LD FAQPage
+        foreach ( $all_signals as $s ) {
+            foreach ( $s['json_ld'] ?? [] as $ld ) {
+                $type = $ld['@type'] ?? '';
+                if ( $type === 'FAQPage' ) {
+                    $qa_count = count( $ld['mainEntity'] ?? [] );
+                    $score += 3;
+                    $r['evidence']['found'][] = 'JSON-LD FAQPage構造化データ: ' . $qa_count . '件（' . ( wp_parse_url( $s['url'], PHP_URL_PATH ) ?? '/' ) . '）';
+                }
+                // @graph 内もチェック
+                if ( isset( $ld['@graph'] ) && is_array( $ld['@graph'] ) ) {
+                    foreach ( $ld['@graph'] as $item ) {
+                        if ( ( $item['@type'] ?? '' ) === 'FAQPage' ) {
+                            $qa_count = count( $item['mainEntity'] ?? [] );
+                            $score += 3;
+                            $r['evidence']['found'][] = 'JSON-LD FAQPage構造化データ: ' . $qa_count . '件';
+                        }
+                    }
+                }
+            }
+        }
+
+        // Q&A パターンの検出
+        foreach ( $all_signals as $s ) {
+            $body = $s['body_text'] ?? '';
+            $url_label = wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '/';
+
+            $qa_patterns = [ 'よくある質問', 'よくあるご質問', 'FAQ', 'Q.', 'Q：', 'Q:' ];
+            foreach ( $qa_patterns as $pat ) {
+                $count = mb_substr_count( $body, $pat );
+                if ( $count > 0 ) {
+                    $score += min( 2, $count );
+                    $r['evidence']['found'][] = '「' . $pat . '」パターン: ' . $count . '件（' . $url_label . '）';
+                    break;
+                }
+            }
+        }
+
+        $r['evidence']['found'] = array_values( array_unique( $r['evidence']['found'] ) );
+        if ( ! $faq_page_found ) {
+            $r['evidence']['missing'][] = 'FAQページが見つかりません';
+        }
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? 'FAQ情報が充実しています。'
+            : ( $score >= 4 ? 'FAQはありますが、質問数を増やすとAIの回答材料になります。' : 'FAQ整備が不足しています。' );
+        return $r;
+    }
+
+    private function diagnose_pricing( array $r, array $all_signals ): array {
+        $score = 0;
+
+        // 料金ページの存在
+        foreach ( $all_signals as $s ) {
+            $path = strtolower( wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '' );
+            if ( preg_match( '/(price|pricing|fee|plan|ryoukin|cost)/', $path ) ) {
+                $score += 3;
+                $r['evidence']['found'][] = '料金ページ検出: ' . $s['url'];
+            }
+        }
+
+        // 料金関連キーワード
+        $price_keywords = [ '円', '税込', '税別', '料金', '費用', '価格', 'プラン', 'コース', '月額', '年額', '初期費用', '見積' ];
+        foreach ( $all_signals as $s ) {
+            $body = $s['body_text'] ?? '';
+            $url_label = wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '/';
+
+            foreach ( $price_keywords as $kw ) {
+                if ( mb_strpos( $body, $kw ) !== false ) {
+                    $score += 1;
+                    $r['evidence']['found'][] = '「' . $kw . '」を検出（' . $url_label . '）';
+                }
+            }
+        }
+
+        // 流れ・ステップ
+        $flow_keywords = [ 'ご利用の流れ', 'お申し込みの流れ', 'ステップ', 'STEP', '納品まで' ];
+        foreach ( $all_signals as $s ) {
+            $body = $s['body_text'] ?? '';
+            $url_label = wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '/';
+
+            foreach ( $flow_keywords as $kw ) {
+                if ( mb_strpos( $body, $kw ) !== false ) {
+                    $score += 1;
+                    $r['evidence']['found'][] = '「' . $kw . '」を検出（' . $url_label . '）';
+                    break;
+                }
+            }
+        }
+
+        $r['evidence']['found'] = array_values( array_unique( $r['evidence']['found'] ) );
+        if ( empty( $r['evidence']['found'] ) ) {
+            $r['evidence']['missing'][] = '料金・費用に関する情報が見つかりません';
+        }
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? '料金・サービスの流れが明示されています。'
+            : ( $score >= 4 ? '料金情報はありますが、より明確に提示すると効果的です。' : '料金・流れの明示が不足しています。' );
+        return $r;
+    }
+
+    private function diagnose_company_info( array $r, array $all_signals ): array {
+        $score = 0;
+        $keywords = [ '代表', '社長', '所在地', '住所', 'TEL', '電話番号', '設立', '創業', 'メールアドレス', '資本金' ];
+
+        // 会社概要ページの存在
+        foreach ( $all_signals as $s ) {
+            $path = strtolower( wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '' );
+            if ( preg_match( '/(company|about|profile|gaiyou|corporate)/', $path ) ) {
+                $score += 2;
+                $r['evidence']['found'][] = '会社概要ページ検出: ' . $s['url'];
+            }
+        }
+
+        // キーワード検出
+        foreach ( $all_signals as $s ) {
+            $body = $s['body_text'] ?? '';
+            $url_label = wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '/';
+
+            foreach ( $keywords as $kw ) {
+                if ( mb_strpos( $body, $kw ) !== false ) {
+                    $score += 1;
+                    $r['evidence']['found'][] = '「' . $kw . '」を検出（' . $url_label . '）';
+                }
+            }
+        }
+
+        // JSON-LD Organization / LocalBusiness
+        foreach ( $all_signals as $s ) {
+            foreach ( $s['json_ld'] ?? [] as $ld ) {
+                $type = $ld['@type'] ?? '';
+                if ( in_array( $type, [ 'Organization', 'LocalBusiness', 'Corporation' ], true ) ) {
+                    $score += 2;
+                    $r['evidence']['found'][] = 'JSON-LD ' . $type . ' 検出';
+                }
+                if ( isset( $ld['@graph'] ) && is_array( $ld['@graph'] ) ) {
+                    foreach ( $ld['@graph'] as $item ) {
+                        if ( in_array( $item['@type'] ?? '', [ 'Organization', 'LocalBusiness', 'Corporation' ], true ) ) {
+                            $score += 2;
+                            $r['evidence']['found'][] = 'JSON-LD ' . $item['@type'] . ' 検出';
+                        }
+                    }
+                }
+            }
+        }
+
+        $r['evidence']['found'] = array_values( array_unique( $r['evidence']['found'] ) );
+        if ( empty( $r['evidence']['found'] ) ) {
+            $r['evidence']['missing'][] = '会社情報が見つかりません';
+        }
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? '会社情報が充実しています。'
+            : ( $score >= 4 ? '会社情報はありますが、所在地・代表者等を追加すると信頼性が向上します。' : '会社情報の明示が不足しています。' );
+        return $r;
+    }
+
+    private function diagnose_heading_structure( array $r, array $all_signals ): array {
+        $score = 10; // 減点方式
+        $issues = [];
+
+        foreach ( $all_signals as $s ) {
+            $headings = $s['headings'] ?? [];
+            $h1s = array_filter( $headings, function ( $h ) { return $h['level'] === 1; } );
+            $url_label = wp_parse_url( $s['url'] ?? '', PHP_URL_PATH ) ?? '/';
+
+            // h1 が 0 または 2以上
+            $h1_count = count( $h1s );
+            if ( $h1_count === 0 ) {
+                $score -= 2;
+                $r['evidence']['missing'][] = 'h1なし（' . $url_label . '）';
+            } elseif ( $h1_count > 1 ) {
+                $score -= 1;
+                $issues[] = 'h1が' . $h1_count . '個（' . $url_label . '）';
+            } else {
+                $r['evidence']['found'][] = 'h1が1件（正常）（' . $url_label . '）';
+            }
+
+            // 見出し階層スキップチェック
+            $prev_level = 0;
+            foreach ( $headings as $h ) {
+                if ( $prev_level > 0 && $h['level'] > $prev_level + 1 ) {
+                    $score -= 1;
+                    $issues[] = 'h' . $prev_level . '→h' . $h['level'] . 'のスキップ（' . $url_label . '）';
+                    break; // 1ページにつき1回だけ
+                }
+                $prev_level = $h['level'];
+            }
+
+            // 見出し数の充実度
+            if ( count( $headings ) >= 5 ) {
+                $r['evidence']['found'][] = '見出し' . count( $headings ) . '件（' . $url_label . '）';
+            } elseif ( count( $headings ) < 3 && ! empty( $s['body_text'] ) ) {
+                $score -= 1;
+                $r['evidence']['missing'][] = '見出しが少ない: ' . count( $headings ) . '件（' . $url_label . '）';
+            }
+        }
+
+        foreach ( $issues as $issue ) {
+            $r['evidence']['missing'][] = $issue;
+        }
+
+        $r['evidence']['found']   = array_values( array_unique( $r['evidence']['found'] ) );
+        $r['evidence']['missing'] = array_values( array_unique( $r['evidence']['missing'] ) );
+
+        $r['score'] = max( 0, min( 10, $score ) );
+        $r['comment'] = $r['score'] >= 8
+            ? '見出し構造が適切に設計されています。'
+            : ( $r['score'] >= 4 ? '見出し構造に一部改善の余地があります。' : '見出し構造の整備が必要です。' );
+        return $r;
+    }
+
+    private function diagnose_uniqueness( array $r, array $all_signals ): array {
+        $score = 0;
+
+        // メタディスクリプションの多様性
+        $meta_descs = [];
+        foreach ( $all_signals as $s ) {
+            $meta = $s['meta_description'] ?? '';
+            if ( ! empty( $meta ) ) {
+                $meta_descs[] = $meta;
+            }
+        }
+
+        if ( count( $meta_descs ) >= 2 ) {
+            $unique_metas = array_unique( $meta_descs );
+            if ( count( $unique_metas ) === count( $meta_descs ) ) {
+                $score += 3;
+                $r['evidence']['found'][] = 'メタディスクリプションが各ページで異なる（' . count( $meta_descs ) . 'ページ）';
+            } else {
+                $score += 1;
+                $r['evidence']['missing'][] = 'メタディスクリプションが一部のページで重複';
+            }
+        } elseif ( count( $meta_descs ) === 1 ) {
+            $score += 1;
+            $r['evidence']['found'][] = 'メタディスクリプション設定あり（1ページのみ確認）';
+        } else {
+            $r['evidence']['missing'][] = 'メタディスクリプション未設定';
+        }
+
+        // 本文量（充実度）
+        $total_content = 0;
+        foreach ( $all_signals as $s ) {
+            $total_content += $s['word_count'] ?? 0;
+        }
+        if ( $total_content >= 5000 ) {
+            $score += 3;
+            $r['evidence']['found'][] = 'サイト全体のコンテンツ量: 約' . number_format( $total_content ) . '文字';
+        } elseif ( $total_content >= 2000 ) {
+            $score += 2;
+            $r['evidence']['found'][] = 'サイト全体のコンテンツ量: 約' . number_format( $total_content ) . '文字（やや少なめ）';
+        } else {
+            $r['evidence']['missing'][] = 'コンテンツ量が少ない（約' . number_format( $total_content ) . '文字）';
+        }
+
+        // タイトルの多様性
+        $titles = [];
+        foreach ( $all_signals as $s ) {
+            $t = $s['title'] ?? '';
+            if ( ! empty( $t ) ) {
+                $titles[] = $t;
+            }
+        }
+        if ( count( $titles ) >= 2 ) {
+            $unique_titles = array_unique( $titles );
+            if ( count( $unique_titles ) === count( $titles ) ) {
+                $score += 2;
+                $r['evidence']['found'][] = 'タイトルが各ページで異なる';
+            } else {
+                $r['evidence']['missing'][] = 'タイトルが一部のページで重複';
+            }
+        }
+
+        // ページ数の多様性
+        if ( count( $all_signals ) >= 4 ) {
+            $score += 2;
+            $r['evidence']['found'][] = '診断ページ数: ' . count( $all_signals ) . 'ページ';
+        }
+
+        $r['evidence']['found']   = array_values( array_unique( $r['evidence']['found'] ) );
+        $r['evidence']['missing'] = array_values( array_unique( $r['evidence']['missing'] ) );
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? 'コンテンツの独自性が高いです。'
+            : ( $score >= 4 ? 'コンテンツはありますが、各ページの差別化を進めると効果的です。' : '独自性のあるコンテンツが不足しています。' );
+        return $r;
+    }
+
+    private function diagnose_internal_links( array $r, array $all_signals, array $home ): array {
+        $score = 0;
+
+        // ホームからの内部リンク数
+        $home_links = $home['internal_links'] ?? [];
+        $link_count = count( $home_links );
+
+        if ( $link_count >= 20 ) {
+            $score += 3;
+            $r['evidence']['found'][] = 'トップページ内部リンク: ' . $link_count . '件';
+        } elseif ( $link_count >= 10 ) {
+            $score += 2;
+            $r['evidence']['found'][] = 'トップページ内部リンク: ' . $link_count . '件';
+        } elseif ( $link_count > 0 ) {
+            $score += 1;
+            $r['evidence']['found'][] = 'トップページ内部リンク: ' . $link_count . '件（少なめ）';
+        } else {
+            $r['evidence']['missing'][] = 'トップページに内部リンクなし';
+        }
+
+        // パンくず
+        $has_breadcrumbs = false;
+        foreach ( $all_signals as $s ) {
+            if ( $s['has_breadcrumbs'] ?? false ) {
+                $has_breadcrumbs = true;
+                $score += 2;
+                $r['evidence']['found'][] = 'パンくずリスト検出（' . ( wp_parse_url( $s['url'], PHP_URL_PATH ) ?? '/' ) . '）';
+                break;
+            }
+        }
+        if ( ! $has_breadcrumbs ) {
+            $r['evidence']['missing'][] = 'パンくずリストが見つかりません';
+        }
+
+        // 主要ページへの導線
+        $important_paths = [ '/contact', '/service', '/about', '/faq', '/price' ];
+        foreach ( $important_paths as $path ) {
+            foreach ( $home_links as $link ) {
+                if ( stripos( $link, $path ) !== false ) {
+                    $score += 1;
+                    $r['evidence']['found'][] = $path . ' への導線あり';
+                    break;
+                }
+            }
+        }
+
+        $r['evidence']['found']   = array_values( array_unique( $r['evidence']['found'] ) );
+        $r['evidence']['missing'] = array_values( array_unique( $r['evidence']['missing'] ) );
+
+        $r['score'] = min( 10, $score );
+        $r['comment'] = $score >= 8
+            ? '内部リンク設計が良好です。'
+            : ( $score >= 4 ? '内部リンクはありますが、主要ページへの導線を強化すると効果的です。' : '内部リンク設計の改善が必要です。' );
+        return $r;
+    }
+
+    /**
+     * サイト診断を実行（クロール → 解析 → 保存）
+     *
+     * @param int $user_id
+     * @return array 診断結果
+     * @throws \RuntimeException サイトURL未設定時
+     */
+    public function run_site_diagnosis( int $user_id ): array {
+        $site_url = $this->resolve_site_url( $user_id );
+        if ( empty( $site_url ) ) {
+            throw new \RuntimeException( '対象サイトURLが設定されていません。クライアント設定でサイトURLを登録してください。' );
+        }
+
+        // クロール
+        $crawl_result = $this->crawl_site( $site_url );
+
+        // シグナル抽出
+        $all_signals = [];
+        foreach ( $crawl_result['crawled_urls'] as $page ) {
+            if ( ! empty( $page['html'] ) ) {
+                $all_signals[] = $this->extract_page_signals( $page['html'], $page['url'] );
+            }
+        }
+
+        // クライアント設定取得
+        $client_settings = gcrev_get_client_settings( $user_id );
+
+        // 10項目の診断
+        $items = [];
+        foreach ( self::DIAGNOSIS_ITEMS as $key => $label ) {
+            $items[] = $this->analyze_diagnosis_item( $key, $all_signals, $client_settings );
+        }
+
+        // crawled_urls から html を除去（保存用）
+        $urls_for_save = array_map( function ( $p ) {
+            return [
+                'url'    => $p['url'],
+                'status' => $p['status'],
+                'title'  => $p['title'],
+            ];
+        }, $crawl_result['crawled_urls'] );
+
+        // 保存
+        $this->save_site_diagnosis( $user_id, $items, $urls_for_save );
+
+        // 保存後のデータを返す
+        return $this->get_site_diagnosis( $user_id );
     }
 }

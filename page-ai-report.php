@@ -140,9 +140,11 @@ get_header();
     font-size: 14px;
     font-weight: 700;
 }
-.air-diagnosis-item__icon--ok          { background: rgba(78,138,107,0.12); color: #4E8A6B; }
-.air-diagnosis-item__icon--caution     { background: rgba(201,168,76,0.15); color: #C9A84C; }
-.air-diagnosis-item__icon--not_addressed { background: rgba(201,90,79,0.12); color: #C95A4F; }
+.air-diagnosis-item__icon--ok             { background: rgba(78,138,107,0.12); color: #4E8A6B; }
+.air-diagnosis-item__icon--caution        { background: rgba(201,168,76,0.15); color: #C9A84C; }
+.air-diagnosis-item__icon--not_addressed  { background: rgba(201,90,79,0.12); color: #C95A4F; }
+.air-diagnosis-item__icon--unknown        { background: rgba(150,150,150,0.1); color: #999; }
+.air-diagnosis-item__icon--fetch_failed   { background: rgba(201,90,79,0.12); color: #C95A4F; }
 .air-diagnosis-item__body { flex: 1; min-width: 0; }
 .air-diagnosis-item__label {
     font-size: 14px;
@@ -387,6 +389,51 @@ get_header();
 .air-toast.active { opacity: 1; pointer-events: auto; }
 .air-toast--error { background: #C95A4F; }
 
+/* エビデンス表示 */
+.air-evidence { margin-top: 6px; font-size: 12px; line-height: 1.7; }
+.air-evidence__item { display: flex; align-items: baseline; gap: 4px; }
+.air-evidence__item--found { color: #4E8A6B; }
+.air-evidence__item--missing { color: #C95A4F; }
+.air-evidence__icon { flex-shrink: 0; font-size: 10px; }
+
+/* 診断対象URL */
+.air-crawled-urls { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--mw-border-light); }
+.air-crawled-urls__title { font-size: 13px; font-weight: 600; color: var(--mw-text-secondary); margin-bottom: 8px; }
+.air-crawled-url { font-size: 12px; margin-bottom: 4px; color: var(--mw-text-secondary); }
+.air-crawled-url__status { font-weight: 600; margin-right: 4px; }
+.air-crawled-url__status--ok { color: #4E8A6B; }
+.air-crawled-url__status--err { color: #C95A4F; }
+
+/* 診断実行ボタン（未診断時の大きなCTA） */
+.air-diagnosis-cta {
+    text-align: center;
+    padding: 40px 20px;
+    border: 2px dashed var(--mw-border-light);
+    border-radius: 12px;
+    background: var(--mw-bg-secondary);
+}
+.air-diagnosis-cta__text {
+    font-size: 14px;
+    color: var(--mw-text-secondary);
+    margin-bottom: 16px;
+}
+.air-diagnosis-cta__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 24px;
+    background: var(--mw-primary-blue);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.air-diagnosis-cta__btn:hover { opacity: 0.9; }
+.air-diagnosis-cta__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* 空状態 */
 .air-empty {
     text-align: center;
@@ -457,9 +504,14 @@ get_header();
                 <h2 class="air-section__title">🔍 AIに伝わるサイト診断</h2>
                 <div class="air-section__note">AIがサイト内容を正しく理解できる状態か、10項目でチェックします（参考値）</div>
             </div>
+            <button class="air-btn air-btn--primary" id="airDiagBtn" onclick="runDiagnosis()" style="font-size:13px;padding:6px 14px;display:none;">
+                再診断
+            </button>
         </div>
-        <div class="air-diagnosis-grid" id="airDiagnosisGrid">
-            <div class="air-empty">診断データを読み込み中...</div>
+        <div id="airDiagnosisBody">
+            <div class="air-diagnosis-grid" id="airDiagnosisGrid">
+                <div class="air-empty">診断データを読み込み中...</div>
+            </div>
         </div>
     </div>
 
@@ -580,7 +632,10 @@ get_header();
         var s = reportData.summary;
         var el = function(id) { return document.getElementById(id); };
 
-        el('airDiagScore').textContent = s.diagnosis_score > 0 ? s.diagnosis_score + '点' : '未診断';
+        el('airDiagScore').textContent = s.diagnosis_score !== null ? s.diagnosis_score + '点' : 'ー';
+        if (s.diagnosis_score === null) {
+            el('airDiagScore').insertAdjacentHTML('afterend', '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:2px;">未診断</div>');
+        }
         el('airMentionRate').textContent = s.mention_total > 0 ? s.mention_rate + '%' : '未計測';
         el('airMentionSub').textContent = s.mention_total > 0
             ? s.mention_count + ' / ' + s.mention_total + ' 件で掲載確認'
@@ -591,7 +646,7 @@ get_header();
             medium: '<span class="air-badge air-badge--medium">中</span>',
             low:    '<span class="air-badge air-badge--low">低</span>'
         };
-        el('airPriority').innerHTML = s.mention_total > 0 || s.diagnosis_score > 0
+        el('airPriority').innerHTML = s.mention_total > 0 || s.diagnosis_score !== null
             ? (priorityMap[s.priority] || '<span class="air-badge air-badge--none">--</span>')
             : '<span class="air-badge air-badge--none">--</span>';
 
@@ -604,27 +659,75 @@ get_header();
     function renderDiagnosis() {
         var diag = reportData.diagnosis;
         var items = diag.items || [];
+        var body = document.getElementById('airDiagnosisBody');
         var grid = document.getElementById('airDiagnosisGrid');
+        var diagBtn = document.getElementById('airDiagBtn');
+        var isDefault = items.length === 0 || items.every(function(i) { return i.source === 'default'; });
 
-        if (items.length === 0 || items.every(function(i) { return i.source === 'default'; })) {
-            grid.innerHTML = '<div class="air-empty">サイト診断はまだ実施されていません。<br>管理者による診断設定をお待ちください。</div>';
+        if (isDefault) {
+            // 未診断 — CTA表示
+            diagBtn.style.display = 'none';
+            grid.innerHTML = '<div class="air-diagnosis-cta">'
+                + '<div class="air-diagnosis-cta__text">サイト診断はまだ実施されていません。<br>サイトをクロールして、AIへの伝わりやすさを10項目で診断します。</div>'
+                + '<button class="air-diagnosis-cta__btn" onclick="runDiagnosis()">🔍 診断を実行</button>'
+                + '</div>';
             return;
         }
 
-        var iconMap = { ok: '✓', caution: '!', not_addressed: '×' };
+        // 診断済み — ヘッダーに再診断ボタン表示
+        diagBtn.style.display = '';
+        diagBtn.textContent = '再診断';
+
+        var iconMap = { ok: '✓', caution: '!', not_addressed: '×', unknown: '?', fetch_failed: '×' };
         var html = '';
         items.forEach(function(item) {
             html += '<div class="air-diagnosis-item">'
                 + '<div class="air-diagnosis-item__icon air-diagnosis-item__icon--' + esc(item.status) + '">'
-                + iconMap[item.status] || '?'
+                + (iconMap[item.status] || '?')
                 + '</div>'
                 + '<div class="air-diagnosis-item__body">'
                 + '<div class="air-diagnosis-item__label">' + esc(item.label) + '</div>'
                 + '<div class="air-diagnosis-item__score">' + item.score + ' / 10</div>'
-                + (item.comment ? '<div class="air-diagnosis-item__comment">' + esc(item.comment) + '</div>' : '')
-                + '</div></div>';
+                + (item.comment ? '<div class="air-diagnosis-item__comment">' + esc(item.comment) + '</div>' : '');
+
+            // エビデンス表示
+            if (item.evidence) {
+                html += '<div class="air-evidence">';
+                (item.evidence.found || []).forEach(function(e) {
+                    html += '<div class="air-evidence__item air-evidence__item--found">'
+                        + '<span class="air-evidence__icon">✓</span> ' + esc(e) + '</div>';
+                });
+                (item.evidence.missing || []).forEach(function(e) {
+                    html += '<div class="air-evidence__item air-evidence__item--missing">'
+                        + '<span class="air-evidence__icon">✕</span> ' + esc(e) + '</div>';
+                });
+                html += '</div>';
+            }
+
+            html += '</div></div>';
         });
         grid.innerHTML = html;
+
+        // 診断対象URL表示
+        var crawledUrls = diag.crawled_urls || [];
+        if (crawledUrls.length > 0) {
+            var urlHtml = '<div class="air-crawled-urls">'
+                + '<div class="air-crawled-urls__title">診断対象URL</div>';
+            crawledUrls.forEach(function(u) {
+                var isOk = u.status >= 200 && u.status < 400;
+                urlHtml += '<div class="air-crawled-url">'
+                    + '<span class="air-crawled-url__status ' + (isOk ? 'air-crawled-url__status--ok' : 'air-crawled-url__status--err') + '">'
+                    + '[' + u.status + ']</span> '
+                    + esc(u.url) + (u.title ? ' — ' + esc(u.title) : '')
+                    + '</div>';
+            });
+            urlHtml += '</div>';
+            // updated_at 表示
+            if (diag.updated_at) {
+                urlHtml += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:8px;">診断日時: ' + formatDate(diag.updated_at) + '</div>';
+            }
+            grid.insertAdjacentHTML('afterend', urlHtml);
+        }
     }
 
     // =========================================================
@@ -872,6 +975,41 @@ get_header();
             });
         }
         runNext();
+    };
+
+    // =========================================================
+    // サイト診断実行
+    // =========================================================
+    window.runDiagnosis = function() {
+        if (!confirm('サイト診断を実行します。サイトをクロールして解析するため、1〜2分ほどかかります。よろしいですか？')) return;
+
+        var btns = document.querySelectorAll('#airDiagBtn, .air-diagnosis-cta__btn');
+        btns.forEach(function(b) { b.disabled = true; });
+        showProgress(true, 'サイトを診断中... ページを取得・解析しています');
+
+        fetch('/wp-json/gcrev/v1/aio/run-diagnosis', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            showProgress(false);
+            btns.forEach(function(b) { b.disabled = false; });
+            if (json.success) {
+                showToast('サイト診断が完了しました');
+                reportData = null;
+                fetchReportData();
+            } else {
+                showToast(json.message || '診断に失敗しました', true);
+            }
+        })
+        .catch(function(err) {
+            showProgress(false);
+            btns.forEach(function(b) { b.disabled = false; });
+            showToast('通信エラーが発生しました', true);
+            console.error('[AIReport] runDiagnosis error:', err);
+        });
     };
 
     // =========================================================

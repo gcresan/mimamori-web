@@ -760,6 +760,12 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_save_aio_site_diagnosis' ],
             'permission_callback' => function() { return current_user_can('manage_options'); },
         ]);
+        // サイト診断実行
+        register_rest_route('gcrev/v1', '/aio/run-diagnosis', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_run_aio_site_diagnosis' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         // 管理者用: AIOキーワード管理
         register_rest_route('gcrev/v1', '/aio/keywords', [
             'methods'             => 'GET',
@@ -11105,6 +11111,42 @@ PROMPT;
         $ok      = $service->save_site_diagnosis( $user_id, $items );
 
         return new \WP_REST_Response( [ 'success' => $ok ] );
+    }
+
+    /**
+     * POST /aio/run-diagnosis — サイト診断を実行（クロール→解析→保存）
+     */
+    public function rest_run_aio_site_diagnosis( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( current_user_can( 'manage_options' ) && $request->get_param( 'user_id' ) ) {
+            $user_id = absint( $request->get_param( 'user_id' ) );
+        }
+
+        // レート制限（1時間に1回）
+        $lock_key = 'gcrev_diag_lock_' . $user_id;
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => '診断は1時間に1回のみ実行できます。しばらくお待ちください。',
+            ], 429 );
+        }
+        set_transient( $lock_key, 1, HOUR_IN_SECONDS );
+
+        // タイムアウト延長
+        @set_time_limit( 120 );
+
+        try {
+            $service = new Gcrev_AIO_Service( $this->config );
+            $result  = $service->run_site_diagnosis( $user_id );
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $result ] );
+        } catch ( \Throwable $e ) {
+            delete_transient( $lock_key );
+            error_log( '[GCREV][AIO] run_site_diagnosis error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => '診断中にエラーが発生しました: ' . esc_html( $e->getMessage() ),
+            ], 500 );
+        }
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
