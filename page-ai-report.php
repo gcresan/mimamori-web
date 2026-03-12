@@ -434,6 +434,25 @@ get_header();
 .air-diagnosis-cta__btn:hover { opacity: 0.9; }
 .air-diagnosis-cta__btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* 地点タグ */
+.air-location-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--mw-text-tertiary);
+}
+/* プロバイダー注記 */
+.air-provider-notes {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--mw-border-light);
+    font-size: 11px;
+    color: var(--mw-text-tertiary);
+    line-height: 1.6;
+}
+.air-provider-notes div { margin-bottom: 2px; }
+
 /* 空状態 */
 .air-empty {
     text-align: center;
@@ -487,6 +506,11 @@ get_header();
             <div class="air-summary-card__sub">診断 + 掲載結果から判定</div>
         </div>
         <div class="air-summary-card">
+            <div class="air-summary-card__label">基準地点</div>
+            <div class="air-summary-card__value" id="airLocationLabel" style="font-size:18px;">--</div>
+            <div class="air-summary-card__sub" id="airLocationSub"></div>
+        </div>
+        <div class="air-summary-card">
             <div class="air-summary-card__label">最終計測</div>
             <div class="air-summary-card__value" id="airLastFetched" style="font-size:18px;">--</div>
             <div class="air-summary-card__sub">
@@ -520,7 +544,7 @@ get_header();
         <div class="air-section__header">
             <div>
                 <h2 class="air-section__title">📋 AI掲載チェック</h2>
-                <div class="air-section__note">各AIで自社が言及されたかを確認できます</div>
+                <div class="air-section__note">各AIの回答内で自社が言及された傾向を確認できます（指定地点ベース・参考値）</div>
             </div>
         </div>
         <div id="airMentionContent">
@@ -533,7 +557,7 @@ get_header();
         <div class="air-section__header">
             <div>
                 <h2 class="air-section__title">👥 AI掲載傾向 — 競合比較</h2>
-                <div class="air-section__note">自社と一緒にAIで言及されやすい他社の傾向です（参考値）</div>
+                <div class="air-section__note" id="airCompetitorNote">自社と一緒にAIで言及されやすい他社の傾向です（参考値）</div>
             </div>
         </div>
         <div id="airCompetitorContent">
@@ -558,8 +582,8 @@ get_header();
     <div class="air-section" id="airRankingSection">
         <div class="air-section__header">
             <div>
-                <h2 class="air-section__title">📊 AI掲載ランキング <span class="air-beta-badge">β版・参考値</span></h2>
-                <div class="air-section__note">AIの回答内での言及傾向です。精度は参考程度としてご覧ください。</div>
+                <h2 class="air-section__title">📊 地点別AI掲載傾向 <span class="air-beta-badge">β版・参考値</span></h2>
+                <div class="air-section__note" id="airRankingNote">指定地点を基準にしたAIの言及傾向です。実際の結果はユーザーの位置情報や環境により変動します。</div>
             </div>
         </div>
         <div id="airRankingContent">
@@ -651,6 +675,19 @@ get_header();
             : '<span class="air-badge air-badge--none">--</span>';
 
         el('airLastFetched').textContent = s.last_fetched ? formatDate(s.last_fetched) : '未計測';
+
+        // 基準地点カード
+        el('airLocationLabel').textContent = s.location_label || '未設定';
+        var sourceMap = {
+            'auto_from_client_settings': 'クライアント設定から自動取得',
+            'keyword_text': 'キーワードから自動検出',
+            'client_settings': 'クライアント設定から取得',
+            'none': '地点補正なし'
+        };
+        el('airLocationSub').textContent = sourceMap[s.location_source] || '';
+        if (s.location_source === 'none' || !s.location_label) {
+            el('airLocationLabel').style.color = 'var(--mw-text-tertiary)';
+        }
     }
 
     // =========================================================
@@ -751,7 +788,11 @@ get_header();
         html += '<th>最終計測</th></tr></thead><tbody>';
 
         matrix.forEach(function(kw) {
-            html += '<tr><td>' + esc(kw.keyword) + '</td>';
+            html += '<tr><td>' + esc(kw.keyword);
+            if (kw.location_label) {
+                html += '<br><span class="air-location-tag">📍 ' + esc(kw.location_label) + '</span>';
+            }
+            html += '</td>';
             var lastFetched = null;
             PROVIDERS.forEach(function(p) {
                 var d = kw.providers[p] || { status: 'not_run', label: '未計測' };
@@ -771,6 +812,19 @@ get_header();
         });
 
         html += '</tbody></table></div>';
+
+        // プロバイダー注記
+        if (reportData.provider_notes) {
+            html += '<div class="air-provider-notes">';
+            PROVIDERS.forEach(function(p) {
+                if (reportData.provider_notes[p]) {
+                    html += '<div><strong>' + PROVIDER_LABELS[p] + ':</strong> '
+                        + esc(reportData.provider_notes[p]) + '</div>';
+                }
+            });
+            html += '</div>';
+        }
+
         container.innerHTML = html;
     }
 
@@ -781,6 +835,13 @@ get_header();
         var comp = reportData.competitors || {};
         var container = document.getElementById('airCompetitorContent');
         var competitors = comp.competitors || [];
+
+        // 地点ラベルを note に反映
+        var noteEl = document.getElementById('airCompetitorNote');
+        if (comp.location_label && noteEl) {
+            noteEl.textContent = '基準地点: ' + comp.location_label
+                + ' — 自社と一緒にAIで言及されやすい他社の傾向です（参考値）';
+        }
 
         if (competitors.length === 0) {
             container.innerHTML = '<div class="air-empty">計測データが不足しているため、競合比較を表示できません。</div>';
@@ -844,6 +905,13 @@ get_header();
     function renderRanking() {
         var matrix = reportData.mention_matrix || [];
         var container = document.getElementById('airRankingContent');
+
+        // 地点名をランキング note に反映
+        var rankNote = document.getElementById('airRankingNote');
+        var locLabel = reportData.summary && reportData.summary.location_label;
+        if (locLabel && rankNote) {
+            rankNote.textContent = locLabel + ' を基準にしたAIの言及傾向です。実際の結果はユーザーの位置情報や環境により変動します。';
+        }
 
         if (matrix.length === 0) {
             container.innerHTML = '<div class="air-empty">計測データがありません。</div>';

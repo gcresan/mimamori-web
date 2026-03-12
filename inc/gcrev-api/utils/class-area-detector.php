@@ -68,4 +68,24 @@ class Gcrev_Area_Detector {
 
         return null;
     }
+
+    /**
+     * テキストから市区町村名を検出する
+     *
+     * @param string $text 検索キーワード等のテキスト
+     * @return string|null 市区町村名（例：「松山市」「新宿区」）。未検出なら null
+     */
+    public static function detect_city( string $text ): ?string {
+        $t = trim( $text );
+        if ( $t === '' ) {
+            return null;
+        }
+
+        // 「○○市」「○○区」「○○町」「○○村」パターンを検出
+        if ( preg_match( '/([一-龥ぁ-んァ-ヶヶ]{1,6}[市区町村])/u', $t, $m ) ) {
+            return $m[1];
+        }
+
+        return null;
+    }
 }

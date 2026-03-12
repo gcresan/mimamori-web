@@ -519,6 +519,60 @@ PROMPT;
     }
 
     // =========================================================
+    // 地点コンテキスト解決
+    // =========================================================
+
+    /**
+     * キーワード＋ユーザー設定から地点コンテキストを解決する
+     *
+     * 優先順位:
+     *  1. キーワードから市区町村検出
+     *  2. キーワードから都道府県検出
+     *  3. クライアント設定から取得
+     *  4. 該当なし
+     *
+     * @param string $keyword  検索キーワード
+     * @param int    $user_id  ユーザーID
+     * @return array { label: string, source: string }
+     */
+    public function resolve_location_context( string $keyword, int $user_id ): array {
+        // 1. キーワードから市区町村検出
+        $city = Gcrev_Area_Detector::detect_city( $keyword );
+        if ( $city ) {
+            return [
+                'label'  => $city,
+                'source' => 'keyword_text',
+            ];
+        }
+
+        // 2. キーワードから都道府県検出
+        $pref = Gcrev_Area_Detector::detect( $keyword );
+        if ( $pref ) {
+            return [
+                'label'  => $pref,
+                'source' => 'keyword_text',
+            ];
+        }
+
+        // 3. クライアント設定から取得
+        if ( function_exists( 'gcrev_get_aio_default_location' ) ) {
+            $default = gcrev_get_aio_default_location( $user_id );
+            if ( ! empty( $default['location_label'] ) ) {
+                return [
+                    'label'  => $default['location_label'],
+                    'source' => 'client_settings',
+                ];
+            }
+        }
+
+        // 4. 該当なし
+        return [
+            'label'  => '',
+            'source' => 'none',
+        ];
+    }
+
+    // =========================================================
     // オーケストレーション
     // =========================================================
 
@@ -559,6 +613,9 @@ PROMPT;
         // 質問生成
         $questions = $this->generate_questions( $kw['keyword'], $area_label );
 
+        // 地点コンテキスト解決
+        $location_ctx = $this->resolve_location_context( $kw['keyword'], $user_id );
+
         $tz  = wp_timezone();
         $now = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
 
@@ -591,8 +648,8 @@ PROMPT;
                         "INSERT INTO {$results_table}
                          (user_id, keyword_id, provider, question, question_index,
                           raw_response, extracted_names, self_rank, self_score, is_mentioned,
-                          status, fetched_at, created_at)
-                         VALUES (%d, %d, %s, %s, %d, %s, %s, {$self_rank_sql}, {$self_score_sql}, %d, %s, %s, %s)
+                          status, location_label, location_source, fetched_at, created_at)
+                         VALUES (%d, %d, %s, %s, %d, %s, %s, {$self_rank_sql}, {$self_score_sql}, %d, %s, %s, %s, %s, %s)
                          ON DUPLICATE KEY UPDATE
                           raw_response = VALUES(raw_response),
                           extracted_names = VALUES(extracted_names),
@@ -600,6 +657,8 @@ PROMPT;
                           self_score = VALUES(self_score),
                           is_mentioned = VALUES(is_mentioned),
                           status = VALUES(status),
+                          location_label = VALUES(location_label),
+                          location_source = VALUES(location_source),
                           fetched_at = VALUES(fetched_at)",
                         $user_id,
                         $keyword_id,
@@ -610,6 +669,8 @@ PROMPT;
                         wp_json_encode( $result['names'], JSON_UNESCAPED_UNICODE ),
                         $result['is_mentioned'] ? 1 : 0,
                         $status,
+                        $location_ctx['label'],
+                        $location_ctx['source'],
                         $now,
                         $now
                     ) );
@@ -1116,6 +1177,11 @@ PROMPT;
             }
         }
 
+        // 地点情報
+        $default_location = function_exists( 'gcrev_get_aio_default_location' )
+            ? gcrev_get_aio_default_location( $user_id )
+            : [ 'location_type' => '', 'location_label' => '', 'location_source' => 'none' ];
+
         return [
             'summary' => [
                 'diagnosis_score'  => $diagnosis_score,
@@ -1124,11 +1190,19 @@ PROMPT;
                 'mention_total'    => $mention_stats['total'],
                 'priority'         => $priority,
                 'last_fetched'     => $mention_stats['last_fetched'],
+                'location_label'   => $default_location['location_label'],
+                'location_type'    => $default_location['location_type'],
+                'location_source'  => $default_location['location_source'],
             ],
             'diagnosis'      => $diagnosis,
             'mention_matrix' => $mention_matrix,
             'competitors'    => $competitors,
             'actions'        => $actions,
+            'provider_notes' => [
+                'chatgpt'   => '質問文に地域名を含めた一般傾向ベースの参考値',
+                'gemini'    => '質問文に地域名を含めた参考計測値',
+                'google_ai' => '地域コード指定によるSERP結果。地域文脈が考慮されています',
+            ],
         ];
     }
 
@@ -1160,7 +1234,7 @@ PROMPT;
         // 状態カラムが存在しない場合のフォールバック
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT keyword_id, provider, status, is_mentioned, self_rank, fetched_at,
-                    raw_response, extracted_names
+                    raw_response, extracted_names, location_label
              FROM {$results_table}
              WHERE user_id = %d AND keyword_id IN ({$placeholders})
              ORDER BY keyword_id, provider, question_index",
@@ -1172,9 +1246,10 @@ PROMPT;
         foreach ( $keywords as $kw ) {
             $kid = (int) $kw['id'];
             $entry = [
-                'keyword_id' => $kid,
-                'keyword'    => $kw['keyword'],
-                'providers'  => [],
+                'keyword_id'     => $kid,
+                'keyword'        => $kw['keyword'],
+                'location_label' => '',
+                'providers'      => [],
             ];
             foreach ( self::PROVIDERS as $p ) {
                 $entry['providers'][ $p ] = [
@@ -1194,6 +1269,11 @@ PROMPT;
             $p   = $row['provider'];
             if ( ! isset( $matrix[ $kid ]['providers'][ $p ] ) ) {
                 continue;
+            }
+
+            // 地点ラベルを最初に見つかった値で設定
+            if ( empty( $matrix[ $kid ]['location_label'] ) && ! empty( $row['location_label'] ) ) {
+                $matrix[ $kid ]['location_label'] = $row['location_label'];
             }
 
             $ref = &$matrix[ $kid ]['providers'][ $p ];
@@ -1263,6 +1343,15 @@ PROMPT;
                 unset( $ref['_rank_sum'], $ref['_rank_cnt'], $ref['_statuses'] );
             }
         }
+
+        // DB に location_label が未保存（legacy データ）の場合、キーワードテキストから解決
+        foreach ( $matrix as &$entry ) {
+            if ( empty( $entry['location_label'] ) ) {
+                $loc = $this->resolve_location_context( $entry['keyword'], $user_id );
+                $entry['location_label'] = $loc['label'];
+            }
+        }
+        unset( $entry );
 
         return array_values( $matrix );
     }
@@ -1556,11 +1645,17 @@ PROMPT;
             ];
         }
 
+        // 地点情報
+        $default_location = function_exists( 'gcrev_get_aio_default_location' )
+            ? gcrev_get_aio_default_location( $user_id )
+            : [ 'location_label' => '' ];
+
         return [
             'competitors'     => $competitors,
             'self_count'      => $self_count,
             'self_rate'       => $total_responses > 0 ? round( ( $self_count / $total_responses ) * 100, 0 ) : 0,
             'total_responses' => $total_responses,
+            'location_label'  => $default_location['location_label'],
         ];
     }
 

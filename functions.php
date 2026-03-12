@@ -4890,6 +4890,8 @@ function gcrev_aio_results_create_table(): void {
         self_score      DECIMAL(3,2) NULL,
         is_mentioned    TINYINT(1) NOT NULL DEFAULT 0,
         status          VARCHAR(30) NOT NULL DEFAULT 'not_run',
+        location_label  VARCHAR(100) NULL DEFAULT NULL,
+        location_source VARCHAR(30)  NULL DEFAULT NULL,
         fetched_at      DATETIME NOT NULL,
         created_at      DATETIME NOT NULL,
         PRIMARY KEY  (id),
@@ -4907,6 +4909,92 @@ function gcrev_aio_results_create_table(): void {
         $wpdb->query( "UPDATE {$table} SET status = 'success_not_mentioned' WHERE is_mentioned = 0 AND raw_response IS NOT NULL AND raw_response != '' AND status = 'not_run'" );
         update_option( 'gcrev_aio_status_migrated', 1 );
     }
+
+    // 地点情報の既存データマイグレーション（1回限り）
+    if ( ! get_option( 'gcrev_aio_location_migrated' ) ) {
+        $wpdb->query(
+            "UPDATE {$table} SET location_source = 'legacy'
+             WHERE location_source IS NULL AND raw_response IS NOT NULL AND raw_response != ''"
+        );
+        update_option( 'gcrev_aio_location_migrated', 1 );
+    }
+}
+
+/**
+ * AIO計測のデフォルト地点情報を取得
+ *
+ * user_meta `gcrev_aio_location` があればそれを返す。
+ * なければクライアント設定から自動生成する。
+ *
+ * @param int $user_id
+ * @return array { location_type, location_label, location_source }
+ */
+function gcrev_get_aio_default_location( int $user_id ): array {
+    // 手動設定があればそれを返す
+    $manual = get_user_meta( $user_id, 'gcrev_aio_location', true );
+    if ( is_string( $manual ) && $manual !== '' ) {
+        $decoded = json_decode( $manual, true );
+        if ( is_array( $decoded ) && ! empty( $decoded['location_label'] ) ) {
+            return [
+                'location_type'   => $decoded['location_type'] ?? 'custom',
+                'location_label'  => $decoded['location_label'],
+                'location_source' => $decoded['location_source'] ?? 'manual',
+            ];
+        }
+    }
+
+    // クライアント設定から自動生成
+    $settings  = gcrev_get_client_settings( $user_id );
+    $area_type = $settings['area_type'] ?? '';
+    $area_pref = $settings['area_pref'] ?? '';
+    $area_city = $settings['area_city'] ?? '';
+
+    if ( $area_type === 'city' && ! empty( $area_city ) ) {
+        $label = $area_city;
+        if ( mb_substr( $label, -1 ) !== '市' && mb_substr( $label, -1 ) !== '区'
+            && mb_substr( $label, -1 ) !== '町' && mb_substr( $label, -1 ) !== '村' ) {
+            $label .= '中心部';
+        } else {
+            $label .= '中心部';
+        }
+        return [
+            'location_type'   => 'city_center',
+            'location_label'  => $label,
+            'location_source' => 'auto_from_client_settings',
+        ];
+    }
+
+    if ( $area_type === 'prefecture' && ! empty( $area_pref ) ) {
+        return [
+            'location_type'   => 'prefecture',
+            'location_label'  => $area_pref,
+            'location_source' => 'auto_from_client_settings',
+        ];
+    }
+
+    if ( $area_type === 'custom' && ! empty( $settings['area_custom'] ?? '' ) ) {
+        return [
+            'location_type'   => 'custom',
+            'location_label'  => $settings['area_custom'],
+            'location_source' => 'auto_from_client_settings',
+        ];
+    }
+
+    // 全国 or 未設定
+    if ( ! empty( $area_pref ) ) {
+        // area_type は nationwide でも area_pref がある場合がある
+        return [
+            'location_type'   => 'prefecture',
+            'location_label'  => $area_pref,
+            'location_source' => 'auto_from_client_settings',
+        ];
+    }
+
+    return [
+        'location_type'   => 'nationwide',
+        'location_label'  => '全国',
+        'location_source' => 'auto_from_client_settings',
+    ];
 }
 
 // ----------------------------
