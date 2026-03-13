@@ -893,7 +893,7 @@ get_header();
                 showToast('SEO診断が完了しました');
             } else {
                 var msg = json.message || '診断に失敗しました';
-                console.error('[SEO] diagnosis failed:', json._httpStatus, msg, json);
+                alert('SEO診断エラー\nHTTP: ' + json._httpStatus + '\n' + JSON.stringify(json).substring(0, 300));
                 showToast(msg, true);
             }
         })
