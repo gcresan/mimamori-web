@@ -878,7 +878,9 @@ get_header();
             },
             credentials: 'same-origin'
         })
-        .then(function(res) { return res.json(); })
+        .then(function(res) {
+            return res.json().then(function(json) { json._httpStatus = res.status; return json; });
+        })
         .then(function(json) {
             hideProgress();
             if (json.success && json.data) {
@@ -886,7 +888,9 @@ get_header();
                 renderAll(json.data);
                 showToast('SEO診断が完了しました');
             } else {
-                showToast(json.message || '診断に失敗しました', true);
+                var msg = json.message || '診断に失敗しました';
+                console.error('[SEO] diagnosis failed:', json._httpStatus, msg);
+                showToast(msg, true);
             }
         })
         .catch(function(err) {

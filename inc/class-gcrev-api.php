@@ -11227,7 +11227,9 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => true, 'data' => $result ] );
         } catch ( \Throwable $e ) {
             // delete_transient( $lock_key );
-            error_log( '[GCREV][SEO] run_diagnosis error: ' . $e->getMessage() );
+            $err_detail = $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
+            error_log( '[GCREV][SEO] run_diagnosis error: ' . $err_detail );
+            file_put_contents( '/tmp/gcrev_seo_debug.log', date('Y-m-d H:i:s') . ' ' . $err_detail . "\n" . $e->getTraceAsString() . "\n", FILE_APPEND );
             return new \WP_REST_Response( [
                 'success' => false,
                 'message' => '診断中にエラーが発生しました: ' . esc_html( $e->getMessage() ),
