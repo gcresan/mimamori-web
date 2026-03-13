@@ -395,7 +395,7 @@ get_header();
 .seo-toast {
     position: fixed;
     bottom: 24px;
-    right: 24px;
+    left: 24px;
     padding: 12px 20px;
     border-radius: 10px;
     background: #1A2F33;
