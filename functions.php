@@ -773,6 +773,14 @@ if ( file_exists( $gcrev_aio_service ) ) {
 }
 
 // ========================================
+// Step8: SEO Checker（SEO対策）
+// ========================================
+$gcrev_seo_checker = $gcrev_modules_path . 'class-seo-checker.php';
+if ( file_exists( $gcrev_seo_checker ) ) {
+    require_once $gcrev_seo_checker;
+}
+
+// ========================================
 // 既存のAPIクラス（入口）は最後に読み込む
 // ========================================
 $gcrev_entry = $gcrev_inc_path . 'class-gcrev-api.php';

@@ -777,6 +777,20 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_save_aio_keyword_admin' ],
             'permission_callback' => function() { return current_user_can('manage_options'); },
         ]);
+
+        // =============================================
+        // SEO対策
+        // =============================================
+        register_rest_route('gcrev/v1', '/seo/report', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_seo_report' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/seo/run-diagnosis', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_run_seo_diagnosis' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
     }
 
     // =========================================================
@@ -11142,6 +11156,75 @@ PROMPT;
         } catch ( \Throwable $e ) {
             delete_transient( $lock_key );
             error_log( '[GCREV][AIO] run_site_diagnosis error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => '診断中にエラーが発生しました: ' . esc_html( $e->getMessage() ),
+            ], 500 );
+        }
+    }
+
+    // =========================================================
+    // SEO対策
+    // =========================================================
+
+    /**
+     * SEO診断結果を取得
+     */
+    public function rest_get_seo_report( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( current_user_can( 'manage_options' ) && $request->get_param( 'user_id' ) ) {
+            $user_id = absint( $request->get_param( 'user_id' ) );
+        }
+
+        try {
+            $checker = new Gcrev_SEO_Checker();
+            $data    = $checker->get_diagnosis( $user_id );
+            if ( ! $data ) {
+                return new \WP_REST_Response( [
+                    'success' => true,
+                    'data'    => null,
+                    'message' => 'まだ診断が実行されていません。',
+                ] );
+            }
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $data ] );
+        } catch ( \Throwable $e ) {
+            error_log( '[GCREV][SEO] get_report error: ' . $e->getMessage() );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => 'データ取得中にエラーが発生しました。',
+            ], 500 );
+        }
+    }
+
+    /**
+     * SEO診断を実行
+     */
+    public function rest_run_seo_diagnosis( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( current_user_can( 'manage_options' ) && $request->get_param( 'user_id' ) ) {
+            $user_id = absint( $request->get_param( 'user_id' ) );
+        }
+
+        // レート制限（1時間に1回）
+        $lock_key = 'gcrev_seo_diag_lock_' . $user_id;
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => 'SEO診断は1時間に1回のみ実行できます。しばらくお待ちください。',
+            ], 429 );
+        }
+        set_transient( $lock_key, 1, HOUR_IN_SECONDS );
+
+        // タイムアウト延長（クロールに時間がかかるため）
+        @set_time_limit( 180 );
+
+        try {
+            $checker = new Gcrev_SEO_Checker();
+            $result  = $checker->run_diagnosis( $user_id );
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $result ] );
+        } catch ( \Throwable $e ) {
+            delete_transient( $lock_key );
+            error_log( '[GCREV][SEO] run_diagnosis error: ' . $e->getMessage() );
             return new \WP_REST_Response( [
                 'success' => false,
                 'message' => '診断中にエラーが発生しました: ' . esc_html( $e->getMessage() ),

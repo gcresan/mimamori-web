@@ -508,203 +508,28 @@ get_header();
         <div id="seoFutureContent"></div>
     </div>
 
+    <!-- ===== 未診断時の表示 ===== -->
+    <div class="seo-section" id="seoEmptyState" style="display:none;">
+        <div style="text-align:center;padding:60px 20px;">
+            <div style="font-size:48px;margin-bottom:16px;">🔍</div>
+            <div style="font-size:16px;font-weight:600;color:var(--mw-text-heading);margin-bottom:8px;">まだSEO診断が実行されていません</div>
+            <div style="font-size:14px;color:var(--mw-text-secondary);margin-bottom:24px;">「診断する」ボタンを押すと、サイトのSEO状態をチェックします。</div>
+            <button class="seo-btn seo-btn--primary" onclick="window.runSeoCheck()" style="font-size:15px;padding:12px 28px;">
+                診断する
+            </button>
+        </div>
+    </div>
+
 </div><!-- .content-area -->
 
 <script>
 (function() {
     'use strict';
 
-    /* =================================================================
-       ダミーデータ
-       将来的に fetch('/wp-json/gcrev/v1/seo/report') に差し替え
-       ================================================================= */
-    var DUMMY_DATA = {
-        siteSummary: {
-            totalScore: 72,
-            rank: 'B',
-            criticalCount: 3,
-            warningCount: 9,
-            pageCount: 8,
-            lastCheckedAt: '2026/03/13 14:30'
-        },
+    var wpNonce = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
 
-        seoChecks: [
-            {
-                key: 'title_tag',
-                label: 'タイトルタグ',
-                score: 6,
-                maxScore: 10,
-                status: 'caution',
-                findings: [
-                    '重複したタイトルが2ページで見つかりました',
-                    '長すぎるタイトルが1ページあります（70文字超）',
-                    '主要キーワードを含むタイトルは概ね適切です'
-                ],
-                affectedUrls: ['/works/', '/member/']
-            },
-            {
-                key: 'meta_description',
-                label: 'メタディスクリプション',
-                score: 4,
-                maxScore: 10,
-                status: 'critical',
-                findings: [
-                    '未設定のページが3ページあります',
-                    '重複したdescriptionが2ページで見つかりました',
-                    '文字数が短すぎるページが1つあります'
-                ],
-                affectedUrls: ['/faq/', '/works/', '/member/', '/blog/']
-            },
-            {
-                key: 'heading_structure',
-                label: '見出し構造',
-                score: 7,
-                maxScore: 10,
-                status: 'caution',
-                findings: [
-                    'h1が未設定のページが1つあります',
-                    'h2の下にいきなりh4が使われている箇所があります',
-                    'トップページの見出し階層は適切です'
-                ],
-                affectedUrls: ['/blog/']
-            },
-            {
-                key: 'content_quality',
-                label: 'コンテンツ充実度',
-                score: 5,
-                maxScore: 10,
-                status: 'caution',
-                findings: [
-                    '文字数が500文字未満のページが2つあります',
-                    'サービス説明ページの内容が薄い可能性があります',
-                    'トップページ・実績ページは十分な情報量です'
-                ],
-                affectedUrls: ['/faq/', '/member/']
-            },
-            {
-                key: 'image_optimization',
-                label: '画像最適化',
-                score: 4,
-                maxScore: 10,
-                status: 'critical',
-                findings: [
-                    'alt属性が未設定の画像が7つあります',
-                    '1MB超の画像ファイルが3つ使用されています',
-                    'ファイル名が不適切な画像があります（IMG_001.jpg等）'
-                ],
-                affectedUrls: ['/works/', '/blog/', '/']
-            },
-            {
-                key: 'internal_links',
-                label: '内部リンク設計',
-                score: 6,
-                maxScore: 10,
-                status: 'caution',
-                findings: [
-                    '孤立しているページが1つあります（他ページからのリンクなし）',
-                    'サービスページから実績ページへの導線が不足しています',
-                    'パンくずリストは適切に設定されています'
-                ],
-                affectedUrls: ['/faq/']
-            },
-            {
-                key: 'url_structure',
-                label: 'URL・構造',
-                score: 8,
-                maxScore: 10,
-                status: 'ok',
-                findings: [
-                    'URLはシンプルで分かりやすい構成です',
-                    'カテゴリ構造は整理されています',
-                    'canonical設定は適切です'
-                ],
-                affectedUrls: []
-            },
-            {
-                key: 'indexing_technical',
-                label: 'インデックス制御・技術設定',
-                score: 9,
-                maxScore: 10,
-                status: 'ok',
-                findings: [
-                    'robots.txtは適切に設定されています',
-                    'sitemap.xmlが正しく配置されています',
-                    'SSL化が完了しています',
-                    'HTTPSリダイレクトが設定されています'
-                ],
-                affectedUrls: []
-            },
-            {
-                key: 'performance',
-                label: '表示速度・パフォーマンス',
-                score: 5,
-                maxScore: 10,
-                status: 'caution',
-                findings: [
-                    '画像の合計サイズが大きく、読み込みに影響しています',
-                    '未使用のCSSやJSが読み込まれている可能性があります',
-                    'キャッシュ設定は適切です'
-                ],
-                affectedUrls: ['/works/', '/']
-            },
-            {
-                key: 'structured_data',
-                label: '構造化データ',
-                score: 3,
-                maxScore: 10,
-                status: 'critical',
-                findings: [
-                    'Organization構造化データが未実装です',
-                    'FAQ構造化データが未実装です',
-                    'パンくずの構造化データは設定されています',
-                    'LocalBusiness構造化データの追加を推奨します'
-                ],
-                affectedUrls: ['/faq/', '/']
-            }
-        ],
-
-        overallAssessment: {
-            summary: 'サイト全体のSEO状態は72点（Bランク）です。技術的な基盤（SSL・robots.txt・sitemap等）は整っていますが、コンテンツ面（description・画像alt・構造化データ等）に複数の改善点が見つかりました。まずはdescriptionの設定と画像altの追加から着手すると、比較的少ない手間で大きな改善効果が期待できます。',
-            goodPoints: [
-                'SSL化・HTTPSリダイレクトが適切に設定されている',
-                'robots.txt・sitemap.xmlが正しく配置されている',
-                'URL構造がシンプルで分かりやすい',
-                'パンくずリストが適切に設定されている',
-                'トップページ・実績ページは十分な情報量がある'
-            ],
-            improvementPoints: [
-                'メタディスクリプションが未設定・重複しているページがある',
-                'alt属性が未設定の画像が多い',
-                '構造化データ（Organization・FAQ等）が未実装',
-                'サービスページのコンテンツ量が不足している',
-                '大きすぎる画像ファイルの最適化が必要'
-            ]
-        },
-
-        issuePages: [
-            { url: '/faq/', statusCode: 200, issueType: 'メタディスクリプション', issueDetail: 'descriptionが未設定', priority: 'high', suggestion: 'ページの内容を要約した80〜120文字のdescriptionを設定してください' },
-            { url: '/works/', statusCode: 200, issueType: 'タイトルタグ', issueDetail: 'タイトルが他ページと重複', priority: 'high', suggestion: '実績ページ固有のキーワードを含むタイトルに変更してください' },
-            { url: '/works/', statusCode: 200, issueType: '画像最適化', issueDetail: 'alt未設定の画像が4つ', priority: 'high', suggestion: '各画像に内容を説明するalt属性を追加してください' },
-            { url: '/member/', statusCode: 200, issueType: 'メタディスクリプション', issueDetail: 'descriptionが他ページと重複', priority: 'medium', suggestion: 'スタッフ紹介に特化したdescriptionに変更してください' },
-            { url: '/member/', statusCode: 200, issueType: 'コンテンツ充実度', issueDetail: '文字数が約350文字と少ない', priority: 'medium', suggestion: 'スタッフの専門性や実績など、内容を充実させてください' },
-            { url: '/blog/', statusCode: 200, issueType: '見出し構造', issueDetail: 'h1が未設定', priority: 'medium', suggestion: 'ブログ一覧ページにh1見出しを追加してください' },
-            { url: '/blog/', statusCode: 200, issueType: 'メタディスクリプション', issueDetail: 'descriptionが未設定', priority: 'medium', suggestion: 'ブログの概要を説明するdescriptionを設定してください' },
-            { url: '/', statusCode: 200, issueType: '構造化データ', issueDetail: 'Organization未実装', priority: 'medium', suggestion: 'トップページにOrganization構造化データを追加してください' },
-            { url: '/', statusCode: 200, issueType: '画像最適化', issueDetail: '1MB超の画像が2つ', priority: 'low', suggestion: '画像を圧縮・リサイズして読み込み速度を改善してください' },
-            { url: '/faq/', statusCode: 200, issueType: '内部リンク設計', issueDetail: '他ページからのリンクが少ない', priority: 'low', suggestion: 'サービスページやトップページからFAQへのリンクを追加してください' }
-        ],
-
-        recommendations: [
-            { title: 'メタディスクリプションの設定・修正', description: '未設定のページにdescriptionを追加し、重複しているページは固有の内容に書き換えてください。検索結果のクリック率向上に直結します。', priority: 'high' },
-            { title: '画像alt属性の追加', description: 'alt属性が未設定の画像7つに、画像の内容を説明するテキストを追加してください。アクセシビリティとSEOの両方に効果があります。', priority: 'high' },
-            { title: '構造化データの実装', description: 'Organization・FAQ・LocalBusinessなどの構造化データを追加してください。検索結果でリッチスニペットが表示される可能性が高まります。', priority: 'high' },
-            { title: 'タイトルタグの重複解消', description: '重複しているタイトルを、各ページ固有の内容に修正してください。ページごとの検索順位向上が期待できます。', priority: 'medium' },
-            { title: 'コンテンツの拡充', description: '文字数が少ないページ（FAQ・メンバーページ等）の内容を充実させてください。専門性と情報量はSEO評価に大きく影響します。', priority: 'medium' },
-            { title: '画像ファイルの最適化', description: '1MB超の大きな画像を圧縮・リサイズしてください。表示速度の改善はユーザー体験とSEO評価の両方に効果があります。', priority: 'medium' },
-            { title: '内部リンクの強化', description: 'サービスページから実績ページへの導線、トップページからFAQへのリンクなど、関連ページ間の内部リンクを追加してください。', priority: 'low' },
-            { title: '見出し構造の整理', description: 'h1が未設定のページに見出しを追加し、h2→h4のような階層の飛びを修正してください。', priority: 'low' }
-        ]
-    };
+    // セクション要素ID
+    var SECTION_IDS = ['seoSummary','seoDiagnosisSection','seoAssessmentSection','seoIssuesSection','seoActionsSection','seoFutureSection'];
 
     /* =================================================================
        ユーティリティ
@@ -720,7 +545,7 @@ get_header();
         var el = document.getElementById('seoToast');
         el.textContent = msg;
         el.className = 'seo-toast active' + (isError ? ' seo-toast--error' : '');
-        setTimeout(function() { el.className = 'seo-toast'; }, 3000);
+        setTimeout(function() { el.className = 'seo-toast'; }, 4000);
     }
 
     function showProgress(msg) {
@@ -745,15 +570,45 @@ get_header();
     }
 
     var STATUS_ICONS = { ok: '✓', caution: '△', critical: '✕' };
-    var STATUS_LABELS = { ok: '良好', caution: '要改善', critical: '要対応' };
     var PRIORITY_LABELS = { high: '高', medium: '中', low: '低' };
 
+    function showSections(visible) {
+        SECTION_IDS.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = visible ? '' : 'none';
+        });
+        var empty = document.getElementById('seoEmptyState');
+        if (empty) empty.style.display = visible ? 'none' : '';
+    }
+
     /* =================================================================
-       初期化
+       初期化 — APIからデータ取得
        ================================================================= */
     document.addEventListener('DOMContentLoaded', function() {
-        renderAll(DUMMY_DATA);
+        fetchReport();
     });
+
+    function fetchReport() {
+        showSections(false);
+        fetch('/wp-json/gcrev/v1/seo/report', {
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success && json.data) {
+                showSections(true);
+                renderAll(json.data);
+            } else {
+                // 未診断
+                showSections(false);
+            }
+        })
+        .catch(function(err) {
+            console.error('[SEO]', err);
+            showSections(false);
+        });
+    }
 
     function renderAll(data) {
         renderSummary(data.siteSummary);
@@ -773,12 +628,11 @@ get_header();
         var offset = circumference - (s.totalScore / 100) * circumference;
 
         var html = '';
-        // スコアカード（リング表示）
         html += '<div class="seo-summary-card">';
         html += '  <div class="seo-summary-card__label">SEO総合スコア</div>';
         html += '  <div class="seo-score-ring">';
         html += '    <svg width="80" height="80" viewBox="0 0 80 80">';
-        html += '      <circle cx="40" cy="40" r="36" stroke="' + 'var(--mw-border-light)' + '" stroke-width="6" fill="none"/>';
+        html += '      <circle cx="40" cy="40" r="36" stroke="var(--mw-border-light)" stroke-width="6" fill="none"/>';
         html += '      <circle cx="40" cy="40" r="36" stroke="' + esc(scoreColor) + '" stroke-width="6" fill="none"';
         html += '        stroke-dasharray="' + circumference + '" stroke-dashoffset="' + offset + '" stroke-linecap="round"/>';
         html += '    </svg>';
@@ -787,33 +641,29 @@ get_header();
         html += '  <div><span class="seo-rank-label seo-rank-label--' + esc(s.rank) + '">' + esc(s.rank) + 'ランク</span></div>';
         html += '</div>';
 
-        // 致命的な問題
         html += '<div class="seo-summary-card">';
         html += '  <div class="seo-summary-card__label">致命的な問題</div>';
         html += '  <div class="seo-summary-card__value seo-summary-card__value--critical">' + esc(s.criticalCount) + '<span style="font-size:16px;font-weight:400;">件</span></div>';
         html += '  <div class="seo-summary-card__sub">早急に対応が必要</div>';
         html += '</div>';
 
-        // 要改善
         html += '<div class="seo-summary-card">';
         html += '  <div class="seo-summary-card__label">要改善項目</div>';
         html += '  <div class="seo-summary-card__value seo-summary-card__value--warning">' + esc(s.warningCount) + '<span style="font-size:16px;font-weight:400;">件</span></div>';
         html += '  <div class="seo-summary-card__sub">改善でスコアアップが期待</div>';
         html += '</div>';
 
-        // 対象ページ
         html += '<div class="seo-summary-card">';
         html += '  <div class="seo-summary-card__label">診断対象ページ</div>';
         html += '  <div class="seo-summary-card__value">' + esc(s.pageCount) + '<span style="font-size:16px;font-weight:400;">ページ</span></div>';
         html += '  <div class="seo-summary-card__sub">クロール済みページ数</div>';
         html += '</div>';
 
-        // 最終診断
         html += '<div class="seo-summary-card">';
         html += '  <div class="seo-summary-card__label">最終診断日時</div>';
         html += '  <div class="seo-summary-card__value" style="font-size:18px;">' + esc(s.lastCheckedAt) + '</div>';
         html += '  <div class="seo-summary-card__sub">';
-        html += '    <button class="seo-btn seo-btn--primary" onclick="window.runSeoCheck()" style="margin-top:8px;font-size:13px;padding:6px 14px;">診断する</button>';
+        html += '    <button class="seo-btn seo-btn--primary" onclick="window.runSeoCheck()" style="margin-top:8px;font-size:13px;padding:6px 14px;">再診断する</button>';
         html += '  </div>';
         html += '</div>';
 
@@ -837,19 +687,14 @@ get_header();
             html += '    <div class="seo-diagnosis-item__score" style="color:' + scoreColor + '">' + esc(c.score) + ' / ' + esc(c.maxScore) + '</div>';
 
             if (c.findings && c.findings.length) {
-                html += '    <ul class="seo-diagnosis-item__findings">';
-                c.findings.forEach(function(f) {
-                    html += '      <li>' + esc(f) + '</li>';
-                });
-                html += '    </ul>';
+                html += '<ul class="seo-diagnosis-item__findings">';
+                c.findings.forEach(function(f) { html += '<li>' + esc(f) + '</li>'; });
+                html += '</ul>';
             }
-
             if (c.affectedUrls && c.affectedUrls.length) {
-                html += '    <div class="seo-diagnosis-item__urls">対象: ' + c.affectedUrls.map(function(u) { return esc(u); }).join(', ') + '</div>';
+                html += '<div class="seo-diagnosis-item__urls">対象: ' + c.affectedUrls.map(function(u) { return esc(u); }).join(', ') + '</div>';
             }
-
-            html += '  </div>';
-            html += '</div>';
+            html += '  </div></div>';
         });
         document.getElementById('seoDiagnosisGrid').innerHTML = html;
     }
@@ -858,29 +703,19 @@ get_header();
        Section 3: 全体評価
        ================================================================= */
     function renderAssessment(a) {
-        var html = '';
-        html += '<div class="seo-assessment">';
-        html += '  <div class="seo-assessment__summary">' + esc(a.summary) + '</div>';
+        var html = '<div class="seo-assessment">';
+        html += '<div class="seo-assessment__summary">' + esc(a.summary) + '</div>';
 
-        html += '  <div class="seo-assessment__group">';
-        html += '    <div class="seo-assessment__group-title">👍 良いところ</div>';
-        html += '    <ul class="seo-assessment__list seo-assessment__list--good">';
-        a.goodPoints.forEach(function(p) {
-            html += '      <li>' + esc(p) + '</li>';
-        });
-        html += '    </ul>';
-        html += '  </div>';
+        html += '<div class="seo-assessment__group"><div class="seo-assessment__group-title">👍 良いところ</div>';
+        html += '<ul class="seo-assessment__list seo-assessment__list--good">';
+        a.goodPoints.forEach(function(p) { html += '<li>' + esc(p) + '</li>'; });
+        html += '</ul></div>';
 
-        html += '  <div class="seo-assessment__group">';
-        html += '    <div class="seo-assessment__group-title">👎 改善が必要なところ</div>';
-        html += '    <ul class="seo-assessment__list seo-assessment__list--improve">';
-        a.improvementPoints.forEach(function(p) {
-            html += '      <li>' + esc(p) + '</li>';
-        });
-        html += '    </ul>';
-        html += '  </div>';
+        html += '<div class="seo-assessment__group"><div class="seo-assessment__group-title">👎 改善が必要なところ</div>';
+        html += '<ul class="seo-assessment__list seo-assessment__list--improve">';
+        a.improvementPoints.forEach(function(p) { html += '<li>' + esc(p) + '</li>'; });
+        html += '</ul></div></div>';
 
-        html += '</div>';
         document.getElementById('seoAssessmentContent').innerHTML = html;
     }
 
@@ -892,27 +727,18 @@ get_header();
             document.getElementById('seoIssuesContent').innerHTML = '<div class="seo-empty">問題は検出されませんでした</div>';
             return;
         }
-
-        var html = '<table class="seo-issues-table">';
-        html += '<thead><tr>';
-        html += '  <th>URL</th>';
-        html += '  <th>問題カテゴリ</th>';
-        html += '  <th>問題内容</th>';
-        html += '  <th>重要度</th>';
-        html += '  <th>改善候補</th>';
-        html += '</tr></thead>';
-        html += '<tbody>';
-
+        var html = '<table class="seo-issues-table"><thead><tr>';
+        html += '<th>URL</th><th>問題カテゴリ</th><th>問題内容</th><th>重要度</th><th>改善候補</th>';
+        html += '</tr></thead><tbody>';
         pages.forEach(function(p) {
             html += '<tr>';
-            html += '  <td class="seo-url-cell" title="' + esc(p.url) + '">' + esc(p.url) + '</td>';
-            html += '  <td>' + esc(p.issueType) + '</td>';
-            html += '  <td>' + esc(p.issueDetail) + '</td>';
-            html += '  <td><span class="seo-priority-badge seo-priority-badge--' + esc(p.priority) + '">' + esc(PRIORITY_LABELS[p.priority] || p.priority) + '</span></td>';
-            html += '  <td style="font-size:12px;color:var(--mw-text-secondary);max-width:250px;">' + esc(p.suggestion) + '</td>';
+            html += '<td class="seo-url-cell" title="' + esc(p.url) + '">' + esc(p.url) + '</td>';
+            html += '<td>' + esc(p.issueType) + '</td>';
+            html += '<td>' + esc(p.issueDetail) + '</td>';
+            html += '<td><span class="seo-priority-badge seo-priority-badge--' + esc(p.priority) + '">' + esc(PRIORITY_LABELS[p.priority] || p.priority) + '</span></td>';
+            html += '<td style="font-size:12px;color:var(--mw-text-secondary);max-width:250px;">' + esc(p.suggestion) + '</td>';
             html += '</tr>';
         });
-
         html += '</tbody></table>';
         document.getElementById('seoIssuesContent').innerHTML = html;
     }
@@ -925,21 +751,18 @@ get_header();
             document.getElementById('seoActionsContent').innerHTML = '<div class="seo-empty">提案はありません</div>';
             return;
         }
-
         var priorityOrder = { high: 0, medium: 1, low: 2 };
         var sorted = recs.slice().sort(function(a, b) {
             return (priorityOrder[a.priority] || 9) - (priorityOrder[b.priority] || 9);
         });
-
         var html = '<div class="seo-actions-list">';
         sorted.forEach(function(r) {
             html += '<div class="seo-action-card seo-action-card--' + esc(r.priority) + '">';
-            html += '  <div class="seo-action-card__priority seo-action-card__priority--' + esc(r.priority) + '">' + esc(PRIORITY_LABELS[r.priority] || '?') + '</div>';
-            html += '  <div class="seo-action-card__body">';
-            html += '    <div class="seo-action-card__title">' + esc(r.title) + '</div>';
-            html += '    <div class="seo-action-card__desc">' + esc(r.description) + '</div>';
-            html += '  </div>';
-            html += '</div>';
+            html += '<div class="seo-action-card__priority seo-action-card__priority--' + esc(r.priority) + '">' + esc(PRIORITY_LABELS[r.priority] || '?') + '</div>';
+            html += '<div class="seo-action-card__body">';
+            html += '<div class="seo-action-card__title">' + esc(r.title) + '</div>';
+            html += '<div class="seo-action-card__desc">' + esc(r.description) + '</div>';
+            html += '</div></div>';
         });
         html += '</div>';
         document.getElementById('seoActionsContent').innerHTML = html;
@@ -956,14 +779,13 @@ get_header();
             { icon: '📈', title: '月次推移', desc: 'SEOスコアの推移を月ごとに追跡' },
             { icon: '🔄', title: '改善前後比較', desc: '改善施策の効果をビフォーアフターで確認' }
         ];
-
         var html = '<div class="seo-future-grid">';
         items.forEach(function(item) {
             html += '<div class="seo-future-card">';
-            html += '  <div class="seo-future-card__icon">' + item.icon + '</div>';
-            html += '  <div class="seo-future-card__title">' + esc(item.title) + '</div>';
-            html += '  <div class="seo-future-card__desc">' + esc(item.desc) + '</div>';
-            html += '  <span class="seo-coming-badge">準備中</span>';
+            html += '<div class="seo-future-card__icon">' + item.icon + '</div>';
+            html += '<div class="seo-future-card__title">' + esc(item.title) + '</div>';
+            html += '<div class="seo-future-card__desc">' + esc(item.desc) + '</div>';
+            html += '<span class="seo-coming-badge">準備中</span>';
             html += '</div>';
         });
         html += '</div>';
@@ -971,15 +793,34 @@ get_header();
     }
 
     /* =================================================================
-       診断実行（将来API接続用）
+       診断実行 — POST /wp-json/gcrev/v1/seo/run-diagnosis
        ================================================================= */
     window.runSeoCheck = function() {
-        showProgress('SEO診断を実行中...');
-        // 将来的に POST /wp-json/gcrev/v1/seo/run-diagnosis に差し替え
-        setTimeout(function() {
+        showProgress('SEO診断を実行中... サイトをクロールしています。しばらくお待ちください。');
+        fetch('/wp-json/gcrev/v1/seo/run-diagnosis', {
+            method: 'POST',
+            headers: {
+                'X-WP-Nonce': wpNonce,
+                'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
             hideProgress();
-            showToast('診断機能は現在準備中です。今後のアップデートで対応予定です。');
-        }, 1500);
+            if (json.success && json.data) {
+                showSections(true);
+                renderAll(json.data);
+                showToast('SEO診断が完了しました');
+            } else {
+                showToast(json.message || '診断に失敗しました', true);
+            }
+        })
+        .catch(function(err) {
+            hideProgress();
+            console.error('[SEO]', err);
+            showToast('通信エラーが発生しました', true);
+        });
     };
 
 })();
