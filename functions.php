@@ -777,7 +777,11 @@ if ( file_exists( $gcrev_aio_service ) ) {
 // ========================================
 $gcrev_seo_checker = $gcrev_modules_path . 'class-seo-checker.php';
 if ( file_exists( $gcrev_seo_checker ) ) {
-    require_once $gcrev_seo_checker;
+    try {
+        require_once $gcrev_seo_checker;
+    } catch ( \Throwable $e ) {
+        file_put_contents( '/tmp/gcrev_seo_load_error.log', date('Y-m-d H:i:s') . ' ' . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n", FILE_APPEND );
+    }
 }
 
 // ========================================
