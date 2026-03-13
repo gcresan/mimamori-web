@@ -878,13 +878,7 @@ get_header();
             },
             credentials: 'same-origin'
         })
-        .then(function(res) {
-            return res.text().then(function(text) {
-                console.log('[SEO] raw response (status ' + res.status + '):', text.substring(0, 500));
-                try { var json = JSON.parse(text); json._httpStatus = res.status; return json; }
-                catch(e) { return { success: false, message: 'JSONパースエラー: ' + text.substring(0, 200), _httpStatus: res.status }; }
-            });
-        })
+        .then(function(res) { return res.json(); })
         .then(function(json) {
             hideProgress();
             if (json.success && json.data) {
@@ -892,9 +886,7 @@ get_header();
                 renderAll(json.data);
                 showToast('SEO診断が完了しました');
             } else {
-                var msg = json.message || '診断に失敗しました';
-                alert('SEO診断エラー\nHTTP: ' + json._httpStatus + '\n' + JSON.stringify(json).substring(0, 300));
-                showToast(msg, true);
+                showToast(json.message || '診断に失敗しました', true);
             }
         })
         .catch(function(err) {

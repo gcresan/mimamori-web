@@ -791,20 +791,6 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_run_seo_diagnosis' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
-        // デバッグ用（一時的）
-        register_rest_route('gcrev/v1', '/seo/debug', [
-            'methods'             => 'GET',
-            'callback'            => function() {
-                return new \WP_REST_Response([
-                    'seo_checker_exists' => class_exists('Gcrev_SEO_Checker'),
-                    'php_version'        => PHP_VERSION,
-                    'memory_usage'       => memory_get_usage(true),
-                    'memory_peak'        => memory_get_peak_usage(true),
-                    'routes_registered'  => true,
-                ]);
-            },
-            'permission_callback' => [ $this->config, 'check_permission' ],
-        ]);
     }
 
     // =========================================================
@@ -11235,15 +11221,19 @@ PROMPT;
 
         try {
             $checker = new Gcrev_SEO_Checker();
-            $checker->run_diagnosis( $user_id );
+            $run_data = $checker->run_diagnosis( $user_id );
             // 比較データ付きで返す
             $result = $checker->get_diagnosis( $user_id );
+            // get_diagnosis が null の場合は run_diagnosis の結果を直接返す
+            if ( ! $result ) {
+                $run_data['comparison']   = null;
+                $run_data['historyCount'] = 0;
+                $result = $run_data;
+            }
             return new \WP_REST_Response( [ 'success' => true, 'data' => $result ] );
         } catch ( \Throwable $e ) {
             // delete_transient( $lock_key );
-            $err_detail = $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
-            error_log( '[GCREV][SEO] run_diagnosis error: ' . $err_detail );
-            file_put_contents( '/tmp/gcrev_seo_debug.log', date('Y-m-d H:i:s') . ' ' . $err_detail . "\n" . $e->getTraceAsString() . "\n", FILE_APPEND );
+            error_log( '[GCREV][SEO] run_diagnosis error: ' . $e->getMessage() );
             return new \WP_REST_Response( [
                 'success' => false,
                 'message' => '診断中にエラーが発生しました: ' . esc_html( $e->getMessage() ),

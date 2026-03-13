@@ -135,6 +135,9 @@ class Gcrev_SEO_Checker {
      * 診断結果を履歴として保存
      */
     public function save_diagnosis( int $user_id, array $data ): void {
+        // 不正UTF-8をサニタイズ
+        $data = $this->sanitize_utf8_recursive( $data );
+
         // 既存の履歴を読み込み
         $history = [];
         $raw = get_user_meta( $user_id, self::META_KEY_HISTORY, true );
@@ -165,18 +168,40 @@ class Gcrev_SEO_Checker {
             'history' => $history,
         ];
 
-        update_user_meta(
-            $user_id,
-            self::META_KEY_HISTORY,
-            wp_json_encode( $envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES )
-        );
+        $json_history = wp_json_encode( $envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+        $json_latest  = wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
-        // レガシーキーにも最新結果を保存（後方互換）
-        update_user_meta(
-            $user_id,
-            self::META_KEY,
-            wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES )
-        );
+        // エンコード失敗時はINVALID_UTF8_SUBSTITUTEで再試行
+        if ( $json_history === false ) {
+            $json_history = wp_json_encode( $envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE );
+        }
+        if ( $json_latest === false ) {
+            $json_latest = wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE );
+        }
+
+        if ( $json_history !== false ) {
+            update_user_meta( $user_id, self::META_KEY_HISTORY, $json_history );
+        }
+        if ( $json_latest !== false ) {
+            update_user_meta( $user_id, self::META_KEY, $json_latest );
+        }
+    }
+
+    /**
+     * 配列内の文字列を再帰的にUTF-8サニタイズ
+     */
+    private function sanitize_utf8_recursive( $value ) {
+        if ( is_string( $value ) ) {
+            // 不正なUTF-8バイトを除去
+            $value = mb_convert_encoding( $value, 'UTF-8', 'UTF-8' );
+            return $value;
+        }
+        if ( is_array( $value ) ) {
+            foreach ( $value as $k => $v ) {
+                $value[ $k ] = $this->sanitize_utf8_recursive( $v );
+            }
+        }
+        return $value;
     }
 
     /* =========================================================
