@@ -11205,15 +11205,16 @@ PROMPT;
             $user_id = absint( $request->get_param( 'user_id' ) );
         }
 
-        // レート制限（1時間に1回）
+        // レート制限（テスト中のため一時無効化）
         $lock_key = 'gcrev_seo_diag_lock_' . $user_id;
-        if ( get_transient( $lock_key ) ) {
-            return new \WP_REST_Response( [
-                'success' => false,
-                'message' => 'SEO診断は1時間に1回のみ実行できます。しばらくお待ちください。',
-            ], 429 );
-        }
-        set_transient( $lock_key, 1, HOUR_IN_SECONDS );
+        delete_transient( $lock_key ); // 既存ロック解除
+        // if ( get_transient( $lock_key ) ) {
+        //     return new \WP_REST_Response( [
+        //         'success' => false,
+        //         'message' => 'SEO診断は1時間に1回のみ実行できます。しばらくお待ちください。',
+        //     ], 429 );
+        // }
+        // set_transient( $lock_key, 1, HOUR_IN_SECONDS );
 
         // タイムアウト延長（クロールに時間がかかるため）
         @set_time_limit( 180 );
@@ -11225,7 +11226,7 @@ PROMPT;
             $result = $checker->get_diagnosis( $user_id );
             return new \WP_REST_Response( [ 'success' => true, 'data' => $result ] );
         } catch ( \Throwable $e ) {
-            delete_transient( $lock_key );
+            // delete_transient( $lock_key );
             error_log( '[GCREV][SEO] run_diagnosis error: ' . $e->getMessage() );
             return new \WP_REST_Response( [
                 'success' => false,
