@@ -791,6 +791,20 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_run_seo_diagnosis' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        // デバッグ用（一時的）
+        register_rest_route('gcrev/v1', '/seo/debug', [
+            'methods'             => 'GET',
+            'callback'            => function() {
+                return new \WP_REST_Response([
+                    'seo_checker_exists' => class_exists('Gcrev_SEO_Checker'),
+                    'php_version'        => PHP_VERSION,
+                    'memory_usage'       => memory_get_usage(true),
+                    'memory_peak'        => memory_get_peak_usage(true),
+                    'routes_registered'  => true,
+                ]);
+            },
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
     }
 
     // =========================================================
