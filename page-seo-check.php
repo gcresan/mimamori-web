@@ -409,6 +409,40 @@ get_header();
 .seo-toast.active { opacity: 1; pointer-events: auto; }
 .seo-toast--error { background: #C95A4F; }
 
+/* 比較バー */
+.seo-comparison-bar {
+    display: flex;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--mw-bg-secondary);
+    border: 1px solid var(--mw-border-light);
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 13px;
+    color: var(--mw-text-secondary);
+    align-items: center;
+    flex-wrap: wrap;
+}
+.seo-comparison-bar__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* スコアデルタ */
+.seo-score-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+.seo-score-delta--up { color: #4E8A6B; }
+.seo-score-delta--down { color: #C95A4F; }
+.seo-score-delta--same { color: var(--mw-text-tertiary); }
+.seo-score-delta--sm { font-size: 11px; margin-top: 0; }
+
 /* 空状態 */
 .seo-empty {
     text-align: center;
@@ -452,6 +486,9 @@ get_header();
 
     <!-- ===== Section 1: サマリー ===== -->
     <div class="seo-summary-cards" id="seoSummary"></div>
+
+    <!-- ===== 前回比較バー ===== -->
+    <div id="seoComparisonBar" style="display:none;"></div>
 
     <!-- ===== Section 2: SEO診断カード一覧 ===== -->
     <div class="seo-section" id="seoDiagnosisSection">
@@ -529,7 +566,7 @@ get_header();
     var wpNonce = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
 
     // セクション要素ID
-    var SECTION_IDS = ['seoSummary','seoDiagnosisSection','seoAssessmentSection','seoIssuesSection','seoActionsSection','seoFutureSection'];
+    var SECTION_IDS = ['seoSummary','seoComparisonBar','seoDiagnosisSection','seoAssessmentSection','seoIssuesSection','seoActionsSection','seoFutureSection'];
 
     /* =================================================================
        ユーティリティ
@@ -569,6 +606,15 @@ get_header();
         return map[rank] || '#568184';
     }
 
+    function deltaHtml(delta, small) {
+        if (delta === null || delta === undefined || delta === 0) return '';
+        var cls = delta > 0 ? 'up' : 'down';
+        var arrow = delta > 0 ? '↑' : '↓';
+        var sign = delta > 0 ? '+' : '';
+        var sm = small ? ' seo-score-delta--sm' : '';
+        return '<span class="seo-score-delta seo-score-delta--' + cls + sm + '">' + arrow + sign + delta + '</span>';
+    }
+
     var STATUS_ICONS = { ok: '✓', caution: '△', critical: '✕' };
     var PRIORITY_LABELS = { high: '高', medium: '中', low: '低' };
 
@@ -600,7 +646,6 @@ get_header();
                 showSections(true);
                 renderAll(json.data);
             } else {
-                // 未診断
                 showSections(false);
             }
         })
@@ -611,8 +656,10 @@ get_header();
     }
 
     function renderAll(data) {
-        renderSummary(data.siteSummary);
-        renderDiagnosis(data.seoChecks);
+        var comp = data.comparison || null;
+        renderSummary(data.siteSummary, comp);
+        renderComparisonBar(comp);
+        renderDiagnosis(data.seoChecks, comp);
         renderAssessment(data.overallAssessment);
         renderIssues(data.issuePages);
         renderActions(data.recommendations);
@@ -620,9 +667,26 @@ get_header();
     }
 
     /* =================================================================
+       前回比較バー
+       ================================================================= */
+    function renderComparisonBar(comp) {
+        var el = document.getElementById('seoComparisonBar');
+        if (!el) return;
+        if (!comp) { el.style.display = 'none'; return; }
+        el.style.display = '';
+        var html = '<div class="seo-comparison-bar">';
+        html += '<div class="seo-comparison-bar__item">📊 前回診断: ' + esc(comp.previousDate) + '</div>';
+        html += '<div class="seo-comparison-bar__item">スコア変動: ' + deltaHtml(comp.totalScoreDelta) + (comp.totalScoreDelta === 0 ? '<span class="seo-score-delta seo-score-delta--same">→ 変動なし</span>' : '') + '</div>';
+        html += '<div class="seo-comparison-bar__item" style="color:#4E8A6B;">改善: ' + esc(comp.improvedCount) + '項目</div>';
+        html += '<div class="seo-comparison-bar__item" style="color:#C95A4F;">悪化: ' + esc(comp.worsenedCount) + '項目</div>';
+        html += '</div>';
+        el.innerHTML = html;
+    }
+
+    /* =================================================================
        Section 1: サマリー
        ================================================================= */
-    function renderSummary(s) {
+    function renderSummary(s, comp) {
         var scoreColor = getRankColor(s.rank);
         var circumference = 2 * Math.PI * 36;
         var offset = circumference - (s.totalScore / 100) * circumference;
@@ -639,6 +703,9 @@ get_header();
         html += '    <span class="seo-score-ring__value" style="color:' + esc(scoreColor) + '">' + esc(s.totalScore) + '</span>';
         html += '  </div>';
         html += '  <div><span class="seo-rank-label seo-rank-label--' + esc(s.rank) + '">' + esc(s.rank) + 'ランク</span></div>';
+        if (comp && comp.totalScoreDelta !== null && comp.totalScoreDelta !== 0) {
+            html += '  <div>' + deltaHtml(comp.totalScoreDelta) + '点</div>';
+        }
         html += '</div>';
 
         html += '<div class="seo-summary-card">';
@@ -673,18 +740,26 @@ get_header();
     /* =================================================================
        Section 2: 診断カード一覧
        ================================================================= */
-    function renderDiagnosis(checks) {
+    function renderDiagnosis(checks, comp) {
+        var perCheck = (comp && comp.perCheck) ? comp.perCheck : {};
         var html = '';
         checks.forEach(function(c) {
             var iconClass = 'seo-diagnosis-item__icon--' + c.status;
             var icon = STATUS_ICONS[c.status] || '?';
             var scoreColor = getScoreColor(c.score, c.maxScore);
 
+            // per-check delta
+            var checkDelta = perCheck[c.key] ? perCheck[c.key].delta : null;
+
             html += '<div class="seo-diagnosis-item">';
             html += '  <div class="seo-diagnosis-item__icon ' + iconClass + '">' + esc(icon) + '</div>';
             html += '  <div class="seo-diagnosis-item__body">';
             html += '    <div class="seo-diagnosis-item__label">' + esc(c.label) + '</div>';
-            html += '    <div class="seo-diagnosis-item__score" style="color:' + scoreColor + '">' + esc(c.score) + ' / ' + esc(c.maxScore) + '</div>';
+            html += '    <div class="seo-diagnosis-item__score" style="color:' + scoreColor + '">' + esc(c.score) + ' / ' + esc(c.maxScore);
+            if (checkDelta !== null && checkDelta !== 0) {
+                html += ' ' + deltaHtml(checkDelta, true);
+            }
+            html += '</div>';
 
             if (c.findings && c.findings.length) {
                 html += '<ul class="seo-diagnosis-item__findings">';
@@ -775,9 +850,7 @@ get_header();
         var items = [
             { icon: '🗺️', title: '地域別SEO傾向', desc: '対象エリアでの検索順位や競合状況を確認' },
             { icon: '🏢', title: '競合サイト比較', desc: '競合他社のSEO状態との比較分析' },
-            { icon: '🔑', title: '重要キーワードの掲載状況', desc: '主要キーワードでの自社サイトの露出度' },
-            { icon: '📈', title: '月次推移', desc: 'SEOスコアの推移を月ごとに追跡' },
-            { icon: '🔄', title: '改善前後比較', desc: '改善施策の効果をビフォーアフターで確認' }
+            { icon: '🔑', title: '重要キーワードの掲載状況', desc: '主要キーワードでの自社サイトの露出度' }
         ];
         var html = '<div class="seo-future-grid">';
         items.forEach(function(item) {

@@ -11220,7 +11220,9 @@ PROMPT;
 
         try {
             $checker = new Gcrev_SEO_Checker();
-            $result  = $checker->run_diagnosis( $user_id );
+            $checker->run_diagnosis( $user_id );
+            // 比較データ付きで返す
+            $result = $checker->get_diagnosis( $user_id );
             return new \WP_REST_Response( [ 'success' => true, 'data' => $result ] );
         } catch ( \Throwable $e ) {
             delete_transient( $lock_key );
