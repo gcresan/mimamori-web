@@ -5233,13 +5233,15 @@ class Gcrev_Insight_API {
             'BUSINESS_BOOKINGS'                   => 'booking_clicks',
         ];
 
-        foreach (($api_response['multiDailyMetricTimeSeries'] ?? []) as $series) {
-            $metric_name = $series['dailyMetric'] ?? '';
-            $target_key  = $metric_map[$metric_name] ?? null;
-            if (!$target_key) continue;
+        foreach (($api_response['multiDailyMetricTimeSeries'] ?? []) as $multi) {
+            foreach (($multi['dailyMetricTimeSeries'] ?? []) as $series) {
+                $metric_name = $series['dailyMetric'] ?? '';
+                $target_key  = $metric_map[$metric_name] ?? null;
+                if (!$target_key) continue;
 
-            foreach (($series['dailyMetricTimeSeries']['timeSeries']['datedValues'] ?? []) as $dv) {
-                $totals[$target_key] += (int) ($dv['value'] ?? 0);
+                foreach (($series['timeSeries']['datedValues'] ?? []) as $dv) {
+                    $totals[$target_key] += (int) ($dv['value'] ?? 0);
+                }
             }
         }
 
@@ -5260,24 +5262,26 @@ class Gcrev_Insight_API {
             'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => 'map',
         ];
 
-        foreach (($api_response['multiDailyMetricTimeSeries'] ?? []) as $series) {
-            $metric_name = $series['dailyMetric'] ?? '';
-            $type        = $metric_type_map[$metric_name] ?? null;
-            if (!$type) continue;
+        foreach (($api_response['multiDailyMetricTimeSeries'] ?? []) as $multi) {
+            foreach (($multi['dailyMetricTimeSeries'] ?? []) as $series) {
+                $metric_name = $series['dailyMetric'] ?? '';
+                $type        = $metric_type_map[$metric_name] ?? null;
+                if (!$type) continue;
 
-            foreach (($series['dailyMetricTimeSeries']['timeSeries']['datedValues'] ?? []) as $dv) {
-                $date_obj = $dv['date'] ?? [];
-                $date_str = sprintf('%04d-%02d-%02d', $date_obj['year'] ?? 0, $date_obj['month'] ?? 0, $date_obj['day'] ?? 0);
-                $value    = (int) ($dv['value'] ?? 0);
+                foreach (($series['timeSeries']['datedValues'] ?? []) as $dv) {
+                    $date_obj = $dv['date'] ?? [];
+                    $date_str = sprintf('%04d-%02d-%02d', $date_obj['year'] ?? 0, $date_obj['month'] ?? 0, $date_obj['day'] ?? 0);
+                    $value    = (int) ($dv['value'] ?? 0);
 
-                if (!isset($daily[$date_str])) {
-                    $daily[$date_str] = ['date' => $date_str, 'search_impressions' => 0, 'map_impressions' => 0];
-                }
+                    if (!isset($daily[$date_str])) {
+                        $daily[$date_str] = ['date' => $date_str, 'search_impressions' => 0, 'map_impressions' => 0];
+                    }
 
-                if ($type === 'search') {
-                    $daily[$date_str]['search_impressions'] += $value;
-                } else {
-                    $daily[$date_str]['map_impressions'] += $value;
+                    if ($type === 'search') {
+                        $daily[$date_str]['search_impressions'] += $value;
+                    } else {
+                        $daily[$date_str]['map_impressions'] += $value;
+                    }
                 }
             }
         }
