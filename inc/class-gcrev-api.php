@@ -3756,58 +3756,69 @@ class Gcrev_Insight_API {
                 continue;
             }
 
-            $locations_url  = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/locations";
-            $locations_url .= '?' . http_build_query(['readMask' => 'name,title,storefrontAddress'], '', '&');
-
-            $locations_resp = wp_remote_get($locations_url, [
-                'headers' => ['Authorization' => 'Bearer ' . $access_token],
-                'timeout' => 30,
-            ]);
-
-            if (is_wp_error($locations_resp)) {
-                error_log("[GCREV][GBP] Locations API error for {$account_name}: " . $locations_resp->get_error_message());
-                continue;
-            }
-
-            $loc_status = wp_remote_retrieve_response_code($locations_resp);
-            if ($loc_status !== 200) {
-                $loc_body = wp_remote_retrieve_body($locations_resp);
-                error_log("[GCREV][GBP] Locations API HTTP {$loc_status} for {$account_name}: {$loc_body}");
-                continue;
-            }
-
-            $loc_data   = json_decode(wp_remote_retrieve_body($locations_resp), true);
-            $locations  = $loc_data['locations'] ?? [];
-
-            foreach ($locations as $loc) {
-                $loc_name = $loc['name'] ?? '';
-                if (empty($loc_name)) {
-                    continue;
+            // ページネーション対応でロケーション全件取得
+            $next_page_token = null;
+            do {
+                $query_params = ['readMask' => 'name,title,storefrontAddress', 'pageSize' => 100];
+                if ($next_page_token !== null) {
+                    $query_params['pageToken'] = $next_page_token;
                 }
 
-                // 住所を結合
-                $addr_parts = [];
-                $addr       = $loc['storefrontAddress'] ?? [];
-                if (!empty($addr['regionCode']) && $addr['regionCode'] !== 'JP') {
-                    $addr_parts[] = $addr['regionCode'];
-                }
-                if (!empty($addr['administrativeArea'])) {
-                    $addr_parts[] = $addr['administrativeArea'];
-                }
-                if (!empty($addr['locality'])) {
-                    $addr_parts[] = $addr['locality'];
-                }
-                foreach (($addr['addressLines'] ?? []) as $line) {
-                    $addr_parts[] = $line;
-                }
-                $address_str = implode('', $addr_parts);
+                $locations_url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/locations"
+                               . '?' . http_build_query($query_params, '', '&');
 
-                $all_locations[] = [
-                    'location_id' => $loc_name,
-                    'title'       => $loc['title'] ?? '',
-                    'address'     => $address_str,
-                ];
-            }
+                $locations_resp = wp_remote_get($locations_url, [
+                    'headers' => ['Authorization' => 'Bearer ' . $access_token],
+                    'timeout' => 30,
+                ]);
+
+                if (is_wp_error($locations_resp)) {
+                    error_log("[GCREV][GBP] Locations API error for {$account_name}: " . $locations_resp->get_error_message());
+                    break;
+                }
+
+                $loc_status = wp_remote_retrieve_response_code($locations_resp);
+                if ($loc_status !== 200) {
+                    $loc_body = wp_remote_retrieve_body($locations_resp);
+                    error_log("[GCREV][GBP] Locations API HTTP {$loc_status} for {$account_name}: {$loc_body}");
+                    break;
+                }
+
+                $loc_data   = json_decode(wp_remote_retrieve_body($locations_resp), true);
+                $locations  = $loc_data['locations'] ?? [];
+
+                foreach ($locations as $loc) {
+                    $loc_name = $loc['name'] ?? '';
+                    if (empty($loc_name)) {
+                        continue;
+                    }
+
+                    // 住所を結合
+                    $addr_parts = [];
+                    $addr       = $loc['storefrontAddress'] ?? [];
+                    if (!empty($addr['regionCode']) && $addr['regionCode'] !== 'JP') {
+                        $addr_parts[] = $addr['regionCode'];
+                    }
+                    if (!empty($addr['administrativeArea'])) {
+                        $addr_parts[] = $addr['administrativeArea'];
+                    }
+                    if (!empty($addr['locality'])) {
+                        $addr_parts[] = $addr['locality'];
+                    }
+                    foreach (($addr['addressLines'] ?? []) as $line) {
+                        $addr_parts[] = $line;
+                    }
+                    $address_str = implode('', $addr_parts);
+
+                    $all_locations[] = [
+                        'location_id' => $loc_name,
+                        'title'       => $loc['title'] ?? '',
+                        'address'     => $address_str,
+                    ];
+                }
+
+                $next_page_token = $loc_data['nextPageToken'] ?? null;
+            } while ($next_page_token !== null);
         }
 
         error_log("[GCREV][GBP] Found " . count($all_locations) . " location(s) for user_id={$user_id}");
