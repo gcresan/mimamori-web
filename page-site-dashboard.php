@@ -40,91 +40,26 @@ get_header();
 }
 
 /* --- KPI Summary Cards Grid --- */
+/* Uses shared .kpi-card styles from dashboard-redesign.css */
 .sd-kpi-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
     margin-bottom: 40px;
 }
-
-.sd-kpi-card {
-    background: var(--mw-bg-primary, #FFFFFF);
-    border: 1px solid var(--mw-border-light, #C3CED0);
-    border-radius: var(--mw-radius-md, 16px);
+.sd-kpi-grid .kpi-card {
     padding: 20px 24px;
-    transition: all 0.25s ease;
-    position: relative;
 }
-.sd-kpi-card:hover {
-    box-shadow: var(--mw-shadow-float, 0 8px 24px rgba(0,0,0,0.07));
-    border-color: var(--mw-border-medium, #AEBCBE);
-    transform: translateY(-1px);
-}
-
-.sd-kpi-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 12px;
-}
-
-.sd-kpi-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-.sd-kpi-label {
-    font-size: 13px;
-    color: var(--mw-text-secondary, #384D50);
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    line-height: 1.4;
-}
-
-.sd-kpi-value {
+.sd-kpi-grid .kpi-value {
     font-size: 32px;
-    font-weight: 700;
-    color: var(--mw-text-heading, #1A2F33);
-    letter-spacing: -0.02em;
-    line-height: 1.2;
-    margin-bottom: 6px;
 }
-
-.sd-kpi-change {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 4px 8px;
-    border-radius: 6px;
-}
-.sd-kpi-change.positive {
-    color: #4E8A6B;
-    background: rgba(82, 140, 90, 0.12);
-}
-.sd-kpi-change.negative {
-    color: #C95A4F;
-    background: rgba(201, 90, 79, 0.10);
-}
-.sd-kpi-change.neutral {
-    color: #666;
-    background: rgba(102, 102, 102, 0.08);
-}
-
-.sd-kpi-sparkline {
+.sd-kpi-grid .kpi-sparkline {
     margin-top: 10px;
     height: 32px;
     display: flex;
     align-items: center;
 }
-.sd-kpi-sparkline svg {
+.sd-kpi-grid .kpi-sparkline svg {
     width: 100%;
     height: 32px;
 }
@@ -354,7 +289,7 @@ get_header();
         grid-template-columns: repeat(2, 1fr);
         gap: 12px;
     }
-    .sd-kpi-value {
+    .sd-kpi-grid .kpi-value {
         font-size: 26px;
     }
     .sd-analysis-grid {
@@ -433,15 +368,15 @@ get_template_part('template-parts/period-selector');
     var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
     var homeUrl  = <?php echo wp_json_encode(esc_url(home_url('/'))); ?>;
 
-    // KPI定義
+    // KPI定義（月次レポートと同じ用語・説明）
     var kpiDefs = [
-        { key: 'pageViews',      dailyKey: 'pageViews',   trendKey: 'pageViews',      label: '見られた回数',         emoji: '👀', bg: 'rgba(86,129,132,0.10)',  color: '#568184', format: 'number' },
-        { key: 'sessions',       dailyKey: 'sessions',    trendKey: 'sessions',       label: '訪問数',               emoji: '🚶', bg: 'rgba(78,138,107,0.10)',  color: '#4E8A6B', format: 'number' },
-        { key: 'users',          dailyKey: 'users',       trendKey: 'users',          label: '見に来た人の数',       emoji: '👥', bg: 'rgba(122,163,166,0.12)', color: '#7AA3A6', format: 'number' },
-        { key: 'newUsers',       dailyKey: 'newUsers',    trendKey: 'newUsers',       label: 'はじめての人の数',     emoji: '🆕', bg: 'rgba(59,130,246,0.10)',  color: '#3B82F6', format: 'number' },
-        { key: 'returningUsers', dailyKey: 'returning',   trendKey: 'returningUsers', label: 'まえ来てくれた人',     emoji: '🔄', bg: 'rgba(168,139,91,0.12)', color: '#A68B5B', format: 'number' },
-        { key: 'avgDuration',    dailyKey: 'duration',    trendKey: 'avgDuration',    label: 'しっかり見られた時間', emoji: '⏱️', bg: 'rgba(201,168,76,0.10)',  color: '#C9A84C', format: 'duration' },
-        { key: 'conversions',    dailyKey: 'conversions', trendKey: 'conversions',    label: 'ゴール数',             emoji: '🎯', bg: 'rgba(78,138,107,0.12)', color: '#4E8A6B', format: 'number' },
+        { key: 'pageViews',      dailyKey: 'pageViews',   trendKey: 'pageViews',      label: '見られた回数',         term: 'ページビュー',   tip: 'ホームページの各ページが何回見られたかの合計です。同じ人が何ページも見ると、その分だけ数が増えます。', emoji: '👁️', bg: 'rgba(86,129,132,0.08)',  color: '#568184', format: 'number' },
+        { key: 'sessions',       dailyKey: 'sessions',    trendKey: 'sessions',       label: '訪問回数',             term: 'セッション',     tip: 'ホームページに誰かが来た回数です。1人が朝と夜に来たら「2回」とカウントされます。', emoji: '🎯', bg: 'rgba(212,168,66,0.12)', color: '#D4A842', format: 'number' },
+        { key: 'users',          dailyKey: 'users',       trendKey: 'users',          label: '見に来た人の数',       term: 'ユーザー',       tip: 'ホームページを見に来た人数です。同じ人が何回来ても「1人」としてカウントされます。', emoji: '👥', bg: 'rgba(78,138,107,0.10)', color: '#4E8A6B', format: 'number' },
+        { key: 'newUsers',       dailyKey: 'newUsers',    trendKey: 'newUsers',       label: 'はじめての人の数',     term: '新規ユーザー',   tip: 'この期間にはじめてホームページを訪れた人の数です。新しいお客様候補がどれだけ増えたかがわかります。', emoji: '✨', bg: 'rgba(122,163,166,0.10)', color: '#7AA3A6', format: 'number' },
+        { key: 'returningUsers', dailyKey: 'returning',   trendKey: 'returningUsers', label: 'また来てくれた人',     term: 'リピーター',     tip: '以前にもホームページを見たことがある人の数です。多いほど「また見たい」と思われている証拠です。', emoji: '🔁', bg: 'rgba(181,87,75,0.08)',   color: '#B5574B', format: 'number' },
+        { key: 'avgDuration',    dailyKey: 'duration',    trendKey: 'avgDuration',    label: 'しっかり見られた時間', term: '平均滞在時間',   tip: '訪問者がホームページに滞在した平均時間です。長いほど内容に興味を持って読んでもらえています。', emoji: '⏱️', bg: 'rgba(212,168,66,0.15)', color: '#C9A84C', format: 'duration' },
+        { key: 'conversions',    dailyKey: 'conversions', trendKey: 'conversions',    label: 'ゴール数',             term: 'コンバージョン', tip: 'お問い合わせや申込みなど、ホームページの目標が達成された回数です。この数が増えると、ホームページが成果につながっています。', emoji: '🎉', bg: 'rgba(78,138,107,0.10)', color: '#4E8A6B', format: 'number' },
     ];
 
     // デバイス名マッピング
@@ -597,8 +532,11 @@ get_template_part('template-parts/period-selector');
         return html;
     }
 
+    // ?ボタンSVG（月次レポートと同じ）
+    var infoBtnSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg>';
+
     // =============================================
-    // KPI カード描画
+    // KPI カード描画（月次レポートと同じ構造）
     // =============================================
     function renderKpiCards(data) {
         var grid = document.getElementById('sdKpiGrid');
@@ -626,18 +564,32 @@ get_template_part('template-parts/period-selector');
                 sparkHtml = renderSparkline(sparkData.values, def.color);
             }
 
-            html += '<div class="sd-kpi-card">' +
-                '<div class="sd-kpi-header">' +
-                    '<div class="sd-kpi-label">' + escapeHtml(def.label) + '</div>' +
-                    '<div class="sd-kpi-icon" style="background:' + def.bg + ';">' + def.emoji + '</div>' +
+            // 月次レポートと同じ .kpi-card 構造
+            html += '<div class="kpi-card">' +
+                '<div class="kpi-card-header">' +
+                    '<span class="kpi-title">' + escapeHtml(def.label) +
+                        ' <button type="button" class="kpi-info-btn" aria-label="説明を表示">' + infoBtnSvg + '</button>' +
+                        '<span class="kpi-term">（' + escapeHtml(def.term) + '）</span>' +
+                    '</span>' +
+                    '<div class="kpi-icon" style="background:' + def.bg + ';">' + def.emoji + '</div>' +
                 '</div>' +
-                '<div class="sd-kpi-value">' + displayVal + '</div>' +
-                '<div class="sd-kpi-change ' + trendClass + '">' + escapeHtml(trendText) + '</div>' +
-                (sparkHtml ? '<div class="sd-kpi-sparkline">' + sparkHtml + '</div>' : '') +
+                '<div class="kpi-info-tip">' + escapeHtml(def.tip) + '</div>' +
+                '<div class="kpi-value">' + displayVal + '</div>' +
+                '<div class="kpi-change ' + trendClass + '"><span>' + escapeHtml(trendText) + '</span></div>' +
+                '<div class="kpi-sparkline">' + sparkHtml + '</div>' +
             '</div>';
         }
 
         grid.innerHTML = html;
+
+        // ?ボタンのクリックイベント（月次レポートと同じ挙動）
+        grid.querySelectorAll('.kpi-info-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var card = btn.closest('.kpi-card');
+                if (card) card.classList.toggle('info-open');
+            });
+        });
     }
 
     // =============================================
