@@ -5233,27 +5233,109 @@ class Gcrev_Insight_API {
         string $access_token, string $location_id, int $months = 6
     ): array {
         $now = new \DateTimeImmutable('first day of last month', wp_timezone());
+        $start = $now->modify('-' . ($months - 1) . ' months');
 
-        $month_labels  = [];
-        $monthly_data  = []; // month_key => [keyword => impressions]
+        // 月ラベル生成
+        $month_labels = [];
+        for ($i = 0; $i < $months; $i++) {
+            $month_labels[] = $start->modify("+{$i} months")->format('Y/m');
+        }
 
-        for ($i = $months - 1; $i >= 0; $i--) {
-            $target = $now->modify("-{$i} months");
-            $month_key   = $target->format('Y/m');
-            $month_labels[] = $month_key;
+        // location_id 正規化
+        if (strpos($location_id, 'locations/') !== 0) {
+            $location_id = 'locations/' . $location_id;
+        }
 
-            $kw_data = $this->gbp_fetch_search_keywords(
-                $access_token,
-                $location_id,
-                $target->format('Y-m-01'),
-                $target->format('Y-m-t')
-            );
+        // 6ヶ月分を一括取得（ページネーション対応）
+        $url = "https://businessprofileperformance.googleapis.com/v1/{$location_id}/searchkeywords/impressions/monthly";
+        $base_params = [
+            'monthlyRange.startMonth.year'  => (int) $start->format('Y'),
+            'monthlyRange.startMonth.month' => (int) $start->format('n'),
+            'monthlyRange.endMonth.year'    => (int) $now->format('Y'),
+            'monthlyRange.endMonth.month'   => (int) $now->format('n'),
+            'pageSize'                      => 100,
+        ];
 
-            $map = [];
-            foreach ($kw_data as $kw) {
-                $map[$kw['keyword']] = $kw['impressions'];
+        $all_items = [];
+        $page_token = null;
+
+        do {
+            $params = $base_params;
+            if ($page_token) {
+                $params['pageToken'] = $page_token;
             }
-            $monthly_data[$month_key] = $map;
+
+            $response = wp_remote_get($url . '?' . http_build_query($params), [
+                'headers' => ['Authorization' => 'Bearer ' . $access_token],
+                'timeout' => 30,
+            ]);
+
+            if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+                $code = is_wp_error($response) ? $response->get_error_message() : wp_remote_retrieve_response_code($response);
+                file_put_contents('/tmp/gcrev_kw_debug.log',
+                    date('Y-m-d H:i:s') . " keywords_monthly_series ERROR: {$code}\n" .
+                    wp_remote_retrieve_body($response) . "\n",
+                    FILE_APPEND
+                );
+                break;
+            }
+
+            $result = json_decode(wp_remote_retrieve_body($response), true);
+            $items  = $result['searchKeywordsCounts'] ?? [];
+            $all_items = array_merge($all_items, $items);
+            $page_token = $result['nextPageToken'] ?? null;
+        } while ($page_token);
+
+        if (empty($all_items)) {
+            file_put_contents('/tmp/gcrev_kw_debug.log',
+                date('Y-m-d H:i:s') . " keywords_monthly_series: 0 items. params=" . wp_json_encode($base_params) . "\n",
+                FILE_APPEND
+            );
+            return ['months' => $month_labels, 'keywords' => []];
+        }
+
+        // キーワード×月ごとに集計
+        // API returns: searchKeywordsCounts[].searchKeyword, .insightsValue.value/.threshold
+        // Each item corresponds to one keyword for ONE month (the API returns
+        // separate entries per keyword per month within the range).
+        // しかし月情報がレスポンスに含まれない場合がある → 月単位でAPIを呼ぶフォールバック
+        $monthly_data = []; // month_key => [keyword => impressions]
+        foreach ($month_labels as $ml) {
+            $monthly_data[$ml] = [];
+        }
+
+        // Check if items have month info
+        $has_month_info = isset($all_items[0]['searchMonth']);
+
+        if ($has_month_info) {
+            // APIが月情報を返す場合
+            foreach ($all_items as $item) {
+                $kw = $item['searchKeyword'] ?? '';
+                $imp = (int) ($item['insightsValue']['value'] ?? $item['insightsValue']['threshold'] ?? 0);
+                $m = $item['searchMonth'] ?? [];
+                if (!empty($m['year']) && !empty($m['month'])) {
+                    $mk = sprintf('%04d/%02d', $m['year'], $m['month']);
+                    if (isset($monthly_data[$mk])) {
+                        $monthly_data[$mk][$kw] = ($monthly_data[$mk][$kw] ?? 0) + $imp;
+                    }
+                }
+            }
+        } else {
+            // 月情報がない場合 → 月別に個別APIコール
+            foreach ($month_labels as $ml) {
+                $parts = explode('/', $ml);
+                $y = (int) $parts[0];
+                $m = (int) $parts[1];
+                $month_start = sprintf('%04d-%02d-01', $y, $m);
+                $month_end   = date('Y-m-t', strtotime($month_start));
+
+                $kw_data = $this->gbp_fetch_search_keywords(
+                    $access_token, $location_id, $month_start, $month_end
+                );
+                foreach ($kw_data as $kw) {
+                    $monthly_data[$ml][$kw['keyword']] = $kw['impressions'];
+                }
+            }
         }
 
         // 全キーワードを集約
