@@ -833,7 +833,15 @@ get_header();
         document.getElementById('sv-q-label').value = '';
         qTypeSelect.value = 'checkbox';
         document.getElementById('sv-q-required').value = '1';
-        document.getElementById('sv-q-sort').value = '0';
+        // 新規追加時はリストの末尾に配置されるよう max sort_order + 10 をセット
+        var maxSort = 0;
+        var qContainer = document.getElementById('sv-questions-container');
+        if (qContainer && qContainer._questions) {
+            qContainer._questions.forEach(function(q) {
+                if (q.sort_order > maxSort) maxSort = q.sort_order;
+            });
+        }
+        document.getElementById('sv-q-sort').value = String(maxSort + 10);
         document.getElementById('sv-q-description').value = '';
         document.getElementById('sv-q-placeholder').value = '';
         document.getElementById('sv-q-options').value = '';
