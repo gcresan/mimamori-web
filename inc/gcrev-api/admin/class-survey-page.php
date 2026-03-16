@@ -486,10 +486,20 @@ class Gcrev_Survey_Page {
                 <?php if (empty($questions)): ?>
                     <p style="color:#94a3b8;">質問がまだありません。下の「質問を追加」フォームから追加してください。</p>
                 <?php else: ?>
+                    <style>
+                    #gcrev-questions-sortable tr { cursor: grab; }
+                    #gcrev-questions-sortable tr:active { cursor: grabbing; }
+                    #gcrev-questions-sortable tr.gcrev-drag-over { border-top: 3px solid #3b82f6; }
+                    .gcrev-drag-handle { color: #94a3b8; font-size: 18px; cursor: grab; user-select: none; }
+                    .gcrev-drag-handle:hover { color: #64748b; }
+                    .gcrev-sort-saving { color: #3b82f6; font-size: 13px; margin-left: 12px; }
+                    .gcrev-sort-saved { color: #059669; font-size: 13px; margin-left: 12px; }
+                    </style>
+                    <p style="font-size:13px;color:#64748b;margin-bottom:8px;">💡 行をドラッグして並び順を変更できます。変更は自動で保存されます。<span id="gcrev-sort-status"></span></p>
                     <table class="widefat striped" style="margin-bottom:24px;">
                         <thead>
                             <tr>
-                                <th style="width:40px;">順</th>
+                                <th style="width:40px;"></th>
                                 <th>質問文</th>
                                 <th style="width:100px;">タイプ</th>
                                 <th style="width:60px;">必須</th>
@@ -497,7 +507,7 @@ class Gcrev_Survey_Page {
                                 <th style="width:120px;">操作</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="gcrev-questions-sortable">
                         <?php foreach ($questions as $q):
                             $type_labels = ['textarea' => 'テキスト', 'radio' => 'ラジオ', 'checkbox' => 'チェック', 'text' => '一行テキスト', 'select' => 'セレクト'];
                             $type_label  = $type_labels[$q->type] ?? $q->type;
@@ -506,8 +516,8 @@ class Gcrev_Survey_Page {
                                 'survey_id' => $survey_id, 'question_id' => $q->id
                             ], admin_url('admin.php'));
                         ?>
-                            <tr <?php echo $q->is_active ? '' : 'style="opacity:0.5;"'; ?>>
-                                <td style="text-align:center;"><?php echo (int) $q->sort_order; ?></td>
+                            <tr data-question-id="<?php echo (int) $q->id; ?>" <?php echo $q->is_active ? '' : 'style="opacity:0.5;"'; ?>>
+                                <td style="text-align:center;"><span class="gcrev-drag-handle" title="ドラッグで並び替え">☰</span></td>
                                 <td><?php echo esc_html(mb_strimwidth($q->label, 0, 60, '...')); ?></td>
                                 <td><?php echo esc_html($type_label); ?></td>
                                 <td style="text-align:center;"><?php echo $q->required ? '必須' : '任意'; ?></td>
@@ -604,6 +614,113 @@ class Gcrev_Survey_Page {
             document.getElementById('options-field').style.display = show ? '' : 'none';
         }
         toggleOptionsField();
+
+        // ===== ドラッグ＆ドロップ並び替え =====
+        (function() {
+            var tbody = document.getElementById('gcrev-questions-sortable');
+            if (!tbody) return;
+
+            var surveyId = <?php echo (int) $survey_id; ?>;
+            var apiUrl   = <?php echo wp_json_encode(rest_url('gcrev/v1/survey/question/reorder')); ?>;
+            var dragRow  = null;
+
+            tbody.addEventListener('dragstart', function(e) {
+                var tr = e.target.closest('tr');
+                if (!tr) return;
+                dragRow = tr;
+                tr.style.opacity = '0.4';
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', '');
+            });
+
+            tbody.addEventListener('dragend', function(e) {
+                if (dragRow) dragRow.style.opacity = '';
+                dragRow = null;
+                // clear all drag-over classes
+                tbody.querySelectorAll('.gcrev-drag-over').forEach(function(r) {
+                    r.classList.remove('gcrev-drag-over');
+                });
+            });
+
+            tbody.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                var tr = e.target.closest('tr');
+                if (!tr || tr === dragRow) return;
+                // highlight
+                tbody.querySelectorAll('.gcrev-drag-over').forEach(function(r) {
+                    r.classList.remove('gcrev-drag-over');
+                });
+                tr.classList.add('gcrev-drag-over');
+            });
+
+            tbody.addEventListener('drop', function(e) {
+                e.preventDefault();
+                var tr = e.target.closest('tr');
+                if (!tr || !dragRow || tr === dragRow) return;
+                tr.classList.remove('gcrev-drag-over');
+
+                // 挿入位置を決定
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var dragIdx = rows.indexOf(dragRow);
+                var dropIdx = rows.indexOf(tr);
+                if (dragIdx < dropIdx) {
+                    tr.parentNode.insertBefore(dragRow, tr.nextSibling);
+                } else {
+                    tr.parentNode.insertBefore(dragRow, tr);
+                }
+
+                saveOrder();
+            });
+
+            // 全行を draggable に
+            tbody.querySelectorAll('tr').forEach(function(tr) {
+                tr.setAttribute('draggable', 'true');
+            });
+
+            function saveOrder() {
+                var status = document.getElementById('gcrev-sort-status');
+                if (status) { status.textContent = '保存中...'; status.className = 'gcrev-sort-saving'; }
+
+                var rows = tbody.querySelectorAll('tr[data-question-id]');
+                var order = [];
+                rows.forEach(function(row, idx) {
+                    order.push({ id: parseInt(row.getAttribute('data-question-id'), 10), sort_order: (idx + 1) * 10 });
+                });
+
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-WP-Nonce': '<?php echo wp_create_nonce('wp_rest'); ?>'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ survey_id: surveyId, order: order })
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (status) {
+                        if (data.success) {
+                            status.textContent = '✓ 保存しました';
+                            status.className = 'gcrev-sort-saved';
+                        } else {
+                            status.textContent = '⚠ 保存失敗';
+                            status.className = '';
+                            status.style.color = '#dc2626';
+                        }
+                        setTimeout(function() { status.textContent = ''; }, 2000);
+                    }
+                })
+                .catch(function() {
+                    if (status) {
+                        status.textContent = '⚠ 通信エラー';
+                        status.className = '';
+                        status.style.color = '#dc2626';
+                        setTimeout(function() { status.textContent = ''; }, 2000);
+                    }
+                });
+            }
+        })();
         </script>
         <?php
     }
