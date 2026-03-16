@@ -800,6 +800,45 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_generate_review' ],
             'permission_callback' => [ $this, 'check_review_rate_limit' ],
         ]);
+
+        // =========================================================
+        // アンケート管理（ログインユーザー向け）
+        // =========================================================
+        register_rest_route('gcrev/v1', '/survey/list', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_survey_list' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/detail', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_survey_detail' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/save', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_save' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/delete', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_delete' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/question/save', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_question_save' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/question/delete', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_question_delete' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/question/reorder', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_question_reorder' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
     }
 
     // =========================================================
@@ -11717,6 +11756,366 @@ PROMPT;
             'short_review'  => sanitize_textarea_field($parsed['short_review']),
             'normal_review' => sanitize_textarea_field($parsed['normal_review']),
         ];
+    }
+
+    // =========================================================
+    // アンケート管理 REST API コールバック
+    // =========================================================
+
+    private const SURVEY_LIMIT = 3;
+
+    /**
+     * アンケートへのアクセス権チェック
+     */
+    private function can_access_survey(int $survey_id, int $user_id): bool {
+        if ($survey_id <= 0) return false;
+        if (current_user_can('manage_options')) return true;
+        global $wpdb;
+        $owner = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT user_id FROM {$wpdb->prefix}gcrev_surveys WHERE id = %d",
+            $survey_id
+        ));
+        return $owner === $user_id;
+    }
+
+    /**
+     * GET survey/list — 自分のアンケート一覧
+     */
+    public function rest_survey_list(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $user_id  = get_current_user_id();
+        $is_admin = current_user_can('manage_options');
+        $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+
+        $where = $is_admin ? '1=1' : $wpdb->prepare('s.user_id = %d', $user_id);
+
+        $surveys = $wpdb->get_results(
+            "SELECT s.*,
+                    (SELECT COUNT(*) FROM {$t_questions} q WHERE q.survey_id = s.id AND q.is_active = 1) AS question_count
+             FROM {$t_surveys} s
+             WHERE {$where}
+             ORDER BY s.updated_at DESC"
+        );
+
+        $form_url = home_url('/review-form/');
+        $items = [];
+        foreach ($surveys as $s) {
+            $items[] = [
+                'id'             => (int) $s->id,
+                'title'          => $s->title,
+                'status'         => $s->status,
+                'question_count' => (int) $s->question_count,
+                'token'          => $s->token,
+                'public_url'     => $s->status === 'published' ? $form_url . '?t=' . $s->token : '',
+                'updated_at'     => $s->updated_at,
+                'user_id'        => (int) $s->user_id,
+            ];
+        }
+
+        $count = $is_admin
+            ? count($items)
+            : (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$t_surveys} WHERE user_id = %d", $user_id
+              ));
+
+        return new \WP_REST_Response([
+            'surveys'  => $items,
+            'count'    => $count,
+            'limit'    => self::SURVEY_LIMIT,
+            'is_admin' => $is_admin,
+        ], 200);
+    }
+
+    /**
+     * GET survey/detail — アンケート詳細 + 質問一覧
+     */
+    public function rest_survey_detail(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $survey_id = absint($request->get_param('id'));
+        $user_id   = get_current_user_id();
+
+        if (!$this->can_access_survey($survey_id, $user_id)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+
+        $survey = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$t_surveys} WHERE id = %d", $survey_id
+        ));
+        if (!$survey) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アンケートが見つかりません。'], 404);
+        }
+
+        $questions = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$t_questions} WHERE survey_id = %d ORDER BY sort_order ASC, id ASC",
+            $survey_id
+        ));
+
+        $q_items = [];
+        foreach ($questions as $q) {
+            $opts = [];
+            if (!empty($q->options)) {
+                $decoded = json_decode($q->options, true);
+                if (is_array($decoded)) $opts = $decoded;
+            }
+            $q_items[] = [
+                'id'          => (int) $q->id,
+                'type'        => $q->type,
+                'label'       => $q->label,
+                'description' => $q->description,
+                'placeholder' => $q->placeholder,
+                'options'     => $opts,
+                'required'    => (bool) $q->required,
+                'sort_order'  => (int) $q->sort_order,
+                'is_active'   => (bool) $q->is_active,
+            ];
+        }
+
+        $form_url = home_url('/review-form/');
+        return new \WP_REST_Response([
+            'survey' => [
+                'id'                => (int) $survey->id,
+                'title'             => $survey->title,
+                'description'       => $survey->description,
+                'google_review_url' => $survey->google_review_url,
+                'status'            => $survey->status,
+                'token'             => $survey->token,
+                'created_at'        => $survey->created_at,
+                'updated_at'        => $survey->updated_at,
+            ],
+            'questions'  => $q_items,
+            'public_url' => $survey->status === 'published' ? $form_url . '?t=' . $survey->token : '',
+        ], 200);
+    }
+
+    /**
+     * POST survey/save — アンケート作成/更新
+     */
+    public function rest_survey_save(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params  = $request->get_json_params();
+        $user_id = get_current_user_id();
+        $id      = absint($params['id'] ?? 0);
+
+        $title             = sanitize_text_field($params['title'] ?? '');
+        $description       = sanitize_textarea_field($params['description'] ?? '');
+        $google_review_url = esc_url_raw($params['google_review_url'] ?? '');
+        $status            = sanitize_text_field($params['status'] ?? 'draft');
+
+        if (empty($title)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'タイトルは必須です。'], 400);
+        }
+        if (!in_array($status, ['draft', 'published'], true)) {
+            $status = 'draft';
+        }
+
+        $t_surveys = $wpdb->prefix . 'gcrev_surveys';
+        $now = current_time('mysql');
+
+        if ($id > 0) {
+            // 更新
+            if (!$this->can_access_survey($id, $user_id)) {
+                return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+            }
+            $wpdb->update($t_surveys, [
+                'title'             => $title,
+                'description'       => $description,
+                'google_review_url' => $google_review_url,
+                'status'            => $status,
+                'updated_at'        => $now,
+            ], ['id' => $id], ['%s', '%s', '%s', '%s', '%s'], ['%d']);
+        } else {
+            // 新規作成 — 上限チェック
+            $count = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$t_surveys} WHERE user_id = %d", $user_id
+            ));
+            if ($count >= self::SURVEY_LIMIT) {
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => 'アンケートは最大' . self::SURVEY_LIMIT . '件まで作成できます。',
+                    'count'   => $count,
+                    'limit'   => self::SURVEY_LIMIT,
+                ], 400);
+            }
+
+            $token = wp_generate_password(32, false);
+            $wpdb->insert($t_surveys, [
+                'user_id'           => $user_id,
+                'title'             => $title,
+                'description'       => $description,
+                'google_review_url' => $google_review_url,
+                'token'             => $token,
+                'status'            => $status,
+                'created_at'        => $now,
+                'updated_at'        => $now,
+            ], ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']);
+            $id = (int) $wpdb->insert_id;
+        }
+
+        return new \WP_REST_Response([
+            'success'   => true,
+            'survey_id' => $id,
+        ], 200);
+    }
+
+    /**
+     * POST survey/delete — アンケート削除
+     */
+    public function rest_survey_delete(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params    = $request->get_json_params();
+        $survey_id = absint($params['id'] ?? 0);
+        $user_id   = get_current_user_id();
+
+        if (!$this->can_access_survey($survey_id, $user_id)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+
+        $wpdb->delete($t_questions, ['survey_id' => $survey_id], ['%d']);
+        $wpdb->delete($t_surveys, ['id' => $survey_id], ['%d']);
+
+        return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    /**
+     * POST survey/question/save — 質問追加/更新
+     */
+    public function rest_survey_question_save(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params    = $request->get_json_params();
+        $survey_id = absint($params['survey_id'] ?? 0);
+        $q_id      = absint($params['id'] ?? 0);
+        $user_id   = get_current_user_id();
+
+        if (!$this->can_access_survey($survey_id, $user_id)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $label = sanitize_text_field($params['label'] ?? '');
+        if (empty($label)) {
+            return new \WP_REST_Response(['success' => false, 'message' => '質問文は必須です。'], 400);
+        }
+
+        $type        = sanitize_text_field($params['type'] ?? 'textarea');
+        $valid_types = ['textarea', 'radio', 'checkbox', 'text', 'select'];
+        if (!in_array($type, $valid_types, true)) {
+            $type = 'textarea';
+        }
+
+        $description = sanitize_text_field($params['description'] ?? '');
+        $placeholder = sanitize_text_field($params['placeholder'] ?? '');
+        $required    = !empty($params['required']) ? 1 : 0;
+        $sort_order  = absint($params['sort_order'] ?? 0);
+        $is_active   = isset($params['is_active']) ? (int) (bool) $params['is_active'] : 1;
+
+        // options処理
+        $options_raw = $params['options'] ?? [];
+        if (is_array($options_raw)) {
+            $options_raw = array_map('sanitize_text_field', $options_raw);
+            $options_raw = array_values(array_filter($options_raw, function($v) { return $v !== ''; }));
+        } else {
+            $options_raw = [];
+        }
+        $options_json = !empty($options_raw) ? wp_json_encode($options_raw, JSON_UNESCAPED_UNICODE) : '';
+
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+
+        $data = [
+            'survey_id'   => $survey_id,
+            'type'        => $type,
+            'label'       => $label,
+            'description' => $description,
+            'placeholder' => $placeholder,
+            'options'     => $options_json,
+            'required'    => $required,
+            'sort_order'  => $sort_order,
+            'is_active'   => $is_active,
+        ];
+        $format = ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d'];
+
+        if ($q_id > 0) {
+            $wpdb->update($t_questions, $data, ['id' => $q_id, 'survey_id' => $survey_id], $format, ['%d', '%d']);
+        } else {
+            $wpdb->insert($t_questions, $data, $format);
+            $q_id = (int) $wpdb->insert_id;
+        }
+
+        // survey の updated_at を更新
+        $wpdb->update($t_surveys, ['updated_at' => current_time('mysql')], ['id' => $survey_id], ['%s'], ['%d']);
+
+        return new \WP_REST_Response([
+            'success'     => true,
+            'question_id' => $q_id,
+        ], 200);
+    }
+
+    /**
+     * POST survey/question/delete — 質問削除
+     */
+    public function rest_survey_question_delete(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params      = $request->get_json_params();
+        $survey_id   = absint($params['survey_id'] ?? 0);
+        $question_id = absint($params['question_id'] ?? 0);
+        $user_id     = get_current_user_id();
+
+        if (!$this->can_access_survey($survey_id, $user_id)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+
+        $wpdb->delete($t_questions, ['id' => $question_id, 'survey_id' => $survey_id], ['%d', '%d']);
+        $wpdb->update($t_surveys, ['updated_at' => current_time('mysql')], ['id' => $survey_id], ['%s'], ['%d']);
+
+        return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    /**
+     * POST survey/question/reorder — 質問並び順一括更新
+     */
+    public function rest_survey_question_reorder(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params    = $request->get_json_params();
+        $survey_id = absint($params['survey_id'] ?? 0);
+        $order     = $params['order'] ?? [];
+        $user_id   = get_current_user_id();
+
+        if (!$this->can_access_survey($survey_id, $user_id)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        if (!is_array($order)) {
+            return new \WP_REST_Response(['success' => false, 'message' => '並び順データが不正です。'], 400);
+        }
+
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+
+        foreach ($order as $item) {
+            $qid   = absint($item['id'] ?? 0);
+            $sort   = absint($item['sort_order'] ?? 0);
+            if ($qid <= 0) continue;
+            $wpdb->update(
+                $t_questions,
+                ['sort_order' => $sort],
+                ['id' => $qid, 'survey_id' => $survey_id],
+                ['%d'],
+                ['%d', '%d']
+            );
+        }
+
+        $wpdb->update($t_surveys, ['updated_at' => current_time('mysql')], ['id' => $survey_id], ['%s'], ['%d']);
+
+        return new \WP_REST_Response(['success' => true], 200);
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

@@ -75,7 +75,7 @@
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ analysis ---
       $report_pages   = array('report-latest','report-archive');
       $analysis_pages = array('analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','rank-tracker','seo-check','ai-report');
-      $tools_pages    = array('column-support','review-survey','review-manage','gbp-posts','gbp-schedule');
+      $tools_pages    = array('review-survey');
       $settings_pages = array('report-settings','cv-review','cv-settings','client-settings','ga-gsc-connection','meo-dashboard','notifications');
       $support_pages  = array('faq','tutorials','inquiry');
       $option_pages   = array('service','improvement-request','training','ad-consulting','meeting-reservation');
@@ -180,46 +180,22 @@
                   </ul>
                </li>
 
-               <?php /* 改善ツール — 一時的に非表示
+               <!-- 改善ツール（折りたたみ親） -->
                <li class="nav-item nav-item-collapsible<?php echo $tools_child_active ? ' child-active' : ''; ?>" data-menu-key="tools">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleTools" aria-expanded="true">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20.7 4.561a5.5 5.5 0 0 0-7.778 0l-.354.353a.5.5 0 0 0 0 .707l2.828 2.829a.5.5 0 0 0 .707 0l.354-.354a5.5 5.5 0 0 0 0-7.778v.243Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.56 5.56l-7.4 7.4a2 2 0 0 0-.5.83l-1.12 3.91a.5.5 0 0 0 .62.62l3.91-1.12a2 2 0 0 0 .83-.5l7.4-7.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                   <span>改善ツール</span>
-                  <span class="nav-ext-badge" aria-label="拡張機能">拡張</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuTools">
-                     <li class="nav-submenu-heading" aria-hidden="true"><span>コンテンツ改善</span></li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/tools/column-support/'); ?>" class="nav-link <?php echo is_page('column-support') ? 'active' : ''; ?>">
-                        <span>コラム記事サポート</span>
-                        </a>
-                     </li>
                      <li class="nav-submenu-heading" aria-hidden="true"><span>口コミ・評価改善</span></li>
                      <li class="nav-item">
                         <a href="<?php echo home_url('/tools/review-survey/'); ?>" class="nav-link <?php echo is_page('review-survey') ? 'active' : ''; ?>">
                         <span>口コミ用アンケート作成</span>
                         </a>
                      </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/tools/review-manage/'); ?>" class="nav-link <?php echo is_page('review-manage') ? 'active' : ''; ?>">
-                        <span>口コミ管理</span>
-                        </a>
-                     </li>
-                     <li class="nav-submenu-heading" aria-hidden="true"><span>MEO運用</span></li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/tools/gbp-posts/'); ?>" class="nav-link <?php echo is_page('gbp-posts') ? 'active' : ''; ?>">
-                        <span>投稿管理</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo home_url('/tools/gbp-schedule/'); ?>" class="nav-link <?php echo is_page('gbp-schedule') ? 'active' : ''; ?>">
-                        <span>投稿予約</span>
-                        </a>
-                     </li>
                   </ul>
                </li>
-               */ ?>
 
                <!-- 各種設定（折りたたみ親） -->
                <li class="nav-item nav-item-collapsible<?php echo $settings_child_active ? ' child-active' : ''; ?>" data-menu-key="settings">
