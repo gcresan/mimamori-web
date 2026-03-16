@@ -350,8 +350,15 @@ get_header();
     font-weight: 700;
     color: #1a1a1a;
 }
+.rt-link-to-settings {
+    font-size: 13px;
+    color: #568184;
+    text-decoration: none;
+    font-weight: 500;
+}
+.rt-link-to-settings:hover { text-decoration: underline; }
 
-/* Keyword management table */
+/* Keyword toggle table */
 .rt-kw-table {
     width: 100%;
     border-collapse: collapse;
@@ -372,76 +379,6 @@ get_header();
     font-size: 14px;
 }
 .rt-kw-table tr:last-child td { border-bottom: none; }
-
-.rt-kw-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    white-space: nowrap;
-}
-.rt-kw-order-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    background: #fff;
-    cursor: pointer;
-    font-size: 14px;
-    color: #6b7280;
-}
-.rt-kw-order-btn:hover { background: #f9fafb; }
-.rt-kw-delete-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 5px 10px;
-    border: 1px solid #fecaca;
-    border-radius: 6px;
-    background: #fff;
-    color: #ef4444;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-}
-.rt-kw-delete-btn:hover { background: #fef2f2; }
-
-/* --- Footer quota --- */
-.rt-quota {
-    display: flex;
-    gap: 24px;
-    padding: 16px 0;
-    font-size: 14px;
-    color: #6b7280;
-}
-.rt-quota strong {
-    color: #1a1a1a;
-    font-weight: 700;
-}
-.rt-quota__item--remaining strong { color: #22c55e; }
-
-/* --- Add form --- */
-.rt-add-form {
-    display: flex;
-    gap: 10px;
-    align-items: end;
-    padding: 16px;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    margin-bottom: 20px;
-}
-.rt-add-form__input {
-    flex: 1;
-    padding: 9px 12px;
-    border: 1px solid #d0d5dd;
-    border-radius: 6px;
-    font-size: 14px;
-    background: #fff;
-}
-.rt-add-form__input:focus { outline: none; border-color: #568184; }
 
 /* --- Empty state --- */
 .rt-empty {
@@ -783,28 +720,15 @@ get_header();
     <div class="rt-kw-section" id="kwSection">
         <div class="rt-kw-section__header">
             <div class="rt-kw-section__title">計測キーワード</div>
-            <button class="rt-btn rt-btn--primary" id="kwAddBtn" onclick="showAddForm()">
-                <span class="rt-btn__icon">+</span> 作成
-            </button>
+            <a href="/client-settings/" class="rt-link-to-settings">キーワードを追加・管理 →</a>
         </div>
 
-        <!-- Add form (hidden by default) -->
-        <div id="kwFormWrap" style="display:none;">
-            <div class="rt-add-form">
-                <input type="text" class="rt-add-form__input" id="kwInput" placeholder="キーワードを入力（例: 愛媛 ホームページ制作）" maxlength="255">
-                <button class="rt-btn rt-btn--primary" id="kwSubmitBtn" onclick="submitKeyword()">追加する</button>
-                <button class="rt-btn" id="kwCancelBtn" onclick="cancelAdd()">キャンセル</button>
-            </div>
-        </div>
-
-        <!-- Keyword management table -->
+        <!-- Keyword toggle table -->
         <div id="kwTableWrap" style="display:none;">
             <table class="rt-kw-table">
                 <thead>
                     <tr>
-                        <th>名前</th>
-                        <th>作成日時</th>
-                        <th style="text-align:right;">操作</th>
+                        <th>キーワード</th>
                         <th>ランキング計測</th>
                         <th>AIO診断</th>
                     </tr>
@@ -813,11 +737,8 @@ get_header();
             </table>
         </div>
 
-        <!-- Quota -->
-        <div class="rt-quota" id="kwQuota" style="display:none;">
-            <div class="rt-quota__item">計測上限: <strong id="quotaLimit">5</strong></div>
-            <div class="rt-quota__item">計測中: <strong id="quotaUsed" style="color:#568184;">0</strong></div>
-            <div class="rt-quota__item rt-quota__item--remaining">残り枠: <strong id="quotaRemaining">5</strong></div>
+        <div id="kwEmpty" style="display:none;font-size:13px;color:#94a3b8;padding:8px 0;">
+            キーワードが登録されていません。<a href="/client-settings/" style="color:#568184;">設定ページ</a>から追加してください。
         </div>
     </div>
 </div>
@@ -877,7 +798,6 @@ get_header();
     var kwLimit = 5;
     var kwCanAdd = true;
     var kwDefaultDomain = '';
-    var editingId = 0;
     var manualFetchLimit = { daily_used: 0, daily_limit: 5, daily_remaining: 5, is_admin: false };
 
     // SERP Modal state
@@ -1384,54 +1304,25 @@ get_header();
     function renderKwManagement() {
         var tableWrap = document.getElementById('kwTableWrap');
         var tbody = document.getElementById('kwTableBody');
-        var quota = document.getElementById('kwQuota');
-        var addBtn = document.getElementById('kwAddBtn');
-
-        var enabledCount = myKeywords.filter(function(k) { return k.enabled; }).length;
-
-        // Add button visibility
-        if (!kwCanAdd && editingId === 0) {
-            addBtn.style.display = 'none';
-        } else {
-            addBtn.style.display = 'inline-flex';
-        }
+        var empty = document.getElementById('kwEmpty');
 
         if (myKeywords.length === 0) {
             tableWrap.style.display = 'none';
-            quota.style.display = 'none';
+            empty.style.display = 'block';
             return;
         }
 
+        empty.style.display = 'none';
         tableWrap.style.display = 'block';
-        quota.style.display = 'flex';
 
-        // Quota
-        document.getElementById('quotaLimit').textContent = kwLimit;
-        document.getElementById('quotaUsed').textContent = enabledCount;
-        document.getElementById('quotaRemaining').textContent = kwLimit - enabledCount;
-
-        // Table
         var html = '';
         for (var i = 0; i < myKeywords.length; i++) {
             var kw = myKeywords[i];
-            var created = kw.created_at ? formatDateTime(kw.created_at) : '-';
 
             html += '<tr>';
 
-            // Name
+            // Keyword name
             html += '<td><strong>' + escHtml(kw.keyword) + '</strong></td>';
-
-            // Created at
-            html += '<td style="color:#6b7280; font-size:13px;">' + created + '</td>';
-
-            // Actions (reorder + delete)
-            html += '<td style="text-align:right;">';
-            html += '<div class="rt-kw-actions" style="justify-content:flex-end;">';
-            html += '<button class="rt-kw-order-btn" onclick="reorderKeyword(' + kw.id + ', \'up\')" title="上に移動">&#x2191;</button>';
-            html += '<button class="rt-kw-order-btn" onclick="reorderKeyword(' + kw.id + ', \'down\')" title="下に移動">&#x2193;</button>';
-            html += '<button class="rt-kw-delete-btn" onclick="deleteKeyword(' + kw.id + ', \'' + escHtml(kw.keyword).replace(/'/g, "\\'") + '\')">&#x1F5D1; 削除</button>';
-            html += '</div>';
-            html += '</td>';
 
             // Ranking toggle
             html += '<td>';
@@ -1455,73 +1346,9 @@ get_header();
         tbody.innerHTML = html;
     }
 
-    function formatDateTime(str) {
-        if (!str) return '-';
-        // "2026-03-05 12:09:00" → "2026年03月05日 12:09"
-        var d = str.replace(/-/g, '/');
-        var dt = new Date(d);
-        if (isNaN(dt.getTime())) return str;
-        var y = dt.getFullYear();
-        var m = ('0' + (dt.getMonth() + 1)).slice(-2);
-        var day = ('0' + dt.getDate()).slice(-2);
-        var h = ('0' + dt.getHours()).slice(-2);
-        var min = ('0' + dt.getMinutes()).slice(-2);
-        return y + '年' + m + '月' + day + '日 ' + h + ':' + min;
-    }
-
     // =========================================================
-    // Keyword management — actions
+    // Keyword toggle actions
     // =========================================================
-    window.showAddForm = function() {
-        document.getElementById('kwFormWrap').style.display = 'block';
-        document.getElementById('kwInput').focus();
-    };
-
-    window.cancelAdd = function() {
-        editingId = 0;
-        document.getElementById('kwInput').value = '';
-        document.getElementById('kwSubmitBtn').textContent = '追加する';
-        document.getElementById('kwFormWrap').style.display = 'none';
-    };
-
-    window.submitKeyword = function() {
-        var kwInput = document.getElementById('kwInput');
-        var keyword = kwInput.value.trim();
-        if (!keyword) { alert('キーワードを入力してください。'); return; }
-
-        var submitBtn = document.getElementById('kwSubmitBtn');
-        submitBtn.disabled = true;
-
-        var body = { keyword: keyword, target_domain: kwDefaultDomain };
-        if (editingId > 0) body.id = editingId;
-
-        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
-            method: 'POST',
-            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify(body)
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            submitBtn.disabled = false;
-            if (json.success) {
-                kwInput.value = '';
-                editingId = 0;
-                document.getElementById('kwFormWrap').style.display = 'none';
-                fetchMyKeywords();
-                fetchRankings();
-                showToast('キーワードを追加しました。');
-            } else {
-                alert(json.message || 'エラーが発生しました。');
-            }
-        })
-        .catch(function(err) {
-            submitBtn.disabled = false;
-            console.error('[KW Submit]', err);
-            alert('通信エラーが発生しました。');
-        });
-    };
-
     window.toggleKeyword = function(id, enable) {
         var kw = myKeywords.find(function(k) { return k.id === id; });
         if (!kw) return;
@@ -1556,42 +1383,6 @@ get_header();
                 fetchMyKeywords();
             } else {
                 alert(json.message || 'エラーが発生しました。');
-            }
-        });
-    };
-
-    window.deleteKeyword = function(id, keyword) {
-        if (!confirm('「' + keyword + '」を削除しますか？\nこのキーワードの順位履歴も削除されます。')) return;
-
-        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords/' + id, {
-            method: 'DELETE',
-            headers: { 'X-WP-Nonce': wpNonce },
-            credentials: 'same-origin'
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            if (json.success) {
-                fetchMyKeywords();
-                fetchRankings();
-                showToast('キーワードを削除しました。');
-            } else {
-                alert(json.message || '削除に失敗しました。');
-            }
-        });
-    };
-
-    window.reorderKeyword = function(id, direction) {
-        fetch('/wp-json/gcrev/v1/rank-tracker/reorder', {
-            method: 'POST',
-            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ keyword_id: id, direction: direction })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            if (json.success) {
-                fetchMyKeywords();
-                fetchRankings();
             }
         });
     };

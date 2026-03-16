@@ -284,11 +284,77 @@ get_header();
 }
 .char-count { font-size: 12px; color: #94a3b8; text-align: right; margin-top: 2px; }
 
+/* --- 計測キーワード管理 --- */
+.cs-kw-table {
+    width: 100%; border-collapse: collapse; margin-bottom: 12px;
+}
+.cs-kw-table th {
+    font-size: 12px; font-weight: 600; color: #6b7280;
+    padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+}
+.cs-kw-table td {
+    padding: 12px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; font-size: 14px;
+}
+.cs-kw-table tr:last-child td { border-bottom: none; }
+
+.cs-kw-actions {
+    display: flex; align-items: center; gap: 8px; white-space: nowrap; justify-content: flex-end;
+}
+.cs-kw-order-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border: 1px solid #e5e7eb; border-radius: 6px;
+    background: #fff; cursor: pointer; font-size: 14px; color: #6b7280;
+}
+.cs-kw-order-btn:hover { background: #f9fafb; }
+.cs-kw-delete-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 10px; border: 1px solid #fecaca; border-radius: 6px;
+    background: #fff; color: #ef4444; font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.cs-kw-delete-btn:hover { background: #fef2f2; }
+
+.cs-kw-add-form {
+    display: flex; gap: 10px; align-items: end;
+    padding: 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px;
+}
+.cs-kw-add-form input[type="text"] {
+    flex: 1; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px;
+    font-size: 14px; background: #fff; box-sizing: border-box;
+}
+.cs-kw-add-form input[type="text"]:focus { outline: none; border-color: #4E8A6B; box-shadow: 0 0 0 3px rgba(78,138,107,.12); }
+.cs-kw-add-form .btn-kw-submit {
+    padding: 9px 18px; background: #4E8A6B; color: #fff; border: none; border-radius: 6px;
+    font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.cs-kw-add-form .btn-kw-submit:hover { background: #2d6b54; }
+.cs-kw-add-form .btn-kw-submit:disabled { opacity: .5; cursor: not-allowed; }
+.cs-kw-add-form .btn-kw-cancel {
+    padding: 9px 14px; background: #fff; color: #64748b; border: 1px solid #cbd5e1; border-radius: 6px;
+    font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.cs-kw-add-form .btn-kw-cancel:hover { background: #f9fafb; }
+
+.cs-kw-footer {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 4px;
+}
+.btn-add-kw {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 8px 16px; background: #fff; color: #4E8A6B; border: 1px dashed #4E8A6B; border-radius: 6px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.btn-add-kw:hover { background: #f0fdf4; }
+.btn-add-kw:disabled { opacity: .5; cursor: not-allowed; border-color: #94a3b8; color: #94a3b8; }
+.cs-kw-quota { font-size: 13px; color: #6b7280; }
+.cs-kw-quota strong { font-weight: 700; color: #1e293b; }
+.cs-kw-empty { font-size: 13px; color: #94a3b8; padding: 12px 0; }
+
 @media (max-width: 600px) {
     .ref-url-row { flex-wrap: wrap; }
     .ref-url-row input[type="url"],
     .ref-url-row input[type="text"] { flex: 1 1 100%; }
     .persona-gen-modal { width: 96%; max-height: 90vh; }
+    .cs-kw-add-form { flex-wrap: wrap; }
+    .cs-kw-add-form input[type="text"] { flex: 1 1 100%; }
 }
 </style>
 
@@ -306,6 +372,40 @@ get_header();
                 <label for="cs-site-url">解析対象のサイトURL <span class="required">*</span></label>
                 <input type="url" id="cs-site-url" placeholder="https://example.com" value="<?php echo esc_attr( $initial_site_url ); ?>">
                 <small class="form-text">AIレポートやAI相談で参照されるWebサイトのURLです</small>
+            </div>
+        </div>
+
+        <!-- 計測キーワード -->
+        <div class="cs-section">
+            <h2 class="cs-section-title"><span class="icon">🔑</span> 計測キーワード</h2>
+            <p style="font-size:13px;color:#64748b;margin:0 0 14px;">順位チェック・AIO診断で計測するキーワードを設定します（最大5件）</p>
+
+            <div id="csKwTableWrap" style="display:none;">
+                <table class="cs-kw-table">
+                    <thead>
+                        <tr>
+                            <th>キーワード</th>
+                            <th>作成日</th>
+                            <th style="text-align:right;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="csKwTableBody"></tbody>
+                </table>
+            </div>
+
+            <div id="csKwEmpty" class="cs-kw-empty">キーワードが登録されていません。</div>
+
+            <div id="csKwFormWrap" style="display:none;">
+                <div class="cs-kw-add-form">
+                    <input type="text" id="csKwInput" placeholder="キーワードを入力（例: 愛媛 ホームページ制作）" maxlength="255">
+                    <button type="button" class="btn-kw-submit" id="csKwSubmitBtn" onclick="csSubmitKeyword()">追加する</button>
+                    <button type="button" class="btn-kw-cancel" onclick="csCancelAdd()">キャンセル</button>
+                </div>
+            </div>
+
+            <div class="cs-kw-footer">
+                <button type="button" class="btn-add-kw" id="csKwAddBtn" onclick="csShowAddForm()">＋ キーワードを追加</button>
+                <span class="cs-kw-quota" id="csKwQuota"></span>
             </div>
         </div>
 
@@ -1159,6 +1259,166 @@ get_header();
         toast.classList.add('show');
         setTimeout(function() { toast.classList.remove('show'); }, 3000);
     }
+
+    // =========================================================
+    // 計測キーワード管理
+    // =========================================================
+    var csKwList = [];
+    var csKwLimit = 5;
+    var csKwCanAdd = true;
+    var csKwDefaultDomain = '';
+
+    function csKwEsc(s) {
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function csKwFormatDate(str) {
+        if (!str) return '-';
+        var dt = new Date(str.replace(/-/g, '/'));
+        if (isNaN(dt.getTime())) return str;
+        var y = dt.getFullYear();
+        var m = ('0' + (dt.getMonth() + 1)).slice(-2);
+        var day = ('0' + dt.getDate()).slice(-2);
+        return y + '/' + m + '/' + day;
+    }
+
+    function csKwFetch() {
+        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success && json.data) {
+                csKwList = json.data.keywords || [];
+                csKwLimit = json.data.limit || 5;
+                csKwCanAdd = json.data.can_add;
+                csKwDefaultDomain = json.data.default_domain || '';
+                csKwRender();
+            }
+        })
+        .catch(function(err) { console.error('[CS KW]', err); });
+    }
+
+    function csKwRender() {
+        var tableWrap = document.getElementById('csKwTableWrap');
+        var tbody = document.getElementById('csKwTableBody');
+        var empty = document.getElementById('csKwEmpty');
+        var addBtn = document.getElementById('csKwAddBtn');
+        var quota = document.getElementById('csKwQuota');
+
+        // 枠数表示
+        quota.innerHTML = '<strong>' + csKwList.length + '</strong> / ' + csKwLimit + ' キーワード';
+
+        // 追加ボタン
+        addBtn.disabled = !csKwCanAdd;
+
+        if (csKwList.length === 0) {
+            tableWrap.style.display = 'none';
+            empty.style.display = 'block';
+            return;
+        }
+
+        empty.style.display = 'none';
+        tableWrap.style.display = 'block';
+
+        var html = '';
+        for (var i = 0; i < csKwList.length; i++) {
+            var kw = csKwList[i];
+            html += '<tr>';
+            html += '<td><strong>' + csKwEsc(kw.keyword) + '</strong></td>';
+            html += '<td style="color:#6b7280;font-size:13px;">' + csKwFormatDate(kw.created_at) + '</td>';
+            html += '<td style="text-align:right;">';
+            html += '<div class="cs-kw-actions">';
+            html += '<button class="cs-kw-order-btn" onclick="csReorderKeyword(' + kw.id + ',\'up\')" title="上に移動">&#x2191;</button>';
+            html += '<button class="cs-kw-order-btn" onclick="csReorderKeyword(' + kw.id + ',\'down\')" title="下に移動">&#x2193;</button>';
+            html += '<button class="cs-kw-delete-btn" onclick="csDeleteKeyword(' + kw.id + ',\'' + csKwEsc(kw.keyword).replace(/'/g, "\\'") + '\')">&#x1F5D1; 削除</button>';
+            html += '</div>';
+            html += '</td>';
+            html += '</tr>';
+        }
+        tbody.innerHTML = html;
+    }
+
+    window.csShowAddForm = function() {
+        document.getElementById('csKwFormWrap').style.display = 'block';
+        document.getElementById('csKwInput').focus();
+    };
+
+    window.csCancelAdd = function() {
+        document.getElementById('csKwInput').value = '';
+        document.getElementById('csKwFormWrap').style.display = 'none';
+    };
+
+    window.csSubmitKeyword = function() {
+        var input = document.getElementById('csKwInput');
+        var keyword = input.value.trim();
+        if (!keyword) { alert('キーワードを入力してください。'); return; }
+
+        var btn = document.getElementById('csKwSubmitBtn');
+        btn.disabled = true;
+
+        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ keyword: keyword, target_domain: csKwDefaultDomain })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            btn.disabled = false;
+            if (json.success) {
+                input.value = '';
+                document.getElementById('csKwFormWrap').style.display = 'none';
+                csKwFetch();
+                showToast('キーワードを追加しました');
+            } else {
+                alert(json.message || 'エラーが発生しました。');
+            }
+        })
+        .catch(function(err) {
+            btn.disabled = false;
+            console.error('[CS KW Submit]', err);
+            alert('通信エラーが発生しました。');
+        });
+    };
+
+    window.csDeleteKeyword = function(id, keyword) {
+        if (!confirm('「' + keyword + '」を削除しますか？\nこのキーワードの順位履歴も削除されます。')) return;
+
+        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords/' + id, {
+            method: 'DELETE',
+            headers: { 'X-WP-Nonce': wpNonce },
+            credentials: 'same-origin'
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success) {
+                csKwFetch();
+                showToast('キーワードを削除しました');
+            } else {
+                alert(json.message || '削除に失敗しました。');
+            }
+        });
+    };
+
+    window.csReorderKeyword = function(id, direction) {
+        fetch('/wp-json/gcrev/v1/rank-tracker/reorder', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ keyword_id: id, direction: direction })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success) { csKwFetch(); }
+        });
+    };
+
+    // 初期読み込み
+    csKwFetch();
 })();
 </script>
 
