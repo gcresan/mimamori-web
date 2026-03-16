@@ -556,35 +556,35 @@ get_header();
         <div class="summary-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px;">
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(86,129,132,0.1);">🔍</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">検索での表示</div>
-                </div>
-                <div id="meo-search-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-search-impressions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(78,138,107,0.1);">🗺️</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">マップでの表示</div>
-                </div>
-                <div id="meo-map-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-map-impressions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(122,163,166,0.1);">👁️</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">合計表示回数</div>
+                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #dbeafe; color: #3b82f6;">👁️</div>
+                    <div style="font-size: 13px; color: #666666; font-weight: 600;">表示回数</div>
                 </div>
                 <div id="meo-total-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
                 <div id="meo-total-impressions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
             </div>
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(212,168,66,0.12);">📷</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">写真閲覧数</div>
+                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #d1fae5; color: #10b981;">📱</div>
+                    <div style="font-size: 13px; color: #666666; font-weight: 600;">モバイル</div>
                 </div>
-                <div id="meo-photo-views" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-photo-views-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
+                <div id="meo-mobile-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
+                <div id="meo-mobile-impressions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
+            </div>
+            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #dbeafe; color: #2563eb;">🖥️</div>
+                    <div style="font-size: 13px; color: #666666; font-weight: 600;">PC</div>
+                </div>
+                <div id="meo-desktop-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
+                <div id="meo-desktop-impressions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
+            </div>
+            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #fef3c7; color: #f59e0b;">📈</div>
+                    <div style="font-size: 13px; color: #666666; font-weight: 600;">平均クリック率</div>
+                </div>
+                <div id="meo-click-rate" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
+                <div id="meo-click-rate-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
             </div>
         </div>
 
@@ -592,35 +592,35 @@ get_header();
         <div class="summary-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px;">
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(212,168,66,0.15);">📞</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">電話クリック</div>
+                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #fef3c7; color: #d97706;">📞</div>
+                    <div style="font-size: 13px; color: #666666; font-weight: 600;">電話クリック数</div>
                 </div>
                 <div id="meo-calls" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
                 <div id="meo-calls-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
             </div>
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: #fecaca;">📍</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">ルート検索</div>
+                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #fee2e2; color: #ef4444;">📍</div>
+                    <div style="font-size: 13px; color: #666666; font-weight: 600;">ルート検索回数</div>
                 </div>
                 <div id="meo-directions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
                 <div id="meo-directions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
             </div>
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: #cffafe;">🌐</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">ウェブサイトクリック</div>
+                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #cffafe; color: #06b6d4;">🌐</div>
+                    <div style="font-size: 13px; color: #666666; font-weight: 600;">ウェブサイトクリック数</div>
                 </div>
                 <div id="meo-website" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
                 <div id="meo-website-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
             </div>
             <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(181,87,75,0.08);">📋</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">予約クリック</div>
+                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #fce7f3; color: #ec4899;">☰</div>
+                    <div style="font-size: 13px; color: #666666; font-weight: 600;">メニュークリック数</div>
                 </div>
-                <div id="meo-bookings" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-bookings-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
+                <div id="meo-menu" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
+                <div id="meo-menu-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
             </div>
         </div>
 
@@ -978,14 +978,39 @@ get_header();
         var m = data.metrics || {};
         var p = data.metrics_previous || {};
 
-        setKpi('meo-search-impressions', m.search_impressions, p.search_impressions);
-        setKpi('meo-map-impressions',    m.map_impressions,    p.map_impressions);
-        setKpi('meo-total-impressions',  m.total_impressions,  p.total_impressions);
-        setKpi('meo-photo-views',        m.photo_views,        p.photo_views);
-        setKpi('meo-calls',              m.call_clicks,        p.call_clicks);
-        setKpi('meo-directions',         m.direction_clicks,   p.direction_clicks);
-        setKpi('meo-website',            m.website_clicks,     p.website_clicks);
-        setKpi('meo-bookings',           m.booking_clicks,     p.booking_clicks);
+        setKpi('meo-total-impressions',   m.total_impressions,   p.total_impressions);
+        setKpi('meo-mobile-impressions',  m.mobile_impressions,  p.mobile_impressions);
+        setKpi('meo-desktop-impressions', m.desktop_impressions, p.desktop_impressions);
+        setKpi('meo-calls',               m.call_clicks,         p.call_clicks);
+        setKpi('meo-directions',          m.direction_clicks,    p.direction_clicks);
+        setKpi('meo-website',             m.website_clicks,      p.website_clicks);
+        setKpi('meo-menu',                m.menu_clicks,         p.menu_clicks);
+
+        // 平均クリック率
+        var totalActions = (m.call_clicks || 0) + (m.direction_clicks || 0) + (m.website_clicks || 0) + (m.menu_clicks || 0);
+        var totalImpressions = m.total_impressions || 0;
+        var clickRate = totalImpressions > 0 ? (totalActions / totalImpressions * 100) : 0;
+        var prevActions = (p.call_clicks || 0) + (p.direction_clicks || 0) + (p.website_clicks || 0) + (p.menu_clicks || 0);
+        var prevImpressions = p.total_impressions || 0;
+        var prevRate = prevImpressions > 0 ? (prevActions / prevImpressions * 100) : 0;
+
+        var rateEl = document.getElementById('meo-click-rate');
+        var rateChEl = document.getElementById('meo-click-rate-change');
+        if (rateEl) rateEl.textContent = clickRate.toFixed(2) + '%';
+        if (rateChEl) {
+            var diff = clickRate - prevRate;
+            if (prevRate === 0 && clickRate === 0) {
+                rateChEl.innerHTML = '<span style="color:#666666;">→ 0.0%</span>';
+            } else if (prevRate === 0) {
+                rateChEl.innerHTML = '<span style="color:#568184;">NEW</span>';
+            } else if (diff > 0) {
+                rateChEl.innerHTML = '<span style="color:#4E8A6B;">↑ +' + diff.toFixed(1) + 'pt</span>';
+            } else if (diff < 0) {
+                rateChEl.innerHTML = '<span style="color:#C0392B;">↓ ' + diff.toFixed(1) + 'pt</span>';
+            } else {
+                rateChEl.innerHTML = '<span style="color:#666666;">→ 0.0%</span>';
+            }
+        }
     }
 
     function setKpi(id, current, previous) {
@@ -1091,14 +1116,14 @@ get_header();
         var ctx = document.getElementById('meo-actions-chart');
         if (!ctx) return;
 
-        var labels = ['電話', 'ルート検索', 'ウェブサイト', '予約'];
+        var labels = ['電話', 'ルート検索', 'ウェブサイト', 'メニュー'];
         var values = [
             m.call_clicks || 0,
             m.direction_clicks || 0,
             m.website_clicks || 0,
-            m.booking_clicks || 0
+            m.menu_clicks || 0
         ];
-        var colors = ['#D4A842', '#C95A4F', '#7AA3A6', '#C95A4F'];
+        var colors = ['#D4A842', '#C95A4F', '#7AA3A6', '#ec4899'];
 
         if (actionsChart) actionsChart.destroy();
 

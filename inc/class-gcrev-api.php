@@ -5046,18 +5046,19 @@ class Gcrev_Insight_API {
             'CALL_CLICKS',
             'WEBSITE_CLICKS',
             'BUSINESS_DIRECTION_REQUESTS',
-            'BUSINESS_BOOKINGS',
+            'BUSINESS_FOOD_MENU_CLICKS',
         ];
 
+        // 各メトリクスを複数キーに加算するマッピング
         $metric_map = [
-            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH' => 'search_impressions',
-            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH'  => 'search_impressions',
-            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS'   => 'map_impressions',
-            'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => 'map_impressions',
-            'CALL_CLICKS'                         => 'call_clicks',
-            'WEBSITE_CLICKS'                      => 'website_clicks',
-            'BUSINESS_DIRECTION_REQUESTS'         => 'direction_clicks',
-            'BUSINESS_BOOKINGS'                   => 'booking_clicks',
+            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH' => ['desktop_impressions'],
+            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH'  => ['mobile_impressions'],
+            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS'   => ['desktop_impressions'],
+            'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => ['mobile_impressions'],
+            'CALL_CLICKS'                         => ['call_clicks'],
+            'WEBSITE_CLICKS'                      => ['website_clicks'],
+            'BUSINESS_DIRECTION_REQUESTS'         => ['direction_clicks'],
+            'BUSINESS_FOOD_MENU_CLICKS'           => ['menu_clicks'],
         ];
 
         $start_obj = $this->gbp_date_obj($start_date);
@@ -5095,16 +5096,18 @@ class Gcrev_Insight_API {
                 continue;
             }
 
-            $data       = json_decode($raw_body, true);
-            $target_key = $metric_map[$metric] ?? null;
-            if (!$target_key) continue;
+            $data        = json_decode($raw_body, true);
+            $target_keys = $metric_map[$metric] ?? [];
 
             foreach (($data['timeSeries']['datedValues'] ?? []) as $dv) {
-                $totals[$target_key] += (int) ($dv['value'] ?? 0);
+                $val = (int) ($dv['value'] ?? 0);
+                foreach ($target_keys as $key) {
+                    $totals[$key] += $val;
+                }
             }
         }
 
-        $totals['total_impressions'] = $totals['search_impressions'] + $totals['map_impressions'];
+        $totals['total_impressions'] = $totals['mobile_impressions'] + $totals['desktop_impressions'];
 
         return $totals;
     }
@@ -5256,14 +5259,13 @@ class Gcrev_Insight_API {
      */
     private function gbp_empty_metrics(): array {
         return [
-            'search_impressions'  => 0,
-            'map_impressions'     => 0,
             'total_impressions'   => 0,
-            'photo_views'         => 0,
+            'mobile_impressions'  => 0,
+            'desktop_impressions' => 0,
             'call_clicks'         => 0,
             'direction_clicks'    => 0,
             'website_clicks'      => 0,
-            'booking_clicks'      => 0,
+            'menu_clicks'         => 0,
         ];
     }
 
