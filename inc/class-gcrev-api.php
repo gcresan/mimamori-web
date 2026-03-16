@@ -4132,6 +4132,16 @@ class Gcrev_Insight_API {
                 $cached = get_transient( $cache_key );
                 if ( $cached !== false && is_array( $cached ) ) {
                     $cached['keywords'] = $this->meo_build_keyword_list( $all_keywords, $kw_id );
+
+                    // キャッシュヒットでも、今週の履歴が未保存なら保存
+                    $this->meo_save_to_history(
+                        $user_id, $kw_id, $device,
+                        $cached['maps']['rank'] ?? null,
+                        $cached['local_finder']['rank'] ?? null,
+                        $cached['maps']['store'] ?? null,
+                        $cached['maps']['competitors'] ?? []
+                    );
+
                     return new \WP_REST_Response( $cached, 200 );
                 }
             }
@@ -4245,6 +4255,9 @@ class Gcrev_Insight_API {
 
             set_transient( $cache_key, $result, 86400 );
 
+            // 週次履歴テーブルにも保存（gcrev_meo_results — UPSERT）
+            $this->meo_save_to_history( $user_id, $kw_id, $device, $maps_rank, $finder_rank, $store_data, $competitors );
+
             return new \WP_REST_Response( $result, 200 );
 
         } catch ( \Exception $e ) {
@@ -4254,6 +4267,82 @@ class Gcrev_Insight_API {
             );
             return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
         }
+    }
+
+    /**
+     * MEO ランキングデータを gcrev_meo_results テーブルに保存（UPSERT）
+     *
+     * 同一 (user_id, keyword_id, device, iso_year_week) は上書きされる。
+     * ページ閲覧ごとにリアルタイムデータが蓄積され、週次推移テーブルに反映される。
+     */
+    private function meo_save_to_history(
+        int $user_id,
+        int $keyword_id,
+        string $device,
+        ?int $maps_rank,
+        ?int $finder_rank,
+        ?array $store_data,
+        array $competitors
+    ): void {
+        global $wpdb;
+
+        $meo_table = $wpdb->prefix . 'gcrev_meo_results';
+
+        // テーブル存在チェック
+        $table_exists = $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = %s AND table_name = %s",
+            DB_NAME,
+            $meo_table
+        ) );
+        if ( ! $table_exists ) {
+            return;
+        }
+
+        $tz  = wp_timezone();
+        $now = new \DateTimeImmutable( 'now', $tz );
+
+        $iso_year_week = $now->format( 'o-\WW' );
+        $fetch_date    = $now->format( 'Y-m-d' );
+        $fetched_at    = $now->format( 'Y-m-d H:i:s' );
+
+        // 今週のデータが既にあればスキップ（キャッシュヒット時の重複書き込み防止）
+        $exists = $wpdb->get_var( $wpdb->prepare(
+            "SELECT id FROM {$meo_table}
+             WHERE user_id = %d AND keyword_id = %d AND device = %s AND iso_year_week = %s
+             LIMIT 1",
+            $user_id, $keyword_id, $device, $iso_year_week
+        ) );
+        if ( $exists ) {
+            return;
+        }
+
+        // 店舗情報から rating / reviews_count を抽出
+        $rating        = null;
+        $reviews_count = null;
+        if ( $store_data ) {
+            $rating        = isset( $store_data['rating'] ) ? (float) $store_data['rating'] : null;
+            $reviews_count = isset( $store_data['reviews_count'] ) ? (int) $store_data['reviews_count'] : null;
+        }
+
+        $wpdb->replace(
+            $meo_table,
+            [
+                'user_id'          => $user_id,
+                'keyword_id'       => $keyword_id,
+                'device'           => $device,
+                'maps_rank'        => $maps_rank,
+                'finder_rank'      => $finder_rank,
+                'rating'           => $rating,
+                'reviews_count'    => $reviews_count,
+                'store_data'       => $store_data ? wp_json_encode( $store_data, JSON_UNESCAPED_UNICODE ) : null,
+                'competitors_data' => ! empty( $competitors ) ? wp_json_encode( $competitors, JSON_UNESCAPED_UNICODE ) : null,
+                'iso_year_week'    => $iso_year_week,
+                'fetch_date'       => $fetch_date,
+                'fetched_at'       => $fetched_at,
+                'created_at'       => $fetched_at,
+            ],
+            [ '%d', '%d', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s' ]
+        );
     }
 
     /**
