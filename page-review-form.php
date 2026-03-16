@@ -189,9 +189,14 @@ $api_url = rest_url('gcrev/v1/review/generate');
         color: #2C3E40;
         margin-bottom: 4px;
         line-height: 1.8;
+        padding-left: 1.6em;
+        text-indent: -1.6em;
     }
     .question-number {
-        margin-right: 2px;
+        display: inline-block;
+        width: 1.6em;
+        text-indent: 0;
+        color: #2C3E40;
     }
     .question-badge {
         font-size: 11px;
