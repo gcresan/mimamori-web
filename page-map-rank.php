@@ -351,6 +351,7 @@ get_header();
         meoKeywordSelect.addEventListener('change', function() {
             currentKeywordId = parseInt(meoKeywordSelect.value, 10) || 0;
             meoFetchData(currentDevice, currentKeywordId);
+            meoRenderHistory();
         });
 
         meoRadiusSelect.addEventListener('change', function() {
@@ -706,7 +707,16 @@ get_header();
             return;
         }
 
+        // 選択中のキーワードに一致するデータを探す（見つからなければ先頭）
         var kwData = meoHistoryData.keywords[0];
+        if (currentKeywordId > 0) {
+            for (var k = 0; k < meoHistoryData.keywords.length; k++) {
+                if (meoHistoryData.keywords[k].keyword_id === currentKeywordId) {
+                    kwData = meoHistoryData.keywords[k];
+                    break;
+                }
+            }
+        }
         var weekly = kwData.weekly ? kwData.weekly[currentDevice] : {};
 
         if (!weekly || Object.keys(weekly).length === 0) {
