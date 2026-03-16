@@ -46,7 +46,7 @@
             $u = wp_get_current_user();
 
             // 表示名優先 → 姓
-            $company = $u->last_name ?: $u->display_name;
+            $company = gcrev_get_business_name( $u->ID );
             ?>
          <div class="sidebar-user-info">
             <div class="sidebar-user-name">
@@ -381,7 +381,7 @@
       <div class="topbar-right">
          <?php if ( is_user_logged_in() ) :
             $u = wp_get_current_user();
-            $company = $u->last_name ?: $u->display_name;
+            $company = gcrev_get_business_name( $u->ID );
             ?>
 
          <!-- クライアント名・サイトURL -->

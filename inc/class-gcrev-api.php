@@ -11705,10 +11705,14 @@ PROMPT;
                 $survey_id      = (int) $survey->id;
                 $survey_user_id = (int) $survey->user_id;
                 $user_id        = $survey_user_id;
-                $business_name  = get_user_meta($survey_user_id, 'report_client_name', true) ?: '';
+                $business_name  = function_exists('gcrev_get_business_name')
+                    ? gcrev_get_business_name($survey_user_id)
+                    : (get_user_meta($survey_user_id, 'gcrev_business_name', true) ?: '');
             } elseif ($user_id > 0) {
                 // レガシー方式
-                $business_name = get_user_meta($user_id, 'report_client_name', true) ?: '';
+                $business_name = function_exists('gcrev_get_business_name')
+                    ? gcrev_get_business_name($user_id)
+                    : (get_user_meta($user_id, 'gcrev_business_name', true) ?: '');
             }
 
             // 回答をプロンプト用テキストに整形

@@ -430,10 +430,88 @@ function gcrev_hide_profile_sections_css() {
     .user-url-wrap,                /* サイト */
     .user-description-wrap,        /* プロフィール情報 */
     .user-profile-picture,         /* プロフィール写真 */
-    #application-passwords-section /* アプリケーションパスワード */
+    #application-passwords-section, /* アプリケーションパスワード */
+    .user-first-name-wrap,        /* 名（事業者名項目に統一） */
+    .user-last-name-wrap           /* 姓（事業者名項目に統一） */
     { display: none !important; }
     </style>
     <?php
+}
+
+// ----------------------------------------
+// 事業者名（gcrev_business_name）ヘルパー・プロフィール項目・移行
+// ----------------------------------------
+
+/**
+ * 事業者名を取得するヘルパー関数
+ * フォールバック: gcrev_business_name → last_name → display_name
+ */
+function gcrev_get_business_name( $user_id ) {
+    $name = get_user_meta( $user_id, 'gcrev_business_name', true );
+    if ( ! empty( $name ) ) {
+        return $name;
+    }
+    $user = get_userdata( $user_id );
+    if ( ! $user ) {
+        return '';
+    }
+    if ( ! empty( $user->last_name ) ) {
+        return $user->last_name;
+    }
+    return $user->display_name;
+}
+
+// プロフィール画面に「事業者名」項目を追加
+add_action( 'show_user_profile', 'gcrev_render_business_name_field' );
+add_action( 'edit_user_profile', 'gcrev_render_business_name_field' );
+
+function gcrev_render_business_name_field( $user ) {
+    $value = get_user_meta( $user->ID, 'gcrev_business_name', true );
+    ?>
+    <h3>みまもりウェブ — 事業者情報</h3>
+    <table class="form-table">
+        <tr>
+            <th><label for="gcrev_business_name">事業者名</label></th>
+            <td>
+                <input type="text" name="gcrev_business_name" id="gcrev_business_name"
+                       value="<?php echo esc_attr( $value ); ?>" class="regular-text">
+                <p class="description">みまもりウェブ内で表示する事業者名です。アンケートや各種画面に使用されます。</p>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+
+// 事業者名の保存処理
+add_action( 'personal_options_update', 'gcrev_save_business_name_field' );
+add_action( 'edit_user_profile_update', 'gcrev_save_business_name_field' );
+
+function gcrev_save_business_name_field( $user_id ) {
+    if ( ! current_user_can( 'edit_user', $user_id ) ) {
+        return;
+    }
+    $value = sanitize_text_field( $_POST['gcrev_business_name'] ?? '' );
+    update_user_meta( $user_id, 'gcrev_business_name', $value );
+}
+
+// 既存データ一括移行: last_name → gcrev_business_name（1回限り実行）
+add_action( 'admin_init', 'gcrev_migrate_business_name' );
+
+function gcrev_migrate_business_name() {
+    if ( get_option( 'gcrev_business_name_migrated' ) ) {
+        return;
+    }
+    $users = get_users( [ 'fields' => [ 'ID' ] ] );
+    foreach ( $users as $u ) {
+        $existing = get_user_meta( $u->ID, 'gcrev_business_name', true );
+        if ( empty( $existing ) ) {
+            $last = get_user_meta( $u->ID, 'last_name', true );
+            if ( ! empty( $last ) ) {
+                update_user_meta( $u->ID, 'gcrev_business_name', $last );
+            }
+        }
+    }
+    update_option( 'gcrev_business_name_migrated', '1' );
 }
 
 // ----------------------------------------
@@ -6055,10 +6133,10 @@ add_action( 'wp_ajax_gcrev_save_account_info', function () {
         wp_send_json_error( 'このメールアドレスは既に使用されています' );
     }
 
+    update_user_meta( $user_id, 'gcrev_business_name', $company );
     $result = wp_update_user( [
         'ID'         => $user_id,
         'first_name' => $person,
-        'last_name'  => $company,
         'user_email' => $email,
     ] );
 

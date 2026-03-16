@@ -34,7 +34,7 @@ $c_status     = $dates['status'];
 $has_contract = ! empty( $dates['start_at'] );
 
 // --- ② ユーザー情報データ ---
-$acct_company = $current_user->last_name;
+$acct_company = gcrev_get_business_name( $current_user->ID );
 $acct_person  = $current_user->first_name;
 $acct_email   = $current_user->user_email;
 

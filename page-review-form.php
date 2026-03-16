@@ -35,12 +35,8 @@ if (!empty($survey_token)) {
         $survey_description = $survey->description ?? '';
         $google_review_url = $survey->google_review_url;
 
-        // クライアント名はuser metaから取得
-        $client_name = get_user_meta($target_user_id, 'report_client_name', true);
-        if (empty($client_name)) {
-            $target_user = get_userdata($target_user_id);
-            $client_name = $target_user ? $target_user->display_name : '';
-        }
+        // クライアント名を取得
+        $client_name = gcrev_get_business_name($target_user_id);
 
         // 質問取得
         $db_questions = $wpdb->get_results($wpdb->prepare(
@@ -75,10 +71,7 @@ if (!empty($survey_token)) {
     // ----- レガシー方式: user_id からビジネス情報取得（ハードコード質問） -----
     $target_user = get_userdata($target_user_id);
     if ($target_user) {
-        $client_name = get_user_meta($target_user_id, 'report_client_name', true);
-        if (empty($client_name)) {
-            $client_name = $target_user->display_name;
-        }
+        $client_name = gcrev_get_business_name($target_user_id);
         $survey_title = $client_name . ' ご感想アンケート';
         $survey_description = '';
         $google_review_url = get_user_meta($target_user_id, '_gcrev_google_review_url', true);
