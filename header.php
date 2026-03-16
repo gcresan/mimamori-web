@@ -75,7 +75,7 @@
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ website ---
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','rank-tracker');
-      $meo_pages       = array('meo-dashboard','meo-competitor','review-survey','review-management','gbp-posts');
+      $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','review-management','gbp-posts');
       $settings_pages  = array('client-settings','report-settings','cv-settings','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
@@ -218,8 +218,8 @@
                         </a>
                      </li>
                      <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/meo-competitor/') ); ?>" class="nav-link <?php echo is_page('meo-competitor') ? 'active' : ''; ?>">
-                        <span>競合比較</span>
+                        <a href="<?php echo esc_url( home_url('/meo/meo-search-terms/') ); ?>" class="nav-link <?php echo is_page('meo-search-terms') ? 'active' : ''; ?>">
+                        <span>検索語句分析</span>
                         </a>
                      </li>
                      <li class="nav-item">

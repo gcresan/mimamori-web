@@ -678,10 +678,7 @@ $gcrev_utils_opportunity_scorer = $gcrev_utils_path . 'class-opportunity-scorer.
 if ( file_exists( $gcrev_utils_opportunity_scorer ) ) {
     require_once $gcrev_utils_opportunity_scorer;
 }
-$gcrev_utils_city_coordinates = $gcrev_utils_path . 'class-city-coordinates.php';
-if ( file_exists( $gcrev_utils_city_coordinates ) ) {
-    require_once $gcrev_utils_city_coordinates;
-}
+// class-city-coordinates.php は DataForSEO MEO座標機能廃止に伴い削除済み
 
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）
@@ -4633,7 +4630,7 @@ add_action('after_setup_theme', function () {
     gcrev_cv_review_create_table();
     gcrev_rank_keywords_create_table();
     gcrev_rank_results_create_table();
-    gcrev_meo_results_create_table();
+    // gcrev_meo_results_create_table(); // DataForSEO MEO順位テーブル — 廃止（テーブルはDROPせず残置）
     gcrev_aio_results_create_table();
     gcrev_survey_create_tables();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
@@ -4849,37 +4846,7 @@ function gcrev_rank_results_migrate_to_daily(): void {
     error_log( '[GCREV] rank_results: migrated to daily (fetch_date)' );
 }
 
-// ----------------------------
-// MEO Results テーブル（週次 MEO 計測結果の永続化）
-// ----------------------------
-function gcrev_meo_results_create_table(): void {
-    global $wpdb;
-    $table = $wpdb->prefix . 'gcrev_meo_results';
-    $charset_collate = $wpdb->get_charset_collate();
-
-    $sql = "CREATE TABLE {$table} (
-        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        user_id BIGINT(20) UNSIGNED NOT NULL,
-        keyword_id BIGINT(20) UNSIGNED NOT NULL,
-        device VARCHAR(10) NOT NULL,
-        maps_rank SMALLINT UNSIGNED NULL,
-        finder_rank SMALLINT UNSIGNED NULL,
-        rating DECIMAL(2,1) NULL,
-        reviews_count INT UNSIGNED NULL,
-        store_data TEXT NULL,
-        competitors_data TEXT NULL,
-        iso_year_week CHAR(8) NOT NULL,
-        fetch_date DATE NOT NULL,
-        fetched_at DATETIME NOT NULL,
-        created_at DATETIME NOT NULL,
-        PRIMARY KEY  (id),
-        UNIQUE KEY user_kw_device_week (user_id, keyword_id, device, iso_year_week),
-        KEY user_fetched (user_id, fetched_at)
-    ) {$charset_collate};";
-
-    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-    dbDelta( $sql );
-}
+// gcrev_meo_results テーブル作成関数は DataForSEO MEO順位廃止に伴い削除（テーブルはDROPせず残置）
 
 function gcrev_aio_results_create_table(): void {
     global $wpdb;

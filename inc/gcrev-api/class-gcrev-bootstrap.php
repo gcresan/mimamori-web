@@ -26,10 +26,6 @@ class Gcrev_Bootstrap {
         add_action('gcrev_rank_fetch_weekly_event', [__CLASS__, 'on_rank_fetch_weekly_event']);
         add_action('gcrev_rank_fetch_chunk_event', [__CLASS__, 'on_rank_fetch_chunk_event'], 10, 2);
 
-        // MEO 週次フェッチ
-        add_action('gcrev_meo_fetch_weekly_event', [__CLASS__, 'on_meo_fetch_weekly_event']);
-        add_action('gcrev_meo_fetch_chunk_event', [__CLASS__, 'on_meo_fetch_chunk_event'], 10, 2);
-
         // キーワード指標（月次 — 検索ボリューム + SEO難易度）
         add_action('gcrev_keyword_metrics_monthly_event', [__CLASS__, 'on_keyword_metrics_monthly']);
         add_action('gcrev_keyword_metrics_chunk_event', [__CLASS__, 'on_keyword_metrics_chunk'], 10, 2);
@@ -196,24 +192,6 @@ class Gcrev_Bootstrap {
     }
 
     /**
-     * MEO 週次フェッチイベント（月曜 04:30）
-     */
-    public static function on_meo_fetch_weekly_event(): void {
-        error_log('[GCREV] gcrev_meo_fetch_weekly_event triggered');
-        $api = new Gcrev_Insight_API(false);
-        $api->auto_fetch_meo_rankings();
-    }
-
-    /**
-     * MEO 週次フェッチ — チャンクイベント
-     */
-    public static function on_meo_fetch_chunk_event( $offset, $limit ): void {
-        error_log("[GCREV] gcrev_meo_fetch_chunk_event triggered: offset={$offset}, limit={$limit}");
-        $api = new Gcrev_Insight_API(false);
-        $api->meo_fetch_chunk( (int) $offset, (int) $limit );
-    }
-
-    /**
      * 順位トラッキング — チャンクフェッチイベント
      */
     public static function on_rank_fetch_chunk_event( $offset, $limit ): void {
@@ -301,9 +279,6 @@ class Gcrev_Bootstrap {
         }
         self::schedule_weekly_if_missing('gcrev_rank_fetch_weekly_event', 'next Monday 03:30:00');
 
-        // MEO 週次フェッチ（月曜 04:30）
-        self::schedule_weekly_if_missing('gcrev_meo_fetch_weekly_event', 'next Monday 04:30:00');
-
         // キーワード指標: 月1回（1日 06:00）
         self::schedule_monthly_if_missing('gcrev_keyword_metrics_monthly_event', 'first day of next month 06:00:00');
     }
@@ -371,7 +346,6 @@ class Gcrev_Bootstrap {
             'gcrev_cron_log_cleanup_event',
             'gcrev_rank_fetch_daily_event',
             'gcrev_rank_fetch_weekly_event',
-            'gcrev_meo_fetch_weekly_event',
             'gcrev_keyword_metrics_monthly_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
