@@ -737,12 +737,9 @@ if ($infographic && is_array($infographic)) {
         // 比較期間のKPI（currがキャッシュヒットした場合のみ取得）
         $kpi_prev = [];
         if (!empty($kpi_curr)) {
-            // 比較期間もキャッシュチェック — なければJS側で非同期取得
-            $comp_cache_key = "gcrev_dash_{$user_id}_comp_{$last30_comp['start']}_{$last30_comp['end']}";
-            $kpi_prev = get_transient($comp_cache_key);
-            if ($kpi_prev === false) {
-                $kpi_prev = [];
-            }
+            $kpi_prev = $gcrev_api->get_dashboard_kpi_by_dates(
+                $last30_comp['start'], $last30_comp['end'], $user_id
+            );
         }
 
         // --- MEO直近30日（cache_first方式: キャッシュがあれば即、なければJS非同期へ）---

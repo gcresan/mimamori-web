@@ -2795,6 +2795,15 @@ class Gcrev_Insight_API {
      * @return array KPIデータ
      */
     public function get_dashboard_kpi_by_dates( string $start_date, string $end_date, int $user_id ): array {
+        // --- Transient キャッシュ（12+ API呼び出しを回避）---
+        $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
+        $filter_suffix   = $exclude_foreign ? '_filtered' : '';
+        $cache_key       = "gcrev_dash_bydate_{$user_id}_{$start_date}_{$end_date}{$filter_suffix}";
+        $cached          = get_transient( $cache_key );
+        if ( $cached !== false && is_array( $cached ) ) {
+            return $cached;
+        }
+
         $config = $this->config->get_user_config( $user_id );
 
         $ga4_id  = $config['ga4_id'];
@@ -2900,6 +2909,9 @@ class Gcrev_Insight_API {
             }
             $result['trends']['conversions'] = $cv_trend;
         }
+
+        // キャッシュ保存（24時間）
+        set_transient( $cache_key, $result, 24 * HOUR_IN_SECONDS );
 
         return $result;
 
