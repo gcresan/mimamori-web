@@ -358,8 +358,13 @@ class Gcrev_DataForSEO_Client {
      * @return array|null マッチしたアイテム（rank_group, rank_absolute, url, domain, type）
      */
     public function find_domain_in_results( array $items, string $target_domain ): ?array {
-        // www. を除いた正規化ドメイン
-        $normalized_target = preg_replace( '/^www\./i', '', strtolower( $target_domain ) );
+        // URL が渡された場合はホスト部分を抽出し、www. を除いた正規化ドメインにする
+        $host = $target_domain;
+        if ( preg_match( '#^https?://#i', $target_domain ) ) {
+            $parsed = wp_parse_url( $target_domain );
+            $host   = $parsed['host'] ?? $target_domain;
+        }
+        $normalized_target = preg_replace( '/^www\./i', '', strtolower( trim( $host, '/' ) ) );
 
         foreach ( $items as $item ) {
             if ( empty( $item['domain'] ) ) {
