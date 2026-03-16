@@ -364,6 +364,7 @@ wp/
 | 正規表現に `preg_quote()` なしで変数 | ReDoS・意図しないマッチ |
 | `date()` / `new DateTime()` | `wp_timezone()` + `DateTimeImmutable` を使う |
 | 新ファイル不要な場面でファイル作成 | 既存ファイルへの差分変更を優先 |
+| `error_log()` をデバッグに使う | KUSANAGI環境で出力されない。`file_put_contents` を使う（後述§7.1） |
 
 ### セキュリティ — WordPress 慣習厳守
 
@@ -372,6 +373,104 @@ wp/
 - 入力: `sanitize_text_field()`, `absint()`, etc.
 - REST: `permission_callback` 必ず設定
 - JSON: `wp_json_encode($data, JSON_UNESCAPED_UNICODE)`
+
+### 7.1 デバッグ・ログ出力ルール（MUST FOLLOW）
+
+#### KUSANAGI 環境では `error_log()` を使わない
+
+KUSANAGI + PHP-FPM 環境では `error_log()` の出力先が不定で、REST APIハンドラーや Cron コールバックから呼んでも **ログが一切出力されない** ことがある。デバッグ目的のログは以下のパターンを使うこと。
+
+#### 正しいデバッグログの書き方
+
+```php
+// 基本形
+file_put_contents('/tmp/gcrev_<機能名>_debug.log',
+    date('Y-m-d H:i:s') . " <メッセージ>\n",
+    FILE_APPEND
+);
+
+// 例: GBP API デバッグ
+file_put_contents('/tmp/gcrev_gbp_debug.log',
+    date('Y-m-d H:i:s') . " fetch_metrics: status={$status}, body=" . substr($body, 0, 500) . "\n",
+    FILE_APPEND
+);
+
+// 例: 配列・オブジェクトの出力
+file_put_contents('/tmp/gcrev_gbp_debug.log',
+    date('Y-m-d H:i:s') . " response: " . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n",
+    FILE_APPEND
+);
+```
+
+#### ファイル名規約
+
+| ログファイル | 用途 |
+|---|---|
+| `/tmp/gcrev_gbp_debug.log` | GBP/MEO API デバッグ |
+| `/tmp/gcrev_ga4_debug.log` | GA4 API デバッグ |
+| `/tmp/gcrev_gsc_debug.log` | GSC API デバッグ |
+| `/tmp/gcrev_report_debug.log` | レポート生成デバッグ |
+| `/tmp/gcrev_chat_debug.log` | AIチャット デバッグ |
+| `/tmp/gcrev_cron_debug.log` | Cron 処理デバッグ |
+
+**命名パターン**: `/tmp/gcrev_<機能名>_debug.log`
+
+#### ログ出力時の注意事項
+
+1. **タイムスタンプ必須**: 各行に `date('Y-m-d H:i:s')` を付ける
+2. **FILE_APPEND**: 常に追記モード。上書き（`FILE_APPEND` なし）は禁止
+3. **レスポンスボディは切り詰める**: 巨大なレスポンスは `substr($body, 0, 500)` 等で先頭だけ出力
+4. **機密情報の出力禁止**: アクセストークン、シークレット、パスワードは絶対にログに含めない
+5. **デバッグログは原則残す**: 外部API呼び出しのエラーパスには常にログを入れておく（正常パスのログは不要）
+
+#### 外部API呼び出しには必ずエラーログを入れる
+
+```php
+$response = wp_remote_get($url, [...]);
+if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+    $code = is_wp_error($response)
+        ? $response->get_error_message()
+        : wp_remote_retrieve_response_code($response);
+    file_put_contents('/tmp/gcrev_<機能名>_debug.log',
+        date('Y-m-d H:i:s') . " API ERROR: code={$code}, url={$url}\n"
+        . substr(wp_remote_retrieve_body($response), 0, 500) . "\n",
+        FILE_APPEND
+    );
+    return []; // or appropriate fallback
+}
+```
+
+**これは「あると便利」ではなく必須**。外部APIの呼び出しでエラーログがないと、障害時にサーバーログを読んでも何が起きたか分からず、毎回デバッグコードの追加→デプロイ→再現を繰り返すことになる。
+
+#### サーバーでのログ確認
+
+```bash
+# リアルタイム監視
+tail -f /tmp/gcrev_gbp_debug.log
+
+# 直近のエラーを確認
+cat /tmp/gcrev_gbp_debug.log
+
+# ログファイル削除（蓄積が不要になったら）
+rm /tmp/gcrev_*_debug.log
+```
+
+#### 本番環境のログ
+
+| ログ | パス | 備考 |
+|---|---|---|
+| WordPress debug.log | `wp-content/debug.log` | `WP_DEBUG_LOG=true` 時のみ |
+| PHP-FPM error log | `/var/opt/kusanagi/log/php-fpm/www-error.log` | PHP Fatal等 |
+| デバッグ用一時ログ | `/tmp/gcrev_*_debug.log` | 上記パターンで手動作成 |
+| QA夜間バッチログ | `/home/kusanagi/mimamori-dev/logs/qa-nightly.log` | crontab出力 |
+
+#### OPcache による反映遅延
+
+コードをデプロイしても OPcache が古いバイトコードを返す場合がある。ログが期待通りに出ない場合はまず OPcache をクリアする：
+
+```bash
+systemctl restart php-fpm
+```
 
 ### Diff-based Changes
 
@@ -557,7 +656,20 @@ sudo -u kusanagi /opt/kusanagi/php/bin/php /opt/kusanagi/bin/wp mimamori qa run 
 1. `gcrev_invalidate_user_cv_cache($user_id)` を呼ぶ
 2. Transient を直接削除: `wp transient delete --all`
 3. TTL 確認: ダッシュボード 24h, 長期間 48h, 実績CV 2h
-4. OPcache: `kill -USR2 $(cat /run/kusanagi/php-fpm.pid)`
+4. OPcache: `systemctl restart php-fpm`
+
+**重要**: APIレスポンス構造を変更した場合、古い形式のキャッシュが残っているとフロントエンドで表示崩れ・データ欠落が起きる。構造変更後は必ずサーバーでTransientをクリアすること：
+
+```bash
+sudo -u kusanagi /opt/kusanagi/php/bin/php /opt/kusanagi/bin/wp transient delete --all \
+  --path=/home/kusanagi/mimamori-dev/DocumentRoot
+```
+
+### デバッグログが出力されない
+
+1. `error_log()` はKUSANAGI環境で効かない → `file_put_contents('/tmp/gcrev_*_debug.log', ..., FILE_APPEND)` を使う（§7.1 参照）
+2. OPcacheが古いコードをキャッシュしている → `systemctl restart php-fpm`
+3. デプロイ後にパーミッション不足 → `chown -R kusanagi:kusanagi /home/kusanagi/mimamori-dev/DocumentRoot/wp-content/themes/mimamori/`
 
 ### ログインリダイレクトがおかしい
 
