@@ -5060,43 +5060,47 @@ class Gcrev_Insight_API {
             ],
         ];
 
+        $req_body_json = wp_json_encode($body);
+
+        // DEBUG: リクエスト情報をログ
+        $dbg = date('Y-m-d H:i:s') . " === GBP Performance API REQUEST ===\n";
+        $dbg .= "URL: {$url}\n";
+        $dbg .= "location_id: {$location_id}\n";
+        $dbg .= "date_range: {$start_date} ~ {$end_date}\n";
+        $dbg .= "request_body: {$req_body_json}\n";
+        file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
+
         $response = wp_remote_post($url, [
             'headers' => [
                 'Authorization' => 'Bearer ' . $access_token,
                 'Content-Type'  => 'application/json',
             ],
-            'body'    => wp_json_encode($body),
+            'body'    => $req_body_json,
             'timeout' => 30,
         ]);
 
         if (is_wp_error($response)) {
-            error_log("[GCREV][GBP] Performance API error: " . $response->get_error_message());
+            $err = $response->get_error_message();
+            file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " WP_ERROR: {$err}\n\n", FILE_APPEND);
             return $this->gbp_empty_metrics();
         }
 
-        $status = wp_remote_retrieve_response_code($response);
-        if ($status !== 200) {
-            $body_text = wp_remote_retrieve_body($response);
-            error_log("[GCREV][GBP] Performance API HTTP {$status}: {$body_text}");
-            return $this->gbp_empty_metrics();
-        }
-
+        $status   = wp_remote_retrieve_response_code($response);
         $raw_body = wp_remote_retrieve_body($response);
+
+        $dbg2 = date('Y-m-d H:i:s') . " HTTP {$status}\n";
+        $dbg2 .= "response (first 3000):\n" . substr($raw_body, 0, 3000) . "\n";
+        $dbg2 .= "=== END ===\n\n";
+        file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg2, FILE_APPEND);
+
+        if ($status !== 200) {
+            return $this->gbp_empty_metrics();
+        }
+
         $data = json_decode($raw_body, true);
-
-        // DEBUG: file_put_contents で /tmp に出力（一時的）
-        $dbg = date('Y-m-d H:i:s') . " === GBP Performance API DEBUG ===\n";
-        $dbg .= "location_id: {$location_id}\n";
-        $dbg .= "date_range: {$start_date} ~ {$end_date}\n";
-        $dbg .= "HTTP status: {$status}\n";
-        $dbg .= "raw_body (first 3000):\n" . substr($raw_body, 0, 3000) . "\n";
-        $dbg .= "=== END ===\n\n";
-        file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
-
         $aggregated = $this->gbp_aggregate_metrics($data);
 
-        $dbg2 = date('Y-m-d H:i:s') . " aggregated: " . wp_json_encode($aggregated, JSON_UNESCAPED_UNICODE) . "\n\n";
-        file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg2, FILE_APPEND);
+        file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " aggregated: " . wp_json_encode($aggregated, JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
 
         return $aggregated;
     }
