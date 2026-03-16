@@ -100,7 +100,7 @@ get_header();
 /* Store card */
 .meo-store-card {
     background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;
-    padding: 20px; margin-bottom: 20px;
+    padding: 20px; margin-top: 20px; margin-bottom: 20px;
 }
 .meo-store-card__title {
     font-size: 14px; font-weight: 700; color: #1a1a1a; margin-bottom: 14px;
