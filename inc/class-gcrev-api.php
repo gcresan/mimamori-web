@@ -461,6 +461,13 @@ class Gcrev_Insight_API {
                     'validate_callback' => function($param) {
                         return in_array($param, ['sessions', 'cv', 'meo']);
                     }
+                ],
+                'view' => [
+                    'required'          => false,
+                    'default'           => 'monthly',
+                    'validate_callback' => function($param) {
+                        return in_array($param, ['monthly', 'daily']);
+                    }
                 ]
             ]
         ]);
@@ -5527,6 +5534,19 @@ class Gcrev_Insight_API {
         }
     }
 
+    /**
+     * MEO合計表示回数を安全に取得（テンプレートから利用可能な公開ラッパー）
+     *
+     * @param int    $user_id
+     * @param string $start YYYY-MM-DD
+     * @param string $end   YYYY-MM-DD
+     * @return int total_impressions（取得失敗時は0）
+     */
+    public function get_meo_total_impressions(int $user_id, string $start, string $end): int {
+        $metrics = $this->fetch_meo_metrics_safe($user_id, $start, $end);
+        return (int)($metrics['total_impressions'] ?? 0);
+    }
+
     // =========================================================
     // インフォグラフィックJSON 生成（score=PHP計算、summary/action=AI）
     // =========================================================
@@ -7745,7 +7765,13 @@ PROMPT;
 
         try {
             $metric = $request->get_param('metric');
-            $result = $this->get_monthly_metric_trend($user_id, $metric, 12);
+            $view   = $request->get_param('view') ?? 'monthly';
+
+            if ($view === 'daily') {
+                $result = $this->get_daily_metric_trend($user_id, $metric, 30);
+            } else {
+                $result = $this->get_monthly_metric_trend($user_id, $metric, 12);
+            }
 
             return new \WP_REST_Response($result, 200);
 
@@ -8026,7 +8052,7 @@ PROMPT;
                     $end   = date('Y-m-t', strtotime($start));
                     try {
                         $m = $this->gbp_fetch_performance_metrics($access_token, $location_id, $start, $end);
-                        $values[] = ($m['search_impressions'] ?? 0) + ($m['map_impressions'] ?? 0);
+                        $values[] = (int)($m['total_impressions'] ?? 0);
                     } catch (\Exception $e) {
                         error_log("[GCREV][Trend] MEO error ({$ym}): " . $e->getMessage());
                         $values[] = 0;
@@ -8047,6 +8073,137 @@ PROMPT;
 
         // TTL: 24時間（cronが毎日更新）
         set_transient($cache_key, $result, DAY_IN_SECONDS);
+
+        return $result;
+    }
+
+    /**
+     * 直近N日の日別メトリクストレンドを返す
+     *
+     * @param int    $user_id
+     * @param string $metric  'sessions' | 'cv' | 'meo'
+     * @param int    $days    日数（デフォルト30）
+     * @return array {success, metric, labels, values, view}
+     */
+    public function get_daily_metric_trend(int $user_id, string $metric, int $days = 30): array {
+
+        $today_str = date('Y-m-d');
+        $filter_sfx = (isset($this->ga4) && $this->ga4->has_country_filter()) ? '_jp' : '';
+        $cache_key = "gcrev_trend_daily_{$user_id}_{$metric}_{$today_str}{$filter_sfx}";
+        $cached = get_transient($cache_key);
+        if ($cached !== false && is_array($cached)) {
+            return $cached;
+        }
+
+        $tz = wp_timezone();
+        $end   = new \DateTimeImmutable('yesterday', $tz);
+        $start = $end->sub(new \DateInterval('P' . ($days - 1) . 'D'));
+
+        $start_str = $start->format('Y-m-d');
+        $end_str   = $end->format('Y-m-d');
+
+        // 日付ラベル配列（YYYY-MM-DD）
+        $labels = [];
+        $dt = $start;
+        while ($dt <= $end) {
+            $labels[] = $dt->format('Y-m-d');
+            $dt = $dt->add(new \DateInterval('P1D'));
+        }
+
+        $values = [];
+
+        switch ($metric) {
+            case 'sessions':
+                $config = $this->config->get_user_config($user_id);
+                $ga4_id = $config['ga4_id'] ?? '';
+                if (empty($ga4_id)) {
+                    $values = array_fill(0, $days, 0);
+                    break;
+                }
+                try {
+                    $daily = $this->ga4->fetch_ga4_daily_series($ga4_id, $start_str, $end_str);
+                    $sess_data = $daily['sessions'] ?? [];
+                    $sess_labels = $sess_data['labels'] ?? [];
+                    $sess_values = $sess_data['values'] ?? [];
+                    // YYYYMMDD → index map
+                    $sess_map = [];
+                    foreach ($sess_labels as $i => $lbl) {
+                        $sess_map[$lbl] = $sess_values[$i] ?? 0;
+                    }
+                    foreach ($labels as $d) {
+                        $key = str_replace('-', '', $d);
+                        $values[] = (int)($sess_map[$key] ?? 0);
+                    }
+                } catch (\Exception $e) {
+                    error_log("[GCREV][DailyTrend] sessions error: " . $e->getMessage());
+                    $values = array_fill(0, $days, 0);
+                }
+                break;
+
+            case 'cv':
+                $config = $this->config->get_user_config($user_id);
+                $ga4_id = $config['ga4_id'] ?? '';
+                if (empty($ga4_id)) {
+                    $values = array_fill(0, $days, 0);
+                    break;
+                }
+                try {
+                    $daily = $this->ga4->fetch_ga4_daily_series($ga4_id, $start_str, $end_str);
+                    $conv_data = $daily['conversions'] ?? [];
+                    $conv_labels = $conv_data['labels'] ?? [];
+                    $conv_values = $conv_data['values'] ?? [];
+                    $conv_map = [];
+                    foreach ($conv_labels as $i => $lbl) {
+                        $conv_map[$lbl] = $conv_values[$i] ?? 0;
+                    }
+                    foreach ($labels as $d) {
+                        $key = str_replace('-', '', $d);
+                        $values[] = (int)($conv_map[$key] ?? 0);
+                    }
+                } catch (\Exception $e) {
+                    error_log("[GCREV][DailyTrend] cv error: " . $e->getMessage());
+                    $values = array_fill(0, $days, 0);
+                }
+                break;
+
+            case 'meo':
+                $values = array_fill(0, $days, 0);
+                $location_id = get_user_meta($user_id, '_gcrev_gbp_location_id', true);
+                if (!empty($location_id) && strpos($location_id, 'pending_') !== 0) {
+                    $access_token = $this->gbp_get_access_token($user_id);
+                    if (!empty($access_token)) {
+                        try {
+                            $daily = $this->gbp_fetch_daily_metrics($access_token, $location_id, $start_str, $end_str);
+                            $daily_map = [];
+                            foreach ($daily as $d) {
+                                $daily_map[$d['date']] = ($d['search_impressions'] ?? 0) + ($d['map_impressions'] ?? 0);
+                            }
+                            $values = [];
+                            foreach ($labels as $d) {
+                                $values[] = (int)($daily_map[$d] ?? 0);
+                            }
+                        } catch (\Exception $e) {
+                            error_log("[GCREV][DailyTrend] meo error: " . $e->getMessage());
+                            $values = array_fill(0, $days, 0);
+                        }
+                    }
+                }
+                break;
+
+            default:
+                $values = array_fill(0, $days, 0);
+        }
+
+        $result = [
+            'success' => true,
+            'metric'  => $metric,
+            'labels'  => $labels,
+            'values'  => $values,
+            'view'    => 'daily',
+        ];
+
+        // TTL: 6時間
+        set_transient($cache_key, $result, 6 * HOUR_IN_SECONDS);
 
         return $result;
     }

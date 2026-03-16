@@ -22,22 +22,24 @@ set_query_var('gcrev_page_subtitle', 'このホームページが、今どんな
 // パンくず設定（ダッシュボードは2階層: ホーム › 全体のようす）
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('全体のようす'));
 
-// 前月・前々月の日付範囲を計算
-$tz = wp_timezone();
-$prev_month_start = new DateTimeImmutable('first day of last month', $tz);
-$prev_month_end = new DateTimeImmutable('last day of last month', $tz);
-
-$prev_prev_month_start = new DateTimeImmutable('first day of 2 months ago', $tz);
-$prev_prev_month_end = new DateTimeImmutable('last day of 2 months ago', $tz);
-
-$year = (int)$prev_month_start->format('Y');
-$month = (int)$prev_month_start->format('n');
-
+// APIインスタンス初期化（日付計算より先に必要）
 global $gcrev_api_instance;
 if ( ! isset($gcrev_api_instance) || ! ($gcrev_api_instance instanceof Gcrev_Insight_API) ) {
     $gcrev_api_instance = new Gcrev_Insight_API(false);
 }
 $gcrev_api = $gcrev_api_instance;
+
+// 直近30日（ダッシュボード主軸）
+$tz = wp_timezone();
+$date_helper = new Gcrev_Date_Helper();
+$last30      = $date_helper->get_date_range('last30');
+$last30_comp = $date_helper->get_comparison_range($last30['start'], $last30['end']);
+
+// 月次レポート/インフォグラフィック用（従来どおり）
+$prev_month_start = new DateTimeImmutable('first day of last month', $tz);
+$prev_month_end   = new DateTimeImmutable('last day of last month', $tz);
+$year  = (int)$prev_month_start->format('Y');
+$month = (int)$prev_month_start->format('n');
 
 
 /**
@@ -161,6 +163,37 @@ get_header();
   .kpi-trend-chart-wrap { height: 200px; }
   .kpi-trend-inline-title { font-size: 13px; }
   .kpi-trend-inline-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .kpi-trend-toggle { width: 100%; justify-content: flex-end; }
+}
+
+/* KPI trend period toggle */
+.kpi-trend-toggle {
+  display: flex;
+  gap: 0;
+  margin-left: auto;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.kpi-trend-toggle-btn {
+  background: #fff;
+  border: none;
+  padding: 5px 14px;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  line-height: 1.4;
+}
+.kpi-trend-toggle-btn + .kpi-trend-toggle-btn {
+  border-left: 1px solid #d0d0d0;
+}
+.kpi-trend-toggle-btn.is-active {
+  background: #568184;
+  color: #fff;
+}
+.kpi-trend-toggle-btn:hover:not(.is-active) {
+  background: #f0f0f0;
 }
 
 /* =========================================================
@@ -686,127 +719,52 @@ $infographic = $gcrev_api->get_monthly_infographic($year, $month, $user_id);
 $kpi_curr = [];
 $kpi_prev = [];
 
-// === Effective CV で採点の「成果」を上書き ＋ KPIライブデータで全観点を補正 ===
+// === 直近30日ベースのKPI・スコア算出 ===
 if ($infographic && is_array($infographic)) {
     try {
-        $prev_ym_dash = $prev_month_start->format('Y-m');
-        $prev_prev_ym_dash = $prev_prev_month_start->format('Y-m');
-        $eff_cv_curr = $gcrev_api->get_effective_cv_monthly($prev_ym_dash, $user_id);
-        $eff_cv_prev = $gcrev_api->get_effective_cv_monthly($prev_prev_ym_dash, $user_id);
-
-        // KPI の cv を上書き
-        if (isset($infographic['kpi']['cv'])) {
-            $infographic['kpi']['cv']['value']  = $eff_cv_curr['total'];
-            $infographic['kpi']['cv']['diff']   = $eff_cv_curr['total'] - $eff_cv_prev['total'];
-            $infographic['kpi']['cv']['source'] = $eff_cv_curr['source'];
-        }
-
-        // breakdown の cv を上書き
-        if (isset($infographic['breakdown']['cv'])) {
-            $bd_cv = &$infographic['breakdown']['cv'];
-            $bd_cv['curr'] = (float)$eff_cv_curr['total'];
-            $bd_cv['prev'] = (float)$eff_cv_prev['total'];
-            // pct 再計算
-            if ($bd_cv['prev'] > 0) {
-                $bd_cv['pct'] = round((($bd_cv['curr'] - $bd_cv['prev']) / $bd_cv['prev']) * 100.0, 1);
-            } else {
-                $bd_cv['pct'] = ($bd_cv['curr'] > 0) ? 100.0 : 0.0;
-            }
-            // points 再計算
-            $max_p = (int)($bd_cv['max'] ?? 25);
-            $pct_v = (float)$bd_cv['pct'];
-            if ($pct_v >= 15.0) $bd_cv['points'] = $max_p;
-            elseif ($pct_v >= 5.0) $bd_cv['points'] = (int)($max_p * 0.8);
-            elseif ($pct_v >= -4.0) $bd_cv['points'] = (int)($max_p * 0.6);
-            elseif ($pct_v >= -14.0) $bd_cv['points'] = (int)($max_p * 0.32);
-            else $bd_cv['points'] = 0;
-            if ((int)$bd_cv['curr'] === 0) $bd_cv['points'] = 0;
-            unset($bd_cv);
-        }
-
-        // === KPIライブデータで流入・検索の採点を補正 ===
+        // --- 直近30日のKPIデータ（GA4+GSC）---
         // cache_first=1: キャッシュがあれば使い、なければスキップ（JS側で非同期取得）
-        $kpi_curr = $gcrev_api->get_dashboard_kpi('prev-month', $user_id, 1);
-        $kpi_prev = $gcrev_api->get_dashboard_kpi('prev-prev-month', $user_id, 1);
+        $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id, 1);
 
+        // 比較期間のKPI
+        $kpi_prev = [];
         if (!empty($kpi_curr)) {
-        // --- 流入（traffic = sessions）を上書き ---
+            $kpi_prev = $gcrev_api->get_dashboard_kpi_by_dates(
+                $last30_comp['start'], $last30_comp['end'], $user_id
+            );
+        }
+
+        // --- MEO直近30日 ---
+        $meo_curr = $gcrev_api->get_meo_total_impressions($user_id, $last30['start'], $last30['end']);
+        $meo_prev = $gcrev_api->get_meo_total_impressions($user_id, $last30_comp['start'], $last30_comp['end']);
+
+        // --- KPI値構築 ---
         $sess_curr = (int)str_replace(',', '', (string)($kpi_curr['sessions'] ?? '0'));
         $sess_prev = (int)str_replace(',', '', (string)($kpi_prev['sessions'] ?? '0'));
+        $cv_curr   = (int)str_replace(',', '', (string)($kpi_curr['conversions'] ?? '0'));
+        $cv_prev   = (int)str_replace(',', '', (string)($kpi_prev['conversions'] ?? '0'));
+        $gsc_curr_val = (int)str_replace(',', '', (string)(
+            $kpi_curr['gsc']['total']['clicks'] ?? $kpi_curr['gsc']['total']['impressions'] ?? '0'
+        ));
+        $gsc_prev_val = (int)str_replace(',', '', (string)(
+            $kpi_prev['gsc']['total']['clicks'] ?? $kpi_prev['gsc']['total']['impressions'] ?? '0'
+        ));
 
-        if (isset($infographic['kpi']['visits'])) {
-            $infographic['kpi']['visits']['value'] = $sess_curr;
-            $infographic['kpi']['visits']['diff']  = $sess_curr - $sess_prev;
-        }
+        // infographic KPI 上書き（訪問数・ゴール数・MEO）
+        $infographic['kpi']['visits'] = ['value' => $sess_curr, 'diff' => $sess_curr - $sess_prev];
+        $infographic['kpi']['cv']     = ['value' => $cv_curr,   'diff' => $cv_curr - $cv_prev];
+        $infographic['kpi']['meo']    = ['value' => $meo_curr,  'diff' => $meo_curr - $meo_prev];
 
-        if (isset($infographic['breakdown']['traffic'])) {
-            $bd_tr = &$infographic['breakdown']['traffic'];
-            $bd_tr['curr'] = (float)$sess_curr;
-            $bd_tr['prev'] = (float)$sess_prev;
-            if ($bd_tr['prev'] > 0) {
-                $bd_tr['pct'] = round((($bd_tr['curr'] - $bd_tr['prev']) / $bd_tr['prev']) * 100.0, 1);
-            } else {
-                $bd_tr['pct'] = ($bd_tr['curr'] > 0) ? 100.0 : 0.0;
-            }
-            $max_p = (int)($bd_tr['max'] ?? 25);
-            $pct_v = (float)$bd_tr['pct'];
-            if ($pct_v >= 15.0) $bd_tr['points'] = $max_p;
-            elseif ($pct_v >= 5.0) $bd_tr['points'] = (int)($max_p * 0.8);
-            elseif ($pct_v >= -4.0) $bd_tr['points'] = (int)($max_p * 0.6);
-            elseif ($pct_v >= -14.0) $bd_tr['points'] = (int)($max_p * 0.32);
-            else $bd_tr['points'] = 0;
-            if ((int)$bd_tr['curr'] === 0) $bd_tr['points'] = 0;
-            unset($bd_tr);
-        }
-
-        // --- 検索（gsc = clicks）を上書き ---
-        $gsc_curr_raw = $kpi_curr['gsc']['total'] ?? [];
-        $gsc_prev_raw = $kpi_prev['gsc']['total'] ?? [];
-        $gsc_curr_val = (int)str_replace(',', '', (string)($gsc_curr_raw['clicks'] ?? $gsc_curr_raw['impressions'] ?? '0'));
-        $gsc_prev_val = (int)str_replace(',', '', (string)($gsc_prev_raw['clicks'] ?? $gsc_prev_raw['impressions'] ?? '0'));
-
-        if ($gsc_curr_val > 0 && isset($infographic['breakdown']['gsc'])) {
-            $bd_gsc = &$infographic['breakdown']['gsc'];
-            $bd_gsc['curr'] = (float)$gsc_curr_val;
-            $bd_gsc['prev'] = (float)$gsc_prev_val;
-            if ($bd_gsc['prev'] > 0) {
-                $bd_gsc['pct'] = round((($bd_gsc['curr'] - $bd_gsc['prev']) / $bd_gsc['prev']) * 100.0, 1);
-            } else {
-                $bd_gsc['pct'] = ($bd_gsc['curr'] > 0) ? 100.0 : 0.0;
-            }
-            $max_p = (int)($bd_gsc['max'] ?? 25);
-            $pct_v = (float)$bd_gsc['pct'];
-            if ($pct_v >= 15.0) $bd_gsc['points'] = $max_p;
-            elseif ($pct_v >= 5.0) $bd_gsc['points'] = (int)($max_p * 0.8);
-            elseif ($pct_v >= -4.0) $bd_gsc['points'] = (int)($max_p * 0.6);
-            elseif ($pct_v >= -14.0) $bd_gsc['points'] = (int)($max_p * 0.32);
-            else $bd_gsc['points'] = 0;
-            if ((int)$bd_gsc['curr'] === 0) $bd_gsc['points'] = 0;
-            unset($bd_gsc);
-        }
-
-        } // end if (!empty($kpi_curr))
-
-        // === score 再計算（常にv2ロジックで再スコアリング） ===
-        // KPIライブデータ有無に関わらず、最新の breakdown curr/prev で v2 再計算
-        $re_curr = [];
-        $re_prev = [];
-        foreach (['traffic', 'cv', 'gsc', 'meo'] as $rk) {
-            $re_curr[$rk] = (float)($infographic['breakdown'][$rk]['curr'] ?? 0);
-            $re_prev[$rk] = (float)($infographic['breakdown'][$rk]['prev'] ?? 0);
-        }
-        $re_health = $gcrev_api->calc_monthly_health_score(
-            $re_curr, $re_prev, [],
-            $user_id,
-            (int)$prev_month_start->format('Y'),
-            (int)$prev_month_start->format('n')
-        );
+        // === スコア再計算（直近30日 vs その前の30日）===
+        $re_curr = ['traffic' => $sess_curr, 'cv' => $cv_curr, 'gsc' => $gsc_curr_val, 'meo' => $meo_curr];
+        $re_prev = ['traffic' => $sess_prev, 'cv' => $cv_prev, 'gsc' => $gsc_prev_val, 'meo' => $meo_prev];
+        $re_health = $gcrev_api->calc_monthly_health_score($re_curr, $re_prev, [], $user_id);
         $infographic['score']      = $re_health['score'];
         $infographic['status']     = $re_health['status'];
         $infographic['breakdown']  = $re_health['breakdown'];
         $infographic['components'] = $re_health['components'];
     } catch (\Throwable $e) {
-        error_log('[GCREV] page-dashboard infographic override error: ' . $e->getMessage());
+        error_log('[GCREV] page-dashboard last30 override error: ' . $e->getMessage());
     }
 }
 
@@ -834,13 +792,13 @@ if ($infographic) {
     <!-- 期間表示 -->
     <div class="period-info">
         <div class="period-item">
-            <span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>
-            <span class="period-value"><?php echo esc_html( $prev_month_start->format('Y年n月') ); ?>（<?php echo esc_html( $prev_month_start->format('n/1') ); ?> - <?php echo esc_html( $prev_month_end->format('n/t') ); ?>）</span>
+            <span class="period-label-v2">&#x1F4C5; 対象期間：</span>
+            <span class="period-value">直近30日（<?php echo esc_html( $last30['display']['start'] ); ?> 〜 <?php echo esc_html( $last30['display']['end'] ); ?>）</span>
         </div>
         <div class="period-divider"></div>
         <div class="period-item">
             <span class="period-label-v2">&#x1F4CA; 比較期間：</span>
-            <span class="period-value"><?php echo esc_html( $prev_prev_month_start->format('Y年n月') ); ?>（<?php echo esc_html( $prev_prev_month_start->format('n/1') ); ?> - <?php echo esc_html( $prev_prev_month_end->format('n/t') ); ?>）</span>
+            <span class="period-value">その前の30日（<?php echo esc_html( $last30_comp['display']['start'] ); ?> 〜 <?php echo esc_html( $last30_comp['display']['end'] ); ?>）</span>
         </div>
     </div>
 <?php if ($infographic): ?>
@@ -849,13 +807,13 @@ if ($infographic) {
   <!-- 外枠右上：最新月次レポートを見る（※月次レポートがある時だけ表示） -->
   <?php if (!empty($monthly_report)): ?>
     <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="info-monthly-link info-monthly-link--corner">
-      <span aria-hidden="true">📊</span> 最新月次レポートを見る
+      <span aria-hidden="true">📊</span> 前月の月次レポートを見る
     </a>
   <?php endif; ?>
 
   <!-- 見出し -->
   <h2 class="dashboard-infographic-title">
-    <span class="icon" aria-hidden="true">📊</span><?php echo esc_html($year . '年' . $month); ?>月の状態
+    <span class="icon" aria-hidden="true">📊</span>直近30日の状態
   </h2>
 
   <?php
@@ -1704,8 +1662,14 @@ foreach ($highlight_items as $highlight):
 
     <?php if (!empty($kpi_curr)): ?>
     // --- キャッシュヒット: サーバーサイドで取得済みのデータをそのまま適用 ---
-    var curr = <?php echo wp_json_encode(['sessions' => $kpi_curr['sessions'] ?? 0, 'conversions' => $kpi_curr['conversions'] ?? 0]); ?>;
-    var prev = <?php echo wp_json_encode($kpi_prev ? ['sessions' => $kpi_prev['sessions'] ?? 0, 'conversions' => $kpi_prev['conversions'] ?? 0] : null); ?>;
+    var curr = <?php echo wp_json_encode([
+        'sessions'    => $kpi_curr['sessions'] ?? 0,
+        'conversions' => $kpi_curr['conversions'] ?? 0,
+    ]); ?>;
+    var prev = <?php echo wp_json_encode($kpi_prev ? [
+        'sessions'    => $kpi_prev['sessions'] ?? 0,
+        'conversions' => $kpi_prev['conversions'] ?? 0,
+    ] : null); ?>;
 
     var currSessions = parseInt(String(curr.sessions || 0).replace(/,/g, ''), 10);
     var prevSessions = prev ? parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10) : 0;
@@ -1715,14 +1679,21 @@ foreach ($highlight_items as $highlight):
     var prevCv = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
     updateInfoKpi('cv', currCv, currCv - prevCv);
 
+    // MEO（PHP側で取得済み）
+    var meoCurr = <?php echo (int)($meo_curr ?? 0); ?>;
+    var meoPrev = <?php echo (int)($meo_prev ?? 0); ?>;
+    updateInfoKpi('meo', meoCurr, meoCurr - meoPrev);
+
     <?php else: ?>
     // --- キャッシュミス: REST API で非同期取得（スケルトン＋スピナー表示） ---
     (function(){
         var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
         var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
+        var compStart = <?php echo wp_json_encode($last30_comp['start']); ?>;
+        var compEnd   = <?php echo wp_json_encode($last30_comp['end']); ?>;
 
-        // visits/cv のみローディング表示（MEOはinfographic由来で正しいのでスキップ）
-        var kpiKeys = ['visits', 'cv'];
+        // 3カード全てローディング表示（MEO含む）
+        var kpiKeys = ['visits', 'cv', 'meo'];
         kpiKeys.forEach(function(key){
             var card = document.querySelector('[data-kpi-key="' + key + '"]');
             if (!card) return;
@@ -1730,7 +1701,7 @@ foreach ($highlight_items as $highlight):
             var diffEl = card.querySelector('[data-kpi-role="diff"]');
             if (valEl) {
                 valEl.dataset.originalText = valEl.textContent;
-                valEl.textContent = '\u8aad\u307f\u8fbc\u307f\u4e2d'; // 読み込み中（CSS shimmerで透明化）
+                valEl.textContent = '\u8aad\u307f\u8fbc\u307f\u4e2d';
             }
             if (diffEl) {
                 diffEl.dataset.originalText = diffEl.textContent;
@@ -1738,7 +1709,6 @@ foreach ($highlight_items as $highlight):
             }
             card.classList.add('is-kpi-loading');
             card.setAttribute('aria-busy', 'true');
-            // スピナー＋「読み込み中…」テキスト
             var loadEl = document.createElement('span');
             loadEl.className = 'info-kpi-loading-text';
             loadEl.innerHTML = '<span class="info-kpi-spinner"></span>\u8aad\u307f\u8fbc\u307f\u4e2d\u2026';
@@ -1754,7 +1724,7 @@ foreach ($highlight_items as $highlight):
                 if (card.querySelector('.info-kpi-timeout-text')) return;
                 var el = document.createElement('span');
                 el.className = 'info-kpi-timeout-text';
-                el.textContent = '\u6642\u9593\u304c\u304b\u304b\u3063\u3066\u3044\u307e\u3059\u2026'; // 時間がかかっています…
+                el.textContent = '\u6642\u9593\u304c\u304b\u304b\u3063\u3066\u3044\u307e\u3059\u2026';
                 card.appendChild(el);
             });
         }, 8000);
@@ -1780,13 +1750,13 @@ foreach ($highlight_items as $highlight):
             var els = card.querySelectorAll('[data-kpi-role="loading-indicator"], .info-kpi-timeout-text');
             els.forEach(function(e){ e.remove(); });
             var valEl = card.querySelector('[data-kpi-role="value"]');
-            if (valEl) valEl.textContent = '\u53d6\u5f97\u306b\u5931\u6557\u3057\u307e\u3057\u305f'; // 取得に失敗しました
+            if (valEl) valEl.textContent = '\u53d6\u5f97\u306b\u5931\u6557\u3057\u307e\u3057\u305f';
             var diffEl = card.querySelector('[data-kpi-role="diff"]');
             if (diffEl) diffEl.textContent = '';
             var retryBtn = document.createElement('button');
             retryBtn.type = 'button';
             retryBtn.className = 'info-kpi-retry-btn';
-            retryBtn.textContent = '\u518d\u53d6\u5f97'; // 再取得
+            retryBtn.textContent = '\u518d\u53d6\u5f97';
             retryBtn.addEventListener('click', function(e){
                 e.stopPropagation();
                 location.reload();
@@ -1794,12 +1764,17 @@ foreach ($highlight_items as $highlight):
             card.appendChild(retryBtn);
         }
 
+        // 直近30日 + 比較期間 + MEO を並列取得
         Promise.all([
-            fetch(restBase + 'dashboard/kpi?period=prev-month', {
+            fetch(restBase + 'dashboard/kpi?period=last30', {
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); }),
-            fetch(restBase + 'dashboard/kpi?period=prev-prev-month', {
+            fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd), {
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': nonce }
+            }).then(function(r){ return r.json(); }),
+            fetch(restBase + 'meo/dashboard?period=last30', {
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); })
@@ -1807,20 +1782,27 @@ foreach ($highlight_items as $highlight):
             clearTimeout(timeoutId);
             var curr = results[0].success ? results[0].data : null;
             var prev = results[1].success ? results[1].data : null;
+            var meoData = results[2];
+
             if (!curr) {
-                kpiKeys.forEach(function(k){ errorCard(k); });
-                return;
+                ['visits', 'cv'].forEach(function(k){ errorCard(k); });
+            } else {
+                var cS = parseInt(String(curr.sessions || 0).replace(/,/g, ''), 10);
+                var pS = prev ? parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10) : 0;
+                updateInfoKpi('visits', cS, cS - pS);
+                finishCard('visits');
+
+                var cC = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
+                var pC = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
+                updateInfoKpi('cv', cC, cC - pC);
+                finishCard('cv');
             }
 
-            var cS = parseInt(String(curr.sessions || 0).replace(/,/g, ''), 10);
-            var pS = prev ? parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10) : 0;
-            updateInfoKpi('visits', cS, cS - pS);
-            finishCard('visits');
-
-            var cC = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
-            var pC = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
-            updateInfoKpi('cv', cC, cC - pC);
-            finishCard('cv');
+            // MEO（meo/dashboard は metrics + metrics_previous を一括返却）
+            var mCurr = (meoData && meoData.metrics) ? parseInt(meoData.metrics.total_impressions || 0, 10) : 0;
+            var mPrev = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.total_impressions || 0, 10) : 0;
+            updateInfoKpi('meo', mCurr, mCurr - mPrev);
+            finishCard('meo');
         }).catch(function(err){
             clearTimeout(timeoutId);
             console.error('[GCREV] KPI async fetch error:', err);
@@ -1835,8 +1817,12 @@ foreach ($highlight_items as $highlight):
     var restBase = '<?php echo esc_url(rest_url('gcrev/v1/')); ?>';
     var nonce    = '<?php echo esc_js(wp_create_nonce('wp_rest')); ?>';
     var kpiTrendChart = null;
-    var _trendCache   = {};
+    // ビュー別キャッシュ: _trendCache[view][metric]
+    var _trendCache   = { daily: {}, monthly: {} };
     var _activeMetric = null;
+    var _activeView   = 'daily'; // デフォルトは直近30日（日別）
+    var _activeLabel  = null;
+    var _activeIcon   = null;
     var _retryMetric  = null;
     var _retryLabel   = null;
     var _retryIcon    = null;
@@ -1849,22 +1835,32 @@ foreach ($highlight_items as $highlight):
     var errorEl   = document.getElementById('kpiTrendError');
     var retryBtn  = document.getElementById('kpiTrendRetry');
 
-    // (1) 即時データ先読み — 全3指標をfetch、sessionsが来たら即描画
+    // (0) 期間トグルボタンを挿入（チャートヘッダー内）
+    var trendHeader = document.querySelector('.kpi-trend-inline-header');
+    if (trendHeader) {
+        var toggleDiv = document.createElement('div');
+        toggleDiv.className = 'kpi-trend-toggle';
+        toggleDiv.id = 'kpiTrendToggle';
+        toggleDiv.innerHTML =
+            '<button type="button" class="kpi-trend-toggle-btn is-active" data-view="daily">直近30日</button>' +
+            '<button type="button" class="kpi-trend-toggle-btn" data-view="monthly">1年間</button>';
+        trendHeader.appendChild(toggleDiv);
+    }
+
+    // (1) 即時データ先読み — dailyビューの全3指標をfetch
     ['sessions', 'cv', 'meo'].forEach(function(m){
-        fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(m), {
+        fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(m) + '&view=daily', {
             headers: { 'X-WP-Nonce': nonce },
             credentials: 'same-origin'
         })
         .then(function(res){ return res.json(); })
         .then(function(json){
-            _trendCache[m] = json;
-            // sessionsデータが取れたらまだ何も表示していなければ即描画
+            _trendCache.daily[m] = json;
             if (m === 'sessions' && !_activeMetric) {
                 showTrend('sessions', '訪問数', '👥');
             }
         })
         .catch(function(){
-            // sessions の初回ロードが失敗した場合はエラー表示
             if (m === 'sessions' && !_activeMetric) {
                 showError('sessions', '訪問数', '👥');
             }
@@ -1879,6 +1875,25 @@ foreach ($highlight_items as $highlight):
             var icon   = card.dataset.kpiIcon || '📊';
             showTrend(metric, label, icon);
         });
+    });
+
+    // (2b) 期間トグルクリック
+    document.addEventListener('click', function(e){
+        var btn = e.target.closest('.kpi-trend-toggle-btn');
+        if (!btn) return;
+        var newView = btn.dataset.view;
+        if (newView === _activeView) return;
+        _activeView = newView;
+        // ボタン状態更新
+        document.querySelectorAll('.kpi-trend-toggle-btn').forEach(function(b){
+            b.classList.toggle('is-active', b.dataset.view === newView);
+        });
+        // 現在のメトリクスで再描画（強制）
+        if (_activeMetric) {
+            var m = _activeMetric;
+            _activeMetric = null; // ガードリセット
+            showTrend(m, _activeLabel, _activeIcon);
+        }
     });
 
     // (3) アクティブカード状態更新（is-active + aria-pressed）
@@ -1896,25 +1911,25 @@ foreach ($highlight_items as $highlight):
 
     // (4) チャート表示メイン関数
     function showTrend(metric, label, icon) {
-        if (_activeMetric === metric) return; // 同じメトリクスなら何もしない
+        if (_activeMetric === metric) return;
         _activeMetric = metric;
+        _activeLabel  = label;
+        _activeIcon   = icon;
         setActiveCard(metric);
 
-        // タイトル更新
-        titleText.textContent = label + ' — 過去12ヶ月の推移';
+        var viewLabel = _activeView === 'daily' ? '直近30日の推移' : '1年間の推移';
+        titleText.textContent = label + ' — ' + viewLabel;
         titleIcon.textContent = icon;
 
-        // エラー非表示
         errorEl.style.display = 'none';
 
-        // キャッシュがあれば即表示（フェードアニメーション付き）
-        if (_trendCache[metric]) {
-            // 切替アニメーション: 0.3s fade
+        // ビュー別キャッシュ確認
+        var cache = _trendCache[_activeView];
+        if (cache[metric]) {
             chartWrap.style.opacity = '0';
             loading.classList.remove('active');
             chartWrap.style.display = 'block';
-            renderTrendChart(_trendCache[metric], label);
-            // requestAnimationFrame で次フレームに opacity を戻す
+            renderTrendChart(cache[metric], label);
             requestAnimationFrame(function(){
                 requestAnimationFrame(function(){
                     chartWrap.style.opacity = '1';
@@ -1927,14 +1942,13 @@ foreach ($highlight_items as $highlight):
         chartWrap.style.display = 'none';
         loading.classList.add('active');
 
-        fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(metric), {
+        fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(metric) + '&view=' + _activeView, {
             headers: { 'X-WP-Nonce': nonce },
             credentials: 'same-origin'
         })
         .then(function(res){ return res.json(); })
         .then(function(json){
-            _trendCache[metric] = json;
-            // 取得中にユーザーが別カードを押した場合はスキップ
+            _trendCache[_activeView][metric] = json;
             if (_activeMetric !== metric) return;
             loading.classList.remove('active');
             chartWrap.style.display = 'block';
@@ -1960,12 +1974,11 @@ foreach ($highlight_items as $highlight):
     if (retryBtn) {
         retryBtn.addEventListener('click', function(){
             if (!_retryMetric) return;
-            // リトライ: キャッシュをクリアして再取得
             var m = _retryMetric;
             var l = _retryLabel;
             var i = _retryIcon;
-            _activeMetric = null; // ガードをリセット
-            delete _trendCache[m];
+            _activeMetric = null;
+            delete _trendCache[_activeView][m];
             errorEl.style.display = 'none';
             showTrend(m, l, i);
         });
@@ -1981,17 +1994,32 @@ foreach ($highlight_items as $highlight):
             return;
         }
 
+        var view = json.view || 'monthly';
         chartWrap.innerHTML = '<canvas id="kpiTrendChart"></canvas>';
-        var shortLabels = json.labels.map(function(ym){
-            return parseInt(ym.split('-')[1], 10) + '月';
-        });
+
+        // 日付ラベルをビューに応じてフォーマット
+        var shortLabels;
+        if (view === 'daily') {
+            shortLabels = json.labels.map(function(d){
+                var parts = d.split('-');
+                return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
+            });
+        } else {
+            shortLabels = json.labels.map(function(ym){
+                return parseInt(ym.split('-')[1], 10) + '月';
+            });
+        }
+
         var dataLen = json.values.length;
         var pointBg = json.values.map(function(v, i){
             return i === dataLen - 1 ? '#C95A4F' : '#568184';
         });
         var pointR = json.values.map(function(v, i){
+            if (view === 'daily') return i === dataLen - 1 ? 4 : 2;
             return i === dataLen - 1 ? 6 : 3;
         });
+
+        var isDaily = view === 'daily';
 
         kpiTrendChart = new Chart('kpiTrendChart', {
             type: 'line',
@@ -2004,8 +2032,8 @@ foreach ($highlight_items as $highlight):
                     borderWidth: 2.5,
                     pointBackgroundColor: pointBg,
                     pointRadius: pointR,
-                    pointHitRadius: 15,
-                    pointHoverRadius: 7,
+                    pointHitRadius: isDaily ? 8 : 15,
+                    pointHoverRadius: isDaily ? 5 : 7,
                     tension: 0.3,
                     fill: true,
                     backgroundColor: 'rgba(86,129,132,0.13)',
@@ -2015,10 +2043,11 @@ foreach ($highlight_items as $highlight):
                 responsive: true,
                 maintainAspectRatio: false,
                 onHover: function(evt, elements) {
-                    evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+                    evt.native.target.style.cursor = (elements.length && !isDaily) ? 'pointer' : 'default';
                 },
                 onClick: function(evt, elements) {
-                    if (!elements.length) return;
+                    // 日別表示ではドリルダウン無効
+                    if (isDaily || !elements.length) return;
                     var idx = elements[0].index;
                     var month = json.labels[idx];
                     showDrilldownPopover(month, elements[0].element);
@@ -2027,13 +2056,28 @@ foreach ($highlight_items as $highlight):
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            title: function(ctx){ return json.labels[ctx[0].dataIndex]; },
+                            title: function(ctx){
+                                if (isDaily) {
+                                    return json.labels[ctx[0].dataIndex];
+                                }
+                                return json.labels[ctx[0].dataIndex];
+                            },
                             label: function(ctx){ return label + ': ' + ctx.parsed.y.toLocaleString(); },
-                            afterLabel: function(){ return 'クリックして詳細を表示'; }
+                            afterLabel: function(){
+                                return isDaily ? '' : 'クリックして詳細を表示';
+                            }
                         }
                     }
                 },
                 scales: {
+                    x: {
+                        ticks: isDaily ? {
+                            maxTicksAtIndex: 10,
+                            maxRotation: 0,
+                            autoSkip: true,
+                            autoSkipPadding: 8
+                        } : {}
+                    },
                     y: {
                         beginAtZero: true,
                         ticks: { callback: function(v){ return v.toLocaleString(); } }
