@@ -7994,11 +7994,6 @@ PROMPT;
         $cache_key = "gcrev_trend_{$user_id}_{$metric}_{$current_month}{$filter_sfx}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
-            if ($metric === 'meo') {
-                file_put_contents('/tmp/gcrev_gbp_debug.log',
-                    date('Y-m-d H:i:s') . " [Trend] MEO monthly CACHE HIT: key={$cache_key}, values=" . wp_json_encode($cached['values'] ?? []) . "\n", FILE_APPEND
-                );
-            }
             return $cached;
         }
 
@@ -8048,33 +8043,15 @@ PROMPT;
                 if (!empty($location_id) && !$is_pending) {
                     $access_token = $this->gbp_get_access_token($user_id);
                 }
-                file_put_contents('/tmp/gcrev_gbp_debug.log',
-                    date('Y-m-d H:i:s') . " [Trend] MEO monthly: location_id=" . ($location_id ?: '(empty)')
-                    . ", is_pending=" . ($is_pending ? 'true' : 'false')
-                    . ", access_token=" . (empty($access_token) ? '(empty)' : 'OK(' . strlen($access_token) . 'chars)')
-                    . "\n", FILE_APPEND
-                );
                 if (empty($location_id) || empty($access_token) || $is_pending) {
-                    file_put_contents('/tmp/gcrev_gbp_debug.log',
-                        date('Y-m-d H:i:s') . " [Trend] MEO monthly: SKIP (no location/token)\n", FILE_APPEND
-                    );
                     $values = array_fill(0, $months, 0);
                     break;
                 }
                 // 12ヶ月分を一括取得して月ごとに集計（API呼び出し4回で済む）
                 $range_start = $labels[0] . '-01';
                 $range_end   = date('Y-m-t', strtotime($labels[count($labels) - 1] . '-01'));
-                file_put_contents('/tmp/gcrev_gbp_debug.log',
-                    date('Y-m-d H:i:s') . " [Trend] MEO monthly: range={$range_start} ~ {$range_end}\n", FILE_APPEND
-                );
                 try {
                     $daily_rows = $this->gbp_fetch_daily_metrics($access_token, $location_id, $range_start, $range_end);
-                    file_put_contents('/tmp/gcrev_gbp_debug.log',
-                        date('Y-m-d H:i:s') . " [Trend] MEO monthly: daily_rows count=" . count($daily_rows)
-                        . ", first=" . wp_json_encode($daily_rows[0] ?? null, JSON_UNESCAPED_UNICODE)
-                        . ", last=" . wp_json_encode(end($daily_rows) ?: null, JSON_UNESCAPED_UNICODE)
-                        . "\n", FILE_APPEND
-                    );
                     // 月別に集計
                     $monthly_totals = [];
                     foreach ($daily_rows as $row) {
@@ -8084,9 +8061,6 @@ PROMPT;
                         }
                         $monthly_totals[$ym] += (int)($row['search_impressions'] ?? 0) + (int)($row['map_impressions'] ?? 0);
                     }
-                    file_put_contents('/tmp/gcrev_gbp_debug.log',
-                        date('Y-m-d H:i:s') . " [Trend] MEO monthly totals: " . wp_json_encode($monthly_totals, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND
-                    );
                     foreach ($labels as $ym) {
                         $values[] = $monthly_totals[$ym] ?? 0;
                     }

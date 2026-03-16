@@ -163,14 +163,22 @@ get_header();
   .kpi-trend-chart-wrap { height: 200px; }
   .kpi-trend-inline-title { font-size: 13px; }
   .kpi-trend-inline-header { flex-direction: column; align-items: flex-start; gap: 4px; }
-  .kpi-trend-toggle { width: 100%; justify-content: flex-end; }
+  .kpi-trend-inline-actions { width: 100%; justify-content: flex-end; }
+  .kpi-trend-toggle { width: auto; }
+}
+
+/* KPI trend actions container (hint + toggle) */
+.kpi-trend-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
 }
 
 /* KPI trend period toggle */
 .kpi-trend-toggle {
   display: flex;
   gap: 0;
-  margin-left: auto;
   border: 1px solid #d0d0d0;
   border-radius: 6px;
   overflow: hidden;
@@ -949,10 +957,16 @@ if ($infographic) {
         <span class="kpi-trend-inline-icon" id="kpiTrendIcon">👥</span>
         <span id="kpiTrendTitleText">訪問数 — 過去12ヶ月の推移</span>
       </h3>
-      <span class="kpi-trend-inline-hint" title="各月の点をクリックすると、内訳データを確認できます">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11ZM8 5a.75.75 0 1 1 0-1.5A.75.75 0 0 1 8 5Zm-.75 1.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-1.5 0v-3.5Z"/></svg>
-        <span class="kpi-trend-inline-hint-text">各月の点をクリックで詳細を表示</span>
-      </span>
+      <div class="kpi-trend-inline-actions">
+        <span class="kpi-trend-inline-hint" id="kpiTrendHint" title="各月の点をクリックすると、内訳データを確認できます">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1Zm0 12.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11ZM8 5a.75.75 0 1 1 0-1.5A.75.75 0 0 1 8 5Zm-.75 1.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-1.5 0v-3.5Z"/></svg>
+          <span class="kpi-trend-inline-hint-text">各月の点をクリックで詳細を表示</span>
+        </span>
+        <div class="kpi-trend-toggle" id="kpiTrendToggle">
+          <button type="button" class="kpi-trend-toggle-btn is-active" data-view="daily">直近30日</button>
+          <button type="button" class="kpi-trend-toggle-btn" data-view="monthly">1年間</button>
+        </div>
+      </div>
     </div>
     <div class="kpi-trend-inline-body">
       <div class="kpi-trend-loading active" id="kpiTrendLoading">
@@ -1835,17 +1849,8 @@ foreach ($highlight_items as $highlight):
     var errorEl   = document.getElementById('kpiTrendError');
     var retryBtn  = document.getElementById('kpiTrendRetry');
 
-    // (0) 期間トグルボタンを挿入（チャートヘッダー内）
-    var trendHeader = document.querySelector('.kpi-trend-inline-header');
-    if (trendHeader) {
-        var toggleDiv = document.createElement('div');
-        toggleDiv.className = 'kpi-trend-toggle';
-        toggleDiv.id = 'kpiTrendToggle';
-        toggleDiv.innerHTML =
-            '<button type="button" class="kpi-trend-toggle-btn is-active" data-view="daily">直近30日</button>' +
-            '<button type="button" class="kpi-trend-toggle-btn" data-view="monthly">1年間</button>';
-        trendHeader.appendChild(toggleDiv);
-    }
+    // DOM参照: ヒントテキスト
+    var hintEl = document.getElementById('kpiTrendHint');
 
     // (1) 即時データ先読み — dailyビューの全3指標をfetch
     ['sessions', 'cv', 'meo'].forEach(function(m){
@@ -1916,6 +1921,17 @@ foreach ($highlight_items as $highlight):
         _activeLabel  = label;
         _activeIcon   = icon;
         setActiveCard(metric);
+
+        // MEO時はドリルダウンヒントを非表示、それ以外は表示
+        if (hintEl) {
+            hintEl.style.display = (metric === 'meo') ? 'none' : '';
+            var hintText = hintEl.querySelector('.kpi-trend-inline-hint-text');
+            if (hintText) {
+                hintText.textContent = _activeView === 'daily'
+                    ? 'クリックで該当月の詳細を表示'
+                    : '各月の点をクリックで詳細を表示';
+            }
+        }
 
         var viewLabel = _activeView === 'daily' ? '直近30日の推移' : '1年間の推移';
         titleText.textContent = label + ' — ' + viewLabel;
@@ -2020,6 +2036,9 @@ foreach ($highlight_items as $highlight):
         });
 
         var isDaily = view === 'daily';
+        var isMeo   = _activeMetric === 'meo';
+        // MEO以外はドリルダウン可能（日別・月別両方）
+        var canDrill = !isMeo;
 
         kpiTrendChart = new Chart('kpiTrendChart', {
             type: 'line',
@@ -2043,28 +2062,25 @@ foreach ($highlight_items as $highlight):
                 responsive: true,
                 maintainAspectRatio: false,
                 onHover: function(evt, elements) {
-                    evt.native.target.style.cursor = (elements.length && !isDaily) ? 'pointer' : 'default';
+                    evt.native.target.style.cursor = (elements.length && canDrill) ? 'pointer' : 'default';
                 },
                 onClick: function(evt, elements) {
-                    // 日別表示ではドリルダウン無効
-                    if (isDaily || !elements.length) return;
+                    if (!canDrill || !elements.length) return;
                     var idx = elements[0].index;
-                    var month = json.labels[idx];
+                    // 日別の場合: 日付(YYYY-MM-DD)から月(YYYY-MM)を抽出
+                    var month = isDaily
+                        ? json.labels[idx].substring(0, 7)
+                        : json.labels[idx];
                     showDrilldownPopover(month, elements[0].element);
                 },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            title: function(ctx){
-                                if (isDaily) {
-                                    return json.labels[ctx[0].dataIndex];
-                                }
-                                return json.labels[ctx[0].dataIndex];
-                            },
+                            title: function(ctx){ return json.labels[ctx[0].dataIndex]; },
                             label: function(ctx){ return label + ': ' + ctx.parsed.y.toLocaleString(); },
                             afterLabel: function(){
-                                return isDaily ? '' : 'クリックして詳細を表示';
+                                return canDrill ? 'クリックして詳細を表示' : '';
                             }
                         }
                     }
