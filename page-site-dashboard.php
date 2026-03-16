@@ -328,7 +328,7 @@ set_query_var('gcrev_period_selector', [
         ['value' => 'last180',         'label' => '過去半年'],
         ['value' => 'last365',         'label' => '過去1年'],
     ],
-    'default' => 'prev-month',
+    'default' => 'last30',
 ]);
 get_template_part('template-parts/period-selector');
 ?>
@@ -961,15 +961,21 @@ get_template_part('template-parts/period-selector');
     // =============================================
     // 期間セレクター連携
     // =============================================
-    document.addEventListener('gcrev:periodChange', function(e) {
-        var detail = e.detail || {};
-        if (detail.selectorId === 'sd-period') {
-            loadData(detail.period);
-        }
-    });
+    var selectorEl = document.getElementById('sd-period');
+    if (selectorEl) {
+        selectorEl.addEventListener('gcrev:periodChange', function(e) {
+            var detail = e.detail || {};
+            if (detail.period) {
+                loadData(detail.period);
+            }
+        });
+    }
 
-    // 初期読み込み
-    loadData('prev-month');
+    // 初期読み込み（period-selector.js の emit(initial) が初回発火するため、
+    // selectorEl がある場合はそちらに任せる。ない場合のみ直接ロード）
+    if (!selectorEl) {
+        loadData('last30');
+    }
 
 })();
 </script>
