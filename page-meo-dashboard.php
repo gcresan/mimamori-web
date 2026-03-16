@@ -987,10 +987,10 @@ get_header();
         setKpi('meo-menu',                m.menu_clicks,         p.menu_clicks);
 
         // 平均クリック率
-        var totalActions = (m.call_clicks || 0) + (m.direction_clicks || 0) + (m.website_clicks || 0) + (m.menu_clicks || 0);
+        var totalActions = (m.call_clicks || 0) + (m.website_clicks || 0);
         var totalImpressions = m.total_impressions || 0;
         var clickRate = totalImpressions > 0 ? (totalActions / totalImpressions * 100) : 0;
-        var prevActions = (p.call_clicks || 0) + (p.direction_clicks || 0) + (p.website_clicks || 0) + (p.menu_clicks || 0);
+        var prevActions = (p.call_clicks || 0) + (p.website_clicks || 0);
         var prevImpressions = p.total_impressions || 0;
         var prevRate = prevImpressions > 0 ? (prevActions / prevImpressions * 100) : 0;
 
