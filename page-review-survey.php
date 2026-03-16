@@ -676,12 +676,13 @@ get_header();
         var typeLabels = { checkbox: 'チェック', radio: 'ラジオ', textarea: 'テキスト', text: 'テキスト(1行)', select: 'セレクト' };
         var html = '<p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">💡 行をドラッグして並び順を変更できます<span class="sv-q-sort-status" id="sv-sort-status"></span></p>';
         html += '<table class="sv-q-table"><thead><tr>';
-        html += '<th style="width:36px;"></th><th>質問文</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
+        html += '<th style="width:36px;"></th><th style="width:36px;">No.</th><th>質問文</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
         html += '</tr></thead><tbody id="sv-q-sortable">';
 
-        questions.forEach(function(q) {
+        questions.forEach(function(q, idx) {
             html += '<tr draggable="true" data-qid="' + q.id + '">';
             html += '<td><span class="sv-q-drag-handle" title="ドラッグで並び替え">☰</span></td>';
+            html += '<td style="font-weight:600;color:#6b7280;">' + (idx + 1) + '</td>';
             html += '<td>' + esc(q.label) + '</td>';
             html += '<td><span class="sv-q-type-badge">' + (typeLabels[q.type] || q.type) + '</span></td>';
             html += '<td>' + (q.required ? '<span class="sv-q-required">必須</span>' : '<span class="sv-q-optional">任意</span>') + '</td>';
