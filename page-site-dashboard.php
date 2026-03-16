@@ -129,10 +129,10 @@ get_header();
     height: 32px;
 }
 
-/* --- Analysis Cards Grid --- */
+/* --- Analysis Cards Grid (3 columns) --- */
 .sd-analysis-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 20px;
     margin-bottom: 40px;
 }
@@ -178,33 +178,113 @@ get_header();
     color: #476C6F;
 }
 
-.sd-analysis-items {
+/* --- Chart cards (top row) --- */
+.sd-chart-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 16px;
+    min-height: 120px;
+}
+
+/* Donut chart */
+.sd-donut-wrap {
+    position: relative;
+    width: 120px;
+    height: 120px;
+}
+.sd-donut-wrap svg {
+    width: 120px;
+    height: 120px;
+    transform: rotate(-90deg);
+}
+
+/* Horizontal bar chart */
+.sd-hbar-chart {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sd-hbar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sd-hbar-label {
+    font-size: 12px;
+    color: var(--mw-text-secondary, #384D50);
+    width: 60px;
+    text-align: right;
+    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sd-hbar-bar-wrap {
+    flex: 1;
+    height: 20px;
+    background: var(--mw-bg-tertiary, #E6EEF0);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.sd-hbar-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+/* Chart card list (percentage display) */
+.sd-chart-list {
     list-style: none;
     padding: 0;
     margin: 0;
 }
-
-.sd-analysis-item {
+.sd-chart-list-item {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    padding: 9px 0;
+    padding: 10px 0;
     border-bottom: 1px solid var(--mw-bg-tertiary, #E6EEF0);
 }
-.sd-analysis-item:last-child {
+.sd-chart-list-item:last-child {
     border-bottom: none;
 }
-
-.sd-analysis-rank {
-    font-size: 12px;
+.sd-chart-list-label {
+    font-size: 14px;
+    color: var(--mw-text-primary, #263335);
+    font-weight: 500;
+}
+.sd-chart-list-value {
+    font-size: 14px;
     font-weight: 700;
-    color: var(--mw-text-secondary, #384D50);
-    width: 20px;
-    text-align: center;
-    flex-shrink: 0;
+    color: var(--mw-text-heading, #1A2F33);
 }
 
-.sd-analysis-item-label {
+/* --- Ranking cards (bottom row) --- */
+.sd-ranking-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.sd-ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--mw-bg-tertiary, #E6EEF0);
+}
+.sd-ranking-item:last-child {
+    border-bottom: none;
+}
+.sd-ranking-num {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mw-text-secondary, #384D50);
+    flex-shrink: 0;
+    min-width: 18px;
+}
+.sd-ranking-label {
     font-size: 14px;
     color: var(--mw-text-primary, #263335);
     flex: 1;
@@ -213,31 +293,12 @@ get_header();
     white-space: nowrap;
     min-width: 0;
 }
-
-.sd-analysis-item-value {
+.sd-ranking-value {
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--mw-text-heading, #1A2F33);
     flex-shrink: 0;
-    min-width: 50px;
     text-align: right;
-}
-
-.sd-analysis-bar-wrap {
-    width: 60px;
-    flex-shrink: 0;
-}
-.sd-analysis-bar {
-    height: 4px;
-    background: var(--mw-bg-tertiary, #E6EEF0);
-    border-radius: 2px;
-    overflow: hidden;
-}
-.sd-analysis-bar-fill {
-    height: 100%;
-    border-radius: 2px;
-    background: var(--mw-primary-teal, #7AA3A6);
-    transition: width 0.4s ease;
 }
 
 .sd-analysis-empty {
@@ -245,23 +306,6 @@ get_header();
     color: var(--mw-text-secondary, #384D50);
     text-align: center;
     padding: 20px 0;
-}
-
-/* CV card specific */
-.sd-cv-summary {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    margin-bottom: 12px;
-}
-.sd-cv-total {
-    font-size: 28px;
-    font-weight: 700;
-    color: var(--mw-text-heading, #1A2F33);
-}
-.sd-cv-unit {
-    font-size: 14px;
-    color: var(--mw-text-secondary, #384D50);
 }
 
 /* --- Insights Section --- */
@@ -300,7 +344,7 @@ get_header();
         grid-template-columns: repeat(3, 1fr);
     }
     .sd-analysis-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 @media (max-width: 768px) {
@@ -310,6 +354,9 @@ get_header();
     }
     .sd-kpi-value {
         font-size: 26px;
+    }
+    .sd-analysis-grid {
+        grid-template-columns: 1fr;
     }
     .sd-analysis-card {
         padding: 20px;
@@ -395,15 +442,33 @@ get_template_part('template-parts/period-selector');
         { key: 'conversions',    dailyKey: 'conversions', trendKey: 'conversions',    label: 'ゴール数',             emoji: '🎯', bg: 'rgba(78,138,107,0.12)', color: '#4E8A6B', format: 'number' },
     ];
 
-    // 分析カード定義
-    var analysisDefs = [
-        { key: 'devices',    title: 'スマホとパソコンの割合', emoji: '📱', dataKey: 'devices',    labelField: 'name',  valueField: 'sessions', top: 3, link: '/analysis/analysis-device/',   nameMap: { mobile: 'スマホ', desktop: 'パソコン', tablet: 'タブレット' } },
-        { key: 'age',        title: '見ている人の年代',       emoji: '👤', dataKey: 'age',        labelField: 'range', valueField: 'sessions', top: 5, link: '/analysis/analysis-age/',      nameMap: null },
-        { key: 'medium',     title: '見つけたきっかけ',       emoji: '🔍', dataKey: 'medium',     labelField: 'name',  valueField: 'sessions', top: 5, link: '/analysis/analysis-source/',   nameMap: { organic: '自然検索', direct: 'ダイレクト', referral: '他サイト', social: 'SNS', cpc: '広告', email: 'メール', '(none)': 'ダイレクト' } },
-        { key: 'geo_region', title: '見ている人の場所',       emoji: '📍', dataKey: 'geo_region', labelField: 'name',  valueField: 'sessions', top: 5, link: '/analysis/analysis-region/',   nameMap: null },
-        { key: 'pages',      title: 'よく見られているページ', emoji: '📄', dataKey: 'pages',      labelField: 'path',  valueField: 'sessions', top: 5, link: '/analysis/analysis-pages/',    nameMap: null },
-        { key: 'keywords',   title: 'どんな言葉で探された？', emoji: '🔑', dataKey: 'keywords',   labelField: 'query', valueField: 'clicks',   top: 5, link: '/analysis/analysis-keywords/', nameMap: null },
-    ];
+    // デバイス名マッピング
+    var deviceNameMap = { mobile: 'モバイル', desktop: 'デスクトップ', tablet: 'タブレット' };
+
+    // 流入元名マッピング
+    var mediumNameMap = { organic: '自然検索', direct: '直接', referral: '参照元', social: 'SNS', cpc: '広告', email: 'メール', '(none)': '直接', '(not set)': '(not set)' };
+
+    // 地域名マッピング（GA4 region → 日本語都道府県）
+    var regionNameMap = {
+        'Tokyo': '東京都', 'Osaka': '大阪府', 'Kanagawa': '神奈川県', 'Aichi': '愛知県',
+        'Saitama': '埼玉県', 'Chiba': '千葉県', 'Hokkaido': '北海道', 'Fukuoka': '福岡県',
+        'Hyogo': '兵庫県', 'Kyoto': '京都府', 'Shizuoka': '静岡県', 'Hiroshima': '広島県',
+        'Miyagi': '宮城県', 'Niigata': '新潟県', 'Nagano': '長野県', 'Gifu': '岐阜県',
+        'Gunma': '群馬県', 'Tochigi': '栃木県', 'Ibaraki': '茨城県', 'Okayama': '岡山県',
+        'Mie': '三重県', 'Kumamoto': '熊本県', 'Kagoshima': '鹿児島県', 'Okinawa': '沖縄県',
+        'Ehime': '愛媛県', 'Nara': '奈良県', 'Shiga': '滋賀県', 'Wakayama': '和歌山県',
+        'Nagasaki': '長崎県', 'Oita': '大分県', 'Ishikawa': '石川県', 'Yamaguchi': '山口県',
+        'Toyama': '富山県', 'Fukui': '福井県', 'Saga': '佐賀県', 'Miyazaki': '宮崎県',
+        'Kochi': '高知県', 'Tokushima': '徳島県', 'Kagawa': '香川県', 'Yamanashi': '山梨県',
+        'Fukushima': '福島県', 'Iwate': '岩手県', 'Akita': '秋田県', 'Aomori': '青森県',
+        'Yamagata': '山形県', 'Tottori': '鳥取県', 'Shimane': '島根県'
+    };
+
+    // ドーナツチャートの色
+    var donutColors = ['#568184', '#7AA3A6', '#C9A84C'];
+
+    // 横棒チャートの色
+    var hbarColors = ['#568184', '#7AA3A6', '#A0BFC1', '#C3CED0', '#D9E2E3'];
 
     // =============================================
     // ユーティリティ
@@ -412,6 +477,12 @@ get_template_part('template-parts/period-selector');
         var num = parseInt(n, 10);
         if (isNaN(num)) return '-';
         return num.toLocaleString('ja-JP');
+    }
+
+    function parseFormattedNumber(s) {
+        if (typeof s === 'number') return s;
+        if (typeof s !== 'string') return 0;
+        return parseInt(s.replace(/,/g, ''), 10) || 0;
     }
 
     function formatDuration(sec) {
@@ -442,6 +513,11 @@ get_template_part('template-parts/period-selector');
         if (el) el.classList.remove('active');
     }
 
+    function mapName(name, map) {
+        if (!map) return name;
+        return map[name] || name;
+    }
+
     // =============================================
     // SVG スパークライン
     // =============================================
@@ -460,6 +536,63 @@ get_template_part('template-parts/period-selector');
         return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' +
             '<polyline points="' + points.join(' ') + '" fill="none" stroke="' + escapeHtml(color) + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
             '</svg>';
+    }
+
+    // =============================================
+    // SVG ドーナツチャート
+    // =============================================
+    function renderDonutChart(items, colors) {
+        var total = 0;
+        for (var i = 0; i < items.length; i++) total += items[i].value;
+        if (total === 0) return '<div class="sd-analysis-empty">データがありません</div>';
+
+        var size = 120, cx = 60, cy = 60, r = 45, sw = 22;
+        var circumference = 2 * Math.PI * r;
+        var svg = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">';
+
+        // 背景円
+        svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#E6EEF0" stroke-width="' + sw + '"/>';
+
+        var offset = 0;
+        for (var i = 0; i < items.length; i++) {
+            var pct = items[i].value / total;
+            var dash = pct * circumference;
+            var gap = circumference - dash;
+            var color = colors[i % colors.length];
+            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" ' +
+                'stroke="' + color + '" stroke-width="' + sw + '" ' +
+                'stroke-dasharray="' + dash.toFixed(2) + ' ' + gap.toFixed(2) + '" ' +
+                'stroke-dashoffset="' + (-offset).toFixed(2) + '" ' +
+                'stroke-linecap="butt"/>';
+            offset += dash;
+        }
+
+        svg += '</svg>';
+        return svg;
+    }
+
+    // =============================================
+    // 横棒チャート
+    // =============================================
+    function renderHBarChart(items, colors) {
+        if (items.length === 0) return '<div class="sd-analysis-empty">データがありません</div>';
+
+        var maxVal = 0;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].value > maxVal) maxVal = items[i].value;
+        }
+
+        var html = '<div class="sd-hbar-chart">';
+        for (var i = 0; i < items.length; i++) {
+            var pct = maxVal > 0 ? (items[i].value / maxVal * 100) : 0;
+            var color = colors[i % colors.length];
+            html += '<div class="sd-hbar-row">' +
+                '<span class="sd-hbar-label">' + escapeHtml(items[i].label) + '</span>' +
+                '<div class="sd-hbar-bar-wrap"><div class="sd-hbar-bar" style="width:' + pct.toFixed(1) + '%;background:' + color + ';"></div></div>' +
+            '</div>';
+        }
+        html += '</div>';
+        return html;
     }
 
     // =============================================
@@ -514,101 +647,208 @@ get_template_part('template-parts/period-selector');
 
         var html = '';
 
-        // 通常の分析カード
-        for (var i = 0; i < analysisDefs.length; i++) {
-            var def = analysisDefs[i];
-            var items = data[def.dataKey] || [];
-            var topItems = items.slice(0, def.top);
+        // --- 上段: チャート付きカード (デバイス、年齢、流入元) ---
+        html += renderDeviceCard(data);
+        html += renderAgeCard(data);
+        html += renderMediumCard(data);
 
-            html += '<div class="sd-analysis-card">' +
-                '<div class="sd-analysis-header">' +
-                    '<div class="sd-analysis-title">' + def.emoji + ' ' + escapeHtml(def.title) + '</div>' +
-                    '<a href="' + escapeHtml(homeUrl + def.link.replace(/^\//, '')) + '" class="sd-analysis-link">詳細を見る →</a>' +
-                '</div>';
-
-            if (topItems.length === 0) {
-                html += '<div class="sd-analysis-empty">データがありません</div>';
-            } else {
-                var maxVal = 0;
-                for (var j = 0; j < topItems.length; j++) {
-                    var v = parseFloat(topItems[j][def.valueField]) || 0;
-                    if (v > maxVal) maxVal = v;
-                }
-
-                html += '<ul class="sd-analysis-items">';
-                for (var j = 0; j < topItems.length; j++) {
-                    var item = topItems[j];
-                    var label = item[def.labelField] || '-';
-                    var val = parseFloat(item[def.valueField]) || 0;
-                    var pct = maxVal > 0 ? (val / maxVal * 100) : 0;
-
-                    // 名前マッピング
-                    if (def.nameMap && def.nameMap[label]) {
-                        label = def.nameMap[label];
-                    }
-
-                    html += '<li class="sd-analysis-item">' +
-                        '<span class="sd-analysis-rank">' + (j + 1) + '</span>' +
-                        '<span class="sd-analysis-item-label">' + escapeHtml(label) + '</span>' +
-                        '<span class="sd-analysis-item-value">' + formatNumber(val) + '</span>' +
-                        '<span class="sd-analysis-bar-wrap"><div class="sd-analysis-bar"><div class="sd-analysis-bar-fill" style="width:' + pct.toFixed(1) + '%;"></div></div></span>' +
-                    '</li>';
-                }
-                html += '</ul>';
-            }
-
-            html += '</div>';
-        }
-
-        // ゴール分析カード（特別扱い）
-        html += renderCvCard(data);
+        // --- 下段: ランキングカード (地域、ページ、キーワード) ---
+        html += renderRankingCard(data, {
+            title: '見ている人の場所',
+            emoji: '📍',
+            dataKey: 'geo_region',
+            labelField: 'name',
+            rawValueField: 'sessions',
+            nameMap: regionNameMap,
+            top: 5,
+            link: '/analysis/analysis-region/',
+            suffix: ''
+        });
+        html += renderRankingCard(data, {
+            title: 'よく見られているページ',
+            emoji: '📄',
+            dataKey: 'pages',
+            labelField: 'title',
+            rawValueField: 'pageViews',
+            nameMap: null,
+            top: 5,
+            link: '/analysis/analysis-pages/',
+            suffix: ''
+        });
+        html += renderRankingCard(data, {
+            title: 'どんな言葉で探された？',
+            emoji: '🔑',
+            dataKey: 'keywords',
+            labelField: 'query',
+            rawValueField: 'clicks',
+            nameMap: null,
+            top: 5,
+            link: '/analysis/analysis-keywords/',
+            suffix: ''
+        });
 
         grid.innerHTML = html;
     }
 
-    function renderCvCard(data) {
-        var cvTotal = parseInt(data.conversions, 10) || 0;
-        var trends = data.trends || {};
-        var cvTrend = trends.conversions || {};
-        var trendVal = parseFloat(cvTrend.value) || 0;
-        var trendText = cvTrend.text || '±0.0%';
-        var trendClass = trendVal > 0 ? 'positive' : (trendVal < 0 ? 'negative' : 'neutral');
+    // --- デバイス別アクセス (ドーナツチャート + パーセント表示) ---
+    function renderDeviceCard(data) {
+        var devices = data.devices || [];
+        var html = '<div class="sd-analysis-card">' +
+            '<div class="sd-analysis-header">' +
+                '<div class="sd-analysis-title">📱 スマホとパソコンの割合</div>' +
+                '<a href="' + escapeHtml(homeUrl + 'analysis/analysis-device/') + '" class="sd-analysis-link">詳細を見る →</a>' +
+            '</div>';
 
-        // effective_cv があればそれを優先
-        var effCv = data.effective_cv;
-        if (effCv && effCv.total !== undefined) {
-            cvTotal = parseInt(effCv.total, 10) || 0;
+        if (devices.length === 0) {
+            html += '<div class="sd-analysis-empty">データがありません</div>';
+        } else {
+            // デバイスデータ: {device, count, percent}
+            var items = [];
+            for (var i = 0; i < devices.length; i++) {
+                var d = devices[i];
+                var name = mapName(d.device || d.name || '', deviceNameMap);
+                var count = parseFormattedNumber(d.count || d.sessions || d.value || 0);
+                var pctStr = d.percent || '';
+                items.push({ label: name, value: count, percent: pctStr });
+            }
+
+            // ドーナツチャート
+            html += '<div class="sd-chart-area">' + renderDonutChart(items, donutColors) + '</div>';
+
+            // パーセントリスト
+            html += '<ul class="sd-chart-list">';
+            for (var i = 0; i < items.length; i++) {
+                html += '<li class="sd-chart-list-item">' +
+                    '<span class="sd-chart-list-label">' + escapeHtml(items[i].label) + '</span>' +
+                    '<span class="sd-chart-list-value">' + escapeHtml(items[i].percent) + '</span>' +
+                '</li>';
+            }
+            html += '</ul>';
         }
+
+        html += '</div>';
+        return html;
+    }
+
+    // --- 年齢別アクセス (横棒チャート + パーセント表示) ---
+    function renderAgeCard(data) {
+        var ages = data.age || [];
+        var html = '<div class="sd-analysis-card">' +
+            '<div class="sd-analysis-header">' +
+                '<div class="sd-analysis-title">👤 見ている人の年代</div>' +
+                '<a href="' + escapeHtml(homeUrl + 'analysis/analysis-age/') + '" class="sd-analysis-link">詳細を見る →</a>' +
+            '</div>';
+
+        if (ages.length === 0) {
+            html += '<div class="sd-analysis-empty">データがありません</div>';
+        } else {
+            // 年齢データ: {name, sessions (formatted), percentage (numeric)}
+            var topAges = ages.slice(0, 3);
+            var items = [];
+            var totalSess = 0;
+            for (var i = 0; i < ages.length; i++) {
+                totalSess += parseFormattedNumber(ages[i].sessions);
+            }
+            for (var i = 0; i < topAges.length; i++) {
+                var a = topAges[i];
+                var sess = parseFormattedNumber(a.sessions);
+                var pct = a.percentage !== undefined ? parseFloat(a.percentage) : (totalSess > 0 ? (sess / totalSess * 100) : 0);
+                items.push({ label: a.name || '-', value: sess, percent: pct.toFixed(1) + '%' });
+            }
+
+            // 横棒チャート
+            html += '<div class="sd-chart-area">' + renderHBarChart(items, hbarColors) + '</div>';
+
+            // パーセントリスト
+            html += '<ul class="sd-chart-list">';
+            for (var i = 0; i < items.length; i++) {
+                html += '<li class="sd-chart-list-item">' +
+                    '<span class="sd-chart-list-label">' + escapeHtml(items[i].label) + '</span>' +
+                    '<span class="sd-chart-list-value">' + escapeHtml(items[i].percent) + '</span>' +
+                '</li>';
+            }
+            html += '</ul>';
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    // --- 見つけたきっかけ (横棒チャート + パーセント表示) ---
+    function renderMediumCard(data) {
+        var mediums = data.medium || [];
+        var html = '<div class="sd-analysis-card">' +
+            '<div class="sd-analysis-header">' +
+                '<div class="sd-analysis-title">🌐 見つけたきっかけ</div>' +
+                '<a href="' + escapeHtml(homeUrl + 'analysis/analysis-source/') + '" class="sd-analysis-link">詳細を見る →</a>' +
+            '</div>';
+
+        if (mediums.length === 0) {
+            html += '<div class="sd-analysis-empty">データがありません</div>';
+        } else {
+            // 流入元データ: {medium, sessions (formatted), conversions, cvr}
+            var topMediums = mediums.slice(0, 3);
+            var items = [];
+            var totalSess = 0;
+            for (var i = 0; i < mediums.length; i++) {
+                totalSess += parseFormattedNumber(mediums[i].sessions);
+            }
+            for (var i = 0; i < topMediums.length; i++) {
+                var m = topMediums[i];
+                var name = mapName(m.medium || m.name || '', mediumNameMap);
+                var sess = parseFormattedNumber(m.sessions);
+                var pct = totalSess > 0 ? (sess / totalSess * 100) : 0;
+                items.push({ label: name, value: sess, percent: pct.toFixed(1) + '%' });
+            }
+
+            // 横棒チャート
+            html += '<div class="sd-chart-area">' + renderHBarChart(items, hbarColors) + '</div>';
+
+            // パーセントリスト
+            html += '<ul class="sd-chart-list">';
+            for (var i = 0; i < items.length; i++) {
+                html += '<li class="sd-chart-list-item">' +
+                    '<span class="sd-chart-list-label">' + escapeHtml(items[i].label) + '</span>' +
+                    '<span class="sd-chart-list-value">' + escapeHtml(items[i].percent) + '</span>' +
+                '</li>';
+            }
+            html += '</ul>';
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    // --- ランキングカード (番号付きリスト + 数値) ---
+    function renderRankingCard(data, def) {
+        var items = data[def.dataKey] || [];
+        var topItems = items.slice(0, def.top);
 
         var html = '<div class="sd-analysis-card">' +
             '<div class="sd-analysis-header">' +
-                '<div class="sd-analysis-title">🎯 ゴール分析</div>' +
-                '<a href="' + escapeHtml(homeUrl + 'analysis/analysis-cv/') + '" class="sd-analysis-link">詳細を見る →</a>' +
-            '</div>' +
-            '<div class="sd-cv-summary">' +
-                '<span class="sd-cv-total">' + formatNumber(cvTotal) + '</span>' +
-                '<span class="sd-cv-unit">件</span>' +
-                '<span class="sd-kpi-change ' + trendClass + '">' + escapeHtml(trendText) + '</span>' +
+                '<div class="sd-analysis-title">' + def.emoji + ' ' + escapeHtml(def.title) + ' TOP' + def.top + '</div>' +
+                '<a href="' + escapeHtml(homeUrl + def.link.replace(/^\//, '')) + '" class="sd-analysis-link">詳細を見る →</a>' +
             '</div>';
 
-        // CV内訳（effective_cv.components がある場合）
-        if (effCv && effCv.components) {
-            var comps = effCv.components;
-            html += '<ul class="sd-analysis-items">';
-            if (comps.ga4_total !== undefined) {
-                html += '<li class="sd-analysis-item">' +
-                    '<span class="sd-analysis-rank">-</span>' +
-                    '<span class="sd-analysis-item-label">サイト経由（GA4）</span>' +
-                    '<span class="sd-analysis-item-value">' + formatNumber(comps.ga4_total) + '</span>' +
-                    '<span class="sd-analysis-bar-wrap"></span>' +
-                '</li>';
-            }
-            if (comps.manual_total !== undefined && comps.manual_total > 0) {
-                html += '<li class="sd-analysis-item">' +
-                    '<span class="sd-analysis-rank">-</span>' +
-                    '<span class="sd-analysis-item-label">手動登録（電話等）</span>' +
-                    '<span class="sd-analysis-item-value">' + formatNumber(comps.manual_total) + '</span>' +
-                    '<span class="sd-analysis-bar-wrap"></span>' +
+        if (topItems.length === 0) {
+            html += '<div class="sd-analysis-empty">データがありません</div>';
+        } else {
+            html += '<ul class="sd-ranking-items">';
+            for (var i = 0; i < topItems.length; i++) {
+                var item = topItems[i];
+                var label = item[def.labelField] || '-';
+                var rawVal = item[def.rawValueField] || item['_' + def.rawValueField] || '0';
+                var val = parseFormattedNumber(rawVal);
+
+                // 名前マッピング
+                if (def.nameMap) {
+                    label = mapName(label, def.nameMap);
+                }
+
+                html += '<li class="sd-ranking-item">' +
+                    '<span class="sd-ranking-num">' + (i + 1) + '.</span>' +
+                    '<span class="sd-ranking-label">' + escapeHtml(label) + '</span>' +
+                    '<span class="sd-ranking-value">' + formatNumber(val) + '</span>' +
                 '</li>';
             }
             html += '</ul>';
@@ -663,15 +903,12 @@ get_template_part('template-parts/period-selector');
         // 2. デバイス比率
         var devices = data.devices || [];
         if (devices.length > 0) {
-            var total = 0;
-            for (var d = 0; d < devices.length; d++) total += (parseFloat(devices[d].sessions) || 0);
-            if (total > 0) {
-                var topDev = devices[0];
-                var share = ((parseFloat(topDev.sessions) || 0) / total * 100).toFixed(0);
-                var devLabel = topDev.name === 'mobile' ? 'スマホ' : (topDev.name === 'desktop' ? 'パソコン' : topDev.name);
-                if (parseInt(share, 10) >= 55) {
-                    insights.push({ icon: '📱', text: devLabel + 'からのアクセスが' + share + '%を占めています。' + devLabel + '向けの表示を特に意識しましょう。' });
-                }
+            var topDev = devices[0];
+            var pctStr = (topDev.percent || '').replace('%', '');
+            var pctNum = parseFloat(pctStr) || 0;
+            if (pctNum >= 55) {
+                var devLabel = mapName(topDev.device || topDev.name || '', deviceNameMap);
+                insights.push({ icon: '📱', text: devLabel + 'からのアクセスが' + pctNum.toFixed(0) + '%を占めています。' + devLabel + '向けの表示を特に意識しましょう。' });
             }
         }
 
