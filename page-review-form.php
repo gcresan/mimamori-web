@@ -189,14 +189,17 @@ $api_url = rest_url('gcrev/v1/review/generate');
         color: #2C3E40;
         margin-bottom: 4px;
         line-height: 1.8;
-        padding-left: 1.6em;
-        text-indent: -1.6em;
+        display: flex;
+        align-items: baseline;
     }
     .question-number {
-        display: inline-block;
+        flex-shrink: 0;
         width: 1.6em;
-        text-indent: 0;
         color: #2C3E40;
+    }
+    .question-label-text {
+        flex: 1;
+        min-width: 0;
     }
     .question-badge {
         font-size: 11px;
@@ -764,12 +767,14 @@ $api_url = rest_url('gcrev/v1/review/generate');
                 html += '<div class="question-block" data-qid="' + q.id + '">';
                 html += '<div class="question-label">';
                 html += '<span class="question-number">' + (idx + 1) + '.</span>';
+                html += '<span class="question-label-text">';
                 html += escapeHtml(q.label);
                 if (q.required) {
                     html += '<span class="question-badge badge-required">必須</span>';
                 } else {
                     html += '<span class="question-badge badge-optional">任意</span>';
                 }
+                html += '</span>';
                 html += '</div>';
 
                 if (q.description) {
