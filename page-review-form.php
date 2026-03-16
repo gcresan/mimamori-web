@@ -178,16 +178,17 @@ $api_url = rest_url('gcrev/v1/review/generate');
         font-weight: 700;
         color: #2C3E40;
         margin-bottom: 4px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        line-height: 1.8;
     }
     .question-badge {
         font-size: 11px;
         font-weight: 600;
         padding: 2px 8px;
         border-radius: 4px;
-        flex-shrink: 0;
+        margin-left: 6px;
+        display: inline;
+        vertical-align: middle;
+        white-space: nowrap;
     }
     .badge-required {
         background: #fef2f2;
