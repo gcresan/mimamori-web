@@ -348,6 +348,22 @@ get_header();
 .cs-kw-quota strong { font-weight: 700; color: #1e293b; }
 .cs-kw-empty { font-size: 13px; color: #94a3b8; padding: 12px 0; }
 
+/* Toggle switch */
+.cs-kw-toggle {
+    position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0;
+}
+.cs-kw-toggle input { opacity: 0; width: 0; height: 0; }
+.cs-kw-toggle__slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background: #d1d5db; border-radius: 22px; transition: 0.2s;
+}
+.cs-kw-toggle__slider::before {
+    content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
+    background: #fff; border-radius: 50%; transition: 0.2s;
+}
+.cs-kw-toggle input:checked + .cs-kw-toggle__slider { background: #568184; }
+.cs-kw-toggle input:checked + .cs-kw-toggle__slider::before { transform: translateX(18px); }
+
 @media (max-width: 600px) {
     .ref-url-row { flex-wrap: wrap; }
     .ref-url-row input[type="url"],
@@ -385,7 +401,8 @@ get_header();
                     <thead>
                         <tr>
                             <th>キーワード</th>
-                            <th>作成日</th>
+                            <th style="text-align:center;">ランキング計測</th>
+                            <th style="text-align:center;">AIO診断</th>
                             <th style="text-align:right;">操作</th>
                         </tr>
                     </thead>
@@ -1329,7 +1346,23 @@ get_header();
             var kw = csKwList[i];
             html += '<tr>';
             html += '<td><strong>' + csKwEsc(kw.keyword) + '</strong></td>';
-            html += '<td style="color:#6b7280;font-size:13px;">' + csKwFormatDate(kw.created_at) + '</td>';
+
+            // ランキング計測トグル
+            html += '<td style="text-align:center;">';
+            html += '<label class="cs-kw-toggle">';
+            html += '<input type="checkbox"' + (kw.enabled ? ' checked' : '') + ' onchange="csToggleKeyword(' + kw.id + ', this.checked)">';
+            html += '<span class="cs-kw-toggle__slider"></span>';
+            html += '</label>';
+            html += '</td>';
+
+            // AIO診断トグル
+            html += '<td style="text-align:center;">';
+            html += '<label class="cs-kw-toggle">';
+            html += '<input type="checkbox"' + (kw.aio_enabled ? ' checked' : '') + ' onchange="csToggleAio(' + kw.id + ', this.checked)">';
+            html += '<span class="cs-kw-toggle__slider"></span>';
+            html += '</label>';
+            html += '</td>';
+
             html += '<td style="text-align:right;">';
             html += '<div class="cs-kw-actions">';
             html += '<button class="cs-kw-order-btn" onclick="csReorderKeyword(' + kw.id + ',\'up\')" title="上に移動">&#x2191;</button>';
@@ -1414,6 +1447,45 @@ get_header();
         .then(function(res) { return res.json(); })
         .then(function(json) {
             if (json.success) { csKwFetch(); }
+        });
+    };
+
+    window.csToggleKeyword = function(id, enable) {
+        var kw = csKwList.find(function(k) { return k.id === id; });
+        if (!kw) return;
+
+        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ id: id, keyword: kw.keyword, enabled: enable ? 1 : 0 })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success) {
+                csKwFetch();
+            } else {
+                alert(json.message || 'エラーが発生しました。');
+                csKwFetch(); // revert UI
+            }
+        });
+    };
+
+    window.csToggleAio = function(id, enable) {
+        fetch('/wp-json/gcrev/v1/aio/my-keywords', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ keyword_id: id, aio_enabled: enable ? 1 : 0 })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(json) {
+            if (json.success) {
+                csKwFetch();
+            } else {
+                alert(json.message || 'エラーが発生しました。');
+                csKwFetch(); // revert UI
+            }
         });
     };
 

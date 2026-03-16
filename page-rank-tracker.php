@@ -300,86 +300,6 @@ get_header();
 .rt-action-link:hover { color: #476C6F; text-decoration: underline; }
 .rt-action-link__icon { font-size: 14px; }
 
-/* Toggle switch */
-.rt-toggle {
-    position: relative;
-    display: inline-block;
-    width: 40px;
-    height: 22px;
-    flex-shrink: 0;
-}
-.rt-toggle input { opacity: 0; width: 0; height: 0; }
-.rt-toggle__slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: #d1d5db;
-    border-radius: 22px;
-    transition: 0.2s;
-}
-.rt-toggle__slider::before {
-    content: '';
-    position: absolute;
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    bottom: 3px;
-    background: #fff;
-    border-radius: 50%;
-    transition: 0.2s;
-}
-.rt-toggle input:checked + .rt-toggle__slider { background: #568184; }
-.rt-toggle input:checked + .rt-toggle__slider::before { transform: translateX(18px); }
-
-/* --- Keyword management section --- */
-.rt-kw-section {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 32px;
-}
-.rt-kw-section__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-.rt-kw-section__title {
-    font-size: 17px;
-    font-weight: 700;
-    color: #1a1a1a;
-}
-.rt-link-to-settings {
-    font-size: 13px;
-    color: #568184;
-    text-decoration: none;
-    font-weight: 500;
-}
-.rt-link-to-settings:hover { text-decoration: underline; }
-
-/* Keyword toggle table */
-.rt-kw-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.rt-kw-table th {
-    font-size: 12px;
-    font-weight: 600;
-    color: #6b7280;
-    padding: 10px 12px;
-    text-align: left;
-    border-bottom: 1px solid #e5e7eb;
-    white-space: nowrap;
-}
-.rt-kw-table td {
-    padding: 12px;
-    border-bottom: 1px solid #f3f4f6;
-    vertical-align: middle;
-    font-size: 14px;
-}
-.rt-kw-table tr:last-child td { border-bottom: none; }
-
 /* --- Empty state --- */
 .rt-empty {
     text-align: center;
@@ -630,7 +550,6 @@ get_header();
 @media (max-width: 768px) {
     .rt-header { flex-direction: column; align-items: flex-start; }
     .rt-table-wrap { overflow-x: auto; }
-    .rt-kw-section { padding: 16px; }
     .rt-add-form { flex-direction: column; }
     .rt-quota { flex-direction: column; gap: 8px; }
 }
@@ -714,33 +633,6 @@ get_header();
         </div>
     </div>
 
-    <!-- ===========================
-         キーワード管理セクション
-         =========================== -->
-    <div class="rt-kw-section" id="kwSection">
-        <div class="rt-kw-section__header">
-            <div class="rt-kw-section__title">計測キーワード</div>
-            <a href="/client-settings/" class="rt-link-to-settings">キーワードを追加・管理 →</a>
-        </div>
-
-        <!-- Keyword toggle table -->
-        <div id="kwTableWrap" style="display:none;">
-            <table class="rt-kw-table">
-                <thead>
-                    <tr>
-                        <th>キーワード</th>
-                        <th>ランキング計測</th>
-                        <th>AIO診断</th>
-                    </tr>
-                </thead>
-                <tbody id="kwTableBody"></tbody>
-            </table>
-        </div>
-
-        <div id="kwEmpty" style="display:none;font-size:13px;color:#94a3b8;padding:8px 0;">
-            キーワードが登録されていません。<a href="/client-settings/" style="color:#568184;">設定ページ</a>から追加してください。
-        </div>
-    </div>
 </div>
 
 <!-- Progress overlay (bulk fetch) -->
@@ -793,11 +685,6 @@ get_header();
     var weekKeys = [];
     var summaryData = {};
 
-    // Keyword management
-    var myKeywords = [];
-    var kwLimit = 5;
-    var kwCanAdd = true;
-    var kwDefaultDomain = '';
     var manualFetchLimit = { daily_used: 0, daily_limit: 5, daily_remaining: 5, is_admin: false };
 
     // SERP Modal state
@@ -808,7 +695,6 @@ get_header();
     // Init
     // =========================================================
     document.addEventListener('DOMContentLoaded', function() {
-        fetchMyKeywords();
         fetchRankings();
     });
 
@@ -1082,7 +968,6 @@ get_header();
                 setTimeout(function() {
                     showProgress(false);
                     showToast(cnt + '件のキーワードの最新順位を取得しました。');
-                    fetchMyKeywords();
                     fetchRankings();
                 }, 1200);
             } else {
@@ -1271,121 +1156,6 @@ get_header();
         html += '</tbody></table>';
         return html;
     }
-
-    // =========================================================
-    // Keyword management — data
-    // =========================================================
-    function fetchMyKeywords() {
-        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
-            headers: { 'X-WP-Nonce': wpNonce },
-            credentials: 'same-origin'
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            if (json.success && json.data) {
-                myKeywords = json.data.keywords || [];
-                kwLimit = json.data.limit || 5;
-                kwCanAdd = json.data.can_add;
-                kwDefaultDomain = json.data.default_domain || '';
-                if (json.data.manual_fetch_limit) {
-                    manualFetchLimit = json.data.manual_fetch_limit;
-                }
-                renderKwManagement();
-            }
-        })
-        .catch(function(err) {
-            console.error('[KW Mgmt]', err);
-        });
-    }
-
-    // =========================================================
-    // Keyword management — render
-    // =========================================================
-    function renderKwManagement() {
-        var tableWrap = document.getElementById('kwTableWrap');
-        var tbody = document.getElementById('kwTableBody');
-        var empty = document.getElementById('kwEmpty');
-
-        if (myKeywords.length === 0) {
-            tableWrap.style.display = 'none';
-            empty.style.display = 'block';
-            return;
-        }
-
-        empty.style.display = 'none';
-        tableWrap.style.display = 'block';
-
-        var html = '';
-        for (var i = 0; i < myKeywords.length; i++) {
-            var kw = myKeywords[i];
-
-            html += '<tr>';
-
-            // Keyword name
-            html += '<td><strong>' + escHtml(kw.keyword) + '</strong></td>';
-
-            // Ranking toggle
-            html += '<td>';
-            html += '<label class="rt-toggle">';
-            html += '<input type="checkbox"' + (kw.enabled ? ' checked' : '') + ' onchange="toggleKeyword(' + kw.id + ', this.checked)">';
-            html += '<span class="rt-toggle__slider"></span>';
-            html += '</label>';
-            html += '</td>';
-
-            // AIO toggle
-            html += '<td>';
-            html += '<label class="rt-toggle">';
-            html += '<input type="checkbox"' + (kw.aio_enabled ? ' checked' : '') + ' onchange="toggleAio(' + kw.id + ', this.checked)">';
-            html += '<span class="rt-toggle__slider"></span>';
-            html += '</label>';
-            html += '</td>';
-
-            html += '</tr>';
-        }
-
-        tbody.innerHTML = html;
-    }
-
-    // =========================================================
-    // Keyword toggle actions
-    // =========================================================
-    window.toggleKeyword = function(id, enable) {
-        var kw = myKeywords.find(function(k) { return k.id === id; });
-        if (!kw) return;
-
-        fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
-            method: 'POST',
-            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ id: id, keyword: kw.keyword, enabled: enable ? 1 : 0 })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            if (json.success) {
-                fetchMyKeywords();
-                fetchRankings();
-            } else {
-                alert(json.message || 'エラーが発生しました。');
-            }
-        });
-    };
-
-    window.toggleAio = function(id, enable) {
-        fetch('/wp-json/gcrev/v1/aio/my-keywords', {
-            method: 'POST',
-            headers: { 'X-WP-Nonce': wpNonce, 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ keyword_id: id, aio_enabled: enable ? 1 : 0 })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(json) {
-            if (json.success) {
-                fetchMyKeywords();
-            } else {
-                alert(json.message || 'エラーが発生しました。');
-            }
-        });
-    };
 
     // =========================================================
     // CSV export
