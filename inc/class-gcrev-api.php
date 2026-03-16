@@ -3940,7 +3940,6 @@ class Gcrev_Insight_API {
 
             // pending_ IDの場合はGBP API呼び出し不可 → 空データで正常返却
             $is_pending = (strpos($location_id, 'pending_') === 0);
-            file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " location_id={$location_id}, is_pending=" . ($is_pending ? 'true' : 'false') . "\n", FILE_APPEND);
 
             $access_token = $this->gbp_get_access_token($user_id);
             if (empty($access_token) && !$is_pending) {
@@ -3957,11 +3956,8 @@ class Gcrev_Insight_API {
             // キャッシュ（既存パターンと同一）
             $date_hash = md5("{$dates['start']}_{$dates['end']}");
             $cache_key = "gcrev_meo_{$user_id}_{$period}_{$date_hash}";
-            // DEBUG: キャッシュを一時的にバイパス（原因調査用）
-            $force_debug = true;
             $cached    = get_transient($cache_key);
-            if (!$force_debug && $cached !== false && is_array($cached)) {
-                error_log("[GCREV][MEO] Cache HIT: {$cache_key}");
+            if ($cached !== false && is_array($cached)) {
                 return new \WP_REST_Response($cached, 200);
             }
 
@@ -5083,32 +5079,17 @@ class Gcrev_Insight_API {
             $url = "https://businessprofileperformance.googleapis.com/v1/{$location_id}:getDailyMetricsTimeSeries?"
                  . http_build_query($params, '', '&');
 
-            // DEBUG（一時的）
-            if ($metric === 'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH') {
-                $dbg = date('Y-m-d H:i:s') . " === GBP getDailyMetricsTimeSeries ===\n";
-                $dbg .= "URL: {$url}\n";
-                file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
-            }
-
             $response = wp_remote_get($url, [
                 'headers' => ['Authorization' => 'Bearer ' . $access_token],
                 'timeout' => 15,
             ]);
 
             if (is_wp_error($response)) {
-                file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " WP_ERROR ({$metric}): " . $response->get_error_message() . "\n", FILE_APPEND);
                 continue;
             }
 
             $status   = wp_remote_retrieve_response_code($response);
             $raw_body = wp_remote_retrieve_body($response);
-
-            // DEBUG: 最初のメトリクスのみ詳細ログ
-            if ($metric === 'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH') {
-                $dbg2 = date('Y-m-d H:i:s') . " HTTP {$status}\n";
-                $dbg2 .= "response (first 2000):\n" . substr($raw_body, 0, 2000) . "\n=== END ===\n\n";
-                file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg2, FILE_APPEND);
-            }
 
             if ($status !== 200) {
                 continue;
@@ -5124,8 +5105,6 @@ class Gcrev_Insight_API {
         }
 
         $totals['total_impressions'] = $totals['search_impressions'] + $totals['map_impressions'];
-
-        file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " aggregated: " . wp_json_encode($totals, JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
 
         return $totals;
     }
