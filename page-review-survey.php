@@ -348,6 +348,7 @@ get_header();
                         <select class="sv-form-select" id="sv-q-type">
                             <option value="checkbox">チェックボックス（複数選択）</option>
                             <option value="radio">ラジオボタン（単一選択）</option>
+                            <option value="text">テキスト（短文・1行）</option>
                             <option value="textarea">テキストエリア（自由記述）</option>
                         </select>
                     </div>
@@ -782,7 +783,7 @@ get_header();
     var modalBody = document.getElementById('sv-q-modal-body');
 
     function openQuestionEditModal(q) {
-        var typeLabels = { checkbox: 'チェックボックス（複数選択）', radio: 'ラジオボタン（単一選択）', textarea: 'テキストエリア（自由記述）' };
+        var typeLabels = { checkbox: 'チェックボックス（複数選択）', radio: 'ラジオボタン（単一選択）', text: 'テキスト（短文・1行）', textarea: 'テキストエリア（自由記述）' };
         var optionsVal = (q.options || []).join('\n');
         var showOpts = (q.type === 'checkbox' || q.type === 'radio');
 
@@ -793,6 +794,7 @@ get_header();
             '<div class="sv-form-group"><label class="sv-form-label">タイプ</label><select class="sv-form-select" id="sv-qm-type">' +
             '<option value="checkbox"' + (q.type === 'checkbox' ? ' selected' : '') + '>' + (typeLabels.checkbox) + '</option>' +
             '<option value="radio"' + (q.type === 'radio' ? ' selected' : '') + '>' + (typeLabels.radio) + '</option>' +
+            '<option value="text"' + (q.type === 'text' ? ' selected' : '') + '>' + (typeLabels.text) + '</option>' +
             '<option value="textarea"' + (q.type === 'textarea' ? ' selected' : '') + '>' + (typeLabels.textarea) + '</option>' +
             '</select></div>' +
             '<div class="sv-form-group" style="max-width:100px;"><label class="sv-form-label">必須</label><select class="sv-form-select" id="sv-qm-required"><option value="1"' + (q.required ? ' selected' : '') + '>必須</option><option value="0"' + (!q.required ? ' selected' : '') + '>任意</option></select></div>' +
