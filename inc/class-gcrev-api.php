@@ -791,6 +791,15 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_run_seo_diagnosis' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+
+        // =========================================================
+        // 口コミ投稿支援（公開エンドポイント）
+        // =========================================================
+        register_rest_route('gcrev/v1', '/review/generate', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_generate_review' ],
+            'permission_callback' => [ $this, 'check_review_rate_limit' ],
+        ]);
     }
 
     // =========================================================
@@ -11455,6 +11464,198 @@ PROMPT;
                 'message' => '診断中にエラーが発生しました: ' . esc_html( $e->getMessage() ),
             ], 500 );
         }
+    }
+
+    // =========================================================
+    // 口コミ投稿支援
+    // =========================================================
+
+    /**
+     * レートリミットチェック（公開エンドポイント保護）
+     * 1時間あたり10回/IPに制限
+     */
+    public function check_review_rate_limit(\WP_REST_Request $request): bool {
+        $ip  = sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        $key = 'gcrev_review_rate_' . md5($ip);
+        $count = (int) get_transient($key);
+        if ($count >= 10) {
+            return false;
+        }
+        set_transient($key, $count + 1, HOUR_IN_SECONDS);
+        return true;
+    }
+
+    /**
+     * 口コミ参考文を生成する（公開エンドポイント）
+     *
+     * POST gcrev/v1/review/generate
+     * Body: { answers: [{ question, answer }], user_id: int }
+     */
+    public function rest_generate_review(\WP_REST_Request $request): \WP_REST_Response {
+        try {
+            $params  = $request->get_json_params();
+            $answers = $params['answers'] ?? [];
+            $user_id = absint($params['user_id'] ?? 0);
+
+            if (empty($answers) || !is_array($answers)) {
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => '回答データが不足しています。',
+                ], 400);
+            }
+
+            // 回答をプロンプト用テキストに整形
+            $answer_text = $this->format_review_answers($answers);
+            if (empty($answer_text)) {
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => '有効な回答がありません。入力内容をご確認ください。',
+                ], 400);
+            }
+
+            // ビジネス名の取得（プロンプトに含める）
+            $business_name = '';
+            if ($user_id > 0) {
+                $business_name = get_user_meta($user_id, 'report_client_name', true);
+            }
+
+            // AIプロンプト構築
+            $prompt = $this->build_review_prompt($answer_text, $business_name);
+
+            // Gemini API 呼び出し
+            $raw_response = $this->ai->call_gemini_api($prompt);
+
+            // JSONパース
+            $parsed = $this->parse_review_response($raw_response);
+            if ($parsed === null) {
+                file_put_contents('/tmp/gcrev_review_debug.log',
+                    date('Y-m-d H:i:s') . " JSON parse failed. raw=" . substr($raw_response, 0, 500) . "\n",
+                    FILE_APPEND
+                );
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => '口コミ案の作成に失敗しました。もう一度お試しください。',
+                ], 500);
+            }
+
+            return new \WP_REST_Response([
+                'success'       => true,
+                'short_review'  => $parsed['short_review'],
+                'normal_review' => $parsed['normal_review'],
+            ], 200);
+
+        } catch (\Exception $e) {
+            file_put_contents('/tmp/gcrev_review_debug.log',
+                date('Y-m-d H:i:s') . " review generate error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => '口コミ案の作成に失敗しました。少し時間をおいてもう一度お試しください。',
+            ], 500);
+        }
+    }
+
+    /**
+     * アンケート回答をプロンプト用テキストに整形
+     */
+    private function format_review_answers(array $answers): string {
+        $lines = [];
+        foreach ($answers as $item) {
+            $question = sanitize_text_field($item['question'] ?? '');
+            $answer   = $item['answer'] ?? '';
+
+            if (empty($question)) continue;
+
+            if (is_array($answer)) {
+                $answer = array_map('sanitize_text_field', $answer);
+                $answer = array_filter($answer);
+                if (empty($answer)) continue;
+                $lines[] = "【{$question}】\n" . implode('、', $answer);
+            } else {
+                $answer = sanitize_textarea_field($answer);
+                if (trim($answer) === '') continue;
+                $lines[] = "【{$question}】\n{$answer}";
+            }
+        }
+        return implode("\n\n", $lines);
+    }
+
+    /**
+     * 口コミ生成用AIプロンプトを構築
+     */
+    private function build_review_prompt(string $answer_text, string $business_name = ''): string {
+        $business_part = $business_name
+            ? "対象のサービス・店舗名: {$business_name}\n"
+            : '';
+
+        return <<<PROMPT
+あなたは、実際に利用した顧客の視点でGoogle口コミの参考文を作成するアシスタントです。
+
+## 目的
+以下のアンケート回答をもとに、Google口コミとして投稿できる参考文を2パターン作成してください。
+これは自動投稿用ではなく、顧客本人が修正して使うための下書きです。
+
+{$business_part}
+## アンケート回答内容
+{$answer_text}
+
+## 出力ルール
+
+### short_review（80〜120文字程度）
+- 短く簡潔にまとめた口コミ文
+
+### normal_review（120〜180文字程度）
+- もう少し詳しく書いた口コミ文
+
+### 共通の文体ルール
+- 実際のアンケート回答内容から逸脱しないこと
+- 回答にない情報や体験を勝手に補わないこと
+- 誇張しすぎない。不自然に褒めすぎない
+- テンプレート感を抑え、自然な日本語にする
+- 実体験に基づいた口コミに見える文体にする
+- 営業色が強すぎる表現は避ける
+- Google口コミとして違和感のない文体にする
+- 「です・ます」調で統一する
+- 星評価（★）は含めない
+
+## 出力形式
+以下のJSON形式のみを出力してください。説明文やマークダウンは不要です。
+
+```json
+{
+  "short_review": "短めの口コミ文",
+  "normal_review": "標準の口コミ文"
+}
+```
+PROMPT;
+    }
+
+    /**
+     * AI応答からJSON（short_review / normal_review）をパース
+     */
+    private function parse_review_response(string $raw): ?array {
+        // マークダウンのコードブロックを除去
+        $cleaned = preg_replace('/```(?:json)?\s*/i', '', $raw);
+        $cleaned = preg_replace('/```\s*/', '', $cleaned);
+        $cleaned = trim($cleaned);
+
+        $parsed = json_decode($cleaned, true);
+        if (!is_array($parsed)) {
+            // フォールバック: JSONブロックを正規表現で抽出
+            if (preg_match('/\{[^{}]*"short_review"\s*:\s*"[^"]*"[^{}]*"normal_review"\s*:\s*"[^"]*"[^{}]*\}/s', $raw, $m)) {
+                $parsed = json_decode($m[0], true);
+            }
+        }
+
+        if (!is_array($parsed) || empty($parsed['short_review']) || empty($parsed['normal_review'])) {
+            return null;
+        }
+
+        return [
+            'short_review'  => sanitize_textarea_field($parsed['short_review']),
+            'normal_review' => sanitize_textarea_field($parsed['normal_review']),
+        ];
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

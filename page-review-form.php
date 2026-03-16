@@ -1,0 +1,852 @@
+<?php
+/*Template Name: 口コミ投稿支援フォーム */
+
+// =====================================================
+// 質問定義（この配列を編集するだけで質問を追加・変更可能）
+// =====================================================
+$review_questions = [
+    [
+        'id'          => 'concerns',
+        'type'        => 'checkbox',
+        'label'       => '利用前に困っていたこと',
+        'required'    => true,
+        'description' => '当てはまるものをすべて選択してください',
+        'options'     => [
+            '集客が伸び悩んでいた',
+            'どのエリアに配ればよいかわからなかった',
+            '反応があるか不安だった',
+            '費用対効果が見えづらかった',
+            'その他',
+        ],
+    ],
+    [
+        'id'          => 'reasons',
+        'type'        => 'checkbox',
+        'label'       => 'このサービスを選んだ理由',
+        'required'    => true,
+        'description' => '当てはまるものをすべて選択してください',
+        'options'     => [
+            '説明がわかりやすかった',
+            '相談しやすかった',
+            '費用感に納得できた',
+            '地元で実績があった',
+            '対応が丁寧だった',
+            'その他',
+        ],
+    ],
+    [
+        'id'          => 'good_points',
+        'type'        => 'checkbox',
+        'label'       => '実際に利用して良かった点',
+        'required'    => true,
+        'description' => '当てはまるものをすべて選択してください',
+        'options'     => [
+            '対応が早かった',
+            '配布内容について相談しやすかった',
+            '安心して任せられた',
+            '続けやすかった',
+            '反応につながった',
+            'その他',
+        ],
+    ],
+    [
+        'id'          => 'satisfaction',
+        'type'        => 'radio',
+        'label'       => '総合的な満足度',
+        'required'    => true,
+        'description' => '1つ選択してください',
+        'options'     => [
+            'とても満足',
+            '満足',
+            'ふつう',
+            'やや不満',
+            '不満',
+        ],
+    ],
+    [
+        'id'          => 'impression',
+        'type'        => 'textarea',
+        'label'       => '特に印象に残っている対応や良かった点',
+        'required'    => true,
+        'description' => '一言でも大丈夫です。箇条書きでも構いません。',
+        'placeholder' => '例：担当の方がとても親切で、初めてでも安心できました。',
+    ],
+    [
+        'id'          => 'message',
+        'type'        => 'textarea',
+        'label'       => 'これから利用を検討している方にひとこと',
+        'required'    => false,
+        'description' => '任意です。思いつく範囲でご記入ください。',
+        'placeholder' => '例：迷っている方はまず相談してみるとよいと思います。',
+    ],
+];
+
+// =====================================================
+// 対象ビジネス情報の取得
+// =====================================================
+$target_user_id = isset($_GET['u']) ? absint($_GET['u']) : 0;
+$business_name  = '';
+$google_review_url = '';
+
+if ($target_user_id > 0) {
+    $target_user = get_userdata($target_user_id);
+    if ($target_user) {
+        $business_name = get_user_meta($target_user_id, 'report_client_name', true);
+        if (empty($business_name)) {
+            $business_name = $target_user->display_name;
+        }
+        // Google口コミURL: user meta → フォールバック
+        $google_review_url = get_user_meta($target_user_id, '_gcrev_google_review_url', true);
+    }
+}
+
+// フォールバック: Google口コミURLが未設定
+if (empty($google_review_url)) {
+    $google_review_url = '#';
+}
+
+// REST API URL
+$api_url = rest_url('gcrev/v1/review/generate');
+?>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo esc_html($business_name ? $business_name . ' - ご感想アンケート' : 'ご感想アンケート'); ?></title>
+    <link rel="icon" type="image/x-icon" href="<?php echo esc_url(get_template_directory_uri()); ?>/images/favicon.ico">
+    <style>
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+        background: #f5f6fa;
+        color: #333;
+        line-height: 1.7;
+        -webkit-text-size-adjust: 100%;
+    }
+
+    /* ===== Layout ===== */
+    .review-container {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 24px 16px 60px;
+    }
+
+    /* ===== Header ===== */
+    .review-header {
+        text-align: center;
+        padding: 32px 0 24px;
+    }
+    .review-header-logo {
+        width: 160px;
+        height: auto;
+        margin-bottom: 16px;
+    }
+    .review-header h1 {
+        font-size: 20px;
+        font-weight: 700;
+        color: #2C3E40;
+        margin-bottom: 8px;
+    }
+    .review-header p {
+        font-size: 14px;
+        color: #666;
+    }
+
+    /* ===== Card ===== */
+    .review-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        padding: 28px 24px;
+        margin-bottom: 20px;
+    }
+
+    /* ===== Question ===== */
+    .question-block {
+        margin-bottom: 32px;
+    }
+    .question-block:last-child {
+        margin-bottom: 0;
+    }
+    .question-label {
+        font-size: 15px;
+        font-weight: 700;
+        color: #2C3E40;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .question-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        flex-shrink: 0;
+    }
+    .badge-required {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+    .badge-optional {
+        background: #f0fdf4;
+        color: #16a34a;
+    }
+    .question-description {
+        font-size: 13px;
+        color: #888;
+        margin-bottom: 12px;
+    }
+
+    /* ===== Checkbox / Radio ===== */
+    .option-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .option-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        background: #f9fafb;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .option-item:hover {
+        border-color: #93c5fd;
+        background: #f0f7ff;
+    }
+    .option-item.selected {
+        border-color: #3b82f6;
+        background: #eff6ff;
+    }
+    .option-item input[type="checkbox"],
+    .option-item input[type="radio"] {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        accent-color: #3b82f6;
+        cursor: pointer;
+    }
+    .option-item label {
+        font-size: 14px;
+        color: #444;
+        cursor: pointer;
+        flex: 1;
+        user-select: none;
+    }
+
+    /* ===== Textarea ===== */
+    .review-textarea {
+        width: 100%;
+        min-height: 100px;
+        padding: 12px 14px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        line-height: 1.7;
+        resize: vertical;
+        transition: border-color 0.15s;
+        background: #f9fafb;
+    }
+    .review-textarea:focus {
+        outline: none;
+        border-color: #3b82f6;
+        background: #fff;
+    }
+    .review-textarea::placeholder {
+        color: #aaa;
+    }
+
+    /* ===== Error ===== */
+    .question-error {
+        font-size: 13px;
+        color: #dc2626;
+        margin-top: 6px;
+        display: none;
+    }
+    .question-error.visible {
+        display: block;
+    }
+
+    /* ===== Submit Button ===== */
+    .submit-area {
+        text-align: center;
+        margin-top: 8px;
+    }
+    .btn-submit {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 360px;
+        padding: 14px 24px;
+        background: #3b82f6;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 700;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-submit:hover {
+        background: #2563eb;
+    }
+    .btn-submit:disabled {
+        background: #93c5fd;
+        cursor: not-allowed;
+    }
+
+    /* ===== Loading ===== */
+    .loading-section {
+        display: none;
+        text-align: center;
+        padding: 60px 20px;
+    }
+    .loading-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #e5e7eb;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 20px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+        font-size: 15px;
+        color: #555;
+        line-height: 1.8;
+    }
+
+    /* ===== Result ===== */
+    .result-section {
+        display: none;
+    }
+    .result-notice {
+        font-size: 13px;
+        color: #666;
+        background: #fefce8;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        line-height: 1.7;
+    }
+    .result-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+    .result-card-header {
+        font-size: 14px;
+        font-weight: 700;
+        color: #2C3E40;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .result-card-header .badge {
+        font-size: 11px;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+    .badge-short { background: #dbeafe; color: #1d4ed8; }
+    .badge-normal { background: #d1fae5; color: #065f46; }
+    .result-text {
+        font-size: 14px;
+        color: #444;
+        line-height: 1.8;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .btn-copy {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        background: #fff;
+        color: #3b82f6;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1.5px solid #3b82f6;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-copy:hover { background: #eff6ff; }
+    .btn-copy.copied {
+        background: #d1fae5;
+        color: #059669;
+        border-color: #059669;
+    }
+
+    .result-actions {
+        text-align: center;
+        margin-top: 24px;
+    }
+    .btn-google-review {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 360px;
+        padding: 14px 24px;
+        background: #ea4335;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 700;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s;
+    }
+    .btn-google-review:hover { background: #d32f2f; }
+    .btn-retry {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 10px 20px;
+        background: #fff;
+        color: #555;
+        font-size: 14px;
+        font-weight: 600;
+        border: 1.5px solid #d1d5db;
+        border-radius: 8px;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .btn-retry:hover { background: #f9fafb; }
+
+    /* ===== Error Screen ===== */
+    .error-section {
+        display: none;
+        text-align: center;
+        padding: 40px 20px;
+    }
+    .error-icon { font-size: 48px; margin-bottom: 16px; }
+    .error-message {
+        font-size: 15px;
+        color: #555;
+        line-height: 1.8;
+        margin-bottom: 24px;
+    }
+
+    /* ===== Footer ===== */
+    .review-footer {
+        text-align: center;
+        padding: 24px 0;
+        font-size: 12px;
+        color: #aaa;
+    }
+    </style>
+</head>
+<body>
+    <div class="review-container">
+
+        <!-- ヘッダー -->
+        <div class="review-header">
+            <img src="<?php echo esc_url(get_template_directory_uri()); ?>/images/common/logo.png" alt="ロゴ" class="review-header-logo">
+            <h1><?php echo esc_html($business_name ? $business_name . ' ご感想アンケート' : 'ご感想アンケート'); ?></h1>
+            <p>ご利用の感想をお聞かせください。<br>回答をもとに口コミの下書きをお作りします。</p>
+        </div>
+
+        <!-- ===== 入力画面 ===== -->
+        <div id="review-form-section">
+            <form id="review-form" novalidate>
+                <div class="review-card">
+                    <div id="questions-container"></div>
+                </div>
+                <div class="submit-area">
+                    <button type="submit" class="btn-submit" id="btn-submit">
+                        送信して口コミ案を作成する
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ===== ローディング画面 ===== -->
+        <div id="review-loading-section" class="loading-section">
+            <div class="review-card" style="padding: 48px 24px;">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">
+                    口コミ案を作成しています...<br>
+                    <span style="font-size: 13px; color: #888;">入力内容をもとに参考文を整えています</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 結果表示画面 ===== -->
+        <div id="review-result-section" class="result-section">
+            <div class="result-notice">
+                この文章は、アンケート内容をもとに作成した<strong>参考文</strong>です。<br>
+                実際のご感想に合わせて、自由に修正してご利用ください。
+            </div>
+
+            <div class="result-card" id="result-short">
+                <div class="result-card-header">
+                    <span class="badge badge-short">短め</span> 口コミ案A
+                </div>
+                <div class="result-text" id="result-short-text"></div>
+                <button type="button" class="btn-copy" data-target="result-short-text">
+                    この文章をコピー
+                </button>
+            </div>
+
+            <div class="result-card" id="result-normal">
+                <div class="result-card-header">
+                    <span class="badge badge-normal">標準</span> 口コミ案B
+                </div>
+                <div class="result-text" id="result-normal-text"></div>
+                <button type="button" class="btn-copy" data-target="result-normal-text">
+                    この文章をコピー
+                </button>
+            </div>
+
+            <div class="result-actions">
+                <a href="<?php echo esc_url($google_review_url); ?>" target="_blank" rel="noopener noreferrer" class="btn-google-review" id="btn-google-review">
+                    Google口コミを書く
+                </a>
+                <br>
+                <button type="button" class="btn-retry" id="btn-back-to-form">
+                    もう一度やり直す
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== エラー画面 ===== -->
+        <div id="review-error-section" class="error-section">
+            <div class="review-card" style="padding: 40px 24px;">
+                <div class="error-icon">...</div>
+                <div class="error-message" id="error-message">
+                    口コミ案の作成に失敗しました。<br>少し時間をおいてもう一度お試しください。
+                </div>
+                <button type="button" class="btn-retry" id="btn-error-retry">
+                    もう一度試す
+                </button>
+            </div>
+        </div>
+
+        <!-- フッター -->
+        <div class="review-footer">
+            &copy; <?php echo esc_html(date('Y')); ?> <?php bloginfo('name'); ?>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // =====================================================
+        // 設定（PHPから注入）
+        // =====================================================
+        var REVIEW_CONFIG = {
+            apiUrl:         <?php echo wp_json_encode($api_url); ?>,
+            userId:         <?php echo (int) $target_user_id; ?>,
+            googleReviewUrl: <?php echo wp_json_encode($google_review_url); ?>,
+            questions:      <?php echo wp_json_encode($review_questions, JSON_UNESCAPED_UNICODE); ?>
+        };
+
+        // =====================================================
+        // DOM参照
+        // =====================================================
+        var formSection    = document.getElementById('review-form-section');
+        var loadingSection = document.getElementById('review-loading-section');
+        var resultSection  = document.getElementById('review-result-section');
+        var errorSection   = document.getElementById('review-error-section');
+        var form           = document.getElementById('review-form');
+        var container      = document.getElementById('questions-container');
+
+        // =====================================================
+        // フォーム描画
+        // =====================================================
+        function renderQuestions() {
+            var html = '';
+            REVIEW_CONFIG.questions.forEach(function(q) {
+                html += '<div class="question-block" data-qid="' + q.id + '">';
+                html += '<div class="question-label">';
+                if (q.required) {
+                    html += '<span class="question-badge badge-required">必須</span>';
+                } else {
+                    html += '<span class="question-badge badge-optional">任意</span>';
+                }
+                html += escapeHtml(q.label);
+                html += '</div>';
+
+                if (q.description) {
+                    html += '<div class="question-description">' + escapeHtml(q.description) + '</div>';
+                }
+
+                if (q.type === 'checkbox' || q.type === 'radio') {
+                    html += renderOptions(q);
+                } else if (q.type === 'textarea') {
+                    html += '<textarea class="review-textarea" name="' + q.id + '" placeholder="' + escapeAttr(q.placeholder || '') + '"></textarea>';
+                } else if (q.type === 'text') {
+                    html += '<input type="text" class="review-textarea" style="min-height:auto;height:44px;" name="' + q.id + '" placeholder="' + escapeAttr(q.placeholder || '') + '">';
+                }
+
+                html += '<div class="question-error" id="error-' + q.id + '"></div>';
+                html += '</div>';
+            });
+            container.innerHTML = html;
+            bindOptionClicks();
+        }
+
+        function renderOptions(q) {
+            var html = '<div class="option-list">';
+            q.options.forEach(function(opt, i) {
+                var inputId = q.id + '_' + i;
+                html += '<div class="option-item" data-input="' + inputId + '">';
+                html += '<input type="' + q.type + '" id="' + inputId + '" name="' + q.id + '" value="' + escapeAttr(opt) + '">';
+                html += '<label for="' + inputId + '">' + escapeHtml(opt) + '</label>';
+                html += '</div>';
+            });
+            html += '</div>';
+            return html;
+        }
+
+        function bindOptionClicks() {
+            var items = document.querySelectorAll('.option-item');
+            items.forEach(function(item) {
+                item.addEventListener('click', function(e) {
+                    if (e.target.tagName === 'INPUT') return; // input直接クリック時はブラウザに任せる
+                    var input = item.querySelector('input');
+                    if (!input) return;
+
+                    if (input.type === 'checkbox') {
+                        input.checked = !input.checked;
+                    } else if (input.type === 'radio') {
+                        input.checked = true;
+                    }
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+
+                // selected クラスの切替
+                var input = item.querySelector('input');
+                if (input) {
+                    input.addEventListener('change', function() {
+                        if (input.type === 'radio') {
+                            // 同グループの全itemからselectedを外す
+                            var group = document.querySelectorAll('input[name="' + input.name + '"]');
+                            group.forEach(function(r) {
+                                var parent = r.closest('.option-item');
+                                if (parent) parent.classList.remove('selected');
+                            });
+                        }
+                        item.classList.toggle('selected', input.checked);
+                    });
+                }
+            });
+        }
+
+        // =====================================================
+        // バリデーション
+        // =====================================================
+        function validate() {
+            var valid = true;
+            // 前回のエラーをクリア
+            document.querySelectorAll('.question-error').forEach(function(el) {
+                el.textContent = '';
+                el.classList.remove('visible');
+            });
+
+            REVIEW_CONFIG.questions.forEach(function(q) {
+                if (!q.required) return;
+
+                var errorEl = document.getElementById('error-' + q.id);
+                var hasError = false;
+
+                if (q.type === 'checkbox') {
+                    var checked = document.querySelectorAll('input[name="' + q.id + '"]:checked');
+                    if (checked.length === 0) {
+                        hasError = true;
+                        errorEl.textContent = 'この項目を選択してください';
+                    }
+                } else if (q.type === 'radio') {
+                    var selected = document.querySelector('input[name="' + q.id + '"]:checked');
+                    if (!selected) {
+                        hasError = true;
+                        errorEl.textContent = 'この項目を選択してください';
+                    }
+                } else if (q.type === 'textarea' || q.type === 'text') {
+                    var input = document.querySelector('[name="' + q.id + '"]');
+                    if (!input || input.value.trim() === '') {
+                        hasError = true;
+                        errorEl.textContent = 'ご記入をお願いします';
+                    }
+                }
+
+                if (hasError) {
+                    errorEl.classList.add('visible');
+                    if (valid) {
+                        // 最初のエラー箇所にスクロール
+                        var block = document.querySelector('[data-qid="' + q.id + '"]');
+                        if (block) block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    valid = false;
+                }
+            });
+
+            return valid;
+        }
+
+        // =====================================================
+        // 回答データ収集
+        // =====================================================
+        function collectAnswers() {
+            var answers = {};
+            REVIEW_CONFIG.questions.forEach(function(q) {
+                if (q.type === 'checkbox') {
+                    var checked = document.querySelectorAll('input[name="' + q.id + '"]:checked');
+                    answers[q.id] = Array.from(checked).map(function(el) { return el.value; });
+                } else if (q.type === 'radio') {
+                    var selected = document.querySelector('input[name="' + q.id + '"]:checked');
+                    answers[q.id] = selected ? selected.value : '';
+                } else {
+                    var input = document.querySelector('[name="' + q.id + '"]');
+                    answers[q.id] = input ? input.value.trim() : '';
+                }
+            });
+            return answers;
+        }
+
+        // =====================================================
+        // 画面切替
+        // =====================================================
+        function showSection(section) {
+            formSection.style.display    = 'none';
+            loadingSection.style.display = 'none';
+            resultSection.style.display  = 'none';
+            errorSection.style.display   = 'none';
+            section.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // =====================================================
+        // API呼び出し
+        // =====================================================
+        function submitReview(answers) {
+            showSection(loadingSection);
+
+            // 質問ラベルと回答を紐づけた構造を作る
+            var labeled = [];
+            REVIEW_CONFIG.questions.forEach(function(q) {
+                var answer = answers[q.id];
+                if (Array.isArray(answer) && answer.length === 0) return;
+                if (typeof answer === 'string' && answer === '') return;
+
+                labeled.push({
+                    question: q.label,
+                    answer: answer
+                });
+            });
+
+            fetch(REVIEW_CONFIG.apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    answers: labeled,
+                    user_id: REVIEW_CONFIG.userId
+                })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success && data.short_review && data.normal_review) {
+                    document.getElementById('result-short-text').textContent = data.short_review;
+                    document.getElementById('result-normal-text').textContent = data.normal_review;
+                    showSection(resultSection);
+                } else {
+                    var msg = data.message || '口コミ案の作成に失敗しました。\n少し時間をおいてもう一度お試しください。';
+                    document.getElementById('error-message').innerHTML = escapeHtml(msg).replace(/\n/g, '<br>');
+                    showSection(errorSection);
+                }
+            })
+            .catch(function() {
+                document.getElementById('error-message').innerHTML = '口コミ案の作成に失敗しました。<br>少し時間をおいてもう一度お試しください。';
+                showSection(errorSection);
+            });
+        }
+
+        // =====================================================
+        // コピー機能
+        // =====================================================
+        function initCopyButtons() {
+            document.querySelectorAll('.btn-copy').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var targetId = btn.getAttribute('data-target');
+                    var textEl = document.getElementById(targetId);
+                    if (!textEl) return;
+
+                    navigator.clipboard.writeText(textEl.textContent).then(function() {
+                        var originalText = btn.innerHTML;
+                        btn.classList.add('copied');
+                        btn.textContent = 'コピーしました';
+                        setTimeout(function() {
+                            btn.classList.remove('copied');
+                            btn.innerHTML = originalText;
+                        }, 2000);
+                    });
+                });
+            });
+        }
+
+        // =====================================================
+        // イベント登録
+        // =====================================================
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!validate()) return;
+            var answers = collectAnswers();
+            submitReview(answers);
+        });
+
+        // 「もう一度やり直す」ボタン
+        document.getElementById('btn-back-to-form').addEventListener('click', function() {
+            showSection(formSection);
+        });
+
+        // 「もう一度試す」（エラー画面から）
+        document.getElementById('btn-error-retry').addEventListener('click', function() {
+            showSection(formSection);
+        });
+
+        // =====================================================
+        // ユーティリティ
+        // =====================================================
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+        function escapeAttr(str) {
+            return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // =====================================================
+        // 初期化
+        // =====================================================
+        renderQuestions();
+        initCopyButtons();
+    })();
+    </script>
+</body>
+</html>
