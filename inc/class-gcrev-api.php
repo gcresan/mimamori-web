@@ -3939,6 +3939,7 @@ class Gcrev_Insight_API {
 
             // pending_ IDの場合はGBP API呼び出し不可 → 空データで正常返却
             $is_pending = (strpos($location_id, 'pending_') === 0);
+            error_log("[GCREV][MEO] DEBUG location_id={$location_id}, is_pending=" . ($is_pending ? 'true' : 'false'));
 
             $access_token = $this->gbp_get_access_token($user_id);
             if (empty($access_token) && !$is_pending) {
@@ -3955,8 +3956,10 @@ class Gcrev_Insight_API {
             // キャッシュ（既存パターンと同一）
             $date_hash = md5("{$dates['start']}_{$dates['end']}");
             $cache_key = "gcrev_meo_{$user_id}_{$period}_{$date_hash}";
+            // DEBUG: キャッシュを一時的にバイパス（原因調査用）
+            $force_debug = true;
             $cached    = get_transient($cache_key);
-            if ($cached !== false && is_array($cached)) {
+            if (!$force_debug && $cached !== false && is_array($cached)) {
                 error_log("[GCREV][MEO] Cache HIT: {$cache_key}");
                 return new \WP_REST_Response($cached, 200);
             }
@@ -5078,8 +5081,38 @@ class Gcrev_Insight_API {
             return $this->gbp_empty_metrics();
         }
 
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-        return $this->gbp_aggregate_metrics($data);
+        $raw_body = wp_remote_retrieve_body($response);
+        $data = json_decode($raw_body, true);
+
+        // DEBUG: 生レスポンスの構造をログ出力（一時的）
+        error_log("[GCREV][GBP] DEBUG raw response keys: " . wp_json_encode(array_keys($data ?? []), JSON_UNESCAPED_UNICODE));
+        if (!empty($data['multiDailyMetricTimeSeries'])) {
+            $first = $data['multiDailyMetricTimeSeries'][0] ?? [];
+            error_log("[GCREV][GBP] DEBUG first multiDailyMetricTimeSeries keys: " . wp_json_encode(array_keys($first), JSON_UNESCAPED_UNICODE));
+            if (isset($first['dailyMetricTimeSeries'])) {
+                $first_inner = $first['dailyMetricTimeSeries'][0] ?? [];
+                error_log("[GCREV][GBP] DEBUG first dailyMetricTimeSeries keys: " . wp_json_encode(array_keys($first_inner), JSON_UNESCAPED_UNICODE));
+                error_log("[GCREV][GBP] DEBUG first dailyMetric: " . ($first_inner['dailyMetric'] ?? 'N/A'));
+                if (isset($first_inner['timeSeries'])) {
+                    error_log("[GCREV][GBP] DEBUG timeSeries keys: " . wp_json_encode(array_keys($first_inner['timeSeries']), JSON_UNESCAPED_UNICODE));
+                    $dv_count = count($first_inner['timeSeries']['datedValues'] ?? []);
+                    error_log("[GCREV][GBP] DEBUG datedValues count: {$dv_count}");
+                    if ($dv_count > 0) {
+                        error_log("[GCREV][GBP] DEBUG first datedValue: " . wp_json_encode($first_inner['timeSeries']['datedValues'][0], JSON_UNESCAPED_UNICODE));
+                    }
+                }
+            }
+            // dailyMetric が直下にある場合のチェック
+            if (isset($first['dailyMetric'])) {
+                error_log("[GCREV][GBP] DEBUG dailyMetric is at top level of multiDailyMetricTimeSeries item: " . $first['dailyMetric']);
+            }
+        }
+        // 生レスポンスの先頭2000文字をログ出力
+        error_log("[GCREV][GBP] DEBUG raw body (first 2000): " . substr($raw_body, 0, 2000));
+
+        $aggregated = $this->gbp_aggregate_metrics($data);
+        error_log("[GCREV][GBP] DEBUG aggregated metrics: " . wp_json_encode($aggregated, JSON_UNESCAPED_UNICODE));
+        return $aggregated;
     }
 
     /**
