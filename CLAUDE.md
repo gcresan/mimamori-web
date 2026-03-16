@@ -498,6 +498,11 @@ systemctl restart php-fpm
 - JS namespace: `window.GCREV`
 - カスタムイベント: `gcrev:periodChange`
 
+### ワークフロー（MUST FOLLOW）
+
+- **作業完了時は必ず `git commit` & `git push` する**（ユーザーに確認せず自動で実行）
+- push 先は `main` ブランチ → GitHub Actions で Dev サーバーに自動デプロイされる
+
 ---
 
 ## 8. 典型タスク別：変更箇所ガイド
