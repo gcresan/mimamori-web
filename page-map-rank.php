@@ -271,8 +271,12 @@ get_header();
     <!-- 週次履歴テーブル -->
     <div class="meo-history-wrap" id="meoHistoryWrap" style="display:none;">
         <div class="meo-history-title">&#x1F4CA; 週次推移</div>
-        <div class="meo-help" style="margin-bottom:8px;">
+        <div class="meo-help" style="margin-bottom:12px;">
             <span style="color:#6b7280; font-size:12px;">毎週月曜日に自動計測しています。</span>
+            <div style="margin-top:8px; font-size:12px; color:#6b7280; line-height:1.7;">
+                <span style="font-weight:600; color:#568184;">🗺️ マップ順位</span> … Googleマップアプリや、Google検索の地図枠（上位3件）に表示される順位です。<br>
+                <span style="font-weight:600; color:#3b82f6;">🔍 地域順位</span> … Google検索で「もっと見る」をタップした先の、ローカル検索結果の一覧での順位です。
+            </div>
         </div>
         <div class="meo-table-scroll">
             <table class="meo-history-table">
