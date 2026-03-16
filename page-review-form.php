@@ -744,12 +744,12 @@ $api_url = rest_url('gcrev/v1/review/generate');
             REVIEW_CONFIG.questions.forEach(function(q) {
                 html += '<div class="question-block" data-qid="' + q.id + '">';
                 html += '<div class="question-label">';
+                html += escapeHtml(q.label);
                 if (q.required) {
                     html += '<span class="question-badge badge-required">必須</span>';
                 } else {
                     html += '<span class="question-badge badge-optional">任意</span>';
                 }
-                html += escapeHtml(q.label);
                 html += '</div>';
 
                 if (q.description) {
