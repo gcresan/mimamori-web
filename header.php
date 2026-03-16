@@ -95,8 +95,8 @@
       foreach ($support_pages as $_p) { if (is_page($_p)) { $support_child_active = true; break; } }
       $option_child_active = false;
       foreach ($option_pages as $_p) { if (is_page($_p)) { $option_child_active = true; break; } }
-      // 子がアクティブなグループを開く。なければデフォルト 'website'
-      $sidebar_active_group = 'website';
+      // 子がアクティブなグループを開く。なければ全部閉じた状態
+      $sidebar_active_group = '';
       if ($diagnosis_child_active) $sidebar_active_group = 'diagnosis';
       if ($ranking_child_active)   $sidebar_active_group = 'ranking';
       if ($meo_child_active)       $sidebar_active_group = 'meo';
