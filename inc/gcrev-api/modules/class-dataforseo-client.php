@@ -715,7 +715,13 @@ class Gcrev_DataForSEO_Client {
      * @return array|null マッチしたアイテム全体、見つからない場合 null
      */
     public function find_business_in_maps_results( array $items, string $target_domain ): ?array {
-        $normalized_target = preg_replace( '/^www\./i', '', strtolower( $target_domain ) );
+        // URL が渡された場合はホスト部分を抽出し、www. を除いた正規化ドメインにする
+        $host = $target_domain;
+        if ( preg_match( '#^https?://#i', $target_domain ) ) {
+            $parsed = wp_parse_url( $target_domain );
+            $host   = $parsed['host'] ?? $target_domain;
+        }
+        $normalized_target = preg_replace( '/^www\./i', '', strtolower( trim( $host, '/' ) ) );
 
         foreach ( $items as $item ) {
             $domain = $item['domain'] ?? '';
