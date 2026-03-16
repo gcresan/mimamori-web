@@ -8047,16 +8047,29 @@ PROMPT;
                     $values = array_fill(0, $months, 0);
                     break;
                 }
-                foreach ($labels as $ym) {
-                    $start = $ym . '-01';
-                    $end   = date('Y-m-t', strtotime($start));
-                    try {
-                        $m = $this->gbp_fetch_performance_metrics($access_token, $location_id, $start, $end);
-                        $values[] = (int)($m['total_impressions'] ?? 0);
-                    } catch (\Exception $e) {
-                        error_log("[GCREV][Trend] MEO error ({$ym}): " . $e->getMessage());
-                        $values[] = 0;
+                // 12ヶ月分を一括取得して月ごとに集計（API呼び出し4回で済む）
+                $range_start = $labels[0] . '-01';
+                $range_end   = date('Y-m-t', strtotime($labels[count($labels) - 1] . '-01'));
+                try {
+                    $daily_rows = $this->gbp_fetch_daily_metrics($access_token, $location_id, $range_start, $range_end);
+                    // 月別に集計
+                    $monthly_totals = [];
+                    foreach ($daily_rows as $row) {
+                        $ym = substr($row['date'], 0, 7); // YYYY-MM
+                        if (!isset($monthly_totals[$ym])) {
+                            $monthly_totals[$ym] = 0;
+                        }
+                        $monthly_totals[$ym] += (int)($row['search_impressions'] ?? 0) + (int)($row['map_impressions'] ?? 0);
                     }
+                    foreach ($labels as $ym) {
+                        $values[] = $monthly_totals[$ym] ?? 0;
+                    }
+                } catch (\Exception $e) {
+                    file_put_contents('/tmp/gcrev_gbp_debug.log',
+                        date('Y-m-d H:i:s') . " [Trend] MEO monthly error: " . $e->getMessage() . "\n",
+                        FILE_APPEND
+                    );
+                    $values = array_fill(0, $months, 0);
                 }
                 break;
 
