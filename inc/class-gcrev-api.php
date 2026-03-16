@@ -481,7 +481,8 @@ class Gcrev_Insight_API {
                 'month' => [
                     'required'          => true,
                     'validate_callback' => function($param) {
-                        return preg_match('/^\d{4}-\d{2}$/', $param);
+                        // YYYY-MM（月）または YYYY-MM-DD（日）を受け付ける
+                        return preg_match('/^\d{4}-\d{2}(-\d{2})?$/', $param);
                     }
                 ],
                 'type'  => [
@@ -7806,7 +7807,7 @@ PROMPT;
         $filter_set = $this->maybe_set_country_filter( $user_id );
 
         try {
-            $month  = $request->get_param('month');    // "2026-01"
+            $month  = $request->get_param('month');    // "2026-01" or "2026-01-15"
             $type   = $request->get_param('type');     // "region"|"page"|"source"
             $metric = $request->get_param('metric') ?? 'sessions';
 
@@ -7816,9 +7817,15 @@ PROMPT;
                 return new \WP_REST_Response(['success' => false, 'message' => 'GA4 未設定'], 400);
             }
 
-            // 月 → 日付範囲
-            $start = $month . '-01';
-            $end   = date('Y-m-t', strtotime( $start ));
+            // 日付範囲の決定: YYYY-MM-DD なら1日、YYYY-MM なら月全体
+            $is_daily = (strlen($month) === 10); // "2026-01-15" = 10文字
+            if ($is_daily) {
+                $start = $month;
+                $end   = $month;
+            } else {
+                $start = $month . '-01';
+                $end   = date('Y-m-t', strtotime( $start ));
+            }
 
             // MEO は region のみ対応（page/source は無意味）
             if ( $metric === 'meo' && $type !== 'region' ) {

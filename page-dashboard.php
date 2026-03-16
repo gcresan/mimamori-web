@@ -2116,10 +2116,8 @@ foreach ($highlight_items as $highlight):
                 onClick: function(evt, elements) {
                     if (!canDrill || !elements.length) return;
                     var idx = elements[0].index;
-                    // 日別の場合: 日付(YYYY-MM-DD)から月(YYYY-MM)を抽出
-                    var month = isDaily
-                        ? json.labels[idx].substring(0, 7)
-                        : json.labels[idx];
+                    // 日別: YYYY-MM-DD をそのまま渡す、月別: YYYY-MM
+                    var month = json.labels[idx];
                     showDrilldownPopover(month, elements[0].element);
                 },
                 plugins: {
@@ -2234,7 +2232,10 @@ foreach ($highlight_items as $highlight):
     function showDrilldownPopover(month, pointEl) {
         _ddMonth = month;
         var parts = month.split('-');
-        ddPopTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月';
+        // YYYY-MM-DD（日別）か YYYY-MM（月別）かでタイトルを分岐
+        ddPopTitle.textContent = parts.length >= 3
+            ? parts[0] + '年' + parseInt(parts[1], 10) + '月' + parseInt(parts[2], 10) + '日'
+            : parts[0] + '年' + parseInt(parts[1], 10) + '月';
 
         // ── 指標に応じてポップオーバー項目を切り替え ──
         var ddMetric = _activeMetric || 'sessions';
@@ -2317,7 +2318,10 @@ foreach ($highlight_items as $highlight):
         var typeLabel = (metricLabels[type] || _ddLabels.sessions[type]).label;
 
         var parts = month.split('-');
-        ddModalTitle.textContent = parts[0] + '年' + parseInt(parts[1], 10) + '月 — ' + typeLabel;
+        var dateStr = parts.length >= 3
+            ? parts[0] + '年' + parseInt(parts[1], 10) + '月' + parseInt(parts[2], 10) + '日'
+            : parts[0] + '年' + parseInt(parts[1], 10) + '月';
+        ddModalTitle.textContent = dateStr + ' — ' + typeLabel;
 
         ddLoading.style.display   = 'block';
         ddChartWrap.style.display = 'none';
