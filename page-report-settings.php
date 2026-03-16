@@ -13,10 +13,10 @@ $user_id = $current_user->ID;
 $is_admin = current_user_can('manage_options'); // 管理者判定
 
 // ページタイトル設定
-set_query_var('gcrev_page_title', '月次レポート設定');
+set_query_var('gcrev_page_title', '月次レポート設定・生成');
 
 // パンくず設定
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート設定', '各種設定'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート設定・生成', '各種設定'));
 
 // 保存済みの設定を取得（月次戦略情報のみ）
 $saved_issue         = get_user_meta($user_id, 'report_issue',         true) ?: '';

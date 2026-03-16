@@ -12,10 +12,10 @@ $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
 
 // ページタイトル設定
-set_query_var('gcrev_page_title', 'MEO設定');
+set_query_var('gcrev_page_title', 'MEOダッシュボード');
 
 // パンくず設定
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('MEO設定', 'MEO'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('MEOダッシュボード', 'MEO'));
 
 // ===== GBP接続状態判定（class-gcrev-api.php経由） =====
 global $gcrev_api_instance;
