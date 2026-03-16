@@ -5518,6 +5518,13 @@ class Gcrev_Insight_API {
      * @return array gbp_empty_metrics() 互換
      */
     private function fetch_meo_metrics_safe(int $user_id, string $start_date, string $end_date): array {
+        // Transientキャッシュ（6時間）
+        $cache_key = "gcrev_meo_perf_{$user_id}_{$start_date}_{$end_date}";
+        $cached = get_transient($cache_key);
+        if ($cached !== false && is_array($cached)) {
+            return $cached;
+        }
+
         try {
             $location_id = (string)get_user_meta($user_id, '_gcrev_gbp_location_id', true);
             if (empty($location_id) || strpos($location_id, 'pending') === 0) {
@@ -5527,7 +5534,9 @@ class Gcrev_Insight_API {
             if (empty($access_token)) {
                 return $this->gbp_empty_metrics();
             }
-            return $this->gbp_fetch_performance_metrics($access_token, $location_id, $start_date, $end_date);
+            $metrics = $this->gbp_fetch_performance_metrics($access_token, $location_id, $start_date, $end_date);
+            set_transient($cache_key, $metrics, 6 * HOUR_IN_SECONDS);
+            return $metrics;
         } catch (\Exception $e) {
             error_log("[GCREV] fetch_meo_metrics_safe: Error user_id={$user_id}: " . $e->getMessage());
             return $this->gbp_empty_metrics();

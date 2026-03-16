@@ -734,17 +734,24 @@ if ($infographic && is_array($infographic)) {
         // cache_first=1: キャッシュがあれば使い、なければスキップ（JS側で非同期取得）
         $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id, 1);
 
-        // 比較期間のKPI
+        // 比較期間のKPI（currがキャッシュヒットした場合のみ取得）
         $kpi_prev = [];
         if (!empty($kpi_curr)) {
-            $kpi_prev = $gcrev_api->get_dashboard_kpi_by_dates(
-                $last30_comp['start'], $last30_comp['end'], $user_id
-            );
+            // 比較期間もキャッシュチェック — なければJS側で非同期取得
+            $comp_cache_key = "gcrev_dash_{$user_id}_comp_{$last30_comp['start']}_{$last30_comp['end']}";
+            $kpi_prev = get_transient($comp_cache_key);
+            if ($kpi_prev === false) {
+                $kpi_prev = [];
+            }
         }
 
-        // --- MEO直近30日 ---
-        $meo_curr = $gcrev_api->get_meo_total_impressions($user_id, $last30['start'], $last30['end']);
-        $meo_prev = $gcrev_api->get_meo_total_impressions($user_id, $last30_comp['start'], $last30_comp['end']);
+        // --- MEO直近30日（cache_first方式: キャッシュがあれば即、なければJS非同期へ）---
+        $meo_cache_curr = get_transient("gcrev_meo_perf_{$user_id}_{$last30['start']}_{$last30['end']}");
+        $meo_cache_prev = get_transient("gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}");
+        $meo_curr = ($meo_cache_curr !== false && is_array($meo_cache_curr))
+            ? (int)($meo_cache_curr['total_impressions'] ?? 0) : null;
+        $meo_prev = ($meo_cache_prev !== false && is_array($meo_cache_prev))
+            ? (int)($meo_cache_prev['total_impressions'] ?? 0) : null;
 
         // --- KPI値構築 ---
         $sess_curr = (int)str_replace(',', '', (string)($kpi_curr['sessions'] ?? '0'));
@@ -761,11 +768,16 @@ if ($infographic && is_array($infographic)) {
         // infographic KPI 上書き（訪問数・ゴール数・MEO）
         $infographic['kpi']['visits'] = ['value' => $sess_curr, 'diff' => $sess_curr - $sess_prev];
         $infographic['kpi']['cv']     = ['value' => $cv_curr,   'diff' => $cv_curr - $cv_prev];
-        $infographic['kpi']['meo']    = ['value' => $meo_curr,  'diff' => $meo_curr - $meo_prev];
+        // MEOはキャッシュがある場合のみ上書き（なければJS非同期で後から更新）
+        if ($meo_curr !== null && $meo_prev !== null) {
+            $infographic['kpi']['meo'] = ['value' => $meo_curr, 'diff' => $meo_curr - $meo_prev];
+        }
 
         // === スコア再計算（直近30日 vs その前の30日）===
-        $re_curr = ['traffic' => $sess_curr, 'cv' => $cv_curr, 'gsc' => $gsc_curr_val, 'meo' => $meo_curr];
-        $re_prev = ['traffic' => $sess_prev, 'cv' => $cv_prev, 'gsc' => $gsc_prev_val, 'meo' => $meo_prev];
+        $meo_curr_score = $meo_curr ?? (int)($infographic['kpi']['meo']['value'] ?? 0);
+        $meo_prev_score = $meo_prev ?? 0;
+        $re_curr = ['traffic' => $sess_curr, 'cv' => $cv_curr, 'gsc' => $gsc_curr_val, 'meo' => $meo_curr_score];
+        $re_prev = ['traffic' => $sess_prev, 'cv' => $cv_prev, 'gsc' => $gsc_prev_val, 'meo' => $meo_prev_score];
         $re_health = $gcrev_api->calc_monthly_health_score($re_curr, $re_prev, [], $user_id);
         $infographic['score']      = $re_health['score'];
         $infographic['status']     = $re_health['status'];
@@ -1693,10 +1705,42 @@ foreach ($highlight_items as $highlight):
     var prevCv = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
     updateInfoKpi('cv', currCv, currCv - prevCv);
 
-    // MEO（PHP側で取得済み）
-    var meoCurr = <?php echo (int)($meo_curr ?? 0); ?>;
-    var meoPrev = <?php echo (int)($meo_prev ?? 0); ?>;
+    // MEO
+    <?php if ($meo_curr !== null && $meo_prev !== null): ?>
+    // MEOキャッシュヒット: PHP側で取得済み
+    var meoCurr = <?php echo (int)$meo_curr; ?>;
+    var meoPrev = <?php echo (int)$meo_prev; ?>;
     updateInfoKpi('meo', meoCurr, meoCurr - meoPrev);
+    <?php else: ?>
+    // MEOキャッシュミス: REST API で非同期取得
+    (function(){
+        var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
+        var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
+        var card = document.querySelector('[data-kpi-key="meo"]');
+        if (card) {
+            card.classList.add('is-kpi-loading');
+            card.setAttribute('aria-busy', 'true');
+        }
+        fetch(restBase + 'meo/dashboard?period=last30', {
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }
+        }).then(function(r){ return r.json(); }).then(function(meoData){
+            var mC = (meoData && meoData.metrics) ? parseInt(meoData.metrics.total_impressions || 0, 10) : 0;
+            var mP = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.total_impressions || 0, 10) : 0;
+            updateInfoKpi('meo', mC, mC - mP);
+            if (card) {
+                card.classList.remove('is-kpi-loading');
+                card.classList.add('is-kpi-loaded');
+                card.setAttribute('aria-busy', 'false');
+            }
+        }).catch(function(){
+            if (card) {
+                card.classList.remove('is-kpi-loading');
+                card.setAttribute('aria-busy', 'false');
+            }
+        });
+    })();
+    <?php endif; ?>
 
     <?php else: ?>
     // --- キャッシュミス: REST API で非同期取得（スケルトン＋スピナー表示） ---
@@ -1852,25 +1896,30 @@ foreach ($highlight_items as $highlight):
     // DOM参照: ヒントテキスト
     var hintEl = document.getElementById('kpiTrendHint');
 
-    // (1) 即時データ先読み — dailyビューの全3指標をfetch
-    ['sessions', 'cv', 'meo'].forEach(function(m){
-        fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(m) + '&view=daily', {
+    // (1) 先読み — sessionsのみ即時fetch、残りは遅延
+    function prefetchMetric(m) {
+        return fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(m) + '&view=daily', {
             headers: { 'X-WP-Nonce': nonce },
             credentials: 'same-origin'
         })
         .then(function(res){ return res.json(); })
-        .then(function(json){
-            _trendCache.daily[m] = json;
-            if (m === 'sessions' && !_activeMetric) {
-                showTrend('sessions', '訪問数', '👥');
-            }
+        .then(function(json){ _trendCache.daily[m] = json; return json; });
+    }
+
+    // sessionsを即時fetchして初期チャート描画
+    prefetchMetric('sessions')
+        .then(function(){
+            if (!_activeMetric) showTrend('sessions', '訪問数', '👥');
         })
         .catch(function(){
-            if (m === 'sessions' && !_activeMetric) {
-                showError('sessions', '訪問数', '👥');
-            }
+            if (!_activeMetric) showError('sessions', '訪問数', '👥');
         });
-    });
+
+    // cv, meo は2秒後に遅延先読み（初期表示をブロックしない）
+    setTimeout(function(){
+        prefetchMetric('cv');
+        prefetchMetric('meo');
+    }, 2000);
 
     // (2) KPIカードクリックでチャート切替
     document.querySelectorAll('.info-kpi-item[data-metric]').forEach(function(card){
