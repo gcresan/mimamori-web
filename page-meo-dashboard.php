@@ -79,7 +79,9 @@ get_header();
 <!-- コンテンツエリア -->
 <div class="content-area">
 
-<?php if ( ! $is_connected || $needs_reauth ): ?>
+<?php if ( ! $is_connected || $needs_reauth ):
+    $gbp_auth_url = $gcrev_api->gbp_get_auth_url($user_id);
+?>
     <!-- ===== 未接続 or 再認証必要：接続ボタンのみ表示 ===== -->
     <div style="text-align: center; padding: 80px 20px;">
         <div style="font-size: 56px; margin-bottom: 24px;">📍</div>
@@ -92,11 +94,6 @@ get_header();
                 アクセストークンの更新に失敗しました。<br>
                 再接続して、MEOダッシュボードをご利用ください。
             </p>
-            <a href="<?php echo esc_url($gcrev_api->gbp_get_auth_url($user_id)); ?>"
-               class="btn btn-primary btn-lg"
-               style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #568184; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-                🔄 Googleビジネスプロフィールと再接続
-            </a>
         <?php else: ?>
             <h3 style="font-size: 22px; font-weight: 600; color: #333; margin-bottom: 12px;">
                 MEOダッシュボードを利用するには、<br>Googleビジネスプロフィールとの接続が必要です
@@ -105,11 +102,18 @@ get_header();
                 お店のGoogleビジネスプロフィール（旧Googleマイビジネス）と連携すると、<br>
                 表示回数・検索キーワード・クリック数などをダッシュボードで確認できます。
             </p>
-            <a href="<?php echo esc_url($gcrev_api->gbp_get_auth_url($user_id)); ?>"
+        <?php endif; ?>
+
+        <?php if ( ! empty($gbp_auth_url) ): ?>
+            <a href="<?php echo esc_url($gbp_auth_url); ?>"
                class="btn btn-primary btn-lg"
                style="min-width: 300px; display: inline-block; padding: 16px 32px; background: #568184; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-                📍 Googleビジネスプロフィールと接続
+                <?php echo $needs_reauth ? '🔄 Googleビジネスプロフィールと再接続' : '📍 Googleビジネスプロフィールと接続'; ?>
             </a>
+        <?php else: ?>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px 24px; max-width: 480px; margin: 0 auto; color: #991b1b; font-size: 14px;">
+                GBP OAuth の設定が未完了です。管理者に連絡してください。
+            </div>
         <?php endif; ?>
     </div>
 
