@@ -132,7 +132,7 @@ get_header();
 /* --- Analysis Cards Grid (3 columns) --- */
 .sd-analysis-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px;
     margin-bottom: 40px;
 }
@@ -143,6 +143,8 @@ get_header();
     border-radius: var(--mw-radius-md, 16px);
     padding: 24px;
     transition: all 0.25s ease;
+    min-width: 0;
+    overflow: hidden;
 }
 .sd-analysis-card:hover {
     box-shadow: var(--mw-shadow-float, 0 8px 24px rgba(0,0,0,0.07));
@@ -341,10 +343,10 @@ get_header();
 /* --- Responsive --- */
 @media (max-width: 1024px) {
     .sd-kpi-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .sd-analysis-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 @media (max-width: 768px) {
