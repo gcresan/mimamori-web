@@ -206,6 +206,16 @@ get_header();
     text-align: center; padding: 24px; color: #9ca3af; font-size: 14px;
 }
 
+/* Drag & drop sorting */
+.sv-q-table tbody tr { cursor: grab; }
+.sv-q-table tbody tr:active { cursor: grabbing; }
+.sv-q-table tbody tr.sv-drag-over { border-top: 3px solid var(--mw-primary-blue, #568184); }
+.sv-q-drag-handle { color: #94a3b8; font-size: 16px; cursor: grab; user-select: none; }
+.sv-q-drag-handle:hover { color: #64748b; }
+.sv-q-sort-status { font-size: 12px; margin-left: 8px; }
+.sv-q-sort-status.saving { color: var(--mw-primary-blue, #568184); }
+.sv-q-sort-status.saved { color: #059669; }
+
 /* Question add/edit form */
 .sv-q-form {
     background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
@@ -359,10 +369,7 @@ get_header();
                             <option value="0">任意</option>
                         </select>
                     </div>
-                    <div class="sv-form-group" style="max-width:100px;">
-                        <label class="sv-form-label">並び順</label>
-                        <input type="number" class="sv-form-input" id="sv-q-sort" value="0" min="0">
-                    </div>
+                    <input type="hidden" id="sv-q-sort" value="0">
                 </div>
                 <div class="sv-form-group">
                     <label class="sv-form-label">補助説明</label>
@@ -667,13 +674,14 @@ get_header();
         }
 
         var typeLabels = { checkbox: 'チェック', radio: 'ラジオ', textarea: 'テキスト', text: 'テキスト(1行)', select: 'セレクト' };
-        var html = '<table class="sv-q-table"><thead><tr>';
-        html += '<th style="width:40px;">順</th><th>質問文</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
-        html += '</tr></thead><tbody>';
+        var html = '<p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">💡 行をドラッグして並び順を変更できます<span class="sv-q-sort-status" id="sv-sort-status"></span></p>';
+        html += '<table class="sv-q-table"><thead><tr>';
+        html += '<th style="width:36px;"></th><th>質問文</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
+        html += '</tr></thead><tbody id="sv-q-sortable">';
 
         questions.forEach(function(q) {
-            html += '<tr>';
-            html += '<td>' + q.sort_order + '</td>';
+            html += '<tr draggable="true" data-qid="' + q.id + '">';
+            html += '<td><span class="sv-q-drag-handle" title="ドラッグで並び替え">☰</span></td>';
             html += '<td>' + esc(q.label) + '</td>';
             html += '<td><span class="sv-q-type-badge">' + (typeLabels[q.type] || q.type) + '</span></td>';
             html += '<td>' + (q.required ? '<span class="sv-q-required">必須</span>' : '<span class="sv-q-optional">任意</span>') + '</td>';
@@ -685,6 +693,9 @@ get_header();
         });
         html += '</tbody></table>';
         container.innerHTML = html;
+
+        // Init drag & drop
+        initQuestionDragSort();
 
         // Store for edit modal
         container._questions = questions;
@@ -708,6 +719,99 @@ get_header();
                     else { toast(res.message || '削除に失敗しました', 'error'); }
                 });
             });
+        });
+    }
+
+    // =====================================================
+    // Question drag & drop sorting
+    // =====================================================
+    function initQuestionDragSort() {
+        var tbody = document.getElementById('sv-q-sortable');
+        if (!tbody) return;
+
+        var dragRow = null;
+
+        tbody.addEventListener('dragstart', function(e) {
+            var tr = e.target.closest('tr');
+            if (!tr) return;
+            dragRow = tr;
+            tr.style.opacity = '0.4';
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', '');
+        });
+
+        tbody.addEventListener('dragend', function() {
+            if (dragRow) dragRow.style.opacity = '';
+            dragRow = null;
+            tbody.querySelectorAll('.sv-drag-over').forEach(function(r) {
+                r.classList.remove('sv-drag-over');
+            });
+        });
+
+        tbody.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            var tr = e.target.closest('tr');
+            if (!tr || tr === dragRow) return;
+            tbody.querySelectorAll('.sv-drag-over').forEach(function(r) {
+                r.classList.remove('sv-drag-over');
+            });
+            tr.classList.add('sv-drag-over');
+        });
+
+        tbody.addEventListener('drop', function(e) {
+            e.preventDefault();
+            var tr = e.target.closest('tr');
+            if (!tr || !dragRow || tr === dragRow) return;
+            tr.classList.remove('sv-drag-over');
+
+            var rows = Array.from(tbody.querySelectorAll('tr'));
+            var dragIdx = rows.indexOf(dragRow);
+            var dropIdx = rows.indexOf(tr);
+            if (dragIdx < dropIdx) {
+                tr.parentNode.insertBefore(dragRow, tr.nextSibling);
+            } else {
+                tr.parentNode.insertBefore(dragRow, tr);
+            }
+
+            saveSortOrder();
+        });
+    }
+
+    function saveSortOrder() {
+        var tbody = document.getElementById('sv-q-sortable');
+        var status = document.getElementById('sv-sort-status');
+        if (!tbody) return;
+
+        if (status) { status.textContent = '保存中...'; status.className = 'sv-q-sort-status saving'; }
+
+        var rows = tbody.querySelectorAll('tr[data-qid]');
+        var order = [];
+        rows.forEach(function(row, idx) {
+            order.push({ id: parseInt(row.getAttribute('data-qid'), 10), sort_order: (idx + 1) * 10 });
+        });
+
+        apiPost('question/reorder', { survey_id: currentSurveyId, order: order })
+        .then(function(data) {
+            if (status) {
+                if (data.success) {
+                    status.textContent = '✓ 保存しました';
+                    status.className = 'sv-q-sort-status saved';
+                } else {
+                    status.textContent = '⚠ 保存失敗';
+                    status.className = 'sv-q-sort-status';
+                    status.style.color = '#dc2626';
+                }
+                setTimeout(function() { status.textContent = ''; }, 2000);
+            }
+        })
+        .catch(function() {
+            if (status) {
+                status.textContent = '⚠ 通信エラー';
+                status.className = 'sv-q-sort-status';
+                status.style.color = '#dc2626';
+                setTimeout(function() { status.textContent = ''; }, 2000);
+            }
         });
     }
 
@@ -798,7 +902,7 @@ get_header();
             '<option value="textarea"' + (q.type === 'textarea' ? ' selected' : '') + '>' + (typeLabels.textarea) + '</option>' +
             '</select></div>' +
             '<div class="sv-form-group" style="max-width:100px;"><label class="sv-form-label">必須</label><select class="sv-form-select" id="sv-qm-required"><option value="1"' + (q.required ? ' selected' : '') + '>必須</option><option value="0"' + (!q.required ? ' selected' : '') + '>任意</option></select></div>' +
-            '<div class="sv-form-group" style="max-width:80px;"><label class="sv-form-label">順</label><input type="number" class="sv-form-input" id="sv-qm-sort" value="' + q.sort_order + '" min="0"></div>' +
+            '<input type="hidden" id="sv-qm-sort" value="' + q.sort_order + '">' +
             '</div>' +
             '<div class="sv-form-group"><label class="sv-form-label">補助説明</label><input type="text" class="sv-form-input" id="sv-qm-desc" value="' + esc(q.description) + '"></div>' +
             '<div class="sv-form-group"><label class="sv-form-label">プレースホルダー</label><input type="text" class="sv-form-input" id="sv-qm-ph" value="' + esc(q.placeholder) + '"></div>' +
