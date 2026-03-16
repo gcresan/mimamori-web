@@ -436,6 +436,95 @@ $api_url = rest_url('gcrev/v1/review/generate');
         margin-bottom: 24px;
     }
 
+    /* ===== Consent (AI確認) ===== */
+    .consent-section { display: none; }
+    .consent-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        padding: 32px 24px;
+        text-align: center;
+    }
+    .consent-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #2C3E40;
+        margin-bottom: 8px;
+    }
+    .consent-desc {
+        font-size: 14px;
+        color: #666;
+        line-height: 1.7;
+        margin-bottom: 24px;
+    }
+    .consent-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: center;
+    }
+    .btn-ai-support {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 360px;
+        padding: 14px 24px;
+        background: #3b82f6;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 700;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-ai-support:hover { background: #2563eb; }
+    .btn-manual-input {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        max-width: 360px;
+        padding: 14px 24px;
+        background: #fff;
+        color: #555;
+        font-size: 15px;
+        font-weight: 600;
+        border: 1.5px solid #d1d5db;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-manual-input:hover { background: #f9fafb; }
+
+    /* ===== Manual Input (自分で入力) ===== */
+    .manual-section { display: none; }
+    .manual-textarea {
+        width: 100%;
+        min-height: 160px;
+        padding: 14px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        line-height: 1.8;
+        resize: vertical;
+        background: #f9fafb;
+    }
+    .manual-textarea:focus {
+        outline: none;
+        border-color: #3b82f6;
+        background: #fff;
+    }
+    .manual-hint {
+        font-size: 13px;
+        color: #888;
+        margin-bottom: 12px;
+        line-height: 1.7;
+    }
+
     /* ===== Footer ===== */
     .review-footer {
         text-align: center;
@@ -452,7 +541,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
         <div class="review-header">
             <img src="<?php echo esc_url(get_template_directory_uri()); ?>/images/common/logo.png" alt="ロゴ" class="review-header-logo">
             <h1><?php echo esc_html($business_name ? $business_name . ' ご感想アンケート' : 'ご感想アンケート'); ?></h1>
-            <p>ご利用の感想をお聞かせください。<br>回答をもとに口コミの下書きをお作りします。</p>
+            <p>ご利用の感想をお聞かせください。</p>
         </div>
 
 <?php if (!empty($survey_error)) : ?>
@@ -479,10 +568,53 @@ $api_url = rest_url('gcrev/v1/review/generate');
                 </div>
                 <div class="submit-area">
                     <button type="submit" class="btn-submit" id="btn-submit">
-                        送信して口コミ案を作成する
+                        回答を送信する
                     </button>
                 </div>
             </form>
+        </div>
+
+        <!-- ===== AI利用確認画面 ===== -->
+        <div id="review-consent-section" class="consent-section">
+            <div class="consent-card">
+                <div class="consent-title">口コミ文の作成方法を選んでください</div>
+                <div class="consent-desc">
+                    回答内容をもとにAIが口コミの下書きを作成できます。<br>
+                    ご自身で自由に書くこともできます。
+                </div>
+                <div class="consent-buttons">
+                    <button type="button" class="btn-ai-support" id="btn-use-ai">
+                        ✨ AIサポートで下書きを作成する
+                    </button>
+                    <button type="button" class="btn-manual-input" id="btn-use-manual">
+                        ✏️ 自分で入力する
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 自分で入力画面 ===== -->
+        <div id="review-manual-section" class="manual-section">
+            <div class="review-card">
+                <div class="consent-title" style="margin-bottom:12px;">口コミを入力してください</div>
+                <div class="manual-hint">
+                    ご感想を自由にご記入ください。書いた内容をそのままGoogle口コミに貼り付けできます。
+                </div>
+                <textarea class="manual-textarea" id="manual-review-text" placeholder="例：とても丁寧に対応していただきました。初めてでも安心して利用できました。"></textarea>
+            </div>
+            <div class="result-actions" style="margin-top:20px;">
+                <button type="button" class="btn-copy" id="btn-copy-manual" data-target="manual-review-text" style="margin-bottom:16px;">
+                    この文章をコピー
+                </button>
+                <br>
+                <a href="<?php echo esc_url($google_review_url); ?>" target="_blank" rel="noopener noreferrer" class="btn-google-review">
+                    Google口コミを書く
+                </a>
+                <br>
+                <button type="button" class="btn-retry" id="btn-manual-back">
+                    もう一度やり直す
+                </button>
+            </div>
         </div>
 
         <!-- ===== ローディング画面 ===== -->
@@ -490,8 +622,8 @@ $api_url = rest_url('gcrev/v1/review/generate');
             <div class="review-card" style="padding: 48px 24px;">
                 <div class="loading-spinner"></div>
                 <div class="loading-text">
-                    口コミ案を作成しています...<br>
-                    <span style="font-size: 13px; color: #888;">入力内容をもとに参考文を整えています</span>
+                    AIが口コミの下書きを作成しています...<br>
+                    <span style="font-size: 13px; color: #888;">入力内容をもとに下書きを整えています</span>
                 </div>
             </div>
         </div>
@@ -499,8 +631,8 @@ $api_url = rest_url('gcrev/v1/review/generate');
         <!-- ===== 結果表示画面 ===== -->
         <div id="review-result-section" class="result-section">
             <div class="result-notice">
-                この文章は、アンケート内容をもとに作成した<strong>参考文</strong>です。<br>
-                実際のご感想に合わせて、自由に修正してご利用ください。
+                以下はAIが作成した<strong>下書き</strong>です。あなたの言葉で自由に修正してからご利用ください。<br>
+                <span style="font-size:12px;color:#999;">※ この文章はアンケートの回答内容をもとにAIが作成したものです。実際の体験と異なる表現が含まれる場合は修正してください。</span>
             </div>
 
             <div class="result-card" id="result-short">
@@ -572,6 +704,8 @@ $api_url = rest_url('gcrev/v1/review/generate');
         // DOM参照
         // =====================================================
         var formSection    = document.getElementById('review-form-section');
+        var consentSection = document.getElementById('review-consent-section');
+        var manualSection  = document.getElementById('review-manual-section');
         var loadingSection = document.getElementById('review-loading-section');
         var resultSection  = document.getElementById('review-result-section');
         var errorSection   = document.getElementById('review-error-section');
@@ -736,6 +870,8 @@ $api_url = rest_url('gcrev/v1/review/generate');
         // =====================================================
         function showSection(section) {
             formSection.style.display    = 'none';
+            consentSection.style.display = 'none';
+            manualSection.style.display  = 'none';
             loadingSection.style.display = 'none';
             resultSection.style.display  = 'none';
             errorSection.style.display   = 'none';
@@ -802,8 +938,9 @@ $api_url = rest_url('gcrev/v1/review/generate');
                     var targetId = btn.getAttribute('data-target');
                     var textEl = document.getElementById(targetId);
                     if (!textEl) return;
+                    var copyText = textEl.tagName === 'TEXTAREA' ? textEl.value : textEl.textContent;
 
-                    navigator.clipboard.writeText(textEl.textContent).then(function() {
+                    navigator.clipboard.writeText(copyText).then(function() {
                         var originalText = btn.innerHTML;
                         btn.classList.add('copied');
                         btn.textContent = 'コピーしました';
@@ -819,11 +956,28 @@ $api_url = rest_url('gcrev/v1/review/generate');
         // =====================================================
         // イベント登録
         // =====================================================
+        var pendingAnswers = null;
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             if (!validate()) return;
-            var answers = collectAnswers();
-            submitReview(answers);
+            pendingAnswers = collectAnswers();
+            showSection(consentSection);
+        });
+
+        // AIサポートを使う → API呼び出し
+        document.getElementById('btn-use-ai').addEventListener('click', function() {
+            if (pendingAnswers) submitReview(pendingAnswers);
+        });
+
+        // 自分で入力する → 手動入力画面
+        document.getElementById('btn-use-manual').addEventListener('click', function() {
+            showSection(manualSection);
+        });
+
+        // 手動入力: やり直す
+        document.getElementById('btn-manual-back').addEventListener('click', function() {
+            showSection(formSection);
         });
 
         // 「もう一度やり直す」ボタン
