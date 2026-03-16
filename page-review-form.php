@@ -2,102 +2,87 @@
 /*Template Name: 口コミ投稿支援フォーム */
 
 // =====================================================
-// 質問定義（この配列を編集するだけで質問を追加・変更可能）
+// アンケートデータ取得（トークン方式 or レガシー方式）
 // =====================================================
-$review_questions = [
-    [
-        'id'          => 'concerns',
-        'type'        => 'checkbox',
-        'label'       => '利用前に困っていたこと',
-        'required'    => true,
-        'description' => '当てはまるものをすべて選択してください',
-        'options'     => [
-            '集客が伸び悩んでいた',
-            'どのエリアに配ればよいかわからなかった',
-            '反応があるか不安だった',
-            '費用対効果が見えづらかった',
-            'その他',
-        ],
-    ],
-    [
-        'id'          => 'reasons',
-        'type'        => 'checkbox',
-        'label'       => 'このサービスを選んだ理由',
-        'required'    => true,
-        'description' => '当てはまるものをすべて選択してください',
-        'options'     => [
-            '説明がわかりやすかった',
-            '相談しやすかった',
-            '費用感に納得できた',
-            '地元で実績があった',
-            '対応が丁寧だった',
-            'その他',
-        ],
-    ],
-    [
-        'id'          => 'good_points',
-        'type'        => 'checkbox',
-        'label'       => '実際に利用して良かった点',
-        'required'    => true,
-        'description' => '当てはまるものをすべて選択してください',
-        'options'     => [
-            '対応が早かった',
-            '配布内容について相談しやすかった',
-            '安心して任せられた',
-            '続けやすかった',
-            '反応につながった',
-            'その他',
-        ],
-    ],
-    [
-        'id'          => 'satisfaction',
-        'type'        => 'radio',
-        'label'       => '総合的な満足度',
-        'required'    => true,
-        'description' => '1つ選択してください',
-        'options'     => [
-            'とても満足',
-            '満足',
-            'ふつう',
-            'やや不満',
-            '不満',
-        ],
-    ],
-    [
-        'id'          => 'impression',
-        'type'        => 'textarea',
-        'label'       => '特に印象に残っている対応や良かった点',
-        'required'    => true,
-        'description' => '一言でも大丈夫です。箇条書きでも構いません。',
-        'placeholder' => '例：担当の方がとても親切で、初めてでも安心できました。',
-    ],
-    [
-        'id'          => 'message',
-        'type'        => 'textarea',
-        'label'       => 'これから利用を検討している方にひとこと',
-        'required'    => false,
-        'description' => '任意です。思いつく範囲でご記入ください。',
-        'placeholder' => '例：迷っている方はまず相談してみるとよいと思います。',
-    ],
-];
+global $wpdb;
 
-// =====================================================
-// 対象ビジネス情報の取得
-// =====================================================
-$target_user_id = isset($_GET['u']) ? absint($_GET['u']) : 0;
-$business_name  = '';
+$survey_token      = isset($_GET['t']) ? sanitize_text_field($_GET['t']) : '';
+$target_user_id    = isset($_GET['u']) ? absint($_GET['u']) : 0;
+$business_name     = '';
 $google_review_url = '';
+$review_questions  = [];
+$survey_error      = '';
 
-if ($target_user_id > 0) {
+if (!empty($survey_token)) {
+    // ----- トークン方式: DBからアンケート取得 -----
+    $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+    $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+
+    $survey = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM {$t_surveys} WHERE token = %s",
+        $survey_token
+    ));
+
+    if (!$survey) {
+        $survey_error = 'このアンケートは存在しません。URLをご確認ください。';
+    } elseif ($survey->status !== 'published') {
+        $survey_error = 'このアンケートは現在公開されていません。';
+    } else {
+        $target_user_id = (int) $survey->user_id;
+        $business_name  = $survey->title;
+        $google_review_url = $survey->google_review_url;
+
+        // 質問取得
+        $db_questions = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$t_questions} WHERE survey_id = %d AND is_active = 1 ORDER BY sort_order ASC, id ASC",
+            (int) $survey->id
+        ));
+
+        foreach ($db_questions as $q) {
+            $options = [];
+            if (!empty($q->options)) {
+                $decoded = json_decode($q->options, true);
+                if (is_array($decoded)) {
+                    $options = $decoded;
+                }
+            }
+            $review_questions[] = [
+                'id'          => (int) $q->id,
+                'type'        => $q->type,
+                'label'       => $q->label,
+                'required'    => (bool) $q->required,
+                'description' => $q->description,
+                'placeholder' => $q->placeholder,
+                'options'     => $options,
+            ];
+        }
+
+        if (empty($review_questions)) {
+            $survey_error = 'このアンケートには質問が設定されていません。';
+        }
+    }
+} elseif ($target_user_id > 0) {
+    // ----- レガシー方式: user_id からビジネス情報取得（ハードコード質問） -----
     $target_user = get_userdata($target_user_id);
     if ($target_user) {
         $business_name = get_user_meta($target_user_id, 'report_client_name', true);
         if (empty($business_name)) {
             $business_name = $target_user->display_name;
         }
-        // Google口コミURL: user meta → フォールバック
         $google_review_url = get_user_meta($target_user_id, '_gcrev_google_review_url', true);
     }
+
+    // レガシー用ハードコード質問
+    $review_questions = [
+        ['id' => 'concerns',   'type' => 'checkbox', 'label' => '利用前に困っていたこと', 'required' => true, 'description' => '当てはまるものをすべて選択してください', 'placeholder' => '', 'options' => ['集客が伸び悩んでいた','どのエリアに配ればよいかわからなかった','反応があるか不安だった','費用対効果が見えづらかった','その他']],
+        ['id' => 'reasons',    'type' => 'checkbox', 'label' => 'このサービスを選んだ理由', 'required' => true, 'description' => '当てはまるものをすべて選択してください', 'placeholder' => '', 'options' => ['説明がわかりやすかった','相談しやすかった','費用感に納得できた','地元で実績があった','対応が丁寧だった','その他']],
+        ['id' => 'good_points','type' => 'checkbox', 'label' => '実際に利用して良かった点', 'required' => true, 'description' => '当てはまるものをすべて選択してください', 'placeholder' => '', 'options' => ['対応が早かった','配布内容について相談しやすかった','安心して任せられた','続けやすかった','反応につながった','その他']],
+        ['id' => 'satisfaction','type' => 'radio',    'label' => '総合的な満足度', 'required' => true, 'description' => '1つ選択してください', 'placeholder' => '', 'options' => ['とても満足','満足','ふつう','やや不満','不満']],
+        ['id' => 'impression', 'type' => 'textarea',  'label' => '特に印象に残っている対応や良かった点', 'required' => true, 'description' => '一言でも大丈夫です。箇条書きでも構いません。', 'placeholder' => '例：担当の方がとても親切で、初めてでも安心できました。', 'options' => []],
+        ['id' => 'message',    'type' => 'textarea',  'label' => 'これから利用を検討している方にひとこと', 'required' => false, 'description' => '任意です。思いつく範囲でご記入ください。', 'placeholder' => '例：迷っている方はまず相談してみるとよいと思います。', 'options' => []],
+    ];
+} else {
+    $survey_error = 'アンケートが指定されていません。URLをご確認ください。';
 }
 
 // フォールバック: Google口コミURLが未設定
@@ -470,6 +455,22 @@ $api_url = rest_url('gcrev/v1/review/generate');
             <p>ご利用の感想をお聞かせください。<br>回答をもとに口コミの下書きをお作りします。</p>
         </div>
 
+<?php if (!empty($survey_error)) : ?>
+        <!-- ===== エラー表示（無効なアンケート） ===== -->
+        <div class="review-card" style="text-align:center; padding: 48px 24px;">
+            <div style="font-size:48px; margin-bottom:16px;">...</div>
+            <p style="font-size:15px; color:#555; line-height:1.8;"><?php echo esc_html($survey_error); ?></p>
+        </div>
+
+        <!-- フッター -->
+        <div class="review-footer">
+            &copy; <?php echo esc_html(gmdate('Y')); ?> <?php bloginfo('name'); ?>
+        </div>
+    </div>
+</body>
+</html>
+<?php return; endif; ?>
+
         <!-- ===== 入力画面 ===== -->
         <div id="review-form-section">
             <form id="review-form" novalidate>
@@ -548,7 +549,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
 
         <!-- フッター -->
         <div class="review-footer">
-            &copy; <?php echo esc_html(date('Y')); ?> <?php bloginfo('name'); ?>
+            &copy; <?php echo esc_html(gmdate('Y')); ?> <?php bloginfo('name'); ?>
         </div>
     </div>
 
@@ -561,6 +562,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
         // =====================================================
         var REVIEW_CONFIG = {
             apiUrl:         <?php echo wp_json_encode($api_url); ?>,
+            surveyToken:    <?php echo wp_json_encode($survey_token); ?>,
             userId:         <?php echo (int) $target_user_id; ?>,
             googleReviewUrl: <?php echo wp_json_encode($google_review_url); ?>,
             questions:      <?php echo wp_json_encode($review_questions, JSON_UNESCAPED_UNICODE); ?>
@@ -755,18 +757,23 @@ $api_url = rest_url('gcrev/v1/review/generate');
                 if (typeof answer === 'string' && answer === '') return;
 
                 labeled.push({
+                    question_id: q.id,
                     question: q.label,
                     answer: answer
                 });
             });
 
+            var payload = { answers: labeled };
+            if (REVIEW_CONFIG.surveyToken) {
+                payload.survey_token = REVIEW_CONFIG.surveyToken;
+            } else {
+                payload.user_id = REVIEW_CONFIG.userId;
+            }
+
             fetch(REVIEW_CONFIG.apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    answers: labeled,
-                    user_id: REVIEW_CONFIG.userId
-                })
+                body: JSON.stringify(payload)
             })
             .then(function(res) { return res.json(); })
             .then(function(data) {

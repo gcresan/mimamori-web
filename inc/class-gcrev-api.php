@@ -11489,19 +11489,48 @@ PROMPT;
      * 口コミ参考文を生成する（公開エンドポイント）
      *
      * POST gcrev/v1/review/generate
-     * Body: { answers: [{ question, answer }], user_id: int }
+     * Body（トークン方式）: { survey_token, answers: [{question_id, question, answer}] }
+     * Body（レガシー方式）: { answers: [{question, answer}], user_id: int }
      */
     public function rest_generate_review(\WP_REST_Request $request): \WP_REST_Response {
         try {
-            $params  = $request->get_json_params();
-            $answers = $params['answers'] ?? [];
-            $user_id = absint($params['user_id'] ?? 0);
+            global $wpdb;
+            $params       = $request->get_json_params();
+            $answers      = $params['answers'] ?? [];
+            $survey_token = sanitize_text_field($params['survey_token'] ?? '');
+            $user_id      = absint($params['user_id'] ?? 0);
 
             if (empty($answers) || !is_array($answers)) {
                 return new \WP_REST_Response([
                     'success' => false,
                     'message' => '回答データが不足しています。',
                 ], 400);
+            }
+
+            // トークン方式: DBからアンケート情報を取得
+            $survey_id      = 0;
+            $survey_user_id = 0;
+            $business_name  = '';
+
+            if (!empty($survey_token)) {
+                $t_surveys = $wpdb->prefix . 'gcrev_surveys';
+                $survey = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM {$t_surveys} WHERE token = %s AND status = 'published'",
+                    $survey_token
+                ));
+                if (!$survey) {
+                    return new \WP_REST_Response([
+                        'success' => false,
+                        'message' => 'アンケートが見つかりません。',
+                    ], 404);
+                }
+                $survey_id      = (int) $survey->id;
+                $survey_user_id = (int) $survey->user_id;
+                $user_id        = $survey_user_id;
+                $business_name  = get_user_meta($survey_user_id, 'report_client_name', true) ?: '';
+            } elseif ($user_id > 0) {
+                // レガシー方式
+                $business_name = get_user_meta($user_id, 'report_client_name', true) ?: '';
             }
 
             // 回答をプロンプト用テキストに整形
@@ -11513,16 +11542,8 @@ PROMPT;
                 ], 400);
             }
 
-            // ビジネス名の取得（プロンプトに含める）
-            $business_name = '';
-            if ($user_id > 0) {
-                $business_name = get_user_meta($user_id, 'report_client_name', true);
-            }
-
-            // AIプロンプト構築
-            $prompt = $this->build_review_prompt($answer_text, $business_name);
-
-            // Gemini API 呼び出し
+            // AIプロンプト構築 → Gemini API 呼び出し
+            $prompt       = $this->build_review_prompt($answer_text, $business_name);
             $raw_response = $this->ai->call_gemini_api($prompt);
 
             // JSONパース
@@ -11536,6 +11557,11 @@ PROMPT;
                     'success' => false,
                     'message' => '口コミ案の作成に失敗しました。もう一度お試しください。',
                 ], 500);
+            }
+
+            // 回答をDBに保存（トークン方式の場合のみ）
+            if ($survey_id > 0) {
+                $this->save_survey_response($wpdb, $survey_id, $survey_user_id, $answers, $parsed);
             }
 
             return new \WP_REST_Response([
@@ -11553,6 +11579,41 @@ PROMPT;
                 'success' => false,
                 'message' => '口コミ案の作成に失敗しました。少し時間をおいてもう一度お試しください。',
             ], 500);
+        }
+    }
+
+    /**
+     * アンケート回答をDBに保存
+     */
+    private function save_survey_response(\wpdb $wpdb, int $survey_id, int $user_id, array $answers, array $parsed): void {
+        $t_responses = $wpdb->prefix . 'gcrev_survey_responses';
+        $t_answers   = $wpdb->prefix . 'gcrev_survey_response_answers';
+
+        $wpdb->insert($t_responses, [
+            'survey_id'     => $survey_id,
+            'user_id'       => $user_id,
+            'short_review'  => $parsed['short_review'],
+            'normal_review' => $parsed['normal_review'],
+            'created_at'    => current_time('mysql'),
+        ], ['%d', '%d', '%s', '%s', '%s']);
+
+        $response_id = (int) $wpdb->insert_id;
+        if ($response_id <= 0) return;
+
+        foreach ($answers as $item) {
+            $question_id = absint($item['question_id'] ?? 0);
+            $answer      = $item['answer'] ?? '';
+
+            // answer を JSON 文字列として保存
+            $answer_json = is_array($answer)
+                ? wp_json_encode($answer, JSON_UNESCAPED_UNICODE)
+                : sanitize_textarea_field($answer);
+
+            $wpdb->insert($t_answers, [
+                'response_id' => $response_id,
+                'question_id' => $question_id,
+                'answer'      => $answer_json,
+            ], ['%d', '%d', '%s']);
         }
     }
 

@@ -108,6 +108,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_AIO_Settings_Page())->register();
             }
 
+            $survey_page_path = __DIR__ . '/admin/class-survey-page.php';
+            if ( file_exists( $survey_page_path ) ) {
+                require_once $survey_page_path;
+                (new Gcrev_Survey_Page())->register();
+            }
+
             // デプロイ管理画面（Dev 環境のみ）
             if ( defined( 'MIMAMORI_ENV' ) && MIMAMORI_ENV === 'development' ) {
                 $deploy_page_path = __DIR__ . '/admin/class-deploy-page.php';

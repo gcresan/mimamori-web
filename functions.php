@@ -4635,6 +4635,7 @@ add_action('after_setup_theme', function () {
     gcrev_rank_results_create_table();
     gcrev_meo_results_create_table();
     gcrev_aio_results_create_table();
+    gcrev_survey_create_tables();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -4926,6 +4927,84 @@ function gcrev_aio_results_create_table(): void {
         );
         update_option( 'gcrev_aio_location_migrated', 1 );
     }
+}
+
+// =========================================================
+// 口コミ支援アンケート テーブル
+// =========================================================
+
+function gcrev_survey_create_tables(): void {
+    global $wpdb;
+    $charset_collate = $wpdb->get_charset_collate();
+
+    // --- gcrev_surveys ---
+    $t_surveys = $wpdb->prefix . 'gcrev_surveys';
+    $sql_surveys = "CREATE TABLE {$t_surveys} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        title VARCHAR(200) NOT NULL DEFAULT '',
+        description TEXT,
+        google_review_url VARCHAR(500) NOT NULL DEFAULT '',
+        token VARCHAR(32) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY token (token),
+        KEY user_id (user_id),
+        KEY status (status)
+    ) {$charset_collate};";
+
+    // --- gcrev_survey_questions ---
+    $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+    $sql_questions = "CREATE TABLE {$t_questions} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        survey_id BIGINT(20) UNSIGNED NOT NULL,
+        type VARCHAR(20) NOT NULL DEFAULT 'textarea',
+        label VARCHAR(500) NOT NULL DEFAULT '',
+        description VARCHAR(500) NOT NULL DEFAULT '',
+        placeholder VARCHAR(500) NOT NULL DEFAULT '',
+        options TEXT,
+        required TINYINT(1) NOT NULL DEFAULT 1,
+        sort_order INT NOT NULL DEFAULT 0,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        PRIMARY KEY  (id),
+        KEY survey_id (survey_id),
+        KEY sort_order (sort_order)
+    ) {$charset_collate};";
+
+    // --- gcrev_survey_responses ---
+    $t_responses = $wpdb->prefix . 'gcrev_survey_responses';
+    $sql_responses = "CREATE TABLE {$t_responses} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        survey_id BIGINT(20) UNSIGNED NOT NULL,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        short_review TEXT,
+        normal_review TEXT,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        KEY survey_id (survey_id),
+        KEY user_id (user_id),
+        KEY created_at (created_at)
+    ) {$charset_collate};";
+
+    // --- gcrev_survey_response_answers ---
+    $t_answers = $wpdb->prefix . 'gcrev_survey_response_answers';
+    $sql_answers = "CREATE TABLE {$t_answers} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        response_id BIGINT(20) UNSIGNED NOT NULL,
+        question_id BIGINT(20) UNSIGNED NOT NULL,
+        answer TEXT,
+        PRIMARY KEY  (id),
+        KEY response_id (response_id),
+        KEY question_id (question_id)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql_surveys );
+    dbDelta( $sql_questions );
+    dbDelta( $sql_responses );
+    dbDelta( $sql_answers );
 }
 
 /**
