@@ -157,6 +157,16 @@ $api_url = rest_url('gcrev/v1/review/generate');
         line-height: 1.7;
     }
 
+    /* ===== スマホ: intro左寄せ・改行無効 ===== */
+    @media (max-width: 640px) {
+        .survey-intro {
+            text-align: left;
+        }
+        .survey-intro-desc br {
+            display: none;
+        }
+    }
+
     /* ===== Card ===== */
     .review-card {
         background: #fff;
@@ -179,6 +189,9 @@ $api_url = rest_url('gcrev/v1/review/generate');
         color: #2C3E40;
         margin-bottom: 4px;
         line-height: 1.8;
+    }
+    .question-number {
+        margin-right: 2px;
     }
     .question-badge {
         font-size: 11px;
@@ -742,9 +755,10 @@ $api_url = rest_url('gcrev/v1/review/generate');
         // =====================================================
         function renderQuestions() {
             var html = '';
-            REVIEW_CONFIG.questions.forEach(function(q) {
+            REVIEW_CONFIG.questions.forEach(function(q, idx) {
                 html += '<div class="question-block" data-qid="' + q.id + '">';
                 html += '<div class="question-label">';
+                html += '<span class="question-number">' + (idx + 1) + '.</span>';
                 html += escapeHtml(q.label);
                 if (q.required) {
                     html += '<span class="question-badge badge-required">必須</span>';
