@@ -311,7 +311,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
         width: 100%;
         max-width: 360px;
         padding: 14px 24px;
-        background: #3b82f6;
+        background: #2C3E50;
         color: #fff;
         font-size: 16px;
         font-weight: 700;
@@ -321,10 +321,10 @@ $api_url = rest_url('gcrev/v1/review/generate');
         transition: background 0.15s;
     }
     .btn-submit:hover {
-        background: #2563eb;
+        background: #1a2a3a;
     }
     .btn-submit:disabled {
-        background: #93c5fd;
+        background: #7f8c9b;
         cursor: not-allowed;
     }
 
