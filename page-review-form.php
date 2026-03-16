@@ -577,7 +577,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
         <!-- ===== AI利用確認画面 ===== -->
         <div id="review-consent-section" class="consent-section">
             <div class="consent-card">
-                <div class="consent-title">口コミ文の作成方法を選んでください</div>
+                <div class="consent-title">ご利用のご感想を、Googleの口コミでもお聞かせいただけると嬉しいです</div>
                 <div class="consent-desc">
                     回答内容をもとにAIが口コミの下書きを作成できます。<br>
                     ご自身で自由に書くこともできます。
