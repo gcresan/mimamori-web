@@ -16,7 +16,7 @@ set_query_var('gcrev_page_title', 'よく見られているページ');
 set_query_var('gcrev_page_subtitle', 'どのページがよく読まれているかが分かります。');
 
 // パンくず設定
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('よく見られているページ', '集客のようす'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('よく見られているページ', 'ホームページ'));
 
 get_header();
 ?>

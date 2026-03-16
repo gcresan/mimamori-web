@@ -16,7 +16,7 @@ set_query_var('gcrev_page_title', '見ている人の場所');
 set_query_var('gcrev_page_subtitle', 'どの地域の人に見られているかが分かります。');
 
 // パンくず設定
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('見ている人の場所', '集客のようす'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('見ている人の場所', 'ホームページ'));
 
 get_header();
 

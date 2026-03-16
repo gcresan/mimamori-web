@@ -6738,7 +6738,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
  */
 function gcrev_breadcrumb( string $current, ?string $parent = null ): string {
     $sep = '<span>›</span>';
-    $bc  = '<a href="' . esc_url( home_url( '/mypage/dashboard/' ) ) . '">ホーム</a>';
+    $bc  = '<a href="' . esc_url( home_url( '/dashboard/' ) ) . '">ホーム</a>';
 
     if ( $parent !== null ) {
         $bc .= $sep . '<span>' . esc_html( $parent ) . '</span>';

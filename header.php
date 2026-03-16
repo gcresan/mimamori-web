@@ -77,7 +77,7 @@
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
       $ranking_pages   = array('rank-tracker','map-rank');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','review-management','gbp-posts');
-      $settings_pages  = array('client-settings','report-settings','cv-settings','notifications','account-info');
+      $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
 
@@ -279,7 +279,7 @@
                         </a>
                      </li>
                      <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/cv-settings/') ); ?>" class="nav-link <?php echo is_page('cv-settings') ? 'active' : ''; ?>">
+                        <a href="<?php echo esc_url( home_url('/analysis/cv-review/') ); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
                         <span>ゴール関連設定</span>
                         </a>
                      </li>

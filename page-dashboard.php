@@ -16,11 +16,11 @@ $can_ai         = mimamori_can( 'ai_chat', $user_id );
 $can_highlights = mimamori_can( 'dashboard_highlights', $user_id );
 
 // ページタイトル設定
-set_query_var('gcrev_page_title', '全体のようす');
+set_query_var('gcrev_page_title', '全体ダッシュボード');
 set_query_var('gcrev_page_subtitle', 'このホームページが、今どんな状態かをひと目で確認できます。');
 
-// パンくず設定（ダッシュボードは2階層: ホーム › 全体のようす）
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('全体のようす'));
+// パンくず設定（ダッシュボードは2階層: ホーム › 全体ダッシュボード）
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('全体ダッシュボード'));
 
 // APIインスタンス初期化（日付計算より先に必要）
 global $gcrev_api_instance;

@@ -11,9 +11,9 @@ if ( ! is_user_logged_in() ) {
 $current_user = wp_get_current_user();
 $user_id      = $current_user->ID;
 
-set_query_var( 'gcrev_page_title', '口コミ用アンケート作成' );
+set_query_var( 'gcrev_page_title', '口コミ用アンケート管理' );
 set_query_var( 'gcrev_page_subtitle', 'お客様向けのアンケートを作成し、回答から口コミ案を自動生成します。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '口コミ用アンケート作成', '改善ツール' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '口コミ用アンケート管理', 'MEO' ) );
 
 get_header();
 ?>

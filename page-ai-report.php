@@ -9,9 +9,9 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-set_query_var( 'gcrev_page_title', 'AI検索対策' );
+set_query_var( 'gcrev_page_title', 'AI検索診断' );
 set_query_var( 'gcrev_page_subtitle', 'AIに自社がどれだけ伝わりやすいか、言及されやすいかを確認できます。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'AI検索対策', '集客のようす' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'AI検索診断', '診断レポート' ) );
 
 get_header();
 ?>

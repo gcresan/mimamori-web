@@ -17,7 +17,7 @@ set_query_var('gcrev_page_title', '見つけたきっかけ');
 set_query_var('gcrev_page_subtitle', '検索・Googleマップ・SNSなど、どこから見つけられたかが分かります。');
 
 // パンくず設定
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('見つけたきっかけ', '集客のようす'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('見つけたきっかけ', 'ホームページ'));
 
 get_header();
 ?>

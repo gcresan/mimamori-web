@@ -16,7 +16,7 @@ set_query_var('gcrev_page_title', 'どんな言葉で探された？');
 set_query_var('gcrev_page_subtitle', '検索で使われた言葉が分かります。');
 
 // パンくず設定
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('どんな言葉で探された？', '集客のようす'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('どんな言葉で探された？', 'ホームページ'));
 
 get_header();
 ?>
