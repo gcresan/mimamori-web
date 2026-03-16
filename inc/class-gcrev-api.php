@@ -3871,24 +3871,25 @@ class Gcrev_Insight_API {
         $access_token = $this->gbp_get_access_token($user_id);
         $test_ok = false;
         if (!empty($access_token)) {
-            $test_url  = "https://businessprofileperformance.googleapis.com/v1/{$location_id}:fetchMultiDailyMetricsTimeSeries";
-            $today     = new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tokyo'));
-            $start     = $today->modify('-7 days');
-            $test_body = [
-                'dailyMetrics' => ['BUSINESS_IMPRESSIONS_DESKTOP_SEARCH'],
-                'dailyRange'   => [
-                    'startDate' => ['year' => (int) $start->format('Y'), 'month' => (int) $start->format('n'), 'day' => (int) $start->format('j')],
-                    'endDate'   => ['year' => (int) $today->format('Y'), 'month' => (int) $today->format('n'), 'day' => (int) $today->format('j')],
-                ],
+            $today = new \DateTimeImmutable('now', new \DateTimeZone('Asia/Tokyo'));
+            $start = $today->modify('-7 days');
+            $test_params = [
+                'dailyMetric'                  => 'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH',
+                'dailyRange.startDate.year'    => (int) $start->format('Y'),
+                'dailyRange.startDate.month'   => (int) $start->format('n'),
+                'dailyRange.startDate.day'     => (int) $start->format('j'),
+                'dailyRange.endDate.year'      => (int) $today->format('Y'),
+                'dailyRange.endDate.month'     => (int) $today->format('n'),
+                'dailyRange.endDate.day'       => (int) $today->format('j'),
             ];
-            $test_response = wp_remote_post($test_url, [
-                'headers' => ['Authorization' => 'Bearer ' . $access_token, 'Content-Type' => 'application/json'],
-                'body'    => wp_json_encode($test_body),
+            $test_url = "https://businessprofileperformance.googleapis.com/v1/{$location_id}:getDailyMetricsTimeSeries?"
+                      . http_build_query($test_params, '', '&');
+            $test_response = wp_remote_get($test_url, [
+                'headers' => ['Authorization' => 'Bearer ' . $access_token],
                 'timeout' => 15,
             ]);
             $test_status = wp_remote_retrieve_response_code($test_response);
             $test_ok     = ($test_status === 200);
-            error_log("[GCREV][GBP] Select location test: {$location_id} → HTTP {$test_status}");
         }
 
         // user_meta に保存
@@ -5041,68 +5042,92 @@ class Gcrev_Insight_API {
             $location_id = 'locations/' . $location_id;
         }
 
-        $url = "https://businessprofileperformance.googleapis.com/v1/{$location_id}:fetchMultiDailyMetricsTimeSeries";
-
-        $body = [
-            'dailyMetrics' => [
-                'BUSINESS_IMPRESSIONS_DESKTOP_MAPS',
-                'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH',
-                'BUSINESS_IMPRESSIONS_MOBILE_MAPS',
-                'BUSINESS_IMPRESSIONS_MOBILE_SEARCH',
-                'CALL_CLICKS',
-                'WEBSITE_CLICKS',
-                'BUSINESS_DIRECTION_REQUESTS',
-                'BUSINESS_BOOKINGS',
-            ],
-            'dailyRange' => [
-                'startDate' => $this->gbp_date_obj($start_date),
-                'endDate'   => $this->gbp_date_obj($end_date),
-            ],
+        $metrics = [
+            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS',
+            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH',
+            'BUSINESS_IMPRESSIONS_MOBILE_MAPS',
+            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH',
+            'CALL_CLICKS',
+            'WEBSITE_CLICKS',
+            'BUSINESS_DIRECTION_REQUESTS',
+            'BUSINESS_BOOKINGS',
         ];
 
-        $req_body_json = wp_json_encode($body);
+        $metric_map = [
+            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH' => 'search_impressions',
+            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH'  => 'search_impressions',
+            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS'   => 'map_impressions',
+            'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => 'map_impressions',
+            'CALL_CLICKS'                         => 'call_clicks',
+            'WEBSITE_CLICKS'                      => 'website_clicks',
+            'BUSINESS_DIRECTION_REQUESTS'         => 'direction_clicks',
+            'BUSINESS_BOOKINGS'                   => 'booking_clicks',
+        ];
 
-        // DEBUG: リクエスト情報をログ
-        $dbg = date('Y-m-d H:i:s') . " === GBP Performance API REQUEST ===\n";
-        $dbg .= "URL: {$url}\n";
-        $dbg .= "location_id: {$location_id}\n";
-        $dbg .= "date_range: {$start_date} ~ {$end_date}\n";
-        $dbg .= "request_body: {$req_body_json}\n";
-        file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
+        $start_obj = $this->gbp_date_obj($start_date);
+        $end_obj   = $this->gbp_date_obj($end_date);
 
-        $response = wp_remote_post($url, [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $access_token,
-                'Content-Type'  => 'application/json',
-            ],
-            'body'    => $req_body_json,
-            'timeout' => 30,
-        ]);
+        $totals = $this->gbp_empty_metrics();
 
-        if (is_wp_error($response)) {
-            $err = $response->get_error_message();
-            file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " WP_ERROR: {$err}\n\n", FILE_APPEND);
-            return $this->gbp_empty_metrics();
+        foreach ($metrics as $metric) {
+            $params = [
+                'dailyMetric'                  => $metric,
+                'dailyRange.startDate.year'    => $start_obj['year'],
+                'dailyRange.startDate.month'   => $start_obj['month'],
+                'dailyRange.startDate.day'     => $start_obj['day'],
+                'dailyRange.endDate.year'      => $end_obj['year'],
+                'dailyRange.endDate.month'     => $end_obj['month'],
+                'dailyRange.endDate.day'       => $end_obj['day'],
+            ];
+
+            $url = "https://businessprofileperformance.googleapis.com/v1/{$location_id}:getDailyMetricsTimeSeries?"
+                 . http_build_query($params, '', '&');
+
+            // DEBUG（一時的）
+            if ($metric === 'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH') {
+                $dbg = date('Y-m-d H:i:s') . " === GBP getDailyMetricsTimeSeries ===\n";
+                $dbg .= "URL: {$url}\n";
+                file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
+            }
+
+            $response = wp_remote_get($url, [
+                'headers' => ['Authorization' => 'Bearer ' . $access_token],
+                'timeout' => 15,
+            ]);
+
+            if (is_wp_error($response)) {
+                file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " WP_ERROR ({$metric}): " . $response->get_error_message() . "\n", FILE_APPEND);
+                continue;
+            }
+
+            $status   = wp_remote_retrieve_response_code($response);
+            $raw_body = wp_remote_retrieve_body($response);
+
+            // DEBUG: 最初のメトリクスのみ詳細ログ
+            if ($metric === 'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH') {
+                $dbg2 = date('Y-m-d H:i:s') . " HTTP {$status}\n";
+                $dbg2 .= "response (first 2000):\n" . substr($raw_body, 0, 2000) . "\n=== END ===\n\n";
+                file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg2, FILE_APPEND);
+            }
+
+            if ($status !== 200) {
+                continue;
+            }
+
+            $data       = json_decode($raw_body, true);
+            $target_key = $metric_map[$metric] ?? null;
+            if (!$target_key) continue;
+
+            foreach (($data['timeSeries']['datedValues'] ?? []) as $dv) {
+                $totals[$target_key] += (int) ($dv['value'] ?? 0);
+            }
         }
 
-        $status   = wp_remote_retrieve_response_code($response);
-        $raw_body = wp_remote_retrieve_body($response);
+        $totals['total_impressions'] = $totals['search_impressions'] + $totals['map_impressions'];
 
-        $dbg2 = date('Y-m-d H:i:s') . " HTTP {$status}\n";
-        $dbg2 .= "response (first 3000):\n" . substr($raw_body, 0, 3000) . "\n";
-        $dbg2 .= "=== END ===\n\n";
-        file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg2, FILE_APPEND);
+        file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " aggregated: " . wp_json_encode($totals, JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
 
-        if ($status !== 200) {
-            return $this->gbp_empty_metrics();
-        }
-
-        $data = json_decode($raw_body, true);
-        $aggregated = $this->gbp_aggregate_metrics($data);
-
-        file_put_contents('/tmp/gcrev_gbp_debug.log', date('Y-m-d H:i:s') . " aggregated: " . wp_json_encode($aggregated, JSON_UNESCAPED_UNICODE) . "\n\n", FILE_APPEND);
-
-        return $aggregated;
+        return $totals;
     }
 
     /**
@@ -5115,36 +5140,61 @@ class Gcrev_Insight_API {
             $location_id = 'locations/' . $location_id;
         }
 
-        $url = "https://businessprofileperformance.googleapis.com/v1/{$location_id}:fetchMultiDailyMetricsTimeSeries";
-
-        $body = [
-            'dailyMetrics' => [
-                'BUSINESS_IMPRESSIONS_DESKTOP_MAPS',
-                'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH',
-                'BUSINESS_IMPRESSIONS_MOBILE_MAPS',
-                'BUSINESS_IMPRESSIONS_MOBILE_SEARCH',
-            ],
-            'dailyRange' => [
-                'startDate' => $this->gbp_date_obj($start_date),
-                'endDate'   => $this->gbp_date_obj($end_date),
-            ],
+        $metrics = [
+            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH' => 'search',
+            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH'  => 'search',
+            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS'   => 'map',
+            'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => 'map',
         ];
 
-        $response = wp_remote_post($url, [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $access_token,
-                'Content-Type'  => 'application/json',
-            ],
-            'body'    => wp_json_encode($body),
-            'timeout' => 30,
-        ]);
+        $start_obj = $this->gbp_date_obj($start_date);
+        $end_obj   = $this->gbp_date_obj($end_date);
+        $daily     = []; // date => [search_impressions, map_impressions]
 
-        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-            return [];
+        foreach ($metrics as $metric => $type) {
+            $params = [
+                'dailyMetric'                  => $metric,
+                'dailyRange.startDate.year'    => $start_obj['year'],
+                'dailyRange.startDate.month'   => $start_obj['month'],
+                'dailyRange.startDate.day'     => $start_obj['day'],
+                'dailyRange.endDate.year'      => $end_obj['year'],
+                'dailyRange.endDate.month'     => $end_obj['month'],
+                'dailyRange.endDate.day'       => $end_obj['day'],
+            ];
+
+            $url = "https://businessprofileperformance.googleapis.com/v1/{$location_id}:getDailyMetricsTimeSeries?"
+                 . http_build_query($params, '', '&');
+
+            $response = wp_remote_get($url, [
+                'headers' => ['Authorization' => 'Bearer ' . $access_token],
+                'timeout' => 15,
+            ]);
+
+            if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+                continue;
+            }
+
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+
+            foreach (($data['timeSeries']['datedValues'] ?? []) as $dv) {
+                $date_obj = $dv['date'] ?? [];
+                $date_str = sprintf('%04d-%02d-%02d', $date_obj['year'] ?? 0, $date_obj['month'] ?? 0, $date_obj['day'] ?? 0);
+                $value    = (int) ($dv['value'] ?? 0);
+
+                if (!isset($daily[$date_str])) {
+                    $daily[$date_str] = ['date' => $date_str, 'search_impressions' => 0, 'map_impressions' => 0];
+                }
+
+                if ($type === 'search') {
+                    $daily[$date_str]['search_impressions'] += $value;
+                } else {
+                    $daily[$date_str]['map_impressions'] += $value;
+                }
+            }
         }
 
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-        return $this->gbp_build_daily_series($data);
+        ksort($daily);
+        return array_values($daily);
     }
 
     /**
