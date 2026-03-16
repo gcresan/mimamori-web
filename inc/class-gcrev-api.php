@@ -3974,10 +3974,8 @@ class Gcrev_Insight_API {
                 $prev_metrics    = $this->gbp_fetch_performance_metrics($access_token, $location_id, $comparison['start'], $comparison['end']);
                 $daily_metrics   = $this->gbp_fetch_daily_metrics($access_token, $location_id, $dates['start'], $dates['end']);
 
-                // 検索キーワード
-                $current_kw = $this->gbp_fetch_search_keywords($access_token, $location_id, $dates['start'], $dates['end']);
-                $prev_kw    = $this->gbp_fetch_search_keywords($access_token, $location_id, $comparison['start'], $comparison['end']);
-                $keywords   = $this->gbp_merge_keyword_changes($current_kw, $prev_kw);
+                // 検索キーワード（直近6ヶ月の月別時系列）
+                $keywords = $this->gbp_fetch_keywords_monthly_series($access_token, $location_id, 6);
             }
 
             $result = [
@@ -5202,31 +5200,16 @@ class Gcrev_Insight_API {
             'pageSize'                      => 10,
         ];
 
-        $full_url = $url . '?' . http_build_query($params);
-        $response = wp_remote_get($full_url, [
+        $response = wp_remote_get($url . '?' . http_build_query($params), [
             'headers' => ['Authorization' => 'Bearer ' . $access_token],
             'timeout' => 30,
         ]);
 
-        // DEBUG（一時的）
-        $dbg = date('Y-m-d H:i:s') . " === Search Keywords API ===\n";
-        $dbg .= "URL: {$full_url}\n";
-        if (is_wp_error($response)) {
-            $dbg .= "WP_ERROR: " . $response->get_error_message() . "\n";
-            file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
-            return [];
-        }
-        $kw_status = wp_remote_retrieve_response_code($response);
-        $kw_body   = wp_remote_retrieve_body($response);
-        $dbg .= "HTTP {$kw_status}\n";
-        $dbg .= "response (first 2000):\n" . substr($kw_body, 0, 2000) . "\n=== END ===\n\n";
-        file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
-
-        if ($kw_status !== 200) {
+        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
             return [];
         }
 
-        $result   = json_decode($kw_body, true);
+        $result = json_decode(wp_remote_retrieve_body($response), true);
         $keywords = [];
 
         foreach (($result['searchKeywordsCounts'] ?? []) as $item) {
@@ -5239,6 +5222,72 @@ class Gcrev_Insight_API {
 
         usort($keywords, function($a, $b) { return $b['impressions'] - $a['impressions']; });
         return $keywords;
+    }
+
+    /**
+     * 直近Nヶ月の検索キーワードを月別に取得し、時系列テーブル用データを返す
+     *
+     * @return array ['months' => ['2025/08', ...], 'keywords' => [['keyword' => '...', 'monthly' => [count, ...], 'total' => int], ...]]
+     */
+    private function gbp_fetch_keywords_monthly_series(
+        string $access_token, string $location_id, int $months = 6
+    ): array {
+        $now = new \DateTimeImmutable('first day of last month', wp_timezone());
+
+        $month_labels  = [];
+        $monthly_data  = []; // month_key => [keyword => impressions]
+
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $target = $now->modify("-{$i} months");
+            $month_key   = $target->format('Y/m');
+            $month_labels[] = $month_key;
+
+            $kw_data = $this->gbp_fetch_search_keywords(
+                $access_token,
+                $location_id,
+                $target->format('Y-m-01'),
+                $target->format('Y-m-t')
+            );
+
+            $map = [];
+            foreach ($kw_data as $kw) {
+                $map[$kw['keyword']] = $kw['impressions'];
+            }
+            $monthly_data[$month_key] = $map;
+        }
+
+        // 全キーワードを集約
+        $all_keywords = [];
+        foreach ($monthly_data as $map) {
+            foreach (array_keys($map) as $kw) {
+                $all_keywords[$kw] = true;
+            }
+        }
+
+        // キーワードごとに月別データと合計を組み立て
+        $rows = [];
+        foreach (array_keys($all_keywords) as $kw) {
+            $monthly = [];
+            $total   = 0;
+            foreach ($month_labels as $ml) {
+                $val = $monthly_data[$ml][$kw] ?? 0;
+                $monthly[] = $val;
+                $total += $val;
+            }
+            $rows[] = [
+                'keyword' => $kw,
+                'monthly' => $monthly,
+                'total'   => $total,
+            ];
+        }
+
+        // 合計降順でソート
+        usort($rows, function($a, $b) { return $b['total'] - $a['total']; });
+
+        return [
+            'months'   => $month_labels,
+            'keywords' => $rows,
+        ];
     }
 
     /**

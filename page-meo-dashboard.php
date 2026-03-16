@@ -644,20 +644,13 @@ get_header();
             </div>
         </div>
 
-        <!-- 検索キーワード TOP5 -->
+        <!-- 検索キーワード（月別時系列） -->
         <div style="background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; overflow-x: auto;">
-            <div style="font-size: 18px; font-weight: 700; color: #2C3E40; margin-bottom: 20px;">🏆 検索キーワード TOP5</div>
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr>
-                        <th style="background: #f9fafb; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #666666; border-bottom: 1px solid #e5e7eb; width: 60px;"></th>
-                        <th style="background: #f9fafb; padding: 12px 16px; text-align: left; font-size: 13px; font-weight: 600; color: #666666; border-bottom: 1px solid #e5e7eb;">キーワード</th>
-                        <th style="background: #f9fafb; padding: 12px 16px; text-align: right; font-size: 13px; font-weight: 600; color: #666666; border-bottom: 1px solid #e5e7eb; width: 120px;">表示回数</th>
-                        <th style="background: #f9fafb; padding: 12px 16px; text-align: right; font-size: 13px; font-weight: 600; color: #666666; border-bottom: 1px solid #e5e7eb; width: 120px;">前期比</th>
-                    </tr>
-                </thead>
+            <div style="font-size: 18px; font-weight: 700; color: #2C3E40; margin-bottom: 20px;">🏆 検索キーワード</div>
+            <table id="meo-keywords-table" style="width: 100%; border-collapse: collapse;">
+                <thead id="meo-keywords-head"></thead>
                 <tbody id="meo-keywords-body">
-                    <tr><td colspan="4" style="padding: 24px; text-align: center; color: #888888;">データを読み込み中...</td></tr>
+                    <tr><td colspan="2" style="padding: 24px; text-align: center; color: #888888;">データを読み込み中...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1021,40 +1014,65 @@ get_header();
         if (chEl) chEl.innerHTML = changeHtml(val, previous);
     }
 
-    // ===== キーワードテーブル更新 =====
+    // ===== キーワードテーブル更新（月別時系列） =====
     function updateKeywordsTable(data) {
-        var keywords = data.search_keywords || [];
+        var kwData = data.search_keywords || {};
+        var months = kwData.months || [];
+        var keywords = kwData.keywords || [];
+        var kwHead = document.getElementById('meo-keywords-head');
         var kwBody = document.getElementById('meo-keywords-body');
         if (!kwBody) return;
 
+        var colCount = months.length + 2; // キーワード + 各月 + 合計
+
         if (keywords.length === 0) {
-            kwBody.innerHTML = '<tr><td colspan="4" style="padding: 24px; text-align: center; color: #888888;">キーワードデータがありません</td></tr>';
+            if (kwHead) kwHead.innerHTML = '';
+            kwBody.innerHTML = '<tr><td colspan="' + colCount + '" style="padding: 24px; text-align: center; color: #888888;">キーワードデータがありません</td></tr>';
             return;
         }
 
-        kwBody.innerHTML = '';
-        var top5 = keywords.slice(0, 5);
-        var ranks = ['🥇', '🥈', '🥉', '4', '5'];
+        // ヘッダー構築
+        if (kwHead) {
+            var headHtml = '<tr>'
+                + '<th style="padding:10px 14px;text-align:left;font-size:13px;font-weight:700;color:#555;border-bottom:2px solid #e5e7eb;white-space:nowrap;">キーワード</th>';
+            months.forEach(function(m) {
+                headHtml += '<th style="padding:10px 14px;text-align:right;font-size:13px;font-weight:700;color:#555;border-bottom:2px solid #e5e7eb;white-space:nowrap;">' + escapeHtml(m) + '</th>';
+            });
+            headHtml += '<th style="padding:10px 14px;text-align:right;font-size:13px;font-weight:700;color:#555;border-bottom:2px solid #e5e7eb;white-space:nowrap;">合計</th>';
+            headHtml += '</tr>';
+            kwHead.innerHTML = headHtml;
+        }
 
-        top5.forEach(function(kw, i) {
-            var rankHtml;
-            if (i < 3) {
-                rankHtml = '<span style="font-size:20px;">' + ranks[i] + '</span>';
-            } else {
-                rankHtml = '<span style="width:28px;height:28px;border-radius:50%;background:#e5e7eb;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#2C3E40;">' + ranks[i] + '</span>';
-            }
+        // ボディ構築
+        var bodyHtml = '';
+        var monthTotals = new Array(months.length).fill(0);
+        var grandTotal = 0;
 
-            var impressions = kw.impressions || kw.count || 0;
-            var prevImpressions = kw.prev_impressions || kw.prev_count || null;
-            var chHtml = changeHtml(impressions, prevImpressions);
-
-            kwBody.innerHTML += '<tr>'
-                + '<td style="padding:12px 16px;border-bottom:1px solid #f3f4f6;text-align:center;">' + rankHtml + '</td>'
-                + '<td style="padding:12px 16px;border-bottom:1px solid #f3f4f6;font-weight:600;font-size:14px;color:#555555;">' + escapeHtml(kw.keyword || kw.query || '') + '</td>'
-                + '<td style="padding:12px 16px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#555555;font-weight:700;text-align:right;">' + Number(impressions).toLocaleString() + '</td>'
-                + '<td style="padding:12px 16px;border-bottom:1px solid #f3f4f6;font-size:13px;font-weight:600;text-align:right;">' + chHtml + '</td>'
-                + '</tr>';
+        keywords.forEach(function(kw) {
+            var monthly = kw.monthly || [];
+            var total = kw.total || 0;
+            bodyHtml += '<tr>'
+                + '<td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:14px;font-weight:600;color:#555;">' + escapeHtml(kw.keyword || '') + '</td>';
+            months.forEach(function(m, mi) {
+                var val = monthly[mi] || 0;
+                monthTotals[mi] += val;
+                bodyHtml += '<td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#555;text-align:right;">' + Number(val).toLocaleString() + '</td>';
+            });
+            grandTotal += total;
+            bodyHtml += '<td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:14px;font-weight:700;color:#333;text-align:right;">' + Number(total).toLocaleString() + '</td>';
+            bodyHtml += '</tr>';
         });
+
+        // 合計行
+        bodyHtml += '<tr style="background:#f8f9fa;">'
+            + '<td style="padding:10px 14px;font-size:14px;font-weight:700;color:#333;">合計</td>';
+        monthTotals.forEach(function(t) {
+            bodyHtml += '<td style="padding:10px 14px;font-size:14px;font-weight:700;color:#333;text-align:right;">' + Number(t).toLocaleString() + '</td>';
+        });
+        bodyHtml += '<td style="padding:10px 14px;font-size:14px;font-weight:700;color:#333;text-align:right;">' + Number(grandTotal).toLocaleString() + '</td>';
+        bodyHtml += '</tr>';
+
+        kwBody.innerHTML = bodyHtml;
     }
 
     function escapeHtml(str) {
