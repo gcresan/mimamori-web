@@ -6,12 +6,14 @@
 // =====================================================
 global $wpdb;
 
-$survey_token      = isset($_GET['t']) ? sanitize_text_field($_GET['t']) : '';
-$target_user_id    = isset($_GET['u']) ? absint($_GET['u']) : 0;
-$business_name     = '';
-$google_review_url = '';
-$review_questions  = [];
-$survey_error      = '';
+$survey_token       = isset($_GET['t']) ? sanitize_text_field($_GET['t']) : '';
+$target_user_id     = isset($_GET['u']) ? absint($_GET['u']) : 0;
+$client_name        = '';
+$survey_title       = '';
+$survey_description = '';
+$google_review_url  = '';
+$review_questions   = [];
+$survey_error       = '';
 
 if (!empty($survey_token)) {
     // ----- トークン方式: DBからアンケート取得 -----
@@ -28,9 +30,17 @@ if (!empty($survey_token)) {
     } elseif ($survey->status !== 'published') {
         $survey_error = 'このアンケートは現在公開されていません。';
     } else {
-        $target_user_id = (int) $survey->user_id;
-        $business_name  = $survey->title;
+        $target_user_id    = (int) $survey->user_id;
+        $survey_title      = $survey->title;
+        $survey_description = $survey->description ?? '';
         $google_review_url = $survey->google_review_url;
+
+        // クライアント名はuser metaから取得
+        $client_name = get_user_meta($target_user_id, 'report_client_name', true);
+        if (empty($client_name)) {
+            $target_user = get_userdata($target_user_id);
+            $client_name = $target_user ? $target_user->display_name : '';
+        }
 
         // 質問取得
         $db_questions = $wpdb->get_results($wpdb->prepare(
@@ -65,10 +75,12 @@ if (!empty($survey_token)) {
     // ----- レガシー方式: user_id からビジネス情報取得（ハードコード質問） -----
     $target_user = get_userdata($target_user_id);
     if ($target_user) {
-        $business_name = get_user_meta($target_user_id, 'report_client_name', true);
-        if (empty($business_name)) {
-            $business_name = $target_user->display_name;
+        $client_name = get_user_meta($target_user_id, 'report_client_name', true);
+        if (empty($client_name)) {
+            $client_name = $target_user->display_name;
         }
+        $survey_title = $client_name . ' ご感想アンケート';
+        $survey_description = '';
         $google_review_url = get_user_meta($target_user_id, '_gcrev_google_review_url', true);
     }
 
@@ -98,7 +110,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo esc_html($business_name ? $business_name . ' - ご感想アンケート' : 'ご感想アンケート'); ?></title>
+    <title><?php echo esc_html($survey_title ?: 'アンケート'); ?></title>
     <link rel="icon" type="image/x-icon" href="<?php echo esc_url(get_template_directory_uri()); ?>/images/favicon.ico">
     <style>
     /* ===== Reset & Base ===== */
@@ -120,23 +132,36 @@ $api_url = rest_url('gcrev/v1/review/generate');
 
     /* ===== Header ===== */
     .review-header {
+        background: #2C3E50;
+        color: #fff;
         text-align: center;
-        padding: 32px 0 24px;
+        padding: 28px 20px;
+        margin: -24px -16px 24px;
     }
-    .review-header-logo {
-        width: 160px;
-        height: auto;
-        margin-bottom: 16px;
-    }
-    .review-header h1 {
+    .review-header-client {
         font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        line-height: 1.5;
+    }
+
+    /* ===== Survey Intro ===== */
+    .survey-intro {
+        text-align: center;
+        padding: 0 0 8px;
+        margin-bottom: 20px;
+    }
+    .survey-intro-title {
+        font-size: 17px;
         font-weight: 700;
         color: #2C3E40;
         margin-bottom: 8px;
+        line-height: 1.6;
     }
-    .review-header p {
+    .survey-intro-desc {
         font-size: 14px;
         color: #666;
+        line-height: 1.7;
     }
 
     /* ===== Card ===== */
@@ -537,11 +562,17 @@ $api_url = rest_url('gcrev/v1/review/generate');
 <body>
     <div class="review-container">
 
-        <!-- ヘッダー -->
+        <!-- ヘッダー（クライアント名帯） -->
         <div class="review-header">
-            <img src="<?php echo esc_url(get_template_directory_uri()); ?>/images/common/logo.png" alt="ロゴ" class="review-header-logo">
-            <h1><?php echo esc_html($business_name ? $business_name . ' ご感想アンケート' : 'ご感想アンケート'); ?></h1>
-            <p>ご利用の感想をお聞かせください。</p>
+            <div class="review-header-client"><?php echo esc_html($client_name ?: 'アンケート'); ?></div>
+        </div>
+
+        <!-- アンケートタイトル＋説明文 -->
+        <div class="survey-intro">
+            <h1 class="survey-intro-title"><?php echo esc_html($survey_title); ?></h1>
+            <?php if (!empty($survey_description)) : ?>
+                <p class="survey-intro-desc"><?php echo nl2br(esc_html($survey_description)); ?></p>
+            <?php endif; ?>
         </div>
 
 <?php if (!empty($survey_error)) : ?>
@@ -553,7 +584,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
 
         <!-- フッター -->
         <div class="review-footer">
-            &copy; <?php echo esc_html(gmdate('Y')); ?> <?php bloginfo('name'); ?>
+            &copy; <?php echo esc_html(gmdate('Y')); ?> | <?php echo esc_html($client_name ?: 'アンケート'); ?>
         </div>
     </div>
 </body>
@@ -681,7 +712,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
 
         <!-- フッター -->
         <div class="review-footer">
-            &copy; <?php echo esc_html(gmdate('Y')); ?> <?php bloginfo('name'); ?>
+            &copy; <?php echo esc_html(gmdate('Y')); ?> | <?php echo esc_html($client_name ?: 'アンケート'); ?>
         </div>
     </div>
 
