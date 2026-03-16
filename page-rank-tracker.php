@@ -12,11 +12,11 @@ $current_user = wp_get_current_user();
 $user_id = $current_user->ID;
 
 // ページタイトル設定
-set_query_var('gcrev_page_title', '検索順位チェック');
+set_query_var('gcrev_page_title', '自然検索順位');
 set_query_var('gcrev_page_subtitle', '指定キーワードの Google 検索順位を確認できます。');
 
 // パンくず設定
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('検索順位チェック', '集客のようす'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('自然検索順位', '検索順位チェック'));
 
 get_header();
 ?>

@@ -74,7 +74,8 @@
       <?php
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ website ---
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis');
-      $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','rank-tracker');
+      $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
+      $ranking_pages   = array('rank-tracker','map-rank');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','review-management','gbp-posts');
       $settings_pages  = array('client-settings','report-settings','cv-settings','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
@@ -84,6 +85,8 @@
       foreach ($diagnosis_pages as $_p) { if (is_page($_p)) { $diagnosis_child_active = true; break; } }
       $website_child_active = false;
       foreach ($website_pages as $_p) { if (is_page($_p)) { $website_child_active = true; break; } }
+      $ranking_child_active = false;
+      foreach ($ranking_pages as $_p) { if (is_page($_p)) { $ranking_child_active = true; break; } }
       $meo_child_active = false;
       foreach ($meo_pages as $_p) { if (is_page($_p)) { $meo_child_active = true; break; } }
       $settings_child_active = false;
@@ -95,6 +98,7 @@
       // 子がアクティブなグループを開く。なければデフォルト 'website'
       $sidebar_active_group = 'website';
       if ($diagnosis_child_active) $sidebar_active_group = 'diagnosis';
+      if ($ranking_child_active)   $sidebar_active_group = 'ranking';
       if ($meo_child_active)       $sidebar_active_group = 'meo';
       if ($settings_child_active)  $sidebar_active_group = 'settings';
       if ($support_child_active)   $sidebar_active_group = 'support';
@@ -196,9 +200,25 @@
                         <span>ゴール分析</span>
                         </a>
                      </li>
+                  </ul>
+               </li>
+
+               <!-- ========== 検索順位チェック ========== -->
+               <li class="nav-item nav-item-collapsible<?php echo $ranking_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'ranking' ? ' collapsed' : ''; ?>" data-menu-key="ranking">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleRanking" aria-expanded="<?php echo $sidebar_active_group === 'ranking' ? 'true' : 'false'; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 3v18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 16l4-5 4 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span>検索順位チェック</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuRanking">
                      <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/analysis/rank-tracker/') ); ?>" class="nav-link <?php echo is_page('rank-tracker') ? 'active' : ''; ?>">
-                        <span>検索順位チェック</span>
+                        <a href="<?php echo esc_url( home_url('/rank-tracker/') ); ?>" class="nav-link <?php echo is_page('rank-tracker') ? 'active' : ''; ?>">
+                        <span>自然検索順位</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/map-rank/') ); ?>" class="nav-link <?php echo is_page('map-rank') ? 'active' : ''; ?>">
+                        <span>マップ順位</span>
                         </a>
                      </li>
                   </ul>
