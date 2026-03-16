@@ -5202,22 +5202,38 @@ class Gcrev_Insight_API {
             'pageSize'                      => 10,
         ];
 
-        $response = wp_remote_get($url . '?' . http_build_query($params), [
+        $full_url = $url . '?' . http_build_query($params);
+        $response = wp_remote_get($full_url, [
             'headers' => ['Authorization' => 'Bearer ' . $access_token],
             'timeout' => 30,
         ]);
 
-        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+        // DEBUG（一時的）
+        $dbg = date('Y-m-d H:i:s') . " === Search Keywords API ===\n";
+        $dbg .= "URL: {$full_url}\n";
+        if (is_wp_error($response)) {
+            $dbg .= "WP_ERROR: " . $response->get_error_message() . "\n";
+            file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
+            return [];
+        }
+        $kw_status = wp_remote_retrieve_response_code($response);
+        $kw_body   = wp_remote_retrieve_body($response);
+        $dbg .= "HTTP {$kw_status}\n";
+        $dbg .= "response (first 2000):\n" . substr($kw_body, 0, 2000) . "\n=== END ===\n\n";
+        file_put_contents('/tmp/gcrev_gbp_debug.log', $dbg, FILE_APPEND);
+
+        if ($kw_status !== 200) {
             return [];
         }
 
-        $result   = json_decode(wp_remote_retrieve_body($response), true);
+        $result   = json_decode($kw_body, true);
         $keywords = [];
 
         foreach (($result['searchKeywordsCounts'] ?? []) as $item) {
+            $impressions = (int) ($item['insightsValue']['value'] ?? $item['insightsValue']['threshold'] ?? 0);
             $keywords[] = [
                 'keyword'     => $item['searchKeyword'] ?? '',
-                'impressions' => (int) ($item['insightsValue']['value'] ?? 0),
+                'impressions' => $impressions,
             ];
         }
 
