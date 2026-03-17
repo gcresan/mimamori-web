@@ -10146,9 +10146,10 @@ PROMPT;
         }
         set_transient( $lock_key, 1, $lock_ttl );
 
-        // Cron ログ開始
+        // Cron ログ開始（log_id をチャンク間で引き継ぐためTransientに保存）
         if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-            Gcrev_Cron_Logger::start( 'rank_fetch' );
+            $log_id = Gcrev_Cron_Logger::start( 'rank_fetch' );
+            set_transient( 'gcrev_rank_fetch_log_id', $log_id, 7200 );
         }
 
         global $wpdb;
@@ -10186,8 +10187,10 @@ PROMPT;
         if ( empty( $user_ids ) ) {
             // 完了
             delete_transient( 'gcrev_lock_rank_fetch' );
-            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-                Gcrev_Cron_Logger::finish( 'rank_fetch' );
+            $log_id = (int) get_transient( 'gcrev_rank_fetch_log_id' );
+            if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::finish( $log_id );
+                delete_transient( 'gcrev_rank_fetch_log_id' );
             }
             error_log( '[GCREV][RankTracker] Daily fetch completed' );
             return;
@@ -10238,8 +10241,9 @@ PROMPT;
                 $this->save_rank_results( $kw, $results );
             }
 
-            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-                Gcrev_Cron_Logger::log_user( 'rank_fetch', $uid, 'ok' );
+            $log_id = (int) get_transient( 'gcrev_rank_fetch_log_id' );
+            if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::log_user( $log_id, $uid, 'ok' );
             }
         }
 
