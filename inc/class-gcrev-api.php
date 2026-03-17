@@ -2654,6 +2654,7 @@ class Gcrev_Insight_API {
     // レポート生成（Multi-pass）
     // =========================================================
     public function generate_report(WP_REST_Request $request): WP_REST_Response {
+        @set_time_limit( 300 );
 
         $user_id = get_current_user_id();
         $params  = $request->get_json_params();
@@ -3794,6 +3795,8 @@ class Gcrev_Insight_API {
      * REST: v2ダッシュボード用レポート手動生成
      */
     public function rest_generate_report_manual(WP_REST_Request $request): WP_REST_Response {
+        @set_time_limit( 300 );
+
         $year = $request->get_param('year');
         $month = $request->get_param('month');
         $user_id = get_current_user_id();

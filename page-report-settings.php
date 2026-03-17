@@ -479,6 +479,14 @@ async function callGenerateReport(prevData, twoData, clientData) {
         })
     });
 
+    // レスポンスが JSON かどうかチェック（PHP Fatal Error 時に HTML が返る場合がある）
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('Non-JSON response:', text.substring(0, 500));
+        throw new Error('サーバーでエラーが発生しました。しばらく待ってから再度お試しください。');
+    }
+
     const json = await res.json();
 
     if (!res.ok || !json.success) {
