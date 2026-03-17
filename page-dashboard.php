@@ -1355,38 +1355,25 @@ foreach ($highlight_items as $highlight):
             updateInfoKpi('meo', mCurr, mCurr - mPrev);
             finishCard('meo');
 
-            // --- スコアゲージ非同期更新 ---
+            // --- スコアゲージ非同期更新（サーバーサイドで統一計算） ---
             if (curr) {
                 var gscCurr = parseInt(String((curr.gsc && curr.gsc.total ? curr.gsc.total.clicks || curr.gsc.total.impressions : 0) || 0).replace(/,/g, ''), 10);
                 var gscPrev = prev ? parseInt(String((prev.gsc && prev.gsc.total ? prev.gsc.total.clicks || prev.gsc.total.impressions : 0) || 0).replace(/,/g, ''), 10) : 0;
 
-                // 簡易スコア計算（サーバーサイドの pct_to_points と同等）
-                function calcPct(c, p) {
-                    if (p === 0) return c === 0 ? 0 : 100;
-                    return ((c - p) / p) * 100;
-                }
-                function pctToPoints(pct) {
-                    if (pct >= 15) return 25;
-                    if (pct >= 5) return 20;
-                    if (pct >= -4) return 15;
-                    if (pct >= -14) return 8;
-                    return 0;
-                }
-                var dims = {
-                    traffic: [cS, pS],
-                    cv: [cC, pC],
-                    gsc: [gscCurr, gscPrev],
-                    meo: [mCurr, mPrev]
-                };
-                var total = 0;
-                var hasAny = false;
-                Object.keys(dims).forEach(function(k) {
-                    var c = dims[k][0], p = dims[k][1];
-                    if (c > 0) hasAny = true;
-                    total += (c === 0) ? 0 : pctToPoints(calcPct(c, p));
+                // サーバーサイドで calc_monthly_health_score を使って統一スコアを計算
+                fetch(restBase + 'dashboard/score', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        curr: { traffic: cS, cv: cC, gsc: gscCurr, meo: mCurr },
+                        prev: { traffic: pS, cv: pC, gsc: gscPrev, meo: mPrev }
+                    })
+                }).then(function(r){ return r.json(); }).then(function(scoreRes){
+                    if (scoreRes.success) {
+                        updateScoreGauge(scoreRes.score);
+                    }
                 });
-                var score = hasAny ? Math.max(35, Math.min(100, total)) : 0;
-                updateScoreGauge(score);
             }
         }).catch(function(err){
             clearTimeout(timeoutId);

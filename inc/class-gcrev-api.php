@@ -256,6 +256,17 @@ class Gcrev_Insight_API {
             ]
         ]);
 
+        // ===== ダッシュボードスコア計算（JS非同期取得後の統一スコア） =====
+        register_rest_route('gcrev/v1', '/dashboard/score', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_calc_dashboard_score' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+            'args'                => [
+                'curr' => [ 'required' => true ],
+                'prev' => [ 'required' => true ],
+            ]
+        ]);
+
         // ===== 流入元分析用エンドポイント =====
         register_rest_route('gcrev/v1', '/analysis/source', [
             'methods'             => 'GET',
@@ -1391,6 +1402,61 @@ class Gcrev_Insight_API {
                 }
                 usleep(self::PREFETCH_SLEEP_US);
             }
+
+            // --- (4) 比較期間キャッシュ + スコア事前計算 ---
+            // ダッシュボード表示時にPHPキャッシュヒットで即表示するために
+            // last30 の比較期間（その前の30日間）も事前取得し、スコアも計算・保存する
+            try {
+                $last30_dates = $this->dates->get_date_range('last30');
+                $last30_comp  = $this->dates->get_comparison_range($last30_dates['start'], $last30_dates['end']);
+                $filter_suffix_pf = $exclude_foreign ? '_filtered' : '';
+                $comp_cache_key   = "gcrev_dash_bydate_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
+                $comp_cached      = get_transient( $comp_cache_key );
+
+                if ( ! $comp_cached ) {
+                    $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id );
+                    error_log("[GCREV] Prefetch comparison SUCCESS user_id={$user_id}");
+                } else {
+                    $comp_data = $comp_cached;
+                    error_log("[GCREV] Prefetch comparison SKIP user_id={$user_id}: already cached");
+                }
+
+                // スコア事前計算・KPI transient に保存
+                $kpi_filter_suffix = $exclude_foreign ? '_jp' : '';
+                $kpi_cache_key = "gcrev_dash_{$user_id}_last30{$kpi_filter_suffix}";
+                $kpi_cached    = get_transient( $kpi_cache_key );
+                if ( $kpi_cached && is_array( $kpi_cached ) && ! isset( $kpi_cached['_cached_score'] ) ) {
+                    $sess_c  = (int) str_replace( ',', '', (string)( $kpi_cached['sessions'] ?? '0' ) );
+                    $sess_p  = (int) str_replace( ',', '', (string)( $comp_data['sessions'] ?? '0' ) );
+                    $cv_c    = (int) str_replace( ',', '', (string)( $kpi_cached['conversions'] ?? '0' ) );
+                    $cv_p    = (int) str_replace( ',', '', (string)( $comp_data['conversions'] ?? '0' ) );
+                    $gsc_c   = (int) str_replace( ',', '', (string)( $kpi_cached['gsc']['total']['clicks'] ?? $kpi_cached['gsc']['total']['impressions'] ?? '0' ) );
+                    $gsc_p   = (int) str_replace( ',', '', (string)( $comp_data['gsc']['total']['clicks'] ?? $comp_data['gsc']['total']['impressions'] ?? '0' ) );
+
+                    // MEO（transient から取得）
+                    $meo_cache_c = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_dates['start']}_{$last30_dates['end']}" );
+                    $meo_cache_p = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}" );
+                    $meo_c = ( $meo_cache_c !== false && is_array( $meo_cache_c ) ) ? (int)( $meo_cache_c['total_impressions'] ?? 0 ) : 0;
+                    $meo_p = ( $meo_cache_p !== false && is_array( $meo_cache_p ) ) ? (int)( $meo_cache_p['total_impressions'] ?? 0 ) : 0;
+
+                    $score_curr = [ 'traffic' => $sess_c, 'cv' => $cv_c, 'gsc' => $gsc_c, 'meo' => $meo_c ];
+                    $score_prev = [ 'traffic' => $sess_p, 'cv' => $cv_p, 'gsc' => $gsc_p, 'meo' => $meo_p ];
+                    $health = $this->calc_monthly_health_score( $score_curr, $score_prev, [], $user_id );
+
+                    $kpi_cached['_cached_score'] = [
+                        'score'      => $health['score'],
+                        'status'     => $health['status'],
+                        'breakdown'  => $health['breakdown'],
+                        'components' => $health['components'],
+                    ];
+                    set_transient( $kpi_cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
+                    error_log("[GCREV] Prefetch score SUCCESS user_id={$user_id}, score={$health['score']}");
+                }
+            } catch ( \Exception $e ) {
+                error_log("[GCREV] Prefetch comparison/score ERROR user_id={$user_id}: " . $e->getMessage());
+                $user_had_error = true;
+            }
+            usleep( self::PREFETCH_SLEEP_US );
 
             // 国フィルタ解除
             if ( $exclude_foreign ) {
@@ -3789,6 +3855,52 @@ class Gcrev_Insight_API {
         } finally {
             $this->restore_country_filter( $filter_set );
         }
+    }
+
+    /**
+     * REST: ダッシュボードスコア計算（JS非同期取得後にサーバー側で統一スコアを計算）
+     * curr/prev の4指標を受け取り、calc_monthly_health_score で計算して返す。
+     * 結果は KPI transient にも保存し、次回リロード時のスコア安定化に利用。
+     */
+    public function rest_calc_dashboard_score( WP_REST_Request $request ): WP_REST_Response {
+        $user_id = get_current_user_id();
+        $curr_raw = $request->get_param('curr');
+        $prev_raw = $request->get_param('prev');
+
+        if ( ! is_array( $curr_raw ) || ! is_array( $prev_raw ) ) {
+            return new WP_REST_Response([ 'success' => false, 'message' => 'Invalid params' ], 400);
+        }
+
+        $keys = ['traffic', 'cv', 'gsc', 'meo'];
+        $curr = [];
+        $prev = [];
+        foreach ( $keys as $k ) {
+            $curr[ $k ] = (int)( $curr_raw[ $k ] ?? 0 );
+            $prev[ $k ] = (int)( $prev_raw[ $k ] ?? 0 );
+        }
+
+        $health = $this->calc_monthly_health_score( $curr, $prev, [], $user_id );
+
+        // KPI transient にスコアを保存（次回リロード時にPHP側で即復元）
+        $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
+        $filter_suffix   = $exclude_foreign ? '_jp' : '';
+        $cache_key       = "gcrev_dash_{$user_id}_last30{$filter_suffix}";
+        $kpi_cached      = get_transient( $cache_key );
+        if ( $kpi_cached !== false && is_array( $kpi_cached ) ) {
+            $kpi_cached['_cached_score'] = [
+                'score'      => $health['score'],
+                'status'     => $health['status'],
+                'breakdown'  => $health['breakdown'],
+                'components' => $health['components'],
+            ];
+            set_transient( $cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
+        }
+
+        return new WP_REST_Response([
+            'success' => true,
+            'score'   => $health['score'],
+            'status'  => $health['status'],
+        ], 200);
     }
 
     /**
