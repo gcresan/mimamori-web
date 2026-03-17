@@ -241,12 +241,15 @@ class Gcrev_Client_Management_Page {
                         $tier = function_exists( 'gcrev_get_service_tier' ) ? gcrev_get_service_tier( $uid ) : 'basic';
                         $tier_defs = function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : [];
                         $tier_name = $tier_defs[ $tier ]['name'] ?? $tier;
-                        if ( $tier === 'ai_support' ) :
+                        $tier_badge_map = [
+                            'basic'      => ['color' => '#6B7280', 'bg' => '#f5f5f5',               'border' => ''],
+                            'ai_support' => ['color' => '#4E8A6B', 'bg' => 'rgba(78,138,107,0.08)', 'border' => '1px solid rgba(78,138,107,0.2)'],
+                            'bansou'     => ['color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)', 'border' => '1px solid rgba(147,51,234,0.2)'],
+                        ];
+                        $tb = $tier_badge_map[ $tier ] ?? $tier_badge_map['basic'];
+                        $border_style = $tb['border'] ? "border:{$tb['border']};" : '';
                         ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#4E8A6B; background:rgba(78,138,107,0.08); border:1px solid rgba(78,138,107,0.2); border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
-                        <?php else : ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#6B7280; background:#f5f5f5; border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
-                        <?php endif; ?>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:<?php echo esc_attr($tb['color']); ?>; background:<?php echo esc_attr($tb['bg']); ?>; <?php echo $border_style; ?> border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
                     </td>
                     <td>
                         <?php if ( $is_test ) : ?>

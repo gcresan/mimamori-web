@@ -5683,12 +5683,17 @@ function gcrev_get_service_tier_definitions(): array {
         'basic' => [
             'name'        => 'ベーシックプラン',
             'monthly'     => 5500,
-            'description' => 'AIがホームページの状態を見て、毎月レポートをお届け',
+            'description' => '見える化中心。AIがホームページの状態を見て、毎月レポートをお届け',
         ],
         'ai_support' => [
             'name'        => 'AIサポートプラン',
             'monthly'     => 11000,
-            'description' => 'AIが状態を見て＋改善アドバイスまで提供',
+            'description' => '改善提案まで。AIが状態を見て＋改善アドバイスまで提供',
+        ],
+        'bansou' => [
+            'name'        => '伴走プラン',
+            'monthly'     => 33000,
+            'description' => '人による継続支援。専門スタッフが伴走・MTGで改善をサポート',
         ],
     ];
 }
@@ -5717,7 +5722,7 @@ function gcrev_get_service_tier( int $user_id = 0 ): string {
     }
     // 管理者は常に最上位
     if ( user_can( $user_id, 'manage_options' ) ) {
-        return 'ai_support';
+        return 'bansou';
     }
     $tier = get_user_meta( $user_id, 'gcrev_service_tier', true );
     if ( in_array( $tier, gcrev_get_valid_service_tiers(), true ) ) {
@@ -5737,7 +5742,7 @@ function gcrev_get_service_tier( int $user_id = 0 ): string {
  * @return bool
  */
 function mimamori_can( string $feature, int $user_id = 0 ): bool {
-    $tier_hierarchy = [ 'basic' => 0, 'ai_support' => 1 ];
+    $tier_hierarchy = [ 'basic' => 0, 'ai_support' => 1, 'bansou' => 2 ];
 
     $feature_map = [
         // AI機能（ai_support のみ）
@@ -6615,7 +6620,8 @@ function gcrev_render_service_tier_field( $user ) {
                 </select>
                 <p class="description">
                     ベーシック: AIがデータを見てレポート作成（総評・スコア・KPI）<br>
-                    AIサポート: 上記＋改善アドバイス・AIチャット・ネクストアクション
+                    AIサポート: 上記＋改善アドバイス・AIチャット・ネクストアクション<br>
+                    伴走: 上記すべて＋専門スタッフによる伴走・MTG
                 </p>
             </td>
         </tr>
@@ -6626,6 +6632,7 @@ function gcrev_render_service_tier_field( $user ) {
                 $badge_styles = [
                     'basic'      => [ 'color' => '#666',    'bg' => '#f0f0f0',               'label' => 'ベーシック' ],
                     'ai_support' => [ 'color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)',   'label' => 'AIサポート' ],
+                    'bansou'     => [ 'color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)',  'label' => '伴走' ],
                 ];
                 $bs = $badge_styles[ $current_tier ] ?? $badge_styles['basic'];
                 ?>

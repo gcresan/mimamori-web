@@ -30,6 +30,11 @@ $plan_info = isset( $plan_defs[ $user_plan ] ) ? $plan_defs[ $user_plan ] : null
 $plan_name = $plan_info ? $plan_info['name'] : '未選択';
 $monthly   = $plan_info ? number_format( $plan_info['monthly'] ) : '—';
 
+// サービスティア
+$service_tier  = gcrev_get_service_tier( $user_id );
+$tier_defs_all = gcrev_get_service_tier_definitions();
+$tier_name     = $tier_defs_all[ $service_tier ]['name'] ?? 'ベーシックプラン';
+
 $c_status     = $dates['status'];
 $has_contract = ! empty( $dates['start_at'] );
 
@@ -348,6 +353,22 @@ get_header();
                 <tr>
                     <th>プラン名</th>
                     <td><?php echo esc_html( $plan_name ); ?></td>
+                </tr>
+                <tr>
+                    <th>サービスティア</th>
+                    <td>
+                        <?php
+                        $tier_badge_colors = [
+                            'basic'      => ['color' => '#666',    'bg' => '#f0f0f0'],
+                            'ai_support' => ['color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)'],
+                            'bansou'     => ['color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)'],
+                        ];
+                        $tbc = $tier_badge_colors[ $service_tier ] ?? $tier_badge_colors['basic'];
+                        ?>
+                        <span style="display:inline-block; padding:4px 12px; border-radius:12px; font-size:13px; font-weight:600; color:<?php echo esc_attr($tbc['color']); ?>; background:<?php echo esc_attr($tbc['bg']); ?>;">
+                            <?php echo esc_html( $tier_name ); ?>
+                        </span>
+                    </td>
                 </tr>
                 <tr>
                     <th>月額料金</th>
