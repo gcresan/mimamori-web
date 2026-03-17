@@ -279,7 +279,7 @@
 }
 .sidebar-nav .nav-subgroup-label {
   display: block;
-  padding: 6px 20px 4px 52px;
+  padding: 6px 20px 4px 56px;
   font-size: 12px;
   font-weight: 600;
   color: #568184;
@@ -292,8 +292,24 @@
   padding: 0;
 }
 .sidebar-nav .nav-subgroup-menu .nav-link {
-  padding: 7px 20px 7px 66px;
+  padding: 7px 20px 7px 76px;
   font-size: 12.5px;
+}
+.sidebar-nav .nav-subgroup-menu .nav-link::before {
+  left: 58px;
+  width: 8px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: #b0bec5;
+}
+.sidebar-nav .nav-subgroup-menu .nav-link:hover::before {
+  background: var(--mw-primary-blue);
+}
+.sidebar-nav .nav-subgroup-menu .nav-link.active::before {
+  background: var(--mw-primary-blue);
+  width: 10px;
+  height: 1.5px;
+  border-radius: 1px;
 }
 
 /* かんたん解説（リテラシー低め向け） */
