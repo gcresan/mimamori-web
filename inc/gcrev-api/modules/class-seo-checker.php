@@ -104,8 +104,18 @@ class Gcrev_SEO_Checker {
      * 保存済み診断結果を取得（比較データ付き）
      */
     public function get_diagnosis( int $user_id ): ?array {
-        // 新キー（履歴）から読み込み
         $raw = get_user_meta( $user_id, self::META_KEY_HISTORY, true );
+
+        // 新形式: PHP配列で保存されたデータ
+        if ( is_array( $raw ) && ! empty( $raw['history'] ) ) {
+            $current  = $raw['history'][0];
+            $previous = $raw['history'][1] ?? null;
+            $current['comparison']   = $this->compute_comparison( $current, $previous );
+            $current['historyCount'] = count( $raw['history'] );
+            return $current;
+        }
+
+        // 旧形式: JSON文字列で保存された既存データ
         if ( $raw && is_string( $raw ) ) {
             $decoded = json_decode( $raw, true );
             if ( is_array( $decoded ) && ! empty( $decoded['history'] ) ) {
@@ -117,22 +127,27 @@ class Gcrev_SEO_Checker {
             }
         }
 
-        // 旧キーにフォールバック
-        $raw = get_user_meta( $user_id, self::META_KEY, true );
-        if ( ! $raw || ! is_string( $raw ) ) {
-            return null;
+        // レガシーキーにフォールバック
+        $legacy = get_user_meta( $user_id, self::META_KEY, true );
+        if ( is_array( $legacy ) && isset( $legacy['siteSummary'] ) ) {
+            $legacy['comparison']   = null;
+            $legacy['historyCount'] = 1;
+            return $legacy;
         }
-        $data = json_decode( $raw, true );
-        if ( ! is_array( $data ) ) {
-            return null;
+        if ( $legacy && is_string( $legacy ) ) {
+            $data = json_decode( $legacy, true );
+            if ( is_array( $data ) ) {
+                $data['comparison']   = null;
+                $data['historyCount'] = 1;
+                return $data;
+            }
         }
-        $data['comparison']   = null;
-        $data['historyCount'] = 1;
-        return $data;
+
+        return null;
     }
 
     /**
-     * 診断結果を履歴として保存
+     * 診断結果を履歴として保存（PHP配列としてWordPressに委ねる）
      */
     public function save_diagnosis( int $user_id, array $data ): void {
         // 不正UTF-8をサニタイズ
@@ -141,7 +156,13 @@ class Gcrev_SEO_Checker {
         // 既存の履歴を読み込み
         $history = [];
         $raw = get_user_meta( $user_id, self::META_KEY_HISTORY, true );
-        if ( $raw && is_string( $raw ) ) {
+
+        // 新形式: PHP配列
+        if ( is_array( $raw ) && isset( $raw['history'] ) ) {
+            $history = $raw['history'];
+        }
+        // 旧形式: JSON文字列
+        elseif ( $raw && is_string( $raw ) ) {
             $decoded = json_decode( $raw, true );
             if ( is_array( $decoded ) && isset( $decoded['history'] ) ) {
                 $history = $decoded['history'];
@@ -151,7 +172,9 @@ class Gcrev_SEO_Checker {
         // 空ならレガシーキーからマイグレーション
         if ( empty( $history ) ) {
             $old = get_user_meta( $user_id, self::META_KEY, true );
-            if ( $old && is_string( $old ) ) {
+            if ( is_array( $old ) && isset( $old['siteSummary'] ) ) {
+                $history[] = $old;
+            } elseif ( $old && is_string( $old ) ) {
                 $old_data = json_decode( $old, true );
                 if ( is_array( $old_data ) && isset( $old_data['siteSummary'] ) ) {
                     $history[] = $old_data;
@@ -168,22 +191,16 @@ class Gcrev_SEO_Checker {
             'history' => $history,
         ];
 
-        $json_history = wp_json_encode( $envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
-        $json_latest  = wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+        // PHP配列として保存（WordPressが内部でserializeする）
+        $result = update_user_meta( $user_id, self::META_KEY_HISTORY, $envelope );
+        update_user_meta( $user_id, self::META_KEY, $data );
 
-        // エンコード失敗時はINVALID_UTF8_SUBSTITUTEで再試行
-        if ( $json_history === false ) {
-            $json_history = wp_json_encode( $envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE );
-        }
-        if ( $json_latest === false ) {
-            $json_latest = wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE );
-        }
-
-        if ( $json_history !== false ) {
-            update_user_meta( $user_id, self::META_KEY_HISTORY, $json_history );
-        }
-        if ( $json_latest !== false ) {
-            update_user_meta( $user_id, self::META_KEY, $json_latest );
+        // 保存失敗時のデバッグログ
+        if ( $result === false ) {
+            file_put_contents( '/tmp/gcrev_seo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " SAVE FAILED: user={$user_id}, history_count=" . count( $history ) . "\n",
+                FILE_APPEND
+            );
         }
     }
 
