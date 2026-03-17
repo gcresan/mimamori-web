@@ -11672,7 +11672,7 @@ PROMPT;
         @set_time_limit( 180 );
 
         try {
-            $checker = new Gcrev_SEO_Checker();
+            $checker = new Gcrev_SEO_Checker( $this->ai );
             $run_data = $checker->run_diagnosis( $user_id );
             // 比較データ付きで返す
             $result = $checker->get_diagnosis( $user_id );

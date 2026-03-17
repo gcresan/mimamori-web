@@ -324,6 +324,74 @@ get_header();
 .seo-action-card__title { font-size: 14px; font-weight: 600; color: var(--mw-text-heading); margin-bottom: 4px; }
 .seo-action-card__desc  { font-size: 13px; color: var(--mw-text-secondary); line-height: 1.5; }
 
+/* キーワード最適化 */
+.seo-kw-grid { display: flex; flex-direction: column; gap: 16px; }
+.seo-kw-card {
+    border: 1px solid var(--mw-border-light);
+    border-radius: 12px;
+    padding: 20px;
+    background: var(--mw-bg-primary);
+}
+.seo-kw-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 8px;
+}
+.seo-kw-card__keyword {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--mw-text-heading);
+}
+.seo-kw-card__placements {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.seo-kw-placement {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.seo-kw-placement--found { background: rgba(78,138,107,0.12); color: #4E8A6B; }
+.seo-kw-placement--missing { background: rgba(201,90,79,0.08); color: #C95A4F; }
+.seo-kw-card__pages {
+    font-size: 13px;
+    color: var(--mw-text-secondary);
+    line-height: 1.7;
+}
+.seo-kw-card__ai {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: var(--mw-bg-secondary);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--mw-text-secondary);
+    line-height: 1.6;
+}
+.seo-kw-card__ai strong { color: var(--mw-text-primary); }
+.seo-kw-card__ai ul { margin: 4px 0 0; padding-left: 16px; }
+.seo-kw-card__ai li { margin-bottom: 2px; }
+.seo-kw-empty {
+    text-align: center;
+    padding: 32px 24px;
+    color: var(--mw-text-tertiary);
+    font-size: 14px;
+    background: var(--mw-bg-secondary);
+    border-radius: 8px;
+    line-height: 1.8;
+}
+.seo-kw-empty a {
+    color: var(--mw-brand);
+    text-decoration: none;
+    font-weight: 600;
+}
+.seo-kw-empty a:hover { text-decoration: underline; }
+
 /* 将来拡張枠 */
 .seo-future-grid {
     display: grid;
@@ -467,6 +535,7 @@ get_header();
     .seo-issues-table th, .seo-issues-table td { padding: 8px 6px; }
     .seo-section { padding: 20px 16px; }
     .seo-future-grid { grid-template-columns: 1fr; }
+    .seo-kw-card__header { flex-direction: column; align-items: flex-start; }
     .seo-section__header { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
 </style>
@@ -510,6 +579,17 @@ get_header();
             </div>
         </div>
         <div id="seoAssessmentContent"></div>
+    </div>
+
+    <!-- ===== Section 3.5: キーワード最適化 ===== -->
+    <div class="seo-section" id="seoKeywordSection" style="display:none;">
+        <div class="seo-section__header">
+            <div>
+                <h2 class="seo-section__title">🔑 キーワード最適化</h2>
+                <div class="seo-section__note">登録したターゲットキーワードがサイト内で適切に使われているかを確認します</div>
+            </div>
+        </div>
+        <div id="seoKeywordContent"></div>
     </div>
 
     <!-- ===== Section 4: 問題URL一覧 ===== -->
@@ -566,7 +646,7 @@ get_header();
     var wpNonce = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
 
     // セクション要素ID
-    var SECTION_IDS = ['seoSummary','seoComparisonBar','seoDiagnosisSection','seoAssessmentSection','seoIssuesSection','seoActionsSection','seoFutureSection'];
+    var SECTION_IDS = ['seoSummary','seoComparisonBar','seoDiagnosisSection','seoKeywordSection','seoAssessmentSection','seoIssuesSection','seoActionsSection','seoFutureSection'];
 
     /* =================================================================
        ユーティリティ
@@ -657,10 +737,12 @@ get_header();
 
     function renderAll(data) {
         var comp = data.comparison || null;
-        renderSummary(data.siteSummary, comp);
+        var kwData = data.keywordAnalysis || null;
+        renderSummary(data.siteSummary, comp, kwData);
         renderComparisonBar(comp);
         renderDiagnosis(data.seoChecks, comp);
         renderAssessment(data.overallAssessment);
+        renderKeywords(kwData);
         renderIssues(data.issuePages);
         renderActions(data.recommendations);
         renderFuture();
@@ -686,7 +768,7 @@ get_header();
     /* =================================================================
        Section 1: サマリー
        ================================================================= */
-    function renderSummary(s, comp) {
+    function renderSummary(s, comp, kwData) {
         var scoreColor = getRankColor(s.rank);
         var circumference = 2 * Math.PI * 36;
         var offset = circumference - (s.totalScore / 100) * circumference;
@@ -725,6 +807,14 @@ get_header();
         html += '  <div class="seo-summary-card__value">' + esc(s.pageCount) + '<span style="font-size:16px;font-weight:400;">ページ</span></div>';
         html += '  <div class="seo-summary-card__sub">クロール済みページ数</div>';
         html += '</div>';
+
+        if (kwData && kwData.keywords && kwData.keywords.length > 0) {
+            html += '<div class="seo-summary-card">';
+            html += '  <div class="seo-summary-card__label">ターゲットキーワード</div>';
+            html += '  <div class="seo-summary-card__value seo-summary-card__value--accent">' + esc(kwData.keywords.length) + '<span style="font-size:16px;font-weight:400;">件</span></div>';
+            html += '  <div class="seo-summary-card__sub">キーワード最適化を分析</div>';
+            html += '</div>';
+        }
 
         html += '<div class="seo-summary-card">';
         html += '  <div class="seo-summary-card__label">最終診断日時</div>';
@@ -844,13 +934,134 @@ get_header();
     }
 
     /* =================================================================
+       Section 3.5: キーワード最適化
+       ================================================================= */
+    function renderKeywords(kwData) {
+        var section = document.getElementById('seoKeywordSection');
+        var content = document.getElementById('seoKeywordContent');
+        if (!section || !content) return;
+
+        // キーワード分析データがない場合は非表示
+        if (!kwData) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = '';
+
+        // キーワード未登録
+        if (!kwData.keywords || kwData.keywords.length === 0) {
+            content.innerHTML = '<div class="seo-kw-empty">' +
+                '🔑 ターゲットキーワードが登録されていません。<br>' +
+                '<a href="' + esc('/rank-tracker/') + '">順位トラッキング</a>でキーワードを設定すると、キーワード最適化の診断が利用できます。' +
+                '</div>';
+            return;
+        }
+
+        var coverage = kwData.coverage || [];
+        var aiAnalysis = kwData.aiAnalysis || [];
+
+        // AI分析をキーワード名でマッピング
+        var aiMap = {};
+        aiAnalysis.forEach(function(a) {
+            if (a && a.keyword) aiMap[a.keyword] = a;
+        });
+
+        var PLACEMENT_LABELS = {
+            hasTitle: 'title',
+            hasH1: 'h1',
+            hasDesc: 'description',
+            hasH2: 'h2',
+            hasBody: '本文'
+        };
+        var PLACEMENT_KEYS = ['hasTitle', 'hasH1', 'hasDesc', 'hasH2', 'hasBody'];
+
+        var html = '<div class="seo-kw-grid">';
+
+        coverage.forEach(function(kw) {
+            var ai = aiMap[kw.keyword] || null;
+
+            html += '<div class="seo-kw-card">';
+
+            // ヘッダー: キーワード名 + マッチ数
+            html += '<div class="seo-kw-card__header">';
+            html += '<span class="seo-kw-card__keyword">' + esc(kw.keyword) + '</span>';
+            var matchBadgeClass = kw.matchCount > 0 ? 'seo-badge--ok' : 'seo-badge--critical';
+            html += '<span class="seo-badge ' + matchBadgeClass + '">' + esc(kw.matchCount) + '箇所で検出</span>';
+            html += '</div>';
+
+            // 配置バッジ
+            html += '<div class="seo-kw-card__placements">';
+            PLACEMENT_KEYS.forEach(function(key) {
+                var found = kw[key] || false;
+                var cls = found ? 'seo-kw-placement--found' : 'seo-kw-placement--missing';
+                var mark = found ? '✓' : '✕';
+                html += '<span class="seo-kw-placement ' + cls + '">' + mark + ' ' + esc(PLACEMENT_LABELS[key]) + '</span>';
+            });
+            html += '</div>';
+
+            // マッチしたページ一覧
+            if (kw.matches && kw.matches.length > 0) {
+                html += '<div class="seo-kw-card__pages">';
+                html += '<strong>検出ページ:</strong><br>';
+                kw.matches.forEach(function(m) {
+                    var locations = [];
+                    if (m.inTitle) locations.push('title');
+                    if (m.inH1) locations.push('h1');
+                    if (m.inDesc) locations.push('description');
+                    if (m.inH2) locations.push('h2');
+                    if (m.inBody) locations.push('本文');
+                    html += esc(m.url) + ' <span style="color:var(--mw-text-tertiary);font-size:11px;">(' + esc(locations.join(', ')) + ')</span><br>';
+                });
+                html += '</div>';
+            }
+
+            // ランクイン URL
+            if (kw.foundUrl) {
+                html += '<div style="margin-top:6px;font-size:12px;color:var(--mw-text-tertiary);">';
+                html += '📍 検索結果でランクインしているURL: <span style="color:var(--mw-primary-blue);">' + esc(kw.foundUrl) + '</span>';
+                html += '</div>';
+            }
+
+            // AI分析
+            if (ai) {
+                html += '<div class="seo-kw-card__ai">';
+                if (ai.relevance) {
+                    var relColor = ai.relevance === 'high' ? '#4E8A6B' : (ai.relevance === 'medium' ? '#C9A84C' : '#C95A4F');
+                    html += '<strong>関連性:</strong> <span style="color:' + relColor + ';">' + esc(ai.relevance) + '</span>';
+                    if (ai.best_page) {
+                        html += ' &mdash; 最適ページ: <span style="color:var(--mw-primary-blue);">' + esc(ai.best_page) + '</span>';
+                    }
+                    html += '<br>';
+                }
+                if (ai.intent_match) {
+                    html += '<strong>検索意図:</strong> ' + esc(ai.intent_match) + '<br>';
+                }
+                if (ai.suggestions && ai.suggestions.length > 0) {
+                    html += '<strong>改善提案:</strong>';
+                    html += '<ul>';
+                    ai.suggestions.forEach(function(s) {
+                        html += '<li>' + esc(s) + '</li>';
+                    });
+                    html += '</ul>';
+                }
+                html += '</div>';
+            }
+
+            html += '</div>'; // .seo-kw-card
+        });
+
+        html += '</div>'; // .seo-kw-grid
+        content.innerHTML = html;
+    }
+
+    /* =================================================================
        Section 6: 将来拡張枠
        ================================================================= */
     function renderFuture() {
         var items = [
             { icon: '🗺️', title: '地域別SEO傾向', desc: '対象エリアでの検索順位や競合状況を確認' },
-            { icon: '🏢', title: '競合サイト比較', desc: '競合他社のSEO状態との比較分析' },
-            { icon: '🔑', title: '重要キーワードの掲載状況', desc: '主要キーワードでの自社サイトの露出度' }
+            { icon: '🏢', title: '競合サイト比較', desc: '競合他社のSEO状態との比較分析' }
         ];
         var html = '<div class="seo-future-grid">';
         items.forEach(function(item) {

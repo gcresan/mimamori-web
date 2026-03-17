@@ -29,6 +29,13 @@ class Gcrev_SEO_Checker {
     /** User-Agent */
     private const USER_AGENT = 'MimamoriSEO/1.0';
 
+    /** Gemini AI クライアント（キーワード分析用、null なら AI 分析スキップ） */
+    private $ai_client;
+
+    public function __construct( $ai_client = null ) {
+        $this->ai_client = $ai_client;
+    }
+
     /**
      * コンテンツ量チェックの対象外URLパターン
      *
@@ -87,17 +94,55 @@ class Gcrev_SEO_Checker {
         // 2. クロール & 解析
         $page_results = $this->crawl_and_analyze( $urls, $host );
 
-        // 3. スコアリング
-        $scores          = $this->compute_scores( $page_results );
-        $total_score     = $this->compute_total_score( $scores );
-        $rank            = $this->determine_rank( $total_score );
-        $issues          = $this->compute_issues( $page_results );
+        // 3. スコアリング（8次元）
+        $scores = $this->compute_scores( $page_results );
+
+        // 4. キーワード最適化分析
+        $keywords         = $this->fetch_user_keywords( $user_id );
+        $keyword_coverage = [];
+        $ai_analysis      = null;
+
+        if ( ! empty( $keywords ) ) {
+            $keyword_coverage = $this->analyze_keyword_coverage( $keywords, $page_results );
+            $ai_analysis      = $this->analyze_keyword_with_ai( $keywords, $page_results );
+            $keyword_score    = $this->score_keyword_optimization( $keyword_coverage, $ai_analysis );
+            $scores[]         = $keyword_score;
+        }
+
+        // 5. 総合スコア
+        $total_score = $this->compute_total_score( $scores );
+        $rank        = $this->determine_rank( $total_score );
+
+        // 6. 問題一覧（既存 + キーワード）
+        $issues = $this->compute_issues( $page_results );
+        if ( ! empty( $keyword_coverage ) ) {
+            $kw_issues = $this->compute_keyword_issues( $keyword_coverage, $ai_analysis );
+            $issues    = array_merge( $issues, $kw_issues );
+            $priority_order = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
+            usort( $issues, function( $a, $b ) use ( $priority_order ) {
+                return ( $priority_order[ $a['priority'] ] ?? 9 ) - ( $priority_order[ $b['priority'] ] ?? 9 );
+            } );
+        }
+
+        // 7. 改善提案（キーワード + 既存）
         $recommendations = $this->compute_recommendations( $scores, $issues );
-        $assessment      = $this->compute_overall_assessment( $scores, $total_score, $rank );
+        if ( ! empty( $keyword_coverage ) ) {
+            $kw_recs = $this->compute_keyword_recommendations( $keyword_coverage, $ai_analysis );
+            $recommendations = array_merge( $kw_recs, $recommendations );
+            // 全体を重要度順に再ソート
+            $priority_order = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
+            usort( $recommendations, function( $a, $b ) use ( $priority_order ) {
+                return ( $priority_order[ $a['priority'] ] ?? 9 ) - ( $priority_order[ $b['priority'] ] ?? 9 );
+            } );
+        }
+
+        // 8. 全体評価
+        $assessment = $this->compute_overall_assessment( $scores, $total_score, $rank );
 
         $critical_count = 0;
         $warning_count  = 0;
         foreach ( $scores as $s ) {
+            if ( ! empty( $s['excluded'] ) ) { continue; }
             if ( $s['status'] === 'critical' ) { $critical_count++; }
             if ( $s['status'] === 'caution' )  { $warning_count++; }
         }
@@ -120,6 +165,11 @@ class Gcrev_SEO_Checker {
             'overallAssessment' => $assessment,
             'issuePages'        => $issues,
             'recommendations'   => $recommendations,
+            'keywordAnalysis'   => [
+                'keywords'     => $keyword_coverage,
+                'aiAnalysis'   => $ai_analysis,
+                'keywordCount' => count( $keywords ),
+            ],
         ];
 
         $this->save_diagnosis( $user_id, $data );
@@ -419,18 +469,19 @@ class Gcrev_SEO_Checker {
                 $analysis = $this->analyze_page( $res['html'], $url, $res['status'], $host );
             } else {
                 $analysis = [
-                    'url'              => $url,
-                    'status_code'      => $res['status'],
-                    'title'            => '',
-                    'meta_description' => '',
-                    'h1'               => [],
-                    'h2'               => [],
-                    'images_total'     => 0,
-                    'images_no_alt'    => 0,
-                    'canonical'        => '',
-                    'internal_links'   => 0,
-                    'body_text_length' => 0,
-                    'fetch_error'      => true,
+                    'url'               => $url,
+                    'status_code'       => $res['status'],
+                    'title'             => '',
+                    'meta_description'  => '',
+                    'h1'                => [],
+                    'h2'                => [],
+                    'images_total'      => 0,
+                    'images_no_alt'     => 0,
+                    'canonical'         => '',
+                    'internal_links'    => 0,
+                    'body_text_length'  => 0,
+                    'body_text_excerpt' => '',
+                    'fetch_error'       => true,
                 ];
             }
             $results[] = $analysis;
@@ -490,19 +541,22 @@ class Gcrev_SEO_Checker {
         libxml_clear_errors();
         $xpath = new \DOMXPath( $dom );
 
+        $body_text = $this->extract_body_text( $dom );
+
         return [
-            'url'              => $url,
-            'status_code'      => $status_code,
-            'title'            => $this->extract_title( $xpath ),
-            'meta_description' => $this->extract_meta_description( $xpath ),
-            'h1'               => $this->extract_headings( $xpath, 'h1' ),
-            'h2'               => $this->extract_headings( $xpath, 'h2' ),
-            'images_total'     => $this->count_images( $xpath ),
-            'images_no_alt'    => $this->count_images_no_alt( $xpath ),
-            'canonical'        => $this->extract_canonical( $xpath ),
-            'internal_links'   => $this->count_internal_links( $xpath, $host ),
-            'body_text_length' => $this->extract_body_text_length( $dom ),
-            'fetch_error'      => false,
+            'url'               => $url,
+            'status_code'       => $status_code,
+            'title'             => $this->extract_title( $xpath ),
+            'meta_description'  => $this->extract_meta_description( $xpath ),
+            'h1'                => $this->extract_headings( $xpath, 'h1' ),
+            'h2'                => $this->extract_headings( $xpath, 'h2' ),
+            'images_total'      => $this->count_images( $xpath ),
+            'images_no_alt'     => $this->count_images_no_alt( $xpath ),
+            'canonical'         => $this->extract_canonical( $xpath ),
+            'internal_links'    => $this->count_internal_links( $xpath, $host ),
+            'body_text_length'  => mb_strlen( $body_text ),
+            'body_text_excerpt' => mb_substr( $body_text, 0, 500 ),
+            'fetch_error'       => false,
         ];
     }
 
@@ -573,12 +627,12 @@ class Gcrev_SEO_Checker {
     }
 
     /**
-     * 本文テキスト量を抽出（script/style/nav/header/footer を除去）
+     * 本文テキストを抽出（script/style/nav/header/footer を除去）
      */
-    private function extract_body_text_length( \DOMDocument $dom ): int {
+    private function extract_body_text( \DOMDocument $dom ): string {
         $body_nodes = $dom->getElementsByTagName( 'body' );
         if ( $body_nodes->length === 0 ) {
-            return 0;
+            return '';
         }
         $body = $body_nodes->item( 0 );
 
@@ -598,8 +652,7 @@ class Gcrev_SEO_Checker {
 
         $text = trim( $clone->textContent );
         // 連続空白を1つに正規化
-        $text = preg_replace( '/\s+/u', ' ', $text );
-        return mb_strlen( $text );
+        return preg_replace( '/\s+/u', ' ', $text );
     }
 
     /* =========================================================
@@ -1280,6 +1333,7 @@ class Gcrev_SEO_Checker {
         $improvement_points = [];
 
         foreach ( $scores as $s ) {
+            if ( ! empty( $s['excluded'] ) ) { continue; }
             if ( $s['score'] >= 8 ) {
                 $good_points[] = $s['label'] . 'は適切に設定されています';
             }
@@ -1310,16 +1364,445 @@ class Gcrev_SEO_Checker {
     }
 
     /* =========================================================
+     * キーワード最適化分析
+     * ========================================================= */
+
+    /**
+     * ユーザーの計測キーワードを取得
+     */
+    private function fetch_user_keywords( int $user_id ): array {
+        global $wpdb;
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+
+        $keywords = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, keyword, target_domain FROM {$kw_table}
+             WHERE user_id = %d AND enabled = 1
+             ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        if ( empty( $keywords ) ) {
+            return [];
+        }
+
+        // 各キーワードの最新ランクイン URL を取得
+        foreach ( $keywords as &$kw ) {
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT found_url FROM {$res_table}
+                 WHERE keyword_id = %d AND is_ranked = 1 AND found_url != ''
+                 ORDER BY fetch_date DESC
+                 LIMIT 1",
+                (int) $kw['id']
+            ) );
+            $kw['found_url'] = $found ?: '';
+        }
+        unset( $kw );
+
+        return $keywords;
+    }
+
+    /**
+     * ルールベースのキーワード出現チェック
+     */
+    private function analyze_keyword_coverage( array $keywords, array $page_results ): array {
+        $result = [];
+
+        foreach ( $keywords as $kw ) {
+            $keyword   = $kw['keyword'];
+            $found_url = $kw['found_url'];
+            $matches   = [];
+
+            foreach ( $page_results as $p ) {
+                if ( ! empty( $p['fetch_error'] ) ) { continue; }
+
+                $in_title = mb_stripos( $p['title'], $keyword ) !== false;
+                $in_desc  = mb_stripos( $p['meta_description'], $keyword ) !== false;
+                $in_h1    = $this->keyword_in_array( $keyword, $p['h1'] );
+                $in_h2    = $this->keyword_in_array( $keyword, $p['h2'] );
+                $in_body  = mb_stripos( $p['body_text_excerpt'] ?? '', $keyword ) !== false;
+
+                // rank_results の found_url と一致するか
+                $is_ranking_url = false;
+                if ( $found_url ) {
+                    $found_path = untrailingslashit( wp_parse_url( $found_url, PHP_URL_PATH ) ?: '/' );
+                    $page_path  = untrailingslashit( wp_parse_url( $p['url'], PHP_URL_PATH ) ?: '/' );
+                    $is_ranking_url = ( $found_path === $page_path );
+                }
+
+                if ( $in_title || $in_desc || $in_h1 || $in_h2 || $in_body || $is_ranking_url ) {
+                    $placements = [];
+                    if ( $in_title ) { $placements[] = 'title'; }
+                    if ( $in_desc )  { $placements[] = 'description'; }
+                    if ( $in_h1 )    { $placements[] = 'h1'; }
+                    if ( $in_h2 )    { $placements[] = 'h2'; }
+                    if ( $in_body )  { $placements[] = 'body'; }
+                    if ( $is_ranking_url ) { $placements[] = 'ranking_url'; }
+
+                    $matches[] = [
+                        'url'            => $p['url'],
+                        'url_path'       => $this->url_path( $p['url'] ),
+                        'placements'     => $placements,
+                        'is_ranking_url' => $is_ranking_url,
+                    ];
+                }
+            }
+
+            $result[] = [
+                'keyword'    => $keyword,
+                'found_url'  => $found_url,
+                'matches'    => $matches,
+                'matchCount' => count( $matches ),
+                'hasTitle'   => $this->any_placement( $matches, 'title' ),
+                'hasH1'      => $this->any_placement( $matches, 'h1' ),
+                'hasDesc'    => $this->any_placement( $matches, 'description' ),
+                'hasBody'    => $this->any_placement( $matches, 'body' ),
+            ];
+        }
+        return $result;
+    }
+
+    private function keyword_in_array( string $keyword, array $texts ): bool {
+        foreach ( $texts as $text ) {
+            if ( mb_stripos( $text, $keyword ) !== false ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function any_placement( array $matches, string $placement ): bool {
+        foreach ( $matches as $m ) {
+            if ( in_array( $placement, $m['placements'], true ) ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Gemini AI によるキーワード×ページのコンテンツ関連性分析
+     *
+     * 全ページメタデータ + 全キーワードを1回の呼び出しで分析。
+     * AI client が null またはエラー時は null を返す（ルールベース分析のみで動作）。
+     */
+    private function analyze_keyword_with_ai( array $keywords, array $page_results ): ?array {
+        if ( ! $this->ai_client || empty( $keywords ) ) {
+            return null;
+        }
+
+        // ページ情報を要約
+        $page_summaries = [];
+        foreach ( $page_results as $p ) {
+            if ( ! empty( $p['fetch_error'] ) ) { continue; }
+            $page_summaries[] = [
+                'url'       => $this->url_path( $p['url'] ),
+                'title'     => mb_substr( $p['title'], 0, 80 ),
+                'desc'      => mb_substr( $p['meta_description'], 0, 160 ),
+                'h1'        => implode( ' / ', array_slice( $p['h1'], 0, 3 ) ),
+                'h2_sample' => implode( ' / ', array_slice( $p['h2'], 0, 5 ) ),
+                'excerpt'   => mb_substr( $p['body_text_excerpt'] ?? '', 0, 300 ),
+            ];
+        }
+
+        $kw_list    = array_map( function( $k ) { return $k['keyword']; }, $keywords );
+        $pages_json = wp_json_encode( $page_summaries, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
+        $kw_json    = wp_json_encode( $kw_list, JSON_UNESCAPED_UNICODE );
+
+        $prompt = <<<PROMPT
+あなたはSEOの専門家です。以下のウェブサイトのページ情報とターゲットキーワードを分析してください。
+
+【ターゲットキーワード】
+{$kw_json}
+
+【ページ情報】
+{$pages_json}
+
+各キーワードについて以下を分析し、JSON配列で返してください。
+
+分析観点:
+1. そのキーワードに最も関連性の高いページ（URL）はどれか
+2. そのページのタイトル・見出し・説明文にキーワードが適切に含まれているか
+3. コンテンツの検索意図（情報収集型/比較検討型/行動型）との適合度
+4. 検索意図に応えるために不足している要素（料金、事例、FAQ、地域情報、比較情報など）
+5. 改善すべき具体的なポイント
+
+出力形式（厳守）:
+```json
+[
+  {
+    "keyword": "キーワード名",
+    "best_page": "/最も関連性の高いページのパス",
+    "relevance": "high または medium または low",
+    "intent_match": "検索意図との適合についての1文コメント",
+    "missing_elements": "不足している要素についての1文コメント",
+    "suggestions": [
+      "改善提案1（具体的に）",
+      "改善提案2（具体的に）"
+    ]
+  }
+]
+```
+
+ルール:
+- 各キーワードに対して必ず1つのエントリを返す
+- best_pageはページ情報のurlから選ぶ。該当ページがない場合は空文字""
+- suggestionsは最大3つまで
+- 日本語で回答する
+- JSON以外のテキストは出力しない
+PROMPT;
+
+        try {
+            $raw = $this->ai_client->call_gemini_api( $prompt );
+            // ```json フェンスを除去
+            $raw = preg_replace( '/^```json\s*/s', '', $raw );
+            $raw = preg_replace( '/\s*```\s*$/s', '', $raw );
+            $raw = trim( $raw );
+            $parsed = json_decode( $raw, true );
+            if ( ! is_array( $parsed ) ) {
+                file_put_contents( '/tmp/gcrev_seo_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " AI keyword analysis JSON parse failed: " . substr( $raw, 0, 500 ) . "\n",
+                    FILE_APPEND
+                );
+                return null;
+            }
+            return $parsed;
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_seo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " AI keyword analysis error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return null;
+        }
+    }
+
+    /**
+     * キーワード最適化スコアリング（9番目の診断次元）
+     */
+    private function score_keyword_optimization( array $keyword_coverage, ?array $ai_analysis ): array {
+        if ( empty( $keyword_coverage ) ) {
+            return [
+                'key'          => 'keyword_optimization',
+                'label'        => 'キーワード最適化',
+                'score'        => 0,
+                'maxScore'     => 0,
+                'status'       => 'none',
+                'findings'     => [ 'キーワードが登録されていません。順位トラッキングでキーワードを設定すると、キーワード最適化の診断が利用できます。' ],
+                'affectedUrls' => [],
+                'excluded'     => true,
+            ];
+        }
+
+        $score    = 10;
+        $findings = [];
+        $affected = [];
+        $kw_count = count( $keyword_coverage );
+
+        $no_title = 0;
+        $no_h1    = 0;
+        $no_match = 0;
+
+        foreach ( $keyword_coverage as $kc ) {
+            if ( $kc['matchCount'] === 0 ) {
+                $no_match++;
+                $findings[] = "「{$kc['keyword']}」がサイト内のどのページにも見つかりませんでした";
+            } else {
+                if ( ! $kc['hasTitle'] ) { $no_title++; }
+                if ( ! $kc['hasH1'] )    { $no_h1++; }
+            }
+        }
+
+        if ( $no_match > 0 ) { $score -= min( $no_match * 3, 8 ); }
+        if ( $no_title > 0 ) { $score -= min( $no_title * 1, 3 ); $findings[] = "titleタグに含まれていないキーワードが{$no_title}つあります"; }
+        if ( $no_h1 > 0 )    { $score -= min( $no_h1 * 1, 2 );    $findings[] = "h1に含まれていないキーワードが{$no_h1}つあります"; }
+
+        // AI 関連性チェック
+        if ( $ai_analysis ) {
+            $low_count = 0;
+            foreach ( $ai_analysis as $a ) {
+                if ( isset( $a['relevance'] ) && $a['relevance'] === 'low' ) {
+                    $low_count++;
+                }
+            }
+            if ( $low_count > 0 ) {
+                $score -= min( $low_count * 2, 4 );
+                $findings[] = "コンテンツの関連性が低いキーワードが{$low_count}つあります（AI分析）";
+            }
+        }
+
+        if ( empty( $findings ) ) {
+            $findings[] = "すべてのターゲットキーワード（{$kw_count}件）がサイト内で適切に使用されています";
+        }
+
+        $score = max( 0, $score );
+        return [
+            'key'          => 'keyword_optimization',
+            'label'        => 'キーワード最適化',
+            'score'        => $score,
+            'maxScore'     => 10,
+            'status'       => $this->status_from_score( $score ),
+            'findings'     => $findings,
+            'affectedUrls' => $affected,
+        ];
+    }
+
+    /**
+     * キーワード関連の問題一覧を生成
+     */
+    private function compute_keyword_issues( array $keyword_coverage, ?array $ai_analysis ): array {
+        $issues = [];
+        $ai_map = [];
+        if ( $ai_analysis ) {
+            foreach ( $ai_analysis as $a ) {
+                $ai_map[ $a['keyword'] ] = $a;
+            }
+        }
+
+        foreach ( $keyword_coverage as $kc ) {
+            $kw = $kc['keyword'];
+
+            if ( $kc['matchCount'] === 0 ) {
+                $issues[] = [
+                    'url'         => '（サイト全体）',
+                    'statusCode'  => 200,
+                    'issueType'   => 'キーワード最適化',
+                    'issueDetail' => "「{$kw}」がサイト内のどのページにも見つかりません",
+                    'priority'    => 'high',
+                    'suggestion'  => "ターゲットキーワード「{$kw}」に対応するページを作成するか、既存ページのtitle・h1・本文にキーワードを含めてください。",
+                ];
+                continue;
+            }
+
+            $page_path = $kc['matches'][0]['url_path'] ?? '（不明）';
+
+            if ( ! $kc['hasTitle'] ) {
+                $issues[] = [
+                    'url'         => $page_path,
+                    'statusCode'  => 200,
+                    'issueType'   => 'キーワード最適化',
+                    'issueDetail' => "「{$kw}」がtitleタグに含まれていません",
+                    'priority'    => 'medium',
+                    'suggestion'  => "「{$kw}」をtitleタグに含めることで、検索結果での表示を改善できます。",
+                ];
+            }
+
+            if ( ! $kc['hasH1'] ) {
+                $issues[] = [
+                    'url'         => $page_path,
+                    'statusCode'  => 200,
+                    'issueType'   => 'キーワード最適化',
+                    'issueDetail' => "「{$kw}」がh1に含まれていません",
+                    'priority'    => 'medium',
+                    'suggestion'  => "「{$kw}」またはその関連語をh1見出しに含めることで、ページの主題を明確にできます。",
+                ];
+            }
+
+            if ( ! $kc['hasDesc'] ) {
+                $issues[] = [
+                    'url'         => $page_path,
+                    'statusCode'  => 200,
+                    'issueType'   => 'キーワード最適化',
+                    'issueDetail' => "「{$kw}」がmeta descriptionに含まれていません",
+                    'priority'    => 'low',
+                    'suggestion'  => "「{$kw}」をmeta descriptionに自然に含めることで、検索結果のクリック率向上が期待できます。",
+                ];
+            }
+
+            // AI 分析の改善提案
+            if ( isset( $ai_map[ $kw ] ) ) {
+                $ai = $ai_map[ $kw ];
+                if ( isset( $ai['relevance'] ) && $ai['relevance'] !== 'high' && ! empty( $ai['suggestions'] ) ) {
+                    $best_page = ! empty( $ai['best_page'] ) ? $ai['best_page'] : $page_path;
+                    $detail = "「{$kw}」のコンテンツ関連性が" . ( $ai['relevance'] === 'low' ? '低い' : 'やや不十分' ) . 'です';
+                    if ( ! empty( $ai['missing_elements'] ) ) {
+                        $detail .= '（' . $ai['missing_elements'] . '）';
+                    }
+                    $issues[] = [
+                        'url'         => $best_page,
+                        'statusCode'  => 200,
+                        'issueType'   => 'キーワード最適化（AI分析）',
+                        'issueDetail' => $detail,
+                        'priority'    => $ai['relevance'] === 'low' ? 'high' : 'medium',
+                        'suggestion'  => $ai['suggestions'][0],
+                    ];
+                }
+            }
+        }
+
+        return $issues;
+    }
+
+    /**
+     * キーワード関連の改善提案を生成
+     */
+    private function compute_keyword_recommendations( array $keyword_coverage, ?array $ai_analysis ): array {
+        $recs   = [];
+        $ai_map = [];
+        if ( $ai_analysis ) {
+            foreach ( $ai_analysis as $a ) {
+                $ai_map[ $a['keyword'] ] = $a;
+            }
+        }
+
+        foreach ( $keyword_coverage as $kc ) {
+            $kw = $kc['keyword'];
+
+            if ( $kc['matchCount'] === 0 ) {
+                $recs[] = [
+                    'title'       => "「{$kw}」の専用ページ作成",
+                    'description' => "【問題】ターゲットキーワード「{$kw}」に対応するコンテンツがありません。【対策】「{$kw}」をテーマにした専用ページを作成し、title・h1・本文にキーワードを自然に含めてください。",
+                    'priority'    => 'high',
+                ];
+                continue;
+            }
+
+            // AI 分析からの改善提案
+            if ( isset( $ai_map[ $kw ] ) && ! empty( $ai_map[ $kw ]['suggestions'] ) ) {
+                $ai = $ai_map[ $kw ];
+                $desc_parts = [];
+                foreach ( $ai['suggestions'] as $s ) {
+                    $desc_parts[] = $s;
+                }
+                if ( ! empty( $ai['intent_match'] ) ) {
+                    $desc_parts[] = '【検索意図】' . $ai['intent_match'];
+                }
+                if ( ! empty( $ai['missing_elements'] ) ) {
+                    $desc_parts[] = '【不足要素】' . $ai['missing_elements'];
+                }
+                $priority = 'low';
+                if ( isset( $ai['relevance'] ) ) {
+                    if ( $ai['relevance'] === 'low' )    { $priority = 'high'; }
+                    elseif ( $ai['relevance'] === 'medium' ) { $priority = 'medium'; }
+                }
+                $recs[] = [
+                    'title'       => "「{$kw}」のSEO最適化",
+                    'description' => implode( '。', $desc_parts ),
+                    'priority'    => $priority,
+                ];
+            }
+        }
+
+        return $recs;
+    }
+
+    /* =========================================================
      * ユーティリティ
      * ========================================================= */
 
+    /**
+     * 総合スコア計算（excluded な次元はスキップ）
+     */
     private function compute_total_score( array $scores ): int {
         if ( empty( $scores ) ) { return 0; }
-        $sum = 0;
+        $sum     = 0;
+        $max_sum = 0;
         foreach ( $scores as $s ) {
-            $sum += $s['score'];
+            if ( ! empty( $s['excluded'] ) ) { continue; }
+            $sum     += $s['score'];
+            $max_sum += $s['maxScore'];
         }
-        return (int) round( ( $sum / ( count( $scores ) * 10 ) ) * 100 );
+        if ( $max_sum === 0 ) { return 0; }
+        return (int) round( ( $sum / $max_sum ) * 100 );
     }
 
     private function determine_rank( int $score ): string {
