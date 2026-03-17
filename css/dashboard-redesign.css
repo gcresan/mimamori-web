@@ -297,6 +297,45 @@ h3 { font-size: 20px; font-weight: 700; }
   padding-top: 6px;
 }
 
+/* サブグループ（口コミアンケート配下） */
+.sidebar-nav .nav-subgroup-wrapper {
+  margin-top: 6px;
+}
+.sidebar-nav .nav-subgroup-label {
+  display: block;
+  padding: 6px 24px 4px 56px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #568184;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+.sidebar-nav .nav-subgroup-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sidebar-nav .nav-subgroup-menu .nav-link {
+  padding: 9px 24px 9px 76px;
+  font-size: 13.5px;
+}
+.sidebar-nav .nav-subgroup-menu .nav-link::before {
+  left: 58px;
+  width: 8px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: #b0bec5;
+}
+.sidebar-nav .nav-subgroup-menu .nav-link:hover::before {
+  background: var(--mw-primary-blue);
+}
+.sidebar-nav .nav-subgroup-menu .nav-link.active::before {
+  background: var(--mw-primary-blue);
+  width: 10px;
+  height: 1.5px;
+  border-radius: 1px;
+}
+
 /* 折りたたみトグル（集客のようす） */
 .nav-link-toggle {
   width: 100%;
