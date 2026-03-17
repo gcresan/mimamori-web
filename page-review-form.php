@@ -760,7 +760,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
                             <span>承諾しない</span>
                         </label>
                     </div>
-                    <div class="consent-review-note">※ 承諾いただいた場合のみ、生成された口コミ文を店舗サイト等で紹介することがあります。個人情報は掲載しません。</div>
+                    <div class="consent-review-note">※ 承諾いただいた場合のみ、生成された口コミ文をホームページ等で紹介することがあります。</div>
                 </div>
                 <div class="consent-buttons">
                     <button type="button" class="btn-ai-support" id="btn-use-ai">
