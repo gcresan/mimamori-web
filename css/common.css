@@ -273,18 +273,64 @@
   padding: 8px 20px 8px 52px;
   font-size: 13px;
 }
+/* サブグループ（口コミアンケート等） */
+.sidebar-nav .nav-subgroup-wrapper {
+  margin: 6px 0 4px;
+}
 .sidebar-nav .nav-subgroup-label {
-  padding: 10px 20px 4px 52px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  display: block;
+  padding: 8px 20px 5px 52px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.01em;
+  position: relative;
   pointer-events: none;
 }
-.sidebar-nav .nav-subgroup-item .nav-link {
-  padding-left: 62px;
+.sidebar-nav .nav-subgroup-label::before {
+  content: '';
+  position: absolute;
+  left: 43px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 14px;
+  background: #568184;
+  border-radius: 2px;
+}
+.sidebar-nav .nav-subgroup-menu {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  position: relative;
+}
+.sidebar-nav .nav-subgroup-menu::before {
+  content: '';
+  position: absolute;
+  left: 44px;
+  top: 0;
+  bottom: 8px;
+  width: 1.5px;
+  background: #cbd5e1;
+  border-radius: 1px;
+}
+.sidebar-nav .nav-subgroup-menu .nav-link {
+  padding: 7px 20px 7px 68px;
   font-size: 12.5px;
+  position: relative;
+}
+.sidebar-nav .nav-subgroup-menu .nav-link::before {
+  content: '';
+  position: absolute;
+  left: 44px;
+  top: 50%;
+  width: 12px;
+  height: 1.5px;
+  background: #cbd5e1;
+}
+.sidebar-nav .nav-subgroup-menu .nav-link:hover::before,
+.sidebar-nav .nav-subgroup-menu .nav-link.active::before {
+  background: #568184;
 }
 
 /* かんたん解説（リテラシー低め向け） */
