@@ -949,7 +949,7 @@ get_header();
         btn.innerHTML = '<span class="rt-btn__icon">&#x22EF;</span> 最新情報を取得中...';
 
         // プログレスオーバーレイ表示
-        var kwCount = myKeywords.filter(function(k) { return k.enabled; }).length || '?';
+        var kwCount = (rankData && rankData.length) ? rankData.length : '?';
         showProgress(true, kwCount);
 
         fetch('/wp-json/gcrev/v1/rank-tracker/fetch-all', {
