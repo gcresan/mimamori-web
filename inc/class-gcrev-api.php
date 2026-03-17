@@ -12306,6 +12306,13 @@ PROMPT;
                         'message' => 'アンケートが見つかりません。',
                     ], 404);
                 }
+                // お試し期限切れチェック
+                if ( function_exists( 'gcrev_is_trial_expired' ) && gcrev_is_trial_expired( (int) $survey->user_id ) ) {
+                    return new \WP_REST_Response([
+                        'success' => false,
+                        'message' => 'このアンケートは現在ご利用いただけません。',
+                    ], 403);
+                }
                 $survey_id      = (int) $survey->id;
                 $survey_user_id = (int) $survey->user_id;
                 $user_id        = $survey_user_id;

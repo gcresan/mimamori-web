@@ -547,13 +547,42 @@ function is_mobile() {
 // WP-Members
 // ----------------------------------------
 
-// ログイン後、決済ステータスに応じてリダイレクト先を切替
+// ログイン後、決済ステータス / お試し期限に応じてリダイレクト先を切替
 add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
+    // お試し期限切れ → ログインさせない（強制ログアウト）
+    if ( gcrev_is_trial_expired( $user_id ) ) {
+        wp_logout();
+        return home_url( '/login/?trial_expired=1' );
+    }
+    // お試し中（期限内） → ダッシュボードへ
+    if ( gcrev_is_trial_active( $user_id ) ) {
+        return home_url('/dashboard/');
+    }
     if ( gcrev_is_payment_active( $user_id ) ) {
-        return home_url('/mypage/dashboard/');
+        return home_url('/dashboard/');
     }
     return home_url('/payment-status/');
 }, 10, 2);
+
+// ----------------------------------------
+// お試し期限切れ — wp_authenticate_user でブロック
+// ----------------------------------------
+add_filter( 'wp_authenticate_user', function ( $user, $password ) {
+    if ( is_wp_error( $user ) ) {
+        return $user;
+    }
+    // 管理者はブロックしない
+    if ( user_can( $user->ID, 'manage_options' ) ) {
+        return $user;
+    }
+    if ( gcrev_is_trial_expired( $user->ID ) ) {
+        return new WP_Error(
+            'trial_expired',
+            'お試し期間が終了したため、現在はご利用いただけません。継続利用をご希望の場合は、管理者までお問い合わせください。'
+        );
+    }
+    return $user;
+}, 30, 2 );
 
 // ----------------------------------------
 // wp-login.php カスタマイズ
@@ -6552,7 +6581,53 @@ function gcrev_render_payment_status_fields( $user ) {
 }
 
 // --------------------------------------------------
-// WP管理画面 — テスト運用チェックボックスを表示
+// お試し利用 — 共通判定関数
+// 内部meta key: gcrev_test_operation（後方互換のため維持）
+// --------------------------------------------------
+
+/** お試し利用中かどうか（チェックON かつ 期限内） */
+function gcrev_is_trial_active( int $user_id ): bool {
+    if ( get_user_meta( $user_id, 'gcrev_test_operation', true ) !== '1' ) {
+        return false;
+    }
+    return ! gcrev_is_trial_expired( $user_id );
+}
+
+/** お試し期限切れかどうか（チェックON かつ 終了日時を超過） */
+function gcrev_is_trial_expired( int $user_id ): bool {
+    if ( get_user_meta( $user_id, 'gcrev_test_operation', true ) !== '1' ) {
+        return false;
+    }
+    $end = get_user_meta( $user_id, 'gcrev_trial_end', true );
+    if ( empty( $end ) ) {
+        return false; // 終了日未設定 → 期限なし扱い
+    }
+    $now = new DateTimeImmutable( 'now', wp_timezone() );
+    $end_dt = new DateTimeImmutable( $end, wp_timezone() );
+    return $now > $end_dt;
+}
+
+/** お試しフラグがONか（期限切れ含む） */
+function gcrev_is_trial_user( int $user_id ): bool {
+    return get_user_meta( $user_id, 'gcrev_test_operation', true ) === '1';
+}
+
+/** お試し終了日を「Y年n月j日」形式で返す。未設定なら空文字 */
+function gcrev_get_trial_end_display( int $user_id ): string {
+    $end = get_user_meta( $user_id, 'gcrev_trial_end', true );
+    if ( empty( $end ) ) {
+        return '';
+    }
+    return wp_date( 'Y年n月j日', strtotime( $end ) );
+}
+
+/** デフォルトお試し期間（日数） */
+function gcrev_trial_default_days(): int {
+    return 14;
+}
+
+// --------------------------------------------------
+// WP管理画面 — お試し利用セクションを表示
 // --------------------------------------------------
 add_action( 'edit_user_profile', 'gcrev_render_test_operation_field' );
 add_action( 'show_user_profile', 'gcrev_render_test_operation_field' );
@@ -6565,12 +6640,28 @@ function gcrev_render_test_operation_field( $user ) {
         return;
     }
 
-    $is_test = ( get_user_meta( $user->ID, 'gcrev_test_operation', true ) === '1' );
+    $is_test   = ( get_user_meta( $user->ID, 'gcrev_test_operation', true ) === '1' );
+    $trial_start = get_user_meta( $user->ID, 'gcrev_trial_start', true );
+    $trial_end   = get_user_meta( $user->ID, 'gcrev_trial_end', true );
+    $is_expired  = $is_test && gcrev_is_trial_expired( $user->ID );
+
+    // 残り日数計算
+    $remaining = '';
+    if ( $is_test && ! empty( $trial_end ) ) {
+        $now    = new DateTimeImmutable( 'now', wp_timezone() );
+        $end_dt = new DateTimeImmutable( $trial_end, wp_timezone() );
+        $diff   = $now->diff( $end_dt );
+        if ( $now > $end_dt ) {
+            $remaining = '期限切れ';
+        } else {
+            $remaining = $diff->days . '日';
+        }
+    }
     ?>
-    <h3>運用ステータス</h3>
+    <h3>お試し利用</h3>
     <table class="form-table" role="presentation">
         <tr>
-            <th><label for="gcrev_test_operation">テスト運用</label></th>
+            <th><label for="gcrev_test_operation">お試し利用</label></th>
             <td>
                 <label>
                     <input type="checkbox"
@@ -6578,12 +6669,75 @@ function gcrev_render_test_operation_field( $user ) {
                            name="gcrev_test_operation"
                            value="1"
                            <?php checked( $is_test ); ?>>
-                    テスト運用中
+                    お試し中
                 </label>
-                <p class="description">チェックを入れると、フロントのサイドバーに「テスト運用」バッジが表示されます。</p>
+                <p class="description">チェックを入れると、お試しアカウントとして扱われます。お試し期間中はフロント画面に期限が表示され、期限終了後はログインできなくなります。</p>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="gcrev_trial_start">お試し開始日時</label></th>
+            <td>
+                <input type="datetime-local"
+                       id="gcrev_trial_start"
+                       name="gcrev_trial_start"
+                       value="<?php echo esc_attr( $trial_start ? date( 'Y-m-d\TH:i', strtotime( $trial_start ) ) : '' ); ?>"
+                       style="width: 220px;"
+                       <?php echo $is_test ? '' : 'disabled'; ?>>
+                <?php if ( ! empty( $trial_start ) ) : ?>
+                    <span style="margin-left: 8px; color: #666; font-size: 13px;">
+                        <?php echo esc_html( wp_date( 'Y年n月j日 H:i', strtotime( $trial_start ) ) ); ?>
+                    </span>
+                <?php endif; ?>
+                <p class="description">初回チェック時に自動設定されます。手動変更も可能です。</p>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="gcrev_trial_end">お試し終了日時</label></th>
+            <td>
+                <input type="datetime-local"
+                       id="gcrev_trial_end"
+                       name="gcrev_trial_end"
+                       value="<?php echo esc_attr( $trial_end ? date( 'Y-m-d\TH:i', strtotime( $trial_end ) ) : '' ); ?>"
+                       style="width: 220px;"
+                       <?php echo $is_test ? '' : 'disabled'; ?>>
+                <?php if ( ! empty( $trial_end ) ) : ?>
+                    <span style="margin-left: 8px; color: #666; font-size: 13px;">
+                        <?php echo esc_html( wp_date( 'Y年n月j日 H:i', strtotime( $trial_end ) ) ); ?>
+                    </span>
+                <?php endif; ?>
+                <?php if ( $remaining ) : ?>
+                    <span style="margin-left: 8px; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600;
+                        <?php echo $is_expired
+                            ? 'color: #c0392b; background: #fdf0ee;'
+                            : 'color: #d97706; background: rgba(217,119,6,0.08);'; ?>">
+                        残り <?php echo esc_html( $remaining ); ?>
+                    </span>
+                <?php endif; ?>
+                <p class="description">デフォルトは開始日時から<?php echo gcrev_trial_default_days(); ?>日後です。手動変更可能です。</p>
             </td>
         </tr>
     </table>
+    <script>
+    (function(){
+        var cb = document.getElementById('gcrev_test_operation');
+        var startInput = document.getElementById('gcrev_trial_start');
+        var endInput   = document.getElementById('gcrev_trial_end');
+        if (!cb || !startInput || !endInput) return;
+        cb.addEventListener('change', function(){
+            startInput.disabled = !this.checked;
+            endInput.disabled   = !this.checked;
+            // 初回チェック時に日時を自動設定（既存値がなければ）
+            if (this.checked && !startInput.value) {
+                var now = new Date();
+                var pad = function(n){ return n < 10 ? '0'+n : n; };
+                var local = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+'T'+pad(now.getHours())+':'+pad(now.getMinutes());
+                startInput.value = local;
+                var end = new Date(now.getTime() + <?php echo gcrev_trial_default_days(); ?> * 86400000);
+                endInput.value = end.getFullYear()+'-'+pad(end.getMonth()+1)+'-'+pad(end.getDate())+'T'+pad(end.getHours())+':'+pad(end.getMinutes());
+            }
+        });
+    })();
+    </script>
     <?php
 }
 
@@ -6667,7 +6821,7 @@ function gcrev_save_service_tier_field( int $user_id ) {
 }
 
 // --------------------------------------------------
-// WP管理画面 — テスト運用チェックボックスの保存処理
+// WP管理画面 — お試し利用の保存処理
 // --------------------------------------------------
 add_action( 'edit_user_profile_update', 'gcrev_save_test_operation_field' );
 add_action( 'personal_options_update',  'gcrev_save_test_operation_field' );
@@ -6680,10 +6834,43 @@ function gcrev_save_test_operation_field( int $user_id ) {
         return;
     }
 
-    if ( ! empty( $_POST['gcrev_test_operation'] ) ) {
+    $was_trial = ( get_user_meta( $user_id, 'gcrev_test_operation', true ) === '1' );
+    $is_trial  = ! empty( $_POST['gcrev_test_operation'] );
+
+    if ( $is_trial ) {
         update_user_meta( $user_id, 'gcrev_test_operation', '1' );
+
+        // 開始日時: フォーム値があればそれを使用、なければ初回のみ自動設定
+        $start_input = isset( $_POST['gcrev_trial_start'] ) ? sanitize_text_field( wp_unslash( $_POST['gcrev_trial_start'] ) ) : '';
+        $existing_start = get_user_meta( $user_id, 'gcrev_trial_start', true );
+
+        if ( ! empty( $start_input ) ) {
+            // datetime-local形式(Y-m-d\TH:i) → Y-m-d H:i:s
+            $start_dt = date( 'Y-m-d H:i:s', strtotime( $start_input ) );
+            update_user_meta( $user_id, 'gcrev_trial_start', $start_dt );
+        } elseif ( empty( $existing_start ) ) {
+            // 初回チェック: 自動設定
+            $now = new DateTimeImmutable( 'now', wp_timezone() );
+            update_user_meta( $user_id, 'gcrev_trial_start', $now->format( 'Y-m-d H:i:s' ) );
+        }
+
+        // 終了日時: フォーム値があればそれを使用、なければ初回のみ自動設定
+        $end_input = isset( $_POST['gcrev_trial_end'] ) ? sanitize_text_field( wp_unslash( $_POST['gcrev_trial_end'] ) ) : '';
+        $existing_end = get_user_meta( $user_id, 'gcrev_trial_end', true );
+
+        if ( ! empty( $end_input ) ) {
+            $end_dt = date( 'Y-m-d H:i:s', strtotime( $end_input ) );
+            update_user_meta( $user_id, 'gcrev_trial_end', $end_dt );
+        } elseif ( empty( $existing_end ) ) {
+            // 初回: 開始日 + デフォルト日数
+            $start_str = get_user_meta( $user_id, 'gcrev_trial_start', true );
+            $start_obj = new DateTimeImmutable( $start_str, wp_timezone() );
+            $end_obj   = $start_obj->modify( '+' . gcrev_trial_default_days() . ' days' );
+            update_user_meta( $user_id, 'gcrev_trial_end', $end_obj->format( 'Y-m-d H:i:s' ) );
+        }
     } else {
         delete_user_meta( $user_id, 'gcrev_test_operation' );
+        // 開始日・終了日は残す（再度ONにした際に復元できるようにする）
     }
 }
 
@@ -6761,13 +6948,32 @@ function gcrev_save_payment_status_fields( int $user_id ) {
 }
 
 // --------------------------------------------------
-// アクセスゲート — 非 active ユーザーを /payment-status/ へリダイレクト
+// アクセスゲート — 非 active / お試し期限切れユーザーを制御
 // --------------------------------------------------
 add_action( 'template_redirect', function () {
     if ( ! is_user_logged_in() ) {
         return;
     }
     if ( ! is_page() ) {
+        return;
+    }
+
+    $user_id = get_current_user_id();
+
+    // 管理者はゲート対象外
+    if ( current_user_can( 'manage_options' ) ) {
+        return;
+    }
+
+    // お試し期限切れ → 強制ログアウト＆リダイレクト
+    if ( gcrev_is_trial_expired( $user_id ) ) {
+        wp_logout();
+        wp_safe_redirect( home_url( '/login/?trial_expired=1' ) );
+        exit;
+    }
+
+    // お試し中（期限内） → 全機能アクセスOK
+    if ( gcrev_is_trial_active( $user_id ) ) {
         return;
     }
 

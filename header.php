@@ -63,10 +63,18 @@
                   style="color: inherit; text-decoration: none;"><?php echo esc_html( $display_url ); ?></a>
             </div>
             <?php endif; ?>
-            <?php if ( get_user_meta( $u->ID, 'gcrev_test_operation', true ) === '1' ) : ?>
+            <?php if ( function_exists( 'gcrev_is_trial_active' ) && gcrev_is_trial_active( $u->ID ) ) : ?>
             <div class="sidebar-test-badge" style="margin-top: 6px;">
-               <span style="display: inline-block; padding: 2px 10px; font-size: 11px; font-weight: 600; color: #c0392b; background: #fdf0ee; border: 1px solid #e8c4bf; border-radius: 4px; letter-spacing: 0.05em;">テスト運用</span>
+               <span style="display: inline-block; padding: 2px 10px; font-size: 11px; font-weight: 600; color: #d97706; background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.2); border-radius: 4px; letter-spacing: 0.05em;">お試し中</span>
             </div>
+            <?php
+               $trial_end_display = gcrev_get_trial_end_display( $u->ID );
+               if ( $trial_end_display ) :
+            ?>
+            <div style="margin-top: 4px; font-size: 11px; color: #999; text-align: center;">
+               <?php echo esc_html( $trial_end_display ); ?> まで
+            </div>
+            <?php endif; ?>
             <?php endif; ?>
          </div>
          <?php endif; ?>

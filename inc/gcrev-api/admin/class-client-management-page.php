@@ -253,7 +253,7 @@ class Gcrev_Client_Management_Page {
                     </td>
                     <td>
                         <?php if ( $is_test ) : ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#c0392b; background:#fdf0ee; border:1px solid #e8c4bf; border-radius:3px;">テスト運用</span>
+                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#d97706; background:rgba(217,119,6,0.08); border:1px solid rgba(217,119,6,0.2); border-radius:3px;">お試し中</span>
                         <?php elseif ( $is_paid ) : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#4E8A6B; background:rgba(78,138,107,0.08); border-radius:3px;">利用中</span>
                         <?php else : ?>

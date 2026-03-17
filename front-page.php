@@ -164,6 +164,13 @@ $page_title = trim( wp_title('', false) );
             <p class="logo-subcatch">みまもるから、次が見える。</p>
         </div>
 
+        <?php if ( isset( $_GET['trial_expired'] ) && $_GET['trial_expired'] === '1' ) : ?>
+        <div style="margin-bottom: 20px; padding: 14px 16px; background: #fdf0ee; border: 1px solid #e8c4bf; border-radius: 6px; color: #c0392b; font-size: 13px; line-height: 1.6; text-align: center;">
+            お試し期間が終了したため、現在はご利用いただけません。<br>
+            継続利用をご希望の場合は、管理者までお問い合わせください。
+        </div>
+        <?php endif; ?>
+
         <?php
         // WP-Members ログインフォームを取得し、ラベルを日本語化
         $login_form = do_shortcode('[wpmem_form login]');

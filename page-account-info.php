@@ -37,7 +37,8 @@ $tier_name     = $tier_defs_all[ $service_tier ]['name'] ?? 'ベーシックプ�
 
 $c_status     = $dates['status'];
 $has_contract = ! empty( $dates['start_at'] );
-$is_test      = ( get_user_meta( $user_id, 'gcrev_test_operation', true ) === '1' );
+$is_test      = function_exists( 'gcrev_is_trial_user' ) ? gcrev_is_trial_user( $user_id ) : false;
+$trial_end_display = function_exists( 'gcrev_get_trial_end_display' ) ? gcrev_get_trial_end_display( $user_id ) : '';
 
 // --- ② ユーザー情報データ ---
 $acct_company = gcrev_get_business_name( $current_user->ID );
@@ -368,7 +369,7 @@ get_header();
                     <th>契約ステータス</th>
                     <td>
                         <?php if ( $is_test ) : ?>
-                            <span class="contract-badge contract-badge--test">テスト運用</span>
+                            <span class="contract-badge contract-badge--test">お試し中</span>
                         <?php elseif ( $c_status === 'active' ) : ?>
                             <span class="contract-badge contract-badge--active">利用中</span>
                         <?php elseif ( $c_status === 'canceled' ) : ?>
@@ -378,12 +379,24 @@ get_header();
                         <?php endif; ?>
                     </td>
                 </tr>
+                <?php if ( $is_test ) : ?>
+                <tr>
+                    <th>お試し終了日</th>
+                    <td><?php echo $trial_end_display ? esc_html( $trial_end_display ) : '－'; ?></td>
+                </tr>
+                <tr>
+                    <th>次回更新日</th>
+                    <td>－</td>
+                </tr>
+                <tr>
+                    <th>解約可能日</th>
+                    <td>－</td>
+                </tr>
+                <?php else : ?>
                 <tr>
                     <th>次回更新日</th>
                     <td>
-                        <?php if ( $is_test ) : ?>
-                            －
-                        <?php elseif ( $has_contract && $dates['next_renewal_at'] ) : ?>
+                        <?php if ( $has_contract && $dates['next_renewal_at'] ) : ?>
                             <?php echo esc_html( wp_date( 'Y年n月j日', strtotime( $dates['next_renewal_at'] ) ) ); ?>
                         <?php else : ?>
                             —
@@ -393,15 +406,14 @@ get_header();
                 <tr>
                     <th>解約可能日</th>
                     <td>
-                        <?php if ( $is_test ) : ?>
-                            －
-                        <?php elseif ( $has_contract && $dates['cancellable_at'] ) : ?>
+                        <?php if ( $has_contract && $dates['cancellable_at'] ) : ?>
                             <?php echo esc_html( wp_date( 'Y年n月j日', strtotime( $dates['cancellable_at'] ) ) ); ?>
                         <?php else : ?>
                             —
                         <?php endif; ?>
                     </td>
                 </tr>
+                <?php endif; ?>
             </tbody>
         </table>
 

@@ -29,6 +29,8 @@ if (!empty($survey_token)) {
         $survey_error = 'このアンケートは存在しません。URLをご確認ください。';
     } elseif ($survey->status !== 'published') {
         $survey_error = 'このアンケートは現在公開されていません。';
+    } elseif ( function_exists( 'gcrev_is_trial_expired' ) && gcrev_is_trial_expired( (int) $survey->user_id ) ) {
+        $survey_error = 'このアンケートは現在ご利用いただけません。';
     } else {
         $target_user_id    = (int) $survey->user_id;
         $survey_title      = $survey->title;
