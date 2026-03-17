@@ -98,6 +98,7 @@
       // 子がアクティブなグループを開く。なければ全部閉じた状態
       $sidebar_active_group = '';
       if ($diagnosis_child_active) $sidebar_active_group = 'diagnosis';
+      if ($website_child_active)   $sidebar_active_group = 'website';
       if ($ranking_child_active)   $sidebar_active_group = 'ranking';
       if ($meo_child_active)       $sidebar_active_group = 'meo';
       if ($settings_child_active)  $sidebar_active_group = 'settings';
