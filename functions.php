@@ -7046,11 +7046,11 @@ function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
     $params = $request->get_json_params();
 
     $type_labels = [
-        'plan_basic'      => 'ベーシックプランについて相談したい',
-        'plan_ai_support' => 'AIサポートプランについて相談したい',
-        'plan_bansou'     => '伴走プランについて相談したい',
+        'plan_basic'      => 'ベーシックプランに変更したい',
+        'plan_ai_support' => 'AIサポートプランに変更したい',
+        'plan_bansou'     => '伴走プランに変更したい',
         'plan_change'     => 'プラン変更について相談したい',
-        'support'         => 'サポートについて問い合わせしたい',
+        'support'         => 'サポートをお願いしたい',
         'other'           => 'その他のお問い合わせ',
     ];
 

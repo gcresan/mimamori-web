@@ -333,15 +333,15 @@ get_header();
                     <div class="inq-type-list" id="inqTypeList">
                         <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="plan_basic">
-                            <span class="inq-type-box"><span class="inq-type-radio"></span>ベーシックプランについて相談したい</span>
+                            <span class="inq-type-box"><span class="inq-type-radio"></span>ベーシックプランに変更したい</span>
                         </label>
                         <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="plan_ai_support">
-                            <span class="inq-type-box"><span class="inq-type-radio"></span>AIサポートプランについて相談したい</span>
+                            <span class="inq-type-box"><span class="inq-type-radio"></span>AIサポートプランに変更したい</span>
                         </label>
                         <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="plan_bansou">
-                            <span class="inq-type-box"><span class="inq-type-radio"></span>伴走プランについて相談したい</span>
+                            <span class="inq-type-box"><span class="inq-type-radio"></span>伴走プランに変更したい</span>
                         </label>
                         <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="plan_change">
@@ -349,7 +349,7 @@ get_header();
                         </label>
                         <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="support">
-                            <span class="inq-type-box"><span class="inq-type-radio"></span>サポートについて問い合わせしたい</span>
+                            <span class="inq-type-box"><span class="inq-type-radio"></span>サポートをお願いしたい</span>
                         </label>
                         <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="other">
