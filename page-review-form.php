@@ -611,6 +611,10 @@ $api_url = rest_url('gcrev/v1/review/generate');
             <form id="review-form" novalidate>
                 <div class="review-card">
                     <div id="questions-container"></div>
+                    <div style="margin-top:16px; padding-top:16px; border-top:1px solid #e5e7eb;">
+                        <label style="display:block; font-size:14px; font-weight:600; color:#374151; margin-bottom:6px;">お名前・ニックネーム（任意）</label>
+                        <input type="text" id="respondent-name" placeholder="例：田中" style="width:100%; padding:10px 12px; font-size:14px; border:1.5px solid #e5e7eb; border-radius:8px; background:#f9fafb; font-family:inherit;">
+                    </div>
                 </div>
                 <div class="submit-area">
                     <button type="submit" class="btn-submit" id="btn-submit">
@@ -627,6 +631,12 @@ $api_url = rest_url('gcrev/v1/review/generate');
                 <div class="consent-desc">
                     回答内容をもとにAIが口コミの下書きを作成できます。<br>
                     ご自身で自由に書くこともできます。
+                </div>
+                <div style="margin:16px 0; padding:12px 16px; background:#f9fafb; border-radius:8px;">
+                    <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; color:#374151; cursor:pointer;">
+                        <input type="checkbox" id="consent-review" style="margin-top:2px; flex-shrink:0;">
+                        <span>生成された口コミ文を店舗サイト等で紹介しても構いません</span>
+                    </label>
                 </div>
                 <div class="consent-buttons">
                     <button type="button" class="btn-ai-support" id="btn-use-ai">
@@ -954,6 +964,11 @@ $api_url = rest_url('gcrev/v1/review/generate');
             } else {
                 payload.user_id = REVIEW_CONFIG.userId;
             }
+            var nameEl = document.getElementById('respondent-name');
+            if (nameEl) payload.respondent_name = nameEl.value.trim();
+            payload.consent_ai = true;
+            var consentReviewEl = document.getElementById('consent-review');
+            if (consentReviewEl) payload.consent_review = consentReviewEl.checked;
 
             fetch(REVIEW_CONFIG.apiUrl, {
                 method: 'POST',

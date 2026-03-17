@@ -5051,12 +5051,18 @@ function gcrev_survey_create_tables(): void {
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         survey_id BIGINT(20) UNSIGNED NOT NULL,
         user_id BIGINT(20) UNSIGNED NOT NULL,
+        respondent_name VARCHAR(200) NOT NULL DEFAULT '',
         short_review TEXT,
         normal_review TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'new',
+        consent_ai TINYINT(1) NOT NULL DEFAULT 0,
+        consent_review TINYINT(1) NOT NULL DEFAULT 0,
+        admin_notes TEXT,
         created_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
         KEY survey_id (survey_id),
         KEY user_id (user_id),
+        KEY status (status),
         KEY created_at (created_at)
     ) {$charset_collate};";
 
@@ -5072,11 +5078,71 @@ function gcrev_survey_create_tables(): void {
         KEY question_id (question_id)
     ) {$charset_collate};";
 
+    // --- gcrev_survey_ai_generations ---
+    $t_ai_gen = $wpdb->prefix . 'gcrev_survey_ai_generations';
+    $sql_ai_gen = "CREATE TABLE {$t_ai_gen} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        response_id BIGINT(20) UNSIGNED NOT NULL,
+        survey_id BIGINT(20) UNSIGNED NOT NULL,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        generated_text TEXT,
+        review_type VARCHAR(20) NOT NULL DEFAULT 'normal',
+        version INT NOT NULL DEFAULT 1,
+        status VARCHAR(20) NOT NULL DEFAULT 'generated',
+        generation_params TEXT,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        KEY response_id (response_id),
+        KEY survey_id (survey_id),
+        KEY user_id (user_id),
+        KEY status (status),
+        KEY created_at (created_at)
+    ) {$charset_collate};";
+
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql_surveys );
     dbDelta( $sql_questions );
     dbDelta( $sql_responses );
     dbDelta( $sql_answers );
+    dbDelta( $sql_ai_gen );
+
+    // --- 既存データ移行: short_review/normal_review → ai_generations ---
+    if ( ! get_option( 'gcrev_survey_ai_gen_migrated' ) ) {
+        $rows = $wpdb->get_results(
+            "SELECT id, survey_id, user_id, short_review, normal_review, created_at
+             FROM {$t_responses}
+             WHERE short_review IS NOT NULL AND short_review != ''"
+        );
+        if ( $rows ) {
+            foreach ( $rows as $row ) {
+                if ( ! empty( $row->short_review ) ) {
+                    $wpdb->insert( $t_ai_gen, [
+                        'response_id'    => (int) $row->id,
+                        'survey_id'      => (int) $row->survey_id,
+                        'user_id'        => (int) $row->user_id,
+                        'generated_text' => $row->short_review,
+                        'review_type'    => 'short',
+                        'version'        => 1,
+                        'status'         => 'generated',
+                        'created_at'     => $row->created_at,
+                    ], [ '%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s' ] );
+                }
+                if ( ! empty( $row->normal_review ) ) {
+                    $wpdb->insert( $t_ai_gen, [
+                        'response_id'    => (int) $row->id,
+                        'survey_id'      => (int) $row->survey_id,
+                        'user_id'        => (int) $row->user_id,
+                        'generated_text' => $row->normal_review,
+                        'review_type'    => 'normal',
+                        'version'        => 1,
+                        'status'         => 'generated',
+                        'created_at'     => $row->created_at,
+                    ], [ '%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s' ] );
+                }
+            }
+        }
+        update_option( 'gcrev_survey_ai_gen_migrated', 1 );
+    }
 }
 
 /**

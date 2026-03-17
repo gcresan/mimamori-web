@@ -273,6 +273,19 @@
   padding: 8px 20px 8px 52px;
   font-size: 13px;
 }
+.sidebar-nav .nav-subgroup-label {
+  padding: 10px 20px 4px 52px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+}
+.sidebar-nav .nav-subgroup-item .nav-link {
+  padding-left: 62px;
+  font-size: 12.5px;
+}
 
 /* かんたん解説（リテラシー低め向け） */
 .help-lead {

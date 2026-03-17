@@ -76,7 +76,7 @@
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
       $ranking_pages   = array('rank-tracker','map-rank');
-      $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','review-management','gbp-posts');
+      $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
@@ -242,9 +242,30 @@
                         <span>検索語句分析</span>
                         </a>
                      </li>
-                     <li class="nav-item">
+                     <li class="nav-item nav-subgroup-label"><span>口コミアンケート</span></li>
+                     <li class="nav-item nav-subgroup-item">
                         <a href="<?php echo esc_url( home_url('/tools/review-survey/') ); ?>" class="nav-link <?php echo is_page('review-survey') ? 'active' : ''; ?>">
-                        <span>口コミ用アンケート管理</span>
+                        <span>アンケート管理</span>
+                        </a>
+                     </li>
+                     <li class="nav-item nav-subgroup-item">
+                        <a href="<?php echo esc_url( home_url('/survey-responses/') ); ?>" class="nav-link <?php echo is_page('survey-responses') ? 'active' : ''; ?>">
+                        <span>回答履歴</span>
+                        </a>
+                     </li>
+                     <li class="nav-item nav-subgroup-item">
+                        <a href="<?php echo esc_url( home_url('/survey-analytics/') ); ?>" class="nav-link <?php echo is_page('survey-analytics') ? 'active' : ''; ?>">
+                        <span>集計</span>
+                        </a>
+                     </li>
+                     <li class="nav-item nav-subgroup-item">
+                        <a href="<?php echo esc_url( home_url('/survey-analysis/') ); ?>" class="nav-link <?php echo is_page('survey-analysis') ? 'active' : ''; ?>">
+                        <span>分析</span>
+                        </a>
+                     </li>
+                     <li class="nav-item nav-subgroup-item">
+                        <a href="<?php echo esc_url( home_url('/survey-ai-history/') ); ?>" class="nav-link <?php echo is_page('survey-ai-history') ? 'active' : ''; ?>">
+                        <span>AI生成履歴</span>
                         </a>
                      </li>
                      <li class="nav-item">

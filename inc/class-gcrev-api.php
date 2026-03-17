@@ -801,6 +801,55 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_survey_question_reorder' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+
+        // =========================================================
+        // アンケート回答管理・AI生成・集計・分析
+        // =========================================================
+        register_rest_route('gcrev/v1', '/survey/responses', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_survey_responses' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/response/detail', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_survey_response_detail' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/response/status', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_response_status' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/response/notes', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_response_notes' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/ai-generate', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_ai_generate' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/ai-generations', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_survey_ai_generations' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/ai-generation/status', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_ai_generation_status' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/analytics', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_survey_analytics' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/analysis', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_survey_analysis' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
     }
 
     // =========================================================
@@ -11743,7 +11792,12 @@ PROMPT;
 
             // 回答をDBに保存（トークン方式の場合のみ）
             if ($survey_id > 0) {
-                $this->save_survey_response($wpdb, $survey_id, $survey_user_id, $answers, $parsed);
+                $extra = [
+                    'respondent_name' => sanitize_text_field($params['respondent_name'] ?? ''),
+                    'consent_ai'      => ! empty($params['consent_ai']),
+                    'consent_review'  => ! empty($params['consent_review']),
+                ];
+                $this->save_survey_response($wpdb, $survey_id, $survey_user_id, $answers, $parsed, $extra);
             }
 
             return new \WP_REST_Response([
@@ -11767,17 +11821,23 @@ PROMPT;
     /**
      * アンケート回答をDBに保存
      */
-    private function save_survey_response(\wpdb $wpdb, int $survey_id, int $user_id, array $answers, array $parsed): void {
+    private function save_survey_response(\wpdb $wpdb, int $survey_id, int $user_id, array $answers, array $parsed, array $extra = []): void {
         $t_responses = $wpdb->prefix . 'gcrev_survey_responses';
         $t_answers   = $wpdb->prefix . 'gcrev_survey_response_answers';
+        $t_ai_gen    = $wpdb->prefix . 'gcrev_survey_ai_generations';
+        $now         = current_time('mysql');
 
         $wpdb->insert($t_responses, [
-            'survey_id'     => $survey_id,
-            'user_id'       => $user_id,
-            'short_review'  => $parsed['short_review'],
-            'normal_review' => $parsed['normal_review'],
-            'created_at'    => current_time('mysql'),
-        ], ['%d', '%d', '%s', '%s', '%s']);
+            'survey_id'       => $survey_id,
+            'user_id'         => $user_id,
+            'respondent_name' => sanitize_text_field($extra['respondent_name'] ?? ''),
+            'short_review'    => $parsed['short_review'],
+            'normal_review'   => $parsed['normal_review'],
+            'status'          => 'new',
+            'consent_ai'      => ! empty($extra['consent_ai']) ? 1 : 0,
+            'consent_review'  => ! empty($extra['consent_review']) ? 1 : 0,
+            'created_at'      => $now,
+        ], ['%d', '%d', '%s', '%s', '%s', '%s', '%d', '%d', '%s']);
 
         $response_id = (int) $wpdb->insert_id;
         if ($response_id <= 0) return;
@@ -11786,7 +11846,6 @@ PROMPT;
             $question_id = absint($item['question_id'] ?? 0);
             $answer      = $item['answer'] ?? '';
 
-            // answer を JSON 文字列として保存
             $answer_json = is_array($answer)
                 ? wp_json_encode($answer, JSON_UNESCAPED_UNICODE)
                 : sanitize_textarea_field($answer);
@@ -11796,6 +11855,32 @@ PROMPT;
                 'question_id' => $question_id,
                 'answer'      => $answer_json,
             ], ['%d', '%d', '%s']);
+        }
+
+        // AI生成文を ai_generations テーブルにも保存
+        if ( ! empty($parsed['short_review']) ) {
+            $wpdb->insert($t_ai_gen, [
+                'response_id'    => $response_id,
+                'survey_id'      => $survey_id,
+                'user_id'        => $user_id,
+                'generated_text' => $parsed['short_review'],
+                'review_type'    => 'short',
+                'version'        => 1,
+                'status'         => 'generated',
+                'created_at'     => $now,
+            ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s']);
+        }
+        if ( ! empty($parsed['normal_review']) ) {
+            $wpdb->insert($t_ai_gen, [
+                'response_id'    => $response_id,
+                'survey_id'      => $survey_id,
+                'user_id'        => $user_id,
+                'generated_text' => $parsed['normal_review'],
+                'review_type'    => 'normal',
+                'version'        => 1,
+                'status'         => 'generated',
+                'created_at'     => $now,
+            ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s']);
         }
     }
 
@@ -12119,7 +12204,23 @@ PROMPT;
 
         $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
         $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_responses = $wpdb->prefix . 'gcrev_survey_responses';
+        $t_answers   = $wpdb->prefix . 'gcrev_survey_response_answers';
+        $t_ai_gen    = $wpdb->prefix . 'gcrev_survey_ai_generations';
 
+        // カスケード削除: 回答 → 回答詳細 + AI生成文
+        $response_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT id FROM {$t_responses} WHERE survey_id = %d", $survey_id
+        ));
+        if ( ! empty($response_ids) ) {
+            $placeholders = implode(',', array_fill(0, count($response_ids), '%d'));
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM {$t_answers} WHERE response_id IN ({$placeholders})",
+                ...$response_ids
+            ));
+        }
+        $wpdb->delete($t_ai_gen, ['survey_id' => $survey_id], ['%d']);
+        $wpdb->delete($t_responses, ['survey_id' => $survey_id], ['%d']);
         $wpdb->delete($t_questions, ['survey_id' => $survey_id], ['%d']);
         $wpdb->delete($t_surveys, ['id' => $survey_id], ['%d']);
 
@@ -12259,6 +12360,729 @@ PROMPT;
         $wpdb->update($t_surveys, ['updated_at' => current_time('mysql')], ['id' => $survey_id], ['%s'], ['%d']);
 
         return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    // =========================================================
+    // アンケート回答管理 REST API
+    // =========================================================
+
+    /**
+     * GET survey/responses — 回答一覧（フィルタ・ページネーション）
+     */
+    public function rest_survey_responses(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $user_id   = get_current_user_id();
+        $is_admin  = current_user_can('manage_options');
+        $t_resp    = $wpdb->prefix . 'gcrev_survey_responses';
+        $t_surv    = $wpdb->prefix . 'gcrev_surveys';
+        $t_ai_gen  = $wpdb->prefix . 'gcrev_survey_ai_generations';
+
+        $survey_id = absint($request->get_param('survey_id'));
+        $status    = sanitize_text_field($request->get_param('status') ?? '');
+        $ai_status = sanitize_text_field($request->get_param('ai_status') ?? '');
+        $keyword   = sanitize_text_field($request->get_param('keyword') ?? '');
+        $date_from = sanitize_text_field($request->get_param('date_from') ?? '');
+        $date_to   = sanitize_text_field($request->get_param('date_to') ?? '');
+        $page      = max(1, absint($request->get_param('page') ?? 1));
+        $per_page  = min(100, max(1, absint($request->get_param('per_page') ?? 20)));
+
+        $where = [];
+        $args  = [];
+
+        if ( ! $is_admin ) {
+            $where[] = 's.user_id = %d';
+            $args[]  = $user_id;
+        }
+        if ($survey_id > 0) {
+            $where[] = 'r.survey_id = %d';
+            $args[]  = $survey_id;
+        }
+        if (in_array($status, ['new', 'reviewed', 'utilized'], true)) {
+            $where[] = 'r.status = %s';
+            $args[]  = $status;
+        }
+        if ($date_from && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from)) {
+            $where[] = 'r.created_at >= %s';
+            $args[]  = $date_from . ' 00:00:00';
+        }
+        if ($date_to && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to)) {
+            $where[] = 'r.created_at <= %s';
+            $args[]  = $date_to . ' 23:59:59';
+        }
+        if ($keyword !== '') {
+            $like = '%' . $wpdb->esc_like($keyword) . '%';
+            $where[] = '(r.respondent_name LIKE %s OR r.admin_notes LIKE %s)';
+            $args[]  = $like;
+            $args[]  = $like;
+        }
+
+        $where_sql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        // Count
+        $count_sql = "SELECT COUNT(DISTINCT r.id) FROM {$t_resp} r INNER JOIN {$t_surv} s ON r.survey_id = s.id {$where_sql}";
+        $total = (int) ($args ? $wpdb->get_var($wpdb->prepare($count_sql, ...$args)) : $wpdb->get_var($count_sql));
+
+        // Data
+        $offset   = ($page - 1) * $per_page;
+        $data_sql = "SELECT r.*, s.title AS survey_title,
+                     (SELECT COUNT(*) FROM {$t_ai_gen} g WHERE g.response_id = r.id) AS ai_count
+                     FROM {$t_resp} r
+                     INNER JOIN {$t_surv} s ON r.survey_id = s.id
+                     {$where_sql}
+                     ORDER BY r.created_at DESC
+                     LIMIT %d OFFSET %d";
+        $data_args = array_merge($args, [$per_page, $offset]);
+        $rows = $wpdb->get_results($wpdb->prepare($data_sql, ...$data_args));
+
+        // ai_status フィルタ（後処理）
+        if ($ai_status !== '') {
+            $rows = array_values(array_filter($rows, function($r) use ($ai_status) {
+                if ($ai_status === 'has_generated') return (int) $r->ai_count > 0;
+                if ($ai_status === 'none') return (int) $r->ai_count === 0;
+                return true;
+            }));
+        }
+
+        $responses = array_map(function($r) {
+            return [
+                'id'              => (int) $r->id,
+                'survey_id'       => (int) $r->survey_id,
+                'survey_title'    => $r->survey_title,
+                'respondent_name' => $r->respondent_name,
+                'status'          => $r->status ?: 'new',
+                'consent_ai'      => (bool) $r->consent_ai,
+                'consent_review'  => (bool) $r->consent_review,
+                'ai_count'        => (int) $r->ai_count,
+                'created_at'      => $r->created_at,
+            ];
+        }, $rows);
+
+        return new \WP_REST_Response([
+            'responses'   => $responses,
+            'total'       => $total,
+            'page'        => $page,
+            'per_page'    => $per_page,
+            'total_pages' => max(1, (int) ceil($total / $per_page)),
+        ], 200);
+    }
+
+    /**
+     * GET survey/response/detail — 回答詳細（回答+質問+AI生成文）
+     */
+    public function rest_survey_response_detail(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $response_id = absint($request->get_param('response_id'));
+        $user_id     = get_current_user_id();
+
+        $t_resp    = $wpdb->prefix . 'gcrev_survey_responses';
+        $t_surv    = $wpdb->prefix . 'gcrev_surveys';
+        $t_ans     = $wpdb->prefix . 'gcrev_survey_response_answers';
+        $t_q       = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_ai_gen  = $wpdb->prefix . 'gcrev_survey_ai_generations';
+
+        $resp = $wpdb->get_row($wpdb->prepare(
+            "SELECT r.*, s.title AS survey_title FROM {$t_resp} r INNER JOIN {$t_surv} s ON r.survey_id = s.id WHERE r.id = %d",
+            $response_id
+        ));
+        if (!$resp) {
+            return new \WP_REST_Response(['success' => false, 'message' => '回答が見つかりません。'], 404);
+        }
+        if (!$this->can_access_survey((int) $resp->survey_id, $user_id)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        // 質問 + 回答
+        $answers = $wpdb->get_results($wpdb->prepare(
+            "SELECT a.question_id, a.answer, q.label AS question_label, q.type AS question_type
+             FROM {$t_ans} a
+             LEFT JOIN {$t_q} q ON a.question_id = q.id
+             WHERE a.response_id = %d
+             ORDER BY q.sort_order ASC, a.id ASC",
+            $response_id
+        ));
+
+        $answer_list = array_map(function($a) {
+            $answer_val = $a->answer;
+            $decoded = json_decode($answer_val, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $answer_val = $decoded;
+            }
+            return [
+                'question_id'    => (int) $a->question_id,
+                'question_label' => $a->question_label ?: '(削除された質問)',
+                'question_type'  => $a->question_type ?: 'text',
+                'answer'         => $answer_val,
+            ];
+        }, $answers);
+
+        // AI生成文
+        $ai_gens = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$t_ai_gen} WHERE response_id = %d ORDER BY created_at DESC",
+            $response_id
+        ));
+        $ai_list = array_map(function($g) {
+            return [
+                'id'             => (int) $g->id,
+                'generated_text' => $g->generated_text,
+                'review_type'    => $g->review_type,
+                'version'        => (int) $g->version,
+                'status'         => $g->status,
+                'generation_params' => $g->generation_params ? json_decode($g->generation_params, true) : null,
+                'created_at'     => $g->created_at,
+            ];
+        }, $ai_gens);
+
+        return new \WP_REST_Response([
+            'success'  => true,
+            'response' => [
+                'id'              => (int) $resp->id,
+                'survey_id'       => (int) $resp->survey_id,
+                'survey_title'    => $resp->survey_title,
+                'respondent_name' => $resp->respondent_name,
+                'status'          => $resp->status ?: 'new',
+                'consent_ai'      => (bool) $resp->consent_ai,
+                'consent_review'  => (bool) $resp->consent_review,
+                'admin_notes'     => $resp->admin_notes ?: '',
+                'created_at'      => $resp->created_at,
+            ],
+            'answers'      => $answer_list,
+            'ai_generations' => $ai_list,
+        ], 200);
+    }
+
+    /**
+     * POST survey/response/status — 回答ステータス更新
+     */
+    public function rest_survey_response_status(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params      = $request->get_json_params();
+        $response_id = absint($params['response_id'] ?? 0);
+        $new_status  = sanitize_text_field($params['status'] ?? '');
+        $user_id     = get_current_user_id();
+
+        if ( ! in_array($new_status, ['new', 'reviewed', 'utilized'], true) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => '無効なステータスです。'], 400);
+        }
+
+        $t_resp = $wpdb->prefix . 'gcrev_survey_responses';
+        $survey_id = (int) $wpdb->get_var($wpdb->prepare("SELECT survey_id FROM {$t_resp} WHERE id = %d", $response_id));
+        if ( ! $this->can_access_survey($survey_id, $user_id) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $wpdb->update($t_resp, ['status' => $new_status], ['id' => $response_id], ['%s'], ['%d']);
+
+        return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    /**
+     * POST survey/response/notes — 管理メモ更新
+     */
+    public function rest_survey_response_notes(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params      = $request->get_json_params();
+        $response_id = absint($params['response_id'] ?? 0);
+        $notes       = sanitize_textarea_field($params['notes'] ?? '');
+        $user_id     = get_current_user_id();
+
+        $t_resp = $wpdb->prefix . 'gcrev_survey_responses';
+        $survey_id = (int) $wpdb->get_var($wpdb->prepare("SELECT survey_id FROM {$t_resp} WHERE id = %d", $response_id));
+        if ( ! $this->can_access_survey($survey_id, $user_id) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $wpdb->update($t_resp, ['admin_notes' => $notes], ['id' => $response_id], ['%s'], ['%d']);
+
+        return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    // =========================================================
+    // アンケートAI生成管理 REST API
+    // =========================================================
+
+    /**
+     * POST survey/ai-generate — 既存回答からAI口コミ文を再生成
+     */
+    public function rest_survey_ai_generate(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params      = $request->get_json_params();
+        $response_id = absint($params['response_id'] ?? 0);
+        $tone        = sanitize_text_field($params['tone'] ?? '');
+        $emphasis    = sanitize_text_field($params['emphasis'] ?? '');
+        $user_id     = get_current_user_id();
+
+        $t_resp   = $wpdb->prefix . 'gcrev_survey_responses';
+        $t_ans    = $wpdb->prefix . 'gcrev_survey_response_answers';
+        $t_q      = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_ai_gen = $wpdb->prefix . 'gcrev_survey_ai_generations';
+
+        $resp = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$t_resp} WHERE id = %d", $response_id));
+        if ( ! $resp ) {
+            return new \WP_REST_Response(['success' => false, 'message' => '回答が見つかりません。'], 404);
+        }
+        if ( ! $this->can_access_survey((int) $resp->survey_id, $user_id) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        // 回答データを再構築
+        $raw_answers = $wpdb->get_results($wpdb->prepare(
+            "SELECT a.answer, q.label AS question FROM {$t_ans} a LEFT JOIN {$t_q} q ON a.question_id = q.id WHERE a.response_id = %d ORDER BY q.sort_order ASC",
+            $response_id
+        ));
+
+        $answers = [];
+        foreach ($raw_answers as $ra) {
+            $answer = $ra->answer;
+            $decoded = json_decode($answer, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $answer = $decoded;
+            }
+            $answers[] = ['question' => $ra->question ?: '', 'answer' => $answer];
+        }
+
+        $answer_text = $this->format_review_answers($answers);
+        if (empty($answer_text)) {
+            return new \WP_REST_Response(['success' => false, 'message' => '有効な回答データがありません。'], 400);
+        }
+
+        $business_name = function_exists('gcrev_get_business_name')
+            ? gcrev_get_business_name((int) $resp->user_id)
+            : (get_user_meta((int) $resp->user_id, 'gcrev_business_name', true) ?: '');
+
+        $prompt = $this->build_review_prompt($answer_text, $business_name);
+
+        // トーン・強調指定がある場合、プロンプトに追加
+        if ($tone || $emphasis) {
+            $extra_instructions = "\n\n## 追加指示\n";
+            if ($tone) $extra_instructions .= "- 口調: {$tone}\n";
+            if ($emphasis) $extra_instructions .= "- 強調ポイント: {$emphasis}\n";
+            $prompt .= $extra_instructions;
+        }
+
+        try {
+            $raw_response = $this->ai->call_gemini_api($prompt);
+            $parsed = $this->parse_review_response($raw_response);
+
+            if ($parsed === null) {
+                file_put_contents('/tmp/gcrev_review_debug.log',
+                    date('Y-m-d H:i:s') . " AI re-generate parse failed. raw=" . substr($raw_response, 0, 500) . "\n",
+                    FILE_APPEND
+                );
+                return new \WP_REST_Response(['success' => false, 'message' => '口コミ案の生成に失敗しました。'], 500);
+            }
+
+            $now = current_time('mysql');
+            $gen_params = wp_json_encode([
+                'tone'     => $tone,
+                'emphasis' => $emphasis,
+                'model'    => $this->config->get_gemini_model(),
+            ], JSON_UNESCAPED_UNICODE);
+
+            $results = [];
+            foreach (['short' => 'short_review', 'normal' => 'normal_review'] as $type => $key) {
+                if (empty($parsed[$key])) continue;
+                $max_ver = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COALESCE(MAX(version), 0) FROM {$t_ai_gen} WHERE response_id = %d AND review_type = %s",
+                    $response_id, $type
+                ));
+                $wpdb->insert($t_ai_gen, [
+                    'response_id'      => $response_id,
+                    'survey_id'        => (int) $resp->survey_id,
+                    'user_id'          => (int) $resp->user_id,
+                    'generated_text'   => $parsed[$key],
+                    'review_type'      => $type,
+                    'version'          => $max_ver + 1,
+                    'status'           => 'generated',
+                    'generation_params' => $gen_params,
+                    'created_at'       => $now,
+                ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s', '%s']);
+                $results[] = [
+                    'id'             => (int) $wpdb->insert_id,
+                    'review_type'    => $type,
+                    'generated_text' => $parsed[$key],
+                    'version'        => $max_ver + 1,
+                ];
+            }
+
+            return new \WP_REST_Response(['success' => true, 'generations' => $results], 200);
+
+        } catch (\Exception $e) {
+            file_put_contents('/tmp/gcrev_review_debug.log',
+                date('Y-m-d H:i:s') . " AI re-generate error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response(['success' => false, 'message' => '口コミ案の生成に失敗しました。'], 500);
+        }
+    }
+
+    /**
+     * GET survey/ai-generations — AI生成履歴一覧
+     */
+    public function rest_survey_ai_generations(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $user_id   = get_current_user_id();
+        $is_admin  = current_user_can('manage_options');
+        $t_ai_gen  = $wpdb->prefix . 'gcrev_survey_ai_generations';
+        $t_surv    = $wpdb->prefix . 'gcrev_surveys';
+        $t_resp    = $wpdb->prefix . 'gcrev_survey_responses';
+
+        $survey_id = absint($request->get_param('survey_id'));
+        $status    = sanitize_text_field($request->get_param('status') ?? '');
+        $date_from = sanitize_text_field($request->get_param('date_from') ?? '');
+        $date_to   = sanitize_text_field($request->get_param('date_to') ?? '');
+        $page      = max(1, absint($request->get_param('page') ?? 1));
+        $per_page  = min(100, max(1, absint($request->get_param('per_page') ?? 20)));
+
+        $where = [];
+        $args  = [];
+
+        if ( ! $is_admin ) {
+            $where[] = 'g.user_id = %d';
+            $args[]  = $user_id;
+        }
+        if ($survey_id > 0) {
+            $where[] = 'g.survey_id = %d';
+            $args[]  = $survey_id;
+        }
+        if (in_array($status, ['generated', 'adopted', 'rejected', 'posted'], true)) {
+            $where[] = 'g.status = %s';
+            $args[]  = $status;
+        }
+        if ($date_from && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from)) {
+            $where[] = 'g.created_at >= %s';
+            $args[]  = $date_from . ' 00:00:00';
+        }
+        if ($date_to && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to)) {
+            $where[] = 'g.created_at <= %s';
+            $args[]  = $date_to . ' 23:59:59';
+        }
+
+        $where_sql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $count_sql = "SELECT COUNT(*) FROM {$t_ai_gen} g {$where_sql}";
+        $total = (int) ($args ? $wpdb->get_var($wpdb->prepare($count_sql, ...$args)) : $wpdb->get_var($count_sql));
+
+        $offset   = ($page - 1) * $per_page;
+        $data_sql = "SELECT g.*, s.title AS survey_title, r.respondent_name
+                     FROM {$t_ai_gen} g
+                     INNER JOIN {$t_surv} s ON g.survey_id = s.id
+                     LEFT JOIN {$t_resp} r ON g.response_id = r.id
+                     {$where_sql}
+                     ORDER BY g.created_at DESC
+                     LIMIT %d OFFSET %d";
+        $data_args = array_merge($args, [$per_page, $offset]);
+        $rows = $wpdb->get_results($wpdb->prepare($data_sql, ...$data_args));
+
+        $generations = array_map(function($g) {
+            return [
+                'id'              => (int) $g->id,
+                'response_id'     => (int) $g->response_id,
+                'survey_id'       => (int) $g->survey_id,
+                'survey_title'    => $g->survey_title,
+                'respondent_name' => $g->respondent_name ?: '',
+                'generated_text'  => $g->generated_text,
+                'review_type'     => $g->review_type,
+                'version'         => (int) $g->version,
+                'status'          => $g->status,
+                'created_at'      => $g->created_at,
+            ];
+        }, $rows);
+
+        return new \WP_REST_Response([
+            'generations' => $generations,
+            'total'       => $total,
+            'page'        => $page,
+            'per_page'    => $per_page,
+            'total_pages' => max(1, (int) ceil($total / $per_page)),
+        ], 200);
+    }
+
+    /**
+     * POST survey/ai-generation/status — AI生成文ステータス変更
+     */
+    public function rest_survey_ai_generation_status(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params        = $request->get_json_params();
+        $generation_id = absint($params['generation_id'] ?? 0);
+        $new_status    = sanitize_text_field($params['status'] ?? '');
+        $user_id       = get_current_user_id();
+
+        if ( ! in_array($new_status, ['generated', 'adopted', 'rejected', 'posted'], true) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => '無効なステータスです。'], 400);
+        }
+
+        $t_ai_gen = $wpdb->prefix . 'gcrev_survey_ai_generations';
+        $gen = $wpdb->get_row($wpdb->prepare("SELECT survey_id FROM {$t_ai_gen} WHERE id = %d", $generation_id));
+        if ( ! $gen || ! $this->can_access_survey((int) $gen->survey_id, $user_id) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $wpdb->update($t_ai_gen, ['status' => $new_status], ['id' => $generation_id], ['%s'], ['%d']);
+
+        return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    // =========================================================
+    // アンケート集計・分析 REST API
+    // =========================================================
+
+    /**
+     * GET survey/analytics — 集計データ
+     */
+    public function rest_survey_analytics(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $user_id   = get_current_user_id();
+        $survey_id = absint($request->get_param('survey_id'));
+        $date_from = sanitize_text_field($request->get_param('date_from') ?? '');
+        $date_to   = sanitize_text_field($request->get_param('date_to') ?? '');
+
+        if ($survey_id <= 0) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'survey_id は必須です。'], 400);
+        }
+        if ( ! $this->can_access_survey($survey_id, $user_id) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $t_resp   = $wpdb->prefix . 'gcrev_survey_responses';
+        $t_ans    = $wpdb->prefix . 'gcrev_survey_response_answers';
+        $t_q      = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_ai_gen = $wpdb->prefix . 'gcrev_survey_ai_generations';
+
+        $date_where = '';
+        $date_args  = [$survey_id];
+        if ($date_from && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_from)) {
+            $date_where .= ' AND r.created_at >= %s';
+            $date_args[] = $date_from . ' 00:00:00';
+        }
+        if ($date_to && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_to)) {
+            $date_where .= ' AND r.created_at <= %s';
+            $date_args[] = $date_to . ' 23:59:59';
+        }
+
+        // サマリ
+        $total_responses = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$t_resp} r WHERE r.survey_id = %d {$date_where}",
+            ...$date_args
+        ));
+        $by_status = $wpdb->get_results($wpdb->prepare(
+            "SELECT r.status, COUNT(*) AS cnt FROM {$t_resp} r WHERE r.survey_id = %d {$date_where} GROUP BY r.status",
+            ...$date_args
+        ));
+        $status_map = [];
+        foreach ($by_status as $row) {
+            $status_map[$row->status ?: 'new'] = (int) $row->cnt;
+        }
+
+        // AI統計
+        $ai_stats = $wpdb->get_results($wpdb->prepare(
+            "SELECT g.status, COUNT(*) AS cnt FROM {$t_ai_gen} g WHERE g.survey_id = %d GROUP BY g.status",
+            $survey_id
+        ));
+        $ai_map = [];
+        $ai_total = 0;
+        foreach ($ai_stats as $row) {
+            $ai_map[$row->status] = (int) $row->cnt;
+            $ai_total += (int) $row->cnt;
+        }
+
+        // 質問別回答分布
+        $questions = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$t_q} WHERE survey_id = %d AND is_active = 1 ORDER BY sort_order ASC",
+            $survey_id
+        ));
+
+        $question_stats = [];
+        foreach ($questions as $q) {
+            $answers = $wpdb->get_col($wpdb->prepare(
+                "SELECT a.answer FROM {$t_ans} a INNER JOIN {$t_resp} r ON a.response_id = r.id WHERE a.question_id = %d AND r.survey_id = %d {$date_where}",
+                ...array_merge([(int) $q->id], $date_args)
+            ));
+
+            $dist = [];
+            $total_ans = count($answers);
+            if (in_array($q->type, ['checkbox', 'radio'], true)) {
+                foreach ($answers as $ans_raw) {
+                    $decoded = json_decode($ans_raw, true);
+                    $values = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : [$ans_raw];
+                    foreach ($values as $v) {
+                        $v = trim($v);
+                        if ($v === '') continue;
+                        $dist[$v] = ($dist[$v] ?? 0) + 1;
+                    }
+                }
+                arsort($dist);
+            }
+
+            $question_stats[] = [
+                'question_id'   => (int) $q->id,
+                'label'         => $q->label,
+                'type'          => $q->type,
+                'total_answers' => $total_ans,
+                'distribution'  => $dist,
+            ];
+        }
+
+        // 回答推移（月別）
+        $trend = $wpdb->get_results($wpdb->prepare(
+            "SELECT DATE_FORMAT(r.created_at, '%%Y-%%m') AS month, COUNT(*) AS cnt
+             FROM {$t_resp} r WHERE r.survey_id = %d {$date_where}
+             GROUP BY month ORDER BY month ASC",
+            ...$date_args
+        ));
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'summary' => [
+                'total_responses' => $total_responses,
+                'by_status'       => $status_map,
+                'ai_total'        => $ai_total,
+                'ai_by_status'    => $ai_map,
+            ],
+            'questions' => $question_stats,
+            'trend'     => array_map(function($t) { return ['month' => $t->month, 'count' => (int) $t->cnt]; }, $trend),
+        ], 200);
+    }
+
+    /**
+     * GET survey/analysis — 分析データ（Gemini AIで分析）
+     */
+    public function rest_survey_analysis(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $user_id   = get_current_user_id();
+        $survey_id = absint($request->get_param('survey_id'));
+
+        if ($survey_id <= 0) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'survey_id は必須です。'], 400);
+        }
+        if ( ! $this->can_access_survey($survey_id, $user_id) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $t_resp   = $wpdb->prefix . 'gcrev_survey_responses';
+        $t_ans    = $wpdb->prefix . 'gcrev_survey_response_answers';
+        $t_q      = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_ai_gen = $wpdb->prefix . 'gcrev_survey_ai_generations';
+
+        // キャッシュチェック
+        $cache_key = "gcrev_survey_analysis_{$survey_id}";
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return new \WP_REST_Response(['success' => true, 'analysis' => $cached, 'cached' => true], 200);
+        }
+
+        // 回答データ収集
+        $response_count = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$t_resp} WHERE survey_id = %d", $survey_id
+        ));
+
+        if ($response_count === 0) {
+            return new \WP_REST_Response(['success' => true, 'analysis' => null, 'message' => '回答データがまだありません。'], 200);
+        }
+
+        // 全回答テキストを集約
+        $all_answers = $wpdb->get_results($wpdb->prepare(
+            "SELECT q.label AS question, a.answer, q.type AS question_type
+             FROM {$t_ans} a
+             INNER JOIN {$t_resp} r ON a.response_id = r.id
+             LEFT JOIN {$t_q} q ON a.question_id = q.id
+             WHERE r.survey_id = %d
+             ORDER BY q.sort_order ASC",
+            $survey_id
+        ));
+
+        // 質問ごとにグルーピング
+        $grouped = [];
+        foreach ($all_answers as $row) {
+            $q_label = $row->question ?: '(不明)';
+            if (!isset($grouped[$q_label])) {
+                $grouped[$q_label] = ['type' => $row->question_type, 'answers' => []];
+            }
+            $decoded = json_decode($row->answer, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $grouped[$q_label]['answers'][] = implode('、', $decoded);
+            } else {
+                $grouped[$q_label]['answers'][] = $row->answer;
+            }
+        }
+
+        // AI生成統計
+        $ai_adoption = $wpdb->get_results($wpdb->prepare(
+            "SELECT status, COUNT(*) AS cnt FROM {$t_ai_gen} WHERE survey_id = %d GROUP BY status",
+            $survey_id
+        ));
+
+        // プロンプト構築
+        $summary_text = "アンケート回答数: {$response_count}件\n\n";
+        foreach ($grouped as $q_label => $data) {
+            $sample = array_slice($data['answers'], 0, 50);
+            $summary_text .= "【{$q_label}】（{$data['type']}型, 回答数: " . count($data['answers']) . "件）\n";
+            $summary_text .= implode("\n", $sample) . "\n\n";
+        }
+
+        $ai_stats_text = '';
+        foreach ($ai_adoption as $row) {
+            $ai_stats_text .= "{$row->status}: {$row->cnt}件 / ";
+        }
+
+        $prompt = <<<PROMPT
+あなたは口コミ・アンケート分析の専門家です。
+以下のアンケート回答データを分析し、ビジネス改善に役立つインサイトを提供してください。
+
+## アンケート回答データ
+{$summary_text}
+
+## AI口コミ生成統計
+{$ai_stats_text}
+
+## 分析して欲しい内容
+1. よく選ばれている回答の傾向（satisfaction_trends）
+2. 顧客が満足しているポイントTOP5（satisfaction_points）
+3. 改善の余地がありそうなポイント（improvement_areas）
+4. 自由記述でよく出てくるキーワードTOP10（frequent_keywords）
+5. 口コミとして使いやすい内容の候補3つ（review_candidates）
+6. 総合コメント（overall_comment）
+
+## 出力形式
+以下のJSON形式のみを出力してください。
+```json
+{
+  "satisfaction_trends": ["傾向1", "傾向2", ...],
+  "satisfaction_points": ["ポイント1", "ポイント2", ...],
+  "improvement_areas": ["改善点1", "改善点2", ...],
+  "frequent_keywords": ["キーワード1", "キーワード2", ...],
+  "review_candidates": ["候補文1", "候補文2", "候補文3"],
+  "overall_comment": "総合的な分析コメント"
+}
+```
+PROMPT;
+
+        try {
+            $raw = $this->ai->call_gemini_api($prompt);
+            $cleaned = preg_replace('/```(?:json)?\s*/i', '', $raw);
+            $cleaned = preg_replace('/```\s*/', '', $cleaned);
+            $cleaned = trim($cleaned);
+            $analysis = json_decode($cleaned, true);
+
+            if (!is_array($analysis)) {
+                file_put_contents('/tmp/gcrev_review_debug.log',
+                    date('Y-m-d H:i:s') . " analysis parse failed: " . substr($raw, 0, 500) . "\n",
+                    FILE_APPEND
+                );
+                return new \WP_REST_Response(['success' => false, 'message' => '分析結果の解析に失敗しました。'], 500);
+            }
+
+            // 1時間キャッシュ
+            set_transient($cache_key, $analysis, HOUR_IN_SECONDS);
+
+            return new \WP_REST_Response(['success' => true, 'analysis' => $analysis, 'cached' => false], 200);
+
+        } catch (\Exception $e) {
+            file_put_contents('/tmp/gcrev_review_debug.log',
+                date('Y-m-d H:i:s') . " analysis error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response(['success' => false, 'message' => '分析の実行に失敗しました。'], 500);
+        }
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
