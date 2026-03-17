@@ -11033,7 +11033,12 @@ PROMPT;
      * ログインユーザーの有効キーワードすべてを一括で順位取得
      */
     public function rest_fetch_all_my_keywords( \WP_REST_Request $request ): \WP_REST_Response {
+        file_put_contents( '/tmp/gcrev_rank_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [fetch_all] START user=" . get_current_user_id() . "\n", FILE_APPEND );
+
         if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
+            file_put_contents( '/tmp/gcrev_rank_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [fetch_all] DataForSEO not configured\n", FILE_APPEND );
             return new \WP_REST_Response( [ 'success' => false, 'message' => '順位取得サービスが利用できません。' ], 503 );
         }
 
@@ -11071,12 +11076,20 @@ PROMPT;
         $fetched     = 0;
 
         foreach ( $keywords as $kw ) {
+            file_put_contents( '/tmp/gcrev_rank_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [fetch_all] Fetching kw_id={$kw['id']} keyword={$kw['keyword']}\n", FILE_APPEND );
+
             $results = $this->dataforseo->fetch_rankings_for_keyword(
                 $kw['keyword'],
                 $kw['target_domain'],
                 (int) $kw['location_code'],
                 $kw['language_code']
             );
+
+            file_put_contents( '/tmp/gcrev_rank_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [fetch_all] Got results kw_id={$kw['id']}"
+                . " desktop=" . ( $results['desktop']['rank_group'] ?? 'null' )
+                . " mobile=" . ( $results['mobile']['rank_group'] ?? 'null' ) . "\n", FILE_APPEND );
 
             $saved = $this->save_rank_results( $kw, $results, 'manual_live' );
             $fetched++;
@@ -11124,6 +11137,9 @@ PROMPT;
         if ( ! $is_admin ) {
             set_transient( 'gcrev_bulk_fetch_' . $user_id . '_' . $today, 1, DAY_IN_SECONDS );
         }
+
+        file_put_contents( '/tmp/gcrev_rank_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [fetch_all] DONE fetched={$fetched}\n", FILE_APPEND );
 
         return new \WP_REST_Response([
             'success' => true,
