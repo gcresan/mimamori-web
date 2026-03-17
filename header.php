@@ -125,6 +125,14 @@
                   </a>
                </li>
 
+               <!-- プラン紹介（単独） -->
+               <li class="nav-item">
+                  <a href="<?php echo esc_url( home_url('/plans/') ); ?>" class="nav-link <?php echo is_page('plans') ? 'active' : ''; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4h14M3 4v12a1 1 0 001 1h12a1 1 0 001-1V4M7 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 9h2M7 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+                  <span>プラン紹介</span>
+                  </a>
+               </li>
+
                <!-- 月次レポート（単独） -->
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/report/report-latest/') ); ?>" class="nav-link <?php echo ( is_page('report-latest') || is_page('report-archive') ) ? 'active' : ''; ?>">
