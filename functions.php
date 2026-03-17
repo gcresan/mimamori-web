@@ -7109,27 +7109,45 @@ function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
 
     $body    = implode( "\n", $body_lines );
     $subject = '【みまもりウェブ】お問い合わせ: ' . $type_display;
-    $to      = get_option( 'admin_email' );
+
+    // 管理者通知の送信先（管理画面で設定可能）
+    $to = get_option( 'gcrev_inquiry_admin_email', '' );
+    if ( empty( $to ) || ! is_email( $to ) ) {
+        $to = get_option( 'admin_email' );
+    }
+
     $headers = [ 'Reply-To: ' . $name . ' <' . $email . '>' ];
 
     $sent = wp_mail( $to, $subject, $body, $headers );
 
-    // 自動返信
+    // 自動返信（件名・本文・フッターは管理画面で設定可能）
     if ( $sent ) {
-        $reply_body  = "{$name} 様\n\n";
-        $reply_body .= "お問い合わせいただきありがとうございます。\n";
-        $reply_body .= "以下の内容で受け付けました。\n\n";
-        $reply_body .= "---\n";
-        $reply_body .= "問い合わせ種別: {$type_display}\n";
-        $reply_body .= "お問い合わせ内容:\n{$message}\n";
-        $reply_body .= "---\n\n";
-        $reply_body .= "内容を確認のうえ、順次ご案内いたします。\n";
-        $reply_body .= "通常2〜3営業日以内にご連絡いたします。\n\n";
-        $reply_body .= "※このメールは自動送信です。\n";
-        $reply_body .= "みまもりウェブ";
+        $reply_subject = get_option( 'gcrev_inquiry_reply_subject', '【みまもりウェブ】お問い合わせを受け付けました' );
+
+        $default_template = "{name} 様\n\nお問い合わせいただきありがとうございます。\n以下の内容で受け付けました。\n\n---\n問い合わせ種別: {type}\nお問い合わせ内容:\n{message}\n---";
+        $reply_template = get_option( 'gcrev_inquiry_reply_body', '' );
+        if ( empty( $reply_template ) ) {
+            $reply_template = $default_template;
+        }
+
+        // プレースホルダー置換
+        $reply_body = str_replace(
+            [ '{name}', '{type}', '{message}' ],
+            [ $name, $type_display, $message ],
+            $reply_template
+        );
+
+        // フッター追加
+        $default_footer = "内容を確認のうえ、順次ご案内いたします。\n通常2〜3営業日以内にご連絡いたします。";
+        $reply_footer = get_option( 'gcrev_inquiry_reply_footer', '' );
+        if ( empty( $reply_footer ) ) {
+            $reply_footer = $default_footer;
+        }
+        $reply_body .= "\n\n" . $reply_footer;
+        $reply_body .= "\n\n※このメールは自動送信です。\nみまもりウェブ";
 
         $reply_headers = [ 'From: みまもりウェブ <' . $to . '>' ];
-        wp_mail( $email, '【みまもりウェブ】お問い合わせを受け付けました', $reply_body, $reply_headers );
+        wp_mail( $email, $reply_subject, $reply_body, $reply_headers );
     }
 
     if ( ! $sent ) {

@@ -112,6 +112,68 @@ class Gcrev_Notification_Settings_Page {
             self::MENU_SLUG,
             self::SECTION_ID
         );
+
+        // ==========================================================
+        // お問い合わせメール設定セクション
+        // ==========================================================
+        $inquiry_section = 'gcrev_inquiry_email_section';
+
+        register_setting( self::OPTION_GROUP, 'gcrev_inquiry_admin_email', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_email',
+            'default'           => '',
+        ] );
+        register_setting( self::OPTION_GROUP, 'gcrev_inquiry_reply_subject', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default'           => '【みまもりウェブ】お問い合わせを受け付けました',
+        ] );
+        register_setting( self::OPTION_GROUP, 'gcrev_inquiry_reply_body', [
+            'type'              => 'string',
+            'sanitize_callback' => 'wp_kses_post',
+            'default'           => '',
+        ] );
+        register_setting( self::OPTION_GROUP, 'gcrev_inquiry_reply_footer', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+            'default'           => '',
+        ] );
+
+        add_settings_section(
+            $inquiry_section,
+            'お問い合わせメール設定',
+            [ $this, 'render_inquiry_section_description' ],
+            self::MENU_SLUG
+        );
+
+        add_settings_field(
+            'gcrev_inquiry_admin_email',
+            '管理者通知の送信先',
+            [ $this, 'render_inquiry_admin_email_field' ],
+            self::MENU_SLUG,
+            $inquiry_section
+        );
+        add_settings_field(
+            'gcrev_inquiry_reply_subject',
+            '自動返信メールの件名',
+            [ $this, 'render_inquiry_reply_subject_field' ],
+            self::MENU_SLUG,
+            $inquiry_section
+        );
+        add_settings_field(
+            'gcrev_inquiry_reply_body',
+            '自動返信メールの本文',
+            [ $this, 'render_inquiry_reply_body_field' ],
+            self::MENU_SLUG,
+            $inquiry_section
+        );
+        add_settings_field(
+            'gcrev_inquiry_reply_footer',
+            '自動返信メールのフッター',
+            [ $this, 'render_inquiry_reply_footer_field' ],
+            self::MENU_SLUG,
+            $inquiry_section
+        );
     }
 
     // =========================================================
@@ -137,6 +199,46 @@ class Gcrev_Notification_Settings_Page {
         $val = (int) get_option( 'gcrev_notify_error_threshold', 1 );
         echo '<input type="number" name="gcrev_notify_error_threshold" value="' . esc_attr( (string) $val ) . '" min="1" max="100" class="small-text" />';
         echo '<p class="description">エラー数がこの値以上のとき通知します。</p>';
+    }
+
+    // =========================================================
+    // お問い合わせメール設定フィールド
+    // =========================================================
+
+    public function render_inquiry_section_description(): void {
+        echo '<p>お問い合わせフォームから送信された際の、管理者通知メールと自動返信メールの設定です。</p>';
+    }
+
+    public function render_inquiry_admin_email_field(): void {
+        $val     = get_option( 'gcrev_inquiry_admin_email', '' );
+        $default = get_option( 'admin_email', '' );
+        echo '<input type="email" name="gcrev_inquiry_admin_email" value="' . esc_attr( $val ) . '" class="regular-text" />';
+        echo '<p class="description">空欄の場合はWordPress管理者メール (' . esc_html( $default ) . ') に送信されます。</p>';
+    }
+
+    public function render_inquiry_reply_subject_field(): void {
+        $val = get_option( 'gcrev_inquiry_reply_subject', '【みまもりウェブ】お問い合わせを受け付けました' );
+        echo '<input type="text" name="gcrev_inquiry_reply_subject" value="' . esc_attr( $val ) . '" class="regular-text" />';
+    }
+
+    public function render_inquiry_reply_body_field(): void {
+        $default = "{name} 様\n\nお問い合わせいただきありがとうございます。\n以下の内容で受け付けました。\n\n---\n問い合わせ種別: {type}\nお問い合わせ内容:\n{message}\n---";
+        $val = get_option( 'gcrev_inquiry_reply_body', '' );
+        if ( empty( $val ) ) {
+            $val = $default;
+        }
+        echo '<textarea name="gcrev_inquiry_reply_body" rows="10" cols="60" class="large-text">' . esc_textarea( $val ) . '</textarea>';
+        echo '<p class="description">使用可能なプレースホルダー: <code>{name}</code>（送信者名）、<code>{type}</code>（問い合わせ種別）、<code>{message}</code>（問い合わせ内容）</p>';
+    }
+
+    public function render_inquiry_reply_footer_field(): void {
+        $default = "内容を確認のうえ、順次ご案内いたします。\n通常2〜3営業日以内にご連絡いたします。";
+        $val = get_option( 'gcrev_inquiry_reply_footer', '' );
+        if ( empty( $val ) ) {
+            $val = $default;
+        }
+        echo '<textarea name="gcrev_inquiry_reply_footer" rows="4" cols="60" class="large-text">' . esc_textarea( $val ) . '</textarea>';
+        echo '<p class="description">本文の後に追加されるフッターテキストです。末尾に「※このメールは自動送信です。みまもりウェブ」が自動付与されます。</p>';
     }
 
     // =========================================================
