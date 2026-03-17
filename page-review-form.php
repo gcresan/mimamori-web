@@ -556,6 +556,62 @@ $api_url = rest_url('gcrev/v1/review/generate');
         line-height: 1.7;
         margin-bottom: 24px;
     }
+    .consent-review-block {
+        margin: 20px 0;
+        padding: 16px 20px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        text-align: left;
+    }
+    .consent-review-heading {
+        font-size: 13px;
+        font-weight: 700;
+        color: #374151;
+        margin-bottom: 12px;
+    }
+    .consent-review-options {
+        display: flex;
+        gap: 12px;
+    }
+    .consent-review-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        padding: 12px 16px;
+        background: #fff;
+        border: 1.5px solid #d1d5db;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        color: #444;
+        transition: border-color 0.15s, background 0.15s;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .consent-review-option:hover {
+        border-color: #93c5fd;
+        background: #f0f7ff;
+    }
+    .consent-review-option.selected {
+        border-color: #3b82f6;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .consent-review-option input[type="radio"] {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        accent-color: #3b82f6;
+        cursor: pointer;
+    }
+    .consent-review-note {
+        font-size: 11.5px;
+        color: #999;
+        line-height: 1.6;
+        margin-top: 10px;
+    }
     .consent-buttons {
         display: flex;
         flex-direction: column;
@@ -691,11 +747,19 @@ $api_url = rest_url('gcrev/v1/review/generate');
                     回答内容をもとにAIが口コミの下書きを作成できます。<br>
                     ご自身で自由に書くこともできます。
                 </div>
-                <div style="margin:16px 0; padding:12px 16px; background:#f9fafb; border-radius:8px;">
-                    <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; color:#374151; cursor:pointer;">
-                        <input type="checkbox" id="consent-review" style="margin-top:2px; flex-shrink:0;">
-                        <span>生成された口コミ文を店舗サイト等で紹介しても構いません</span>
-                    </label>
+                <div class="consent-review-block">
+                    <div class="consent-review-heading">生成された口コミ文の紹介についてお選びください</div>
+                    <div class="consent-review-options">
+                        <label class="consent-review-option" id="consent-review-yes-label">
+                            <input type="radio" name="consent_review" id="consent-review-yes" value="yes">
+                            <span>承諾する</span>
+                        </label>
+                        <label class="consent-review-option" id="consent-review-no-label">
+                            <input type="radio" name="consent_review" id="consent-review-no" value="no">
+                            <span>承諾しない</span>
+                        </label>
+                    </div>
+                    <div class="consent-review-note">※ 承諾いただいた場合のみ、生成された口コミ文を店舗サイト等で紹介することがあります。個人情報は掲載しません。</div>
                 </div>
                 <div class="consent-buttons">
                     <button type="button" class="btn-ai-support" id="btn-use-ai">
@@ -1051,8 +1115,8 @@ $api_url = rest_url('gcrev/v1/review/generate');
             var nameEl = document.getElementById('respondent-name');
             if (nameEl) payload.respondent_name = nameEl.value.trim();
             payload.consent_ai = true;
-            var consentReviewEl = document.getElementById('consent-review');
-            if (consentReviewEl) payload.consent_review = consentReviewEl.checked;
+            var consentYes = document.getElementById('consent-review-yes');
+            payload.consent_review = consentYes ? consentYes.checked : false;
 
             fetch(REVIEW_CONFIG.apiUrl, {
                 method: 'POST',
@@ -1227,6 +1291,23 @@ $api_url = rest_url('gcrev/v1/review/generate');
         function escapeAttr(str) {
             return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
+
+        // =====================================================
+        // 口コミ紹介同意ラジオボタン
+        // =====================================================
+        (function() {
+            var radios = document.querySelectorAll('input[name="consent_review"]');
+            radios.forEach(function(radio) {
+                radio.addEventListener('change', function() {
+                    document.querySelectorAll('.consent-review-option').forEach(function(label) {
+                        label.classList.remove('selected');
+                    });
+                    if (radio.checked) {
+                        radio.closest('.consent-review-option').classList.add('selected');
+                    }
+                });
+            });
+        })();
 
         // =====================================================
         // 初期化
