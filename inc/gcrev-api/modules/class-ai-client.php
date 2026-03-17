@@ -166,9 +166,9 @@ class Gcrev_AI_Client {
         // finishReason をログに記録（STOP以外の場合は注意を促す）
         $finish_reason = $json['candidates'][0]['finishReason'] ?? 'UNKNOWN';
 
-        // MAX_OUTPUT_TOKENSの場合は警告してテキストを返す（リトライループで再生成される）
-        if ($finish_reason === 'MAX_OUTPUT_TOKENS') {
-            error_log("[GCREV] call_gemini_api: WARNING - finishReason=MAX_OUTPUT_TOKENS (output was truncated, may need retry)");
+        // MAX_OUTPUT_TOKENS / MAX_TOKENS の場合は警告してテキストを返す（リトライループで再生成される）
+        if ($finish_reason === 'MAX_OUTPUT_TOKENS' || $finish_reason === 'MAX_TOKENS') {
+            error_log("[GCREV] call_gemini_api: WARNING - finishReason={$finish_reason} (output was truncated, may need retry)");
             $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
             if (!is_string($text) || $text === '') {
                 throw new \Exception('Gemini の応答が空でした。finishReason=' . $finish_reason);
