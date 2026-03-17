@@ -542,13 +542,14 @@ $api_url = rest_url('gcrev/v1/review/generate');
         border-radius: 12px;
         box-shadow: 0 1px 4px rgba(0,0,0,0.06);
         padding: 32px 24px;
-        text-align: center;
+        text-align: left;
     }
     .consent-title {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
         color: #2C3E40;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
+        line-height: 1.6;
     }
     .consent-desc {
         font-size: 14px;
@@ -617,6 +618,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
         flex-direction: column;
         gap: 12px;
         align-items: center;
+        text-align: center;
     }
     .btn-ai-support {
         display: inline-flex;
@@ -744,8 +746,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
             <div class="consent-card">
                 <div class="consent-title">ご利用のご感想を、Googleの口コミでもお聞かせいただけると嬉しいです</div>
                 <div class="consent-desc">
-                    回答内容をもとにAIが口コミの下書きを作成できます。<br>
-                    ご自身で自由に書くこともできます。
+                    回答内容をもとにAIが口コミの下書きを作成できます。ご自身で自由に書くこともできます。
                 </div>
                 <div class="consent-review-block">
                     <div class="consent-review-heading">生成された口コミ文の紹介についてお選びください</div>
