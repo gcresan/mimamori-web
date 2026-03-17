@@ -12272,6 +12272,10 @@ PROMPT;
      */
     public function rest_generate_review(\WP_REST_Request $request): \WP_REST_Response {
         try {
+            file_put_contents('/tmp/gcrev_review_debug.log',
+                date('Y-m-d H:i:s') . " rest_generate_review called\n",
+                FILE_APPEND
+            );
             global $wpdb;
             $params       = $request->get_json_params();
             $answers      = $params['answers'] ?? [];
@@ -12330,6 +12334,10 @@ PROMPT;
 
             // AIプロンプト構築 → Gemini API 呼び出し（口コミ用に高 temperature）
             $prompt       = $this->build_review_prompt($answer_text, $business_name);
+            file_put_contents('/tmp/gcrev_review_debug.log',
+                date('Y-m-d H:i:s') . " calling gemini API, prompt_len=" . strlen($prompt) . ", is_regenerate=" . ($is_regenerate ? 'yes' : 'no') . "\n",
+                FILE_APPEND
+            );
             $raw_response = $this->ai->call_gemini_api($prompt, [
                 'temperature'     => 0.9,
                 'topP'            => 0.95,
@@ -12376,9 +12384,11 @@ PROMPT;
                 'version'       => $version,
             ], 200);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             file_put_contents('/tmp/gcrev_review_debug.log',
-                date('Y-m-d H:i:s') . " review generate error: " . $e->getMessage() . "\n",
+                date('Y-m-d H:i:s') . " review generate error: " . $e->getMessage()
+                . "\n  File: " . $e->getFile() . ':' . $e->getLine()
+                . "\n  Trace: " . substr($e->getTraceAsString(), 0, 800) . "\n",
                 FILE_APPEND
             );
             return new \WP_REST_Response([
