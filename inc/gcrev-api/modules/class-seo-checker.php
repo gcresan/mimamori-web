@@ -29,6 +29,33 @@ class Gcrev_SEO_Checker {
     /** User-Agent */
     private const USER_AGENT = 'MimamoriSEO/1.0';
 
+    /**
+     * コンテンツ量チェックの対象外URLパターン
+     *
+     * 確認ページ・送信完了ページ等、SEO的にコンテンツ量が少なくて当然のページ。
+     * パスの末尾部分（スラッシュ除去後）に部分一致で判定する。
+     * 拡張時はここにパターンを追加するだけでよい。
+     */
+    private const CONTENT_EXCLUDE_SLUGS = [
+        'thanks',
+        'thank-you',
+        'thankyou',
+        'confirm',
+        'confirmation',
+        'complete',
+        'finish',
+        'finished',
+        'done',
+        'contact-confirm',
+        'contact-thanks',
+        'contact-complete',
+        'form-confirm',
+        'form-thanks',
+        'form-complete',
+        'sent',
+        'submitted',
+    ];
+
     /* =========================================================
      * 公開 API
      * ========================================================= */
@@ -889,6 +916,9 @@ class Gcrev_SEO_Checker {
 
     /**
      * コンテンツ量スコアリング
+     *
+     * 確認ページ・送信完了ページ等（CONTENT_EXCLUDE_SLUGS）は
+     * コンテンツが少なくて当然なので評価対象から除外する。
      */
     private function score_body_content( array $pages ): array {
         $score     = 10;
@@ -896,9 +926,15 @@ class Gcrev_SEO_Checker {
         $affected  = [];
         $very_thin = 0;
         $thin      = 0;
+        $excluded  = 0;
 
         foreach ( $pages as $p ) {
             if ( ! empty( $p['fetch_error'] ) ) { continue; }
+            // 確認・完了ページはコンテンツ量評価から除外
+            if ( $this->is_content_excluded_url( $p['url'] ) ) {
+                $excluded++;
+                continue;
+            }
             $len = $p['body_text_length'] ?? 0;
             if ( $len < 100 ) {
                 $very_thin++;
@@ -911,6 +947,7 @@ class Gcrev_SEO_Checker {
 
         if ( $very_thin > 0 ) { $score -= min( $very_thin * 5, 10 ); $findings[] = "コンテンツが極端に少ないページが{$very_thin}つあります（100文字未満）"; }
         if ( $thin > 0 )      { $score -= min( $thin * 2, 6 );       $findings[] = "コンテンツが少なめのページが{$thin}つあります（300文字未満）"; }
+        if ( $excluded > 0 )  { $findings[] = "確認・完了ページ{$excluded}件はコンテンツ量評価の対象外としました"; }
         if ( empty( $findings ) ) { $findings[] = 'すべてのページで十分なコンテンツ量があります'; }
 
         $score = max( 0, $score );
@@ -1096,26 +1133,28 @@ class Gcrev_SEO_Checker {
                 ];
             }
 
-            // --- コンテンツ量 ---
-            $body_len = $p['body_text_length'] ?? 0;
-            if ( $body_len < 100 ) {
-                $issues[] = [
-                    'url'         => $url_path,
-                    'statusCode'  => $code,
-                    'issueType'   => 'コンテンツ量',
-                    'issueDetail' => "コンテンツが極端に少ない（{$body_len}文字）",
-                    'priority'    => 'high',
-                    'suggestion'  => 'テキスト量が極端に少ないページは低品質と判定される可能性があります。ユーザーにとって有益な情報を追加してください。',
-                ];
-            } elseif ( $body_len < 300 ) {
-                $issues[] = [
-                    'url'         => $url_path,
-                    'statusCode'  => $code,
-                    'issueType'   => 'コンテンツ量',
-                    'issueDetail' => "コンテンツが少なめ（{$body_len}文字）",
-                    'priority'    => 'medium',
-                    'suggestion'  => 'テキスト量が少ないページは検索エンジンからの評価が低くなる傾向があります。ページのテーマに沿った有益なコンテンツを追加してください。',
-                ];
+            // --- コンテンツ量（確認・完了ページは除外） ---
+            if ( ! $this->is_content_excluded_url( $p['url'] ) ) {
+                $body_len = $p['body_text_length'] ?? 0;
+                if ( $body_len < 100 ) {
+                    $issues[] = [
+                        'url'         => $url_path,
+                        'statusCode'  => $code,
+                        'issueType'   => 'コンテンツ量',
+                        'issueDetail' => "コンテンツが極端に少ない（{$body_len}文字）",
+                        'priority'    => 'high',
+                        'suggestion'  => 'テキスト量が極端に少ないページは低品質と判定される可能性があります。ユーザーにとって有益な情報を追加してください。',
+                    ];
+                } elseif ( $body_len < 300 ) {
+                    $issues[] = [
+                        'url'         => $url_path,
+                        'statusCode'  => $code,
+                        'issueType'   => 'コンテンツ量',
+                        'issueDetail' => "コンテンツが少なめ（{$body_len}文字）",
+                        'priority'    => 'medium',
+                        'suggestion'  => 'テキスト量が少ないページは検索エンジンからの評価が低くなる傾向があります。ページのテーマに沿った有益なコンテンツを追加してください。',
+                    ];
+                }
             }
         }
 
@@ -1223,6 +1262,12 @@ class Gcrev_SEO_Checker {
             }
         }
 
+        // 重要度の高い順にソート（high → medium → low）
+        $priority_order = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
+        usort( $recs, function( $a, $b ) use ( $priority_order ) {
+            return ( $priority_order[ $a['priority'] ] ?? 9 ) - ( $priority_order[ $b['priority'] ] ?? 9 );
+        } );
+
         return $recs;
     }
 
@@ -1293,5 +1338,32 @@ class Gcrev_SEO_Checker {
     private function url_path( string $url ): string {
         $path = wp_parse_url( $url, PHP_URL_PATH );
         return $path ?: '/';
+    }
+
+    /**
+     * コンテンツ量チェックの除外対象ページか判定
+     *
+     * 確認ページ・送信完了ページ等はコンテンツが少なくて当然なので除外する。
+     * URLパスの末尾スラッグを CONTENT_EXCLUDE_SLUGS と照合。
+     */
+    private function is_content_excluded_url( string $url ): bool {
+        $path = wp_parse_url( $url, PHP_URL_PATH );
+        if ( ! $path || $path === '/' ) {
+            return false;
+        }
+        // 末尾スラッシュを除去してスラッグを取得
+        $slug = basename( rtrim( $path, '/' ) );
+        $slug = strtolower( $slug );
+
+        foreach ( self::CONTENT_EXCLUDE_SLUGS as $pattern ) {
+            if ( $slug === $pattern ) {
+                return true;
+            }
+            // スラッグが pattern を含む場合も除外（例: my-thanks, contact-confirm-page）
+            if ( strpos( $slug, $pattern ) !== false ) {
+                return true;
+            }
+        }
+        return false;
     }
 }
