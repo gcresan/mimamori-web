@@ -64,17 +64,15 @@
             </div>
             <?php endif; ?>
             <?php if ( function_exists( 'gcrev_is_trial_active' ) && gcrev_is_trial_active( $u->ID ) ) : ?>
-            <div class="sidebar-test-badge" style="margin-top: 6px;">
-               <span style="display: inline-block; padding: 2px 10px; font-size: 11px; font-weight: 600; color: #d97706; background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.2); border-radius: 4px; letter-spacing: 0.05em;">お試し中</span>
+            <div style="margin-top: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: nowrap;">
+               <span style="display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: 600; color: #d97706; background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.2); border-radius: 4px; letter-spacing: 0.05em; white-space: nowrap;">お試し中</span>
+               <?php
+                  $trial_end_display = gcrev_get_trial_end_display( $u->ID );
+                  if ( $trial_end_display ) :
+               ?>
+               <span style="font-size: 11px; color: #999; white-space: nowrap;"><?php echo esc_html( $trial_end_display ); ?>まで</span>
+               <?php endif; ?>
             </div>
-            <?php
-               $trial_end_display = gcrev_get_trial_end_display( $u->ID );
-               if ( $trial_end_display ) :
-            ?>
-            <div style="margin-top: 4px; font-size: 11px; color: #999; text-align: center;">
-               <?php echo esc_html( $trial_end_display ); ?> まで
-            </div>
-            <?php endif; ?>
             <?php endif; ?>
          </div>
          <?php endif; ?>
