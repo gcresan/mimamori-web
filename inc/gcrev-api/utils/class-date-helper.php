@@ -38,6 +38,26 @@ class Gcrev_Date_Helper {
     }
 
     // =========================================================
+    // 月固定期間の判定
+    // =========================================================
+
+    /**
+     * 月固定期間かどうかを判定する
+     *
+     * 月固定期間: 月初に確定保存し、日次更新しない期間
+     * 日次期間: 毎日スライドし、日次更新する期間
+     *
+     * @param  string $period 期間キー
+     * @return bool 月固定なら true
+     */
+    public static function is_monthly_fixed_period( string $period ): bool {
+        return in_array( $period, [
+            'previousMonth', 'twoMonthsAgo', 'last180', 'last365',
+            'prev-month', 'prev-prev-month',
+        ], true );
+    }
+
+    // =========================================================
     // ダッシュボード用：期間範囲の計算
     // =========================================================
 
@@ -76,8 +96,9 @@ class Gcrev_Date_Helper {
                 break;
 
             case 'last180':
-                $end   = new \DateTimeImmutable('yesterday', $tz);
-                $start = $end->sub(new \DateInterval('P179D'));
+                // 月固定: 前月末を終了日とした直近6ヶ月
+                $end   = new \DateTimeImmutable('last day of last month', $tz);
+                $start = $end->modify('first day of -5 months');
                 $display = [
                     'text'  => '過去半年',
                     'start' => $start->format('Y/m/d'),
@@ -86,8 +107,9 @@ class Gcrev_Date_Helper {
                 break;
 
             case 'last365':
-                $end   = new \DateTimeImmutable('yesterday', $tz);
-                $start = $end->sub(new \DateInterval('P364D'));
+                // 月固定: 前月末を終了日とした直近12ヶ月
+                $end   = new \DateTimeImmutable('last day of last month', $tz);
+                $start = $end->modify('first day of -11 months');
                 $display = [
                     'text'  => '過去1年',
                     'start' => $start->format('Y/m/d'),
@@ -221,18 +243,18 @@ class Gcrev_Date_Helper {
                 break;
 
             case 'last180':
-                $end = clone $today;
-                $end->modify('-1 day');
+                // 月固定: 前月末を終了日とした直近6ヶ月
+                $end   = new \DateTime('last day of last month', new \DateTimeZone('Asia/Tokyo'));
                 $start = clone $end;
-                $start->modify('-179 days');
+                $start->modify('first day of -5 months');
                 $display = $start->format('Y/m/d') . ' 〜 ' . $end->format('Y/m/d');
                 break;
 
             case 'last365':
-                $end = clone $today;
-                $end->modify('-1 day');
+                // 月固定: 前月末を終了日とした直近12ヶ月
+                $end   = new \DateTime('last day of last month', new \DateTimeZone('Asia/Tokyo'));
                 $start = clone $end;
-                $start->modify('-364 days');
+                $start->modify('first day of -11 months');
                 $display = $start->format('Y/m/d') . ' 〜 ' . $end->format('Y/m/d');
                 break;
 
@@ -290,17 +312,25 @@ class Gcrev_Date_Helper {
                 break;
 
             case 'last180':
-                $end = clone $today;
-                $end->modify('-181 days');
+                // 月固定: 当該6ヶ月の直前6ヶ月
+                $main_end   = new \DateTime('last day of last month', new \DateTimeZone('Asia/Tokyo'));
+                $main_start = clone $main_end;
+                $main_start->modify('first day of -5 months');
+                $end   = clone $main_start;
+                $end->modify('-1 day'); // 当該期間の前日
                 $start = clone $end;
-                $start->modify('-179 days');
+                $start->modify('first day of -5 months');
                 break;
 
             case 'last365':
-                $end = clone $today;
-                $end->modify('-366 days');
+                // 月固定: 当該12ヶ月の直前12ヶ月
+                $main_end   = new \DateTime('last day of last month', new \DateTimeZone('Asia/Tokyo'));
+                $main_start = clone $main_end;
+                $main_start->modify('first day of -11 months');
+                $end   = clone $main_start;
+                $end->modify('-1 day'); // 当該期間の前日
                 $start = clone $end;
-                $start->modify('-364 days');
+                $start->modify('first day of -11 months');
                 break;
 
             case 'prev-prev-month':

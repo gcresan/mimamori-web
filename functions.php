@@ -4711,6 +4711,7 @@ add_action('after_setup_theme', function () {
     gcrev_meo_results_create_table(); // MEO週次順位テーブル（マップ順位ページで使用）
     gcrev_aio_results_create_table();
     gcrev_survey_create_tables();
+    gcrev_prefetch_status_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -5143,6 +5144,34 @@ function gcrev_survey_create_tables(): void {
         }
         update_option( 'gcrev_survey_ai_gen_migrated', 1 );
     }
+}
+
+/**
+ * プリフェッチステータス管理テーブル作成
+ *
+ * 各クライアント×期間×データ種別ごとの取得ステータスを記録。
+ * 管理画面のプリフェッチ管理ページで参照。
+ */
+function gcrev_prefetch_status_create_table(): void {
+    global $wpdb;
+    $table           = $wpdb->prefix . 'gcrev_prefetch_status';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        period VARCHAR(30) NOT NULL,
+        data_type VARCHAR(30) NOT NULL DEFAULT 'all',
+        status VARCHAR(20) NOT NULL DEFAULT 'success',
+        fetched_at DATETIME NOT NULL,
+        error_message TEXT NULL,
+        source VARCHAR(20) NOT NULL DEFAULT 'cron',
+        UNIQUE KEY user_period_type (user_id, period, data_type),
+        KEY status (status),
+        KEY fetched_at (fetched_at)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
 }
 
 /**

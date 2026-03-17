@@ -34,12 +34,20 @@ class Gcrev_Bootstrap {
         add_action('gcrev_keyword_metrics_monthly_event', [__CLASS__, 'on_keyword_metrics_monthly']);
         add_action('gcrev_keyword_metrics_chunk_event', [__CLASS__, 'on_keyword_metrics_chunk'], 10, 2);
 
+        // 月次データプリフェッチ（月固定期間: prev-month, prev-prev-month, last180, last365）
+        add_action('gcrev_monthly_data_prefetch_event', [__CLASS__, 'on_monthly_data_prefetch_event']);
+        add_action('gcrev_monthly_prefetch_chunk_event', [__CLASS__, 'on_monthly_prefetch_chunk_event'], 10, 2);
+
         // スロット別プリフェッチ
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
             $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
             for ( $i = 0; $i < $slot_count; $i++ ) {
                 add_action( "gcrev_prefetch_daily_event_slot_{$i}", [__CLASS__, 'on_prefetch_slot_event'] );
                 add_action( "gcrev_prefetch_chunk_slot_{$i}_event", [__CLASS__, 'on_prefetch_chunk_slot_event'], 10, 3 );
+
+                // 月次スロット
+                add_action( "gcrev_monthly_data_event_slot_{$i}", [__CLASS__, 'on_monthly_prefetch_slot_event'] );
+                add_action( "gcrev_monthly_data_chunk_slot_{$i}_event", [__CLASS__, 'on_monthly_prefetch_chunk_slot_event'], 10, 3 );
             }
         }
 
@@ -106,6 +114,12 @@ class Gcrev_Bootstrap {
             if ( file_exists( $aio_settings_path ) ) {
                 require_once $aio_settings_path;
                 (new Gcrev_AIO_Settings_Page())->register();
+            }
+
+            $prefetch_management_path = __DIR__ . '/admin/class-prefetch-management-page.php';
+            if ( file_exists( $prefetch_management_path ) ) {
+                require_once $prefetch_management_path;
+                (new Gcrev_Prefetch_Management_Page())->register();
             }
 
             // アンケート管理は表側ダッシュボード (page-review-survey.php + REST API) に移行済み
@@ -266,6 +280,58 @@ class Gcrev_Bootstrap {
     }
 
     // =========================================================
+    // 月次データプリフェッチ Callbacks
+    // =========================================================
+
+    /**
+     * 月次データプリフェッチ日次イベント（毎日 05:00 に発火、月初のみ実行）
+     */
+    public static function on_monthly_data_prefetch_event(): void {
+        error_log('[GCREV] gcrev_monthly_data_prefetch_event triggered');
+        // スロット方式が有効な場合はスロット側で処理
+        if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+            error_log( '[GCREV] monthly_data_prefetch: slot-based scheduling active, skipping legacy' );
+            return;
+        }
+        $api = new Gcrev_Insight_API(false);
+        $api->auto_monthly_data_prefetch();
+    }
+
+    /**
+     * 月次データプリフェッチ — チャンクイベント
+     */
+    public static function on_monthly_prefetch_chunk_event( $offset, $limit ): void {
+        error_log("[GCREV] gcrev_monthly_prefetch_chunk_event triggered: offset={$offset}, limit={$limit}");
+        $api = new Gcrev_Insight_API(false);
+        $api->monthly_data_prefetch_chunk( (int) $offset, (int) $limit );
+    }
+
+    /**
+     * 月次データプリフェッチ — スロット別イベント
+     */
+    public static function on_monthly_prefetch_slot_event(): void {
+        $action = current_action();
+        if ( preg_match( '/slot_(\d+)$/', $action, $m ) ) {
+            $slot = (int) $m[1];
+            error_log( "[GCREV] gcrev_monthly_data_event_slot_{$slot} triggered" );
+            $api = new Gcrev_Insight_API( false );
+            $api->monthly_prefetch_chunk_for_slot( $slot, 0, Gcrev_Insight_API::PREFETCH_CHUNK_LIMIT );
+        }
+    }
+
+    /**
+     * 月次データプリフェッチ — スロット別チャンクイベント
+     */
+    public static function on_monthly_prefetch_chunk_slot_event( $slot, $offset, $limit ): void {
+        $slot   = (int) $slot;
+        $offset = (int) $offset;
+        $limit  = (int) $limit;
+        error_log( "[GCREV] monthly_data_chunk_slot_{$slot}_event triggered: offset={$offset}, limit={$limit}" );
+        $api = new Gcrev_Insight_API( false );
+        $api->monthly_prefetch_chunk_for_slot( $slot, $offset, $limit );
+    }
+
+    // =========================================================
     // Schedule登録（イベント名・時刻は現状維持）
     // =========================================================
 
@@ -303,6 +369,24 @@ class Gcrev_Bootstrap {
 
         // MEO 週次フェッチ（月曜 04:30）
         self::schedule_weekly_if_missing('gcrev_meo_fetch_weekly_event', 'next Monday 04:30:00');
+
+        // 月次データプリフェッチ: 毎日 05:00（月初のみ実行、月固定期間データを取得）
+        if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+            // スロット版: 05:10, 05:40, 06:10, 06:40
+            $monthly_slot_times = ['05:10:00', '05:40:00', '06:10:00', '06:40:00'];
+            $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
+            for ( $i = 0; $i < $slot_count; $i++ ) {
+                $slot_hook = "gcrev_monthly_data_event_slot_{$i}";
+                if ( ! wp_next_scheduled( $slot_hook ) ) {
+                    $time_str = $monthly_slot_times[ $i ] ?? $monthly_slot_times[0];
+                    $tz = wp_timezone();
+                    $dt = new DateTimeImmutable( "tomorrow {$time_str}", $tz );
+                    wp_schedule_event( $dt->getTimestamp(), 'daily', $slot_hook );
+                    error_log( "[GCREV] Scheduled {$slot_hook} (daily) at " . $dt->format('Y-m-d H:i:s T') );
+                }
+            }
+        }
+        self::schedule_daily_if_missing('gcrev_monthly_data_prefetch_event', 'tomorrow 05:00:00');
 
         // キーワード指標: 月1回（1日 06:00）
         self::schedule_monthly_if_missing('gcrev_keyword_metrics_monthly_event', 'first day of next month 06:00:00');
@@ -373,11 +457,13 @@ class Gcrev_Bootstrap {
             'gcrev_rank_fetch_weekly_event',
             'gcrev_meo_fetch_weekly_event',
             'gcrev_keyword_metrics_monthly_event',
+            'gcrev_monthly_data_prefetch_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',
             // 'gcrev_rank_fetch_chunk_event',
             // 'gcrev_keyword_metrics_chunk_event',
+            // 'gcrev_monthly_prefetch_chunk_event',
         ];
 
         foreach ($hooks as $hook) {
@@ -388,9 +474,18 @@ class Gcrev_Bootstrap {
             }
         }
 
-        // スロット別プリフェッチイベントも掃除
+        // スロット別プリフェッチイベントも掃除（日次 + 月次）
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
             Gcrev_Prefetch_Scheduler::unschedule_all_slots();
+            $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
+            for ( $i = 0; $i < $slot_count; $i++ ) {
+                $hook = "gcrev_monthly_data_event_slot_{$i}";
+                $ts   = wp_next_scheduled( $hook );
+                while ( $ts ) {
+                    wp_unschedule_event( $ts, $hook );
+                    $ts = wp_next_scheduled( $hook );
+                }
+            }
         }
 
         error_log('[GCREV] Unschedule events done (switch_theme)');

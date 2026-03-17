@@ -28,6 +28,24 @@ get_header();
 /* All shared styles are in css/dashboard-redesign.css */
 </style>
 
+<?php
+// 期間セレクター（共通モジュール）
+set_query_var('gcrev_period_selector', [
+  'id' => 'cv-period',
+  'items' => [
+    ['value' => 'last30',     'label' => '直近30日'],
+    ['value' => 'prev-month',      'label' => '前月'],
+    ['value' => 'prev-prev-month', 'label' => '前々月'],
+    ['value' => 'last90',          'label' => '過去90日'],
+    ['value' => 'last180',    'label' => '過去半年'],
+    ['value' => 'last365',    'label' => '過去1年'],
+  ],
+  'default' => 'last30',
+]);
+
+get_template_part('template-parts/period-selector');
+?>
+
 <!-- コンテンツエリア -->
 <div class="content-area">
     <!-- ローディングオーバーレイ -->
@@ -218,8 +236,21 @@ function setupTabToggle(toggleId, onRealloc, onGa4) {
     });
 }
 
-// ===== 初期化：前月データを固定で取得 =====
-loadCvData('prev-month');
+// ===== 初期化：期間セレクターと連動 =====
+const SELECTOR_ID = 'cv-period';
+const selectorEl  = document.getElementById(SELECTOR_ID);
+if (selectorEl) {
+    selectorEl.addEventListener('gcrev:periodChange', function(e) {
+        loadCvData(e.detail.period);
+    });
+} else {
+    // フォールバック
+    document.addEventListener('gcrev:periodChange', function(e) {
+        if (e.detail && e.detail.selectorId === SELECTOR_ID) {
+            loadCvData(e.detail.period);
+        }
+    });
+}
 
 // ===== データ取得 =====
 async function loadCvData(period) {

@@ -53,7 +53,7 @@ set_query_var('gcrev_period_selector', [
     ['value' => 'last180',    'label' => '過去半年'],
     ['value' => 'last365',    'label' => '過去1年'],
   ],
-  'default' => 'prev-month',
+  'default' => 'last30',
 ]);
 
 get_template_part('template-parts/period-selector');

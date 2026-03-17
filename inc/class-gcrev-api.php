@@ -225,7 +225,7 @@ class Gcrev_Insight_API {
             'args'                => [
                 'period' => [
                     'required'          => false,
-                    'default'           => 'prev-month',
+                    'default'           => 'last30',
                     'validate_callback' => function($param) {
                         return in_array($param, ['last30', 'last90', 'last180', 'last365', 'prev-month', 'prev-prev-month']);
                     }
@@ -264,7 +264,7 @@ class Gcrev_Insight_API {
             'args'                => [
                 'period' => [
                     'required'          => false,
-                    'default'           => 'previousMonth',
+                    'default'           => 'last30',
                     'validate_callback' => function($param) {
                         return in_array($param, ['last30', 'last90', 'last180', 'last365', 'previousMonth', 'twoMonthsAgo', 'prev-month', 'prev-prev-month']);
                     }
@@ -279,7 +279,7 @@ class Gcrev_Insight_API {
             'args'                => [
                 'period' => [
                     'required'          => false,
-                    'default'           => 'prev-month',
+                    'default'           => 'last30',
                     'validate_callback' => function($param) {
                         return in_array($param, ['last30', 'last90', 'last180', 'last365', 'prev-month', 'prev-prev-month']);
                     }
@@ -322,7 +322,7 @@ class Gcrev_Insight_API {
             'args'                => [
                 'period' => [
                     'required'          => false,
-                    'default'           => 'prev-month',
+                    'default'           => 'last30',
                     'validate_callback' => function($param) {
                         return in_array($param, ['last30', 'last90', 'last180', 'last365', 'prev-month', 'prev-prev-month']);
                     }
@@ -338,7 +338,7 @@ class Gcrev_Insight_API {
             'args'                => [
                 'period' => [
                     'required'          => false,
-                    'default'           => 'prev-month',
+                    'default'           => 'last30',
                     'validate_callback' => function($param) {
                         return in_array($param, ['last30', 'last90', 'last180', 'last365', 'prev-month', 'prev-prev-month']);
                     }
@@ -354,7 +354,7 @@ class Gcrev_Insight_API {
             'args'                => [
                 'period' => [
                     'required'          => false,
-                    'default'           => 'prev-month',
+                    'default'           => 'last30',
                     'validate_callback' => function($param) {
                         return in_array($param, ['last30', 'prev-month']);
                     }
@@ -485,7 +485,7 @@ class Gcrev_Insight_API {
             'args'                => [
                 'period' => [
                     'required'          => false,
-                    'default'           => 'prev-month',
+                    'default'           => 'last30',
                     'validate_callback' => function($param) {
                         return in_array($param, ['last30', 'last90', 'last180', 'last365', 'prev-month', 'prev-prev-month']);
                     }
@@ -903,10 +903,16 @@ class Gcrev_Insight_API {
 
     private function dashboard_cache_set(int $user_id, string $range, array $data): void {
         $key = $this->cache_key_dashboard($user_id, $range);
-        // [CACHE_FIRST] last90/last180/last365 は 48h キャッシュ（重いため長めに保持）
-        $ttl = in_array($range, ['last90', 'last180', 'last365'], true)
-            ? 172800   // 48h
-            : $this->dashboard_cache_ttl;  // 24h（既存）
+        // 月固定期間（prev-month / prev-prev-month / last180 / last365）: 35日
+        // 日次期間(last90): 48h（重い）
+        // 日次期間(last30 等): 24h
+        if ( Gcrev_Date_Helper::is_monthly_fixed_period( $range ) ) {
+            $ttl = 3024000;  // 35日
+        } elseif ( $range === 'last90' ) {
+            $ttl = 172800;   // 48h
+        } else {
+            $ttl = $this->dashboard_cache_ttl;  // 24h
+        }
         set_transient($key, $data, $ttl);
     }
 
@@ -974,6 +980,111 @@ class Gcrev_Insight_API {
             'gcrev_beginner_rw_',
             'gcrev_title_',
         ];
+    }
+
+    // =========================================================
+    // プリフェッチステータス記録
+    // =========================================================
+
+    /**
+     * プリフェッチステータスを記録する（UPSERT）
+     *
+     * @param int         $user_id   ユーザーID
+     * @param string      $period    期間キー（last30, prev-month 等）
+     * @param string      $data_type データ種別（all, dashboard, source, region, page, keywords）
+     * @param string      $status    ステータス（success, error, skip）
+     * @param string|null $error     エラーメッセージ
+     * @param string      $source    ソース（cron, manual）
+     */
+    public function record_prefetch_status( int $user_id, string $period, string $data_type, string $status, ?string $error = null, string $source = 'cron' ): void {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_prefetch_status';
+        $wpdb->replace( $table, [
+            'user_id'       => $user_id,
+            'period'        => $period,
+            'data_type'     => $data_type,
+            'status'        => $status,
+            'fetched_at'    => current_time( 'mysql', false ),
+            'error_message' => $error,
+            'source'        => $source,
+        ], [ '%d', '%s', '%s', '%s', '%s', '%s', '%s' ] );
+    }
+
+    /**
+     * プリフェッチステータスを取得する
+     *
+     * @param int|null $user_id  指定時はそのユーザーのみ、null で全ユーザー
+     * @return array
+     */
+    public function get_prefetch_statuses( ?int $user_id = null ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_prefetch_status';
+        if ( $user_id !== null ) {
+            return $wpdb->get_results( $wpdb->prepare(
+                "SELECT * FROM {$table} WHERE user_id = %d ORDER BY period, data_type",
+                $user_id
+            ), ARRAY_A ) ?: [];
+        }
+        return $wpdb->get_results(
+            "SELECT * FROM {$table} ORDER BY user_id, period, data_type",
+            ARRAY_A
+        ) ?: [];
+    }
+
+    /**
+     * 特定ユーザー × 特定期間のデータを手動取得する
+     *
+     * @param int    $user_id ユーザーID
+     * @param string $period  期間キー（last30, last90, previousMonth 等）
+     * @return array  ['status' => string, 'error' => ?string]
+     */
+    public function manual_fetch_for_user( int $user_id, string $period ): array {
+        try {
+            $config = $this->config->get_user_config( $user_id );
+        } catch ( \Exception $e ) {
+            $this->record_prefetch_status( $user_id, $period, 'all', 'error', $e->getMessage(), 'manual' );
+            return [ 'status' => 'error', 'error' => $e->getMessage() ];
+        }
+
+        // 国フィルタ適用
+        $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
+        if ( $exclude_foreign ) {
+            $this->ga4->set_country_filter( 'Japan' );
+        }
+
+        $had_error = false;
+        $error_msg = '';
+
+        try {
+            // ダッシュボードキャッシュ
+            $dash_range = $period;
+            // period-selector 値をダッシュボード range 値に変換
+            if ( $period === 'prev-month' )      $dash_range = 'previousMonth';
+            if ( $period === 'prev-prev-month' ) $dash_range = 'twoMonthsAgo';
+
+            // 既存キャッシュを削除して強制再取得
+            $cache_key = $this->cache_key_dashboard( $user_id, $dash_range );
+            delete_transient( $cache_key );
+
+            $data = $this->fetch_dashboard_data_internal( $config, $dash_range );
+            $this->dashboard_cache_set( $user_id, $dash_range, $data );
+
+            // 分析ページキャッシュ
+            $this->prefetch_analysis_caches( $user_id, $config, $period );
+
+        } catch ( \Exception $e ) {
+            $had_error = true;
+            $error_msg = $e->getMessage();
+        }
+
+        if ( $exclude_foreign ) {
+            $this->ga4->set_country_filter( null );
+        }
+
+        $status = $had_error ? 'error' : 'success';
+        $this->record_prefetch_status( $user_id, $period, 'all', $status, $had_error ? $error_msg : null, 'manual' );
+
+        return [ 'status' => $status, 'error' => $had_error ? $error_msg : null ];
     }
 
     /**
@@ -1212,7 +1323,8 @@ class Gcrev_Insight_API {
             return;
         }
 
-        $ranges = ['last30', 'last90', 'last180', 'last365', 'previousMonth', 'twoMonthsAgo'];
+        // 日次プリフェッチ: スライド期間のみ（月固定期間は月次cronで取得）
+        $ranges = ['last30', 'last90'];
 
         foreach ($users as $u) {
             $user_id = (int)$u->ID;
@@ -1229,7 +1341,13 @@ class Gcrev_Insight_API {
                 continue;
             }
 
-            // --- (1) ダッシュボード／デバイスキャッシュ（既存） ---
+            // 国フィルタ適用
+            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
+            if ( $exclude_foreign ) {
+                $this->ga4->set_country_filter( 'Japan' );
+            }
+
+            // --- (1) ダッシュボード／デバイスキャッシュ ---
             foreach ($ranges as $range) {
                 $cached = $this->dashboard_cache_get($user_id, $range);
                 if ($cached) {
@@ -1249,9 +1367,9 @@ class Gcrev_Insight_API {
                 usleep(self::PREFETCH_SLEEP_US);
             }
 
-            // --- (2) 各分析ページキャッシュ（追加） ---
-            // period-selector が使う値（prev-month / last30）を対象にプリフェッチ
-            $analysis_periods = ['prev-month', 'last30'];
+            // --- (2) 各分析ページキャッシュ ---
+            // 日次プリフェッチでは last30 のみ
+            $analysis_periods = ['last30'];
 
             foreach ($analysis_periods as $period) {
                 $this->prefetch_analysis_caches($user_id, $config, $period);
@@ -1272,6 +1390,16 @@ class Gcrev_Insight_API {
                     $user_had_error = true;
                 }
                 usleep(self::PREFETCH_SLEEP_US);
+            }
+
+            // 国フィルタ解除
+            if ( $exclude_foreign ) {
+                $this->ga4->set_country_filter( null );
+            }
+
+            // ステータス記録（日次期間分）
+            foreach ( $ranges as $r ) {
+                $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron' );
             }
 
             // Cron Logger: ユーザー単位の結果を記録
@@ -1359,7 +1487,8 @@ class Gcrev_Insight_API {
             return;
         }
 
-        $ranges = ['last30', 'last90', 'last180', 'last365', 'previousMonth', 'twoMonthsAgo'];
+        // 日次プリフェッチ: スライド期間のみ
+        $ranges = ['last30', 'last90'];
 
         foreach ( $user_ids as $user_id ) {
             error_log( "[GCREV] Prefetch slot_{$slot} processing: user_id={$user_id}" );
@@ -1373,6 +1502,12 @@ class Gcrev_Insight_API {
                     Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $e->getMessage() );
                 }
                 continue;
+            }
+
+            // 国フィルタ適用
+            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
+            if ( $exclude_foreign ) {
+                $this->ga4->set_country_filter( 'Japan' );
             }
 
             // --- (1) ダッシュボード ---
@@ -1391,8 +1526,8 @@ class Gcrev_Insight_API {
                 usleep( self::PREFETCH_SLEEP_US );
             }
 
-            // --- (2) 分析ページ ---
-            foreach ( ['prev-month', 'last30'] as $period ) {
+            // --- (2) 分析ページ（日次は last30 のみ） ---
+            foreach ( ['last30'] as $period ) {
                 $this->prefetch_analysis_caches( $user_id, $config, $period );
             }
 
@@ -1409,6 +1544,16 @@ class Gcrev_Insight_API {
                     $user_had_error = true;
                 }
                 usleep( self::PREFETCH_SLEEP_US );
+            }
+
+            // 国フィルタ解除
+            if ( $exclude_foreign ) {
+                $this->ga4->set_country_filter( null );
+            }
+
+            // ステータス記録
+            foreach ( $ranges as $r ) {
+                $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron' );
             }
 
             if ( $log_id > 0 ) {
@@ -1450,6 +1595,9 @@ class Gcrev_Insight_API {
         $comparison  = $this->dates->calculate_comparison_dates($period);
         $date_hash   = md5("{$dates['start']}_{$dates['end']}");
 
+        // 月固定期間は35日、日次期間は24h
+        $cache_ttl = Gcrev_Date_Helper::is_monthly_fixed_period( $period ) ? 3024000 : 86400;
+
         // source 用の period 正規化（get_source_analysis は previousMonth/twoMonthsAgo を期待）
         $source_period = $period;
         if ($period === 'prev-month')      $source_period = 'previousMonth';
@@ -1482,7 +1630,7 @@ class Gcrev_Insight_API {
                     'period'         => $period,
                     'period_display' => $dates['display'] ?? '',
                     'regions_detail' => $regions_result,
-                ], 86400);
+                ], $cache_ttl);
                 error_log("[GCREV] Prefetch REGION OK: user={$user_id}, period={$period}");
             } catch (\Exception $e) {
                 error_log("[GCREV] Prefetch REGION ERR: user={$user_id}, period={$period}: " . $e->getMessage());
@@ -1506,7 +1654,7 @@ class Gcrev_Insight_API {
                         'current_range_label'  => str_replace('-', '/', $dates['start']) . ' 〜 ' . str_replace('-', '/', $dates['end']),
                         'compare_range_label'  => str_replace('-', '/', $comparison['start']) . ' 〜 ' . str_replace('-', '/', $comparison['end']),
                     ],
-                ], 86400);
+                ], $cache_ttl);
                 error_log("[GCREV] Prefetch PAGE OK: user={$user_id}, period={$period}");
             } catch (\Exception $e) {
                 error_log("[GCREV] Prefetch PAGE ERR: user={$user_id}, period={$period}: " . $e->getMessage());
@@ -1534,13 +1682,331 @@ class Gcrev_Insight_API {
                         'current_range_label'  => str_replace('-', '/', $dates['start']) . ' 〜 ' . str_replace('-', '/', $dates['end']),
                         'compare_range_label'  => str_replace('-', '/', $comparison['start']) . ' 〜 ' . str_replace('-', '/', $comparison['end']),
                     ],
-                ], 86400);
+                ], $cache_ttl);
                 error_log("[GCREV] Prefetch KEYWORD OK: user={$user_id}, period={$period}");
             } catch (\Exception $e) {
                 error_log("[GCREV] Prefetch KEYWORD ERR: user={$user_id}, period={$period}: " . $e->getMessage());
             }
             usleep(self::PREFETCH_SLEEP_US);
         }
+    }
+
+    // =========================================================
+    // 月次プリフェッチ処理（月初にCronから呼ばれる）
+    // =========================================================
+
+    private const LOCK_MONTHLY_PREFETCH = 'gcrev_lock_monthly_prefetch';
+
+    /**
+     * 月次データプリフェッチの起動（月初のみ実行）
+     */
+    public function auto_monthly_data_prefetch(): void {
+        $tz  = wp_timezone();
+        $now = new \DateTimeImmutable( 'now', $tz );
+        if ( (int) $now->format( 'd' ) !== 1 ) {
+            error_log( '[GCREV] monthly_data_prefetch: Not 1st of month, skipping.' );
+            return;
+        }
+        $this->monthly_data_prefetch_chunk( 0, self::PREFETCH_CHUNK_LIMIT );
+    }
+
+    /**
+     * 月次データプリフェッチのチャンク処理
+     */
+    public function monthly_data_prefetch_chunk( int $offset, int $limit ): void {
+
+        if ( $offset === 0 ) {
+            if ( get_transient( self::LOCK_MONTHLY_PREFETCH ) ) {
+                error_log( '[GCREV] monthly_prefetch: LOCKED, skipping' );
+                if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    $locked_id = Gcrev_Cron_Logger::start( 'monthly_prefetch', [ 'note' => 'locked' ] );
+                    Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
+                }
+                return;
+            }
+            set_transient( self::LOCK_MONTHLY_PREFETCH, 1, self::LOCK_TTL );
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                $log_id = Gcrev_Cron_Logger::start( 'monthly_prefetch', [ 'chunk_limit' => $limit ] );
+                set_transient( 'gcrev_current_monthly_prefetch_log_id', $log_id, self::LOCK_TTL );
+            }
+        }
+
+        $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( 'gcrev_current_monthly_prefetch_log_id' ) : 0;
+
+        error_log( "[GCREV] monthly_prefetch START: offset={$offset}, limit={$limit}" );
+
+        $users = get_users( [ 'number' => $limit, 'offset' => $offset, 'fields' => ['ID'] ] );
+
+        if ( empty( $users ) ) {
+            error_log( "[GCREV] monthly_prefetch: No users at offset={$offset}. DONE." );
+            delete_transient( self::LOCK_MONTHLY_PREFETCH );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( 'gcrev_current_monthly_prefetch_log_id' );
+            }
+            return;
+        }
+
+        // 月次プリフェッチ: 月固定期間のみ
+        $dash_ranges      = [ 'previousMonth', 'twoMonthsAgo', 'last180', 'last365' ];
+        $analysis_periods = [ 'prev-month', 'prev-prev-month', 'last180', 'last365' ];
+
+        foreach ( $users as $u ) {
+            $user_id = (int) $u->ID;
+            error_log( "[GCREV] monthly_prefetch processing: user_id={$user_id}" );
+            $user_had_error = false;
+
+            try {
+                $config = $this->config->get_user_config( $user_id );
+            } catch ( \Exception $e ) {
+                error_log( "[GCREV] monthly_prefetch SKIP user_id={$user_id}: " . $e->getMessage() );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $e->getMessage() );
+                }
+                continue;
+            }
+
+            // 国フィルタ適用
+            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
+            if ( $exclude_foreign ) {
+                $this->ga4->set_country_filter( 'Japan' );
+            }
+
+            // --- (1) ダッシュボードキャッシュ（月固定期間） ---
+            foreach ( $dash_ranges as $range ) {
+                // 月次は強制再取得（前月データが確定するため）
+                $cache_key = $this->cache_key_dashboard( $user_id, $range );
+                delete_transient( $cache_key );
+
+                try {
+                    $data = $this->fetch_dashboard_data_internal( $config, $range );
+                    $this->dashboard_cache_set( $user_id, $range, $data );
+                    error_log( "[GCREV] monthly_prefetch SUCCESS user_id={$user_id}, range={$range}" );
+                } catch ( \Exception $e ) {
+                    error_log( "[GCREV] monthly_prefetch ERROR user_id={$user_id}, range={$range}: " . $e->getMessage() );
+                    $user_had_error = true;
+                }
+                usleep( self::PREFETCH_SLEEP_US );
+            }
+
+            // --- (2) 分析ページキャッシュ（月固定期間） ---
+            foreach ( $analysis_periods as $period ) {
+                $this->prefetch_analysis_caches( $user_id, $config, $period );
+            }
+
+            // 国フィルタ解除
+            if ( $exclude_foreign ) {
+                $this->ga4->set_country_filter( null );
+            }
+
+            // ステータス記録
+            foreach ( $dash_ranges as $r ) {
+                $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron' );
+            }
+
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::log_user(
+                    $log_id,
+                    $user_id,
+                    $user_had_error ? 'error' : 'success',
+                    $user_had_error ? 'Some ranges had errors' : null
+                );
+            }
+        }
+
+        // 次チャンク
+        $next_offset = $offset + $limit;
+        $next_users  = get_users( [ 'number' => 1, 'offset' => $next_offset, 'fields' => ['ID'] ] );
+
+        if ( ! empty( $next_users ) ) {
+            wp_schedule_single_event( time() + 10, 'gcrev_monthly_prefetch_chunk_event', [ $next_offset, $limit ] );
+            error_log( "[GCREV] monthly_prefetch: Scheduled next chunk offset={$next_offset}" );
+        } else {
+            delete_transient( self::LOCK_MONTHLY_PREFETCH );
+            error_log( "[GCREV] monthly_prefetch DONE." );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( 'gcrev_current_monthly_prefetch_log_id' );
+            }
+        }
+    }
+
+    /**
+     * 月次データプリフェッチ — スロット別チャンク処理
+     *
+     * prefetch_chunk_for_slot() の月次版。月固定期間のみ取得。
+     * 月初（1日）以外に呼ばれた場合はスキップ。
+     */
+    public function monthly_prefetch_chunk_for_slot( int $slot, int $offset, int $limit ): void {
+
+        // 月初のみ実行
+        $now = new \DateTimeImmutable('now', wp_timezone());
+        if ( (int) $now->format('d') !== 1 ) {
+            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: Not 1st of month, skipping" );
+            return;
+        }
+
+        $lock_key     = "gcrev_lock_monthly_prefetch_slot_{$slot}";
+        $log_id_key   = "gcrev_current_monthly_prefetch_slot_{$slot}_log_id";
+        $chunk_hook   = "gcrev_monthly_data_chunk_slot_{$slot}_event";
+
+        // ─── 重複実行防止ロック ───
+        if ( $offset === 0 ) {
+            if ( get_transient( $lock_key ) ) {
+                error_log( "[GCREV] monthly_prefetch_slot_{$slot}: LOCKED, skipping" );
+                if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    $locked_id = Gcrev_Cron_Logger::start( "monthly_prefetch_slot_{$slot}", [ 'note' => 'locked' ] );
+                    Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
+                }
+                return;
+            }
+            set_transient( $lock_key, 1, self::LOCK_TTL );
+
+            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                $log_id = Gcrev_Cron_Logger::start( "monthly_prefetch_slot_{$slot}", [ 'slot' => $slot, 'chunk_limit' => $limit ] );
+                set_transient( $log_id_key, $log_id, self::LOCK_TTL );
+            }
+        }
+
+        $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( $log_id_key ) : 0;
+
+        error_log( "[GCREV] monthly_prefetch_slot_{$slot} START: offset={$offset}, limit={$limit}" );
+
+        if ( ! class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: Gcrev_Prefetch_Scheduler not loaded, aborting" );
+            return;
+        }
+
+        $user_ids = Gcrev_Prefetch_Scheduler::get_users_for_slot( $slot, $limit, $offset );
+
+        if ( empty( $user_ids ) ) {
+            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: No users at offset={$offset}. DONE." );
+            delete_transient( $lock_key );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( $log_id_key );
+            }
+            return;
+        }
+
+        $dash_ranges      = [ 'previousMonth', 'twoMonthsAgo', 'last180', 'last365' ];
+        $analysis_periods = [ 'prev-month', 'prev-prev-month', 'last180', 'last365' ];
+
+        foreach ( $user_ids as $user_id ) {
+            error_log( "[GCREV] monthly_prefetch_slot_{$slot} processing: user_id={$user_id}" );
+            $user_had_error = false;
+
+            try {
+                $config = $this->config->get_user_config( $user_id );
+            } catch ( \Exception $e ) {
+                error_log( "[GCREV] monthly_prefetch_slot_{$slot} SKIP user_id={$user_id}: " . $e->getMessage() );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $e->getMessage() );
+                }
+                continue;
+            }
+
+            // 国フィルタ適用
+            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
+            if ( $exclude_foreign ) {
+                $this->ga4->set_country_filter( 'Japan' );
+            }
+
+            // --- (1) ダッシュボードキャッシュ（月固定期間、強制再取得） ---
+            foreach ( $dash_ranges as $range ) {
+                $cache_key = $this->cache_key_dashboard( $user_id, $range );
+                delete_transient( $cache_key );
+
+                try {
+                    $data = $this->fetch_dashboard_data_internal( $config, $range );
+                    $this->dashboard_cache_set( $user_id, $range, $data );
+                } catch ( \Exception $e ) {
+                    error_log( "[GCREV] monthly_prefetch_slot_{$slot} ERROR user_id={$user_id}, range={$range}: " . $e->getMessage() );
+                    $user_had_error = true;
+                }
+                usleep( self::PREFETCH_SLEEP_US );
+            }
+
+            // --- (2) 分析ページキャッシュ（月固定期間） ---
+            foreach ( $analysis_periods as $period ) {
+                $this->prefetch_analysis_caches( $user_id, $config, $period );
+            }
+
+            // 国フィルタ解除
+            if ( $exclude_foreign ) {
+                $this->ga4->set_country_filter( null );
+            }
+
+            // ステータス記録
+            foreach ( $dash_ranges as $r ) {
+                $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron' );
+            }
+
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::log_user(
+                    $log_id,
+                    $user_id,
+                    $user_had_error ? 'error' : 'success',
+                    $user_had_error ? 'Some ranges had errors' : null
+                );
+            }
+        }
+
+        // ─── 次チャンクのスケジュール ───
+        $next_offset = $offset + $limit;
+
+        if ( Gcrev_Prefetch_Scheduler::has_more_users( $slot, $next_offset ) ) {
+            wp_schedule_single_event( time() + 10, $chunk_hook, [ $slot, $next_offset, $limit ] );
+            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: Scheduled next chunk offset={$next_offset}" );
+        } else {
+            delete_transient( $lock_key );
+            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: DONE." );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                delete_transient( $log_id_key );
+            }
+        }
+    }
+
+    /**
+     * API 接続テスト
+     *
+     * @param int $user_id
+     * @return array ['ga4' => bool, 'gsc' => bool, 'ga4_error' => ?string, 'gsc_error' => ?string]
+     */
+    public function check_api_connection( int $user_id ): array {
+        $result = [ 'ga4' => false, 'gsc' => false, 'ga4_error' => null, 'gsc_error' => null ];
+
+        try {
+            $config = $this->config->get_user_config( $user_id );
+        } catch ( \Exception $e ) {
+            $result['ga4_error'] = $e->getMessage();
+            $result['gsc_error'] = $e->getMessage();
+            return $result;
+        }
+
+        // GA4 テスト（最小リクエスト: 昨日1日・sessions のみ）
+        try {
+            $tz       = wp_timezone();
+            $yesterday = ( new \DateTimeImmutable( 'yesterday', $tz ) )->format( 'Y-m-d' );
+            $this->ga4->fetch_ga4_summary( $config['ga4_id'], $yesterday, $yesterday );
+            $result['ga4'] = true;
+        } catch ( \Exception $e ) {
+            $result['ga4_error'] = $e->getMessage();
+        }
+
+        // GSC テスト（最小リクエスト）
+        try {
+            $tz        = wp_timezone();
+            $week_ago  = ( new \DateTimeImmutable( '-7 days', $tz ) )->format( 'Y-m-d' );
+            $yesterday = ( new \DateTimeImmutable( 'yesterday', $tz ) )->format( 'Y-m-d' );
+            $this->gsc->fetch_gsc_data( $config['gsc_url'], $week_ago, $yesterday );
+            $result['gsc'] = true;
+        } catch ( \Exception $e ) {
+            $result['gsc_error'] = $e->getMessage();
+        }
+
+        return $result;
     }
 
     // =========================================================
