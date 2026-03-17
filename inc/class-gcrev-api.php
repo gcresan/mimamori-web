@@ -12324,9 +12324,17 @@ PROMPT;
                 ], 400);
             }
 
-            // AIプロンプト構築 → Gemini API 呼び出し
+            // 再生成フラグ
+            $is_regenerate = ! empty($params['regenerate']);
+            $existing_response_id = absint($params['response_id'] ?? 0);
+
+            // AIプロンプト構築 → Gemini API 呼び出し（口コミ用に高 temperature）
             $prompt       = $this->build_review_prompt($answer_text, $business_name);
-            $raw_response = $this->ai->call_gemini_api($prompt);
+            $raw_response = $this->ai->call_gemini_api($prompt, [
+                'temperature'     => 0.9,
+                'topP'            => 0.95,
+                'maxOutputTokens' => 1024,
+            ]);
 
             // JSONパース
             $parsed = $this->parse_review_response($raw_response);
@@ -12342,19 +12350,30 @@ PROMPT;
             }
 
             // 回答をDBに保存（トークン方式の場合のみ）
+            $response_id = 0;
+            $version     = 1;
             if ($survey_id > 0) {
-                $extra = [
-                    'respondent_name' => sanitize_text_field($params['respondent_name'] ?? ''),
-                    'consent_ai'      => ! empty($params['consent_ai']),
-                    'consent_review'  => ! empty($params['consent_review']),
-                ];
-                $this->save_survey_response($wpdb, $survey_id, $survey_user_id, $answers, $parsed, $extra);
+                if ($is_regenerate && $existing_response_id > 0) {
+                    // 再生成: 既存 response_id に新バージョンの AI 生成文を追加
+                    $version = $this->save_regenerated_review($wpdb, $existing_response_id, $survey_id, $survey_user_id, $parsed);
+                    $response_id = $existing_response_id;
+                } else {
+                    // 初回生成: 新規 response 作成
+                    $extra = [
+                        'respondent_name' => sanitize_text_field($params['respondent_name'] ?? ''),
+                        'consent_ai'      => ! empty($params['consent_ai']),
+                        'consent_review'  => ! empty($params['consent_review']),
+                    ];
+                    $response_id = $this->save_survey_response($wpdb, $survey_id, $survey_user_id, $answers, $parsed, $extra);
+                }
             }
 
             return new \WP_REST_Response([
                 'success'       => true,
                 'short_review'  => $parsed['short_review'],
                 'normal_review' => $parsed['normal_review'],
+                'response_id'   => $response_id,
+                'version'       => $version,
             ], 200);
 
         } catch (\Exception $e) {
@@ -12372,7 +12391,7 @@ PROMPT;
     /**
      * アンケート回答をDBに保存
      */
-    private function save_survey_response(\wpdb $wpdb, int $survey_id, int $user_id, array $answers, array $parsed, array $extra = []): void {
+    private function save_survey_response(\wpdb $wpdb, int $survey_id, int $user_id, array $answers, array $parsed, array $extra = []): int {
         $t_responses = $wpdb->prefix . 'gcrev_survey_responses';
         $t_answers   = $wpdb->prefix . 'gcrev_survey_response_answers';
         $t_ai_gen    = $wpdb->prefix . 'gcrev_survey_ai_generations';
@@ -12391,7 +12410,7 @@ PROMPT;
         ], ['%d', '%d', '%s', '%s', '%s', '%s', '%d', '%d', '%s']);
 
         $response_id = (int) $wpdb->insert_id;
-        if ($response_id <= 0) return;
+        if ($response_id <= 0) return 0;
 
         foreach ($answers as $item) {
             $question_id = absint($item['question_id'] ?? 0);
@@ -12433,6 +12452,48 @@ PROMPT;
                 'created_at'     => $now,
             ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s']);
         }
+
+        return $response_id;
+    }
+
+    /**
+     * 再生成時のAI生成文を保存（既存 response_id に新バージョンを追加）
+     */
+    private function save_regenerated_review(\wpdb $wpdb, int $response_id, int $survey_id, int $user_id, array $parsed): int {
+        $t_ai_gen = $wpdb->prefix . 'gcrev_survey_ai_generations';
+        $now      = current_time('mysql');
+        $version  = 1;
+
+        foreach (['short' => 'short_review', 'normal' => 'normal_review'] as $type => $key) {
+            if (empty($parsed[$key])) continue;
+            $max_ver = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COALESCE(MAX(version), 0) FROM {$t_ai_gen} WHERE response_id = %d AND review_type = %s",
+                $response_id, $type
+            ));
+            $version = max($version, $max_ver + 1);
+            $wpdb->insert($t_ai_gen, [
+                'response_id'    => $response_id,
+                'survey_id'      => $survey_id,
+                'user_id'        => $user_id,
+                'generated_text' => $parsed[$key],
+                'review_type'    => $type,
+                'version'        => $max_ver + 1,
+                'status'         => 'generated',
+                'created_at'     => $now,
+            ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s']);
+        }
+
+        // responses テーブルの short_review / normal_review も最新版で更新
+        $t_resp = $wpdb->prefix . 'gcrev_survey_responses';
+        $wpdb->update(
+            $t_resp,
+            ['short_review' => $parsed['short_review'], 'normal_review' => $parsed['normal_review']],
+            ['id' => $response_id],
+            ['%s', '%s'],
+            ['%d']
+        );
+
+        return $version;
     }
 
     /**
@@ -12469,34 +12530,56 @@ PROMPT;
             : '';
 
         return <<<PROMPT
-あなたは、実際に利用した顧客の視点でGoogle口コミの参考文を作成するアシスタントです。
-
-## 目的
-以下のアンケート回答をもとに、Google口コミとして投稿できる参考文を2パターン作成してください。
-これは自動投稿用ではなく、顧客本人が修正して使うための下書きです。
+あなたは、実際にサービスを利用した顧客になりきって Google 口コミの下書きを作成するライターです。
+顧客本人が修正して使うための参考文なので、本人が「自分の言葉に近い」と感じられる自然さを最優先してください。
 
 {$business_part}
 ## アンケート回答内容
 {$answer_text}
 
-## 出力ルール
+## 作成ルール
 
-### short_review（80〜120文字程度）
+### 構成
+- 回答内容を項目順にそのまま並べるのではなく、**体験の流れ**として再構成する
+- 基本的な流れのイメージ: きっかけ → 依頼の決め手 → やり取りの印象 → 結果・感想
+- ただし毎回この順序に固定せず、書き出し・構成・締め方に変化をつける
+
+### 文体
+- 実在の利用者が自分の言葉で書いたように見えること
+- 「です・ます」調を基本とするが、体言止めや「〜でした」「〜と思います」など自然な混在はOK
+- 1文を長くしすぎない（40文字前後を目安に区切る）
+- テンプレート的な定型表現を避ける（「柔軟に対応していただきました」「レスポンスが早く」等を毎回使わない）
+- 同じ語尾が3回以上続かないようにする
+
+### 感情・温度感
+- 相談前の不安、やり取り中の安心感、結果への手応えなど**感情の動き**を1つは自然に含める
+- ただし大げさにしない。「感動しました」「最高です」のような過剰表現は避ける
+
+### 禁止事項
+- アンケート回答にない情報・数字・成果を創作しない
+- 過度な美辞麗句や広告的表現を使わない
+- 星評価（★）は含めない
+- 「この会社に頼んで本当によかったです」のような定型的な締めを使わない
+
+### 書き出しバリエーション（参考。これに限定しない）
+- サービス内容に触れて始める
+- 相談のきっかけ・背景から始める
+- 印象的だったポイントから始める
+- 依頼の決め手から始める
+
+### 締め方バリエーション（参考。これに限定しない）
+- 今後も継続したい旨
+- 初めての人にも勧められる旨
+- 対応の印象をまとめる
+- 実務上助かった点で終わる
+
+### 出力パターン
+
+#### short_review（80〜120文字程度）
 - 短く簡潔にまとめた口コミ文
 
-### normal_review（120〜180文字程度）
-- もう少し詳しく書いた口コミ文
-
-### 共通の文体ルール
-- 実際のアンケート回答内容から逸脱しないこと
-- 回答にない情報や体験を勝手に補わないこと
-- 誇張しすぎない。不自然に褒めすぎない
-- テンプレート感を抑え、自然な日本語にする
-- 実体験に基づいた口コミに見える文体にする
-- 営業色が強すぎる表現は避ける
-- Google口コミとして違和感のない文体にする
-- 「です・ます」調で統一する
-- 星評価（★）は含めない
+#### normal_review（120〜200文字程度）
+- もう少し詳しく書いた口コミ文。体験の流れが感じられるように
 
 ## 出力形式
 以下のJSON形式のみを出力してください。説明文やマークダウンは不要です。
@@ -13211,7 +13294,11 @@ PROMPT;
         }
 
         try {
-            $raw_response = $this->ai->call_gemini_api($prompt);
+            $raw_response = $this->ai->call_gemini_api($prompt, [
+                'temperature'     => 0.9,
+                'topP'            => 0.95,
+                'maxOutputTokens' => 1024,
+            ]);
             $parsed = $this->parse_review_response($raw_response);
 
             if ($parsed === null) {

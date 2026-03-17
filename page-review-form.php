@@ -462,6 +462,65 @@ $api_url = rest_url('gcrev/v1/review/generate');
     }
     .btn-retry:hover { background: #f9fafb; }
 
+    /* ===== 再生成バー ===== */
+    .result-version-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        padding: 0 4px;
+    }
+    .result-version-badge {
+        display: inline-block;
+        background: #E8F5E9;
+        color: #2E7D32;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 12px;
+    }
+    .btn-regenerate {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 16px;
+        background: #fff;
+        border: 1.5px solid #568184;
+        border-radius: 8px;
+        color: #568184;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .btn-regenerate:hover {
+        background: #F2F5F5;
+    }
+    .btn-regenerate:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .result-card.is-regenerating {
+        opacity: 0.5;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+    }
+    .result-card .result-text {
+        transition: opacity 0.2s ease;
+    }
+    .btn-spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid #ccc;
+        border-top-color: #568184;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
     /* ===== Error Screen ===== */
     .error-section {
         display: none;
@@ -689,6 +748,13 @@ $api_url = rest_url('gcrev/v1/review/generate');
             <div class="result-notice">
                 以下はAIが作成した<strong>下書き</strong>です。あなたの言葉で自由に修正してからご利用ください。<br>
                 <span style="font-size:12px;color:#999;">※ この文章はアンケートの回答内容をもとにAIが作成したものです。実際の体験と異なる表現が含まれる場合は修正してください。</span>
+            </div>
+
+            <div class="result-version-bar">
+                <span class="result-version-badge" id="result-version">v1</span>
+                <button type="button" class="btn-regenerate" id="btn-regenerate">
+                    🔄 再生成する
+                </button>
             </div>
 
             <div class="result-card" id="result-short">
@@ -939,12 +1005,22 @@ $api_url = rest_url('gcrev/v1/review/generate');
         }
 
         // =====================================================
+        // 再生成用の状態変数
+        // =====================================================
+        var currentResponseId = null;
+        var currentVersion = 1;
+        var isRegenerating = false;
+        var lastLabeledAnswers = null;
+
+        function updateVersionDisplay() {
+            var badge = document.getElementById('result-version');
+            if (badge) badge.textContent = 'v' + currentVersion;
+        }
+
+        // =====================================================
         // API呼び出し
         // =====================================================
-        function submitReview(answers) {
-            showSection(loadingSection);
-
-            // 質問ラベルと回答を紐づけた構造を作る
+        function buildLabeledAnswers(answers) {
             var labeled = [];
             REVIEW_CONFIG.questions.forEach(function(q) {
                 var answer = answers[q.id];
@@ -957,6 +1033,14 @@ $api_url = rest_url('gcrev/v1/review/generate');
                     answer: answer
                 });
             });
+            return labeled;
+        }
+
+        function submitReview(answers) {
+            showSection(loadingSection);
+
+            var labeled = buildLabeledAnswers(answers);
+            lastLabeledAnswers = labeled;
 
             var payload = { answers: labeled };
             if (REVIEW_CONFIG.surveyToken) {
@@ -980,6 +1064,9 @@ $api_url = rest_url('gcrev/v1/review/generate');
                 if (data.success && data.short_review && data.normal_review) {
                     document.getElementById('result-short-text').textContent = data.short_review;
                     document.getElementById('result-normal-text').textContent = data.normal_review;
+                    currentResponseId = data.response_id || null;
+                    currentVersion = data.version || 1;
+                    updateVersionDisplay();
                     showSection(resultSection);
                 } else {
                     var msg = data.message || '口コミ案の作成に失敗しました。\n少し時間をおいてもう一度お試しください。';
@@ -990,6 +1077,72 @@ $api_url = rest_url('gcrev/v1/review/generate');
             .catch(function() {
                 document.getElementById('error-message').innerHTML = '口コミ案の作成に失敗しました。<br>少し時間をおいてもう一度お試しください。';
                 showSection(errorSection);
+            });
+        }
+
+        // =====================================================
+        // 再生成
+        // =====================================================
+        function regenerateReview() {
+            if (isRegenerating || !lastLabeledAnswers) return;
+            isRegenerating = true;
+
+            var btn = document.getElementById('btn-regenerate');
+            var originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="btn-spinner"></span> 生成中…';
+
+            document.querySelectorAll('.result-card').forEach(function(card) {
+                card.classList.add('is-regenerating');
+            });
+
+            var payload = {
+                answers: lastLabeledAnswers,
+                regenerate: true,
+                response_id: currentResponseId
+            };
+            if (REVIEW_CONFIG.surveyToken) {
+                payload.survey_token = REVIEW_CONFIG.surveyToken;
+            } else {
+                payload.user_id = REVIEW_CONFIG.userId;
+            }
+            payload.consent_ai = true;
+
+            fetch(REVIEW_CONFIG.apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success && data.short_review && data.normal_review) {
+                    var shortEl = document.getElementById('result-short-text');
+                    var normalEl = document.getElementById('result-normal-text');
+                    shortEl.style.opacity = '0';
+                    normalEl.style.opacity = '0';
+                    setTimeout(function() {
+                        shortEl.textContent = data.short_review;
+                        normalEl.textContent = data.normal_review;
+                        shortEl.style.opacity = '1';
+                        normalEl.style.opacity = '1';
+                    }, 200);
+                    currentVersion = data.version || (currentVersion + 1);
+                    currentResponseId = data.response_id || currentResponseId;
+                    updateVersionDisplay();
+                } else {
+                    alert('再生成に失敗しました。もう一度お試しください。');
+                }
+            })
+            .catch(function() {
+                alert('再生成に失敗しました。もう一度お試しください。');
+            })
+            .finally(function() {
+                isRegenerating = false;
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                document.querySelectorAll('.result-card').forEach(function(card) {
+                    card.classList.remove('is-regenerating');
+                });
             });
         }
 
@@ -1044,8 +1197,17 @@ $api_url = rest_url('gcrev/v1/review/generate');
             showSection(formSection);
         });
 
+        // 再生成ボタン
+        document.getElementById('btn-regenerate').addEventListener('click', function() {
+            regenerateReview();
+        });
+
         // 「もう一度やり直す」ボタン
         document.getElementById('btn-back-to-form').addEventListener('click', function() {
+            currentResponseId = null;
+            currentVersion = 1;
+            lastLabeledAnswers = null;
+            updateVersionDisplay();
             showSection(formSection);
         });
 

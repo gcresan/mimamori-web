@@ -111,7 +111,7 @@ class Gcrev_AI_Client {
      * @return string Gemini からの応答テキスト
      * @throws \Exception API通信エラーまたは応答が空の場合
      */
-    public function call_gemini_api( $prompt ) {
+    public function call_gemini_api( $prompt, array $options = [] ) {
 
         $project_id = $this->config->get_gcp_project_id();
         if ($project_id === '') {
@@ -138,10 +138,7 @@ class Gcrev_AI_Client {
                 'role'  => 'user',
                 'parts' => [[ 'text' => $prompt ]]
             ]],
-            'generationConfig' => [
-                'temperature'     => 0.4,
-                'maxOutputTokens' => 8192, // 長いセクション(考察・アクション)対応のため増量
-            ],
+            'generationConfig' => $this->build_generation_config( $options ),
         ];
 
         $response = wp_remote_post($url, [
@@ -195,6 +192,23 @@ class Gcrev_AI_Client {
 
     // =========================================================
     // 初心者向けリライト（Markdown出力）
+    /**
+     * generationConfig を構築（$options でデフォルト値を上書き可能）
+     */
+    private function build_generation_config( array $options ): array {
+        $config = [
+            'temperature'     => $options['temperature'] ?? 0.4,
+            'maxOutputTokens' => $options['maxOutputTokens'] ?? 8192,
+        ];
+        if ( isset( $options['topP'] ) ) {
+            $config['topP'] = (float) $options['topP'];
+        }
+        if ( isset( $options['topK'] ) ) {
+            $config['topK'] = (int) $options['topK'];
+        }
+        return $config;
+    }
+
     // =========================================================
 
     /**
