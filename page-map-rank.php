@@ -26,22 +26,22 @@ get_header();
    Map Rank Page (.meo-)
    ============================================================ */
 .meo-section {
-    background: #fff;
-    border: 1px solid #E5E3DC;
-    border-radius: 14px;
-    padding: 30px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
 }
-.meo-header { margin-bottom: 16px; }
+.meo-header { margin-bottom: 20px; }
 .meo-header__title {
-    font-size: 18px; font-weight: 700; color: #1a1a1a;
+    font-size: 20px; font-weight: 700; color: #1a1a1a;
     display: flex; align-items: center; gap: 8px;
 }
-.meo-help { font-size: 13px; color: #6b7280; margin-bottom: 16px; line-height: 1.6; }
+.meo-help { font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
 /* Measurement conditions row */
 .meo-conditions {
-    display: flex; align-items: flex-start; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;
-    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 18px;
+    display: flex; align-items: flex-start; gap: 24px; margin-bottom: 24px; flex-wrap: wrap;
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 20px;
 }
 .meo-condition-group { display: flex; flex-direction: column; gap: 4px; }
 .meo-condition-label {
@@ -82,10 +82,10 @@ get_header();
     padding: 5px 10px; background: #fff; cursor: pointer; max-width: 120px; font-weight: 500;
 }
 /* Metrics cards */
-.meo-metrics-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.meo-metrics-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
 .meo-metric-card {
-    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
-    padding: 16px; border-left: 4px solid #e5e7eb; text-align: center;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 16px 20px; border-left: 4px solid #e5e7eb; text-align: center;
 }
 .meo-metric-card--teal   { border-left-color: #568184; }
 .meo-metric-card--blue   { border-left-color: #3b82f6; }
@@ -192,11 +192,12 @@ get_header();
 
 /* MEO History Table */
 .meo-history-wrap {
-    margin-top: 20px; background: #fff; border: 1px solid #e5e7eb;
-    border-radius: 12px; padding: 20px;
+    margin-top: 24px; background: #fff; border: 1px solid #e5e7eb;
+    border-radius: 12px; padding: 24px;
 }
 .meo-history-title {
-    font-weight: 600; font-size: 15px; color: #1a1a1a; margin-bottom: 12px;
+    font-weight: 700; font-size: 15px; color: #1a1a1a; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
 }
 .meo-history-table { width: 100%; border-collapse: collapse; }
 .meo-history-table th {
@@ -216,7 +217,6 @@ get_header();
 
 /* Responsive */
 @media (max-width: 768px) {
-    .meo-section { padding: 20px 16px; }
     .meo-metrics-cards { grid-template-columns: repeat(2, 1fr); }
     .meo-conditions { flex-direction: column; gap: 12px; padding: 12px 14px; }
     .meo-store-grid { grid-template-columns: 1fr; gap: 4px; }
@@ -225,6 +225,7 @@ get_header();
 }
 </style>
 
+<div class="content-area">
 <section class="meo-section" id="meoSection">
     <div class="meo-header">
         <div class="meo-header__title">
@@ -306,6 +307,7 @@ get_header();
     </div>
     <div class="meo-error" id="meoError" style="display:none;"></div>
 </section>
+</div><!-- /.content-area -->
 
 <script>
 /* ============================================================
