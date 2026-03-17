@@ -4416,8 +4416,10 @@ class Gcrev_Insight_API {
         }
         set_transient( $lock_key, 1, $lock_ttl );
 
+        // Cron ログ開始（log_id をチャンク間で引き継ぐためTransientに保存）
         if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-            Gcrev_Cron_Logger::start( 'meo_fetch' );
+            $log_id = Gcrev_Cron_Logger::start( 'meo_fetch' );
+            set_transient( 'gcrev_meo_fetch_log_id', $log_id, 7200 );
         }
 
         file_put_contents( '/tmp/gcrev_meo_debug.log',
@@ -4446,8 +4448,10 @@ class Gcrev_Insight_API {
 
         if ( empty( $user_ids ) ) {
             delete_transient( 'gcrev_lock_meo_fetch' );
-            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-                Gcrev_Cron_Logger::finish( 'meo_fetch' );
+            $log_id = (int) get_transient( 'gcrev_meo_fetch_log_id' );
+            if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::finish( $log_id );
+                delete_transient( 'gcrev_meo_fetch_log_id' );
             }
             file_put_contents( '/tmp/gcrev_meo_debug.log',
                 date( 'Y-m-d H:i:s' ) . " [MEO] Weekly MEO fetch completed\n", FILE_APPEND );
@@ -4581,8 +4585,9 @@ class Gcrev_Insight_API {
                 }
             }
 
-            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-                Gcrev_Cron_Logger::log_user( 'meo_fetch', $uid, 'ok' );
+            $log_id = (int) get_transient( 'gcrev_meo_fetch_log_id' );
+            if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::log_user( $log_id, $uid, 'ok' );
             }
         }
 
@@ -10880,8 +10885,10 @@ PROMPT;
         }
         set_transient( $lock_key, 1, $lock_ttl );
 
+        // Cron ログ開始（log_id をチャンク間で引き継ぐためTransientに保存）
         if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-            Gcrev_Cron_Logger::start( 'keyword_metrics' );
+            $log_id = Gcrev_Cron_Logger::start( 'keyword_metrics' );
+            set_transient( 'gcrev_keyword_metrics_log_id', $log_id, 7200 );
         }
 
         error_log( '[GCREV][KeywordMetrics] Starting monthly keyword metrics fetch' );
@@ -10910,8 +10917,10 @@ PROMPT;
         if ( empty( $user_ids ) ) {
             // 完了
             delete_transient( 'gcrev_lock_keyword_metrics' );
-            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-                Gcrev_Cron_Logger::finish( 'keyword_metrics' );
+            $log_id = (int) get_transient( 'gcrev_keyword_metrics_log_id' );
+            if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::finish( $log_id );
+                delete_transient( 'gcrev_keyword_metrics_log_id' );
             }
             error_log( '[GCREV][KeywordMetrics] Monthly metrics fetch completed' );
             return;
@@ -11003,8 +11012,9 @@ PROMPT;
 
             error_log( "[GCREV][KeywordMetrics] User {$uid}: fetched={$fetched_count}, skipped_this_month={$skipped}" );
 
-            if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-                Gcrev_Cron_Logger::log_user( 'keyword_metrics', $uid, 'ok' );
+            $log_id = (int) get_transient( 'gcrev_keyword_metrics_log_id' );
+            if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                Gcrev_Cron_Logger::log_user( $log_id, $uid, 'ok' );
             }
         }
 
