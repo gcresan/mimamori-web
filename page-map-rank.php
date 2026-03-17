@@ -274,13 +274,10 @@ get_header();
             <select class="meo-keyword-select" id="meoKeywordSelect" style="display:none;"></select>
         </div>
 <?php if ( $maps_domain !== '' ) : ?>
-        <!-- GBPドメイン -->
+        <!-- 対象ドメイン（GBPドメイン） -->
         <div class="meo-condition-group">
-            <span class="meo-condition-label">GBPドメイン</span>
-            <span class="meo-condition-value" style="display:flex; align-items:center; gap:6px;">
-                <?php echo esc_html( $maps_domain ); ?>
-                <span class="meo-gbp-badge">GBP</span>
-            </span>
+            <span class="meo-condition-label">対象ドメイン（GBPドメイン）</span>
+            <span class="meo-condition-value"><?php echo esc_html( $maps_domain ); ?></span>
         </div>
 <?php endif; ?>
     </div>
