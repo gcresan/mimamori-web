@@ -325,11 +325,17 @@ if ($infographic && is_array($infographic)) {
         $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id, 1);
 
         // 比較期間のKPI（currがキャッシュヒットした場合のみ取得）
+        // cache_first方式: キャッシュあれば即返却、なければ空（JS非同期に委任）
         $kpi_prev = [];
         if (!empty($kpi_curr)) {
-            $kpi_prev = $gcrev_api->get_dashboard_kpi_by_dates(
-                $last30_comp['start'], $last30_comp['end'], $user_id
-            );
+            $exclude_foreign_prev = get_user_meta( $user_id, 'report_exclude_foreign', true );
+            $filter_suffix_prev   = $exclude_foreign_prev ? '_filtered' : '';
+            $prev_cache_key = "gcrev_dash_bydate_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_prev}";
+            $prev_cached    = get_transient( $prev_cache_key );
+            if ( $prev_cached !== false && is_array( $prev_cached ) ) {
+                $kpi_prev = $prev_cached;
+            }
+            // キャッシュミス時: $kpi_prev は空 → diffは0表示、JS非同期で後から更新
         }
 
         // --- MEO直近30日（cache_first方式: キャッシュがあれば即、なければJS非同期へ）---
@@ -360,16 +366,42 @@ if ($infographic && is_array($infographic)) {
             $infographic['kpi']['meo'] = ['value' => $meo_curr, 'diff' => $meo_curr - $meo_prev];
         }
 
-        // === スコア再計算（直近30日 vs その前の30日）===
-        $meo_curr_score = $meo_curr ?? (int)($infographic['kpi']['meo']['value'] ?? 0);
-        $meo_prev_score = $meo_prev ?? 0;
-        $re_curr = ['traffic' => $sess_curr, 'cv' => $cv_curr, 'gsc' => $gsc_curr_val, 'meo' => $meo_curr_score];
-        $re_prev = ['traffic' => $sess_prev, 'cv' => $cv_prev, 'gsc' => $gsc_prev_val, 'meo' => $meo_prev_score];
-        $re_health = $gcrev_api->calc_monthly_health_score($re_curr, $re_prev, [], $user_id);
-        $infographic['score']      = $re_health['score'];
-        $infographic['status']     = $re_health['status'];
-        $infographic['breakdown']  = $re_health['breakdown'];
-        $infographic['components'] = $re_health['components'];
+        // === スコア計算（キャッシュ済みなら復元、なければ計算してキャッシュ保存）===
+        if ( !empty($kpi_curr) && isset($kpi_curr['_cached_score']) ) {
+            // キャッシュ済みスコアを復元（再計算しない → スコア安定化）
+            $infographic['score']      = $kpi_curr['_cached_score']['score'];
+            $infographic['status']     = $kpi_curr['_cached_score']['status'];
+            $infographic['breakdown']  = $kpi_curr['_cached_score']['breakdown'];
+            $infographic['components'] = $kpi_curr['_cached_score']['components'];
+        } else {
+            // スコア計算（初回 or キャッシュにスコアが含まれていない場合）
+            $meo_curr_score = $meo_curr ?? (int)($infographic['kpi']['meo']['value'] ?? 0);
+            $meo_prev_score = $meo_prev ?? 0;
+            $re_curr = ['traffic' => $sess_curr, 'cv' => $cv_curr, 'gsc' => $gsc_curr_val, 'meo' => $meo_curr_score];
+            $re_prev = ['traffic' => $sess_prev, 'cv' => $cv_prev, 'gsc' => $gsc_prev_val, 'meo' => $meo_prev_score];
+            $re_health = $gcrev_api->calc_monthly_health_score($re_curr, $re_prev, [], $user_id);
+            $infographic['score']      = $re_health['score'];
+            $infographic['status']     = $re_health['status'];
+            $infographic['breakdown']  = $re_health['breakdown'];
+            $infographic['components'] = $re_health['components'];
+
+            // スコアをKPIキャッシュに保存（次回以降スコア安定化）
+            if ( !empty($kpi_curr) ) {
+                $kpi_curr['_cached_score'] = [
+                    'score'      => $re_health['score'],
+                    'status'     => $re_health['status'],
+                    'breakdown'  => $re_health['breakdown'],
+                    'components' => $re_health['components'],
+                ];
+                $exclude_foreign_sc = get_user_meta( $user_id, 'report_exclude_foreign', true );
+                $filter_suffix_sc   = $exclude_foreign_sc ? '_jp' : '';
+                set_transient(
+                    "gcrev_dash_{$user_id}_last30{$filter_suffix_sc}",
+                    $kpi_curr,
+                    24 * HOUR_IN_SECONDS
+                );
+            }
+        }
     } catch (\Throwable $e) {
         error_log('[GCREV] page-dashboard last30 override error: ' . $e->getMessage());
     }
@@ -1173,6 +1205,32 @@ foreach ($highlight_items as $highlight):
                 card.classList.remove('is-kpi-loading');
                 card.setAttribute('aria-busy', 'false');
             }
+        });
+    })();
+    <?php endif; ?>
+
+    <?php if (empty($kpi_prev)): ?>
+    // --- 比較期間のみ非同期取得（currはキャッシュヒット済み、prevのみ未取得）---
+    (function(){
+        var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
+        var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
+        var compStart = <?php echo wp_json_encode($last30_comp['start']); ?>;
+        var compEnd   = <?php echo wp_json_encode($last30_comp['end']); ?>;
+
+        fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd), {
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }
+        }).then(function(r){ return r.json(); }).then(function(result){
+            var prev = result.success ? result.data : null;
+            if (!prev) return;
+
+            var cS = <?php echo (int)$sess_curr; ?>;
+            var pS = parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10);
+            var cC = <?php echo (int)$cv_curr; ?>;
+            var pC = parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10);
+
+            updateInfoKpi('visits', cS, cS - pS);
+            updateInfoKpi('cv', cC, cC - pC);
         });
     })();
     <?php endif; ?>
