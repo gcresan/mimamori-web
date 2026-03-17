@@ -18,6 +18,9 @@ set_query_var('gcrev_page_subtitle', 'Googleマップやローカル検索での
 // パンくず設定
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('マップ順位', '検索順位チェック'));
 
+// Maps用ドメイン
+$maps_domain = get_user_meta( $user_id, '_gcrev_maps_domain', true ) ?: '';
+
 get_header();
 ?>
 
@@ -71,6 +74,12 @@ get_header();
 }
 .meo-keyword-single {
     font-size: 13px; font-weight: 600; color: #1a1a1a;
+}
+/* GBP domain badge */
+.meo-gbp-badge {
+    display: inline-block; font-size: 9px; font-weight: 700; color: #568184;
+    background: #e8f4f5; border: 1px solid #c5dfe0; border-radius: 4px;
+    padding: 1px 5px; letter-spacing: 0.5px;
 }
 /* Radius selector */
 .meo-radius-group { display: flex; flex-direction: column; gap: 4px; }
@@ -264,6 +273,16 @@ get_header();
             <span class="meo-keyword-single" id="meoKeywordSingle"></span>
             <select class="meo-keyword-select" id="meoKeywordSelect" style="display:none;"></select>
         </div>
+<?php if ( $maps_domain !== '' ) : ?>
+        <!-- GBPドメイン -->
+        <div class="meo-condition-group">
+            <span class="meo-condition-label">GBPドメイン</span>
+            <span class="meo-condition-value" style="display:flex; align-items:center; gap:6px;">
+                <?php echo esc_html( $maps_domain ); ?>
+                <span class="meo-gbp-badge">GBP</span>
+            </span>
+        </div>
+<?php endif; ?>
     </div>
 
     <!-- メトリクスカード 4枚 -->
