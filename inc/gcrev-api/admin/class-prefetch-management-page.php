@@ -100,7 +100,7 @@ class Gcrev_Prefetch_Management_Page {
         switch ( $action ) {
             case 'fetch_single_period':
                 if ( $user_id > 0 && $period ) {
-                    $api->manual_fetch_for_user( $user_id, [ $period ] );
+                    $api->manual_fetch_for_user( $user_id, $period );
                     $this->redirect_with_notice( 'single_ok', $user_id );
                 }
                 break;
@@ -108,7 +108,9 @@ class Gcrev_Prefetch_Management_Page {
             case 'fetch_all_periods':
                 if ( $user_id > 0 ) {
                     $all_periods = [ 'last30', 'last90', 'previousMonth', 'twoMonthsAgo', 'last180', 'last365' ];
-                    $api->manual_fetch_for_user( $user_id, $all_periods );
+                    foreach ( $all_periods as $p ) {
+                        $api->manual_fetch_for_user( $user_id, $p );
+                    }
                     $this->redirect_with_notice( 'all_ok', $user_id );
                 }
                 break;
