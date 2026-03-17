@@ -370,7 +370,7 @@ function updateSummaryCards(data) {
         
         return `
             <div class="summary-card">
-                <div class="summary-card-header">${escapeHtml(age.age_range || '不明')}</div>
+                <div class="summary-card-header">${escapeHtml(age.age_range ? age.age_range + '歳' : '不明')}</div>
                 <div class="summary-card-value">${formatNumber(sessions)}</div>
                 ${changeClass ? `
                 <div class="summary-card-change ${changeClass}">
@@ -400,7 +400,7 @@ function updateAgeDistributionChart(data) {
         return;
     }
     
-    const labels = age_demographics.map(item => item.age_range || '不明');
+    const labels = age_demographics.map(item => item.age_range ? item.age_range + '歳' : '不明');
     const sessions = age_demographics.map(item => item.sessions || 0);
     
     const ctx = document.getElementById('ageDistributionChart');
@@ -492,7 +492,10 @@ function updateGenderAgeChart(data) {
     }
     
     // ラベル（年齢層）とデータを準備
-    const labels = gender_age_cross.map(item => item.age_range || item.age || '不明');
+    const labels = gender_age_cross.map(item => {
+        const r = item.age_range || item.age;
+        return r ? r + '歳' : '不明';
+    });
 // sessions をチャート用に抽出（新形式: male.sessions / 旧形式: male）
 const maleData = gender_age_cross.map(item => {
     const v = item?.male;
@@ -704,7 +707,7 @@ function updateDetailTable(data) {
         
         return `
             <tr>
-                <td>${escapeHtml(age.age_range || '不明')}</td>
+                <td>${escapeHtml(age.age_range ? age.age_range + '歳' : '不明')}</td>
                 <td>${formatNumber(sessions)}</td>
                 <td>${formatPercent(percent)}</td>
                 <td>${formatNumber(age.pageviews)}</td>
@@ -805,7 +808,7 @@ function exportTableData() {
         const percent = totalSessions > 0 ? (sessions / totalSessions * 100).toFixed(1) : 0;
         
         return [
-            age.age_range || '不明',
+            age.age_range ? age.age_range + '歳' : '不明',
             sessions,
             percent + '%',
             age.pageviews || 0,
