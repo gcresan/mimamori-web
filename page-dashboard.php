@@ -320,8 +320,9 @@ $kpi_prev = [];
 if ($infographic && is_array($infographic)) {
     try {
         // --- 直近30日のKPIデータ（GA4+GSC）---
-        // スコア計算に必要なため常に取得（プリフェッチ済みならキャッシュヒット）
-        $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id);
+        // cache_first=1: プリフェッチ済みキャッシュがあれば即返却、なければ空配列
+        // （キャッシュなし時はJS非同期で取得→スコアも非同期更新）
+        $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id, 1);
 
         // 比較期間のKPI（currがキャッシュヒットした場合のみ取得）
         $kpi_prev = [];
@@ -488,7 +489,13 @@ if ($infographic) {
                   class="score-progress" transform="rotate(-90 60 60)" />
         </svg>
         <div class="score-center-text">
-          <span class="info-score-value"><?php echo esc_html((string)$score_val); ?><span class="info-score-unit">点</span></span>
+          <span class="info-score-value"><?php
+            if (empty($kpi_curr) && $score_val === 0) {
+                echo '<span class="info-kpi-spinner"></span>';
+            } else {
+                echo esc_html((string)$score_val) . '<span class="info-score-unit">点</span>';
+            }
+          ?></span>
           <span class="info-score-label">100点中</span>
         </div>
       </div>
@@ -1073,6 +1080,31 @@ foreach ($highlight_items as $highlight):
 
 <script>
 (function(){
+    // スコアゲージ更新（非同期KPI取得後に呼ばれる）
+    function updateScoreGauge(score) {
+        var circumference = 326.73; // 2 * π * 52
+        var pct = Math.max(0, Math.min(100, score));
+        var offset = circumference * (1 - pct / 100);
+
+        // SVG circle
+        var circle = document.querySelector('.score-progress');
+        if (circle) {
+            circle.style.transition = 'stroke-dashoffset 0.8s ease-out';
+            circle.setAttribute('stroke-dashoffset', offset);
+        }
+
+        // スコア数値
+        var valEl = document.querySelector('.info-score-value');
+        if (valEl) valEl.innerHTML = score + '<span class="info-score-unit">点</span>';
+
+        // ステータスラベル
+        var statusEl = document.querySelector('.info-score-status');
+        if (statusEl) {
+            var status = score >= 70 ? '安定しています' : (score >= 50 ? '改善傾向です' : (score >= 35 ? 'もう少しです' : '要注意です'));
+            statusEl.textContent = status;
+        }
+    }
+
     // KPI更新の共通関数
     function fmt(n){ return n.toLocaleString(); }
     function updateInfoKpi(key, value, diff){
@@ -1264,6 +1296,40 @@ foreach ($highlight_items as $highlight):
             var mPrev = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.total_impressions || 0, 10) : 0;
             updateInfoKpi('meo', mCurr, mCurr - mPrev);
             finishCard('meo');
+
+            // --- スコアゲージ非同期更新 ---
+            if (curr) {
+                var gscCurr = parseInt(String((curr.gsc && curr.gsc.total ? curr.gsc.total.clicks || curr.gsc.total.impressions : 0) || 0).replace(/,/g, ''), 10);
+                var gscPrev = prev ? parseInt(String((prev.gsc && prev.gsc.total ? prev.gsc.total.clicks || prev.gsc.total.impressions : 0) || 0).replace(/,/g, ''), 10) : 0;
+
+                // 簡易スコア計算（サーバーサイドの pct_to_points と同等）
+                function calcPct(c, p) {
+                    if (p === 0) return c === 0 ? 0 : 100;
+                    return ((c - p) / p) * 100;
+                }
+                function pctToPoints(pct) {
+                    if (pct >= 15) return 25;
+                    if (pct >= 5) return 20;
+                    if (pct >= -4) return 15;
+                    if (pct >= -14) return 8;
+                    return 0;
+                }
+                var dims = {
+                    traffic: [cS, pS],
+                    cv: [cC, pC],
+                    gsc: [gscCurr, gscPrev],
+                    meo: [mCurr, mPrev]
+                };
+                var total = 0;
+                var hasAny = false;
+                Object.keys(dims).forEach(function(k) {
+                    var c = dims[k][0], p = dims[k][1];
+                    if (c > 0) hasAny = true;
+                    total += (c === 0) ? 0 : pctToPoints(calcPct(c, p));
+                });
+                var score = hasAny ? Math.max(35, Math.min(100, total)) : 0;
+                updateScoreGauge(score);
+            }
         }).catch(function(err){
             clearTimeout(timeoutId);
             console.error('[GCREV] KPI async fetch error:', err);

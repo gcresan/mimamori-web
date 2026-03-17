@@ -127,7 +127,7 @@ get_template_part('template-parts/analysis-help');
 
 <script>
 // ===== グローバル変数 =====
-let currentPeriod = 'prev-month';
+let currentPeriod = 'last30';
 let currentData = null;
 let trendChart = null;
 let shareChart = null;
@@ -211,8 +211,8 @@ document.addEventListener('DOMContentLoaded', function () {
         window.GCREV.initPeriodSelectors();
     }
 
-    // 常に前月で開く
-    currentPeriod = 'prev-month';
+    // 直近30日で開く
+    currentPeriod = 'last30';
 
     // 初回データ読み込み
     loadSourceData(currentPeriod, SELECTOR_ID);

@@ -239,7 +239,7 @@ const REST_URL = '<?php echo esc_url(rest_url('gcrev/v1/analysis/region')); ?>';
 const REST_TREND_URL = '<?php echo esc_url(rest_url('gcrev/v1/analysis/region-trend')); ?>';
 
 let currentData = null;
-let currentPeriod = 'prev-month';
+let currentPeriod = 'last30';
 let top10Chart = null;
 let trendChart = null;
 let selectedAreaIndex = -1;   // 選択中の棒インデックス（-1 = 未選択）
@@ -251,8 +251,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // DOMが完全に準備できるまで少し待つ
     setTimeout(function() {
-        // 常に前月で開く
-        currentPeriod = 'prev-month';
+        // 直近30日で開く
+        currentPeriod = 'last30';
 
         // 期間ボタンのイベントリスナー設定
         setupPeriodButtons();

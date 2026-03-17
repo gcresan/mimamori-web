@@ -203,7 +203,7 @@ let currentPeriod = null;
     const selectorId = 'device-period';
     const selectorEl = document.getElementById(selectorId);
 
-    const initialPeriod = 'prev-month';
+    const initialPeriod = 'last30';
 
     // 期間変更イベント（period-selector.js から発火）
     if (selectorEl) {

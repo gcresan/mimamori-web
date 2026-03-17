@@ -155,7 +155,7 @@ get_template_part('template-parts/analysis-help');
 
 <script>
 // ===== グローバル変数 =====
-let currentPeriod = 'prev-month';
+let currentPeriod = 'last30';
 let currentData = null;
 let ageDistributionChart = null;
 let genderAgeChart = null;
@@ -181,8 +181,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // 初期データ読み込み（常に前月）
-  currentPeriod = 'prev-month';
+  // 初期データ読み込み（直近30日）
+  currentPeriod = 'last30';
   loadData(currentPeriod, selectorId);
 });
 /**
