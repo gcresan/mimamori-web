@@ -4196,6 +4196,10 @@ class Gcrev_Insight_API {
                 }
             }
 
+            // Maps 用ドメイン（GBP のドメインが target_domain と異なる場合に user meta で設定）
+            $maps_domain  = (string) get_user_meta( $user_id, '_gcrev_maps_domain', true );
+            $match_domain = $maps_domain !== '' ? $maps_domain : $target_domain;
+
             // DataForSEO API 呼び出し
             $maps_items   = $this->dataforseo->fetch_maps_serp( $keyword_text, $device, $location_code, $language_code, $location_coordinate );
             $finder_items = $this->dataforseo->fetch_local_finder_serp( $keyword_text, $device, $location_code, $language_code, $location_coordinate );
@@ -4206,7 +4210,7 @@ class Gcrev_Insight_API {
             $competitors = [];
 
             if ( ! is_wp_error( $maps_items ) && is_array( $maps_items ) ) {
-                $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $target_domain );
+                $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $match_domain );
 
                 if ( $my_biz ) {
                     $maps_rank  = (int) ( $my_biz['rank_group'] ?? 0 ) ?: null;
@@ -4223,7 +4227,7 @@ class Gcrev_Insight_API {
 
                     $item_domain = $item['domain'] ?? '';
                     $normalized_item = preg_replace( '/^www\./i', '', strtolower( $item_domain ) );
-                    $normalized_target = preg_replace( '/^www\./i', '', strtolower( $target_domain ) );
+                    $normalized_target = preg_replace( '/^www\./i', '', strtolower( $match_domain ) );
                     $is_self = ( $normalized_item !== '' && $normalized_item === $normalized_target );
 
                     $rating_obj = $item['rating'] ?? [];
@@ -4250,7 +4254,7 @@ class Gcrev_Insight_API {
 
             if ( ! is_wp_error( $finder_items ) && is_array( $finder_items ) ) {
                 $finder_total = count( $finder_items );
-                $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $target_domain );
+                $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $match_domain );
                 if ( $my_finder ) {
                     $finder_rank = (int) ( $my_finder['rank_group'] ?? 0 ) ?: null;
                 }
@@ -4515,6 +4519,10 @@ class Gcrev_Insight_API {
                 }
 
                 $target_domain = $kw['target_domain'];
+                // Maps 用ドメイン（GBP のドメインが target_domain と異なる場合）
+                $maps_domain   = (string) get_user_meta( $uid, '_gcrev_maps_domain', true );
+                $match_domain  = $maps_domain !== '' ? $maps_domain : $target_domain;
+
                 $location_code = (int) ( $kw['location_code'] ?: 2392 );
                 $zoom = Gcrev_DataForSEO_Client::radius_to_zoom( $meo_radius );
                 $coordinate_str = Gcrev_DataForSEO_Client::build_coordinate_string(
@@ -4533,7 +4541,7 @@ class Gcrev_Insight_API {
                     $competitors = [];
 
                     if ( ! is_wp_error( $maps_items ) && is_array( $maps_items ) ) {
-                        $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $target_domain );
+                        $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $match_domain );
                         if ( $my_biz ) {
                             $maps_rank = (int) ( $my_biz['rank_group'] ?? 0 ) ?: null;
                             $store     = $this->meo_extract_store_info( $my_biz );
@@ -4544,7 +4552,7 @@ class Gcrev_Insight_API {
                             if ( empty( $item['title'] ) ) continue;
                             $item_domain = $item['domain'] ?? '';
                             $norm_item   = preg_replace( '/^www\./i', '', strtolower( $item_domain ) );
-                            $norm_target = preg_replace( '/^www\./i', '', strtolower( $target_domain ) );
+                            $norm_target = preg_replace( '/^www\./i', '', strtolower( $match_domain ) );
                             $is_self = ( $norm_item !== '' && $norm_item === $norm_target );
                             $rating_obj = $item['rating'] ?? [];
                             $competitors[] = [
@@ -4565,7 +4573,7 @@ class Gcrev_Insight_API {
 
                     $finder_rank = null;
                     if ( ! is_wp_error( $finder_items ) && is_array( $finder_items ) ) {
-                        $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $target_domain );
+                        $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $match_domain );
                         if ( $my_finder ) {
                             $finder_rank = (int) ( $my_finder['rank_group'] ?? 0 ) ?: null;
                         }
