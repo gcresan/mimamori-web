@@ -142,16 +142,126 @@ class Gcrev_Deploy_Page {
         $output  = $this->run_script( 'deploy.sh' );
         $success = ( strpos( $output, 'OK' ) !== false );
 
+        // デプロイ成功時: dev のアップデート情報を本番に同期
+        $sync_msg = '';
+        if ( $success ) {
+            $sync_result = $this->sync_updates_to_prod();
+            if ( $sync_result > 0 ) {
+                $sync_msg = " アップデート情報 {$sync_result} 件を本番に同期しました。";
+            }
+        }
+
         add_settings_error(
             'gcrev_deploy',
             'deploy_result',
             $success
-                ? 'デプロイが完了しました。'
+                ? 'デプロイが完了しました。' . $sync_msg
                 : 'デプロイに失敗しました: ' . esc_html( mb_substr( $output, 0, 500 ) ),
             $success ? 'success' : 'error'
         );
 
         error_log( '[GCREV Deploy] deploy: ' . ( $success ? 'OK' : 'FAIL' ) . ' output=' . mb_substr( $output, 0, 300 ) );
+    }
+
+    /**
+     * Dev のアップデート情報を本番に同期する
+     *
+     * Dev の mimamori_update CPT のうち、前回デプロイ以降に作成されたものを
+     * 本番の ingest API に POST する。
+     *
+     * @return int 同期した件数
+     */
+    private function sync_updates_to_prod(): int {
+        // 本番サイト URL と ingest トークンが必要
+        $prod_url = defined( 'MIMAMORI_PROD_THEME_PATH' )
+            ? str_replace(
+                '/DocumentRoot/wp-content/themes/mimamori',
+                '',
+                MIMAMORI_PROD_THEME_PATH
+            )
+            : '';
+
+        // 本番の WordPress URL を取得（wp-config.php から推定）
+        // MIMAMORI_PROD_THEME_PATH = /home/kusanagi/mimamori/DocumentRoot/wp-content/themes/mimamori
+        // → 本番ドメインは https://mimamori-web.jp
+        $prod_site_url = 'https://mimamori-web.jp';
+
+        $ingest_token = defined( 'MIMAMORI_UPDATES_INGEST_TOKEN' )
+            ? MIMAMORI_UPDATES_INGEST_TOKEN
+            : '';
+
+        if ( empty( $ingest_token ) ) {
+            error_log( '[GCREV Deploy] sync_updates: SKIP — MIMAMORI_UPDATES_INGEST_TOKEN not defined' );
+            return 0;
+        }
+
+        // 前回のデプロイ同期タイムスタンプ
+        $last_sync = (int) get_option( 'gcrev_deploy_last_update_sync', 0 );
+
+        // dev の最新アップデート情報を取得
+        $args = [
+            'post_type'      => 'mimamori_update',
+            'post_status'    => 'publish',
+            'posts_per_page' => 50,
+            'orderby'        => 'date',
+            'order'          => 'ASC',
+        ];
+
+        if ( $last_sync > 0 ) {
+            $args['date_query'] = [
+                [
+                    'after'     => gmdate( 'Y-m-d H:i:s', $last_sync ),
+                    'inclusive' => false,
+                ],
+            ];
+        }
+
+        $posts = get_posts( $args );
+        if ( empty( $posts ) ) {
+            error_log( '[GCREV Deploy] sync_updates: No new updates to sync' );
+            return 0;
+        }
+
+        $synced = 0;
+        $ingest_url = $prod_site_url . '/wp-json/mimamori/v1/updates/ingest';
+
+        foreach ( $posts as $p ) {
+            $payload = wp_json_encode( [
+                'title'    => $p->post_title,
+                'content'  => wp_strip_all_tags( $p->post_content ),
+                'category' => get_post_meta( $p->ID, 'update_category', true ) ?: 'other',
+                'version'  => get_post_meta( $p->ID, 'update_version', true ) ?: '',
+            ], JSON_UNESCAPED_UNICODE );
+
+            $response = wp_remote_post( $ingest_url, [
+                'timeout' => 10,
+                'headers' => [
+                    'Content-Type'             => 'application/json',
+                    'X-Mimamori-Ingest-Token'  => $ingest_token,
+                ],
+                'body' => $payload,
+            ] );
+
+            if ( is_wp_error( $response ) ) {
+                error_log( '[GCREV Deploy] sync_updates FAIL: ' . $p->post_title . ' — ' . $response->get_error_message() );
+                continue;
+            }
+
+            $code = wp_remote_retrieve_response_code( $response );
+            if ( $code === 201 ) {
+                $synced++;
+                error_log( '[GCREV Deploy] sync_updates OK: ' . $p->post_title );
+            } else {
+                error_log( '[GCREV Deploy] sync_updates FAIL: ' . $p->post_title . ' — HTTP ' . $code );
+            }
+        }
+
+        // 同期タイムスタンプを更新
+        update_option( 'gcrev_deploy_last_update_sync', time() );
+
+        $total = count( $posts );
+        error_log( "[GCREV Deploy] sync_updates: {$synced}/{$total} synced to prod" );
+        return $synced;
     }
 
     /**
