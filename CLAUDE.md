@@ -610,9 +610,11 @@ compass compile
 ローカル開発 → git push main
   ↓ GitHub Actions (deploy-dev.yml)
 Dev サーバー自動デプロイ
-  ↓ 手動実行 (deploy-prod.yml or deploy.sh)
-Prod サーバーデプロイ + タグ作成
+  ↓ Dev 管理画面「デプロイ管理」→「本番にデプロイ」ボタン
+Prod サーバーデプロイ（スナップショット自動作成 + rsync）
 ```
+
+**本番デプロイ方法**: Dev 環境の WordPress 管理画面 → サイドバー「みまもりウェブ > デプロイ」→「🚀 本番にデプロイ」ボタンをクリック。実行前にテーマ ZIP スナップショットが自動作成される。ロールバックも同画面から可能。
 
 ### WP-CLI（サーバー実行）
 
