@@ -265,6 +265,39 @@ class Gcrev_Notification_Settings_Page {
     }
 
     // =========================================================
+    // セクション個別描画ヘルパー
+    // =========================================================
+
+    /**
+     * 指定セクションだけを描画する（do_settings_sections の単一セクション版）。
+     *
+     * @param string $page    ページスラッグ
+     * @param string $section セクションID
+     */
+    private static function render_single_section( string $page, string $section ): void {
+        global $wp_settings_sections, $wp_settings_fields;
+
+        if ( ! isset( $wp_settings_sections[ $page ][ $section ] ) ) {
+            return;
+        }
+        $sec = $wp_settings_sections[ $page ][ $section ];
+
+        if ( $sec['title'] ) {
+            echo '<h2>' . esc_html( $sec['title'] ) . '</h2>';
+        }
+        if ( $sec['callback'] ) {
+            call_user_func( $sec['callback'], $sec );
+        }
+
+        if ( ! isset( $wp_settings_fields[ $page ][ $section ] ) ) {
+            return;
+        }
+        echo '<table class="form-table" role="presentation">';
+        do_settings_fields( $page, $section );
+        echo '</table>';
+    }
+
+    // =========================================================
     // ページ描画
     // =========================================================
 
@@ -279,21 +312,30 @@ class Gcrev_Notification_Settings_Page {
             <?php settings_errors( 'gcrev_notification' ); ?>
 
             <form method="post" action="options.php">
-                <?php
-                settings_fields( self::OPTION_GROUP );
-                do_settings_sections( self::MENU_SLUG );
-                submit_button( '設定を保存' );
-                ?>
+                <?php settings_fields( self::OPTION_GROUP ); ?>
+
+                <?php // ── Cronエラー通知セクション ── ?>
+                <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:16px 24px 24px; margin-bottom:30px;">
+                    <?php self::render_single_section( self::MENU_SLUG, self::SECTION_ID ); ?>
+
+                    <hr style="margin:24px 0 16px;" />
+                    <h3 style="margin:0 0 8px;">テスト送信</h3>
+                    <p style="margin:0 0 8px;">現在の設定でテスト通知メールを送信します。</p>
+                </div>
+
+                <?php // ── お問い合わせメール設定セクション ── ?>
+                <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:16px 24px 24px;">
+                    <?php self::render_single_section( self::MENU_SLUG, 'gcrev_inquiry_email_section' ); ?>
+                </div>
+
+                <?php submit_button( '設定を保存' ); ?>
             </form>
 
-            <hr />
-
-            <h2>テスト送信</h2>
-            <p>現在の設定でテスト通知メールを送信します。</p>
-            <form method="post">
+            <?php // テスト送信は別フォーム（nonce別） ?>
+            <form method="post" style="margin-top:-20px;">
                 <?php wp_nonce_field( 'gcrev_test_notification_nonce' ); ?>
                 <input type="hidden" name="gcrev_test_notification" value="1" />
-                <?php submit_button( 'テスト通知を送信', 'secondary' ); ?>
+                <?php submit_button( 'Cronエラー テスト通知を送信', 'secondary' ); ?>
             </form>
         </div>
         <?php
