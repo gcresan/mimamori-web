@@ -629,8 +629,18 @@ function updatePagesList(pages) {
         listEl.innerHTML = '<li class="digest-list-item"><span class="digest-list-item-name">データなし</span></li>';
         return;
     }
-    
-    const top5 = pages.slice(0, 5);
+
+    // 確認画面・送信完了画面を除外
+    const excludePatterns = /\/(confirm|thanks|complete|done|finish|sent|success|thankyou|thank-you|completion)(\/|$|\?)/i;
+    const filtered = pages.filter(item => {
+        const path = item.pagePath || item.page || '';
+        const title = (item.title || '').toLowerCase();
+        if (excludePatterns.test(path)) return false;
+        if (/確認(画面|ページ)?|送信完了|完了(画面|ページ)?|ありがとう/.test(title)) return false;
+        return true;
+    });
+
+    const top5 = filtered.slice(0, 5);
     
     listEl.innerHTML = top5.map((item, index) => {
         // titleフィールドをそのまま使用（APIで実際のページタイトルが返される）

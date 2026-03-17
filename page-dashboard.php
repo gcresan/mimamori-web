@@ -320,8 +320,8 @@ $kpi_prev = [];
 if ($infographic && is_array($infographic)) {
     try {
         // --- 直近30日のKPIデータ（GA4+GSC）---
-        // cache_first=1: キャッシュがあれば使い、なければスキップ（JS側で非同期取得）
-        $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id, 1);
+        // スコア計算に必要なため常に取得（プリフェッチ済みならキャッシュヒット）
+        $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id);
 
         // 比較期間のKPI（currがキャッシュヒットした場合のみ取得）
         $kpi_prev = [];

@@ -6832,11 +6832,11 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
  * @return string パンくず HTML
  */
 function gcrev_breadcrumb( string $current, ?string $parent = null ): string {
-    $sep = '<span>›</span>';
+    $sep = '<span class="breadcrumb-sep">›</span>';
     $bc  = '<a href="' . esc_url( home_url( '/dashboard/' ) ) . '">ホーム</a>';
 
     if ( $parent !== null ) {
-        $bc .= $sep . '<span>' . esc_html( $parent ) . '</span>';
+        $bc .= $sep . '<span class="breadcrumb-parent">' . esc_html( $parent ) . '</span>';
     }
 
     $bc .= $sep . '<strong>' . esc_html( $current ) . '</strong>';

@@ -3736,8 +3736,11 @@ class Gcrev_Insight_API {
 
             return $result;
 
-        } catch (Exception $e) {
-            error_log("[GCREV] generate_monthly_report_manual: Error - " . $e->getMessage());
+        } catch (\Exception $e) {
+            file_put_contents('/tmp/gcrev_report_debug.log',
+                date('Y-m-d H:i:s') . " generate_monthly_report_manual ERROR: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n",
+                FILE_APPEND
+            );
             return [
                 'success' => false,
                 'message' => 'レポートの生成に失敗しました: ' . $e->getMessage()
@@ -3795,7 +3798,32 @@ class Gcrev_Insight_API {
         $month = $request->get_param('month');
         $user_id = get_current_user_id();
 
-        error_log("[GCREV] REST generate_report_manual: user_id={$user_id}, year={$year}, month={$month}");
+        file_put_contents('/tmp/gcrev_report_debug.log',
+            date('Y-m-d H:i:s') . " REST generate_report_manual START: user_id={$user_id}, year={$year}, month={$month}\n",
+            FILE_APPEND
+        );
+
+        // PHP Fatal Error をキャッチして JSON レスポンスを返すためのシャットダウンハンドラ
+        register_shutdown_function(function () {
+            $error = error_get_last();
+            if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+                file_put_contents('/tmp/gcrev_report_debug.log',
+                    date('Y-m-d H:i:s') . " FATAL ERROR: {$error['message']} in {$error['file']}:{$error['line']}\n",
+                    FILE_APPEND
+                );
+                // 出力バッファをクリアして JSON エラーレスポンスを返す
+                if (ob_get_level()) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                http_response_code(500);
+                echo wp_json_encode([
+                    'success' => false,
+                    'message' => 'サーバーで致命的なエラーが発生しました。管理者にお問い合わせください。',
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+        });
 
         try {
             $result = $this->generate_monthly_report_manual($user_id, $year, $month);
@@ -3806,8 +3834,11 @@ class Gcrev_Insight_API {
                 return new WP_REST_Response($result, 400);
             }
 
-        } catch (\Exception $e) {
-            error_log("[GCREV] REST generate_report_manual ERROR: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            file_put_contents('/tmp/gcrev_report_debug.log',
+                date('Y-m-d H:i:s') . " REST generate_report_manual ERROR: " . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n",
+                FILE_APPEND
+            );
             return new WP_REST_Response([
                 'success' => false,
                 'message' => $e->getMessage(),

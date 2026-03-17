@@ -426,9 +426,13 @@
   text-decoration: underline;
 }
 
-.breadcrumb span {
+.breadcrumb .breadcrumb-sep {
   margin: 0 8px;
-  color: #E5E3DC;
+  color: #C5C3BC;
+}
+
+.breadcrumb .breadcrumb-parent {
+  color: #888883;
 }
 
 /* コンテンツエリア */
