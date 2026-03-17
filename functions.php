@@ -7030,6 +7030,120 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 }
 
 // ========================================
+// お問い合わせ REST API
+// ========================================
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'mimamori/v1', '/inquiry', [
+        'methods'             => 'POST',
+        'callback'            => 'gcrev_handle_inquiry',
+        'permission_callback' => function () {
+            return is_user_logged_in();
+        },
+    ] );
+} );
+
+function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
+    $params = $request->get_json_params();
+
+    $type_labels = [
+        'plan_basic'      => 'ベーシックプランについて相談したい',
+        'plan_ai_support' => 'AIサポートプランについて相談したい',
+        'plan_bansou'     => '伴走プランについて相談したい',
+        'plan_change'     => 'プラン変更について相談したい',
+        'support'         => 'サポートについて問い合わせしたい',
+        'other'           => 'その他のお問い合わせ',
+    ];
+
+    $inquiry_type = sanitize_text_field( $params['inquiry_type'] ?? '' );
+    $name         = sanitize_text_field( $params['name'] ?? '' );
+    $company      = sanitize_text_field( $params['company'] ?? '' );
+    $email        = sanitize_email( $params['email'] ?? '' );
+    $phone        = sanitize_text_field( $params['phone'] ?? '' );
+    $current_plan = sanitize_text_field( $params['current_plan'] ?? '' );
+    $desired_plan = sanitize_text_field( $params['desired_plan'] ?? '' );
+    $message      = sanitize_textarea_field( $params['message'] ?? '' );
+
+    // バリデーション
+    if ( empty( $inquiry_type ) || ! isset( $type_labels[ $inquiry_type ] ) ) {
+        return new \WP_REST_Response( [ 'success' => false, 'message' => 'お問い合わせ種別を選択してください。' ], 400 );
+    }
+    if ( empty( $name ) ) {
+        return new \WP_REST_Response( [ 'success' => false, 'message' => 'お名前を入力してください。' ], 400 );
+    }
+    if ( empty( $email ) || ! is_email( $email ) ) {
+        return new \WP_REST_Response( [ 'success' => false, 'message' => '正しいメールアドレスを入力してください。' ], 400 );
+    }
+    if ( empty( $message ) ) {
+        return new \WP_REST_Response( [ 'success' => false, 'message' => 'お問い合わせ内容を入力してください。' ], 400 );
+    }
+
+    // メール本文構築
+    $type_display = $type_labels[ $inquiry_type ];
+    $current_user = wp_get_current_user();
+    $body_lines   = [];
+    $body_lines[] = '【みまもりウェブ お問い合わせ】';
+    $body_lines[] = '';
+    $body_lines[] = "■ 問い合わせ種別: {$type_display}";
+    $body_lines[] = "■ お名前: {$name}";
+    if ( $company ) {
+        $body_lines[] = "■ 会社名: {$company}";
+    }
+    $body_lines[] = "■ メールアドレス: {$email}";
+    if ( $phone ) {
+        $body_lines[] = "■ 電話番号: {$phone}";
+    }
+    if ( $current_plan ) {
+        $body_lines[] = "■ 現在利用中のプラン: {$current_plan}";
+    }
+    if ( $desired_plan ) {
+        $body_lines[] = "■ 変更希望プラン: {$desired_plan}";
+    }
+    $body_lines[] = '';
+    $body_lines[] = '■ お問い合わせ内容:';
+    $body_lines[] = $message;
+    $body_lines[] = '';
+    $body_lines[] = '---';
+    $body_lines[] = 'ユーザーID: ' . $current_user->ID;
+    $body_lines[] = 'ログインメール: ' . $current_user->user_email;
+    $body_lines[] = '送信日時: ' . wp_date( 'Y-m-d H:i:s' );
+
+    $body    = implode( "\n", $body_lines );
+    $subject = '【みまもりウェブ】お問い合わせ: ' . $type_display;
+    $to      = get_option( 'admin_email' );
+    $headers = [ 'Reply-To: ' . $name . ' <' . $email . '>' ];
+
+    $sent = wp_mail( $to, $subject, $body, $headers );
+
+    // 自動返信
+    if ( $sent ) {
+        $reply_body  = "{$name} 様\n\n";
+        $reply_body .= "お問い合わせいただきありがとうございます。\n";
+        $reply_body .= "以下の内容で受け付けました。\n\n";
+        $reply_body .= "---\n";
+        $reply_body .= "問い合わせ種別: {$type_display}\n";
+        $reply_body .= "お問い合わせ内容:\n{$message}\n";
+        $reply_body .= "---\n\n";
+        $reply_body .= "内容を確認のうえ、順次ご案内いたします。\n";
+        $reply_body .= "通常2〜3営業日以内にご連絡いたします。\n\n";
+        $reply_body .= "※このメールは自動送信です。\n";
+        $reply_body .= "みまもりウェブ";
+
+        $reply_headers = [ 'From: みまもりウェブ <' . $to . '>' ];
+        wp_mail( $email, '【みまもりウェブ】お問い合わせを受け付けました', $reply_body, $reply_headers );
+    }
+
+    if ( ! $sent ) {
+        file_put_contents( '/tmp/gcrev_inquiry_debug.log',
+            date( 'Y-m-d H:i:s' ) . " wp_mail failed: to={$to}, type={$inquiry_type}\n",
+            FILE_APPEND
+        );
+        return new \WP_REST_Response( [ 'success' => false, 'message' => '送信に失敗しました。しばらくしてからもう一度お試しください。' ], 500 );
+    }
+
+    return new \WP_REST_Response( [ 'success' => true ] );
+}
+
+// ========================================
 // パンくず共通生成関数
 // ========================================
 /**

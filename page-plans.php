@@ -435,9 +435,9 @@ get_header();
             <?php if ( $is_current ) : ?>
                 <span class="plan-card__cta plan-card__cta--current">現在のプラン</span>
             <?php elseif ( $is_rec ) : ?>
-                <a href="<?php echo esc_url( home_url( '/inquiry/' ) ); ?>" class="plan-card__cta plan-card__cta--primary">プラン変更を相談する</a>
+                <a href="<?php echo esc_url( home_url( '/inquiry/?type=change&plan=' . $plan['id'] ) ); ?>" class="plan-card__cta plan-card__cta--primary">プラン変更を相談する</a>
             <?php else : ?>
-                <a href="<?php echo esc_url( home_url( '/inquiry/' ) ); ?>" class="plan-card__cta plan-card__cta--secondary">プラン変更を相談する</a>
+                <a href="<?php echo esc_url( home_url( '/inquiry/?type=change&plan=' . $plan['id'] ) ); ?>" class="plan-card__cta plan-card__cta--secondary">プラン変更を相談する</a>
             <?php endif; ?>
         </div>
         <?php endforeach; ?>
@@ -471,7 +471,7 @@ get_header();
     <!-- お問い合わせ -->
     <div class="plans-contact">
         <p class="plans-contact__text">プラン変更やご不明な点がございましたら、お気軽にお問い合わせください。</p>
-        <a href="<?php echo esc_url( home_url( '/inquiry/' ) ); ?>" class="plans-contact__link">お問い合わせ</a>
+        <a href="<?php echo esc_url( home_url( '/inquiry/?type=other' ) ); ?>" class="plans-contact__link">お問い合わせ</a>
     </div>
 
 </div>
