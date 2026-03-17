@@ -64,7 +64,7 @@
             </div>
             <?php endif; ?>
             <?php if ( function_exists( 'gcrev_is_trial_active' ) && gcrev_is_trial_active( $u->ID ) ) : ?>
-            <div style="margin-top: 6px; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: nowrap;">
+            <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;">
                <span style="display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: 600; color: #d97706; background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.2); border-radius: 4px; letter-spacing: 0.05em; white-space: nowrap;">お試し中</span>
                <?php
                   $trial_end_display = gcrev_get_trial_end_display( $u->ID );
