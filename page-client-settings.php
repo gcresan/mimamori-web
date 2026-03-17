@@ -31,6 +31,9 @@ if ( empty( $initial_site_url ) ) {
     $initial_site_url = get_user_meta( $user_id, 'weisite_url', true ) ?: '';
 }
 
+// Maps（GBP）用ドメイン
+$maps_domain = get_user_meta( $user_id, '_gcrev_maps_domain', true ) ?: '';
+
 get_header();
 ?>
 
@@ -388,6 +391,11 @@ get_header();
                 <label for="cs-site-url">解析対象のサイトURL <span class="required">*</span></label>
                 <input type="url" id="cs-site-url" placeholder="https://example.com" value="<?php echo esc_attr( $initial_site_url ); ?>">
                 <small class="form-text">AIレポートやAI相談で参照されるWebサイトのURLです</small>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label for="cs-maps-domain">Googleマップ用ドメイン <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
+                <input type="text" id="cs-maps-domain" placeholder="例: example.co.jp" value="<?php echo esc_attr( $maps_domain ); ?>">
+                <small class="form-text">Googleビジネスプロフィール（GBP）に登録しているWebサイトのドメインが、対象サイトURLと異なる場合に設定してください。未入力の場合は対象サイトURLのドメインで照合します。</small>
             </div>
         </div>
 
@@ -1236,6 +1244,7 @@ get_header();
                 },
                 body: JSON.stringify({
                     site_url:               siteUrl,
+                    maps_domain:            (document.getElementById('cs-maps-domain').value || '').trim(),
                     area_type:              areaType,
                     area_pref:              areaPref,
                     area_city:              areaCity,

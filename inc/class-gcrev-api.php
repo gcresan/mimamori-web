@@ -1835,6 +1835,19 @@ class Gcrev_Insight_API {
         }
 
         update_user_meta($user_id, 'gcrev_client_site_url',      $site_url);
+
+        // Maps（GBP）用ドメイン
+        $maps_domain = sanitize_text_field( $params['maps_domain'] ?? '' );
+        // www. / プロトコル付きで入力された場合はドメイン部分を正規化
+        if ( $maps_domain !== '' ) {
+            if ( preg_match( '#^https?://#i', $maps_domain ) ) {
+                $parsed_md = wp_parse_url( $maps_domain );
+                $maps_domain = $parsed_md['host'] ?? $maps_domain;
+            }
+            $maps_domain = preg_replace( '/^www\./i', '', strtolower( trim( $maps_domain, '/' ) ) );
+        }
+        update_user_meta( $user_id, '_gcrev_maps_domain', $maps_domain );
+
         update_user_meta($user_id, 'gcrev_client_area_type',      $area_type);
         update_user_meta($user_id, 'gcrev_client_area_pref',      sanitize_text_field($params['area_pref'] ?? ''));
         update_user_meta($user_id, 'gcrev_client_area_city',      sanitize_text_field($params['area_city'] ?? ''));
