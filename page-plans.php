@@ -186,13 +186,13 @@ get_header();
     color: #fff;
 }
 .plan-card__cta--secondary {
-    background: #f5f5f5;
-    color: #666;
-    border: 1px solid #e5e5e5;
+    background: #4A5568;
+    color: #fff;
+    border: none;
 }
 .plan-card__cta--secondary:hover {
-    background: #ebebeb;
-    color: #666;
+    background: #3D4B5C;
+    color: #fff;
 }
 .plan-card__cta--current {
     background: #f0f0f0;
