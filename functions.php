@@ -552,15 +552,15 @@ function is_mobile() {
 
 // ログイン後、決済ステータス / お試し期限に応じてリダイレクト先を切替
 add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
-    // お試し期限切れ → ログインさせない（強制ログアウト）
-    if ( gcrev_is_trial_expired( $user_id ) ) {
-        wp_logout();
-        return home_url( '/login/?trial_expired=1' );
-    }
     // お試し中（期限内） → ダッシュボードへ
     if ( gcrev_is_trial_active( $user_id ) ) {
         return home_url('/dashboard/');
     }
+    // お試し期限切れ → ご利用案内ページへ（ログインは維持）
+    if ( gcrev_is_trial_expired( $user_id ) ) {
+        return home_url( '/payment-status/' );
+    }
+    // 決済済み → ダッシュボードへ
     if ( gcrev_is_payment_active( $user_id ) ) {
         return home_url('/dashboard/');
     }
@@ -568,24 +568,9 @@ add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
 }, 10, 2);
 
 // ----------------------------------------
-// お試し期限切れ — wp_authenticate_user でブロック
+// お試し期限切れ — ログインは許可し、payment-status ページへ誘導
+// （wp_authenticate_user でのブロックは廃止: 2026-03-18）
 // ----------------------------------------
-add_filter( 'wp_authenticate_user', function ( $user, $password ) {
-    if ( is_wp_error( $user ) ) {
-        return $user;
-    }
-    // 管理者はブロックしない
-    if ( user_can( $user->ID, 'manage_options' ) ) {
-        return $user;
-    }
-    if ( gcrev_is_trial_expired( $user->ID ) ) {
-        return new WP_Error(
-            'trial_expired',
-            'お試し期間が終了したため、現在はご利用いただけません。継続利用をご希望の場合は、管理者までお問い合わせください。'
-        );
-    }
-    return $user;
-}, 30, 2 );
 
 // ----------------------------------------
 // wp-login.php カスタマイズ
@@ -6984,13 +6969,6 @@ add_action( 'template_redirect', function () {
         return;
     }
 
-    // お試し期限切れ → 強制ログアウト＆リダイレクト
-    if ( gcrev_is_trial_expired( $user_id ) ) {
-        wp_logout();
-        wp_safe_redirect( home_url( '/login/?trial_expired=1' ) );
-        exit;
-    }
-
     // お試し中（期限内） → 全機能アクセスOK
     if ( gcrev_is_trial_active( $user_id ) ) {
         return;
@@ -6999,6 +6977,7 @@ add_action( 'template_redirect', function () {
     // 除外スラッグ（リダイレクトループ防止 + 常時アクセス許可ページ）
     $exempt_slugs = [
         'payment-status',
+        'plans',
         'account',
         'signup',
         'thanks',
