@@ -1092,7 +1092,7 @@ get_header();
             if (line.indexOf('■') === 0) {
                 if (inSection) html += '</div>'; // 前のセクションを閉じる
                 html += '<div class="ar-ai-section">';
-                html += '<h4 class="ar-ai-heading">' + escapeHtml(line) + '</h4>';
+                html += '<h4 class="ar-ai-heading">' + escapeHtml(line.replace(/^■\s*/, '')) + '</h4>';
                 inSection = true;
             } else {
                 html += '<p class="ar-ai-paragraph">' + highlightText(line) + '</p>';
