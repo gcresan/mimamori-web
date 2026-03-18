@@ -655,7 +655,7 @@ get_header();
     function showError(msg) {
         var el = document.getElementById('arError');
         if (el) {
-            el.textContent = msg;
+            el.innerHTML = escapeHtml(msg).replace(/\n/g, '<br>');
             el.style.display = 'block';
         }
         hideLoading();
@@ -1120,7 +1120,16 @@ get_header();
         .then(function(r) { return r.json(); })
         .then(function(json) {
             if (!json.success) {
-                showError(json.message || 'データの取得に失敗しました。');
+                var code = json.code || '';
+                var msg  = json.message || 'データの取得に失敗しました。';
+                if (code === 'NO_GA4') {
+                    msg = '⚠️ GA4プロパティが設定されていません。\n先にクライアント設定でGA4連携を完了してください。';
+                } else if (code === 'FUTURE_YEAR') {
+                    msg = '📅 ' + year + '年のデータはまだありません。';
+                } else if (code === 'INSUFFICIENT_DATA') {
+                    msg = '📊 ' + year + '年はまだ1年分のデータが揃っていないため、年次レポートを作成できません。\nデータが蓄積されるまでお待ちください。';
+                }
+                showError(msg);
                 return;
             }
 

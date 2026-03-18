@@ -34,6 +34,9 @@ class Gcrev_Bootstrap {
         add_action('gcrev_keyword_metrics_monthly_event', [__CLASS__, 'on_keyword_metrics_monthly']);
         add_action('gcrev_keyword_metrics_chunk_event', [__CLASS__, 'on_keyword_metrics_chunk'], 10, 2);
 
+        // 年次レポート自動生成（1月のみ実行）
+        add_action('gcrev_annual_report_generate_event', [__CLASS__, 'on_annual_report_generate_event']);
+
         // 月次データプリフェッチ（月固定期間: prev-month, prev-prev-month, last180, last365）
         add_action('gcrev_monthly_data_prefetch_event', [__CLASS__, 'on_monthly_data_prefetch_event']);
         add_action('gcrev_monthly_prefetch_chunk_event', [__CLASS__, 'on_monthly_prefetch_chunk_event'], 10, 2);
@@ -182,6 +185,85 @@ class Gcrev_Bootstrap {
         error_log('[GCREV] gcrev_monthly_report_finalize_event triggered');
         $api = new Gcrev_Insight_API(false);
         $api->auto_finalize_monthly_reports();
+    }
+
+    /**
+     * 年次レポート自動生成（1月のみ実行）
+     * 前年1年分のデータが揃っている全ユーザーに対して年次レポートを生成。
+     */
+    public static function on_annual_report_generate_event(): void {
+        // 1月以外はスキップ
+        if ( (int) date( 'n' ) !== 1 ) {
+            return;
+        }
+
+        $prev_year = (int) date( 'Y' ) - 1;
+        $meta_key  = "gcrev_annual_snapshot_{$prev_year}";
+
+        error_log( "[GCREV] annual_report_generate: starting for year={$prev_year}" );
+
+        // GA4設定があるユーザーを取得（管理者除外）
+        $users = get_users( [
+            'role__not_in' => [ 'administrator' ],
+            'fields'       => [ 'ID' ],
+        ] );
+
+        $api       = new Gcrev_Insight_API( false );
+        $generated = 0;
+        $skipped   = 0;
+
+        foreach ( $users as $user ) {
+            $uid = (int) $user->ID;
+
+            // 既にスナップショットがあればスキップ
+            $existing = get_user_meta( $uid, $meta_key, true );
+            if ( ! empty( $existing ) && is_array( $existing ) ) {
+                $skipped++;
+                continue;
+            }
+
+            // GA4設定チェック
+            try {
+                $cfg = new Gcrev_Config();
+                $user_config = $cfg->get_user_config( $uid );
+                if ( empty( $user_config['ga4_id'] ) ) {
+                    $skipped++;
+                    continue;
+                }
+            } catch ( \Throwable $e ) {
+                $skipped++;
+                continue;
+            }
+
+            // REST APIのコールバックを内部呼び出し（WP_REST_Requestを模擬）
+            try {
+                $request = new \WP_REST_Request( 'GET', '/gcrev/v1/annual-report' );
+                $request->set_param( 'year', (string) $prev_year );
+
+                // ユーザーコンテキストを一時的に切り替え
+                wp_set_current_user( $uid );
+
+                $response = $api->rest_get_annual_report( $request );
+                $data     = $response->get_data();
+
+                if ( ! empty( $data['success'] ) ) {
+                    $generated++;
+                    error_log( "[GCREV] annual_report_generate: user={$uid} generated successfully" );
+                } else {
+                    error_log( "[GCREV] annual_report_generate: user={$uid} failed: " . ( $data['message'] ?? 'unknown' ) );
+                }
+            } catch ( \Throwable $e ) {
+                error_log( "[GCREV] annual_report_generate: user={$uid} error: " . $e->getMessage() );
+            }
+
+            // API負荷軽減
+            sleep( 2 );
+        }
+
+        // ユーザーコンテキストをリセット
+        wp_set_current_user( 0 );
+
+        error_log( "[GCREV] annual_report_generate: completed. generated={$generated}, skipped={$skipped}" );
     }
 
     public static function on_cron_log_cleanup(): void {
@@ -390,6 +472,9 @@ class Gcrev_Bootstrap {
 
         // キーワード指標: 月1回（1日 06:00）
         self::schedule_monthly_if_missing('gcrev_keyword_metrics_monthly_event', 'first day of next month 06:00:00');
+
+        // 年次レポート自動生成: 毎日 06:30（1月のみ実行、前年分を全ユーザーに対して生成）
+        self::schedule_daily_if_missing('gcrev_annual_report_generate_event', 'tomorrow 06:30:00');
     }
 
     /**

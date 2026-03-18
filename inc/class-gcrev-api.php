@@ -3938,8 +3938,26 @@ class Gcrev_Insight_API {
             $gsc_url  = $config['gsc_url'];
             $site_url = $config['site_url'] ?? '';
 
+            if ( empty( $ga4_id ) ) {
+                return new \WP_REST_Response( [
+                    'success' => false,
+                    'code'    => 'NO_GA4',
+                    'message' => 'GA4プロパティが設定されていません。クライアント設定でGA4連携を完了してください。',
+                ], 200 );
+            }
+
             $start = "{$year}-01-01";
             $end   = "{$year}-12-31";
+
+            // 対象年が未来、または現在年で1月より前のデータしかない場合はチェック
+            $current_year = (int) date( 'Y' );
+            if ( $year > $current_year ) {
+                return new \WP_REST_Response( [
+                    'success' => false,
+                    'code'    => 'FUTURE_YEAR',
+                    'message' => "{$year}年のデータはまだありません。",
+                ], 200 );
+            }
 
             $prev_year  = $year - 1;
             $prev_start = "{$prev_year}-01-01";
