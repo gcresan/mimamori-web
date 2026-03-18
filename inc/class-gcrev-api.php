@@ -4157,6 +4157,12 @@ class Gcrev_Insight_API {
 - マークダウンは使わず、プレーンテキストで出力
 PROMPT;
 
+        if ( ! $this->ai ) {
+            file_put_contents( '/tmp/gcrev_annual_debug.log',
+                date( 'Y-m-d H:i:s' ) . " AI summary: ERROR - ai client is null\n", FILE_APPEND );
+            return null;
+        }
+
         file_put_contents( '/tmp/gcrev_annual_debug.log',
             date( 'Y-m-d H:i:s' ) . " AI summary: calling Gemini, prompt_len=" . strlen( $prompt ) . "\n", FILE_APPEND );
 

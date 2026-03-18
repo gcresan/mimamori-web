@@ -1031,7 +1031,7 @@ get_header();
             container.innerHTML = '<div class="ar-ai-placeholder">' +
                 '<p style="font-size:20px; margin-bottom:8px;">🔮</p>' +
                 '<p>AIによる年間振り返りコメントを生成できませんでした。</p>' +
-                '<p style="margin-top:12px;"><button type="button" onclick="loadAnnualReport(selectedYear, true)" ' +
+                '<p style="margin-top:12px;"><button type="button" id="arAiRetryBtn" ' +
                 'style="padding:8px 20px; border:1px solid var(--mw-border-light,#C3CED0); border-radius:8px; background:#fff; color:var(--mw-text-secondary,#384D50); font-size:13px; font-weight:600; cursor:pointer;">🔄 再生成する</button></p>' +
             '</div>';
             return;
@@ -1054,6 +1054,16 @@ get_header();
         }
         html += '</div>';
         container.innerHTML = html;
+
+        // 再生成ボタンのイベントリスナー（IIFE内なのでonclickではなくaddEventListenerで）
+        var retryBtn = document.getElementById('arAiRetryBtn');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', function() {
+                this.disabled = true;
+                this.innerHTML = '⏳ 生成中...';
+                loadAnnualReport(selectedYear, true);
+            });
+        }
     }
 
     // =============================================
