@@ -1315,6 +1315,23 @@ foreach ($highlight_items as $highlight):
             card.appendChild(retryBtn);
         }
 
+        // キャッシュチェック（sessionStorage）
+        var _dashCacheKey = 'main_dash_kpi';
+        var _dashCached = window.gcrevCache && window.gcrevCache.get(_dashCacheKey);
+        if (_dashCached && _dashCached.curr && _dashCached.meoData) {
+            clearTimeout(timeoutId);
+            var curr = _dashCached.curr;
+            var prev = _dashCached.prev;
+            var meoData = _dashCached.meoData;
+            var cS = _dashCached.cS, pS = _dashCached.pS, cC = _dashCached.cC, pC = _dashCached.pC;
+            var mCurr = _dashCached.mCurr, mPrev = _dashCached.mPrev;
+            updateInfoKpi('visits', cS, cS - pS); finishCard('visits');
+            updateInfoKpi('cv', cC, cC - pC); finishCard('cv');
+            updateInfoKpi('meo', mCurr, mCurr - mPrev); finishCard('meo');
+            if (_dashCached.score !== undefined) updateScoreGauge(_dashCached.score);
+            return; // キャッシュヒット — API呼び出しなし
+        }
+
         // 直近30日 + 比較期間 + MEO を並列取得
         Promise.all([
             fetch(restBase + 'dashboard/kpi?period=last30', {
@@ -1372,8 +1389,26 @@ foreach ($highlight_items as $highlight):
                 }).then(function(r){ return r.json(); }).then(function(scoreRes){
                     if (scoreRes.success) {
                         updateScoreGauge(scoreRes.score);
+                        // キャッシュに保存（スコア込み）
+                        if (window.gcrevCache) {
+                            window.gcrevCache.set(_dashCacheKey, {
+                                curr: curr, prev: prev, meoData: meoData,
+                                cS: cS, pS: pS, cC: cC, pC: pC,
+                                mCurr: mCurr, mPrev: mPrev,
+                                score: scoreRes.score
+                            });
+                        }
                     }
                 });
+            } else {
+                // スコア計算なしでもキャッシュ保存
+                if (window.gcrevCache) {
+                    window.gcrevCache.set(_dashCacheKey, {
+                        curr: curr, prev: prev, meoData: meoData,
+                        cS: cS, pS: pS, cC: cC, pC: pC,
+                        mCurr: mCurr, mPrev: mPrev
+                    });
+                }
             }
         }).catch(function(err){
             clearTimeout(timeoutId);
