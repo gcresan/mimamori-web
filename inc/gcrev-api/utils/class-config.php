@@ -138,7 +138,11 @@ class Gcrev_Config {
         if ( current_user_can( 'manage_options' ) ) {
             return true;
         }
-        // 決済ステータスが active でなければ拒否
+        // お試し利用中（期限内）は許可
+        if ( function_exists( 'gcrev_is_trial_active' ) && gcrev_is_trial_active( get_current_user_id() ) ) {
+            return true;
+        }
+        // 決済ステータスが active であれば許可
         if ( function_exists( 'gcrev_is_payment_active' ) ) {
             return gcrev_is_payment_active();
         }
