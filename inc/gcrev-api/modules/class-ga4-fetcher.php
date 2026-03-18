@@ -294,6 +294,71 @@ class Gcrev_GA4_Fetcher {
     }
 
     // =========================================================
+    // GA4: 月別集計シリーズ（年次レポート用）
+    // yearMonth ディメンションで 1 回の API コールで月別集計を取得
+    // =========================================================
+    public function fetch_ga4_monthly_series( string $property_id, string $start, string $end ): array {
+
+        $this->prepare_ga4_call();
+        $client = new BetaAnalyticsDataClient();
+
+        $params = [
+            'property'    => 'properties/' . $property_id,
+            'date_ranges' => [ new DateRange([ 'start_date' => $start, 'end_date' => $end ]) ],
+            'dimensions'  => [
+                new Dimension([ 'name' => 'yearMonth' ]),
+            ],
+            'metrics'     => [
+                new Metric([ 'name' => 'screenPageViews' ]),
+                new Metric([ 'name' => 'sessions' ]),
+                new Metric([ 'name' => 'totalUsers' ]),
+                new Metric([ 'name' => 'newUsers' ]),
+                new Metric([ 'name' => 'averageSessionDuration' ]),
+                new Metric([ 'name' => 'keyEvents' ]),
+            ],
+            'order_bys'   => [
+                new \Google\Analytics\Data\V1beta\OrderBy([
+                    'dimension' => new \Google\Analytics\Data\V1beta\OrderBy\DimensionOrderBy([
+                        'dimension_name' => 'yearMonth',
+                    ]),
+                    'desc' => false,
+                ]),
+            ],
+            'limit' => 13,
+        ];
+        $this->apply_country_filter( $params );
+        $request  = new RunReportRequest( $params );
+        $response = $client->runReport( $request );
+
+        $result = [
+            'labels'      => [],
+            'pageViews'   => [],
+            'sessions'    => [],
+            'users'       => [],
+            'newUsers'    => [],
+            'conversions' => [],
+            'duration'    => [],
+        ];
+
+        foreach ( $response->getRows() as $row ) {
+            $dims = $row->getDimensionValues();
+            $vals = $row->getMetricValues();
+            $ym_raw = $dims[0]->getValue(); // "202501"
+            $label  = substr( $ym_raw, 0, 4 ) . '-' . substr( $ym_raw, 4, 2 ); // "2025-01"
+
+            $result['labels'][]      = $label;
+            $result['pageViews'][]   = (int) ( $vals[0]->getValue() ?? 0 );
+            $result['sessions'][]    = (int) ( $vals[1]->getValue() ?? 0 );
+            $result['users'][]       = (int) ( $vals[2]->getValue() ?? 0 );
+            $result['newUsers'][]    = (int) ( $vals[3]->getValue() ?? 0 );
+            $result['duration'][]    = round( (float) ( $vals[4]->getValue() ?? 0 ), 1 );
+            $result['conversions'][] = (int) ( $vals[5]->getValue() ?? 0 );
+        }
+
+        return $result;
+    }
+
+    // =========================================================
     // GA4: 日次シリーズ（スパークライン用：直近7日）
     // =========================================================
     public function fetch_ga4_daily_series(string $property_id, string $start, string $end): array {

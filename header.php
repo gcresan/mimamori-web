@@ -141,6 +141,14 @@
                   </a>
                </li>
 
+               <!-- 年次レポート（単独） -->
+               <li class="nav-item">
+                  <a href="<?php echo esc_url( home_url('/annual-report/') ); ?>" class="nav-link <?php echo is_page('annual-report') ? 'active' : ''; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="2" width="14" height="16" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M7 6h6M7 9.5h6M7 13h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M13 13l1.5 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+                  <span>年次レポート</span>
+                  </a>
+               </li>
+
                <!-- ========== 診断レポート ========== -->
                <li class="nav-item nav-item-collapsible<?php echo $diagnosis_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'diagnosis' ? ' collapsed' : ''; ?>" data-menu-key="diagnosis">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleDiagnosis" aria-expanded="<?php echo $sidebar_active_group === 'diagnosis' ? 'true' : 'false'; ?>">

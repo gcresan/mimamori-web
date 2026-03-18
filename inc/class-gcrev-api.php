@@ -298,6 +298,22 @@ class Gcrev_Insight_API {
             ]
         ]);
 
+        // ===== 年次レポート =====
+        register_rest_route('gcrev/v1', '/annual-report', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_annual_report' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+            'args'                => [
+                'year' => [
+                    'required'          => true,
+                    'validate_callback' => function( $param ) {
+                        return preg_match( '/^\d{4}$/', $param ) && (int) $param >= 2020 && (int) $param <= (int) date( 'Y' );
+                    },
+                    'sanitize_callback' => 'absint',
+                ],
+            ],
+        ]);
+
         // ===== 地域別 月別推移エンドポイント =====
         register_rest_route('gcrev/v1', '/analysis/region-trend', [
             'methods'             => 'GET',
@@ -3852,6 +3868,114 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
+    /**
+     * REST: 年次レポートデータ取得
+     * GET gcrev/v1/annual-report?year=YYYY
+     */
+    public function rest_get_annual_report( \WP_REST_Request $request ): \WP_REST_Response {
+        $year    = (int) $request->get_param( 'year' );
+        $user_id = get_current_user_id();
+
+        // キャッシュ
+        $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
+        $filter_suffix   = $exclude_foreign ? '_filtered' : '';
+        $cache_key       = "gcrev_annual_{$user_id}_{$year}{$filter_suffix}";
+        $cached          = get_transient( $cache_key );
+        if ( $cached !== false && is_array( $cached ) ) {
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $cached ], 200 );
+        }
+
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
+            $config   = $this->config->get_user_config( $user_id );
+            $ga4_id   = $config['ga4_id'];
+            $gsc_url  = $config['gsc_url'];
+            $site_url = $config['site_url'] ?? '';
+
+            $start = "{$year}-01-01";
+            $end   = "{$year}-12-31";
+
+            $prev_year  = $year - 1;
+            $prev_start = "{$prev_year}-01-01";
+            $prev_end   = "{$prev_year}-12-31";
+
+            // 年間KPIサマリー
+            $kpi      = $this->ga4->fetch_ga4_summary( $ga4_id, $start, $end );
+            $kpi_prev = $this->ga4->fetch_ga4_summary( $ga4_id, $prev_start, $prev_end );
+            $trends   = $this->build_trends( $kpi, $kpi_prev );
+
+            // 月別推移
+            $monthly      = $this->ga4->fetch_ga4_monthly_series( $ga4_id, $start, $end );
+            $monthly_prev = $this->ga4->fetch_ga4_monthly_series( $ga4_id, $prev_start, $prev_end );
+
+            // ページランキング
+            $ga4_pages = $this->ga4->fetch_ga4_data( $ga4_id, $start, $end, $site_url );
+            $pages     = array_slice( $ga4_pages['pages'] ?? [], 0, 20 );
+
+            // 流入元
+            $channels_summary = [];
+            try {
+                $source_data = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
+                $channels_summary = $source_data['channels'] ?? [];
+                // セッション合計で割合計算
+                $total_sess = 0;
+                foreach ( $channels_summary as $ch ) {
+                    $total_sess += (int) ( $ch['sessions'] ?? 0 );
+                }
+                if ( $total_sess > 0 ) {
+                    foreach ( $channels_summary as &$ch ) {
+                        $ch['percentage'] = round( ( (int) $ch['sessions'] / $total_sess ) * 100, 1 );
+                    }
+                    unset( $ch );
+                }
+            } catch ( \Exception $e ) {
+                file_put_contents( '/tmp/gcrev_annual_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " source error: " . $e->getMessage() . "\n", FILE_APPEND );
+            }
+
+            // キーワード
+            $gsc_data = [];
+            try {
+                $gsc_data = $this->gsc->fetch_gsc_data( $gsc_url, $start, $end );
+            } catch ( \Exception $e ) {
+                file_put_contents( '/tmp/gcrev_annual_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " gsc error: " . $e->getMessage() . "\n", FILE_APPEND );
+            }
+            $keywords = array_slice( $gsc_data['keywords'] ?? [], 0, 20 );
+
+            $result = [
+                'year'             => $year,
+                'period'           => [ 'start' => $start, 'end' => $end ],
+                'prev_year'        => [ 'start' => $prev_start, 'end' => $prev_end ],
+                'kpi'              => $kpi,
+                'trends'           => $trends,
+                'monthly'          => $monthly,
+                'monthly_prev'     => $monthly_prev,
+                'pages'            => $pages,
+                'channels_summary' => $channels_summary,
+                'keywords'         => $keywords,
+                'ai_summary'       => null,
+            ];
+
+            // キャッシュ保存（今年は24h、過去年は48h）
+            $ttl = ( $year === (int) date( 'Y' ) ) ? 24 * HOUR_IN_SECONDS : 48 * HOUR_IN_SECONDS;
+            set_transient( $cache_key, $result, $ttl );
+
+            return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
+
+        } catch ( \Exception $e ) {
+            file_put_contents( '/tmp/gcrev_annual_debug.log',
+                date( 'Y-m-d H:i:s' ) . " API ERROR: " . $e->getMessage() . "\n", FILE_APPEND );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500 );
         } finally {
             $this->restore_country_filter( $filter_set );
         }
