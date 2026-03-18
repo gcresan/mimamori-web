@@ -4374,6 +4374,34 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   text-decoration: none;
 }
 
+/* ========== 通知バナー（共通） ========== */
+.gcrev-notice-prev2 {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #EF4444;
+  background: #FEF2F2;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--mw-text-primary, #333);
+}
+.gcrev-notice-prev2 .notice-icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+.gcrev-notice-prev2 .notice-text {
+  flex: 1;
+  min-width: 0;
+}
+.gcrev-notice-prev2 .notice-text strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
 /* ========== Print ========== */
 @media print {
   .page-header .action-btns { display: none; }
