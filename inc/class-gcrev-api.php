@@ -3960,6 +3960,23 @@ class Gcrev_Insight_API {
             }
             $keywords = array_slice( $gsc_data['keywords'] ?? [], 0, 20 );
 
+            // --- AI年間総括コメント生成 ---
+            $ai_summary = null;
+            try {
+                $client_settings = function_exists( 'gcrev_get_client_settings' )
+                    ? gcrev_get_client_settings( $user_id ) : [];
+                $business_name   = function_exists( 'gcrev_get_business_name' )
+                    ? gcrev_get_business_name( $user_id ) : '';
+
+                $ai_summary = $this->generate_annual_ai_summary(
+                    $year, $kpi, $kpi_prev, $trends, $monthly, $channels_summary, $keywords, $pages,
+                    $client_settings, $business_name
+                );
+            } catch ( \Throwable $e ) {
+                file_put_contents( '/tmp/gcrev_annual_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " AI summary error: " . $e->getMessage() . "\n", FILE_APPEND );
+            }
+
             $result = [
                 'year'             => $year,
                 'period'           => [ 'start' => $start, 'end' => $end ],
@@ -3971,7 +3988,7 @@ class Gcrev_Insight_API {
                 'pages'            => $pages,
                 'channels_summary' => $channels_summary,
                 'keywords'         => $keywords,
-                'ai_summary'       => null,
+                'ai_summary'       => $ai_summary,
                 'snapshot_saved_at' => ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' ),
             ];
 
@@ -3999,6 +4016,128 @@ class Gcrev_Insight_API {
         } finally {
             $this->restore_country_filter( $filter_set );
         }
+    }
+
+    /**
+     * AI年間総括コメントを生成する
+     */
+    private function generate_annual_ai_summary(
+        int $year, array $kpi, array $kpi_prev, array $trends, array $monthly,
+        array $channels, array $keywords, array $pages,
+        array $client_settings, string $business_name
+    ): ?string {
+
+        // クライアント情報をプロンプトに含める
+        $client_context = '';
+        if ( ! empty( $business_name ) ) {
+            $client_context .= "事業者名: {$business_name}\n";
+        }
+        if ( ! empty( $client_settings['site_url'] ) ) {
+            $client_context .= "サイトURL: {$client_settings['site_url']}\n";
+        }
+        if ( ! empty( $client_settings['industry'] ) ) {
+            $client_context .= "業種: {$client_settings['industry']}\n";
+        }
+        if ( ! empty( $client_settings['business_type'] ) ) {
+            $client_context .= "業態: {$client_settings['business_type']}\n";
+        }
+        $area_label = function_exists( 'gcrev_get_client_area_label' )
+            ? gcrev_get_client_area_label( $client_settings ) : '';
+        if ( ! empty( $area_label ) ) {
+            $client_context .= "対象エリア: {$area_label}\n";
+        }
+
+        // KPIサマリーテキスト
+        $kpi_text = "【{$year}年 年間実績】\n";
+        $kpi_text .= "  ページビュー: {$kpi['pageViews']}（前年: {$kpi_prev['pageViews']}）\n";
+        $kpi_text .= "  セッション: {$kpi['sessions']}（前年: {$kpi_prev['sessions']}）\n";
+        $kpi_text .= "  ユーザー数: {$kpi['users']}（前年: {$kpi_prev['users']}）\n";
+        $kpi_text .= "  新規ユーザー: {$kpi['newUsers']}（前年: {$kpi_prev['newUsers']}）\n";
+        $kpi_text .= "  ゴール数: {$kpi['conversions']}（前年: {$kpi_prev['conversions']}）\n";
+
+        // トレンドテキスト
+        $trend_text = "【前年比】\n";
+        foreach ( $trends as $key => $t ) {
+            if ( isset( $t['text'] ) ) {
+                $labels = [
+                    'pageViews' => 'ページビュー', 'sessions' => 'セッション',
+                    'users' => 'ユーザー', 'newUsers' => '新規ユーザー',
+                    'returningUsers' => 'リピーター', 'avgDuration' => '平均滞在時間',
+                    'conversions' => 'ゴール数',
+                ];
+                $label = $labels[ $key ] ?? $key;
+                $trend_text .= "  {$label}: {$t['text']}\n";
+            }
+        }
+
+        // 月別推移テキスト（要約）
+        $monthly_text = "【月別セッション推移】\n";
+        $labels = $monthly['labels'] ?? [];
+        $sess_arr = $monthly['sessions'] ?? [];
+        for ( $i = 0; $i < count( $labels ); $i++ ) {
+            $m = (int) substr( $labels[ $i ] ?? '', 5, 2 );
+            $monthly_text .= "  {$m}月: " . number_format( $sess_arr[ $i ] ?? 0 ) . "\n";
+        }
+
+        // 流入元TOP5
+        $ch_text = "【流入元TOP5】\n";
+        $top_channels = array_slice( $channels, 0, 5 );
+        foreach ( $top_channels as $ch ) {
+            $pct = isset( $ch['percentage'] ) ? number_format( $ch['percentage'], 1 ) . '%' : '-';
+            $ch_text .= "  {$ch['channel']}: {$pct}\n";
+        }
+
+        // キーワードTOP5
+        $kw_text = "【検索キーワードTOP5】\n";
+        $top_kw = array_slice( $keywords, 0, 5 );
+        foreach ( $top_kw as $kw ) {
+            $kw_text .= "  {$kw['query']}: クリック{$kw['clicks']}回, 表示{$kw['impressions']}回\n";
+        }
+
+        // 人気ページTOP5
+        $pg_text = "【人気ページTOP5】\n";
+        $top_pages = array_slice( $pages, 0, 5 );
+        foreach ( $top_pages as $p ) {
+            $title = $p['title'] ?? $p['page'] ?? '-';
+            $pg_text .= "  {$title}: {$p['pageViews']}PV\n";
+        }
+
+        $prompt = <<<PROMPT
+あなたはウェブマーケティングの専門家です。以下のアクセスデータをもとに、{$year}年の年間総括コメントを日本語で作成してください。
+
+{$client_context}
+
+{$kpi_text}
+{$trend_text}
+{$monthly_text}
+{$ch_text}
+{$kw_text}
+{$pg_text}
+
+以下の観点で、初心者の事業者にもわかりやすく、やさしい言葉で書いてください。
+1. この1年で良かった点・成果（具体的な数字を引用）
+2. 特に伸びたポイント（前年比で大きく改善した指標）
+3. 課題として見える点（改善が必要な部分）
+4. 来年に向けた改善の優先ポイント（具体的なアクション提案）
+
+【出力形式】
+- 見出し（■）と本文で構成
+- 全体で400〜600文字程度
+- 数字を具体的に引用する
+- 前向きなトーンで、事業者を応援する姿勢で書く
+- マークダウンは使わず、プレーンテキストで出力
+PROMPT;
+
+        $raw = $this->ai->call_gemini_api( $prompt, [
+            'temperature'     => 0.7,
+            'maxOutputTokens' => 1500,
+        ] );
+
+        if ( empty( $raw ) ) {
+            return null;
+        }
+
+        return trim( $raw );
     }
 
     /**

@@ -334,6 +334,30 @@ get_header();
     line-height: 1.8;
 }
 
+/* --- AI Summary content --- */
+.ar-ai-content {
+    background: var(--mw-bg-primary, #FFFFFF);
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    border-radius: var(--mw-radius-md, 16px);
+    padding: 28px 32px;
+    line-height: 1.9;
+    color: var(--mw-text-primary, #263335);
+    font-size: 14px;
+}
+.ar-ai-heading {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--mw-primary-blue, #568184);
+    margin: 20px 0 8px 0;
+    padding: 0;
+}
+.ar-ai-heading:first-child {
+    margin-top: 0;
+}
+.ar-ai-paragraph {
+    margin: 0 0 6px 0;
+}
+
 /* --- KPI supplement label --- */
 .kpi-supplement {
     font-size: 11px;
@@ -841,6 +865,24 @@ get_header();
     // =============================================
     // 流入元ドーナツ
     // =============================================
+    // 流入元チャネル名の日本語マッピング
+    var channelNameMap = {
+        'Organic Search':  '自然検索（Organic Search）',
+        'Direct':          '直接アクセス（Direct）',
+        'Referral':        '外部サイト経由（Referral）',
+        'Organic Social':  'SNS（Organic Social）',
+        'Paid Search':     '検索広告（Paid Search）',
+        'Display':         'ディスプレイ広告（Display）',
+        'Email':           'メール（Email）',
+        'Paid Social':     'SNS広告（Paid Social）',
+        'Organic Video':   '動画（Organic Video）',
+        'Unassigned':      'その他（Unassigned）',
+        '(Other)':         'その他',
+    };
+    function translateChannel(name) {
+        return channelNameMap[name] || name;
+    }
+
     function renderChannels(data) {
         var container = document.getElementById('arChannels');
         if (!container) return;
@@ -859,8 +901,9 @@ get_header();
         for (var i = 0; i < channels.length; i++) {
             var ch = channels[i];
             var color = channelColors[i % channelColors.length];
+            var label = translateChannel(ch.channel);
             html += '<li class="ar-channel-list-item">' +
-                '<span class="ar-channel-label"><span class="ar-channel-dot" style="background:' + color + ';"></span>' + escapeHtml(ch.channel) + '</span>' +
+                '<span class="ar-channel-label"><span class="ar-channel-dot" style="background:' + color + ';"></span>' + escapeHtml(label) + '</span>' +
                 '<span class="ar-channel-value">' + parseFloat(ch.percentage || 0).toFixed(1) + '%</span>' +
             '</li>';
         }
@@ -880,7 +923,7 @@ get_header();
         channelChart = new Chart(dCanvas, {
             type: 'doughnut',
             data: {
-                labels: channels.map(function(c) { return c.channel; }),
+                labels: channels.map(function(c) { return translateChannel(c.channel); }),
                 datasets: [{
                     data: channels.map(function(c) { return c.sessions || 0; }),
                     backgroundColor: channelColors.slice(0, channels.length),
@@ -925,9 +968,11 @@ get_header();
         var html = '<ul class="ar-ranking-items">';
         for (var i = 0; i < pages.length; i++) {
             var p = pages[i];
+            var displayTitle = p.title || p.pagePath || p.page || '-';
+            var pagePath = p.pagePath || p.page || '';
             html += '<li class="ar-ranking-item">' +
                 '<span class="ar-ranking-num">' + (i + 1) + '</span>' +
-                '<span class="ar-ranking-label" title="' + escapeHtml(p.pagePath || '') + '">' + escapeHtml(p.pagePath || '-') + '</span>' +
+                '<span class="ar-ranking-label" title="' + escapeHtml(pagePath) + '">' + escapeHtml(displayTitle) + '</span>' +
                 '<span class="ar-ranking-value">' + formatNumber(p.pageViews) + ' PV</span>' +
             '</li>';
         }
@@ -975,6 +1020,42 @@ get_header();
     }
 
     // =============================================
+    // AI年間総括コメント
+    // =============================================
+    function renderAiSummary(data) {
+        var container = document.getElementById('arAiSummary');
+        if (!container) return;
+
+        var summary = data.ai_summary;
+        if (!summary) {
+            container.innerHTML = '<div class="ar-ai-placeholder">' +
+                '<p style="font-size:20px; margin-bottom:8px;">🔮</p>' +
+                '<p>AIによる年間振り返りコメントを生成できませんでした。</p>' +
+                '<p style="font-size:12px; margin-top:8px;">データが十分に蓄積されると自動で生成されます。</p>' +
+            '</div>';
+            return;
+        }
+
+        // プレーンテキストをHTML化（■見出しを太字に、改行を<br>に）
+        var html = '<div class="ar-ai-content">';
+        var lines = summary.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line) {
+                html += '<br>';
+                continue;
+            }
+            if (line.indexOf('■') === 0) {
+                html += '<h4 class="ar-ai-heading">' + escapeHtml(line) + '</h4>';
+            } else {
+                html += '<p class="ar-ai-paragraph">' + escapeHtml(line) + '</p>';
+            }
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    // =============================================
     // データ取得 & 描画
     // =============================================
     function loadAnnualReport(year) {
@@ -1000,6 +1081,7 @@ get_header();
             renderChannels(json.data);
             renderPages(json.data);
             renderKeywords(json.data);
+            renderAiSummary(json.data);
             hideLoading();
         })
         .catch(function(e) {
