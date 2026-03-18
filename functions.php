@@ -2307,6 +2307,87 @@ function mimamori_get_analytics_digest( int $user_id ): string {
 }
 
 /**
+ * 年間データダイジェストを生成する（AIチャット用）
+ *
+ * 年次レポートのスナップショット（user meta）が保存されていればそこから取得。
+ * なければ空文字を返す（API呼び出しはしない）。
+ *
+ * @param int $user_id WordPress ユーザーID
+ * @return string 年間ダイジェストテキスト
+ */
+function mimamori_get_annual_digest( int $user_id ): string {
+    $prev_year = (int) date( 'Y' ) - 1;
+    $meta_key  = "gcrev_annual_snapshot_{$prev_year}";
+    $snapshot  = get_user_meta( $user_id, $meta_key, true );
+
+    if ( empty( $snapshot ) || ! is_array( $snapshot ) ) {
+        return '';
+    }
+
+    $kpi    = $snapshot['kpi'] ?? [];
+    $trends = $snapshot['trends'] ?? [];
+
+    if ( empty( $kpi ) ) {
+        return '';
+    }
+
+    $lines = [];
+    $lines[] = "【{$prev_year}年 年間アクセスデータ（1月1日〜12月31日）】";
+
+    $metrics = [
+        [ 'label' => 'ページビュー', 'key' => 'pageViews' ],
+        [ 'label' => 'セッション',   'key' => 'sessions' ],
+        [ 'label' => 'ユーザー',     'key' => 'users' ],
+        [ 'label' => '新規ユーザー', 'key' => 'newUsers' ],
+        [ 'label' => 'ゴール',       'key' => 'conversions' ],
+    ];
+
+    foreach ( $metrics as $m ) {
+        $val  = $kpi[ $m['key'] ] ?? '0';
+        $line = '・' . $m['label'] . ': ' . $val;
+        if ( ! empty( $trends[ $m['key'] ]['text'] ) ) {
+            $line .= '（前年比 ' . $trends[ $m['key'] ]['text'] . '）';
+        }
+        $lines[] = $line;
+    }
+
+    if ( isset( $kpi['avgDuration'] ) ) {
+        $dur = (float) $kpi['avgDuration'];
+        $min = floor( $dur / 60 );
+        $sec = (int) ( $dur % 60 );
+        $lines[] = '・平均滞在時間: ' . ( $min > 0 ? "{$min}分{$sec}秒" : "{$sec}秒" );
+    }
+
+    // 流入元TOP3
+    $channels = $snapshot['channels_summary'] ?? [];
+    if ( ! empty( $channels ) ) {
+        $lines[] = '';
+        $lines[] = "【{$prev_year}年 流入元TOP3】";
+        $top_ch = array_slice( $channels, 0, 3 );
+        foreach ( $top_ch as $ch ) {
+            $pct = isset( $ch['percentage'] ) ? number_format( $ch['percentage'], 1 ) . '%' : '-';
+            $lines[] = '・' . ( $ch['channel'] ?? '-' ) . ': ' . $pct;
+        }
+    }
+
+    // キーワードTOP3
+    $keywords = $snapshot['keywords'] ?? [];
+    if ( ! empty( $keywords ) ) {
+        $lines[] = '';
+        $lines[] = "【{$prev_year}年 検索キーワードTOP3】";
+        $top_kw = array_slice( $keywords, 0, 3 );
+        $rank = 1;
+        foreach ( $top_kw as $kw ) {
+            $lines[] = '  ' . $rank . '. ' . ( $kw['query'] ?? '?' )
+                . '（クリック: ' . ( $kw['clicks'] ?? 0 ) . '）';
+            $rank++;
+        }
+    }
+
+    return implode( "\n", $lines );
+}
+
+/**
  * 動的コンテキスト（ページ情報・GA4/GSCデータ）をテキストブロックとして組み立てる
  *
  * @param array  $sources       mimamori_resolve_data_sources() の返り値
@@ -2327,12 +2408,18 @@ function mimamori_build_data_context( array $sources, array $current_page, int $
         }
     }
 
-    // GA4 / GSC ダイジェスト
+    // GA4 / GSC ダイジェスト（直近28日間）
     if ( ! empty( $sources['use_analytics'] ) ) {
         $digest = mimamori_get_analytics_digest( $user_id );
         if ( $digest !== '' ) {
             $blocks[]   = $digest;
             $ref_list[] = 'GA4 / Search Console のデータ（直近28日間）';
+        }
+        // 年間データ（前年分のスナップショットがあれば追加）
+        $annual_digest = mimamori_get_annual_digest( $user_id );
+        if ( $annual_digest !== '' ) {
+            $blocks[]   = $annual_digest;
+            $ref_list[] = '前年の年間アクセスデータ';
         }
     }
 
@@ -2751,6 +2838,12 @@ function mimamori_build_context_blocks(
         if ( $digest !== '' ) {
             $blocks[]   = $digest;
             $ref_list[] = 'GA4 / Search Console のデータ（直近28日間）';
+        }
+        // 年間データ
+        $annual_digest = mimamori_get_annual_digest( $user_id );
+        if ( $annual_digest !== '' ) {
+            $blocks[]   = $annual_digest;
+            $ref_list[] = '前年の年間アクセスデータ';
         }
     }
 
@@ -4649,7 +4742,12 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
     $enrichment_text = '';
 
     if ( ! empty( $sources['use_analytics'] ) ) {
-        $digest          = mimamori_get_analytics_digest( $user_id );
+        $digest = mimamori_get_analytics_digest( $user_id );
+        // 年間データも結合してプランナーに渡す
+        $annual_digest = mimamori_get_annual_digest( $user_id );
+        if ( $annual_digest !== '' ) {
+            $digest = $digest . "\n\n" . $annual_digest;
+        }
         $planner_queries = mimamori_call_planner_pass( $effective_message ?? $message, $digest, $intent_type );
 
         if ( ! empty( $planner_queries ) ) {
