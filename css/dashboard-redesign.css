@@ -4404,14 +4404,31 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 
 /* ========== Print ========== */
 @media print {
-  /* レイアウト: サイドバー・トップバー非表示、メインを全幅に */
+  /* === レイアウトリセット === */
   .sidebar { display: none !important; }
-  .topbar { display: none !important; }
   .breadcrumb { display: none !important; }
   .main-content { margin-left: 0 !important; padding-top: 0 !important; }
-  body { background: #fff !important; }
+  body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  /* UI要素の非表示 */
+  /* === トップバー: レポートヘッダーとして再構成 === */
+  .topbar {
+    position: static !important;
+    border-bottom: 2px solid #E6EEF0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    padding: 12px 20px !important;
+    margin-bottom: 12px !important;
+  }
+  /* 不要なUI要素を非表示 */
+  .topbar .menu-toggle,
+  .topbar .settings-menu,
+  .topbar .updates-bell,
+  .topbar .account-menu { display: none !important; }
+  /* クライアント名・ドメインを右寄せ */
+  .topbar .topbar-right { margin-left: auto; }
+  .topbar .topbar-user-info { display: block !important; }
+
+  /* === UI要素の非表示 === */
   .page-header .action-btns { display: none; }
   .loading-overlay { display: none !important; }
   .beginner-report-action { background: #f8f8f8 !important; }
@@ -4425,6 +4442,60 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   .mw-chat-panel,
   [onclick="window.print()"] { display: none !important; }
 
-  /* 改ページ制御 */
-  .content-area { break-inside: avoid; }
+  /* === KPIカード: 4列並列 === */
+  .kpi-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 16px !important;
+  }
+  .kpi-card {
+    padding: 12px 14px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .kpi-value { font-size: 22px !important; }
+  .kpi-title { font-size: 11px !important; }
+  .kpi-term { font-size: 10px !important; }
+  .kpi-change { font-size: 11px !important; padding: 2px 6px !important; }
+  .kpi-sparkline { height: 20px !important; margin-top: 6px !important; }
+  .kpi-sparkline canvas,
+  .kpi-sparkline svg { height: 20px !important; }
+  .kpi-info-btn,
+  .kpi-info-tip { display: none !important; }
+  .kpi-icon { width: 28px !important; height: 28px !important; font-size: 14px !important; }
+
+  /* === レポート本文: 文字サイズ縮小 & 余白圧縮 === */
+  .report-content {
+    padding: 16px 20px !important;
+    border: none !important;
+  }
+  .report-section {
+    margin-bottom: 12px !important;
+    padding-bottom: 10px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .section-title {
+    font-size: 14px !important;
+    margin-bottom: 6px !important;
+    padding-bottom: 4px !important;
+  }
+  .section-content {
+    font-size: 12px !important;
+    line-height: 1.6 !important;
+  }
+  .section-content p { margin-bottom: 4px !important; }
+  .list-box { padding: 8px 12px !important; margin-bottom: 6px !important; }
+
+  /* === 年月切り替え: 非表示 === */
+  .rpt-ym-switcher { display: none !important; }
+
+  /* === 余白の全体圧縮 === */
+  .content-area { padding: 0 8px !important; }
+  h2, h3 { margin-top: 10px !important; margin-bottom: 6px !important; font-size: 14px !important; }
+
+  /* === 改ページ制御 === */
+  .kpi-card,
+  .report-section,
+  .ar-analysis-card { break-inside: avoid; page-break-inside: avoid; }
 }

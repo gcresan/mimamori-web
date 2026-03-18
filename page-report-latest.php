@@ -1823,4 +1823,29 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<!-- 印刷用フッター（画面では非表示、印刷時のみ表示） -->
+<div class="print-footer" style="display:none;">
+    <div style="text-align:center; padding:16px 0 8px; border-top:1px solid #E6EEF0; color:#999; font-size:10px;">
+        Powered by <strong style="color:#568184;">みまもりウェブ</strong>
+        <span style="margin-left:4px; color:#aaa;">mimamori-web.jp</span>
+    </div>
+</div>
+
+<style>
+@media print {
+    .print-footer {
+        display: block !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #fff;
+    }
+    /* 印刷フッター分の余白確保 */
+    .content-area {
+        padding-bottom: 50px !important;
+    }
+}
+</style>
+
 <?php get_footer(); ?>
