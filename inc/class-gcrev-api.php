@@ -3893,11 +3893,15 @@ class Gcrev_Insight_API {
             delete_user_meta( $user_id, $meta_key );
         }
 
+        // AI総括プロンプトのバージョン — プロンプト変更時にインクリメントする
+        $ai_prompt_version = 2;
+
         if ( ! $is_current_year && ! $force_refresh ) {
             $saved = get_user_meta( $user_id, $meta_key, true );
             if ( ! empty( $saved ) && is_array( $saved ) ) {
-                // AI総括が未生成のスナップショットなら、AI部分だけ再生成してキャッシュ更新
-                if ( empty( $saved['ai_summary'] ) ) {
+                // AI総括が未生成、またはプロンプトバージョンが古い場合は再生成
+                $saved_version = $saved['ai_summary_version'] ?? 0;
+                if ( empty( $saved['ai_summary'] ) || $saved_version < $ai_prompt_version ) {
                     try {
                         $client_settings = function_exists( 'gcrev_get_client_settings' )
                             ? gcrev_get_client_settings( $user_id ) : [];
@@ -3910,7 +3914,8 @@ class Gcrev_Insight_API {
                             $client_settings, $business_name
                         );
                         if ( ! empty( $ai ) ) {
-                            $saved['ai_summary'] = $ai;
+                            $saved['ai_summary']         = $ai;
+                            $saved['ai_summary_version'] = $ai_prompt_version;
                             update_user_meta( $user_id, $meta_key, $saved );
                         }
                     } catch ( \Throwable $e ) {
@@ -3925,7 +3930,8 @@ class Gcrev_Insight_API {
             $filter_suffix   = $exclude_foreign ? '_filtered' : '';
             $transient_key   = "gcrev_annual_{$user_id}_{$year}{$filter_suffix}";
             $cached          = get_transient( $transient_key );
-            if ( $cached !== false && is_array( $cached ) ) {
+            $cached_version  = is_array( $cached ) ? ( $cached['ai_summary_version'] ?? 0 ) : 0;
+            if ( $cached !== false && is_array( $cached ) && $cached_version >= $ai_prompt_version ) {
                 return new \WP_REST_Response( [ 'success' => true, 'data' => $cached ], 200 );
             }
         }
@@ -4035,8 +4041,9 @@ class Gcrev_Insight_API {
                 'pages'            => $pages,
                 'channels_summary' => $channels_summary,
                 'keywords'         => $keywords,
-                'ai_summary'       => $ai_summary,
-                'snapshot_saved_at' => ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' ),
+                'ai_summary'         => $ai_summary,
+                'ai_summary_version' => $ai_prompt_version,
+                'snapshot_saved_at'  => ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' ),
             ];
 
             // --- 保存 ---
