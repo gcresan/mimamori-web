@@ -562,8 +562,8 @@ get_header();
         </div>
     </div>
 
-    <!-- AI年間総括コメント -->
-    <h2 class="ar-section-title">🤖 AI年間総括</h2>
+    <!-- 年間総括コメント -->
+    <h2 class="ar-section-title">📝 年間総括</h2>
     <div id="arAiSummary">
         <div class="ar-ai-placeholder">
             <p style="font-size:20px; margin-bottom:8px;">🔮</p>
