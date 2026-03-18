@@ -1845,6 +1845,10 @@ document.addEventListener('DOMContentLoaded', function() {
     .content-area {
         padding-bottom: 50px !important;
     }
+    /* 集客分析結果の見出し（インラインstyle上書き） */
+    .digest-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
 }
 </style>
 

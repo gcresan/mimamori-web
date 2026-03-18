@@ -4531,4 +4531,131 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   .kpi-card,
   .report-section,
   .ar-analysis-card { break-inside: avoid; page-break-inside: avoid; }
+
+  /* === 期間表示: 確実に1行化 === */
+  .period-info .period-divider {
+    display: block !important;
+    background: #ccc !important;
+  }
+
+  /* === 総評・本文の文字サイズ縮小（考察・インサイトと統一） === */
+  .highlight-box {
+    padding: 12px 14px !important;
+    margin: 8px 0 !important;
+  }
+  .highlight-box h4 {
+    font-size: 12px !important;
+    margin-bottom: 4px !important;
+  }
+  .highlight-box p {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+  }
+  .list-box li {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+    margin-bottom: 6px !important;
+  }
+  .beginner-report-item {
+    margin-bottom: 12px !important;
+    padding-bottom: 10px !important;
+  }
+  .beginner-report-title {
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+    margin-bottom: 4px !important;
+  }
+  .beginner-report-desc {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+    margin-bottom: 6px !important;
+  }
+  .beginner-report-desc p {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+  }
+  .beginner-report-action {
+    padding: 8px 12px !important;
+    margin-top: 6px !important;
+  }
+  .beginner-report-action__label {
+    font-size: 11px !important;
+    margin-bottom: 4px !important;
+  }
+  .beginner-report-action__body {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+  }
+  /* 考察・インサイト本文 */
+  .section-content p {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+  }
+  /* ネクストアクション */
+  .next-actions .action-item {
+    padding: 8px 10px !important;
+    margin-bottom: 6px !important;
+  }
+  .next-actions .action-text {
+    font-size: 11px !important;
+    line-height: 1.6 !important;
+  }
+  .next-actions .action-text strong {
+    font-size: 12px !important;
+  }
+  .next-actions .action-priority {
+    font-size: 10px !important;
+    min-width: 24px !important;
+    padding: 2px 6px !important;
+  }
+
+  /* === 集客分析結果: 印刷用2列レイアウト === */
+  .digest-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    margin-bottom: 12px !important;
+  }
+  .digest-card {
+    padding: 12px !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    overflow: hidden !important;
+    border: 1px solid #ddd !important;
+  }
+  .digest-card-header {
+    margin-bottom: 8px !important;
+  }
+  .digest-card-title {
+    font-size: 11px !important;
+    gap: 4px !important;
+  }
+  .detail-link {
+    display: none !important;
+  }
+  .digest-chart-placeholder {
+    height: 70px !important;
+    padding: 6px !important;
+    margin-bottom: 8px !important;
+  }
+  .digest-list-item {
+    padding: 4px 0 !important;
+    gap: 6px !important;
+  }
+  .digest-list-item-name {
+    font-size: 10px !important;
+  }
+  .digest-list-item-value {
+    font-size: 11px !important;
+  }
+  .digest-list-item-change {
+    font-size: 9px !important;
+    padding: 2px 4px !important;
+  }
+
+  /* 集客分析結果のセクション見出し */
+  .digest-grid + h2,
+  .digest-grid ~ h2 {
+    font-size: 14px !important;
+  }
 }
