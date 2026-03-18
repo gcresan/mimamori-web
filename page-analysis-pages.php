@@ -160,6 +160,18 @@ let sortDir = 'desc';         // 'asc' | 'desc'
  */
 async function loadData(period) {
     currentPeriod = period;
+
+    // キャッシュチェック（ローディングなしで即表示）
+    var cacheKey = 'an_pages_' + period;
+    var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+    if (cached) {
+        currentData = cached;
+        updatePeriodDisplay(currentData);
+        updatePeriodRangeFromData(currentData, 'page-period');
+        applyFilter();
+        return;
+    }
+
     showLoading();
 
     try {
@@ -180,6 +192,9 @@ async function loadData(period) {
         }
 
         currentData = result.data;
+
+        // キャッシュに保存
+        if (window.gcrevCache) window.gcrevCache.set(cacheKey, currentData);
 
         // 期間表示更新（device と同一）
         updatePeriodDisplay(currentData);

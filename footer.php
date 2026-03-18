@@ -7,6 +7,61 @@
 
 <script>
 // =============================================
+// クライアントサイドキャッシュ（sessionStorage）
+// ページ遷移時の再取得を防ぎ、即座にデータを表示する
+// =============================================
+window.gcrevCache = {
+    TTL: 30 * 60 * 1000, // 30分
+
+    /** キャッシュからデータを取得（期限切れならnull） */
+    get: function(key) {
+        try {
+            var raw = sessionStorage.getItem('gcrev_' + key);
+            if (!raw) return null;
+            var item = JSON.parse(raw);
+            if (Date.now() - item.ts < this.TTL) {
+                return item.data;
+            }
+            sessionStorage.removeItem('gcrev_' + key);
+        } catch(e) {}
+        return null;
+    },
+
+    /** データをキャッシュに保存 */
+    set: function(key, data) {
+        try {
+            sessionStorage.setItem('gcrev_' + key, JSON.stringify({
+                ts: Date.now(),
+                data: data
+            }));
+        } catch(e) {
+            // 容量超過時は古いキャッシュをクリア
+            try {
+                var keys = [];
+                for (var i = 0; i < sessionStorage.length; i++) {
+                    var k = sessionStorage.key(i);
+                    if (k && k.indexOf('gcrev_') === 0) keys.push(k);
+                }
+                keys.forEach(function(k) { sessionStorage.removeItem(k); });
+                sessionStorage.setItem('gcrev_' + key, JSON.stringify({ ts: Date.now(), data: data }));
+            } catch(e2) {}
+        }
+    },
+
+    /** 特定プレフィックスのキャッシュを削除 */
+    clear: function(prefix) {
+        try {
+            var keys = [];
+            for (var i = 0; i < sessionStorage.length; i++) {
+                var k = sessionStorage.key(i);
+                if (k && k.indexOf('gcrev_' + (prefix || '')) === 0) keys.push(k);
+            }
+            keys.forEach(function(k) { sessionStorage.removeItem(k); });
+        } catch(e) {}
+    }
+};
+
+// =============================================
 // 共通JavaScript
 // =============================================
 

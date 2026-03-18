@@ -383,8 +383,20 @@ function setupPeriodButtons() {
  */
 async function loadRegionData(period) {
     console.log(`地域別データ取得開始: ${period}`);
+
+    // キャッシュチェック（ローディングなしで即表示）
+    var cacheKey = 'an_region_' + period;
+    var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+    if (cached) {
+        currentData = cached;
+        updatePeriodDisplay(cached.period_display || '期間不明');
+        updateTop10Chart(cached);
+        updateRegionTable(cached);
+        return;
+    }
+
     showLoading();
-    
+
     try {
         const url = `${REST_URL}?period=${period}`;
         console.log('リクエストURL:', url);
@@ -410,10 +422,13 @@ async function loadRegionData(period) {
         console.log('地域別データ取得成功:', data);
         
         currentData = data;
-        
+
+        // キャッシュに保存
+        if (window.gcrevCache) window.gcrevCache.set(cacheKey, data);
+
         // 期間表示更新
         updatePeriodDisplay(data.period_display || '期間不明');
-        
+
         // 各セクション更新
         updateTop10Chart(data);
         updateRegionTable(data);

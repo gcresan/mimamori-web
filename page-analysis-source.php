@@ -250,8 +250,23 @@ if (selectorEl) {
  * 流入元データ読み込み
  */
 async function loadSourceData(period, selectorId, isRetry) {
+    // キャッシュチェック（ローディングなしで即表示）
+    var cacheKey = 'an_source_' + period;
+    var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+    if (cached) {
+        currentPeriod = period;
+        currentData = cached.data;
+        updatePeriodDisplay(cached._fullResult);
+        updatePeriodRangeFromData(cached._fullResult, selectorId);
+        updateSummaryCards(currentData);
+        updateTrendChart(currentData);
+        updateShareChart(currentData);
+        updateDetailTable(currentData);
+        return;
+    }
+
     showLoading();
-    
+
     try {
         // 他のページと同じ /dashboard/kpi を使用
         const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>?period=' + encodeURIComponent(period);
@@ -282,7 +297,10 @@ async function loadSourceData(period, selectorId, isRetry) {
         
         // /dashboard/kpi のレスポンスから流入元データを取得
         currentData = result.data;
-        
+
+        // キャッシュに保存（period表示用にfullResultも保持）
+        if (window.gcrevCache) window.gcrevCache.set(cacheKey, { data: currentData, _fullResult: result });
+
         // 期間表示・レンジ表示更新
         console.log('[GCREV Source] Calling updatePeriodDisplay with:', result);
         updatePeriodDisplay(result);

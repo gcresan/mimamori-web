@@ -224,8 +224,23 @@ let currentPeriod = null;
  */
 async function loadData(period) {
     currentPeriod = period;
+
+    // キャッシュチェック（ローディングなしで即表示）
+    var cacheKey = 'an_device_' + period;
+    var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+    if (cached) {
+        currentData = cached;
+        updatePeriodDisplay(currentData);
+        updatePeriodRangeFromData(currentData, 'device-period');
+        updateSummaryCards(currentData);
+        updateTrendChart(currentData);
+        updateShareChart(currentData);
+        updateDetailTable(currentData);
+        return;
+    }
+
     showLoading();
-    
+
     try {
 const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>?period=' + period;
 const response = await fetch(apiUrl, {
@@ -243,17 +258,20 @@ const response = await fetch(apiUrl, {
         }
         
         currentData = result.data;
-        
+
+        // キャッシュに保存
+        if (window.gcrevCache) window.gcrevCache.set(cacheKey, currentData);
+
         // 期間表示更新
         updatePeriodDisplay(currentData);
         updatePeriodRangeFromData(currentData, 'device-period');
-        
+
         // UI更新
         updateSummaryCards(currentData);
         updateTrendChart(currentData);
         updateShareChart(currentData);
         updateDetailTable(currentData);
-        
+
     } catch (error) {
         console.error('データ取得エラー:', error);
         alert('データの取得に失敗しました。もう一度お試しください。');

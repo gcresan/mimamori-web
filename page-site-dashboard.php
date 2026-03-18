@@ -941,6 +941,18 @@ get_template_part('template-parts/period-selector');
     // データ取得 & 描画
     // =============================================
     function loadData(period) {
+        var cacheKey = 'sd_kpi_' + period;
+
+        // キャッシュがあれば即座に描画（ローディングなし）
+        var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        if (cached) {
+            updatePeriodDisplay(cached);
+            renderKpiCards(cached);
+            renderAnalysisCards(cached);
+            renderInsights(cached);
+            return;
+        }
+
         showLoading();
 
         fetch(restBase + 'dashboard/kpi?period=' + encodeURIComponent(period), {
@@ -954,6 +966,9 @@ get_template_part('template-parts/period-selector');
                 return;
             }
             var data = res.data || res;
+
+            // キャッシュに保存
+            if (window.gcrevCache) window.gcrevCache.set(cacheKey, data);
 
             updatePeriodDisplay(data);
             renderKpiCards(data);

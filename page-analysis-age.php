@@ -286,8 +286,24 @@ function updatePeriodRangeFromData(data, selectorId) {
  * データ取得とUI更新（既存API方式を完全踏襲）
  */
 async function loadData(period, selectorId) {
+    // キャッシュチェック（ローディングなしで即表示）
+    var cacheKey = 'an_age_' + period;
+    var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+    if (cached) {
+        currentPeriod = period;
+        updatePeriodDisplay(cached._fullResult);
+        updatePeriodRangeFromData(cached._fullResult, selectorId || 'age-period');
+        currentData = cached.data;
+        updateSummaryCards(currentData);
+        updateAgeDistributionChart(currentData);
+        updateDetailTable(currentData);
+        updateGenderAgeChart(currentData);
+        updateGenderDetailTable(currentData);
+        return;
+    }
+
     showLoading();
-    
+
     try {
         const apiUrl = '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>?period=' + period;
         const response = await fetch(apiUrl, {
@@ -313,9 +329,13 @@ console.log('=== API Response ===');
         }
         
         currentData = result.data;
+
+        // キャッシュに保存（period表示用にfullResultも保持）
+        if (window.gcrevCache) window.gcrevCache.set(cacheKey, { data: currentData, _fullResult: result });
+
         console.log('age_demographics:', currentData.age_demographics);
         console.log('gender_age_cross:', currentData.gender_age_cross);
-        
+
         // UI更新（年齢別専用）
         updateSummaryCards(currentData);
         updateAgeDistributionChart(currentData);
