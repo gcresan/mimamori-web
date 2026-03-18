@@ -4404,6 +4404,14 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
 
 /* ========== Print ========== */
 @media print {
+  /* レイアウト: サイドバー・トップバー非表示、メインを全幅に */
+  .sidebar { display: none !important; }
+  .topbar { display: none !important; }
+  .breadcrumb { display: none !important; }
+  .main-content { margin-left: 0 !important; padding-top: 0 !important; }
+  body { background: #fff !important; }
+
+  /* UI要素の非表示 */
   .page-header .action-btns { display: none; }
   .loading-overlay { display: none !important; }
   .beginner-report-action { background: #f8f8f8 !important; }
@@ -4411,4 +4419,12 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   .drilldown-modal-overlay,
   .score-breakdown-overlay { display: none !important; }
   .plan-locked-overlay { display: none !important; }
+
+  /* FAB・チャット・印刷ボタン自体を非表示 */
+  .mw-chat-fab,
+  .mw-chat-panel,
+  [onclick="window.print()"] { display: none !important; }
+
+  /* 改ページ制御 */
+  .content-area { break-inside: avoid; }
 }
