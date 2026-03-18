@@ -461,12 +461,14 @@ function gcrev_get_business_name( $user_id ) {
     return $user->display_name;
 }
 
-// プロフィール画面に「事業者名」項目を追加
+// プロフィール画面に「事業者名」項目を追加（登録画面・編集画面共通）
 add_action( 'show_user_profile', 'gcrev_render_business_name_field' );
 add_action( 'edit_user_profile', 'gcrev_render_business_name_field' );
+add_action( 'user_new_form',     'gcrev_render_business_name_field' );
 
 function gcrev_render_business_name_field( $user ) {
-    $value = get_user_meta( $user->ID, 'gcrev_business_name', true );
+    $is_new = ! ( $user instanceof WP_User );
+    $value  = $is_new ? '' : get_user_meta( $user->ID, 'gcrev_business_name', true );
     ?>
     <h3>みまもりウェブ — 事業者情報</h3>
     <table class="form-table">
@@ -482,9 +484,10 @@ function gcrev_render_business_name_field( $user ) {
     <?php
 }
 
-// 事業者名の保存処理
-add_action( 'personal_options_update', 'gcrev_save_business_name_field' );
+// 事業者名の保存処理（編集・登録共通）
+add_action( 'personal_options_update',  'gcrev_save_business_name_field' );
 add_action( 'edit_user_profile_update', 'gcrev_save_business_name_field' );
+add_action( 'user_register',            'gcrev_save_business_name_field' );
 
 function gcrev_save_business_name_field( $user_id ) {
     if ( ! current_user_can( 'edit_user', $user_id ) ) {
@@ -6366,10 +6369,12 @@ add_action( 'admin_init', function () {
 // --------------------------------------------------
 
 // --------------------------------------------------
-// WP管理画面 — ユーザープロフィールに決済チェックボックスを表示
+// WP管理画面 — 決済チェックボックス（UI非表示: 2026-03-18）
+// 複雑な契約管理UIを一旦廃止。ヘルパー関数（gcrev_get_payment_status 等）は
+// API権限チェック等で参照されるため、関数本体は残す。
 // --------------------------------------------------
-add_action( 'edit_user_profile', 'gcrev_render_payment_status_fields' );
-add_action( 'show_user_profile', 'gcrev_render_payment_status_fields' );
+// add_action( 'edit_user_profile', 'gcrev_render_payment_status_fields' );
+// add_action( 'show_user_profile', 'gcrev_render_payment_status_fields' );
 
 function gcrev_render_payment_status_fields( $user ) {
     if ( ! current_user_can( 'manage_options' ) ) {
@@ -6627,23 +6632,28 @@ function gcrev_trial_default_days(): int {
 }
 
 // --------------------------------------------------
-// WP管理画面 — お試し利用セクションを表示
+// WP管理画面 — お試し利用セクションを表示（登録画面・編集画面共通）
 // --------------------------------------------------
 add_action( 'edit_user_profile', 'gcrev_render_test_operation_field' );
 add_action( 'show_user_profile', 'gcrev_render_test_operation_field' );
+add_action( 'user_new_form',     'gcrev_render_test_operation_field' );
 
 function gcrev_render_test_operation_field( $user ) {
     if ( ! current_user_can( 'manage_options' ) ) {
         return;
     }
-    if ( user_can( $user->ID, 'manage_options' ) ) {
+
+    $is_new = ! ( $user instanceof WP_User );
+
+    // 編集画面: 対象が管理者ならスキップ
+    if ( ! $is_new && user_can( $user->ID, 'manage_options' ) ) {
         return;
     }
 
-    $is_test   = ( get_user_meta( $user->ID, 'gcrev_test_operation', true ) === '1' );
-    $trial_start = get_user_meta( $user->ID, 'gcrev_trial_start', true );
-    $trial_end   = get_user_meta( $user->ID, 'gcrev_trial_end', true );
-    $is_expired  = $is_test && gcrev_is_trial_expired( $user->ID );
+    $is_test     = $is_new ? false : ( get_user_meta( $user->ID, 'gcrev_test_operation', true ) === '1' );
+    $trial_start = $is_new ? ''    : get_user_meta( $user->ID, 'gcrev_trial_start', true );
+    $trial_end   = $is_new ? ''    : get_user_meta( $user->ID, 'gcrev_trial_end', true );
+    $is_expired  = ! $is_new && $is_test && gcrev_is_trial_expired( $user->ID );
 
     // 残り日数計算
     $remaining = '';
@@ -6742,20 +6752,25 @@ function gcrev_render_test_operation_field( $user ) {
 }
 
 // --------------------------------------------------
-// WP管理画面 — サービスティア選択
+// WP管理画面 — サービスティア選択（登録画面・編集画面共通）
 // --------------------------------------------------
 add_action( 'edit_user_profile', 'gcrev_render_service_tier_field' );
 add_action( 'show_user_profile', 'gcrev_render_service_tier_field' );
+add_action( 'user_new_form',     'gcrev_render_service_tier_field' );
 
 function gcrev_render_service_tier_field( $user ) {
     if ( ! current_user_can( 'manage_options' ) ) {
         return;
     }
-    if ( user_can( $user->ID, 'manage_options' ) ) {
+
+    $is_new = ! ( $user instanceof WP_User );
+
+    // 編集画面: 対象が管理者ならスキップ
+    if ( ! $is_new && user_can( $user->ID, 'manage_options' ) ) {
         return;
     }
 
-    $current_tier = gcrev_get_service_tier( $user->ID );
+    $current_tier = $is_new ? 'basic' : gcrev_get_service_tier( $user->ID );
     $tier_defs    = gcrev_get_service_tier_definitions();
     ?>
     <h3>サービスティア</h3>
@@ -6779,6 +6794,7 @@ function gcrev_render_service_tier_field( $user ) {
                 </p>
             </td>
         </tr>
+        <?php if ( ! $is_new ) : ?>
         <tr>
             <th>現在のティア</th>
             <td>
@@ -6795,13 +6811,15 @@ function gcrev_render_service_tier_field( $user ) {
                 </span>
             </td>
         </tr>
+        <?php endif; ?>
     </table>
     <?php
 }
 
-// Save handler
+// Save handler（登録画面・編集画面共通）
 add_action( 'edit_user_profile_update', 'gcrev_save_service_tier_field' );
 add_action( 'personal_options_update',  'gcrev_save_service_tier_field' );
+add_action( 'user_register',            'gcrev_save_service_tier_field' );
 
 function gcrev_save_service_tier_field( int $user_id ) {
     if ( ! current_user_can( 'manage_options' ) ) {
@@ -6821,10 +6839,11 @@ function gcrev_save_service_tier_field( int $user_id ) {
 }
 
 // --------------------------------------------------
-// WP管理画面 — お試し利用の保存処理
+// WP管理画面 — お試し利用の保存処理（登録画面・編集画面共通）
 // --------------------------------------------------
 add_action( 'edit_user_profile_update', 'gcrev_save_test_operation_field' );
 add_action( 'personal_options_update',  'gcrev_save_test_operation_field' );
+add_action( 'user_register',            'gcrev_save_test_operation_field' );
 
 function gcrev_save_test_operation_field( int $user_id ) {
     if ( ! current_user_can( 'manage_options' ) ) {
@@ -6875,10 +6894,10 @@ function gcrev_save_test_operation_field( int $user_id ) {
 }
 
 // --------------------------------------------------
-// WP管理画面 — 決済チェックボックスの保存処理
+// WP管理画面 — 決済チェックボックスの保存処理（UI非表示: 2026-03-18）
 // --------------------------------------------------
-add_action( 'edit_user_profile_update', 'gcrev_save_payment_status_fields' );
-add_action( 'personal_options_update',  'gcrev_save_payment_status_fields' );
+// add_action( 'edit_user_profile_update', 'gcrev_save_payment_status_fields' );
+// add_action( 'personal_options_update',  'gcrev_save_payment_status_fields' );
 
 function gcrev_save_payment_status_fields( int $user_id ) {
     if ( ! current_user_can( 'manage_options' ) ) {
