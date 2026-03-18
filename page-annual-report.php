@@ -1031,7 +1031,8 @@ get_header();
             container.innerHTML = '<div class="ar-ai-placeholder">' +
                 '<p style="font-size:20px; margin-bottom:8px;">🔮</p>' +
                 '<p>AIによる年間振り返りコメントを生成できませんでした。</p>' +
-                '<p style="font-size:12px; margin-top:8px;">データが十分に蓄積されると自動で生成されます。</p>' +
+                '<p style="margin-top:12px;"><button type="button" onclick="loadAnnualReport(selectedYear, true)" ' +
+                'style="padding:8px 20px; border:1px solid var(--mw-border-light,#C3CED0); border-radius:8px; background:#fff; color:var(--mw-text-secondary,#384D50); font-size:13px; font-weight:600; cursor:pointer;">🔄 再生成する</button></p>' +
             '</div>';
             return;
         }
@@ -1058,11 +1059,14 @@ get_header();
     // =============================================
     // データ取得 & 描画
     // =============================================
-    function loadAnnualReport(year) {
+    function loadAnnualReport(year, refresh) {
         showLoading();
         hideError();
 
-        fetch(restBase + 'annual-report?year=' + year, {
+        var url = restBase + 'annual-report?year=' + year;
+        if (refresh) url += '&refresh=1';
+
+        fetch(url, {
             credentials: 'same-origin',
             headers: { 'X-WP-Nonce': nonce }
         })

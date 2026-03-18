@@ -3881,15 +3881,43 @@ class Gcrev_Insight_API {
         $year    = (int) $request->get_param( 'year' );
         $user_id = get_current_user_id();
         $is_current_year = ( $year === (int) date( 'Y' ) );
+        $force_refresh   = $request->get_param( 'refresh' ) === '1';
 
         // --- キャッシュ戦略 ---
         // 過去年: user meta に永続保存（確定データ、再取得不要）
         // 今年 : Transient 24h（まだデータが増えるため定期更新）
+        // refresh=1: キャッシュを無視して再取得
         $meta_key = "gcrev_annual_snapshot_{$year}";
 
-        if ( ! $is_current_year ) {
+        if ( $force_refresh ) {
+            delete_user_meta( $user_id, $meta_key );
+        }
+
+        if ( ! $is_current_year && ! $force_refresh ) {
             $saved = get_user_meta( $user_id, $meta_key, true );
             if ( ! empty( $saved ) && is_array( $saved ) ) {
+                // AI総括が未生成のスナップショットなら、AI部分だけ再生成してキャッシュ更新
+                if ( empty( $saved['ai_summary'] ) ) {
+                    try {
+                        $client_settings = function_exists( 'gcrev_get_client_settings' )
+                            ? gcrev_get_client_settings( $user_id ) : [];
+                        $business_name   = function_exists( 'gcrev_get_business_name' )
+                            ? gcrev_get_business_name( $user_id ) : '';
+                        $ai = $this->generate_annual_ai_summary(
+                            $year, $saved['kpi'] ?? [], $saved['kpi_prev'] ?? $saved['kpi'] ?? [],
+                            $saved['trends'] ?? [], $saved['monthly'] ?? [],
+                            $saved['channels_summary'] ?? [], $saved['keywords'] ?? [], $saved['pages'] ?? [],
+                            $client_settings, $business_name
+                        );
+                        if ( ! empty( $ai ) ) {
+                            $saved['ai_summary'] = $ai;
+                            update_user_meta( $user_id, $meta_key, $saved );
+                        }
+                    } catch ( \Throwable $e ) {
+                        file_put_contents( '/tmp/gcrev_annual_debug.log',
+                            date( 'Y-m-d H:i:s' ) . " AI backfill error: " . $e->getMessage() . "\n", FILE_APPEND );
+                    }
+                }
                 return new \WP_REST_Response( [ 'success' => true, 'data' => $saved ], 200 );
             }
         } else {
@@ -3982,6 +4010,7 @@ class Gcrev_Insight_API {
                 'period'           => [ 'start' => $start, 'end' => $end ],
                 'prev_year'        => [ 'start' => $prev_start, 'end' => $prev_end ],
                 'kpi'              => $kpi,
+                'kpi_prev'         => $kpi_prev,
                 'trends'           => $trends,
                 'monthly'          => $monthly,
                 'monthly_prev'     => $monthly_prev,
@@ -4128,10 +4157,16 @@ class Gcrev_Insight_API {
 - マークダウンは使わず、プレーンテキストで出力
 PROMPT;
 
+        file_put_contents( '/tmp/gcrev_annual_debug.log',
+            date( 'Y-m-d H:i:s' ) . " AI summary: calling Gemini, prompt_len=" . strlen( $prompt ) . "\n", FILE_APPEND );
+
         $raw = $this->ai->call_gemini_api( $prompt, [
             'temperature'     => 0.7,
             'maxOutputTokens' => 1500,
         ] );
+
+        file_put_contents( '/tmp/gcrev_annual_debug.log',
+            date( 'Y-m-d H:i:s' ) . " AI summary: response_len=" . strlen( $raw ?? '' ) . ", empty=" . ( empty( $raw ) ? 'yes' : 'no' ) . "\n", FILE_APPEND );
 
         if ( empty( $raw ) ) {
             return null;
