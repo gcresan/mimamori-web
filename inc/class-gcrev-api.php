@@ -3880,14 +3880,26 @@ class Gcrev_Insight_API {
     public function rest_get_annual_report( \WP_REST_Request $request ): \WP_REST_Response {
         $year    = (int) $request->get_param( 'year' );
         $user_id = get_current_user_id();
+        $is_current_year = ( $year === (int) date( 'Y' ) );
 
-        // キャッシュ
-        $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
-        $filter_suffix   = $exclude_foreign ? '_filtered' : '';
-        $cache_key       = "gcrev_annual_{$user_id}_{$year}{$filter_suffix}";
-        $cached          = get_transient( $cache_key );
-        if ( $cached !== false && is_array( $cached ) ) {
-            return new \WP_REST_Response( [ 'success' => true, 'data' => $cached ], 200 );
+        // --- キャッシュ戦略 ---
+        // 過去年: user meta に永続保存（確定データ、再取得不要）
+        // 今年 : Transient 24h（まだデータが増えるため定期更新）
+        $meta_key = "gcrev_annual_snapshot_{$year}";
+
+        if ( ! $is_current_year ) {
+            $saved = get_user_meta( $user_id, $meta_key, true );
+            if ( ! empty( $saved ) && is_array( $saved ) ) {
+                return new \WP_REST_Response( [ 'success' => true, 'data' => $saved ], 200 );
+            }
+        } else {
+            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
+            $filter_suffix   = $exclude_foreign ? '_filtered' : '';
+            $transient_key   = "gcrev_annual_{$user_id}_{$year}{$filter_suffix}";
+            $cached          = get_transient( $transient_key );
+            if ( $cached !== false && is_array( $cached ) ) {
+                return new \WP_REST_Response( [ 'success' => true, 'data' => $cached ], 200 );
+            }
         }
 
         $filter_set = $this->maybe_set_country_filter( $user_id );
@@ -3923,7 +3935,6 @@ class Gcrev_Insight_API {
             try {
                 $source_data = $this->ga4->fetch_source_data_from_ga4( $ga4_id, $start, $end );
                 $channels_summary = $source_data['channels'] ?? [];
-                // セッション合計で割合計算
                 $total_sess = 0;
                 foreach ( $channels_summary as $ch ) {
                     $total_sess += (int) ( $ch['sessions'] ?? 0 );
@@ -3961,11 +3972,20 @@ class Gcrev_Insight_API {
                 'channels_summary' => $channels_summary,
                 'keywords'         => $keywords,
                 'ai_summary'       => null,
+                'snapshot_saved_at' => ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' ),
             ];
 
-            // キャッシュ保存（今年は24h、過去年は48h）
-            $ttl = ( $year === (int) date( 'Y' ) ) ? 24 * HOUR_IN_SECONDS : 48 * HOUR_IN_SECONDS;
-            set_transient( $cache_key, $result, $ttl );
+            // --- 保存 ---
+            if ( ! $is_current_year ) {
+                // 過去年: user meta に永続保存（確定スナップショット）
+                update_user_meta( $user_id, $meta_key, $result );
+            } else {
+                // 今年: Transient 24h
+                $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
+                $filter_suffix   = $exclude_foreign ? '_filtered' : '';
+                $transient_key   = "gcrev_annual_{$user_id}_{$year}{$filter_suffix}";
+                set_transient( $transient_key, $result, 24 * HOUR_IN_SECONDS );
+            }
 
             return new \WP_REST_Response( [ 'success' => true, 'data' => $result ], 200 );
 
