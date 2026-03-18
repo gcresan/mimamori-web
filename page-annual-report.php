@@ -76,6 +76,30 @@ get_header();
     font-size: 14px;
 }
 
+/* --- KPI Grid (page-site-dashboard.php と同じ定義) --- */
+.sd-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+}
+.sd-kpi-grid .kpi-card {
+    padding: 20px 24px;
+}
+.sd-kpi-grid .kpi-value {
+    font-size: 32px;
+}
+.sd-kpi-grid .kpi-sparkline {
+    margin-top: 10px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+}
+.sd-kpi-grid .kpi-sparkline svg {
+    width: 100%;
+    height: 32px;
+}
+
 /* --- Section Titles --- */
 .ar-section-title {
     font-size: 16px;
