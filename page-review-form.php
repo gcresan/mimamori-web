@@ -1197,7 +1197,7 @@ $api_url = rest_url('gcrev/v1/review/generate');
                     currentResponseId = data.response_id || currentResponseId;
                     updateVersionDisplay();
                 } else {
-                    alert('再生成に失敗しました。もう一度お試しください。');
+                    alert(data.message || '再生成に失敗しました。もう一度お試しください。');
                 }
             })
             .catch(function() {

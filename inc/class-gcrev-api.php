@@ -12361,18 +12361,57 @@ PROMPT;
     // =========================================================
 
     /**
+     * リバースプロキシ（KUSANAGI/nginx）を考慮した実クライアントIP取得
+     */
+    private function get_client_ip(): string {
+        // X-Forwarded-For: 複数IPがカンマ区切りの場合、最初（=元のクライアント）を使用
+        if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
+            $ips = explode( ',', $_SERVER['HTTP_X_FORWARDED_FOR'] );
+            $ip  = trim( $ips[0] );
+            if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+                return $ip;
+            }
+        }
+        // X-Real-IP（nginx proxy_set_header X-Real-IP）
+        if ( ! empty( $_SERVER['HTTP_X_REAL_IP'] ) ) {
+            $ip = trim( $_SERVER['HTTP_X_REAL_IP'] );
+            if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+                return $ip;
+            }
+        }
+        return sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? 'unknown' );
+    }
+
+    /**
      * レートリミットチェック（公開エンドポイント保護）
-     * 1時間あたり10回/IPに制限
+     * permission_callback では常に true を返し、コールバック内でチェックする
      */
     public function check_review_rate_limit(\WP_REST_Request $request): bool {
-        $ip  = sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? 'unknown');
-        $key = 'gcrev_review_rate_' . md5($ip);
-        $count = (int) get_transient($key);
-        if ($count >= 10) {
-            return false;
-        }
-        set_transient($key, $count + 1, HOUR_IN_SECONDS);
         return true;
+    }
+
+    /**
+     * レートリミットを実行し、超過時は WP_REST_Response を返す
+     * 1時間あたり30回/IPに制限
+     *
+     * @return \WP_REST_Response|null  超過時はレスポンス、OK時は null
+     */
+    private function enforce_review_rate_limit(): ?\WP_REST_Response {
+        $ip    = $this->get_client_ip();
+        $key   = 'gcrev_review_rate_' . md5( $ip );
+        $count = (int) get_transient( $key );
+        if ( $count >= 30 ) {
+            file_put_contents('/tmp/gcrev_review_debug.log',
+                date('Y-m-d H:i:s') . " RATE LIMIT exceeded: ip={$ip}, count={$count}\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'しばらく時間をおいてから再度お試しください。（1時間あたりの利用回数上限に達しました）',
+            ], 429);
+        }
+        set_transient( $key, $count + 1, HOUR_IN_SECONDS );
+        return null;
     }
 
     /**
@@ -12383,9 +12422,15 @@ PROMPT;
      * Body（レガシー方式）: { answers: [{question, answer}], user_id: int }
      */
     public function rest_generate_review(\WP_REST_Request $request): \WP_REST_Response {
+        // レートリミットチェック（超過時は日本語メッセージ付き 429 を返す）
+        $rate_error = $this->enforce_review_rate_limit();
+        if ( $rate_error ) {
+            return $rate_error;
+        }
+
         try {
             file_put_contents('/tmp/gcrev_review_debug.log',
-                date('Y-m-d H:i:s') . " rest_generate_review called\n",
+                date('Y-m-d H:i:s') . " rest_generate_review called, ip=" . $this->get_client_ip() . "\n",
                 FILE_APPEND
             );
             global $wpdb;
