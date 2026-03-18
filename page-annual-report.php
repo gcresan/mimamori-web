@@ -336,26 +336,54 @@ get_header();
 
 /* --- AI Summary content --- */
 .ar-ai-content {
-    background: var(--mw-bg-primary, #FFFFFF);
+    background: linear-gradient(135deg, #FAFCFC 0%, #F5F8F8 100%);
     border: 1px solid var(--mw-border-light, #C3CED0);
     border-radius: var(--mw-radius-md, 16px);
-    padding: 28px 32px;
-    line-height: 1.9;
+    padding: 32px 36px;
+    line-height: 2.0;
     color: var(--mw-text-primary, #263335);
-    font-size: 14px;
+    font-size: 14.5px;
+}
+.ar-ai-section {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--mw-bg-tertiary, #E6EEF0);
+}
+.ar-ai-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
 }
 .ar-ai-heading {
     font-size: 15px;
     font-weight: 700;
     color: var(--mw-primary-blue, #568184);
-    margin: 20px 0 8px 0;
-    padding: 0;
-}
-.ar-ai-heading:first-child {
-    margin-top: 0;
+    margin: 0 0 10px 0;
+    padding: 6px 12px;
+    background: rgba(86, 129, 132, 0.06);
+    border-radius: 8px;
+    border-left: 3px solid var(--mw-primary-blue, #568184);
 }
 .ar-ai-paragraph {
-    margin: 0 0 6px 0;
+    margin: 0 0 8px 0;
+    padding-left: 4px;
+}
+.ar-ai-paragraph:last-child {
+    margin-bottom: 0;
+}
+/* 数値の強調 */
+.ar-ai-content .ar-ai-num {
+    font-weight: 700;
+    color: var(--mw-primary-blue, #568184);
+}
+/* ポジティブ/ネガティブ */
+.ar-ai-content .ar-ai-positive {
+    color: #2563EB;
+    font-weight: 600;
+}
+.ar-ai-content .ar-ai-negative {
+    color: #DC2626;
+    font-weight: 600;
 }
 
 /* --- KPI supplement label --- */
@@ -1037,21 +1065,40 @@ get_header();
             return;
         }
 
-        // プレーンテキストをHTML化（■見出しを太字に、改行を<br>に）
+        // プレーンテキストをHTML化
+        // ■見出しでセクション分割、数値を太字強調、増減を色分け
+        function highlightText(text) {
+            var escaped = escapeHtml(text);
+            // 数値（カンマ付き含む）+ 単位を強調
+            escaped = escaped.replace(/(\d[\d,]*\.?\d*)(回|%|人|件|秒|PV|ページ|倍|ポイント|円)/g,
+                '<span class="ar-ai-num">$1$2</span>');
+            // +XX% / -XX% を色分け
+            escaped = escaped.replace(/(\+\d[\d,]*\.?\d*%)/g, '<span class="ar-ai-positive">$1</span>');
+            escaped = escaped.replace(/(\-\d[\d,]*\.?\d*%)/g, '<span class="ar-ai-negative">$1</span>');
+            // 前年比XX%増 / 減
+            escaped = escaped.replace(/(前年比?\d[\d,]*\.?\d*%増)/g, '<span class="ar-ai-positive">$1</span>');
+            escaped = escaped.replace(/(前年比?\d[\d,]*\.?\d*%減)/g, '<span class="ar-ai-negative">$1</span>');
+            return escaped;
+        }
+
         var html = '<div class="ar-ai-content">';
         var lines = summary.split('\n');
+        var inSection = false;
+
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i].trim();
-            if (!line) {
-                html += '<br>';
-                continue;
-            }
+            if (!line) continue;
+
             if (line.indexOf('■') === 0) {
+                if (inSection) html += '</div>'; // 前のセクションを閉じる
+                html += '<div class="ar-ai-section">';
                 html += '<h4 class="ar-ai-heading">' + escapeHtml(line) + '</h4>';
+                inSection = true;
             } else {
-                html += '<p class="ar-ai-paragraph">' + escapeHtml(line) + '</p>';
+                html += '<p class="ar-ai-paragraph">' + highlightText(line) + '</p>';
             }
         }
+        if (inSection) html += '</div>';
         html += '</div>';
         container.innerHTML = html;
     }
