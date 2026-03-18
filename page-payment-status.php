@@ -19,9 +19,9 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-// 支払い済み → ダッシュボードへ
-if ( gcrev_is_payment_active() ) {
-    wp_safe_redirect( home_url('/mypage/dashboard/') );
+// お試し中（期限内）or 支払い済み → ダッシュボードへ
+if ( gcrev_is_trial_active( get_current_user_id() ) || gcrev_is_payment_active() ) {
+    wp_safe_redirect( home_url('/dashboard/') );
     exit;
 }
 

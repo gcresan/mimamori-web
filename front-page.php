@@ -1,8 +1,9 @@
 <?php
-// ログイン済み → 決済ステータスに応じてリダイレクト
+// ログイン済み → ダッシュボードへリダイレクト
 if ( is_user_logged_in() ) {
-    if ( gcrev_is_payment_active() ) {
-        wp_safe_redirect( home_url('/mypage/dashboard/') );
+    $uid = get_current_user_id();
+    if ( gcrev_is_trial_active( $uid ) || gcrev_is_payment_active( $uid ) ) {
+        wp_safe_redirect( home_url('/dashboard/') );
     } else {
         wp_safe_redirect( home_url('/payment-status/') );
     }
