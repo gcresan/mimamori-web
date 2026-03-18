@@ -411,7 +411,7 @@ get_template_part('template-parts/period-selector');
     // ユーティリティ
     // =============================================
     function formatNumber(n) {
-        var num = parseInt(n, 10);
+        var num = parseFormattedNumber(n);
         if (isNaN(num)) return '-';
         return num.toLocaleString('ja-JP');
     }
