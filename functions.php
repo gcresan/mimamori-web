@@ -1041,7 +1041,7 @@ add_action('wp_enqueue_scripts', function() {
         'apiUrl'            => rest_url( 'mimamori/v1/ai-chat' ),
         'voiceUrl'          => rest_url( 'mimamori/v1/voice-transcribe' ),
         'nonce'             => wp_create_nonce( 'wp_rest' ),
-        'paymentActive'     => gcrev_is_payment_active(),
+        'paymentActive'     => gcrev_is_payment_active() || gcrev_is_trial_active( get_current_user_id() ),
         'paymentStatusUrl'  => home_url( '/payment-status/' ),
         'serviceTier'       => gcrev_get_service_tier(),
         'quickPrompts'      => $quick_prompts,
