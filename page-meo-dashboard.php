@@ -518,10 +518,10 @@ get_header();
     set_query_var('gcrev_period_selector', [
         'id'      => 'meo-period',
         'items'   => [
-            ['value' => 'prev-month', 'label' => '前月'],
             ['value' => 'last30',     'label' => '直近30日'],
+            ['value' => 'prev-month', 'label' => '前月'],
         ],
-        'default' => 'prev-month',
+        'default' => 'last30',
     ]);
     get_template_part('template-parts/period-selector');
     ?>
@@ -662,7 +662,7 @@ get_header();
     // REST API設定（deviceページと同一パターン）
     const REST_URL    = '<?php echo esc_js(rest_url("gcrev/v1/meo/dashboard")); ?>';
     const WP_NONCE    = '<?php echo wp_create_nonce("wp_rest"); ?>';
-    let currentPeriod = 'prev-month';
+    let currentPeriod = 'last30';
     let currentData   = null;
 
     // Chart.jsインスタンス
