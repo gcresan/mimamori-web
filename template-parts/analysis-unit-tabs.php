@@ -48,10 +48,11 @@ $active_unit_id = absint( get_query_var( 'gcrev_active_unit_id', 0 ) );
     var root = document.getElementById('analysisUnitTabs');
     if (!root) return;
 
-    // グローバルにユニットIDを保持
+    // グローバルにユニットIDを保持（アクティブタブから初期化）
     if (!window.GCREV) window.GCREV = {};
-    window.GCREV.currentUnitId   = 0;
-    window.GCREV.currentUnitType = 'all';
+    var activeBtn = root.querySelector('.unit-tab.active');
+    window.GCREV.currentUnitId   = activeBtn ? (parseInt(activeBtn.dataset.unitId, 10) || 0) : 0;
+    window.GCREV.currentUnitType = activeBtn ? (activeBtn.dataset.unitType || 'all') : 'all';
 
     root.addEventListener('click', function(e) {
         var btn = e.target.closest('.unit-tab');

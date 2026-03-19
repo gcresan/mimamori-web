@@ -328,6 +328,13 @@ $infographic = $gcrev_api->get_monthly_infographic($year, $month, $user_id);
 $kpi_curr = [];
 $kpi_prev = [];
 
+// === 解析ユニットフィルタ適用 ===
+$dash_unit_id  = absint( $_GET['unit'] ?? 0 );
+$dash_unit_set = false;
+if ( $dash_unit_id > 0 && isset( $gcrev_api ) && method_exists( $gcrev_api, 'apply_unit_filters' ) ) {
+    $dash_unit_set = $gcrev_api->apply_unit_filters( $user_id, $dash_unit_id );
+}
+
 // === 直近30日ベースのKPI・スコア算出 ===
 if ($infographic && is_array($infographic)) {
     try {
@@ -1134,6 +1141,9 @@ if ($infographic) {
 </div><!-- .content-area -->
 
 <script>
+// 解析ユニットID（タブ切り替え時のURL ?unit=X から取得）
+var _dashUnitId = <?php echo (int) $dash_unit_id; ?>;
+var _dashUnitSuffix = _dashUnitId > 0 ? '&unit_id=' + _dashUnitId : '';
 (function(){
     // スコアゲージ更新（非同期KPI取得後に呼ばれる）
     function updateScoreGauge(score) {
@@ -1240,7 +1250,7 @@ if ($infographic) {
         var compStart = <?php echo wp_json_encode($last30_comp['start']); ?>;
         var compEnd   = <?php echo wp_json_encode($last30_comp['end']); ?>;
 
-        fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd), {
+        fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd) + _dashUnitSuffix, {
             credentials: 'same-origin',
             headers: { 'X-WP-Nonce': nonce }
         }).then(function(r){ return r.json(); }).then(function(result){
@@ -1377,11 +1387,11 @@ if ($infographic) {
 
         // 直近30日 + 比較期間 + MEO を並列取得
         Promise.all([
-            fetch(restBase + 'dashboard/kpi?period=last30', {
+            fetch(restBase + 'dashboard/kpi?period=last30' + _dashUnitSuffix, {
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); }),
-            fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd), {
+            fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd) + _dashUnitSuffix, {
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); }),

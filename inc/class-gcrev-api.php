@@ -1100,6 +1100,20 @@ class Gcrev_Insight_API {
         return absint( $request->get_param( 'unit_id' ) ?? 0 );
     }
 
+    /**
+     * 外部からユニットフィルタを適用する（page-dashboard.php 等で使用）
+     */
+    public function apply_unit_filters( int $user_id, int $unit_id ): bool {
+        return $this->maybe_set_unit_filters( $user_id, $unit_id );
+    }
+
+    /**
+     * 外部からユニットフィルタを解除する
+     */
+    public function clear_unit_filters( bool $was_set ): void {
+        $this->restore_unit_filters( $was_set );
+    }
+
     private function cache_key_dashboard(int $user_id, string $range): string {
         $suffix = $this->ga4->has_country_filter() ? '_jp' : '';
         $unit_suffix = $this->current_unit_id > 0 ? "_u{$this->current_unit_id}" : '';
