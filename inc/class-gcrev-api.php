@@ -14384,8 +14384,14 @@ PROMPT;
             $params['pageToken'] = $page_token;
         }
 
+        // Google My Business API v4 で口コミ一覧を取得
+        // ※ Google Cloud Console で「Google My Business API」の有効化が必要
         $url = "https://mybusiness.googleapis.com/v4/{$account_name}/{$location_id}/reviews"
              . '?' . http_build_query( $params, '', '&' );
+
+        file_put_contents( '/tmp/gcrev_gbp_debug.log',
+            date( 'Y-m-d H:i:s' ) . " reviews API request: {$account_name}/{$location_id}/reviews\n",
+            FILE_APPEND );
 
         $response = wp_remote_get( $url, [
             'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
@@ -14403,8 +14409,27 @@ PROMPT;
         if ( $status !== 200 ) {
             $body = wp_remote_retrieve_body( $response );
             file_put_contents( '/tmp/gcrev_gbp_debug.log',
-                date( 'Y-m-d H:i:s' ) . " reviews API HTTP {$status}: " . substr( $body, 0, 500 ) . "\n",
+                date( 'Y-m-d H:i:s' ) . " reviews API HTTP {$status}: " . substr( $body, 0, 1000 ) . "\n",
                 FILE_APPEND );
+
+            // 403: API未有効化の可能性が高い
+            if ( $status === 403 ) {
+                $error_data = json_decode( $body, true );
+                $error_msg  = $error_data['error']['message'] ?? '';
+
+                // API が有効化されていない場合の案内
+                if ( strpos( $body, 'has not been used' ) !== false
+                  || strpos( $body, 'is not enabled' ) !== false
+                  || strpos( $body, 'PERMISSION_DENIED' ) !== false
+                  || strpos( $body, 'forbidden' ) !== false ) {
+                    return [
+                        'success' => false,
+                        'message' => "口コミ機能を利用するには、Google Cloud Console で「Google My Business API」を有効化してください。\n"
+                            . "手順: Google Cloud Console → APIとサービス → ライブラリ → 「My Business」で検索 → 「Google My Business API」を有効化",
+                    ];
+                }
+                return [ 'success' => false, 'message' => "口コミの取得に失敗しました（HTTP 403）。\nアクセス権限を確認してください。\n詳細: " . substr( $error_msg, 0, 200 ) ];
+            }
             return [ 'success' => false, 'message' => "口コミの取得に失敗しました（HTTP {$status}）。" ];
         }
 

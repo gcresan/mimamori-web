@@ -411,8 +411,9 @@ get_header();
         // 初回は no_cache なしでキャッシュ利用
         fetchJson(url).then(function(data) {
             if (!data.success) {
+                var msgHtml = escHtml(data.message || '').replace(/\n/g, '<br>');
                 document.getElementById('reviewList').innerHTML =
-                    '<div class="rm-empty"><div class="rm-empty-icon">⚠️</div><p>' + escHtml(data.message) + '</p></div>';
+                    '<div class="rm-empty"><div class="rm-empty-icon">⚠️</div><p style="line-height:1.8;max-width:600px;margin:0 auto;">' + msgHtml + '</p></div>';
                 return;
             }
             var reviews = data.reviews || [];
