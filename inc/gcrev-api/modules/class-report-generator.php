@@ -180,6 +180,38 @@ class Gcrev_Report_Generator {
             $foreign_note = "\n⚠️ 重要：このレポートのデータは「日本国内からのアクセスのみ」に絞り込まれています。海外からのアクセスは除外されています。この点をレポート内で明記してください。";
         }
 
+        // 統合型 / 分離型レポートの指示
+        $domain_instruction = '';
+        $report_type = $client['report_type'] ?? 'integrated';
+        $site_domain = $client['site_domain'] ?? '';
+        $maps_domain = $client['maps_domain'] ?? '';
+
+        if ($report_type === 'separated') {
+            $domain_instruction = <<<DOMAIN
+
+📌 **【重要：分離型レポート】**
+このクライアントの解析対象サイト（{$client['site_url']}）と、Googleビジネスプロフィール（GBP）に登録されているドメイン（{$maps_domain}）は**異なるサイト**です。
+
+■ 必ず守ること：
+1. ホームページ分析（訪問数・ゴール数・ページ閲覧等）は「解析対象サイト：{$site_domain}」の成果として記述すること
+2. MEOデータ（マップ表示回数・電話クリック・ルート検索・ウェブサイトクリック等）は「Googleマップ対象：{$maps_domain}」の成果として記述すること
+3. **両者の数値を合算・混同しないこと**。「集客全体が増えた」等の断定は、導線が別であるため禁止
+4. 結論サマリーでは「主サイトの状況」と「Googleマップ経由の状況」を分けて要約すること
+5. 改善提案も「主サイト側の改善」と「Googleマップ側の改善」を明確に分けること
+6. 各セクション内で、どちらのデータを参照しているか明示すること
+
+DOMAIN;
+        } else {
+            $domain_instruction = <<<DOMAIN
+
+📌 **【統合型レポート】**
+このクライアントの解析対象サイトとGoogleビジネスプロフィールは同じドメイン（{$site_domain}）です。
+ホームページ分析とMEO分析を、同じ集客導線の一部として統合的に評価してください。
+集客全体の流れとしてまとめつつ、各数字の意味は混同しないでください。
+
+DOMAIN;
+        }
+
         // 初心者向けモード用の追加指示
         $mode_instruction = '';
         if ($is_easy_mode) {
@@ -258,9 +290,12 @@ class Gcrev_Report_Generator {
 
         以下のデータとクライアント情報を元に、**{$section_labels}**のセクションのみを生成してください。
         {$mode_instruction}
+        {$domain_instruction}
 
         # クライアント情報
-        - サイトURL: {$client['site_url']}
+        - 解析対象サイトURL: {$client['site_url']}
+        - Googleマップ対象ドメイン: {$maps_domain}
+        - レポートタイプ: {$report_type}（integrated=統合型 / separated=分離型）
         - 商圏・対応エリア: {$client['area_label']}
         - 業種・業態: {$client['industry']}
         - ビジネス形態: {$client['business_type']}
@@ -1055,6 +1090,20 @@ class Gcrev_Report_Generator {
         if ($site_line !== '') {
             $html .= '<p class="period">' . esc_html($site_line) . '</p>';
         }
+
+        // 分離型レポートの場合、対象ドメインの注記を追加
+        $rtype = $client_info['report_type'] ?? 'integrated';
+        if ($rtype === 'separated') {
+            $s_domain = esc_html($client_info['site_domain'] ?? '');
+            $m_domain = esc_html($client_info['maps_domain'] ?? '');
+            $html .= '<div style="margin-top: 12px; padding: 12px 16px; background: #f0f7ff; border-left: 4px solid #3b82f6; border-radius: 6px; font-size: 13px; line-height: 1.6; color: #374151;">';
+            $html .= '<strong>📋 このレポートについて</strong><br>';
+            $html .= '解析対象サイト：<strong>' . $s_domain . '</strong><br>';
+            $html .= 'Googleマップ対象：<strong>' . $m_domain . '</strong><br>';
+            $html .= '<span style="color: #6b7280; font-size: 12px;">※ Googleマップ経由のデータは、解析対象サイトとは別のドメインをもとに表示しています。</span>';
+            $html .= '</div>';
+        }
+
         $html .= '</div>';
 
         // ---- 重要指標サマリー ----

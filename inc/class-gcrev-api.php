@@ -2795,8 +2795,32 @@ class Gcrev_Insight_API {
     private function build_client_info_for_report(int $user_id): array {
         $client = gcrev_get_client_settings($user_id);
 
+        // ドメイン判定（統合型 / 分離型）
+        $site_url     = $client['site_url'] ?? '';
+        $maps_domain  = get_user_meta($user_id, '_gcrev_maps_domain', true) ?: '';
+
+        // 解析対象サイトURLからドメインを抽出（正規化）
+        $site_domain = '';
+        if ($site_url) {
+            $parsed = wp_parse_url($site_url);
+            $site_domain = isset($parsed['host']) ? strtolower($parsed['host']) : '';
+            $site_domain = preg_replace('/^www\./', '', $site_domain);
+        }
+        // maps_domain も正規化（保存時に正規化済みだが念のため）
+        $maps_norm = $maps_domain ? strtolower(preg_replace('/^www\./', '', $maps_domain)) : '';
+
+        // 判定: maps未入力 or 同一ドメイン → 統合型、異なる → 分離型
+        if (empty($maps_norm) || $maps_norm === $site_domain) {
+            $report_type = 'integrated'; // 統合型
+        } else {
+            $report_type = 'separated';  // 分離型
+        }
+
         return [
-            'site_url'         => $client['site_url'],
+            'site_url'         => $site_url,
+            'site_domain'      => $site_domain,
+            'maps_domain'      => $maps_domain ?: $site_domain,
+            'report_type'      => $report_type,
             'area_label'       => gcrev_get_client_area_label($client),
             'industry'         => $client['industry'],
             'business_type'    => $client['business_type'],

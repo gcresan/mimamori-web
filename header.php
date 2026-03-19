@@ -53,15 +53,42 @@
                <?php echo esc_html( $company ); ?> 様
             </div>
             <?php
-            $site_url = get_user_meta( $u->ID, 'report_site_url', true )
+            // 解析対象サイトURL（新→旧フォールバック）
+            $site_url = get_user_meta( $u->ID, 'gcrev_client_site_url', true )
+                      ?: get_user_meta( $u->ID, 'report_site_url', true )
                       ?: get_user_meta( $u->ID, 'weisite_url', true );
+            $maps_domain = get_user_meta( $u->ID, '_gcrev_maps_domain', true );
+
+            // ドメイン正規化して比較
+            $site_domain_norm = '';
+            if ( $site_url ) {
+                $parsed = wp_parse_url( $site_url );
+                $site_domain_norm = isset( $parsed['host'] ) ? strtolower( preg_replace( '/^www\./', '', $parsed['host'] ) ) : '';
+            }
+            $maps_norm = $maps_domain ? strtolower( preg_replace( '/^www\./', '', $maps_domain ) ) : '';
+            $is_separated = ( $maps_norm !== '' && $maps_norm !== $site_domain_norm );
+
             if ( $site_url ) :
                $display_url = preg_replace( '#^https?://#', '', untrailingslashit( $site_url ) );
             ?>
+            <?php if ( $is_separated ) : ?>
+            <div class="sidebar-user-plan" style="line-height: 1.5;">
+               <div style="display: flex; align-items: baseline; gap: 4px; font-size: 11px;">
+                  <span style="color: #888; white-space: nowrap;">解析:</span>
+                  <a href="<?php echo esc_url( $site_url ); ?>" target="_blank" rel="noopener noreferrer"
+                     style="color: inherit; text-decoration: none;"><?php echo esc_html( $display_url ); ?></a>
+               </div>
+               <div style="display: flex; align-items: baseline; gap: 4px; font-size: 11px; margin-top: 2px;">
+                  <span style="color: #888; white-space: nowrap;">MEO:</span>
+                  <span style="color: inherit;"><?php echo esc_html( $maps_domain ); ?></span>
+               </div>
+            </div>
+            <?php else : ?>
             <div class="sidebar-user-plan">
                <a href="<?php echo esc_url( $site_url ); ?>" target="_blank" rel="noopener noreferrer"
                   style="color: inherit; text-decoration: none;"><?php echo esc_html( $display_url ); ?></a>
             </div>
+            <?php endif; ?>
             <?php endif; ?>
             <?php if ( function_exists( 'gcrev_is_trial_active' ) && gcrev_is_trial_active( $u->ID ) ) : ?>
             <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;">
