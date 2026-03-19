@@ -4826,6 +4826,7 @@ add_action('after_setup_theme', function () {
     gcrev_meo_results_create_table(); // MEO週次順位テーブル（マップ順位ページで使用）
     gcrev_aio_results_create_table();
     gcrev_survey_create_tables();
+    gcrev_review_drafts_create_table();
     gcrev_prefetch_status_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
@@ -5259,6 +5260,33 @@ function gcrev_survey_create_tables(): void {
         }
         update_option( 'gcrev_survey_ai_gen_migrated', 1 );
     }
+}
+
+/**
+ * 口コミ返信下書きテーブル作成
+ *
+ * AI生成した返信文や手動編集した下書きを保存。
+ * 口コミ管理ページで使用。
+ */
+function gcrev_review_drafts_create_table(): void {
+    global $wpdb;
+    $table           = $wpdb->prefix . 'gcrev_review_drafts';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        review_name VARCHAR(255) NOT NULL,
+        draft_text TEXT NOT NULL,
+        ai_generated TINYINT(1) NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY user_review (user_id, review_name)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
 }
 
 /**

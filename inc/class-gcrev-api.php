@@ -459,6 +459,33 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== 口コミ管理（GBP Reviews API） =====
+        register_rest_route('gcrev/v1', '/meo/reviews', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_reviews' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/reviews/reply', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_post_review_reply' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/reviews/ai-generate', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_generate_review_reply' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/reviews/draft', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_review_draft' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/reviews/ai-settings', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_review_ai_settings' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== v2ダッシュボード用レポート生成 =====
         register_rest_route('gcrev/v1', '/report/generate-manual', [
             'methods'             => 'POST',
@@ -14265,6 +14292,445 @@ PROMPT;
             );
             return new \WP_REST_Response(['success' => false, 'message' => '分析の実行に失敗しました。'], 500);
         }
+    }
+
+    // =========================================================
+    // 口コミ管理（GBP Reviews API）
+    // =========================================================
+
+    /**
+     * ユーザーの GBP ロケーションに対応するアカウント名を取得
+     * 結果は user meta にキャッシュする
+     */
+    private function gbp_get_account_for_location( int $user_id ): ?string {
+        $cached = get_user_meta( $user_id, '_gcrev_gbp_account_name', true );
+        if ( ! empty( $cached ) ) {
+            return $cached;
+        }
+
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( empty( $access_token ) ) {
+            return null;
+        }
+
+        $location_id = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( empty( $location_id ) || strpos( $location_id, 'pending_' ) === 0 ) {
+            return null;
+        }
+
+        // アカウント一覧取得
+        $accounts_url  = 'https://mybusinessaccountmanagement.googleapis.com/v1/accounts';
+        $accounts_resp = wp_remote_get( $accounts_url, [
+            'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+            'timeout' => 30,
+        ] );
+        if ( is_wp_error( $accounts_resp ) || wp_remote_retrieve_response_code( $accounts_resp ) !== 200 ) {
+            return null;
+        }
+        $accounts_data = json_decode( wp_remote_retrieve_body( $accounts_resp ), true );
+        $accounts      = $accounts_data['accounts'] ?? [];
+
+        // 各アカウントのロケーションを照合
+        foreach ( $accounts as $account ) {
+            $account_name = $account['name'] ?? '';
+            if ( empty( $account_name ) ) {
+                continue;
+            }
+            $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/locations"
+                 . '?' . http_build_query( [ 'readMask' => 'name', 'pageSize' => 100 ], '', '&' );
+            $resp = wp_remote_get( $url, [
+                'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+                'timeout' => 30,
+            ] );
+            if ( is_wp_error( $resp ) || wp_remote_retrieve_response_code( $resp ) !== 200 ) {
+                continue;
+            }
+            $locs = json_decode( wp_remote_retrieve_body( $resp ), true )['locations'] ?? [];
+            foreach ( $locs as $loc ) {
+                if ( ( $loc['name'] ?? '' ) === $location_id ) {
+                    update_user_meta( $user_id, '_gcrev_gbp_account_name', $account_name );
+                    return $account_name;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * GBP Reviews API でレビュー一覧を取得
+     */
+    private function gbp_fetch_reviews( int $user_id, string $page_token = '' ): array {
+        // キャッシュ（ページトークンなしの1ページ目のみ）
+        if ( empty( $page_token ) ) {
+            $cached = get_transient( "gcrev_reviews_{$user_id}" );
+            if ( $cached !== false && is_array( $cached ) ) {
+                return $cached;
+            }
+        }
+
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( empty( $access_token ) ) {
+            return [ 'success' => false, 'message' => 'GBPアクセストークンを取得できません。MEO設定からGoogleアカウントを再接続してください。' ];
+        }
+
+        $account_name = $this->gbp_get_account_for_location( $user_id );
+        $location_id  = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( empty( $account_name ) || empty( $location_id ) ) {
+            return [ 'success' => false, 'message' => 'GBPロケーション情報が見つかりません。MEOダッシュボードでロケーションを設定してください。' ];
+        }
+
+        $params = [ 'pageSize' => 50 ];
+        if ( ! empty( $page_token ) ) {
+            $params['pageToken'] = $page_token;
+        }
+
+        $url = "https://mybusiness.googleapis.com/v4/{$account_name}/{$location_id}/reviews"
+             . '?' . http_build_query( $params, '', '&' );
+
+        $response = wp_remote_get( $url, [
+            'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+            'timeout' => 30,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " reviews API error: " . $response->get_error_message() . "\n",
+                FILE_APPEND );
+            return [ 'success' => false, 'message' => 'Google API接続エラー: ' . $response->get_error_message() ];
+        }
+
+        $status = wp_remote_retrieve_response_code( $response );
+        if ( $status !== 200 ) {
+            $body = wp_remote_retrieve_body( $response );
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " reviews API HTTP {$status}: " . substr( $body, 0, 500 ) . "\n",
+                FILE_APPEND );
+            return [ 'success' => false, 'message' => "口コミの取得に失敗しました（HTTP {$status}）。" ];
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        $result = [
+            'success'          => true,
+            'reviews'          => $data['reviews'] ?? [],
+            'totalReviewCount' => (int) ( $data['totalReviewCount'] ?? 0 ),
+            'averageRating'    => (float) ( $data['averageRating'] ?? 0 ),
+            'nextPageToken'    => $data['nextPageToken'] ?? null,
+        ];
+
+        // 1ページ目のみキャッシュ (1時間)
+        if ( empty( $page_token ) ) {
+            set_transient( "gcrev_reviews_{$user_id}", $result, HOUR_IN_SECONDS );
+        }
+
+        return $result;
+    }
+
+    /**
+     * GBP Reviews API で返信を投稿/更新
+     */
+    private function gbp_reply_to_review( int $user_id, string $review_name, string $comment ): array {
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( empty( $access_token ) ) {
+            return [ 'success' => false, 'message' => 'アクセストークンを取得できません。' ];
+        }
+
+        $url = "https://mybusiness.googleapis.com/v4/{$review_name}/reply";
+        $response = wp_remote_request( $url, [
+            'method'  => 'PUT',
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type'  => 'application/json; charset=utf-8',
+            ],
+            'body'    => wp_json_encode( [ 'comment' => $comment ], JSON_UNESCAPED_UNICODE ),
+            'timeout' => 30,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " reply API error: " . $response->get_error_message() . "\n",
+                FILE_APPEND );
+            return [ 'success' => false, 'message' => 'Google API接続エラー: ' . $response->get_error_message() ];
+        }
+
+        $status = wp_remote_retrieve_response_code( $response );
+        if ( $status !== 200 ) {
+            $body = wp_remote_retrieve_body( $response );
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " reply API HTTP {$status}: " . substr( $body, 0, 500 ) . "\n",
+                FILE_APPEND );
+
+            $error_data = json_decode( $body, true );
+            $error_msg  = $error_data['error']['message'] ?? "返信の投稿に失敗しました（HTTP {$status}）。";
+            return [ 'success' => false, 'message' => $error_msg ];
+        }
+
+        // キャッシュ無効化
+        delete_transient( "gcrev_reviews_{$user_id}" );
+
+        $reply_data = json_decode( wp_remote_retrieve_body( $response ), true );
+        return [ 'success' => true, 'message' => '返信を投稿しました。', 'reply' => $reply_data ];
+    }
+
+    // --- REST コールバック: 口コミ一覧取得 ---
+    public function rest_get_reviews( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id    = get_current_user_id();
+        $filter     = sanitize_text_field( $request->get_param( 'filter' ) ?: 'all' );
+        $sort       = sanitize_text_field( $request->get_param( 'sort' ) ?: 'newest' );
+        $page_token = sanitize_text_field( $request->get_param( 'page_token' ) ?: '' );
+        $no_cache   = (int) $request->get_param( 'no_cache' );
+
+        if ( $no_cache ) {
+            delete_transient( "gcrev_reviews_{$user_id}" );
+        }
+
+        $result = $this->gbp_fetch_reviews( $user_id, $page_token );
+        if ( ! ( $result['success'] ?? false ) ) {
+            return new \WP_REST_Response( $result, 200 );
+        }
+
+        $reviews = $result['reviews'] ?? [];
+
+        // 下書き情報をマージ
+        global $wpdb;
+        $drafts_table = $wpdb->prefix . 'gcrev_review_drafts';
+        $drafts_raw   = $wpdb->get_results( $wpdb->prepare(
+            "SELECT review_name, draft_text, ai_generated, updated_at FROM {$drafts_table} WHERE user_id = %d",
+            $user_id
+        ), ARRAY_A );
+        $drafts = [];
+        foreach ( $drafts_raw as $d ) {
+            $drafts[ $d['review_name'] ] = $d;
+        }
+
+        // サマリー集計
+        $summary = [ 'total' => count( $reviews ), 'unreplied' => 0, 'replied' => 0, 'low_rating' => 0 ];
+        foreach ( $reviews as &$review ) {
+            $has_reply = ! empty( $review['reviewReply'] );
+            $rating    = (int) $this->gbp_star_to_number( $review['starRating'] ?? '' );
+            $name      = $review['name'] ?? '';
+
+            $review['_rating_num'] = $rating;
+            $review['_has_reply']  = $has_reply;
+            $review['_draft']      = $drafts[ $name ] ?? null;
+
+            if ( $has_reply ) {
+                $summary['replied']++;
+            } else {
+                $summary['unreplied']++;
+            }
+            if ( $rating <= 2 ) {
+                $summary['low_rating']++;
+            }
+        }
+        unset( $review );
+
+        // フィルタ
+        if ( $filter !== 'all' ) {
+            $reviews = array_filter( $reviews, function ( $r ) use ( $filter ) {
+                $rating = $r['_rating_num'];
+                switch ( $filter ) {
+                    case 'unreplied': return ! $r['_has_reply'];
+                    case 'replied':   return $r['_has_reply'];
+                    case 'low':       return $rating <= 2;
+                    case 'mid':       return $rating === 3;
+                    case 'high':      return $rating >= 4;
+                    default:          return true;
+                }
+            } );
+            $reviews = array_values( $reviews );
+        }
+
+        // ソート
+        usort( $reviews, function ( $a, $b ) use ( $sort ) {
+            $ta = $a['createTime'] ?? '';
+            $tb = $b['createTime'] ?? '';
+            return $sort === 'oldest' ? strcmp( $ta, $tb ) : strcmp( $tb, $ta );
+        } );
+
+        return new \WP_REST_Response( [
+            'success'        => true,
+            'reviews'        => $reviews,
+            'summary'        => $summary,
+            'averageRating'  => $result['averageRating'],
+            'nextPageToken'  => $result['nextPageToken'],
+        ], 200 );
+    }
+
+    /**
+     * GBP starRating 文字列を数値に変換
+     */
+    private function gbp_star_to_number( string $star_rating ): int {
+        $map = [ 'ONE' => 1, 'TWO' => 2, 'THREE' => 3, 'FOUR' => 4, 'FIVE' => 5 ];
+        return $map[ $star_rating ] ?? 0;
+    }
+
+    // --- REST コールバック: 返信投稿 ---
+    public function rest_post_review_reply( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id     = get_current_user_id();
+        $review_name = sanitize_text_field( $request->get_param( 'review_name' ) );
+        $comment     = sanitize_textarea_field( $request->get_param( 'comment' ) );
+
+        if ( empty( $review_name ) || empty( $comment ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '返信内容を入力してください。' ], 400 );
+        }
+
+        // 二重送信防止
+        $lock_key = "gcrev_reply_lock_{$user_id}_" . md5( $review_name );
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '処理中です。しばらくお待ちください。' ], 429 );
+        }
+        set_transient( $lock_key, 1, 10 );
+
+        $result = $this->gbp_reply_to_review( $user_id, $review_name, $comment );
+
+        // 成功時に下書き削除
+        if ( $result['success'] ) {
+            global $wpdb;
+            $wpdb->delete(
+                $wpdb->prefix . 'gcrev_review_drafts',
+                [ 'user_id' => $user_id, 'review_name' => $review_name ],
+                [ '%d', '%s' ]
+            );
+        }
+
+        return new \WP_REST_Response( $result, $result['success'] ? 200 : 500 );
+    }
+
+    // --- REST コールバック: AI返信文生成 ---
+    public function rest_generate_review_reply( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id      = get_current_user_id();
+        $review_name  = sanitize_text_field( $request->get_param( 'review_name' ) );
+        $reviewer     = sanitize_text_field( $request->get_param( 'reviewer_name' ) ?: '投稿者' );
+        $star_rating  = absint( $request->get_param( 'star_rating' ) );
+        $comment_text = sanitize_textarea_field( $request->get_param( 'comment_text' ) ?: '' );
+
+        if ( empty( $review_name ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'パラメータが不足しています。' ], 400 );
+        }
+
+        // AI設定取得
+        $settings_raw = get_user_meta( $user_id, '_gcrev_review_ai_settings', true );
+        $settings     = is_string( $settings_raw ) ? json_decode( $settings_raw, true ) : [];
+        if ( ! is_array( $settings ) ) {
+            $settings = [];
+        }
+
+        $tone_map   = [ 'polite' => '丁寧', 'friendly' => 'やや親しみやすい', 'formal' => 'フォーマル' ];
+        $length_map = [ 'short' => '短め（50〜80字）', 'standard' => '標準（80〜150字）', 'long' => 'やや丁寧長め（150〜250字）' ];
+        $policy_map = [ 'apology' => 'お詫び重視', 'improvement' => '改善姿勢重視', 'individual' => '個別対応案内重視' ];
+
+        $tone        = $tone_map[ $settings['tone'] ?? '' ] ?? '丁寧';
+        $length      = $length_map[ $settings['length'] ?? '' ] ?? '標準（80〜150字）';
+        $policy      = $policy_map[ $settings['low_rating_policy'] ?? '' ] ?? 'お詫び重視';
+        $biz_name    = $settings['business_name'] ?? get_user_meta( $user_id, '_gcrev_gbp_location_name', true ) ?: '（事業者）';
+        $industry    = $settings['industry'] ?? '';
+
+        $prompt = "あなたはGoogle口コミへの返信を作成するプロのライターです。以下の情報をもとに、自然で丁寧な返信文を1つ作成してください。\n\n"
+                . "【事業者情報】\n"
+                . "- 事業者名: {$biz_name}\n"
+                . ( $industry ? "- 業種: {$industry}\n" : '' )
+                . "\n【口コミ情報】\n"
+                . "- 投稿者名: {$reviewer}\n"
+                . "- 星評価: {$star_rating}/5\n"
+                . "- 口コミ本文: " . ( $comment_text ?: '（テキストなし）' ) . "\n"
+                . "\n【返信方針】\n"
+                . "- トーン: {$tone}\n"
+                . "- 長さ: {$length}\n"
+                . ( $star_rating <= 2 ? "- 低評価口コミへの基本方針: {$policy}\n" : '' )
+                . "\n【星評価別の方向性】\n"
+                . "★4-5: 感謝を中心に。来店・利用へのお礼。毎回同じ定型文にしない。\n"
+                . "★3: お礼を伝える。必要に応じて補足や改善意識を入れる。過剰に明るすぎない。\n"
+                . "★1-2: まず真摯に受け止める。反論しない。断定・言い訳・感情的表現を避ける。必要なら個別対応案内。\n"
+                . "\n【必須ルール】\n"
+                . "- 自然で実務でそのまま使える文面にすること\n"
+                . "- 口コミ本文の具体的な内容に必ず触れること\n"
+                . "- 投稿者名は「{$reviewer}様」として使うこと\n"
+                . "- 定型的な締め文句を避け、口コミの内容に合わせた返信にすること\n"
+                . "- 返信文のみを出力してください（JSONや説明文は不要）";
+
+        try {
+            $reply_text = $this->ai->call_gemini_api( $prompt, [
+                'temperature'     => 0.8,
+                'maxOutputTokens' => 1024,
+            ] );
+            $reply_text = trim( $reply_text );
+            // 余分な引用符やマークダウンを除去
+            $reply_text = preg_replace( '/^["\'`]+|["\'`]+$/', '', $reply_text );
+            $reply_text = preg_replace( '/^```[a-z]*\n?|\n?```$/', '', $reply_text );
+            $reply_text = trim( $reply_text );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " AI reply generate error: " . $e->getMessage() . "\n",
+                FILE_APPEND );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => 'AI返信文の生成に失敗しました: ' . $e->getMessage(),
+            ], 500 );
+        }
+
+        // 下書きとして自動保存
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_review_drafts';
+        $now   = current_time( 'mysql' );
+        $wpdb->replace( $table, [
+            'user_id'      => $user_id,
+            'review_name'  => $review_name,
+            'draft_text'   => $reply_text,
+            'ai_generated' => 1,
+            'created_at'   => $now,
+            'updated_at'   => $now,
+        ], [ '%d', '%s', '%s', '%d', '%s', '%s' ] );
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'reply'   => $reply_text,
+        ], 200 );
+    }
+
+    // --- REST コールバック: 下書き保存 ---
+    public function rest_save_review_draft( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id     = get_current_user_id();
+        $review_name = sanitize_text_field( $request->get_param( 'review_name' ) );
+        $draft_text  = sanitize_textarea_field( $request->get_param( 'draft_text' ) ?? '' );
+
+        if ( empty( $review_name ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'パラメータが不足しています。' ], 400 );
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_review_drafts';
+
+        if ( $draft_text === '' ) {
+            $wpdb->delete( $table, [ 'user_id' => $user_id, 'review_name' => $review_name ], [ '%d', '%s' ] );
+        } else {
+            $now = current_time( 'mysql' );
+            $wpdb->replace( $table, [
+                'user_id'      => $user_id,
+                'review_name'  => $review_name,
+                'draft_text'   => $draft_text,
+                'ai_generated' => 0,
+                'created_at'   => $now,
+                'updated_at'   => $now,
+            ], [ '%d', '%s', '%s', '%d', '%s', '%s' ] );
+        }
+
+        return new \WP_REST_Response( [ 'success' => true ], 200 );
+    }
+
+    // --- REST コールバック: AI返信設定保存 ---
+    public function rest_save_review_ai_settings( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id  = get_current_user_id();
+        $settings = [
+            'tone'              => sanitize_text_field( $request->get_param( 'tone' ) ?: 'polite' ),
+            'length'            => sanitize_text_field( $request->get_param( 'length' ) ?: 'standard' ),
+            'low_rating_policy' => sanitize_text_field( $request->get_param( 'low_rating_policy' ) ?: 'apology' ),
+            'business_name'     => sanitize_text_field( $request->get_param( 'business_name' ) ?: '' ),
+            'industry'          => sanitize_text_field( $request->get_param( 'industry' ) ?: '' ),
+        ];
+        update_user_meta( $user_id, '_gcrev_review_ai_settings', wp_json_encode( $settings, JSON_UNESCAPED_UNICODE ) );
+
+        return new \WP_REST_Response( [ 'success' => true ], 200 );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
