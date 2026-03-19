@@ -434,8 +434,8 @@ get_header();
             </div>
             <div class="form-group" style="margin-top:16px;">
                 <label for="cs-include-paths">解析対象URL条件 <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
-                <textarea id="cs-include-paths" rows="2" placeholder="例: /fukuyama/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $include_paths_text ); ?></textarea>
-                <small class="form-text">このアカウントで集計対象に<strong>含めたい</strong>URL条件を指定します。同一ドメイン内の特定ディレクトリだけを分析したい場合に使用します。1行に1つずつ入力してください。<br>例: <code>/fukuyama/</code> と入力すると、<code>/fukuyama/</code> 配下のページだけが集計対象になります。<br><strong>未設定の場合は、解析対象URL配下すべてが対象です。</strong></small>
+                <textarea id="cs-include-paths" rows="2" placeholder="例: /example/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $include_paths_text ); ?></textarea>
+                <small class="form-text">このアカウントで集計対象に<strong>含めたい</strong>URL条件を指定します。同一ドメイン内の特定ディレクトリだけを分析したい場合に使用します。1行に1つずつ入力してください。<br>例: <code>/example/</code> と入力すると、<code>/example/</code> 配下のページだけが集計対象になります。<br><strong>未設定の場合は、解析対象URL配下すべてが対象です。</strong></small>
             </div>
             <div class="form-group" style="margin-top:16px;">
                 <label for="cs-exclude-paths">解析除外URL条件 <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
