@@ -217,6 +217,13 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== 解析ユニット一覧取得 =====
+        register_rest_route('gcrev/v1', '/analysis-units', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_analysis_units' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== v2ダッシュボード用KPI取得 =====
         register_rest_route('gcrev/v1', '/dashboard/kpi', [
             'methods'             => 'GET',
@@ -1043,9 +1050,60 @@ class Gcrev_Insight_API {
         }
     }
 
+    // =========================================================
+    // 解析ユニット フィルタ制御
+    // =========================================================
+
+    /** @var int 現在のユニットID（0=全体） */
+    private int $current_unit_id = 0;
+
+    /**
+     * 解析ユニットのフィルタを設定する。
+     * ユニットに page_path_prefix がある場合、GA4 Fetcher にセットする。
+     *
+     * @param int $user_id ユーザーID
+     * @param int $unit_id ユニットID（0=全体/フォールバック）
+     * @return bool フィルタが設定されたかどうか
+     */
+    private function maybe_set_unit_filters( int $user_id, int $unit_id ): bool {
+        if ( $unit_id <= 0 ) {
+            $this->current_unit_id = 0;
+            return false;
+        }
+
+        $unit_config = gcrev_resolve_unit_config( $user_id, $unit_id );
+        $this->current_unit_id = $unit_config['unit_id'];
+
+        // pagePath フィルタ設定
+        if ( ! empty( $unit_config['page_path_prefix'] ) ) {
+            $this->ga4->set_page_path_filter( $unit_config['page_path_prefix'] );
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 解析ユニットのフィルタを解除する。
+     */
+    private function restore_unit_filters( bool $was_set ): void {
+        if ( $was_set ) {
+            $this->ga4->set_page_path_filter( null );
+        }
+        $this->current_unit_id = 0;
+    }
+
+    /**
+     * リクエストから unit_id を取得するヘルパー
+     */
+    private function get_unit_id_from_request( WP_REST_Request $request ): int {
+        return absint( $request->get_param( 'unit_id' ) ?? 0 );
+    }
+
     private function cache_key_dashboard(int $user_id, string $range): string {
         $suffix = $this->ga4->has_country_filter() ? '_jp' : '';
-        return "gcrev_dash_{$user_id}_{$range}{$suffix}";
+        $unit_suffix = $this->current_unit_id > 0 ? "_u{$this->current_unit_id}" : '';
+        return "gcrev_dash_{$user_id}_{$range}{$suffix}{$unit_suffix}";
     }
 
     private function dashboard_cache_get(int $user_id, string $range): ?array {
@@ -4005,9 +4063,11 @@ class Gcrev_Insight_API {
         $start_date  = $request->get_param('start_date');
         $end_date    = $request->get_param('end_date');
         $user_id     = get_current_user_id();
+        $unit_id     = $this->get_unit_id_from_request( $request );
 
-        // 海外アクセス除外フィルタ
+        // フィルタ設定（海外除外 + ユニット別 pagePath）
         $filter_set = $this->maybe_set_country_filter( $user_id );
+        $unit_set   = $this->maybe_set_unit_filters( $user_id, $unit_id );
 
         try {
             // start_date / end_date が指定されている場合は日付範囲で取得
@@ -4015,6 +4075,14 @@ class Gcrev_Insight_API {
                 $kpi_data = $this->get_dashboard_kpi_by_dates( $start_date, $end_date, $user_id );
             } else {
                 $kpi_data = $this->get_dashboard_kpi($period, $user_id, (int)$cache_first);
+            }
+
+            // ユニット情報を付加
+            if ( $unit_id > 0 ) {
+                $kpi_data['analysis_unit_id'] = $unit_id;
+                $unit_config = gcrev_resolve_unit_config( $user_id, $unit_id );
+                $kpi_data['analysis_unit_label'] = $unit_config['label'];
+                $kpi_data['analysis_unit_type']  = $unit_config['unit_type'];
             }
 
             return new WP_REST_Response([
@@ -4029,6 +4097,7 @@ class Gcrev_Insight_API {
                 'message' => $e->getMessage(),
             ], 500);
         } finally {
+            $this->restore_unit_filters( $unit_set );
             $this->restore_country_filter( $filter_set );
         }
     }
@@ -16343,6 +16412,23 @@ PROMPT;
             'errors'         => $errors,
             'message'        => "{$imported}件を登録しました。",
         ], 200 );
+    }
+
+    // =========================================================
+    // 解析ユニット REST API
+    // =========================================================
+
+    /**
+     * ユーザーの解析ユニット一覧を取得
+     */
+    public function rest_get_analysis_units( WP_REST_Request $request ): WP_REST_Response {
+        $user_id = get_current_user_id();
+        $units   = gcrev_get_analysis_units( $user_id );
+
+        return new WP_REST_Response([
+            'success' => true,
+            'units'   => $units,
+        ], 200);
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

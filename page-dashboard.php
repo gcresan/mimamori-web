@@ -300,6 +300,18 @@ get_header();
         </div>
     </div>
 
+    <?php
+    // 解析ユニットタブ（複数導線がある場合のみ表示）
+    $analysis_units = gcrev_get_analysis_units( $user_id );
+    $active_unit_id = absint( $_GET['unit'] ?? 0 );
+    if ( ! empty( $analysis_units ) ) :
+        set_query_var( 'gcrev_analysis_units', $analysis_units );
+        set_query_var( 'gcrev_unit_reload', '1' );
+        set_query_var( 'gcrev_active_unit_id', $active_unit_id );
+        get_template_part( 'template-parts/analysis-unit-tabs' );
+    endif;
+    ?>
+
     <!-- サービス説明（常時表示） -->
     <p class="service-lead">
         「みまもりウェブ」は、ホームページの状態を毎日データで見守り、「今どうなっているか」をやさしく伝えるサービスです。

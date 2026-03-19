@@ -42,6 +42,9 @@ class Gcrev_GA4_Fetcher {
     /** @var ?FilterExpression 国フィルタ（set_country_filter で設定） */
     private ?FilterExpression $country_filter = null;
 
+    /** @var ?FilterExpression pagePathフィルタ（解析ユニットのディレクトリ分離用） */
+    private ?FilterExpression $page_path_filter = null;
+
     /**
      * @param Gcrev_Config $config
      */
@@ -87,27 +90,67 @@ class Gcrev_GA4_Fetcher {
     }
 
     /**
-     * RunReportRequest のパラメータ配列に国フィルタを適用する。
-     * 既存の dimension_filter がある場合は AND 結合する。
+     * pagePath フィルタを設定する。解析ユニットのディレクトリ分離用。
+     * null を渡すとフィルタを解除する。
+     *
+     * @param ?string $prefix パスプレフィックス（例: '/fukuyama/'）BEGINS_WITH でマッチ
+     */
+    public function set_page_path_filter( ?string $prefix ): void {
+        if ( $prefix === null ) {
+            $this->page_path_filter = null;
+            return;
+        }
+        $sf = new \Google\Analytics\Data\V1beta\Filter\StringFilter([
+            'value'      => $prefix,
+            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::BEGINS_WITH,
+        ]);
+        $this->page_path_filter = new FilterExpression([
+            'filter' => new Filter([
+                'field_name'    => 'pagePath',
+                'string_filter' => $sf,
+            ]),
+        ]);
+    }
+
+    /**
+     * RunReportRequest のパラメータ配列にディメンションフィルタを適用する。
+     * 国フィルタ + pagePathフィルタ を AND 結合し、既存のフィルタとも結合する。
      *
      * @param array &$params RunReportRequest のコンストラクタに渡す配列
      */
-    private function apply_country_filter( array &$params ): void {
-        if ( $this->country_filter === null ) {
+    private function apply_dimension_filters( array &$params ): void {
+        $filters = [];
+        if ( $this->country_filter !== null ) {
+            $filters[] = $this->country_filter;
+        }
+        if ( $this->page_path_filter !== null ) {
+            $filters[] = $this->page_path_filter;
+        }
+        if ( empty( $filters ) ) {
             return;
         }
+
+        // 既存の dimension_filter があればそれも含める
         if ( isset( $params['dimension_filter'] ) ) {
+            $filters[] = $params['dimension_filter'];
+        }
+
+        if ( count( $filters ) === 1 ) {
+            $params['dimension_filter'] = $filters[0];
+        } else {
             $params['dimension_filter'] = new FilterExpression([
                 'and_group' => new FilterExpressionList([
-                    'expressions' => [
-                        $params['dimension_filter'],
-                        $this->country_filter,
-                    ],
+                    'expressions' => $filters,
                 ]),
             ]);
-        } else {
-            $params['dimension_filter'] = $this->country_filter;
         }
+    }
+
+    /**
+     * 後方互換: apply_country_filter は apply_dimension_filters に委譲
+     */
+    private function apply_country_filter( array &$params ): void {
+        $this->apply_dimension_filters( $params );
     }
 
     /**
