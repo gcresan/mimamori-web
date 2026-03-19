@@ -212,7 +212,7 @@ wp_enqueue_media();
     <div class="gp-tabs">
         <button class="gp-tab active" data-tab="local">📝 投稿管理</button>
         <button class="gp-tab" data-tab="gbp">🌐 Google上の投稿</button>
-        <button class="gp-tab" data-tab="brand">🎨 ブランド設定</button>
+        <button class="gp-tab" data-tab="brand">🎨 AI画像生成ルール</button>
     </div>
 
     <!-- ===== ローカル投稿タブ ===== -->
