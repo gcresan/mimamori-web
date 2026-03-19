@@ -41,10 +41,27 @@ get_header();
 /* page-client-settings — Page-specific overrides only */
 /* All shared styles are in css/dashboard-redesign.css */
 
-.cs-section { margin-bottom: 28px; }
+/* 親コンテナ（settings-card）をカード風から透明なラッパーに変更 */
+.content-area .settings-card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
+}
+
+/* カード化：各セクションを独立したカードとして表示 */
+.cs-section {
+    margin-bottom: 20px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 24px 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
 .cs-section-title {
-    font-size: 15px; font-weight: 700; color: #1e293b;
-    margin: 0 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;
+    font-size: 16px; font-weight: 700; color: #1e293b;
+    margin: 0 0 20px; padding-bottom: 12px; border-bottom: 2px solid #e9ecef;
     display: flex; align-items: center; gap: 8px;
 }
 .cs-section-title .icon { font-size: 18px; }
@@ -133,15 +150,18 @@ get_header();
 .btype-option.selected { border-color: #4E8A6B; background: #f0fdf4; color: #166534; }
 .btype-option input[type="radio"] { accent-color: #4E8A6B; }
 
-/* 保存ボタン */
-.cs-actions { margin-top: 24px; display: flex; gap: 12px; }
+/* 保存ボタン — カード群の外に独立配置 */
+.cs-actions {
+    margin-top: 8px; padding: 20px 0; display: flex; gap: 12px;
+    justify-content: center;
+}
 .cs-actions .btn-save {
-    padding: 10px 32px; background: #4E8A6B; color: #fff; border: none;
-    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-    transition: background .2s;
+    padding: 12px 48px; background: #4E8A6B; color: #fff; border: none;
+    border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: background .2s; box-shadow: 0 2px 6px rgba(78,138,107,0.25);
 }
 .cs-actions .btn-save:hover { background: #2d6b54; }
-.cs-actions .btn-save:disabled { background: #94a3b8; cursor: not-allowed; }
+.cs-actions .btn-save:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
 
 /* トースト */
 .cs-toast {
@@ -368,6 +388,7 @@ get_header();
 .cs-kw-toggle input:checked + .cs-kw-toggle__slider::before { transform: translateX(18px); }
 
 @media (max-width: 600px) {
+    .cs-section { padding: 18px 16px; margin-bottom: 16px; }
     .ref-url-row { flex-wrap: wrap; }
     .ref-url-row input[type="url"],
     .ref-url-row input[type="text"] { flex: 1 1 100%; }
