@@ -427,8 +427,8 @@ get_header();
             </div>
             <div class="form-group" style="margin-top:16px;">
                 <label for="cs-exclude-paths">除外URL条件 <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
-                <textarea id="cs-exclude-paths" rows="3" placeholder="例:&#10;/fukuyama/&#10;/recruit/&#10;/campaign/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $exclude_paths_text ); ?></textarea>
-                <small class="form-text">解析対象から除外したいURLパスを1行に1つずつ入力してください。同一ドメイン内の別LP・採用ページなどのデータを集計対象から外す場合に使用します。<br>例: <code>/fukuyama/</code> と入力すると、<code>https://example.com/fukuyama/</code> 配下のページデータが除外されます。</small>
+                <textarea id="cs-exclude-paths" rows="3" placeholder="例:&#10;/example/&#10;/recruit/&#10;/campaign/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $exclude_paths_text ); ?></textarea>
+                <small class="form-text">解析対象から除外したいURLパスを1行に1つずつ入力してください。同一ドメイン内の別LP・採用ページなどのデータを集計対象から外す場合に使用します。<br>例: <code>/example/</code> と入力すると、<code>https://example.com/example/</code> 配下のページデータが除外されます。</small>
             </div>
         </div>
 
