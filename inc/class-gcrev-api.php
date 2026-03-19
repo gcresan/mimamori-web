@@ -507,6 +507,16 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_get_gbp_remote_posts' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/meo/posts/gbp-update', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_update_gbp_remote_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/gbp-delete', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_delete_gbp_remote_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/meo/posts/csv-template', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_get_csv_template' ],
@@ -15539,6 +15549,80 @@ PROMPT;
         }
 
         return new \WP_REST_Response( $response_data, 200 );
+    }
+
+    /**
+     * GBP上の投稿を直接更新
+     */
+    public function rest_update_gbp_remote_post( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id  = get_current_user_id();
+        $gbp_name = sanitize_text_field( $request->get_param( 'gbp_name' ) ?: '' );
+
+        if ( empty( $gbp_name ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿IDが指定されていません。' ], 400 );
+        }
+
+        // 二重送信防止
+        $lock_key = "gcrev_lock_gbp_post_{$user_id}";
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '処理中です。' ], 429 );
+        }
+        set_transient( $lock_key, 1, 10 );
+
+        $post_data = [
+            'summary'     => sanitize_textarea_field( $request->get_param( 'summary' ) ?: '' ),
+            'topic_type'  => sanitize_text_field( $request->get_param( 'topic_type' ) ?: 'STANDARD' ),
+            'cta_type'    => sanitize_text_field( $request->get_param( 'cta_type' ) ?: '' ) ?: null,
+            'cta_url'     => esc_url_raw( $request->get_param( 'cta_url' ) ?: '' ) ?: null,
+            'event_title' => sanitize_text_field( $request->get_param( 'event_title' ) ?: '' ) ?: null,
+            'event_start' => sanitize_text_field( $request->get_param( 'event_start' ) ?: '' ) ?: null,
+            'event_end'   => sanitize_text_field( $request->get_param( 'event_end' ) ?: '' ) ?: null,
+            'image_url'   => esc_url_raw( $request->get_param( 'image_url' ) ?: '' ) ?: null,
+            'image_attachment_id' => absint( $request->get_param( 'image_attachment_id' ) ?: 0 ) ?: null,
+        ];
+
+        if ( empty( $post_data['summary'] ) ) {
+            delete_transient( $lock_key );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿本文は必須です。' ], 400 );
+        }
+
+        // 画像URLをattachment_idから解決
+        if ( empty( $post_data['image_url'] ) && ! empty( $post_data['image_attachment_id'] ) ) {
+            $post_data['image_url'] = wp_get_attachment_url( $post_data['image_attachment_id'] ) ?: null;
+        }
+
+        $result = $this->gbp_update_local_post( $user_id, $gbp_name, $post_data );
+
+        // キャッシュ無効化
+        delete_transient( "gcrev_gbp_posts_{$user_id}" );
+
+        delete_transient( $lock_key );
+        return new \WP_REST_Response( [
+            'success' => $result['success'],
+            'message' => $result['success'] ? '更新しました。' : $result['message'],
+        ], 200 );
+    }
+
+    /**
+     * GBP上の投稿を直接削除
+     */
+    public function rest_delete_gbp_remote_post( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id  = get_current_user_id();
+        $gbp_name = sanitize_text_field( $request->get_param( 'gbp_name' ) ?: '' );
+
+        if ( empty( $gbp_name ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿IDが指定されていません。' ], 400 );
+        }
+
+        $result = $this->gbp_delete_local_post( $user_id, $gbp_name );
+
+        // キャッシュ無効化
+        delete_transient( "gcrev_gbp_posts_{$user_id}" );
+
+        return new \WP_REST_Response( [
+            'success' => $result['success'],
+            'message' => $result['success'] ? '削除しました。' : $result['message'],
+        ], 200 );
     }
 
     /**

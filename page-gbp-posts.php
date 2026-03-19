@@ -566,7 +566,12 @@ wp_enqueue_media();
         });
     }
 
-    function closeModal() { document.getElementById('postModal').style.display = 'none'; }
+    function closeModal() {
+        document.getElementById('postModal').style.display = 'none';
+        editingGbpName = null;
+        // 投稿タイミングラジオを再表示
+        document.querySelectorAll('input[name="postAction"]').forEach(function(r){ r.closest('label').style.display = ''; });
+    }
 
     function submitPost() {
         var btn = document.getElementById('modalSubmitBtn');
@@ -591,7 +596,12 @@ wp_enqueue_media();
         };
 
         var url, method;
-        if (editingPostId) {
+        if (editingGbpName) {
+            // GBP上の投稿を直接更新
+            body.gbp_name = editingGbpName;
+            url = restBase + 'meo/posts/gbp-update';
+            method = 'POST';
+        } else if (editingPostId) {
             url = restBase + 'meo/posts/' + editingPostId;
             method = 'POST';
         } else {
@@ -611,6 +621,7 @@ wp_enqueue_media();
                 closeModal();
                 loadSummary();
                 loadPosts();
+                if (gbpPostsLoaded) { gbpPostsLoaded = false; loadGbpPosts(); }
             } else {
                 showToast(data.message || 'エラーが発生しました。', 'error');
             }
@@ -922,6 +933,11 @@ wp_enqueue_media();
         var linkHtml = '';
         if (p.search_url) linkHtml = '<a class="gp-gbp-link" href="' + escHtml(p.search_url) + '" target="_blank" rel="noopener">Googleで見る ↗</a>';
 
+        var actionsHtml = '<div class="gp-card-actions">'
+            + '<button class="gp-btn" data-gbp-action="edit" data-gbp-post=\'' + escHtml(JSON.stringify(p)) + '\'>編集</button>'
+            + '<button class="gp-btn gp-btn-danger" data-gbp-action="delete" data-gbp-name="' + escHtml(p.gbp_name) + '">削除</button>'
+            + '</div>';
+
         return '<div class="gp-gbp-card">'
             + '<div class="gp-card-header">'
             +   '<span class="gp-gbp-state ' + stateClass + '">' + escHtml(stateLabel) + '</span>'
@@ -935,12 +951,75 @@ wp_enqueue_media();
             +     '<div class="gp-card-meta">' + metaHtml + '</div>'
             +   '</div>'
             + '</div>'
+            + actionsHtml
             + '</div>';
     }
 
     document.getElementById('gbpLoadMoreBtn').addEventListener('click', function() {
         if (gbpNextPageToken) loadGbpPosts(true);
     });
+
+    // GBP投稿の編集・削除
+    var editingGbpName = null;
+
+    document.getElementById('gbpPostList').addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-gbp-action]');
+        if (!btn) return;
+        var action = btn.dataset.gbpAction;
+
+        if (action === 'edit') {
+            var postData = JSON.parse(btn.dataset.gbpPost);
+            openGbpEditModal(postData);
+        } else if (action === 'delete') {
+            var gbpName = btn.dataset.gbpName;
+            if (!confirm('この投稿をGoogleから削除しますか？この操作は元に戻せません。')) return;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-sm"></span>';
+            fetchJson(restBase + 'meo/posts/gbp-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gbp_name: gbpName })
+            }).then(function(data) {
+                showToast(data.message || (data.success ? '削除しました。' : 'エラー'), data.success ? 'success' : 'error');
+                if (data.success) {
+                    gbpPostsLoaded = false;
+                    loadGbpPosts();
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = '削除';
+                }
+            });
+        }
+    });
+
+    function openGbpEditModal(p) {
+        editingPostId = null;
+        editingGbpName = p.gbp_name;
+        document.getElementById('modalTitle').textContent = 'Google投稿を編集';
+        document.getElementById('postTitle').value = '';
+        document.getElementById('postTopicType').value = p.topic_type || 'STANDARD';
+        document.getElementById('postSummary').value = p.summary || '';
+        document.getElementById('summaryCount').textContent = (p.summary || '').length;
+        document.getElementById('eventTitle').value = p.event_title || '';
+        document.getElementById('eventStart').value = '';
+        document.getElementById('eventEnd').value = '';
+        document.getElementById('postCtaType').value = p.cta_type || '';
+        document.getElementById('postCtaUrl').value = p.cta_url || '';
+        document.getElementById('imageAttachmentId').value = '';
+        document.getElementById('imageUrl').value = p.image_url || '';
+        if (p.image_url) {
+            document.getElementById('imagePreviewImg').src = p.image_url;
+            document.getElementById('imagePreview').style.display = 'inline-block';
+        } else {
+            document.getElementById('imagePreview').style.display = 'none';
+        }
+        // GBP編集では投稿タイミング選択を非表示
+        document.querySelectorAll('input[name="postAction"]').forEach(function(r){ r.closest('label').style.display = 'none'; });
+        document.getElementById('scheduleWrap').style.display = 'none';
+        toggleTopicFields();
+        toggleCtaUrl();
+        document.getElementById('postModal').style.display = 'flex';
+    }
 
     // ===== Init =====
     loadSummary();
