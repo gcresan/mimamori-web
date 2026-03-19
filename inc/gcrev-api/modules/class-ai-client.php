@@ -312,9 +312,9 @@ REWRITE_PROMPT;
                 return [ 'success' => false, 'mime_type' => '', 'base64_data' => '', 'error' => 'GCPプロジェクトIDが未設定です。' ];
             }
 
-            // 画像生成モデルは us-central1 で利用可能（asia-northeast1 等では不可）
+            // 画像生成専用モデル gemini-2.5-flash-image を使用（us-central1 で利用可能）
             $location     = $options['location'] ?? 'us-central1';
-            $model        = $options['model'] ?? 'gemini-2.0-flash-001';
+            $model        = $options['model'] ?? 'gemini-2.5-flash-image';
             $aspect_ratio = $options['aspect_ratio'] ?? '16:9';
 
             $host = $location . '-aiplatform.googleapis.com';
