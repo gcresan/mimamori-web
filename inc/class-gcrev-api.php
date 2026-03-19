@@ -5167,6 +5167,100 @@ PROMPT;
 
 
     /**
+     * MEO ダッシュボード + 検索語句分析のデータをプリフェッチ（cron用）
+     *
+     * 全GBP連携済みユーザーの prev-month / last30 のデータを取得しキャッシュに格納。
+     * 深夜に実行することで、日中のアクセス時はキャッシュから即座に返却できる。
+     */
+    public function prefetch_meo_dashboard_data(): void {
+        global $wpdb;
+
+        // GBP連携済みユーザーを取得
+        $user_ids = $wpdb->get_col(
+            "SELECT user_id FROM {$wpdb->usermeta}
+             WHERE meta_key = '_gcrev_gbp_location_id'
+             AND meta_value != ''
+             AND meta_value NOT LIKE 'pending_%'"
+        );
+
+        if ( empty( $user_ids ) ) {
+            file_put_contents( '/tmp/gcrev_meo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [MEO Prefetch] No GBP-connected users found\n", FILE_APPEND );
+            return;
+        }
+
+        file_put_contents( '/tmp/gcrev_meo_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [MEO Prefetch] Starting for " . count( $user_ids ) . " users\n", FILE_APPEND );
+
+        $periods  = [ 'prev-month', 'last30' ];
+        $fetched  = 0;
+        $skipped  = 0;
+        $errors   = 0;
+
+        foreach ( $user_ids as $uid ) {
+            $uid          = (int) $uid;
+            $location_id  = get_user_meta( $uid, '_gcrev_gbp_location_id', true );
+            $access_token = $this->gbp_get_access_token( $uid );
+
+            if ( empty( $access_token ) || empty( $location_id ) ) {
+                $skipped++;
+                continue;
+            }
+
+            foreach ( $periods as $period ) {
+                try {
+                    $dates      = $this->dates->calculate_period_dates( $period );
+                    $comparison = $this->dates->calculate_comparison_dates( $period );
+                    $date_hash  = md5( "{$dates['start']}_{$dates['end']}" );
+                    $cache_key  = "gcrev_meo_{$uid}_{$period}_{$date_hash}";
+
+                    // 既にキャッシュが残っていればスキップ（まだ有効期限内）
+                    $existing = get_transient( $cache_key );
+                    if ( $existing !== false && is_array( $existing ) ) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $current_metrics = $this->gbp_fetch_performance_metrics( $access_token, $location_id, $dates['start'], $dates['end'] );
+                    $prev_metrics    = $this->gbp_fetch_performance_metrics( $access_token, $location_id, $comparison['start'], $comparison['end'] );
+                    $daily_metrics   = $this->gbp_fetch_daily_metrics( $access_token, $location_id, $dates['start'], $dates['end'] );
+                    $keywords        = $this->gbp_fetch_keywords_monthly_series( $access_token, $location_id, 6 );
+
+                    $result = [
+                        'success'             => true,
+                        'metrics'             => $current_metrics,
+                        'metrics_previous'    => $prev_metrics,
+                        'daily_metrics'       => $daily_metrics,
+                        'search_keywords'     => $keywords,
+                        'current_range_label' => str_replace( '-', '/', $dates['start'] ) . ' 〜 ' . str_replace( '-', '/', $dates['end'] ),
+                        'compare_range_label' => str_replace( '-', '/', $comparison['start'] ) . ' 〜 ' . str_replace( '-', '/', $comparison['end'] ),
+                        'current_period'      => [ 'start' => $dates['start'], 'end' => $dates['end'] ],
+                        'comparison_period'   => [ 'start' => $comparison['start'], 'end' => $comparison['end'] ],
+                    ];
+
+                    set_transient( $cache_key, $result, 86400 );
+                    $fetched++;
+
+                } catch ( \Throwable $e ) {
+                    $errors++;
+                    file_put_contents( '/tmp/gcrev_meo_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " [MEO Prefetch] ERROR user={$uid} period={$period}: " . $e->getMessage() . "\n",
+                        FILE_APPEND
+                    );
+                }
+
+                // API レート制限（1ユーザー1期間あたり2秒）
+                sleep( 2 );
+            }
+        }
+
+        file_put_contents( '/tmp/gcrev_meo_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [MEO Prefetch] Done: fetched={$fetched}, skipped={$skipped}, errors={$errors}\n",
+            FILE_APPEND
+        );
+    }
+
+    /**
      * GET /meo/rankings — マップ順位ページ用（DataForSEO Maps/Local Finder SERP）
      *
      * ユーザーのキーワードでリアルタイムにMaps SERP / Local Finder SERPを取得し、

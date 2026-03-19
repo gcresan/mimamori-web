@@ -37,6 +37,9 @@ class Gcrev_Bootstrap {
         // GBP予約投稿（10分ごと）
         add_action('gcrev_gbp_posts_publish_event', [__CLASS__, 'on_gbp_posts_publish']);
 
+        // MEOダッシュボード日次プリフェッチ
+        add_action('gcrev_meo_dashboard_prefetch_event', [__CLASS__, 'on_meo_dashboard_prefetch']);
+
         // 年次レポート自動生成（1月のみ実行）
         add_action('gcrev_annual_report_generate_event', [__CLASS__, 'on_annual_report_generate_event']);
 
@@ -417,6 +420,37 @@ class Gcrev_Bootstrap {
     }
 
     // =========================================================
+    // MEO ダッシュボード日次プリフェッチ（毎日 02:30）
+    // =========================================================
+
+    /**
+     * MEOダッシュボード + 検索語句分析のキャッシュを事前に温める。
+     * 深夜実行 → 日中はキャッシュから即座に返却。
+     */
+    public static function on_meo_dashboard_prefetch(): void {
+        $lock_key = 'gcrev_lock_meo_prefetch';
+        if ( get_transient( $lock_key ) ) {
+            return;
+        }
+        set_transient( $lock_key, 1, 1800 ); // 30分ロック
+
+        file_put_contents( '/tmp/gcrev_meo_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [MEO Prefetch] Cron triggered\n", FILE_APPEND );
+
+        try {
+            $api = new Gcrev_Insight_API( false );
+            $api->prefetch_meo_dashboard_data();
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_meo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [MEO Prefetch] Fatal error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+        }
+
+        delete_transient( $lock_key );
+    }
+
+    // =========================================================
     // GBP 予約投稿実行（10分ごと）
     // =========================================================
 
@@ -560,6 +594,9 @@ class Gcrev_Bootstrap {
         // 年次レポート自動生成: 毎日 06:30（1月のみ実行、前年分を全ユーザーに対して生成）
         self::schedule_daily_if_missing('gcrev_annual_report_generate_event', 'tomorrow 06:30:00');
 
+        // MEOダッシュボード日次プリフェッチ: 毎日 02:30
+        self::schedule_daily_if_missing('gcrev_meo_dashboard_prefetch_event', 'tomorrow 02:30:00');
+
         // GBP予約投稿: 10分ごと
         if ( ! wp_next_scheduled( 'gcrev_gbp_posts_publish_event' ) ) {
             wp_schedule_event( time(), 'ten_minutes', 'gcrev_gbp_posts_publish_event' );
@@ -640,6 +677,7 @@ class Gcrev_Bootstrap {
             'gcrev_keyword_metrics_monthly_event',
             'gcrev_monthly_data_prefetch_event',
             'gcrev_gbp_posts_publish_event',
+            'gcrev_meo_dashboard_prefetch_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',
