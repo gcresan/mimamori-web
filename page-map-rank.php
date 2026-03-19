@@ -242,9 +242,20 @@ get_header();
         </div>
     </div>
 
-    <div class="meo-help">
-        Googleマップやローカル検索で、あなたのお店が<strong>何番目に表示されるか</strong>、
-        口コミの状況、近くの競合との比較をまとめています。
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+        <div class="meo-help" style="margin-bottom: 0; flex: 1;">
+            Googleマップやローカル検索で、あなたのお店が<strong>何番目に表示されるか</strong>、
+            口コミの状況、近くの競合との比較をまとめています。
+        </div>
+        <button id="meoRefreshBtn" type="button"
+            style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+                   border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; color: #344054;
+                   font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
+                   transition: all 0.2s; flex-shrink: 0;"
+            onmouseover="this.style.background='#f9fafb'; this.style.borderColor='#568184'; this.style.color='#568184';"
+            onmouseout="this.style.background='#fff'; this.style.borderColor='#d0d5dd'; this.style.color='#344054';">
+            🔄 最新の情報を見る
+        </button>
     </div>
 
     <!-- 計測条件エリア -->
@@ -380,6 +391,44 @@ get_header();
             currentRadius = parseInt(meoRadiusSelect.value, 10) || 0;
             meoFetchData(currentDevice, currentKeywordId);
         });
+
+        // 最新の情報を見るボタン
+        var refreshBtn = document.getElementById('meoRefreshBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', function() {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '⏳ 取得中...';
+                refreshBtn.style.opacity = '0.6';
+
+                // force=1 でキャッシュを無視して再取得
+                var url = restBase + 'meo/rankings?device=' + encodeURIComponent(currentDevice)
+                        + '&keyword_id=' + encodeURIComponent(currentKeywordId)
+                        + '&force=1';
+                if (isCoordinateMode && currentRadius > 0) {
+                    url += '&radius=' + encodeURIComponent(currentRadius);
+                }
+
+                fetch(url, {
+                    method: 'GET',
+                    headers: { 'X-WP-Nonce': nonce },
+                    credentials: 'same-origin'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.success !== false) {
+                        meoRender(data);
+                    }
+                    // 履歴も再取得
+                    meoFetchHistory();
+                })
+                .catch(function() {})
+                .finally(function() {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄 最新の情報を見る';
+                    refreshBtn.style.opacity = '1';
+                });
+            });
+        }
 
         meoFetchData('mobile', 0);
         meoFetchHistory();
