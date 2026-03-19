@@ -16045,7 +16045,7 @@ PROMPT;
         global $wpdb;
         $user_id    = get_current_user_id();
         $table      = $wpdb->prefix . 'gcrev_gbp_posts';
-        $chunk_size = min( 2, max( 1, absint( $request->get_param( 'chunk_size' ) ?: 2 ) ) );
+        $chunk_size = min( 2, max( 1, absint( $request->get_param( 'chunk_size' ) ?: 1 ) ) );
 
         // 全体の未生成件数を先に取得
         $total_remaining = (int) $wpdb->get_var( $wpdb->prepare(

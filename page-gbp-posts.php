@@ -1187,7 +1187,7 @@ wp_enqueue_media();
 
     document.getElementById('bulkGenImgBtn').addEventListener('click', function() {
         if (bulkState.running) return;
-        if (!confirm('画像未設定の投稿に対してAI画像を一括生成しますか？\n（2件ずつ処理します。完了まで画面を閉じないでください）')) return;
+        if (!confirm('画像未設定の投稿に対してAI画像を一括生成しますか？\n（1件ずつ処理します。完了まで画面を閉じないでください）')) return;
         startBulkGeneration();
     });
 
@@ -1208,14 +1208,21 @@ wp_enqueue_media();
         runBulkChunk();
     }
 
+    var bulkRetryCount = 0;
+    var BULK_MAX_RETRIES = 3;
+
     function runBulkChunk() {
         fetchJson(restBase + 'meo/posts/bulk-generate-images', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chunk_size: 2 })
+            body: JSON.stringify({ chunk_size: 1 })
         }).then(function(data) {
-            if (!data.success) {
-                finishBulkGeneration('エラーが発生しました: ' + (data.message || ''));
+            bulkRetryCount = 0; // 成功時はリトライカウントリセット
+
+            if (!data.success && data.message && data.message.indexOf('実行中') >= 0) {
+                // ロック中 → 少し待って再試行
+                document.getElementById('progressDetail').textContent = 'サーバー処理待ち...しばらくお待ちください';
+                setTimeout(runBulkChunk, 10000);
                 return;
             }
 
@@ -1224,20 +1231,28 @@ wp_enqueue_media();
                 bulkState.totalTarget = data.total;
             }
 
-            bulkState.completed += data.processed;
-            bulkState.succeeded += data.succeeded;
-            bulkState.failed += data.failed;
+            bulkState.completed += (data.processed || 0);
+            bulkState.succeeded += (data.succeeded || 0);
+            bulkState.failed += (data.failed || 0);
 
             updateProgressUI();
 
             if (data.has_more && data.remaining > 0) {
                 // 次のチャンクを待ってから実行（API レート制限対策）
-                setTimeout(runBulkChunk, 5000);
+                setTimeout(runBulkChunk, 8000);
             } else {
                 finishBulkGeneration();
             }
         }).catch(function(err) {
-            finishBulkGeneration('通信エラーが発生しました。');
+            bulkRetryCount++;
+            if (bulkRetryCount <= BULK_MAX_RETRIES) {
+                // 通信エラー時も自動リトライ（タイムアウト等）
+                var wait = bulkRetryCount * 15;
+                document.getElementById('progressDetail').textContent = '通信エラー発生。' + wait + '秒後にリトライします... (' + bulkRetryCount + '/' + BULK_MAX_RETRIES + ')';
+                setTimeout(runBulkChunk, wait * 1000);
+            } else {
+                finishBulkGeneration('通信エラーが連続しました。時間をおいて再実行してください。');
+            }
         });
     }
 
