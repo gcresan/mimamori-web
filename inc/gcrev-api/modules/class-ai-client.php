@@ -343,29 +343,51 @@ REWRITE_PROMPT;
                 ],
             ];
 
-            file_put_contents( '/tmp/gcrev_gbp_debug.log',
-                date( 'Y-m-d H:i:s' ) . " [ImageGen] Request: model={$model}, aspect={$aspect_ratio}, prompt=" . substr( $prompt, 0, 200 ) . "\n",
-                FILE_APPEND
-            );
+            $request_body = wp_json_encode( $body, JSON_UNESCAPED_UNICODE );
+            $max_retries  = 2;
+            $status       = 0;
+            $raw          = '';
 
-            $response = wp_remote_post( $url, [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . $access_token,
-                    'Content-Type'  => 'application/json; charset=utf-8',
-                ],
-                'body'    => wp_json_encode( $body, JSON_UNESCAPED_UNICODE ),
-                'timeout' => 120,
-            ] );
+            for ( $attempt = 0; $attempt <= $max_retries; $attempt++ ) {
+                if ( $attempt > 0 ) {
+                    $wait = $attempt * 30; // 1回目リトライ30秒、2回目60秒
+                    file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " [ImageGen] Rate limited, retry {$attempt}/{$max_retries} after {$wait}s\n", FILE_APPEND );
+                    sleep( $wait );
+                }
 
-            if ( is_wp_error( $response ) ) {
-                $err = $response->get_error_message();
                 file_put_contents( '/tmp/gcrev_gbp_debug.log',
-                    date( 'Y-m-d H:i:s' ) . " [ImageGen] WP_Error: {$err}\n", FILE_APPEND );
-                return [ 'success' => false, 'mime_type' => '', 'base64_data' => '', 'error' => "通信エラー: {$err}" ];
-            }
+                    date( 'Y-m-d H:i:s' ) . " [ImageGen] Request (attempt " . ( $attempt + 1 ) . "): model={$model}, aspect={$aspect_ratio}, prompt=" . substr( $prompt, 0, 200 ) . "\n",
+                    FILE_APPEND
+                );
 
-            $status = (int) wp_remote_retrieve_response_code( $response );
-            $raw    = (string) wp_remote_retrieve_body( $response );
+                $response = wp_remote_post( $url, [
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $access_token,
+                        'Content-Type'  => 'application/json; charset=utf-8',
+                    ],
+                    'body'    => $request_body,
+                    'timeout' => 120,
+                ] );
+
+                if ( is_wp_error( $response ) ) {
+                    $err = $response->get_error_message();
+                    file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " [ImageGen] WP_Error: {$err}\n", FILE_APPEND );
+                    return [ 'success' => false, 'mime_type' => '', 'base64_data' => '', 'error' => "通信エラー: {$err}" ];
+                }
+
+                $status = (int) wp_remote_retrieve_response_code( $response );
+                $raw    = (string) wp_remote_retrieve_body( $response );
+
+                // 429 Rate Limit → リトライ
+                if ( $status === 429 && $attempt < $max_retries ) {
+                    continue;
+                }
+
+                // それ以外はループ終了
+                break;
+            }
 
             if ( $status < 200 || $status >= 300 ) {
                 $json = json_decode( $raw, true );

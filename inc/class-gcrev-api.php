@@ -16045,7 +16045,7 @@ PROMPT;
         global $wpdb;
         $user_id    = get_current_user_id();
         $table      = $wpdb->prefix . 'gcrev_gbp_posts';
-        $chunk_size = min( 3, max( 1, absint( $request->get_param( 'chunk_size' ) ?: 3 ) ) );
+        $chunk_size = min( 2, max( 1, absint( $request->get_param( 'chunk_size' ) ?: 2 ) ) );
 
         // 全体の未生成件数を先に取得
         $total_remaining = (int) $wpdb->get_var( $wpdb->prepare(
@@ -16069,9 +16069,9 @@ PROMPT;
             } else {
                 $failed++;
             }
-            // API レート制限対策: 各生成間に5秒待機
+            // API レート制限対策: 各生成間に10秒待機
             if ( next( $posts ) !== false ) {
-                sleep( 5 );
+                sleep( 10 );
             }
         }
 

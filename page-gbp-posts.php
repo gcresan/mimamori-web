@@ -1187,7 +1187,7 @@ wp_enqueue_media();
 
     document.getElementById('bulkGenImgBtn').addEventListener('click', function() {
         if (bulkState.running) return;
-        if (!confirm('画像未設定の投稿に対してAI画像を一括生成しますか？\n（3件ずつ処理します。完了まで画面を閉じないでください）')) return;
+        if (!confirm('画像未設定の投稿に対してAI画像を一括生成しますか？\n（2件ずつ処理します。完了まで画面を閉じないでください）')) return;
         startBulkGeneration();
     });
 
@@ -1212,7 +1212,7 @@ wp_enqueue_media();
         fetchJson(restBase + 'meo/posts/bulk-generate-images', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chunk_size: 3 })
+            body: JSON.stringify({ chunk_size: 2 })
         }).then(function(data) {
             if (!data.success) {
                 finishBulkGeneration('エラーが発生しました: ' + (data.message || ''));
@@ -1231,8 +1231,8 @@ wp_enqueue_media();
             updateProgressUI();
 
             if (data.has_more && data.remaining > 0) {
-                // 次のチャンクを少し待ってから実行（API レート制限対策）
-                setTimeout(runBulkChunk, 2000);
+                // 次のチャンクを待ってから実行（API レート制限対策）
+                setTimeout(runBulkChunk, 5000);
             } else {
                 finishBulkGeneration();
             }
