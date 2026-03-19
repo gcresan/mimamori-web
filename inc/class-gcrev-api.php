@@ -383,7 +383,7 @@ class Gcrev_Insight_API {
                     'required'          => false,
                     'default'           => 'last30',
                     'validate_callback' => function($param) {
-                        return in_array($param, ['last30', 'prev-month']);
+                        return in_array($param, ['last30', 'prev-month', 'prev-prev-month', 'last90', 'last180', 'last365']);
                     }
                 ]
             ]
@@ -6754,10 +6754,14 @@ PROMPT;
 
             $response = wp_remote_get($url, [
                 'headers' => ['Authorization' => 'Bearer ' . $access_token],
-                'timeout' => 15,
+                'timeout' => 30,
             ]);
 
             if (is_wp_error($response)) {
+                file_put_contents('/tmp/gcrev_gbp_debug.log',
+                    date('Y-m-d H:i:s') . " [Perf] wp_error: metric={$metric}, err=" . $response->get_error_message() . "\n",
+                    FILE_APPEND
+                );
                 continue;
             }
 
@@ -6765,6 +6769,10 @@ PROMPT;
             $raw_body = wp_remote_retrieve_body($response);
 
             if ($status !== 200) {
+                file_put_contents('/tmp/gcrev_gbp_debug.log',
+                    date('Y-m-d H:i:s') . " [Perf] HTTP {$status}: metric={$metric}, body=" . substr($raw_body, 0, 300) . "\n",
+                    FILE_APPEND
+                );
                 continue;
             }
 
@@ -6821,7 +6829,7 @@ PROMPT;
 
             $response = wp_remote_get($url, [
                 'headers' => ['Authorization' => 'Bearer ' . $access_token],
-                'timeout' => 15,
+                'timeout' => 30,
             ]);
 
             if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {

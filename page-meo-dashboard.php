@@ -700,14 +700,18 @@ get_header();
 
         try {
             var apiUrl = REST_URL + '?period=' + encodeURIComponent(period);
+            var controller = new AbortController();
+            var timeoutId = setTimeout(function() { controller.abort(); }, 120000); // 2分タイムアウト
             var response = await fetch(apiUrl, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-WP-Nonce': WP_NONCE
                 },
-                credentials: 'same-origin'
+                credentials: 'same-origin',
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             var result = await response.json();
 
