@@ -1516,7 +1516,7 @@
 
     // セクション本文: コンテンツコンテナのテキスト
     var bodyEl = container.querySelector(
-      '.section-content, .info-monthly-summary, .info-monthly-highlight-value'
+      '.section-content, .info-monthly-summary, .info-summary-blocks, .info-monthly-highlight-value'
     );
     var sectionBody = bodyEl ? bodyEl.textContent.trim() : '';
 
