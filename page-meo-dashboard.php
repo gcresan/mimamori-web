@@ -505,29 +505,30 @@ get_header();
     </script>
     <?php endif; ?>
 
-    <!-- 期間選択 -->
-    <div style="background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;">
-        <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-            <button class="period-btn active" data-period="prev-month">前月</button>
-            <button class="period-btn" data-period="last30">直近30日</button>
-        </div>
-        <div class="period-info" id="meo-period-display">
-            <div class="period-item">
-                <span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>
-                <span class="period-value" id="meo-period-current">読み込み中...</span>
-            </div>
-            <div class="period-divider"></div>
-            <div class="period-item">
-                <span class="period-label-v2">&#x1F4CA; 比較期間：</span>
-                <span class="period-value" id="meo-period-compare">読み込み中...</span>
-            </div>
+    <!-- ローディングオーバーレイ（標準パターン） -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>データを取得中...</p>
         </div>
     </div>
 
-    <!-- ローディングオーバーレイ -->
-    <div id="meo-loading" style="display: none; text-align: center; padding: 60px 20px;">
-        <div style="font-size: 20px; color: #666666; margin-bottom: 12px;">⏳</div>
-        <div style="font-size: 15px; color: #666666;">データを取得しています...</div>
+    <!-- 期間選択（共通コンポーネント） -->
+    <?php
+    set_query_var('gcrev_period_selector', [
+        'id'      => 'meo-period',
+        'items'   => [
+            ['value' => 'prev-month', 'label' => '前月'],
+            ['value' => 'last30',     'label' => '直近30日'],
+        ],
+        'default' => 'prev-month',
+    ]);
+    get_template_part('template-parts/period-selector');
+    ?>
+
+    <!-- 期間表示 -->
+    <div class="period-display" id="periodDisplay">
+        分析対象期間を選択してください
     </div>
 
     <!-- メインコンテンツ（データ読み込み後に表示） -->
@@ -668,29 +669,26 @@ get_header();
     let impressionsChart = null;
     let actionsChart     = null;
 
-    // ===== ローディング制御 =====
+    // ===== ローディング制御（標準パターン） =====
     function showLoading() {
-        var el = document.getElementById('meo-loading');
-        var main = document.getElementById('meo-main-content');
-        if (el) el.style.display = 'block';
-        if (main) main.style.display = 'none';
+        var overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.classList.add('active');
     }
     function hideLoading() {
-        var el = document.getElementById('meo-loading');
-        var main = document.getElementById('meo-main-content');
-        if (el) el.style.display = 'none';
-        if (main) main.style.display = 'block';
+        var overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.classList.remove('active');
     }
 
-    // ===== 期間ボタン切替（deviceと同一パターン） =====
-    document.querySelectorAll('.period-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
-            this.classList.add('active');
-            currentPeriod = this.dataset.period;
+    // ===== 期間セレクター（共通コンポーネント連携） =====
+    var selectorEl = document.getElementById('meo-period');
+    if (selectorEl) {
+        selectorEl.addEventListener('gcrev:periodChange', function(e) {
+            var period = e.detail && e.detail.period ? e.detail.period : null;
+            if (!period || period === currentPeriod) return;
+            currentPeriod = period;
             loadData(currentPeriod);
         });
-    });
+    }
 
     // ===== データ取得（deviceページと同一のfetch + nonce + credentials） =====
     async function loadData(period) {
@@ -724,19 +722,38 @@ get_header();
 
         } catch (error) {
             console.error('[MEO] データ取得エラー:', error);
-            document.getElementById('meo-period-current').textContent = 'データ取得に失敗しました';
-            document.getElementById('meo-period-compare').textContent = '-';
+            var pdEl = document.getElementById('periodDisplay');
+            if (pdEl) pdEl.innerHTML = '<span style="color:#dc2626;">データ取得に失敗しました。再読み込みしてください。</span>';
         } finally {
             hideLoading();
         }
     }
 
-    // ===== 期間表示更新 =====
+    // ===== 期間表示更新（標準パターン） =====
     function updatePeriodDisplay(data) {
         var cur = data.current_range_label || '---';
         var cmp = data.compare_range_label || '---';
-        document.getElementById('meo-period-current').textContent = cur;
-        document.getElementById('meo-period-compare').textContent = cmp;
+
+        // 共通ユーティリティがあれば使用
+        if (window.GCREV && typeof window.GCREV.updatePeriodDisplay === 'function') {
+            window.GCREV.updatePeriodDisplay(data, { periodDisplayId: 'periodDisplay' });
+            return;
+        }
+
+        // フォールバック
+        var el = document.getElementById('periodDisplay');
+        if (el) {
+            el.innerHTML =
+                '<div class="period-item">' +
+                '  <span class="period-label-v2">&#x1F4C5; 分析対象期間：</span>' +
+                '  <span class="period-value">' + cur + '</span>' +
+                '</div>' +
+                '<div class="period-divider"></div>' +
+                '<div class="period-item">' +
+                '  <span class="period-label-v2">&#x1F4CA; 比較期間：</span>' +
+                '  <span class="period-value">' + cmp + '</span>' +
+                '</div>';
+        }
     }
 
     // ===== 前期比のHTML生成 =====
