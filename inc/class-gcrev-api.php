@@ -1023,8 +1023,8 @@ class Gcrev_Insight_API {
      * 再入可能: 外側の呼び出しで既にフィルタが設定済みの場合は false を返し、
      * restore_country_filter(false) で解除されないようにする。
      */
-    /** @var bool 除外パスフィルタが設定されているか */
-    private bool $exclude_paths_set = false;
+    /** @var bool パスフィルタ（include/exclude）が設定されているか */
+    private bool $path_filters_set = false;
 
     private function maybe_set_country_filter( int $user_id ): bool {
         if ( $this->ga4->has_country_filter() ) {
@@ -1037,12 +1037,18 @@ class Gcrev_Insight_API {
             $was_set = true;
         }
 
-        // 除外URL条件を適用
-        if ( ! $this->exclude_paths_set ) {
+        // 解析対象URL条件 + 解析除外URL条件を適用
+        if ( ! $this->path_filters_set ) {
+            $include_paths = get_user_meta( $user_id, '_gcrev_include_paths', true );
+            if ( is_array( $include_paths ) && ! empty( $include_paths ) ) {
+                $this->ga4->set_include_paths_filter( $include_paths );
+                $this->path_filters_set = true;
+            }
+
             $exclude_paths = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
             if ( is_array( $exclude_paths ) && ! empty( $exclude_paths ) ) {
                 $this->ga4->set_exclude_paths_filter( $exclude_paths );
-                $this->exclude_paths_set = true;
+                $this->path_filters_set = true;
             }
         }
 
@@ -1050,22 +1056,23 @@ class Gcrev_Insight_API {
     }
 
     /**
-     * 国フィルタ + 除外パスフィルタを解除する（maybe_set_country_filter の対）
+     * 国フィルタ + パスフィルタを解除する（maybe_set_country_filter の対）
      */
     private function restore_country_filter( bool $was_set ): void {
         if ( $was_set ) {
             $this->ga4->set_country_filter( null );
         }
-        if ( $this->exclude_paths_set ) {
+        if ( $this->path_filters_set ) {
+            $this->ga4->clear_include_paths_filter();
             $this->ga4->set_page_path_filter( null );
-            $this->exclude_paths_set = false;
+            $this->path_filters_set = false;
         }
     }
 
     private function cache_key_dashboard(int $user_id, string $range): string {
         $suffix = $this->ga4->has_country_filter() ? '_jp' : '';
-        // 除外パス設定がある場合はキャッシュキーを差別化
-        if ( $this->exclude_paths_set ) {
+        // パスフィルタ設定がある場合はキャッシュキーを差別化
+        if ( $this->path_filters_set ) {
             $suffix .= '_ex';
         }
         return "gcrev_dash_{$user_id}_{$range}{$suffix}";
@@ -2546,7 +2553,24 @@ class Gcrev_Insight_API {
         }
         update_user_meta( $user_id, '_gcrev_maps_domain', $maps_domain );
 
-        // 除外URL条件（1行1パス、配列で保存）
+        // 解析対象URL条件（1行1パス、配列で保存）
+        $include_paths_raw = $params['include_paths'] ?? '';
+        $include_paths = [];
+        if ( is_string( $include_paths_raw ) && $include_paths_raw !== '' ) {
+            $lines = explode( "\n", $include_paths_raw );
+            foreach ( $lines as $line ) {
+                $path = trim( sanitize_text_field( $line ) );
+                if ( $path !== '' ) {
+                    if ( $path[0] !== '/' ) {
+                        $path = '/' . $path;
+                    }
+                    $include_paths[] = $path;
+                }
+            }
+        }
+        update_user_meta( $user_id, '_gcrev_include_paths', $include_paths );
+
+        // 解析除外URL条件（1行1パス、配列で保存）
         $exclude_paths_raw = $params['exclude_paths'] ?? '';
         $exclude_paths = [];
         if ( is_string( $exclude_paths_raw ) && $exclude_paths_raw !== '' ) {

@@ -34,7 +34,14 @@ if ( empty( $initial_site_url ) ) {
 // Maps（GBP）用ドメイン
 $maps_domain = get_user_meta( $user_id, '_gcrev_maps_domain', true ) ?: '';
 
-// 除外URL条件
+// 解析対象URL条件
+$include_paths_raw = get_user_meta( $user_id, '_gcrev_include_paths', true );
+$include_paths_text = '';
+if ( is_array( $include_paths_raw ) && ! empty( $include_paths_raw ) ) {
+    $include_paths_text = implode( "\n", $include_paths_raw );
+}
+
+// 解析除外URL条件
 $exclude_paths_raw = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
 $exclude_paths_text = '';
 if ( is_array( $exclude_paths_raw ) && ! empty( $exclude_paths_raw ) ) {
@@ -426,9 +433,14 @@ get_header();
                 <small class="form-text">Googleビジネスプロフィール（GBP）に登録しているWebサイトのドメインが、対象サイトURLと異なる場合に設定してください。未入力の場合は対象サイトURLのドメインで照合します。</small>
             </div>
             <div class="form-group" style="margin-top:16px;">
-                <label for="cs-exclude-paths">除外URL条件 <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
-                <textarea id="cs-exclude-paths" rows="3" placeholder="例:&#10;/example/&#10;/recruit/&#10;/campaign/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $exclude_paths_text ); ?></textarea>
-                <small class="form-text">解析対象から除外したいURLパスを1行に1つずつ入力してください。同一ドメイン内の別LP・採用ページなどのデータを集計対象から外す場合に使用します。<br>例: <code>/example/</code> と入力すると、<code>https://example.com/example/</code> 配下のページデータが除外されます。</small>
+                <label for="cs-include-paths">解析対象URL条件 <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
+                <textarea id="cs-include-paths" rows="2" placeholder="例: /fukuyama/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $include_paths_text ); ?></textarea>
+                <small class="form-text">このアカウントで集計対象に<strong>含めたい</strong>URL条件を指定します。同一ドメイン内の特定ディレクトリだけを分析したい場合に使用します。1行に1つずつ入力してください。<br>例: <code>/fukuyama/</code> と入力すると、<code>/fukuyama/</code> 配下のページだけが集計対象になります。<br><strong>未設定の場合は、解析対象URL配下すべてが対象です。</strong></small>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label for="cs-exclude-paths">解析除外URL条件 <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
+                <textarea id="cs-exclude-paths" rows="2" placeholder="例:&#10;/example/&#10;/recruit/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $exclude_paths_text ); ?></textarea>
+                <small class="form-text">このアカウントで集計対象から<strong>除外したい</strong>URL条件を指定します。別LP・採用ページ・キャンペーンページなどを除外したい場合に使用します。1行に1つずつ入力してください。<br>例: <code>/example/</code> と入力すると、<code>/example/</code> 配下のページデータが除外されます。</small>
             </div>
         </div>
 
@@ -1278,6 +1290,7 @@ get_header();
                 body: JSON.stringify({
                     site_url:               siteUrl,
                     maps_domain:            (document.getElementById('cs-maps-domain').value || '').trim(),
+                    include_paths:          (document.getElementById('cs-include-paths').value || '').trim(),
                     exclude_paths:          (document.getElementById('cs-exclude-paths').value || '').trim(),
                     area_type:              areaType,
                     area_pref:              areaPref,

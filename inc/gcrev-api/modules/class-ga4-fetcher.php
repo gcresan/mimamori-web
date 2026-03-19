@@ -42,7 +42,10 @@ class Gcrev_GA4_Fetcher {
     /** @var ?FilterExpression 国フィルタ（set_country_filter で設定） */
     private ?FilterExpression $country_filter = null;
 
-    /** @var ?FilterExpression pagePathフィルタ（除外URL条件等で使用） */
+    /** @var ?FilterExpression pagePath includeフィルタ（解析対象URL条件） */
+    private ?FilterExpression $include_path_filter = null;
+
+    /** @var ?FilterExpression pagePath excludeフィルタ（解析除外URL条件） */
     private ?FilterExpression $page_path_filter = null;
 
     /**
@@ -165,6 +168,59 @@ class Gcrev_GA4_Fetcher {
     }
 
     /**
+     * 解析対象URL条件を設定する。指定パスプレフィックスに一致するページのみを対象にする。
+     * 複数パスの場合は OR で結合する（いずれかに一致すれば対象）。
+     *
+     * @param array $paths 対象パスプレフィックスの配列（例: ['/fukuyama/']）
+     */
+    public function set_include_paths_filter( array $paths ): void {
+        if ( empty( $paths ) ) {
+            $this->include_path_filter = null;
+            return;
+        }
+
+        $path_filters = [];
+        foreach ( $paths as $path ) {
+            $path = trim( $path );
+            if ( $path === '' ) continue;
+
+            $sf = new \Google\Analytics\Data\V1beta\Filter\StringFilter([
+                'value'      => $path,
+                'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::BEGINS_WITH,
+            ]);
+            $path_filters[] = new FilterExpression([
+                'filter' => new Filter([
+                    'field_name'    => 'pagePath',
+                    'string_filter' => $sf,
+                ]),
+            ]);
+        }
+
+        if ( empty( $path_filters ) ) {
+            $this->include_path_filter = null;
+            return;
+        }
+
+        // 複数パスを OR 結合（いずれかに一致すれば対象）
+        if ( count( $path_filters ) === 1 ) {
+            $this->include_path_filter = $path_filters[0];
+        } else {
+            $this->include_path_filter = new FilterExpression([
+                'or_group' => new FilterExpressionList([
+                    'expressions' => $path_filters,
+                ]),
+            ]);
+        }
+    }
+
+    /**
+     * 解析対象URL条件フィルタをクリアする。
+     */
+    public function clear_include_paths_filter(): void {
+        $this->include_path_filter = null;
+    }
+
+    /**
      * RunReportRequest のパラメータ配列にディメンションフィルタを適用する。
      * 国フィルタ + pagePathフィルタ を AND 結合し、既存のフィルタとも結合する。
      *
@@ -174,6 +230,9 @@ class Gcrev_GA4_Fetcher {
         $filters = [];
         if ( $this->country_filter !== null ) {
             $filters[] = $this->country_filter;
+        }
+        if ( $this->include_path_filter !== null ) {
+            $filters[] = $this->include_path_filter;
         }
         if ( $this->page_path_filter !== null ) {
             $filters[] = $this->page_path_filter;
