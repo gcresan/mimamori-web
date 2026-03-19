@@ -615,6 +615,22 @@ get_header();
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <div style="font-size: 18px; font-weight: 700; color: #2C3E40;">📈 表示回数の推移</div>
             </div>
+            <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; padding: 14px 18px; background: #f8fafa; border-radius: 8px; border: 1px solid #e8eeee;">
+                <div style="display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 220px;">
+                    <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: #568184; flex-shrink: 0; margin-top: 3px;"></span>
+                    <div>
+                        <div style="font-size: 13px; font-weight: 700; color: #2C3E40; margin-bottom: 2px;">検索での表示</div>
+                        <div style="font-size: 12px; color: #777; line-height: 1.6;">Google検索であなたのビジネス情報が表示された回数です。<br>「地域名＋業種」などで検索した際に、検索結果にビジネスプロフィールが出た回数を表します。</div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 220px;">
+                    <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: #4E8A6B; flex-shrink: 0; margin-top: 3px;"></span>
+                    <div>
+                        <div style="font-size: 13px; font-weight: 700; color: #2C3E40; margin-bottom: 2px;">マップでの表示</div>
+                        <div style="font-size: 12px; color: #777; line-height: 1.6;">Googleマップであなたのビジネス情報が表示された回数です。<br>マップ上で周辺を探している人に、お店や会社の情報が表示された回数を表します。</div>
+                    </div>
+                </div>
+            </div>
             <div style="height: 300px;">
                 <canvas id="meo-impressions-chart"></canvas>
             </div>
