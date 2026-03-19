@@ -375,8 +375,9 @@ if ($infographic && is_array($infographic)) {
             $infographic['components'] = $kpi_curr['_cached_score']['components'];
         } else {
             // スコア計算（初回 or キャッシュにスコアが含まれていない場合）
-            $meo_curr_score = $meo_curr ?? (int)($infographic['kpi']['meo']['value'] ?? 0);
-            $meo_prev_score = $meo_prev ?? 0;
+            // MEO: 片方でもキャッシュミスなら両方0にする（非対称比較によるスコア水増し防止）
+            $meo_curr_score = ($meo_curr !== null && $meo_prev !== null) ? $meo_curr : 0;
+            $meo_prev_score = ($meo_curr !== null && $meo_prev !== null) ? $meo_prev : 0;
             $re_curr = ['traffic' => $sess_curr, 'cv' => $cv_curr, 'gsc' => $gsc_curr_val, 'meo' => $meo_curr_score];
             $re_prev = ['traffic' => $sess_prev, 'cv' => $cv_prev, 'gsc' => $gsc_prev_val, 'meo' => $meo_prev_score];
             $re_health = $gcrev_api->calc_monthly_health_score($re_curr, $re_prev, [], $user_id);
@@ -386,7 +387,8 @@ if ($infographic && is_array($infographic)) {
             $infographic['components'] = $re_health['components'];
 
             // スコアをKPIキャッシュに保存（次回以降スコア安定化）
-            if ( !empty($kpi_curr) ) {
+            // ※ kpi_prev が空の場合はスコアをキャッシュしない（prev=0 で水増しスコアが24h持続するのを防止）
+            if ( !empty($kpi_curr) && !empty($kpi_prev) ) {
                 $kpi_curr['_cached_score'] = [
                     'score'      => $re_health['score'],
                     'status'     => $re_health['status'],
@@ -1231,6 +1233,26 @@ foreach ($highlight_items as $highlight):
 
             updateInfoKpi('visits', cS, cS - pS);
             updateInfoKpi('cv', cC, cC - pC);
+
+            // スコアも再計算（prev=0 で計算された水増しスコアを修正）
+            var gscCurr = <?php echo (int)$gsc_curr_val; ?>;
+            var gscPrev = parseInt(String((prev.gsc && prev.gsc.total ? prev.gsc.total.clicks || prev.gsc.total.impressions : 0) || 0).replace(/,/g, ''), 10);
+            var mCurr = <?php echo (int)($meo_curr ?? 0); ?>;
+            var mPrev = <?php echo (int)($meo_prev ?? 0); ?>;
+
+            fetch(restBase + 'dashboard/score', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    curr: { traffic: cS, cv: cC, gsc: gscCurr, meo: mCurr },
+                    prev: { traffic: pS, cv: pC, gsc: gscPrev, meo: mPrev }
+                })
+            }).then(function(r){ return r.json(); }).then(function(scoreRes){
+                if (scoreRes.success && typeof updateScoreGauge === 'function') {
+                    updateScoreGauge(scoreRes.score);
+                }
+            });
         });
     })();
     <?php endif; ?>
