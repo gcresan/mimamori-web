@@ -3533,10 +3533,19 @@ class Gcrev_Insight_API {
             }
         }
 
-        // cache_first 明示指定でキャッシュが空 → 重い API 呼び出しをスキップし空を返す
-        // （呼び出し元の JS 側で非同期フォールバック取得する）
+        // cache_first 明示指定でキャッシュが空 → サーバーサイドで取得を試みる
+        // キャッシュミス時もPHP側でデータ取得しインライン出力を可能にする
+        // ただし last30/prev-month のみ（長期間はJS非同期に委任）
         if ( $cache_first ) {
-            return [];
+            if ( in_array($period, ['last30', 'prev-month'], true) ) {
+                // 短期間はサーバーサイドで取得してキャッシュに保存
+                file_put_contents('/tmp/gcrev_dash_debug.log',
+                    date('Y-m-d H:i:s') . " [cache_first] Cache miss for user={$user_id}, period={$period}, fetching server-side\n",
+                    FILE_APPEND
+                );
+            } else {
+                return [];
+            }
         }
 
         // 既存メソッドでデータ取得（WP_REST_Requestをモック）

@@ -324,8 +324,8 @@ if ($infographic && is_array($infographic)) {
         // （キャッシュなし時はJS非同期で取得→スコアも非同期更新）
         $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id, 1);
 
-        // 比較期間のKPI（currがキャッシュヒットした場合のみ取得）
-        // cache_first方式: キャッシュあれば即返却、なければ空（JS非同期に委任）
+        // 比較期間のKPI（currが取得できた場合のみ）
+        // まずキャッシュを確認、なければサーバーサイドで取得
         $kpi_prev = [];
         if (!empty($kpi_curr)) {
             $exclude_foreign_prev = get_user_meta( $user_id, 'report_exclude_foreign', true );
@@ -334,16 +334,41 @@ if ($infographic && is_array($infographic)) {
             $prev_cached    = get_transient( $prev_cache_key );
             if ( $prev_cached !== false && is_array( $prev_cached ) ) {
                 $kpi_prev = $prev_cached;
+            } else {
+                // キャッシュミス: サーバーサイドで取得してキャッシュに保存
+                $kpi_prev = $gcrev_api->get_dashboard_kpi_by_dates(
+                    $last30_comp['start'], $last30_comp['end'], $user_id
+                );
             }
-            // キャッシュミス時: $kpi_prev は空 → diffは0表示、JS非同期で後から更新
         }
 
-        // --- MEO直近30日（cache_first方式: キャッシュがあれば即、なければJS非同期へ）---
+        // --- MEO直近30日 ---
         $meo_cache_curr = get_transient("gcrev_meo_perf_{$user_id}_{$last30['start']}_{$last30['end']}");
         $meo_cache_prev = get_transient("gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}");
-        $meo_curr = ($meo_cache_curr !== false && is_array($meo_cache_curr))
+
+        // MEOキャッシュミス時: REST API経由でサーバーサイド取得
+        if ($meo_cache_curr === false || $meo_cache_prev === false) {
+            $meo_location_id = get_user_meta($user_id, '_gcrev_gbp_location_id', true);
+            if (!empty($meo_location_id) && strpos($meo_location_id, 'pending_') !== 0) {
+                try {
+                    $meo_request = new WP_REST_Request('GET', '/gcrev/v1/meo/dashboard');
+                    $meo_request->set_param('period', 'last30');
+                    // 内部メソッド呼び出し — REST経由でキャッシュ保存される
+                    $meo_response = $gcrev_api->rest_get_meo_dashboard($meo_request);
+                    $meo_result   = $meo_response->get_data();
+                    if (!empty($meo_result['success'])) {
+                        $meo_cache_curr = $meo_result['metrics'] ?? [];
+                        $meo_cache_prev = $meo_result['metrics_previous'] ?? [];
+                    }
+                } catch (\Throwable $e) {
+                    // MEO取得失敗はnullのまま（JSフォールバック）
+                }
+            }
+        }
+
+        $meo_curr = (is_array($meo_cache_curr) && $meo_cache_curr !== false)
             ? (int)($meo_cache_curr['total_impressions'] ?? 0) : null;
-        $meo_prev = ($meo_cache_prev !== false && is_array($meo_cache_prev))
+        $meo_prev = (is_array($meo_cache_prev) && $meo_cache_prev !== false)
             ? (int)($meo_cache_prev['total_impressions'] ?? 0) : null;
 
         // --- KPI値構築 ---
