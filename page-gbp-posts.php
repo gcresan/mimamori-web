@@ -134,6 +134,16 @@ wp_enqueue_media();
 .gp-toast.error { background:#dc2626; }
 .gp-toast.show { opacity:1; }
 
+/* Progress bar */
+.gp-progress-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.5); z-index:10002; display:flex; align-items:center; justify-content:center; }
+.gp-progress-box { background:#fff; border-radius:16px; padding:32px 40px; min-width:360px; max-width:480px; text-align:center; }
+.gp-progress-title { font-size:16px; font-weight:700; color:#1e293b; margin-bottom:16px; }
+.gp-progress-bar-wrap { background:#e2e8f0; border-radius:8px; height:12px; overflow:hidden; margin-bottom:12px; }
+.gp-progress-bar-fill { height:100%; background:linear-gradient(90deg, #3b6b5e, #16a34a); border-radius:8px; transition:width .4s ease; }
+.gp-progress-text { font-size:13px; color:#475569; margin-bottom:4px; }
+.gp-progress-detail { font-size:11px; color:#94a3b8; }
+.gp-progress-done { margin-top:16px; }
+
 /* AI Image badges */
 .gp-ai-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; margin-left:6px; }
 .gp-ai-badge.ai-done { background:#dcfce7; color:#15803d; }
@@ -474,6 +484,21 @@ wp_enqueue_media();
 
 <!-- Toast -->
 <div class="gp-toast" id="gpToast"></div>
+
+<!-- Progress Modal -->
+<div class="gp-progress-overlay" id="progressOverlay" style="display:none;">
+    <div class="gp-progress-box">
+        <div class="gp-progress-title" id="progressTitle">🖼 AI画像一括生成中...</div>
+        <div class="gp-progress-bar-wrap">
+            <div class="gp-progress-bar-fill" id="progressBarFill" style="width:0%"></div>
+        </div>
+        <div class="gp-progress-text" id="progressText">0 / 0 件完了</div>
+        <div class="gp-progress-detail" id="progressDetail">成功: 0 / 失敗: 0</div>
+        <div class="gp-progress-done" id="progressDone" style="display:none;">
+            <button class="gp-btn gp-btn-primary" id="progressCloseBtn">閉じる</button>
+        </div>
+    </div>
+</div>
 
 <!-- Lightbox -->
 <div class="gp-lightbox" id="gpLightbox" style="display:none;">
@@ -1157,27 +1182,97 @@ wp_enqueue_media();
         });
     }
 
-    // AI画像一括生成
+    // AI画像一括生成（進捗バー付きチェーン処理）
+    var bulkState = { totalTarget: 0, completed: 0, succeeded: 0, failed: 0, running: false };
+
     document.getElementById('bulkGenImgBtn').addEventListener('click', function() {
-        var btn = this;
-        if (!confirm('画像未設定の投稿に対してAI画像を一括生成しますか？（最大5件ずつ処理）')) return;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-sm"></span> 生成中...';
+        if (bulkState.running) return;
+        if (!confirm('画像未設定の投稿に対してAI画像を一括生成しますか？\n（3件ずつ処理します。完了まで画面を閉じないでください）')) return;
+        startBulkGeneration();
+    });
+
+    function startBulkGeneration() {
+        bulkState = { totalTarget: 0, completed: 0, succeeded: 0, failed: 0, running: true };
+        document.getElementById('bulkGenImgBtn').disabled = true;
+
+        // 進捗モーダル表示
+        var overlay = document.getElementById('progressOverlay');
+        document.getElementById('progressTitle').textContent = '🖼 AI画像一括生成中...';
+        document.getElementById('progressBarFill').style.width = '0%';
+        document.getElementById('progressText').textContent = '準備中...';
+        document.getElementById('progressDetail').textContent = '';
+        document.getElementById('progressDone').style.display = 'none';
+        overlay.style.display = 'flex';
+
+        // 最初のチャンクを実行
+        runBulkChunk();
+    }
+
+    function runBulkChunk() {
         fetchJson(restBase + 'meo/posts/bulk-generate-images', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chunk_size: 5 })
+            body: JSON.stringify({ chunk_size: 3 })
         }).then(function(data) {
-            btn.disabled = false;
-            btn.textContent = '🖼 AI画像一括生成';
-            showToast(data.message || '完了しました。', data.success ? 'success' : 'error');
-            loadSummary();
-            loadPosts();
-        }).catch(function() {
-            btn.disabled = false;
-            btn.textContent = '🖼 AI画像一括生成';
-            showToast('通信エラーが発生しました。', 'error');
+            if (!data.success) {
+                finishBulkGeneration('エラーが発生しました: ' + (data.message || ''));
+                return;
+            }
+
+            // 初回で全体件数を記録
+            if (bulkState.totalTarget === 0 && data.total > 0) {
+                bulkState.totalTarget = data.total;
+            }
+
+            bulkState.completed += data.processed;
+            bulkState.succeeded += data.succeeded;
+            bulkState.failed += data.failed;
+
+            updateProgressUI();
+
+            if (data.has_more && data.remaining > 0) {
+                // 次のチャンクを少し待ってから実行（API レート制限対策）
+                setTimeout(runBulkChunk, 2000);
+            } else {
+                finishBulkGeneration();
+            }
+        }).catch(function(err) {
+            finishBulkGeneration('通信エラーが発生しました。');
         });
+    }
+
+    function updateProgressUI() {
+        var total = bulkState.totalTarget || 1;
+        var pct = Math.min(100, Math.round((bulkState.completed / total) * 100));
+
+        document.getElementById('progressBarFill').style.width = pct + '%';
+        document.getElementById('progressText').textContent = bulkState.completed + ' / ' + total + ' 件完了';
+        document.getElementById('progressDetail').textContent = '成功: ' + bulkState.succeeded + ' / 失敗: ' + bulkState.failed;
+    }
+
+    function finishBulkGeneration(errorMsg) {
+        bulkState.running = false;
+        document.getElementById('bulkGenImgBtn').disabled = false;
+        document.getElementById('bulkGenImgBtn').textContent = '🖼 AI画像一括生成';
+
+        if (errorMsg) {
+            document.getElementById('progressTitle').textContent = '⚠ エラー';
+            document.getElementById('progressDetail').textContent = errorMsg;
+        } else {
+            var pct = bulkState.totalTarget > 0 ? 100 : 0;
+            document.getElementById('progressBarFill').style.width = pct + '%';
+            document.getElementById('progressTitle').textContent = '✅ 一括生成完了';
+            document.getElementById('progressText').textContent = bulkState.completed + ' / ' + bulkState.totalTarget + ' 件完了';
+            document.getElementById('progressDetail').textContent = '成功: ' + bulkState.succeeded + ' / 失敗: ' + bulkState.failed;
+        }
+
+        document.getElementById('progressDone').style.display = 'block';
+        loadSummary();
+        loadPosts();
+    }
+
+    document.getElementById('progressCloseBtn').addEventListener('click', function() {
+        document.getElementById('progressOverlay').style.display = 'none';
     });
 
     // ===== Brand Settings =====

@@ -16045,24 +16045,19 @@ PROMPT;
         global $wpdb;
         $user_id    = get_current_user_id();
         $table      = $wpdb->prefix . 'gcrev_gbp_posts';
-        $chunk_size = min( 5, max( 1, absint( $request->get_param( 'chunk_size' ) ?: 5 ) ) );
+        $chunk_size = min( 3, max( 1, absint( $request->get_param( 'chunk_size' ) ?: 3 ) ) );
 
-        $lock_key = "gcrev_lock_bulk_image_{$user_id}";
-        if ( get_transient( $lock_key ) ) {
-            return new \WP_REST_Response( [ 'success' => false, 'message' => '一括生成が実行中です。' ], 429 );
-        }
-        set_transient( $lock_key, 1, 300 );
-
-        // 画像未生成の投稿を取得
-        $posts = $wpdb->get_results( $wpdb->prepare(
-            "SELECT id FROM {$table} WHERE user_id = %d AND (image_url IS NULL OR image_url = '') AND ai_image_status NOT IN ('generating','manual') ORDER BY scheduled_at ASC, created_at ASC LIMIT %d",
-            $user_id, $chunk_size
-        ), ARRAY_A );
-
-        $remaining = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND (image_url IS NULL OR image_url = '') AND ai_image_status NOT IN ('generating','manual')",
+        // 全体の未生成件数を先に取得
+        $total_remaining = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND (image_url IS NULL OR image_url = '') AND ai_image_status NOT IN ('generating','manual','done')",
             $user_id
         ) );
+
+        // このチャンクで処理する投稿を取得
+        $posts = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id FROM {$table} WHERE user_id = %d AND (image_url IS NULL OR image_url = '') AND ai_image_status NOT IN ('generating','manual','done') ORDER BY scheduled_at ASC, created_at ASC LIMIT %d",
+            $user_id, $chunk_size
+        ), ARRAY_A );
 
         $succeeded = 0;
         $failed    = 0;
@@ -16074,19 +16069,24 @@ PROMPT;
             } else {
                 $failed++;
             }
-            sleep( 2 );
+            // API レート制限対策: 各生成間に5秒待機
+            if ( next( $posts ) !== false ) {
+                sleep( 5 );
+            }
         }
 
-        delete_transient( $lock_key );
-
         $processed = $succeeded + $failed;
+        $after_remaining = max( 0, $total_remaining - $processed );
+
         return new \WP_REST_Response( [
-            'success'   => true,
-            'processed' => $processed,
-            'succeeded' => $succeeded,
-            'failed'    => $failed,
-            'remaining' => max( 0, $remaining - $processed ),
-            'message'   => "{$succeeded}件生成、{$failed}件失敗。残り" . max( 0, $remaining - $processed ) . "件。",
+            'success'         => true,
+            'processed'       => $processed,
+            'succeeded'       => $succeeded,
+            'failed'          => $failed,
+            'total'           => $total_remaining,
+            'remaining'       => $after_remaining,
+            'has_more'        => $after_remaining > 0,
+            'message'         => "{$succeeded}件生成、{$failed}件失敗。残り{$after_remaining}件。",
         ], 200 );
     }
 
