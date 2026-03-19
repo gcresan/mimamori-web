@@ -486,6 +486,63 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== GBP投稿管理 =====
+        register_rest_route('gcrev/v1', '/meo/posts', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_gbp_posts' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/summary', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_gbp_posts_summary' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_create_gbp_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/csv-template', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_csv_template' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/csv-import', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_import_gbp_posts_csv' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_update_gbp_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)/delete', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_delete_gbp_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)/duplicate', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_duplicate_gbp_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)/post-now', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_post_gbp_now' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)/retry', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_retry_gbp_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)/cancel', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_cancel_gbp_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== v2ダッシュボード用レポート生成 =====
         register_rest_route('gcrev/v1', '/report/generate-manual', [
             'methods'             => 'POST',
@@ -14756,6 +14813,773 @@ PROMPT;
         update_user_meta( $user_id, '_gcrev_review_ai_settings', wp_json_encode( $settings, JSON_UNESCAPED_UNICODE ) );
 
         return new \WP_REST_Response( [ 'success' => true ], 200 );
+    }
+
+    // =========================================================
+    // GBP 投稿管理 — API メソッド
+    // =========================================================
+
+    /**
+     * GBP localPosts 用リクエストボディを組み立てる
+     */
+    private function gbp_build_post_body( array $post ): array {
+        $body = [
+            'languageCode' => 'ja',
+            'topicType'    => $post['topic_type'] ?: 'STANDARD',
+            'summary'      => $post['summary'],
+        ];
+
+        // CTA
+        if ( ! empty( $post['cta_type'] ) ) {
+            $body['callToAction'] = [
+                'actionType' => $post['cta_type'],
+                'url'        => $post['cta_url'] ?? '',
+            ];
+        }
+
+        // 画像
+        $image_url = $post['image_url'] ?? '';
+        if ( empty( $image_url ) && ! empty( $post['image_attachment_id'] ) ) {
+            $image_url = wp_get_attachment_url( (int) $post['image_attachment_id'] );
+        }
+        if ( ! empty( $image_url ) ) {
+            $body['media'] = [
+                [
+                    'mediaFormat' => 'PHOTO',
+                    'sourceUrl'   => $image_url,
+                ],
+            ];
+        }
+
+        // イベント
+        if ( $post['topic_type'] === 'EVENT' && ! empty( $post['event_title'] ) ) {
+            $start = new \DateTimeImmutable( $post['event_start'] ?? 'now', wp_timezone() );
+            $end   = ! empty( $post['event_end'] )
+                ? new \DateTimeImmutable( $post['event_end'], wp_timezone() )
+                : $start->modify( '+1 day' );
+
+            $body['event'] = [
+                'title'    => $post['event_title'],
+                'schedule' => [
+                    'startDate' => [
+                        'year'  => (int) $start->format( 'Y' ),
+                        'month' => (int) $start->format( 'n' ),
+                        'day'   => (int) $start->format( 'j' ),
+                    ],
+                    'startTime' => [
+                        'hours'   => (int) $start->format( 'G' ),
+                        'minutes' => (int) $start->format( 'i' ),
+                    ],
+                    'endDate' => [
+                        'year'  => (int) $end->format( 'Y' ),
+                        'month' => (int) $end->format( 'n' ),
+                        'day'   => (int) $end->format( 'j' ),
+                    ],
+                    'endTime' => [
+                        'hours'   => (int) $end->format( 'G' ),
+                        'minutes' => (int) $end->format( 'i' ),
+                    ],
+                ],
+            ];
+        }
+
+        // オファー
+        if ( $post['topic_type'] === 'OFFER' ) {
+            $offer = [];
+            if ( ! empty( $post['cta_url'] ) ) {
+                $offer['redeemOnlineUrl'] = $post['cta_url'];
+            }
+            if ( ! empty( $offer ) ) {
+                $body['offer'] = $offer;
+            }
+        }
+
+        return $body;
+    }
+
+    /**
+     * GBP にローカル投稿を作成
+     */
+    private function gbp_create_local_post( int $user_id, array $post_data ): array {
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( ! $access_token ) {
+            return [ 'success' => false, 'gbp_post_name' => '', 'message' => 'アクセストークンの取得に失敗しました。GBP連携を確認してください。' ];
+        }
+
+        $account_name = $this->gbp_get_account_for_location( $user_id );
+        $location_id  = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( ! $account_name || ! $location_id ) {
+            return [ 'success' => false, 'gbp_post_name' => '', 'message' => 'GBPロケーション情報が見つかりません。' ];
+        }
+
+        $url  = "https://mybusiness.googleapis.com/v4/{$account_name}/{$location_id}/localPosts";
+        $body = $this->gbp_build_post_body( $post_data );
+
+        file_put_contents( '/tmp/gcrev_gbp_debug.log',
+            date( 'Y-m-d H:i:s' ) . " create localPost: url={$url}, body=" . substr( wp_json_encode( $body, JSON_UNESCAPED_UNICODE ), 0, 500 ) . "\n",
+            FILE_APPEND
+        );
+
+        $response = wp_remote_post( $url, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type'  => 'application/json; charset=utf-8',
+            ],
+            'body'    => wp_json_encode( $body, JSON_UNESCAPED_UNICODE ),
+            'timeout' => 30,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            $err = $response->get_error_message();
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " create localPost WP_Error: {$err}\n", FILE_APPEND );
+            return [ 'success' => false, 'gbp_post_name' => '', 'message' => "通信エラー: {$err}" ];
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $rbody = wp_remote_retrieve_body( $response );
+
+        file_put_contents( '/tmp/gcrev_gbp_debug.log',
+            date( 'Y-m-d H:i:s' ) . " create localPost HTTP {$code}: " . substr( $rbody, 0, 500 ) . "\n",
+            FILE_APPEND
+        );
+
+        if ( $code < 200 || $code >= 300 ) {
+            $data = json_decode( $rbody, true );
+            $msg  = $data['error']['message'] ?? "HTTP {$code}";
+            return [ 'success' => false, 'gbp_post_name' => '', 'message' => "投稿に失敗しました: {$msg}" ];
+        }
+
+        $data = json_decode( $rbody, true );
+        return [
+            'success'       => true,
+            'gbp_post_name' => $data['name'] ?? '',
+            'message'       => '',
+        ];
+    }
+
+    /**
+     * GBP のローカル投稿を削除
+     */
+    private function gbp_delete_local_post( int $user_id, string $gbp_post_name ): array {
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( ! $access_token ) {
+            return [ 'success' => false, 'message' => 'アクセストークンの取得に失敗しました。' ];
+        }
+
+        $url = "https://mybusiness.googleapis.com/v4/{$gbp_post_name}";
+        $response = wp_remote_request( $url, [
+            'method'  => 'DELETE',
+            'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+            'timeout' => 30,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            return [ 'success' => false, 'message' => '通信エラー: ' . $response->get_error_message() ];
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( $code >= 200 && $code < 300 ) {
+            return [ 'success' => true, 'message' => '' ];
+        }
+
+        $rbody = wp_remote_retrieve_body( $response );
+        $data  = json_decode( $rbody, true );
+        return [ 'success' => false, 'message' => 'GBP削除エラー: ' . ( $data['error']['message'] ?? "HTTP {$code}" ) ];
+    }
+
+    /**
+     * GBP のローカル投稿を更新
+     */
+    private function gbp_update_local_post( int $user_id, string $gbp_post_name, array $post_data ): array {
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( ! $access_token ) {
+            return [ 'success' => false, 'gbp_post_name' => '', 'message' => 'アクセストークンの取得に失敗しました。' ];
+        }
+
+        $body = $this->gbp_build_post_body( $post_data );
+        $url  = "https://mybusiness.googleapis.com/v4/{$gbp_post_name}?updateMask=summary,callToAction,media,event";
+
+        $response = wp_remote_request( $url, [
+            'method'  => 'PATCH',
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type'  => 'application/json; charset=utf-8',
+            ],
+            'body'    => wp_json_encode( $body, JSON_UNESCAPED_UNICODE ),
+            'timeout' => 30,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            return [ 'success' => false, 'gbp_post_name' => $gbp_post_name, 'message' => '通信エラー: ' . $response->get_error_message() ];
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( $code >= 200 && $code < 300 ) {
+            return [ 'success' => true, 'gbp_post_name' => $gbp_post_name, 'message' => '' ];
+        }
+
+        $rbody = wp_remote_retrieve_body( $response );
+        $data  = json_decode( $rbody, true );
+        return [ 'success' => false, 'gbp_post_name' => $gbp_post_name, 'message' => '更新エラー: ' . ( $data['error']['message'] ?? "HTTP {$code}" ) ];
+    }
+
+    // =========================================================
+    // GBP 投稿管理 — REST コールバック
+    // =========================================================
+
+    /**
+     * 投稿一覧取得
+     */
+    public function rest_get_gbp_posts( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id  = get_current_user_id();
+        $table    = $wpdb->prefix . 'gcrev_gbp_posts';
+        $status   = sanitize_text_field( $request->get_param( 'status' ) ?: 'all' );
+        $sort     = sanitize_text_field( $request->get_param( 'sort' ) ?: 'newest' );
+        $page     = max( 1, absint( $request->get_param( 'page' ) ?: 1 ) );
+        $per_page = min( 50, max( 1, absint( $request->get_param( 'per_page' ) ?: 20 ) ) );
+        $offset   = ( $page - 1 ) * $per_page;
+
+        $where = $wpdb->prepare( "WHERE user_id = %d", $user_id );
+        if ( $status !== 'all' && in_array( $status, [ 'draft', 'scheduled', 'posted', 'failed', 'cancelled' ], true ) ) {
+            $where .= $wpdb->prepare( " AND status = %s", $status );
+        }
+
+        $order = 'ORDER BY created_at DESC';
+        if ( $sort === 'oldest' ) {
+            $order = 'ORDER BY created_at ASC';
+        } elseif ( $sort === 'scheduled_asc' ) {
+            $order = 'ORDER BY COALESCE(scheduled_at, created_at) ASC';
+        }
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} {$where}" );
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $posts = $wpdb->get_results(
+            $wpdb->prepare( "SELECT * FROM {$table} {$where} {$order} LIMIT %d OFFSET %d", $per_page, $offset ),
+            ARRAY_A
+        );
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'posts'   => $posts ?: [],
+            'total'   => $total,
+            'pages'   => (int) ceil( $total / $per_page ),
+            'page'    => $page,
+        ], 200 );
+    }
+
+    /**
+     * 投稿ステータス別件数
+     */
+    public function rest_get_gbp_posts_summary( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT status, COUNT(*) as cnt FROM {$table} WHERE user_id = %d GROUP BY status", $user_id
+        ), ARRAY_A );
+
+        $summary = [ 'total' => 0, 'draft' => 0, 'scheduled' => 0, 'posted' => 0, 'failed' => 0, 'cancelled' => 0 ];
+        foreach ( $rows as $row ) {
+            $summary[ $row['status'] ] = (int) $row['cnt'];
+            $summary['total'] += (int) $row['cnt'];
+        }
+
+        return new \WP_REST_Response( [ 'success' => true, 'summary' => $summary ], 200 );
+    }
+
+    /**
+     * 投稿を新規作成
+     */
+    public function rest_create_gbp_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $now     = current_time( 'mysql' );
+
+        // 二重送信防止
+        $lock_key = "gcrev_lock_gbp_post_{$user_id}";
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '処理中です。しばらくお待ちください。' ], 429 );
+        }
+        set_transient( $lock_key, 1, 10 );
+
+        $action = sanitize_text_field( $request->get_param( 'action' ) ?: 'draft' );
+        $data   = [
+            'user_id'            => $user_id,
+            'title'              => sanitize_text_field( $request->get_param( 'title' ) ?: '' ),
+            'summary'            => sanitize_textarea_field( $request->get_param( 'summary' ) ?: '' ),
+            'topic_type'         => sanitize_text_field( $request->get_param( 'topic_type' ) ?: 'STANDARD' ),
+            'cta_type'           => sanitize_text_field( $request->get_param( 'cta_type' ) ?: '' ) ?: null,
+            'cta_url'            => esc_url_raw( $request->get_param( 'cta_url' ) ?: '' ) ?: null,
+            'event_title'        => sanitize_text_field( $request->get_param( 'event_title' ) ?: '' ) ?: null,
+            'event_start'        => sanitize_text_field( $request->get_param( 'event_start' ) ?: '' ) ?: null,
+            'event_end'          => sanitize_text_field( $request->get_param( 'event_end' ) ?: '' ) ?: null,
+            'image_url'          => esc_url_raw( $request->get_param( 'image_url' ) ?: '' ) ?: null,
+            'image_attachment_id' => absint( $request->get_param( 'image_attachment_id' ) ?: 0 ) ?: null,
+            'status'             => 'draft',
+            'scheduled_at'       => null,
+            'created_at'         => $now,
+            'updated_at'         => $now,
+        ];
+
+        if ( empty( $data['summary'] ) ) {
+            delete_transient( $lock_key );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿本文は必須です。' ], 400 );
+        }
+        if ( mb_strlen( $data['summary'] ) > 1500 ) {
+            delete_transient( $lock_key );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿本文は1500文字以内にしてください。' ], 400 );
+        }
+
+        // 画像URLをattachment_idから解決
+        if ( empty( $data['image_url'] ) && ! empty( $data['image_attachment_id'] ) ) {
+            $data['image_url'] = wp_get_attachment_url( $data['image_attachment_id'] ) ?: null;
+        }
+
+        if ( $action === 'schedule' ) {
+            $scheduled_at = sanitize_text_field( $request->get_param( 'scheduled_at' ) ?: '' );
+            if ( empty( $scheduled_at ) ) {
+                delete_transient( $lock_key );
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '予約日時を指定してください。' ], 400 );
+            }
+            $data['status']       = 'scheduled';
+            $data['scheduled_at'] = $scheduled_at;
+        }
+
+        if ( $action === 'post_now' ) {
+            // 先にDBに保存してからGBPに投稿
+            $data['status'] = 'scheduled';
+            $wpdb->insert( $table, $data );
+            $post_id = $wpdb->insert_id;
+
+            $result = $this->gbp_create_local_post( $user_id, $data );
+            if ( $result['success'] ) {
+                $wpdb->update( $table, [
+                    'status'        => 'posted',
+                    'posted_at'     => current_time( 'mysql' ),
+                    'gbp_post_name' => $result['gbp_post_name'],
+                    'updated_at'    => current_time( 'mysql' ),
+                ], [ 'id' => $post_id ] );
+            } else {
+                $wpdb->update( $table, [
+                    'status'        => 'failed',
+                    'error_message' => $result['message'],
+                    'updated_at'    => current_time( 'mysql' ),
+                ], [ 'id' => $post_id ] );
+            }
+
+            delete_transient( $lock_key );
+            return new \WP_REST_Response( [
+                'success' => $result['success'],
+                'post_id' => $post_id,
+                'message' => $result['success'] ? '投稿しました。' : $result['message'],
+            ], $result['success'] ? 200 : 200 );
+        }
+
+        // draft or schedule
+        $wpdb->insert( $table, $data );
+        $post_id = $wpdb->insert_id;
+
+        delete_transient( $lock_key );
+        return new \WP_REST_Response( [
+            'success' => true,
+            'post_id' => $post_id,
+            'message' => $action === 'schedule' ? '予約投稿を登録しました。' : '下書きを保存しました。',
+        ], 200 );
+    }
+
+    /**
+     * 投稿を更新
+     */
+    public function rest_update_gbp_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $post_id = absint( $request['id'] );
+
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d", $post_id, $user_id
+        ), ARRAY_A );
+        if ( ! $existing ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿が見つかりません。' ], 404 );
+        }
+
+        $action = sanitize_text_field( $request->get_param( 'action' ) ?: 'save' );
+        $update = [
+            'title'              => sanitize_text_field( $request->get_param( 'title' ) ?: '' ),
+            'summary'            => sanitize_textarea_field( $request->get_param( 'summary' ) ?: '' ),
+            'topic_type'         => sanitize_text_field( $request->get_param( 'topic_type' ) ?: 'STANDARD' ),
+            'cta_type'           => sanitize_text_field( $request->get_param( 'cta_type' ) ?: '' ) ?: null,
+            'cta_url'            => esc_url_raw( $request->get_param( 'cta_url' ) ?: '' ) ?: null,
+            'event_title'        => sanitize_text_field( $request->get_param( 'event_title' ) ?: '' ) ?: null,
+            'event_start'        => sanitize_text_field( $request->get_param( 'event_start' ) ?: '' ) ?: null,
+            'event_end'          => sanitize_text_field( $request->get_param( 'event_end' ) ?: '' ) ?: null,
+            'image_url'          => esc_url_raw( $request->get_param( 'image_url' ) ?: '' ) ?: null,
+            'image_attachment_id' => absint( $request->get_param( 'image_attachment_id' ) ?: 0 ) ?: null,
+            'updated_at'         => current_time( 'mysql' ),
+        ];
+
+        if ( empty( $update['summary'] ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿本文は必須です。' ], 400 );
+        }
+
+        // 画像URLをattachment_idから解決
+        if ( empty( $update['image_url'] ) && ! empty( $update['image_attachment_id'] ) ) {
+            $update['image_url'] = wp_get_attachment_url( $update['image_attachment_id'] ) ?: null;
+        }
+
+        if ( $action === 'schedule' ) {
+            $update['status']       = 'scheduled';
+            $update['scheduled_at'] = sanitize_text_field( $request->get_param( 'scheduled_at' ) ?: '' );
+            $update['retry_count']  = 0;
+            $update['error_message'] = null;
+        } elseif ( $action === 'draft' ) {
+            $update['status'] = 'draft';
+        }
+
+        $wpdb->update( $table, $update, [ 'id' => $post_id ] );
+
+        // 投稿済みの場合はGBPも更新
+        if ( $existing['status'] === 'posted' && ! empty( $existing['gbp_post_name'] ) && $action === 'save' ) {
+            $merged = array_merge( $existing, $update );
+            $this->gbp_update_local_post( $user_id, $existing['gbp_post_name'], $merged );
+        }
+
+        return new \WP_REST_Response( [ 'success' => true, 'message' => '更新しました。' ], 200 );
+    }
+
+    /**
+     * 投稿を削除
+     */
+    public function rest_delete_gbp_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $post_id = absint( $request['id'] );
+
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d", $post_id, $user_id
+        ), ARRAY_A );
+        if ( ! $existing ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿が見つかりません。' ], 404 );
+        }
+
+        // GBPに投稿済みならGBPからも削除
+        if ( $existing['status'] === 'posted' && ! empty( $existing['gbp_post_name'] ) ) {
+            $this->gbp_delete_local_post( $user_id, $existing['gbp_post_name'] );
+        }
+
+        $wpdb->delete( $table, [ 'id' => $post_id ] );
+        return new \WP_REST_Response( [ 'success' => true, 'message' => '削除しました。' ], 200 );
+    }
+
+    /**
+     * 投稿を複製（下書きとして）
+     */
+    public function rest_duplicate_gbp_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $post_id = absint( $request['id'] );
+
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d", $post_id, $user_id
+        ), ARRAY_A );
+        if ( ! $existing ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿が見つかりません。' ], 404 );
+        }
+
+        $now = current_time( 'mysql' );
+        $wpdb->insert( $table, [
+            'user_id'             => $user_id,
+            'title'               => $existing['title'] . '（コピー）',
+            'summary'             => $existing['summary'],
+            'topic_type'          => $existing['topic_type'],
+            'cta_type'            => $existing['cta_type'],
+            'cta_url'             => $existing['cta_url'],
+            'event_title'         => $existing['event_title'],
+            'event_start'         => $existing['event_start'],
+            'event_end'           => $existing['event_end'],
+            'image_url'           => $existing['image_url'],
+            'image_attachment_id' => $existing['image_attachment_id'],
+            'status'              => 'draft',
+            'created_at'          => $now,
+            'updated_at'          => $now,
+        ] );
+
+        return new \WP_REST_Response( [ 'success' => true, 'post_id' => $wpdb->insert_id, 'message' => '複製しました。' ], 200 );
+    }
+
+    /**
+     * 今すぐ投稿
+     */
+    public function rest_post_gbp_now( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $post_id = absint( $request['id'] );
+
+        $lock_key = "gcrev_lock_gbp_post_{$user_id}";
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '処理中です。' ], 429 );
+        }
+        set_transient( $lock_key, 1, 10 );
+
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d", $post_id, $user_id
+        ), ARRAY_A );
+        if ( ! $existing ) {
+            delete_transient( $lock_key );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿が見つかりません。' ], 404 );
+        }
+
+        $result = $this->gbp_create_local_post( $user_id, $existing );
+        if ( $result['success'] ) {
+            $wpdb->update( $table, [
+                'status'        => 'posted',
+                'posted_at'     => current_time( 'mysql' ),
+                'gbp_post_name' => $result['gbp_post_name'],
+                'error_message' => null,
+                'updated_at'    => current_time( 'mysql' ),
+            ], [ 'id' => $post_id ] );
+        } else {
+            $wpdb->update( $table, [
+                'status'        => 'failed',
+                'error_message' => $result['message'],
+                'updated_at'    => current_time( 'mysql' ),
+            ], [ 'id' => $post_id ] );
+        }
+
+        delete_transient( $lock_key );
+        return new \WP_REST_Response( [
+            'success' => $result['success'],
+            'message' => $result['success'] ? '投稿しました。' : $result['message'],
+        ], 200 );
+    }
+
+    /**
+     * 失敗投稿を再実行
+     */
+    public function rest_retry_gbp_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $post_id = absint( $request['id'] );
+
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d AND status = 'failed'", $post_id, $user_id
+        ), ARRAY_A );
+        if ( ! $existing ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '再実行可能な投稿が見つかりません。' ], 404 );
+        }
+
+        $wpdb->update( $table, [
+            'status'        => 'scheduled',
+            'scheduled_at'  => current_time( 'mysql' ),
+            'retry_count'   => 0,
+            'error_message' => null,
+            'updated_at'    => current_time( 'mysql' ),
+        ], [ 'id' => $post_id ] );
+
+        return new \WP_REST_Response( [ 'success' => true, 'message' => '再投稿をスケジュールしました。' ], 200 );
+    }
+
+    /**
+     * 予約をキャンセル
+     */
+    public function rest_cancel_gbp_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $post_id = absint( $request['id'] );
+
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d AND status = 'scheduled'", $post_id, $user_id
+        ), ARRAY_A );
+        if ( ! $existing ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'キャンセル可能な予約が見つかりません。' ], 404 );
+        }
+
+        $wpdb->update( $table, [
+            'status'     => 'cancelled',
+            'updated_at' => current_time( 'mysql' ),
+        ], [ 'id' => $post_id ] );
+
+        return new \WP_REST_Response( [ 'success' => true, 'message' => '予約をキャンセルしました。' ], 200 );
+    }
+
+    /**
+     * CSVテンプレートダウンロード
+     */
+    public function rest_get_csv_template( \WP_REST_Request $request ): \WP_REST_Response {
+        $bom     = "\xEF\xBB\xBF";
+        $header  = "投稿日時,種類,本文,CTAタイプ,CTAリンク,イベントタイトル,イベント開始,イベント終了,画像URL";
+        $example1 = "2026-04-01 10:00,,今週のおすすめ情報です！,LEARN_MORE,https://example.com,,,,";
+        $example2 = "2026-04-08 10:00,EVENT,春のイベント開催！,,,春祭り,2026-04-08 10:00,2026-04-08 18:00,";
+        $csv = $bom . $header . "\n" . $example1 . "\n" . $example2 . "\n";
+
+        header( 'Content-Type: text/csv; charset=UTF-8' );
+        header( 'Content-Disposition: attachment; filename="gbp-posts-template.csv"' );
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        echo $csv;
+        exit;
+    }
+
+    /**
+     * CSV一括取込
+     */
+    public function rest_import_gbp_posts_csv( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $preview = (bool) $request->get_param( 'preview' );
+
+        $files = $request->get_file_params();
+        if ( empty( $files['file']['tmp_name'] ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'CSVファイルを選択してください。' ], 400 );
+        }
+
+        $content = file_get_contents( $files['file']['tmp_name'] );
+        // BOM除去
+        $content = ltrim( $content, "\xEF\xBB\xBF" );
+        $lines   = explode( "\n", str_replace( "\r\n", "\n", $content ) );
+
+        if ( count( $lines ) < 2 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'CSVにデータ行がありません。' ], 400 );
+        }
+
+        // ヘッダースキップ
+        array_shift( $lines );
+
+        $valid_cta_types  = [ '', 'BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL' ];
+        $valid_topic_types = [ '', 'STANDARD', 'EVENT', 'OFFER' ];
+        $rows    = [];
+        $errors  = [];
+        $line_no = 1;
+        $now     = current_time( 'mysql' );
+
+        foreach ( $lines as $line ) {
+            $line_no++;
+            $line = trim( $line );
+            if ( $line === '' ) continue;
+
+            $cols = str_getcsv( $line );
+            if ( count( $cols ) < 3 ) {
+                $errors[] = [ 'line' => $line_no, 'reason' => '列数が不足しています（最低3列必要）。' ];
+                continue;
+            }
+
+            $scheduled_at  = trim( $cols[0] ?? '' );
+            $topic_type    = strtoupper( trim( $cols[1] ?? '' ) ) ?: 'STANDARD';
+            $summary       = trim( $cols[2] ?? '' );
+            $cta_type      = strtoupper( trim( $cols[3] ?? '' ) );
+            $cta_url       = trim( $cols[4] ?? '' );
+            $event_title   = trim( $cols[5] ?? '' );
+            $event_start   = trim( $cols[6] ?? '' );
+            $event_end     = trim( $cols[7] ?? '' );
+            $image_url     = trim( $cols[8] ?? '' );
+
+            $row_errors = [];
+
+            // バリデーション
+            if ( empty( $summary ) ) {
+                $row_errors[] = '本文が空です。';
+            } elseif ( mb_strlen( $summary ) > 1500 ) {
+                $row_errors[] = '本文が1500文字を超えています。';
+            }
+
+            if ( ! in_array( $topic_type, $valid_topic_types, true ) ) {
+                $row_errors[] = "種類「{$topic_type}」は無効です（STANDARD/EVENT/OFFER）。";
+            }
+
+            if ( ! empty( $cta_type ) && ! in_array( $cta_type, $valid_cta_types, true ) ) {
+                $row_errors[] = "CTAタイプ「{$cta_type}」は無効です。";
+            }
+
+            if ( ! empty( $cta_type ) && empty( $cta_url ) ) {
+                $row_errors[] = 'CTAタイプを指定した場合、CTAリンクは必須です。';
+            }
+
+            if ( ! empty( $cta_url ) && ! filter_var( $cta_url, FILTER_VALIDATE_URL ) ) {
+                $row_errors[] = 'CTAリンクのURL形式が不正です。';
+            }
+
+            if ( $topic_type === 'EVENT' ) {
+                if ( empty( $event_title ) ) $row_errors[] = 'イベントにはイベントタイトルが必須です。';
+                if ( empty( $event_start ) ) $row_errors[] = 'イベントには開始日時が必須です。';
+            }
+
+            if ( ! empty( $image_url ) && ! filter_var( $image_url, FILTER_VALIDATE_URL ) ) {
+                $row_errors[] = '画像URLの形式が不正です。';
+            }
+
+            $status = 'draft';
+            if ( ! empty( $scheduled_at ) ) {
+                if ( ! preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $scheduled_at ) ) {
+                    $row_errors[] = '投稿日時の形式が不正です（例: 2026-04-01 10:00）。';
+                } else {
+                    $status = 'scheduled';
+                }
+            }
+
+            if ( ! empty( $row_errors ) ) {
+                $errors[] = [ 'line' => $line_no, 'reason' => implode( ' / ', $row_errors ) ];
+                continue;
+            }
+
+            $rows[] = [
+                'user_id'     => $user_id,
+                'title'       => '',
+                'summary'     => $summary,
+                'topic_type'  => $topic_type,
+                'cta_type'    => $cta_type ?: null,
+                'cta_url'     => $cta_url ?: null,
+                'event_title' => $event_title ?: null,
+                'event_start' => $event_start ?: null,
+                'event_end'   => $event_end ?: null,
+                'image_url'   => $image_url ?: null,
+                'status'      => $status,
+                'scheduled_at' => $status === 'scheduled' ? $scheduled_at . ':00' : null,
+                'csv_import'  => 1,
+                'created_at'  => $now,
+                'updated_at'  => $now,
+            ];
+
+            if ( count( $rows ) >= 100 ) {
+                break;
+            }
+        }
+
+        if ( $preview ) {
+            return new \WP_REST_Response( [
+                'success'      => true,
+                'preview'      => true,
+                'valid_count'  => count( $rows ),
+                'error_count'  => count( $errors ),
+                'preview_rows' => array_slice( $rows, 0, 20 ),
+                'errors'       => $errors,
+            ], 200 );
+        }
+
+        // 実登録
+        $imported = 0;
+        foreach ( $rows as $row ) {
+            $wpdb->insert( $table, $row );
+            if ( $wpdb->insert_id ) $imported++;
+        }
+
+        return new \WP_REST_Response( [
+            'success'        => true,
+            'imported_count' => $imported,
+            'error_count'    => count( $errors ),
+            'errors'         => $errors,
+            'message'        => "{$imported}件を登録しました。",
+        ], 200 );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

@@ -34,6 +34,9 @@ class Gcrev_Bootstrap {
         add_action('gcrev_keyword_metrics_monthly_event', [__CLASS__, 'on_keyword_metrics_monthly']);
         add_action('gcrev_keyword_metrics_chunk_event', [__CLASS__, 'on_keyword_metrics_chunk'], 10, 2);
 
+        // GBP予約投稿（10分ごと）
+        add_action('gcrev_gbp_posts_publish_event', [__CLASS__, 'on_gbp_posts_publish']);
+
         // 年次レポート自動生成（1月のみ実行）
         add_action('gcrev_annual_report_generate_event', [__CLASS__, 'on_annual_report_generate_event']);
 
@@ -414,6 +417,87 @@ class Gcrev_Bootstrap {
     }
 
     // =========================================================
+    // GBP 予約投稿実行（10分ごと）
+    // =========================================================
+
+    public static function on_gbp_posts_publish(): void {
+        $lock_key = 'gcrev_lock_gbp_publish';
+        if ( get_transient( $lock_key ) ) {
+            return;
+        }
+        set_transient( $lock_key, 1, 300 ); // 5分ロック
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_gbp_posts';
+        $now   = current_time( 'mysql' );
+
+        $posts = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE status = 'scheduled' AND scheduled_at <= %s ORDER BY scheduled_at ASC LIMIT 10",
+            $now
+        ), ARRAY_A );
+
+        if ( empty( $posts ) ) {
+            delete_transient( $lock_key );
+            return;
+        }
+
+        file_put_contents( '/tmp/gcrev_gbp_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [PostPublish] found " . count( $posts ) . " scheduled posts to publish\n",
+            FILE_APPEND
+        );
+
+        $api = new Gcrev_Insight_API( false );
+
+        foreach ( $posts as $post ) {
+            $uid     = (int) $post['user_id'];
+            $post_id = (int) $post['id'];
+
+            wp_set_current_user( $uid );
+
+            $result = $api->gbp_create_local_post( $uid, $post );
+
+            if ( $result['success'] ) {
+                $wpdb->update( $table, [
+                    'status'        => 'posted',
+                    'posted_at'     => current_time( 'mysql' ),
+                    'gbp_post_name' => $result['gbp_post_name'],
+                    'error_message' => null,
+                    'updated_at'    => current_time( 'mysql' ),
+                ], [ 'id' => $post_id ] );
+
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [PostPublish] post_id={$post_id} user={$uid} posted OK\n",
+                    FILE_APPEND
+                );
+            } else {
+                $retry = (int) $post['retry_count'] + 1;
+                $new_status = $retry >= 3 ? 'failed' : 'scheduled';
+                $new_scheduled = $retry < 3
+                    ? gmdate( 'Y-m-d H:i:s', strtotime( $post['scheduled_at'] ) + 600 )
+                    : $post['scheduled_at'];
+
+                $wpdb->update( $table, [
+                    'status'        => $new_status,
+                    'retry_count'   => $retry,
+                    'error_message' => $result['message'],
+                    'scheduled_at'  => $new_scheduled,
+                    'updated_at'    => current_time( 'mysql' ),
+                ], [ 'id' => $post_id ] );
+
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [PostPublish] post_id={$post_id} user={$uid} FAILED (retry={$retry}): " . $result['message'] . "\n",
+                    FILE_APPEND
+                );
+            }
+
+            sleep( 1 ); // レート制限
+        }
+
+        wp_set_current_user( 0 );
+        delete_transient( $lock_key );
+    }
+
+    // =========================================================
     // Schedule登録（イベント名・時刻は現状維持）
     // =========================================================
 
@@ -475,6 +559,12 @@ class Gcrev_Bootstrap {
 
         // 年次レポート自動生成: 毎日 06:30（1月のみ実行、前年分を全ユーザーに対して生成）
         self::schedule_daily_if_missing('gcrev_annual_report_generate_event', 'tomorrow 06:30:00');
+
+        // GBP予約投稿: 10分ごと
+        if ( ! wp_next_scheduled( 'gcrev_gbp_posts_publish_event' ) ) {
+            wp_schedule_event( time(), 'ten_minutes', 'gcrev_gbp_posts_publish_event' );
+            error_log( '[GCREV] Scheduled gcrev_gbp_posts_publish_event (ten_minutes)' );
+        }
     }
 
     /**
@@ -485,6 +575,12 @@ class Gcrev_Bootstrap {
             $schedules['weekly'] = [
                 'interval' => WEEK_IN_SECONDS,
                 'display'  => '週1回',
+            ];
+        }
+        if ( ! isset( $schedules['ten_minutes'] ) ) {
+            $schedules['ten_minutes'] = [
+                'interval' => 600,
+                'display'  => '10分ごと',
             ];
         }
         if ( ! isset( $schedules['monthly'] ) ) {
@@ -543,6 +639,7 @@ class Gcrev_Bootstrap {
             'gcrev_meo_fetch_weekly_event',
             'gcrev_keyword_metrics_monthly_event',
             'gcrev_monthly_data_prefetch_event',
+            'gcrev_gbp_posts_publish_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',

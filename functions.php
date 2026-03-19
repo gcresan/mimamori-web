@@ -4827,6 +4827,7 @@ add_action('after_setup_theme', function () {
     gcrev_aio_results_create_table();
     gcrev_survey_create_tables();
     gcrev_review_drafts_create_table();
+    gcrev_gbp_posts_create_table();
     gcrev_prefetch_status_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
@@ -5283,6 +5284,47 @@ function gcrev_review_drafts_create_table(): void {
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         UNIQUE KEY user_review (user_id, review_name)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
+ * GBP投稿管理テーブル作成
+ *
+ * 投稿管理ページで使用。予約投稿・下書き・投稿履歴を保存。
+ */
+function gcrev_gbp_posts_create_table(): void {
+    global $wpdb;
+    $table           = $wpdb->prefix . 'gcrev_gbp_posts';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        title VARCHAR(255) NOT NULL DEFAULT '',
+        summary TEXT NOT NULL,
+        topic_type VARCHAR(20) NOT NULL DEFAULT 'STANDARD',
+        cta_type VARCHAR(20) NULL,
+        cta_url VARCHAR(2083) NULL,
+        event_title VARCHAR(255) NULL,
+        event_start DATETIME NULL,
+        event_end DATETIME NULL,
+        image_url VARCHAR(2083) NULL,
+        image_attachment_id BIGINT(20) UNSIGNED NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        scheduled_at DATETIME NULL,
+        posted_at DATETIME NULL,
+        gbp_post_name VARCHAR(255) NULL,
+        error_message TEXT NULL,
+        retry_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        csv_import TINYINT(1) NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_status (user_id, status),
+        KEY status_scheduled (status, scheduled_at)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
