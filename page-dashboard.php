@@ -488,7 +488,7 @@ if ($infographic) {
   $congrats_kpi          = $infographic['kpi'] ?? [];
   $congrats_improved     = 0;
   $congrats_improved_labels = [];
-  $congrats_label_map    = ['visits' => '訪問数', 'cv' => 'ゴール数', 'meo' => 'マップ表示'];
+  $congrats_label_map    = ['visits' => '訪問数', 'cv' => $cv_label, 'meo' => 'マップ表示'];
   foreach (['visits', 'cv', 'meo'] as $ck) {
       $cd = (int)($congrats_kpi[$ck]['diff'] ?? 0);
       $cv = (int)($congrats_kpi[$ck]['value'] ?? 0);
@@ -575,10 +575,15 @@ if ($infographic) {
       <h3 class="section-title info-kpi-heading">主な指標</h3>
       <div class="info-kpi">
         <?php
+        // クライアントごとのゴール名カスタマイズ（未設定時はデフォルト）
+        $cv_label_custom = get_user_meta($user_id, '_gcrev_cv_label', true);
+        $cv_label = !empty($cv_label_custom) ? $cv_label_custom : 'ゴール数';
+        $cv_sub   = !empty($cv_label_custom) ? '' : 'お問い合わせ・資料請求など';
+
         $kpi_items = [
-          'visits' => ['label' => '訪問数',   'icon' => '👥', 'metric' => 'sessions'],
-          'cv'     => ['label' => 'ゴール数', 'icon' => '🎯', 'metric' => 'cv'],
-          'meo'    => ['label' => 'Googleマップでの表示回数',  'icon' => '📍', 'metric' => 'meo'],
+          'visits' => ['label' => '訪問数',   'sub' => '', 'icon' => '👥', 'metric' => 'sessions'],
+          'cv'     => ['label' => $cv_label,  'sub' => $cv_sub, 'icon' => '🎯', 'metric' => 'cv'],
+          'meo'    => ['label' => 'Googleマップでの表示回数', 'sub' => '', 'icon' => '📍', 'metric' => 'meo'],
         ];
         $first_kpi = true;
         foreach ($kpi_items as $key => $meta):
@@ -594,7 +599,7 @@ if ($infographic) {
         ?>
           <button type="button" class="info-kpi-item<?php echo $is_first_active; ?>" data-kpi-key="<?php echo esc_attr($key); ?>" data-metric="<?php echo esc_attr($meta['metric']); ?>" data-kpi-icon="<?php echo esc_attr($meta['icon']); ?>" aria-pressed="<?php echo esc_attr($aria_pressed); ?>">
             <span class="info-kpi-icon"><?php echo $meta['icon']; ?></span>
-            <span class="info-kpi-label"><?php echo esc_html($meta['label']); ?></span>
+            <span class="info-kpi-label"><?php echo esc_html($meta['label']); ?><?php if (!empty($meta['sub'])): ?><span class="info-kpi-sub"><?php echo esc_html($meta['sub']); ?></span><?php endif; ?></span>
             <span class="info-kpi-value" data-kpi-role="value"><?php echo esc_html(number_format($kpi_val)); ?></span>
             <span class="info-kpi-diff <?php echo esc_attr($kpi_diff_class); ?>" data-kpi-role="diff">
               <?php echo esc_html($kpi_diff_icon . ' ' . $kpi_diff_text); ?>
