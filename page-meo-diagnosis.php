@@ -10,7 +10,7 @@ if ( ! is_user_logged_in() ) {
 
 set_query_var( 'gcrev_page_title', 'MEO診断' );
 set_query_var( 'gcrev_page_subtitle', 'Googleビジネスプロフィールの状態を診断し、改善ポイントを整理します。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'MEO診断', '診断レポート' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'MEO診断', '各種診断' ) );
 
 get_header();
 ?>

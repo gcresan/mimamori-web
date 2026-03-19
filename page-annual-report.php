@@ -15,7 +15,7 @@ $default_year = (int) date('Y') - 1;
 $current_year_param = isset($_GET['year']) ? absint($_GET['year']) : $default_year;
 
 set_query_var('gcrev_page_title', '年次レポート');
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('年次レポート'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('年次レポート', 'レポート'));
 
 get_header();
 ?>

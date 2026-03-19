@@ -95,7 +95,7 @@ $current_month = (int) $prev_month_start->format('n');
 $display_ym = $prev_month_start->format('Y年n月');
 set_query_var('gcrev_page_title', '月次レポート');
 set_query_var('gcrev_page_subtitle', $display_ym . 'のアクセス状況や反応をまとめたレポートです。');
-set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート'));
+set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('月次レポート', 'レポート'));
 
 // 月次AIレポート取得
 $year  = (int)$prev_month_start->format('Y');

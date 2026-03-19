@@ -78,21 +78,24 @@
          <?php endif; ?>
       </div>
       <?php
-      // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ website ---
+      // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ全部閉じ ---
+      $report_pages    = array('report-latest','report-archive','annual-report');
+      $ranking_pages   = array('rank-tracker','map-rank');
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
-      $ranking_pages   = array('rank-tracker','map-rank');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
 
+      $report_child_active = false;
+      foreach ($report_pages as $_p) { if (is_page($_p)) { $report_child_active = true; break; } }
+      $ranking_child_active = false;
+      foreach ($ranking_pages as $_p) { if (is_page($_p)) { $ranking_child_active = true; break; } }
       $diagnosis_child_active = false;
       foreach ($diagnosis_pages as $_p) { if (is_page($_p)) { $diagnosis_child_active = true; break; } }
       $website_child_active = false;
       foreach ($website_pages as $_p) { if (is_page($_p)) { $website_child_active = true; break; } }
-      $ranking_child_active = false;
-      foreach ($ranking_pages as $_p) { if (is_page($_p)) { $ranking_child_active = true; break; } }
       $meo_child_active = false;
       foreach ($meo_pages as $_p) { if (is_page($_p)) { $meo_child_active = true; break; } }
       $settings_child_active = false;
@@ -103,9 +106,10 @@
       foreach ($option_pages as $_p) { if (is_page($_p)) { $option_child_active = true; break; } }
       // 子がアクティブなグループを開く。なければ全部閉じた状態
       $sidebar_active_group = '';
+      if ($report_child_active)    $sidebar_active_group = 'report';
+      if ($ranking_child_active)   $sidebar_active_group = 'ranking';
       if ($diagnosis_child_active) $sidebar_active_group = 'diagnosis';
       if ($website_child_active)   $sidebar_active_group = 'website';
-      if ($ranking_child_active)   $sidebar_active_group = 'ranking';
       if ($meo_child_active)       $sidebar_active_group = 'meo';
       if ($settings_child_active)  $sidebar_active_group = 'settings';
       if ($support_child_active)   $sidebar_active_group = 'support';
@@ -115,9 +119,7 @@
          <div class="nav-section">
             <ul class="nav-menu">
 
-               <!-- ========== 全体 ========== -->
-
-               <!-- 全体ダッシュボード（単独） -->
+               <!-- ========== 全体ダッシュボード（単独） ========== -->
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/dashboard/') ); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3C6 3 2.7 5.9 1.5 10c1.2 4.1 4.5 7 8.5 7s7.3-2.9 8.5-7C17.3 5.9 14 3 10 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
@@ -125,35 +127,53 @@
                   </a>
                </li>
 
-               <!-- プラン紹介（単独） -->
-               <li class="nav-item">
-                  <a href="<?php echo esc_url( home_url('/plans/') ); ?>" class="nav-link <?php echo is_page('plans') ? 'active' : ''; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4h14M3 4v12a1 1 0 001 1h12a1 1 0 001-1V4M7 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 9h2M7 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-                  <span>プラン紹介</span>
-                  </a>
-               </li>
-
-               <!-- 月次レポート（単独） -->
-               <li class="nav-item">
-                  <a href="<?php echo esc_url( home_url('/report/report-latest/') ); ?>" class="nav-link <?php echo ( is_page('report-latest') || is_page('report-archive') ) ? 'active' : ''; ?>">
+               <!-- ========== レポート ========== -->
+               <li class="nav-item nav-item-collapsible<?php echo $report_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'report' ? ' collapsed' : ''; ?>" data-menu-key="report">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleReport" aria-expanded="<?php echo $sidebar_active_group === 'report' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 2.5V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 11h5M7.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-                  <span>月次レポート</span>
-                  </a>
+                  <span>レポート</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuReport">
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/report/report-latest/') ); ?>" class="nav-link <?php echo ( is_page('report-latest') || is_page('report-archive') ) ? 'active' : ''; ?>">
+                        <span>月次レポート</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/annual-report/') ); ?>" class="nav-link <?php echo is_page('annual-report') ? 'active' : ''; ?>">
+                        <span>年次レポート</span>
+                        </a>
+                     </li>
+                  </ul>
                </li>
 
-               <!-- 年次レポート（単独） -->
-               <li class="nav-item">
-                  <a href="<?php echo esc_url( home_url('/annual-report/') ); ?>" class="nav-link <?php echo is_page('annual-report') ? 'active' : ''; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="2" width="14" height="16" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M7 6h6M7 9.5h6M7 13h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M13 13l1.5 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
-                  <span>年次レポート</span>
-                  </a>
+               <!-- ========== 検索順位チェック ========== -->
+               <li class="nav-item nav-item-collapsible<?php echo $ranking_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'ranking' ? ' collapsed' : ''; ?>" data-menu-key="ranking">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleRanking" aria-expanded="<?php echo $sidebar_active_group === 'ranking' ? 'true' : 'false'; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 3v18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 16l4-5 4 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span>検索順位チェック</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuRanking">
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/rank-tracker/') ); ?>" class="nav-link <?php echo is_page('rank-tracker') ? 'active' : ''; ?>">
+                        <span>自然検索順位</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/map-rank/') ); ?>" class="nav-link <?php echo is_page('map-rank') ? 'active' : ''; ?>">
+                        <span>マップ順位</span>
+                        </a>
+                     </li>
+                  </ul>
                </li>
 
-               <!-- ========== 診断レポート ========== -->
+               <!-- ========== 各種診断 ========== -->
                <li class="nav-item nav-item-collapsible<?php echo $diagnosis_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'diagnosis' ? ' collapsed' : ''; ?>" data-menu-key="diagnosis">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleDiagnosis" aria-expanded="<?php echo $sidebar_active_group === 'diagnosis' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                  <span>診断レポート</span>
+                  <span>各種診断</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuDiagnosis">
@@ -221,27 +241,6 @@
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/analysis/analysis-cv/') ); ?>" class="nav-link <?php echo is_page('analysis-cv') ? 'active' : ''; ?>">
                         <span>ゴール分析</span>
-                        </a>
-                     </li>
-                  </ul>
-               </li>
-
-               <!-- ========== 検索順位チェック ========== -->
-               <li class="nav-item nav-item-collapsible<?php echo $ranking_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'ranking' ? ' collapsed' : ''; ?>" data-menu-key="ranking">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleRanking" aria-expanded="<?php echo $sidebar_active_group === 'ranking' ? 'true' : 'false'; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 3v18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 16l4-5 4 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                  <span>検索順位チェック</span>
-                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
-                  </button>
-                  <ul class="nav-submenu" id="navSubmenuRanking">
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/rank-tracker/') ); ?>" class="nav-link <?php echo is_page('rank-tracker') ? 'active' : ''; ?>">
-                        <span>自然検索順位</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/map-rank/') ); ?>" class="nav-link <?php echo is_page('map-rank') ? 'active' : ''; ?>">
-                        <span>マップ順位</span>
                         </a>
                      </li>
                   </ul>
@@ -342,6 +341,14 @@
                         </a>
                      </li>
                   </ul>
+               </li>
+
+               <!-- ========== プラン紹介（単独） ========== -->
+               <li class="nav-item">
+                  <a href="<?php echo esc_url( home_url('/plans/') ); ?>" class="nav-link <?php echo is_page('plans') ? 'active' : ''; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4h14M3 4v12a1 1 0 001 1h12a1 1 0 001-1V4M7 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 9h2M7 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+                  <span>プラン紹介</span>
+                  </a>
                </li>
 
                <!-- ========== サポート・問い合わせ ========== -->
