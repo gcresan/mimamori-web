@@ -502,6 +502,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_create_gbp_post' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/meo/posts/gbp-list', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_gbp_remote_posts' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/meo/posts/csv-template', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_get_csv_template' ],
@@ -14820,6 +14825,61 @@ PROMPT;
     // =========================================================
 
     /**
+     * GBP から既存の投稿一覧を取得
+     */
+    private function gbp_list_local_posts( int $user_id, string $page_token = '' ): array {
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( ! $access_token ) {
+            return [ 'success' => false, 'posts' => [], 'message' => 'アクセストークンの取得に失敗しました。' ];
+        }
+
+        $account_name = $this->gbp_get_account_for_location( $user_id );
+        $location_id  = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( ! $account_name || ! $location_id ) {
+            return [ 'success' => false, 'posts' => [], 'message' => 'GBPロケーション情報が見つかりません。' ];
+        }
+
+        $url = "https://mybusiness.googleapis.com/v4/{$account_name}/{$location_id}/localPosts?pageSize=100";
+        if ( ! empty( $page_token ) ) {
+            $url .= '&pageToken=' . urlencode( $page_token );
+        }
+
+        file_put_contents( '/tmp/gcrev_gbp_debug.log',
+            date( 'Y-m-d H:i:s' ) . " list localPosts: url={$url}\n", FILE_APPEND );
+
+        $response = wp_remote_get( $url, [
+            'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+            'timeout' => 30,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            $err = $response->get_error_message();
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " list localPosts WP_Error: {$err}\n", FILE_APPEND );
+            return [ 'success' => false, 'posts' => [], 'message' => '通信エラー: ' . $err ];
+        }
+
+        $code  = wp_remote_retrieve_response_code( $response );
+        $rbody = wp_remote_retrieve_body( $response );
+
+        file_put_contents( '/tmp/gcrev_gbp_debug.log',
+            date( 'Y-m-d H:i:s' ) . " list localPosts HTTP {$code}: " . substr( $rbody, 0, 500 ) . "\n", FILE_APPEND );
+
+        if ( $code < 200 || $code >= 300 ) {
+            $data = json_decode( $rbody, true );
+            $msg  = $data['error']['message'] ?? "HTTP {$code}";
+            return [ 'success' => false, 'posts' => [], 'message' => "取得に失敗しました: {$msg}" ];
+        }
+
+        $data = json_decode( $rbody, true );
+        return [
+            'success'       => true,
+            'posts'         => $data['localPosts'] ?? [],
+            'nextPageToken' => $data['nextPageToken'] ?? null,
+        ];
+    }
+
+    /**
      * GBP localPosts 用リクエストボディを組み立てる
      */
     private function gbp_build_post_body( array $post ): array {
@@ -15411,6 +15471,74 @@ PROMPT;
         ], [ 'id' => $post_id ] );
 
         return new \WP_REST_Response( [ 'success' => true, 'message' => '予約をキャンセルしました。' ], 200 );
+    }
+
+    /**
+     * GBP上の既存投稿一覧を取得
+     */
+    public function rest_get_gbp_remote_posts( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id    = get_current_user_id();
+        $page_token = sanitize_text_field( $request->get_param( 'page_token' ) ?: '' );
+
+        // キャッシュ（1時間）
+        $cache_key = "gcrev_gbp_posts_{$user_id}";
+        if ( empty( $page_token ) ) {
+            $cached = get_transient( $cache_key );
+            if ( $cached !== false ) {
+                return new \WP_REST_Response( $cached, 200 );
+            }
+        }
+
+        $result = $this->gbp_list_local_posts( $user_id, $page_token );
+        if ( ! $result['success'] ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => $result['message'],
+                'posts'   => [],
+            ], 200 );
+        }
+
+        // GBP投稿を整形
+        $posts = [];
+        foreach ( $result['posts'] as $gp ) {
+            $topic_type = $gp['topicType'] ?? 'STANDARD';
+            $summary    = $gp['summary'] ?? '';
+            $state      = $gp['state'] ?? 'LIVE';
+            $media      = $gp['media'][0]['googleUrl'] ?? ( $gp['media'][0]['sourceUrl'] ?? '' );
+            $cta_type   = $gp['callToAction']['actionType'] ?? '';
+            $cta_url    = $gp['callToAction']['url'] ?? '';
+            $event_title = $gp['event']['title'] ?? '';
+            $create_time = $gp['createTime'] ?? '';
+            $update_time = $gp['updateTime'] ?? '';
+            $search_url  = $gp['searchUrl'] ?? '';
+
+            $posts[] = [
+                'gbp_name'    => $gp['name'] ?? '',
+                'topic_type'  => $topic_type,
+                'summary'     => $summary,
+                'state'       => $state,
+                'image_url'   => $media,
+                'cta_type'    => $cta_type,
+                'cta_url'     => $cta_url,
+                'event_title' => $event_title,
+                'create_time' => $create_time,
+                'update_time' => $update_time,
+                'search_url'  => $search_url,
+            ];
+        }
+
+        $response_data = [
+            'success'       => true,
+            'posts'         => $posts,
+            'nextPageToken' => $result['nextPageToken'] ?? null,
+        ];
+
+        // 1ページ目のみキャッシュ
+        if ( empty( $page_token ) ) {
+            set_transient( $cache_key, $response_data, HOUR_IN_SECONDS );
+        }
+
+        return new \WP_REST_Response( $response_data, 200 );
     }
 
     /**

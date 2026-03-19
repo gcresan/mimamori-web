@@ -128,6 +128,22 @@ wp_enqueue_media();
 .gp-toast.error { background:#dc2626; }
 .gp-toast.show { opacity:1; }
 
+/* Tabs */
+.gp-tabs { display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid #e2e8f0; }
+.gp-tab { padding:10px 20px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; background:none; border-top:none; border-left:none; border-right:none; font-family:inherit; }
+.gp-tab:hover { color:#1e293b; }
+.gp-tab.active { color:#3b6b5e; border-bottom-color:#3b6b5e; }
+.gp-tab-content { display:none; }
+.gp-tab-content.active { display:block; }
+
+/* GBP remote posts */
+.gp-gbp-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 20px; margin-bottom:10px; border-left:4px solid #f59e0b; }
+.gp-gbp-card .gp-card-header { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
+.gp-gbp-state { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; background:#fef3c7; color:#92400e; }
+.gp-gbp-state.live { background:#dcfce7; color:#15803d; }
+.gp-gbp-link { font-size:11px; color:#2563eb; text-decoration:none; margin-left:auto; }
+.gp-gbp-link:hover { text-decoration:underline; }
+
 .gp-empty { text-align:center; padding:48px 20px; color:#94a3b8; }
 .gp-empty p { font-size:14px; }
 
@@ -165,6 +181,15 @@ wp_enqueue_media();
         <div class="gp-summary-card gp-sc-failed"><div class="gp-sc-label">失敗</div><div class="gp-sc-value" id="smFailed">-</div></div>
     </div>
 
+    <!-- タブ切り替え -->
+    <div class="gp-tabs">
+        <button class="gp-tab active" data-tab="local">📝 投稿管理</button>
+        <button class="gp-tab" data-tab="gbp">🌐 Google上の投稿</button>
+    </div>
+
+    <!-- ===== ローカル投稿タブ ===== -->
+    <div class="gp-tab-content active" id="tabLocal">
+
     <!-- アクションバー -->
     <div class="gp-action-bar">
         <button class="gp-btn gp-btn-primary" id="newPostBtn">＋ 新規投稿</button>
@@ -194,6 +219,19 @@ wp_enqueue_media();
 
     <!-- ページネーション -->
     <div id="paginationWrap" class="gp-pagination" style="display:none;"></div>
+
+    </div><!-- /tabLocal -->
+
+    <!-- ===== Google上の投稿タブ ===== -->
+    <div class="gp-tab-content" id="tabGbp">
+        <p style="font-size:13px; color:#64748b; margin-bottom:16px;">GBP管理画面から直接投稿した記事を含む、Google上の全投稿を表示しています。</p>
+        <div id="gbpPostList" class="gp-post-list">
+            <div class="gp-loading"><span class="spinner-sm"></span> Google投稿を取得中...</div>
+        </div>
+        <div id="gbpLoadMoreWrap" style="text-align:center; margin-top:16px; display:none;">
+            <button class="gp-btn" id="gbpLoadMoreBtn">もっと読み込む</button>
+        </div>
+    </div><!-- /tabGbp -->
 
     <!-- 新規/編集モーダル -->
     <div class="gp-modal-overlay" id="postModal" style="display:none;">
@@ -817,6 +855,92 @@ wp_enqueue_media();
     document.getElementById('csvPreviewBtn').addEventListener('click', previewCsv);
     document.getElementById('csvSubmitBtn').addEventListener('click', submitCsv);
     document.getElementById('csvTemplateBtn').addEventListener('click', downloadCsvTemplate);
+
+    // ===== Tabs =====
+    var gbpPostsLoaded = false;
+    var gbpNextPageToken = null;
+
+    document.querySelector('.gp-tabs').addEventListener('click', function(e) {
+        var tab = e.target.closest('.gp-tab');
+        if (!tab) return;
+        var target = tab.dataset.tab;
+        document.querySelectorAll('.gp-tab').forEach(function(t){ t.classList.remove('active'); });
+        document.querySelectorAll('.gp-tab-content').forEach(function(c){ c.classList.remove('active'); });
+        tab.classList.add('active');
+        document.getElementById(target === 'gbp' ? 'tabGbp' : 'tabLocal').classList.add('active');
+        if (target === 'gbp' && !gbpPostsLoaded) {
+            loadGbpPosts();
+        }
+    });
+
+    // ===== GBP Remote Posts =====
+    function loadGbpPosts(append) {
+        var list = document.getElementById('gbpPostList');
+        if (!append) list.innerHTML = '<div class="gp-loading"><span class="spinner-sm"></span> Google投稿を取得中...</div>';
+
+        var url = restBase + 'meo/posts/gbp-list';
+        if (gbpNextPageToken && append) url += '?page_token=' + encodeURIComponent(gbpNextPageToken);
+
+        fetchJson(url).then(function(data) {
+            gbpPostsLoaded = true;
+            if (!data.success) {
+                list.innerHTML = '<div class="gp-empty"><p>⚠ ' + escHtml(data.message || '取得に失敗しました。') + '</p></div>';
+                return;
+            }
+            if (!data.posts || data.posts.length === 0) {
+                if (!append) list.innerHTML = '<div class="gp-empty"><p>Google上に投稿がありません。</p></div>';
+                return;
+            }
+
+            gbpNextPageToken = data.nextPageToken || null;
+            var html = append ? list.innerHTML : '';
+            data.posts.forEach(function(p) { html += renderGbpCard(p); });
+            list.innerHTML = html;
+
+            var loadMore = document.getElementById('gbpLoadMoreWrap');
+            loadMore.style.display = gbpNextPageToken ? 'block' : 'none';
+        }).catch(function() {
+            list.innerHTML = '<div class="gp-empty"><p>通信エラーが発生しました。</p></div>';
+        });
+    }
+
+    function renderGbpCard(p) {
+        var stateLabels = { LIVE: '公開中', REJECTED: '却下', PROCESSING: '処理中' };
+        var stateLabel = stateLabels[p.state] || p.state || '不明';
+        var stateClass = p.state === 'LIVE' ? 'live' : '';
+        var topicLabels = { STANDARD: '通常', EVENT: 'イベント', OFFER: '特典', ALERT: 'アラート' };
+        var summaryText = p.summary ? (p.summary.length > 200 ? p.summary.substring(0, 200) + '…' : p.summary) : '';
+        var createDate = p.create_time ? formatDate(p.create_time) : '-';
+
+        var imgHtml = '';
+        if (p.image_url) imgHtml = '<img class="gp-card-thumb" src="' + escHtml(p.image_url) + '" alt="">';
+
+        var metaHtml = '<span>' + escHtml(topicLabels[p.topic_type] || p.topic_type) + '</span>';
+        if (p.cta_type) metaHtml += '<span>CTA: ' + escHtml(p.cta_type) + '</span>';
+        if (p.event_title) metaHtml += '<span>🎪 ' + escHtml(p.event_title) + '</span>';
+
+        var linkHtml = '';
+        if (p.search_url) linkHtml = '<a class="gp-gbp-link" href="' + escHtml(p.search_url) + '" target="_blank" rel="noopener">Googleで見る ↗</a>';
+
+        return '<div class="gp-gbp-card">'
+            + '<div class="gp-card-header">'
+            +   '<span class="gp-gbp-state ' + stateClass + '">' + escHtml(stateLabel) + '</span>'
+            +   '<span class="gp-card-date">' + escHtml(createDate) + '</span>'
+            +   linkHtml
+            + '</div>'
+            + '<div class="gp-card-body">'
+            +   imgHtml
+            +   '<div class="gp-card-content">'
+            +     '<div class="gp-card-summary">' + escHtml(summaryText) + '</div>'
+            +     '<div class="gp-card-meta">' + metaHtml + '</div>'
+            +   '</div>'
+            + '</div>'
+            + '</div>';
+    }
+
+    document.getElementById('gbpLoadMoreBtn').addEventListener('click', function() {
+        if (gbpNextPageToken) loadGbpPosts(true);
+    });
 
     // ===== Init =====
     loadSummary();
