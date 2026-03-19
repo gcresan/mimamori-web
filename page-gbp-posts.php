@@ -68,7 +68,13 @@ wp_enqueue_media();
 .gp-card-date { font-size:11px; color:#94a3b8; margin-left:auto; white-space:nowrap; }
 
 .gp-card-body { display:flex; gap:16px; }
-.gp-card-thumb { width:80px; height:80px; border-radius:8px; object-fit:cover; flex-shrink:0; border:1px solid #e2e8f0; }
+.gp-card-thumb { width:80px; height:80px; border-radius:8px; object-fit:cover; flex-shrink:0; border:1px solid #e2e8f0; cursor:pointer; transition:opacity .15s; }
+.gp-card-thumb:hover { opacity:.8; }
+
+/* Lightbox */
+.gp-lightbox { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.75); z-index:10001; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.gp-lightbox img { max-width:90vw; max-height:90vh; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,.4); }
+.gp-lightbox-close { position:absolute; top:20px; right:24px; color:#fff; font-size:32px; cursor:pointer; background:none; border:none; line-height:1; text-shadow:0 2px 4px rgba(0,0,0,.5); }
 .gp-card-content { flex:1; min-width:0; }
 .gp-card-summary { font-size:13px; color:#334155; line-height:1.6; margin-bottom:6px; word-break:break-word; white-space:pre-wrap; }
 .gp-card-meta { font-size:11px; color:#94a3b8; }
@@ -469,6 +475,12 @@ wp_enqueue_media();
 <!-- Toast -->
 <div class="gp-toast" id="gpToast"></div>
 
+<!-- Lightbox -->
+<div class="gp-lightbox" id="gpLightbox" style="display:none;">
+    <button class="gp-lightbox-close" id="lightboxClose">&times;</button>
+    <img id="lightboxImg" src="" alt="">
+</div>
+
 <?php if ( $gbp_connected ) : ?>
 <script>
 (function(){
@@ -563,7 +575,7 @@ wp_enqueue_media();
 
         var imgHtml = '';
         var imgUrl = p.image_url || '';
-        if (imgUrl) imgHtml = '<img class="gp-card-thumb" src="' + escHtml(imgUrl) + '" alt="">';
+        if (imgUrl) imgHtml = '<img class="gp-card-thumb" data-lightbox="' + escHtml(imgUrl) + '" src="' + escHtml(imgUrl) + '" alt="">';
 
         var metaHtml = '<span>' + escHtml(topicLabels[p.topic_type] || p.topic_type) + '</span>';
         if (p.cta_type) metaHtml += '<span>CTA: ' + escHtml(p.cta_type) + '</span>';
@@ -1263,7 +1275,7 @@ wp_enqueue_media();
         var createDate = p.create_time ? formatDate(p.create_time) : '-';
 
         var imgHtml = '';
-        if (p.image_url) imgHtml = '<img class="gp-card-thumb" src="' + escHtml(p.image_url) + '" alt="">';
+        if (p.image_url) imgHtml = '<img class="gp-card-thumb" data-lightbox="' + escHtml(p.image_url) + '" src="' + escHtml(p.image_url) + '" alt="">';
 
         var metaHtml = '<span>' + escHtml(topicLabels[p.topic_type] || p.topic_type) + '</span>';
         if (p.cta_type) metaHtml += '<span>CTA: ' + escHtml(p.cta_type) + '</span>';
@@ -1359,6 +1371,27 @@ wp_enqueue_media();
         toggleCtaUrl();
         document.getElementById('postModal').style.display = 'flex';
     }
+
+    // ===== Lightbox =====
+    document.addEventListener('click', function(e) {
+        var img = e.target.closest('[data-lightbox]');
+        if (img) {
+            var lb = document.getElementById('gpLightbox');
+            document.getElementById('lightboxImg').src = img.dataset.lightbox;
+            lb.style.display = 'flex';
+            e.stopPropagation();
+        }
+    });
+    document.getElementById('gpLightbox').addEventListener('click', function(e) {
+        if (e.target === this || e.target.id === 'lightboxClose') {
+            this.style.display = 'none';
+        }
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.getElementById('gpLightbox').style.display = 'none';
+        }
+    });
 
     // ===== Init =====
     loadSummary();
