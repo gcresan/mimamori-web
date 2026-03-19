@@ -518,8 +518,12 @@ get_header();
     set_query_var('gcrev_period_selector', [
         'id'      => 'meo-period',
         'items'   => [
-            ['value' => 'last30',     'label' => '直近30日'],
-            ['value' => 'prev-month', 'label' => '前月'],
+            ['value' => 'last30',          'label' => '直近30日'],
+            ['value' => 'prev-month',      'label' => '前月'],
+            ['value' => 'prev-prev-month', 'label' => '前々月'],
+            ['value' => 'last90',          'label' => '過去90日'],
+            ['value' => 'last180',         'label' => '過去半年'],
+            ['value' => 'last365',         'label' => '過去1年'],
         ],
         'default' => 'last30',
     ]);
