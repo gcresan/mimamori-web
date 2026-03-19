@@ -91,33 +91,6 @@
             <?php endif; ?>
             <?php endif; ?>
             <?php
-            // 解析ユニット一覧（複数導線がある場合のみ表示）
-            if ( function_exists( 'gcrev_get_analysis_units' ) ) :
-                $sidebar_units = gcrev_get_analysis_units( $u->ID );
-                if ( ! empty( $sidebar_units ) ) :
-            ?>
-            <div class="sidebar-user-plan" style="line-height: 1.6; margin-top: 4px;">
-                <?php foreach ( $sidebar_units as $su ) :
-                    $su_label = esc_html( $su['label'] );
-                    $su_type  = $su['unit_type'] === 'meo' ? 'MEO' : 'LP';
-                    $su_url   = '';
-                    if ( $su['unit_type'] === 'meo' && ! empty( $su['meo_domain'] ) ) {
-                        $su_url = esc_html( $su['meo_domain'] );
-                    } elseif ( ! empty( $su['page_path_prefix'] ) ) {
-                        $su_url = esc_html( $display_url . rtrim( $su['page_path_prefix'], '/' ) . '/' );
-                    } else {
-                        $su_url = esc_html( $display_url ?? '' );
-                    }
-                ?>
-                <div style="display: flex; align-items: baseline; gap: 4px; font-size: 10px;">
-                    <span style="color: #888; white-space: nowrap;"><?php echo $su_label; ?>:</span>
-                    <span style="color: inherit; word-break: break-all;"><?php echo $su_url; ?></span>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <?php
-                endif;
-            endif;
             ?>
             <?php if ( function_exists( 'gcrev_is_trial_active' ) && gcrev_is_trial_active( $u->ID ) ) : ?>
             <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;">

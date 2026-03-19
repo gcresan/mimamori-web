@@ -300,18 +300,6 @@ get_header();
         </div>
     </div>
 
-    <?php
-    // 解析ユニットタブ（複数導線がある場合のみ表示）
-    $analysis_units = gcrev_get_analysis_units( $user_id );
-    $active_unit_id = absint( $_GET['unit'] ?? 0 );
-    if ( ! empty( $analysis_units ) ) :
-        set_query_var( 'gcrev_analysis_units', $analysis_units );
-        set_query_var( 'gcrev_unit_reload', '1' );
-        set_query_var( 'gcrev_active_unit_id', $active_unit_id );
-        get_template_part( 'template-parts/analysis-unit-tabs' );
-    endif;
-    ?>
-
     <!-- サービス説明（常時表示） -->
     <p class="service-lead">
         「みまもりウェブ」は、ホームページの状態を毎日データで見守り、「今どうなっているか」をやさしく伝えるサービスです。
@@ -327,13 +315,6 @@ $infographic = $gcrev_api->get_monthly_infographic($year, $month, $user_id);
 // KPIデータ（JSインライン用に外スコープで宣言）
 $kpi_curr = [];
 $kpi_prev = [];
-
-// === 解析ユニットフィルタ適用 ===
-$dash_unit_id  = absint( $_GET['unit'] ?? 0 );
-$dash_unit_set = false;
-if ( $dash_unit_id > 0 && isset( $gcrev_api ) && method_exists( $gcrev_api, 'apply_unit_filters' ) ) {
-    $dash_unit_set = $gcrev_api->apply_unit_filters( $user_id, $dash_unit_id );
-}
 
 // === 直近30日ベースのKPI・スコア算出 ===
 if ($infographic && is_array($infographic)) {
@@ -1142,8 +1123,6 @@ if ($infographic) {
 
 <script>
 // 解析ユニットID（タブ切り替え時のURL ?unit=X から取得）
-var _dashUnitId = <?php echo (int) $dash_unit_id; ?>;
-var _dashUnitSuffix = _dashUnitId > 0 ? '&unit_id=' + _dashUnitId : '';
 (function(){
     // スコアゲージ更新（非同期KPI取得後に呼ばれる）
     function updateScoreGauge(score) {
@@ -1250,7 +1229,7 @@ var _dashUnitSuffix = _dashUnitId > 0 ? '&unit_id=' + _dashUnitId : '';
         var compStart = <?php echo wp_json_encode($last30_comp['start']); ?>;
         var compEnd   = <?php echo wp_json_encode($last30_comp['end']); ?>;
 
-        fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd) + _dashUnitSuffix, {
+        fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd), {
             credentials: 'same-origin',
             headers: { 'X-WP-Nonce': nonce }
         }).then(function(r){ return r.json(); }).then(function(result){
@@ -1387,11 +1366,11 @@ var _dashUnitSuffix = _dashUnitId > 0 ? '&unit_id=' + _dashUnitId : '';
 
         // 直近30日 + 比較期間 + MEO を並列取得
         Promise.all([
-            fetch(restBase + 'dashboard/kpi?period=last30' + _dashUnitSuffix, {
+            fetch(restBase + 'dashboard/kpi?period=last30', {
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); }),
-            fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd) + _dashUnitSuffix, {
+            fetch(restBase + 'dashboard/kpi?start_date=' + encodeURIComponent(compStart) + '&end_date=' + encodeURIComponent(compEnd), {
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); }),
