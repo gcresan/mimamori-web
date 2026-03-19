@@ -35,6 +35,10 @@ if ( ! defined( 'ABSPATH' ) ) {
           <span><?php echo esc_html( 'みまもりAI' ); ?></span>
         </div>
         <div class="mw-chat-header__actions">
+          <span class="mw-chat-header__status-badge">
+            <span class="mw-chat-header__status-dot" aria-hidden="true"></span>
+            <span><?php echo esc_html( '相談受付中' ); ?></span>
+          </span>
           <button type="button"
                   class="mw-chat-header__btn mw-chat-header__btn--expand"
                   title="<?php echo esc_attr( '拡大表示' ); ?>"
@@ -49,15 +53,17 @@ if ( ! defined( 'ABSPATH' ) ) {
                   aria-label="<?php echo esc_attr( '閉じる' ); ?>">&#x2715;</button>
         </div>
       </div>
-      <div class="mw-chat-header__subtitle"><?php echo esc_html( '今どうなっていて、次に何をすればいいかをお伝えします' ); ?></div>
-      <div class="mw-chat-header__status">
-        <span class="mw-chat-header__status-dot" aria-hidden="true"></span>
-        <span><?php echo esc_html( '相談受付中' ); ?></span>
-      </div>
     </div>
 
-    <!-- Quick Questions — 2モード×3カテゴリ（JSで動的描画） -->
-    <div class="mw-chat-quick">
+    <!-- Quick Questions — 初期非表示、トグルで開閉 -->
+    <div class="mw-chat-quick-toggle">
+      <button type="button" class="mw-chat-quick-toggle__btn" id="mwChatQuickToggle">
+        <span class="mw-chat-quick-toggle__icon">💡</span>
+        <span><?php echo esc_html( '質問例を見る' ); ?></span>
+        <span class="mw-chat-quick-toggle__arrow">▾</span>
+      </button>
+    </div>
+    <div class="mw-chat-quick mw-chat-quick--collapsed" id="mwChatQuickArea">
       <div class="mw-chat-quick__mode-tabs">
         <button type="button" class="mw-chat-quick__mode-tab"
                 data-mode="beginner"><?php echo esc_html( '初心者向け' ); ?></button>

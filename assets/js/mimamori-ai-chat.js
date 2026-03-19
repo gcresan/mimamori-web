@@ -129,7 +129,10 @@
 
       // Quick question chips を非表示にする（会話がある場合）
       var quickArea = els.quickArea || (els.root ? els.root.querySelector('.mw-chat-quick') : null);
-      if (quickArea) quickArea.style.display = 'none';
+      if (quickArea) quickArea.classList.add('mw-chat-quick--collapsed');
+      // トグルボタンも閉じた状態に
+      var quickToggle = els.quickToggle || (els.root ? els.root.querySelector('#mwChatQuickToggle') : null);
+      if (quickToggle) quickToggle.classList.remove('is-active');
 
       return true;
     } catch (e) {
@@ -1312,6 +1315,23 @@
   }
 
   /* ============================
+     Quick Toggle (質問例を見る)
+     ============================ */
+  function initQuickToggle() {
+    if (!els.quickToggle || !els.quickArea) return;
+    els.quickToggle.addEventListener('click', function () {
+      var isOpen = !els.quickArea.classList.contains('mw-chat-quick--collapsed');
+      if (isOpen) {
+        els.quickArea.classList.add('mw-chat-quick--collapsed');
+        els.quickToggle.classList.remove('is-active');
+      } else {
+        els.quickArea.classList.remove('mw-chat-quick--collapsed');
+        els.quickToggle.classList.add('is-active');
+      }
+    });
+  }
+
+  /* ============================
      Event Binding
      ============================ */
   function bindEvents() {
@@ -1444,12 +1464,14 @@
     els.expandBtn   = els.root.querySelector('.mw-chat-header__btn--expand');
     els.collapseBtn = els.root.querySelector('.mw-chat-header__btn--collapse');
     els.quickArea   = els.root.querySelector('.mw-chat-quick');
+    els.quickToggle = els.root.querySelector('#mwChatQuickToggle');
 
     if (!els.fab || !els.messages || !els.textarea) return;
 
     initVoice();
     bindEvents();
     initQuickPrompts();
+    initQuickToggle();
 
     // セッション復元: 前ページの会話履歴をDOMに再描画
     var hadHistory = restoreSession();

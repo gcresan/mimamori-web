@@ -180,7 +180,7 @@
 .mw-chat-header {
   background: linear-gradient(135deg, var(--mw-primary) 0%, var(--mw-teal) 100%);
   color: #fff;
-  padding: 20px;
+  padding: 14px 20px;
   flex-shrink: 0;
 }
 
@@ -192,7 +192,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .mw-chat-header__title {
@@ -228,21 +228,21 @@
 .mw-chat--panel .mw-chat-header__btn--expand,
 .mw-chat--modal .mw-chat-header__btn--expand   { display: none; }
 
-.mw-chat-header__subtitle {
-  font-size: 13px;
-  color: rgba(255,255,255,0.9);
-  margin-bottom: 6px;
-}
+/* Subtitle — hidden by default for space savings */
+.mw-chat-header__subtitle { display: none; }
 
-.mw-chat-header__status {
+/* Status badge — moved to header actions row */
+.mw-chat-header__status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: rgba(255,255,255,0.95);
+  gap: 5px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.9);
   background: rgba(255,255,255,0.15);
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  margin-right: 4px;
+  white-space: nowrap;
 }
 
 .mw-chat-header__status-dot {
@@ -251,11 +251,61 @@
   background: #10b981;
   border-radius: 50%;
   animation: mw-chat-pulse 2s infinite;
+  flex-shrink: 0;
 }
 
 @keyframes mw-chat-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.5; }
+}
+
+/* Quick toggle button */
+.mw-chat-quick-toggle {
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--mw-border);
+  flex-shrink: 0;
+}
+
+.mw-chat-quick-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid var(--mw-border);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mw-text-sub);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mw-chat-quick-toggle__btn:hover {
+  background: var(--mw-bg-sub);
+  border-color: var(--mw-border-md);
+}
+
+.mw-chat-quick-toggle__btn.is-active {
+  background: var(--mw-bg-sub);
+  color: var(--mw-primary);
+}
+
+.mw-chat-quick-toggle__icon { font-size: 14px; }
+
+.mw-chat-quick-toggle__arrow {
+  font-size: 10px;
+  color: var(--mw-text-ter);
+  transition: transform 0.2s;
+}
+
+.mw-chat-quick-toggle__btn.is-active .mw-chat-quick-toggle__arrow {
+  transform: rotate(180deg);
+}
+
+/* Quick area — collapsed by default */
+.mw-chat-quick--collapsed {
+  display: none !important;
 }
 
 /* ==========================================================
