@@ -5320,11 +5320,17 @@ function gcrev_gbp_posts_create_table(): void {
         error_message TEXT NULL,
         retry_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
         csv_import TINYINT(1) NOT NULL DEFAULT 0,
+        ai_image_status VARCHAR(20) NOT NULL DEFAULT 'none',
+        ai_image_prompt TEXT NULL,
+        ai_image_error VARCHAR(500) NULL,
+        ai_image_generated_at DATETIME NULL,
+        ai_image_manual_override TINYINT(1) NOT NULL DEFAULT 0,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY user_status (user_id, status),
-        KEY status_scheduled (status, scheduled_at)
+        KEY status_scheduled (status, scheduled_at),
+        KEY ai_status (user_id, ai_image_status)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

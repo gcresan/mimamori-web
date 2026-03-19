@@ -128,6 +128,23 @@ wp_enqueue_media();
 .gp-toast.error { background:#dc2626; }
 .gp-toast.show { opacity:1; }
 
+/* AI Image badges */
+.gp-ai-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; margin-left:6px; }
+.gp-ai-badge.ai-done { background:#dcfce7; color:#15803d; }
+.gp-ai-badge.ai-pending { background:#fef3c7; color:#92400e; }
+.gp-ai-badge.ai-generating { background:#dbeafe; color:#1d4ed8; }
+.gp-ai-badge.ai-failed { background:#fee2e2; color:#dc2626; }
+.gp-ai-badge.ai-manual { background:#f3f4f6; color:#6b7280; }
+.gp-ai-badge.ai-none { background:#f1f5f9; color:#94a3b8; }
+
+/* Brand settings form */
+.gp-brand-form { max-width:640px; }
+.gp-color-row { display:flex; align-items:center; gap:8px; }
+.gp-color-input { width:50px; height:34px; padding:2px; border:1px solid #e2e8f0; border-radius:6px; cursor:pointer; }
+.gp-brand-form .gp-form-group { margin-bottom:14px; }
+.gp-toggle-wrap { display:flex; align-items:center; gap:8px; }
+.gp-toggle-wrap input[type="checkbox"] { width:18px; height:18px; }
+
 /* Bulk selection */
 .gp-bulk-bar { display:flex; align-items:center; gap:10px; padding:8px 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:12px; flex-wrap:wrap; min-height:40px; }
 .gp-bulk-bar.hidden { display:none; }
@@ -195,6 +212,7 @@ wp_enqueue_media();
     <div class="gp-tabs">
         <button class="gp-tab active" data-tab="local">📝 投稿管理</button>
         <button class="gp-tab" data-tab="gbp">🌐 Google上の投稿</button>
+        <button class="gp-tab" data-tab="brand">🎨 ブランド設定</button>
     </div>
 
     <!-- ===== ローカル投稿タブ ===== -->
@@ -205,6 +223,7 @@ wp_enqueue_media();
         <button class="gp-btn gp-btn-primary" id="newPostBtn">＋ 新規投稿</button>
         <button class="gp-btn" id="csvImportBtn">📄 CSV一括取込</button>
         <button class="gp-btn" id="csvTemplateBtn">⬇ テンプレートDL</button>
+        <button class="gp-btn" id="bulkGenImgBtn">🖼 AI画像一括生成</button>
     </div>
 
     <!-- フィルタ -->
@@ -254,6 +273,77 @@ wp_enqueue_media();
             <button class="gp-btn" id="gbpLoadMoreBtn">もっと読み込む</button>
         </div>
     </div><!-- /tabGbp -->
+
+    <!-- ===== ブランド設定タブ ===== -->
+    <div class="gp-tab-content" id="tabBrand">
+        <p style="font-size:13px; color:#64748b; margin-bottom:16px;">AI画像生成の方向性をクライアントごとに設定します。</p>
+        <div class="gp-brand-form">
+            <div class="gp-form-row">
+                <div class="gp-form-group">
+                    <label>ブランドカラー（メイン）</label>
+                    <div class="gp-color-row">
+                        <input type="color" class="gp-color-input" id="brandColorPrimary" value="#3b6b5e">
+                        <input type="text" id="brandColorPrimaryText" placeholder="#3b6b5e" style="width:100px;">
+                    </div>
+                </div>
+                <div class="gp-form-group">
+                    <label>ブランドカラー（サブ）</label>
+                    <div class="gp-color-row">
+                        <input type="color" class="gp-color-input" id="brandColorSecondary" value="#f59e0b">
+                        <input type="text" id="brandColorSecondaryText" placeholder="" style="width:100px;">
+                    </div>
+                </div>
+            </div>
+            <div class="gp-form-row">
+                <div class="gp-form-group">
+                    <label>ビジュアルスタイル</label>
+                    <select id="brandVisualStyle">
+                        <option value="photographic">写真風（リアル）</option>
+                        <option value="illustration">イラスト風</option>
+                        <option value="minimalist">ミニマル</option>
+                    </select>
+                </div>
+                <div class="gp-form-group">
+                    <label>トーン・雰囲気</label>
+                    <select id="brandTone">
+                        <option value="warm">あたたかい</option>
+                        <option value="professional">プロフェッショナル</option>
+                        <option value="playful">カジュアル・元気</option>
+                        <option value="elegant">上品・高級感</option>
+                    </select>
+                </div>
+            </div>
+            <div class="gp-form-row">
+                <div class="gp-form-group">
+                    <label>事業者名</label>
+                    <input type="text" id="brandBusinessName" placeholder="例: カフェ みどり">
+                </div>
+                <div class="gp-form-group">
+                    <label>業種</label>
+                    <input type="text" id="brandIndustry" placeholder="例: 飲食店、美容室">
+                </div>
+            </div>
+            <div class="gp-form-group">
+                <label>アスペクト比</label>
+                <select id="brandAspectRatio">
+                    <option value="16:9">16:9（横長）</option>
+                    <option value="4:3">4:3</option>
+                    <option value="1:1">1:1（正方形）</option>
+                </select>
+            </div>
+            <div class="gp-form-group">
+                <label>カスタム指示（200文字以内）</label>
+                <textarea id="brandCustomInstructions" rows="2" maxlength="200" placeholder="例: 人物は含めない、自然の写真を多めに"></textarea>
+            </div>
+            <div class="gp-form-group">
+                <label class="gp-toggle-wrap">
+                    <input type="checkbox" id="brandAutoGenerate" checked>
+                    <span>投稿作成時にAI画像を自動生成する</span>
+                </label>
+            </div>
+            <button class="gp-btn gp-btn-primary" id="saveBrandBtn">設定を保存</button>
+        </div>
+    </div><!-- /tabBrand -->
 
     <!-- 新規/編集モーダル -->
     <div class="gp-modal-overlay" id="postModal" style="display:none;">
@@ -479,6 +569,11 @@ wp_enqueue_media();
         if (p.cta_type) metaHtml += '<span>CTA: ' + escHtml(p.cta_type) + '</span>';
         if (p.csv_import == 1) metaHtml += '<span>📄 CSV取込</span>';
 
+        // AI画像ステータスバッジ
+        var aiStatusLabels = { none: '未生成', pending: '待機中', generating: '生成中', done: 'AI生成済', failed: '生成失敗', manual: '手動設定' };
+        var aiSt = p.ai_image_status || 'none';
+        metaHtml += '<span class="gp-ai-badge ai-' + aiSt + '">' + (aiStatusLabels[aiSt] || aiSt) + '</span>';
+
         var errorHtml = '';
         if (p.status === 'failed' && p.error_message) {
             errorHtml = '<div class="gp-card-error">⚠ ' + escHtml(p.error_message) + '</div>';
@@ -495,6 +590,12 @@ wp_enqueue_media();
         }
         if (p.status === 'failed') {
             actions += '<button class="gp-btn gp-btn-primary" data-action="retry" data-post-id="' + p.id + '">再実行</button>';
+        }
+        // AI画像生成ボタン
+        if (!p.image_url && aiSt !== 'generating') {
+            actions += '<button class="gp-btn" data-action="gen-image" data-post-id="' + p.id + '">🖼 AI画像生成</button>';
+        } else if (aiSt === 'done' || (p.image_url && aiSt !== 'generating')) {
+            actions += '<button class="gp-btn" data-action="gen-image" data-post-id="' + p.id + '">🔄 画像再生成</button>';
         }
         actions += '<button class="gp-btn gp-btn-danger" data-action="delete" data-post-id="' + p.id + '">削除</button>';
 
@@ -816,6 +917,7 @@ wp_enqueue_media();
         else if (action === 'post-now') performAction('post-now', postId, 'この投稿を今すぐGoogleに投稿しますか？');
         else if (action === 'retry') performAction('retry', postId);
         else if (action === 'cancel') performAction('cancel', postId, '予約をキャンセルしますか？');
+        else if (action === 'gen-image') generatePostImage(postId, btn);
     });
 
     // Pagination
@@ -1006,7 +1108,9 @@ wp_enqueue_media();
     // ===== Tabs =====
     var gbpPostsLoaded = false;
     var gbpNextPageToken = null;
+    var brandSettingsLoaded = false;
 
+    var tabMap = { local: 'tabLocal', gbp: 'tabGbp', brand: 'tabBrand' };
     document.querySelector('.gp-tabs').addEventListener('click', function(e) {
         var tab = e.target.closest('.gp-tab');
         if (!tab) return;
@@ -1014,10 +1118,109 @@ wp_enqueue_media();
         document.querySelectorAll('.gp-tab').forEach(function(t){ t.classList.remove('active'); });
         document.querySelectorAll('.gp-tab-content').forEach(function(c){ c.classList.remove('active'); });
         tab.classList.add('active');
-        document.getElementById(target === 'gbp' ? 'tabGbp' : 'tabLocal').classList.add('active');
-        if (target === 'gbp' && !gbpPostsLoaded) {
-            loadGbpPosts();
-        }
+        var tabEl = document.getElementById(tabMap[target] || 'tabLocal');
+        if (tabEl) tabEl.classList.add('active');
+        if (target === 'gbp' && !gbpPostsLoaded) loadGbpPosts();
+        if (target === 'brand' && !brandSettingsLoaded) loadBrandSettings();
+    });
+
+    // ===== AI Image Generation =====
+    function generatePostImage(postId, btn) {
+        var origText = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> 生成中...';
+        fetchJson(restBase + 'meo/posts/' + postId + '/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ force: true })
+        }).then(function(data) {
+            btn.disabled = false;
+            btn.textContent = origText;
+            showToast(data.message || (data.success ? '画像を生成しました。' : 'エラー'), data.success ? 'success' : 'error');
+            if (data.success) loadPosts();
+        }).catch(function() {
+            btn.disabled = false;
+            btn.textContent = origText;
+            showToast('通信エラーが発生しました。', 'error');
+        });
+    }
+
+    // AI画像一括生成
+    document.getElementById('bulkGenImgBtn').addEventListener('click', function() {
+        var btn = this;
+        if (!confirm('画像未設定の投稿に対してAI画像を一括生成しますか？（最大5件ずつ処理）')) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> 生成中...';
+        fetchJson(restBase + 'meo/posts/bulk-generate-images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chunk_size: 5 })
+        }).then(function(data) {
+            btn.disabled = false;
+            btn.textContent = '🖼 AI画像一括生成';
+            showToast(data.message || '完了しました。', data.success ? 'success' : 'error');
+            loadSummary();
+            loadPosts();
+        }).catch(function() {
+            btn.disabled = false;
+            btn.textContent = '🖼 AI画像一括生成';
+            showToast('通信エラーが発生しました。', 'error');
+        });
+    });
+
+    // ===== Brand Settings =====
+    function loadBrandSettings() {
+        fetchJson(restBase + 'meo/posts/brand-settings').then(function(data) {
+            if (!data.success) return;
+            brandSettingsLoaded = true;
+            var s = data.settings;
+            document.getElementById('brandColorPrimary').value = s.color_primary || '#3b6b5e';
+            document.getElementById('brandColorPrimaryText').value = s.color_primary || '';
+            document.getElementById('brandColorSecondary').value = s.color_secondary || '#f59e0b';
+            document.getElementById('brandColorSecondaryText').value = s.color_secondary || '';
+            document.getElementById('brandVisualStyle').value = s.visual_style || 'photographic';
+            document.getElementById('brandTone').value = s.tone || 'warm';
+            document.getElementById('brandBusinessName').value = s.business_name || '';
+            document.getElementById('brandIndustry').value = s.industry || '';
+            document.getElementById('brandAspectRatio').value = s.aspect_ratio || '16:9';
+            document.getElementById('brandCustomInstructions').value = s.custom_instructions || '';
+            document.getElementById('brandAutoGenerate').checked = s.auto_generate !== false;
+        });
+    }
+
+    // カラーピッカー同期
+    document.getElementById('brandColorPrimary').addEventListener('input', function() { document.getElementById('brandColorPrimaryText').value = this.value; });
+    document.getElementById('brandColorPrimaryText').addEventListener('input', function() { document.getElementById('brandColorPrimary').value = this.value; });
+    document.getElementById('brandColorSecondary').addEventListener('input', function() { document.getElementById('brandColorSecondaryText').value = this.value; });
+    document.getElementById('brandColorSecondaryText').addEventListener('input', function() { document.getElementById('brandColorSecondary').value = this.value; });
+
+    document.getElementById('saveBrandBtn').addEventListener('click', function() {
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> 保存中...';
+        fetchJson(restBase + 'meo/posts/brand-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                color_primary: document.getElementById('brandColorPrimaryText').value,
+                color_secondary: document.getElementById('brandColorSecondaryText').value,
+                visual_style: document.getElementById('brandVisualStyle').value,
+                tone: document.getElementById('brandTone').value,
+                business_name: document.getElementById('brandBusinessName').value,
+                industry: document.getElementById('brandIndustry').value,
+                aspect_ratio: document.getElementById('brandAspectRatio').value,
+                custom_instructions: document.getElementById('brandCustomInstructions').value,
+                auto_generate: document.getElementById('brandAutoGenerate').checked,
+            })
+        }).then(function(data) {
+            btn.disabled = false;
+            btn.textContent = '設定を保存';
+            showToast(data.message || '保存しました。', data.success ? 'success' : 'error');
+        }).catch(function() {
+            btn.disabled = false;
+            btn.textContent = '設定を保存';
+            showToast('通信エラーが発生しました。', 'error');
+        });
     });
 
     // ===== GBP Remote Posts =====

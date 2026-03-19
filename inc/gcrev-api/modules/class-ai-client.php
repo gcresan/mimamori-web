@@ -285,4 +285,123 @@ REWRITE_PROMPT;
 
         return $this->call_gemini_api( $prompt );
     }
+
+    // =========================================================
+    // AI 画像生成（Gemini Image Generation）
+    // =========================================================
+
+    /**
+     * Gemini の画像生成機能を使って画像を生成する
+     *
+     * @param  string $prompt  画像生成プロンプト（英語推奨）
+     * @param  array  $options {
+     *   @type string $model        モデル名（デフォルト: gemini-2.0-flash-exp）
+     *   @type string $aspect_ratio アスペクト比（デフォルト: 16:9）
+     * }
+     * @return array {
+     *   @type bool   $success    成功/失敗
+     *   @type string $mime_type  MIMEタイプ（image/png 等）
+     *   @type string $base64_data Base64エンコード画像データ
+     *   @type string $error      エラーメッセージ（失敗時）
+     * }
+     */
+    public function generate_image( string $prompt, array $options = [] ): array {
+        try {
+            $project_id = $this->config->get_gcp_project_id();
+            if ( $project_id === '' ) {
+                return [ 'success' => false, 'mime_type' => '', 'base64_data' => '', 'error' => 'GCPプロジェクトIDが未設定です。' ];
+            }
+
+            $location     = $this->config->get_gemini_location();
+            $model        = $options['model'] ?? 'gemini-2.0-flash-exp';
+            $aspect_ratio = $options['aspect_ratio'] ?? '16:9';
+
+            $host = ( $location === 'global' ) ? 'aiplatform.googleapis.com' : ( $location . '-aiplatform.googleapis.com' );
+
+            $url = sprintf(
+                'https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent',
+                $host,
+                rawurlencode( $project_id ),
+                rawurlencode( $location ),
+                rawurlencode( $model )
+            );
+
+            $access_token = $this->get_vertex_access_token();
+
+            $body = [
+                'contents' => [ [
+                    'role'  => 'user',
+                    'parts' => [ [ 'text' => $prompt ] ],
+                ] ],
+                'generationConfig' => [
+                    'responseModalities' => [ 'TEXT', 'IMAGE' ],
+                    'temperature'        => $options['temperature'] ?? 0.7,
+                    'imageConfig'        => [
+                        'aspectRatio' => $aspect_ratio,
+                    ],
+                ],
+            ];
+
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [ImageGen] Request: model={$model}, aspect={$aspect_ratio}, prompt=" . substr( $prompt, 0, 200 ) . "\n",
+                FILE_APPEND
+            );
+
+            $response = wp_remote_post( $url, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $access_token,
+                    'Content-Type'  => 'application/json; charset=utf-8',
+                ],
+                'body'    => wp_json_encode( $body, JSON_UNESCAPED_UNICODE ),
+                'timeout' => 120,
+            ] );
+
+            if ( is_wp_error( $response ) ) {
+                $err = $response->get_error_message();
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [ImageGen] WP_Error: {$err}\n", FILE_APPEND );
+                return [ 'success' => false, 'mime_type' => '', 'base64_data' => '', 'error' => "通信エラー: {$err}" ];
+            }
+
+            $status = (int) wp_remote_retrieve_response_code( $response );
+            $raw    = (string) wp_remote_retrieve_body( $response );
+
+            if ( $status < 200 || $status >= 300 ) {
+                $json = json_decode( $raw, true );
+                $msg  = $json['error']['message'] ?? "HTTP {$status}";
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [ImageGen] API Error HTTP {$status}: " . substr( $raw, 0, 500 ) . "\n", FILE_APPEND );
+                return [ 'success' => false, 'mime_type' => '', 'base64_data' => '', 'error' => "API エラー: {$msg}" ];
+            }
+
+            $json = json_decode( $raw, true );
+            $parts = $json['candidates'][0]['content']['parts'] ?? [];
+
+            // inlineData を持つ part を探す
+            foreach ( $parts as $part ) {
+                if ( isset( $part['inlineData']['data'] ) && isset( $part['inlineData']['mimeType'] ) ) {
+                    file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " [ImageGen] Success: mime=" . $part['inlineData']['mimeType'] . ", data_len=" . strlen( $part['inlineData']['data'] ) . "\n",
+                        FILE_APPEND
+                    );
+                    return [
+                        'success'     => true,
+                        'mime_type'   => $part['inlineData']['mimeType'],
+                        'base64_data' => $part['inlineData']['data'],
+                        'error'       => '',
+                    ];
+                }
+            }
+
+            // 画像が返ってこなかった
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [ImageGen] No image in response. Parts count=" . count( $parts ) . "\n", FILE_APPEND );
+            return [ 'success' => false, 'mime_type' => '', 'base64_data' => '', 'error' => '画像が生成されませんでした。プロンプトを調整してください。' ];
+
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [ImageGen] Exception: " . $e->getMessage() . "\n", FILE_APPEND );
+            return [ 'success' => false, 'mime_type' => '', 'base64_data' => '', 'error' => $e->getMessage() ];
+        }
+    }
 }

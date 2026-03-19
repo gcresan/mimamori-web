@@ -532,6 +532,29 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_bulk_delete_gbp_posts' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        // AI画像生成
+        register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)/generate-image', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_generate_post_image' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/bulk-generate-images', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_bulk_generate_images' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/posts/brand-settings', [
+            [
+                'methods'             => 'GET',
+                'callback'            => [ $this, 'rest_get_brand_settings' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
+            [
+                'methods'             => 'POST',
+                'callback'            => [ $this, 'rest_save_brand_settings' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
+        ]);
         register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_update_gbp_post' ],
@@ -15794,6 +15817,322 @@ PROMPT;
             'success' => $result['success'],
             'message' => $result['success'] ? '削除しました。' : $result['message'],
         ], 200 );
+    }
+
+    // =========================================================
+    // AI 画像生成 — サービスメソッド
+    // =========================================================
+
+    /**
+     * 投稿本文からテーマを分類
+     */
+    private function classify_post_theme( string $summary, string $topic_type, string $industry ): string {
+        $themes = 'seasonal, service, event, offer, update, customer_story, tips, behind_scenes';
+        $prompt = "Classify the following Japanese business post into exactly ONE theme keyword.\nAllowed themes: {$themes}\nPost type: {$topic_type}\nIndustry: {$industry}\nPost content: " . mb_substr( $summary, 0, 300 ) . "\n\nReturn ONLY the theme keyword, nothing else.";
+
+        try {
+            $result = $this->ai->call_gemini_api( $prompt, [ 'temperature' => 0.1, 'maxOutputTokens' => 20 ] );
+            $theme  = strtolower( trim( $result ) );
+            $valid  = [ 'seasonal', 'service', 'event', 'offer', 'update', 'customer_story', 'tips', 'behind_scenes' ];
+            return in_array( $theme, $valid, true ) ? $theme : 'update';
+        } catch ( \Throwable $e ) {
+            return 'update';
+        }
+    }
+
+    /**
+     * テーマ + ブランド設定から画像生成プロンプトを構築
+     */
+    private function build_image_prompt( string $summary, string $theme, array $brand ): string {
+        $theme_directions = [
+            'seasonal'       => 'warm seasonal atmosphere, nature elements, festive mood appropriate to the current season',
+            'service'        => 'professional service showcase, clean modern environment, trustworthy business imagery',
+            'event'          => 'exciting event atmosphere, people gathering, celebration mood',
+            'offer'          => 'attractive promotional imagery, bright and inviting, special deal atmosphere',
+            'update'         => 'modern business communication, professional update imagery, clean design',
+            'customer_story' => 'satisfied customers, positive testimonial atmosphere, trust and reliability',
+            'tips'           => 'educational and helpful imagery, clear informative visual, expert guidance',
+            'behind_scenes'  => 'authentic workplace scenery, team spirit, behind the scenes of a business',
+        ];
+        $direction = $theme_directions[ $theme ] ?? $theme_directions['update'];
+
+        $style_map = [
+            'photographic' => 'photorealistic, high-quality photograph style',
+            'illustration' => 'modern flat illustration style, clean vector aesthetic',
+            'minimalist'   => 'minimalist clean design, simple shapes, lots of white space',
+        ];
+        $style = $style_map[ $brand['visual_style'] ?? 'photographic' ] ?? $style_map['photographic'];
+
+        $tone_map = [
+            'warm'         => 'warm and inviting color tones, soft lighting',
+            'professional' => 'professional and corporate feel, cool neutral tones',
+            'playful'      => 'bright and playful colors, energetic mood',
+            'elegant'      => 'elegant and sophisticated, refined color palette',
+        ];
+        $tone = $tone_map[ $brand['tone'] ?? 'warm' ] ?? $tone_map['warm'];
+
+        $industry = ! empty( $brand['industry'] ) ? "for a {$brand['industry']} business" : '';
+        $color_hint = '';
+        if ( ! empty( $brand['color_primary'] ) ) {
+            $color_hint = "Color palette should incorporate {$brand['color_primary']}";
+            if ( ! empty( $brand['color_secondary'] ) ) {
+                $color_hint .= " and {$brand['color_secondary']}";
+            }
+            $color_hint .= '. ';
+        }
+
+        $custom = ! empty( $brand['custom_instructions'] ) ? $brand['custom_instructions'] . '. ' : '';
+
+        $prompt = "Create a professional, high-quality image for a Google Business Profile post {$industry}. "
+            . "Visual direction: {$direction}. "
+            . "Style: {$style}. "
+            . "Mood: {$tone}. "
+            . $color_hint
+            . $custom
+            . "The image should be clean, trustworthy, and suitable for a business social media post. "
+            . "IMPORTANT: No text overlays. No watermarks. No logos. No written words in the image.";
+
+        return $prompt;
+    }
+
+    /**
+     * Base64画像をWordPressメディアライブラリに保存
+     */
+    private function save_base64_to_media( int $user_id, string $base64, string $mime_type, string $filename ): array {
+        $decoded = base64_decode( $base64 );
+        if ( $decoded === false ) {
+            return [ 'success' => false, 'attachment_id' => 0, 'url' => '', 'error' => 'Base64デコードに失敗しました。' ];
+        }
+
+        $ext_map = [ 'image/png' => '.png', 'image/jpeg' => '.jpg', 'image/webp' => '.webp' ];
+        $ext     = $ext_map[ $mime_type ] ?? '.png';
+        $file    = $filename . $ext;
+
+        $upload = wp_upload_bits( $file, null, $decoded );
+        if ( ! empty( $upload['error'] ) ) {
+            return [ 'success' => false, 'attachment_id' => 0, 'url' => '', 'error' => 'ファイル保存エラー: ' . $upload['error'] ];
+        }
+
+        $attachment = [
+            'post_mime_type' => $mime_type,
+            'post_title'     => sanitize_file_name( $filename ),
+            'post_content'   => '',
+            'post_status'    => 'inherit',
+            'post_author'    => $user_id,
+        ];
+        $attach_id = wp_insert_attachment( $attachment, $upload['file'] );
+        if ( is_wp_error( $attach_id ) ) {
+            return [ 'success' => false, 'attachment_id' => 0, 'url' => '', 'error' => 'メディア登録エラー。' ];
+        }
+
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        $metadata = wp_generate_attachment_metadata( $attach_id, $upload['file'] );
+        wp_update_attachment_metadata( $attach_id, $metadata );
+
+        return [
+            'success'       => true,
+            'attachment_id' => $attach_id,
+            'url'           => $upload['url'],
+            'error'         => '',
+        ];
+    }
+
+    /**
+     * 単一投稿のAI画像を生成
+     */
+    private function generate_post_image( int $post_id, int $user_id, bool $force = false ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_gbp_posts';
+
+        $post = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d", $post_id, $user_id
+        ), ARRAY_A );
+
+        if ( ! $post ) {
+            return [ 'success' => false, 'image_url' => '', 'attachment_id' => 0, 'message' => '投稿が見つかりません。' ];
+        }
+
+        // 手動差し替え済みで強制再生成でない場合はスキップ
+        if ( ! $force && (int) $post['ai_image_manual_override'] === 1 ) {
+            return [ 'success' => false, 'image_url' => $post['image_url'] ?? '', 'attachment_id' => 0, 'message' => '手動設定の画像が優先されています。' ];
+        }
+
+        // 同時生成防止
+        if ( $post['ai_image_status'] === 'generating' ) {
+            return [ 'success' => false, 'image_url' => '', 'attachment_id' => 0, 'message' => '画像生成中です。' ];
+        }
+
+        // ステータスを generating に更新
+        $wpdb->update( $table, [ 'ai_image_status' => 'generating', 'updated_at' => current_time( 'mysql' ) ], [ 'id' => $post_id ] );
+
+        // ブランド設定取得
+        $brand_raw = get_user_meta( $user_id, '_gcrev_gbp_brand_settings', true );
+        $brand     = is_string( $brand_raw ) ? json_decode( $brand_raw, true ) : [];
+        if ( ! is_array( $brand ) ) $brand = [];
+
+        $industry   = $brand['industry'] ?? '';
+        $theme      = $this->classify_post_theme( $post['summary'], $post['topic_type'], $industry );
+        $prompt     = $this->build_image_prompt( $post['summary'], $theme, $brand );
+        $aspect     = $brand['aspect_ratio'] ?? '16:9';
+
+        // プロンプト保存
+        $wpdb->update( $table, [ 'ai_image_prompt' => $prompt ], [ 'id' => $post_id ] );
+
+        // 画像生成
+        $result = $this->ai->generate_image( $prompt, [ 'aspect_ratio' => $aspect ] );
+
+        if ( ! $result['success'] ) {
+            $wpdb->update( $table, [
+                'ai_image_status' => 'failed',
+                'ai_image_error'  => mb_substr( $result['error'], 0, 500 ),
+                'updated_at'      => current_time( 'mysql' ),
+            ], [ 'id' => $post_id ] );
+            return [ 'success' => false, 'image_url' => '', 'attachment_id' => 0, 'message' => $result['error'] ];
+        }
+
+        // メディアライブラリに保存
+        $filename = 'gbp-post-' . $post_id . '-' . time();
+        $media    = $this->save_base64_to_media( $user_id, $result['base64_data'], $result['mime_type'], $filename );
+
+        if ( ! $media['success'] ) {
+            $wpdb->update( $table, [
+                'ai_image_status' => 'failed',
+                'ai_image_error'  => $media['error'],
+                'updated_at'      => current_time( 'mysql' ),
+            ], [ 'id' => $post_id ] );
+            return [ 'success' => false, 'image_url' => '', 'attachment_id' => 0, 'message' => $media['error'] ];
+        }
+
+        // 成功 → DB更新
+        $wpdb->update( $table, [
+            'image_url'              => $media['url'],
+            'image_attachment_id'    => $media['attachment_id'],
+            'ai_image_status'        => 'done',
+            'ai_image_error'         => null,
+            'ai_image_generated_at'  => current_time( 'mysql' ),
+            'ai_image_manual_override' => 0,
+            'updated_at'             => current_time( 'mysql' ),
+        ], [ 'id' => $post_id ] );
+
+        return [
+            'success'       => true,
+            'image_url'     => $media['url'],
+            'attachment_id' => $media['attachment_id'],
+            'message'       => '画像を生成しました。',
+        ];
+    }
+
+    // =========================================================
+    // AI 画像生成 — REST コールバック
+    // =========================================================
+
+    /**
+     * 単一投稿のAI画像生成
+     */
+    public function rest_generate_post_image( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $post_id = absint( $request['id'] );
+        $force   = (bool) $request->get_param( 'force' );
+
+        $result = $this->generate_post_image( $post_id, $user_id, $force );
+        return new \WP_REST_Response( $result, 200 );
+    }
+
+    /**
+     * AI画像一括生成
+     */
+    public function rest_bulk_generate_images( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id    = get_current_user_id();
+        $table      = $wpdb->prefix . 'gcrev_gbp_posts';
+        $chunk_size = min( 5, max( 1, absint( $request->get_param( 'chunk_size' ) ?: 5 ) ) );
+
+        $lock_key = "gcrev_lock_bulk_image_{$user_id}";
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '一括生成が実行中です。' ], 429 );
+        }
+        set_transient( $lock_key, 1, 300 );
+
+        // 画像未生成の投稿を取得
+        $posts = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id FROM {$table} WHERE user_id = %d AND (image_url IS NULL OR image_url = '') AND ai_image_status NOT IN ('generating','manual') ORDER BY scheduled_at ASC, created_at ASC LIMIT %d",
+            $user_id, $chunk_size
+        ), ARRAY_A );
+
+        $remaining = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND (image_url IS NULL OR image_url = '') AND ai_image_status NOT IN ('generating','manual')",
+            $user_id
+        ) );
+
+        $succeeded = 0;
+        $failed    = 0;
+
+        foreach ( $posts as $row ) {
+            $r = $this->generate_post_image( (int) $row['id'], $user_id );
+            if ( $r['success'] ) {
+                $succeeded++;
+            } else {
+                $failed++;
+            }
+            sleep( 2 );
+        }
+
+        delete_transient( $lock_key );
+
+        $processed = $succeeded + $failed;
+        return new \WP_REST_Response( [
+            'success'   => true,
+            'processed' => $processed,
+            'succeeded' => $succeeded,
+            'failed'    => $failed,
+            'remaining' => max( 0, $remaining - $processed ),
+            'message'   => "{$succeeded}件生成、{$failed}件失敗。残り" . max( 0, $remaining - $processed ) . "件。",
+        ], 200 );
+    }
+
+    /**
+     * ブランド設定取得
+     */
+    public function rest_get_brand_settings( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id  = get_current_user_id();
+        $raw      = get_user_meta( $user_id, '_gcrev_gbp_brand_settings', true );
+        $settings = is_string( $raw ) ? json_decode( $raw, true ) : [];
+        if ( ! is_array( $settings ) ) $settings = [];
+
+        $defaults = [
+            'color_primary'      => '',
+            'color_secondary'    => '',
+            'visual_style'       => 'photographic',
+            'tone'               => 'warm',
+            'industry'           => '',
+            'business_name'      => '',
+            'custom_instructions' => '',
+            'auto_generate'      => true,
+            'aspect_ratio'       => '16:9',
+        ];
+
+        return new \WP_REST_Response( [ 'success' => true, 'settings' => array_merge( $defaults, $settings ) ], 200 );
+    }
+
+    /**
+     * ブランド設定保存
+     */
+    public function rest_save_brand_settings( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id  = get_current_user_id();
+        $settings = [
+            'color_primary'      => sanitize_text_field( $request->get_param( 'color_primary' ) ?: '' ),
+            'color_secondary'    => sanitize_text_field( $request->get_param( 'color_secondary' ) ?: '' ),
+            'visual_style'       => sanitize_text_field( $request->get_param( 'visual_style' ) ?: 'photographic' ),
+            'tone'               => sanitize_text_field( $request->get_param( 'tone' ) ?: 'warm' ),
+            'industry'           => sanitize_text_field( $request->get_param( 'industry' ) ?: '' ),
+            'business_name'      => sanitize_text_field( $request->get_param( 'business_name' ) ?: '' ),
+            'custom_instructions' => sanitize_textarea_field( mb_substr( $request->get_param( 'custom_instructions' ) ?: '', 0, 200 ) ),
+            'auto_generate'      => (bool) $request->get_param( 'auto_generate' ),
+            'aspect_ratio'       => sanitize_text_field( $request->get_param( 'aspect_ratio' ) ?: '16:9' ),
+        ];
+        update_user_meta( $user_id, '_gcrev_gbp_brand_settings', wp_json_encode( $settings, JSON_UNESCAPED_UNICODE ) );
+
+        return new \WP_REST_Response( [ 'success' => true, 'message' => 'ブランド設定を保存しました。' ], 200 );
     }
 
     /**
