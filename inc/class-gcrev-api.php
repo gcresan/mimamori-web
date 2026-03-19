@@ -1023,28 +1023,51 @@ class Gcrev_Insight_API {
      * 再入可能: 外側の呼び出しで既にフィルタが設定済みの場合は false を返し、
      * restore_country_filter(false) で解除されないようにする。
      */
+    /** @var bool 除外パスフィルタが設定されているか */
+    private bool $exclude_paths_set = false;
+
     private function maybe_set_country_filter( int $user_id ): bool {
         if ( $this->ga4->has_country_filter() ) {
             return false; // 外側で既に設定済み — 内側では解除しない
         }
+
+        $was_set = false;
         if ( $this->is_exclude_foreign( $user_id ) ) {
             $this->ga4->set_country_filter( 'Japan' );
-            return true;
+            $was_set = true;
         }
-        return false;
+
+        // 除外URL条件を適用
+        if ( ! $this->exclude_paths_set ) {
+            $exclude_paths = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+            if ( is_array( $exclude_paths ) && ! empty( $exclude_paths ) ) {
+                $this->ga4->set_exclude_paths_filter( $exclude_paths );
+                $this->exclude_paths_set = true;
+            }
+        }
+
+        return $was_set;
     }
 
     /**
-     * 国フィルタを解除する（maybe_set_country_filter の対）
+     * 国フィルタ + 除外パスフィルタを解除する（maybe_set_country_filter の対）
      */
     private function restore_country_filter( bool $was_set ): void {
         if ( $was_set ) {
             $this->ga4->set_country_filter( null );
         }
+        if ( $this->exclude_paths_set ) {
+            $this->ga4->set_page_path_filter( null );
+            $this->exclude_paths_set = false;
+        }
     }
 
     private function cache_key_dashboard(int $user_id, string $range): string {
         $suffix = $this->ga4->has_country_filter() ? '_jp' : '';
+        // 除外パス設定がある場合はキャッシュキーを差別化
+        if ( $this->exclude_paths_set ) {
+            $suffix .= '_ex';
+        }
         return "gcrev_dash_{$user_id}_{$range}{$suffix}";
     }
 
@@ -2522,6 +2545,24 @@ class Gcrev_Insight_API {
             $maps_domain = preg_replace( '/^www\./i', '', strtolower( trim( $maps_domain, '/' ) ) );
         }
         update_user_meta( $user_id, '_gcrev_maps_domain', $maps_domain );
+
+        // 除外URL条件（1行1パス、配列で保存）
+        $exclude_paths_raw = $params['exclude_paths'] ?? '';
+        $exclude_paths = [];
+        if ( is_string( $exclude_paths_raw ) && $exclude_paths_raw !== '' ) {
+            $lines = explode( "\n", $exclude_paths_raw );
+            foreach ( $lines as $line ) {
+                $path = trim( sanitize_text_field( $line ) );
+                if ( $path !== '' ) {
+                    // 先頭 / を保証
+                    if ( $path[0] !== '/' ) {
+                        $path = '/' . $path;
+                    }
+                    $exclude_paths[] = $path;
+                }
+            }
+        }
+        update_user_meta( $user_id, '_gcrev_exclude_paths', $exclude_paths );
 
         update_user_meta($user_id, 'gcrev_client_area_type',      $area_type);
         update_user_meta($user_id, 'gcrev_client_area_pref',      sanitize_text_field($params['area_pref'] ?? ''));

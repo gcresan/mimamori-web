@@ -34,6 +34,13 @@ if ( empty( $initial_site_url ) ) {
 // Maps（GBP）用ドメイン
 $maps_domain = get_user_meta( $user_id, '_gcrev_maps_domain', true ) ?: '';
 
+// 除外URL条件
+$exclude_paths_raw = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+$exclude_paths_text = '';
+if ( is_array( $exclude_paths_raw ) && ! empty( $exclude_paths_raw ) ) {
+    $exclude_paths_text = implode( "\n", $exclude_paths_raw );
+}
+
 get_header();
 ?>
 
@@ -417,6 +424,11 @@ get_header();
                 <label for="cs-maps-domain">Googleマップ用ドメイン <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
                 <input type="text" id="cs-maps-domain" placeholder="例: example.co.jp" value="<?php echo esc_attr( $maps_domain ); ?>">
                 <small class="form-text">Googleビジネスプロフィール（GBP）に登録しているWebサイトのドメインが、対象サイトURLと異なる場合に設定してください。未入力の場合は対象サイトURLのドメインで照合します。</small>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label for="cs-exclude-paths">除外URL条件 <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
+                <textarea id="cs-exclude-paths" rows="3" placeholder="例:&#10;/fukuyama/&#10;/recruit/&#10;/campaign/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $exclude_paths_text ); ?></textarea>
+                <small class="form-text">解析対象から除外したいURLパスを1行に1つずつ入力してください。同一ドメイン内の別LP・採用ページなどのデータを集計対象から外す場合に使用します。<br>例: <code>/fukuyama/</code> と入力すると、<code>https://example.com/fukuyama/</code> 配下のページデータが除外されます。</small>
             </div>
         </div>
 
@@ -1266,6 +1278,7 @@ get_header();
                 body: JSON.stringify({
                     site_url:               siteUrl,
                     maps_domain:            (document.getElementById('cs-maps-domain').value || '').trim(),
+                    exclude_paths:          (document.getElementById('cs-exclude-paths').value || '').trim(),
                     area_type:              areaType,
                     area_pref:              areaPref,
                     area_city:              areaCity,

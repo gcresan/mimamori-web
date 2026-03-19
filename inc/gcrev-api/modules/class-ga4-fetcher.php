@@ -42,7 +42,7 @@ class Gcrev_GA4_Fetcher {
     /** @var ?FilterExpression 国フィルタ（set_country_filter で設定） */
     private ?FilterExpression $country_filter = null;
 
-    /** @var ?FilterExpression pagePathフィルタ（解析ユニットのディレクトリ分離用） */
+    /** @var ?FilterExpression pagePathフィルタ（除外URL条件等で使用） */
     private ?FilterExpression $page_path_filter = null;
 
     /**
@@ -90,7 +90,7 @@ class Gcrev_GA4_Fetcher {
     }
 
     /**
-     * pagePath フィルタを設定する。解析ユニットのディレクトリ分離用。
+     * pagePath フィルタを設定する。単一プレフィックス指定（BEGINS_WITH）。
      * null を渡すとフィルタを解除する。
      *
      * @param ?string $prefix パスプレフィックス（例: '/fukuyama/'）BEGINS_WITH でマッチ
@@ -109,6 +109,58 @@ class Gcrev_GA4_Fetcher {
                 'field_name'    => 'pagePath',
                 'string_filter' => $sf,
             ]),
+        ]);
+    }
+
+    /**
+     * 除外URL条件を設定する。指定パスプレフィックスに一致するページを除外する。
+     * 複数パスの場合は OR で結合し、NOT でラップする。
+     *
+     * @param array $paths 除外パスプレフィックスの配列（例: ['/fukuyama/', '/recruit/']）
+     */
+    public function set_exclude_paths_filter( array $paths ): void {
+        if ( empty( $paths ) ) {
+            $this->page_path_filter = null;
+            return;
+        }
+
+        // 各パスを BEGINS_WITH で個別に FilterExpression 化
+        $path_filters = [];
+        foreach ( $paths as $path ) {
+            $path = trim( $path );
+            if ( $path === '' ) continue;
+
+            $sf = new \Google\Analytics\Data\V1beta\Filter\StringFilter([
+                'value'      => $path,
+                'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::BEGINS_WITH,
+            ]);
+            $path_filters[] = new FilterExpression([
+                'filter' => new Filter([
+                    'field_name'    => 'pagePath',
+                    'string_filter' => $sf,
+                ]),
+            ]);
+        }
+
+        if ( empty( $path_filters ) ) {
+            $this->page_path_filter = null;
+            return;
+        }
+
+        // 複数パスを OR 結合
+        if ( count( $path_filters ) === 1 ) {
+            $or_expr = $path_filters[0];
+        } else {
+            $or_expr = new FilterExpression([
+                'or_group' => new FilterExpressionList([
+                    'expressions' => $path_filters,
+                ]),
+            ]);
+        }
+
+        // NOT でラップ（除外）
+        $this->page_path_filter = new FilterExpression([
+            'not_expression' => $or_expr,
         ]);
     }
 
