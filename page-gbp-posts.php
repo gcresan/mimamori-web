@@ -128,6 +128,16 @@ wp_enqueue_media();
 .gp-toast.error { background:#dc2626; }
 .gp-toast.show { opacity:1; }
 
+/* Bulk selection */
+.gp-bulk-bar { display:flex; align-items:center; gap:10px; padding:8px 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:12px; flex-wrap:wrap; min-height:40px; }
+.gp-bulk-bar.hidden { display:none; }
+.gp-select-all-wrap { display:flex; align-items:center; gap:6px; font-size:12px; color:#475569; cursor:pointer; }
+.gp-select-all-wrap input[type="checkbox"] { width:16px; height:16px; cursor:pointer; }
+.gp-bulk-count { font-size:12px; color:#475569; font-weight:600; }
+.gp-bulk-actions { margin-left:auto; display:flex; gap:8px; }
+.gp-card-checkbox { position:absolute; top:16px; left:12px; width:16px; height:16px; cursor:pointer; z-index:2; }
+.gp-post-card { padding-left:40px; }
+
 /* Tabs */
 .gp-tabs { display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid #e2e8f0; }
 .gp-tab { padding:10px 20px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; background:none; border-top:none; border-left:none; border-right:none; font-family:inherit; }
@@ -210,6 +220,18 @@ wp_enqueue_media();
             <option value="scheduled_asc">予約日時順</option>
         </select>
         <button class="gp-refresh-btn" id="refreshBtn">🔄 更新</button>
+    </div>
+
+    <!-- 一括操作バー -->
+    <div class="gp-bulk-bar" id="bulkBar">
+        <label class="gp-select-all-wrap">
+            <input type="checkbox" id="selectAllCb">
+            <span>すべて選択</span>
+        </label>
+        <span class="gp-bulk-count" id="bulkCount"></span>
+        <div class="gp-bulk-actions">
+            <button class="gp-btn gp-btn-danger" id="bulkDeleteBtn" disabled>🗑 選択した投稿を削除</button>
+        </div>
     </div>
 
     <!-- 投稿一覧 -->
@@ -425,6 +447,9 @@ wp_enqueue_media();
             data.posts.forEach(function(p) { html += renderPostCard(p); });
             list.innerHTML = html;
             renderPagination();
+            document.getElementById('selectAllCb').checked = false;
+            document.getElementById('selectAllCb').indeterminate = false;
+            updateBulkUI();
         });
     }
 
@@ -469,6 +494,7 @@ wp_enqueue_media();
         actions += '<button class="gp-btn gp-btn-danger" data-action="delete" data-post-id="' + p.id + '">削除</button>';
 
         return '<div class="gp-post-card gp-status-' + p.status + '">'
+            + '<input type="checkbox" class="gp-card-checkbox" data-post-id="' + p.id + '">'
             + '<div class="gp-card-header">'
             +   '<span class="gp-status-badge ' + badgeClass + '">' + escHtml(statusLabels[p.status] || p.status) + '</span>'
             +   '<span class="gp-card-title">' + escHtml(titleText) + '</span>'
@@ -866,6 +892,104 @@ wp_enqueue_media();
     document.getElementById('csvPreviewBtn').addEventListener('click', previewCsv);
     document.getElementById('csvSubmitBtn').addEventListener('click', submitCsv);
     document.getElementById('csvTemplateBtn').addEventListener('click', downloadCsvTemplate);
+
+    // ===== Bulk Selection & Delete =====
+    function getSelectedIds() {
+        var ids = [];
+        document.querySelectorAll('.gp-card-checkbox:checked').forEach(function(cb) {
+            ids.push(parseInt(cb.dataset.postId, 10));
+        });
+        return ids;
+    }
+
+    function updateBulkUI() {
+        var all = document.querySelectorAll('.gp-card-checkbox');
+        var checked = document.querySelectorAll('.gp-card-checkbox:checked');
+        var count = checked.length;
+        var total = all.length;
+        var selectAllCb = document.getElementById('selectAllCb');
+        var bulkCount = document.getElementById('bulkCount');
+        var bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+
+        bulkDeleteBtn.disabled = count === 0;
+        bulkCount.textContent = count > 0 ? count + '件選択中' : '';
+
+        if (total === 0) {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = false;
+        } else if (count === total) {
+            selectAllCb.checked = true;
+            selectAllCb.indeterminate = false;
+        } else if (count > 0) {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = true;
+        } else {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = false;
+        }
+    }
+
+    // すべて選択 / 解除
+    document.getElementById('selectAllCb').addEventListener('change', function() {
+        var isChecked = this.checked;
+        document.querySelectorAll('.gp-card-checkbox').forEach(function(cb) {
+            cb.checked = isChecked;
+        });
+        updateBulkUI();
+    });
+
+    // 個別チェックボックスの変更を監視（イベント委譲）
+    document.getElementById('postList').addEventListener('change', function(e) {
+        if (e.target.classList.contains('gp-card-checkbox')) {
+            updateBulkUI();
+        }
+    });
+
+    // 一括削除
+    document.getElementById('bulkDeleteBtn').addEventListener('click', function() {
+        var ids = getSelectedIds();
+        if (ids.length === 0) return;
+
+        // 投稿済みが含まれるか確認
+        var postedCount = 0;
+        ids.forEach(function(id) {
+            var cb = document.querySelector('.gp-card-checkbox[data-post-id="' + id + '"]');
+            if (cb) {
+                var card = cb.closest('.gp-post-card');
+                if (card && card.classList.contains('gp-status-posted')) postedCount++;
+            }
+        });
+
+        var msg = ids.length + '件の投稿を削除しますか？';
+        if (postedCount > 0) {
+            msg += '\n\n※ 投稿済み' + postedCount + '件が含まれています。\nGoogle上の投稿はそのまま残り、みまもりウェブの管理データのみ削除されます。';
+        }
+        if (!confirm(msg)) return;
+
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> 削除中...';
+
+        fetchJson(restBase + 'meo/posts/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: ids })
+        }).then(function(data) {
+            btn.disabled = false;
+            btn.textContent = '🗑 選択した投稿を削除';
+            showToast(data.message || (data.success ? '削除しました。' : 'エラー'), data.success ? 'success' : 'error');
+            if (data.success) {
+                document.getElementById('selectAllCb').checked = false;
+                document.getElementById('selectAllCb').indeterminate = false;
+                loadSummary();
+                loadPosts();
+            }
+        }).catch(function() {
+            btn.disabled = false;
+            btn.textContent = '🗑 選択した投稿を削除';
+            showToast('通信エラーが発生しました。', 'error');
+        });
+    });
 
     // ===== Tabs =====
     var gbpPostsLoaded = false;

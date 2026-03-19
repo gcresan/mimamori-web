@@ -527,6 +527,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_import_gbp_posts_csv' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/meo/posts/bulk-delete', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_bulk_delete_gbp_posts' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_update_gbp_post' ],
@@ -15575,6 +15580,78 @@ PROMPT;
         ], [ 'id' => $post_id ] );
 
         return new \WP_REST_Response( [ 'success' => true, 'message' => '予約をキャンセルしました。' ], 200 );
+    }
+
+    /**
+     * 投稿を一括削除
+     *
+     * 投稿済み（posted）はみまもりウェブ管理データのみ削除（Google側は維持）。
+     * それ以外のステータスは通常削除。
+     */
+    public function rest_bulk_delete_gbp_posts( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_gbp_posts';
+        $ids_raw = $request->get_param( 'ids' );
+
+        if ( empty( $ids_raw ) || ! is_array( $ids_raw ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '削除対象が指定されていません。' ], 400 );
+        }
+
+        // IDをサニタイズ
+        $ids = array_map( 'absint', $ids_raw );
+        $ids = array_filter( $ids );
+        if ( empty( $ids ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '有効なIDがありません。' ], 400 );
+        }
+
+        // 自分の投稿のみ取得
+        $placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+        // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+        $posts = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, status, gbp_post_name FROM {$table} WHERE id IN ({$placeholders}) AND user_id = %d",
+            array_merge( $ids, [ $user_id ] )
+        ), ARRAY_A );
+
+        if ( empty( $posts ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '削除可能な投稿が見つかりません。' ], 404 );
+        }
+
+        $deleted       = 0;
+        $posted_count  = 0;
+        $failed_ids    = [];
+
+        foreach ( $posts as $post ) {
+            $post_id = (int) $post['id'];
+
+            if ( $post['status'] === 'posted' ) {
+                // 投稿済み: みまもりウェブ上の管理データのみ削除（Google側は維持）
+                $posted_count++;
+            }
+
+            $result = $wpdb->delete( $table, [ 'id' => $post_id, 'user_id' => $user_id ] );
+            if ( $result ) {
+                $deleted++;
+            } else {
+                $failed_ids[] = $post_id;
+            }
+        }
+
+        $message = "{$deleted}件を削除しました。";
+        if ( $posted_count > 0 ) {
+            $message .= "（うち投稿済み{$posted_count}件はGoogle上の投稿は維持されます）";
+        }
+        if ( ! empty( $failed_ids ) ) {
+            $message .= " " . count( $failed_ids ) . "件は削除に失敗しました。";
+        }
+
+        return new \WP_REST_Response( [
+            'success'      => true,
+            'deleted'      => $deleted,
+            'posted_kept'  => $posted_count,
+            'failed_count' => count( $failed_ids ),
+            'message'      => $message,
+        ], 200 );
     }
 
     /**
