@@ -581,9 +581,9 @@ if ($infographic) {
         $cv_sub   = !empty($cv_label_custom) ? '' : 'お問い合わせ・資料請求など';
 
         $kpi_items = [
-          'visits' => ['label' => '訪問数',   'sub' => '', 'icon' => '👥', 'metric' => 'sessions'],
-          'cv'     => ['label' => $cv_label,  'sub' => $cv_sub, 'icon' => '🎯', 'metric' => 'cv'],
-          'meo'    => ['label' => 'Googleマップでの表示回数', 'sub' => '', 'icon' => '📍', 'metric' => 'meo'],
+          'visits' => ['label' => '訪問数',       'sub' => 'ホームページを見に来た人数', 'icon' => '👥', 'metric' => 'sessions'],
+          'cv'     => ['label' => $cv_label,      'sub' => $cv_sub,                     'icon' => '🎯', 'metric' => 'cv'],
+          'meo'    => ['label' => 'マップ表示回数', 'sub' => 'Googleマップで見られた回数', 'icon' => '📍', 'metric' => 'meo'],
         ];
         $first_kpi = true;
         foreach ($kpi_items as $key => $meta):
