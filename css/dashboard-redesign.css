@@ -1109,6 +1109,75 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   text-decoration: underline;
 }
 
+/* ========== Summary 3-Block Layout ========== */
+.info-summary-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.info-summary-block {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--mw-border-light);
+}
+
+.info-summary-block:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.info-summary-block:first-child {
+  padding-top: 0;
+}
+
+.info-summary-block-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mw-text-heading);
+  margin-bottom: 10px;
+  letter-spacing: 0.02em;
+}
+
+.info-summary-block-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.info-summary-block-text {
+  font-size: 15px;
+  color: var(--mw-text-secondary);
+  line-height: 1.9;
+}
+
+.info-summary-block-text p {
+  margin: 0;
+}
+
+.info-summary-block-text strong {
+  color: var(--mw-text-primary);
+}
+
+.info-summary-block-text .point-head {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mw-text-heading);
+  display: block;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 600px) {
+  .info-summary-block {
+    padding: 16px 0;
+  }
+  .info-summary-block-text {
+    font-size: 14px;
+    line-height: 1.8;
+  }
+}
+
 /* ========== Monthly Empty State ========== */
 .monthly-empty {
   text-align: center;

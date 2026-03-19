@@ -947,92 +947,71 @@ if ($infographic) {
         <?php endif; ?>
       </div>
 
-      <div class="info-monthly-summary">
-        <?php if (!empty($monthly_report['summary'])): ?>
-          <?php echo enhance_report_text($monthly_report['summary'], 'default'); ?>
-        <?php else: ?>
-          <p class="info-monthly-wait">今月のレポートサマリーを生成中です...</p>
+      <?php if (!empty($monthly_report['summary'])): ?>
+      <?php
+      // サマリーテキストを3ブロック（状況・要因・次の行動）に構造化して表示
+      $summary_text = $monthly_report['summary'];
+      $highlight_detail_fact    = $highlight_details['top_issue']['fact'] ?? '';
+      $highlight_detail_causes  = $highlight_details['top_issue']['causes'] ?? [];
+      $highlight_detail_actions = $highlight_details['top_issue']['actions'] ?? [];
+      $next_action = !empty($infographic['action'])
+          ? $infographic['action']
+          : ($highlights['opportunity'] ?? '');
+
+      // ハイライトから3ブロックの素材を組み立て
+      $block_situation = $summary_text;
+      $block_cause     = $highlight_detail_fact;
+      if (empty($block_cause) && !empty($highlight_detail_causes)) {
+          $block_cause = implode('。', array_slice($highlight_detail_causes, 0, 2));
+      }
+      $block_action = '';
+      if (!empty($highlight_detail_actions)) {
+          $block_action = implode('。', array_slice($highlight_detail_actions, 0, 2));
+      } elseif (!empty($next_action)) {
+          $block_action = $next_action;
+      }
+      ?>
+
+      <div class="info-summary-blocks">
+        <div class="info-summary-block">
+          <div class="info-summary-block-label">
+            <span class="info-summary-block-icon">📊</span> 今月の状況
+          </div>
+          <div class="info-summary-block-text">
+            <?php echo enhance_report_text($block_situation, 'default'); ?>
+          </div>
+        </div>
+
+        <?php if (!empty($block_cause)): ?>
+        <div class="info-summary-block">
+          <div class="info-summary-block-label">
+            <span class="info-summary-block-icon">🔍</span> 主な要因
+          </div>
+          <div class="info-summary-block-text">
+            <p><?php echo esc_html($block_cause); ?></p>
+          </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($block_action)): ?>
+        <div class="info-summary-block">
+          <div class="info-summary-block-label">
+            <span class="info-summary-block-icon">✅</span> 次にやること
+          </div>
+          <div class="info-summary-block-text">
+            <p><?php echo esc_html($block_action); ?></p>
+          </div>
+        </div>
         <?php endif; ?>
       </div>
 
-
-<?php if ($can_highlights): ?>
-<div class="info-monthly-highlights">
-<?php
-$next_action = !empty($infographic['action'])
-    ? $infographic['action']
-    : ($highlights['opportunity'] ?? '改善施策を検討');
-
-$highlight_items = [
-    ['label' => '📈 今月うまくいっていること',  'value' => $highlights['most_important'] ?? '新規ユーザー獲得', 'key' => 'most_important', 'ai_instruction' => 'この「良かった点」を踏まえて、次に伸ばすべきポイントは？'],
-    ['label' => '⚠️ 今いちばん気をつけたい点',  'value' => $highlights['top_issue'] ?? 'ゴール改善',    'key' => 'top_issue',       'ai_instruction' => 'この「課題」の原因と、最短で効く改善を3つ提案して'],
-    ['label' => '🎯 次にやるとよいこと',         'value' => $next_action,                                       'key' => 'opportunity',     'ai_instruction' => 'この「次にやること」を具体的な手順に分解して教えて'],
-];
-
-$section_type_map = [
-    'most_important' => 'highlight_good',
-    'top_issue'      => 'highlight_issue',
-    'opportunity'    => 'highlight_action',
-];
-
-foreach ($highlight_items as $highlight):
-    $detail    = $highlight_details[$highlight['key']] ?? null;
-    $detail_id = 'highlight-detail-' . esc_attr($highlight['key']);
-?>
-    <div class="info-monthly-highlight-item" data-ai-section="<?php echo esc_attr( $section_type_map[ $highlight['key'] ] ?? 'highlight' ); ?>">
-        <div class="info-monthly-highlight-label">
-            <?php echo esc_html($highlight['label']); ?>
+      <?php else: ?>
+        <div class="info-monthly-summary">
+          <p class="info-monthly-wait">今月のレポートサマリーを生成中です...</p>
         </div>
-        <div class="info-monthly-highlight-value">
-            <?php echo esc_html($highlight['value']); ?>
-        </div>
-        <button type="button" class="ask-ai-btn ask-ai-btn--sm" data-ai-ask
-          data-ai-instruction="<?php echo esc_attr($highlight['ai_instruction']); ?>">
-          <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
-        </button>
+      <?php endif; ?>
 
-        <?php if ($detail && (!empty($detail['fact']) || !empty($detail['causes']) || !empty($detail['actions']))): ?>
-        <details class="highlight-detail-accordion" id="<?php echo $detail_id; ?>">
-            <summary class="highlight-detail-toggle"
-                     aria-expanded="false"
-                     aria-controls="<?php echo $detail_id; ?>-body">
-                <span>詳しく見る</span>
-                <span class="highlight-detail-arrow" aria-hidden="true">▾</span>
-            </summary>
-            <div class="highlight-detail-body" id="<?php echo $detail_id; ?>-body" role="region">
-                <?php if (!empty($detail['fact'])): ?>
-                <div class="highlight-detail-section">
-                    <div class="highlight-detail-section-label">📊 何が起きているか</div>
-                    <p class="highlight-detail-section-text"><?php echo esc_html($detail['fact']); ?></p>
-                </div>
-                <?php endif; ?>
-                <?php if (!empty($detail['causes'])): ?>
-                <div class="highlight-detail-section">
-                    <div class="highlight-detail-section-label">🔍 考えられる原因</div>
-                    <ul class="highlight-detail-list">
-                    <?php foreach ($detail['causes'] as $cause): ?>
-                        <li><?php echo esc_html($cause); ?></li>
-                    <?php endforeach; ?>
-                    </ul>
-                </div>
-                <?php endif; ?>
-                <?php if (!empty($detail['actions'])): ?>
-                <div class="highlight-detail-section">
-                    <div class="highlight-detail-section-label">✅ 次にやること</div>
-                    <ul class="highlight-detail-list">
-                    <?php foreach ($detail['actions'] as $act): ?>
-                        <li><?php echo esc_html($act); ?></li>
-                    <?php endforeach; ?>
-                    </ul>
-                </div>
-                <?php endif; ?>
-            </div>
-        </details>
-        <?php endif; ?>
-    </div>
-<?php endforeach; ?>
-</div>
-<?php else: ?>
+<?php if (!$can_highlights): ?>
 <!-- ベーシックプラン: ロック表示 -->
 <div class="plan-locked-section">
     <div class="plan-locked-overlay">
