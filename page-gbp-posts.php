@@ -436,11 +436,16 @@ wp_enqueue_media();
             + '&sort=' + encodeURIComponent(currentSort)
             + '&page=' + currentPage + '&per_page=20';
         fetchJson(url).then(function(data) {
-            if (!data.success) { list.innerHTML = '<div class="gp-empty"><p>取得に失敗しました。</p></div>'; return; }
+            if (!data.success) {
+                list.innerHTML = '<div class="gp-empty"><p>取得に失敗しました。</p></div>';
+                resetBulkState();
+                return;
+            }
             totalPages = data.pages || 1;
             if (!data.posts || data.posts.length === 0) {
                 list.innerHTML = '<div class="gp-empty"><p>投稿がありません。</p></div>';
                 document.getElementById('paginationWrap').style.display = 'none';
+                resetBulkState();
                 return;
             }
             var html = '';
@@ -927,6 +932,13 @@ wp_enqueue_media();
             selectAllCb.checked = false;
             selectAllCb.indeterminate = false;
         }
+    }
+
+    function resetBulkState() {
+        document.getElementById('selectAllCb').checked = false;
+        document.getElementById('selectAllCb').indeterminate = false;
+        document.getElementById('bulkCount').textContent = '';
+        document.getElementById('bulkDeleteBtn').disabled = true;
     }
 
     // すべて選択 / 解除
