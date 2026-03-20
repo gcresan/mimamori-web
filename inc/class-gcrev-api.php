@@ -1230,11 +1230,9 @@ class Gcrev_Insight_API {
             return [ 'status' => 'error', 'error' => $e->getMessage() ];
         }
 
-        // 国フィルタ適用
-        $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
-        if ( $exclude_foreign ) {
-            $this->ga4->set_country_filter( 'Japan' );
-        }
+        // 国フィルタ + パスフィルタ適用（REST エンドポイントと同じ関数を使用）
+        $filter_set      = $this->maybe_set_country_filter( $user_id );
+        $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
         $had_error = false;
         $error_msg = '';
@@ -1261,9 +1259,7 @@ class Gcrev_Insight_API {
             $error_msg = $e->getMessage();
         }
 
-        if ( $exclude_foreign ) {
-            $this->ga4->set_country_filter( null );
-        }
+        $this->restore_country_filter( $filter_set );
 
         $status = $had_error ? 'error' : 'success';
         $this->record_prefetch_status( $user_id, $period, 'all', $status, $had_error ? $error_msg : null, 'manual' );
@@ -1525,11 +1521,9 @@ class Gcrev_Insight_API {
                 continue;
             }
 
-            // 国フィルタ適用
-            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
-            if ( $exclude_foreign ) {
-                $this->ga4->set_country_filter( 'Japan' );
-            }
+            // 国フィルタ + パスフィルタ適用（REST エンドポイントと同じ関数を使用）
+            $filter_set = $this->maybe_set_country_filter( $user_id );
+            $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
             // --- (1) ダッシュボード／デバイスキャッシュ ---
             foreach ($ranges as $range) {
@@ -1631,10 +1625,8 @@ class Gcrev_Insight_API {
             }
             usleep( self::PREFETCH_SLEEP_US );
 
-            // 国フィルタ解除
-            if ( $exclude_foreign ) {
-                $this->ga4->set_country_filter( null );
-            }
+            // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
+            $this->restore_country_filter( $filter_set );
 
             // ステータス記録（日次期間分）
             foreach ( $ranges as $r ) {
@@ -1743,11 +1735,9 @@ class Gcrev_Insight_API {
                 continue;
             }
 
-            // 国フィルタ適用
-            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
-            if ( $exclude_foreign ) {
-                $this->ga4->set_country_filter( 'Japan' );
-            }
+            // 国フィルタ + パスフィルタ適用（REST エンドポイントと同じ関数を使用）
+            $filter_set      = $this->maybe_set_country_filter( $user_id );
+            $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
             // --- (1) ダッシュボード ---
             foreach ( $ranges as $range ) {
@@ -1785,10 +1775,8 @@ class Gcrev_Insight_API {
                 usleep( self::PREFETCH_SLEEP_US );
             }
 
-            // 国フィルタ解除
-            if ( $exclude_foreign ) {
-                $this->ga4->set_country_filter( null );
-            }
+            // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
+            $this->restore_country_filter( $filter_set );
 
             // ステータス記録
             foreach ( $ranges as $r ) {
@@ -2005,11 +1993,9 @@ class Gcrev_Insight_API {
                 continue;
             }
 
-            // 国フィルタ適用
-            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
-            if ( $exclude_foreign ) {
-                $this->ga4->set_country_filter( 'Japan' );
-            }
+            // 国フィルタ + パスフィルタ適用（REST エンドポイントと同じ関数を使用）
+            $filter_set      = $this->maybe_set_country_filter( $user_id );
+            $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
             // --- (1) ダッシュボードキャッシュ（月固定期間） ---
             foreach ( $dash_ranges as $range ) {
@@ -2033,10 +2019,8 @@ class Gcrev_Insight_API {
                 $this->prefetch_analysis_caches( $user_id, $config, $period );
             }
 
-            // 国フィルタ解除
-            if ( $exclude_foreign ) {
-                $this->ga4->set_country_filter( null );
-            }
+            // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
+            $this->restore_country_filter( $filter_set );
 
             // ステータス記録
             foreach ( $dash_ranges as $r ) {
@@ -2145,11 +2129,9 @@ class Gcrev_Insight_API {
                 continue;
             }
 
-            // 国フィルタ適用
-            $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
-            if ( $exclude_foreign ) {
-                $this->ga4->set_country_filter( 'Japan' );
-            }
+            // 国フィルタ + パスフィルタ適用（REST エンドポイントと同じ関数を使用）
+            $filter_set      = $this->maybe_set_country_filter( $user_id );
+            $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
             // --- (1) ダッシュボードキャッシュ（月固定期間、強制再取得） ---
             foreach ( $dash_ranges as $range ) {
@@ -2171,10 +2153,8 @@ class Gcrev_Insight_API {
                 $this->prefetch_analysis_caches( $user_id, $config, $period );
             }
 
-            // 国フィルタ解除
-            if ( $exclude_foreign ) {
-                $this->ga4->set_country_filter( null );
-            }
+            // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
+            $this->restore_country_filter( $filter_set );
 
             // ステータス記録
             foreach ( $dash_ranges as $r ) {
