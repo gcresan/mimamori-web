@@ -6228,7 +6228,14 @@ PROMPT;
         }
 
         $latest_day  = end( $days );
+        $prev_day    = count( $days ) >= 2 ? $days[ count( $days ) - 2 ] : null;
         $latest_data = null;
+
+        // サマリー集計用
+        $summary = [
+            'mobile'  => [ 'rank_1_3' => 0, 'rank_4_10' => 0, 'rank_11_20' => 0, 'rank_out' => 0 ],
+            'desktop' => [ 'rank_1_3' => 0, 'rank_4_10' => 0, 'rank_11_20' => 0, 'rank_out' => 0 ],
+        ];
 
         $output = [];
         foreach ( $keywords as $kw ) {
@@ -6236,6 +6243,7 @@ PROMPT;
             $entry = [
                 'keyword_id' => $kw_id,
                 'keyword'    => $kw['keyword'],
+                'current'    => [ 'mobile' => null, 'desktop' => null ],
                 'daily'      => [ 'mobile' => [], 'desktop' => [] ],
             ];
 
@@ -6264,18 +6272,106 @@ PROMPT;
                         $entry['daily'][ $device ][ $day ] = null;
                     }
                 }
+
+                // current（最新日のデータ + 前日比）
+                $latest_gkey = $kw_id . '_' . $device . '_' . $latest_day;
+                $latest_row  = $grouped[ $latest_gkey ] ?? null;
+                if ( $latest_row ) {
+                    $cur_maps   = $latest_row['maps_rank'] !== null ? (int) $latest_row['maps_rank'] : null;
+                    $cur_finder = $latest_row['finder_rank'] !== null ? (int) $latest_row['finder_rank'] : null;
+                    $is_ranked  = ( $cur_maps !== null );
+
+                    // 前日比計算
+                    $change = null;
+                    if ( $prev_day ) {
+                        $prev_gkey = $kw_id . '_' . $device . '_' . $prev_day;
+                        $prev_row  = $grouped[ $prev_gkey ] ?? null;
+                        if ( $prev_row ) {
+                            $prev_maps = $prev_row['maps_rank'] !== null ? (int) $prev_row['maps_rank'] : null;
+                            if ( $prev_maps !== null && $cur_maps !== null ) {
+                                $change = $prev_maps - $cur_maps; // 上昇=正
+                            } elseif ( $prev_maps === null && $cur_maps !== null ) {
+                                $change = 999; // 圏外→圏内
+                            } elseif ( $prev_maps !== null && $cur_maps === null ) {
+                                $change = -999; // 圏内→圏外
+                            }
+                        }
+                    }
+
+                    $entry['current'][ $device ] = [
+                        'maps_rank'   => $cur_maps,
+                        'finder_rank' => $cur_finder,
+                        'rating'      => $latest_row['rating'] !== null ? (float) $latest_row['rating'] : null,
+                        'reviews'     => $latest_row['reviews_count'] !== null ? (int) $latest_row['reviews_count'] : null,
+                        'change'      => $change,
+                        'is_ranked'   => $is_ranked,
+                    ];
+
+                    // サマリー集計（マップ順位ベース）
+                    if ( $cur_maps !== null ) {
+                        if ( $cur_maps <= 3 ) {
+                            $summary[ $device ]['rank_1_3']++;
+                        } elseif ( $cur_maps <= 10 ) {
+                            $summary[ $device ]['rank_4_10']++;
+                        } elseif ( $cur_maps <= 20 ) {
+                            $summary[ $device ]['rank_11_20']++;
+                        } else {
+                            $summary[ $device ]['rank_out']++;
+                        }
+                    } else {
+                        $summary[ $device ]['rank_out']++;
+                    }
+                } else {
+                    $summary[ $device ]['rank_out']++;
+                }
             }
 
             $output[] = $entry;
         }
 
+        // 計測地点情報
+        $meo_lat     = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
+        $meo_lng     = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
+        $meo_address = (string) get_user_meta( $user_id, '_gcrev_meo_address', true );
+        $meo_radius  = (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000;
+        $location_source = 'manual';
+
+        if ( $meo_lat === '' || $meo_lng === '' ) {
+            if ( class_exists( 'Gcrev_City_Coordinates' ) ) {
+                $city_coords = \Gcrev_City_Coordinates::get_for_user( $user_id );
+                if ( $city_coords ) {
+                    $meo_lat         = (string) $city_coords['lat'];
+                    $meo_lng         = (string) $city_coords['lng'];
+                    $meo_address     = $city_coords['label'];
+                    $meo_radius      = \Gcrev_City_Coordinates::DEFAULT_RADIUS;
+                    $location_source = 'city_center';
+                }
+            }
+        }
+
+        $use_coordinate = ( $meo_lat !== '' && $meo_lng !== '' );
+        $location_info = [
+            'mode'    => $use_coordinate ? 'coordinate' : 'location_code',
+            'address' => $meo_address,
+            'lat'     => $meo_lat,
+            'lng'     => $meo_lng,
+            'radius'  => $meo_radius,
+            'source'  => $use_coordinate ? $location_source : 'location_code',
+        ];
+
+        // GBPドメイン
+        $maps_domain = get_user_meta( $user_id, '_gcrev_maps_domain', true ) ?: '';
+
         return new \WP_REST_Response([
             'success' => true,
             'data'    => [
-                'keywords'    => $output,
-                'days'        => $days,
-                'day_labels'  => $day_labels,
-                'latest'      => $latest_data,
+                'keywords'     => $output,
+                'days'         => $days,
+                'day_labels'   => $day_labels,
+                'summary'      => $summary,
+                'location'     => $location_info,
+                'maps_domain'  => $maps_domain,
+                'latest'       => $latest_data,
             ],
         ]);
     }

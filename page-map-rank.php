@@ -25,7 +25,32 @@ get_header();
 ?>
 
 <style>
-/* --- Shared button (rt-btn) --- */
+/* ============================================================
+   page-map-rank v2 — Multi-keyword list layout
+   ============================================================ */
+
+/* --- Header bar --- */
+.rt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.rt-header__title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.rt-header__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
 .rt-btn {
     display: inline-flex;
     align-items: center;
@@ -52,22 +77,344 @@ get_header();
 .rt-btn--primary:disabled { background: #999; border-color: #999; }
 .rt-btn__icon { font-size: 15px; }
 
-/* ============================================================
-   Map Rank Page (.meo-)
-   ============================================================ */
-.meo-section {
-    background: transparent;
+/* --- Help lead --- */
+.rt-help {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+/* --- Summary cards --- */
+.rt-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+}
+@media (max-width: 768px) {
+    .rt-summary-cards { grid-template-columns: repeat(2, 1fr); }
+}
+.rt-summary-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-left: 4px solid #e5e7eb;
+}
+.rt-summary-card--gold   { border-left-color: #f59e0b; }
+.rt-summary-card--blue   { border-left-color: #3b82f6; }
+.rt-summary-card--green  { border-left-color: #22c55e; }
+.rt-summary-card--red    { border-left-color: #ef4444; }
+.rt-summary-card__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.rt-summary-card__dot--gold  { background: #f59e0b; }
+.rt-summary-card__dot--blue  { background: #3b82f6; }
+.rt-summary-card__dot--green { background: #22c55e; }
+.rt-summary-card__dot--red   { background: #ef4444; }
+.rt-summary-card__label {
+    font-size: 13px;
+    color: #6b7280;
+    flex: 1;
+}
+.rt-summary-card__count {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a1a;
+    min-width: 32px;
+    text-align: right;
+}
+.rt-summary-card__unit {
+    font-size: 12px;
+    font-weight: 400;
+    color: #9ca3af;
+}
+
+/* --- Rankings table --- */
+.rt-table-wrap {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 32px;
+}
+.rt-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.rt-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.rt-table th {
+    background: #f9fafb;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+.rt-table td {
+    padding: 14px;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 14px;
+    color: #1a1a1a;
+    vertical-align: middle;
+}
+.rt-table tr:last-child td { border-bottom: none; }
+.rt-table tr:hover td { background: #fafbfc; }
+
+/* Left accent bar */
+.rt-table td:first-child {
+    position: relative;
+    padding-left: 20px;
+}
+.rt-rank-accent {
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    border-radius: 2px;
+}
+.rt-rank-accent--gold  { background: #f59e0b; }
+.rt-rank-accent--blue  { background: #3b82f6; }
+.rt-rank-accent--green { background: #22c55e; }
+.rt-rank-accent--red   { background: #ef4444; }
+.rt-rank-accent--gray  { background: #d1d5db; }
+
+/* Keyword cell */
+.rt-kw-name {
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 2px;
+}
+
+/* Rank value */
+.rt-rank {
+    font-weight: 700;
+    font-size: 16px;
+    color: #1a1a1a;
+}
+.rt-rank--out {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ef4444;
+}
+.rt-rank--na {
+    font-size: 12px;
+    color: #d1d5db;
+}
+.rt-rank-unit {
+    font-size: 11px;
+    font-weight: 400;
+    color: #9ca3af;
+}
+.rt-rank-change {
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+.rt-rank-change--up   { color: #16a34a; }
+.rt-rank-change--down { color: #ef4444; }
+.rt-rank-change--same { color: #9ca3af; }
+
+/* Daily cell (compact) */
+.rt-daily {
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    min-width: 48px;
+}
+.rt-daily--out { color: #ef4444; font-size: 11px; }
+.rt-daily--na  { color: #d1d5db; }
+
+/* Meta cells */
+.rt-meta-rating { font-size: 13px; color: #f59e0b; }
+.rt-meta-reviews { font-size: 13px; color: #6b7280; }
+
+/* Actions column */
+.rt-action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: #568184;
+    cursor: pointer;
+    text-decoration: none;
+    padding: 4px 0;
     border: none;
-    border-radius: 0;
-    padding: 0;
-    box-shadow: none;
+    background: none;
+    white-space: nowrap;
 }
-.meo-header { margin-bottom: 20px; }
-.meo-header__title {
-    font-size: 20px; font-weight: 700; color: #1a1a1a;
-    display: flex; align-items: center; gap: 8px;
+.rt-action-link:hover { color: #476C6F; text-decoration: underline; }
+.rt-action-link__icon { font-size: 14px; }
+
+/* --- Empty state --- */
+.rt-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
 }
-.meo-help { font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
+.rt-empty__icon { font-size: 40px; margin-bottom: 12px; }
+.rt-empty__text { font-size: 15px; color: #6b7280; }
+
+/* --- Loading --- */
+.rt-loading {
+    text-align: center;
+    padding: 40px;
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+/* --- Modal --- */
+.rt-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 10000;
+    display: none;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 60px 20px;
+    overflow-y: auto;
+}
+.rt-modal-overlay.active { display: flex; }
+.rt-modal {
+    background: #fff;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 720px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.rt-modal__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1;
+    border-radius: 14px 14px 0 0;
+}
+.rt-modal__title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+.rt-modal__close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+}
+.rt-modal__close:hover { background: #e5e7eb; }
+.rt-modal__body {
+    padding: 24px;
+}
+
+/* --- Progress overlay (bulk fetch) --- */
+.rt-progress-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 10002;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+.rt-progress-overlay.active { display: flex; }
+.rt-progress-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px 40px;
+    min-width: 340px;
+    max-width: 480px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.rt-progress-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 16px;
+}
+.rt-progress-bar-wrap {
+    width: 100%;
+    height: 10px;
+    background: #e5e7eb;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+.rt-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #568184, #a3c9a9);
+    border-radius: 5px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+.rt-progress-bar--indeterminate {
+    width: 30%;
+    animation: rt-progress-slide 1.5s infinite ease-in-out;
+}
+@keyframes rt-progress-slide {
+    0%   { transform: translateX(-100%); }
+    50%  { transform: translateX(200%); }
+    100% { transform: translateX(-100%); }
+}
+.rt-progress-text {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 4px;
+}
+.rt-progress-sub {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+/* --- Toast --- */
+.rt-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    z-index: 10001;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.3s, transform 0.3s;
+    max-width: 400px;
+    line-height: 1.5;
+}
+.rt-toast.show { opacity: 1; transform: translateY(0); }
+.rt-toast--error { background: #ef4444; }
+
+/* ============================================================
+   MEO-specific styles (conditions bar, modal content)
+   ============================================================ */
+
 /* Measurement conditions row */
 .meo-conditions {
     display: flex; align-items: flex-start; gap: 24px; margin-bottom: 24px; flex-wrap: wrap;
@@ -78,7 +425,7 @@ get_header();
     font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;
 }
 .meo-condition-value { font-size: 13px; font-weight: 600; color: #1a1a1a; }
-.meo-condition-value--sub { font-size: 11px; font-weight: 400; color: #6b7280; }
+
 /* Device toggle */
 .meo-device-toggle {
     display: inline-flex; background: #f2f4f7; border-radius: 8px; padding: 3px;
@@ -90,24 +437,14 @@ get_header();
 .meo-device-btn.active {
     background: #fff; color: #1a1a1a; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
-/* Keyword selector with label */
-.meo-keyword-group { display: flex; flex-direction: column; gap: 4px; }
-.meo-keyword-label {
-    font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;
-}
-.meo-keyword-select {
-    font-size: 13px; color: #344054; border: 1px solid #d0d5dd; border-radius: 8px;
-    padding: 5px 10px; background: #fff; cursor: pointer; max-width: 240px; font-weight: 500;
-}
-.meo-keyword-single {
-    font-size: 13px; font-weight: 600; color: #1a1a1a;
-}
+
 /* GBP domain badge */
 .meo-gbp-badge {
     display: inline-block; font-size: 9px; font-weight: 700; color: #568184;
     background: #e8f4f5; border: 1px solid #c5dfe0; border-radius: 4px;
     padding: 1px 5px; letter-spacing: 0.5px;
 }
+
 /* Radius selector */
 .meo-radius-group { display: flex; flex-direction: column; gap: 4px; }
 .meo-radius-label {
@@ -117,26 +454,11 @@ get_header();
     font-size: 13px; color: #344054; border: 1px solid #d0d5dd; border-radius: 8px;
     padding: 5px 10px; background: #fff; cursor: pointer; max-width: 120px; font-weight: 500;
 }
-/* Metrics cards */
-.meo-metrics-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
-.meo-metric-card {
-    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
-    padding: 16px 20px; border-left: 4px solid #e5e7eb; text-align: center;
-}
-.meo-metric-card--teal   { border-left-color: #568184; }
-.meo-metric-card--blue   { border-left-color: #3b82f6; }
-.meo-metric-card--gold   { border-left-color: #f59e0b; }
-.meo-metric-card--green  { border-left-color: #22c55e; }
-.meo-metric-icon { font-size: 20px; margin-bottom: 4px; }
-.meo-metric-label { font-size: 12px; color: #1a1a1a; font-weight: 600; margin-bottom: 2px; }
-.meo-metric-sublabel { font-size: 10px; color: #9ca3af; margin-bottom: 6px; line-height: 1.3; }
-.meo-metric-value { font-size: 22px; font-weight: 700; color: #1a1a1a; line-height: 1.2; }
-.meo-metric-value small { font-size: 12px; font-weight: 400; color: #9ca3af; }
-.meo-metric-value--out { font-size: 14px; color: #ef4444; }
-/* Store card */
+
+/* Store card (modal content) */
 .meo-store-card {
     background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;
-    padding: 20px; margin-top: 20px; margin-bottom: 20px;
+    padding: 20px; margin-bottom: 20px;
 }
 .meo-store-card__title {
     font-size: 14px; font-weight: 700; color: #1a1a1a; margin-bottom: 14px;
@@ -152,7 +474,8 @@ get_header();
     color: #568184; text-decoration: none; margin-top: 12px;
 }
 .meo-store-link:hover { text-decoration: underline; }
-/* Reviews card */
+
+/* Reviews card (modal content) */
 .meo-reviews-card {
     background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;
     padding: 20px; margin-bottom: 20px;
@@ -179,7 +502,8 @@ get_header();
     height: 100%; background: #f59e0b; border-radius: 4px; transition: width 0.3s;
 }
 .meo-rating-bar-count { width: 32px; text-align: right; flex-shrink: 0; font-size: 11px; color: #9ca3af; }
-/* Competitor table */
+
+/* Competitor table (modal content) */
 .meo-competitor-wrap {
     background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;
     margin-bottom: 10px;
@@ -211,49 +535,17 @@ get_header();
     font-weight: 600;
 }
 .meo-stars-sm { font-size: 12px; color: #f59e0b; }
+
 /* States */
 .meo-loading { text-align: center; padding: 32px; color: #9ca3af; font-size: 13px; }
-.meo-empty { text-align: center; padding: 40px 20px; color: #9ca3af; display: none; }
+.meo-empty { text-align: center; padding: 40px 20px; color: #9ca3af; }
 .meo-empty__icon { font-size: 32px; margin-bottom: 8px; }
 .meo-empty__text { font-size: 14px; color: #6b7280; }
-.meo-error {
-    text-align: center; padding: 24px; color: #ef4444; font-size: 13px;
-    background: #fef2f2; border-radius: 8px; margin-top: 12px; display: none;
-}
-.meo-retry-btn {
-    display: inline-block; margin-top: 8px; padding: 6px 14px; border: 1px solid #d0d5dd;
-    border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; color: #344054;
-}
-.meo-retry-btn:hover { background: #f9fafb; }
-
-/* MEO History Table */
-.meo-history-wrap {
-    margin-top: 24px; background: #fff; border: 1px solid #e5e7eb;
-    border-radius: 12px; padding: 24px;
-}
-.meo-history-title {
-    font-weight: 700; font-size: 15px; color: #1a1a1a; margin-bottom: 12px;
-    display: flex; align-items: center; gap: 6px;
-}
-.meo-history-table { width: 100%; border-collapse: collapse; }
-.meo-history-table th {
-    background: #f9fafb; font-size: 11px; font-weight: 600; color: #6b7280;
-    padding: 10px 14px; text-align: center; border-bottom: 1px solid #e5e7eb; white-space: nowrap;
-}
-.meo-history-table th:first-child { text-align: left; }
-.meo-history-table td {
-    padding: 12px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #1a1a1a;
-    vertical-align: middle; text-align: center;
-}
-.meo-history-table td:first-child { text-align: left; font-size: 12px; }
-.meo-history-table tr:last-child td { border-bottom: none; }
-.meo-trend-up { color: #16a34a; font-weight: 600; font-size: 11px; }
-.meo-trend-down { color: #dc2626; font-weight: 600; font-size: 11px; }
-.meo-trend-same { color: #9ca3af; font-size: 11px; }
 
 /* Responsive */
 @media (max-width: 768px) {
-    .meo-metrics-cards { grid-template-columns: repeat(2, 1fr); }
+    .rt-header { flex-direction: column; align-items: flex-start; }
+    .rt-table-wrap { overflow-x: auto; }
     .meo-conditions { flex-direction: column; gap: 12px; padding: 12px 14px; }
     .meo-store-grid { grid-template-columns: 1fr; gap: 4px; }
     .meo-store-label { font-weight: 600; }
@@ -261,25 +553,27 @@ get_header();
 }
 </style>
 
+<!-- コンテンツエリア -->
 <div class="content-area">
-<section class="meo-section" id="meoSection">
-    <div class="meo-header">
-        <div class="meo-header__title">
-            &#x1F4CD; マップ順位
+
+    <!-- Header -->
+    <div class="rt-header">
+        <div class="rt-header__title">
+            <span>&#x1F4CD;</span> マップ順位
+        </div>
+        <div class="rt-header__actions">
+            <button class="rt-btn rt-btn--primary" id="meoFetchAllBtn" type="button">
+                <span class="rt-btn__icon">&#x21BB;</span>
+                最新の情報を見る
+            </button>
         </div>
     </div>
 
-    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-        <div class="meo-help" style="margin-bottom: 0; flex: 1;">
-            Googleマップやローカル検索で、あなたのお店が<strong>何番目に表示されるか</strong>、
-            口コミの状況、近くの競合との比較をまとめています。
-        </div>
-        <button class="rt-btn rt-btn--primary" id="meoRefreshBtn" type="button" style="flex-shrink: 0;">
-            <span class="rt-btn__icon">&#x21BB;</span>
-            最新の情報を見る
-        </button>
+    <!-- Help -->
+    <div class="rt-help">
+        Googleマップやローカル検索で、あなたのお店が<strong>何番目に表示されるか</strong>、
+        口コミの状況、近くの競合との比較をまとめています。
     </div>
-    <div style="margin-bottom: 24px;"></div>
 
     <!-- 計測条件エリア -->
     <div class="meo-conditions" id="meoConditions">
@@ -301,12 +595,6 @@ get_header();
             <span class="meo-radius-label">半径</span>
             <select class="meo-radius-select" id="meoRadiusSelect"></select>
         </div>
-        <!-- キーワード -->
-        <div class="meo-keyword-group" id="meoKeywordGroup">
-            <span class="meo-keyword-label">計測キーワード</span>
-            <span class="meo-keyword-single" id="meoKeywordSingle"></span>
-            <select class="meo-keyword-select" id="meoKeywordSelect" style="display:none;"></select>
-        </div>
 <?php if ( $maps_domain !== '' ) : ?>
         <!-- 対象ドメイン（GBPドメイン） -->
         <div class="meo-condition-group">
@@ -316,52 +604,85 @@ get_header();
 <?php endif; ?>
     </div>
 
-    <!-- メトリクスカード 4枚 -->
-    <div class="meo-metrics-cards" id="meoMetricsCards"></div>
+    <!-- Summary cards -->
+    <div class="rt-summary-cards" id="summaryCards">
+        <div class="rt-summary-card rt-summary-card--gold">
+            <span class="rt-summary-card__dot rt-summary-card__dot--gold"></span>
+            <span class="rt-summary-card__label">1位〜3位</span>
+            <span class="rt-summary-card__count" id="summary13">0<span class="rt-summary-card__unit">件</span></span>
+        </div>
+        <div class="rt-summary-card rt-summary-card--blue">
+            <span class="rt-summary-card__dot rt-summary-card__dot--blue"></span>
+            <span class="rt-summary-card__label">4位〜10位</span>
+            <span class="rt-summary-card__count" id="summary410">0<span class="rt-summary-card__unit">件</span></span>
+        </div>
+        <div class="rt-summary-card rt-summary-card--green">
+            <span class="rt-summary-card__dot rt-summary-card__dot--green"></span>
+            <span class="rt-summary-card__label">11位〜20位</span>
+            <span class="rt-summary-card__count" id="summary1120">0<span class="rt-summary-card__unit">件</span></span>
+        </div>
+        <div class="rt-summary-card rt-summary-card--red">
+            <span class="rt-summary-card__dot rt-summary-card__dot--red"></span>
+            <span class="rt-summary-card__label">圏外(20位以下)</span>
+            <span class="rt-summary-card__count" id="summaryOut">0<span class="rt-summary-card__unit">件</span></span>
+        </div>
+    </div>
 
-    <!-- 日次履歴テーブル -->
-    <div class="meo-history-wrap" id="meoHistoryWrap" style="display:none;">
-        <div class="meo-history-title">&#x1F4CA; 日次推移</div>
-        <div class="meo-help" style="margin-bottom:12px;">
-            <span style="color:#6b7280; font-size:12px;">毎日自動計測しています。</span>
-            <div style="margin-top:8px; font-size:12px; color:#6b7280; line-height:1.7;">
-                <span style="font-weight:600; color:#568184;">🗺️ マップ順位</span> … Googleマップアプリや、Google検索の地図枠（上位3件）に表示される順位です。<br>
-                <span style="font-weight:600; color:#3b82f6;">🔍 地域順位</span> … Google検索で「もっと見る」をタップした先の、ローカル検索結果の一覧での順位です。
+    <!-- Rankings table -->
+    <div id="meoTableWrap">
+        <div class="meo-loading" id="meoLoading">データを取得中...</div>
+        <div class="meo-empty" id="meoEmpty" style="display:none;">
+            <div class="meo-empty__icon">&#x1F4CD;</div>
+            <div class="meo-empty__text">MEOデータがまだありません</div>
+            <div style="color:#9ca3af; font-size:12px; margin-top:6px;">
+                <a href="<?php echo esc_url( home_url( '/rank-tracker/' ) ); ?>" style="color:#568184;">自然検索順位</a>ページでキーワードを登録すると、Googleマップでの順位も確認できます。
             </div>
         </div>
-        <div class="meo-table-scroll">
-            <table class="meo-history-table">
-                <thead id="meoHistoryHead"></thead>
-                <tbody id="meoHistoryBody"></tbody>
-            </table>
+        <div class="rt-table-wrap" id="meoTableContainer" style="display:none;">
+            <div class="rt-table-scroll">
+                <table class="rt-table" id="meoTable">
+                    <thead id="meoTableHead"></thead>
+                    <tbody id="meoTableBody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    <!-- 店舗情報 -->
-    <div class="meo-store-card" id="meoStoreCard" style="display:none;"></div>
-
-    <!-- 口コミ状況 -->
-    <div class="meo-reviews-card" id="meoReviewsCard" style="display:none;"></div>
-
-    <!-- 競合比較 -->
-    <div class="meo-competitor-wrap" id="meoCompetitorWrap" style="display:none;"></div>
-
-    <!-- 状態表示 -->
-    <div class="meo-loading" id="meoLoading">データを取得中...</div>
-    <div class="meo-empty" id="meoEmpty" style="display:none;">
-        <div class="meo-empty__icon">&#x1F4CD;</div>
-        <div class="meo-empty__text">MEOデータがまだありません</div>
-        <div style="color:#9ca3af; font-size:12px; margin-top:6px;">
-            <a href="<?php echo esc_url( home_url( '/rank-tracker/' ) ); ?>" style="color:#568184;">自然検索順位</a>ページでキーワードを登録すると、Googleマップでの順位も確認できます。
-        </div>
-    </div>
-    <div class="meo-error" id="meoError" style="display:none;"></div>
-</section>
 </div><!-- /.content-area -->
+
+<!-- Progress overlay (bulk fetch) -->
+<div class="rt-progress-overlay" id="progressOverlay">
+    <div class="rt-progress-box">
+        <div class="rt-progress-title" id="progressTitle">最新の順位を取得中...</div>
+        <div class="rt-progress-bar-wrap">
+            <div class="rt-progress-bar rt-progress-bar--indeterminate" id="progressBar"></div>
+        </div>
+        <div class="rt-progress-text" id="progressText">キーワードの順位を取得しています...</div>
+        <div class="rt-progress-sub" id="progressSub">しばらくお待ちください</div>
+    </div>
+</div>
+
+<!-- Detail modal (store + reviews + competitors) -->
+<div class="rt-modal-overlay" id="meoDetailModal">
+    <div class="rt-modal">
+        <div class="rt-modal__header">
+            <div class="rt-modal__title" id="meoDetailModalTitle">詳細情報</div>
+            <button class="rt-modal__close" id="meoDetailCloseBtn">&times;</button>
+        </div>
+        <div class="rt-modal__body" id="meoDetailModalBody">
+            <div class="rt-loading">読み込み中...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="rt-toast" id="meoToast"></div>
+
+<?php get_footer(); ?>
 
 <script>
 /* ============================================================
-   MEO Section — マップ順位
+   MEO Section v2 — Multi-keyword list
    ============================================================ */
 (function() {
     'use strict';
@@ -369,104 +690,335 @@ get_header();
     var restBase = '<?php echo esc_url( rest_url( 'gcrev/v1/' ) ); ?>';
     var nonce    = '<?php echo esc_attr( wp_create_nonce( 'wp_rest' ) ); ?>';
 
+    // State
+    var currentDevice = 'mobile';
+    var meoData       = null; // Full API response
+    var keywordsList  = [];   // keyword objects from API
+    var dayLabels     = [];
+    var dayKeys       = [];
+    var summaryData   = {};
+
     // DOM refs
-    var meoSection      = document.getElementById('meoSection');
-    var meoLoading      = document.getElementById('meoLoading');
-    var meoEmpty        = document.getElementById('meoEmpty');
-    var meoError        = document.getElementById('meoError');
-    var meoMetricsCards = document.getElementById('meoMetricsCards');
-    var meoStoreCard    = document.getElementById('meoStoreCard');
-    var meoReviewsCard  = document.getElementById('meoReviewsCard');
-    var meoCompetitorWrap = document.getElementById('meoCompetitorWrap');
-    var meoRegion       = document.getElementById('meoRegion');
-    var meoKeywordSelect = document.getElementById('meoKeywordSelect');
-    var meoKeywordSingle = document.getElementById('meoKeywordSingle');
-    var meoDeviceToggle  = document.getElementById('meoDeviceToggle');
-    var meoRadiusGroup   = document.getElementById('meoRadiusGroup');
-    var meoRadiusSelect  = document.getElementById('meoRadiusSelect');
+    var loadingEl     = document.getElementById('meoLoading');
+    var emptyEl       = document.getElementById('meoEmpty');
+    var tableContainer= document.getElementById('meoTableContainer');
+    var thead         = document.getElementById('meoTableHead');
+    var tbody         = document.getElementById('meoTableBody');
+    var regionEl      = document.getElementById('meoRegion');
+    var radiusGroup   = document.getElementById('meoRadiusGroup');
+    var radiusSelect  = document.getElementById('meoRadiusSelect');
 
-    if (!meoSection) return;
-
-    var currentDevice    = 'mobile';
-    var currentKeywordId = 0;
-    var currentRadius    = 0;
-    var isCoordinateMode = false;
-
-    // ----- Init -----
-    function meoInit() {
-        meoDeviceToggle.addEventListener('click', function(e) {
-            var btn = e.target.closest('.meo-device-btn');
-            if (!btn || btn.classList.contains('active')) return;
-            meoDeviceToggle.querySelectorAll('.meo-device-btn').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            currentDevice = btn.dataset.device;
-            meoFetchData(currentDevice, currentKeywordId);
-            meoRenderHistory();
-        });
-
-        meoKeywordSelect.addEventListener('change', function() {
-            currentKeywordId = parseInt(meoKeywordSelect.value, 10) || 0;
-            meoFetchData(currentDevice, currentKeywordId);
-            meoRenderHistory();
-        });
-
-        meoRadiusSelect.addEventListener('change', function() {
-            currentRadius = parseInt(meoRadiusSelect.value, 10) || 0;
-            meoFetchData(currentDevice, currentKeywordId);
-        });
-
-        // 最新の情報を見るボタン
-        var refreshBtn = document.getElementById('meoRefreshBtn');
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', function() {
-                refreshBtn.disabled = true;
-                refreshBtn.innerHTML = '<span class="rt-btn__icon">&#x23F3;</span> 取得中...';
-                refreshBtn.style.opacity = '0.6';
-
-                // force=1 でキャッシュを無視して再取得
-                var url = restBase + 'meo/rankings?device=' + encodeURIComponent(currentDevice)
-                        + '&keyword_id=' + encodeURIComponent(currentKeywordId)
-                        + '&force=1';
-                if (isCoordinateMode && currentRadius > 0) {
-                    url += '&radius=' + encodeURIComponent(currentRadius);
-                }
-
-                fetch(url, {
-                    method: 'GET',
-                    headers: { 'X-WP-Nonce': nonce },
-                    credentials: 'same-origin'
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (data && data.success !== false) {
-                        meoRender(data);
-                    }
-                    // 履歴も再取得
-                    meoFetchHistory();
-                })
-                .catch(function() {})
-                .finally(function() {
-                    refreshBtn.disabled = false;
-                    refreshBtn.innerHTML = '<span class="rt-btn__icon">&#x21BB;</span> 最新の情報を見る';
-                    refreshBtn.style.opacity = '1';
-                });
+    // =========================================================
+    // Init
+    // =========================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        // Device toggle
+        var deviceToggle = document.getElementById('meoDeviceToggle');
+        if (deviceToggle) {
+            deviceToggle.addEventListener('click', function(e) {
+                var btn = e.target.closest('.meo-device-btn');
+                if (!btn || btn.classList.contains('active')) return;
+                deviceToggle.querySelectorAll('.meo-device-btn').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                currentDevice = btn.dataset.device;
+                renderSummary();
+                renderTable();
             });
         }
 
-        meoFetchData('mobile', 0);
-        meoFetchHistory();
+        // Fetch all button
+        var fetchAllBtn = document.getElementById('meoFetchAllBtn');
+        if (fetchAllBtn) {
+            fetchAllBtn.addEventListener('click', fetchAllKeywords);
+        }
+
+        // Detail modal close
+        var closeBtn = document.getElementById('meoDetailCloseBtn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeDetailModal);
+        }
+        document.addEventListener('click', function(e) {
+            if (e.target.id === 'meoDetailModal') closeDetailModal();
+        });
+
+        // Radius change
+        if (radiusSelect) {
+            radiusSelect.addEventListener('change', function() {
+                // Re-fetch with new radius — reload all data
+                fetchMeoData();
+            });
+        }
+
+        // Initial load
+        fetchMeoData();
+    });
+
+    // =========================================================
+    // Fetch data (single API call)
+    // =========================================================
+    function fetchMeoData() {
+        showState('loading');
+
+        fetch(restBase + 'meo/history', {
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(json) {
+            if (json.success && json.data) {
+                meoData      = json.data;
+                keywordsList = json.data.keywords || [];
+                dayLabels    = json.data.day_labels || [];
+                dayKeys      = json.data.days || [];
+                summaryData  = json.data.summary || {};
+
+                // Location info
+                renderLocation(json.data.location);
+
+                if (keywordsList.length === 0) {
+                    showState('empty');
+                    return;
+                }
+
+                showState('table');
+                renderSummary();
+                renderTable();
+            } else {
+                showState('empty');
+            }
+        })
+        .catch(function(err) {
+            console.error('[GCREV][MEO]', err);
+            showState('empty');
+        });
     }
 
-    // ----- Fetch Data -----
-    function meoFetchData(device, keywordId) {
-        meoShowLoading();
+    // =========================================================
+    // Location rendering
+    // =========================================================
+    function renderLocation(loc) {
+        if (!loc || !regionEl) return;
 
-        var url = restBase + 'meo/rankings?device=' + encodeURIComponent(device)
-                + '&keyword_id=' + encodeURIComponent(keywordId);
-
-        if (isCoordinateMode && currentRadius > 0) {
-            url += '&radius=' + encodeURIComponent(currentRadius);
+        if (loc.mode === 'coordinate') {
+            if (loc.source === 'city_center') {
+                regionEl.innerHTML = escHtml(loc.address || '')
+                    + ' <span style="font-size:11px;color:#999;font-weight:400;">(自動設定)</span>';
+            } else {
+                regionEl.textContent = loc.address || (loc.lat + ', ' + loc.lng);
+            }
+            // Show radius selector if we have coordinate mode
+            if (radiusGroup) radiusGroup.style.display = '';
+        } else {
+            regionEl.textContent = loc.address || '未設定';
+            if (radiusGroup) radiusGroup.style.display = 'none';
         }
+    }
+
+    // =========================================================
+    // Summary cards
+    // =========================================================
+    function renderSummary() {
+        var s = summaryData[currentDevice] || { rank_1_3: 0, rank_4_10: 0, rank_11_20: 0, rank_out: 0 };
+        setSummaryText('summary13', s.rank_1_3);
+        setSummaryText('summary410', s.rank_4_10);
+        setSummaryText('summary1120', s.rank_11_20);
+        setSummaryText('summaryOut', s.rank_out);
+    }
+
+    function setSummaryText(id, val) {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = val + '<span class="rt-summary-card__unit">件</span>';
+    }
+
+    // =========================================================
+    // Keywords table
+    // =========================================================
+    function renderTable() {
+        if (!keywordsList || keywordsList.length === 0) {
+            showState('empty');
+            return;
+        }
+
+        // Build header
+        var hHtml = '<tr>';
+        hHtml += '<th>キーワード</th>';
+        hHtml += '<th>マップ順位</th>';
+        hHtml += '<th>地域順位</th>';
+        hHtml += '<th>評価</th>';
+        hHtml += '<th>口コミ</th>';
+        for (var d = 0; d < dayLabels.length; d++) {
+            hHtml += '<th style="text-align:center;">' + dayLabels[d] + '</th>';
+        }
+        hHtml += '<th>操作</th>';
+        hHtml += '</tr>';
+        thead.innerHTML = hHtml;
+
+        // Build body
+        var html = '';
+        for (var i = 0; i < keywordsList.length; i++) {
+            var kw = keywordsList[i];
+            var cur = kw.current ? kw.current[currentDevice] : null;
+            var daily = kw.daily ? kw.daily[currentDevice] : {};
+
+            // Determine accent color based on maps_rank
+            var accent = getAccentClass(cur);
+
+            html += '<tr>';
+
+            // Keyword name
+            html += '<td>';
+            html += '<div class="rt-rank-accent ' + accent + '"></div>';
+            html += '<div class="rt-kw-name">' + escHtml(kw.keyword) + '</div>';
+            html += '</td>';
+
+            // Maps rank (current)
+            html += '<td>';
+            html += formatCurrentRank(cur, 'maps_rank');
+            html += '</td>';
+
+            // Finder rank (current)
+            html += '<td>';
+            html += formatSimpleRank(cur, 'finder_rank');
+            html += '</td>';
+
+            // Rating
+            html += '<td>';
+            if (cur && cur.rating != null) {
+                html += '<span class="rt-meta-rating">' + meoStarsMini(cur.rating) + '</span> '
+                      + '<span style="font-size:13px;">' + parseFloat(cur.rating).toFixed(1) + '</span>';
+            } else {
+                html += '<span class="rt-rank--na">-</span>';
+            }
+            html += '</td>';
+
+            // Reviews count
+            html += '<td>';
+            if (cur && cur.reviews != null) {
+                html += '<span class="rt-meta-reviews">' + cur.reviews + '件</span>';
+            } else {
+                html += '<span class="rt-rank--na">-</span>';
+            }
+            html += '</td>';
+
+            // Daily columns (7 days) — maps_rank
+            for (var d = 0; d < dayKeys.length; d++) {
+                var dayData = daily ? daily[dayKeys[d]] : null;
+                html += '<td class="rt-daily">' + formatDailyMapsRank(dayData) + '</td>';
+            }
+
+            // Actions
+            html += '<td>';
+            html += '<button class="rt-action-link" data-keyword-id="' + kw.keyword_id + '" onclick="meoOpenDetail(' + kw.keyword_id + ')">';
+            html += '<span class="rt-action-link__icon">&#x1F50D;</span> 詳細を見る';
+            html += '</button>';
+            html += '</td>';
+
+            html += '</tr>';
+        }
+
+        tbody.innerHTML = html;
+    }
+
+    // =========================================================
+    // Format helpers
+    // =========================================================
+    function getAccentClass(cur) {
+        if (!cur || !cur.is_ranked || cur.maps_rank == null) return 'rt-rank-accent--red';
+        var r = cur.maps_rank;
+        if (r <= 3) return 'rt-rank-accent--gold';
+        if (r <= 10) return 'rt-rank-accent--blue';
+        if (r <= 20) return 'rt-rank-accent--green';
+        return 'rt-rank-accent--red';
+    }
+
+    function formatCurrentRank(cur, key) {
+        if (!cur) return '<span class="rt-rank--na">-</span>';
+        var rank = cur[key];
+        if (rank == null) return '<span class="rt-rank--out">圏外</span>';
+
+        var html = '<span class="rt-rank">' + rank + '<span class="rt-rank-unit">位</span></span>';
+
+        // Change indicator (only for maps_rank)
+        if (key === 'maps_rank' && cur.change != null) {
+            if (cur.change === 0) {
+                html += '<div class="rt-rank-change rt-rank-change--same">&#x2192;</div>';
+            } else {
+                html += '<div class="rt-rank-change ' + (cur.change > 0 ? 'rt-rank-change--up' : 'rt-rank-change--down') + '">';
+                if (cur.change === 999) {
+                    html += '&#x2191; NEW';
+                } else if (cur.change === -999) {
+                    html += '&#x2193; 圏外';
+                } else if (cur.change > 0) {
+                    html += '&#x2191; ' + cur.change;
+                } else {
+                    html += '&#x2193; ' + Math.abs(cur.change);
+                }
+                html += '</div>';
+            }
+        }
+        return html;
+    }
+
+    function formatSimpleRank(cur, key) {
+        if (!cur) return '<span class="rt-rank--na">-</span>';
+        var rank = cur[key];
+        if (rank == null) return '<span class="rt-rank--out">圏外</span>';
+        return '<span class="rt-rank">' + rank + '<span class="rt-rank-unit">位</span></span>';
+    }
+
+    function formatDailyMapsRank(dayData) {
+        if (!dayData) return '<span class="rt-daily--na">-</span>';
+        if (dayData.maps_rank == null) return '<span class="rt-daily--out">圏外</span>';
+        return dayData.maps_rank + '位';
+    }
+
+    function meoStarsMini(val) {
+        var r = Math.round(parseFloat(val) || 0);
+        var s = '';
+        for (var i = 1; i <= 5; i++) s += (i <= r) ? '\u2605' : '\u2606';
+        return s;
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // =========================================================
+    // State management
+    // =========================================================
+    function showState(state) {
+        loadingEl.style.display = state === 'loading' ? '' : 'none';
+        emptyEl.style.display   = state === 'empty' ? '' : 'none';
+        tableContainer.style.display = state === 'table' ? '' : 'none';
+    }
+
+    // =========================================================
+    // Detail modal
+    // =========================================================
+    window.meoOpenDetail = function(keywordId) {
+        var modal = document.getElementById('meoDetailModal');
+        var titleEl = document.getElementById('meoDetailModalTitle');
+        var bodyEl = document.getElementById('meoDetailModalBody');
+        if (!modal) return;
+
+        // Find keyword name
+        var kwName = '';
+        for (var i = 0; i < keywordsList.length; i++) {
+            if (keywordsList[i].keyword_id === keywordId) {
+                kwName = keywordsList[i].keyword;
+                break;
+            }
+        }
+        titleEl.textContent = '「' + kwName + '」の詳細情報';
+        bodyEl.innerHTML = '<div class="rt-loading">データを取得中...</div>';
+        modal.classList.add('active');
+
+        // Fetch detail data from meo/rankings
+        var url = restBase + 'meo/rankings?device=' + encodeURIComponent(currentDevice)
+                + '&keyword_id=' + encodeURIComponent(keywordId);
 
         fetch(url, {
             credentials: 'same-origin',
@@ -474,158 +1026,51 @@ get_header();
         })
         .then(function(resp) { return resp.json(); })
         .then(function(data) {
-            if (data.success) {
-                meoRenderAll(data);
-            } else if (data.keywords && data.keywords.length === 0) {
-                meoShowEmpty();
+            if (data && data.success !== false) {
+                renderDetailModal(data, bodyEl);
             } else {
-                meoShowError(data.message || 'データの取得に失敗しました');
+                bodyEl.innerHTML = '<div class="rt-loading" style="color:#ef4444;">' + escHtml(data.message || 'データの取得に失敗しました。') + '</div>';
             }
         })
         .catch(function(err) {
-            console.error('[GCREV][MEO]', err);
-            meoShowError('通信エラーが発生しました');
+            console.error('[GCREV][MEO Detail]', err);
+            bodyEl.innerHTML = '<div class="rt-loading" style="color:#ef4444;">通信エラーが発生しました。</div>';
         });
-    }
+    };
 
-    // ----- Render All -----
-    function meoRenderAll(data) {
-        meoHideStates();
+    function renderDetailModal(data, bodyEl) {
+        var html = '';
 
-        var loc = data.location || {};
-        isCoordinateMode = (loc.mode === 'coordinate');
-
-        if (isCoordinateMode) {
-            if (loc.source === 'city_center') {
-                meoRegion.innerHTML = meoEsc(loc.address || '')
-                    + ' <span style="font-size:11px;color:#999;font-weight:400;">(自動設定)</span>';
-            } else {
-                meoRegion.textContent = loc.address || (loc.lat + ', ' + loc.lng);
-            }
-        } else {
-            var regionText = data.region || '';
-            if (regionText && regionText !== '日本（広域）') {
-                meoRegion.textContent = regionText + '周辺';
-            } else {
-                meoRegion.textContent = regionText || '未設定';
-            }
-        }
-
-        if (isCoordinateMode && data.radius_options && data.radius_options.length > 0) {
-            meoRenderRadiusOptions(data.radius_options, loc.radius || 3000);
-            meoRadiusGroup.style.display = '';
-        } else {
-            meoRadiusGroup.style.display = 'none';
-        }
-
-        meoRenderKeywords(data.keywords || []);
-        meoRenderMetrics(data);
-
+        // Store info
         if (data.maps && data.maps.store) {
-            meoRenderStore(data.maps.store);
-            meoStoreCard.style.display = '';
-            meoRenderReviews(data.maps.store);
-            meoReviewsCard.style.display = '';
-        } else {
-            meoStoreCard.style.display = 'none';
-            meoReviewsCard.style.display = 'none';
+            html += renderStoreHtml(data.maps.store);
+            html += renderReviewsHtml(data.maps.store);
         }
 
+        // Competitors
         if (data.maps && data.maps.competitors && data.maps.competitors.length > 0) {
-            meoRenderCompetitors(data.maps.competitors);
-            meoCompetitorWrap.style.display = '';
-        } else {
-            meoCompetitorWrap.style.display = 'none';
-        }
-    }
-
-    // ----- Render Keywords Selector -----
-    function meoRenderKeywords(keywords) {
-        if (!keywords || keywords.length === 0) {
-            meoKeywordSingle.textContent = '未登録';
-            meoKeywordSelect.style.display = 'none';
-            meoKeywordSingle.style.display = '';
-            return;
+            html += renderCompetitorsHtml(data.maps.competitors);
         }
 
-        if (keywords.length === 1) {
-            meoKeywordSingle.textContent = keywords[0].keyword;
-            meoKeywordSelect.style.display = 'none';
-            meoKeywordSingle.style.display = '';
-            return;
+        if (html === '') {
+            html = '<div class="rt-loading" style="color:#9ca3af;">詳細データがありません。「最新の情報を見る」でデータを取得してください。</div>';
         }
 
-        var html = '';
-        keywords.forEach(function(kw) {
-            html += '<option value="' + kw.id + '"' + (kw.selected ? ' selected' : '') + '>'
-                  + meoEsc(kw.keyword) + '</option>';
-        });
-        meoKeywordSelect.innerHTML = html;
-        meoKeywordSelect.style.display = '';
-        meoKeywordSingle.style.display = 'none';
+        bodyEl.innerHTML = html;
     }
 
-    // ----- Render Metrics Cards -----
-    function meoRenderMetrics(data) {
-        var maps = data.maps || {};
-        var finder = data.local_finder || {};
-        var store = maps.store || {};
-
-        var cards = [
-            {
-                icon: '\uD83D\uDDFA\uFE0F',
-                label: 'Googleマップ順位',
-                sublabel: 'マップアプリでの表示順',
-                value: maps.rank ? maps.rank + '<small>位</small>' : '<span class="meo-metric-value--out">圏外</span>',
-                cls: 'meo-metric-card--teal'
-            },
-            {
-                icon: '\uD83D\uDD0D',
-                label: '検索結果の地域順位',
-                sublabel: 'Google検索のローカル表示',
-                value: finder.rank ? finder.rank + '<small>位</small>' : '<span class="meo-metric-value--out">圏外</span>',
-                cls: 'meo-metric-card--blue'
-            },
-            {
-                icon: '\u2B50',
-                label: '口コミ評価',
-                sublabel: 'Googleの平均評価',
-                value: store.rating != null ? store.rating + '<small> / 5.0</small>' : '<small>-</small>',
-                cls: 'meo-metric-card--gold'
-            },
-            {
-                icon: '\uD83D\uDCAC',
-                label: '口コミ件数',
-                sublabel: 'Googleの口コミ総数',
-                value: store.reviews_count != null ? store.reviews_count + '<small>件</small>' : '<small>-</small>',
-                cls: 'meo-metric-card--green'
-            }
-        ];
-
-        var html = '';
-        cards.forEach(function(c) {
-            html += '<div class="meo-metric-card ' + c.cls + '">'
-                  + '<div class="meo-metric-icon">' + c.icon + '</div>'
-                  + '<div class="meo-metric-label">' + c.label + '</div>'
-                  + '<div class="meo-metric-sublabel">' + c.sublabel + '</div>'
-                  + '<div class="meo-metric-value">' + c.value + '</div>'
-                  + '</div>';
-        });
-        meoMetricsCards.innerHTML = html;
-    }
-
-    // ----- Render Store -----
-    function meoRenderStore(store) {
+    function renderStoreHtml(store) {
         var rows = [];
-        if (store.title)    rows.push(['店舗名', meoEsc(store.title)]);
-        if (store.category) rows.push(['カテゴリ', meoEsc(store.category)]);
-        if (store.address)  rows.push(['住所', meoEsc(store.address)]);
-        if (store.phone)    rows.push(['電話番号', meoEsc(store.phone)]);
-        if (store.work_hours) rows.push(['営業時間', meoEsc(store.work_hours)]);
+        if (store.title)    rows.push(['店舗名', escHtml(store.title)]);
+        if (store.category) rows.push(['カテゴリ', escHtml(store.category)]);
+        if (store.address)  rows.push(['住所', escHtml(store.address)]);
+        if (store.phone)    rows.push(['電話番号', escHtml(store.phone)]);
+        if (store.work_hours) rows.push(['営業時間', escHtml(store.work_hours)]);
 
-        if (rows.length === 0) { meoStoreCard.style.display = 'none'; return; }
+        if (rows.length === 0) return '';
 
-        var html = '<div class="meo-store-card__title">\uD83C\uDFEA 店舗情報</div>'
+        var html = '<div class="meo-store-card">'
+                 + '<div class="meo-store-card__title">\uD83C\uDFEA 店舗情報</div>'
                  + '<div class="meo-store-grid">';
         rows.forEach(function(r) {
             html += '<div class="meo-store-label">' + r[0] + '</div>'
@@ -634,16 +1079,16 @@ get_header();
         html += '</div>';
 
         if (store.maps_url) {
-            html += '<a href="' + meoEsc(store.maps_url) + '" target="_blank" rel="noopener" class="meo-store-link">'
+            html += '<a href="' + escHtml(store.maps_url) + '" target="_blank" rel="noopener" class="meo-store-link">'
                   + 'Googleマップで見る \u2192</a>';
         }
 
-        meoStoreCard.innerHTML = html;
+        html += '</div>';
+        return html;
     }
 
-    // ----- Render Reviews -----
-    function meoRenderReviews(store) {
-        if (store.rating == null) { meoReviewsCard.style.display = 'none'; return; }
+    function renderReviewsHtml(store) {
+        if (store.rating == null) return '';
 
         var rating = parseFloat(store.rating) || 0;
         var total = store.reviews_count || 0;
@@ -665,20 +1110,20 @@ get_header();
                       + '</div>';
         }
 
-        var html = '<div class="meo-reviews-card__title">\uD83D\uDCAC 口コミの状況</div>'
-                 + '<div class="meo-reviews-summary">'
-                 + '<span class="meo-reviews-big-rating">' + rating.toFixed(1) + '</span>'
-                 + '<span class="meo-reviews-stars">' + stars + '</span>'
-                 + '<span class="meo-reviews-count">' + total + '件の口コミ</span>'
-                 + '</div>'
-                 + '<div class="meo-rating-bars">' + barsHtml + '</div>';
-
-        meoReviewsCard.innerHTML = html;
+        return '<div class="meo-reviews-card">'
+             + '<div class="meo-reviews-card__title">\uD83D\uDCAC 口コミの状況</div>'
+             + '<div class="meo-reviews-summary">'
+             + '<span class="meo-reviews-big-rating">' + rating.toFixed(1) + '</span>'
+             + '<span class="meo-reviews-stars">' + stars + '</span>'
+             + '<span class="meo-reviews-count">' + total + '件の口コミ</span>'
+             + '</div>'
+             + '<div class="meo-rating-bars">' + barsHtml + '</div>'
+             + '</div>';
     }
 
-    // ----- Render Competitors -----
-    function meoRenderCompetitors(competitors) {
-        var html = '<div class="meo-competitor-title">\uD83C\uDFC6 近くの競合との比較</div>'
+    function renderCompetitorsHtml(competitors) {
+        var html = '<div class="meo-competitor-wrap">'
+                 + '<div class="meo-competitor-title">\uD83C\uDFC6 近くの競合との比較</div>'
                  + '<div class="meo-table-scroll">'
                  + '<table class="meo-competitor-table">'
                  + '<thead><tr>'
@@ -687,7 +1132,7 @@ get_header();
 
         competitors.forEach(function(c) {
             var rowCls = c.is_self ? ' class="meo-self-row"' : '';
-            var name = meoEsc(c.title || '');
+            var name = escHtml(c.title || '');
             if (c.is_self) name += '<span class="meo-self-badge">自社</span>';
 
             var rank = c.rank ? c.rank + '位' : '圏外';
@@ -704,189 +1149,140 @@ get_header();
                   + '</tr>';
         });
 
-        html += '</tbody></table></div>';
-        meoCompetitorWrap.innerHTML = html;
+        html += '</tbody></table></div></div>';
+        return html;
     }
 
-    // ----- Stars mini -----
-    function meoStarsMini(val) {
-        var r = Math.round(parseFloat(val) || 0);
-        var s = '';
-        for (var i = 1; i <= 5; i++) s += (i <= r) ? '\u2605' : '\u2606';
-        return s;
+    function closeDetailModal() {
+        var modal = document.getElementById('meoDetailModal');
+        if (modal) modal.classList.remove('active');
     }
 
-    // ----- Render Radius Options -----
-    function meoRenderRadiusOptions(options, selectedRadius) {
-        var html = '';
-        options.forEach(function(opt) {
-            var sel = (opt.value === selectedRadius) ? ' selected' : '';
-            html += '<option value="' + opt.value + '"' + sel + '>'
-                  + meoEsc(opt.label) + '</option>';
-        });
-        meoRadiusSelect.innerHTML = html;
-        currentRadius = selectedRadius;
-    }
-
-    // ----- State helpers -----
-    function meoShowLoading() {
-        meoLoading.style.display = '';
-        meoEmpty.style.display = 'none';
-        meoError.style.display = 'none';
-        meoMetricsCards.innerHTML = '';
-        meoStoreCard.style.display = 'none';
-        meoReviewsCard.style.display = 'none';
-        meoCompetitorWrap.style.display = 'none';
-    }
-    function meoShowEmpty() {
-        meoLoading.style.display = 'none';
-        meoEmpty.style.display = '';
-        meoError.style.display = 'none';
-    }
-    function meoShowError(msg) {
-        meoLoading.style.display = 'none';
-        meoEmpty.style.display = 'none';
-        meoError.style.display = '';
-        meoError.innerHTML = msg + '<br><button class="meo-retry-btn" onclick="document.getElementById(\'meoError\').style.display=\'none\';">閉じる</button>';
-    }
-    function meoHideStates() {
-        meoLoading.style.display = 'none';
-        meoEmpty.style.display = 'none';
-        meoError.style.display = 'none';
-    }
-
-    // ----- Escape helper -----
-    function meoEsc(str) {
-        if (!str) return '';
-        var el = document.createElement('span');
-        el.textContent = str;
-        return el.innerHTML;
-    }
-
-    // ----- MEO History (週次推移) -----
-    var meoHistoryData = null;
-
-    function meoFetchHistory() {
-        fetch(restBase + 'meo/history', {
-            credentials: 'same-origin',
-            headers: { 'X-WP-Nonce': nonce }
-        })
-        .then(function(resp) { return resp.json(); })
-        .then(function(data) {
-            if (data.success && data.data) {
-                meoHistoryData = data.data;
-                meoRenderHistory();
-            }
-        })
-        .catch(function(err) {
-            console.error('[GCREV][MEO History]', err);
-        });
-    }
-
-    function meoRenderHistory() {
-        var wrap = document.getElementById('meoHistoryWrap');
-        var thead = document.getElementById('meoHistoryHead');
-        var tbody = document.getElementById('meoHistoryBody');
-
-        if (!meoHistoryData || !meoHistoryData.keywords || meoHistoryData.keywords.length === 0) {
-            wrap.style.display = 'none';
+    // =========================================================
+    // Fetch all keywords (bulk)
+    // =========================================================
+    function fetchAllKeywords() {
+        if (!keywordsList || keywordsList.length === 0) {
+            // If no data yet, try a single fetch first
+            fetchMeoData();
             return;
         }
 
-        var days = meoHistoryData.days || [];
-        var labels = meoHistoryData.day_labels || [];
+        var btn = document.getElementById('meoFetchAllBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="rt-btn__icon">&#x22EF;</span> 最新情報を取得中...';
 
-        if (days.length === 0) {
-            wrap.style.display = 'none';
-            return;
-        }
+        var kwCount = keywordsList.length;
+        showProgress(true, kwCount);
 
-        // 選択中のキーワードに一致するデータを探す（見つからなければ先頭）
-        var kwData = meoHistoryData.keywords[0];
-        if (currentKeywordId > 0) {
-            for (var k = 0; k < meoHistoryData.keywords.length; k++) {
-                if (meoHistoryData.keywords[k].keyword_id === currentKeywordId) {
-                    kwData = meoHistoryData.keywords[k];
-                    break;
-                }
+        var completed = 0;
+        var errors = 0;
+
+        // Sequential fetch for each keyword
+        function fetchNext(index) {
+            if (index >= keywordsList.length) {
+                // All done
+                showProgressComplete(completed);
+                setTimeout(function() {
+                    showProgress(false);
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="rt-btn__icon">&#x21BB;</span> 最新の情報を見る';
+                    showToast(completed + '件のキーワードの最新マップ順位を取得しました。');
+                    fetchMeoData(); // Reload table
+                }, 1200);
+                return;
             }
-        }
-        var daily = kwData.daily ? kwData.daily[currentDevice] : {};
 
-        if (!daily || Object.keys(daily).length === 0) {
-            wrap.style.display = '';
-            thead.innerHTML = '';
-            tbody.innerHTML = '<tr><td colspan="' + (days.length + 1) + '" style="text-align:center;color:#9ca3af;padding:24px;">'
-                + '&#x1F4CA; データを蓄積中です。毎日自動計測されます。</td></tr>';
-            return;
-        }
+            var kw = keywordsList[index];
+            updateProgressText(index + 1, kwCount, kw.keyword);
 
-        wrap.style.display = '';
+            var url = restBase + 'meo/rankings?device=' + encodeURIComponent(currentDevice)
+                    + '&keyword_id=' + encodeURIComponent(kw.keyword_id)
+                    + '&force=1';
 
-        var hHtml = '<tr><th style="min-width:140px;">指標</th>';
-        for (var i = 0; i < labels.length; i++) {
-            hHtml += '<th style="text-align:center;min-width:60px;">' + labels[i] + '</th>';
-        }
-        hHtml += '</tr>';
-        thead.innerHTML = hHtml;
-
-        var metrics = [
-            { key: 'maps_rank', label: '\uD83D\uDDFA\uFE0F マップ順位', unit: '位', lower_is_better: true },
-            { key: 'finder_rank', label: '\uD83D\uDD0D 地域順位', unit: '位', lower_is_better: true },
-            { key: 'rating', label: '\u2B50 口コミ評価', unit: '', lower_is_better: false },
-            { key: 'reviews', label: '\uD83D\uDCAC 口コミ件数', unit: '件', lower_is_better: false }
-        ];
-
-        var bHtml = '';
-        for (var m = 0; m < metrics.length; m++) {
-            var met = metrics[m];
-            bHtml += '<tr>';
-            bHtml += '<td style="font-weight:500;white-space:nowrap;">' + met.label + '</td>';
-
-            var prevVal = null;
-            for (var w = 0; w < days.length; w++) {
-                var wData = daily[days[w]];
-                var val = wData ? wData[met.key] : null;
-
-                var display = '-';
-                var trendHtml = '';
-
-                if (val !== null && val !== undefined) {
-                    if (met.key === 'rating') {
-                        display = parseFloat(val).toFixed(1);
-                    } else {
-                        display = val + '<small>' + met.unit + '</small>';
-                    }
-
-                    if (prevVal !== null && prevVal !== undefined) {
-                        var diff = val - prevVal;
-                        if (diff !== 0) {
-                            var isGood = met.lower_is_better ? (diff < 0) : (diff > 0);
-                            if (isGood) {
-                                trendHtml = ' <span class="meo-trend-up">\u2191</span>';
-                            } else {
-                                trendHtml = ' <span class="meo-trend-down">\u2193</span>';
-                            }
-                        } else {
-                            trendHtml = ' <span class="meo-trend-same">\u2192</span>';
-                        }
-                    }
+            fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': nonce }
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                if (data && data.success !== false) {
+                    completed++;
+                } else {
+                    errors++;
                 }
-
-                bHtml += '<td style="text-align:center;">' + display + trendHtml + '</td>';
-                if (val !== null && val !== undefined) {
-                    prevVal = val;
-                }
-            }
-            bHtml += '</tr>';
+                updateProgressBar(index + 1, kwCount);
+                fetchNext(index + 1);
+            })
+            .catch(function() {
+                errors++;
+                updateProgressBar(index + 1, kwCount);
+                fetchNext(index + 1);
+            });
         }
 
-        tbody.innerHTML = bHtml;
+        fetchNext(0);
     }
 
-    // ----- Go -----
-    meoInit();
+    // =========================================================
+    // Progress overlay
+    // =========================================================
+    function showProgress(show, kwCount) {
+        var overlay = document.getElementById('progressOverlay');
+        if (!overlay) return;
+        if (show) {
+            var titleEl = document.getElementById('progressTitle');
+            var textEl = document.getElementById('progressText');
+            var subEl = document.getElementById('progressSub');
+            var barEl = document.getElementById('progressBar');
+            if (titleEl) titleEl.textContent = '最新のマップ順位を取得中...';
+            if (textEl) textEl.textContent = kwCount + '件のキーワードのマップ順位を取得します...';
+            if (subEl) subEl.textContent = '1キーワードあたり数秒かかります。しばらくお待ちください。';
+            if (barEl) {
+                barEl.style.width = '0%';
+                barEl.classList.remove('rt-progress-bar--indeterminate');
+            }
+            overlay.classList.add('active');
+        } else {
+            overlay.classList.remove('active');
+        }
+    }
+
+    function updateProgressBar(current, total) {
+        var barEl = document.getElementById('progressBar');
+        if (barEl) {
+            var pct = Math.round((current / total) * 100);
+            barEl.style.width = pct + '%';
+        }
+    }
+
+    function updateProgressText(current, total, keyword) {
+        var textEl = document.getElementById('progressText');
+        if (textEl) textEl.textContent = '「' + keyword + '」を取得中... (' + current + '/' + total + ')';
+    }
+
+    function showProgressComplete(count) {
+        var titleEl = document.getElementById('progressTitle');
+        var textEl = document.getElementById('progressText');
+        var subEl = document.getElementById('progressSub');
+        var barEl = document.getElementById('progressBar');
+        if (titleEl) titleEl.textContent = '取得完了!';
+        if (textEl) textEl.textContent = count + '件のキーワードの最新マップ順位を取得しました。';
+        if (subEl) subEl.textContent = '';
+        if (barEl) barEl.style.width = '100%';
+    }
+
+    // =========================================================
+    // Toast
+    // =========================================================
+    function showToast(msg, type) {
+        var toast = document.getElementById('meoToast');
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.className = 'rt-toast' + (type === 'error' ? ' rt-toast--error' : '');
+        setTimeout(function() { toast.classList.add('show'); }, 10);
+        setTimeout(function() { toast.classList.remove('show'); }, 4000);
+    }
+
 })();
 </script>
-
-<?php get_footer(); ?>
