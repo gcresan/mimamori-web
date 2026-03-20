@@ -47,6 +47,9 @@ class Gcrev_Bootstrap {
         add_action('gcrev_monthly_data_prefetch_event', [__CLASS__, 'on_monthly_data_prefetch_event']);
         add_action('gcrev_monthly_prefetch_chunk_event', [__CLASS__, 'on_monthly_prefetch_chunk_event'], 10, 2);
 
+        // 手動: 単一ユーザー全期間取得（管理画面「全取得」ボタン）
+        add_action('gcrev_manual_fetch_all_event', [__CLASS__, 'on_manual_fetch_all_event']);
+
         // スロット別プリフェッチ
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
             $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
@@ -392,6 +395,24 @@ class Gcrev_Bootstrap {
         error_log("[GCREV] gcrev_monthly_prefetch_chunk_event triggered: offset={$offset}, limit={$limit}");
         $api = new Gcrev_Insight_API(false);
         $api->monthly_data_prefetch_chunk( (int) $offset, (int) $limit );
+    }
+
+    /**
+     * 手動: 単一ユーザー全期間取得（管理画面「全取得」ボタン）
+     * バックグラウンドで実行し nginx タイムアウトを回避する
+     */
+    public static function on_manual_fetch_all_event( $user_id ): void {
+        $user_id = (int) $user_id;
+        error_log( "[GCREV] gcrev_manual_fetch_all_event triggered: user_id={$user_id}" );
+
+        $api = new Gcrev_Insight_API( false );
+        $all_periods = [ 'last30', 'last90', 'previousMonth', 'twoMonthsAgo', 'last180', 'last365' ];
+
+        foreach ( $all_periods as $p ) {
+            $api->manual_fetch_for_user( $user_id, $p );
+        }
+
+        error_log( "[GCREV] gcrev_manual_fetch_all_event DONE: user_id={$user_id}" );
     }
 
     /**
