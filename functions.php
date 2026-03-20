@@ -5063,12 +5063,23 @@ function gcrev_meo_results_create_table(): void {
         fetched_at DATETIME NOT NULL,
         created_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
-        UNIQUE KEY user_kw_device_week (user_id, keyword_id, device, iso_year_week),
+        UNIQUE KEY user_kw_device_date (user_id, keyword_id, device, fetch_date),
         KEY user_fetched (user_id, fetched_at)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta( $sql );
+
+    // 旧ユニークキー(週次)を削除（日次に移行）
+    $old_key_exists = $wpdb->get_var(
+        "SELECT COUNT(*) FROM information_schema.STATISTICS
+         WHERE table_schema = DATABASE()
+           AND table_name = '{$table}'
+           AND index_name = 'user_kw_device_week'"
+    );
+    if ( (int) $old_key_exists > 0 ) {
+        $wpdb->query( "ALTER TABLE {$table} DROP INDEX user_kw_device_week" );
+    }
 }
 
 function gcrev_aio_results_create_table(): void {

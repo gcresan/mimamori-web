@@ -21,13 +21,14 @@ class Gcrev_Bootstrap {
         // Cron Log クリーンアップ
         add_action('gcrev_cron_log_cleanup_event', [__CLASS__, 'on_cron_log_cleanup']);
 
-        // 順位トラッキング（週次）
-        add_action('gcrev_rank_fetch_daily_event', [__CLASS__, 'on_rank_fetch_daily_event']); // 後方互換
-        add_action('gcrev_rank_fetch_weekly_event', [__CLASS__, 'on_rank_fetch_weekly_event']);
+        // 順位トラッキング（日次）
+        add_action('gcrev_rank_fetch_daily_event', [__CLASS__, 'on_rank_fetch_daily_event']);
+        add_action('gcrev_rank_fetch_weekly_event', [__CLASS__, 'on_rank_fetch_daily_event']); // 後方互換
         add_action('gcrev_rank_fetch_chunk_event', [__CLASS__, 'on_rank_fetch_chunk_event'], 10, 2);
 
-        // MEO 週次フェッチ
-        add_action('gcrev_meo_fetch_weekly_event', [__CLASS__, 'on_meo_fetch_weekly_event']);
+        // MEO 日次フェッチ
+        add_action('gcrev_meo_fetch_daily_event', [__CLASS__, 'on_meo_fetch_daily_event']);
+        add_action('gcrev_meo_fetch_weekly_event', [__CLASS__, 'on_meo_fetch_daily_event']); // 後方互換
         add_action('gcrev_meo_fetch_chunk_event', [__CLASS__, 'on_meo_fetch_chunk_event'], 10, 2);
 
         // キーワード指標（月次 — 検索ボリューム + SEO難易度）
@@ -286,16 +287,7 @@ class Gcrev_Bootstrap {
      * 順位トラッキング — 旧日次フェッチ（後方互換: 週次に転送）
      */
     public static function on_rank_fetch_daily_event(): void {
-        error_log('[GCREV] gcrev_rank_fetch_daily_event triggered (legacy → forwarding to weekly)');
-        $api = new Gcrev_Insight_API(false);
-        $api->auto_fetch_rankings();
-    }
-
-    /**
-     * 順位トラッキング — 週次フェッチイベント（月曜 03:30）
-     */
-    public static function on_rank_fetch_weekly_event(): void {
-        error_log('[GCREV] gcrev_rank_fetch_weekly_event triggered');
+        error_log('[GCREV] gcrev_rank_fetch_daily_event triggered');
         $api = new Gcrev_Insight_API(false);
         $api->auto_fetch_rankings();
     }
@@ -312,8 +304,8 @@ class Gcrev_Bootstrap {
     /**
      * MEO 週次フェッチイベント（月曜 04:30）
      */
-    public static function on_meo_fetch_weekly_event(): void {
-        error_log('[GCREV] gcrev_meo_fetch_weekly_event triggered');
+    public static function on_meo_fetch_daily_event(): void {
+        error_log('[GCREV] gcrev_meo_fetch_daily_event triggered');
         $api = new Gcrev_Insight_API(false);
         $api->auto_fetch_meo_rankings();
     }
@@ -580,16 +572,21 @@ class Gcrev_Bootstrap {
         // Cron log cleanup (tomorrow 02:00)
         self::schedule_daily_if_missing('gcrev_cron_log_cleanup_event', 'tomorrow 02:00:00');
 
-        // 順位トラッキング: 週次（月曜 03:30）
-        // 旧日次イベントを解除（週次に移行）
-        $old_daily_rank = wp_next_scheduled('gcrev_rank_fetch_daily_event');
-        if ( $old_daily_rank ) {
-            wp_unschedule_event( $old_daily_rank, 'gcrev_rank_fetch_daily_event' );
+        // 順位トラッキング: 日次（毎日 03:30）
+        // 旧週次イベントを解除（日次に移行）
+        $old_weekly_rank = wp_next_scheduled('gcrev_rank_fetch_weekly_event');
+        if ( $old_weekly_rank ) {
+            wp_unschedule_event( $old_weekly_rank, 'gcrev_rank_fetch_weekly_event' );
         }
-        self::schedule_weekly_if_missing('gcrev_rank_fetch_weekly_event', 'next Monday 03:30:00');
+        self::schedule_daily_if_missing('gcrev_rank_fetch_daily_event', 'tomorrow 03:30:00');
 
-        // MEO 週次フェッチ（月曜 04:30）
-        self::schedule_weekly_if_missing('gcrev_meo_fetch_weekly_event', 'next Monday 04:30:00');
+        // MEO 日次フェッチ（毎日 04:30）
+        // 旧週次イベントを解除
+        $old_weekly_meo = wp_next_scheduled('gcrev_meo_fetch_weekly_event');
+        if ( $old_weekly_meo ) {
+            wp_unschedule_event( $old_weekly_meo, 'gcrev_meo_fetch_weekly_event' );
+        }
+        self::schedule_daily_if_missing('gcrev_meo_fetch_daily_event', 'tomorrow 04:30:00');
 
         // 月次データプリフェッチ: 毎日 05:00（月初のみ実行、月固定期間データを取得）
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {

@@ -681,8 +681,8 @@ get_header();
 
     // Data
     var rankData = [];
-    var weekLabels = [];
-    var weekKeys = [];
+    var dayLabels = [];
+    var dayKeys = [];
     var summaryData = {};
 
     var manualFetchLimit = { daily_used: 0, daily_limit: 5, daily_remaining: 5, is_admin: false };
@@ -725,8 +725,8 @@ get_header();
             showLoading(false);
             if (json.success && json.data) {
                 rankData = json.data.keywords || [];
-                weekLabels = json.data.week_labels || [];
-                weekKeys = json.data.weeks || [];
+                dayLabels = json.data.day_labels || [];
+                dayKeys = json.data.days || [];
                 summaryData = json.data.summary || {};
                 renderSummary();
                 renderTable();
@@ -779,8 +779,8 @@ get_header();
         var hHtml = '<tr>';
         hHtml += '<th>キーワード</th>';
         hHtml += '<th>現在</th>';
-        for (var d = 0; d < weekLabels.length; d++) {
-            hHtml += '<th style="text-align:center;">' + weekLabels[d] + '</th>';
+        for (var d = 0; d < dayLabels.length; d++) {
+            hHtml += '<th style="text-align:center;">' + dayLabels[d] + '</th>';
         }
         hHtml += '<th>操作</th>';
         hHtml += '</tr>';
@@ -792,7 +792,7 @@ get_header();
             var kw = rankData[i];
             var dev = kw[currentDevice];
             var otherDev = kw[currentDevice === 'mobile' ? 'desktop' : 'mobile'];
-            var weekly = kw.weekly ? kw.weekly[currentDevice] : {};
+            var daily = kw.daily ? kw.daily[currentDevice] : {};
 
             // Determine accent color based on current rank
             var accent = getAccentClass(dev);
@@ -818,11 +818,11 @@ get_header();
             }
             html += '</td>';
 
-            // Weekly columns (6 weeks)
-            if (weekKeys) {
-                for (var d = 0; d < weekKeys.length; d++) {
-                    var weekData = weekly ? weekly[weekKeys[d]] : null;
-                    html += '<td class="rt-daily">' + formatDailyRank(weekData) + '</td>';
+            // Daily columns (7 days)
+            if (dayKeys) {
+                for (var d = 0; d < dayKeys.length; d++) {
+                    var dayData = daily ? daily[dayKeys[d]] : null;
+                    html += '<td class="rt-daily">' + formatDailyRank(dayData) + '</td>';
                 }
             }
 

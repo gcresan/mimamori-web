@@ -5886,11 +5886,12 @@ PROMPT;
             foreach ( $keywords as $kw ) {
                 $kw_id = (int) $kw['id'];
 
-                // 週重複チェック
+                // 日次重複チェック
+                $today_str = $now_dt->format( 'Y-m-d' );
                 $already = $wpdb->get_var( $wpdb->prepare(
                     "SELECT COUNT(*) FROM {$meo_table}
-                     WHERE keyword_id = %d AND iso_year_week = %s",
-                    $kw_id, $iso_week
+                     WHERE keyword_id = %d AND fetch_date = %s",
+                    $kw_id, $today_str
                 ) );
 
                 if ( (int) $already > 0 ) {
@@ -6145,12 +6146,16 @@ PROMPT;
         $tz  = wp_timezone();
         $now = new \DateTimeImmutable( 'now', $tz );
 
-        $weeks = [];
-        for ( $i = 5; $i >= 0; $i-- ) {
-            $dt = $now->modify( "-{$i} weeks" );
-            $weeks[] = $dt->format( 'o-\WW' );
+        // 直近7日分の日付配列を生成（古い順）
+        $days = [];
+        for ( $i = 6; $i >= 0; $i-- ) {
+            $dt = $now->modify( "-{$i} days" );
+            $days[] = $dt->format( 'Y-m-d' );
         }
-        $week_labels = array_map( 'gcrev_week_label', $weeks );
+        $day_labels = array_map( function( $d ) {
+            $dt = new \DateTimeImmutable( $d );
+            return (int) $dt->format( 'n' ) . '/' . (int) $dt->format( 'j' );
+        }, $days );
 
         $keywords = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, keyword FROM {$kw_table}
@@ -6164,8 +6169,8 @@ PROMPT;
                 'success' => true,
                 'data'    => [
                     'keywords'    => [],
-                    'weeks'       => $weeks,
-                    'week_labels' => $week_labels,
+                    'days'        => $days,
+                    'day_labels'  => $day_labels,
                     'latest'      => null,
                 ],
             ]);
@@ -6174,7 +6179,7 @@ PROMPT;
         $keyword_ids  = array_column( $keywords, 'id' );
         $placeholders = implode( ',', array_fill( 0, count( $keyword_ids ), '%d' ) );
 
-        // meo_results テーブルが存在するか確認（テーブルは残置されているが将来DROPされる可能性あり）
+        // meo_results テーブルが存在するか確認
         $table_exists = $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = %s AND table_name = %s",
             DB_NAME,
@@ -6182,48 +6187,47 @@ PROMPT;
         ) );
 
         if ( ! $table_exists ) {
-            // テーブルが存在しない場合は空データを返す
             $output = [];
             foreach ( $keywords as $kw ) {
                 $output[] = [
                     'keyword_id' => (int) $kw['id'],
                     'keyword'    => $kw['keyword'],
-                    'weekly'     => [ 'mobile' => [], 'desktop' => [] ],
+                    'daily'      => [ 'mobile' => [], 'desktop' => [] ],
                 ];
             }
             return new \WP_REST_Response([
                 'success' => true,
                 'data'    => [
                     'keywords'    => $output,
-                    'weeks'       => $weeks,
-                    'week_labels' => $week_labels,
+                    'days'        => $days,
+                    'day_labels'  => $day_labels,
                     'latest'      => null,
                 ],
             ]);
         }
 
-        $week_placeholders = implode( ',', array_fill( 0, count( $weeks ), '%s' ) );
+        $day_placeholders = implode( ',', array_fill( 0, count( $days ), '%s' ) );
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT keyword_id, device, maps_rank, finder_rank, rating, reviews_count,
-                    store_data, competitors_data, iso_year_week, fetched_at
+                    store_data, competitors_data, fetch_date, fetched_at
              FROM {$meo_table}
              WHERE user_id = %d
                AND keyword_id IN ({$placeholders})
-               AND iso_year_week IN ({$week_placeholders})
+               AND fetch_date IN ({$day_placeholders})
              ORDER BY fetched_at DESC",
-            ...array_merge( [ $user_id ], $keyword_ids, $weeks )
+            ...array_merge( [ $user_id ], $keyword_ids, $days )
         ), ARRAY_A );
 
         $grouped = [];
         foreach ( $rows as $r ) {
-            $gkey = $r['keyword_id'] . '_' . $r['device'] . '_' . $r['iso_year_week'];
+            $gkey = $r['keyword_id'] . '_' . $r['device'] . '_' . $r['fetch_date'];
             if ( ! isset( $grouped[ $gkey ] ) ) {
                 $grouped[ $gkey ] = $r;
             }
         }
 
-        $latest_week = end( $weeks );
+        $latest_day  = end( $days );
         $latest_data = null;
 
         $output = [];
@@ -6232,23 +6236,23 @@ PROMPT;
             $entry = [
                 'keyword_id' => $kw_id,
                 'keyword'    => $kw['keyword'],
-                'weekly'     => [ 'mobile' => [], 'desktop' => [] ],
+                'daily'      => [ 'mobile' => [], 'desktop' => [] ],
             ];
 
             foreach ( ['mobile', 'desktop'] as $device ) {
-                foreach ( $weeks as $week ) {
-                    $gkey = $kw_id . '_' . $device . '_' . $week;
+                foreach ( $days as $day ) {
+                    $gkey = $kw_id . '_' . $device . '_' . $day;
                     $r    = $grouped[ $gkey ] ?? null;
 
                     if ( $r ) {
-                        $entry['weekly'][ $device ][ $week ] = [
+                        $entry['daily'][ $device ][ $day ] = [
                             'maps_rank'   => $r['maps_rank'] !== null ? (int) $r['maps_rank'] : null,
                             'finder_rank' => $r['finder_rank'] !== null ? (int) $r['finder_rank'] : null,
                             'rating'      => $r['rating'] !== null ? (float) $r['rating'] : null,
                             'reviews'     => $r['reviews_count'] !== null ? (int) $r['reviews_count'] : null,
                         ];
 
-                        if ( $week === $latest_week && $device === 'mobile' && $r['store_data'] && ! $latest_data ) {
+                        if ( $day === $latest_day && $device === 'mobile' && $r['store_data'] && ! $latest_data ) {
                             $latest_data = [
                                 'store'       => json_decode( $r['store_data'], true ),
                                 'competitors' => $r['competitors_data'] ? json_decode( $r['competitors_data'], true ) : [],
@@ -6257,7 +6261,7 @@ PROMPT;
                             ];
                         }
                     } else {
-                        $entry['weekly'][ $device ][ $week ] = null;
+                        $entry['daily'][ $device ][ $day ] = null;
                     }
                 }
             }
@@ -6269,8 +6273,8 @@ PROMPT;
             'success' => true,
             'data'    => [
                 'keywords'    => $output,
-                'weeks'       => $weeks,
-                'week_labels' => $week_labels,
+                'days'        => $days,
+                'day_labels'  => $day_labels,
                 'latest'      => $latest_data,
             ],
         ]);
@@ -11031,15 +11035,18 @@ PROMPT;
         $tz  = wp_timezone();
         $now = new \DateTimeImmutable( 'now', $tz );
 
-        // 直近6週分の ISO week 配列を生成（古い順）
-        $weeks = [];
-        for ( $i = 5; $i >= 0; $i-- ) {
-            $dt = $now->modify( "-{$i} weeks" );
-            $weeks[] = $dt->format( 'o-\WW' );  // e.g. '2025-W10'
+        // 直近7日分の日付配列を生成（古い順）
+        $days = [];
+        for ( $i = 6; $i >= 0; $i-- ) {
+            $dt = $now->modify( "-{$i} days" );
+            $days[] = $dt->format( 'Y-m-d' );
         }
 
-        // 週ラベル: gcrev_week_label() で「3/1週」形式
-        $week_labels = array_map( 'gcrev_week_label', $weeks );
+        // 日付ラベル: 「M/d」形式
+        $day_labels = array_map( function( $d ) {
+            $dt = new \DateTimeImmutable( $d );
+            return (int) $dt->format( 'n' ) . '/' . (int) $dt->format( 'j' );
+        }, $days );
 
         // 有効キーワード取得（検索ボリューム・上がりやすさスコア含む）
         $keywords = $wpdb->get_results( $wpdb->prepare(
@@ -11057,8 +11064,8 @@ PROMPT;
                 'success' => true,
                 'data'    => [
                     'keywords'    => [],
-                    'weeks'       => $weeks,
-                    'week_labels' => $week_labels,
+                    'days'        => $days,
+                    'day_labels'  => $day_labels,
                     'summary'     => $this->rank_tracker_empty_summary_v2(),
                 ],
             ]);
@@ -11067,11 +11074,11 @@ PROMPT;
         $keyword_ids = array_column( $keywords, 'id' );
         $placeholders = implode( ',', array_fill( 0, count( $keyword_ids ), '%d' ) );
 
-        // 直近45日分のすべての結果を一括取得（6週 = 42日 + バッファ）
-        $since = $now->modify( '-45 days' )->format( 'Y-m-d 00:00:00' );
+        // 直近10日分のすべての結果を一括取得（7日 + バッファ）
+        $since = $now->modify( '-10 days' )->format( 'Y-m-d 00:00:00' );
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $all_results = $wpdb->get_results( $wpdb->prepare(
-            "SELECT keyword_id, device, rank_group, is_ranked, iso_year_week, fetched_at
+            "SELECT keyword_id, device, rank_group, is_ranked, fetch_date, fetched_at
              FROM {$res_table}
              WHERE keyword_id IN ({$placeholders}) AND fetched_at >= %s
              ORDER BY fetched_at DESC",
@@ -11102,7 +11109,7 @@ PROMPT;
                 'opportunity_reasons' => $kw['opportunity_reasons'] ? json_decode( $kw['opportunity_reasons'], true ) : null,
                 'desktop'             => null,
                 'mobile'              => null,
-                'weekly'              => [ 'desktop' => [], 'mobile' => [] ],
+                'daily'               => [ 'desktop' => [], 'mobile' => [] ],
                 'fetched_at'          => null,
             ];
 
@@ -11114,13 +11121,13 @@ PROMPT;
                 // 最新
                 $l = ! empty( $history ) ? $history[0] : null;
 
-                // 前回（最新と異なる iso_year_week のもの）
+                // 前回（最新と異なる fetch_date のもの）
                 $p = null;
                 if ( $l ) {
-                    $latest_week = $l['iso_year_week'] ?? '';
+                    $latest_date = substr( $l['fetched_at'] ?? '', 0, 10 );
                     foreach ( $history as $h ) {
-                        $h_week = $h['iso_year_week'] ?? '';
-                        if ( $h_week !== '' && $h_week !== $latest_week ) {
+                        $h_date = substr( $h['fetched_at'] ?? '', 0, 10 );
+                        if ( $h_date !== '' && $h_date !== $latest_date ) {
                             $p = $h;
                             break;
                         }
@@ -11152,31 +11159,32 @@ PROMPT;
                     }
                 }
 
-                // 直近6週分の weekly データ（forward-fill）
+                // 直近7日分の daily データ（forward-fill）
                 $last_found = null;
-                foreach ( $weeks as $week ) {
-                    // この週に該当するデータを探す（history は DESC 順）
+                foreach ( $days as $day ) {
+                    // この日に該当するデータを探す（history は fetched_at DESC 順）
                     $found = null;
                     foreach ( $history as $h ) {
-                        if ( ( $h['iso_year_week'] ?? '' ) === $week ) {
+                        $h_date = $h['fetch_date'] ?? substr( $h['fetched_at'] ?? '', 0, 10 );
+                        if ( $h_date === $day ) {
                             $found = $h;
-                            break; // DESC 順なので最初にマッチしたものがその週の最新
+                            break; // DESC 順なので最初にマッチしたものがその日の最新
                         }
                     }
 
-                    // forward-fill: この週のデータがなければ直前のデータを使う
+                    // forward-fill: この日のデータがなければ直前のデータを使う
                     if ( ! $found && $last_found ) {
                         $found = $last_found;
                     }
 
                     if ( $found ) {
-                        $entry['weekly'][ $device ][ $week ] = [
+                        $entry['daily'][ $device ][ $day ] = [
                             'rank'      => $found['is_ranked'] ? (int) $found['rank_group'] : null,
                             'is_ranked' => (bool) $found['is_ranked'],
                         ];
                         $last_found = $found;
                     } else {
-                        $entry['weekly'][ $device ][ $week ] = null;
+                        $entry['daily'][ $device ][ $day ] = null;
                     }
                 }
             }
@@ -11191,8 +11199,8 @@ PROMPT;
             'success' => true,
             'data'    => [
                 'keywords'    => $output,
-                'weeks'       => $weeks,
-                'week_labels' => $week_labels,
+                'days'        => $days,
+                'day_labels'  => $day_labels,
                 'summary'     => $summary,
             ],
         ]);

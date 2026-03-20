@@ -554,13 +554,13 @@ get_header();
     <div class="seo-toast" id="seoToast"></div>
 
     <!-- ===== Section 1: サマリー ===== -->
-    <div class="seo-summary-cards" id="seoSummary"></div>
+    <div class="seo-summary-cards" id="seoSummary" style="display:none;"></div>
 
     <!-- ===== 前回比較バー ===== -->
     <div id="seoComparisonBar" style="display:none;"></div>
 
     <!-- ===== Section 2: SEO診断カード一覧 ===== -->
-    <div class="seo-section" id="seoDiagnosisSection">
+    <div class="seo-section" id="seoDiagnosisSection" style="display:none;">
         <div class="seo-section__header">
             <div>
                 <h2 class="seo-section__title">🔍 SEO診断チェック</h2>
@@ -571,7 +571,7 @@ get_header();
     </div>
 
     <!-- ===== Section 3: 診断結果の概要 ===== -->
-    <div class="seo-section" id="seoAssessmentSection">
+    <div class="seo-section" id="seoAssessmentSection" style="display:none;">
         <div class="seo-section__header">
             <div>
                 <h2 class="seo-section__title">📝 全体評価</h2>
@@ -593,7 +593,7 @@ get_header();
     </div>
 
     <!-- ===== Section 4: 問題URL一覧 ===== -->
-    <div class="seo-section" id="seoIssuesSection">
+    <div class="seo-section" id="seoIssuesSection" style="display:none;">
         <div class="seo-section__header">
             <div>
                 <h2 class="seo-section__title">📋 ページ別の問題一覧</h2>
@@ -604,7 +604,7 @@ get_header();
     </div>
 
     <!-- ===== Section 5: 改善アクション提案 ===== -->
-    <div class="seo-section" id="seoActionsSection">
+    <div class="seo-section" id="seoActionsSection" style="display:none;">
         <div class="seo-section__header">
             <div>
                 <h2 class="seo-section__title">💡 改善アクション提案</h2>
@@ -615,7 +615,7 @@ get_header();
     </div>
 
     <!-- ===== Section 6: 将来拡張枠 ===== -->
-    <div class="seo-section" id="seoFutureSection">
+    <div class="seo-section" id="seoFutureSection" style="display:none;">
         <div class="seo-section__header">
             <div>
                 <h2 class="seo-section__title">📊 今後の拡張予定</h2>
@@ -715,7 +715,8 @@ get_header();
     });
 
     function fetchReport() {
-        showSections(false);
+        // 初回読み込み時は全セクション非表示のまま（ちらつき防止）
+        // showSections() は API レスポンス後にのみ呼ぶ
         fetch('/wp-json/gcrev/v1/seo/report', {
             headers: { 'X-WP-Nonce': wpNonce },
             credentials: 'same-origin'

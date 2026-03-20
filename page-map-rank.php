@@ -25,6 +25,33 @@ get_header();
 ?>
 
 <style>
+/* --- Shared button (rt-btn) --- */
+.rt-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    background: #fff;
+    color: #344054;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.rt-btn:hover { background: #f9fafb; border-color: #98a2b3; }
+.rt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rt-btn--primary {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+}
+.rt-btn--primary:hover { background: #333; }
+.rt-btn--primary:disabled { background: #999; border-color: #999; }
+.rt-btn__icon { font-size: 15px; }
+
 /* ============================================================
    Map Rank Page (.meo-)
    ============================================================ */
@@ -247,16 +274,12 @@ get_header();
             Googleマップやローカル検索で、あなたのお店が<strong>何番目に表示されるか</strong>、
             口コミの状況、近くの競合との比較をまとめています。
         </div>
-        <button id="meoRefreshBtn" type="button"
-            style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
-                   border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; color: #344054;
-                   font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
-                   transition: all 0.2s; flex-shrink: 0;"
-            onmouseover="this.style.background='#f9fafb'; this.style.borderColor='#568184'; this.style.color='#568184';"
-            onmouseout="this.style.background='#fff'; this.style.borderColor='#d0d5dd'; this.style.color='#344054';">
-            🔄 最新の情報を見る
+        <button class="rt-btn rt-btn--primary" id="meoRefreshBtn" type="button" style="flex-shrink: 0;">
+            <span class="rt-btn__icon">&#x21BB;</span>
+            最新の情報を見る
         </button>
     </div>
+    <div style="margin-bottom: 24px;"></div>
 
     <!-- 計測条件エリア -->
     <div class="meo-conditions" id="meoConditions">
@@ -296,11 +319,11 @@ get_header();
     <!-- メトリクスカード 4枚 -->
     <div class="meo-metrics-cards" id="meoMetricsCards"></div>
 
-    <!-- 週次履歴テーブル -->
+    <!-- 日次履歴テーブル -->
     <div class="meo-history-wrap" id="meoHistoryWrap" style="display:none;">
-        <div class="meo-history-title">&#x1F4CA; 週次推移</div>
+        <div class="meo-history-title">&#x1F4CA; 日次推移</div>
         <div class="meo-help" style="margin-bottom:12px;">
-            <span style="color:#6b7280; font-size:12px;">毎週月曜日に自動計測しています。</span>
+            <span style="color:#6b7280; font-size:12px;">毎日自動計測しています。</span>
             <div style="margin-top:8px; font-size:12px; color:#6b7280; line-height:1.7;">
                 <span style="font-weight:600; color:#568184;">🗺️ マップ順位</span> … Googleマップアプリや、Google検索の地図枠（上位3件）に表示される順位です。<br>
                 <span style="font-weight:600; color:#3b82f6;">🔍 地域順位</span> … Google検索で「もっと見る」をタップした先の、ローカル検索結果の一覧での順位です。
@@ -770,10 +793,10 @@ get_header();
             return;
         }
 
-        var weeks = meoHistoryData.weeks || [];
-        var labels = meoHistoryData.week_labels || [];
+        var days = meoHistoryData.days || [];
+        var labels = meoHistoryData.day_labels || [];
 
-        if (weeks.length === 0) {
+        if (days.length === 0) {
             wrap.style.display = 'none';
             return;
         }
@@ -788,13 +811,13 @@ get_header();
                 }
             }
         }
-        var weekly = kwData.weekly ? kwData.weekly[currentDevice] : {};
+        var daily = kwData.daily ? kwData.daily[currentDevice] : {};
 
-        if (!weekly || Object.keys(weekly).length === 0) {
+        if (!daily || Object.keys(daily).length === 0) {
             wrap.style.display = '';
             thead.innerHTML = '';
-            tbody.innerHTML = '<tr><td colspan="' + (weeks.length + 1) + '" style="text-align:center;color:#9ca3af;padding:24px;">'
-                + '&#x1F4CA; データを蓄積中です。毎週月曜日に自動計測されます。</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="' + (days.length + 1) + '" style="text-align:center;color:#9ca3af;padding:24px;">'
+                + '&#x1F4CA; データを蓄積中です。毎日自動計測されます。</td></tr>';
             return;
         }
 
@@ -821,8 +844,8 @@ get_header();
             bHtml += '<td style="font-weight:500;white-space:nowrap;">' + met.label + '</td>';
 
             var prevVal = null;
-            for (var w = 0; w < weeks.length; w++) {
-                var wData = weekly[weeks[w]];
+            for (var w = 0; w < days.length; w++) {
+                var wData = daily[days[w]];
                 var val = wData ? wData[met.key] : null;
 
                 var display = '-';
