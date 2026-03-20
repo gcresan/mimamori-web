@@ -58,6 +58,9 @@ get_template_part('template-parts/period-selector');
     <div class="period-display" id="periodDisplay">
         分析対象期間を選択してください
     </div>
+    <div id="dataNotice" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px;color:#856404;">
+        <span style="margin-right:6px;">ℹ️</span><span id="dataNoticeText"></span>
+    </div>
 <!-- このページの見方（初心者向け） -->
 <?php
 set_query_var('analysis_help_key', 'page');
@@ -155,6 +158,19 @@ let sortDir = 'desc';         // 'asc' | 'desc'
     loadData(initialPeriod);
 })();
 
+function checkDataNotice(data) {
+    var notice = document.getElementById('dataNotice');
+    var text = document.getElementById('dataNoticeText');
+    if (!notice || !text) return;
+    var detail = data && data.pages_detail;
+    if (detail && detail.length === 0) {
+        text.textContent = 'この期間のページデータはありません。GA4プロパティの作成日が期間の開始日より後の可能性があります。';
+        notice.style.display = '';
+    } else {
+        notice.style.display = 'none';
+    }
+}
+
 /**
  * データ取得とUI更新（device と同一経路）
  */
@@ -167,6 +183,7 @@ async function loadData(period) {
     if (cached) {
         currentData = cached;
         updatePeriodDisplay(currentData);
+        checkDataNotice(currentData);
         updatePeriodRangeFromData(currentData, 'page-period');
         applyFilter();
         return;
@@ -198,6 +215,7 @@ async function loadData(period) {
 
         // 期間表示更新（device と同一）
         updatePeriodDisplay(currentData);
+        checkDataNotice(currentData);
         updatePeriodRangeFromData(currentData, 'page-period');
 
         // フィルタ適用＆テーブル描画

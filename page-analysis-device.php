@@ -61,6 +61,9 @@ get_template_part('template-parts/period-selector');
     <div class="period-display" id="periodDisplay">
         分析対象期間を選択してください
     </div>
+    <div id="dataNotice" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px;color:#856404;">
+        <span style="margin-right:6px;">ℹ️</span><span id="dataNoticeText"></span>
+    </div>
 
     <!-- このページの見方（初心者向け） -->
 <?php
@@ -219,6 +222,19 @@ let currentPeriod = null;
     loadData(initialPeriod);
 })();
 
+function checkDataNotice(data) {
+    var notice = document.getElementById('dataNotice');
+    var text = document.getElementById('dataNoticeText');
+    if (!notice || !text) return;
+    var start = data && data.actual_data_start;
+    if (start) {
+        text.textContent = 'GA4のデータは ' + start.replace(/-/g, '/') + ' からのみ利用可能です。それ以前のデータは存在しないため、短い期間と同じ数値が表示されることがあります。';
+        notice.style.display = '';
+    } else {
+        notice.style.display = 'none';
+    }
+}
+
 /**
  * データ取得とUI更新
  */
@@ -231,6 +247,7 @@ async function loadData(period) {
     if (cached) {
         currentData = cached;
         updatePeriodDisplay(currentData);
+        checkDataNotice(currentData);
         updatePeriodRangeFromData(currentData, 'device-period');
         updateSummaryCards(currentData);
         updateTrendChart(currentData);
@@ -264,6 +281,7 @@ const response = await fetch(apiUrl, {
 
         // 期間表示更新
         updatePeriodDisplay(currentData);
+        checkDataNotice(currentData);
         updatePeriodRangeFromData(currentData, 'device-period');
 
         // UI更新

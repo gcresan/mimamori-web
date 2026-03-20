@@ -63,6 +63,9 @@ get_template_part('template-parts/period-selector');
     <div class="period-display" id="periodDisplay">
         分析対象期間を選択してください
     </div>
+    <div id="dataNotice" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px;color:#856404;">
+        <span style="margin-right:6px;">ℹ️</span><span id="dataNoticeText"></span>
+    </div>
 
 <!-- このページの見方（初心者向け） -->
 <?php
@@ -246,6 +249,19 @@ if (selectorEl) {
 }
 });
 
+function checkDataNotice(data) {
+    var notice = document.getElementById('dataNotice');
+    var text = document.getElementById('dataNoticeText');
+    if (!notice || !text) return;
+    var start = data && data.actual_data_start;
+    if (start) {
+        text.textContent = 'GA4のデータは ' + start.replace(/-/g, '/') + ' からのみ利用可能です。それ以前のデータは存在しないため、短い期間と同じ数値が表示されることがあります。';
+        notice.style.display = '';
+    } else {
+        notice.style.display = 'none';
+    }
+}
+
 /**
  * 流入元データ読み込み
  */
@@ -257,6 +273,7 @@ async function loadSourceData(period, selectorId, isRetry) {
         currentPeriod = period;
         currentData = cached.data;
         updatePeriodDisplay(cached._fullResult);
+        checkDataNotice(currentData);
         updatePeriodRangeFromData(cached._fullResult, selectorId);
         updateSummaryCards(currentData);
         updateTrendChart(currentData);
@@ -304,6 +321,7 @@ async function loadSourceData(period, selectorId, isRetry) {
         // 期間表示・レンジ表示更新
         console.log('[GCREV Source] Calling updatePeriodDisplay with:', result);
         updatePeriodDisplay(result);
+        checkDataNotice(currentData);
         updatePeriodRangeFromData(result, selectorId);
 
         // UI更新（データ構造は /dashboard/kpi のまま使える）

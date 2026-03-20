@@ -2406,7 +2406,35 @@ class Gcrev_Insight_API {
                 'pages' => $ga4_pages['pages'] ?? [],
             ],
             'gsc' => $gsc_data,
+
+            // データ不足検出: daily series の先頭日付がリクエスト開始日より大幅に後ろの場合
+            'actual_data_start' => $this->detect_actual_data_start( $daily, $dates['start'] ),
         ];
+    }
+
+    /**
+     * daily series の先頭日付を確認し、リクエスト開始日との乖離を検出する。
+     * GA4プロパティの作成日が浅い場合、リクエスト期間の前半にデータが存在しない。
+     *
+     * @param  array  $daily  fetch_ga4_daily_series() の戻り値
+     * @param  string $requested_start リクエストされた開始日 (Y-m-d)
+     * @return ?string 実際のデータ開始日 (Y-m-d)。乖離がなければ null
+     */
+    private function detect_actual_data_start( array $daily, string $requested_start ): ?string {
+        $labels = $daily['sessions']['labels'] ?? [];
+        if ( empty( $labels ) ) {
+            return null;
+        }
+        $first_label = $labels[0]; // YYYYMMDD
+        $first_date  = substr( $first_label, 0, 4 ) . '-' . substr( $first_label, 4, 2 ) . '-' . substr( $first_label, 6, 2 );
+
+        $req   = new \DateTimeImmutable( $requested_start );
+        $actual = new \DateTimeImmutable( $first_date );
+        // 7日以上の乖離がある場合のみ通知対象
+        if ( $actual > $req->modify( '+7 days' ) ) {
+            return $first_date;
+        }
+        return null;
     }
 
     // =========================================================

@@ -167,6 +167,9 @@ get_template_part('template-parts/period-selector');
     <div class="period-display" id="periodDisplay">
         分析対象期間を選択してください
     </div>
+    <div id="dataNotice" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px;color:#856404;">
+        <span style="margin-right:6px;">ℹ️</span><span id="dataNoticeText"></span>
+    </div>
 <!-- このページの見方（初心者向け） -->
 <?php
 set_query_var('analysis_help_key', 'region');
@@ -378,6 +381,19 @@ function setupPeriodButtons() {
     });
 }
 
+function checkDataNotice(data) {
+    var notice = document.getElementById('dataNotice');
+    var text = document.getElementById('dataNoticeText');
+    if (!notice || !text) return;
+    var detail = data && data.regions_detail;
+    if (detail && detail.length === 0) {
+        text.textContent = 'この期間の地域データはありません。GA4プロパティの作成日が期間の開始日より後の可能性があります。';
+        notice.style.display = '';
+    } else {
+        notice.style.display = 'none';
+    }
+}
+
 /**
  * 地域別データ取得
  */
@@ -390,6 +406,7 @@ async function loadRegionData(period) {
     if (cached) {
         currentData = cached;
         updatePeriodDisplay(cached.period_display || '期間不明');
+        checkDataNotice(cached);
         updateTop10Chart(cached);
         updateRegionTable(cached);
         return;
@@ -428,6 +445,7 @@ async function loadRegionData(period) {
 
         // 期間表示更新
         updatePeriodDisplay(data.period_display || '期間不明');
+        checkDataNotice(data);
 
         // 各セクション更新
         updateTop10Chart(data);

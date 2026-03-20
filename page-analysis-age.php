@@ -61,6 +61,9 @@ get_template_part('template-parts/period-selector');
     <div class="period-display" id="periodDisplay">
         分析対象期間を選択してください
     </div>
+    <div id="dataNotice" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px;color:#856404;">
+        <span style="margin-right:6px;">ℹ️</span><span id="dataNoticeText"></span>
+    </div>
 
 <!-- このページの見方（初心者向け） -->
 <?php
@@ -282,6 +285,19 @@ function updatePeriodRangeFromData(data, selectorId) {
   window.GCREV.updatePeriodRange(selectorId, currentLabel, compareLabel);
 }
 
+function checkDataNotice(data) {
+    var notice = document.getElementById('dataNotice');
+    var text = document.getElementById('dataNoticeText');
+    if (!notice || !text) return;
+    var start = data && data.actual_data_start;
+    if (start) {
+        text.textContent = 'GA4のデータは ' + start.replace(/-/g, '/') + ' からのみ利用可能です。それ以前のデータは存在しないため、短い期間と同じ数値が表示されることがあります。';
+        notice.style.display = '';
+    } else {
+        notice.style.display = 'none';
+    }
+}
+
 /**
  * データ取得とUI更新（既存API方式を完全踏襲）
  */
@@ -292,6 +308,7 @@ async function loadData(period, selectorId) {
     if (cached) {
         currentPeriod = period;
         updatePeriodDisplay(cached._fullResult);
+        checkDataNotice(cached.data);
         updatePeriodRangeFromData(cached._fullResult, selectorId || 'age-period');
         currentData = cached.data;
         updateSummaryCards(currentData);
@@ -320,6 +337,7 @@ async function loadData(period, selectorId) {
         
         // 期間表示＆レンジ表示を更新（共通）
         updatePeriodDisplay(result);
+        checkDataNotice(result.data || result);
         updatePeriodRangeFromData(result, selectorId || 'age-period');
 console.log('=== API Response ===');
         console.log('result:', result);

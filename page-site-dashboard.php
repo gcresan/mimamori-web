@@ -26,6 +26,21 @@ get_header();
    All shared styles are in css/dashboard-redesign.css
    ============================================= */
 
+/* --- Data Coverage Notice --- */
+.gcrev-notice-nodata {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 14px;
+    color: #856404;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.gcrev-notice-nodata .notice-icon { font-size: 16px; flex-shrink: 0; }
+
 /* --- Section Titles --- */
 .sd-section-title {
     font-size: 16px;
@@ -347,6 +362,12 @@ get_template_part('template-parts/period-selector');
     <!-- 期間表示 -->
     <div class="period-display" id="periodDisplay">
         分析対象期間を選択してください
+    </div>
+
+    <!-- データ不足通知 -->
+    <div id="dataNotice" class="gcrev-notice-nodata" style="display:none;">
+        <span class="notice-icon">ℹ️</span>
+        <span id="dataNoticeText"></span>
     </div>
 
     <!-- KPIサマリーカード -->
@@ -938,6 +959,22 @@ get_template_part('template-parts/period-selector');
     }
 
     // =============================================
+    // データ不足通知
+    // =============================================
+    function checkDataNotice(data) {
+        var notice = document.getElementById('dataNotice');
+        var text = document.getElementById('dataNoticeText');
+        if (!notice || !text) return;
+        var start = data.actual_data_start;
+        if (start) {
+            text.textContent = 'GA4のデータは ' + start.replace(/-/g, '/') + ' からのみ利用可能です。それ以前のデータは存在しないため、短い期間と同じ数値が表示されることがあります。';
+            notice.style.display = '';
+        } else {
+            notice.style.display = 'none';
+        }
+    }
+
+    // =============================================
     // データ取得 & 描画
     // =============================================
     function loadData(period) {
@@ -947,6 +984,7 @@ get_template_part('template-parts/period-selector');
         var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
         if (cached) {
             updatePeriodDisplay(cached);
+            checkDataNotice(cached);
             renderKpiCards(cached);
             renderAnalysisCards(cached);
             renderInsights(cached);
@@ -971,6 +1009,7 @@ get_template_part('template-parts/period-selector');
             if (window.gcrevCache) window.gcrevCache.set(cacheKey, data);
 
             updatePeriodDisplay(data);
+            checkDataNotice(data);
             renderKpiCards(data);
             renderAnalysisCards(data);
             renderInsights(data);

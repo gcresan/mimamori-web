@@ -58,6 +58,9 @@ get_template_part('template-parts/period-selector');
 
     <!-- 期間表示 -->
     <div class="period-display" id="periodDisplay">データを読み込み中...</div>
+    <div id="dataNotice" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px;color:#856404;">
+        <span style="margin-right:6px;">ℹ️</span><span id="dataNoticeText"></span>
+    </div>
 
     <!-- このページの見方（初心者向け） -->
 <?php
@@ -252,6 +255,20 @@ if (selectorEl) {
     });
 }
 
+function checkDataNotice(data) {
+    var notice = document.getElementById('dataNotice');
+    var text = document.getElementById('dataNoticeText');
+    if (!notice || !text) return;
+    // CVデータが空（conversions=0 かつ比較も0）の場合
+    var cv = data && (data.conversions_total || data.total_conversions);
+    if (cv !== undefined && cv === 0) {
+        text.textContent = 'この期間のゴールデータはありません。GA4のキーイベント設定や期間をご確認ください。';
+        notice.style.display = '';
+    } else {
+        notice.style.display = 'none';
+    }
+}
+
 // ===== データ取得 =====
 async function loadCvData(period) {
     currentPeriod = period;
@@ -277,6 +294,7 @@ async function loadCvData(period) {
 
         // 期間表示更新
         updatePeriodDisplay(currentCvData);
+        checkDataNotice(currentCvData);
 
         // UI更新（セクション順: 流入元→デバイス）
         renderCvSummary(currentCvData);
