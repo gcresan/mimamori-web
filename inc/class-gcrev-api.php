@@ -417,6 +417,13 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== MEO基準地点の保存 =====
+        register_rest_route('gcrev/v1', '/meo/base-location', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_meo_base_location' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== MEO順位データ取得（DataForSEO Maps/Local Finder SERP） =====
         register_rest_route('gcrev/v1', '/meo/rankings', [
             'methods'             => 'GET',
@@ -5203,6 +5210,48 @@ PROMPT;
     /**
      * REST: GBPロケーションを選択して保存
      */
+    /**
+     * REST: MEO基準地点の保存
+     * POST /gcrev/v1/meo/base-location
+     */
+    public function rest_save_meo_base_location(\WP_REST_Request $request): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response([ 'success' => false, 'message' => 'ログインが必要です' ], 401);
+        }
+
+        $params  = $request->get_json_params();
+        $address = sanitize_text_field( $params['address'] ?? '' );
+        $label   = sanitize_text_field( $params['label'] ?? '' );
+
+        if ( empty( $address ) ) {
+            return new \WP_REST_Response([ 'success' => false, 'message' => '住所は必須です' ], 400);
+        }
+
+        // 基準地点を保存
+        update_user_meta( $user_id, '_gcrev_meo_address', $address );
+        update_user_meta( $user_id, '_gcrev_meo_base_label', $label );
+        update_user_meta( $user_id, '_gcrev_meo_base_updated', current_time( 'mysql' ) );
+
+        // MEOキャッシュ削除
+        global $wpdb;
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            '%gcrev_meo_' . $user_id . '%'
+        ) );
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'message' => '基準地点を保存しました',
+            'data'    => [
+                'address'      => $address,
+                'base_label'   => $label,
+                'base_updated' => current_time( 'mysql' ),
+            ],
+        ]);
+    }
+
+
     public function rest_select_gbp_location(\WP_REST_Request $request): \WP_REST_Response {
         $user_id = get_current_user_id();
         if (!$user_id) {
@@ -5257,6 +5306,14 @@ PROMPT;
         $existing_radius = (int) get_user_meta($user_id, '_gcrev_gbp_location_radius', true);
         if ($existing_radius < 100) {
             update_user_meta($user_id, '_gcrev_gbp_location_radius', 1000);
+        }
+
+        // 基準地点が未設定の場合、GBP住所を初期値として自動セット
+        $current_meo_address = get_user_meta($user_id, '_gcrev_meo_address', true);
+        if (empty($current_meo_address) && !empty($address)) {
+            update_user_meta($user_id, '_gcrev_meo_address', $address);
+            update_user_meta($user_id, '_gcrev_meo_base_label', $title);
+            update_user_meta($user_id, '_gcrev_meo_base_updated', current_time('mysql'));
         }
 
         // MEOキャッシュ削除
@@ -6260,7 +6317,8 @@ PROMPT;
                             'reviews'     => $r['reviews_count'] !== null ? (int) $r['reviews_count'] : null,
                         ];
 
-                        if ( $day === $latest_day && $device === 'mobile' && $r['store_data'] && ! $latest_data ) {
+                        // 最新の store_data を探す（全キーワード・全デバイス・最新日優先）
+                        if ( $r['store_data'] && ! $latest_data ) {
                             $latest_data = [
                                 'store'       => json_decode( $r['store_data'], true ),
                                 'competitors' => $r['competitors_data'] ? json_decode( $r['competitors_data'], true ) : [],
@@ -6351,12 +6409,14 @@ PROMPT;
 
         $use_coordinate = ( $meo_lat !== '' && $meo_lng !== '' );
         $location_info = [
-            'mode'    => $use_coordinate ? 'coordinate' : 'location_code',
-            'address' => $meo_address,
-            'lat'     => $meo_lat,
-            'lng'     => $meo_lng,
-            'radius'  => $meo_radius,
-            'source'  => $use_coordinate ? $location_source : 'location_code',
+            'mode'         => $use_coordinate ? 'coordinate' : 'location_code',
+            'address'      => $meo_address,
+            'lat'          => $meo_lat,
+            'lng'          => $meo_lng,
+            'radius'       => $meo_radius,
+            'source'       => $use_coordinate ? $location_source : 'location_code',
+            'base_label'   => get_user_meta( $user_id, '_gcrev_meo_base_label', true ) ?: '',
+            'base_updated' => get_user_meta( $user_id, '_gcrev_meo_base_updated', true ) ?: '',
         ];
 
         // GBPドメイン

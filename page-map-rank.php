@@ -542,6 +542,68 @@ get_header();
 .meo-empty__icon { font-size: 32px; margin-bottom: 8px; }
 .meo-empty__text { font-size: 14px; color: #6b7280; }
 
+/* --- Store info card (above table) --- */
+.meo-store-info-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 18px 24px; margin-bottom: 24px; display: none;
+}
+.meo-store-info-card.show { display: block; }
+.meo-store-info-card__header {
+    font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+}
+.meo-store-info-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 32px; font-size: 13px;
+}
+.meo-store-info-item { display: flex; align-items: center; gap: 8px; }
+.meo-store-info-label { color: #6b7280; font-weight: 500; white-space: nowrap; }
+.meo-store-info-val { color: #1a1a1a; font-weight: 600; }
+.meo-store-info-link {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 12px;
+    color: #568184; text-decoration: none; margin-top: 10px;
+}
+.meo-store-info-link:hover { text-decoration: underline; }
+
+/* --- Base location UI --- */
+.meo-base-location-unset {
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+    padding: 14px 20px; margin-bottom: 20px; display: none;
+}
+.meo-base-location-unset.show { display: block; }
+.meo-base-location-unset__title {
+    font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px;
+}
+.meo-base-location-unset__text {
+    font-size: 12px; color: #92400e; line-height: 1.5; margin-bottom: 8px;
+}
+.meo-base-location-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
+    border: 1px solid #d0d5dd; border-radius: 8px; font-size: 12px; font-weight: 500;
+    cursor: pointer; background: #fff; color: #344054; transition: all 0.15s;
+}
+.meo-base-location-btn:hover { background: #f9fafb; border-color: #98a2b3; }
+.meo-base-location-change {
+    font-size: 11px; color: #568184; cursor: pointer; border: none; background: none;
+    text-decoration: underline; padding: 0; margin-left: 6px;
+}
+.meo-base-location-change:hover { color: #476C6F; }
+
+/* --- Base location modal --- */
+.meo-base-modal__desc {
+    font-size: 13px; color: #6b7280; line-height: 1.6; margin-bottom: 16px;
+}
+.meo-base-modal__field { margin-bottom: 14px; }
+.meo-base-modal__label {
+    display: block; font-size: 12px; font-weight: 600; color: #344054; margin-bottom: 4px;
+}
+.meo-base-modal__input {
+    width: 100%; padding: 8px 12px; border: 1px solid #d0d5dd; border-radius: 8px;
+    font-size: 14px; color: #1a1a1a; box-sizing: border-box;
+}
+.meo-base-modal__input:focus { border-color: #568184; outline: none; box-shadow: 0 0 0 2px rgba(86,129,132,0.15); }
+.meo-base-modal__actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
 /* Responsive */
 @media (max-width: 768px) {
     .rt-header { flex-direction: column; align-items: flex-start; }
@@ -550,6 +612,7 @@ get_header();
     .meo-store-grid { grid-template-columns: 1fr; gap: 4px; }
     .meo-store-label { font-weight: 600; }
     .meo-reviews-summary { flex-direction: column; align-items: flex-start; }
+    .meo-store-info-grid { grid-template-columns: 1fr; }
 }
 </style>
 
@@ -589,6 +652,7 @@ get_header();
         <div class="meo-condition-group" id="meoRegionGroup">
             <span class="meo-condition-label">基準地点</span>
             <span class="meo-condition-value" id="meoRegion">読み込み中...</span>
+            <button class="meo-base-location-change" id="meoBaseChangeBtn" style="display:none;" type="button">変更</button>
         </div>
         <!-- 半径（座標モード時のみ表示） -->
         <div class="meo-radius-group" id="meoRadiusGroup" style="display:none;">
@@ -602,6 +666,20 @@ get_header();
             <span class="meo-condition-value"><?php echo esc_html( $maps_domain ); ?></span>
         </div>
 <?php endif; ?>
+    </div>
+
+    <!-- 基準地点未設定バナー -->
+    <div class="meo-base-location-unset" id="meoBaseUnset">
+        <div class="meo-base-location-unset__title">&#x26A0;&#xFE0F; 基準地点が未設定です</div>
+        <div class="meo-base-location-unset__text">マップ順位をより正確に計測するため、基準地点（通常は店舗の住所）を設定してください。</div>
+        <button class="meo-base-location-btn" id="meoBaseSetBtn" type="button">&#x1F4CD; 基準地点を設定する</button>
+    </div>
+
+    <!-- 店舗情報カード -->
+    <div class="meo-store-info-card" id="meoStoreInfoCard">
+        <div class="meo-store-info-card__header">&#x1F3EA; Googleビジネスプロフィール</div>
+        <div class="meo-store-info-grid" id="meoStoreInfoGrid"></div>
+        <a href="#" target="_blank" rel="noopener" class="meo-store-info-link" id="meoStoreInfoMapLink" style="display:none;">Googleマップで見る &#x2192;</a>
     </div>
 
     <!-- Summary cards -->
@@ -671,6 +749,33 @@ get_header();
         </div>
         <div class="rt-modal__body" id="meoDetailModalBody">
             <div class="rt-loading">読み込み中...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Base location modal -->
+<div class="rt-modal-overlay" id="meoBaseModal">
+    <div class="rt-modal" style="max-width:480px;">
+        <div class="rt-modal__header">
+            <div class="rt-modal__title">基準地点を設定</div>
+            <button class="rt-modal__close" id="meoBaseModalClose">&times;</button>
+        </div>
+        <div class="rt-modal__body">
+            <div class="meo-base-modal__desc">
+                基準地点は、Googleマップ上での表示順位を計測する起点となる場所です。通常は店舗の住所を設定します。
+            </div>
+            <div class="meo-base-modal__field">
+                <label class="meo-base-modal__label" for="meoBaseLabel">表示名（任意）</label>
+                <input class="meo-base-modal__input" type="text" id="meoBaseLabel" placeholder="例: 株式会社ジィクレブ">
+            </div>
+            <div class="meo-base-modal__field">
+                <label class="meo-base-modal__label" for="meoBaseAddress">住所 <span style="color:#ef4444;">*</span></label>
+                <input class="meo-base-modal__input" type="text" id="meoBaseAddress" placeholder="例: 愛媛県松山市XX町X-X">
+            </div>
+            <div class="meo-base-modal__actions">
+                <button class="rt-btn" id="meoBaseCancelBtn" type="button">キャンセル</button>
+                <button class="rt-btn rt-btn--primary" id="meoBaseSaveBtn" type="button">&#x1F4BE; 保存する</button>
+            </div>
         </div>
     </div>
 </div>
@@ -749,6 +854,75 @@ get_header();
             });
         }
 
+        // Base location modal handlers
+        var baseSetBtn = document.getElementById('meoBaseSetBtn');
+        var baseChangeBtn = document.getElementById('meoBaseChangeBtn');
+        var baseModal = document.getElementById('meoBaseModal');
+        var baseModalClose = document.getElementById('meoBaseModalClose');
+        var baseCancelBtn = document.getElementById('meoBaseCancelBtn');
+        var baseSaveBtn = document.getElementById('meoBaseSaveBtn');
+
+        function openBaseModal() {
+            if (!baseModal) return;
+            // Pre-fill from current data
+            var addrInput = document.getElementById('meoBaseAddress');
+            var labelInput = document.getElementById('meoBaseLabel');
+            if (meoData && meoData.location) {
+                if (addrInput && meoData.location.address) addrInput.value = meoData.location.address;
+                if (labelInput && meoData.location.base_label) labelInput.value = meoData.location.base_label;
+            }
+            baseModal.classList.add('active');
+        }
+        function closeBaseModal() {
+            if (baseModal) baseModal.classList.remove('active');
+        }
+
+        if (baseSetBtn) baseSetBtn.addEventListener('click', openBaseModal);
+        if (baseChangeBtn) baseChangeBtn.addEventListener('click', openBaseModal);
+        if (baseModalClose) baseModalClose.addEventListener('click', closeBaseModal);
+        if (baseCancelBtn) baseCancelBtn.addEventListener('click', closeBaseModal);
+        if (baseModal) {
+            baseModal.addEventListener('click', function(e) {
+                if (e.target === baseModal) closeBaseModal();
+            });
+        }
+        if (baseSaveBtn) {
+            baseSaveBtn.addEventListener('click', function() {
+                var address = (document.getElementById('meoBaseAddress').value || '').trim();
+                var label = (document.getElementById('meoBaseLabel').value || '').trim();
+                if (!address) {
+                    showToast('住所を入力してください。', 'error');
+                    return;
+                }
+                baseSaveBtn.disabled = true;
+                baseSaveBtn.textContent = '保存中...';
+
+                fetch(restBase + 'meo/base-location', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address: address, label: label })
+                })
+                .then(function(resp) { return resp.json(); })
+                .then(function(json) {
+                    baseSaveBtn.disabled = false;
+                    baseSaveBtn.innerHTML = '&#x1F4BE; 保存する';
+                    if (json.success) {
+                        closeBaseModal();
+                        showToast('基準地点を保存しました。');
+                        fetchMeoData(); // Reload to reflect changes
+                    } else {
+                        showToast(json.message || '保存に失敗しました。', 'error');
+                    }
+                })
+                .catch(function() {
+                    baseSaveBtn.disabled = false;
+                    baseSaveBtn.innerHTML = '&#x1F4BE; 保存する';
+                    showToast('通信エラーが発生しました。', 'error');
+                });
+            });
+        }
+
         // Initial load
         fetchMeoData();
     });
@@ -775,6 +949,9 @@ get_header();
                 // Location info
                 renderLocation(json.data.location);
 
+                // Store info card
+                renderStoreInfoCard(json.data.latest);
+
                 if (keywordsList.length === 0) {
                     showState('empty');
                     return;
@@ -794,24 +971,86 @@ get_header();
     }
 
     // =========================================================
-    // Location rendering
+    // Location rendering + base location UI
     // =========================================================
     function renderLocation(loc) {
         if (!loc || !regionEl) return;
 
-        if (loc.mode === 'coordinate') {
-            if (loc.source === 'city_center') {
-                regionEl.innerHTML = escHtml(loc.address || '')
-                    + ' <span style="font-size:11px;color:#999;font-weight:400;">(自動設定)</span>';
+        var baseUnset = document.getElementById('meoBaseUnset');
+        var baseChangeBtn = document.getElementById('meoBaseChangeBtn');
+        var hasAddress = loc.address && loc.address !== '';
+
+        if (hasAddress) {
+            // 基準地点が設定済み
+            if (loc.mode === 'coordinate') {
+                if (loc.source === 'city_center') {
+                    regionEl.innerHTML = escHtml(loc.address)
+                        + ' <span style="font-size:11px;color:#999;font-weight:400;">(自動設定)</span>';
+                } else {
+                    regionEl.textContent = loc.address;
+                }
+                if (radiusGroup) radiusGroup.style.display = '';
             } else {
-                regionEl.textContent = loc.address || (loc.lat + ', ' + loc.lng);
+                regionEl.textContent = loc.address;
+                if (radiusGroup) radiusGroup.style.display = 'none';
             }
-            // Show radius selector if we have coordinate mode
-            if (radiusGroup) radiusGroup.style.display = '';
+            if (baseChangeBtn) baseChangeBtn.style.display = '';
+            if (baseUnset) baseUnset.classList.remove('show');
         } else {
-            regionEl.textContent = loc.address || '未設定';
+            // 基準地点が未設定
+            regionEl.textContent = '未設定';
             if (radiusGroup) radiusGroup.style.display = 'none';
+            if (baseChangeBtn) baseChangeBtn.style.display = 'none';
+            if (baseUnset) baseUnset.classList.add('show');
         }
+    }
+
+    // =========================================================
+    // Store info card (above table)
+    // =========================================================
+    function renderStoreInfoCard(latest) {
+        var card = document.getElementById('meoStoreInfoCard');
+        var grid = document.getElementById('meoStoreInfoGrid');
+        var mapLink = document.getElementById('meoStoreInfoMapLink');
+        if (!card || !grid) return;
+
+        if (!latest || !latest.store) {
+            card.classList.remove('show');
+            return;
+        }
+
+        var store = latest.store;
+        var items = [];
+
+        if (store.title) items.push(['店舗名', escHtml(store.title)]);
+        if (store.rating != null) {
+            items.push(['Google評価', '<span style="color:#f59e0b;">' + meoStarsMini(store.rating) + '</span> ' + parseFloat(store.rating).toFixed(1)]);
+        }
+        if (store.category) items.push(['カテゴリ', escHtml(store.category)]);
+        if (store.reviews_count != null) items.push(['口コミ件数', store.reviews_count + '件']);
+
+        if (items.length === 0) {
+            card.classList.remove('show');
+            return;
+        }
+
+        var html = '';
+        items.forEach(function(item) {
+            html += '<div class="meo-store-info-item">'
+                  + '<span class="meo-store-info-label">' + item[0] + ':</span>'
+                  + '<span class="meo-store-info-val">' + item[1] + '</span>'
+                  + '</div>';
+        });
+        grid.innerHTML = html;
+
+        if (store.maps_url && mapLink) {
+            mapLink.href = store.maps_url;
+            mapLink.style.display = '';
+        } else if (mapLink) {
+            mapLink.style.display = 'none';
+        }
+
+        card.classList.add('show');
     }
 
     // =========================================================
@@ -844,8 +1083,6 @@ get_header();
         hHtml += '<th>キーワード</th>';
         hHtml += '<th>マップ順位</th>';
         hHtml += '<th>地域順位</th>';
-        hHtml += '<th>評価</th>';
-        hHtml += '<th>口コミ</th>';
         for (var d = 0; d < dayLabels.length; d++) {
             hHtml += '<th style="text-align:center;">' + dayLabels[d] + '</th>';
         }
@@ -879,25 +1116,6 @@ get_header();
             // Finder rank (current)
             html += '<td>';
             html += formatSimpleRank(cur, 'finder_rank');
-            html += '</td>';
-
-            // Rating
-            html += '<td>';
-            if (cur && cur.rating != null) {
-                html += '<span class="rt-meta-rating">' + meoStarsMini(cur.rating) + '</span> '
-                      + '<span style="font-size:13px;">' + parseFloat(cur.rating).toFixed(1) + '</span>';
-            } else {
-                html += '<span class="rt-rank--na">-</span>';
-            }
-            html += '</td>';
-
-            // Reviews count
-            html += '<td>';
-            if (cur && cur.reviews != null) {
-                html += '<span class="rt-meta-reviews">' + cur.reviews + '件</span>';
-            } else {
-                html += '<span class="rt-rank--na">-</span>';
-            }
             html += '</td>';
 
             // Daily columns (7 days) — maps_rank
@@ -1159,7 +1377,7 @@ get_header();
     }
 
     // =========================================================
-    // Fetch all keywords (bulk)
+    // Fetch all keywords (bulk) — mobile + desktop
     // =========================================================
     function fetchAllKeywords() {
         if (!keywordsList || keywordsList.length === 0) {
@@ -1172,32 +1390,46 @@ get_header();
         btn.disabled = true;
         btn.innerHTML = '<span class="rt-btn__icon">&#x22EF;</span> 最新情報を取得中...';
 
-        var kwCount = keywordsList.length;
-        showProgress(true, kwCount);
+        var devices = ['mobile', 'desktop'];
+        var deviceLabels = { mobile: 'スマホ版', desktop: 'PC版' };
+        var totalSteps = keywordsList.length * devices.length;
+        showProgress(true, totalSteps);
 
         var completed = 0;
         var errors = 0;
+        var stepIndex = 0;
 
-        // Sequential fetch for each keyword
+        // Build sequential task list: [{ kw, device }, ...]
+        var tasks = [];
+        for (var k = 0; k < keywordsList.length; k++) {
+            for (var d = 0; d < devices.length; d++) {
+                tasks.push({ kw: keywordsList[k], device: devices[d] });
+            }
+        }
+
         function fetchNext(index) {
-            if (index >= keywordsList.length) {
+            if (index >= tasks.length) {
                 // All done
-                showProgressComplete(completed);
+                showProgressComplete(completed, errors);
                 setTimeout(function() {
                     showProgress(false);
                     btn.disabled = false;
                     btn.innerHTML = '<span class="rt-btn__icon">&#x21BB;</span> 最新の情報を見る';
-                    showToast(completed + '件のキーワードの最新マップ順位を取得しました。');
+                    var msg = completed + '件の順位データを取得しました。';
+                    if (errors > 0) msg += '（' + errors + '件のエラー）';
+                    showToast(msg, errors > 0 ? 'error' : '');
                     fetchMeoData(); // Reload table
                 }, 1200);
                 return;
             }
 
-            var kw = keywordsList[index];
-            updateProgressText(index + 1, kwCount, kw.keyword);
+            var task = tasks[index];
+            var stepNum = index + 1;
+            var deviceLabel = deviceLabels[task.device];
+            updateProgressTextDual(stepNum, totalSteps, task.kw.keyword, deviceLabel);
 
-            var url = restBase + 'meo/rankings?device=' + encodeURIComponent(currentDevice)
-                    + '&keyword_id=' + encodeURIComponent(kw.keyword_id)
+            var url = restBase + 'meo/rankings?device=' + encodeURIComponent(task.device)
+                    + '&keyword_id=' + encodeURIComponent(task.kw.keyword_id)
                     + '&force=1';
 
             fetch(url, {
@@ -1211,12 +1443,12 @@ get_header();
                 } else {
                     errors++;
                 }
-                updateProgressBar(index + 1, kwCount);
+                updateProgressBar(stepNum, totalSteps);
                 fetchNext(index + 1);
             })
             .catch(function() {
                 errors++;
-                updateProgressBar(index + 1, kwCount);
+                updateProgressBar(stepNum, totalSteps);
                 fetchNext(index + 1);
             });
         }
@@ -1227,7 +1459,7 @@ get_header();
     // =========================================================
     // Progress overlay
     // =========================================================
-    function showProgress(show, kwCount) {
+    function showProgress(show, totalSteps) {
         var overlay = document.getElementById('progressOverlay');
         if (!overlay) return;
         if (show) {
@@ -1235,8 +1467,8 @@ get_header();
             var textEl = document.getElementById('progressText');
             var subEl = document.getElementById('progressSub');
             var barEl = document.getElementById('progressBar');
-            if (titleEl) titleEl.textContent = '最新のマップ順位を取得中...';
-            if (textEl) textEl.textContent = kwCount + '件のキーワードのマップ順位を取得します...';
+            if (titleEl) titleEl.textContent = 'スマホ版・PC版の最新データを取得中...';
+            if (textEl) textEl.textContent = totalSteps + '件の順位データを取得します...';
             if (subEl) subEl.textContent = '1キーワードあたり数秒かかります。しばらくお待ちください。';
             if (barEl) {
                 barEl.style.width = '0%';
@@ -1256,18 +1488,20 @@ get_header();
         }
     }
 
-    function updateProgressText(current, total, keyword) {
+    function updateProgressTextDual(current, total, keyword, deviceLabel) {
         var textEl = document.getElementById('progressText');
-        if (textEl) textEl.textContent = '「' + keyword + '」を取得中... (' + current + '/' + total + ')';
+        if (textEl) textEl.textContent = '「' + keyword + '」' + deviceLabel + ' 取得中 (' + current + '/' + total + ')';
     }
 
-    function showProgressComplete(count) {
+    function showProgressComplete(count, errors) {
         var titleEl = document.getElementById('progressTitle');
         var textEl = document.getElementById('progressText');
         var subEl = document.getElementById('progressSub');
         var barEl = document.getElementById('progressBar');
         if (titleEl) titleEl.textContent = '取得完了!';
-        if (textEl) textEl.textContent = count + '件のキーワードの最新マップ順位を取得しました。';
+        var msg = count + '件の順位データを取得しました。';
+        if (errors > 0) msg += '（' + errors + '件のエラー）';
+        if (textEl) textEl.textContent = msg;
         if (subEl) subEl.textContent = '';
         if (barEl) barEl.style.width = '100%';
     }
