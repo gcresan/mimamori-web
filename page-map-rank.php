@@ -420,7 +420,7 @@ get_header();
         if (refreshBtn) {
             refreshBtn.addEventListener('click', function() {
                 refreshBtn.disabled = true;
-                refreshBtn.innerHTML = '⏳ 取得中...';
+                refreshBtn.innerHTML = '<span class="rt-btn__icon">&#x23F3;</span> 取得中...';
                 refreshBtn.style.opacity = '0.6';
 
                 // force=1 でキャッシュを無視して再取得
@@ -447,7 +447,7 @@ get_header();
                 .catch(function() {})
                 .finally(function() {
                     refreshBtn.disabled = false;
-                    refreshBtn.innerHTML = '🔄 最新の情報を見る';
+                    refreshBtn.innerHTML = '<span class="rt-btn__icon">&#x21BB;</span> 最新の情報を見る';
                     refreshBtn.style.opacity = '1';
                 });
             });

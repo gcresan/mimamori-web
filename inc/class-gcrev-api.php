@@ -5562,7 +5562,7 @@ PROMPT;
                 if ( $cached !== false && is_array( $cached ) ) {
                     $cached['keywords'] = $this->meo_build_keyword_list( $all_keywords, $kw_id );
 
-                    // キャッシュヒットでも、今週の履歴が未保存なら保存
+                    // キャッシュヒットでも、今日の履歴が未保存なら保存
                     $this->meo_save_to_history(
                         $user_id, $kw_id, $device,
                         $cached['maps']['rank'] ?? null,
@@ -5688,7 +5688,7 @@ PROMPT;
 
             set_transient( $cache_key, $result, 86400 );
 
-            // 週次履歴テーブルにも保存（gcrev_meo_results — UPSERT）
+            // 日次履歴テーブルにも保存（gcrev_meo_results — UPSERT）
             $this->meo_save_to_history( $user_id, $kw_id, $device, $maps_rank, $finder_rank, $store_data, $competitors );
 
             return new \WP_REST_Response( $result, 200 );
@@ -5738,12 +5738,12 @@ PROMPT;
         $fetch_date    = $now->format( 'Y-m-d' );
         $fetched_at    = $now->format( 'Y-m-d H:i:s' );
 
-        // 今週のデータが既にあればスキップ（キャッシュヒット時の重複書き込み防止）
+        // 当日のデータが既にあればスキップ（キャッシュヒット時の重複書き込み防止）
         $exists = $wpdb->get_var( $wpdb->prepare(
             "SELECT id FROM {$meo_table}
-             WHERE user_id = %d AND keyword_id = %d AND device = %s AND iso_year_week = %s
+             WHERE user_id = %d AND keyword_id = %d AND device = %s AND fetch_date = %s
              LIMIT 1",
-            $user_id, $keyword_id, $device, $iso_year_week
+            $user_id, $keyword_id, $device, $fetch_date
         ) );
         if ( $exists ) {
             return;
@@ -5779,7 +5779,7 @@ PROMPT;
     }
 
     // =========================================================
-    // MEO 週次自動フェッチ（Cron: 毎週月曜 04:30）
+    // MEO 日次自動フェッチ（Cron: 毎日 04:30）
     // =========================================================
 
     /**
@@ -6133,7 +6133,7 @@ PROMPT;
     }
 
     /**
-     * GET /meo/history — 直近6週分の MEO 計測履歴
+     * GET /meo/history — 直近7日分の MEO 計測履歴
      */
     public function rest_get_meo_history( \WP_REST_Request $request ): \WP_REST_Response {
         global $wpdb;
