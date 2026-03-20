@@ -5356,6 +5356,7 @@ function gcrev_prefetch_status_create_table(): void {
         fetched_at DATETIME NOT NULL,
         error_message TEXT NULL,
         source VARCHAR(20) NOT NULL DEFAULT 'cron',
+        batch_type VARCHAR(20) NOT NULL DEFAULT 'daily',
         UNIQUE KEY user_period_type (user_id, period, data_type),
         KEY status (status),
         KEY fetched_at (fetched_at)

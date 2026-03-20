@@ -10,8 +10,8 @@ if ( class_exists('Gcrev_Prefetch_Management_Page') ) { return; }
  * Gcrev_Prefetch_Management_Page
  *
  * WordPress管理画面に「みまもりウェブ > データ取得管理」ページを追加する。
- * - Cronステータス表示
- * - クライアント別プリフェッチ状況一覧
+ * - Cronステータス表示（前回プリフェッチ結果含む）
+ * - クライアント別プリフェッチ状況一覧（日時・ステータス付き）
  * - 手動取得・接続確認
  * - エラー表示
  *
@@ -204,31 +204,7 @@ class Gcrev_Prefetch_Management_Page {
             <?php $this->render_error_log( $errors ); ?>
         </div>
 
-        <style>
-            .gcrev-prefetch-wrap { margin-top: 20px; }
-            .gcrev-status-cards { display: flex; gap: 20px; margin: 15px 0; flex-wrap: wrap; }
-            .gcrev-status-card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; min-width: 280px; flex: 1; }
-            .gcrev-status-card h3 { margin: 0 0 10px; font-size: 15px; }
-            .gcrev-status-card .value { font-size: 14px; color: #444; }
-            .gcrev-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-            .gcrev-badge-success { background: #d4edda; color: #155724; }
-            .gcrev-badge-error { background: #f8d7da; color: #721c24; }
-            .gcrev-badge-stale { background: #fff3cd; color: #856404; }
-            .gcrev-badge-none { background: #e2e3e5; color: #383d41; }
-            .gcrev-badge-locked { background: #cce5ff; color: #004085; }
-            .gcrev-client-table { width: 100%; border-collapse: collapse; background: #fff; }
-            .gcrev-client-table th, .gcrev-client-table td { padding: 8px 10px; border: 1px solid #ddd; font-size: 13px; text-align: center; }
-            .gcrev-client-table th { background: #f1f1f1; font-weight: 600; }
-            .gcrev-client-table td:first-child, .gcrev-client-table td:nth-child(2) { text-align: left; }
-            .gcrev-client-table .actions-cell { white-space: nowrap; }
-            .gcrev-bulk-actions { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
-            .gcrev-bulk-actions form { display: inline; }
-            .gcrev-error-table { width: 100%; border-collapse: collapse; background: #fff; margin-top: 10px; }
-            .gcrev-error-table th, .gcrev-error-table td { padding: 8px 10px; border: 1px solid #ddd; font-size: 12px; }
-            .gcrev-error-table th { background: #f8d7da; }
-            .gcrev-section { margin: 25px 0; }
-            .gcrev-section h2 { font-size: 16px; border-bottom: 2px solid #568184; padding-bottom: 6px; }
-        </style>
+        <?php $this->render_styles(); ?>
         <?php
     }
 
@@ -263,31 +239,48 @@ class Gcrev_Prefetch_Management_Page {
     // =========================================================
 
     private function render_cron_status(): void {
+        // Cron Logger から最新のジョブ情報を取得
+        $latest_jobs = [];
+        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+            $latest_jobs = Gcrev_Cron_Logger::get_latest_per_job();
+        }
+
         ?>
         <div class="gcrev-section">
             <h2>⏱ Cronステータス</h2>
             <div class="gcrev-status-cards">
                 <?php
-                $this->render_cron_card( '日次プリフェッチ', 'gcrev_prefetch_daily_event', 'gcrev_lock_prefetch' );
-                $this->render_cron_card( '月次プリフェッチ', 'gcrev_monthly_data_prefetch_event', 'gcrev_lock_monthly_prefetch' );
+                $this->render_cron_card(
+                    '日次プリフェッチ',
+                    'gcrev_prefetch_daily_event',
+                    'gcrev_lock_prefetch',
+                    $latest_jobs['prefetch'] ?? null
+                );
+                $this->render_cron_card(
+                    '月次プリフェッチ',
+                    'gcrev_monthly_data_prefetch_event',
+                    'gcrev_lock_monthly_prefetch',
+                    $latest_jobs['monthly_prefetch'] ?? null
+                );
                 ?>
             </div>
         </div>
         <?php
     }
 
-    private function render_cron_card( string $title, string $hook, string $lock_key ): void {
+    private function render_cron_card( string $title, string $hook, string $lock_key, ?object $latest_log ): void {
         $next_ts = wp_next_scheduled( $hook );
         $locked  = (bool) get_transient( $lock_key );
+        $tz      = wp_timezone();
 
         ?>
         <div class="gcrev-status-card">
             <h3><?php echo esc_html( $title ); ?></h3>
+
             <div class="value">
                 次回実行:
                 <?php
                 if ( $next_ts ) {
-                    $tz = wp_timezone();
                     $dt = ( new DateTimeImmutable( '@' . $next_ts ) )->setTimezone( $tz );
                     echo esc_html( $dt->format( 'Y-m-d H:i:s' ) );
                 } else {
@@ -295,6 +288,38 @@ class Gcrev_Prefetch_Management_Page {
                 }
                 ?>
             </div>
+
+            <div class="value" style="margin-top:6px;">
+                前回プリフェッチ:
+                <?php if ( $latest_log ): ?>
+                    <?php
+                    $log_dt = ( new DateTimeImmutable( $latest_log->started_at, $tz ) );
+                    echo esc_html( $log_dt->format( 'Y-m-d H:i:s' ) );
+
+                    $log_status = $latest_log->status ?? 'unknown';
+                    if ( $log_status === 'success' ) {
+                        echo ' <span class="gcrev-badge gcrev-badge-success">成功</span>';
+                    } elseif ( $log_status === 'locked' ) {
+                        echo ' <span class="gcrev-badge gcrev-badge-stale">ロック中スキップ</span>';
+                    } else {
+                        echo ' <span class="gcrev-badge gcrev-badge-error">' . esc_html( $log_status ) . '</span>';
+                    }
+
+                    // 処理時間
+                    if ( ! empty( $latest_log->finished_at ) ) {
+                        $started  = strtotime( $latest_log->started_at );
+                        $finished = strtotime( $latest_log->finished_at );
+                        if ( $started && $finished ) {
+                            $elapsed = $finished - $started;
+                            echo ' <small style="color:#888;">(' . $elapsed . '秒)</small>';
+                        }
+                    }
+                    ?>
+                <?php else: ?>
+                    <span style="color:#999;">未実行</span>
+                <?php endif; ?>
+            </div>
+
             <div class="value" style="margin-top:6px;">
                 ロック:
                 <?php if ( $locked ): ?>
@@ -376,39 +401,18 @@ class Gcrev_Prefetch_Management_Page {
 
     private function render_client_row( $user, array $status_map, array $periods ): void {
         $uid = (int) $user->ID;
-        $has_ga4 = (bool) get_user_meta( $uid, 'gcrev_ga4_property_id', true );
-        $has_gsc = (bool) get_user_meta( $uid, 'gcrev_gsc_url', true );
+        $has_ga4 = (bool) get_user_meta( $uid, 'ga4_property_id', true );
+        $has_gsc = (bool) get_user_meta( $uid, 'weisite_url', true );
 
         ?>
         <tr>
             <td><?php echo esc_html( $uid ); ?></td>
             <td><?php echo esc_html( $user->display_name ); ?></td>
-            <td><?php echo $has_ga4 ? '✓' : '<span style="color:#ccc;">✕</span>'; ?></td>
-            <td><?php echo $has_gsc ? '✓' : '<span style="color:#ccc;">✕</span>'; ?></td>
+            <td><?php echo $has_ga4 ? '<span style="color:#28a745;">✓</span>' : '<span style="color:#ccc;">✕</span>'; ?></td>
+            <td><?php echo $has_gsc ? '<span style="color:#28a745;">✓</span>' : '<span style="color:#ccc;">✕</span>'; ?></td>
             <?php foreach ( $periods as $period ): ?>
                 <td>
-                    <?php
-                    $s = $status_map[ $uid ][ $period ] ?? null;
-                    if ( ! $s ) {
-                        echo '<span class="gcrev-badge gcrev-badge-none">未取得</span>';
-                    } elseif ( $s->status === 'error' ) {
-                        echo '<span class="gcrev-badge gcrev-badge-error">エラー</span>';
-                        echo '<br><small>' . esc_html( substr( $s->fetched_at, 5, 11 ) ) . '</small>';
-                    } else {
-                        // TTL 切れチェック
-                        $fetched = strtotime( $s->fetched_at );
-                        $is_monthly = Gcrev_Date_Helper::is_monthly_fixed_period( $period );
-                        $ttl = $is_monthly ? 3024000 : ( $period === 'last90' ? 172800 : 86400 );
-                        $stale = ( time() - $fetched ) > $ttl;
-
-                        if ( $stale ) {
-                            echo '<span class="gcrev-badge gcrev-badge-stale">TTL切れ</span>';
-                        } else {
-                            echo '<span class="gcrev-badge gcrev-badge-success">成功</span>';
-                        }
-                        echo '<br><small>' . esc_html( substr( $s->fetched_at, 5, 11 ) ) . '</small>';
-                    }
-                    ?>
+                    <?php $this->render_status_cell( $status_map, $uid, $period, $has_ga4 ); ?>
                 </td>
             <?php endforeach; ?>
             <td class="actions-cell">
@@ -429,6 +433,67 @@ class Gcrev_Prefetch_Management_Page {
             </td>
         </tr>
         <?php
+    }
+
+    /**
+     * ステータスセルを描画
+     */
+    private function render_status_cell( array $status_map, int $uid, string $period, bool $has_ga4 ): void {
+        $s = $status_map[ $uid ][ $period ] ?? null;
+
+        if ( ! $s ) {
+            // GA4 未設定の場合は「スキップ」表示
+            if ( ! $has_ga4 ) {
+                echo '<span class="gcrev-badge gcrev-badge-skip">スキップ</span>';
+                echo '<br><small class="gcrev-cell-sub">GA4未設定</small>';
+            } else {
+                echo '<span class="gcrev-badge gcrev-badge-none">未取得</span>';
+            }
+            return;
+        }
+
+        $fetched_display = substr( $s->fetched_at, 5, 11 ); // "03-20 03:11"
+        $source_label    = '';
+        $batch_type      = $s->batch_type ?? '';
+        if ( $batch_type === 'manual' ) {
+            $source_label = '手動';
+        } elseif ( $batch_type === 'monthly' ) {
+            $source_label = '月次';
+        } elseif ( $batch_type === 'daily' ) {
+            $source_label = '日次';
+        } else {
+            // batch_type カラム未追加の場合は source を使用
+            $source_label = ( $s->source === 'manual' ) ? '手動' : 'cron';
+        }
+
+        if ( $s->status === 'error' ) {
+            echo '<span class="gcrev-badge gcrev-badge-error">エラー</span>';
+            echo '<br><small class="gcrev-cell-sub">' . esc_html( $fetched_display ) . '</small>';
+            if ( ! empty( $s->error_message ) ) {
+                echo '<br><small class="gcrev-cell-sub" title="' . esc_attr( $s->error_message ) . '">⚠ ' . esc_html( mb_strimwidth( $s->error_message, 0, 30, '…' ) ) . '</small>';
+            }
+            return;
+        }
+
+        if ( $s->status === 'skip' ) {
+            echo '<span class="gcrev-badge gcrev-badge-skip">スキップ</span>';
+            echo '<br><small class="gcrev-cell-sub">' . esc_html( $s->error_message ?: $fetched_display ) . '</small>';
+            return;
+        }
+
+        // 成功 — TTL 切れチェック
+        $fetched    = strtotime( $s->fetched_at );
+        $is_monthly = Gcrev_Date_Helper::is_monthly_fixed_period( $period );
+        $ttl        = $is_monthly ? 3024000 : ( $period === 'last90' ? 172800 : 86400 );
+        $stale      = ( time() - $fetched ) > $ttl;
+
+        if ( $stale ) {
+            echo '<span class="gcrev-badge gcrev-badge-stale">TTL切れ</span>';
+        } else {
+            echo '<span class="gcrev-badge gcrev-badge-success">成功</span>';
+        }
+        echo '<br><small class="gcrev-cell-sub">' . esc_html( $fetched_display ) . '</small>';
+        echo '<br><small class="gcrev-cell-sub gcrev-cell-source">' . esc_html( $source_label ) . '</small>';
     }
 
     // =========================================================
@@ -468,6 +533,43 @@ class Gcrev_Prefetch_Management_Page {
                 </table>
             <?php endif; ?>
         </div>
+        <?php
+    }
+
+    // =========================================================
+    // スタイル
+    // =========================================================
+
+    private function render_styles(): void {
+        ?>
+        <style>
+            .gcrev-prefetch-wrap { margin-top: 20px; }
+            .gcrev-status-cards { display: flex; gap: 20px; margin: 15px 0; flex-wrap: wrap; }
+            .gcrev-status-card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px 20px; min-width: 320px; flex: 1; }
+            .gcrev-status-card h3 { margin: 0 0 10px; font-size: 15px; }
+            .gcrev-status-card .value { font-size: 14px; color: #444; line-height: 1.6; }
+            .gcrev-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+            .gcrev-badge-success { background: #d4edda; color: #155724; }
+            .gcrev-badge-error { background: #f8d7da; color: #721c24; }
+            .gcrev-badge-stale { background: #fff3cd; color: #856404; }
+            .gcrev-badge-none { background: #e2e3e5; color: #383d41; }
+            .gcrev-badge-skip { background: #cce5ff; color: #004085; }
+            .gcrev-badge-locked { background: #cce5ff; color: #004085; }
+            .gcrev-client-table { width: 100%; border-collapse: collapse; background: #fff; }
+            .gcrev-client-table th, .gcrev-client-table td { padding: 8px 10px; border: 1px solid #ddd; font-size: 13px; text-align: center; vertical-align: middle; }
+            .gcrev-client-table th { background: #f1f1f1; font-weight: 600; }
+            .gcrev-client-table td:first-child, .gcrev-client-table td:nth-child(2) { text-align: left; }
+            .gcrev-client-table .actions-cell { white-space: nowrap; }
+            .gcrev-cell-sub { color: #888; font-size: 11px; display: block; line-height: 1.3; margin-top: 2px; }
+            .gcrev-cell-source { color: #aaa; font-size: 10px; }
+            .gcrev-bulk-actions { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
+            .gcrev-bulk-actions form { display: inline; }
+            .gcrev-error-table { width: 100%; border-collapse: collapse; background: #fff; margin-top: 10px; }
+            .gcrev-error-table th, .gcrev-error-table td { padding: 8px 10px; border: 1px solid #ddd; font-size: 12px; }
+            .gcrev-error-table th { background: #f8d7da; }
+            .gcrev-section { margin: 25px 0; }
+            .gcrev-section h2 { font-size: 16px; border-bottom: 2px solid #568184; padding-bottom: 6px; }
+        </style>
         <?php
     }
 }
