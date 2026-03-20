@@ -169,9 +169,8 @@ class Gcrev_Prefetch_Management_Page {
             $status_map[ (int) $s->user_id ][ $s->period ] = $s;
         }
 
-        // クライアント一覧取得
+        // クライアント一覧取得（管理者含む）
         $users = get_users( [
-            'role__not_in' => [ 'administrator' ],
             'orderby'      => 'display_name',
             'order'         => 'ASC',
             'fields'        => [ 'ID', 'display_name' ],
