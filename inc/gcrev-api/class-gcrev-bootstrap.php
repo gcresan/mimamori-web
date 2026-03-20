@@ -395,16 +395,23 @@ class Gcrev_Bootstrap {
      */
     public static function on_manual_fetch_all_event( $user_id ): void {
         $user_id = (int) $user_id;
-        error_log( "[GCREV] gcrev_manual_fetch_all_event triggered: user_id={$user_id}" );
+        $log = '/tmp/gcrev_prefetch_debug.log';
+        file_put_contents( $log, date('Y-m-d H:i:s') . " [manual_fetch_all] START user_id={$user_id}\n", FILE_APPEND );
 
         $api = new Gcrev_Insight_API( false );
         $all_periods = [ 'last30', 'last90', 'previousMonth', 'twoMonthsAgo', 'last180', 'last365' ];
 
         foreach ( $all_periods as $p ) {
-            $api->manual_fetch_for_user( $user_id, $p );
+            file_put_contents( $log, date('Y-m-d H:i:s') . " [manual_fetch_all] fetching period={$p} user_id={$user_id}\n", FILE_APPEND );
+            try {
+                $result = $api->manual_fetch_for_user( $user_id, $p );
+                file_put_contents( $log, date('Y-m-d H:i:s') . " [manual_fetch_all] period={$p} result=" . wp_json_encode( $result, JSON_UNESCAPED_UNICODE ) . "\n", FILE_APPEND );
+            } catch ( \Throwable $e ) {
+                file_put_contents( $log, date('Y-m-d H:i:s') . " [manual_fetch_all] period={$p} EXCEPTION: " . $e->getMessage() . "\n", FILE_APPEND );
+            }
         }
 
-        error_log( "[GCREV] gcrev_manual_fetch_all_event DONE: user_id={$user_id}" );
+        file_put_contents( $log, date('Y-m-d H:i:s') . " [manual_fetch_all] DONE user_id={$user_id}\n", FILE_APPEND );
     }
 
     /**

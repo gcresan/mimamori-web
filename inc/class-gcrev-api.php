@@ -1504,8 +1504,8 @@ class Gcrev_Insight_API {
             return;
         }
 
-        // 日次プリフェッチ: スライド期間のみ（月固定期間は月次cronで取得）
-        $ranges = ['last30', 'last90'];
+        // 日次プリフェッチ: 全期間を毎日取得
+        $ranges = ['last30', 'last90', 'previousMonth', 'twoMonthsAgo', 'last180', 'last365'];
         $chunk_start = microtime( true );
         $chunk_success = 0;
         $chunk_fail    = 0;
@@ -1555,8 +1555,8 @@ class Gcrev_Insight_API {
             }
 
             // --- (2) 各分析ページキャッシュ ---
-            // 日次プリフェッチ: last30 + last90（ユーザーが頻繁に閲覧する期間）
-            $analysis_periods = ['last30', 'last90'];
+            // 日次プリフェッチ: 全期間の分析キャッシュを事前取得
+            $analysis_periods = ['last30', 'last90', 'prev-month', 'prev-prev-month', 'last180', 'last365'];
 
             foreach ($analysis_periods as $period) {
                 $this->prefetch_analysis_caches($user_id, $config, $period);
