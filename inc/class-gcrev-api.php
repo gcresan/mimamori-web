@@ -2264,6 +2264,12 @@ class Gcrev_Insight_API {
         // 比較期間（同日数の直前期間）
         $comparison = $this->dates->get_comparison_range($dates['start'], $dates['end']);
 
+        // デバッグ: 実際に使われる日付範囲をログ
+        file_put_contents('/tmp/gcrev_dash_debug.log',
+            date('Y-m-d H:i:s') . " [fetch_internal] range={$range}, dates={$dates['start']}~{$dates['end']}, comp={$comparison['start']}~{$comparison['end']}\n",
+            FILE_APPEND
+        );
+
         // GA4 / GSC 取得
         $ga4_pages = $this->ga4->fetch_ga4_data($ga4_id, $dates['start'], $dates['end'], $site_url);
 
@@ -3631,11 +3637,21 @@ class Gcrev_Insight_API {
         // --- [CACHE_FIRST] 長期間の場合：明示的にキャッシュ優先パスを通る ---
         // last90/last180/last365 は自動的に cache_first=1 扱いにする（JS側が付け忘れても安全）
         if ($cache_first || in_array($period, ['last90', 'last180', 'last365'], true)) {
+            $cache_key_debug = $this->cache_key_dashboard($user_id, $range);
             $cached = $this->dashboard_cache_get($user_id, $range);
             if ($cached !== null) {
+                $cp = $cached['current_period'] ?? [];
+                file_put_contents('/tmp/gcrev_dash_debug.log',
+                    date('Y-m-d H:i:s') . " [KPI] CACHE HIT period={$period}, range={$range}, key={$cache_key_debug}, dates=" . ($cp['start'] ?? '?') . "~" . ($cp['end'] ?? '?') . "\n",
+                    FILE_APPEND
+                );
                 $cached = $this->inject_effective_cv_into_kpi($cached, $period, $user_id);
                 return $cached;
             }
+            file_put_contents('/tmp/gcrev_dash_debug.log',
+                date('Y-m-d H:i:s') . " [KPI] CACHE MISS period={$period}, range={$range}, key={$cache_key_debug}\n",
+                FILE_APPEND
+            );
         }
 
         // cache_first 明示指定でキャッシュが空 → 空配列を返してJS非同期に委任
@@ -4652,9 +4668,18 @@ PROMPT;
             // キャッシュ
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
             $cache_key = "gcrev_region_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
+
+            file_put_contents('/tmp/gcrev_dash_debug.log',
+                date('Y-m-d H:i:s') . " [REGION] period={$period}, dates={$dates['start']}~{$dates['end']}, comp={$comparison['start']}~{$comparison['end']}, key={$cache_key}\n",
+                FILE_APPEND
+            );
+
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
-                error_log("[GCREV] Region analysis cache HIT: {$cache_key}");
+                file_put_contents('/tmp/gcrev_dash_debug.log',
+                    date('Y-m-d H:i:s') . " [REGION] CACHE HIT: {$cache_key}\n",
+                    FILE_APPEND
+                );
                 return new \WP_REST_Response($cached, 200);
             }
 
