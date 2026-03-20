@@ -1555,8 +1555,8 @@ class Gcrev_Insight_API {
             }
 
             // --- (2) 各分析ページキャッシュ ---
-            // 日次プリフェッチでは last30 のみ
-            $analysis_periods = ['last30'];
+            // 日次プリフェッチ: last30 + last90（ユーザーが頻繁に閲覧する期間）
+            $analysis_periods = ['last30', 'last90'];
 
             foreach ($analysis_periods as $period) {
                 $this->prefetch_analysis_caches($user_id, $config, $period);
@@ -1774,8 +1774,8 @@ class Gcrev_Insight_API {
                 usleep( self::PREFETCH_SLEEP_US );
             }
 
-            // --- (2) 分析ページ（日次は last30 のみ） ---
-            foreach ( ['last30'] as $period ) {
+            // --- (2) 分析ページ（日次は last30 + last90） ---
+            foreach ( ['last30', 'last90'] as $period ) {
                 $this->prefetch_analysis_caches( $user_id, $config, $period );
             }
 
@@ -1844,6 +1844,9 @@ class Gcrev_Insight_API {
         // 月固定期間は35日、日次期間は24h
         $cache_ttl = Gcrev_Date_Helper::is_monthly_fixed_period( $period ) ? 3024000 : 86400;
 
+        // フィルタサフィックス（REST エンドポイントと同じキー形式にする）
+        $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+
         // source 用の period 正規化（get_source_analysis は previousMonth/twoMonthsAgo を期待）
         $source_period = $period;
         if ($period === 'prev-month')      $source_period = 'previousMonth';
@@ -1852,7 +1855,7 @@ class Gcrev_Insight_API {
         // ----- 流入元 -----
         $source_dates = $this->dates->get_date_range($source_period);
         $source_hash  = md5("{$source_dates['start']}_{$source_dates['end']}");
-        $key_source   = "gcrev_source_{$user_id}_{$source_period}_{$source_hash}";
+        $key_source   = "gcrev_source_{$user_id}_{$source_period}_{$source_hash}{$filter_sfx}";
         if (get_transient($key_source) === false) {
             try {
                 // get_source_analysis は内部でキャッシュ保存するので呼ぶだけでOK
@@ -1865,7 +1868,7 @@ class Gcrev_Insight_API {
         }
 
         // ----- 地域 -----
-        $key_region = "gcrev_region_{$user_id}_{$period}_{$date_hash}";
+        $key_region = "gcrev_region_{$user_id}_{$period}_{$date_hash}{$filter_sfx}";
         if (get_transient($key_region) === false) {
             try {
                 $regions       = $this->ga4->fetch_region_details($ga4_id, $dates['start'], $dates['end']);
@@ -1885,7 +1888,7 @@ class Gcrev_Insight_API {
         }
 
         // ----- ページ分析 -----
-        $key_page = "gcrev_page_{$user_id}_{$period}_{$date_hash}";
+        $key_page = "gcrev_page_{$user_id}_{$period}_{$date_hash}{$filter_sfx}";
         if (get_transient($key_page) === false) {
             try {
                 $pages      = $this->ga4->fetch_page_details($ga4_id, $dates['start'], $dates['end'], $gsc_url);
@@ -3635,19 +3638,15 @@ class Gcrev_Insight_API {
             }
         }
 
-        // cache_first 明示指定でキャッシュが空 → サーバーサイドで取得を試みる
-        // キャッシュミス時もPHP側でデータ取得しインライン出力を可能にする
-        // ただし last30/prev-month のみ（長期間はJS非同期に委任）
+        // cache_first 明示指定でキャッシュが空 → 空配列を返してJS非同期に委任
+        // （以前は last30/prev-month を同期取得していたが、15-18本のAPI呼び出しで
+        //   ページ表示が8-15秒ブロックされるため、全期間をJS非同期に統一）
         if ( $cache_first ) {
-            if ( in_array($period, ['last30', 'prev-month'], true) ) {
-                // 短期間はサーバーサイドで取得してキャッシュに保存
-                file_put_contents('/tmp/gcrev_dash_debug.log',
-                    date('Y-m-d H:i:s') . " [cache_first] Cache miss for user={$user_id}, period={$period}, fetching server-side\n",
-                    FILE_APPEND
-                );
-            } else {
-                return [];
-            }
+            file_put_contents('/tmp/gcrev_dash_debug.log',
+                date('Y-m-d H:i:s') . " [cache_first] Cache miss for user={$user_id}, period={$period} — delegating to JS async\n",
+                FILE_APPEND
+            );
+            return [];
         }
 
         // 既存メソッドでデータ取得（WP_REST_Requestをモック）
