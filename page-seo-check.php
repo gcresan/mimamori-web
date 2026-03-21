@@ -925,12 +925,15 @@ get_header();
             var urlDecoded = p.url;
             try { urlDecoded = decodeURI(p.url); } catch(e) {}
             var titleText = p.pageTitle || '';
-            // タイトルがない場合はURLパスをタイトル代わりに表示
-            var displayTitle = titleText || urlDecoded;
             html += '<tr>';
             html += '<td class="seo-url-cell" title="' + esc(urlDecoded) + '">';
-            html += '<div class="seo-url-cell__title">' + esc(displayTitle) + '</div>';
-            html += '<div class="seo-url-cell__path">' + esc(urlDecoded) + '</div></td>';
+            if (titleText) {
+                html += '<div class="seo-url-cell__title">' + esc(titleText) + '</div>';
+                html += '<div class="seo-url-cell__path">' + esc(urlDecoded) + '</div>';
+            } else {
+                html += '<div class="seo-url-cell__title">' + esc(urlDecoded) + '</div>';
+            }
+            html += '</td>';
             html += '<td>' + esc(p.issueType) + '</td>';
             html += '<td>' + esc(p.issueDetail) + '</td>';
             html += '<td><span class="seo-priority-badge seo-priority-badge--' + esc(p.priority) + '">' + esc(PRIORITY_LABELS[p.priority] || p.priority) + '</span></td>';

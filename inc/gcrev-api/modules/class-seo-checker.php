@@ -124,6 +124,16 @@ class Gcrev_SEO_Checker {
             } );
         }
 
+        // 6b. 全issueにページタイトルを付与
+        $title_map = [];
+        foreach ( $page_results as $p ) {
+            $title_map[ $this->url_path( $p['url'] ) ] = $p['title'] ?? '';
+        }
+        foreach ( $issues as &$_issue ) {
+            $_issue['pageTitle'] = $title_map[ $_issue['url'] ] ?? '';
+        }
+        unset( $_issue );
+
         // 7. 改善提案（キーワード + 既存）
         $recommendations = $this->compute_recommendations( $scores, $issues );
         if ( ! empty( $keyword_coverage ) ) {
@@ -1227,17 +1237,6 @@ class Gcrev_SEO_Checker {
             'descriptionが他ページと重複',
             '同じdescriptionが複数ページにあると差別化できません。各ページの内容に合った固有の説明文に変更してください。'
         );
-
-        // URLパス → ページタイトルのマップを作成
-        $title_map = [];
-        foreach ( $page_results as $p ) {
-            $title_map[ $this->url_path( $p['url'] ) ] = $p['title'] ?? '';
-        }
-        // 全issueに pageTitle を付与
-        foreach ( $issues as &$issue ) {
-            $issue['pageTitle'] = $title_map[ $issue['url'] ] ?? '';
-        }
-        unset( $issue );
 
         // 優先度でソート
         $priority_order = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
