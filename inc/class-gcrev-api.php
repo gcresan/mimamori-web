@@ -9268,6 +9268,77 @@ PROMPT;
     }
 
     /**
+     * 任意の日付レンジに対して effective CV を計算する。
+     * カバーする月ごとに get_effective_cv_monthly を呼び、
+     * レンジ内の日のみを合算して返す。
+     */
+    private function get_effective_cv_for_range(string $start, string $end, int $user_id): array {
+        $tz = wp_timezone();
+        $dt_start = new \DateTimeImmutable($start, $tz);
+        $dt_end   = new \DateTimeImmutable($end, $tz);
+
+        // カバーする全月を列挙
+        $months = [];
+        $cursor = $dt_start->modify('first day of this month');
+        $last   = $dt_end->modify('first day of this month');
+        while ($cursor <= $last) {
+            $months[] = $cursor->format('Y-m');
+            $cursor = $cursor->modify('+1 month');
+        }
+
+        $merged_daily   = [];
+        $manual_total   = 0;
+        $ga4_total      = 0;
+        $reviewed_total = null;
+        $source         = 'ga4';
+        $has_overrides  = false;
+        $breakdown_manual = [];
+
+        foreach ($months as $ym) {
+            $eff = $this->get_effective_cv_monthly($ym, $user_id);
+            if ($eff['source'] !== 'ga4') $source = $eff['source'];
+            if (!empty($eff['has_overrides'])) $has_overrides = true;
+
+            $comp = $eff['components'] ?? [];
+            $manual_total += $comp['manual_total'] ?? 0;
+            $ga4_total    += $comp['ga4_total'] ?? 0;
+            if (isset($comp['reviewed_total'])) {
+                $reviewed_total = ($reviewed_total ?? 0) + $comp['reviewed_total'];
+            }
+
+            foreach ($eff['breakdown_manual'] ?? [] as $k => $v) {
+                $breakdown_manual[$k] = ($breakdown_manual[$k] ?? 0) + $v;
+            }
+
+            // 日別データをマージ（レンジ内の日のみ）
+            foreach ($eff['daily'] ?? [] as $date => $val) {
+                if ($date >= $start && $date <= $end) {
+                    $merged_daily[$date] = ($merged_daily[$date] ?? 0) + $val;
+                }
+            }
+        }
+
+        ksort($merged_daily);
+
+        $result = [
+            'source'           => $source,
+            'total'            => array_sum($merged_daily),
+            'daily'            => $merged_daily,
+            'components'       => [
+                'manual_total' => $manual_total,
+                'ga4_total'    => $ga4_total,
+            ],
+            'breakdown_manual' => $breakdown_manual,
+            'has_overrides'    => $has_overrides,
+        ];
+        if ($reviewed_total !== null) {
+            $result['components']['reviewed_total'] = $reviewed_total;
+        }
+
+        return $result;
+    }
+
+    /**
      * CVログ精査テーブルから有効CV数を取得
      *
      * gcrev_cv_review で status=1（有効CV）の行数をカウント。
@@ -10360,28 +10431,29 @@ PROMPT;
             if ($cached !== false && is_array($cached)) {
                 // キャッシュでもeffective CVだけ再計算（入力変更即時反映のため）
                 $year_month = $this->period_to_year_month($period);
-                if ($year_month) {
-                    $eff = $this->get_effective_cv_monthly($year_month, $user_id);
-                    $cached['data']['effective_cv'] = $eff;
+                $eff = $year_month
+                    ? $this->get_effective_cv_monthly($year_month, $user_id)
+                    : $this->get_effective_cv_for_range($start, $end, $user_id);
+                $cached['data']['effective_cv'] = $eff;
 
-                    // 再配分も再計算（手動CV変更の即時反映）
-                    $ct = $eff['total'] ?? 0;
-                    $cached['data']['device_realloc']  = $this->build_cv_dimension_payload($cached['data']['device_cv']  ?? [], $ct);
-                    $cached['data']['source_realloc']  = $this->build_cv_dimension_payload($cached['data']['source_cv']  ?? [], $ct);
-                    $cached['data']['age_realloc']     = $this->build_cv_dimension_payload($cached['data']['age_cv']     ?? [], $ct);
-                    $cached['data']['region_realloc']  = $this->build_cv_dimension_payload($cached['data']['region_cv']  ?? [], $ct);
-                    $cached['data']['page_realloc']    = $this->build_cv_dimension_payload($cached['data']['page_cv']    ?? [], $ct);
+                // 再配分も再計算（手動CV変更の即時反映）
+                $ct = $eff['total'] ?? 0;
+                $cached['data']['device_realloc']  = $this->build_cv_dimension_payload($cached['data']['device_cv']  ?? [], $ct);
+                $cached['data']['source_realloc']  = $this->build_cv_dimension_payload($cached['data']['source_cv']  ?? [], $ct);
+                $cached['data']['age_realloc']     = $this->build_cv_dimension_payload($cached['data']['age_cv']     ?? [], $ct);
+                $cached['data']['region_realloc']  = $this->build_cv_dimension_payload($cached['data']['region_cv']  ?? [], $ct);
+                $cached['data']['page_realloc']    = $this->build_cv_dimension_payload($cached['data']['page_cv']    ?? [], $ct);
 
-                    $comp_ym = $this->get_comparison_year_month($period);
-                    if ($comp_ym) {
-                        $comp_eff = $this->get_effective_cv_monthly($comp_ym, $user_id);
-                        $cached['data']['effective_cv_prev'] = $comp_eff;
+                $comp_ym = $this->get_comparison_year_month($period);
+                $comp_eff = $comp_ym
+                    ? $this->get_effective_cv_monthly($comp_ym, $user_id)
+                    : $this->get_effective_cv_for_range($comp_start, $comp_end, $user_id);
+                $cached['data']['effective_cv_prev'] = $comp_eff;
 
-                        $cp = $comp_eff['total'] ?? 0;
-                        $cached['data']['device_realloc_prev'] = $this->build_cv_dimension_payload($cached['data']['device_cv_prev'] ?? [], $cp);
-                        $cached['data']['source_realloc_prev'] = $this->build_cv_dimension_payload($cached['data']['source_cv_prev'] ?? [], $cp);
-                    }
-                }
+                $cp = $comp_eff['total'] ?? 0;
+                $cached['data']['device_realloc_prev'] = $this->build_cv_dimension_payload($cached['data']['device_cv_prev'] ?? [], $cp);
+                $cached['data']['source_realloc_prev'] = $this->build_cv_dimension_payload($cached['data']['source_cv_prev'] ?? [], $cp);
+
                 error_log("[GCREV] CV analysis cache HIT: {$cache_key}");
                 return new WP_REST_Response($cached, 200);
             }
@@ -10391,10 +10463,19 @@ PROMPT;
             $property = 'properties/' . $ga4_id;
 
             // ===== 1. effective CV（実質CV優先） =====
+            // 月単位の period は従来通り、日付レンジ period はカバー月を合算
             $year_month        = $this->period_to_year_month($period);
-            $effective_cv      = $year_month ? $this->get_effective_cv_monthly($year_month, $user_id) : null;
+            if ($year_month) {
+                $effective_cv      = $this->get_effective_cv_monthly($year_month, $user_id);
+            } else {
+                $effective_cv      = $this->get_effective_cv_for_range($start, $end, $user_id);
+            }
             $comp_ym           = $this->get_comparison_year_month($period);
-            $effective_cv_prev = $comp_ym ? $this->get_effective_cv_monthly($comp_ym, $user_id) : null;
+            if ($comp_ym) {
+                $effective_cv_prev = $this->get_effective_cv_monthly($comp_ym, $user_id);
+            } else {
+                $effective_cv_prev = $this->get_effective_cv_for_range($comp_start, $comp_end, $user_id);
+            }
 
             // ===== 2. デバイス別 × CV =====
             $device_cv      = $this->fetch_cv_by_dimension($client, $property, 'deviceCategory', $start, $end);

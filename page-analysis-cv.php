@@ -28,6 +28,9 @@ get_header();
 /* All shared styles are in css/dashboard-redesign.css */
 </style>
 
+<!-- コンテンツエリア -->
+<div class="content-area">
+    <!-- 期間セレクター -->
 <?php
 // 期間セレクター（共通モジュール）
 set_query_var('gcrev_period_selector', [
@@ -45,9 +48,6 @@ set_query_var('gcrev_period_selector', [
 
 get_template_part('template-parts/period-selector');
 ?>
-
-<!-- コンテンツエリア -->
-<div class="content-area">
     <!-- ローディングオーバーレイ -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
@@ -164,10 +164,6 @@ get_template_part('template-parts/analysis-help');
                     <tr><td colspan="4" style="text-align:center;padding:24px;color:#888888;">読み込み中...</td></tr>
                 </tbody>
             </table>
-            <div class="cv-insight-box" id="sourceCvInsight" style="display:none;">
-                <div class="cv-insight-box-title">💡 気づき</div>
-                <div class="cv-insight-box-content" id="sourceCvInsightText"></div>
-            </div>
         </div>
     </section>
 
@@ -195,10 +191,6 @@ get_template_part('template-parts/analysis-help');
                     <div class="cv-data-item-label">データを読み込み中...</div>
                     <div class="cv-data-item-value">-</div>
                 </div>
-            </div>
-            <div class="cv-insight-box" id="deviceCvInsight" style="display:none;">
-                <div class="cv-insight-box-title">💡 気づき</div>
-                <div class="cv-insight-box-content" id="deviceCvInsightText"></div>
             </div>
         </div>
     </section>
@@ -494,35 +486,6 @@ function renderDeviceCv(data) {
     // タブ切替
     setupTabToggle('deviceTabToggle', () => renderGrid(true), () => renderGrid(false));
 
-    // インサイト
-    const insightEl = document.getElementById('deviceCvInsight');
-    const deviceData = rows.map(r => ({
-        dimension: r.label,
-        cvr: r.reallocated_cvr,
-        sessions: r.sessions,
-    }));
-    if (deviceData.length > 0) {
-        insightEl.style.display = 'block';
-        const mobile = deviceData.find(d => d.dimension.toLowerCase() === 'mobile');
-        const desktop = deviceData.find(d => d.dimension.toLowerCase() === 'desktop');
-        let insight = '';
-        if (mobile && desktop) {
-            const totalSessions = deviceData.reduce((s,d) => s + d.sessions, 0) || 1;
-            const mobileShare = mobile.sessions / totalSessions * 100;
-            if (mobileShare > 50 && mobile.cvr < desktop.cvr) {
-                insight = `スマホ流入が全体の${mobileShare.toFixed(0)}%を占めますがゴール達成率はPCより低い状態です。スマホでの電話ボタン常時表示やフォーム入力の簡略化でゴール達成率向上が期待できます。`;
-            } else if (mobile.cvr > desktop.cvr) {
-                insight = `スマホのゴール達成率がPCを上回っています。モバイルファーストの施策が功を奏しています。`;
-            } else {
-                insight = `PC・スマホともにゴール達成率は同等です。各デバイスに適したCTA配置で更なる改善が見込めます。`;
-            }
-        } else {
-            insight = 'デバイス別のゴール分析結果です。各デバイスに適したCTA配置でゴール達成率改善が見込めます。';
-        }
-        document.getElementById('deviceCvInsightText').textContent = insight;
-    } else {
-        insightEl.style.display = 'none';
-    }
 }
 
 function renderDeviceCvChart(deviceData) {
@@ -619,18 +582,6 @@ function renderSourceCv(data) {
     // タブ切替
     setupTabToggle('sourceTabToggle', () => renderTable(true), () => renderTable(false));
 
-    // インサイト（再配分データで判定）
-    const sourceData = rows.map(r => ({
-        label: translateChannel(r.label),
-        cvr: r.reallocated_cvr || 0,
-        sessions: r.sessions,
-    }));
-    const best = sourceData.filter(s => s.sessions >= 10).sort((a,b) => b.cvr - a.cvr)[0];
-    if (best) {
-        document.getElementById('sourceCvInsight').style.display = 'block';
-        document.getElementById('sourceCvInsightText').textContent =
-            `${best.label}経由はゴール達成率${best.cvr.toFixed(2)}%ともっとも効率が良い経路です。この「見つけたきっかけ」を強化すると、効率的なゴール獲得が期待できます。`;
-    }
 }
 
 function renderSourceCvChart(sourceData) {
