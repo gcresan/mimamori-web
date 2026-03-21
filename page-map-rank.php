@@ -417,25 +417,31 @@ get_header();
 
 /* Measurement conditions row */
 .meo-conditions {
-    display: flex; align-items: flex-start; gap: 24px; margin-bottom: 24px; flex-wrap: wrap;
-    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 20px;
+    display: flex; align-items: center; gap: 32px; margin-bottom: 24px; flex-wrap: wrap;
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px 24px;
 }
-.meo-condition-group { display: flex; flex-direction: column; gap: 4px; }
+.meo-condition-group {
+    display: flex; flex-direction: column; gap: 6px;
+}
 .meo-condition-label {
-    font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;
+    font-size: 11px; font-weight: 600; color: #9ca3af; letter-spacing: 0.3px;
+    line-height: 1;
 }
-.meo-condition-value { font-size: 13px; font-weight: 600; color: #1a1a1a; }
+.meo-condition-value {
+    font-size: 14px; font-weight: 600; color: #1a1a1a; line-height: 1.3;
+}
 
 /* Device toggle */
 .meo-device-toggle {
-    display: inline-flex; background: #f2f4f7; border-radius: 8px; padding: 3px;
+    display: inline-flex; background: #eef0f3; border-radius: 8px; padding: 3px;
 }
 .meo-device-btn {
-    padding: 6px 18px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500;
+    padding: 7px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500;
     cursor: pointer; background: transparent; color: #667085; transition: all 0.2s;
+    line-height: 1.3;
 }
 .meo-device-btn.active {
-    background: #fff; color: #1a1a1a; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    background: #fff; color: #1a1a1a; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 
 /* GBP domain badge */
@@ -446,7 +452,7 @@ get_header();
 }
 
 /* Radius display */
-.meo-radius-group { display: flex; flex-direction: column; gap: 4px; }
+.meo-radius-group { display: flex; flex-direction: column; gap: 6px; }
 
 /* Store card (modal content) */
 .meo-store-card {
@@ -577,12 +583,13 @@ get_header();
 }
 .meo-base-location-btn:hover { background: #f9fafb; border-color: #98a2b3; }
 .meo-base-change-btn {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 6px 14px; border: 1px solid #c5dfe0; border-radius: 8px;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 16px; border: 1px solid #d0d5dd; border-radius: 8px;
     font-size: 12px; font-weight: 500; cursor: pointer;
     background: #fff; color: #568184; transition: all 0.15s; white-space: nowrap;
+    line-height: 1.3;
 }
-.meo-base-change-btn:hover { background: #f0f7f7; border-color: #98b8ba; }
+.meo-base-change-btn:hover { background: #f7fafa; border-color: #a8bfc1; }
 
 /* --- Base location modal --- */
 .meo-base-modal__desc {
@@ -603,7 +610,7 @@ get_header();
 @media (max-width: 768px) {
     .rt-header { flex-direction: column; align-items: flex-start; }
     .rt-table-wrap { overflow-x: auto; }
-    .meo-conditions { flex-direction: column; gap: 12px; padding: 12px 14px; }
+    .meo-conditions { flex-direction: column; align-items: flex-start; gap: 16px; padding: 16px 18px; }
     .meo-store-grid { grid-template-columns: 1fr; gap: 4px; }
     .meo-store-label { font-weight: 600; }
     .meo-reviews-summary { flex-direction: column; align-items: flex-start; }
@@ -654,7 +661,7 @@ get_header();
             <span class="meo-condition-value" id="meoRadiusDisplay">-</span>
         </div>
         <!-- 地点変更ボタン -->
-        <div class="meo-condition-group" id="meoBaseChangeBtnGroup" style="display:none; align-self:flex-end;">
+        <div class="meo-condition-group" id="meoBaseChangeBtnGroup" style="display:none;">
             <button class="meo-base-change-btn" id="meoBaseChangeBtn" type="button">&#x1F4CD; 地点変更</button>
         </div>
 <?php if ( $maps_domain !== '' ) : ?>
