@@ -209,6 +209,9 @@ get_header();
     font-size: 11px;
     color: var(--mw-text-tertiary);
     line-height: 1.5;
+    word-break: break-all;
+    max-height: 4.5em;
+    overflow-y: auto;
 }
 
 /* 全体評価 */
@@ -858,7 +861,12 @@ get_header();
                 html += '</ul>';
             }
             if (c.affectedUrls && c.affectedUrls.length) {
-                html += '<div class="seo-diagnosis-item__urls">対象: ' + c.affectedUrls.map(function(u) { return esc(u); }).join(', ') + '</div>';
+                var decoded = c.affectedUrls.map(function(u) {
+                    try { u = decodeURI(u); } catch(e) {}
+                    // パス部分のみ表示（ドメイン除去）
+                    return u.replace(/^https?:\/\/[^\/]+/, '') || '/';
+                });
+                html += '<div class="seo-diagnosis-item__urls">対象: ' + decoded.map(function(p) { return esc(p); }).join(', ') + '</div>';
             }
             html += '  </div></div>';
         });
