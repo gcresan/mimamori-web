@@ -1256,6 +1256,12 @@ function mimamori_get_system_prompt(): string {
     return <<<'PROMPT'
 あなたは「みまもりAI」です。中小企業のホームページ担当者（初心者）を支援するアシスタントです。
 
+## 最重要ルール（必ず守ること）
+1. データが提供されている場合、ユーザーに逆質問せず、必ずデータを使って結論から回答すること
+2. 追加質問は回答の最後に1つだけ。かつAPIで取得できないビジネス情報（目標・ターゲット等）に限る
+3. ユーザーが数を指定している場合（「1つだけ」「3つ」等）、その数に従うこと
+4. 「データはありますか？」「もう少し教えてください」のような聞き返しは禁止
+
 ## あなたの役割
 - ホームページのアクセス数字の見方をやさしく説明する
 - アクセスの増減理由をわかりやすく分析する
@@ -2549,6 +2555,9 @@ function mimamori_rewrite_intent( string $message, string $page_type ): array {
         '改善', '何をすべき', 'どうしたらいい', '問題', '対策', '施策',
         '打ち手', '優先度', '伸ばす', '増やす', '上げる',
         'アドバイス', '提案', 'おすすめ', 'やること', 'TODO',
+        'ボトルネック', '課題', '注意点', '良い点', '良いところ',
+        '気をつけ', '兆し', '本質', '効果', '工数', '一手',
+        '大事', 'やるべき', '直す', '変えたら',
     ];
 
     // ネガティブ変動（下落・悪化）
@@ -4041,17 +4050,25 @@ function mimamori_extract_date_range( string $message ): array {
  * @param  string  $intent_type     意図タイプ（mimamori_rewrite_intent の結果）
  * @param  ?array  $section_context セクションコンテキスト（AIに聞くボタン由来）
  * @param  array   $history         会話履歴
+ * @param  bool    $is_quick_prompt 質問例チップ由来のメッセージかどうか
  * @return ?array  null = パラメータ十分（通過）、array = { missing, response }
  */
 function mimamori_resolve_params(
     string $message,
     string $intent_type,
     ?array $section_context,
-    array  $history = []
+    array  $history = [],
+    bool   $is_quick_prompt = false
 ): ?array {
     $msg = mb_strtolower( $message );
 
     // --- バイパス条件 ---
+
+    // 0) Quick Prompt（質問例チップ）はパラメータ確認不要
+    //    ワンクリックで即座に回答を返すため、逆質問しない
+    if ( $is_quick_prompt ) {
+        return null;
+    }
 
     // 1) パラメータ不要な意図タイプ
     if ( in_array( $intent_type, [ 'how_to', 'general', 'site_improvement' ], true ) ) {
@@ -4744,8 +4761,9 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
     $trace['sources'] = $sources;
 
     // === ParamResolver: 確認質問ゲート ===
-    $history_arr = $data['history'] ?? [];
-    $param_gate  = mimamori_resolve_params( $message, $intent_type, $section_context, $history_arr );
+    $is_quick_prompt = ! empty( $data['isQuickPrompt'] );
+    $history_arr     = $data['history'] ?? [];
+    $param_gate      = mimamori_resolve_params( $message, $intent_type, $section_context, $history_arr, $is_quick_prompt );
     if ( $param_gate !== null ) {
         $trace['param_gate'] = $param_gate['missing'];
         return [
@@ -4759,6 +4777,10 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
 
     // 分析系意図ではアナリティクスを強制有効化
     if ( in_array( $intent_type, [ 'reason_analysis', 'site_improvement' ], true ) ) {
+        $sources['use_analytics'] = true;
+    }
+    // Quick Prompt は常にアナリティクスデータを使う（general 分類でもデータ付き回答にする）
+    if ( $is_quick_prompt ) {
         $sources['use_analytics'] = true;
     }
     if ( $section_context !== null ) {

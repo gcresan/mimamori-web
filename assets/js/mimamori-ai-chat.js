@@ -478,6 +478,13 @@
     // Show loading
     setLoading(true);
 
+    // Quick Prompt フラグ取得 & クリア
+    var isQuickPrompt = false;
+    if (els.textarea && els.textarea.dataset.quickPrompt === '1') {
+      isQuickPrompt = true;
+      delete els.textarea.dataset.quickPrompt;
+    }
+
     // Build request body
     var body = {
       message: text,
@@ -489,6 +496,11 @@
         url: window.location.href
       }
     };
+
+    // Quick Prompt（質問例チップ由来）
+    if (isQuickPrompt) {
+      body.isQuickPrompt = true;
+    }
 
     // セクションコンテキスト（「AIに聞く」ボタンから抽出）
     if (opts.sectionContext) {
@@ -1397,6 +1409,7 @@
       var q = chip.getAttribute('data-question');
       if (q && !state.isLoading && els.textarea) {
         els.textarea.value = q;
+        els.textarea.dataset.quickPrompt = '1';
         autoResize(els.textarea);
         els.textarea.focus();
       }
