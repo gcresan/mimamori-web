@@ -386,15 +386,19 @@ class Gcrev_SEO_Checker {
             return [];
         }
 
-        // sitemap index → 最初のサブsitemapを取得
+        // sitemap index → 全サブsitemapを取得して結合
         $doc->registerXPathNamespace( 'sm', 'http://www.sitemaps.org/schemas/sitemap/0.9' );
         $sitemaps = $doc->xpath( '//sm:sitemap/sm:loc' );
         if ( ! empty( $sitemaps ) ) {
-            $sub_body = $this->fetch_body( (string) $sitemaps[0] );
-            if ( $sub_body ) {
-                return $this->parse_sitemap_xml( $sub_body, $site_url );
+            $all_urls = [];
+            foreach ( $sitemaps as $sitemap_loc ) {
+                $sub_body = $this->fetch_body( (string) $sitemap_loc );
+                if ( $sub_body ) {
+                    $sub_urls = $this->parse_sitemap_xml( $sub_body, $site_url );
+                    $all_urls = array_merge( $all_urls, $sub_urls );
+                }
             }
-            return [];
+            return array_values( array_unique( $all_urls ) );
         }
 
         // 通常のsitemap → URL一覧
