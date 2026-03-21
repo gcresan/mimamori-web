@@ -284,6 +284,25 @@ get_header();
     text-align: left;
     white-space: nowrap;
 }
+.seo-issues-table th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+    transition: color .15s;
+}
+.seo-issues-table th[data-sort]:hover {
+    color: var(--mw-text-primary, #333);
+}
+.seo-issues-table th .sort-icon {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 10px;
+    opacity: .35;
+    transition: opacity .15s;
+}
+.seo-issues-table th.sort-active .sort-icon {
+    opacity: 1;
+    color: var(--mw-primary-blue, #4A90A4);
+}
 .seo-issues-table td {
     padding: 14px 14px;
     border-bottom: 1px solid var(--mw-border-light);
@@ -291,6 +310,9 @@ get_header();
     line-height: 1.5;
 }
 .seo-issues-table tbody tr:hover { background: var(--mw-bg-secondary); }
+.seo-issues-table tbody tr.seo-issues-same-page td {
+    border-top: 1px dashed var(--mw-border-light);
+}
 .seo-issues-table .seo-url-cell {
     min-width: 180px;
     max-width: 300px;
@@ -913,19 +935,85 @@ get_header();
     /* =================================================================
        Section 4: 問題URL一覧
        ================================================================= */
+    /* --- Issues テーブル ソート状態 --- */
+    var _issuesData = [];
+    var _issuesSortKey = 'priority'; // デフォルト: 重要度順
+    var _issuesSortAsc = true;
+
     function renderIssues(pages) {
         if (!pages || !pages.length) {
             document.getElementById('seoIssuesContent').innerHTML = '<div class="seo-empty">問題は検出されませんでした</div>';
             return;
         }
+        _issuesData = pages;
+        _renderIssuesTable();
+    }
+
+    function _sortIssues(data, key, asc) {
+        var priorityOrder = { high: 0, medium: 1, low: 2 };
+        var sorted = data.slice();
+        sorted.sort(function(a, b) {
+            var va, vb;
+            if (key === 'page') {
+                va = (a.pageTitle || a.url || '').toLowerCase();
+                vb = (b.pageTitle || b.url || '').toLowerCase();
+            } else if (key === 'category') {
+                va = (a.issueType || '').toLowerCase();
+                vb = (b.issueType || '').toLowerCase();
+            } else { /* priority */
+                va = priorityOrder[a.priority] !== undefined ? priorityOrder[a.priority] : 9;
+                vb = priorityOrder[b.priority] !== undefined ? priorityOrder[b.priority] : 9;
+            }
+            if (va < vb) return asc ? -1 : 1;
+            if (va > vb) return asc ? 1 : -1;
+            /* 同値のとき副ソート: ページ → カテゴリ → 重要度 */
+            if (key !== 'page') {
+                var pa = (a.pageTitle || a.url || '').toLowerCase();
+                var pb = (b.pageTitle || b.url || '').toLowerCase();
+                if (pa < pb) return -1;
+                if (pa > pb) return 1;
+            }
+            if (key !== 'priority') {
+                var da = priorityOrder[a.priority] !== undefined ? priorityOrder[a.priority] : 9;
+                var db = priorityOrder[b.priority] !== undefined ? priorityOrder[b.priority] : 9;
+                return da - db;
+            }
+            return 0;
+        });
+        return sorted;
+    }
+
+    function _renderIssuesTable() {
+        var sorted = _sortIssues(_issuesData, _issuesSortKey, _issuesSortAsc);
+        var cols = [
+            { key: 'page',     label: 'ページ' },
+            { key: 'category', label: '問題カテゴリ' },
+            { key: null,       label: '問題内容' },
+            { key: 'priority', label: '重要度' },
+            { key: null,       label: '改善候補' }
+        ];
         var html = '<table class="seo-issues-table"><thead><tr>';
-        html += '<th>ページ</th><th>問題カテゴリ</th><th>問題内容</th><th>重要度</th><th>改善候補</th>';
+        cols.forEach(function(c) {
+            if (c.key) {
+                var active = _issuesSortKey === c.key ? ' sort-active' : '';
+                var arrow = _issuesSortKey === c.key ? (_issuesSortAsc ? '▲' : '▼') : '▲';
+                html += '<th data-sort="' + c.key + '" class="' + active + '">'
+                     + c.label + '<span class="sort-icon">' + arrow + '</span></th>';
+            } else {
+                html += '<th>' + c.label + '</th>';
+            }
+        });
         html += '</tr></thead><tbody>';
-        pages.forEach(function(p) {
+
+        var prevUrl = null;
+        sorted.forEach(function(p) {
             var urlDecoded = p.url;
             try { urlDecoded = decodeURI(p.url); } catch(e) {}
             var titleText = p.pageTitle || '';
-            html += '<tr>';
+            var sameAsPrev = (_issuesSortKey === 'page' && p.url === prevUrl);
+            prevUrl = p.url;
+
+            html += '<tr' + (sameAsPrev ? ' class="seo-issues-same-page"' : '') + '>';
             html += '<td class="seo-url-cell" title="' + esc(urlDecoded) + '">';
             if (titleText) {
                 html += '<div class="seo-url-cell__title">' + esc(titleText) + '</div>';
@@ -942,6 +1030,20 @@ get_header();
         });
         html += '</tbody></table>';
         document.getElementById('seoIssuesContent').innerHTML = html;
+
+        /* ヘッダーのクリックイベント */
+        document.querySelectorAll('.seo-issues-table th[data-sort]').forEach(function(th) {
+            th.addEventListener('click', function() {
+                var key = this.getAttribute('data-sort');
+                if (_issuesSortKey === key) {
+                    _issuesSortAsc = !_issuesSortAsc;
+                } else {
+                    _issuesSortKey = key;
+                    _issuesSortAsc = true;
+                }
+                _renderIssuesTable();
+            });
+        });
     }
 
     /* =================================================================
