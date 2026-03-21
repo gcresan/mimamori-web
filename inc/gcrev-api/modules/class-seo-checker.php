@@ -1824,7 +1824,8 @@ PROMPT;
 
     private function url_path( string $url ): string {
         $path = wp_parse_url( $url, PHP_URL_PATH );
-        return $path ?: '/';
+        $path = $path ? urldecode( $path ) : '/';
+        return $path;
     }
 
     /**
