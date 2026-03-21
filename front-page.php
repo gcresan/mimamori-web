@@ -165,6 +165,12 @@ $page_title = trim( wp_title('', false) );
             <p class="logo-subcatch">みまもるから、次が見える。</p>
         </div>
 
+        <?php if ( isset( $_GET['login_error'] ) && $_GET['login_error'] === '1' ) : ?>
+        <div style="margin-bottom: 20px; padding: 14px 16px; background: #fdf0ee; border: 1px solid #e8c4bf; border-radius: 6px; color: #c0392b; font-size: 13px; line-height: 1.6; text-align: center;">
+            ユーザー名またはパスワードが正しくありません。
+        </div>
+        <?php endif; ?>
+
         <?php if ( isset( $_GET['trial_expired'] ) && $_GET['trial_expired'] === '1' ) : ?>
         <div style="margin-bottom: 20px; padding: 14px 16px; background: #fdf0ee; border: 1px solid #e8c4bf; border-radius: 6px; color: #c0392b; font-size: 13px; line-height: 1.6; text-align: center;">
             お試し期間が終了したため、現在はご利用いただけません。<br>

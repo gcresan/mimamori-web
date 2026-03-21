@@ -571,6 +571,12 @@ function is_mobile() {
 // WP-Members
 // ----------------------------------------
 
+// ログイン失敗時 → トップページへリダイレクト（エラー表示付き）
+add_action( 'wpmem_login_failed', function () {
+    wp_safe_redirect( home_url( '/?login_error=1' ) );
+    exit;
+} );
+
 // ログイン後、決済ステータス / お試し期限に応じてリダイレクト先を切替
 add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
     // お試し中（期限内） → ダッシュボードへ
