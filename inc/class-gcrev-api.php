@@ -3146,6 +3146,12 @@ class Gcrev_Insight_API {
             'additional_notes'  => get_user_meta($user_id, 'report_additional_notes', true),
             'output_mode'       => get_user_meta($user_id, 'report_output_mode', true) ?: 'normal',
             'exclude_foreign'   => get_user_meta($user_id, 'report_exclude_foreign', true) === '1',
+            // ペルソナ情報
+            'persona_one_liner'        => $client['persona_one_liner'] ?? '',
+            'persona_detail_text'      => $client['persona_detail_text'] ?? '',
+            'persona_age_ranges'       => $client['persona_age_ranges'] ?? [],
+            'persona_decision_factors' => $client['persona_decision_factors'] ?? [],
+            'persona_reference_urls'   => $client['persona_reference_urls'] ?? [],
         ];
     }
 

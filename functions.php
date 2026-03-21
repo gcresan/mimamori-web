@@ -2835,6 +2835,50 @@ function mimamori_build_context_blocks(
         $ref_list[] = 'クライアントプロフィール（成長段階・ゴール種別）';
     }
 
+    // --- Block 2.6: ターゲット顧客像（ペルソナ）---
+    $persona_parts = [];
+    if ( ! empty( $client_settings_ctx['persona_one_liner'] ) ) {
+        $persona_parts[] = "ひとことで表すと: {$client_settings_ctx['persona_one_liner']}";
+    }
+    if ( ! empty( $client_settings_ctx['persona_age_ranges'] ) ) {
+        $persona_parts[] = "想定年齢層: " . implode( ', ', $client_settings_ctx['persona_age_ranges'] );
+    }
+    if ( ! empty( $client_settings_ctx['persona_genders'] ) ) {
+        $persona_parts[] = "想定性別: " . implode( ', ', $client_settings_ctx['persona_genders'] );
+    }
+    if ( ! empty( $client_settings_ctx['persona_attributes'] ) ) {
+        $persona_parts[] = "ターゲット属性: " . implode( ', ', $client_settings_ctx['persona_attributes'] );
+    }
+    if ( ! empty( $client_settings_ctx['persona_decision_factors'] ) ) {
+        $persona_parts[] = "検討・意思決定の特徴: " . implode( ', ', $client_settings_ctx['persona_decision_factors'] );
+    }
+    if ( ! empty( $client_settings_ctx['persona_detail_text'] ) ) {
+        $detail = $client_settings_ctx['persona_detail_text'];
+        if ( mb_strlen( $detail ) > 800 ) {
+            $detail = mb_substr( $detail, 0, 800 ) . '…';
+        }
+        $persona_parts[] = "詳細ペルソナ:\n{$detail}";
+    }
+    if ( ! empty( $client_settings_ctx['persona_reference_urls'] ) ) {
+        $ref_lines = [];
+        foreach ( $client_settings_ctx['persona_reference_urls'] as $ref ) {
+            $url  = $ref['url'] ?? '';
+            $note = $ref['note'] ?? '';
+            if ( $url ) {
+                $ref_lines[] = $note ? "{$url}（{$note}）" : $url;
+            }
+        }
+        if ( $ref_lines ) {
+            $persona_parts[] = "参考・競合サイト: " . implode( ' / ', $ref_lines );
+        }
+    }
+    if ( ! empty( $persona_parts ) ) {
+        $persona_block  = "【ターゲット顧客像（ペルソナ）】\n";
+        $persona_block .= implode( "\n", $persona_parts );
+        $blocks[]   = $persona_block;
+        $ref_list[] = 'ターゲット顧客像（ペルソナ・参考サイト）';
+    }
+
     // --- Block 2.8: 月次レポート設定（当月分が存在する場合のみ） ---
     $monthly_fields = [
         'report_issue'            => '課題',

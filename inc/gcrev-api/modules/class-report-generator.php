@@ -180,6 +180,43 @@ class Gcrev_Report_Generator {
             $foreign_note = "\n⚠️ 重要：このレポートのデータは「日本国内からのアクセスのみ」に絞り込まれています。海外からのアクセスは除外されています。この点をレポート内で明記してください。";
         }
 
+        // ペルソナ情報の注記
+        $persona_lines = [];
+        if ( ! empty( $client['persona_one_liner'] ) ) {
+            $persona_lines[] = "- ターゲット顧客像: {$client['persona_one_liner']}";
+        }
+        if ( ! empty( $client['persona_age_ranges'] ) && is_array( $client['persona_age_ranges'] ) ) {
+            $persona_lines[] = "- ターゲット年齢層: " . implode( ', ', $client['persona_age_ranges'] );
+        }
+        if ( ! empty( $client['persona_decision_factors'] ) && is_array( $client['persona_decision_factors'] ) ) {
+            $persona_lines[] = "- 意思決定の特徴: " . implode( ', ', $client['persona_decision_factors'] );
+        }
+        if ( ! empty( $client['persona_detail_text'] ) ) {
+            $detail = $client['persona_detail_text'];
+            if ( mb_strlen( $detail ) > 600 ) {
+                $detail = mb_substr( $detail, 0, 600 ) . '…';
+            }
+            $persona_lines[] = "- 詳細ペルソナ: {$detail}";
+        }
+        if ( ! empty( $client['persona_reference_urls'] ) && is_array( $client['persona_reference_urls'] ) ) {
+            $ref_parts = [];
+            foreach ( $client['persona_reference_urls'] as $ref ) {
+                $url  = $ref['url'] ?? '';
+                $note = $ref['note'] ?? '';
+                if ( $url ) {
+                    $ref_parts[] = $note ? "{$url}（{$note}）" : $url;
+                }
+            }
+            if ( $ref_parts ) {
+                $persona_lines[] = "- 参考・競合サイト: " . implode( ' / ', $ref_parts );
+            }
+        }
+        $persona_note = '';
+        if ( ! empty( $persona_lines ) ) {
+            $persona_note = "\n# ターゲット顧客像（ペルソナ）\n" . implode( "\n", $persona_lines );
+            $persona_note .= "\n※ 上記ペルソナ情報を踏まえ、改善提案やアクション提案はこのターゲット顧客に響く施策を優先してください。";
+        }
+
         // 統合型 / 分離型レポートの指示
         $domain_instruction = '';
         $report_type = $client['report_type'] ?? 'integrated';
@@ -307,6 +344,7 @@ DOMAIN;
         - 主要目標: {$client['goal_main']}
         - その他留意事項: {$client['additional_notes']}
         {$foreign_note}
+        {$persona_note}
         # 前々月データ（比較基準）
         PROMPT;
         $prompt .= "\n" . $this->format_data_for_prompt($two);
