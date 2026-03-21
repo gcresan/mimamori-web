@@ -498,15 +498,21 @@ function gcrev_save_business_name_field( $user_id ) {
 }
 
 // ユーザー一覧の「名前」列を事業者名に差し替え
+// ビルトイン name 列は custom_column フィルターを通らないため、削除して独自列を挿入
 add_filter( 'manage_users_columns', function ( $columns ) {
-    if ( isset( $columns['name'] ) ) {
-        $columns['name'] = '事業者名';
+    $new = [];
+    foreach ( $columns as $key => $label ) {
+        if ( 'name' === $key ) {
+            $new['gcrev_business_name'] = '事業者名';
+        } else {
+            $new[ $key ] = $label;
+        }
     }
-    return $columns;
+    return $new;
 } );
 
 add_filter( 'manage_users_custom_column', function ( $output, $column_name, $user_id ) {
-    if ( 'name' === $column_name ) {
+    if ( 'gcrev_business_name' === $column_name ) {
         return esc_html( gcrev_get_business_name( $user_id ) );
     }
     return $output;
