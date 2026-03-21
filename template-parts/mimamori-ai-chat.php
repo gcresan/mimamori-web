@@ -91,7 +91,7 @@ if ( ! defined( 'ABSPATH' ) ) {
           <?php echo esc_html( '一緒に整理するためのAIです。' ); ?>
         </div>
         <div class="mw-chat-welcome__hint">
-          <?php echo esc_html( "\xE2\x86\x91 まずは「今月やることを3つ」を押してみてください" ); ?>
+          <?php echo esc_html( "\xE2\x86\x91 まずは「質問例を見る」を押してみてください" ); ?>
         </div>
       </div>
     </div>
