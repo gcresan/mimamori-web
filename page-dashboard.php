@@ -1126,6 +1126,100 @@ if ($infographic) {
         }
     }
 
+    // スコア内訳モーダルを動的更新（非同期スコア計算後に呼ばれる）
+    function updateScoreBreakdownModal(score, components) {
+        // モーダル内の合計スコアを更新
+        var totalVal = document.querySelector('.score-breakdown-total-value');
+        if (totalVal) totalVal.textContent = String(score);
+
+        if (!components || typeof components !== 'object') return;
+
+        // コンポーネントリストを生成
+        var listEl = document.querySelector('.score-comp-list');
+        if (!listEl) {
+            // v2 リストがまだない場合（PHP側で空だった場合）、作成
+            var body = document.querySelector('.score-breakdown-modal-body');
+            if (!body) return;
+            // 「内訳は集計中です」テキストがあれば除去
+            var emptyMsg = body.querySelector('.score-breakdown-empty');
+            if (emptyMsg) emptyMsg.remove();
+            listEl = document.createElement('div');
+            listEl.className = 'score-comp-list';
+            // .score-breakdown-total の後に挿入
+            var totalDiv = body.querySelector('.score-breakdown-total');
+            if (totalDiv && totalDiv.nextSibling) {
+                body.insertBefore(listEl, totalDiv.nextSibling);
+            } else {
+                body.appendChild(listEl);
+            }
+        }
+
+        var compIcons = { achievement: '📊', growth: '📈', stability: '\u{1F6E1}\uFE0F', action: '⭐' };
+        var compLabels = { achievement: '実績（中央値比較）', growth: '成長（前月比）', stability: '安定性', action: '行動ボーナス' };
+        var dimLabels = { traffic: 'サイトに来た人の数', cv: 'ゴール（問い合わせ・申込みなど）', gsc: '検索結果からクリックされた数', meo: '地図検索からの表示数' };
+
+        var html = '';
+        var compOrder = ['achievement', 'growth', 'stability', 'action'];
+        compOrder.forEach(function(key) {
+            var comp = components[key];
+            if (!comp) return;
+            var pts = parseInt(comp.points || 0, 10);
+            var max = parseInt(comp.max || 0, 10);
+            var pct = max > 0 ? Math.min(100, (pts / max) * 100) : 0;
+            var icon = compIcons[key] || '📊';
+            var label = comp.label || compLabels[key] || key;
+
+            html += '<div class="score-comp-card">';
+            html += '<div class="score-comp-header">';
+            html += '<span class="score-comp-icon">' + icon + '</span>';
+            html += '<span class="score-comp-label">' + label + '</span>';
+            html += '<span class="score-comp-pts">' + pts + ' / ' + max + 'pt</span>';
+            html += '</div>';
+            html += '<div class="score-comp-bar"><div class="score-comp-bar-fill" style="width:' + pct + '%"></div></div>';
+
+            // 内訳表示（achievement, growth）
+            if ((key === 'achievement' || key === 'growth') && comp.details) {
+                html += '<details class="score-comp-details"><summary>▶内訳を見る</summary><div class="score-comp-details-body">';
+                Object.keys(comp.details).forEach(function(dk) {
+                    var dim = comp.details[dk];
+                    var dLabel = dimLabels[dk] || dk;
+                    var dPts = dim.points || 0;
+                    var dMax = dim.max || 0;
+                    html += '<div class="score-comp-dim-row">';
+                    html += '<span class="score-comp-dim-label">' + dLabel + '</span>';
+                    html += '<span class="score-comp-dim-pts">' + dPts + '/' + dMax + '</span>';
+                    html += '</div>';
+                });
+                html += '</div></details>';
+            }
+
+            // 安定性
+            if (key === 'stability') {
+                var drops = parseInt(comp.drops || 0, 10);
+                html += '<div class="score-comp-inline-note">';
+                html += drops === 0
+                    ? '<span class="score-comp-check-ok">急落なし ✓</span>'
+                    : '<span class="score-comp-check-ng">' + drops + '観点で急落（-20%超）</span>';
+                html += '</div>';
+            }
+
+            // 行動ボーナス
+            if (key === 'action' && comp.checks) {
+                html += '<div class="score-comp-checklist">';
+                comp.checks.forEach(function(chk) {
+                    var cls = chk.ok ? 'is-ok' : 'is-ng';
+                    var mark = chk.ok ? '✓' : '✗';
+                    html += '<span class="score-comp-check-item ' + cls + '">' + mark + ' ' + chk.label + '</span>';
+                });
+                html += '</div>';
+            }
+
+            html += '</div>';
+        });
+
+        listEl.innerHTML = html;
+    }
+
     // KPI更新の共通関数
     function fmt(n){ return n.toLocaleString(); }
     function updateInfoKpi(key, value, diff){
@@ -1238,6 +1332,7 @@ if ($infographic) {
             }).then(function(r){ return r.json(); }).then(function(scoreRes){
                 if (scoreRes.success && typeof updateScoreGauge === 'function') {
                     updateScoreGauge(scoreRes.score);
+                    if (scoreRes.components) updateScoreBreakdownModal(scoreRes.score, scoreRes.components);
                 }
             });
         });
@@ -1413,6 +1508,7 @@ if ($infographic) {
                 }).then(function(r){ return r.json(); }).then(function(scoreRes){
                     if (scoreRes.success) {
                         updateScoreGauge(scoreRes.score);
+                        if (scoreRes.components) updateScoreBreakdownModal(scoreRes.score, scoreRes.components);
                         // キャッシュに保存（スコア込み）
                         if (window.gcrevCache) {
                             window.gcrevCache.set(_dashCacheKey, {

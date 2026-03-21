@@ -4890,9 +4890,10 @@ PROMPT;
         }
 
         return new WP_REST_Response([
-            'success' => true,
-            'score'   => $health['score'],
-            'status'  => $health['status'],
+            'success'    => true,
+            'score'      => $health['score'],
+            'status'     => $health['status'],
+            'components' => $health['components'] ?? null,
         ], 200);
     }
 
