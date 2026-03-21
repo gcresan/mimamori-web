@@ -497,7 +497,7 @@ class Gcrev_GA4_Fetcher {
         foreach ( $response->getRows() as $row ) {
             $dims = $row->getDimensionValues();
             $vals = $row->getMetricValues();
-            $ym_raw = $dims[0]->getValue(); // "202501"
+            $ym_raw = (string) $dims[0]->getValue(); // "202501"（intの場合あり）
             $label  = substr( $ym_raw, 0, 4 ) . '-' . substr( $ym_raw, 4, 2 ); // "2025-01"
 
             $result['labels'][]      = $label;
@@ -1098,10 +1098,10 @@ class Gcrev_GA4_Fetcher {
         $data_by_date = [];
         
         foreach ($response->getRows() as $row) {
-            $date   = $row->getDimensionValues()[0]->getValue(); // YYYYMMDD形式
+            $date   = (string) $row->getDimensionValues()[0]->getValue(); // YYYYMMDD形式（intの場合あり）
             $device = strtolower($row->getDimensionValues()[1]->getValue());
             $sessions = (int)($row->getMetricValues()[0]->getValue() ?? 0);
-            
+
             // 日付フォーマット変換: YYYYMMDD → YYYY-MM-DD
             $formatted_date = substr($date, 0, 4) . '-' . substr($date, 4, 2) . '-' . substr($date, 6, 2);
             
@@ -2018,10 +2018,10 @@ class Gcrev_GA4_Fetcher {
         
         $daily_data = [];
         foreach ($response_daily->getRows() as $row) {
-            $date = $row->getDimensionValues()[0]->getValue(); // YYYYMMDD形式
+            $date = (string) $row->getDimensionValues()[0]->getValue(); // YYYYMMDD形式（intの場合あり）
             $channel = $row->getDimensionValues()[1]->getValue();
             $sessions = (int) $row->getMetricValues()[0]->getValue();
-            
+
             // 日付フォーマット変換: YYYYMMDD → YYYY-MM-DD（デバイス別と同じ形式）
             $formatted_date = substr($date, 0, 4) . '-' . substr($date, 4, 2) . '-' . substr($date, 6, 2);
             

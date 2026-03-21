@@ -2638,7 +2638,7 @@ class Gcrev_Insight_API {
         if ( empty( $labels ) ) {
             return null;
         }
-        $first_label = $labels[0]; // YYYYMMDD
+        $first_label = (string) $labels[0]; // YYYYMMDD（GA4 APIがintで返す場合あり）
         $first_date  = substr( $first_label, 0, 4 ) . '-' . substr( $first_label, 4, 2 ) . '-' . substr( $first_label, 6, 2 );
 
         $req   = new \DateTimeImmutable( $requested_start );
@@ -4746,7 +4746,7 @@ class Gcrev_Insight_API {
         $labels = $monthly['labels'] ?? [];
         $sess_arr = $monthly['sessions'] ?? [];
         for ( $i = 0; $i < count( $labels ); $i++ ) {
-            $m = (int) substr( $labels[ $i ] ?? '', 5, 2 );
+            $m = (int) substr( (string) ( $labels[ $i ] ?? '' ), 5, 2 );
             $monthly_text .= "  {$m}月: " . number_format( $sess_arr[ $i ] ?? 0 ) . "\n";
         }
 
@@ -7121,6 +7121,7 @@ PROMPT;
                 $formatted = ltrim($parts[1], '0') . '/' . ltrim($parts[2], '0');
             } else {
                 // YYYYMMDD 形式（後方互換）
+                $date = (string) $date;
                 $formatted = ltrim(substr($date, 4, 2), '0') . '/' . ltrim(substr($date, 6, 2), '0');
             }
             $labels[] = $formatted;
@@ -8838,6 +8839,7 @@ PROMPT;
 
                 if ($eventName !== $phone_event) continue;
 
+                $dateRaw = (string) $dateRaw;
                 $dk = substr($dateRaw, 0, 4) . '-' . substr($dateRaw, 4, 2) . '-' . substr($dateRaw, 6, 2);
                 if (isset($daily[$dk])) {
                     $daily[$dk] += (int)$row->getMetricValues()[0]->getValue();
@@ -8890,6 +8892,7 @@ PROMPT;
 
             foreach ($client->runReport($request)->getRows() as $row) {
                 $dr = $row->getDimensionValues()[0]->getValue();
+                $dr = (string) $dr;
                 $dk = substr($dr,0,4).'-'.substr($dr,4,2).'-'.substr($dr,6,2);
                 if (isset($daily[$dk])) $daily[$dk] = (int)$row->getMetricValues()[0]->getValue();
             }
@@ -9197,7 +9200,7 @@ PROMPT;
         // 日別集計: "202601150930" → "2026-01-15"
         $daily = [];
         foreach ($valid_rows as $row) {
-            $dhm = $row['date_hour_minute'];
+            $dhm = (string) $row['date_hour_minute'];
             if (strlen($dhm) >= 8) {
                 $date = substr($dhm, 0, 4) . '-' . substr($dhm, 4, 2) . '-' . substr($dhm, 6, 2);
                 $daily[$date] = ($daily[$date] ?? 0) + 1;
