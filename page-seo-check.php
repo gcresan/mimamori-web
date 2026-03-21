@@ -204,6 +204,21 @@ get_header();
     content: '・';
     color: var(--mw-text-tertiary);
 }
+.seo-url-cell__title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mw-text-primary);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+}
+.seo-url-cell__path {
+    font-size: 11px;
+    color: var(--mw-text-tertiary);
+    word-break: break-all;
+}
 .seo-diagnosis-item__urls {
     margin-top: 6px;
     font-size: 11px;
@@ -902,11 +917,16 @@ get_header();
             return;
         }
         var html = '<table class="seo-issues-table"><thead><tr>';
-        html += '<th>URL</th><th>問題カテゴリ</th><th>問題内容</th><th>重要度</th><th>改善候補</th>';
+        html += '<th>ページ</th><th>問題カテゴリ</th><th>問題内容</th><th>重要度</th><th>改善候補</th>';
         html += '</tr></thead><tbody>';
         pages.forEach(function(p) {
+            var urlDecoded = p.url;
+            try { urlDecoded = decodeURI(p.url); } catch(e) {}
+            var titleText = p.pageTitle || '';
             html += '<tr>';
-            html += '<td class="seo-url-cell" title="' + esc(p.url) + '">' + esc(p.url) + '</td>';
+            html += '<td class="seo-url-cell" title="' + esc(urlDecoded) + '">';
+            if (titleText) { html += '<div class="seo-url-cell__title">' + esc(titleText) + '</div>'; }
+            html += '<div class="seo-url-cell__path">' + esc(urlDecoded) + '</div></td>';
             html += '<td>' + esc(p.issueType) + '</td>';
             html += '<td>' + esc(p.issueDetail) + '</td>';
             html += '<td><span class="seo-priority-badge seo-priority-badge--' + esc(p.priority) + '">' + esc(PRIORITY_LABELS[p.priority] || p.priority) + '</span></td>';

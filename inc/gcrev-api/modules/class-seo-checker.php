@@ -1228,6 +1228,17 @@ class Gcrev_SEO_Checker {
             '同じdescriptionが複数ページにあると差別化できません。各ページの内容に合った固有の説明文に変更してください。'
         );
 
+        // URLパス → ページタイトルのマップを作成
+        $title_map = [];
+        foreach ( $page_results as $p ) {
+            $title_map[ $this->url_path( $p['url'] ) ] = $p['title'] ?? '';
+        }
+        // 全issueに pageTitle を付与
+        foreach ( $issues as &$issue ) {
+            $issue['pageTitle'] = $title_map[ $issue['url'] ] ?? '';
+        }
+        unset( $issue );
+
         // 優先度でソート
         $priority_order = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
         usort( $issues, function( $a, $b ) use ( $priority_order ) {
