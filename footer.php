@@ -7,22 +7,27 @@
 
 <script>
 // =============================================
-// クライアントサイドキャッシュ（sessionStorage）
-// ページ遷移時の再取得を防ぎ、即座にデータを表示する
+// クライアントサイドキャッシュ（localStorage 永続版）
+// ページ遷移・タブ閉じ・ブラウザ再起動でも保持され、
+// TTL（2時間）で自動失効する。
 // =============================================
 window.gcrevCache = {
-    TTL: 30 * 60 * 1000, // 30分
+    TTL: 2 * 60 * 60 * 1000, // 2時間（サーバー側Transient 24hより十分短い）
+    PREFIX: 'gcrev_',
+    MAX_AGE: 24 * 60 * 60 * 1000, // 24時間（古いエントリの自動掃除用）
 
     /** キャッシュからデータを取得（期限切れならnull） */
     get: function(key) {
         try {
-            var raw = sessionStorage.getItem('gcrev_' + key);
+            var raw = localStorage.getItem(this.PREFIX + key);
             if (!raw) return null;
             var item = JSON.parse(raw);
-            if (Date.now() - item.ts < this.TTL) {
+            var age = Date.now() - item.ts;
+            if (age < this.TTL) {
                 return item.data;
             }
-            sessionStorage.removeItem('gcrev_' + key);
+            // 期限切れ — 削除
+            localStorage.removeItem(this.PREFIX + key);
         } catch(e) {}
         return null;
     },
@@ -30,20 +35,15 @@ window.gcrevCache = {
     /** データをキャッシュに保存 */
     set: function(key, data) {
         try {
-            sessionStorage.setItem('gcrev_' + key, JSON.stringify({
+            localStorage.setItem(this.PREFIX + key, JSON.stringify({
                 ts: Date.now(),
                 data: data
             }));
         } catch(e) {
-            // 容量超過時は古いキャッシュをクリア
+            // 容量超過時は古いキャッシュをクリアして再試行
+            this._evict();
             try {
-                var keys = [];
-                for (var i = 0; i < sessionStorage.length; i++) {
-                    var k = sessionStorage.key(i);
-                    if (k && k.indexOf('gcrev_') === 0) keys.push(k);
-                }
-                keys.forEach(function(k) { sessionStorage.removeItem(k); });
-                sessionStorage.setItem('gcrev_' + key, JSON.stringify({ ts: Date.now(), data: data }));
+                localStorage.setItem(this.PREFIX + key, JSON.stringify({ ts: Date.now(), data: data }));
             } catch(e2) {}
         }
     },
@@ -51,15 +51,52 @@ window.gcrevCache = {
     /** 特定プレフィックスのキャッシュを削除 */
     clear: function(prefix) {
         try {
+            var fullPrefix = this.PREFIX + (prefix || '');
             var keys = [];
-            for (var i = 0; i < sessionStorage.length; i++) {
-                var k = sessionStorage.key(i);
-                if (k && k.indexOf('gcrev_' + (prefix || '')) === 0) keys.push(k);
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k && k.indexOf(fullPrefix) === 0) keys.push(k);
             }
-            keys.forEach(function(k) { sessionStorage.removeItem(k); });
+            keys.forEach(function(k) { localStorage.removeItem(k); });
+        } catch(e) {}
+    },
+
+    /** 24時間以上古いエントリを掃除 */
+    _evict: function() {
+        try {
+            var now = Date.now();
+            var prefix = this.PREFIX;
+            var maxAge = this.MAX_AGE;
+            var keys = [];
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k && k.indexOf(prefix) === 0) keys.push(k);
+            }
+            keys.forEach(function(k) {
+                try {
+                    var item = JSON.parse(localStorage.getItem(k));
+                    if (!item || !item.ts || (now - item.ts > maxAge)) {
+                        localStorage.removeItem(k);
+                    }
+                } catch(e) { localStorage.removeItem(k); }
+            });
         } catch(e) {}
     }
 };
+
+// sessionStorage → localStorage 移行（一回限り）
+(function() {
+    try {
+        if (sessionStorage.getItem('gcrev_migrated')) return;
+        for (var i = 0; i < sessionStorage.length; i++) {
+            var k = sessionStorage.key(i);
+            if (k && k.indexOf('gcrev_') === 0 && !localStorage.getItem(k)) {
+                localStorage.setItem(k, sessionStorage.getItem(k));
+            }
+        }
+        sessionStorage.setItem('gcrev_migrated', '1');
+    } catch(e) {}
+})();
 
 // =============================================
 // 共通JavaScript
