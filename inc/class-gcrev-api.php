@@ -5344,15 +5344,35 @@ PROMPT;
         $params  = $request->get_json_params();
         $address = sanitize_text_field( $params['address'] ?? '' );
         $label   = sanitize_text_field( $params['label'] ?? '' );
+        $lat     = isset( $params['lat'] ) ? sanitize_text_field( $params['lat'] ) : '';
+        $lng     = isset( $params['lng'] ) ? sanitize_text_field( $params['lng'] ) : '';
 
-        if ( empty( $address ) ) {
-            return new \WP_REST_Response([ 'success' => false, 'message' => '住所は必須です' ], 400);
+        if ( empty( $address ) && empty( $lat ) ) {
+            return new \WP_REST_Response([ 'success' => false, 'message' => '住所または緯度経度を入力してください' ], 400);
+        }
+
+        // 緯度経度バリデーション
+        if ( $lat !== '' || $lng !== '' ) {
+            $lat_f = (float) $lat;
+            $lng_f = (float) $lng;
+            if ( $lat_f < -90 || $lat_f > 90 || $lng_f < -180 || $lng_f > 180 ) {
+                return new \WP_REST_Response([ 'success' => false, 'message' => '緯度経度の値が不正です' ], 400);
+            }
         }
 
         // 基準地点を保存
         update_user_meta( $user_id, '_gcrev_meo_address', $address );
         update_user_meta( $user_id, '_gcrev_meo_base_label', $label );
         update_user_meta( $user_id, '_gcrev_meo_base_updated', current_time( 'mysql' ) );
+
+        // 緯度経度の保存（空の場合は削除して location_code モードに戻す）
+        if ( $lat !== '' && $lng !== '' ) {
+            update_user_meta( $user_id, '_gcrev_meo_lat', $lat );
+            update_user_meta( $user_id, '_gcrev_meo_lng', $lng );
+        } else {
+            delete_user_meta( $user_id, '_gcrev_meo_lat' );
+            delete_user_meta( $user_id, '_gcrev_meo_lng' );
+        }
 
         // MEOキャッシュ削除
         global $wpdb;
@@ -5366,6 +5386,8 @@ PROMPT;
             'message' => '基準地点を保存しました',
             'data'    => [
                 'address'      => $address,
+                'lat'          => $lat,
+                'lng'          => $lng,
                 'base_label'   => $label,
                 'base_updated' => current_time( 'mysql' ),
             ],

@@ -671,7 +671,7 @@ get_header();
     <!-- 基準地点未設定バナー -->
     <div class="meo-base-location-unset" id="meoBaseUnset">
         <div class="meo-base-location-unset__title">&#x26A0;&#xFE0F; 基準地点が未設定です</div>
-        <div class="meo-base-location-unset__text">マップ順位をより正確に計測するため、基準地点（通常は店舗の住所）を設定してください。</div>
+        <div class="meo-base-location-unset__text">マップ順位をより正確に計測するため、基準地点を設定してください。ターゲットエリアの中心地（駅前・市役所周辺など）がおすすめです。</div>
         <button class="meo-base-location-btn" id="meoBaseSetBtn" type="button">&#x1F4CD; 基準地点を設定する</button>
     </div>
 
@@ -755,22 +755,39 @@ get_header();
 
 <!-- Base location modal -->
 <div class="rt-modal-overlay" id="meoBaseModal">
-    <div class="rt-modal" style="max-width:480px;">
+    <div class="rt-modal" style="max-width:520px;">
         <div class="rt-modal__header">
             <div class="rt-modal__title">基準地点を設定</div>
             <button class="rt-modal__close" id="meoBaseModalClose">&times;</button>
         </div>
         <div class="rt-modal__body">
             <div class="meo-base-modal__desc">
-                基準地点は、Googleマップ上での表示順位を計測する起点となる場所です。通常は店舗の住所を設定します。
+                基準地点は、Googleマップ上での表示順位を計測する起点となる場所です。<br>
+                <strong>自社の住所ではなく、ターゲットエリアの中心地（駅前・市役所周辺など）</strong>を設定すると、
+                実際のユーザーの検索環境に近い順位を計測できます。
             </div>
             <div class="meo-base-modal__field">
                 <label class="meo-base-modal__label" for="meoBaseLabel">表示名（任意）</label>
-                <input class="meo-base-modal__input" type="text" id="meoBaseLabel" placeholder="例: 株式会社ジィクレブ">
+                <input class="meo-base-modal__input" type="text" id="meoBaseLabel" placeholder="例: 松山市中心部">
             </div>
             <div class="meo-base-modal__field">
-                <label class="meo-base-modal__label" for="meoBaseAddress">住所 <span style="color:#ef4444;">*</span></label>
-                <input class="meo-base-modal__input" type="text" id="meoBaseAddress" placeholder="例: 愛媛県松山市XX町X-X">
+                <label class="meo-base-modal__label" for="meoBaseAddress">住所</label>
+                <input class="meo-base-modal__input" type="text" id="meoBaseAddress" placeholder="例: 愛媛県松山市大街道">
+                <div style="font-size:11px; color:#9ca3af; margin-top:4px;">住所を入力するか、下の緯度経度を直接指定してください</div>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div class="meo-base-modal__field">
+                    <label class="meo-base-modal__label" for="meoBaseLat">緯度（任意）</label>
+                    <input class="meo-base-modal__input" type="text" id="meoBaseLat" placeholder="例: 33.8395" inputmode="decimal">
+                </div>
+                <div class="meo-base-modal__field">
+                    <label class="meo-base-modal__label" for="meoBaseLng">経度（任意）</label>
+                    <input class="meo-base-modal__input" type="text" id="meoBaseLng" placeholder="例: 132.7657" inputmode="decimal">
+                </div>
+            </div>
+            <div style="font-size:11px; color:#6b7280; line-height:1.5; margin-top:4px; margin-bottom:12px;">
+                &#x1F4A1; 緯度経度を設定すると、その地点を中心にマップ順位を計測します。<br>
+                <a href="https://www.google.com/maps" target="_blank" rel="noopener" style="color:#568184;">Googleマップ</a>で地点を右クリック→座標をコピーして貼り付けできます。
             </div>
             <div class="meo-base-modal__actions">
                 <button class="rt-btn" id="meoBaseCancelBtn" type="button">キャンセル</button>
@@ -867,9 +884,13 @@ get_header();
             // Pre-fill from current data
             var addrInput = document.getElementById('meoBaseAddress');
             var labelInput = document.getElementById('meoBaseLabel');
+            var latInput = document.getElementById('meoBaseLat');
+            var lngInput = document.getElementById('meoBaseLng');
             if (meoData && meoData.location) {
                 if (addrInput && meoData.location.address) addrInput.value = meoData.location.address;
                 if (labelInput && meoData.location.base_label) labelInput.value = meoData.location.base_label;
+                if (latInput && meoData.location.lat) latInput.value = meoData.location.lat;
+                if (lngInput && meoData.location.lng) lngInput.value = meoData.location.lng;
             }
             baseModal.classList.add('active');
         }
@@ -890,18 +911,40 @@ get_header();
             baseSaveBtn.addEventListener('click', function() {
                 var address = (document.getElementById('meoBaseAddress').value || '').trim();
                 var label = (document.getElementById('meoBaseLabel').value || '').trim();
-                if (!address) {
-                    showToast('住所を入力してください。', 'error');
+                var lat = (document.getElementById('meoBaseLat').value || '').trim();
+                var lng = (document.getElementById('meoBaseLng').value || '').trim();
+
+                if (!address && !lat && !lng) {
+                    showToast('住所または緯度経度を入力してください。', 'error');
                     return;
                 }
+                if ((lat && !lng) || (!lat && lng)) {
+                    showToast('緯度と経度は両方入力してください。', 'error');
+                    return;
+                }
+                if (lat && (isNaN(parseFloat(lat)) || parseFloat(lat) < -90 || parseFloat(lat) > 90)) {
+                    showToast('緯度は -90〜90 の数値で入力してください。', 'error');
+                    return;
+                }
+                if (lng && (isNaN(parseFloat(lng)) || parseFloat(lng) < -180 || parseFloat(lng) > 180)) {
+                    showToast('経度は -180〜180 の数値で入力してください。', 'error');
+                    return;
+                }
+
                 baseSaveBtn.disabled = true;
                 baseSaveBtn.textContent = '保存中...';
+
+                var payload = { address: address, label: label };
+                if (lat && lng) {
+                    payload.lat = lat;
+                    payload.lng = lng;
+                }
 
                 fetch(restBase + 'meo/base-location', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ address: address, label: label })
+                    body: JSON.stringify(payload)
                 })
                 .then(function(resp) { return resp.json(); })
                 .then(function(json) {
