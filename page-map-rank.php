@@ -909,6 +909,46 @@ get_header();
             if (baseModal) baseModal.classList.remove('active');
         }
 
+        // 住所入力 → Nominatim で緯度経度を自動取得
+        var geocodeTimer = null;
+        var addrField = document.getElementById('meoBaseAddress');
+        if (addrField) {
+            addrField.addEventListener('blur', function() {
+                var addr = addrField.value.trim();
+                var latField = document.getElementById('meoBaseLat');
+                var lngField = document.getElementById('meoBaseLng');
+                if (!addr || !latField || !lngField) return;
+                // 既に手動で入力済みならスキップ
+                if (latField.value.trim() && lngField.value.trim()) return;
+
+                latField.setAttribute('placeholder', '取得中...');
+                lngField.setAttribute('placeholder', '取得中...');
+                clearTimeout(geocodeTimer);
+                geocodeTimer = setTimeout(function() {
+                    fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(addr)
+                        + '&format=json&limit=1&countrycodes=jp', {
+                        headers: { 'Accept': 'application/json' }
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data && data.length > 0 && data[0].lat && data[0].lon) {
+                            latField.value = parseFloat(data[0].lat).toFixed(6);
+                            lngField.value = parseFloat(data[0].lon).toFixed(6);
+                            showToast('住所から座標を自動取得しました');
+                        } else {
+                            showToast('座標を取得できませんでした。緯度経度を手動で入力してください。', 'error');
+                        }
+                        latField.setAttribute('placeholder', '例: 33.8395');
+                        lngField.setAttribute('placeholder', '例: 132.7657');
+                    })
+                    .catch(function() {
+                        latField.setAttribute('placeholder', '例: 33.8395');
+                        lngField.setAttribute('placeholder', '例: 132.7657');
+                    });
+                }, 300);
+            });
+        }
+
         if (baseSetBtn) baseSetBtn.addEventListener('click', openBaseModal);
         if (baseChangeBtn) baseChangeBtn.addEventListener('click', openBaseModal);
         if (baseModalClose) baseModalClose.addEventListener('click', closeBaseModal);
