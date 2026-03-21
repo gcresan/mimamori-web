@@ -711,9 +711,22 @@ get_header();
     };
 
     // =========================================================
-    // Rankings — fetch
+    // Rankings — fetch（キャッシュ優先）
     // =========================================================
     function fetchRankings() {
+        // キャッシュチェック
+        var cacheKey = 'rank_tracker';
+        var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        if (cached) {
+            rankData = cached.keywords || [];
+            dayLabels = cached.day_labels || [];
+            dayKeys = cached.days || [];
+            summaryData = cached.summary || {};
+            renderSummary();
+            renderTable();
+            return;
+        }
+
         showLoading(true);
 
         fetch('/wp-json/gcrev/v1/rank-tracker/rankings', {
@@ -728,6 +741,8 @@ get_header();
                 dayLabels = json.data.day_labels || [];
                 dayKeys = json.data.days || [];
                 summaryData = json.data.summary || {};
+                // キャッシュに保存
+                if (window.gcrevCache) window.gcrevCache.set(cacheKey, json.data);
                 renderSummary();
                 renderTable();
             }

@@ -1049,6 +1049,27 @@ get_header();
     // Fetch data (single API call)
     // =========================================================
     function fetchMeoData() {
+        // キャッシュチェック（ローディングなしで即表示）
+        var cacheKey = 'map_rank';
+        var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        if (cached) {
+            meoData      = cached;
+            keywordsList = cached.keywords || [];
+            dayLabels    = cached.day_labels || [];
+            dayKeys      = cached.days || [];
+            summaryData  = cached.summary || {};
+            renderLocation(cached.location);
+            renderStoreInfoCard(cached.latest);
+            if (keywordsList.length === 0) {
+                showState('empty');
+                return;
+            }
+            showState('table');
+            renderSummary();
+            renderTable();
+            return;
+        }
+
         showState('loading');
 
         fetch(restBase + 'meo/history', {
@@ -1063,6 +1084,9 @@ get_header();
                 dayLabels    = json.data.day_labels || [];
                 dayKeys      = json.data.days || [];
                 summaryData  = json.data.summary || {};
+
+                // キャッシュに保存
+                if (window.gcrevCache) window.gcrevCache.set(cacheKey, json.data);
 
                 // Location info
                 renderLocation(json.data.location);

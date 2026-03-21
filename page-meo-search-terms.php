@@ -215,6 +215,15 @@ get_header();
     }
 
     function loadData() {
+        // キャッシュチェック（ローディングなしで即表示）
+        var cacheKey = 'meo_search_terms';
+        var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        if (cached) {
+            renderKeywordsTable(cached);
+            renderKeywordsChart(cached);
+            return;
+        }
+
         showLoading();
 
         fetch(REST_BASE + 'meo/dashboard?period=prev-month', {
@@ -228,6 +237,8 @@ get_header();
                     '<tr><td colspan="2" class="st-empty">データの取得に失敗しました: ' + escapeHtml(res.message || '') + '</td></tr>';
                 return;
             }
+            // キャッシュに保存
+            if (window.gcrevCache) window.gcrevCache.set(cacheKey, res);
             renderKeywordsTable(res);
             renderKeywordsChart(res);
         })

@@ -710,8 +710,21 @@ get_header();
         });
     }
 
-    // ===== データ取得（deviceページと同一のfetch + nonce + credentials） =====
+    // ===== データ取得（キャッシュ優先 + fetch） =====
     async function loadData(period) {
+        // キャッシュチェック（ローディングなしで即表示）
+        var cacheKey = 'meo_dash_' + period;
+        var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        if (cached) {
+            currentData = cached;
+            updatePeriodDisplay(currentData);
+            updateSummaryCards(currentData);
+            updateKeywordsTable(currentData);
+            updateImpressionsChart(currentData);
+            updateActionsChart(currentData);
+            return;
+        }
+
         showLoading();
 
         try {
@@ -736,6 +749,9 @@ get_header();
             }
 
             currentData = result;
+
+            // キャッシュに保存
+            if (window.gcrevCache) window.gcrevCache.set(cacheKey, currentData);
 
             // UI更新
             updatePeriodDisplay(currentData);
