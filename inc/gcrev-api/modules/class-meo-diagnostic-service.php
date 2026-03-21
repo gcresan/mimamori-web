@@ -438,7 +438,7 @@ class Gcrev_MEO_Diagnostic_Service {
     private function score_basic_info( array $info ): array {
         $items = [];
         $total = 0;
-        $max_total = 100;
+        $max_total = 90; // 10+10+5+10+10+10+10+10+5+5+5 = 90
 
         // 店舗名 (10)
         $has_title = ! empty( $info['title'] );
@@ -498,14 +498,17 @@ class Gcrev_MEO_Diagnostic_Service {
         $items[] = $this->make_item( 'service_area', 'サービス提供地域', 'サービス提供地域が設定されているか', $has_area ? 5 : 0, 5, $has_area ? '設定済み' : '未設定' );
         $total += $has_area ? 5 : 0;
 
-        // 属性 (15)  — フォールバック時はスキップ
+        // 属性 (5)  — 業種により設定可能な項目数が異なるため配点低め
         if ( empty( $info['_fallback'] ) ) {
             $attr_count = count( $info['attributes'] ?? [] );
-            $attr_score = $attr_count >= 5 ? 15 : ( $attr_count >= 3 ? 10 : ( $attr_count >= 1 ? 5 : 0 ) );
-            $items[] = $this->make_item( 'attributes', '属性', 'Wi-Fi、駐車場などの属性情報が設定されているか', $attr_score, 15, $attr_count . '個設定' );
+            $attr_score = $attr_count >= 3 ? 5 : ( $attr_count >= 1 ? 3 : 0 );
+            $attr_detail = $attr_count > 0
+                ? $attr_count . '個設定'
+                : '未設定（業種によっては設定項目がない場合があります）';
+            $items[] = $this->make_item( 'attributes', '属性', 'Wi-Fi、駐車場などの属性情報（業種により異なる）', $attr_score, 5, $attr_detail );
             $total += $attr_score;
         } else {
-            $max_total -= 15; // フォールバック時は属性を除外
+            $max_total -= 5; // フォールバック時は属性を除外
         }
 
         $score = $max_total > 0 ? (int) round( ( $total / $max_total ) * 100 ) : 0;
