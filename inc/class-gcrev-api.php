@@ -1109,6 +1109,37 @@ class Gcrev_Insight_API {
         return is_array($cached) ? $cached : null;
     }
 
+    /**
+     * TTL切れの transient を直接DBから取得する（フォールバック用）
+     *
+     * get_transient() は TTL 切れで false を返すが、
+     * wp_options テーブルにはデータが残っている場合がある。
+     * APIエラー時に古いデータを表示するために使用する。
+     */
+    private function get_stale_dashboard_cache( int $user_id, string $range ): ?array {
+        // まず通常のキャッシュを確認
+        $cached = $this->dashboard_cache_get( $user_id, $range );
+        if ( $cached ) {
+            return $cached;
+        }
+
+        // TTL切れの transient を直接DBから取得
+        global $wpdb;
+        $key = $this->cache_key_dashboard( $user_id, $range );
+        $option_name = '_transient_' . $key;
+        $value = $wpdb->get_var( $wpdb->prepare(
+            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
+            $option_name
+        ) );
+
+        if ( $value === null ) {
+            return null;
+        }
+
+        $data = maybe_unserialize( $value );
+        return is_array( $data ) ? $data : null;
+    }
+
     private function dashboard_cache_set(int $user_id, string $range, array $data): void {
         $key = $this->cache_key_dashboard($user_id, $range);
         // 月固定期間（prev-month / prev-prev-month / last180 / last365）: 35日
@@ -1411,17 +1442,31 @@ class Gcrev_Insight_API {
             ], 200);
 
         } catch (\Google\Service\Exception $e) {
-            // Google API 固有のエラー（HTTP ステータス + 詳細付き）
+            // Google API 固有のエラー — stale データがあればそれを返す
             $status  = $e->getCode() ?: 500;
             $errors  = $e->getErrors();
             $reason  = ! empty( $errors[0]['reason'] ) ? $errors[0]['reason'] : 'unknown';
             $domain  = ! empty( $errors[0]['domain'] ) ? $errors[0]['domain'] : 'unknown';
-            error_log( sprintf(
-                '[GCREV] REST /dashboard Google API ERROR — user=%d, range=%s, HTTP %d, reason=%s, domain=%s, message=%s',
-                $user_id, $range, $status, $reason, $domain, mb_substr( $e->getMessage(), 0, 500 )
-            ) );
+            file_put_contents( '/tmp/gcrev_dash_debug.log',
+                date( 'Y-m-d H:i:s' ) . sprintf(
+                    " [REST /dashboard] Google API ERROR — user=%d, range=%s, HTTP %d, reason=%s, message=%s\n",
+                    $user_id, $range, $status, $reason, mb_substr( $e->getMessage(), 0, 300 )
+                ), FILE_APPEND
+            );
 
-            // 管理者にはやや詳細、一般ユーザーには汎用文言
+            // stale データのフォールバック: TTL切れでも get_transient は値を返す場合がある（WP内部キャッシュ）
+            // 直接DBからTTL無視で取得する
+            $stale_data = $this->get_stale_dashboard_cache( $user_id, $range );
+            if ( $stale_data ) {
+                return new WP_REST_Response([
+                    'success' => true,
+                    'data'    => $stale_data,
+                    'cached'  => true,
+                    'stale'   => true,
+                    'message' => '最新データの取得に失敗したため、前回のデータを表示しています。',
+                ], 200);
+            }
+
             if ( current_user_can( 'manage_options' ) ) {
                 $front_msg = sprintf( 'Google API エラー (HTTP %d / %s): %s', $status, $reason, mb_substr( $e->getMessage(), 0, 200 ) );
             } else {
@@ -1433,10 +1478,24 @@ class Gcrev_Insight_API {
             ], 500);
 
         } catch (\Exception $e) {
-            error_log( sprintf(
-                '[GCREV] REST /dashboard ERROR — user=%d, range=%s, class=%s, message=%s',
-                $user_id, $range, get_class( $e ), mb_substr( $e->getMessage(), 0, 500 )
-            ) );
+            file_put_contents( '/tmp/gcrev_dash_debug.log',
+                date( 'Y-m-d H:i:s' ) . sprintf(
+                    " [REST /dashboard] ERROR — user=%d, range=%s, class=%s, message=%s\n",
+                    $user_id, $range, get_class( $e ), mb_substr( $e->getMessage(), 0, 300 )
+                ), FILE_APPEND
+            );
+
+            // stale データのフォールバック
+            $stale_data = $this->get_stale_dashboard_cache( $user_id, $range );
+            if ( $stale_data ) {
+                return new WP_REST_Response([
+                    'success' => true,
+                    'data'    => $stale_data,
+                    'cached'  => true,
+                    'stale'   => true,
+                    'message' => '最新データの取得に失敗したため、前回のデータを表示しています。',
+                ], 200);
+            }
 
             if ( current_user_can( 'manage_options' ) ) {
                 $front_msg = 'エラー: ' . mb_substr( $e->getMessage(), 0, 200 );
@@ -1491,7 +1550,7 @@ class Gcrev_Insight_API {
 
         // ─── 重複実行防止ロック（最初のチャンクのみ設定） ───
         if ( $offset === 0 ) {
-            if ( get_transient( self::LOCK_PREFETCH ) ) {
+            if ( ! $this->acquire_lock( self::LOCK_PREFETCH ) ) {
                 $this->prefetch_log( '[PREFETCH] LOCKED — skipping duplicate run' );
                 if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                     $locked_id = Gcrev_Cron_Logger::start( 'prefetch', [ 'note' => 'locked' ] );
@@ -1499,13 +1558,15 @@ class Gcrev_Insight_API {
                 }
                 return;
             }
-            set_transient( self::LOCK_PREFETCH, 1, self::LOCK_TTL );
             // Cron Logger: ジョブ開始
             if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                 $log_id = Gcrev_Cron_Logger::start( 'prefetch', [ 'chunk_limit' => $limit ] );
                 set_transient( 'gcrev_current_prefetch_log_id', $log_id, self::LOCK_TTL );
             }
             $this->prefetch_log( '[PREFETCH] ===== DAILY PREFETCH START =====' );
+        } else {
+            // 後続チャンク: heartbeat 更新
+            $this->heartbeat_lock( self::LOCK_PREFETCH );
         }
 
         // Cron Logger: log_id を取得
@@ -1556,6 +1617,9 @@ class Gcrev_Insight_API {
             $filter_set = $this->maybe_set_country_filter( $user_id );
             $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
+            // 期間別のエラー記録用
+            $period_errors = [];
+
             // --- (1) ダッシュボード／デバイスキャッシュ ---
             foreach ($ranges as $range) {
                 $cached = $this->dashboard_cache_get($user_id, $range);
@@ -1570,9 +1634,15 @@ class Gcrev_Insight_API {
                     $this->dashboard_cache_set($user_id, $range, $data);
                     $elapsed = round( microtime( true ) - $range_start, 1 );
                     $this->prefetch_log( "[PREFETCH] OK user_id={$user_id} period={$range} elapsed={$elapsed}s" );
+                    // 期間単位で成功を記録
+                    $this->record_prefetch_status( $user_id, $range, 'all', 'success', null, 'cron' );
                 } catch (\Exception $e) {
-                    $this->prefetch_log( "[PREFETCH] FAIL user_id={$user_id} period={$range} error=" . $e->getMessage() );
+                    $error_msg = mb_substr( $e->getMessage(), 0, 500 );
+                    $this->prefetch_log( "[PREFETCH] FAIL user_id={$user_id} period={$range} error=" . $error_msg );
                     $user_had_error = true;
+                    $period_errors[ $range ] = $error_msg;
+                    // 期間単位で失敗を記録（エラーメッセージ付き）
+                    $this->record_prefetch_status( $user_id, $range, 'all', 'error', $error_msg, 'cron' );
                 }
 
                 usleep(self::PREFETCH_SLEEP_US);
@@ -1629,10 +1699,10 @@ class Gcrev_Insight_API {
 
                 if ( ! $comp_cached ) {
                     $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id );
-                    error_log("[GCREV] Prefetch comparison SUCCESS user_id={$user_id}");
+                    $this->prefetch_log("[PREFETCH] comparison SUCCESS user_id={$user_id}");
                 } else {
                     $comp_data = $comp_cached;
-                    error_log("[GCREV] Prefetch comparison SKIP user_id={$user_id}: already cached");
+                    $this->prefetch_log("[PREFETCH] comparison SKIP user_id={$user_id}: already cached");
                 }
 
                 // スコア事前計算・KPI transient に保存
@@ -1664,7 +1734,7 @@ class Gcrev_Insight_API {
                         'components' => $health['components'],
                     ];
                     set_transient( $kpi_cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
-                    error_log("[GCREV] Prefetch score SUCCESS user_id={$user_id}, score={$health['score']}");
+                    $this->prefetch_log("[PREFETCH] score SUCCESS user_id={$user_id}, score={$health['score']}");
                 }
             } catch ( \Exception $e ) {
                 $this->prefetch_log( "[PREFETCH] FAIL comparison/score user_id={$user_id} error=" . $e->getMessage() );
@@ -1675,15 +1745,13 @@ class Gcrev_Insight_API {
             // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
             $this->restore_country_filter( $filter_set );
 
-            // ステータス記録（日次期間分）
-            foreach ( $ranges as $r ) {
-                $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron' );
-            }
+            // ステータス記録は期間ごとに上の (1) ループで既に記録済み
 
             $user_elapsed = round( microtime( true ) - $user_start, 1 );
+            $fail_count = count( $period_errors );
             if ( $user_had_error ) {
                 $chunk_fail++;
-                $this->prefetch_log( "[PREFETCH] DONE user_id={$user_id} status=error elapsed={$user_elapsed}s" );
+                $this->prefetch_log( "[PREFETCH] DONE user_id={$user_id} status=error failed_periods={$fail_count} elapsed={$user_elapsed}s" );
             } else {
                 $chunk_success++;
                 $this->prefetch_log( "[PREFETCH] DONE user_id={$user_id} status=success elapsed={$user_elapsed}s" );
@@ -1691,11 +1759,14 @@ class Gcrev_Insight_API {
 
             // Cron Logger: ユーザー単位の結果を記録
             if ( $log_id > 0 ) {
+                $error_detail = $user_had_error
+                    ? 'Failed periods: ' . implode( ', ', array_keys( $period_errors ) )
+                    : null;
                 Gcrev_Cron_Logger::log_user(
                     $log_id,
                     $user_id,
                     $user_had_error ? 'error' : 'success',
-                    $user_had_error ? 'Some ranges had errors' : null
+                    $error_detail
                 );
             }
         }
@@ -1710,11 +1781,12 @@ class Gcrev_Insight_API {
             wp_schedule_single_event(time() + 10, 'gcrev_prefetch_chunk_event', [$next_offset, $limit]);
             $this->prefetch_log( "[PREFETCH] Scheduled next chunk: offset={$next_offset}" );
         } else {
-            delete_transient( self::LOCK_PREFETCH );
+            $this->release_lock( self::LOCK_PREFETCH );
             $this->prefetch_log( '[PREFETCH] ===== DAILY PREFETCH COMPLETE =====' );
             // Cron Logger: ジョブ完了
             if ( $log_id > 0 ) {
-                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                $final_status = $chunk_fail > 0 ? 'partial_error' : 'success';
+                Gcrev_Cron_Logger::finish( $log_id, $final_status );
                 delete_transient( 'gcrev_current_prefetch_log_id' );
             }
         }
@@ -1741,7 +1813,7 @@ class Gcrev_Insight_API {
 
         // ─── 重複実行防止ロック（最初のチャンクのみ設定） ───
         if ( $offset === 0 ) {
-            if ( get_transient( $lock_key ) ) {
+            if ( ! $this->acquire_lock( $lock_key ) ) {
                 $this->prefetch_log_file( $log_file, "slot_{$slot}: LOCKED, skipping" );
                 if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                     $locked_id = Gcrev_Cron_Logger::start( "prefetch_slot_{$slot}", [ 'note' => 'locked' ] );
@@ -1749,12 +1821,14 @@ class Gcrev_Insight_API {
                 }
                 return;
             }
-            set_transient( $lock_key, 1, self::LOCK_TTL );
 
             if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                 $log_id = Gcrev_Cron_Logger::start( "prefetch_slot_{$slot}", [ 'slot' => $slot, 'chunk_limit' => $limit ] );
                 set_transient( $log_id_key, $log_id, self::LOCK_TTL );
             }
+        } else {
+            // 後続チャンク: heartbeat 更新
+            $this->heartbeat_lock( $lock_key );
         }
 
         $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( $log_id_key ) : 0;
@@ -1802,6 +1876,9 @@ class Gcrev_Insight_API {
             $filter_set      = $this->maybe_set_country_filter( $user_id );
             $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
+            // 期間別のエラー記録用
+            $period_errors = [];
+
             // --- (1) ダッシュボード（全6期間） ---
             foreach ( $ranges as $range ) {
                 $cached = $this->dashboard_cache_get( $user_id, $range );
@@ -1815,9 +1892,13 @@ class Gcrev_Insight_API {
                     $this->dashboard_cache_set( $user_id, $range, $data );
                     $elapsed = round( microtime( true ) - $range_start, 1 );
                     $this->prefetch_log_file( $log_file, "slot_{$slot} OK user_id={$user_id} period={$range} elapsed={$elapsed}s" );
+                    $this->record_prefetch_status( $user_id, $range, 'all', 'success', null, 'cron' );
                 } catch ( \Exception $e ) {
-                    $this->prefetch_log_file( $log_file, "slot_{$slot} FAIL user_id={$user_id} period={$range} error=" . $e->getMessage() );
+                    $error_msg = mb_substr( $e->getMessage(), 0, 500 );
+                    $this->prefetch_log_file( $log_file, "slot_{$slot} FAIL user_id={$user_id} period={$range} error=" . $error_msg );
                     $user_had_error = true;
+                    $period_errors[ $range ] = $error_msg;
+                    $this->record_prefetch_status( $user_id, $range, 'all', 'error', $error_msg, 'cron' );
                 }
                 usleep( self::PREFETCH_SLEEP_US );
             }
@@ -1912,19 +1993,20 @@ class Gcrev_Insight_API {
             // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
             $this->restore_country_filter( $filter_set );
 
-            // ステータス記録（全期間分）
-            foreach ( $ranges as $r ) {
-                $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron' );
-            }
+            // ステータス記録は期間ごとに上の (1) ループで既に記録済み
 
-            $this->prefetch_log_file( $log_file, "slot_{$slot} DONE user_id={$user_id} status=" . ( $user_had_error ? 'error' : 'success' ) );
+            $fail_count = count( $period_errors );
+            $this->prefetch_log_file( $log_file, "slot_{$slot} DONE user_id={$user_id} status=" . ( $user_had_error ? "error (failed={$fail_count})" : 'success' ) );
 
             if ( $log_id > 0 ) {
+                $error_detail = $user_had_error
+                    ? 'Failed periods: ' . implode( ', ', array_keys( $period_errors ) )
+                    : null;
                 Gcrev_Cron_Logger::log_user(
                     $log_id,
                     $user_id,
                     $user_had_error ? 'error' : 'success',
-                    $user_had_error ? 'Some ranges had errors' : null
+                    $error_detail
                 );
             }
         }
@@ -1936,7 +2018,7 @@ class Gcrev_Insight_API {
             wp_schedule_single_event( time() + 10, $chunk_hook, [ $slot, $next_offset, $limit ] );
             $this->prefetch_log_file( $log_file, "slot_{$slot}: Scheduled next chunk offset={$next_offset}" );
         } else {
-            delete_transient( $lock_key );
+            $this->release_lock( $lock_key );
             $this->prefetch_log_file( $log_file, "slot_{$slot}: ALL DONE." );
             if ( $log_id > 0 ) {
                 Gcrev_Cron_Logger::finish( $log_id, 'success' );
@@ -2082,30 +2164,31 @@ class Gcrev_Insight_API {
     public function monthly_data_prefetch_chunk( int $offset, int $limit ): void {
 
         if ( $offset === 0 ) {
-            if ( get_transient( self::LOCK_MONTHLY_PREFETCH ) ) {
-                error_log( '[GCREV] monthly_prefetch: LOCKED, skipping' );
+            if ( ! $this->acquire_lock( self::LOCK_MONTHLY_PREFETCH ) ) {
+                $this->prefetch_log( '[MONTHLY_PREFETCH] LOCKED, skipping' );
                 if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                     $locked_id = Gcrev_Cron_Logger::start( 'monthly_prefetch', [ 'note' => 'locked' ] );
                     Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
                 }
                 return;
             }
-            set_transient( self::LOCK_MONTHLY_PREFETCH, 1, self::LOCK_TTL );
             if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                 $log_id = Gcrev_Cron_Logger::start( 'monthly_prefetch', [ 'chunk_limit' => $limit ] );
                 set_transient( 'gcrev_current_monthly_prefetch_log_id', $log_id, self::LOCK_TTL );
             }
+        } else {
+            $this->heartbeat_lock( self::LOCK_MONTHLY_PREFETCH );
         }
 
         $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( 'gcrev_current_monthly_prefetch_log_id' ) : 0;
 
-        error_log( "[GCREV] monthly_prefetch START: offset={$offset}, limit={$limit}" );
+        $this->prefetch_log( "[MONTHLY_PREFETCH] START: offset={$offset}, limit={$limit}" );
 
         $users = get_users( [ 'number' => $limit, 'offset' => $offset, 'fields' => ['ID'] ] );
 
         if ( empty( $users ) ) {
-            error_log( "[GCREV] monthly_prefetch: No users at offset={$offset}. DONE." );
-            delete_transient( self::LOCK_MONTHLY_PREFETCH );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] No users at offset={$offset}. DONE." );
+            $this->release_lock( self::LOCK_MONTHLY_PREFETCH );
             if ( $log_id > 0 ) {
                 Gcrev_Cron_Logger::finish( $log_id, 'success' );
                 delete_transient( 'gcrev_current_monthly_prefetch_log_id' );
@@ -2116,16 +2199,18 @@ class Gcrev_Insight_API {
         // 月次プリフェッチ: 月固定期間のみ
         $dash_ranges      = [ 'previousMonth', 'twoMonthsAgo', 'last180', 'last365' ];
         $analysis_periods = [ 'prev-month', 'prev-prev-month', 'last180', 'last365' ];
+        $chunk_fail = 0;
 
         foreach ( $users as $u ) {
             $user_id = (int) $u->ID;
-            error_log( "[GCREV] monthly_prefetch processing: user_id={$user_id}" );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] processing: user_id={$user_id}" );
             $user_had_error = false;
+            $period_errors  = [];
 
             try {
                 $config = $this->config->get_user_config( $user_id );
             } catch ( \Exception $e ) {
-                error_log( "[GCREV] monthly_prefetch SKIP user_id={$user_id}: " . $e->getMessage() );
+                $this->prefetch_log( "[MONTHLY_PREFETCH] SKIP user_id={$user_id}: " . $e->getMessage() );
                 if ( $log_id > 0 ) {
                     Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $e->getMessage() );
                 }
@@ -2145,10 +2230,14 @@ class Gcrev_Insight_API {
                 try {
                     $data = $this->fetch_dashboard_data_internal( $config, $range );
                     $this->dashboard_cache_set( $user_id, $range, $data );
-                    error_log( "[GCREV] monthly_prefetch SUCCESS user_id={$user_id}, range={$range}" );
+                    $this->prefetch_log( "[MONTHLY_PREFETCH] SUCCESS user_id={$user_id}, range={$range}" );
+                    $this->record_prefetch_status( $user_id, $range, 'all', 'success', null, 'cron', 'monthly' );
                 } catch ( \Exception $e ) {
-                    error_log( "[GCREV] monthly_prefetch ERROR user_id={$user_id}, range={$range}: " . $e->getMessage() );
+                    $error_msg = mb_substr( $e->getMessage(), 0, 500 );
+                    $this->prefetch_log( "[MONTHLY_PREFETCH] ERROR user_id={$user_id}, range={$range}: " . $error_msg );
                     $user_had_error = true;
+                    $period_errors[ $range ] = $error_msg;
+                    $this->record_prefetch_status( $user_id, $range, 'all', 'error', $error_msg, 'cron', 'monthly' );
                 }
                 usleep( self::PREFETCH_SLEEP_US );
             }
@@ -2161,17 +2250,19 @@ class Gcrev_Insight_API {
             // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
             $this->restore_country_filter( $filter_set );
 
-            // ステータス記録（月次）
-            foreach ( $dash_ranges as $r ) {
-                $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron', 'monthly' );
+            if ( $user_had_error ) {
+                $chunk_fail++;
             }
 
             if ( $log_id > 0 ) {
+                $error_detail = $user_had_error
+                    ? 'Failed periods: ' . implode( ', ', array_keys( $period_errors ) )
+                    : null;
                 Gcrev_Cron_Logger::log_user(
                     $log_id,
                     $user_id,
                     $user_had_error ? 'error' : 'success',
-                    $user_had_error ? 'Some ranges had errors' : null
+                    $error_detail
                 );
             }
         }
@@ -2182,12 +2273,13 @@ class Gcrev_Insight_API {
 
         if ( ! empty( $next_users ) ) {
             wp_schedule_single_event( time() + 10, 'gcrev_monthly_prefetch_chunk_event', [ $next_offset, $limit ] );
-            error_log( "[GCREV] monthly_prefetch: Scheduled next chunk offset={$next_offset}" );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] Scheduled next chunk offset={$next_offset}" );
         } else {
-            delete_transient( self::LOCK_MONTHLY_PREFETCH );
-            error_log( "[GCREV] monthly_prefetch DONE." );
+            $this->release_lock( self::LOCK_MONTHLY_PREFETCH );
+            $final_status = $chunk_fail > 0 ? 'partial_error' : 'success';
+            $this->prefetch_log( "[MONTHLY_PREFETCH] DONE. status={$final_status}" );
             if ( $log_id > 0 ) {
-                Gcrev_Cron_Logger::finish( $log_id, 'success' );
+                Gcrev_Cron_Logger::finish( $log_id, $final_status );
                 delete_transient( 'gcrev_current_monthly_prefetch_log_id' );
             }
         }
@@ -2201,10 +2293,10 @@ class Gcrev_Insight_API {
      */
     public function monthly_prefetch_chunk_for_slot( int $slot, int $offset, int $limit ): void {
 
-        // 月初のみ実行
+        // 月初のみ実行（自動Cron経由の場合。手動は monthly_data_prefetch_chunk 経由）
         $now = new \DateTimeImmutable('now', wp_timezone());
         if ( (int) $now->format('d') !== 1 ) {
-            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: Not 1st of month, skipping" );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot}: Not 1st of month, skipping" );
             return;
         }
 
@@ -2214,36 +2306,37 @@ class Gcrev_Insight_API {
 
         // ─── 重複実行防止ロック ───
         if ( $offset === 0 ) {
-            if ( get_transient( $lock_key ) ) {
-                error_log( "[GCREV] monthly_prefetch_slot_{$slot}: LOCKED, skipping" );
+            if ( ! $this->acquire_lock( $lock_key ) ) {
+                $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot}: LOCKED, skipping" );
                 if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                     $locked_id = Gcrev_Cron_Logger::start( "monthly_prefetch_slot_{$slot}", [ 'note' => 'locked' ] );
                     Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
                 }
                 return;
             }
-            set_transient( $lock_key, 1, self::LOCK_TTL );
 
             if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                 $log_id = Gcrev_Cron_Logger::start( "monthly_prefetch_slot_{$slot}", [ 'slot' => $slot, 'chunk_limit' => $limit ] );
                 set_transient( $log_id_key, $log_id, self::LOCK_TTL );
             }
+        } else {
+            $this->heartbeat_lock( $lock_key );
         }
 
         $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( $log_id_key ) : 0;
 
-        error_log( "[GCREV] monthly_prefetch_slot_{$slot} START: offset={$offset}, limit={$limit}" );
+        $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot} START: offset={$offset}, limit={$limit}" );
 
         if ( ! class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
-            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: Gcrev_Prefetch_Scheduler not loaded, aborting" );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot}: Gcrev_Prefetch_Scheduler not loaded, aborting" );
             return;
         }
 
         $user_ids = Gcrev_Prefetch_Scheduler::get_users_for_slot( $slot, $limit, $offset );
 
         if ( empty( $user_ids ) ) {
-            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: No users at offset={$offset}. DONE." );
-            delete_transient( $lock_key );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot}: No users at offset={$offset}. DONE." );
+            $this->release_lock( $lock_key );
             if ( $log_id > 0 ) {
                 Gcrev_Cron_Logger::finish( $log_id, 'success' );
                 delete_transient( $log_id_key );
@@ -2255,13 +2348,14 @@ class Gcrev_Insight_API {
         $analysis_periods = [ 'prev-month', 'prev-prev-month', 'last180', 'last365' ];
 
         foreach ( $user_ids as $user_id ) {
-            error_log( "[GCREV] monthly_prefetch_slot_{$slot} processing: user_id={$user_id}" );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot} processing: user_id={$user_id}" );
             $user_had_error = false;
+            $period_errors  = [];
 
             try {
                 $config = $this->config->get_user_config( $user_id );
             } catch ( \Exception $e ) {
-                error_log( "[GCREV] monthly_prefetch_slot_{$slot} SKIP user_id={$user_id}: " . $e->getMessage() );
+                $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot} SKIP user_id={$user_id}: " . $e->getMessage() );
                 if ( $log_id > 0 ) {
                     Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $e->getMessage() );
                 }
@@ -2280,9 +2374,13 @@ class Gcrev_Insight_API {
                 try {
                     $data = $this->fetch_dashboard_data_internal( $config, $range );
                     $this->dashboard_cache_set( $user_id, $range, $data );
+                    $this->record_prefetch_status( $user_id, $range, 'all', 'success', null, 'cron', 'monthly' );
                 } catch ( \Exception $e ) {
-                    error_log( "[GCREV] monthly_prefetch_slot_{$slot} ERROR user_id={$user_id}, range={$range}: " . $e->getMessage() );
+                    $error_msg = mb_substr( $e->getMessage(), 0, 500 );
+                    $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot} ERROR user_id={$user_id}, range={$range}: " . $error_msg );
                     $user_had_error = true;
+                    $period_errors[ $range ] = $error_msg;
+                    $this->record_prefetch_status( $user_id, $range, 'all', 'error', $error_msg, 'cron', 'monthly' );
                 }
                 usleep( self::PREFETCH_SLEEP_US );
             }
@@ -2295,17 +2393,15 @@ class Gcrev_Insight_API {
             // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
             $this->restore_country_filter( $filter_set );
 
-            // ステータス記録（月次スロット）
-            foreach ( $dash_ranges as $r ) {
-                $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron', 'monthly' );
-            }
-
             if ( $log_id > 0 ) {
+                $error_detail = $user_had_error
+                    ? 'Failed periods: ' . implode( ', ', array_keys( $period_errors ) )
+                    : null;
                 Gcrev_Cron_Logger::log_user(
                     $log_id,
                     $user_id,
                     $user_had_error ? 'error' : 'success',
-                    $user_had_error ? 'Some ranges had errors' : null
+                    $error_detail
                 );
             }
         }
@@ -2315,10 +2411,10 @@ class Gcrev_Insight_API {
 
         if ( Gcrev_Prefetch_Scheduler::has_more_users( $slot, $next_offset ) ) {
             wp_schedule_single_event( time() + 10, $chunk_hook, [ $slot, $next_offset, $limit ] );
-            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: Scheduled next chunk offset={$next_offset}" );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot}: Scheduled next chunk offset={$next_offset}" );
         } else {
-            delete_transient( $lock_key );
-            error_log( "[GCREV] monthly_prefetch_slot_{$slot}: DONE." );
+            $this->release_lock( $lock_key );
+            $this->prefetch_log( "[MONTHLY_PREFETCH] slot_{$slot}: DONE." );
             if ( $log_id > 0 ) {
                 Gcrev_Cron_Logger::finish( $log_id, 'success' );
                 delete_transient( $log_id_key );
@@ -3393,9 +3489,101 @@ class Gcrev_Insight_API {
     private const LOCK_REPORT_FINALIZE = 'gcrev_lock_report_finalize';
     private const LOCK_PREFETCH        = 'gcrev_lock_prefetch';
     private const LOCK_TTL             = 7200; // 2時間（チャンク処理の全完了を待つため）
+    private const STALE_LOCK_THRESHOLD = 1800; // 30分: ハートビート更新がない場合に stale lock と判定
 
     /** レポート生成チャンクサイズ（重い処理なのでプリフェッチより少なく） */
     public const REPORT_CHUNK_LIMIT = 3;
+
+    /**
+     * ロックを取得する（タイムスタンプ付き heartbeat 方式）
+     *
+     * ロック値に現在のタイムスタンプを保存し、stale lock 検出に使用する。
+     */
+    private function acquire_lock( string $lock_key ): bool {
+        $existing = get_transient( $lock_key );
+        if ( $existing !== false ) {
+            // stale lock チェック: 前回の heartbeat から STALE_LOCK_THRESHOLD 秒以上経過していたら自動解除
+            $lock_time = is_numeric( $existing ) && (int) $existing > 1000000000 ? (int) $existing : 0;
+            if ( $lock_time > 0 && ( time() - $lock_time ) > self::STALE_LOCK_THRESHOLD ) {
+                $this->prefetch_log( "[LOCK] Stale lock detected: key={$lock_key}, locked_at=" . date( 'Y-m-d H:i:s', $lock_time ) . ", age=" . ( time() - $lock_time ) . "s — auto-releasing" );
+                delete_transient( $lock_key );
+                // stale lock の Cron Logger 記録
+                if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    // 前回の log_id があれば finish させる
+                    $log_id_keys = [
+                        'gcrev_lock_prefetch'         => 'gcrev_current_prefetch_log_id',
+                        'gcrev_lock_monthly_prefetch'  => 'gcrev_current_monthly_prefetch_log_id',
+                    ];
+                    foreach ( $log_id_keys as $lk => $lid_key ) {
+                        if ( $lock_key === $lk ) {
+                            $old_log_id = (int) get_transient( $lid_key );
+                            if ( $old_log_id > 0 ) {
+                                Gcrev_Cron_Logger::finish( $old_log_id, 'stale_lock_released' );
+                                delete_transient( $lid_key );
+                            }
+                        }
+                    }
+                    // スロット版のlog_id解放
+                    if ( preg_match( '/slot_(\d+)$/', $lock_key, $m ) ) {
+                        $slot_num = $m[1];
+                        foreach ( [ "gcrev_current_prefetch_slot_{$slot_num}_log_id", "gcrev_current_monthly_prefetch_slot_{$slot_num}_log_id" ] as $lid_key ) {
+                            $old_log_id = (int) get_transient( $lid_key );
+                            if ( $old_log_id > 0 ) {
+                                Gcrev_Cron_Logger::finish( $old_log_id, 'stale_lock_released' );
+                                delete_transient( $lid_key );
+                            }
+                        }
+                    }
+                }
+            } else {
+                return false; // 有効なロックが存在 → 取得失敗
+            }
+        }
+        set_transient( $lock_key, time(), self::LOCK_TTL );
+        return true;
+    }
+
+    /**
+     * ロックの heartbeat を更新する（チャンク処理ごとに呼ぶ）
+     */
+    private function heartbeat_lock( string $lock_key ): void {
+        set_transient( $lock_key, time(), self::LOCK_TTL );
+    }
+
+    /**
+     * ロックを解放する
+     */
+    private function release_lock( string $lock_key ): void {
+        delete_transient( $lock_key );
+    }
+
+    /**
+     * 指定ロックキーが stale かどうかを判定する（管理画面から使用）
+     */
+    public static function is_lock_stale( string $lock_key ): bool {
+        $val = get_transient( $lock_key );
+        if ( $val === false ) {
+            return false;
+        }
+        $lock_time = is_numeric( $val ) && (int) $val > 1000000000 ? (int) $val : 0;
+        if ( $lock_time === 0 ) {
+            // 旧形式（値が 1）の場合は stale と見なす
+            return true;
+        }
+        return ( time() - $lock_time ) > self::STALE_LOCK_THRESHOLD;
+    }
+
+    /**
+     * 指定ロックキーのロック開始時刻を取得する（管理画面から使用）
+     */
+    public static function get_lock_time( string $lock_key ): ?int {
+        $val = get_transient( $lock_key );
+        if ( $val === false ) {
+            return null;
+        }
+        $lock_time = is_numeric( $val ) && (int) $val > 1000000000 ? (int) $val : null;
+        return $lock_time;
+    }
 
     /**
      * プリフェッチ用デバッグログ出力ヘルパー
@@ -4272,7 +4460,27 @@ class Gcrev_Insight_API {
             ], 200);
 
         } catch (\Exception $e) {
-            error_log("[GCREV] REST get_dashboard_kpi ERROR: " . $e->getMessage());
+            file_put_contents( '/tmp/gcrev_dash_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [REST /kpi] ERROR user={$user_id}, period={$period}: " . mb_substr( $e->getMessage(), 0, 300 ) . "\n",
+                FILE_APPEND
+            );
+
+            // stale データのフォールバック
+            $range_map = [
+                'last30' => 'last30', 'last90' => 'last90', 'last180' => 'last180', 'last365' => 'last365',
+                'prev-month' => 'previousMonth', 'prev-prev-month' => 'twoMonthsAgo',
+            ];
+            $fallback_range = $range_map[ $period ] ?? 'previousMonth';
+            $stale_data = $this->get_stale_dashboard_cache( $user_id, $fallback_range );
+            if ( $stale_data ) {
+                return new WP_REST_Response([
+                    'success' => true,
+                    'data'    => $stale_data,
+                    'stale'   => true,
+                    'message' => '最新データの取得に失敗したため、前回のデータを表示しています。',
+                ], 200);
+            }
+
             return new WP_REST_Response([
                 'success' => false,
                 'message' => $e->getMessage(),

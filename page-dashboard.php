@@ -1361,6 +1361,21 @@ if ($infographic) {
             var prev = results[1].success ? results[1].data : null;
             var meoData = results[2];
 
+            // staleデータの場合は注記を表示
+            var isStale = results[0].stale || results[1].stale;
+            if (isStale) {
+                var staleMsg = results[0].message || results[1].message || '';
+                var staleEl = document.getElementById('kpiStaleNotice');
+                if (!staleEl) {
+                    staleEl = document.createElement('div');
+                    staleEl.id = 'kpiStaleNotice';
+                    staleEl.style.cssText = 'background:#fff3cd;color:#856404;padding:8px 16px;border-radius:6px;font-size:13px;margin-bottom:12px;';
+                    staleEl.textContent = staleMsg || '最新データの取得に失敗したため、前回のデータを表示しています。';
+                    var kpiWrap = document.querySelector('.info-kpi-cards');
+                    if (kpiWrap && kpiWrap.parentNode) kpiWrap.parentNode.insertBefore(staleEl, kpiWrap);
+                }
+            }
+
             if (!curr) {
                 ['visits', 'cv'].forEach(function(k){ errorCard(k); });
             } else {

@@ -132,6 +132,60 @@ class Gcrev_Prefetch_Management_Page {
                     $this->redirect_with_notice( $status, $user_id );
                 }
                 break;
+
+            case 'release_all_locks':
+                $all_lock_keys = [ 'gcrev_lock_prefetch', 'gcrev_lock_monthly_prefetch' ];
+                if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+                    $sc = Gcrev_Prefetch_Scheduler::get_slot_count();
+                    for ( $i = 0; $i < $sc; $i++ ) {
+                        $all_lock_keys[] = "gcrev_lock_prefetch_slot_{$i}";
+                        $all_lock_keys[] = "gcrev_lock_monthly_prefetch_slot_{$i}";
+                    }
+                }
+                foreach ( $all_lock_keys as $lk ) {
+                    delete_transient( $lk );
+                }
+                file_put_contents( '/tmp/gcrev_prefetch_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [ADMIN] All locks released\n",
+                    FILE_APPEND
+                );
+                $this->redirect_with_notice( 'lock_released' );
+                break;
+
+            case 'release_lock':
+                $lock_target = isset( $_POST['gcrev_lock_target'] ) ? sanitize_text_field( wp_unslash( $_POST['gcrev_lock_target'] ) ) : '';
+                if ( $lock_target ) {
+                    delete_transient( $lock_target );
+                    // 関連する log_id transient もクリア
+                    $log_id_map = [
+                        'gcrev_lock_prefetch'          => 'gcrev_current_prefetch_log_id',
+                        'gcrev_lock_monthly_prefetch'   => 'gcrev_current_monthly_prefetch_log_id',
+                    ];
+                    if ( isset( $log_id_map[ $lock_target ] ) ) {
+                        $old_log_id = (int) get_transient( $log_id_map[ $lock_target ] );
+                        if ( $old_log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                            Gcrev_Cron_Logger::finish( $old_log_id, 'manual_release' );
+                        }
+                        delete_transient( $log_id_map[ $lock_target ] );
+                    }
+                    // スロット版
+                    if ( preg_match( '/slot_(\d+)$/', $lock_target, $m ) ) {
+                        $sn = $m[1];
+                        foreach ( [ "gcrev_current_prefetch_slot_{$sn}_log_id", "gcrev_current_monthly_prefetch_slot_{$sn}_log_id" ] as $lid ) {
+                            $old_log_id = (int) get_transient( $lid );
+                            if ( $old_log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                                Gcrev_Cron_Logger::finish( $old_log_id, 'manual_release' );
+                            }
+                            delete_transient( $lid );
+                        }
+                    }
+                    file_put_contents( '/tmp/gcrev_prefetch_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " [ADMIN] Lock manually released: {$lock_target}\n",
+                        FILE_APPEND
+                    );
+                    $this->redirect_with_notice( 'lock_released' );
+                }
+                break;
         }
     }
 
@@ -220,6 +274,7 @@ class Gcrev_Prefetch_Management_Page {
             'monthly_scheduled' => '全クライアント月次データ取得をバックグラウンドでスケジュールしました。',
             'conn_ok'          => 'API接続テスト成功（GA4/GSC）。',
             'conn_fail'        => 'API接続テストに失敗しました。設定を確認してください。',
+            'lock_released'    => 'ロックを手動解除しました。次回のプリフェッチが正常に開始できます。',
         ];
 
         $type = in_array( $notice, [ 'conn_fail' ], true ) ? 'error' : 'success';
@@ -262,6 +317,30 @@ class Gcrev_Prefetch_Management_Page {
                 );
                 ?>
             </div>
+            <?php
+            // スロット別ロック状態を表示
+            if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
+                $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
+                $stale_slots = [];
+                for ( $i = 0; $i < $slot_count; $i++ ) {
+                    $daily_lock = "gcrev_lock_prefetch_slot_{$i}";
+                    $monthly_lock = "gcrev_lock_monthly_prefetch_slot_{$i}";
+                    if ( Gcrev_Insight_API::is_lock_stale( $daily_lock ) ) {
+                        $stale_slots[] = "日次slot_{$i}";
+                    }
+                    if ( Gcrev_Insight_API::is_lock_stale( $monthly_lock ) ) {
+                        $stale_slots[] = "月次slot_{$i}";
+                    }
+                }
+                if ( ! empty( $stale_slots ) ) {
+                    echo '<div style="background:#f8d7da;border:1px solid #f5c6cb;border-radius:8px;padding:12px 16px;margin-top:10px;">';
+                    echo '<strong style="color:#721c24;">⚠ 滞留ロック検出:</strong> ';
+                    echo esc_html( implode( ', ', $stale_slots ) );
+                    echo '<br><small style="color:#721c24;">次回のプリフェッチ開始時に自動解除されます。手動で解除するには一括操作の「ロック全解除」を使用してください。</small>';
+                    echo '</div>';
+                }
+            }
+            ?>
         </div>
         <?php
     }
@@ -320,8 +399,32 @@ class Gcrev_Prefetch_Management_Page {
 
             <div class="value" style="margin-top:6px;">
                 ロック:
-                <?php if ( $locked ): ?>
-                    <span class="gcrev-badge gcrev-badge-locked">実行中</span>
+                <?php if ( $locked ):
+                    $is_stale = Gcrev_Insight_API::is_lock_stale( $lock_key );
+                    $lock_time = Gcrev_Insight_API::get_lock_time( $lock_key );
+                    if ( $is_stale ): ?>
+                        <span class="gcrev-badge gcrev-badge-error">滞留ロック</span>
+                        <?php if ( $lock_time ): ?>
+                            <small style="color:#721c24;"> ロック開始: <?php echo esc_html( date( 'Y-m-d H:i:s', $lock_time ) ); ?> (<?php echo esc_html( round( ( time() - $lock_time ) / 60 ) ); ?>分前)</small>
+                        <?php else: ?>
+                            <small style="color:#721c24;"> (旧形式ロック)</small>
+                        <?php endif; ?>
+                        <br>
+                        <form method="post" style="display:inline;margin-top:6px;">
+                            <?php wp_nonce_field( self::NONCE_ACTION, self::NONCE_FIELD ); ?>
+                            <input type="hidden" name="gcrev_action" value="release_lock">
+                            <input type="hidden" name="gcrev_lock_target" value="<?php echo esc_attr( $lock_key ); ?>">
+                            <button type="submit" class="button button-small" style="color:#721c24;border-color:#721c24;"
+                                    onclick="return confirm('ロックを手動解除しますか？実行中のプリフェッチが中断される可能性があります。');">
+                                🔓 ロック解除
+                            </button>
+                        </form>
+                    <?php else: ?>
+                        <span class="gcrev-badge gcrev-badge-locked">実行中</span>
+                        <?php if ( $lock_time ): ?>
+                            <small style="color:#004085;"> 開始: <?php echo esc_html( date( 'H:i:s', $lock_time ) ); ?> (<?php echo esc_html( round( ( time() - $lock_time ) / 60 ) ); ?>分経過)</small>
+                        <?php endif; ?>
+                    <?php endif; ?>
                 <?php else: ?>
                     <span class="gcrev-badge gcrev-badge-success">解放</span>
                 <?php endif; ?>
@@ -341,6 +444,7 @@ class Gcrev_Prefetch_Management_Page {
             <div class="gcrev-bulk-actions">
                 <?php $this->render_bulk_button( 'fetch_all_daily', '全クライアント: 日次データ再取得', 'button button-secondary' ); ?>
                 <?php $this->render_bulk_button( 'fetch_all_monthly', '全クライアント: 月次データ再取得', 'button button-secondary' ); ?>
+                <?php $this->render_bulk_button( 'release_all_locks', '全ロック解除', 'button button-secondary' ); ?>
             </div>
             <p class="description">※ 一括操作はバックグラウンドで実行されます。完了まで数分〜数十分かかる場合があります。</p>
         </div>
@@ -486,11 +590,15 @@ class Gcrev_Prefetch_Management_Page {
         $stale      = ( time() - $fetched ) > $ttl;
 
         if ( $stale ) {
-            echo '<span class="gcrev-badge gcrev-badge-stale">TTL切れ</span>';
+            $age_hours = round( ( time() - $fetched ) / 3600, 1 );
+            $ttl_hours = round( $ttl / 3600 );
+            echo '<span class="gcrev-badge gcrev-badge-stale">期限切れ</span>';
+            echo '<br><small class="gcrev-cell-sub">' . esc_html( $fetched_display ) . '</small>';
+            echo '<br><small class="gcrev-cell-sub" style="color:#856404;" title="TTL: ' . esc_attr( $ttl_hours ) . '時間, 経過: ' . esc_attr( $age_hours ) . '時間">' . esc_html( $age_hours ) . 'h前</small>';
         } else {
             echo '<span class="gcrev-badge gcrev-badge-success">成功</span>';
+            echo '<br><small class="gcrev-cell-sub">' . esc_html( $fetched_display ) . '</small>';
         }
-        echo '<br><small class="gcrev-cell-sub">' . esc_html( $fetched_display ) . '</small>';
         echo '<br><small class="gcrev-cell-sub gcrev-cell-source">' . esc_html( $source_label ) . '</small>';
     }
 
