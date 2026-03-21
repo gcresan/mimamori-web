@@ -208,16 +208,17 @@ get_header();
     font-size: 13px;
     font-weight: 600;
     color: var(--mw-text-primary);
-    margin-bottom: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 280px;
+    line-height: 1.45;
+    margin-bottom: 4px;
+    word-break: break-word;
 }
 .seo-url-cell__path {
     font-size: 11px;
     color: var(--mw-text-tertiary);
-    word-break: break-all;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 260px;
 }
 .seo-diagnosis-item__urls {
     margin-top: 6px;
@@ -284,16 +285,15 @@ get_header();
     white-space: nowrap;
 }
 .seo-issues-table td {
-    padding: 10px 14px;
+    padding: 14px 14px;
     border-bottom: 1px solid var(--mw-border-light);
     vertical-align: top;
+    line-height: 1.5;
 }
 .seo-issues-table tbody tr:hover { background: var(--mw-bg-secondary); }
 .seo-issues-table .seo-url-cell {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    min-width: 180px;
+    max-width: 300px;
     color: var(--mw-primary-blue);
     font-weight: 500;
 }
@@ -550,7 +550,9 @@ get_header();
     .seo-summary-card__value { font-size: 28px; }
     .seo-diagnosis-grid { grid-template-columns: 1fr; }
     .seo-issues-table { font-size: 12px; }
-    .seo-issues-table th, .seo-issues-table td { padding: 8px 6px; }
+    .seo-issues-table th, .seo-issues-table td { padding: 10px 8px; }
+    .seo-issues-table .seo-url-cell { min-width: 140px; max-width: 220px; }
+    .seo-url-cell__path { max-width: 180px; }
     .seo-section { padding: 20px 16px; }
     .seo-future-grid { grid-template-columns: 1fr; }
     .seo-kw-card__header { flex-direction: column; align-items: flex-start; }
@@ -923,9 +925,11 @@ get_header();
             var urlDecoded = p.url;
             try { urlDecoded = decodeURI(p.url); } catch(e) {}
             var titleText = p.pageTitle || '';
+            // タイトルがない場合はURLパスをタイトル代わりに表示
+            var displayTitle = titleText || urlDecoded;
             html += '<tr>';
             html += '<td class="seo-url-cell" title="' + esc(urlDecoded) + '">';
-            if (titleText) { html += '<div class="seo-url-cell__title">' + esc(titleText) + '</div>'; }
+            html += '<div class="seo-url-cell__title">' + esc(displayTitle) + '</div>';
             html += '<div class="seo-url-cell__path">' + esc(urlDecoded) + '</div></td>';
             html += '<td>' + esc(p.issueType) + '</td>';
             html += '<td>' + esc(p.issueDetail) + '</td>';
