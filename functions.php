@@ -4930,6 +4930,8 @@ add_action('after_setup_theme', function () {
     gcrev_review_drafts_create_table();
     gcrev_gbp_posts_create_table();
     gcrev_prefetch_status_create_table();
+    gcrev_page_analysis_create_table();
+    gcrev_page_snapshots_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -5472,6 +5474,76 @@ function gcrev_prefetch_status_create_table(): void {
         UNIQUE KEY user_period_type (user_id, period, data_type),
         KEY status (status),
         KEY fetched_at (fetched_at)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+// =========================================
+// ページ分析: DB テーブル作成
+// =========================================
+
+/**
+ * ページ分析メインテーブルを作成
+ *
+ * 主要ページごとのキャプチャ画像・Clarity行動データ・AI所見を保存する。
+ * 将来的に月次レポート・AIチャットから参照される共通基盤。
+ */
+function gcrev_page_analysis_create_table(): void {
+    global $wpdb;
+
+    $table           = $wpdb->prefix . 'gcrev_page_analysis';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        page_url VARCHAR(500) NOT NULL,
+        page_title VARCHAR(255) NOT NULL DEFAULT '',
+        page_type VARCHAR(50) NOT NULL DEFAULT 'other',
+        screenshot_pc BIGINT(20) UNSIGNED DEFAULT NULL,
+        screenshot_mobile BIGINT(20) UNSIGNED DEFAULT NULL,
+        clarity_data LONGTEXT DEFAULT NULL,
+        ai_summary TEXT DEFAULT NULL,
+        ai_insights LONGTEXT DEFAULT NULL,
+        capture_date DATETIME DEFAULT NULL,
+        clarity_sync_date DATETIME DEFAULT NULL,
+        ai_analysis_date DATETIME DEFAULT NULL,
+        is_auto_capture TINYINT(1) NOT NULL DEFAULT 0,
+        sort_order INT NOT NULL DEFAULT 0,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_id (user_id),
+        UNIQUE KEY user_url (user_id, page_url(191))
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
+ * ページスナップショット履歴テーブルを作成
+ *
+ * キャプチャ画像の履歴を保持し、改善前後の比較に対応する。
+ */
+function gcrev_page_snapshots_create_table(): void {
+    global $wpdb;
+
+    $table           = $wpdb->prefix . 'gcrev_page_snapshots';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        page_analysis_id BIGINT(20) UNSIGNED NOT NULL,
+        device_type VARCHAR(10) NOT NULL DEFAULT 'pc',
+        attachment_id BIGINT(20) UNSIGNED NOT NULL,
+        captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY page_analysis_id (page_analysis_id),
+        KEY captured_at (captured_at)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

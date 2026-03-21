@@ -109,7 +109,7 @@
       $report_pages    = array('report-latest','report-archive','annual-report');
       $ranking_pages   = array('rank-tracker','map-rank');
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
-      $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
+      $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','page-analysis','analysis-keywords','analysis-cv');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
@@ -258,6 +258,11 @@
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/analysis/analysis-pages/') ); ?>" class="nav-link <?php echo is_page('analysis-pages') ? 'active' : ''; ?>">
                         <span>よく見られているページ</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/page-analysis/') ); ?>" class="nav-link <?php echo is_page('page-analysis') ? 'active' : ''; ?>">
+                        <span>ページ分析</span>
                         </a>
                      </li>
                      <li class="nav-item">

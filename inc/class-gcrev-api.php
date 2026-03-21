@@ -655,6 +655,38 @@ class Gcrev_Insight_API {
             'methods'=>'GET', 'callback'=>[$this,'rest_get_ga4_key_events'], 'permission_callback'=>[$this->config,'check_permission'],
         ]);
 
+        // ===== ページ分析エンドポイント =====
+        register_rest_route('gcrev/v1', '/page-analysis/pages', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_page_analysis_pages' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/page-analysis/pages', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_page_analysis_page' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)', [
+            'methods'             => 'DELETE',
+            'callback'            => [ $this, 'rest_delete_page_analysis_page' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/detail', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_page_analysis_detail' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/snapshot', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_upload_page_snapshot' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/analyze', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_trigger_page_analysis' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== CV分析ページ用エンドポイント =====
         register_rest_route('gcrev/v1', '/analysis/cv', [
             'methods'             => 'GET',
@@ -17136,6 +17168,320 @@ PROMPT;
             'errors'         => $errors,
             'message'        => "{$imported}件を登録しました。",
         ], 200 );
+    }
+
+    // =========================================================
+    // ページ分析 — REST ハンドラー
+    // =========================================================
+
+    /**
+     * ページ分析の有効な page_type 値
+     */
+    private static $valid_page_types = [
+        'top', 'service', 'lp', 'contact', 'blog',
+        'company', 'access', 'staff', 'price', 'other',
+    ];
+
+    /**
+     * GET /gcrev/v1/page-analysis/pages — 一覧取得
+     */
+    public function rest_get_page_analysis_pages( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_page_analysis';
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE user_id = %d AND status = 'active' ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        // attachment ID → URL に変換
+        foreach ( $rows as &$row ) {
+            $row['screenshot_pc_url']     = $row['screenshot_pc'] ? wp_get_attachment_url( (int) $row['screenshot_pc'] ) : null;
+            $row['screenshot_mobile_url'] = $row['screenshot_mobile'] ? wp_get_attachment_url( (int) $row['screenshot_mobile'] ) : null;
+            $row['clarity_data']          = $row['clarity_data'] ? json_decode( $row['clarity_data'], true ) : null;
+            $row['ai_insights']           = $row['ai_insights'] ? json_decode( $row['ai_insights'], true ) : null;
+        }
+        unset( $row );
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'pages' => $rows ] ], 200 );
+    }
+
+    /**
+     * POST /gcrev/v1/page-analysis/pages — ページ追加/更新
+     */
+    public function rest_save_page_analysis_page( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_page_analysis';
+        $data    = $request->get_json_params();
+
+        $page_url = isset( $data['page_url'] ) ? esc_url_raw( trim( $data['page_url'] ) ) : '';
+        if ( $page_url === '' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'URLは必須です' ], 400 );
+        }
+
+        $page_type = isset( $data['page_type'] ) ? sanitize_text_field( $data['page_type'] ) : 'other';
+        if ( ! in_array( $page_type, self::$valid_page_types, true ) ) {
+            $page_type = 'other';
+        }
+
+        $page_title = isset( $data['page_title'] ) ? sanitize_text_field( $data['page_title'] ) : '';
+
+        // タイトル自動取得（未指定の場合）
+        if ( $page_title === '' ) {
+            $page_title = $this->fetch_page_title( $page_url );
+        }
+
+        // 既存レコード確認
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, status FROM {$table} WHERE user_id = %d AND page_url = %s",
+            $user_id,
+            $page_url
+        ), ARRAY_A );
+
+        if ( $existing ) {
+            // 削除済みなら復元、既存なら更新
+            $wpdb->update(
+                $table,
+                [
+                    'page_title' => $page_title,
+                    'page_type'  => $page_type,
+                    'status'     => 'active',
+                ],
+                [ 'id' => (int) $existing['id'] ],
+                [ '%s', '%s', '%s' ],
+                [ '%d' ]
+            );
+            $row_id = (int) $existing['id'];
+        } else {
+            $wpdb->insert(
+                $table,
+                [
+                    'user_id'    => $user_id,
+                    'page_url'   => $page_url,
+                    'page_title' => $page_title,
+                    'page_type'  => $page_type,
+                ],
+                [ '%d', '%s', '%s', '%s' ]
+            );
+            $row_id = (int) $wpdb->insert_id;
+        }
+
+        $saved = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d",
+            $row_id
+        ), ARRAY_A );
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $saved ], 200 );
+    }
+
+    /**
+     * DELETE /gcrev/v1/page-analysis/pages/{id} — 論理削除
+     */
+    public function rest_delete_page_analysis_page( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $id      = absint( $request->get_param( 'id' ) );
+        $table   = $wpdb->prefix . 'gcrev_page_analysis';
+
+        $affected = $wpdb->update(
+            $table,
+            [ 'status' => 'deleted' ],
+            [ 'id' => $id, 'user_id' => $user_id ],
+            [ '%s' ],
+            [ '%d', '%d' ]
+        );
+
+        if ( $affected === 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
+        }
+
+        return new \WP_REST_Response( [ 'success' => true ], 200 );
+    }
+
+    /**
+     * GET /gcrev/v1/page-analysis/pages/{id}/detail — 詳細取得
+     */
+    public function rest_get_page_analysis_detail( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $id      = absint( $request->get_param( 'id' ) );
+        $table   = $wpdb->prefix . 'gcrev_page_analysis';
+
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d AND status = 'active'",
+            $id,
+            $user_id
+        ), ARRAY_A );
+
+        if ( ! $row ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
+        }
+
+        $row['screenshot_pc_url']     = $row['screenshot_pc'] ? wp_get_attachment_url( (int) $row['screenshot_pc'] ) : null;
+        $row['screenshot_mobile_url'] = $row['screenshot_mobile'] ? wp_get_attachment_url( (int) $row['screenshot_mobile'] ) : null;
+        $row['clarity_data']          = $row['clarity_data'] ? json_decode( $row['clarity_data'], true ) : null;
+        $row['ai_insights']           = $row['ai_insights'] ? json_decode( $row['ai_insights'], true ) : null;
+
+        // スナップショット履歴
+        $snap_table = $wpdb->prefix . 'gcrev_page_snapshots';
+        $snapshots  = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, device_type, attachment_id, captured_at FROM {$snap_table} WHERE page_analysis_id = %d ORDER BY captured_at DESC LIMIT 20",
+            $id
+        ), ARRAY_A );
+
+        foreach ( $snapshots as &$snap ) {
+            $snap['url'] = wp_get_attachment_url( (int) $snap['attachment_id'] );
+        }
+        unset( $snap );
+
+        $row['snapshots'] = $snapshots;
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $row ], 200 );
+    }
+
+    /**
+     * POST /gcrev/v1/page-analysis/pages/{id}/snapshot — スクリーンショットアップロード
+     */
+    public function rest_upload_page_snapshot( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $id      = absint( $request->get_param( 'id' ) );
+        $table   = $wpdb->prefix . 'gcrev_page_analysis';
+
+        // 所有権チェック
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id FROM {$table} WHERE id = %d AND user_id = %d AND status = 'active'",
+            $id,
+            $user_id
+        ) );
+        if ( ! $row ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
+        }
+
+        $files = $request->get_file_params();
+        if ( empty( $files['file'] ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'ファイルが必要です' ], 400 );
+        }
+
+        $device_type = sanitize_text_field( $request->get_param( 'device_type' ) ?: 'pc' );
+        if ( ! in_array( $device_type, [ 'pc', 'mobile' ], true ) ) {
+            $device_type = 'pc';
+        }
+
+        // アップロード処理
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+
+        $file = $files['file'];
+
+        // MIMEタイプ検証
+        $allowed = [ 'image/jpeg', 'image/png', 'image/webp' ];
+        $check   = wp_check_filetype( $file['name'] );
+        if ( ! $check['type'] || ! in_array( $check['type'], $allowed, true ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'JPEG/PNG/WebP画像のみ対応しています' ], 400 );
+        }
+
+        $upload = wp_handle_upload( $file, [ 'test_form' => false ] );
+        if ( isset( $upload['error'] ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $upload['error'] ], 500 );
+        }
+
+        $attachment_data = [
+            'post_mime_type' => $upload['type'],
+            'post_title'     => sanitize_file_name( $file['name'] ),
+            'post_content'   => '',
+            'post_status'    => 'inherit',
+        ];
+        $attachment_id = wp_insert_attachment( $attachment_data, $upload['file'] );
+
+        if ( is_wp_error( $attachment_id ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'アップロードに失敗しました' ], 500 );
+        }
+
+        $metadata = wp_generate_attachment_metadata( $attachment_id, $upload['file'] );
+        wp_update_attachment_metadata( $attachment_id, $metadata );
+
+        // ページ分析テーブル更新
+        $col = $device_type === 'mobile' ? 'screenshot_mobile' : 'screenshot_pc';
+        $wpdb->update(
+            $table,
+            [
+                $col           => $attachment_id,
+                'capture_date' => current_time( 'mysql' ),
+            ],
+            [ 'id' => $id ],
+            [ '%d', '%s' ],
+            [ '%d' ]
+        );
+
+        // スナップショット履歴に追加
+        $snap_table = $wpdb->prefix . 'gcrev_page_snapshots';
+        $wpdb->insert(
+            $snap_table,
+            [
+                'page_analysis_id' => $id,
+                'device_type'      => $device_type,
+                'attachment_id'    => $attachment_id,
+            ],
+            [ '%d', '%s', '%d' ]
+        );
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'data'    => [
+                'attachment_id' => $attachment_id,
+                'url'           => wp_get_attachment_url( $attachment_id ),
+            ],
+        ], 200 );
+    }
+
+    /**
+     * POST /gcrev/v1/page-analysis/pages/{id}/analyze — AI分析トリガー（Phase 1 プレースホルダー）
+     */
+    public function rest_trigger_page_analysis( \WP_REST_Request $request ): \WP_REST_Response {
+        return new \WP_REST_Response( [
+            'success' => true,
+            'message' => 'AI分析機能は準備中です。今後のアップデートで利用可能になります。',
+        ], 200 );
+    }
+
+    /**
+     * ページタイトルをURLから自動取得
+     *
+     * @param string $url
+     * @return string タイトル文字列（取得失敗時は空文字）
+     */
+    private function fetch_page_title( string $url ): string {
+        $response = wp_remote_get( $url, [
+            'timeout'    => 5,
+            'user-agent' => 'MimamoriWeb/1.0',
+            'sslverify'  => false,
+        ] );
+
+        if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
+            return '';
+        }
+
+        $body = wp_remote_retrieve_body( $response );
+        if ( preg_match( '/<title[^>]*>([^<]+)<\/title>/i', $body, $m ) ) {
+            $title = trim( $m[1] );
+            // 文字コード変換（Shift_JIS等対応）
+            if ( preg_match( '/charset=["\']?([^"\'\s;>]+)/i', $body, $cm ) ) {
+                $charset = strtolower( $cm[1] );
+                if ( $charset !== 'utf-8' && $charset !== 'utf8' ) {
+                    $converted = mb_convert_encoding( $title, 'UTF-8', $charset );
+                    if ( $converted !== false ) {
+                        $title = $converted;
+                    }
+                }
+            }
+            return sanitize_text_field( $title );
+        }
+
+        return '';
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
