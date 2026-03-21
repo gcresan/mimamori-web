@@ -192,12 +192,13 @@ get_header();
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 24px;
+    padding: 20px 24px;
     border-bottom: 1px solid #eee;
+    margin-top: 56px;
 }
 .pa-detail-header h3 {
     margin: 0;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -218,11 +219,11 @@ get_header();
 .pa-tabs {
     display: flex;
     border-bottom: 1px solid #eee;
-    padding: 0 24px;
+    padding: 4px 24px 0;
 }
 .pa-tab {
-    padding: 10px 16px;
-    font-size: 13px;
+    padding: 12px 16px;
+    font-size: 14px;
     color: #666;
     cursor: pointer;
     border: none;
