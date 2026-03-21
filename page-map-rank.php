@@ -445,15 +445,8 @@ get_header();
     padding: 1px 5px; letter-spacing: 0.5px;
 }
 
-/* Radius selector */
+/* Radius display */
 .meo-radius-group { display: flex; flex-direction: column; gap: 4px; }
-.meo-radius-label {
-    font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;
-}
-.meo-radius-select {
-    font-size: 13px; color: #344054; border: 1px solid #d0d5dd; border-radius: 8px;
-    padding: 5px 10px; background: #fff; cursor: pointer; max-width: 120px; font-weight: 500;
-}
 
 /* Store card (modal content) */
 .meo-store-card {
@@ -583,11 +576,13 @@ get_header();
     cursor: pointer; background: #fff; color: #344054; transition: all 0.15s;
 }
 .meo-base-location-btn:hover { background: #f9fafb; border-color: #98a2b3; }
-.meo-base-location-change {
-    font-size: 11px; color: #568184; cursor: pointer; border: none; background: none;
-    text-decoration: underline; padding: 0; margin-left: 6px;
+.meo-base-change-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 6px 14px; border: 1px solid #c5dfe0; border-radius: 8px;
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    background: #fff; color: #568184; transition: all 0.15s; white-space: nowrap;
 }
-.meo-base-location-change:hover { color: #476C6F; }
+.meo-base-change-btn:hover { background: #f0f7f7; border-color: #98b8ba; }
 
 /* --- Base location modal --- */
 .meo-base-modal__desc {
@@ -652,12 +647,15 @@ get_header();
         <div class="meo-condition-group" id="meoRegionGroup">
             <span class="meo-condition-label">基準地点</span>
             <span class="meo-condition-value" id="meoRegion">読み込み中...</span>
-            <button class="meo-base-location-change" id="meoBaseChangeBtn" style="display:none;" type="button">変更</button>
         </div>
-        <!-- 半径（座標モード時のみ表示） -->
-        <div class="meo-radius-group" id="meoRadiusGroup" style="display:none;">
-            <span class="meo-radius-label">半径</span>
-            <select class="meo-radius-select" id="meoRadiusSelect"></select>
+        <!-- 半径 -->
+        <div class="meo-condition-group" id="meoRadiusGroup" style="display:none;">
+            <span class="meo-condition-label">半径</span>
+            <span class="meo-condition-value" id="meoRadiusDisplay">-</span>
+        </div>
+        <!-- 地点変更ボタン -->
+        <div class="meo-condition-group" id="meoBaseChangeBtnGroup" style="display:none; align-self:flex-end;">
+            <button class="meo-base-change-btn" id="meoBaseChangeBtn" type="button">&#x1F4CD; 地点変更</button>
         </div>
 <?php if ( $maps_domain !== '' ) : ?>
         <!-- 対象ドメイン（GBPドメイン） -->
@@ -842,7 +840,6 @@ get_header();
     var tbody         = document.getElementById('meoTableBody');
     var regionEl      = document.getElementById('meoRegion');
     var radiusGroup   = document.getElementById('meoRadiusGroup');
-    var radiusSelect  = document.getElementById('meoRadiusSelect');
 
     // =========================================================
     // Init
@@ -876,14 +873,6 @@ get_header();
         document.addEventListener('click', function(e) {
             if (e.target.id === 'meoDetailModal') closeDetailModal();
         });
-
-        // Radius change
-        if (radiusSelect) {
-            radiusSelect.addEventListener('change', function() {
-                // Re-fetch with new radius — reload all data
-                fetchMeoData();
-            });
-        }
 
         // Base location modal handlers
         var baseSetBtn = document.getElementById('meoBaseSetBtn');
@@ -1036,7 +1025,8 @@ get_header();
         if (!loc || !regionEl) return;
 
         var baseUnset = document.getElementById('meoBaseUnset');
-        var baseChangeBtn = document.getElementById('meoBaseChangeBtn');
+        var changeBtnGroup = document.getElementById('meoBaseChangeBtnGroup');
+        var radiusDisplay = document.getElementById('meoRadiusDisplay');
         var hasAddress = loc.address && loc.address !== '';
 
         if (hasAddress) {
@@ -1048,20 +1038,27 @@ get_header();
                 } else {
                     regionEl.textContent = loc.address;
                 }
+                // 半径を表示テキストとして設定
                 if (radiusGroup) radiusGroup.style.display = '';
+                if (radiusDisplay) radiusDisplay.textContent = formatRadius(loc.radius || 1000);
             } else {
                 regionEl.textContent = loc.address;
                 if (radiusGroup) radiusGroup.style.display = 'none';
             }
-            if (baseChangeBtn) baseChangeBtn.style.display = '';
+            if (changeBtnGroup) changeBtnGroup.style.display = '';
             if (baseUnset) baseUnset.classList.remove('show');
         } else {
             // 基準地点が未設定
             regionEl.textContent = '未設定';
             if (radiusGroup) radiusGroup.style.display = 'none';
-            if (baseChangeBtn) baseChangeBtn.style.display = 'none';
+            if (changeBtnGroup) changeBtnGroup.style.display = 'none';
             if (baseUnset) baseUnset.classList.add('show');
         }
+    }
+
+    function formatRadius(meters) {
+        if (meters >= 1000) return (meters / 1000) + 'km';
+        return meters + 'm';
     }
 
     // =========================================================
