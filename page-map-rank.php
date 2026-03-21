@@ -1297,9 +1297,10 @@ get_header();
         bodyEl.innerHTML = '<div class="rt-loading">データを取得中...</div>';
         modal.classList.add('active');
 
-        // Fetch detail data from meo/rankings
+        // Fetch detail data from meo/rankings (cache_only: 外部API接続しない)
         var url = restBase + 'meo/rankings?device=' + encodeURIComponent(currentDevice)
-                + '&keyword_id=' + encodeURIComponent(keywordId);
+                + '&keyword_id=' + encodeURIComponent(keywordId)
+                + '&cache_only=1';
 
         fetch(url, {
             credentials: 'same-origin',
@@ -1308,7 +1309,11 @@ get_header();
         .then(function(resp) { return resp.json(); })
         .then(function(data) {
             if (data && data.success !== false) {
-                renderDetailModal(data, bodyEl);
+                if (data.cache_only) {
+                    bodyEl.innerHTML = '<div class="rt-loading" style="color:#9ca3af;">' + escHtml(data.message || 'キャッシュデータがありません。') + '</div>';
+                } else {
+                    renderDetailModal(data, bodyEl);
+                }
             } else {
                 bodyEl.innerHTML = '<div class="rt-loading" style="color:#ef4444;">' + escHtml(data.message || 'データの取得に失敗しました。') + '</div>';
             }

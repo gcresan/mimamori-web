@@ -5954,6 +5954,7 @@ PROMPT;
             $device       = sanitize_text_field( $request->get_param( 'device' ) ?: 'mobile' );
             $keyword_id   = absint( $request->get_param( 'keyword_id' ) );
             $force        = absint( $request->get_param( 'force' ) );
+            $cache_only   = absint( $request->get_param( 'cache_only' ) );
             $radius_param = absint( $request->get_param( 'radius' ) );
 
             global $wpdb;
@@ -6055,6 +6056,21 @@ PROMPT;
                     );
 
                     return new \WP_REST_Response( $cached, 200 );
+                }
+
+                // cache_only モード: キャッシュがなければ外部APIを呼ばずにデータなしを返す
+                if ( $cache_only ) {
+                    return new \WP_REST_Response( [
+                        'success'    => true,
+                        'cache_only' => true,
+                        'keyword'    => $keyword_text,
+                        'device'     => $device,
+                        'region'     => $use_coordinate ? ( $meo_address ?: '' ) : $this->meo_get_location_label( $location_code ),
+                        'maps'       => [ 'rank' => null, 'total_results' => 0, 'store' => null, 'competitors' => [] ],
+                        'local_finder' => [ 'rank' => null, 'total_results' => 0 ],
+                        'keywords'   => $this->meo_build_keyword_list( $all_keywords, $kw_id ),
+                        'message'    => 'キャッシュデータがありません。「最新の情報を見る」でデータを取得してください。',
+                    ], 200 );
                 }
             }
 
