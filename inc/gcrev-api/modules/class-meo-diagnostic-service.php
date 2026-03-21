@@ -207,9 +207,9 @@ class Gcrev_MEO_Diagnostic_Service {
             return $this->fallback_business_info( $user_id );
         }
 
-        $account_name = $this->api->gbp_get_account_for_location( $user_id );
-        $location_id  = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
-        if ( empty( $account_name ) || empty( $location_id ) ) {
+        $location_id = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( empty( $location_id ) || strpos( $location_id, 'pending_' ) === 0 ) {
+            $this->log( "collect_business_info: no location_id user_id={$user_id}" );
             return $this->fallback_business_info( $user_id );
         }
 
@@ -219,23 +219,63 @@ class Gcrev_MEO_Diagnostic_Service {
             'openInfo', 'serviceArea', 'metadata', 'latlng',
         ] );
 
-        $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/{$location_id}"
+        // GBP Business Information API: locations.get
+        // エンドポイント: GET /v1/{name} — name は "locations/XXXXX" 形式
+        $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$location_id}"
              . '?readMask=' . $read_mask;
+
+        $this->log( "collect_business_info: fetching url={$url}" );
 
         $response = wp_remote_get( $url, [
             'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
             'timeout' => 20,
         ] );
 
-        if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
-            $code = is_wp_error( $response )
-                ? $response->get_error_message()
-                : wp_remote_retrieve_response_code( $response );
-            $this->log( "collect_business_info API ERROR: code={$code}" );
+        if ( is_wp_error( $response ) ) {
+            $this->log( "collect_business_info API WP_Error: " . $response->get_error_message() );
             return $this->fallback_business_info( $user_id );
         }
 
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $status = wp_remote_retrieve_response_code( $response );
+        $raw_body = wp_remote_retrieve_body( $response );
+
+        if ( $status !== 200 ) {
+            $this->log( "collect_business_info API HTTP {$status}: " . substr( $raw_body, 0, 500 ) );
+
+            // 404 の場合は account_name/location_id 形式でリトライ
+            if ( $status === 404 ) {
+                $account_name = $this->api->gbp_get_account_for_location( $user_id );
+                if ( ! empty( $account_name ) ) {
+                    $retry_url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/{$location_id}"
+                               . '?readMask=' . $read_mask;
+                    $this->log( "collect_business_info: retrying with account url={$retry_url}" );
+
+                    $retry_resp = wp_remote_get( $retry_url, [
+                        'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+                        'timeout' => 20,
+                    ] );
+
+                    $retry_status = wp_remote_retrieve_response_code( $retry_resp );
+                    if ( ! is_wp_error( $retry_resp ) && $retry_status === 200 ) {
+                        $body = json_decode( wp_remote_retrieve_body( $retry_resp ), true );
+                        if ( $body ) {
+                            $this->log( "collect_business_info: retry SUCCESS with account path" );
+                            return $body;
+                        }
+                    }
+                    $this->log( "collect_business_info: retry also failed HTTP {$retry_status}" );
+                }
+            }
+
+            return $this->fallback_business_info( $user_id );
+        }
+
+        $body = json_decode( $raw_body, true );
+        if ( $body ) {
+            $this->log( "collect_business_info: SUCCESS keys=" . implode( ',', array_keys( $body ) ) );
+        } else {
+            $this->log( "collect_business_info: JSON decode failed, raw=" . substr( $raw_body, 0, 300 ) );
+        }
         return $body ?: $this->fallback_business_info( $user_id );
     }
 
@@ -282,29 +322,47 @@ class Gcrev_MEO_Diagnostic_Service {
             return [];
         }
 
-        $account_name = $this->api->gbp_get_account_for_location( $user_id );
-        $location_id  = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
-        if ( empty( $account_name ) || empty( $location_id ) ) {
+        $location_id = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( empty( $location_id ) || strpos( $location_id, 'pending_' ) === 0 ) {
             return [];
         }
 
-        $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/{$location_id}/media"
+        // まず locations/{id}/media を試す
+        $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$location_id}/media"
              . '?pageSize=100';
+        $this->log( "collect_photos: fetching url={$url}" );
 
         $response = wp_remote_get( $url, [
             'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
             'timeout' => 20,
         ] );
 
-        if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) !== 200 ) {
-            $code = is_wp_error( $response )
-                ? $response->get_error_message()
-                : wp_remote_retrieve_response_code( $response );
-            $this->log( "collect_photos API ERROR: code={$code}" );
+        $status = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
+
+        // 404 なら account_name/location_id/media でリトライ
+        if ( $status === 404 ) {
+            $account_name = $this->api->gbp_get_account_for_location( $user_id );
+            if ( ! empty( $account_name ) ) {
+                $retry_url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/{$location_id}/media"
+                           . '?pageSize=100';
+                $this->log( "collect_photos: retrying with account url={$retry_url}" );
+                $response = wp_remote_get( $retry_url, [
+                    'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+                    'timeout' => 20,
+                ] );
+                $status = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
+            }
+        }
+
+        if ( is_wp_error( $response ) || $status !== 200 ) {
+            $err = is_wp_error( $response ) ? $response->get_error_message() : "HTTP {$status}";
+            $this->log( "collect_photos API ERROR: {$err}" );
             return [];
         }
 
-        $body  = json_decode( wp_remote_retrieve_body( $response ), true );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $count = count( $body['mediaItems'] ?? [] );
+        $this->log( "collect_photos: SUCCESS {$count} items" );
         return $body['mediaItems'] ?? [];
     }
 
