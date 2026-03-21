@@ -192,8 +192,8 @@ get_header();
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 24px 24px 20px;
-    margin-top: 56px;
+    padding: 28px 24px 20px;
+    margin-top: 76px;
 }
 .pa-detail-header h3 {
     margin: 0;
