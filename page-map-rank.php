@@ -793,6 +793,9 @@ get_header();
             <div style="font-size:11px; color:#6b7280; line-height:1.5; margin-top:4px; margin-bottom:12px;">
                 &#x1F4A1; 緯度経度を設定すると、その地点を中心にマップ順位を計測します。<br>
                 <a href="https://www.google.com/maps" target="_blank" rel="noopener" style="color:#568184;">Googleマップ</a>で地点を右クリック→座標をコピーして貼り付けできます。
+                <br>
+                <a href="#" id="meoBaseVerifyLink" target="_blank" rel="noopener"
+                   style="display:none; color:#568184; font-size:12px; margin-top:4px; text-decoration:underline;">&#x1F4CD; この地点の場所を確認する</a>
             </div>
             <div class="meo-base-modal__field">
                 <label class="meo-base-modal__label" for="meoBaseRadius">検索半径</label>
@@ -904,10 +907,29 @@ get_header();
                 if (radiusInput && meoData.location.radius) radiusInput.value = String(meoData.location.radius);
             }
             baseModal.classList.add('active');
+            updateVerifyLink();
         }
         function closeBaseModal() {
             if (baseModal) baseModal.classList.remove('active');
         }
+
+        // 「この地点の場所を確認する」リンクの表示制御
+        function updateVerifyLink() {
+            var link = document.getElementById('meoBaseVerifyLink');
+            var latVal = (document.getElementById('meoBaseLat').value || '').trim();
+            var lngVal = (document.getElementById('meoBaseLng').value || '').trim();
+            if (!link) return;
+            if (latVal && lngVal && !isNaN(parseFloat(latVal)) && !isNaN(parseFloat(lngVal))) {
+                link.href = 'https://www.google.com/maps?q=' + encodeURIComponent(latVal + ',' + lngVal);
+                link.style.display = 'inline-flex';
+            } else {
+                link.style.display = 'none';
+            }
+        }
+        var baseLatField = document.getElementById('meoBaseLat');
+        var baseLngField = document.getElementById('meoBaseLng');
+        if (baseLatField) baseLatField.addEventListener('input', updateVerifyLink);
+        if (baseLngField) baseLngField.addEventListener('input', updateVerifyLink);
 
         // 住所入力 → Nominatim で緯度経度を自動取得
         var geocodeTimer = null;
@@ -934,6 +956,7 @@ get_header();
                         if (data && data.length > 0 && data[0].lat && data[0].lon) {
                             latField.value = parseFloat(data[0].lat).toFixed(6);
                             lngField.value = parseFloat(data[0].lon).toFixed(6);
+                            updateVerifyLink();
                             showToast('住所から座標を自動取得しました');
                         } else {
                             showToast('座標を取得できませんでした。緯度経度を手動で入力してください。', 'error');
