@@ -5568,12 +5568,54 @@ PROMPT;
             }
         }
 
+        // 住所のみ入力で緯度経度なし → Nominatim ジオコーディングで自動取得
+        $geocoded = false;
+        if ( $address !== '' && $lat === '' && $lng === '' ) {
+            $geo_url = 'https://nominatim.openstreetmap.org/search?' . http_build_query( [
+                'q'            => $address,
+                'format'       => 'json',
+                'limit'        => 1,
+                'countrycodes' => 'jp',
+            ] );
+            $geo_response = wp_remote_get( $geo_url, [
+                'timeout'    => 10,
+                'user-agent' => 'MimamoriWeb/1.0 (mimamori-web.jp)',
+            ] );
+
+            if ( is_wp_error( $geo_response ) ) {
+                file_put_contents( '/tmp/gcrev_meo_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " Nominatim API ERROR: " . $geo_response->get_error_message() . "\n",
+                    FILE_APPEND
+                );
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => '住所から座標を取得できませんでした。緯度経度を直接入力してください。',
+                ], 400);
+            }
+
+            $geo_body = json_decode( wp_remote_retrieve_body( $geo_response ), true );
+            if ( empty( $geo_body ) || ! isset( $geo_body[0]['lat'], $geo_body[0]['lon'] ) ) {
+                file_put_contents( '/tmp/gcrev_meo_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " Nominatim no results for: {$address}\n",
+                    FILE_APPEND
+                );
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => '「' . $address . '」の座標が見つかりませんでした。より具体的な住所を入力するか、緯度経度を直接入力してください。',
+                ], 400);
+            }
+
+            $lat = (string) $geo_body[0]['lat'];
+            $lng = (string) $geo_body[0]['lon'];
+            $geocoded = true;
+        }
+
         // 基準地点を保存
         update_user_meta( $user_id, '_gcrev_meo_address', $address );
         update_user_meta( $user_id, '_gcrev_meo_base_label', $label );
         update_user_meta( $user_id, '_gcrev_meo_base_updated', current_time( 'mysql' ) );
 
-        // 緯度経度の保存（空の場合は削除して location_code モードに戻す）
+        // 緯度経度の保存
         if ( $lat !== '' && $lng !== '' ) {
             update_user_meta( $user_id, '_gcrev_meo_lat', $lat );
             update_user_meta( $user_id, '_gcrev_meo_lng', $lng );
@@ -5595,10 +5637,15 @@ PROMPT;
             '%gcrev_meo_' . $user_id . '%'
         ) );
 
+        $message = $geocoded
+            ? '住所から座標を自動取得し、基準地点を保存しました'
+            : '基準地点を保存しました';
+
         return new \WP_REST_Response([
-            'success' => true,
-            'message' => '基準地点を保存しました',
-            'data'    => [
+            'success'  => true,
+            'geocoded' => $geocoded,
+            'message'  => $message,
+            'data'     => [
                 'address'      => $address,
                 'lat'          => $lat,
                 'lng'          => $lng,

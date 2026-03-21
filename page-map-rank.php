@@ -964,7 +964,7 @@ get_header();
                     baseSaveBtn.innerHTML = '&#x1F4BE; 保存する';
                     if (json.success) {
                         closeBaseModal();
-                        showToast('基準地点を保存しました。');
+                        showToast(json.message || '基準地点を保存しました。');
                         fetchMeoData(); // Reload to reflect changes
                     } else {
                         showToast(json.message || '保存に失敗しました。', 'error');
