@@ -394,7 +394,7 @@ get_header();
 .rt-toast {
     position: fixed;
     bottom: 24px;
-    right: 24px;
+    left: 24px;
     background: #1a1a1a;
     color: #fff;
     padding: 14px 20px;
