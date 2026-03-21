@@ -789,6 +789,20 @@ get_header();
                 &#x1F4A1; 緯度経度を設定すると、その地点を中心にマップ順位を計測します。<br>
                 <a href="https://www.google.com/maps" target="_blank" rel="noopener" style="color:#568184;">Googleマップ</a>で地点を右クリック→座標をコピーして貼り付けできます。
             </div>
+            <div class="meo-base-modal__field">
+                <label class="meo-base-modal__label" for="meoBaseRadius">検索半径</label>
+                <select class="meo-base-modal__input" id="meoBaseRadius" style="max-width:200px;">
+                    <option value="500">500m</option>
+                    <option value="1000" selected>1km</option>
+                    <option value="2000">2km</option>
+                    <option value="3000">3km</option>
+                    <option value="5000">5km</option>
+                    <option value="10000">10km</option>
+                    <option value="20000">20km</option>
+                    <option value="50000">50km</option>
+                </select>
+                <div style="font-size:11px; color:#9ca3af; margin-top:4px;">基準地点を中心に、この半径内での順位を計測します</div>
+            </div>
             <div class="meo-base-modal__actions">
                 <button class="rt-btn" id="meoBaseCancelBtn" type="button">キャンセル</button>
                 <button class="rt-btn rt-btn--primary" id="meoBaseSaveBtn" type="button">&#x1F4BE; 保存する</button>
@@ -881,16 +895,17 @@ get_header();
 
         function openBaseModal() {
             if (!baseModal) return;
-            // Pre-fill from current data
             var addrInput = document.getElementById('meoBaseAddress');
             var labelInput = document.getElementById('meoBaseLabel');
             var latInput = document.getElementById('meoBaseLat');
             var lngInput = document.getElementById('meoBaseLng');
+            var radiusInput = document.getElementById('meoBaseRadius');
             if (meoData && meoData.location) {
                 if (addrInput && meoData.location.address) addrInput.value = meoData.location.address;
                 if (labelInput && meoData.location.base_label) labelInput.value = meoData.location.base_label;
                 if (latInput && meoData.location.lat) latInput.value = meoData.location.lat;
                 if (lngInput && meoData.location.lng) lngInput.value = meoData.location.lng;
+                if (radiusInput && meoData.location.radius) radiusInput.value = String(meoData.location.radius);
             }
             baseModal.classList.add('active');
         }
@@ -934,7 +949,8 @@ get_header();
                 baseSaveBtn.disabled = true;
                 baseSaveBtn.textContent = '保存中...';
 
-                var payload = { address: address, label: label };
+                var radius = document.getElementById('meoBaseRadius').value || '1000';
+                var payload = { address: address, label: label, radius: parseInt(radius, 10) };
                 if (lat && lng) {
                     payload.lat = lat;
                     payload.lng = lng;

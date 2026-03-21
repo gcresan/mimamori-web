@@ -5374,6 +5374,12 @@ PROMPT;
             delete_user_meta( $user_id, '_gcrev_meo_lng' );
         }
 
+        // 半径の保存
+        $radius = isset( $params['radius'] ) ? absint( $params['radius'] ) : 0;
+        if ( $radius >= 100 && $radius <= 50000 ) {
+            update_user_meta( $user_id, '_gcrev_meo_radius', $radius );
+        }
+
         // MEOキャッシュ削除
         global $wpdb;
         $wpdb->query( $wpdb->prepare(
@@ -5388,6 +5394,7 @@ PROMPT;
                 'address'      => $address,
                 'lat'          => $lat,
                 'lng'          => $lng,
+                'radius'       => $radius ?: (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000,
                 'base_label'   => $label,
                 'base_updated' => current_time( 'mysql' ),
             ],
