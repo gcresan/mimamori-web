@@ -322,13 +322,14 @@ class Gcrev_MEO_Diagnostic_Service {
             return [];
         }
 
-        $location_id = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
-        if ( empty( $location_id ) || strpos( $location_id, 'pending_' ) === 0 ) {
+        $account_name = $this->api->gbp_get_account_for_location( $user_id );
+        $location_id  = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( empty( $account_name ) || empty( $location_id ) || strpos( $location_id, 'pending_' ) === 0 ) {
             return [];
         }
 
-        // まず locations/{id}/media を試す
-        $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$location_id}/media"
+        // GBP v4 API でメディア一覧取得（レビュー・投稿と同じAPIホスト）
+        $url = "https://mybusiness.googleapis.com/v4/{$account_name}/{$location_id}/media"
              . '?pageSize=100';
         $this->log( "collect_photos: fetching url={$url}" );
 
@@ -337,33 +338,32 @@ class Gcrev_MEO_Diagnostic_Service {
             'timeout' => 20,
         ] );
 
-        $status = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
-
-        // 404 なら account_name/location_id/media でリトライ
-        if ( $status === 404 ) {
-            $account_name = $this->api->gbp_get_account_for_location( $user_id );
-            if ( ! empty( $account_name ) ) {
-                $retry_url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$account_name}/{$location_id}/media"
-                           . '?pageSize=100';
-                $this->log( "collect_photos: retrying with account url={$retry_url}" );
-                $response = wp_remote_get( $retry_url, [
-                    'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
-                    'timeout' => 20,
-                ] );
-                $status = is_wp_error( $response ) ? 0 : wp_remote_retrieve_response_code( $response );
-            }
-        }
-
-        if ( is_wp_error( $response ) || $status !== 200 ) {
-            $err = is_wp_error( $response ) ? $response->get_error_message() : "HTTP {$status}";
-            $this->log( "collect_photos API ERROR: {$err}" );
+        if ( is_wp_error( $response ) ) {
+            $this->log( "collect_photos API WP_Error: " . $response->get_error_message() );
             return [];
         }
 
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-        $count = count( $body['mediaItems'] ?? [] );
-        $this->log( "collect_photos: SUCCESS {$count} items" );
-        return $body['mediaItems'] ?? [];
+        $status   = wp_remote_retrieve_response_code( $response );
+        $raw_body = wp_remote_retrieve_body( $response );
+
+        if ( $status !== 200 ) {
+            $this->log( "collect_photos API HTTP {$status}: " . substr( $raw_body, 0, 500 ) );
+            return [];
+        }
+
+        $body  = json_decode( $raw_body, true );
+        $items = $body['mediaItems'] ?? [];
+        $this->log( "collect_photos: SUCCESS " . count( $items ) . " items" );
+
+        // レスポンス構造をログ（初回デバッグ用、最初の1件のキーを出力）
+        if ( ! empty( $items ) ) {
+            $this->log( "collect_photos: sample keys=" . wp_json_encode( array_keys( $items[0] ), JSON_UNESCAPED_UNICODE ) );
+            if ( isset( $items[0]['locationAssociation'] ) ) {
+                $this->log( "collect_photos: locationAssociation=" . wp_json_encode( $items[0]['locationAssociation'], JSON_UNESCAPED_UNICODE ) );
+            }
+        }
+
+        return $items;
     }
 
     private function collect_rankings( int $user_id ): array {
@@ -622,12 +622,20 @@ class Gcrev_MEO_Diagnostic_Service {
         $newest_create = null;
 
         foreach ( $photos as $photo ) {
-            $cat = $photo['locationAssociation']['category'] ?? $photo['mediaFormat'] ?? '';
-            if ( $cat === 'LOGO' ) $has_logo = true;
+            // GBP v4 Media API: カテゴリは複数の場所に存在し得る
+            $cat = $photo['locationAssociation']['category']
+                ?? $photo['category']
+                ?? $photo['mediaFormat']
+                ?? '';
+
+            if ( $cat === 'LOGO' || $cat === 'PROFILE' ) $has_logo = true;
             if ( $cat === 'COVER' ) $has_cover = true;
-            if ( in_array( $cat, [ 'EXTERIOR', 'INTERIOR', 'PRODUCT', 'AT_WORK', 'FOOD_AND_DRINK' ], true ) ) {
+
+            $diversity_cats = [ 'EXTERIOR', 'INTERIOR', 'PRODUCT', 'AT_WORK', 'FOOD_AND_DRINK', 'MENU', 'COMMON_AREA', 'TEAMS', 'ADDITIONAL' ];
+            if ( in_array( $cat, $diversity_cats, true ) ) {
                 $categories_found[ $cat ] = true;
             }
+
             $created = $photo['createTime'] ?? '';
             if ( $created && ( ! $newest_create || $created > $newest_create ) ) {
                 $newest_create = $created;
