@@ -661,7 +661,7 @@ get_header();
             <span class="meo-condition-value" id="meoRadiusDisplay">-</span>
         </div>
         <!-- 地点変更ボタン -->
-        <div class="meo-condition-group" id="meoBaseChangeBtnGroup" style="display:none;">
+        <div class="meo-condition-group" id="meoBaseChangeBtnGroup" style="display:none; margin-top:6px;">
             <button class="meo-base-change-btn" id="meoBaseChangeBtn" type="button">&#x1F4CD; 地点変更</button>
         </div>
 <?php if ( $maps_domain !== '' ) : ?>
