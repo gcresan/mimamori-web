@@ -1570,8 +1570,9 @@ class Gcrev_Insight_API {
             }
 
             // --- (3) KPIトレンド（過去12ヶ月推移）キャッシュ ---
+            $trend_filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
             foreach (['sessions', 'cv', 'meo'] as $trend_metric) {
-                $trend_cache_key = "gcrev_trend_{$user_id}_{$trend_metric}_" . date('Y-m');
+                $trend_cache_key = "gcrev_trend_{$user_id}_{$trend_metric}_" . date('Y-m') . $trend_filter_sfx;
                 if (get_transient($trend_cache_key) !== false) {
                     continue;
                 }
@@ -1582,6 +1583,21 @@ class Gcrev_Insight_API {
                     $user_had_error = true;
                 }
                 usleep(self::PREFETCH_SLEEP_US);
+            }
+
+            // --- (3b) 日次トレンド（ダッシュボードグラフ用）---
+            $today_str = date('Y-m-d');
+            foreach ( ['sessions', 'cv', 'meo'] as $daily_metric ) {
+                $daily_trend_key = "gcrev_trend_daily_{$user_id}_{$daily_metric}_{$today_str}{$trend_filter_sfx}";
+                if ( get_transient( $daily_trend_key ) !== false ) {
+                    continue;
+                }
+                try {
+                    $this->get_daily_metric_trend( $user_id, $daily_metric, 30 );
+                } catch ( \Exception $e ) {
+                    // 日次トレンドの失敗はユーザーエラーにカウントしない（補助データ）
+                }
+                usleep( self::PREFETCH_SLEEP_US );
             }
 
             // --- (4) 比較期間キャッシュ + スコア事前計算 ---
@@ -1704,10 +1720,12 @@ class Gcrev_Insight_API {
         $log_id_key   = "gcrev_current_prefetch_slot_{$slot}_log_id";
         $chunk_hook   = "gcrev_prefetch_chunk_slot_{$slot}_event";
 
+        $log_file = '/tmp/gcrev_prefetch_debug.log';
+
         // ─── 重複実行防止ロック（最初のチャンクのみ設定） ───
         if ( $offset === 0 ) {
             if ( get_transient( $lock_key ) ) {
-                error_log( "[GCREV] prefetch_slot_{$slot}: LOCKED, skipping" );
+                $this->prefetch_log_file( $log_file, "slot_{$slot}: LOCKED, skipping" );
                 if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                     $locked_id = Gcrev_Cron_Logger::start( "prefetch_slot_{$slot}", [ 'note' => 'locked' ] );
                     Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
@@ -1724,18 +1742,18 @@ class Gcrev_Insight_API {
 
         $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( $log_id_key ) : 0;
 
-        error_log( "[GCREV] prefetch_slot_{$slot} START: offset={$offset}, limit={$limit}" );
+        $this->prefetch_log_file( $log_file, "slot_{$slot} chunk START: offset={$offset}, limit={$limit}" );
 
         // スロット別ユーザー取得
         if ( ! class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
-            error_log( "[GCREV] prefetch_slot_{$slot}: Gcrev_Prefetch_Scheduler not loaded, aborting" );
+            $this->prefetch_log_file( $log_file, "slot_{$slot}: Gcrev_Prefetch_Scheduler not loaded, aborting" );
             return;
         }
 
         $user_ids = Gcrev_Prefetch_Scheduler::get_users_for_slot( $slot, $limit, $offset );
 
         if ( empty( $user_ids ) ) {
-            error_log( "[GCREV] prefetch_slot_{$slot}: No users at offset={$offset}. DONE." );
+            $this->prefetch_log_file( $log_file, "slot_{$slot}: No users at offset={$offset}. DONE." );
             delete_transient( $lock_key );
             if ( $log_id > 0 ) {
                 Gcrev_Cron_Logger::finish( $log_id, 'success' );
@@ -1744,17 +1762,19 @@ class Gcrev_Insight_API {
             return;
         }
 
-        // 日次プリフェッチ: スライド期間のみ
-        $ranges = ['last30', 'last90'];
+        // 日次プリフェッチ: 全期間を毎日取得（スロット版もレガシー版と同じ全期間対応）
+        $ranges = ['last30', 'last90', 'previousMonth', 'twoMonthsAgo', 'last180', 'last365'];
+        $analysis_periods = ['last30', 'last90', 'prev-month', 'prev-prev-month', 'last180', 'last365'];
+        $log_file = '/tmp/gcrev_prefetch_debug.log';
 
         foreach ( $user_ids as $user_id ) {
-            error_log( "[GCREV] Prefetch slot_{$slot} processing: user_id={$user_id}" );
+            $this->prefetch_log_file( $log_file, "slot_{$slot} START user_id={$user_id} ranges=" . implode( ',', $ranges ) );
             $user_had_error = false;
 
             try {
                 $config = $this->config->get_user_config( $user_id );
             } catch ( \Exception $e ) {
-                error_log( "[GCREV] Prefetch slot_{$slot} SKIP user_id={$user_id}: " . $e->getMessage() );
+                $this->prefetch_log_file( $log_file, "slot_{$slot} SKIP user_id={$user_id}: " . $e->getMessage() );
                 if ( $log_id > 0 ) {
                     Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $e->getMessage() );
                 }
@@ -1765,49 +1785,122 @@ class Gcrev_Insight_API {
             $filter_set      = $this->maybe_set_country_filter( $user_id );
             $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
-            // --- (1) ダッシュボード ---
+            // --- (1) ダッシュボード（全6期間） ---
             foreach ( $ranges as $range ) {
                 $cached = $this->dashboard_cache_get( $user_id, $range );
                 if ( $cached ) {
+                    $this->prefetch_log_file( $log_file, "slot_{$slot} SKIP user_id={$user_id} period={$range} reason=cache_hit" );
                     continue;
                 }
                 try {
+                    $range_start = microtime( true );
                     $data = $this->fetch_dashboard_data_internal( $config, $range );
                     $this->dashboard_cache_set( $user_id, $range, $data );
+                    $elapsed = round( microtime( true ) - $range_start, 1 );
+                    $this->prefetch_log_file( $log_file, "slot_{$slot} OK user_id={$user_id} period={$range} elapsed={$elapsed}s" );
                 } catch ( \Exception $e ) {
-                    error_log( "[GCREV] Prefetch slot_{$slot} ERROR user_id={$user_id}, range={$range}: " . $e->getMessage() );
+                    $this->prefetch_log_file( $log_file, "slot_{$slot} FAIL user_id={$user_id} period={$range} error=" . $e->getMessage() );
                     $user_had_error = true;
                 }
                 usleep( self::PREFETCH_SLEEP_US );
             }
 
-            // --- (2) 分析ページ（日次は last30 + last90） ---
-            foreach ( ['last30', 'last90'] as $period ) {
+            // --- (2) 分析ページ（全期間） ---
+            foreach ( $analysis_periods as $period ) {
                 $this->prefetch_analysis_caches( $user_id, $config, $period );
             }
 
             // --- (3) KPIトレンド ---
+            $trend_filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
             foreach ( ['sessions', 'cv', 'meo'] as $trend_metric ) {
-                $trend_cache_key = "gcrev_trend_{$user_id}_{$trend_metric}_" . date( 'Y-m' );
+                $trend_cache_key = "gcrev_trend_{$user_id}_{$trend_metric}_" . date( 'Y-m' ) . $trend_filter_sfx;
                 if ( get_transient( $trend_cache_key ) !== false ) {
                     continue;
                 }
                 try {
                     $this->get_monthly_metric_trend( $user_id, $trend_metric, 12 );
                 } catch ( \Exception $e ) {
-                    error_log( "[GCREV] Prefetch slot_{$slot} trend ERROR user_id={$user_id}: " . $e->getMessage() );
+                    $this->prefetch_log_file( $log_file, "slot_{$slot} trend FAIL user_id={$user_id} metric={$trend_metric} error=" . $e->getMessage() );
                     $user_had_error = true;
                 }
                 usleep( self::PREFETCH_SLEEP_US );
             }
 
+            // --- (3b) 日次トレンド（ダッシュボードグラフ用）---
+            $today_str = date('Y-m-d');
+            foreach ( ['sessions', 'cv', 'meo'] as $daily_metric ) {
+                $daily_trend_key = "gcrev_trend_daily_{$user_id}_{$daily_metric}_{$today_str}{$trend_filter_sfx}";
+                if ( get_transient( $daily_trend_key ) !== false ) {
+                    continue;
+                }
+                try {
+                    $this->get_daily_metric_trend( $user_id, $daily_metric, 30 );
+                } catch ( \Exception $e ) {
+                    // 日次トレンドの失敗はユーザーエラーにカウントしない（補助データ）
+                }
+                usleep( self::PREFETCH_SLEEP_US );
+            }
+
+            // --- (4) 比較期間キャッシュ + スコア事前計算（ダッシュボード即表示用） ---
+            try {
+                $last30_dates = $this->dates->get_date_range('last30');
+                $last30_comp  = $this->dates->get_comparison_range($last30_dates['start'], $last30_dates['end']);
+                $filter_suffix_pf = $exclude_foreign ? '_filtered' : '';
+                $comp_cache_key   = "gcrev_dash_bydate_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
+                $comp_cached      = get_transient( $comp_cache_key );
+
+                if ( ! $comp_cached ) {
+                    $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id );
+                    $this->prefetch_log_file( $log_file, "slot_{$slot} comparison OK user_id={$user_id}" );
+                } else {
+                    $comp_data = $comp_cached;
+                }
+
+                // スコア事前計算・KPI transient に保存
+                $kpi_filter_suffix = $exclude_foreign ? '_jp' : '';
+                $kpi_cache_key = "gcrev_dash_{$user_id}_last30{$kpi_filter_suffix}";
+                $kpi_cached    = get_transient( $kpi_cache_key );
+                if ( $kpi_cached && is_array( $kpi_cached ) && ! isset( $kpi_cached['_cached_score'] ) ) {
+                    $sess_c  = (int) str_replace( ',', '', (string)( $kpi_cached['sessions'] ?? '0' ) );
+                    $sess_p  = (int) str_replace( ',', '', (string)( $comp_data['sessions'] ?? '0' ) );
+                    $cv_c    = (int) str_replace( ',', '', (string)( $kpi_cached['conversions'] ?? '0' ) );
+                    $cv_p    = (int) str_replace( ',', '', (string)( $comp_data['conversions'] ?? '0' ) );
+                    $gsc_c   = (int) str_replace( ',', '', (string)( $kpi_cached['gsc']['total']['clicks'] ?? $kpi_cached['gsc']['total']['impressions'] ?? '0' ) );
+                    $gsc_p   = (int) str_replace( ',', '', (string)( $comp_data['gsc']['total']['clicks'] ?? $comp_data['gsc']['total']['impressions'] ?? '0' ) );
+
+                    $meo_cache_c = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_dates['start']}_{$last30_dates['end']}" );
+                    $meo_cache_p = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}" );
+                    $meo_c = ( $meo_cache_c !== false && is_array( $meo_cache_c ) ) ? (int)( $meo_cache_c['total_impressions'] ?? 0 ) : 0;
+                    $meo_p = ( $meo_cache_p !== false && is_array( $meo_cache_p ) ) ? (int)( $meo_cache_p['total_impressions'] ?? 0 ) : 0;
+
+                    $score_curr = [ 'traffic' => $sess_c, 'cv' => $cv_c, 'gsc' => $gsc_c, 'meo' => $meo_c ];
+                    $score_prev = [ 'traffic' => $sess_p, 'cv' => $cv_p, 'gsc' => $gsc_p, 'meo' => $meo_p ];
+                    $health = $this->calc_monthly_health_score( $score_curr, $score_prev, [], $user_id );
+
+                    $kpi_cached['_cached_score'] = [
+                        'score'      => $health['score'],
+                        'status'     => $health['status'],
+                        'breakdown'  => $health['breakdown'],
+                        'components' => $health['components'],
+                    ];
+                    set_transient( $kpi_cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
+                    $this->prefetch_log_file( $log_file, "slot_{$slot} score OK user_id={$user_id} score={$health['score']}" );
+                }
+            } catch ( \Exception $e ) {
+                $this->prefetch_log_file( $log_file, "slot_{$slot} comparison/score FAIL user_id={$user_id} error=" . $e->getMessage() );
+                $user_had_error = true;
+            }
+            usleep( self::PREFETCH_SLEEP_US );
+
             // 国フィルタ + パスフィルタ解除（REST エンドポイントと同じ関数を使用）
             $this->restore_country_filter( $filter_set );
 
-            // ステータス記録
+            // ステータス記録（全期間分）
             foreach ( $ranges as $r ) {
                 $this->record_prefetch_status( $user_id, $r, 'all', $user_had_error ? 'error' : 'success', null, 'cron' );
             }
+
+            $this->prefetch_log_file( $log_file, "slot_{$slot} DONE user_id={$user_id} status=" . ( $user_had_error ? 'error' : 'success' ) );
 
             if ( $log_id > 0 ) {
                 Gcrev_Cron_Logger::log_user(
@@ -1824,10 +1917,10 @@ class Gcrev_Insight_API {
 
         if ( Gcrev_Prefetch_Scheduler::has_more_users( $slot, $next_offset ) ) {
             wp_schedule_single_event( time() + 10, $chunk_hook, [ $slot, $next_offset, $limit ] );
-            error_log( "[GCREV] prefetch_slot_{$slot}: Scheduled next chunk offset={$next_offset}" );
+            $this->prefetch_log_file( $log_file, "slot_{$slot}: Scheduled next chunk offset={$next_offset}" );
         } else {
             delete_transient( $lock_key );
-            error_log( "[GCREV] prefetch_slot_{$slot}: DONE." );
+            $this->prefetch_log_file( $log_file, "slot_{$slot}: ALL DONE." );
             if ( $log_id > 0 ) {
                 Gcrev_Cron_Logger::finish( $log_id, 'success' );
                 delete_transient( $log_id_key );
@@ -3297,6 +3390,17 @@ class Gcrev_Insight_API {
         file_put_contents(
             '/tmp/gcrev_cron_debug.log',
             date( 'Y-m-d H:i:s' ) . ' ' . $message . "\n",
+            FILE_APPEND
+        );
+    }
+
+    /**
+     * 指定ファイルへのプリフェッチログ出力（スロット版用）
+     */
+    private function prefetch_log_file( string $file, string $message ): void {
+        file_put_contents(
+            $file,
+            date( 'Y-m-d H:i:s' ) . ' [PREFETCH] ' . $message . "\n",
             FILE_APPEND
         );
     }
