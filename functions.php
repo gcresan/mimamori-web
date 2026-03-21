@@ -497,6 +497,21 @@ function gcrev_save_business_name_field( $user_id ) {
     update_user_meta( $user_id, 'gcrev_business_name', $value );
 }
 
+// ユーザー一覧の「名前」列を事業者名に差し替え
+add_filter( 'manage_users_columns', function ( $columns ) {
+    if ( isset( $columns['name'] ) ) {
+        $columns['name'] = '事業者名';
+    }
+    return $columns;
+} );
+
+add_filter( 'manage_users_custom_column', function ( $output, $column_name, $user_id ) {
+    if ( 'name' === $column_name ) {
+        return esc_html( gcrev_get_business_name( $user_id ) );
+    }
+    return $output;
+}, 10, 3 );
+
 // 既存データ一括移行: last_name → gcrev_business_name（1回限り実行）
 add_action( 'admin_init', 'gcrev_migrate_business_name' );
 
