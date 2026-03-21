@@ -466,6 +466,23 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== MEO診断 =====
+        register_rest_route('gcrev/v1', '/meo/diagnostic/run', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_run_meo_diagnostic' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/diagnostic/list', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_meo_diagnostic_list' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/meo/diagnostic/(?P<id>\d+)', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_meo_diagnostic_detail' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== 口コミ管理（GBP Reviews API） =====
         register_rest_route('gcrev/v1', '/meo/reviews', [
             'methods'             => 'GET',
@@ -5353,6 +5370,74 @@ PROMPT;
                 'base_updated' => current_time( 'mysql' ),
             ],
         ]);
+    }
+
+
+    // =========================================================
+    // MEO診断 REST コールバック
+    // =========================================================
+
+    public function rest_run_meo_diagnostic( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'ログインが必要です' ], 401 );
+        }
+
+        // レート制限（1時間に1回）
+        $lock_key = "gcrev_meo_diag_lock_{$user_id}";
+        if ( get_transient( $lock_key ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '診断は1時間に1回まで実行できます。しばらくお待ちください。' ], 429 );
+        }
+        set_transient( $lock_key, 1, 3600 );
+
+        set_time_limit( 120 );
+
+        try {
+            $service = new \Gcrev_MEO_Diagnostic_Service( $this->config, $this->ai, $this->repo, $this );
+            $result  = $service->run_diagnostic( $user_id );
+
+            if ( ! $result['success'] ) {
+                delete_transient( $lock_key );
+            }
+
+            return new \WP_REST_Response( $result, $result['success'] ? 200 : 400 );
+        } catch ( \Exception $e ) {
+            delete_transient( $lock_key );
+            file_put_contents( '/tmp/gcrev_meo_diag_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [REST] run_diagnostic ERROR: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '診断中にエラーが発生しました: ' . $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_get_meo_diagnostic_list( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'ログインが必要です' ], 401 );
+        }
+
+        $service = new \Gcrev_MEO_Diagnostic_Service( $this->config, $this->ai, $this->repo, $this );
+        $history = $service->get_history( $user_id );
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $history ], 200 );
+    }
+
+    public function rest_get_meo_diagnostic_detail( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'ログインが必要です' ], 401 );
+        }
+
+        $post_id = (int) $request->get_param( 'id' );
+        $service = new \Gcrev_MEO_Diagnostic_Service( $this->config, $this->ai, $this->repo, $this );
+        $data    = $service->get_by_id( $post_id, $user_id );
+
+        if ( ! $data ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '診断レポートが見つかりません' ], 404 );
+        }
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $data ], 200 );
     }
 
 
@@ -14935,7 +15020,7 @@ PROMPT;
      * ユーザーの GBP ロケーションに対応するアカウント名を取得
      * 結果は user meta にキャッシュする
      */
-    private function gbp_get_account_for_location( int $user_id ): ?string {
+    public function gbp_get_account_for_location( int $user_id ): ?string {
         $cached = get_user_meta( $user_id, '_gcrev_gbp_account_name', true );
         if ( ! empty( $cached ) ) {
             return $cached;
@@ -14992,7 +15077,7 @@ PROMPT;
     /**
      * GBP Reviews API でレビュー一覧を取得
      */
-    private function gbp_fetch_reviews( int $user_id, string $page_token = '' ): array {
+    public function gbp_fetch_reviews( int $user_id, string $page_token = '' ): array {
         // キャッシュ（ページトークンなしの1ページ目のみ）
         if ( empty( $page_token ) ) {
             $cached = get_transient( "gcrev_reviews_{$user_id}" );

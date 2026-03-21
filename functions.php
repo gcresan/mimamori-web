@@ -857,6 +857,14 @@ if ( file_exists( $mimamori_updates_api ) ) {
 }
 
 // ========================================
+// MEO Diagnostic Service（MEO診断）
+// ========================================
+$gcrev_meo_diag = $gcrev_modules_path . 'class-meo-diagnostic-service.php';
+if ( file_exists( $gcrev_meo_diag ) ) {
+    require_once $gcrev_meo_diag;
+}
+
+// ========================================
 // Step7: AIO Service（AI検索スコア）
 // ========================================
 $gcrev_aio_service = $gcrev_modules_path . 'class-aio-service.php';

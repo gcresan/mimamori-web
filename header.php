@@ -108,7 +108,7 @@
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ全部閉じ ---
       $report_pages    = array('report-latest','report-archive','annual-report');
       $ranking_pages   = array('rank-tracker','map-rank');
-      $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis');
+      $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
