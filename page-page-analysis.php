@@ -1238,9 +1238,22 @@ get_header();
         console.log('[Heatmap] deviceKey:', deviceKey, 'devMetrics:', JSON.stringify(devMetrics));
 
         if (Object.keys(metrics).length === 0) {
-            hmSummaryGrid.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください</div>';
+            hmSummaryGrid.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください'
+                + '<br><small style="color:#94a3b8;">clarity_data: ' + (clarity ? JSON.stringify(Object.keys(clarity)).substring(0, 200) : 'null') + '</small></div>';
             return;
         }
+
+        // デバッグ: 実データ構造を画面に表示（開発中のみ）
+        var debugHtml = '<div style="margin-top:12px;padding:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:11px;word-break:break-all;">'
+            + '<strong>📋 clarity_data構造（デバッグ）:</strong><br>'
+            + 'metrics keys: ' + JSON.stringify(Object.keys(metrics)) + '<br>'
+            + 'scroll_depth: ' + JSON.stringify(metrics.scroll_depth) + '<br>'
+            + 'engagement_time: ' + JSON.stringify(metrics.engagement_time) + '<br>'
+            + 'traffic: ' + JSON.stringify(metrics.traffic) + '<br>'
+            + 'dead_click_count: ' + JSON.stringify(metrics.dead_click_count) + '<br>'
+            + 'devices keys: ' + JSON.stringify(Object.keys(clarity.devices || {})) + '<br>'
+            + 'devMetrics(' + deviceKey + '): ' + JSON.stringify(devMetrics).substring(0, 300)
+            + '</div>';
 
         // Clarity APIの実レスポンスキー:
         // sessionsCount, sessionsWithMetricPercentage, pagesViews, subTotal
@@ -1306,7 +1319,8 @@ get_header();
             + stat('Dead Click', dcCount, '無反応クリック')
             + stat('Rage Click', rcCount, '連打クリック')
             + stat('エンゲージメント', engDisplay, '')
-            + stat('Error Click', ecCount, 'エラークリック');
+            + stat('Error Click', ecCount, 'エラークリック')
+            + debugHtml;
     }
 
     // --- タブ切り替え ---
