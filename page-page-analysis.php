@@ -445,9 +445,14 @@ get_header();
     display: block;
     width: 100%;
     height: auto;
+    position: relative;
+    z-index: 1;
 }
 .hm-canvas-wrap canvas {
     position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
     pointer-events: none;
 }
 .hm-empty {
@@ -983,24 +988,19 @@ get_header();
         hmImage.src = imgUrl;
 
         hmImage.onload = function() {
-            // 画像の実表示サイズを取得
-            var rect = hmImage.getBoundingClientRect();
             var dpr = window.devicePixelRatio || 1;
+            var imgW = hmImage.offsetWidth;
+            var imgH = hmImage.offsetHeight;
 
-            // Canvas内部解像度をRetina対応
-            hmCanvas.width  = Math.round(rect.width * dpr);
-            hmCanvas.height = Math.round(rect.height * dpr);
-
-            // CSS表示サイズを画像と完全一致
-            hmCanvas.style.width  = rect.width + 'px';
-            hmCanvas.style.height = rect.height + 'px';
-            hmCanvas.style.position = 'absolute';
-            hmCanvas.style.top = hmImage.offsetTop + 'px';
-            hmCanvas.style.left = hmImage.offsetLeft + 'px';
+            // Canvas サイズ（Retina対応）
+            hmCanvas.width  = imgW * dpr;
+            hmCanvas.height = imgH * dpr;
+            hmCanvas.style.width  = imgW + 'px';
+            hmCanvas.style.height = imgH + 'px';
 
             var ctx = hmCanvas.getContext('2d');
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            drawOverlay(metric, device, data, rect.width, rect.height);
+            drawOverlay(metric, device, data, imgW, imgH);
         };
 
         // サマリー描画
@@ -1012,8 +1012,15 @@ get_header();
         var w = cssW || hmCanvas.width;
         var h = cssH || hmCanvas.height;
 
+        // 描画クリア
+        ctx.clearRect(0, 0, w, h);
+
         var clarity = data.clarity_data || {};
         var metrics = clarity.metrics || {};
+        // データがなくてもスクロール深度のガイドは常に表示
+        if (Object.keys(metrics).length === 0 && metric === 'scroll') {
+            metrics = {}; // 空でも描画関数は呼ぶ
+        }
         // Clarity API のデバイスキー: 'PC', 'Mobile', 'Tablet', 'Other'
         var devKey = device === 'mobile' ? 'Mobile' : 'PC';
         var deviceData = (clarity.devices && (clarity.devices[devKey] || clarity.devices['Desktop'])) || {};
