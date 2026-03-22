@@ -1243,17 +1243,7 @@ get_header();
             return;
         }
 
-        // デバッグ: 実データ構造を画面に表示（開発中のみ）
-        var debugHtml = '<div style="margin-top:12px;padding:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:11px;word-break:break-all;">'
-            + '<strong>📋 clarity_data構造（デバッグ）:</strong><br>'
-            + 'metrics keys: ' + JSON.stringify(Object.keys(metrics)) + '<br>'
-            + 'scroll_depth: ' + JSON.stringify(metrics.scroll_depth) + '<br>'
-            + 'engagement_time: ' + JSON.stringify(metrics.engagement_time) + '<br>'
-            + 'traffic: ' + JSON.stringify(metrics.traffic) + '<br>'
-            + 'dead_click_count: ' + JSON.stringify(metrics.dead_click_count) + '<br>'
-            + 'devices keys: ' + JSON.stringify(Object.keys(clarity.devices || {})) + '<br>'
-            + 'devMetrics(' + deviceKey + '): ' + JSON.stringify(devMetrics).substring(0, 300)
-            + '</div>';
+        var debugHtml = '';
 
         // Clarity APIの実レスポンスキー:
         // sessionsCount, sessionsWithMetricPercentage, pagesViews, subTotal

@@ -462,25 +462,64 @@ class Gcrev_Clarity_Client {
         ];
 
         // URL別データの正規化
-        // Clarity API のキーは 'Url'（大文字U + 小文字rl）
+        // Clarity APIは ?gclid= 等パラメータ付きURLを個別に返すため、
+        // ベースURL（パラメータ除去）で集約する
         if ( ! empty( $responses['by_url']['data'] ) && is_array( $responses['by_url']['data'] ) ) {
             foreach ( $responses['by_url']['data'] as $metric_block ) {
                 $metric_name = $metric_block['metricName'] ?? '';
                 if ( empty( $metric_name ) ) continue;
 
                 $summary['available_metrics'][] = $metric_name;
+                $key = self::normalize_metric_key( $metric_name );
 
                 foreach ( $metric_block['information'] ?? [] as $row ) {
-                    $url = $row['Url'] ?? $row['URL'] ?? $row['url'] ?? '';
-                    if ( empty( $url ) ) continue;
+                    $raw_url = $row['Url'] ?? $row['URL'] ?? $row['url'] ?? '';
+                    if ( empty( $raw_url ) ) continue;
 
-                    if ( ! isset( $pages[ $url ] ) ) {
-                        $pages[ $url ] = [ 'metrics' => [], 'devices' => [] ];
+                    // ベースURL（クエリ・フラグメント除去）で集約
+                    $base_url = preg_replace( '/[?#].*$/', '', $raw_url );
+                    $base_url = rtrim( $base_url, '/' );
+                    if ( empty( $base_url ) ) continue;
+
+                    if ( ! isset( $pages[ $base_url ] ) ) {
+                        $pages[ $base_url ] = [ 'metrics' => [], 'devices' => [], '_raw_url_count' => 0 ];
                     }
+                    $pages[ $base_url ]['_raw_url_count']++;
 
-                    // メトリクス名を正規化キーに変換
-                    $key = self::normalize_metric_key( $metric_name );
-                    $pages[ $url ]['metrics'][ $key ] = self::extract_metric_value( $row, $metric_name );
+                    $values = self::extract_metric_value( $row, $metric_name );
+
+                    // 集約: sessionsCount は合算、率(%)は加重平均用に蓄積
+                    if ( ! isset( $pages[ $base_url ]['metrics'][ $key ] ) ) {
+                        $pages[ $base_url ]['metrics'][ $key ] = $values;
+                        $pages[ $base_url ]['metrics'][ $key ]['_agg_count'] = 1;
+                    } else {
+                        $existing = &$pages[ $base_url ]['metrics'][ $key ];
+                        $existing['_agg_count'] = ( $existing['_agg_count'] ?? 1 ) + 1;
+                        // sessionsCount: 合算
+                        if ( isset( $values['sessionsCount'] ) ) {
+                            $existing['sessionsCount'] = (string)( intval( $existing['sessionsCount'] ?? 0 ) + intval( $values['sessionsCount'] ) );
+                        }
+                        // pagesViews: 合算
+                        if ( isset( $values['pagesViews'] ) ) {
+                            $existing['pagesViews'] = (string)( intval( $existing['pagesViews'] ?? 0 ) + intval( $values['pagesViews'] ) );
+                        }
+                        // subTotal: 合算
+                        if ( isset( $values['subTotal'] ) ) {
+                            $existing['subTotal'] = (string)( intval( $existing['subTotal'] ?? 0 ) + intval( $values['subTotal'] ) );
+                        }
+                        // sessionsWithMetricPercentage: セッション数加重で再計算
+                        if ( isset( $values['sessionsWithMetricPercentage'] ) && isset( $values['sessionsCount'] ) ) {
+                            $s1 = intval( $existing['sessionsCount'] ?? 0 ) - intval( $values['sessionsCount'] ?? 0 );
+                            $s2 = intval( $values['sessionsCount'] ?? 0 );
+                            $total_s = $s1 + $s2;
+                            if ( $total_s > 0 ) {
+                                $p1 = floatval( $existing['sessionsWithMetricPercentage'] ?? 0 );
+                                $p2 = floatval( $values['sessionsWithMetricPercentage'] ?? 0 );
+                                $existing['sessionsWithMetricPercentage'] = round( ( $p1 * $s1 + $p2 * $s2 ) / $total_s, 2 );
+                            }
+                        }
+                        unset( $existing );
+                    }
                 }
             }
         }
@@ -497,7 +536,7 @@ class Gcrev_Clarity_Client {
             }
         }
 
-        // URL×Device データの正規化
+        // URL×Device データの正規化（ベースURLで集約）
         if ( ! empty( $responses['by_url_device']['data'] ) && is_array( $responses['by_url_device']['data'] ) ) {
             foreach ( $responses['by_url_device']['data'] as $metric_block ) {
                 $metric_name = $metric_block['metricName'] ?? '';
@@ -505,17 +544,48 @@ class Gcrev_Clarity_Client {
 
                 $key = self::normalize_metric_key( $metric_name );
                 foreach ( $metric_block['information'] ?? [] as $row ) {
-                    $url    = $row['Url'] ?? $row['URL'] ?? $row['url'] ?? '';
-                    $device = $row['Device'] ?? $row['device'] ?? '';
-                    if ( empty( $url ) || empty( $device ) ) continue;
+                    $raw_url = $row['Url'] ?? $row['URL'] ?? $row['url'] ?? '';
+                    $device  = $row['Device'] ?? $row['device'] ?? '';
+                    if ( empty( $raw_url ) || empty( $device ) ) continue;
 
-                    if ( ! isset( $pages[ $url ] ) ) {
-                        $pages[ $url ] = [ 'metrics' => [], 'devices' => [] ];
+                    $base_url = rtrim( preg_replace( '/[?#].*$/', '', $raw_url ), '/' );
+                    if ( empty( $base_url ) ) continue;
+
+                    if ( ! isset( $pages[ $base_url ] ) ) {
+                        $pages[ $base_url ] = [ 'metrics' => [], 'devices' => [], '_raw_url_count' => 0 ];
                     }
-                    if ( ! isset( $pages[ $url ]['devices'][ $device ] ) ) {
-                        $pages[ $url ]['devices'][ $device ] = [];
+                    if ( ! isset( $pages[ $base_url ]['devices'][ $device ] ) ) {
+                        $pages[ $base_url ]['devices'][ $device ] = [];
                     }
-                    $pages[ $url ]['devices'][ $device ][ $key ] = self::extract_metric_value( $row, $metric_name );
+
+                    $values = self::extract_metric_value( $row, $metric_name );
+
+                    if ( ! isset( $pages[ $base_url ]['devices'][ $device ][ $key ] ) ) {
+                        $pages[ $base_url ]['devices'][ $device ][ $key ] = $values;
+                    } else {
+                        // 合算
+                        $ex = &$pages[ $base_url ]['devices'][ $device ][ $key ];
+                        if ( isset( $values['sessionsCount'] ) ) {
+                            $ex['sessionsCount'] = (string)( intval( $ex['sessionsCount'] ?? 0 ) + intval( $values['sessionsCount'] ) );
+                        }
+                        if ( isset( $values['subTotal'] ) ) {
+                            $ex['subTotal'] = (string)( intval( $ex['subTotal'] ?? 0 ) + intval( $values['subTotal'] ) );
+                        }
+                        if ( isset( $values['pagesViews'] ) ) {
+                            $ex['pagesViews'] = (string)( intval( $ex['pagesViews'] ?? 0 ) + intval( $values['pagesViews'] ) );
+                        }
+                        if ( isset( $values['sessionsWithMetricPercentage'] ) && isset( $values['sessionsCount'] ) ) {
+                            $s1 = intval( $ex['sessionsCount'] ?? 0 ) - intval( $values['sessionsCount'] ?? 0 );
+                            $s2 = intval( $values['sessionsCount'] ?? 0 );
+                            $total_s = $s1 + $s2;
+                            if ( $total_s > 0 ) {
+                                $ex['sessionsWithMetricPercentage'] = round(
+                                    ( floatval( $ex['sessionsWithMetricPercentage'] ?? 0 ) * $s1 + floatval( $values['sessionsWithMetricPercentage'] ?? 0 ) * $s2 ) / $total_s, 2
+                                );
+                            }
+                        }
+                        unset( $ex );
+                    }
                 }
             }
         }
