@@ -1698,13 +1698,6 @@ get_header();
                         html += 'デバイス種別: ' + s.normalized.device_types.join(', ') + '<br>';
                     }
                 }
-                // デバッグ情報
-                if (s.normalized && s.normalized._debug_first_info_keys) {
-                    html += '<br><strong>APIレスポンスのキー構造:</strong> ' + s.normalized._debug_first_info_keys.join(', ') + '<br>';
-                }
-                if (s.normalized && s.normalized._debug_first_info) {
-                    html += '<strong>最初のデータ行:</strong> <code style="font-size:11px;word-break:break-all;">' + JSON.stringify(s.normalized._debug_first_info) + '</code><br>';
-                }
                 if (s.matched_urls && s.matched_urls.length > 0) {
                     html += '<br><strong>マッチしたURL:</strong><br>';
                     s.matched_urls.forEach(function(u) { html += '✅ ' + u + '<br>'; });
