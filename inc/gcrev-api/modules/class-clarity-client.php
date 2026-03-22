@@ -319,25 +319,44 @@ class Gcrev_Clarity_Client {
 
         if ( ! empty( $normalized['pages'] ) ) {
             $pa_table = $wpdb->prefix . 'gcrev_page_analysis';
+
+            // 登録済みページ一覧を取得（URL正規化マッチ用）
+            $registered = $wpdb->get_results( $wpdb->prepare(
+                "SELECT id, page_url FROM {$pa_table} WHERE user_id = %d AND status = 'active'",
+                $user_id
+            ), ARRAY_A );
+
+            // 正規化URLマップ: normalized_url => id
+            $url_map = [];
+            foreach ( $registered as $row ) {
+                $url_map[ self::normalize_url( $row['page_url'] ) ] = (int) $row['id'];
+            }
+
+            $now = current_time( 'Y-m-d H:i:s' );
+            $matched_urls   = [];
+            $unmatched_urls = [];
+
             foreach ( $normalized['pages'] as $page_url => $page_data ) {
-                // 既存行があれば clarity_data を更新
-                $existing = $wpdb->get_var( $wpdb->prepare(
-                    "SELECT id FROM {$pa_table} WHERE user_id = %d AND page_url = %s",
-                    $user_id, $page_url
-                ) );
+                $norm_url = self::normalize_url( $page_url );
+                $pa_id    = $url_map[ $norm_url ] ?? null;
 
-                $clarity_json = wp_json_encode( $page_data, JSON_UNESCAPED_UNICODE );
-                $now = current_time( 'Y-m-d H:i:s' );
-
-                if ( $existing ) {
+                if ( $pa_id ) {
+                    $clarity_json = wp_json_encode( $page_data, JSON_UNESCAPED_UNICODE );
                     $wpdb->update( $pa_table, [
                         'clarity_data'      => $clarity_json,
                         'clarity_sync_date' => $now,
-                    ], [ 'id' => $existing ] );
+                    ], [ 'id' => $pa_id ] );
                     $pages_updated++;
+                    $matched_urls[] = $page_url;
+                } else {
+                    $unmatched_urls[] = $page_url;
                 }
-                // 未登録ページは自動登録しない（ページ分析に登録済みのもののみ更新）
             }
+
+            self::log( "SYNC MATCH: matched=" . count( $matched_urls )
+                . ", unmatched=" . count( $unmatched_urls )
+                . ( $unmatched_urls ? "\nUnmatched URLs: " . implode( ', ', array_slice( $unmatched_urls, 0, 10 ) ) : '' )
+            );
         }
 
         // ---- 同期結果判定 ----
@@ -382,6 +401,8 @@ class Gcrev_Clarity_Client {
                 'pages_updated'   => $pages_updated,
                 'synced_at'       => $finished_at,
                 'normalized'      => $normalized['summary'] ?? [],
+                'matched_urls'    => $matched_urls ?? [],
+                'unmatched_urls'  => $unmatched_urls ?? [],
             ],
         ];
     }
@@ -594,6 +615,23 @@ class Gcrev_Clarity_Client {
     /**
      * デバッグログ出力
      */
+    /**
+     * URL を正規化（マッチング精度向上用）
+     * 末尾スラッシュ・プロトコル・www の差異を吸収
+     */
+    private static function normalize_url( string $url ): string {
+        $url = strtolower( trim( $url ) );
+        // プロトコル除去
+        $url = preg_replace( '#^https?://#', '', $url );
+        // www 除去
+        $url = preg_replace( '#^www\.#', '', $url );
+        // 末尾スラッシュ除去
+        $url = rtrim( $url, '/' );
+        // クエリ・フラグメント除去
+        $url = preg_replace( '/[?#].*$/', '', $url );
+        return $url;
+    }
+
     private static function log( string $message ): void {
         file_put_contents(
             self::LOG_FILE,
