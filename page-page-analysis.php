@@ -984,22 +984,26 @@ get_header();
         hmImage.src = imgUrl;
 
         hmImage.onload = function() {
-            // canvas サイズを画像に合わせる
+            // Retina対応: 画像の実サイズでcanvasを描画し、CSSで表示サイズに縮小
+            var dpr = window.devicePixelRatio || 1;
             var rect = hmImage.getBoundingClientRect();
-            hmCanvas.width  = rect.width;
-            hmCanvas.height = rect.height;
-            drawOverlay(metric, device, data);
+            hmCanvas.width  = rect.width * dpr;
+            hmCanvas.height = rect.height * dpr;
+            hmCanvas.style.width  = rect.width + 'px';
+            hmCanvas.style.height = rect.height + 'px';
+            var ctx = hmCanvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            drawOverlay(metric, device, data, rect.width, rect.height);
         };
 
         // サマリー描画
         renderHeatmapSummary(data, device);
     }
 
-    function drawOverlay(metric, device, data) {
+    function drawOverlay(metric, device, data, cssW, cssH) {
         var ctx = hmCanvas.getContext('2d');
-        var w = hmCanvas.width;
-        var h = hmCanvas.height;
-        ctx.clearRect(0, 0, w, h);
+        var w = cssW || hmCanvas.width;
+        var h = cssH || hmCanvas.height;
 
         var clarity = data.clarity_data || {};
         var metrics = clarity.metrics || {};
@@ -1028,66 +1032,121 @@ get_header();
         var trafficData = deviceData.traffic || metrics.traffic || {};
         var hasData = Object.keys(scrollData).length > 0 || Object.keys(trafficData).length > 0;
 
-        // スクロール到達セッション割合(%)
-        var scrollPct = scrollData.sessionsWithMetricPercentage;
-        var avgScroll = (scrollPct !== undefined && scrollPct !== null) ? parseFloat(scrollPct) : -1;
-
-        // データが全くない場合
         if (!hasData) {
             drawNoDataLabel(ctx, w, h, 'Clarityデータ未同期');
             return;
         }
 
-        // 常にグラデーション表示（視覚的にスクロール方向を示す）
-        var grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, 'rgba(34,197,94,0.15)');
-        grad.addColorStop(0.3, 'rgba(34,197,94,0.08)');
-        grad.addColorStop(0.6, 'rgba(251,191,36,0.10)');
-        grad.addColorStop(1, 'rgba(239,68,68,0.18)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
+        // スクロール到達セッション割合(%)
+        var scrollPct = scrollData.sessionsWithMetricPercentage;
+        var avgScroll = (scrollPct !== undefined && scrollPct !== null) ? parseFloat(scrollPct) : -1;
+        var sessions = parseInt(trafficData.sessionsCount || trafficData.totalSessionCount || 0);
 
-        // 25%, 50%, 75% ガイドライン
-        ctx.strokeStyle = 'rgba(100,100,100,0.25)';
+        // ===== 段階的スクロール深度バー（左端に到達率バー） =====
+        var barW = 36; // 左端バーの幅
+        var steps = [
+            { pct: 0,   label: 'FV',   color: 'rgba(34,197,94,0.35)' },
+            { pct: 25,  label: '25%',  color: 'rgba(34,197,94,0.25)' },
+            { pct: 50,  label: '50%',  color: 'rgba(251,191,36,0.25)' },
+            { pct: 75,  label: '75%',  color: 'rgba(239,68,68,0.20)' },
+            { pct: 100, label: '100%', color: 'rgba(239,68,68,0.30)' },
+        ];
+
+        // 各区間を色分け（左端バー + 全体に薄くグラデーション）
+        for (var i = 0; i < steps.length - 1; i++) {
+            var y1 = h * (steps[i].pct / 100);
+            var y2 = h * (steps[i + 1].pct / 100);
+            var sh = y2 - y1;
+
+            // 左端バー
+            ctx.fillStyle = steps[i].color;
+            ctx.fillRect(0, y1, barW, sh);
+
+            // 全体に薄く
+            ctx.fillStyle = steps[i].color.replace(/[\d.]+\)$/, '0.06)');
+            ctx.fillRect(barW, y1, w - barW, sh);
+        }
+
+        // 区切り線 + パーセンテージラベル
+        ctx.strokeStyle = 'rgba(100,100,100,0.3)';
         ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
         [25, 50, 75].forEach(function(pct) {
             var y = h * (pct / 100);
-            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-            ctx.fillStyle = 'rgba(50,50,50,0.5)';
-            ctx.font = '11px sans-serif';
-            ctx.fillText(pct + '%', 6, y - 5);
+            // 破線
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(barW, y); ctx.lineTo(w, y); ctx.stroke();
+            ctx.setLineDash([]);
+            // バー内のラベル
+            ctx.fillStyle = 'rgba(30,41,59,0.8)';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(pct + '%', barW / 2, y + 14);
+            ctx.textAlign = 'start';
         });
-        ctx.setLineDash([]);
 
-        // スクロール到達ライン
+        // FV ラベル
+        ctx.fillStyle = 'rgba(30,41,59,0.7)';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('FV', barW / 2, 14);
+        ctx.textAlign = 'start';
+
+        // ===== 到達率ライン（赤い実線） =====
         if (avgScroll >= 0) {
             var scrollLine = h * (avgScroll / 100);
+
+            // 到達ラインより下を暗く
+            ctx.fillStyle = 'rgba(0,0,0,0.08)';
+            ctx.fillRect(barW, scrollLine, w - barW, h - scrollLine);
+
+            // ライン描画
             ctx.strokeStyle = '#ef4444';
             ctx.lineWidth = 2.5;
-            ctx.setLineDash([8, 4]);
             ctx.beginPath(); ctx.moveTo(0, scrollLine); ctx.lineTo(w, scrollLine); ctx.stroke();
-            ctx.setLineDash([]);
 
-            // ラベル背景
-            var labelText = '到達 ' + avgScroll.toFixed(1) + '%';
+            // ラベルバッジ
+            var labelText = '▼ 到達率 ' + avgScroll.toFixed(1) + '%';
             ctx.font = 'bold 12px sans-serif';
             var tw = ctx.measureText(labelText).width;
-            ctx.fillStyle = 'rgba(239,68,68,0.9)';
-            ctx.fillRect(6, scrollLine - 20, tw + 12, 18);
+            var badgeX = barW + 8;
+            var badgeY = scrollLine + 4;
+            // バッジ背景
+            ctx.fillStyle = '#ef4444';
+            roundRect(ctx, badgeX, badgeY, tw + 16, 22, 4);
+            ctx.fill();
+            // テキスト
             ctx.fillStyle = '#fff';
-            ctx.fillText(labelText, 12, scrollLine - 6);
+            ctx.fillText(labelText, badgeX + 8, badgeY + 16);
         }
 
-        // セッション数ラベル（右上）
-        var sessions = trafficData.sessionsCount || trafficData.totalSessionCount;
-        if (sessions) {
-            ctx.fillStyle = 'rgba(30,41,59,0.7)';
+        // セッション数（右上）
+        if (sessions > 0) {
+            var sessText = 'セッション: ' + sessions.toLocaleString();
             ctx.font = '11px sans-serif';
+            var stw = ctx.measureText(sessText).width;
+            ctx.fillStyle = 'rgba(30,41,59,0.75)';
+            roundRect(ctx, w - stw - 20, 6, stw + 14, 20, 3);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
             ctx.textAlign = 'right';
-            ctx.fillText('セッション: ' + parseInt(sessions).toLocaleString(), w - 8, 16);
+            ctx.fillText(sessText, w - 14, 20);
             ctx.textAlign = 'start';
         }
+    }
+
+    // 角丸矩形ヘルパー
+    function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
     }
 
     function drawClickOverlay(ctx, w, h, metrics) {
