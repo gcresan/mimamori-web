@@ -404,19 +404,176 @@ get_header();
 .cs-kw-toggle input:checked + .cs-kw-toggle__slider { background: #568184; }
 .cs-kw-toggle input:checked + .cs-kw-toggle__slider::before { transform: translateX(18px); }
 
-/* Clarity連携トグル */
+/* ===== 外部連携共通UI ===== */
+
+/* トグルスイッチ */
 .cs-toggle-label {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
+    padding: 8px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    transition: border-color .2s, background .2s;
 }
+.cs-toggle-label:hover { border-color: #94a3b8; background: #f8fafc; }
 .cs-toggle-label input[type="checkbox"] {
     width: 18px;
     height: 18px;
-    accent-color: #2d9cdb;
+    accent-color: #4E8A6B;
+}
+.cs-toggle-label:has(input:checked) {
+    border-color: #4E8A6B;
+    background: #f0fdf4;
+}
+
+/* トークン入力グループ */
+.cs-token-group {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    overflow: hidden;
+    transition: border-color .2s, box-shadow .2s;
+}
+.cs-token-group:focus-within {
+    border-color: #4E8A6B;
+    box-shadow: 0 0 0 3px rgba(78,138,107,.12);
+}
+.cs-token-group input {
+    flex: 1;
+    border: none;
+    padding: 10px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    background: #fff;
+    outline: none;
+    min-width: 0;
+}
+.cs-token-group input::placeholder { color: #94a3b8; }
+.cs-token-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 14px;
+    border: none;
+    border-left: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+    white-space: nowrap;
+}
+.cs-token-toggle:hover { background: #f1f5f9; color: #1e293b; }
+.cs-token-toggle svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* 接続テストボタン */
+.cs-btn-test {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #4E8A6B;
+    background: #fff;
+    border: 1px solid #4E8A6B;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+}
+.cs-btn-test:hover { background: #f0fdf4; color: #2d6b54; }
+.cs-btn-test:active { background: #dcfce7; }
+.cs-btn-test:disabled {
+    color: #94a3b8;
+    border-color: #d1d5db;
+    background: #f8fafc;
+    cursor: not-allowed;
+}
+.cs-btn-test svg { width: 16px; height: 16px; }
+
+/* 接続ステータスバッジ */
+.cs-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 20px;
+    line-height: 1.4;
+}
+.cs-status-badge--neutral {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+.cs-status-badge--success {
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+.cs-status-badge--error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+.cs-status-badge--loading {
+    background: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+.cs-status-badge .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.cs-status-badge--neutral .dot { background: #94a3b8; }
+.cs-status-badge--success .dot { background: #22c55e; }
+.cs-status-badge--error .dot { background: #ef4444; }
+.cs-status-badge--loading .dot {
+    background: #3b82f6;
+    animation: csPulse 1.2s ease-in-out infinite;
+}
+@keyframes csPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* テストエリア */
+.cs-test-area {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.cs-test-meta {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 8px;
+}
+
+/* ヒントテキスト */
+.cs-hint {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 6px 0 0;
+    line-height: 1.5;
+}
+.cs-hint code {
+    font-size: 11px;
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: #475569;
 }
 
 @media (max-width: 600px) {
@@ -866,52 +1023,55 @@ get_header();
                 </label>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" style="margin-top:16px;">
                 <label for="cs-clarity-token">APIトークン</label>
-                <div style="display:flex;gap:8px;align-items:center;">
+                <div class="cs-token-group">
                     <input type="password" id="cs-clarity-token"
                         placeholder="<?php echo ( $clarity_settings['clarity_has_token'] ?? false ) ? '設定済み（変更する場合のみ入力）' : 'Clarity APIトークンを入力'; ?>"
-                        style="flex:1;"
                         autocomplete="off">
-                    <button type="button" class="btn-toggle-pw" onclick="toggleClarityToken()" style="padding:6px 10px;font-size:12px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;">表示</button>
+                    <button type="button" class="cs-token-toggle" id="btnToggleClarityToken" onclick="toggleClarityToken()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <span>表示</span>
+                    </button>
                 </div>
-                <p style="font-size:11px;color:#94a3b8;margin:4px 0 0;">
+                <p class="cs-hint">
                     <?php if ( $clarity_settings['clarity_has_token'] ?? false ): ?>
-                        現在のトークン: <code style="font-size:11px;"><?php echo esc_html( $clarity_settings['clarity_token_mask'] ?? '' ); ?></code>
+                        現在のトークン: <code><?php echo esc_html( $clarity_settings['clarity_token_mask'] ?? '' ); ?></code>
                     <?php else: ?>
                         Clarityのデータエクスポート用APIトークンを入力してください。このトークンはサーバー側でのみ使用されます。
                     <?php endif; ?>
                 </p>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" style="margin-top:16px;">
                 <label for="cs-clarity-project">Clarityプロジェクト名（任意）</label>
                 <input type="text" id="cs-clarity-project"
                     placeholder="例: g-crev.jp"
                     value="<?php echo esc_attr( $clarity_settings['clarity_project_name'] ?? '' ); ?>">
             </div>
 
-            <div class="form-group">
-                <label>接続テスト</label>
-                <div style="display:flex;gap:12px;align-items:center;">
-                    <button type="button" class="btn-save" id="btnClarityTest" onclick="testClarityConnection()" style="padding:8px 20px;font-size:13px;">
-                        🔌 接続テスト
+            <div class="form-group" style="margin-top:20px;">
+                <label>接続確認</label>
+                <div class="cs-test-area">
+                    <button type="button" class="cs-btn-test" id="btnClarityTest" onclick="testClarityConnection()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        接続テスト
                     </button>
-                    <span id="clarityTestResult" style="font-size:13px;">
+                    <span id="clarityTestResult">
                         <?php
                         $c_status = $clarity_settings['clarity_connection_status'] ?? '';
                         if ( $c_status === 'success' ) {
-                            echo '<span style="color:#16a34a;">✅ 接続に成功しました</span>';
+                            echo '<span class="cs-status-badge cs-status-badge--success"><span class="dot"></span>接続確認済み</span>';
                         } elseif ( $c_status === 'failed' ) {
-                            echo '<span style="color:#dc2626;">❌ ' . esc_html( $clarity_settings['clarity_last_message'] ?? '接続に失敗しました' ) . '</span>';
+                            echo '<span class="cs-status-badge cs-status-badge--error"><span class="dot"></span>' . esc_html( $clarity_settings['clarity_last_message'] ?? '接続エラー' ) . '</span>';
                         } else {
-                            echo '<span style="color:#94a3b8;">未確認</span>';
+                            echo '<span class="cs-status-badge cs-status-badge--neutral"><span class="dot"></span>未確認</span>';
                         }
                         ?>
                     </span>
                 </div>
                 <?php if ( ! empty( $clarity_settings['clarity_last_connected_at'] ) ): ?>
-                <p style="font-size:11px;color:#94a3b8;margin:6px 0 0;">
+                <p class="cs-test-meta">
                     最終確認: <?php echo esc_html( $clarity_settings['clarity_last_connected_at'] ); ?>
                 </p>
                 <?php endif; ?>
@@ -1424,8 +1584,8 @@ get_header();
         var btn = document.getElementById('btnClarityTest');
         var resultEl = document.getElementById('clarityTestResult');
         btn.disabled = true;
-        btn.textContent = 'テスト中...';
-        resultEl.innerHTML = '<span style="color:#94a3b8;">接続テスト中...</span>';
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> 確認中...';
+        resultEl.innerHTML = '<span class="cs-status-badge cs-status-badge--loading"><span class="dot"></span>確認中...</span>';
 
         // トークンが入力されていたら先に保存
         var tokenVal = document.getElementById('cs-clarity-token').value.trim();
@@ -1450,29 +1610,34 @@ get_header();
             });
             var json = await res.json();
             if (json.success) {
-                resultEl.innerHTML = '<span style="color:#16a34a;">✅ 接続に成功しました</span>';
+                resultEl.innerHTML = '<span class="cs-status-badge cs-status-badge--success"><span class="dot"></span>接続確認済み</span>';
                 showToast('Clarity接続テストに成功しました');
             } else {
-                resultEl.innerHTML = '<span style="color:#dc2626;">❌ ' + (json.message || '接続に失敗しました') + '</span>';
+                var msg = json.message || '接続エラー';
+                resultEl.innerHTML = '<span class="cs-status-badge cs-status-badge--error"><span class="dot"></span>' + msg.replace(/</g,'&lt;') + '</span>';
             }
         } catch (e) {
-            resultEl.innerHTML = '<span style="color:#dc2626;">❌ 通信エラーが発生しました</span>';
+            resultEl.innerHTML = '<span class="cs-status-badge cs-status-badge--error"><span class="dot"></span>通信エラー</span>';
         } finally {
             btn.disabled = false;
-            btn.textContent = '🔌 接続テスト';
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> 接続テスト';
         }
     };
 
     // ===== Clarity トークン表示切替 =====
     window.toggleClarityToken = function() {
         var inp = document.getElementById('cs-clarity-token');
-        var btn = inp.nextElementSibling;
+        var toggleBtn = document.getElementById('btnToggleClarityToken');
+        var label = toggleBtn.querySelector('span');
+        var svg = toggleBtn.querySelector('svg');
         if (inp.type === 'password') {
             inp.type = 'text';
-            btn.textContent = '隠す';
+            label.textContent = '非表示';
+            svg.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
         } else {
             inp.type = 'password';
-            btn.textContent = '表示';
+            label.textContent = '表示';
+            svg.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
         }
     };
 
