@@ -462,15 +462,43 @@ class Gcrev_Clarity_Client {
         ];
 
         // URL別データの正規化
-        if ( ! empty( $responses['by_url']['data'] ) && is_array( $responses['by_url']['data'] ) ) {
-            foreach ( $responses['by_url']['data'] as $metric_block ) {
+        $url_data = $responses['by_url']['data'] ?? null;
+
+        // デバッグ: レスポンス構造をログ出力
+        if ( $url_data ) {
+            $first_block = is_array( $url_data ) ? ( $url_data[0] ?? null ) : null;
+            $first_info  = $first_block && isset( $first_block['information'][0] ) ? $first_block['information'][0] : null;
+            self::log( 'NORMALIZE: url_data type=' . gettype( $url_data )
+                . ', count=' . ( is_array( $url_data ) ? count( $url_data ) : 'N/A' )
+                . ', first_block_keys=' . ( $first_block ? implode( ',', array_keys( $first_block ) ) : 'null' )
+                . ', first_info_keys=' . ( $first_info ? implode( ',', array_keys( $first_info ) ) : 'null' )
+                . ', first_info=' . ( $first_info ? wp_json_encode( $first_info, JSON_UNESCAPED_UNICODE ) : 'null' )
+            );
+            $summary['_debug_first_info_keys'] = $first_info ? array_keys( $first_info ) : [];
+            $summary['_debug_first_info']      = $first_info;
+        } else {
+            self::log( 'NORMALIZE: url_data is null/empty, by_url success=' . ( $responses['by_url']['success'] ?? 'N/A' ) );
+        }
+
+        if ( ! empty( $url_data ) && is_array( $url_data ) ) {
+            foreach ( $url_data as $metric_block ) {
                 $metric_name = $metric_block['metricName'] ?? '';
                 if ( empty( $metric_name ) ) continue;
 
                 $summary['available_metrics'][] = $metric_name;
 
                 foreach ( $metric_block['information'] ?? [] as $row ) {
-                    $url = $row['URL'] ?? $row['url'] ?? '';
+                    // Clarity APIのキー名を動的に検出
+                    $url = $row['URL'] ?? $row['url'] ?? $row['Url'] ?? $row['PageUrl'] ?? $row['pageUrl'] ?? '';
+                    if ( empty( $url ) ) {
+                        // URL系キーが見つからない場合、ディメンションキーを探す
+                        foreach ( $row as $k => $v ) {
+                            if ( is_string( $v ) && preg_match( '#^https?://#', $v ) ) {
+                                $url = $v;
+                                break;
+                            }
+                        }
+                    }
                     if ( empty( $url ) ) continue;
 
                     if ( ! isset( $pages[ $url ] ) ) {
