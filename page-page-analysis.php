@@ -1230,9 +1230,12 @@ get_header();
         var devMetrics = (clarity.devices && (clarity.devices[deviceKey] || clarity.devices['Desktop'])) || {};
 
         // デバッグ: clarity_dataの構造をコンソールに出力
-        console.log('[Heatmap] clarity_data:', clarity);
-        console.log('[Heatmap] metrics:', metrics);
-        console.log('[Heatmap] deviceKey:', deviceKey, 'devMetrics:', devMetrics);
+        console.log('[Heatmap] clarity_data:', JSON.stringify(clarity, null, 2));
+        console.log('[Heatmap] metrics keys:', Object.keys(metrics));
+        console.log('[Heatmap] scroll_depth raw:', JSON.stringify(metrics.scroll_depth));
+        console.log('[Heatmap] engagement_time raw:', JSON.stringify(metrics.engagement_time));
+        console.log('[Heatmap] traffic raw:', JSON.stringify(metrics.traffic));
+        console.log('[Heatmap] deviceKey:', deviceKey, 'devMetrics:', JSON.stringify(devMetrics));
 
         if (Object.keys(metrics).length === 0) {
             hmSummaryGrid.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください</div>';
