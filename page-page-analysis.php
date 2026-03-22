@@ -1021,9 +1021,14 @@ get_header();
         if (Object.keys(metrics).length === 0 && metric === 'scroll') {
             metrics = {}; // 空でも描画関数は呼ぶ
         }
-        // Clarity API のデバイスキー: 'PC', 'Mobile', 'Tablet', 'Other'
+        // site_wide（サイト全体の正確なDevice別集計）を優先使用
         var devKey = device === 'mobile' ? 'Mobile' : 'PC';
-        var deviceData = (clarity.devices && (clarity.devices[devKey] || clarity.devices['Desktop'])) || {};
+        var siteWide = clarity.site_wide || {};
+        var swDev = (siteWide.by_device && (siteWide.by_device[devKey] || siteWide.by_device['Desktop'])) || {};
+        var urlDev = (clarity.devices && (clarity.devices[devKey] || clarity.devices['Desktop'])) || {};
+        var deviceData = {};
+        var dk; for (dk in urlDev) { deviceData[dk] = urlDev[dk]; }
+        for (dk in swDev) { deviceData[dk] = swDev[dk]; }
 
         switch (metric) {
             case 'scroll':
@@ -1232,8 +1237,11 @@ get_header();
     function renderHeatmapSummary(data, device) {
         var clarity = data.clarity_data || {};
         var metrics = clarity.metrics || {};
-        // Clarity API のデバイスキー: 'PC', 'Mobile', 'Tablet', 'Other'
+        // サイト全体のDevice別データ（正確な集計値）を優先使用
         var deviceKey = device === 'mobile' ? 'Mobile' : 'PC';
+        var siteWide = clarity.site_wide || {};
+        var swDevice = (siteWide.by_device && (siteWide.by_device[deviceKey] || siteWide.by_device['Desktop'])) || {};
+        // URL集約データ（1000行制限で不正確な場合あり）をフォールバック
         var devMetrics = (clarity.devices && (clarity.devices[deviceKey] || clarity.devices['Desktop'])) || {};
 
         // デバッグ: clarity_dataの構造をコンソールに出力
@@ -1280,12 +1288,13 @@ get_header();
                 + '</div>';
         }
 
-        var scrollM = devMetrics.scroll_depth || metrics.scroll_depth || {};
-        var engM    = devMetrics.engagement_time || metrics.engagement_time || {};
-        var dcM     = devMetrics.dead_click_count || metrics.dead_click_count || {};
-        var rcM     = devMetrics.rage_click_count || metrics.rage_click_count || {};
-        var tM      = devMetrics.traffic || metrics.traffic || {};
-        var ecM     = devMetrics.error_click_count || metrics.error_click_count || {};
+        // site_wide（サイト全体の正確なDevice別集計）→ URL集約 → 全体 の優先順
+        var scrollM = swDevice.scroll_depth || devMetrics.scroll_depth || metrics.scroll_depth || {};
+        var engM    = swDevice.engagement_time || devMetrics.engagement_time || metrics.engagement_time || {};
+        var dcM     = swDevice.dead_click_count || devMetrics.dead_click_count || metrics.dead_click_count || {};
+        var rcM     = swDevice.rage_click_count || devMetrics.rage_click_count || metrics.rage_click_count || {};
+        var tM      = swDevice.traffic || devMetrics.traffic || metrics.traffic || {};
+        var ecM     = swDevice.error_click_count || devMetrics.error_click_count || metrics.error_click_count || {};
 
         // 0 を正しく扱うヘルパー（|| は 0 を falsy にするため使わない）
         function safeNum(v) {

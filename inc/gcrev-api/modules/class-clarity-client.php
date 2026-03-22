@@ -336,11 +336,16 @@ class Gcrev_Clarity_Client {
             $matched_urls   = [];
             $unmatched_urls = [];
 
+            // サイト全体のDevice別データを取得
+            $site_wide_data = $normalized['summary']['site_wide'] ?? [];
+
             foreach ( $normalized['pages'] as $page_url => $page_data ) {
                 $norm_url = self::normalize_url( $page_url );
                 $pa_id    = $url_map[ $norm_url ] ?? null;
 
                 if ( $pa_id ) {
+                    // サイト全体のDevice別データをページに付与
+                    $page_data['site_wide'] = $site_wide_data;
                     $clarity_json = wp_json_encode( $page_data, JSON_UNESCAPED_UNICODE );
                     $wpdb->update( $pa_table, [
                         'clarity_data'      => $clarity_json,
@@ -524,17 +529,31 @@ class Gcrev_Clarity_Client {
             }
         }
 
-        // Device別データの正規化
+        // Device別データの正規化（サイト全体の正確な集計値）
+        // URL別データは1000行制限で不正確になるため、
+        // サマリー表示にはDevice別データを使用する
+        $site_wide = [ 'by_device' => [] ];
         if ( ! empty( $responses['by_device']['data'] ) && is_array( $responses['by_device']['data'] ) ) {
             foreach ( $responses['by_device']['data'] as $metric_block ) {
+                $metric_name = $metric_block['metricName'] ?? '';
+                if ( empty( $metric_name ) ) continue;
+                $key = self::normalize_metric_key( $metric_name );
+
                 foreach ( $metric_block['information'] ?? [] as $row ) {
                     $device = $row['Device'] ?? $row['device'] ?? '';
-                    if ( $device && ! in_array( $device, $summary['device_types'], true ) ) {
+                    if ( empty( $device ) ) continue;
+                    if ( ! in_array( $device, $summary['device_types'], true ) ) {
                         $summary['device_types'][] = $device;
                     }
+                    if ( ! isset( $site_wide['by_device'][ $device ] ) ) {
+                        $site_wide['by_device'][ $device ] = [];
+                    }
+                    $site_wide['by_device'][ $device ][ $key ] = self::extract_metric_value( $row, $metric_name );
                 }
             }
         }
+        // サイト全体のデバイス別集計値を全ページに反映
+        $summary['site_wide'] = $site_wide;
 
         // URL×Device データの正規化（ベースURLで集約）
         if ( ! empty( $responses['by_url_device']['data'] ) && is_array( $responses['by_url_device']['data'] ) ) {
