@@ -908,6 +908,14 @@ if ( file_exists( $gcrev_seo_checker ) ) {
 }
 
 // ========================================
+// Step9: Clarity Client（Clarity連携）
+// ========================================
+$gcrev_clarity_client = $gcrev_modules_path . 'class-clarity-client.php';
+if ( file_exists( $gcrev_clarity_client ) ) {
+    require_once $gcrev_clarity_client;
+}
+
+// ========================================
 // 既存のAPIクラス（入口）は最後に読み込む
 // ========================================
 $gcrev_entry = $gcrev_inc_path . 'class-gcrev-api.php';

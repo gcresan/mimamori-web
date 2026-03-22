@@ -21,6 +21,9 @@ set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'クライアント設定',
 // 現在の設定を取得
 $settings = gcrev_get_client_settings( $user_id );
 
+// Clarity 連携設定
+$clarity_settings = class_exists( 'Gcrev_Clarity_Client' ) ? Gcrev_Clarity_Client::get_settings( $user_id ) : [];
+
 // 旧データフォールバック: report_target から商圏の初期値を推定
 $legacy_target = get_user_meta( $user_id, 'report_target', true );
 $has_new_settings = ! empty( $settings['area_type'] );
@@ -400,6 +403,21 @@ get_header();
 }
 .cs-kw-toggle input:checked + .cs-kw-toggle__slider { background: #568184; }
 .cs-kw-toggle input:checked + .cs-kw-toggle__slider::before { transform: translateX(18px); }
+
+/* Clarity連携トグル */
+.cs-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+.cs-toggle-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #2d9cdb;
+}
 
 @media (max-width: 600px) {
     .cs-section { padding: 18px 16px; margin-bottom: 16px; }
@@ -834,6 +852,70 @@ get_header();
                 ?>
             </div>
             <button type="button" class="btn-add-ref-url" id="btnAddRefUrl">＋ URLを追加</button>
+        </div>
+
+        <!-- ===== Clarity連携設定 ===== -->
+        <div class="cs-section">
+            <h2 class="cs-section-title"><span class="icon">📊</span> Clarity連携設定</h2>
+            <p class="persona-section-desc">Microsoft Clarity のデータをページ分析に統合します。</p>
+
+            <div class="form-group">
+                <label class="cs-toggle-label">
+                    <input type="checkbox" id="cs-clarity-enabled" <?php echo ( $clarity_settings['clarity_enabled'] ?? false ) ? 'checked' : ''; ?>>
+                    Clarity連携を有効にする
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="cs-clarity-token">APIトークン</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="password" id="cs-clarity-token"
+                        placeholder="<?php echo ( $clarity_settings['clarity_has_token'] ?? false ) ? '設定済み（変更する場合のみ入力）' : 'Clarity APIトークンを入力'; ?>"
+                        style="flex:1;"
+                        autocomplete="off">
+                    <button type="button" class="btn-toggle-pw" onclick="toggleClarityToken()" style="padding:6px 10px;font-size:12px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;">表示</button>
+                </div>
+                <p style="font-size:11px;color:#94a3b8;margin:4px 0 0;">
+                    <?php if ( $clarity_settings['clarity_has_token'] ?? false ): ?>
+                        現在のトークン: <code style="font-size:11px;"><?php echo esc_html( $clarity_settings['clarity_token_mask'] ?? '' ); ?></code>
+                    <?php else: ?>
+                        Clarityのデータエクスポート用APIトークンを入力してください。このトークンはサーバー側でのみ使用されます。
+                    <?php endif; ?>
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="cs-clarity-project">Clarityプロジェクト名（任意）</label>
+                <input type="text" id="cs-clarity-project"
+                    placeholder="例: g-crev.jp"
+                    value="<?php echo esc_attr( $clarity_settings['clarity_project_name'] ?? '' ); ?>">
+            </div>
+
+            <div class="form-group">
+                <label>接続テスト</label>
+                <div style="display:flex;gap:12px;align-items:center;">
+                    <button type="button" class="btn-save" id="btnClarityTest" onclick="testClarityConnection()" style="padding:8px 20px;font-size:13px;">
+                        🔌 接続テスト
+                    </button>
+                    <span id="clarityTestResult" style="font-size:13px;">
+                        <?php
+                        $c_status = $clarity_settings['clarity_connection_status'] ?? '';
+                        if ( $c_status === 'success' ) {
+                            echo '<span style="color:#16a34a;">✅ 接続に成功しました</span>';
+                        } elseif ( $c_status === 'failed' ) {
+                            echo '<span style="color:#dc2626;">❌ ' . esc_html( $clarity_settings['clarity_last_message'] ?? '接続に失敗しました' ) . '</span>';
+                        } else {
+                            echo '<span style="color:#94a3b8;">未確認</span>';
+                        }
+                        ?>
+                    </span>
+                </div>
+                <?php if ( ! empty( $clarity_settings['clarity_last_connected_at'] ) ): ?>
+                <p style="font-size:11px;color:#94a3b8;margin:6px 0 0;">
+                    最終確認: <?php echo esc_html( $clarity_settings['clarity_last_connected_at'] ); ?>
+                </p>
+                <?php endif; ?>
+            </div>
         </div>
 
         <div class="cs-actions">
@@ -1308,7 +1390,11 @@ get_header();
                     persona_decision_factors: personaDecisionFactors,
                     persona_one_liner:        personaOneLiner,
                     persona_detail_text:      personaDetailText,
-                    persona_reference_urls:   personaRefUrls
+                    persona_reference_urls:   personaRefUrls,
+                    // Clarity連携
+                    clarity_enabled:      document.getElementById('cs-clarity-enabled').checked ? 1 : 0,
+                    clarity_api_token:    document.getElementById('cs-clarity-token').value.trim(),
+                    clarity_project_name: document.getElementById('cs-clarity-project').value.trim()
                 })
             });
 
@@ -1332,6 +1418,63 @@ get_header();
         toast.classList.add('show');
         setTimeout(function() { toast.classList.remove('show'); }, 3000);
     }
+
+    // ===== Clarity 接続テスト =====
+    window.testClarityConnection = async function() {
+        var btn = document.getElementById('btnClarityTest');
+        var resultEl = document.getElementById('clarityTestResult');
+        btn.disabled = true;
+        btn.textContent = 'テスト中...';
+        resultEl.innerHTML = '<span style="color:#94a3b8;">接続テスト中...</span>';
+
+        // トークンが入力されていたら先に保存
+        var tokenVal = document.getElementById('cs-clarity-token').value.trim();
+        if (tokenVal) {
+            await fetch(restBase + 'save-client-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': wpNonce },
+                body: JSON.stringify({
+                    site_url: document.getElementById('cs-site-url').value.trim() || 'https://placeholder.test',
+                    clarity_enabled: document.getElementById('cs-clarity-enabled').checked ? 1 : 0,
+                    clarity_api_token: tokenVal,
+                    clarity_project_name: document.getElementById('cs-clarity-project').value.trim()
+                })
+            });
+        }
+
+        try {
+            var res = await fetch('<?php echo esc_url_raw( rest_url( 'gcrev/v1/clarity/test-connection' ) ); ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': wpNonce },
+                credentials: 'same-origin'
+            });
+            var json = await res.json();
+            if (json.success) {
+                resultEl.innerHTML = '<span style="color:#16a34a;">✅ 接続に成功しました</span>';
+                showToast('Clarity接続テストに成功しました');
+            } else {
+                resultEl.innerHTML = '<span style="color:#dc2626;">❌ ' + (json.message || '接続に失敗しました') + '</span>';
+            }
+        } catch (e) {
+            resultEl.innerHTML = '<span style="color:#dc2626;">❌ 通信エラーが発生しました</span>';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔌 接続テスト';
+        }
+    };
+
+    // ===== Clarity トークン表示切替 =====
+    window.toggleClarityToken = function() {
+        var inp = document.getElementById('cs-clarity-token');
+        var btn = inp.nextElementSibling;
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            btn.textContent = '隠す';
+        } else {
+            inp.type = 'password';
+            btn.textContent = '表示';
+        }
+    };
 
     // =========================================================
     // 計測キーワード管理

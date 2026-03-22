@@ -694,6 +694,18 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== Clarity 連携 =====
+        register_rest_route('gcrev/v1', '/clarity/test-connection', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_clarity_test_connection' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/clarity/settings', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_clarity_settings' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== CV分析ページ用エンドポイント =====
         register_rest_route('gcrev/v1', '/analysis/cv', [
             'methods'             => 'GET',
@@ -2982,6 +2994,23 @@ class Gcrev_Insight_API {
             }
         }
         update_user_meta($user_id, 'gcrev_client_persona_reference_urls', $ref_urls);
+
+        // === Clarity 連携設定 ===
+        if ( class_exists( 'Gcrev_Clarity_Client' ) ) {
+            $clarity_data = [];
+            if ( isset( $params['clarity_enabled'] ) ) {
+                $clarity_data['clarity_enabled'] = $params['clarity_enabled'];
+            }
+            if ( isset( $params['clarity_api_token'] ) ) {
+                $clarity_data['clarity_api_token'] = $params['clarity_api_token'];
+            }
+            if ( isset( $params['clarity_project_name'] ) ) {
+                $clarity_data['clarity_project_name'] = $params['clarity_project_name'];
+            }
+            if ( ! empty( $clarity_data ) ) {
+                Gcrev_Clarity_Client::save_settings( $user_id, $clarity_data );
+            }
+        }
 
         error_log("[GCREV] Client settings saved for user_id={$user_id}, site_url={$site_url}");
 
@@ -17635,6 +17664,56 @@ PROMPT;
         }
 
         return '';
+    }
+
+    // =========================================================
+    // Clarity 連携
+    // =========================================================
+
+    /**
+     * Clarity 接続テスト
+     * POST gcrev/v1/clarity/test-connection
+     */
+    public function rest_clarity_test_connection( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '認証が必要です' ], 401 );
+        }
+
+        if ( ! class_exists( 'Gcrev_Clarity_Client' ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'Clarity連携モジュールが読み込まれていません' ], 500 );
+        }
+
+        $result = Gcrev_Clarity_Client::test_connection( $user_id );
+
+        return new \WP_REST_Response( [
+            'success' => $result['success'],
+            'message' => $result['message'],
+            'status'  => $result['success'] ? 'success' : 'failed',
+            'tested_at' => current_time( 'Y-m-d H:i:s' ),
+        ], 200 );
+    }
+
+    /**
+     * Clarity 設定取得
+     * GET gcrev/v1/clarity/settings
+     */
+    public function rest_get_clarity_settings( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '認証が必要です' ], 401 );
+        }
+
+        if ( ! class_exists( 'Gcrev_Clarity_Client' ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'Clarity連携モジュールが読み込まれていません' ], 500 );
+        }
+
+        $settings = Gcrev_Clarity_Client::get_settings( $user_id );
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'data'    => $settings,
+        ], 200 );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
