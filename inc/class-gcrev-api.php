@@ -17434,9 +17434,12 @@ PROMPT;
      */
     public function rest_upload_page_snapshot( \WP_REST_Request $request ): \WP_REST_Response {
         global $wpdb;
+        $log = '/tmp/gcrev_page_analysis_debug.log';
         $user_id = get_current_user_id();
         $id      = absint( $request->get_param( 'id' ) );
         $table   = $wpdb->prefix . 'gcrev_page_analysis';
+
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " upload_snapshot: id={$id}, user={$user_id}\n", FILE_APPEND );
 
         // 所有権チェック
         $row = $wpdb->get_row( $wpdb->prepare(
@@ -17445,11 +17448,14 @@ PROMPT;
             $user_id
         ) );
         if ( ! $row ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " upload_snapshot: 所有権チェック失敗\n", FILE_APPEND );
             return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
         }
 
         $files = $request->get_file_params();
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " upload_snapshot: files=" . wp_json_encode( array_keys( $files ), JSON_UNESCAPED_UNICODE ) . ", file_size=" . ( isset( $files['file']['size'] ) ? $files['file']['size'] : 'N/A' ) . "\n", FILE_APPEND );
         if ( empty( $files['file'] ) ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " upload_snapshot: ファイルなし\n", FILE_APPEND );
             return new \WP_REST_Response( [ 'success' => false, 'message' => 'ファイルが必要です' ], 400 );
         }
 
@@ -17474,8 +17480,10 @@ PROMPT;
 
         $upload = wp_handle_upload( $file, [ 'test_form' => false ] );
         if ( isset( $upload['error'] ) ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " upload_snapshot: wp_handle_upload error=" . $upload['error'] . "\n", FILE_APPEND );
             return new \WP_REST_Response( [ 'success' => false, 'message' => $upload['error'] ], 500 );
         }
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " upload_snapshot: upload OK, file=" . $upload['file'] . "\n", FILE_APPEND );
 
         $attachment_data = [
             'post_mime_type' => $upload['type'],

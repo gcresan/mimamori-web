@@ -777,7 +777,8 @@ get_header();
         })
         .catch(function(err) {
             hideLoading();
-            alert(err.message || '通信エラーが発生しました');
+            var sizeInfo = '\nファイルサイズ: ' + Math.round(file.size / 1024) + 'KB';
+            alert('アップロードエラー: ' + (err.message || '通信エラー') + sizeInfo + '\n\nサーバーのアップロード上限を超えている可能性があります。');
         });
     });
 
@@ -787,12 +788,19 @@ get_header();
         if (!confirm(label + 'のキャプチャ画像を削除しますか？')) return;
 
         showLoading();
-        fetch(API_BASE + '/' + id + '/snapshot?device_type=' + encodeURIComponent(device), {
+        fetch(API_BASE + '/' + id + '/snapshot', {
             method: 'DELETE',
             credentials: 'same-origin',
-            headers: { 'X-WP-Nonce': NONCE },
+            headers: {
+                'X-WP-Nonce': NONCE,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ device_type: device }),
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(function(res) {
             hideLoading();
             if (res.success) {
@@ -802,9 +810,9 @@ get_header();
                 alert(res.message || '削除に失敗しました');
             }
         })
-        .catch(function() {
+        .catch(function(err) {
             hideLoading();
-            alert('通信エラーが発生しました');
+            alert('削除エラー: ' + (err.message || '通信エラー'));
         });
     };
 
