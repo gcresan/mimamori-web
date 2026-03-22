@@ -314,6 +314,21 @@ get_header();
     transition: background 0.2s;
 }
 .pa-upload-btn:hover { background: #f0f8ff; }
+.pa-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+    border: 1px solid #dc2626;
+    color: #dc2626;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-left: 8px;
+}
+.pa-delete-btn:hover { background: #fef2f2; }
 
 /* プレースホルダー */
 .pa-placeholder {
@@ -688,11 +703,18 @@ get_header();
             ? '<img src="' + escHtml(data.screenshot_mobile_url) + '" class="pa-capture-img" alt="SP版">'
             : '<div class="pa-capture-empty">キャプチャ未取得</div>';
 
+        var pcDel = data.screenshot_pc_url
+            ? '<button type="button" class="pa-delete-btn" onclick="window._paDeleteCapture(' + data.id + ', \'pc\')">削除</button>'
+            : '';
+        var spDel = data.screenshot_mobile_url
+            ? '<button type="button" class="pa-delete-btn" onclick="window._paDeleteCapture(' + data.id + ', \'mobile\')">削除</button>'
+            : '';
+
         els.captureContent.innerHTML = ''
             + '<div class="pa-capture-box"><h4>PC版</h4>' + pcImg
-            + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'pc\')">画像をアップロード</button></div>'
+            + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'pc\')">画像をアップロード</button>' + pcDel + '</div>'
             + '<div class="pa-capture-box"><h4>スマホ版</h4>' + spImg
-            + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'mobile\')">画像をアップロード</button></div>';
+            + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'mobile\')">画像をアップロード</button>' + spDel + '</div>';
     }
 
     // --- タブ切り替え ---
@@ -747,6 +769,33 @@ get_header();
             alert('通信エラーが発生しました');
         });
     });
+
+    // --- キャプチャ削除 ---
+    window._paDeleteCapture = function(id, device) {
+        var label = device === 'mobile' ? 'スマホ版' : 'PC版';
+        if (!confirm(label + 'のキャプチャ画像を削除しますか？')) return;
+
+        showLoading();
+        fetch(API_BASE + '/' + id + '/snapshot?device_type=' + encodeURIComponent(device), {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': NONCE },
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            hideLoading();
+            if (res.success) {
+                window._paShowDetail(id);
+                loadPages();
+            } else {
+                alert(res.message || '削除に失敗しました');
+            }
+        })
+        .catch(function() {
+            hideLoading();
+            alert('通信エラーが発生しました');
+        });
+    };
 
     // --- 初期化 ---
     loadPages();

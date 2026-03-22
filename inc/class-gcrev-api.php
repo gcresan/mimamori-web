@@ -681,6 +681,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_upload_page_snapshot' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/snapshot', [
+            'methods'             => 'DELETE',
+            'callback'            => [ $this, 'rest_delete_page_snapshot' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/analyze', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_trigger_page_analysis' ],
@@ -17517,6 +17522,60 @@ PROMPT;
                 'url'           => wp_get_attachment_url( $attachment_id ),
             ],
         ], 200 );
+    }
+
+    /**
+     * DELETE /gcrev/v1/page-analysis/pages/{id}/snapshot — スクリーンショット削除
+     */
+    public function rest_delete_page_snapshot( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id     = get_current_user_id();
+        $id          = absint( $request->get_param( 'id' ) );
+        $device_type = sanitize_text_field( $request->get_param( 'device_type' ) ?: 'pc' );
+        if ( ! in_array( $device_type, [ 'pc', 'mobile' ], true ) ) {
+            $device_type = 'pc';
+        }
+
+        $table = $wpdb->prefix . 'gcrev_page_analysis';
+
+        // 所有権チェック
+        $col = $device_type === 'mobile' ? 'screenshot_mobile' : 'screenshot_pc';
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, {$col} AS attachment_id FROM {$table} WHERE id = %d AND user_id = %d AND status = 'active'",
+            $id,
+            $user_id
+        ) );
+        if ( ! $row ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
+        }
+
+        $attachment_id = absint( $row->attachment_id );
+
+        // 添付ファイル削除
+        if ( $attachment_id > 0 ) {
+            wp_delete_attachment( $attachment_id, true );
+        }
+
+        // ページ分析テーブル更新（NULLに戻す）
+        $wpdb->update(
+            $table,
+            [ $col => null ],
+            [ 'id' => $id ],
+            [ null ],
+            [ '%d' ]
+        );
+
+        // capture_date を更新（もう片方も空なら NULL にする）
+        $other_col = $device_type === 'mobile' ? 'screenshot_pc' : 'screenshot_mobile';
+        $other_val = $wpdb->get_var( $wpdb->prepare(
+            "SELECT {$other_col} FROM {$table} WHERE id = %d",
+            $id
+        ) );
+        if ( empty( $other_val ) ) {
+            $wpdb->update( $table, [ 'capture_date' => null ], [ 'id' => $id ], [ null ], [ '%d' ] );
+        }
+
+        return new \WP_REST_Response( [ 'success' => true ], 200 );
     }
 
     /**
