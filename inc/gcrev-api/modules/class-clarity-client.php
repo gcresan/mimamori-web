@@ -244,6 +244,301 @@ class Gcrev_Clarity_Client {
     }
 
     // =========================================================
+    // 手動 / 自動同期
+    // =========================================================
+
+    /**
+     * Clarity データ同期を実行
+     *
+     * 3回のAPIコール（URL別、Device別、全体サマリー）で
+     * 取得可能なデータを網羅的に取得し、保存する。
+     *
+     * @param int    $user_id
+     * @param string $sync_type 'manual' | 'scheduled'
+     * @return array { success, message, summary }
+     */
+    public static function sync_data( int $user_id, string $sync_type = 'manual' ): array {
+        global $wpdb;
+
+        $started_at = current_time( 'Y-m-d H:i:s' );
+
+        // 前提チェック
+        $enabled = get_user_meta( $user_id, self::META_ENABLED, true );
+        if ( $enabled !== '1' ) {
+            return [ 'success' => false, 'message' => 'Clarity連携が無効です' ];
+        }
+
+        $token = self::get_decrypted_token( $user_id );
+        if ( ! $token ) {
+            return [ 'success' => false, 'message' => 'APIトークンが未設定です' ];
+        }
+
+        $log_table = $wpdb->prefix . 'gcrev_clarity_sync_logs';
+        $metrics_fetched = 0;
+        $pages_updated   = 0;
+        $all_responses   = [];
+        $errors          = [];
+
+        // ---- API呼び出し（最大3回 / 1日10回制限に配慮） ----
+
+        // 1) URL別データ（ページ分析用）
+        $url_result = self::api_get( '/project-live-insights', $token, [
+            'numOfDays' => 3,
+            'dimension1' => 'URL',
+        ] );
+        $all_responses['by_url'] = $url_result;
+        if ( $url_result['success'] ) {
+            $metrics_fetched += count( $url_result['data'] ?? [] );
+        } else {
+            $errors[] = 'URL別取得失敗: ' . ( $url_result['error'] ?? 'unknown' );
+        }
+
+        // 2) Device別データ
+        $device_result = self::api_get( '/project-live-insights', $token, [
+            'numOfDays' => 3,
+            'dimension1' => 'Device',
+        ] );
+        $all_responses['by_device'] = $device_result;
+        if ( $device_result['success'] ) {
+            $metrics_fetched += count( $device_result['data'] ?? [] );
+        }
+
+        // 3) URL × Device データ（ページ別デバイス差分用）
+        $url_device_result = self::api_get( '/project-live-insights', $token, [
+            'numOfDays' => 3,
+            'dimension1' => 'URL',
+            'dimension2' => 'Device',
+        ] );
+        $all_responses['by_url_device'] = $url_device_result;
+        if ( $url_device_result['success'] ) {
+            $metrics_fetched += count( $url_device_result['data'] ?? [] );
+        }
+
+        // ---- データ正規化 & 既存ページ分析テーブルに反映 ----
+        $normalized = self::normalize_responses( $all_responses );
+
+        if ( ! empty( $normalized['pages'] ) ) {
+            $pa_table = $wpdb->prefix . 'gcrev_page_analysis';
+            foreach ( $normalized['pages'] as $page_url => $page_data ) {
+                // 既存行があれば clarity_data を更新
+                $existing = $wpdb->get_var( $wpdb->prepare(
+                    "SELECT id FROM {$pa_table} WHERE user_id = %d AND page_url = %s",
+                    $user_id, $page_url
+                ) );
+
+                $clarity_json = wp_json_encode( $page_data, JSON_UNESCAPED_UNICODE );
+                $now = current_time( 'Y-m-d H:i:s' );
+
+                if ( $existing ) {
+                    $wpdb->update( $pa_table, [
+                        'clarity_data'      => $clarity_json,
+                        'clarity_sync_date' => $now,
+                    ], [ 'id' => $existing ] );
+                    $pages_updated++;
+                }
+                // 未登録ページは自動登録しない（ページ分析に登録済みのもののみ更新）
+            }
+        }
+
+        // ---- 同期結果判定 ----
+        $status  = 'success';
+        $message = '同期が完了しました';
+        if ( ! empty( $errors ) && $metrics_fetched === 0 ) {
+            $status  = 'failed';
+            $message = implode( '; ', $errors );
+        } elseif ( ! empty( $errors ) ) {
+            $status  = 'partial';
+            $message = '一部データのみ取得しました';
+        }
+
+        $finished_at = current_time( 'Y-m-d H:i:s' );
+
+        // ---- 同期ログ保存 ----
+        $wpdb->insert( $log_table, [
+            'user_id'          => $user_id,
+            'sync_type'        => $sync_type,
+            'status'           => $status,
+            'num_of_days'      => 3,
+            'dimensions'       => 'URL,Device,URL+Device',
+            'metrics_fetched'  => $metrics_fetched,
+            'pages_updated'    => $pages_updated,
+            'response_json'    => wp_json_encode( $all_responses, JSON_UNESCAPED_UNICODE ),
+            'error_message'    => ! empty( $errors ) ? implode( "\n", $errors ) : null,
+            'started_at'       => $started_at,
+            'finished_at'      => $finished_at,
+        ] );
+
+        // user meta に最終同期情報を保存
+        update_user_meta( $user_id, '_gcrev_clarity_last_sync_at', $finished_at );
+        update_user_meta( $user_id, '_gcrev_clarity_last_sync_status', $status );
+        update_user_meta( $user_id, '_gcrev_clarity_last_sync_message', $message );
+
+        return [
+            'success' => $status !== 'failed',
+            'message' => $message,
+            'summary' => [
+                'status'          => $status,
+                'metrics_fetched' => $metrics_fetched,
+                'pages_updated'   => $pages_updated,
+                'synced_at'       => $finished_at,
+                'normalized'      => $normalized['summary'] ?? [],
+            ],
+        ];
+    }
+
+    /**
+     * 最新の同期ログを取得
+     *
+     * @param int $user_id
+     * @param int $limit
+     * @return array
+     */
+    public static function get_sync_logs( int $user_id, int $limit = 5 ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_clarity_sync_logs';
+
+        return $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, sync_type, status, metrics_fetched, pages_updated,
+                    error_message, started_at, finished_at
+             FROM {$table}
+             WHERE user_id = %d
+             ORDER BY created_at DESC
+             LIMIT %d",
+            $user_id, $limit
+        ), ARRAY_A ) ?: [];
+    }
+
+    /**
+     * 最新の同期結果サマリーを取得
+     *
+     * @param int $user_id
+     * @return array
+     */
+    public static function get_sync_summary( int $user_id ): array {
+        return [
+            'last_sync_at'      => get_user_meta( $user_id, '_gcrev_clarity_last_sync_at', true ) ?: '',
+            'last_sync_status'  => get_user_meta( $user_id, '_gcrev_clarity_last_sync_status', true ) ?: '',
+            'last_sync_message' => get_user_meta( $user_id, '_gcrev_clarity_last_sync_message', true ) ?: '',
+        ];
+    }
+
+    // =========================================================
+    // データ正規化
+    // =========================================================
+
+    /**
+     * APIレスポンスを正規化
+     *
+     * @param array $responses  { by_url, by_device, by_url_device }
+     * @return array { pages: { url => data }, summary: { ... } }
+     */
+    private static function normalize_responses( array $responses ): array {
+        $pages   = [];
+        $summary = [
+            'available_metrics' => [],
+            'total_urls'        => 0,
+            'device_types'      => [],
+        ];
+
+        // URL別データの正規化
+        if ( ! empty( $responses['by_url']['data'] ) && is_array( $responses['by_url']['data'] ) ) {
+            foreach ( $responses['by_url']['data'] as $metric_block ) {
+                $metric_name = $metric_block['metricName'] ?? '';
+                if ( empty( $metric_name ) ) continue;
+
+                $summary['available_metrics'][] = $metric_name;
+
+                foreach ( $metric_block['information'] ?? [] as $row ) {
+                    $url = $row['URL'] ?? $row['url'] ?? '';
+                    if ( empty( $url ) ) continue;
+
+                    if ( ! isset( $pages[ $url ] ) ) {
+                        $pages[ $url ] = [ 'metrics' => [], 'devices' => [] ];
+                    }
+
+                    // メトリクス名を正規化キーに変換
+                    $key = self::normalize_metric_key( $metric_name );
+                    $pages[ $url ]['metrics'][ $key ] = self::extract_metric_value( $row, $metric_name );
+                }
+            }
+        }
+
+        // Device別データの正規化
+        if ( ! empty( $responses['by_device']['data'] ) && is_array( $responses['by_device']['data'] ) ) {
+            foreach ( $responses['by_device']['data'] as $metric_block ) {
+                foreach ( $metric_block['information'] ?? [] as $row ) {
+                    $device = $row['Device'] ?? $row['device'] ?? '';
+                    if ( $device && ! in_array( $device, $summary['device_types'], true ) ) {
+                        $summary['device_types'][] = $device;
+                    }
+                }
+            }
+        }
+
+        // URL×Device データの正規化
+        if ( ! empty( $responses['by_url_device']['data'] ) && is_array( $responses['by_url_device']['data'] ) ) {
+            foreach ( $responses['by_url_device']['data'] as $metric_block ) {
+                $metric_name = $metric_block['metricName'] ?? '';
+                if ( empty( $metric_name ) ) continue;
+
+                $key = self::normalize_metric_key( $metric_name );
+                foreach ( $metric_block['information'] ?? [] as $row ) {
+                    $url    = $row['URL'] ?? $row['url'] ?? '';
+                    $device = $row['Device'] ?? $row['device'] ?? '';
+                    if ( empty( $url ) || empty( $device ) ) continue;
+
+                    if ( ! isset( $pages[ $url ] ) ) {
+                        $pages[ $url ] = [ 'metrics' => [], 'devices' => [] ];
+                    }
+                    if ( ! isset( $pages[ $url ]['devices'][ $device ] ) ) {
+                        $pages[ $url ]['devices'][ $device ] = [];
+                    }
+                    $pages[ $url ]['devices'][ $device ][ $key ] = self::extract_metric_value( $row, $metric_name );
+                }
+            }
+        }
+
+        $summary['available_metrics'] = array_unique( $summary['available_metrics'] );
+        $summary['total_urls']        = count( $pages );
+
+        return [ 'pages' => $pages, 'summary' => $summary ];
+    }
+
+    /**
+     * メトリクス名をスネークケースのキーに正規化
+     */
+    private static function normalize_metric_key( string $metric_name ): string {
+        $map = [
+            'Traffic'           => 'traffic',
+            'EngagementTime'    => 'engagement_time',
+            'ScrollDepth'       => 'scroll_depth',
+            'ExcessiveScroll'   => 'excessive_scroll',
+            'DeadClickCount'    => 'dead_click_count',
+            'RageClickCount'    => 'rage_click_count',
+            'QuickbackClick'    => 'quickback_click',
+            'ErrorClickCount'   => 'error_click_count',
+            'ScriptErrorCount'  => 'script_error_count',
+            'PopularPages'      => 'popular_pages',
+        ];
+        return $map[ $metric_name ] ?? strtolower( preg_replace( '/([a-z])([A-Z])/', '$1_$2', $metric_name ) );
+    }
+
+    /**
+     * メトリクス行から値を抽出
+     */
+    private static function extract_metric_value( array $row, string $metric_name ): array {
+        $value = [];
+        foreach ( $row as $k => $v ) {
+            // ディメンション列はスキップ
+            if ( in_array( $k, [ 'URL', 'url', 'Device', 'device', 'Browser', 'OS', 'Country/Region', 'Source', 'Medium', 'Campaign', 'Channel' ], true ) ) {
+                continue;
+            }
+            $value[ $k ] = $v;
+        }
+        return $value;
+    }
+
+    // =========================================================
     // 内部ヘルパー
     // =========================================================
 

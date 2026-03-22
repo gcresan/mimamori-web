@@ -23,6 +23,7 @@ $settings = gcrev_get_client_settings( $user_id );
 
 // Clarity 連携設定
 $clarity_settings = class_exists( 'Gcrev_Clarity_Client' ) ? Gcrev_Clarity_Client::get_settings( $user_id ) : [];
+$clarity_sync     = class_exists( 'Gcrev_Clarity_Client' ) ? Gcrev_Clarity_Client::get_sync_summary( $user_id ) : [];
 
 // 旧データフォールバック: report_target から商圏の初期値を推定
 $legacy_target = get_user_meta( $user_id, 'report_target', true );
@@ -1076,6 +1077,44 @@ get_header();
                 </p>
                 <?php endif; ?>
             </div>
+
+            <!-- データ同期 -->
+            <div class="form-group" style="margin-top:24px;padding-top:20px;border-top:1px solid #e9ecef;">
+                <label>データ同期</label>
+                <p class="cs-hint" style="margin:-2px 0 12px;">Clarity APIからページ別の行動データを取得し、ページ分析に反映します。<br>※ APIリクエスト制限: 1日10回まで / 直近3日分のデータが対象です。</p>
+                <div class="cs-test-area">
+                    <button type="button" class="cs-btn-test" id="btnClaritySync" onclick="syncClarityData()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        手動同期
+                    </button>
+                    <span id="claritySyncResult">
+                        <?php
+                        $s_status = $clarity_sync['last_sync_status'] ?? '';
+                        if ( $s_status === 'success' ) {
+                            echo '<span class="cs-status-badge cs-status-badge--success"><span class="dot"></span>同期済み</span>';
+                        } elseif ( $s_status === 'failed' ) {
+                            echo '<span class="cs-status-badge cs-status-badge--error"><span class="dot"></span>同期失敗</span>';
+                        } elseif ( $s_status === 'partial' ) {
+                            echo '<span class="cs-status-badge cs-status-badge--neutral"><span class="dot"></span>一部取得</span>';
+                        } else {
+                            echo '<span class="cs-status-badge cs-status-badge--neutral"><span class="dot"></span>未同期</span>';
+                        }
+                        ?>
+                    </span>
+                </div>
+                <?php if ( ! empty( $clarity_sync['last_sync_at'] ) ): ?>
+                <p class="cs-test-meta">
+                    最終同期: <?php echo esc_html( $clarity_sync['last_sync_at'] ); ?>
+                    <?php if ( ! empty( $clarity_sync['last_sync_message'] ) ): ?>
+                        — <?php echo esc_html( $clarity_sync['last_sync_message'] ); ?>
+                    <?php endif; ?>
+                </p>
+                <?php endif; ?>
+
+                <!-- 同期結果詳細（JS で動的更新） -->
+                <div id="claritySyncDetail" style="display:none;margin-top:12px;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;line-height:1.7;">
+                </div>
+            </div>
         </div>
 
         <div class="cs-actions">
@@ -1621,6 +1660,56 @@ get_header();
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> 接続テスト';
+        }
+    };
+
+    // ===== Clarity 手動同期 =====
+    window.syncClarityData = async function() {
+        var btn = document.getElementById('btnClaritySync');
+        var resultEl = document.getElementById('claritySyncResult');
+        var detailEl = document.getElementById('claritySyncDetail');
+        btn.disabled = true;
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> 同期中...';
+        resultEl.innerHTML = '<span class="cs-status-badge cs-status-badge--loading"><span class="dot"></span>Clarity APIからデータ取得中...</span>';
+        detailEl.style.display = 'none';
+
+        try {
+            var res = await fetch('<?php echo esc_url_raw( rest_url( 'gcrev/v1/clarity/sync' ) ); ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': wpNonce },
+                credentials: 'same-origin'
+            });
+            var json = await res.json();
+            if (json.success) {
+                resultEl.innerHTML = '<span class="cs-status-badge cs-status-badge--success"><span class="dot"></span>同期完了</span>';
+                showToast('Clarityデータの同期が完了しました');
+
+                // 結果詳細表示
+                var s = json.summary || {};
+                var html = '<strong>同期結果:</strong><br>';
+                html += '取得メトリクス数: ' + (s.metrics_fetched || 0) + '<br>';
+                html += 'ページ分析更新数: ' + (s.pages_updated || 0) + '<br>';
+                if (s.normalized) {
+                    if (s.normalized.total_urls) html += '取得URL数: ' + s.normalized.total_urls + '<br>';
+                    if (s.normalized.available_metrics && s.normalized.available_metrics.length > 0) {
+                        html += '取得指標: ' + s.normalized.available_metrics.join(', ') + '<br>';
+                    }
+                    if (s.normalized.device_types && s.normalized.device_types.length > 0) {
+                        html += 'デバイス種別: ' + s.normalized.device_types.join(', ') + '<br>';
+                    }
+                }
+                html += '同期日時: ' + (s.synced_at || '-');
+                detailEl.innerHTML = html;
+                detailEl.style.display = 'block';
+            } else {
+                var msg = json.message || '同期に失敗しました';
+                resultEl.innerHTML = '<span class="cs-status-badge cs-status-badge--error"><span class="dot"></span>' + msg.replace(/</g,'&lt;') + '</span>';
+            }
+        } catch (e) {
+            resultEl.innerHTML = '<span class="cs-status-badge cs-status-badge--error"><span class="dot"></span>通信エラーが発生しました</span>';
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> 手動同期';
         }
     };
 

@@ -4940,6 +4940,7 @@ add_action('after_setup_theme', function () {
     gcrev_prefetch_status_create_table();
     gcrev_page_analysis_create_table();
     gcrev_page_snapshots_create_table();
+    gcrev_clarity_sync_log_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -5552,6 +5553,42 @@ function gcrev_page_snapshots_create_table(): void {
         PRIMARY KEY  (id),
         KEY page_analysis_id (page_analysis_id),
         KEY captured_at (captured_at)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
+ * Clarity同期ログテーブル作成
+ *
+ * 手動同期・自動同期の実行ログを保存。
+ * 管理画面から同期状態を確認するために使用。
+ */
+function gcrev_clarity_sync_log_create_table(): void {
+    global $wpdb;
+
+    $table           = $wpdb->prefix . 'gcrev_clarity_sync_logs';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        sync_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        num_of_days TINYINT UNSIGNED NOT NULL DEFAULT 1,
+        dimensions VARCHAR(100) DEFAULT NULL,
+        metrics_fetched INT UNSIGNED NOT NULL DEFAULT 0,
+        pages_updated INT UNSIGNED NOT NULL DEFAULT 0,
+        response_json LONGTEXT DEFAULT NULL,
+        error_message TEXT DEFAULT NULL,
+        started_at DATETIME NOT NULL,
+        finished_at DATETIME DEFAULT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_id (user_id),
+        KEY user_status (user_id, status),
+        KEY created_at (created_at)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

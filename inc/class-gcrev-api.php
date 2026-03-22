@@ -705,6 +705,16 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_get_clarity_settings' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/clarity/sync', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_clarity_sync' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/clarity/sync-logs', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_clarity_sync_logs' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         // ===== CV分析ページ用エンドポイント =====
         register_rest_route('gcrev/v1', '/analysis/cv', [
@@ -17709,10 +17719,56 @@ PROMPT;
         }
 
         $settings = Gcrev_Clarity_Client::get_settings( $user_id );
+        $sync     = Gcrev_Clarity_Client::get_sync_summary( $user_id );
 
         return new \WP_REST_Response( [
             'success' => true,
-            'data'    => $settings,
+            'data'    => array_merge( $settings, $sync ),
+        ], 200 );
+    }
+
+    /**
+     * Clarity 手動同期
+     * POST gcrev/v1/clarity/sync
+     */
+    public function rest_clarity_sync( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '認証が必要です' ], 401 );
+        }
+
+        if ( ! class_exists( 'Gcrev_Clarity_Client' ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'Clarity連携モジュールが読み込まれていません' ], 500 );
+        }
+
+        $result = Gcrev_Clarity_Client::sync_data( $user_id, 'manual' );
+
+        return new \WP_REST_Response( $result, 200 );
+    }
+
+    /**
+     * Clarity 同期ログ取得
+     * GET gcrev/v1/clarity/sync-logs
+     */
+    public function rest_get_clarity_sync_logs( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '認証が必要です' ], 401 );
+        }
+
+        if ( ! class_exists( 'Gcrev_Clarity_Client' ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'Clarity連携モジュールが読み込まれていません' ], 500 );
+        }
+
+        $logs    = Gcrev_Clarity_Client::get_sync_logs( $user_id );
+        $summary = Gcrev_Clarity_Client::get_sync_summary( $user_id );
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'data'    => [
+                'logs'    => $logs,
+                'summary' => $summary,
+            ],
         ], 200 );
     }
 
