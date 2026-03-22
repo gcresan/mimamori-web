@@ -1698,7 +1698,16 @@ get_header();
                         html += 'デバイス種別: ' + s.normalized.device_types.join(', ') + '<br>';
                     }
                 }
-                html += '同期日時: ' + (s.synced_at || '-');
+                if (s.matched_urls && s.matched_urls.length > 0) {
+                    html += '<br><strong>マッチしたURL:</strong><br>';
+                    s.matched_urls.forEach(function(u) { html += '✅ ' + u + '<br>'; });
+                }
+                if (s.unmatched_urls && s.unmatched_urls.length > 0) {
+                    html += '<br><strong style="color:#dc2626;">未マッチURL（Clarityから取得したが、ページ分析に未登録）:</strong><br>';
+                    s.unmatched_urls.slice(0, 20).forEach(function(u) { html += '⚠ ' + u + '<br>'; });
+                    if (s.unmatched_urls.length > 20) html += '...他 ' + (s.unmatched_urls.length - 20) + '件<br>';
+                }
+                html += '<br>同期日時: ' + (s.synced_at || '-');
                 detailEl.innerHTML = html;
                 detailEl.style.display = 'block';
             } else {
