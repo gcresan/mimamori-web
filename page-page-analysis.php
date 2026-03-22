@@ -448,10 +448,6 @@ get_header();
 }
 .hm-canvas-wrap canvas {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
     pointer-events: none;
 }
 .hm-empty {
@@ -967,8 +963,10 @@ get_header();
         var device = hmDeviceSelect ? hmDeviceSelect.value : 'pc';
         var metric = hmMetricSelect ? hmMetricSelect.value : 'scroll';
 
-        // 画像URL取得
-        var imgUrl = device === 'mobile' ? data.screenshot_mobile_url : data.screenshot_pc_url;
+        // 画像URL取得（ヒートマップではオリジナル高解像度画像を使用）
+        var imgUrl = device === 'mobile'
+            ? (data.screenshot_mobile_original || data.screenshot_mobile_url)
+            : (data.screenshot_pc_original || data.screenshot_pc_url);
 
         if (!imgUrl) {
             hmImage.style.display = 'none';
@@ -984,15 +982,23 @@ get_header();
         hmImage.src = imgUrl;
 
         hmImage.onload = function() {
-            // Retina対応: 画像の実サイズでcanvasを描画し、CSSで表示サイズに縮小
-            var dpr = window.devicePixelRatio || 1;
+            // 画像の実表示サイズを取得
             var rect = hmImage.getBoundingClientRect();
-            hmCanvas.width  = rect.width * dpr;
-            hmCanvas.height = rect.height * dpr;
+            var dpr = window.devicePixelRatio || 1;
+
+            // Canvas内部解像度をRetina対応
+            hmCanvas.width  = Math.round(rect.width * dpr);
+            hmCanvas.height = Math.round(rect.height * dpr);
+
+            // CSS表示サイズを画像と完全一致
             hmCanvas.style.width  = rect.width + 'px';
             hmCanvas.style.height = rect.height + 'px';
+            hmCanvas.style.position = 'absolute';
+            hmCanvas.style.top = hmImage.offsetTop + 'px';
+            hmCanvas.style.left = hmImage.offsetLeft + 'px';
+
             var ctx = hmCanvas.getContext('2d');
-            ctx.scale(dpr, dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             drawOverlay(metric, device, data, rect.width, rect.height);
         };
 

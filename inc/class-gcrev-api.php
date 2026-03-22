@@ -17446,8 +17446,12 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
         }
 
-        $row['screenshot_pc_url']     = $row['screenshot_pc'] ? wp_get_attachment_url( (int) $row['screenshot_pc'] ) : null;
-        $row['screenshot_mobile_url'] = $row['screenshot_mobile'] ? wp_get_attachment_url( (int) $row['screenshot_mobile'] ) : null;
+        // フルサイズURL（WordPress 5.3+ の -scaled 自動リサイズを回避し、元画像URLを使用）
+        $row['screenshot_pc_url']     = $row['screenshot_pc'] ? wp_get_attachment_image_url( (int) $row['screenshot_pc'], 'full' ) : null;
+        $row['screenshot_mobile_url'] = $row['screenshot_mobile'] ? wp_get_attachment_image_url( (int) $row['screenshot_mobile'], 'full' ) : null;
+        // 元画像URL（-scaled を除去した真のオリジナル）
+        $row['screenshot_pc_original']     = $row['screenshot_pc'] ? wp_get_original_image_url( (int) $row['screenshot_pc'] ) : null;
+        $row['screenshot_mobile_original'] = $row['screenshot_mobile'] ? wp_get_original_image_url( (int) $row['screenshot_mobile'] ) : null;
         // サムネイルURL（パネル表示用）
         $row['screenshot_pc_thumb']     = $row['screenshot_pc'] ? ( wp_get_attachment_image_url( (int) $row['screenshot_pc'], 'large' ) ?: $row['screenshot_pc_url'] ) : null;
         $row['screenshot_mobile_thumb'] = $row['screenshot_mobile'] ? ( wp_get_attachment_image_url( (int) $row['screenshot_mobile'], 'medium' ) ?: $row['screenshot_mobile_url'] ) : null;
