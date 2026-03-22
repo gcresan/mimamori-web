@@ -906,8 +906,9 @@ get_header();
         }
 
         // キャプチャタブ（サムネイル表示 + クリックで原寸）
-        var pcThumb = data.screenshot_pc_thumb || data.screenshot_pc_url;
-        var spThumb = data.screenshot_mobile_thumb || data.screenshot_mobile_url;
+        // キャプチャタブもオリジナル高解像度画像を使用
+        var pcThumb = data.screenshot_pc_original || data.screenshot_pc_url;
+        var spThumb = data.screenshot_mobile_original || data.screenshot_mobile_url;
         var pcImg = data.screenshot_pc_url
             ? '<img src="' + escHtml(pcThumb) + '" class="pa-capture-img" alt="PC版" onclick="window._paLightbox(\'' + escHtml(data.screenshot_pc_url) + '\')">'
             : '<div class="pa-capture-empty">キャプチャ未取得</div>';
