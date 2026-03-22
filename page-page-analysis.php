@@ -985,14 +985,13 @@ get_header();
         hmEmpty.style.display = 'none';
         hmImage.style.display = 'block';
         hmCanvas.style.display = 'block';
-        hmImage.src = imgUrl;
 
-        hmImage.onload = function() {
+        function doDrawOverlay() {
             var dpr = window.devicePixelRatio || 1;
             var imgW = hmImage.offsetWidth;
             var imgH = hmImage.offsetHeight;
+            if (imgW < 10 || imgH < 10) return; // まだレイアウト未完了
 
-            // Canvas サイズ（Retina対応）
             hmCanvas.width  = imgW * dpr;
             hmCanvas.height = imgH * dpr;
             hmCanvas.style.width  = imgW + 'px';
@@ -1001,7 +1000,17 @@ get_header();
             var ctx = hmCanvas.getContext('2d');
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             drawOverlay(metric, device, data, imgW, imgH);
-        };
+        }
+
+        // キャッシュ済み画像にも対応
+        if (hmImage.src === imgUrl && hmImage.complete && hmImage.naturalHeight > 0) {
+            doDrawOverlay();
+        } else {
+            hmImage.onload = doDrawOverlay;
+            hmImage.src = imgUrl;
+        }
+        // フォールバック: 少し遅れて再描画（レイアウト完了待ち）
+        setTimeout(doDrawOverlay, 300);
 
         // サマリー描画
         renderHeatmapSummary(data, device);
