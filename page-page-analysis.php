@@ -1024,60 +1024,70 @@ get_header();
     }
 
     function drawScrollOverlay(ctx, w, h, metrics, deviceData) {
-        // スクロール深度のグラデーション表示
         var scrollData = deviceData.scroll_depth || metrics.scroll_depth || {};
-        // Clarity API: sessionsWithMetricPercentage = スクロール到達セッション割合(%)
-        var avgScroll = parseFloat(scrollData.sessionsWithMetricPercentage || scrollData.Average || scrollData.average || 0);
+        var trafficData = deviceData.traffic || metrics.traffic || {};
+        var hasData = Object.keys(scrollData).length > 0 || Object.keys(trafficData).length > 0;
 
-        if (avgScroll <= 0) {
-            // データなし — 薄いガイドラインのみ
-            ctx.strokeStyle = 'rgba(100,100,100,0.15)';
-            ctx.setLineDash([4, 4]);
-            for (var pct = 25; pct <= 75; pct += 25) {
-                var y = h * (pct / 100);
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-                ctx.fillStyle = 'rgba(100,100,100,0.3)';
-                ctx.font = '11px sans-serif';
-                ctx.fillText(pct + '%', 4, y - 4);
-            }
-            ctx.setLineDash([]);
+        // スクロール到達セッション割合(%)
+        var scrollPct = scrollData.sessionsWithMetricPercentage;
+        var avgScroll = (scrollPct !== undefined && scrollPct !== null) ? parseFloat(scrollPct) : -1;
+
+        // データが全くない場合
+        if (!hasData) {
+            drawNoDataLabel(ctx, w, h, 'Clarityデータ未同期');
             return;
         }
 
-        // 到達率に応じたグラデーション（上: 緑 → 下: 赤）
-        var scrollLine = h * (avgScroll / 100);
+        // 常にグラデーション表示（視覚的にスクロール方向を示す）
         var grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, 'rgba(34,197,94,0.08)');
-        grad.addColorStop(avgScroll / 100, 'rgba(251,191,36,0.12)');
-        grad.addColorStop(1, 'rgba(239,68,68,0.15)');
+        grad.addColorStop(0, 'rgba(34,197,94,0.15)');
+        grad.addColorStop(0.3, 'rgba(34,197,94,0.08)');
+        grad.addColorStop(0.6, 'rgba(251,191,36,0.10)');
+        grad.addColorStop(1, 'rgba(239,68,68,0.18)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
 
-        // 平均スクロール到達ライン
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 3]);
-        ctx.beginPath(); ctx.moveTo(0, scrollLine); ctx.lineTo(w, scrollLine); ctx.stroke();
-        ctx.setLineDash([]);
-
-        // ラベル
-        ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('平均到達 ' + avgScroll.toFixed(0) + '%', 8, scrollLine - 6);
-
-        // 25%, 50%, 75% ライン
-        ctx.strokeStyle = 'rgba(100,100,100,0.2)';
+        // 25%, 50%, 75% ガイドライン
+        ctx.strokeStyle = 'rgba(100,100,100,0.25)';
         ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
+        ctx.setLineDash([4, 4]);
         [25, 50, 75].forEach(function(pct) {
-            if (Math.abs(pct - avgScroll) < 5) return;
             var y = h * (pct / 100);
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-            ctx.fillStyle = 'rgba(100,100,100,0.4)';
-            ctx.font = '10px sans-serif';
-            ctx.fillText(pct + '%', 4, y - 3);
+            ctx.fillStyle = 'rgba(50,50,50,0.5)';
+            ctx.font = '11px sans-serif';
+            ctx.fillText(pct + '%', 6, y - 5);
         });
         ctx.setLineDash([]);
+
+        // スクロール到達ライン
+        if (avgScroll >= 0) {
+            var scrollLine = h * (avgScroll / 100);
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([8, 4]);
+            ctx.beginPath(); ctx.moveTo(0, scrollLine); ctx.lineTo(w, scrollLine); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // ラベル背景
+            var labelText = '到達 ' + avgScroll.toFixed(1) + '%';
+            ctx.font = 'bold 12px sans-serif';
+            var tw = ctx.measureText(labelText).width;
+            ctx.fillStyle = 'rgba(239,68,68,0.9)';
+            ctx.fillRect(6, scrollLine - 20, tw + 12, 18);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(labelText, 12, scrollLine - 6);
+        }
+
+        // セッション数ラベル（右上）
+        var sessions = trafficData.sessionsCount || trafficData.totalSessionCount;
+        if (sessions) {
+            ctx.fillStyle = 'rgba(30,41,59,0.7)';
+            ctx.font = '11px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText('セッション: ' + parseInt(sessions).toLocaleString(), w - 8, 16);
+            ctx.textAlign = 'start';
+        }
     }
 
     function drawClickOverlay(ctx, w, h, metrics) {
@@ -1198,22 +1208,28 @@ get_header();
         var tM      = devMetrics.traffic || metrics.traffic || {};
         var ecM     = devMetrics.error_click_count || metrics.error_click_count || {};
 
+        // 0 を正しく扱うヘルパー（|| は 0 を falsy にするため使わない）
+        function safeNum(v) {
+            if (v === undefined || v === null || v === '') return null;
+            return v;
+        }
+
         // スクロール深度: sessionsWithMetricPercentage が到達セッション割合
-        var scrollPct = scrollM.sessionsWithMetricPercentage;
-        var scrollDisplay = (scrollPct !== undefined && scrollPct !== null) ? (parseFloat(scrollPct).toFixed(1) + '%') : '-';
+        var scrollPct = safeNum(scrollM.sessionsWithMetricPercentage);
+        var scrollDisplay = scrollPct !== null ? (parseFloat(scrollPct).toFixed(1) + '%') : '-';
 
         // エンゲージメント
-        var engPct = engM.sessionsWithMetricPercentage;
-        var engDisplay = (engPct !== undefined && engPct !== null) ? (parseFloat(engPct).toFixed(1) + '%') : '-';
+        var engPct = safeNum(engM.sessionsWithMetricPercentage);
+        var engDisplay = engPct !== null ? (parseFloat(engPct).toFixed(1) + '%') : '-';
 
         // Dead/Rage Click: subTotal がイベント合計数
-        var dcCount = dcM.subTotal || dcM.sessionsCount || '-';
-        var rcCount = rcM.subTotal || rcM.sessionsCount || '-';
-        var ecCount = ecM.subTotal || ecM.sessionsCount || '-';
+        var dcCount = safeNum(dcM.subTotal) !== null ? dcM.subTotal : (safeNum(dcM.sessionsCount) !== null ? dcM.sessionsCount : '-');
+        var rcCount = safeNum(rcM.subTotal) !== null ? rcM.subTotal : (safeNum(rcM.sessionsCount) !== null ? rcM.sessionsCount : '-');
+        var ecCount = safeNum(ecM.subTotal) !== null ? ecM.subTotal : (safeNum(ecM.sessionsCount) !== null ? ecM.sessionsCount : '-');
 
         // セッション数
-        var sessions = tM.sessionsCount || tM.totalSessionCount || '-';
-        var pageViews = tM.pagesViews || '-';
+        var sessions = safeNum(tM.sessionsCount) !== null ? tM.sessionsCount : (safeNum(tM.totalSessionCount) !== null ? tM.totalSessionCount : '-');
+        var pageViews = safeNum(tM.pagesViews) !== null ? tM.pagesViews : '-';
 
         hmSummaryGrid.innerHTML = ''
             + stat('セッション数', sessions, 'PV: ' + pageViews)
