@@ -17409,6 +17409,9 @@ PROMPT;
 
         $row['screenshot_pc_url']     = $row['screenshot_pc'] ? wp_get_attachment_url( (int) $row['screenshot_pc'] ) : null;
         $row['screenshot_mobile_url'] = $row['screenshot_mobile'] ? wp_get_attachment_url( (int) $row['screenshot_mobile'] ) : null;
+        // サムネイルURL（パネル表示用）
+        $row['screenshot_pc_thumb']     = $row['screenshot_pc'] ? ( wp_get_attachment_image_url( (int) $row['screenshot_pc'], 'large' ) ?: $row['screenshot_pc_url'] ) : null;
+        $row['screenshot_mobile_thumb'] = $row['screenshot_mobile'] ? ( wp_get_attachment_image_url( (int) $row['screenshot_mobile'], 'medium' ) ?: $row['screenshot_mobile_url'] ) : null;
         $row['clarity_data']          = $row['clarity_data'] ? json_decode( $row['clarity_data'], true ) : null;
         $row['ai_insights']           = $row['ai_insights'] ? json_decode( $row['ai_insights'], true ) : null;
 

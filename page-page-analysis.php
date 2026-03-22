@@ -286,6 +286,40 @@ get_header();
     border-radius: 6px;
     border: 1px solid #e0e0e0;
     margin-bottom: 12px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+.pa-capture-img:hover { opacity: 0.85; }
+/* 原寸プレビューモーダル */
+.pa-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(0,0,0,0.8);
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 40px 20px;
+}
+.pa-lightbox.is-open { display: flex; }
+.pa-lightbox img {
+    max-width: 90%;
+    max-height: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+}
+.pa-lightbox-close {
+    position: fixed;
+    top: 16px;
+    right: 24px;
+    color: #fff;
+    font-size: 32px;
+    cursor: pointer;
+    z-index: 100001;
+    background: none;
+    border: none;
+    line-height: 1;
 }
 .pa-capture-empty {
     width: 100%;
@@ -475,6 +509,12 @@ get_header();
 <!-- 非表示ファイル入力 -->
 <input type="file" id="paFileInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
 
+<!-- 原寸プレビュー -->
+<div class="pa-lightbox" id="paLightbox">
+    <button type="button" class="pa-lightbox-close" id="paLightboxClose">&times;</button>
+    <img src="" alt="プレビュー" id="paLightboxImg">
+</div>
+
 <script>
 (function() {
     'use strict';
@@ -513,6 +553,24 @@ get_header();
 
     var currentDetailId = null;
     var uploadTarget = null; // { id, device }
+
+    // --- 原寸プレビュー（ライトボックス） ---
+    var lightbox = document.getElementById('paLightbox');
+    var lightboxImg = document.getElementById('paLightboxImg');
+    window._paLightbox = function(url) {
+        lightboxImg.src = url;
+        lightbox.classList.add('is-open');
+    };
+    document.getElementById('paLightboxClose').addEventListener('click', function() {
+        lightbox.classList.remove('is-open');
+        lightboxImg.src = '';
+    });
+    lightbox.addEventListener('click', function(e) {
+        if (e.target === lightbox) {
+            lightbox.classList.remove('is-open');
+            lightboxImg.src = '';
+        }
+    });
 
     // --- ユーティリティ ---
     function escHtml(s) {
@@ -695,12 +753,14 @@ get_header();
             aiPane.innerHTML = '<div style="padding:8px 0;line-height:1.8;font-size:14px;">' + escHtml(data.ai_summary).replace(/\n/g, '<br>') + '</div>';
         }
 
-        // キャプチャタブ
+        // キャプチャタブ（サムネイル表示 + クリックで原寸）
+        var pcThumb = data.screenshot_pc_thumb || data.screenshot_pc_url;
+        var spThumb = data.screenshot_mobile_thumb || data.screenshot_mobile_url;
         var pcImg = data.screenshot_pc_url
-            ? '<img src="' + escHtml(data.screenshot_pc_url) + '" class="pa-capture-img" alt="PC版">'
+            ? '<img src="' + escHtml(pcThumb) + '" class="pa-capture-img" alt="PC版" onclick="window._paLightbox(\'' + escHtml(data.screenshot_pc_url) + '\')">'
             : '<div class="pa-capture-empty">キャプチャ未取得</div>';
         var spImg = data.screenshot_mobile_url
-            ? '<img src="' + escHtml(data.screenshot_mobile_url) + '" class="pa-capture-img" alt="SP版">'
+            ? '<img src="' + escHtml(spThumb) + '" class="pa-capture-img" alt="SP版" onclick="window._paLightbox(\'' + escHtml(data.screenshot_mobile_url) + '\')">'
             : '<div class="pa-capture-empty">キャプチャ未取得</div>';
 
         var pcDel = data.screenshot_pc_url
