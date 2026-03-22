@@ -677,14 +677,16 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
         register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/snapshot', [
-            'methods'             => 'POST',
-            'callback'            => [ $this, 'rest_upload_page_snapshot' ],
-            'permission_callback' => [ $this->config, 'check_permission' ],
-        ]);
-        register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/snapshot', [
-            'methods'             => 'DELETE',
-            'callback'            => [ $this, 'rest_delete_page_snapshot' ],
-            'permission_callback' => [ $this->config, 'check_permission' ],
+            [
+                'methods'             => 'POST',
+                'callback'            => [ $this, 'rest_upload_page_snapshot' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
+            [
+                'methods'             => 'DELETE',
+                'callback'            => [ $this, 'rest_delete_page_snapshot' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
         ]);
         register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/analyze', [
             'methods'             => 'POST',

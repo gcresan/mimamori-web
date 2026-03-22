@@ -741,6 +741,14 @@ get_header();
     els.fileInput.addEventListener('change', function() {
         if (!this.files[0] || !uploadTarget) return;
         var file = this.files[0];
+
+        // ファイルサイズチェック（50MB上限）
+        var maxSize = 50 * 1024 * 1024;
+        if (file.size > maxSize) {
+            alert('ファイルサイズが大きすぎます（上限: 50MB）。\n現在のサイズ: ' + Math.round(file.size / 1024 / 1024) + 'MB');
+            return;
+        }
+
         var formData = new FormData();
         formData.append('file', file);
         formData.append('device_type', uploadTarget.device);
@@ -752,21 +760,24 @@ get_header();
             headers: { 'X-WP-Nonce': NONCE },
             body: formData,
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            if (!r.ok) {
+                throw new Error('HTTP ' + r.status + ': サーバーエラー（ファイルが大きすぎる可能性があります）');
+            }
+            return r.json();
+        })
         .then(function(res) {
             hideLoading();
             if (res.success) {
-                // 詳細をリロード
                 window._paShowDetail(uploadTarget.id);
-                // 一覧もリロード
                 loadPages();
             } else {
                 alert(res.message || 'アップロードに失敗しました');
             }
         })
-        .catch(function() {
+        .catch(function(err) {
             hideLoading();
-            alert('通信エラーが発生しました');
+            alert(err.message || '通信エラーが発生しました');
         });
     });
 
