@@ -1003,7 +1003,9 @@ get_header();
 
         var clarity = data.clarity_data || {};
         var metrics = clarity.metrics || {};
-        var deviceData = (clarity.devices && clarity.devices[device === 'mobile' ? 'Mobile' : 'Desktop']) || {};
+        // Clarity API のデバイスキー: 'PC', 'Mobile', 'Tablet', 'Other'
+        var devKey = device === 'mobile' ? 'Mobile' : 'PC';
+        var deviceData = (clarity.devices && (clarity.devices[devKey] || clarity.devices['Desktop'])) || {};
 
         switch (metric) {
             case 'scroll':
@@ -1024,7 +1026,8 @@ get_header();
     function drawScrollOverlay(ctx, w, h, metrics, deviceData) {
         // スクロール深度のグラデーション表示
         var scrollData = deviceData.scroll_depth || metrics.scroll_depth || {};
-        var avgScroll = parseFloat(scrollData.Average || scrollData.average || 0);
+        // Clarity API: sessionsWithMetricPercentage = スクロール到達セッション割合(%)
+        var avgScroll = parseFloat(scrollData.sessionsWithMetricPercentage || scrollData.Average || scrollData.average || 0);
 
         if (avgScroll <= 0) {
             // データなし — 薄いガイドラインのみ
@@ -1079,7 +1082,7 @@ get_header();
 
     function drawClickOverlay(ctx, w, h, metrics) {
         var traffic = metrics.traffic || {};
-        var sessions = parseInt(traffic.totalSessionCount || traffic.Count || 0);
+        var sessions = parseInt(traffic.sessionsCount || traffic.totalSessionCount || traffic.Count || 0);
         if (sessions <= 0) {
             drawNoDataLabel(ctx, w, h, 'クリックデータなし');
             return;
@@ -1102,13 +1105,13 @@ get_header();
 
     function drawDeadClickOverlay(ctx, w, h, metrics) {
         var dc = metrics.dead_click_count || {};
-        var count = parseInt(dc.Count || dc.count || dc.value || 0);
+        var count = parseInt(dc.subTotal || dc.sessionsCount || dc.Count || dc.value || 0);
         drawClickBadge(ctx, w, h, count, 'Dead Click', '#f59e0b', 'rgba(245,158,11,0.12)');
     }
 
     function drawRageClickOverlay(ctx, w, h, metrics) {
         var rc = metrics.rage_click_count || {};
-        var count = parseInt(rc.Count || rc.count || rc.value || 0);
+        var count = parseInt(rc.subTotal || rc.sessionsCount || rc.Count || rc.value || 0);
         drawClickBadge(ctx, w, h, count, 'Rage Click', '#ef4444', 'rgba(239,68,68,0.12)');
     }
 
@@ -1146,21 +1149,40 @@ get_header();
     function renderHeatmapSummary(data, device) {
         var clarity = data.clarity_data || {};
         var metrics = clarity.metrics || {};
-        var deviceKey = device === 'mobile' ? 'Mobile' : 'Desktop';
-        var devMetrics = (clarity.devices && clarity.devices[deviceKey]) || {};
+        // Clarity API のデバイスキー: 'PC', 'Mobile', 'Tablet', 'Other'
+        var deviceKey = device === 'mobile' ? 'Mobile' : 'PC';
+        var devMetrics = (clarity.devices && (clarity.devices[deviceKey] || clarity.devices['Desktop'])) || {};
+
+        // デバッグ: clarity_dataの構造をコンソールに出力
+        console.log('[Heatmap] clarity_data:', clarity);
+        console.log('[Heatmap] metrics:', metrics);
+        console.log('[Heatmap] deviceKey:', deviceKey, 'devMetrics:', devMetrics);
 
         if (Object.keys(metrics).length === 0) {
             hmSummaryGrid.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください</div>';
             return;
         }
 
-        var scrollVal = devMetrics.scroll_depth || metrics.scroll_depth || {};
-        var engVal    = devMetrics.engagement_time || metrics.engagement_time || {};
-        var dcVal     = devMetrics.dead_click_count || metrics.dead_click_count || {};
-        var rcVal     = devMetrics.rage_click_count || metrics.rage_click_count || {};
-        var tVal      = metrics.traffic || {};
-        var ecVal     = metrics.error_click_count || {};
-        var qbVal     = metrics.quickback_click || {};
+        // Clarity APIの実レスポンスキー:
+        // sessionsCount, sessionsWithMetricPercentage, pagesViews, subTotal
+        function getMetricVal(obj, fallbackKey) {
+            if (!obj || typeof obj !== 'object') return '-';
+            // sessionsWithMetricPercentage = そのメトリクスに該当するセッション割合(%)
+            // sessionsCount = セッション数
+            // subTotal = メトリクスの合計値
+            // pagesViews = ページビュー数
+            return obj.sessionsWithMetricPercentage
+                || obj.subTotal
+                || obj.sessionsCount
+                || obj.pagesViews
+                || obj.Average || obj.Count || obj.value
+                || '-';
+        }
+
+        function getSessionCount(obj) {
+            if (!obj || typeof obj !== 'object') return '-';
+            return obj.sessionsCount || obj.totalSessionCount || obj.Count || '-';
+        }
 
         function stat(label, value, sub) {
             return '<div class="hm-stat"><div class="hm-stat-label">' + escHtml(label) + '</div>'
@@ -1169,17 +1191,37 @@ get_header();
                 + '</div>';
         }
 
-        function getVal(obj) {
-            return obj.Average || obj.Count || obj.count || obj.value || obj.average || '-';
-        }
+        var scrollM = devMetrics.scroll_depth || metrics.scroll_depth || {};
+        var engM    = devMetrics.engagement_time || metrics.engagement_time || {};
+        var dcM     = devMetrics.dead_click_count || metrics.dead_click_count || {};
+        var rcM     = devMetrics.rage_click_count || metrics.rage_click_count || {};
+        var tM      = devMetrics.traffic || metrics.traffic || {};
+        var ecM     = devMetrics.error_click_count || metrics.error_click_count || {};
+
+        // スクロール深度: sessionsWithMetricPercentage が到達セッション割合
+        var scrollPct = scrollM.sessionsWithMetricPercentage;
+        var scrollDisplay = (scrollPct !== undefined && scrollPct !== null) ? (parseFloat(scrollPct).toFixed(1) + '%') : '-';
+
+        // エンゲージメント
+        var engPct = engM.sessionsWithMetricPercentage;
+        var engDisplay = (engPct !== undefined && engPct !== null) ? (parseFloat(engPct).toFixed(1) + '%') : '-';
+
+        // Dead/Rage Click: subTotal がイベント合計数
+        var dcCount = dcM.subTotal || dcM.sessionsCount || '-';
+        var rcCount = rcM.subTotal || rcM.sessionsCount || '-';
+        var ecCount = ecM.subTotal || ecM.sessionsCount || '-';
+
+        // セッション数
+        var sessions = tM.sessionsCount || tM.totalSessionCount || '-';
+        var pageViews = tM.pagesViews || '-';
 
         hmSummaryGrid.innerHTML = ''
-            + stat('スクロール深度', getVal(scrollVal) + (scrollVal.Average ? '%' : ''), device === 'mobile' ? 'スマホ版' : 'PC版')
-            + stat('エンゲージメント', getVal(engVal) + (engVal.Average ? '秒' : ''), '')
-            + stat('Dead Click', getVal(dcVal), '無反応クリック')
-            + stat('Rage Click', getVal(rcVal), '連打クリック')
-            + stat('セッション数', getVal(tVal), '')
-            + stat('Error Click', getVal(ecVal), 'エラークリック');
+            + stat('セッション数', sessions, 'PV: ' + pageViews)
+            + stat('スクロール深度', scrollDisplay, device === 'mobile' ? 'スマホ版' : 'PC版')
+            + stat('Dead Click', dcCount, '無反応クリック')
+            + stat('Rage Click', rcCount, '連打クリック')
+            + stat('エンゲージメント', engDisplay, '')
+            + stat('Error Click', ecCount, 'エラークリック');
     }
 
     // --- タブ切り替え ---
