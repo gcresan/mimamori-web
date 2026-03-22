@@ -4941,6 +4941,7 @@ add_action('after_setup_theme', function () {
     gcrev_page_analysis_create_table();
     gcrev_page_snapshots_create_table();
     gcrev_clarity_sync_log_create_table();
+    gcrev_heatmap_data_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -5589,6 +5590,40 @@ function gcrev_clarity_sync_log_create_table(): void {
         KEY user_id (user_id),
         KEY user_status (user_id, status),
         KEY created_at (created_at)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
+ * ヒートマップデータテーブル作成
+ *
+ * ページごとのヒートマップ表示用データを保存。
+ * source_type で取り込み元を区別し、将来的に
+ * Clarity API / CSV / PNG / 手動入力に対応。
+ */
+function gcrev_heatmap_data_create_table(): void {
+    global $wpdb;
+
+    $table           = $wpdb->prefix . 'gcrev_heatmap_data';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        page_analysis_id BIGINT(20) UNSIGNED NOT NULL,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        device_type VARCHAR(10) NOT NULL DEFAULT 'pc',
+        metric_type VARCHAR(30) NOT NULL DEFAULT 'scroll',
+        source_type VARCHAR(30) NOT NULL DEFAULT 'clarity_api',
+        date_range_key VARCHAR(30) DEFAULT NULL,
+        payload_json LONGTEXT NOT NULL,
+        note TEXT DEFAULT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY page_device_metric (page_analysis_id, device_type, metric_type),
+        KEY user_id (user_id)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

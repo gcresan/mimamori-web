@@ -386,6 +386,125 @@ get_header();
 /* テーブル上書き */
 .pa-table .data-table td { vertical-align: middle; }
 .pa-table .data-table th { white-space: nowrap; }
+
+/* ===== ヒートマップ解析ビュー ===== */
+.hm-controls {
+    padding: 0 0 14px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 14px;
+}
+.hm-control-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.hm-control-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 120px;
+}
+.hm-control-item label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.hm-control-item select {
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .2s;
+}
+.hm-control-item select:focus {
+    outline: none;
+    border-color: #2d9cdb;
+    box-shadow: 0 0 0 3px rgba(45,156,219,.12);
+}
+/* ビューア */
+.hm-viewer {
+    position: relative;
+    margin-bottom: 16px;
+}
+.hm-canvas-wrap {
+    position: relative;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.hm-canvas-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.hm-canvas-wrap canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.hm-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.8;
+}
+.hm-empty .pa-placeholder-icon { font-size: 36px; margin-bottom: 8px; }
+/* サマリー */
+.hm-summary {
+    padding: 14px 0 0;
+    border-top: 1px solid #eee;
+}
+.hm-summary-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 10px;
+}
+.hm-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.hm-stat {
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+}
+.hm-stat-label {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 2px;
+}
+.hm-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+}
+.hm-stat-sub {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+.hm-no-data {
+    text-align: center;
+    padding: 16px;
+    color: #94a3b8;
+    font-size: 13px;
+}
 </style>
 
 <!-- コンテンツエリア -->
@@ -477,7 +596,7 @@ get_header();
     <div class="pa-tabs">
         <button type="button" class="pa-tab is-active" data-tab="overview">概要</button>
         <button type="button" class="pa-tab" data-tab="capture">キャプチャ</button>
-        <button type="button" class="pa-tab" data-tab="behavior">行動データ</button>
+        <button type="button" class="pa-tab" data-tab="behavior">ヒートマップ</button>
         <button type="button" class="pa-tab" data-tab="ai">AI所見</button>
     </div>
     <div class="pa-tab-content">
@@ -489,11 +608,48 @@ get_header();
         <div class="pa-tab-pane" data-pane="capture">
             <div class="pa-capture-grid" id="paCaptureContent"></div>
         </div>
-        <!-- 行動データタブ -->
+        <!-- ヒートマップ解析タブ -->
         <div class="pa-tab-pane" data-pane="behavior">
-            <div class="pa-placeholder">
-                <div class="pa-placeholder-icon">&#128202;</div>
-                <div class="pa-placeholder-text">Clarity連携は準備中です<br>今後のアップデートで行動データの確認が可能になります</div>
+            <!-- コントロール -->
+            <div class="hm-controls">
+                <div class="hm-control-row">
+                    <div class="hm-control-item">
+                        <label>デバイス</label>
+                        <select id="hmDevice">
+                            <option value="pc">PC版</option>
+                            <option value="mobile">スマホ版</option>
+                        </select>
+                    </div>
+                    <div class="hm-control-item">
+                        <label>表示</label>
+                        <select id="hmMetric">
+                            <option value="scroll">スクロール深度</option>
+                            <option value="click">クリック分布</option>
+                            <option value="dead_click">Dead Click</option>
+                            <option value="rage_click">Rage Click</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 画像 + オーバーレイ表示 -->
+            <div class="hm-viewer" id="hmViewer">
+                <div class="hm-canvas-wrap" id="hmCanvasWrap">
+                    <img id="hmImage" src="" alt="" style="display:none;">
+                    <canvas id="hmCanvas"></canvas>
+                    <div class="hm-empty" id="hmEmpty">
+                        <div class="pa-placeholder-icon">&#128444;</div>
+                        <div>キャプチャ画像をアップロードすると<br>ヒートマップ表示が利用できます</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数値サマリー -->
+            <div class="hm-summary" id="hmSummary">
+                <h4 class="hm-summary-title">行動データサマリー</h4>
+                <div class="hm-summary-grid" id="hmSummaryGrid">
+                    <!-- JS で動的描画 -->
+                </div>
             </div>
         </div>
         <!-- AI所見タブ -->
@@ -775,6 +931,255 @@ get_header();
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'pc\')">画像をアップロード</button>' + pcDel + '</div>'
             + '<div class="pa-capture-box"><h4>スマホ版</h4>' + spImg
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'mobile\')">画像をアップロード</button>' + spDel + '</div>';
+
+        // ===== ヒートマップ解析タブ =====
+        window._hmCurrentData = data;
+        renderHeatmapTab(data);
+    }
+
+    // ===== ヒートマップ解析 =====
+    var hmDeviceSelect = document.getElementById('hmDevice');
+    var hmMetricSelect = document.getElementById('hmMetric');
+    var hmImage        = document.getElementById('hmImage');
+    var hmCanvas       = document.getElementById('hmCanvas');
+    var hmEmpty        = document.getElementById('hmEmpty');
+    var hmSummaryGrid  = document.getElementById('hmSummaryGrid');
+
+    if (hmDeviceSelect) {
+        hmDeviceSelect.addEventListener('change', function() { renderHeatmapView(); });
+    }
+    if (hmMetricSelect) {
+        hmMetricSelect.addEventListener('change', function() { renderHeatmapView(); });
+    }
+
+    function renderHeatmapTab(data) {
+        // デバイスセレクト初期値
+        if (hmDeviceSelect) {
+            hmDeviceSelect.value = data.screenshot_pc_url ? 'pc' : (data.screenshot_mobile_url ? 'mobile' : 'pc');
+        }
+        renderHeatmapView();
+    }
+
+    function renderHeatmapView() {
+        var data = window._hmCurrentData;
+        if (!data) return;
+
+        var device = hmDeviceSelect ? hmDeviceSelect.value : 'pc';
+        var metric = hmMetricSelect ? hmMetricSelect.value : 'scroll';
+
+        // 画像URL取得
+        var imgUrl = device === 'mobile' ? data.screenshot_mobile_url : data.screenshot_pc_url;
+
+        if (!imgUrl) {
+            hmImage.style.display = 'none';
+            hmCanvas.style.display = 'none';
+            hmEmpty.style.display = 'block';
+            hmSummaryGrid.innerHTML = '<div class="hm-no-data">キャプチャ画像をアップロードしてください</div>';
+            return;
+        }
+
+        hmEmpty.style.display = 'none';
+        hmImage.style.display = 'block';
+        hmCanvas.style.display = 'block';
+        hmImage.src = imgUrl;
+
+        hmImage.onload = function() {
+            // canvas サイズを画像に合わせる
+            var rect = hmImage.getBoundingClientRect();
+            hmCanvas.width  = rect.width;
+            hmCanvas.height = rect.height;
+            drawOverlay(metric, device, data);
+        };
+
+        // サマリー描画
+        renderHeatmapSummary(data, device);
+    }
+
+    function drawOverlay(metric, device, data) {
+        var ctx = hmCanvas.getContext('2d');
+        var w = hmCanvas.width;
+        var h = hmCanvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        var clarity = data.clarity_data || {};
+        var metrics = clarity.metrics || {};
+        var deviceData = (clarity.devices && clarity.devices[device === 'mobile' ? 'Mobile' : 'Desktop']) || {};
+
+        switch (metric) {
+            case 'scroll':
+                drawScrollOverlay(ctx, w, h, metrics, deviceData);
+                break;
+            case 'click':
+                drawClickOverlay(ctx, w, h, metrics);
+                break;
+            case 'dead_click':
+                drawDeadClickOverlay(ctx, w, h, metrics);
+                break;
+            case 'rage_click':
+                drawRageClickOverlay(ctx, w, h, metrics);
+                break;
+        }
+    }
+
+    function drawScrollOverlay(ctx, w, h, metrics, deviceData) {
+        // スクロール深度のグラデーション表示
+        var scrollData = deviceData.scroll_depth || metrics.scroll_depth || {};
+        var avgScroll = parseFloat(scrollData.Average || scrollData.average || 0);
+
+        if (avgScroll <= 0) {
+            // データなし — 薄いガイドラインのみ
+            ctx.strokeStyle = 'rgba(100,100,100,0.15)';
+            ctx.setLineDash([4, 4]);
+            for (var pct = 25; pct <= 75; pct += 25) {
+                var y = h * (pct / 100);
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+                ctx.fillStyle = 'rgba(100,100,100,0.3)';
+                ctx.font = '11px sans-serif';
+                ctx.fillText(pct + '%', 4, y - 4);
+            }
+            ctx.setLineDash([]);
+            return;
+        }
+
+        // 到達率に応じたグラデーション（上: 緑 → 下: 赤）
+        var scrollLine = h * (avgScroll / 100);
+        var grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, 'rgba(34,197,94,0.08)');
+        grad.addColorStop(avgScroll / 100, 'rgba(251,191,36,0.12)');
+        grad.addColorStop(1, 'rgba(239,68,68,0.15)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        // 平均スクロール到達ライン
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 3]);
+        ctx.beginPath(); ctx.moveTo(0, scrollLine); ctx.lineTo(w, scrollLine); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // ラベル
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('平均到達 ' + avgScroll.toFixed(0) + '%', 8, scrollLine - 6);
+
+        // 25%, 50%, 75% ライン
+        ctx.strokeStyle = 'rgba(100,100,100,0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        [25, 50, 75].forEach(function(pct) {
+            if (Math.abs(pct - avgScroll) < 5) return;
+            var y = h * (pct / 100);
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+            ctx.fillStyle = 'rgba(100,100,100,0.4)';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(pct + '%', 4, y - 3);
+        });
+        ctx.setLineDash([]);
+    }
+
+    function drawClickOverlay(ctx, w, h, metrics) {
+        var traffic = metrics.traffic || {};
+        var sessions = parseInt(traffic.totalSessionCount || traffic.Count || 0);
+        if (sessions <= 0) {
+            drawNoDataLabel(ctx, w, h, 'クリックデータなし');
+            return;
+        }
+        // クリック分布: 座標データなし → ページ上部に集中する傾向を可視化
+        // TODO: 将来CSV/座標データ取り込み時に実座標ベース描画に置換
+        var clickGrad = ctx.createRadialGradient(w * 0.5, h * 0.15, 0, w * 0.5, h * 0.15, w * 0.4);
+        clickGrad.addColorStop(0, 'rgba(59,130,246,0.3)');
+        clickGrad.addColorStop(0.5, 'rgba(59,130,246,0.1)');
+        clickGrad.addColorStop(1, 'rgba(59,130,246,0)');
+        ctx.fillStyle = clickGrad;
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(30,64,175,0.6)';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('セッション数: ' + sessions.toLocaleString(), 8, 18);
+        ctx.fillStyle = 'rgba(30,64,175,0.35)';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('※ 座標データは今後対応予定', 8, 34);
+    }
+
+    function drawDeadClickOverlay(ctx, w, h, metrics) {
+        var dc = metrics.dead_click_count || {};
+        var count = parseInt(dc.Count || dc.count || dc.value || 0);
+        drawClickBadge(ctx, w, h, count, 'Dead Click', '#f59e0b', 'rgba(245,158,11,0.12)');
+    }
+
+    function drawRageClickOverlay(ctx, w, h, metrics) {
+        var rc = metrics.rage_click_count || {};
+        var count = parseInt(rc.Count || rc.count || rc.value || 0);
+        drawClickBadge(ctx, w, h, count, 'Rage Click', '#ef4444', 'rgba(239,68,68,0.12)');
+    }
+
+    function drawClickBadge(ctx, w, h, count, label, color, bgColor) {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = color;
+        ctx.font = 'bold 28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(count, w / 2, h / 2 - 10);
+        ctx.font = '14px sans-serif';
+        ctx.fillText(label, w / 2, h / 2 + 16);
+        if (count === 0) {
+            ctx.font = '12px sans-serif';
+            ctx.fillStyle = 'rgba(100,100,100,0.5)';
+            ctx.fillText('検出されていません', w / 2, h / 2 + 40);
+        } else {
+            ctx.font = '10px sans-serif';
+            ctx.fillStyle = 'rgba(100,100,100,0.4)';
+            ctx.fillText('※ 座標は今後対応予定', w / 2, h / 2 + 40);
+        }
+        ctx.textAlign = 'start';
+    }
+
+    function drawNoDataLabel(ctx, w, h, text) {
+        ctx.fillStyle = 'rgba(148,163,184,0.15)';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, w / 2, h / 2);
+        ctx.textAlign = 'start';
+    }
+
+    function renderHeatmapSummary(data, device) {
+        var clarity = data.clarity_data || {};
+        var metrics = clarity.metrics || {};
+        var deviceKey = device === 'mobile' ? 'Mobile' : 'Desktop';
+        var devMetrics = (clarity.devices && clarity.devices[deviceKey]) || {};
+
+        if (Object.keys(metrics).length === 0) {
+            hmSummaryGrid.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください</div>';
+            return;
+        }
+
+        var scrollVal = devMetrics.scroll_depth || metrics.scroll_depth || {};
+        var engVal    = devMetrics.engagement_time || metrics.engagement_time || {};
+        var dcVal     = devMetrics.dead_click_count || metrics.dead_click_count || {};
+        var rcVal     = devMetrics.rage_click_count || metrics.rage_click_count || {};
+        var tVal      = metrics.traffic || {};
+        var ecVal     = metrics.error_click_count || {};
+        var qbVal     = metrics.quickback_click || {};
+
+        function stat(label, value, sub) {
+            return '<div class="hm-stat"><div class="hm-stat-label">' + escHtml(label) + '</div>'
+                + '<div class="hm-stat-value">' + escHtml(String(value)) + '</div>'
+                + (sub ? '<div class="hm-stat-sub">' + escHtml(sub) + '</div>' : '')
+                + '</div>';
+        }
+
+        function getVal(obj) {
+            return obj.Average || obj.Count || obj.count || obj.value || obj.average || '-';
+        }
+
+        hmSummaryGrid.innerHTML = ''
+            + stat('スクロール深度', getVal(scrollVal) + (scrollVal.Average ? '%' : ''), device === 'mobile' ? 'スマホ版' : 'PC版')
+            + stat('エンゲージメント', getVal(engVal) + (engVal.Average ? '秒' : ''), '')
+            + stat('Dead Click', getVal(dcVal), '無反応クリック')
+            + stat('Rage Click', getVal(rcVal), '連打クリック')
+            + stat('セッション数', getVal(tVal), '')
+            + stat('Error Click', getVal(ecVal), 'エラークリック');
     }
 
     // --- タブ切り替え ---
