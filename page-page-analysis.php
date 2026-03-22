@@ -647,7 +647,10 @@ get_header();
 
             <!-- 数値サマリー -->
             <div class="hm-summary" id="hmSummary">
-                <h4 class="hm-summary-title">行動データサマリー</h4>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+                    <h4 class="hm-summary-title" style="margin:0;">行動データサマリー</h4>
+                    <span id="hmDataPeriod" style="font-size:11px;color:#94a3b8;"></span>
+                </div>
                 <div class="hm-summary-grid" id="hmSummaryGrid">
                     <!-- JS で動的描画 -->
                 </div>
@@ -1253,17 +1256,24 @@ get_header();
         // URL集約データ（1000行制限で不正確な場合あり）をフォールバック
         var devMetrics = (clarity.devices && (clarity.devices[deviceKey] || clarity.devices['Desktop'])) || {};
 
-        // デバッグ: clarity_dataの構造をコンソールに出力
-        console.log('[Heatmap] clarity_data:', JSON.stringify(clarity, null, 2));
-        console.log('[Heatmap] metrics keys:', Object.keys(metrics));
-        console.log('[Heatmap] scroll_depth raw:', JSON.stringify(metrics.scroll_depth));
-        console.log('[Heatmap] engagement_time raw:', JSON.stringify(metrics.engagement_time));
-        console.log('[Heatmap] traffic raw:', JSON.stringify(metrics.traffic));
-        console.log('[Heatmap] deviceKey:', deviceKey, 'devMetrics:', JSON.stringify(devMetrics));
+        // データ期間を表示（Clarity APIは直近3日間のデータ）
+        var periodEl = document.getElementById('hmDataPeriod');
+        if (periodEl) {
+            var syncDate = data.clarity_sync_date;
+            if (syncDate) {
+                // 同期日の3日前〜同期日
+                var sd = new Date(syncDate.replace(' ', 'T'));
+                var from = new Date(sd);
+                from.setDate(from.getDate() - 3);
+                var fmt = function(d) { return d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate(); };
+                periodEl.textContent = '📅 ' + fmt(from) + ' 〜 ' + fmt(sd) + '（直近3日間） 同期: ' + syncDate;
+            } else {
+                periodEl.textContent = '';
+            }
+        }
 
         if (Object.keys(metrics).length === 0) {
-            hmSummaryGrid.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください'
-                + '<br><small style="color:#94a3b8;">clarity_data: ' + (clarity ? JSON.stringify(Object.keys(clarity)).substring(0, 200) : 'null') + '</small></div>';
+            hmSummaryGrid.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください</div>';
             return;
         }
 
