@@ -435,11 +435,16 @@ get_header();
     background: #f1f5f9;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     min-height: 200px;
+    max-height: 70vh;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+}
+.hm-canvas-wrap .hm-empty {
+    align-self: center;
 }
 .hm-canvas-wrap img {
     display: block;
@@ -978,10 +983,14 @@ get_header();
         var device = hmDeviceSelect ? hmDeviceSelect.value : 'pc';
         var metric = hmMetricSelect ? hmMetricSelect.value : 'scroll';
 
-        // 画像URL取得（ヒートマップではオリジナル高解像度画像を使用）
+        // 画像URL取得（-scaled版は超縦長画像で極細になるため、必ずオリジナルを優先）
         var imgUrl = device === 'mobile'
             ? (data.screenshot_mobile_original || data.screenshot_mobile_url)
             : (data.screenshot_pc_original || data.screenshot_pc_url);
+
+        console.log('[Heatmap] device=' + device + ', imgUrl=' + imgUrl,
+            'original=' + (device === 'mobile' ? data.screenshot_mobile_original : data.screenshot_pc_original),
+            'url=' + (device === 'mobile' ? data.screenshot_mobile_url : data.screenshot_pc_url));
 
         if (!imgUrl) {
             hmImage.style.display = 'none';
