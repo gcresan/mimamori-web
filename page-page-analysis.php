@@ -167,15 +167,12 @@ get_header();
 .pa-modal-btn--primary:hover { background: #2188c4; }
 .pa-modal-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* 詳細パネル */
+/* 詳細パネル（フルスクリーン2カラム） */
 .pa-detail-overlay {
     display: none;
     position: fixed;
-    top: 0; right: 0; bottom: 0;
-    width: 600px;
-    max-width: 90vw;
+    inset: 0;
     background: #fff;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.1);
     z-index: 1001;
     flex-direction: column;
     overflow: hidden;
@@ -184,18 +181,36 @@ get_header();
 .pa-detail-backdrop {
     display: none;
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
+    inset: 0;
     background: rgba(0,0,0,0.3);
     z-index: 1000;
 }
 .pa-detail-backdrop.is-open { display: block; }
 .pa-detail-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 28px 24px 20px;
-    margin-top: 76px;
+    gap: 16px;
+    padding: 16px 24px;
+    border-bottom: 1px solid #eee;
+    background: #fafafa;
+    flex-shrink: 0;
 }
+.pa-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: #568184;
+    border: 1px solid #568184;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.pa-back-btn:hover { background: #f0f5f5; }
 .pa-detail-header h3 {
     margin: 0;
     font-size: 17px;
@@ -203,48 +218,50 @@ get_header();
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 80%;
-}
-.pa-detail-close {
-    background: none;
-    border: none;
-    font-size: 20px;
-    cursor: pointer;
-    color: #999;
-    padding: 4px;
-}
-.pa-detail-close:hover { color: #333; }
-
-/* タブ */
-.pa-tabs {
-    display: flex;
-    border-bottom: 1px solid #eee;
-    padding: 0 24px;
-    margin-top: 16px;
-}
-.pa-tab {
-    padding: 12px 16px;
-    font-size: 14px;
-    color: #666;
-    cursor: pointer;
-    border: none;
-    background: none;
-    border-bottom: 2px solid transparent;
-    transition: color 0.2s, border-color 0.2s;
-}
-.pa-tab:hover { color: #333; }
-.pa-tab.is-active {
-    color: #2d9cdb;
-    border-bottom-color: #2d9cdb;
-    font-weight: 500;
-}
-.pa-tab-content {
     flex: 1;
+}
+.pa-detail-header-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+/* 2カラムボディ */
+.pa-detail-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    flex: 1;
+    overflow: hidden;
+}
+.pa-detail-left {
+    overflow-y: auto;
+    padding: 24px;
+    border-right: 1px solid #eee;
+}
+.pa-detail-right {
     overflow-y: auto;
     padding: 24px;
 }
-.pa-tab-pane { display: none; }
-.pa-tab-pane.is-active { display: block; }
+/* セクション見出し */
+.pa-section {
+    margin-bottom: 28px;
+}
+.pa-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #568184;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pa-section-title .pa-section-icon { font-size: 16px; }
+@media (max-width: 768px) {
+    .pa-detail-body { grid-template-columns: 1fr; }
+    .pa-detail-left { border-right: none; border-bottom: 1px solid #eee; }
+}
 
 /* 概要セクション */
 .pa-info-row {
@@ -657,43 +674,19 @@ get_header();
     </div>
 </div>
 
-<!-- 詳細パネル -->
+<!-- 詳細パネル（フルスクリーン2カラム） -->
 <div class="pa-detail-backdrop" id="paDetailBackdrop"></div>
 <div class="pa-detail-overlay" id="paDetailPanel">
     <div class="pa-detail-header">
+        <button type="button" class="pa-back-btn" id="paDetailClose">&#8592; 一覧に戻る</button>
         <h3 id="paDetailTitle">-</h3>
-        <button type="button" class="pa-detail-close" id="paDetailClose">&times;</button>
+        <div class="pa-detail-header-actions" id="paDetailHeaderActions"></div>
     </div>
-    <div class="pa-tabs">
-        <button type="button" class="pa-tab is-active" data-tab="overview">概要</button>
-        <button type="button" class="pa-tab" data-tab="capture">ページ画像</button>
-        <button type="button" class="pa-tab" data-tab="behavior">行動データ</button>
-        <button type="button" class="pa-tab" data-tab="ai">AI改善案</button>
-    </div>
-    <div class="pa-tab-content">
-        <!-- 概要タブ -->
-        <div class="pa-tab-pane is-active" data-pane="overview">
-            <div id="paOverviewContent"></div>
-        </div>
-        <!-- キャプチャタブ -->
-        <div class="pa-tab-pane" data-pane="capture">
-            <div class="pa-capture-grid" id="paCaptureContent"></div>
-        </div>
-        <!-- 行動データタブ -->
-        <div class="pa-tab-pane" data-pane="behavior">
-            <div class="pa-behavior-header">
-                <p class="pa-behavior-note" style="margin:0;">このページの閲覧や読まれ方の傾向をまとめています。</p>
-                <a id="hmClarityLink" href="#" target="_blank" rel="noopener"
-                   class="pa-clarity-link" style="display:none;">
-                    Clarityで詳細を見る &#8599;
-                </a>
-            </div>
-            <div id="hmBehaviorContent"></div>
-        </div>
-        <!-- AI改善案タブ -->
-        <div class="pa-tab-pane" data-pane="ai">
-            <div id="paAiContent"></div>
-        </div>
+    <div class="pa-detail-body">
+        <!-- 左カラム: ページ画像 -->
+        <div class="pa-detail-left" id="paDetailLeft"></div>
+        <!-- 右カラム: 概要 + 行動データ + AI改善案 -->
+        <div class="pa-detail-right" id="paDetailRight"></div>
     </div>
 </div>
 
@@ -737,8 +730,9 @@ get_header();
         detailBackdrop:document.getElementById('paDetailBackdrop'),
         detailTitle:   document.getElementById('paDetailTitle'),
         detailClose:   document.getElementById('paDetailClose'),
-        overviewContent: document.getElementById('paOverviewContent'),
-        captureContent:  document.getElementById('paCaptureContent'),
+        detailLeft:    document.getElementById('paDetailLeft'),
+        detailRight:   document.getElementById('paDetailRight'),
+        detailActions: document.getElementById('paDetailHeaderActions'),
         fileInput:     document.getElementById('paFileInput'),
     };
 
@@ -941,14 +935,10 @@ get_header();
     window._paShowDetail = function(id) {
         currentDetailId = id;
         els.detailTitle.textContent = '読み込み中...';
+        els.detailLeft.innerHTML = '';
+        els.detailRight.innerHTML = '';
+        els.detailActions.innerHTML = '';
         openDetail();
-        // タブリセット
-        var tabs = els.detailPanel.querySelectorAll('.pa-tab');
-        var panes = els.detailPanel.querySelectorAll('.pa-tab-pane');
-        for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('is-active'); }
-        for (var i = 0; i < panes.length; i++) { panes[i].classList.remove('is-active'); }
-        tabs[0].classList.add('is-active');
-        panes[0].classList.add('is-active');
 
         apiFetch(API_BASE + '/' + id + '/detail').then(function(res) {
             if (!res.success) { closeDetail(); return; }
@@ -960,10 +950,46 @@ get_header();
         els.detailTitle.textContent = data.page_title || '（タイトル未取得）';
         window._currentDetailData = data;
 
-        // ===== 概要タブ =====
-        renderOverviewTab(data);
+        // ヘッダーアクション
+        els.detailActions.innerHTML = ''
+            + '<button type="button" class="pa-btn-sm" onclick="window._paEditOverview()">編集</button>'
+            + '<button type="button" class="pa-btn-sm pa-btn-sm--danger" onclick="window._paDeletePage(' + data.id + ')">削除</button>';
 
-        // ===== ページ画像タブ =====
+        // ===== 左カラム: ページ画像 =====
+        els.detailLeft.innerHTML = buildImageColumn(data);
+
+        // ===== 右カラム: 概要 + 行動データ + AI改善案 =====
+        var rightHtml = buildOverviewSection(data)
+            + buildBehaviorSection(data)
+            + '<div class="pa-section" id="paAiSection">'
+            + '<h4 class="pa-section-title"><span class="pa-section-icon">&#129302;</span> AI改善案</h4>'
+            + '<div id="paAiContent"></div>'
+            + '</div>';
+        els.detailRight.innerHTML = rightHtml;
+
+        // 行動データ描画
+        window._hmCurrentData = data;
+        renderHeatmapTab(data);
+
+        // AI改善案描画
+        renderAiTab(data);
+        maybeAutoGenerateAi(data);
+    }
+
+    function buildImgWithScroll(imgHtml, scrollPct) {
+        if (!imgHtml.match(/pa-capture-img/)) return imgHtml;
+        var overlay = '';
+        if (scrollPct !== null && scrollPct > 0) {
+            overlay = '<div class="pa-scroll-overlay" style="top:' + scrollPct.toFixed(1) + '%;">'
+                + '<div class="pa-scroll-line"></div>'
+                + '<span class="pa-scroll-label">&#9660; 平均到達位置 ' + scrollPct.toFixed(1) + '%</span>'
+                + '</div>'
+                + '<div class="pa-scroll-shade" style="top:' + scrollPct.toFixed(1) + '%;"></div>';
+        }
+        return '<div class="pa-img-wrap">' + imgHtml + overlay + '</div>';
+    }
+
+    function buildImageColumn(data) {
         var pcThumb = data.screenshot_pc_original || data.screenshot_pc_url;
         var spThumb = data.screenshot_mobile_original || data.screenshot_mobile_url;
         var pcImg = data.screenshot_pc_url
@@ -973,82 +999,52 @@ get_header();
             ? '<img src="' + escHtml(spThumb) + '" class="pa-capture-img" alt="SP版" onclick="window._paLightbox(\'' + escHtml(data.screenshot_mobile_url) + '\')">'
             : '<div class="pa-capture-empty">画像未登録</div>';
 
-        var pcDel = data.screenshot_pc_url
-            ? '<button type="button" class="pa-delete-btn" onclick="window._paDeleteCapture(' + data.id + ', \'pc\')">削除</button>'
-            : '';
-        var spDel = data.screenshot_mobile_url
-            ? '<button type="button" class="pa-delete-btn" onclick="window._paDeleteCapture(' + data.id + ', \'mobile\')">削除</button>'
-            : '';
-
-        // スクロール深度データ取得（画像オーバーレイ用）
         var pcScroll = getScrollDepth(data, 'pc');
         var spScroll = getScrollDepth(data, 'mobile');
 
-        function buildImgWithScroll(imgHtml, scrollPct, device) {
-            if (!imgHtml.match(/pa-capture-img/)) return imgHtml; // empty placeholder
-            var overlay = '';
-            if (scrollPct !== null && scrollPct > 0) {
-                overlay = '<div class="pa-scroll-overlay" style="top:' + scrollPct.toFixed(1) + '%;">'
-                    + '<div class="pa-scroll-line"></div>'
-                    + '<span class="pa-scroll-label">&#9660; 平均到達位置 ' + scrollPct.toFixed(1) + '%</span>'
-                    + '</div>'
-                    + '<div class="pa-scroll-shade" style="top:' + scrollPct.toFixed(1) + '%;"></div>';
-            }
-            return '<div class="pa-img-wrap">' + imgHtml + overlay + '</div>';
-        }
-
-        var pcImgWithScroll = buildImgWithScroll(pcImg, pcScroll, 'pc');
-        var spImgWithScroll = buildImgWithScroll(spImg, spScroll, 'mobile');
-
-        // 凡例（スクロール深度データがある場合のみ）
         var legendHtml = (pcScroll !== null || spScroll !== null)
-            ? '<div class="pa-scroll-legend" style="grid-column:1/-1;margin-bottom:8px;">'
+            ? '<div class="pa-scroll-legend" style="margin-bottom:12px;">'
               + '<span class="pa-scroll-legend-line"></span> 青線 = 平均到達位置（この位置より下は閲覧率が下がります）'
               + '</div>' : '';
 
-        els.captureContent.innerHTML = ''
-            + '<p class="pa-behavior-note" style="margin-top:0;grid-column:1/-1;">AI分析にも活用するため、PC版・スマホ版の画像を管理します。</p>'
+        var pcDel = data.screenshot_pc_url
+            ? ' <button type="button" class="pa-delete-btn" onclick="window._paDeleteCapture(' + data.id + ', \'pc\')">削除</button>' : '';
+        var spDel = data.screenshot_mobile_url
+            ? ' <button type="button" class="pa-delete-btn" onclick="window._paDeleteCapture(' + data.id + ', \'mobile\')">削除</button>' : '';
+
+        return '<div class="pa-section">'
+            + '<h4 class="pa-section-title"><span class="pa-section-icon">&#128247;</span> ページ画像</h4>'
             + legendHtml
-            + '<div class="pa-capture-box"><h4>PC版</h4>' + pcImgWithScroll
+            + '<div class="pa-capture-box" style="margin-bottom:16px;"><h4>PC版</h4>' + buildImgWithScroll(pcImg, pcScroll)
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'pc\')">画像をアップロード</button>' + pcDel + '</div>'
-            + '<div class="pa-capture-box"><h4>スマホ版</h4>' + spImgWithScroll
-            + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'mobile\')">画像をアップロード</button>' + spDel + '</div>';
-
-        // ===== 行動データタブ =====
-        window._hmCurrentData = data;
-        renderHeatmapTab(data);
-
-        // ===== AI改善案タブ =====
-        renderAiTab(data);
-
-        // 自動生成: 条件が揃っていれば バックグラウンドでAI改善案を生成
-        maybeAutoGenerateAi(data);
+            + '<div class="pa-capture-box"><h4>スマホ版</h4>' + buildImgWithScroll(spImg, spScroll)
+            + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'mobile\')">画像をアップロード</button>' + spDel + '</div>'
+            + '</div>';
     }
 
-    function renderOverviewTab(data) {
+    function buildOverviewSection(data) {
         var typeName = PAGE_TYPES[data.page_type] || data.page_type;
-        var pcStatus = data.screenshot_pc_url
-            ? '<span class="pa-badge pa-badge--done">登録済</span>'
-            : '<span class="pa-badge pa-badge--pending">未登録</span>';
-        var spStatus = data.screenshot_mobile_url
-            ? '<span class="pa-badge pa-badge--done">登録済</span>'
-            : '<span class="pa-badge pa-badge--pending">未登録</span>';
-
-        els.overviewContent.innerHTML = ''
-            + '<div class="pa-overview-actions">'
-            + '<button type="button" class="pa-btn-sm" onclick="window._paEditOverview()">編集</button>'
-            + '<button type="button" class="pa-btn-sm pa-btn-sm--danger" onclick="window._paDeletePage(' + data.id + ')">このページを削除</button>'
-            + '</div>'
+        return '<div class="pa-section">'
+            + '<h4 class="pa-section-title"><span class="pa-section-icon">&#128196;</span> 概要</h4>'
             + '<div id="paOverviewDisplay">'
             + '<div class="pa-info-row"><span class="pa-info-label">URL</span><span class="pa-info-value"><a href="' + escHtml(data.page_url) + '" target="_blank" rel="noopener">' + escHtml(data.page_url) + '</a></span></div>'
             + '<div class="pa-info-row"><span class="pa-info-label">種別</span><span class="pa-info-value"><span class="pa-badge pa-badge--type">' + escHtml(typeName) + '</span></span></div>'
             + '<div class="pa-info-row"><span class="pa-info-label">主な目的</span><span class="pa-info-value">' + escHtml(data.page_purpose || '未設定') + '</span></div>'
             + '<div class="pa-info-row"><span class="pa-info-label">主要CTA</span><span class="pa-info-value">' + escHtml(data.page_cta || '未設定') + '</span></div>'
-            + '<div class="pa-info-row"><span class="pa-info-label">ページ画像</span><span class="pa-info-value">PC: ' + pcStatus + '　SP: ' + spStatus + '</span></div>'
-            + '<div class="pa-info-row"><span class="pa-info-label">最新画像</span><span class="pa-info-value">' + escHtml(data.capture_date || '未登録') + '</span></div>'
             + '<div class="pa-info-row"><span class="pa-info-label">Clarity同期</span><span class="pa-info-value">' + escHtml(data.clarity_sync_date || '未連携') + '</span></div>'
             + '<div class="pa-info-row"><span class="pa-info-label">AI改善案</span><span class="pa-info-value">' + escHtml(data.ai_analysis_date || '未生成') + '</span></div>'
-            + '<div class="pa-info-row"><span class="pa-info-label">登録日</span><span class="pa-info-value">' + escHtml(data.created_at || '-') + '</span></div>'
+            + '</div></div>';
+    }
+
+    function buildBehaviorSection(data) {
+        var clarityLinkHtml = '';
+        if (data.clarity_project_id) {
+            clarityLinkHtml = '<a href="https://clarity.microsoft.com/projects/view/' + encodeURIComponent(data.clarity_project_id) + '/dashboard" target="_blank" rel="noopener" class="pa-clarity-link" style="padding:6px 12px;font-size:12px;">Clarityで詳細を見る &#8599;</a>';
+        }
+        return '<div class="pa-section">'
+            + '<h4 class="pa-section-title"><span class="pa-section-icon">&#128202;</span> 行動データ ' + clarityLinkHtml + '</h4>'
+            + '<p class="pa-behavior-note">このページの閲覧や読まれ方の傾向をまとめています。</p>'
+            + '<div id="hmBehaviorContent"></div>'
             + '</div>';
     }
 
@@ -1060,9 +1056,11 @@ get_header();
         for (var k in PAGE_TYPES) {
             typeOptions += '<option value="' + k + '"' + (data.page_type === k ? ' selected' : '') + '>' + PAGE_TYPES[k] + '</option>';
         }
-        els.overviewContent.innerHTML = ''
+        var overviewEl = document.getElementById('paOverviewDisplay');
+        if (!overviewEl) return;
+        overviewEl.innerHTML = ''
             + '<div class="pa-overview-actions">'
-            + '<button type="button" class="pa-btn-sm" onclick="renderOverviewTab(window._currentDetailData)">キャンセル</button>'
+            + '<button type="button" class="pa-btn-sm" onclick="window._paShowDetail(' + data.id + ')">キャンセル</button>'
             + '<button type="button" class="pa-btn-sm pa-modal-btn--primary" style="color:#fff;" id="paOverviewSave">保存</button>'
             + '</div>'
             + '<div class="pa-edit-form">'
@@ -1212,14 +1210,6 @@ get_header();
     var hmBehaviorContent = document.getElementById('hmBehaviorContent');
 
     function renderHeatmapTab(data) {
-        // Clarity リンク設定
-        var clarityLink = document.getElementById('hmClarityLink');
-        if (clarityLink && data.clarity_project_id) {
-            clarityLink.href = 'https://clarity.microsoft.com/projects/view/' + encodeURIComponent(data.clarity_project_id) + '/dashboard';
-            clarityLink.style.display = '';
-        } else if (clarityLink) {
-            clarityLink.style.display = 'none';
-        }
         renderBehaviorBothDevices(data);
     }
 
@@ -1327,20 +1317,6 @@ get_header();
 
         hmBehaviorContent.innerHTML = html;
     }
-
-    // --- タブ切り替え ---
-    els.detailPanel.addEventListener('click', function(e) {
-        var tab = e.target.closest('.pa-tab');
-        if (!tab) return;
-        var tabName = tab.getAttribute('data-tab');
-        var tabs = els.detailPanel.querySelectorAll('.pa-tab');
-        var panes = els.detailPanel.querySelectorAll('.pa-tab-pane');
-        for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('is-active'); }
-        for (var i = 0; i < panes.length; i++) { panes[i].classList.remove('is-active'); }
-        tab.classList.add('is-active');
-        var pane = els.detailPanel.querySelector('[data-pane="' + tabName + '"]');
-        if (pane) pane.classList.add('is-active');
-    });
 
     // --- ファイルアップロード ---
     window._paUpload = function(id, device) {
