@@ -12,11 +12,11 @@ $current_user = wp_get_current_user();
 $user_id      = $current_user->ID;
 
 // ページタイトル設定
-set_query_var( 'gcrev_page_title', 'ページ分析' );
+set_query_var( 'gcrev_page_title', 'ページ改善' );
 set_query_var( 'gcrev_page_subtitle', '主要ページのページ画像・行動データ・AI改善案をまとめて管理できます。' );
 
-// パンくず設定
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'ページ分析', 'ホームページ' ) );
+// パンくず設定（親カテゴリとして独立 — 「ホームページ」配下から移動済み）
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'ページ改善' ) );
 
 get_header();
 ?>
