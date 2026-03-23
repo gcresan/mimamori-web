@@ -1014,10 +1014,6 @@ get_header();
             ? (data.screenshot_mobile_original || data.screenshot_mobile_url)
             : (data.screenshot_pc_original || data.screenshot_pc_url);
 
-        console.log('[Heatmap] device=' + device + ', imgUrl=' + imgUrl,
-            'original=' + (device === 'mobile' ? data.screenshot_mobile_original : data.screenshot_pc_original),
-            'url=' + (device === 'mobile' ? data.screenshot_mobile_url : data.screenshot_pc_url));
-
         if (!imgUrl) {
             hmImage.style.display = 'none';
             hmCanvas.style.display = 'none';
