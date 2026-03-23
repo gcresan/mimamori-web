@@ -1030,36 +1030,49 @@ get_header();
         hmImage.style.display = 'block';
         hmCanvas.style.display = 'block';
 
+        // ブラウザ描画上限（約16384px）を超えないよう表示サイズを制限
+        var MAX_RENDER_HEIGHT = 15000;
+
+        function constrainImageSize() {
+            var natW = hmImage.naturalWidth;
+            var natH = hmImage.naturalHeight;
+            if (!natW || !natH) return;
+
+            var containerW = hmImage.parentElement.clientWidth || 500;
+            var displayH = containerW * (natH / natW);
+
+            if (displayH > MAX_RENDER_HEIGHT) {
+                // 表示高さが上限を超える場合、widthを制限して高さを抑える
+                var constrainedW = Math.floor(MAX_RENDER_HEIGHT * (natW / natH));
+                hmImage.style.width = constrainedW + 'px';
+            } else {
+                hmImage.style.width = '100%';
+            }
+        }
+
         function doDrawOverlay() {
             var dpr = window.devicePixelRatio || 1;
             var imgW = hmImage.offsetWidth;
             var imgH = hmImage.offsetHeight;
-            if (imgW < 10 || imgH < 10) return; // まだレイアウト未完了
+            if (imgW < 10 || imgH < 10) return;
 
-            hmCanvas.width  = imgW * dpr;
-            hmCanvas.height = imgH * dpr;
+            // Canvas描画上限チェック
+            var canvasH = Math.min(imgH * dpr, 16384);
+            var canvasW = Math.min(imgW * dpr, 16384);
+
+            hmCanvas.width  = canvasW;
+            hmCanvas.height = canvasH;
             hmCanvas.style.width  = imgW + 'px';
-            hmCanvas.style.height = imgH + 'px';
+            hmCanvas.style.height = (canvasH / dpr) + 'px';
 
             var ctx = hmCanvas.getContext('2d');
+            if (!ctx) return;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            drawOverlay(metric, device, data, imgW, imgH);
+            drawOverlay(metric, device, data, imgW, canvasH / dpr);
         }
 
-        // 画像読み込みエラー時のフォールバック
-        var fallbackUrl = device === 'mobile'
-            ? (data.screenshot_mobile_url || data.screenshot_mobile_original)
-            : (data.screenshot_pc_url || data.screenshot_pc_original);
-
         hmImage.onerror = function() {
-            // メインURLが失敗した場合、フォールバックURLを試す
-            if (fallbackUrl && hmImage.src !== fallbackUrl) {
-                console.warn('[Heatmap] Image load failed, trying fallback:', fallbackUrl);
-                hmImage.src = fallbackUrl;
-                return;
-            }
-            // フォールバックも失敗した場合はエラー表示
-            console.error('[Heatmap] Image load failed:', imgUrl);
+            console.error('[Heatmap] Image load failed:', hmImage.src);
             hmImage.style.display = 'none';
             hmCanvas.style.display = 'none';
             hmEmpty.style.display = 'block';
@@ -1067,15 +1080,20 @@ get_header();
                 '画像の読み込みに失敗しました<br><small style="color:#94a3b8;">キャプチャタブから再アップロードしてください</small>';
         };
 
+        function onImageReady() {
+            constrainImageSize();
+            doDrawOverlay();
+        }
+
         // キャッシュ済み画像にも対応
         if (hmImage.src === imgUrl && hmImage.complete && hmImage.naturalHeight > 0) {
-            doDrawOverlay();
+            onImageReady();
         } else {
-            hmImage.onload = doDrawOverlay;
+            hmImage.onload = onImageReady;
             hmImage.src = imgUrl;
         }
         // フォールバック: 少し遅れて再描画（レイアウト完了待ち）
-        setTimeout(doDrawOverlay, 300);
+        setTimeout(onImageReady, 500);
 
         // サマリー描画
         renderHeatmapSummary(data, device);
