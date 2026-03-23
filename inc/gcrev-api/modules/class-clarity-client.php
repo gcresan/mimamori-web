@@ -109,15 +109,14 @@ class Gcrev_Clarity_Client {
             update_user_meta( $user_id, self::META_ENABLED, $data['clarity_enabled'] ? '1' : '0' );
         }
 
-        // API トークン（空でなければ暗号化して保存、空なら削除）
+        // API トークン（空でなければ暗号化して保存、空なら既存を維持）
         if ( isset( $data['clarity_api_token'] ) ) {
             $token = sanitize_text_field( $data['clarity_api_token'] );
             if ( $token !== '' ) {
                 $encrypted = self::encrypt_token( $token );
                 update_user_meta( $user_id, self::META_API_TOKEN, $encrypted );
-            } else {
-                delete_user_meta( $user_id, self::META_API_TOKEN );
             }
+            // 空文字の場合は既存トークンを維持（設定画面ではパスワードフィールドが常に空のため）
         }
 
         // プロジェクト名
