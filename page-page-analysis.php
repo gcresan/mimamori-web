@@ -867,11 +867,17 @@ get_header();
     function openDetail() {
         els.detailPanel.classList.add('is-open');
         els.detailBackdrop.classList.add('is-open');
+        // モーダル操作を妨げないようAI相談FABを非表示
+        var chatFab = document.querySelector('.mw-chat-fab');
+        if (chatFab) chatFab.style.display = 'none';
     }
     function closeDetail() {
         els.detailPanel.classList.remove('is-open');
         els.detailBackdrop.classList.remove('is-open');
         currentDetailId = null;
+        // AI相談FABを復元
+        var chatFab = document.querySelector('.mw-chat-fab');
+        if (chatFab) chatFab.style.display = '';
     }
     els.detailClose.addEventListener('click', closeDetail);
     els.detailBackdrop.addEventListener('click', closeDetail);
