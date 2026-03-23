@@ -990,6 +990,9 @@ get_header();
 
         // ===== AI改善案タブ =====
         renderAiTab(data);
+
+        // 自動生成: 条件が揃っていれば バックグラウンドでAI改善案を生成
+        maybeAutoGenerateAi(data);
     }
 
     function renderOverviewTab(data) {
@@ -1062,6 +1065,8 @@ get_header();
     };
 
     // --- AI改善案タブ ---
+    var _aiGenerating = false; // 生成中フラグ（重複防止）
+
     function renderAiTab(data) {
         var content = document.getElementById('paAiContent');
         var hasPC = !!data.screenshot_pc_url;
@@ -1077,35 +1082,95 @@ get_header();
             + (hasClarity ? '&#10003;' : '&#10007;') + ' 行動データ</span>'
             + '</div>';
 
-        var bodyHtml = '';
         if (data.ai_summary) {
-            bodyHtml = '<div class="pa-ai-section"><h4>AI改善案</h4>'
-                + '<div class="pa-ai-body">' + escHtml(data.ai_summary).replace(/\n/g, '<br>') + '</div></div>';
+            // 生成済み: 改善案を表示
+            var bodyHtml = '<div class="pa-ai-section"><h4>AI改善案</h4>'
+                + '<div class="pa-ai-body">' + formatAiText(data.ai_summary) + '</div></div>';
             if (data.ai_analysis_date) {
                 bodyHtml += '<div style="font-size:12px;color:#94a3b8;margin-top:8px;">生成日: ' + escHtml(data.ai_analysis_date) + '</div>';
             }
+            var btnHtml = '<div style="text-align:center;margin-top:16px;">'
+                + '<button type="button" class="pa-modal-btn" id="paAiGenerate"'
+                + ' onclick="window._paGenerateAi(' + data.id + ')" style="font-size:13px;">再生成する</button></div>';
+            content.innerHTML = prereqHtml + bodyHtml + btnHtml;
+        } else if (_aiGenerating) {
+            // 自動生成中: ローディング表示
+            content.innerHTML = prereqHtml
+                + '<div class="pa-placeholder" style="padding:40px 20px;">'
+                + '<div class="loading-spinner" style="background:none;box-shadow:none;"><div class="spinner"></div></div>'
+                + '<div class="pa-placeholder-text" style="margin-top:12px;">AI改善案を生成中...<br><small style="color:#94a3b8;">画像と行動データを分析しています（30秒〜1分程度）</small></div></div>';
         } else {
-            bodyHtml = '<div class="pa-placeholder" style="padding:40px 20px;">'
+            // 未生成: プレースホルダー + 生成ボタン
+            var canGenerate = hasPC && hasClarity; // 最低条件: PC画像 + 行動データ
+            var bodyHtml = '<div class="pa-placeholder" style="padding:40px 20px;">'
                 + '<div class="pa-placeholder-icon">&#129302;</div>'
                 + '<div class="pa-placeholder-text">ページ画像と行動データをもとに<br>AI改善案を生成します</div></div>';
+            var btnHtml = '<div style="text-align:center;margin-top:16px;">'
+                + '<button type="button" class="pa-modal-btn pa-modal-btn--primary" id="paAiGenerate"'
+                + (canGenerate ? '' : ' disabled')
+                + ' onclick="window._paGenerateAi(' + data.id + ')">AI改善案を生成</button></div>';
+            content.innerHTML = prereqHtml + bodyHtml + btnHtml;
         }
+    }
 
-        var btnLabel = data.ai_summary ? '再生成する' : 'AI改善案を生成';
-        var btnHtml = '<div style="text-align:center;margin-top:16px;">'
-            + '<button type="button" class="pa-modal-btn pa-modal-btn--primary" id="paAiGenerate"'
-            + ' onclick="window._paGenerateAi(' + data.id + ')">' + btnLabel + '</button></div>';
+    // AI改善案テキストを見やすく整形（##見出しをHTML化）
+    function formatAiText(text) {
+        if (!text) return '';
+        return escHtml(text)
+            .replace(/^## (.+)$/gm, '<strong style="display:block;margin:16px 0 4px;font-size:15px;color:#1e293b;">$1</strong>')
+            .replace(/\n/g, '<br>');
+    }
 
-        content.innerHTML = prereqHtml + bodyHtml + btnHtml;
+    // 自動生成: パネルオープン時にバックグラウンドで実行
+    function maybeAutoGenerateAi(data) {
+        if (_aiGenerating) return;
+        if (data.ai_summary) return; // 生成済み
+        var hasPC = !!data.screenshot_pc_url;
+        var hasClarity = !!(data.clarity_data && data.clarity_data.metrics && Object.keys(data.clarity_data.metrics).length > 0);
+        if (!hasPC || !hasClarity) return; // 前提条件不足
+
+        _aiGenerating = true;
+        renderAiTab(data); // ローディング表示に更新
+
+        apiFetch(API_BASE + '/' + data.id + '/analyze', { method: 'POST' })
+            .then(function(res) {
+                _aiGenerating = false;
+                if (res.success && res.ai_summary) {
+                    // 生成結果でデータを更新
+                    data.ai_summary = res.ai_summary;
+                    data.ai_analysis_date = res.ai_analysis_date;
+                    window._currentDetailData = data;
+                }
+                renderAiTab(data);
+            }).catch(function() {
+                _aiGenerating = false;
+                renderAiTab(data);
+            });
     }
 
     window._paGenerateAi = function(id) {
         var btn = document.getElementById('paAiGenerate');
         if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
+        _aiGenerating = true;
+
+        var data = window._currentDetailData;
+        if (data) renderAiTab(data); // ローディング表示
+
         apiFetch(API_BASE + '/' + id + '/analyze', { method: 'POST' })
             .then(function(res) {
-                if (btn) { btn.disabled = false; btn.textContent = 'AI改善案を生成'; }
-                if (res.message) alert(res.message);
-                if (res.success && res.data) window._paShowDetail(id);
+                _aiGenerating = false;
+                if (res.success && res.ai_summary && data) {
+                    data.ai_summary = res.ai_summary;
+                    data.ai_analysis_date = res.ai_analysis_date;
+                    window._currentDetailData = data;
+                    renderAiTab(data);
+                } else {
+                    if (res.message) alert(res.message);
+                    if (data) renderAiTab(data);
+                }
+            }).catch(function() {
+                _aiGenerating = false;
+                if (data) renderAiTab(data);
             });
     };
 

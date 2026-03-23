@@ -190,8 +190,90 @@ class Gcrev_AI_Client {
         return $text;
     }
 
-    // =========================================================
-    // 初心者向けリライト（Markdown出力）
+    /**
+     * マルチモーダル（テキスト＋画像）で Gemini API を呼び出す
+     *
+     * @param string $prompt  テキストプロンプト
+     * @param array  $images  画像配列 [ ['mime_type' => 'image/png', 'data' => base64_string], ... ]
+     * @param array  $options generationConfig オプション
+     * @return string 応答テキスト
+     */
+    public function call_gemini_multimodal( string $prompt, array $images = [], array $options = [] ): string {
+
+        $project_id = $this->config->get_gcp_project_id();
+        if ( $project_id === '' ) {
+            throw new \Exception( 'GCP project_id を取得できませんでした。' );
+        }
+
+        $location = $this->config->get_gemini_location();
+        $model    = $this->config->get_gemini_model();
+        $host     = ( $location === 'global' ) ? 'aiplatform.googleapis.com' : ( $location . '-aiplatform.googleapis.com' );
+
+        $url = sprintf(
+            'https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent',
+            $host,
+            rawurlencode( $project_id ),
+            rawurlencode( $location ),
+            rawurlencode( $model )
+        );
+
+        $access_token = $this->get_vertex_access_token();
+
+        // パーツ構築: テキスト + 画像
+        $parts = [];
+        foreach ( $images as $img ) {
+            if ( ! empty( $img['data'] ) && ! empty( $img['mime_type'] ) ) {
+                $parts[] = [
+                    'inlineData' => [
+                        'mimeType' => $img['mime_type'],
+                        'data'     => $img['data'],
+                    ],
+                ];
+            }
+        }
+        $parts[] = [ 'text' => $prompt ];
+
+        $body = [
+            'contents' => [[
+                'role'  => 'user',
+                'parts' => $parts,
+            ]],
+            'generationConfig' => $this->build_generation_config(
+                array_merge( [ 'temperature' => 0.5, 'maxOutputTokens' => 4096 ], $options )
+            ),
+        ];
+
+        $response = wp_remote_post( $url, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type'  => 'application/json; charset=utf-8',
+            ],
+            'body'    => wp_json_encode( $body, JSON_UNESCAPED_UNICODE ),
+            'timeout' => 180,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            throw new \Exception( 'Gemini API 通信エラー: ' . $response->get_error_message() );
+        }
+
+        $status = (int) wp_remote_retrieve_response_code( $response );
+        $raw    = (string) wp_remote_retrieve_body( $response );
+        $json   = json_decode( $raw, true );
+
+        if ( $status < 200 || $status >= 300 ) {
+            $msg = $json['error']['message'] ?? substr( $raw, 0, 500 );
+            throw new \Exception( "Gemini API エラー (HTTP {$status}): {$msg}" );
+        }
+
+        $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+        if ( ! is_string( $text ) || $text === '' ) {
+            $finish = $json['candidates'][0]['finishReason'] ?? 'UNKNOWN';
+            throw new \Exception( 'Gemini の応答が空でした。finishReason=' . $finish );
+        }
+
+        return $text;
+    }
+
     /**
      * generationConfig を構築（$options でデフォルト値を上書き可能）
      */

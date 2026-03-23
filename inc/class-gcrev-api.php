@@ -17715,10 +17715,145 @@ PROMPT;
      * POST /gcrev/v1/page-analysis/pages/{id}/analyze — AI分析トリガー（Phase 1 プレースホルダー）
      */
     public function rest_trigger_page_analysis( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $log     = '/tmp/gcrev_page_analysis_debug.log';
+        $user_id = get_current_user_id();
+        $id      = absint( $request->get_param( 'id' ) );
+        $table   = $wpdb->prefix . 'gcrev_page_analysis';
+
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND user_id = %d AND status = 'active'",
+            $id, $user_id
+        ), ARRAY_A );
+
+        if ( ! $row ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
+        }
+
+        // 画像を収集（Base64エンコード）
+        $images = [];
+        foreach ( [ 'screenshot_pc', 'screenshot_mobile' ] as $field ) {
+            $att_id = (int) ( $row[ $field ] ?? 0 );
+            if ( $att_id <= 0 ) continue;
+
+            // -scaled 版（適度なサイズ）を優先、なければ元画像
+            $file_path = get_attached_file( $att_id );
+            if ( ! $file_path || ! file_exists( $file_path ) ) continue;
+
+            // ファイルサイズ上限チェック（5MB）
+            if ( filesize( $file_path ) > 5 * 1024 * 1024 ) {
+                // 大きすぎる場合はscaled版を探す
+                $scaled = preg_replace( '/(\.\w+)$/', '-scaled$1', $file_path );
+                if ( file_exists( $scaled ) ) {
+                    $file_path = $scaled;
+                } else {
+                    continue; // スキップ
+                }
+            }
+
+            $mime = wp_check_filetype( $file_path )['type'] ?: 'image/png';
+            $data = base64_encode( file_get_contents( $file_path ) );
+            $images[] = [ 'mime_type' => $mime, 'data' => $data ];
+        }
+
+        // Clarityデータ抽出
+        $clarity = $row['clarity_data'] ? json_decode( $row['clarity_data'], true ) : [];
+        $behavior_text = $this->build_behavior_summary_text( $clarity );
+
+        // ページ種別名
+        $type_names = [
+            'top' => 'トップページ', 'service' => 'サービス紹介', 'lp' => 'LP',
+            'contact' => 'お問い合わせ', 'blog' => 'ブログ', 'company' => '会社概要',
+            'access' => 'アクセス', 'staff' => 'スタッフ', 'price' => '料金', 'other' => 'その他',
+        ];
+        $type_label = $type_names[ $row['page_type'] ] ?? $row['page_type'];
+
+        // プロンプト構築
+        $prompt = "あなたはWebサイトの改善コンサルタントです。以下のページについて、ホームページ運用の初心者にもわかりやすい改善提案を3〜5点出してください。\n\n"
+            . "【ページ情報】\n"
+            . "- URL: {$row['page_url']}\n"
+            . "- ページ名: {$row['page_title']}\n"
+            . "- 種別: {$type_label}\n"
+            . "- 主な目的: " . ( $row['page_purpose'] ?: '未設定' ) . "\n"
+            . "- 主要CTA: " . ( $row['page_cta'] ?: '未設定' ) . "\n\n"
+            . $behavior_text . "\n"
+            . ( count( $images ) > 0 ? "添付画像はこのページのスクリーンショットです（PC版・スマホ版）。\n\n" : '' )
+            . "改善提案は以下の観点で出してください:\n"
+            . "1. ファーストビューの訴求力\n"
+            . "2. CTAの見つけやすさ・押しやすさ\n"
+            . "3. スクロール離脱を防ぐ構成\n"
+            . "4. スマホでの操作性\n"
+            . "5. Dead Click/Rage Clickが示す問題点\n\n"
+            . "各提案は「## 提案タイトル」の見出しと、具体的な改善内容を2〜3行で書いてください。専門用語は避け、わかりやすい日本語で書いてください。";
+
+        try {
+            $ai_text = $this->ai_client->call_gemini_multimodal( $prompt, $images );
+        } catch ( \Exception $e ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " AI analyze ERROR: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => 'AI改善案の生成に失敗しました: ' . $e->getMessage(),
+            ], 500 );
+        }
+
+        // 結果を保存
+        $now = current_time( 'mysql' );
+        $wpdb->update(
+            $table,
+            [
+                'ai_summary'       => $ai_text,
+                'ai_analysis_date' => $now,
+            ],
+            [ 'id' => $id ],
+            [ '%s', '%s' ],
+            [ '%d' ]
+        );
+
         return new \WP_REST_Response( [
-            'success' => true,
-            'message' => 'AI分析機能は準備中です。今後のアップデートで利用可能になります。',
+            'success'          => true,
+            'message'          => 'AI改善案を生成しました',
+            'ai_summary'       => $ai_text,
+            'ai_analysis_date' => $now,
         ], 200 );
+    }
+
+    /**
+     * Clarityデータからプロンプト用の行動サマリーテキストを構築
+     */
+    private function build_behavior_summary_text( array $clarity ): string {
+        if ( empty( $clarity['metrics'] ) ) {
+            return "【行動データ】\nデータ未取得\n";
+        }
+
+        $text = "【行動データ（直近3日間のサマリー）】\n";
+        $site_wide = $clarity['site_wide']['by_device'] ?? [];
+
+        foreach ( [ 'PC' => 'PC版', 'Mobile' => 'スマホ版' ] as $key => $label ) {
+            $dev = $site_wide[ $key ] ?? [];
+            if ( empty( $dev ) ) continue;
+
+            $t  = $dev['traffic'] ?? [];
+            $sd = $dev['scroll_depth'] ?? [];
+            $et = $dev['engagement_time'] ?? [];
+            $dc = $dev['dead_click_count'] ?? [];
+            $rc = $dev['rage_click_count'] ?? [];
+
+            $sessions   = $t['sessionsCount'] ?? '-';
+            $scroll     = $sd['averageScrollDepth'] ?? ( $sd['sessionsWithMetricPercentage'] ?? '-' );
+            $engagement = $et['activeTime'] ?? ( $et['totalTime'] ?? '-' );
+            $dead       = $dc['subTotal'] ?? ( $dc['sessionsCount'] ?? '-' );
+            $rage       = $rc['subTotal'] ?? ( $rc['sessionsCount'] ?? '-' );
+
+            $scroll_str = is_numeric( $scroll ) ? round( (float) $scroll, 1 ) . '%' : $scroll;
+            $eng_str    = is_numeric( $engagement ) ? round( (float) $engagement ) . '秒' : $engagement;
+
+            $text .= "- {$label}: セッション{$sessions}, スクロール深度{$scroll_str}, エンゲージメント{$eng_str}, Dead Click {$dead}, Rage Click {$rage}\n";
+        }
+
+        return $text;
     }
 
     /**

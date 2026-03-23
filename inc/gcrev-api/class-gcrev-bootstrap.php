@@ -44,6 +44,9 @@ class Gcrev_Bootstrap {
         // 年次レポート自動生成（1月のみ実行）
         add_action('gcrev_annual_report_generate_event', [__CLASS__, 'on_annual_report_generate_event']);
 
+        // Clarity日次蓄積
+        add_action('gcrev_clarity_daily_sync_event', [__CLASS__, 'on_clarity_daily_sync']);
+
         // 月次データプリフェッチ（月固定期間: prev-month, prev-prev-month, last180, last365）
         add_action('gcrev_monthly_data_prefetch_event', [__CLASS__, 'on_monthly_data_prefetch_event']);
         add_action('gcrev_monthly_prefetch_chunk_event', [__CLASS__, 'on_monthly_prefetch_chunk_event'], 10, 2);
@@ -274,6 +277,62 @@ class Gcrev_Bootstrap {
         wp_set_current_user( 0 );
 
         error_log( "[GCREV] annual_report_generate: completed. generated={$generated}, skipped={$skipped}" );
+    }
+
+    /**
+     * Clarity日次蓄積 — numOfDays=1 で直近1日分を取得し gcrev_clarity_daily に保存
+     */
+    public static function on_clarity_daily_sync(): void {
+        $log = '/tmp/gcrev_cron_debug.log';
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync START\n", FILE_APPEND );
+
+        global $wpdb;
+
+        // Clarity連携が有効なユーザーを取得
+        $users = $wpdb->get_col( $wpdb->prepare(
+            "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value = '1'",
+            '_gcrev_clarity_enabled'
+        ) );
+
+        if ( empty( $users ) ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync: no enabled users\n", FILE_APPEND );
+            return;
+        }
+
+        // API制限に配慮: 3コール/ユーザー × 最大3ユーザー = 9コール (10制限以内)
+        $max_users = 3;
+        $synced    = 0;
+
+        foreach ( array_slice( $users, 0, $max_users ) as $uid ) {
+            $uid = (int) $uid;
+            try {
+                wp_set_current_user( $uid );
+
+                $result = Gcrev_Clarity_Client::sync_data( $uid, 'scheduled', 1 );
+
+                // 日次スナップショット保存
+                if ( $result['success'] ) {
+                    Gcrev_Clarity_Client::save_daily_snapshot( $uid, $result, 1 );
+                    $synced++;
+                }
+
+                file_put_contents( $log,
+                    date( 'Y-m-d H:i:s' ) . " clarity_daily_sync: user={$uid}, status=" . ( $result['summary']['status'] ?? 'unknown' ) . "\n",
+                    FILE_APPEND
+                );
+            } catch ( \Throwable $e ) {
+                file_put_contents( $log,
+                    date( 'Y-m-d H:i:s' ) . " clarity_daily_sync ERROR: user={$uid}, " . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
+            }
+
+            // API負荷軽減
+            sleep( 2 );
+        }
+
+        wp_set_current_user( 0 );
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync END: synced={$synced}\n", FILE_APPEND );
     }
 
     public static function on_cron_log_cleanup(): void {
@@ -594,6 +653,9 @@ class Gcrev_Bootstrap {
             wp_unschedule_event( $old_weekly_meo, 'gcrev_meo_fetch_weekly_event' );
         }
         self::schedule_daily_if_missing('gcrev_meo_fetch_daily_event', 'tomorrow 04:30:00');
+
+        // Clarity日次蓄積（毎日 03:45）
+        self::schedule_daily_if_missing('gcrev_clarity_daily_sync_event', 'tomorrow 03:45:00');
 
         // 月次データプリフェッチ: 毎日 05:00（月初のみ実行、月固定期間データを取得）
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {

@@ -4942,6 +4942,7 @@ add_action('after_setup_theme', function () {
     gcrev_page_snapshots_create_table();
     gcrev_clarity_sync_log_create_table();
     gcrev_heatmap_data_create_table();
+    gcrev_clarity_daily_create_table();
     if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
         Gcrev_Cron_Logger::create_tables();
     }
@@ -5626,6 +5627,45 @@ function gcrev_heatmap_data_create_table(): void {
         PRIMARY KEY  (id),
         KEY page_device_metric (page_analysis_id, device_type, metric_type),
         KEY user_id (user_id)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
+ * Clarity日次蓄積テーブルを作成
+ *
+ * Clarity APIから日次で取得した行動データを蓄積し、
+ * 推移比較・月次集計・改善前後比較に使用する。
+ */
+function gcrev_clarity_daily_create_table(): void {
+    global $wpdb;
+
+    $table           = $wpdb->prefix . 'gcrev_clarity_daily';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        page_analysis_id BIGINT(20) UNSIGNED DEFAULT NULL,
+        device_type VARCHAR(10) NOT NULL DEFAULT 'all',
+        target_date DATE NOT NULL,
+        sessions INT UNSIGNED DEFAULT 0,
+        page_views INT UNSIGNED DEFAULT 0,
+        scroll_depth DECIMAL(5,2) DEFAULT NULL,
+        engagement_time INT UNSIGNED DEFAULT NULL,
+        dead_click INT UNSIGNED DEFAULT 0,
+        rage_click INT UNSIGNED DEFAULT 0,
+        error_click INT UNSIGNED DEFAULT 0,
+        source VARCHAR(20) NOT NULL DEFAULT 'clarity_api',
+        is_estimated TINYINT(1) NOT NULL DEFAULT 0,
+        raw_json LONGTEXT DEFAULT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY user_page_device_date (user_id, page_analysis_id, device_type, target_date),
+        KEY user_date (user_id, target_date)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

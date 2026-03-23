@@ -269,7 +269,7 @@ class Gcrev_Clarity_Client {
      * @param string $sync_type 'manual' | 'scheduled'
      * @return array { success, message, summary }
      */
-    public static function sync_data( int $user_id, string $sync_type = 'manual' ): array {
+    public static function sync_data( int $user_id, string $sync_type = 'manual', int $num_of_days = 3 ): array {
         global $wpdb;
 
         $started_at = current_time( 'Y-m-d H:i:s' );
@@ -295,7 +295,7 @@ class Gcrev_Clarity_Client {
 
         // 1) URL別データ（ページ分析用）
         $url_result = self::api_get( '/project-live-insights', $token, [
-            'numOfDays' => 3,
+            'numOfDays' => $num_of_days,
             'dimension1' => 'URL',
         ] );
         $all_responses['by_url'] = $url_result;
@@ -307,7 +307,7 @@ class Gcrev_Clarity_Client {
 
         // 2) Device別データ
         $device_result = self::api_get( '/project-live-insights', $token, [
-            'numOfDays' => 3,
+            'numOfDays' => $num_of_days,
             'dimension1' => 'Device',
         ] );
         $all_responses['by_device'] = $device_result;
@@ -317,7 +317,7 @@ class Gcrev_Clarity_Client {
 
         // 3) URL × Device データ（ページ別デバイス差分用）
         $url_device_result = self::api_get( '/project-live-insights', $token, [
-            'numOfDays' => 3,
+            'numOfDays' => $num_of_days,
             'dimension1' => 'URL',
             'dimension2' => 'Device',
         ] );
@@ -394,7 +394,7 @@ class Gcrev_Clarity_Client {
             'user_id'          => $user_id,
             'sync_type'        => $sync_type,
             'status'           => $status,
-            'num_of_days'      => 3,
+            'num_of_days'      => $num_of_days,
             'dimensions'       => 'URL,Device,URL+Device',
             'metrics_fetched'  => $metrics_fetched,
             'pages_updated'    => $pages_updated,
@@ -422,6 +422,75 @@ class Gcrev_Clarity_Client {
                 'unmatched_urls'  => $unmatched_urls ?? [],
             ],
         ];
+    }
+
+    /**
+     * sync_data() の結果を gcrev_clarity_daily テーブルに日次スナップショットとして保存
+     *
+     * @param int   $user_id
+     * @param array $sync_result  sync_data() の戻り値
+     * @param int   $num_of_days  取得日数（1: 昨日のみ, 3: 3日平均）
+     */
+    public static function save_daily_snapshot( int $user_id, array $sync_result, int $num_of_days = 1 ): void {
+        global $wpdb;
+
+        if ( ! $sync_result['success'] ) return;
+
+        $daily_table = $wpdb->prefix . 'gcrev_clarity_daily';
+        $pa_table    = $wpdb->prefix . 'gcrev_page_analysis';
+        $is_estimated = ( $num_of_days > 1 ) ? 1 : 0;
+
+        // target_date: numOfDays=1 なら昨日、それ以外は今日（平均として）
+        $target_date = ( $num_of_days === 1 )
+            ? gmdate( 'Y-m-d', strtotime( '-1 day', current_time( 'timestamp' ) ) )
+            : current_time( 'Y-m-d' );
+
+        // 登録済みページ一覧
+        $pages = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, page_url, clarity_data FROM {$pa_table} WHERE user_id = %d AND status = 'active' AND clarity_data IS NOT NULL",
+            $user_id
+        ), ARRAY_A );
+
+        foreach ( $pages as $page ) {
+            $clarity = json_decode( $page['clarity_data'], true );
+            if ( empty( $clarity ) ) continue;
+
+            $site_wide = $clarity['site_wide']['by_device'] ?? [];
+
+            foreach ( [ 'PC' => 'pc', 'Mobile' => 'mobile' ] as $api_key => $db_key ) {
+                $dev = $site_wide[ $api_key ] ?? [];
+                if ( empty( $dev ) ) continue;
+
+                $t  = $dev['traffic'] ?? [];
+                $sd = $dev['scroll_depth'] ?? [];
+                $et = $dev['engagement_time'] ?? [];
+                $dc = $dev['dead_click_count'] ?? [];
+                $rc = $dev['rage_click_count'] ?? [];
+                $ec = $dev['error_click_count'] ?? [];
+
+                $row_data = [
+                    'user_id'          => $user_id,
+                    'page_analysis_id' => (int) $page['id'],
+                    'device_type'      => $db_key,
+                    'target_date'      => $target_date,
+                    'sessions'         => (int) ( $t['sessionsCount'] ?? $t['totalSessionCount'] ?? 0 ),
+                    'page_views'       => (int) ( $t['pagesViews'] ?? 0 ),
+                    'scroll_depth'     => isset( $sd['averageScrollDepth'] ) ? round( (float) $sd['averageScrollDepth'], 2 ) : null,
+                    'engagement_time'  => isset( $et['activeTime'] ) ? (int) $et['activeTime'] : ( isset( $et['totalTime'] ) ? (int) $et['totalTime'] : null ),
+                    'dead_click'       => (int) ( $dc['subTotal'] ?? $dc['sessionsCount'] ?? 0 ),
+                    'rage_click'       => (int) ( $rc['subTotal'] ?? $rc['sessionsCount'] ?? 0 ),
+                    'error_click'      => (int) ( $ec['subTotal'] ?? $ec['sessionsCount'] ?? 0 ),
+                    'source'           => 'clarity_api',
+                    'is_estimated'     => $is_estimated,
+                    'raw_json'         => wp_json_encode( $dev, JSON_UNESCAPED_UNICODE ),
+                ];
+
+                // UPSERT: UNIQUE KEY (user_id, page_analysis_id, device_type, target_date) で冪等
+                $wpdb->replace( $daily_table, $row_data );
+            }
+        }
+
+        self::log( "DAILY SNAPSHOT: user={$user_id}, date={$target_date}, pages=" . count( $pages ) . ", estimated={$is_estimated}" );
     }
 
     /**
