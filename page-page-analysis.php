@@ -977,10 +977,8 @@ get_header();
         els.detailTitle.textContent = data.page_title || '（タイトル未取得）';
         window._currentDetailData = data;
 
-        // ヘッダーアクション
-        els.detailActions.innerHTML = ''
-            + '<button type="button" class="pa-btn-sm" onclick="window._paEditOverview()">編集</button>'
-            + '<button type="button" class="pa-btn-sm pa-btn-sm--danger" onclick="window._paDeletePage(' + data.id + ')">削除</button>';
+        // ヘッダーアクションは概要セクション内に移動
+        els.detailActions.innerHTML = '';
 
         // ===== 左カラム: ページ画像 =====
         els.detailLeft.innerHTML = buildImageColumn(data);
@@ -1074,7 +1072,12 @@ get_header();
     function buildOverviewSection(data) {
         var typeName = PAGE_TYPES[data.page_type] || data.page_type;
         return '<div class="pa-section">'
-            + '<h4 class="pa-section-title"><span class="pa-section-icon">&#128196;</span> 概要</h4>'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+            + '<h4 class="pa-section-title" style="margin-bottom:0;"><span class="pa-section-icon">&#128196;</span> 概要</h4>'
+            + '<div style="display:flex;gap:8px;">'
+            + '<button type="button" class="pa-btn-sm" onclick="window._paEditOverview()">編集</button>'
+            + '<button type="button" class="pa-btn-sm pa-btn-sm--danger" onclick="window._paDeletePage(' + data.id + ')">削除</button>'
+            + '</div></div>'
             + '<div id="paOverviewDisplay">'
             + '<div class="pa-info-row"><span class="pa-info-label">URL</span><span class="pa-info-value"><a href="' + escHtml(data.page_url) + '" target="_blank" rel="noopener">' + escHtml(data.page_url) + '</a></span></div>'
             + '<div class="pa-info-row"><span class="pa-info-label">種別</span><span class="pa-info-value"><span class="pa-badge pa-badge--type">' + escHtml(typeName) + '</span></span></div>'
