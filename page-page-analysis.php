@@ -50,9 +50,9 @@ get_header();
     width: 60px;
     height: 40px;
     object-fit: cover;
+    object-position: top;
     border-radius: 4px;
     border: 1px solid #e0e0e0;
-    cursor: pointer;
 }
 .pa-thumb-placeholder {
     width: 60px;
@@ -386,6 +386,8 @@ get_header();
 /* テーブル上書き */
 .pa-table .data-table td { vertical-align: middle; }
 .pa-table .data-table th { white-space: nowrap; }
+.pa-table .data-table tr[data-page-id] { cursor: pointer; transition: background 0.15s; }
+.pa-table .data-table tr[data-page-id]:hover { background: #f0f8ff; }
 
 /* ===== 行動データビュー ===== */
 /* Clarity リンクボタン */
@@ -574,7 +576,13 @@ get_header();
     <!-- アクションバー -->
     <div class="pa-action-bar">
         <span class="pa-count" id="paCount"></span>
-        <button type="button" class="pa-add-btn" id="paAddBtn">+ ページを追加</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+            <a id="paHeaderClarityLink" href="#" target="_blank" rel="noopener"
+               class="pa-clarity-link" style="display:none;">
+                Clarityで詳細を見る &#8599;
+            </a>
+            <button type="button" class="pa-add-btn" id="paAddBtn">+ ページを追加</button>
+        </div>
     </div>
 
     <!-- 一覧テーブル -->
@@ -597,7 +605,6 @@ get_header();
                         <th>SP</th>
                         <th>Clarity</th>
                         <th>AI改善案</th>
-                        <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="paTableBody"></tbody>
@@ -786,9 +793,27 @@ get_header();
             if (!res.success) return;
             var pages = res.data.pages || [];
             renderList(pages);
+            // ヘッダーのClarityリンク設定（最初のページのclarity_project_idを使用）
+            initHeaderClarityLink();
         }).catch(function() {
             hideLoading();
         });
+    }
+
+    function initHeaderClarityLink() {
+        var link = document.getElementById('paHeaderClarityLink');
+        if (!link) return;
+        // クライアント設定のClarity project ID を REST APIから取得
+        fetch('<?php echo esc_url_raw( rest_url( 'gcrev/v1/clarity/settings' ) ); ?>', {
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': NONCE }
+        }).then(function(r) { return r.json(); }).then(function(res) {
+            var pid = res.clarity_project_id || (res.data && res.data.clarity_project_id);
+            if (pid) {
+                link.href = 'https://clarity.microsoft.com/projects/view/' + encodeURIComponent(pid) + '/dashboard';
+                link.style.display = '';
+            }
+        }).catch(function() {});
     }
 
     function renderList(pages) {
@@ -806,10 +831,10 @@ get_header();
             var p = pages[i];
             var typeName = PAGE_TYPES[p.page_type] || p.page_type;
             var pcThumb = p.screenshot_pc_url
-                ? '<img src="' + escHtml(p.screenshot_pc_url) + '" class="pa-thumb" onclick="window._paShowDetail(' + p.id + ')" alt="PC">'
+                ? '<img src="' + escHtml(p.screenshot_pc_url) + '" class="pa-thumb" alt="PC">'
                 : '<div class="pa-thumb-placeholder">未取得</div>';
             var spThumb = p.screenshot_mobile_url
-                ? '<img src="' + escHtml(p.screenshot_mobile_url) + '" class="pa-thumb" onclick="window._paShowDetail(' + p.id + ')" alt="SP">'
+                ? '<img src="' + escHtml(p.screenshot_mobile_url) + '" class="pa-thumb" alt="SP">'
                 : '<div class="pa-thumb-placeholder">未取得</div>';
             var clarityBadge = p.clarity_data
                 ? '<span class="pa-badge pa-badge--done">取得済み</span>'
@@ -818,7 +843,7 @@ get_header();
                 ? '<span class="pa-badge pa-badge--done">分析済み</span>'
                 : '<span class="pa-badge pa-badge--pending">未分析</span>';
 
-            html += '<tr>'
+            html += '<tr data-page-id="' + p.id + '">'
                 + '<td><div style="font-weight:500;">' + escHtml(p.page_title || '（タイトル未取得）') + '</div>'
                 + '<div style="font-size:12px;color:#999;margin-top:2px;">' + escHtml(p.page_url) + '</div></td>'
                 + '<td><span class="pa-badge pa-badge--type">' + escHtml(typeName) + '</span></td>'
@@ -826,13 +851,16 @@ get_header();
                 + '<td>' + spThumb + '</td>'
                 + '<td>' + clarityBadge + '</td>'
                 + '<td>' + aiBadge + '</td>'
-                + '<td>'
-                + '<button class="pa-btn-sm" onclick="window._paShowDetail(' + p.id + ')">詳細</button> '
-                + '<button class="pa-btn-sm pa-btn-sm--danger" onclick="window._paDeletePage(' + p.id + ')">削除</button>'
-                + '</td></tr>';
+                + '</tr>';
         }
         els.tbody.innerHTML = html;
     }
+
+    // 行クリックで詳細を開く
+    els.tbody.addEventListener('click', function(e) {
+        var row = e.target.closest('tr[data-page-id]');
+        if (row) window._paShowDetail(parseInt(row.getAttribute('data-page-id')));
+    });
 
     // --- ページ追加 ---
     els.addBtn.addEventListener('click', function() {
@@ -1007,6 +1035,7 @@ get_header();
         els.overviewContent.innerHTML = ''
             + '<div class="pa-overview-actions">'
             + '<button type="button" class="pa-btn-sm" onclick="window._paEditOverview()">編集</button>'
+            + '<button type="button" class="pa-btn-sm pa-btn-sm--danger" onclick="window._paDeletePage(' + data.id + ')">このページを削除</button>'
             + '</div>'
             + '<div id="paOverviewDisplay">'
             + '<div class="pa-info-row"><span class="pa-info-label">URL</span><span class="pa-info-value"><a href="' + escHtml(data.page_url) + '" target="_blank" rel="noopener">' + escHtml(data.page_url) + '</a></span></div>'
