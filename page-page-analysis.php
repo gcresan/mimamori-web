@@ -1011,6 +1011,27 @@ get_header();
             drawOverlay(metric, device, data, imgW, imgH);
         }
 
+        // 画像読み込みエラー時のフォールバック
+        var fallbackUrl = device === 'mobile'
+            ? (data.screenshot_mobile_url || data.screenshot_mobile_original)
+            : (data.screenshot_pc_url || data.screenshot_pc_original);
+
+        hmImage.onerror = function() {
+            // メインURLが失敗した場合、フォールバックURLを試す
+            if (fallbackUrl && hmImage.src !== fallbackUrl) {
+                console.warn('[Heatmap] Image load failed, trying fallback:', fallbackUrl);
+                hmImage.src = fallbackUrl;
+                return;
+            }
+            // フォールバックも失敗した場合はエラー表示
+            console.error('[Heatmap] Image load failed:', imgUrl);
+            hmImage.style.display = 'none';
+            hmCanvas.style.display = 'none';
+            hmEmpty.style.display = 'block';
+            hmEmpty.querySelector('div:last-child').innerHTML =
+                '画像の読み込みに失敗しました<br><small style="color:#94a3b8;">キャプチャタブから再アップロードしてください</small>';
+        };
+
         // キャッシュ済み画像にも対応
         if (hmImage.src === imgUrl && hmImage.complete && hmImage.naturalHeight > 0) {
             doDrawOverlay();
