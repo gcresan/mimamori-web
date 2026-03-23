@@ -1180,12 +1180,15 @@ get_header();
     }
 
     window._paGenerateAi = function(id) {
-        var btn = document.getElementById('paAiGenerate');
-        if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
         _aiGenerating = true;
 
         var data = window._currentDetailData;
-        if (data) renderAiTab(data); // ローディング表示
+        // 再生成時は既存の結果をクリアしてローディング表示にする
+        if (data) {
+            data.ai_summary = null;
+            data.ai_analysis_date = null;
+            renderAiTab(data);
+        }
 
         apiFetch(API_BASE + '/' + id + '/analyze', { method: 'POST' })
             .then(function(res) {
