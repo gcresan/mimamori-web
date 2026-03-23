@@ -388,44 +388,6 @@ get_header();
 .pa-table .data-table th { white-space: nowrap; }
 
 /* ===== 行動データビュー ===== */
-.hm-controls {
-    padding: 0 0 14px;
-    border-bottom: 1px solid #eee;
-    margin-bottom: 14px;
-}
-.hm-control-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    align-items: flex-end;
-}
-.hm-control-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 120px;
-}
-.hm-control-item label {
-    font-size: 11px;
-    font-weight: 600;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.hm-control-item select {
-    padding: 6px 10px;
-    border: 1px solid #cbd5e1;
-    border-radius: 6px;
-    font-size: 13px;
-    background: #fff;
-    cursor: pointer;
-    transition: border-color .2s;
-}
-.hm-control-item select:focus {
-    outline: none;
-    border-color: #2d9cdb;
-    box-shadow: 0 0 0 3px rgba(45,156,219,.12);
-}
 /* Clarity リンクボタン */
 .pa-clarity-link {
     display: inline-flex;
@@ -440,9 +402,18 @@ get_header();
     background: #fff;
     transition: background 0.2s;
     white-space: nowrap;
-    margin-left: auto;
 }
 .pa-clarity-link:hover { background: #eef2ff; text-decoration: none; color: #6366f1; }
+/* デバイスセクション */
+.hm-device-section { margin-bottom: 24px; }
+.hm-device-section:last-child { margin-bottom: 0; }
+.hm-device-title {
+    font-size: 13px; font-weight: 600; color: #1e293b;
+    margin: 0 0 10px; padding-bottom: 6px;
+    border-bottom: 2px solid #e2e8f0;
+    display: flex; align-items: center; gap: 6px;
+}
+.hm-device-title .hm-device-icon { font-size: 15px; }
 /* サマリー */
 .hm-summary {
     padding: 14px 0 0;
@@ -526,6 +497,41 @@ get_header();
 .pa-ai-section h4 { font-size: 14px; font-weight: 600; color: #1e293b; margin: 0 0 8px; }
 .pa-ai-body { line-height: 1.8; font-size: 14px; color: #333; }
 .pa-behavior-note { font-size: 12px; color: #94a3b8; margin: 0 0 14px; }
+.pa-behavior-header {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+}
+
+/* スクロール深度オーバーレイ */
+.pa-img-wrap { position: relative; overflow: hidden; margin-bottom: 12px; }
+.pa-scroll-overlay {
+    position: absolute; left: 0; right: 0;
+    pointer-events: none; z-index: 5;
+}
+.pa-scroll-line {
+    height: 2.5px; background: #3b82f6;
+    box-shadow: 0 1px 6px rgba(59,130,246,0.5);
+}
+.pa-scroll-label {
+    display: inline-block;
+    background: #3b82f6; color: #fff;
+    font-size: 10px; padding: 2px 8px;
+    border-radius: 0 0 4px 4px;
+    white-space: nowrap;
+}
+.pa-scroll-shade {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.08));
+    pointer-events: none; z-index: 4;
+}
+.pa-scroll-legend {
+    font-size: 11px; color: #64748b; margin-top: 4px;
+    display: flex; align-items: center; gap: 6px;
+}
+.pa-scroll-legend-line {
+    display: inline-block; width: 16px; height: 2px;
+    background: #3b82f6; border-radius: 1px;
+}
 
 /* アップロード進捗バー */
 .pa-progress-bar {
@@ -666,31 +672,14 @@ get_header();
         </div>
         <!-- 行動データタブ -->
         <div class="pa-tab-pane" data-pane="behavior">
-            <div class="hm-controls">
-                <div class="hm-control-row">
-                    <div class="hm-control-item">
-                        <label>デバイス</label>
-                        <select id="hmDevice">
-                            <option value="pc">PC版</option>
-                            <option value="mobile">スマホ版</option>
-                        </select>
-                    </div>
-                    <a id="hmClarityLink" href="#" target="_blank" rel="noopener"
-                       class="pa-clarity-link" style="display:none;">
-                        Clarityで詳細を見る &#8599;
-                    </a>
-                </div>
+            <div class="pa-behavior-header">
+                <p class="pa-behavior-note" style="margin:0;">このページの閲覧や読まれ方の傾向をまとめています。</p>
+                <a id="hmClarityLink" href="#" target="_blank" rel="noopener"
+                   class="pa-clarity-link" style="display:none;">
+                    Clarityで詳細を見る &#8599;
+                </a>
             </div>
-            <p class="pa-behavior-note">Microsoft Clarityから取得した行動データのサマリーです。詳細な分析はClarityダッシュボードで確認できます。</p>
-
-            <!-- 数値サマリー -->
-            <div class="hm-summary" id="hmSummary" style="border-top:none;padding-top:0;">
-                <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
-                    <h4 class="hm-summary-title" style="margin:0;">行動データサマリー</h4>
-                    <span id="hmDataPeriod" style="font-size:11px;color:#94a3b8;"></span>
-                </div>
-                <div class="hm-summary-grid" id="hmSummaryGrid"></div>
-            </div>
+            <div id="hmBehaviorContent"></div>
         </div>
         <!-- AI改善案タブ -->
         <div class="pa-tab-pane" data-pane="ai">
@@ -961,11 +950,38 @@ get_header();
             ? '<button type="button" class="pa-delete-btn" onclick="window._paDeleteCapture(' + data.id + ', \'mobile\')">削除</button>'
             : '';
 
+        // スクロール深度データ取得（画像オーバーレイ用）
+        var pcScroll = getScrollDepth(data, 'pc');
+        var spScroll = getScrollDepth(data, 'mobile');
+
+        function buildImgWithScroll(imgHtml, scrollPct, device) {
+            if (!imgHtml.match(/pa-capture-img/)) return imgHtml; // empty placeholder
+            var overlay = '';
+            if (scrollPct !== null && scrollPct > 0) {
+                overlay = '<div class="pa-scroll-overlay" style="top:' + scrollPct.toFixed(1) + '%;">'
+                    + '<div class="pa-scroll-line"></div>'
+                    + '<span class="pa-scroll-label">&#9660; 平均到達位置 ' + scrollPct.toFixed(1) + '%</span>'
+                    + '</div>'
+                    + '<div class="pa-scroll-shade" style="top:' + scrollPct.toFixed(1) + '%;"></div>';
+            }
+            return '<div class="pa-img-wrap">' + imgHtml + overlay + '</div>';
+        }
+
+        var pcImgWithScroll = buildImgWithScroll(pcImg, pcScroll, 'pc');
+        var spImgWithScroll = buildImgWithScroll(spImg, spScroll, 'mobile');
+
+        // 凡例（スクロール深度データがある場合のみ）
+        var legendHtml = (pcScroll !== null || spScroll !== null)
+            ? '<div class="pa-scroll-legend" style="grid-column:1/-1;margin-bottom:8px;">'
+              + '<span class="pa-scroll-legend-line"></span> 青線 = 平均到達位置（この位置より下は閲覧率が下がります）'
+              + '</div>' : '';
+
         els.captureContent.innerHTML = ''
             + '<p class="pa-behavior-note" style="margin-top:0;grid-column:1/-1;">AI分析にも活用するため、PC版・スマホ版の画像を管理します。</p>'
-            + '<div class="pa-capture-box"><h4>PC版</h4>' + pcImg
+            + legendHtml
+            + '<div class="pa-capture-box"><h4>PC版</h4>' + pcImgWithScroll
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'pc\')">画像をアップロード</button>' + pcDel + '</div>'
-            + '<div class="pa-capture-box"><h4>スマホ版</h4>' + spImg
+            + '<div class="pa-capture-box"><h4>スマホ版</h4>' + spImgWithScroll
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'mobile\')">画像をアップロード</button>' + spDel + '</div>';
 
         // ===== 行動データタブ =====
@@ -1093,21 +1109,10 @@ get_header();
             });
     };
 
-    // ===== 行動データ（サマリー表示） =====
-    var hmDeviceSelect = document.getElementById('hmDevice');
-    var hmSummaryGrid  = document.getElementById('hmSummaryGrid');
-
-    if (hmDeviceSelect) {
-        hmDeviceSelect.addEventListener('change', function() {
-            var data = window._hmCurrentData;
-            if (data) renderHeatmapSummary(data, hmDeviceSelect.value);
-        });
-    }
+    // ===== 行動データ（PC/SP同時表示） =====
+    var hmBehaviorContent = document.getElementById('hmBehaviorContent');
 
     function renderHeatmapTab(data) {
-        if (hmDeviceSelect) {
-            hmDeviceSelect.value = data.screenshot_pc_url ? 'pc' : (data.screenshot_mobile_url ? 'mobile' : 'pc');
-        }
         // Clarity リンク設定
         var clarityLink = document.getElementById('hmClarityLink');
         if (clarityLink && data.clarity_project_id) {
@@ -1116,71 +1121,44 @@ get_header();
         } else if (clarityLink) {
             clarityLink.style.display = 'none';
         }
-        renderHeatmapSummary(data, hmDeviceSelect ? hmDeviceSelect.value : 'pc');
+        renderBehaviorBothDevices(data);
     }
 
-    function renderHeatmapSummary(data, device) {
+    // 0 を正しく扱うヘルパー
+    function safeNum(v) {
+        if (v === undefined || v === null || v === '') return null;
+        return v;
+    }
+
+    function stat(label, value, sub) {
+        return '<div class="hm-stat"><div class="hm-stat-label">' + escHtml(label) + '</div>'
+            + '<div class="hm-stat-value">' + escHtml(String(value)) + '</div>'
+            + (sub ? '<div class="hm-stat-sub">' + escHtml(sub) + '</div>' : '')
+            + '</div>';
+    }
+
+    // スクロール深度をデバイス別に取得（ページ画像タブでも再利用）
+    function getScrollDepth(data, device) {
+        var clarity = data.clarity_data || {};
+        var deviceKey = device === 'mobile' ? 'Mobile' : 'PC';
+        var siteWide = clarity.site_wide || {};
+        var swDev = (siteWide.by_device && (siteWide.by_device[deviceKey] || siteWide.by_device['Desktop'])) || {};
+        var devMetrics = (clarity.devices && (clarity.devices[deviceKey] || clarity.devices['Desktop'])) || {};
+        var scrollM = swDev.scroll_depth || devMetrics.scroll_depth || (clarity.metrics || {}).scroll_depth || {};
+        var val = safeNum(scrollM.averageScrollDepth) !== null ? scrollM.averageScrollDepth
+                : safeNum(scrollM.sessionsWithMetricPercentage) !== null ? scrollM.sessionsWithMetricPercentage
+                : null;
+        return val !== null ? parseFloat(val) : null;
+    }
+
+    function buildDeviceMetrics(device, data) {
         var clarity = data.clarity_data || {};
         var metrics = clarity.metrics || {};
-        // サイト全体のDevice別データ（正確な集計値）を優先使用
         var deviceKey = device === 'mobile' ? 'Mobile' : 'PC';
         var siteWide = clarity.site_wide || {};
         var swDevice = (siteWide.by_device && (siteWide.by_device[deviceKey] || siteWide.by_device['Desktop'])) || {};
-        // URL集約データ（1000行制限で不正確な場合あり）をフォールバック
         var devMetrics = (clarity.devices && (clarity.devices[deviceKey] || clarity.devices['Desktop'])) || {};
 
-        // データ期間を表示（Clarity APIは直近3日間のデータ）
-        var periodEl = document.getElementById('hmDataPeriod');
-        if (periodEl) {
-            var syncDate = data.clarity_sync_date;
-            if (syncDate) {
-                // 同期日の3日前〜同期日
-                var sd = new Date(syncDate.replace(' ', 'T'));
-                var from = new Date(sd);
-                from.setDate(from.getDate() - 3);
-                var fmt = function(d) { return d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate(); };
-                periodEl.textContent = '📅 ' + fmt(from) + ' 〜 ' + fmt(sd) + '（直近3日間） 同期: ' + syncDate;
-            } else {
-                periodEl.textContent = '';
-            }
-        }
-
-        if (Object.keys(metrics).length === 0) {
-            hmSummaryGrid.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください</div>';
-            return;
-        }
-
-        var debugHtml = '';
-
-        // Clarity APIの実レスポンスキー:
-        // sessionsCount, sessionsWithMetricPercentage, pagesViews, subTotal
-        function getMetricVal(obj, fallbackKey) {
-            if (!obj || typeof obj !== 'object') return '-';
-            // sessionsWithMetricPercentage = そのメトリクスに該当するセッション割合(%)
-            // sessionsCount = セッション数
-            // subTotal = メトリクスの合計値
-            // pagesViews = ページビュー数
-            return obj.sessionsWithMetricPercentage
-                || obj.subTotal
-                || obj.sessionsCount
-                || obj.pagesViews
-                || obj.Average || obj.Count || obj.value
-                || '-';
-        }
-
-        function getSessionCount(obj) {
-            if (!obj || typeof obj !== 'object') return '-';
-            return obj.sessionsCount || obj.totalSessionCount || obj.Count || '-';
-        }
-
-        function stat(label, value, sub) {
-            return '<div class="hm-stat"><div class="hm-stat-label">' + escHtml(label) + '</div>'
-                + '<div class="hm-stat-value">' + escHtml(String(value)) + '</div>'
-                + (sub ? '<div class="hm-stat-sub">' + escHtml(sub) + '</div>' : '')
-                + '</div>';
-        }
-
-        // site_wide（サイト全体の正確なDevice別集計）→ URL集約 → 全体 の優先順
         var scrollM = swDevice.scroll_depth || devMetrics.scroll_depth || metrics.scroll_depth || {};
         var engM    = swDevice.engagement_time || devMetrics.engagement_time || metrics.engagement_time || {};
         var dcM     = swDevice.dead_click_count || devMetrics.dead_click_count || metrics.dead_click_count || {};
@@ -1188,42 +1166,67 @@ get_header();
         var tM      = swDevice.traffic || devMetrics.traffic || metrics.traffic || {};
         var ecM     = swDevice.error_click_count || devMetrics.error_click_count || metrics.error_click_count || {};
 
-        // 0 を正しく扱うヘルパー（|| は 0 を falsy にするため使わない）
-        function safeNum(v) {
-            if (v === undefined || v === null || v === '') return null;
-            return v;
-        }
-
-        // スクロール深度: averageScrollDepth（平均スクロール深度%）→ sessionsWithMetricPercentage（到達率%）の順
         var scrollVal = safeNum(scrollM.averageScrollDepth) !== null ? scrollM.averageScrollDepth
-                      : safeNum(scrollM.sessionsWithMetricPercentage) !== null ? scrollM.sessionsWithMetricPercentage
-                      : null;
+                      : safeNum(scrollM.sessionsWithMetricPercentage) !== null ? scrollM.sessionsWithMetricPercentage : null;
         var scrollDisplay = scrollVal !== null ? (parseFloat(scrollVal).toFixed(1) + '%') : '-';
 
-        // エンゲージメント: activeTime（アクティブ時間秒）→ totalTime → sessionsWithMetricPercentage の順
         var engVal = safeNum(engM.activeTime) !== null ? engM.activeTime
-                   : safeNum(engM.totalTime) !== null ? engM.totalTime
-                   : safeNum(engM.sessionsWithMetricPercentage) !== null ? engM.sessionsWithMetricPercentage
-                   : null;
+                   : safeNum(engM.totalTime) !== null ? engM.totalTime : null;
         var engDisplay = engVal !== null ? (parseFloat(engVal).toFixed(0) + '秒') : '-';
 
-        // Dead/Rage Click: subTotal がイベント合計数
         var dcCount = safeNum(dcM.subTotal) !== null ? dcM.subTotal : (safeNum(dcM.sessionsCount) !== null ? dcM.sessionsCount : '-');
         var rcCount = safeNum(rcM.subTotal) !== null ? rcM.subTotal : (safeNum(rcM.sessionsCount) !== null ? rcM.sessionsCount : '-');
         var ecCount = safeNum(ecM.subTotal) !== null ? ecM.subTotal : (safeNum(ecM.sessionsCount) !== null ? ecM.sessionsCount : '-');
-
-        // セッション数
         var sessions = safeNum(tM.sessionsCount) !== null ? tM.sessionsCount : (safeNum(tM.totalSessionCount) !== null ? tM.totalSessionCount : '-');
-        var pageViews = safeNum(tM.pagesViews) !== null ? tM.pagesViews : '-';
 
-        hmSummaryGrid.innerHTML = ''
-            + stat('セッション数', sessions, 'PV: ' + pageViews)
-            + stat('スクロール深度', scrollDisplay, device === 'mobile' ? 'スマホ版' : 'PC版')
-            + stat('Dead Click', dcCount, '無反応クリック')
-            + stat('Rage Click', rcCount, '連打クリック')
-            + stat('エンゲージメント', engDisplay, '')
-            + stat('Error Click', ecCount, 'エラークリック')
-            + debugHtml;
+        return '<div class="hm-summary-grid">'
+            + stat('セッション数', sessions, 'このページが見られた回数の目安です')
+            + stat('スクロール深度', scrollDisplay, 'ページのどこまで読まれたかの目安')
+            + stat('Dead Click', dcCount, '押しても反応がなかった回数')
+            + stat('Rage Click', rcCount, '反応しないため何度も押された回数')
+            + stat('エンゲージメント', engDisplay, 'ページを実際に見た・操作した時間の目安')
+            + stat('Error Click', ecCount, 'クリック時に不具合が起きた可能性がある回数')
+            + '</div>';
+    }
+
+    function renderBehaviorBothDevices(data) {
+        if (!hmBehaviorContent) return;
+        var clarity = data.clarity_data || {};
+        var metrics = clarity.metrics || {};
+
+        // データ期間
+        var periodHtml = '';
+        var syncDate = data.clarity_sync_date;
+        if (syncDate) {
+            var sd = new Date(syncDate.replace(' ', 'T'));
+            var from = new Date(sd);
+            from.setDate(from.getDate() - 3);
+            var fmt = function(d) { return d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate(); };
+            periodHtml = '<div style="font-size:11px;color:#94a3b8;margin-bottom:14px;">'
+                + '&#128197; ' + fmt(from) + ' 〜 ' + fmt(sd) + '（直近3日間） 同期: ' + escHtml(syncDate)
+                + '</div>';
+        }
+
+        if (Object.keys(metrics).length === 0) {
+            hmBehaviorContent.innerHTML = '<div class="hm-no-data">Clarityデータ未取得 — クライアント設定からClarity同期を実行してください</div>';
+            return;
+        }
+
+        var html = periodHtml;
+
+        // PC版セクション
+        html += '<div class="hm-device-section">'
+            + '<h5 class="hm-device-title"><span class="hm-device-icon">&#128187;</span> PC版</h5>'
+            + buildDeviceMetrics('pc', data)
+            + '</div>';
+
+        // スマホ版セクション
+        html += '<div class="hm-device-section">'
+            + '<h5 class="hm-device-title"><span class="hm-device-icon">&#128241;</span> スマホ版</h5>'
+            + buildDeviceMetrics('mobile', data)
+            + '</div>';
+
+        hmBehaviorContent.innerHTML = html;
     }
 
     // --- タブ切り替え ---
