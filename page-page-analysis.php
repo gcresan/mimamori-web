@@ -962,7 +962,7 @@ get_header();
             : '';
 
         els.captureContent.innerHTML = ''
-            + '<p class="pa-behavior-note" style="margin-top:0;">AI分析にも活用するため、PC版・スマホ版の画像を管理します。</p>'
+            + '<p class="pa-behavior-note" style="margin-top:0;grid-column:1/-1;">AI分析にも活用するため、PC版・スマホ版の画像を管理します。</p>'
             + '<div class="pa-capture-box"><h4>PC版</h4>' + pcImg
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'pc\')">画像をアップロード</button>' + pcDel + '</div>'
             + '<div class="pa-capture-box"><h4>スマホ版</h4>' + spImg
