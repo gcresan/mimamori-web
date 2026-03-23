@@ -17733,30 +17733,23 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
         }
 
-        // 画像を収集（Base64エンコード）
+        // 画像を収集（元画像からファーストビュー相当を切り出してBase64エンコード）
         $images = [];
-        foreach ( [ 'screenshot_pc', 'screenshot_mobile' ] as $field ) {
+        foreach ( [ 'screenshot_pc' => 'pc', 'screenshot_mobile' => 'mobile' ] as $field => $device_label ) {
             $att_id = (int) ( $row[ $field ] ?? 0 );
             if ( $att_id <= 0 ) continue;
 
-            // -scaled 版（適度なサイズ）を優先、なければ元画像
-            $file_path = get_attached_file( $att_id );
+            // 元画像パスを取得（-scaled版は超縦長画像で幅が潰れるため使わない）
+            $file_path = function_exists( 'wp_get_original_image_path' )
+                ? wp_get_original_image_path( $att_id )
+                : get_attached_file( $att_id );
             if ( ! $file_path || ! file_exists( $file_path ) ) continue;
 
-            // ファイルサイズ上限チェック（5MB）
-            if ( filesize( $file_path ) > 5 * 1024 * 1024 ) {
-                // 大きすぎる場合はscaled版を探す
-                $scaled = preg_replace( '/(\.\w+)$/', '-scaled$1', $file_path );
-                if ( file_exists( $scaled ) ) {
-                    $file_path = $scaled;
-                } else {
-                    continue; // スキップ
-                }
+            // GDでファーストビュー相当を切り出し（AI分析に最適なサイズに）
+            $img_data = $this->prepare_image_for_ai( $file_path, $device_label );
+            if ( $img_data ) {
+                $images[] = $img_data;
             }
-
-            $mime = wp_check_filetype( $file_path )['type'] ?: 'image/png';
-            $data = base64_encode( file_get_contents( $file_path ) );
-            $images[] = [ 'mime_type' => $mime, 'data' => $data ];
         }
 
         // Clarityデータ抽出
@@ -17826,6 +17819,92 @@ PROMPT;
     /**
      * Clarityデータからプロンプト用の行動サマリーテキストを構築
      */
+    /**
+     * AI分析用に画像を最適化（元画像からFV相当を切り出し + リサイズ）
+     *
+     * 超縦長スクリーンショットの場合、上部（ファーストビュー〜主要コンテンツ）を
+     * 切り出し、Geminiが読み取れるサイズに変換する。
+     *
+     * @param string $file_path 元画像ファイルパス
+     * @param string $device    'pc' or 'mobile'
+     * @return array|null       ['mime_type' => ..., 'data' => base64] or null
+     */
+    private function prepare_image_for_ai( string $file_path, string $device ): ?array {
+        $log = '/tmp/gcrev_page_analysis_debug.log';
+
+        $info = @getimagesize( $file_path );
+        if ( ! $info ) return null;
+
+        $orig_w = $info[0];
+        $orig_h = $info[1];
+        $mime   = $info['mime'] ?? 'image/png';
+
+        // 画像サイズが適切なら（幅300px以上 & 高さが幅の4倍以内）そのまま使用
+        if ( $orig_w >= 300 && $orig_h <= $orig_w * 4 && filesize( $file_path ) <= 4 * 1024 * 1024 ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " ai_img: {$device} using original {$orig_w}x{$orig_h}\n", FILE_APPEND );
+            return [
+                'mime_type' => $mime,
+                'data'      => base64_encode( file_get_contents( $file_path ) ),
+            ];
+        }
+
+        // GDで切り出し + リサイズ
+        if ( ! function_exists( 'imagecreatefrompng' ) ) {
+            // GD未対応: 元画像をそのまま送信（大きくても試行）
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " ai_img: {$device} GD unavailable, sending raw {$orig_w}x{$orig_h}\n", FILE_APPEND );
+            return [
+                'mime_type' => $mime,
+                'data'      => base64_encode( file_get_contents( $file_path ) ),
+            ];
+        }
+
+        // 切り出し高さ: 元の幅 × 3（PC: 約3スクリーン分、SP: 約3スクリーン分）
+        $crop_h = min( $orig_h, $orig_w * 3 );
+        // リサイズ: 最大幅1200px
+        $max_w  = 1200;
+        $new_w  = min( $orig_w, $max_w );
+        $new_h  = (int) round( $crop_h * ( $new_w / $orig_w ) );
+
+        // 元画像読み込み
+        $src = null;
+        switch ( $mime ) {
+            case 'image/png':  $src = @imagecreatefrompng( $file_path ); break;
+            case 'image/jpeg': $src = @imagecreatefromjpeg( $file_path ); break;
+            case 'image/webp': $src = @imagecreatefromwebp( $file_path ); break;
+        }
+        if ( ! $src ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " ai_img: {$device} GD failed to load {$mime}\n", FILE_APPEND );
+            return null;
+        }
+
+        // リサイズ + 切り出し
+        $dst = imagecreatetruecolor( $new_w, $new_h );
+        imagealphablending( $dst, false );
+        imagesavealpha( $dst, true );
+        imagecopyresampled( $dst, $src, 0, 0, 0, 0, $new_w, $new_h, $orig_w, $crop_h );
+        imagedestroy( $src );
+
+        // JPEG出力（サイズ効率）
+        ob_start();
+        imagejpeg( $dst, null, 85 );
+        $jpeg_data = ob_get_clean();
+        imagedestroy( $dst );
+
+        file_put_contents( $log,
+            date( 'Y-m-d H:i:s' ) . " ai_img: {$device} cropped {$orig_w}x{$orig_h} → {$new_w}x{$new_h} ("
+            . round( strlen( $jpeg_data ) / 1024 ) . "KB)\n",
+            FILE_APPEND
+        );
+
+        return [
+            'mime_type' => 'image/jpeg',
+            'data'      => base64_encode( $jpeg_data ),
+        ];
+    }
+
     private function build_behavior_summary_text( array $clarity ): string {
         if ( empty( $clarity['metrics'] ) ) {
             return "【行動データ】\nデータ未取得\n";
