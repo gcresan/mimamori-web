@@ -270,6 +270,7 @@ get_header();
 .pa-img-tab:hover:not(.is-active) { background: #eee; }
 .pa-img-pane { display: none; }
 .pa-img-pane.is-active { display: block; }
+.pa-img-pane[data-img-pane="mobile"] .pa-capture-img { width: 65%; display: block; margin-left: auto; margin-right: auto; }
 
 /* セクション見出し */
 .pa-section {
