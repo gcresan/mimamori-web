@@ -314,6 +314,13 @@ class Gcrev_Bootstrap {
                 if ( $result['success'] ) {
                     Gcrev_Clarity_Client::save_daily_snapshot( $uid, $result, 1 );
                     $synced++;
+
+                    // AI改善案を再生成（画像+Clarityデータが揃っているページのみ）
+                    $ai_generated = self::regenerate_ai_for_user( $uid, $log );
+                    file_put_contents( $log,
+                        date( 'Y-m-d H:i:s' ) . " clarity_daily_sync: user={$uid}, ai_regenerated={$ai_generated}\n",
+                        FILE_APPEND
+                    );
                 }
 
                 file_put_contents( $log,
@@ -333,6 +340,61 @@ class Gcrev_Bootstrap {
 
         wp_set_current_user( 0 );
         file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync END: synced={$synced}\n", FILE_APPEND );
+    }
+
+    /**
+     * 指定ユーザーの全ページ分析に対してAI改善案を再生成
+     *
+     * @param int    $user_id
+     * @param string $log  デバッグログファイルパス
+     * @return int   生成したページ数
+     */
+    private static function regenerate_ai_for_user( int $user_id, string $log ): int {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_page_analysis';
+
+        // 画像 + Clarityデータが揃っているページを取得
+        $pages = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id FROM {$table}
+             WHERE user_id = %d AND status = 'active'
+               AND screenshot_pc IS NOT NULL
+               AND clarity_data IS NOT NULL AND clarity_data != ''",
+            $user_id
+        ), ARRAY_A );
+
+        if ( empty( $pages ) ) return 0;
+
+        $api = new \Gcrev_Insight_API( false );
+        $generated = 0;
+
+        foreach ( $pages as $page ) {
+            try {
+                wp_set_current_user( $user_id );
+                $req = new \WP_REST_Request( 'POST' );
+                $req->set_param( 'id', (int) $page['id'] );
+                $res = $api->rest_trigger_page_analysis( $req );
+                $data = $res->get_data();
+
+                if ( ! empty( $data['success'] ) ) {
+                    $generated++;
+                }
+
+                file_put_contents( $log,
+                    date( 'Y-m-d H:i:s' ) . " ai_regen: page_id={$page['id']}, success=" . ( $data['success'] ? 'true' : 'false' ) . "\n",
+                    FILE_APPEND
+                );
+            } catch ( \Throwable $e ) {
+                file_put_contents( $log,
+                    date( 'Y-m-d H:i:s' ) . " ai_regen ERROR: page_id={$page['id']}, " . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
+            }
+
+            // Gemini API負荷軽減
+            sleep( 3 );
+        }
+
+        return $generated;
     }
 
     public static function on_cron_log_cleanup(): void {
