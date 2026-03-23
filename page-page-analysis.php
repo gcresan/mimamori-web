@@ -80,6 +80,34 @@ get_header();
 .pa-badge--warn { background: #fff8e1; color: #e6a817; }
 .pa-badge--pending { background: #f0f0f0; color: #999; }
 .pa-badge--type { background: #e8f0fe; color: #1967d2; }
+/* ステータスカード（詳細画面上部） */
+.pa-status-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.pa-status-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    color: #495057;
+}
+.pa-status-chip--done { background: #e6f7ed; border-color: #c3e6cb; color: #1a7e3e; }
+.pa-status-chip--warn { background: #fff8e1; border-color: #ffe082; color: #c68a00; }
+.pa-status-chip--pending { background: #f0f0f0; border-color: #ddd; color: #888; }
+/* 一覧テーブル行ホバー強化 */
+#paTable tbody tr { cursor: pointer; transition: background 0.15s, box-shadow 0.15s; }
+#paTable tbody tr:hover { background: #f0f7f7; box-shadow: 0 1px 3px rgba(86,129,132,0.08); }
+/* 最終分析日の相対表示 */
+.pa-date-relative { font-size: 12px; color: #568184; font-weight: 500; }
+.pa-date-absolute { font-size: 11px; color: #aaa; margin-top: 1px; }
 
 /* 操作ボタン */
 .pa-btn-sm {
@@ -790,6 +818,18 @@ get_header();
         if (!s) return '';
         return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+    function relativeDate(dateStr) {
+        if (!dateStr) return '';
+        var d = new Date(dateStr.replace(' ', 'T'));
+        var now = new Date();
+        var diffMs = now - d;
+        var diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return '今日';
+        if (diffDays === 1) return '昨日';
+        if (diffDays < 7) return diffDays + '日前';
+        if (diffDays < 30) return Math.floor(diffDays / 7) + '週間前';
+        return Math.floor(diffDays / 30) + 'ヶ月前';
+    }
 
     function showLoading() { els.loading.classList.add('active'); }
     function hideLoading() { els.loading.classList.remove('active'); }
@@ -872,11 +912,16 @@ get_header();
                 statusHtml = '<span class="pa-badge pa-badge--pending">未設定</span>';
             }
 
-            // 最終分析日
+            // 最終分析日（相対表示）
             var lastDate = p.ai_analysis_date || p.clarity_sync_date || '';
-            var lastDateHtml = lastDate
-                ? '<span style="font-size:12px;color:#666;">' + escHtml(lastDate.substring(0, 10)) + '</span>'
-                : '<span style="font-size:12px;color:#bbb;">—</span>';
+            var lastDateHtml = '';
+            if (lastDate) {
+                var rel = relativeDate(lastDate);
+                lastDateHtml = '<div class="pa-date-relative">' + escHtml(rel) + '</div>'
+                    + '<div class="pa-date-absolute">' + escHtml(lastDate.substring(0, 10)) + '</div>';
+            } else {
+                lastDateHtml = '<span style="font-size:12px;color:#bbb;">—</span>';
+            }
 
             html += '<tr data-page-id="' + p.id + '">'
                 + '<td><div style="font-weight:500;">' + escHtml(p.page_title || '（タイトル未取得）') + '</div>'
@@ -995,8 +1040,9 @@ get_header();
         // ===== 左カラム: ページ画像 =====
         els.detailLeft.innerHTML = buildImageColumn(data);
 
-        // ===== 右カラム: 概要 + 行動データ + AI改善案 =====
-        var rightHtml = buildOverviewSection(data)
+        // ===== 右カラム: ステータスバー + 概要 + 行動データ + AI改善案 =====
+        var rightHtml = buildStatusBar(data)
+            + buildOverviewSection(data)
             + buildBehaviorSection(data)
             + '<div class="pa-section" id="paAiSection">'
             + '<h4 class="pa-section-title"><span class="pa-section-icon">&#129302;</span> AI改善案</h4>'
@@ -1080,6 +1126,37 @@ get_header();
         var pane = els.detailLeft.querySelector('[data-img-pane="' + target + '"]');
         if (pane) pane.classList.add('is-active');
     });
+
+    function buildStatusBar(data) {
+        // 分析状態チップ
+        var statusClass = 'pa-status-chip--pending';
+        var statusLabel = '未設定';
+        if (data.ai_summary) { statusClass = 'pa-status-chip--done'; statusLabel = '分析済み'; }
+        else if (data.clarity_data) { statusClass = 'pa-status-chip--warn'; statusLabel = 'データ蓄積中'; }
+        else if (data.screenshot_pc_url || data.screenshot_mobile_url) { statusLabel = '準備中'; }
+
+        var chips = '<span class="pa-status-chip ' + statusClass + '">' + statusLabel + '</span>';
+
+        // 最終分析日チップ
+        var lastDate = data.ai_analysis_date || data.clarity_sync_date;
+        if (lastDate) {
+            chips += '<span class="pa-status-chip">最終分析: ' + escHtml(relativeDate(lastDate)) + '</span>';
+        }
+
+        // 画像登録チップ
+        var imgStatus = [];
+        if (data.screenshot_pc_url) imgStatus.push('PC');
+        if (data.screenshot_mobile_url) imgStatus.push('SP');
+        if (imgStatus.length > 0) {
+            chips += '<span class="pa-status-chip">画像: ' + imgStatus.join(' / ') + '</span>';
+        }
+
+        // TODO: 将来ここに改善優先度・主要課題・注目端末を追加
+        // chips += '<span class="pa-status-chip pa-status-chip--warn">優先度: 高</span>';
+        // chips += '<span class="pa-status-chip">課題: CTA到達前離脱</span>';
+
+        return '<div class="pa-status-bar">' + chips + '</div>';
+    }
 
     function buildOverviewSection(data) {
         var typeName = PAGE_TYPES[data.page_type] || data.page_type;

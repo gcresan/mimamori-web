@@ -17723,6 +17723,9 @@ PROMPT;
         $user_id = get_current_user_id();
         $id      = absint( $request->get_param( 'id' ) );
         $table   = $wpdb->prefix . 'gcrev_page_analysis';
+        // TODO: 版管理導入後は $row['current_version_id'] を取得し、
+        //       AI改善案を page_ai_insights テーブルに version_id 紐づけで保存する。
+        //       既存の ai_summary / ai_analysis_date カラムは後方互換で残す。
 
         $row = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$table} WHERE id = %d AND user_id = %d AND status = 'active'",
@@ -18042,6 +18045,11 @@ PROMPT;
     /**
      * Clarity 手動同期
      * POST gcrev/v1/clarity/sync
+     *
+     * TODO: 版管理導入後は clarity_data を page_clarity_snapshots テーブルに
+     *       version_id + snapshot_date で保存する。
+     *       既存の clarity_data カラムは「最新スナップショットのキャッシュ」として残す。
+     *       改修記録時に新 version が作られたら、以後は新 version_id に紐づけて蓄積。
      */
     public function rest_clarity_sync( \WP_REST_Request $request ): \WP_REST_Response {
         $user_id = get_current_user_id();
@@ -18082,6 +18090,112 @@ PROMPT;
                 'summary' => $summary,
             ],
         ], 200 );
+    }
+
+    /* =========================================================================
+     * 月次レポート連携用：ページ改善サマリー取得
+     *
+     * レポート生成時に呼び出し、ページ改善の要約情報を取得する。
+     * 月次比較データとは期間が異なるため、補足セクションとして扱う。
+     *
+     * @param int   $user_id ユーザーID
+     * @param array $args    オプション（将来拡張用）
+     *                       - limit: 取得ページ数上限（デフォルト5）
+     *                       - min_sessions: 最低セッション数（デフォルト0）
+     * @return array ページ改善サマリーデータ
+     *
+     * TODO: 版管理導入後は page_version_id に紐づけて取得する
+     * ========================================================================= */
+    public function get_page_improvement_summary( int $user_id, array $args = [] ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_page_analysis';
+        $limit = isset( $args['limit'] ) ? absint( $args['limit'] ) : 5;
+
+        // 分析済みページを優先度順に取得（AI改善案がある → Clarityデータがある → 画像がある）
+        $pages = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, page_title, page_url, page_type, page_purpose, page_cta,
+                    screenshot_pc, screenshot_mobile, clarity_data, clarity_sync_date,
+                    ai_summary, ai_analysis_date
+             FROM {$table}
+             WHERE user_id = %d AND status = 'active'
+             ORDER BY
+                CASE WHEN ai_summary IS NOT NULL AND ai_summary != '' THEN 0 ELSE 1 END,
+                CASE WHEN clarity_data IS NOT NULL AND clarity_data != '' THEN 0 ELSE 1 END,
+                ai_analysis_date DESC
+             LIMIT %d",
+            $user_id,
+            $limit
+        ), ARRAY_A );
+
+        if ( empty( $pages ) ) {
+            return [
+                'status'     => 'no_data',
+                'pages'      => [],
+                'note'       => 'ページ改善データが登録されていません。',
+                'period_note' => '',
+            ];
+        }
+
+        $result_pages = [];
+        foreach ( $pages as $page ) {
+            $clarity = $page['clarity_data'] ? json_decode( $page['clarity_data'], true ) : null;
+
+            // Clarityから要約データを抽出
+            $behavior_summary = [];
+            if ( $clarity ) {
+                $site_wide = $clarity['site_wide'] ?? [];
+                $by_device = $site_wide['by_device'] ?? [];
+                foreach ( ['PC', 'Mobile'] as $dev ) {
+                    if ( ! isset( $by_device[ $dev ] ) ) continue;
+                    $dm = $by_device[ $dev ];
+                    $device_label = $dev === 'PC' ? 'PC' : 'スマホ';
+                    $sessions = $dm['traffic']['sessionsWithMetricCount'] ?? ( $dm['traffic']['subTotal'] ?? null );
+                    $scroll   = $dm['scroll_depth']['averageScrollDepth'] ?? null;
+                    $dead     = $dm['dead_click_count']['sessionsWithMetricCount'] ?? ( $dm['dead_click_count']['subTotal'] ?? null );
+                    $behavior_summary[] = [
+                        'device'       => $device_label,
+                        'sessions'     => $sessions,
+                        'scroll_depth' => $scroll ? round( $scroll, 1 ) . '%' : null,
+                        'dead_click'   => $dead,
+                    ];
+                }
+            }
+
+            // AI改善案の要約（先頭200文字）
+            $ai_excerpt = '';
+            if ( $page['ai_summary'] ) {
+                $ai_excerpt = mb_substr( strip_tags( $page['ai_summary'] ), 0, 200, 'UTF-8' );
+            }
+
+            $result_pages[] = [
+                'page_title'       => $page['page_title'],
+                'page_url'         => $page['page_url'],
+                'page_type'        => $page['page_type'],
+                'page_purpose'     => $page['page_purpose'],
+                'has_ai_summary'   => ! empty( $page['ai_summary'] ),
+                'ai_excerpt'       => $ai_excerpt,
+                'ai_analysis_date' => $page['ai_analysis_date'],
+                'clarity_sync_date'=> $page['clarity_sync_date'],
+                'behavior_summary' => $behavior_summary,
+                // TODO: 将来 page_version_id, improvement_priority を追加
+            ];
+        }
+
+        // 最新のClarity同期日を取得して期間注記を生成
+        $latest_sync = '';
+        foreach ( $result_pages as $rp ) {
+            if ( $rp['clarity_sync_date'] && $rp['clarity_sync_date'] > $latest_sync ) {
+                $latest_sync = $rp['clarity_sync_date'];
+            }
+        }
+
+        return [
+            'status'      => 'ok',
+            'pages'       => $result_pages,
+            'note'        => 'ページ行動に関する所見は、直近数日の閲覧傾向をもとに補足的に生成しています。月次比較データとは期間が異なるため、改善優先判断の参考としてご覧ください。',
+            'period_note' => $latest_sync ? "Clarity最終同期: {$latest_sync}" : '',
+            // TODO: 将来ここに改善優先度サマリーを追加
+        ];
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
