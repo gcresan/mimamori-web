@@ -17787,7 +17787,7 @@ PROMPT;
             . "各提案は「## 提案タイトル」の見出しと、具体的な改善内容を2〜3行で書いてください。専門用語は避け、わかりやすい日本語で書いてください。";
 
         try {
-            $ai_text = $this->ai_client->call_gemini_multimodal( $prompt, $images );
+            $ai_text = $this->ai->call_gemini_multimodal( $prompt, $images );
         } catch ( \Exception $e ) {
             file_put_contents( $log,
                 date( 'Y-m-d H:i:s' ) . " AI analyze ERROR: " . $e->getMessage() . "\n",
