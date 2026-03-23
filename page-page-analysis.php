@@ -511,6 +511,21 @@ get_header();
     color: #94a3b8;
     font-size: 13px;
 }
+/* アップロード進捗バー */
+.pa-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.pa-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #2d9cdb, #56b5d9);
+    border-radius: 4px;
+    transition: width 0.2s ease;
+}
 </style>
 
 <!-- コンテンツエリア -->
@@ -519,7 +534,18 @@ get_header();
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-spinner">
             <div class="spinner"></div>
-            <p>データを取得中...</p>
+            <p id="loadingText">データを取得中...</p>
+        </div>
+    </div>
+
+    <!-- アップロード進捗オーバーレイ -->
+    <div class="loading-overlay" id="uploadOverlay" style="display:none;">
+        <div class="loading-spinner" style="min-width:280px;">
+            <p id="uploadText" style="margin:0 0 12px;font-weight:600;">アップロード中...</p>
+            <div class="pa-progress-bar">
+                <div class="pa-progress-fill" id="uploadProgressFill"></div>
+            </div>
+            <p id="uploadPercent" style="margin:8px 0 0;font-size:13px;color:#64748b;">0%</p>
         </div>
     </div>
 
@@ -1420,33 +1446,56 @@ get_header();
         formData.append('file', file);
         formData.append('device_type', uploadTarget.device);
 
-        showLoading();
-        fetch(API_BASE + '/' + uploadTarget.id + '/snapshot', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'X-WP-Nonce': NONCE },
-            body: formData,
-        })
-        .then(function(r) {
-            if (!r.ok) {
-                throw new Error('HTTP ' + r.status + ': サーバーエラー（ファイルが大きすぎる可能性があります）');
+        var fileSizeMB = (file.size / 1024 / 1024).toFixed(1);
+        var uploadOverlay = document.getElementById('uploadOverlay');
+        var uploadText = document.getElementById('uploadText');
+        var uploadPercent = document.getElementById('uploadPercent');
+        var uploadFill = document.getElementById('uploadProgressFill');
+
+        // 進捗オーバーレイ表示
+        uploadText.textContent = 'アップロード中... (' + fileSizeMB + 'MB)';
+        uploadPercent.textContent = '0%';
+        uploadFill.style.width = '0%';
+        uploadOverlay.style.display = 'flex';
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', API_BASE + '/' + uploadTarget.id + '/snapshot');
+        xhr.setRequestHeader('X-WP-Nonce', NONCE);
+        xhr.withCredentials = true;
+
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                var pct = Math.round((e.loaded / e.total) * 100);
+                uploadFill.style.width = pct + '%';
+                uploadPercent.textContent = pct + '%';
+                if (pct >= 100) {
+                    uploadText.textContent = 'サーバーで処理中...';
+                }
             }
-            return r.json();
-        })
-        .then(function(res) {
-            hideLoading();
-            if (res.success) {
-                window._paShowDetail(uploadTarget.id);
-                loadPages();
-            } else {
-                alert(res.message || 'アップロードに失敗しました');
-            }
-        })
-        .catch(function(err) {
-            hideLoading();
-            var sizeInfo = '\nファイルサイズ: ' + Math.round(file.size / 1024) + 'KB';
-            alert('アップロードエラー: ' + (err.message || '通信エラー') + sizeInfo + '\n\nサーバーのアップロード上限を超えている可能性があります。');
         });
+
+        xhr.addEventListener('load', function() {
+            uploadOverlay.style.display = 'none';
+            if (xhr.status >= 200 && xhr.status < 300) {
+                var res;
+                try { res = JSON.parse(xhr.responseText); } catch (e) { res = {}; }
+                if (res.success) {
+                    window._paShowDetail(uploadTarget.id);
+                    loadPages();
+                } else {
+                    alert(res.message || 'アップロードに失敗しました');
+                }
+            } else {
+                alert('HTTP ' + xhr.status + ': サーバーエラー（ファイルが大きすぎる可能性があります）\nファイルサイズ: ' + fileSizeMB + 'MB');
+            }
+        });
+
+        xhr.addEventListener('error', function() {
+            uploadOverlay.style.display = 'none';
+            alert('アップロードエラー: 通信エラー\nファイルサイズ: ' + fileSizeMB + 'MB\n\nサーバーのアップロード上限を超えている可能性があります。');
+        });
+
+        xhr.send(formData);
     });
 
     // --- キャプチャ削除 ---
