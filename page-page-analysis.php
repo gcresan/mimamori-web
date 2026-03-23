@@ -333,10 +333,7 @@ get_header();
     border-radius: 6px;
     border: 1px solid #e0e0e0;
     margin-bottom: 12px;
-    cursor: pointer;
-    transition: opacity 0.2s;
 }
-.pa-capture-img:hover { opacity: 0.85; }
 /* 原寸プレビューモーダル */
 .pa-lightbox {
     display: none;
@@ -1022,10 +1019,10 @@ get_header();
         var pcThumb = data.screenshot_pc_original || data.screenshot_pc_url;
         var spThumb = data.screenshot_mobile_original || data.screenshot_mobile_url;
         var pcImg = data.screenshot_pc_url
-            ? '<img src="' + escHtml(pcThumb) + '" class="pa-capture-img" alt="PC版" onclick="window._paLightbox(\'' + escHtml(data.screenshot_pc_url) + '\')">'
+            ? '<img src="' + escHtml(pcThumb) + '" class="pa-capture-img" alt="PC版">'
             : '<div class="pa-capture-empty">画像未登録</div>';
         var spImg = data.screenshot_mobile_url
-            ? '<img src="' + escHtml(spThumb) + '" class="pa-capture-img" alt="SP版" onclick="window._paLightbox(\'' + escHtml(data.screenshot_mobile_url) + '\')">'
+            ? '<img src="' + escHtml(spThumb) + '" class="pa-capture-img" alt="SP版">'
             : '<div class="pa-capture-empty">画像未登録</div>';
 
         var pcScroll = getScrollDepth(data, 'pc');
