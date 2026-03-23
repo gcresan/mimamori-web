@@ -3024,6 +3024,9 @@ class Gcrev_Insight_API {
             if ( isset( $params['clarity_project_name'] ) ) {
                 $clarity_data['clarity_project_name'] = $params['clarity_project_name'];
             }
+            if ( isset( $params['clarity_project_id'] ) ) {
+                $clarity_data['clarity_project_id'] = $params['clarity_project_id'];
+            }
             if ( ! empty( $clarity_data ) ) {
                 Gcrev_Clarity_Client::save_settings( $user_id, $clarity_data );
             }
