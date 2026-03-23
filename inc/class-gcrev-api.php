@@ -667,9 +667,16 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
         register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)', [
-            'methods'             => 'DELETE',
-            'callback'            => [ $this, 'rest_delete_page_analysis_page' ],
-            'permission_callback' => [ $this->config, 'check_permission' ],
+            [
+                'methods'             => 'PUT',
+                'callback'            => [ $this, 'rest_update_page_analysis_page' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
+            [
+                'methods'             => 'DELETE',
+                'callback'            => [ $this, 'rest_delete_page_analysis_page' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
         ]);
         register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/detail', [
             'methods'             => 'GET',
@@ -17353,7 +17360,9 @@ PROMPT;
             $page_type = 'other';
         }
 
-        $page_title = isset( $data['page_title'] ) ? sanitize_text_field( $data['page_title'] ) : '';
+        $page_title   = isset( $data['page_title'] ) ? sanitize_text_field( $data['page_title'] ) : '';
+        $page_purpose = isset( $data['page_purpose'] ) ? sanitize_text_field( $data['page_purpose'] ) : '';
+        $page_cta     = isset( $data['page_cta'] ) ? sanitize_text_field( $data['page_cta'] ) : '';
 
         // タイトル自動取得（未指定の場合）
         if ( $page_title === '' ) {
@@ -17372,12 +17381,14 @@ PROMPT;
             $wpdb->update(
                 $table,
                 [
-                    'page_title' => $page_title,
-                    'page_type'  => $page_type,
-                    'status'     => 'active',
+                    'page_title'   => $page_title,
+                    'page_type'    => $page_type,
+                    'page_purpose' => $page_purpose,
+                    'page_cta'     => $page_cta,
+                    'status'       => 'active',
                 ],
                 [ 'id' => (int) $existing['id'] ],
-                [ '%s', '%s', '%s' ],
+                [ '%s', '%s', '%s', '%s', '%s' ],
                 [ '%d' ]
             );
             $row_id = (int) $existing['id'];
@@ -17385,12 +17396,14 @@ PROMPT;
             $wpdb->insert(
                 $table,
                 [
-                    'user_id'    => $user_id,
-                    'page_url'   => $page_url,
-                    'page_title' => $page_title,
-                    'page_type'  => $page_type,
+                    'user_id'      => $user_id,
+                    'page_url'     => $page_url,
+                    'page_title'   => $page_title,
+                    'page_type'    => $page_type,
+                    'page_purpose' => $page_purpose,
+                    'page_cta'     => $page_cta,
                 ],
-                [ '%d', '%s', '%s', '%s' ]
+                [ '%d', '%s', '%s', '%s', '%s', '%s' ]
             );
             $row_id = (int) $wpdb->insert_id;
         }
@@ -17398,6 +17411,62 @@ PROMPT;
         $saved = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$table} WHERE id = %d",
             $row_id
+        ), ARRAY_A );
+
+        return new \WP_REST_Response( [ 'success' => true, 'data' => $saved ], 200 );
+    }
+
+    /**
+     * PUT /gcrev/v1/page-analysis/pages/{id} — ページ情報更新
+     */
+    public function rest_update_page_analysis_page( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $id      = absint( $request->get_param( 'id' ) );
+        $table   = $wpdb->prefix . 'gcrev_page_analysis';
+        $data    = $request->get_json_params();
+
+        // 所有権確認
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id FROM {$table} WHERE id = %d AND user_id = %d AND status = 'active'",
+            $id, $user_id
+        ), ARRAY_A );
+
+        if ( ! $row ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
+        }
+
+        $update = [];
+        $format = [];
+
+        if ( isset( $data['page_type'] ) ) {
+            $pt = sanitize_text_field( $data['page_type'] );
+            if ( in_array( $pt, self::$valid_page_types, true ) ) {
+                $update['page_type'] = $pt;
+                $format[]            = '%s';
+            }
+        }
+        if ( isset( $data['page_purpose'] ) ) {
+            $update['page_purpose'] = sanitize_text_field( $data['page_purpose'] );
+            $format[]               = '%s';
+        }
+        if ( isset( $data['page_cta'] ) ) {
+            $update['page_cta'] = sanitize_text_field( $data['page_cta'] );
+            $format[]           = '%s';
+        }
+        if ( isset( $data['page_title'] ) ) {
+            $update['page_title'] = sanitize_text_field( $data['page_title'] );
+            $format[]             = '%s';
+        }
+
+        if ( empty( $update ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '更新対象がありません' ], 400 );
+        }
+
+        $wpdb->update( $table, $update, [ 'id' => $id ], $format, [ '%d' ] );
+
+        $saved = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d", $id
         ), ARRAY_A );
 
         return new \WP_REST_Response( [ 'success' => true, 'data' => $saved ], 200 );
@@ -17458,6 +17527,9 @@ PROMPT;
 
         $row['clarity_data']          = $row['clarity_data'] ? json_decode( $row['clarity_data'], true ) : null;
         $row['ai_insights']           = $row['ai_insights'] ? json_decode( $row['ai_insights'], true ) : null;
+
+        // Clarity プロジェクトID（行動データタブのリンク用）
+        $row['clarity_project_id'] = get_user_meta( $user_id, '_gcrev_clarity_project_id', true ) ?: null;
 
         // スナップショット履歴
         $snap_table = $wpdb->prefix . 'gcrev_page_snapshots';

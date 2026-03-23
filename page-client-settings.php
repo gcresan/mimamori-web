@@ -1051,6 +1051,14 @@ get_header();
                     value="<?php echo esc_attr( $clarity_settings['clarity_project_name'] ?? '' ); ?>">
             </div>
 
+            <div class="form-group" style="margin-top:16px;">
+                <label for="cs-clarity-project-id">ClarityプロジェクトID（任意）</label>
+                <input type="text" id="cs-clarity-project-id"
+                    placeholder="例: abc123xyz"
+                    value="<?php echo esc_attr( $clarity_settings['clarity_project_id'] ?? '' ); ?>">
+                <p style="font-size:12px;color:#94a3b8;margin:4px 0 0;">ClarityダッシュボードURLの projects/view/<strong>この値</strong>/ の部分です</p>
+            </div>
+
             <div class="form-group" style="margin-top:20px;">
                 <label>接続確認</label>
                 <div class="cs-test-area">
@@ -1593,7 +1601,8 @@ get_header();
                     // Clarity連携
                     clarity_enabled:      document.getElementById('cs-clarity-enabled').checked ? 1 : 0,
                     clarity_api_token:    document.getElementById('cs-clarity-token').value.trim(),
-                    clarity_project_name: document.getElementById('cs-clarity-project').value.trim()
+                    clarity_project_name: document.getElementById('cs-clarity-project').value.trim(),
+                    clarity_project_id:   document.getElementById('cs-clarity-project-id').value.trim()
                 })
             });
 
@@ -1636,7 +1645,8 @@ get_header();
                     site_url: document.getElementById('cs-site-url').value.trim() || 'https://placeholder.test',
                     clarity_enabled: document.getElementById('cs-clarity-enabled').checked ? 1 : 0,
                     clarity_api_token: tokenVal,
-                    clarity_project_name: document.getElementById('cs-clarity-project').value.trim()
+                    clarity_project_name: document.getElementById('cs-clarity-project').value.trim(),
+                    clarity_project_id:   document.getElementById('cs-clarity-project-id').value.trim()
                 })
             });
         }

@@ -41,6 +41,9 @@ class Gcrev_Clarity_Client {
     /** プロジェクト名メモ（任意） */
     public const META_PROJECT_NAME      = '_gcrev_clarity_project_name';
 
+    /** プロジェクトID（ClarityダッシュボードURL用） */
+    public const META_PROJECT_ID        = '_gcrev_clarity_project_id';
+
     /** 接続ステータス: 'success' | 'failed' | '' */
     public const META_CONNECTION_STATUS = '_gcrev_clarity_connection_status';
 
@@ -64,6 +67,7 @@ class Gcrev_Clarity_Client {
         $enabled      = get_user_meta( $user_id, self::META_ENABLED, true );
         $token_raw    = get_user_meta( $user_id, self::META_API_TOKEN, true );
         $project_name = get_user_meta( $user_id, self::META_PROJECT_NAME, true );
+        $project_id   = get_user_meta( $user_id, self::META_PROJECT_ID, true );
         $status       = get_user_meta( $user_id, self::META_CONNECTION_STATUS, true );
         $last_conn    = get_user_meta( $user_id, self::META_LAST_CONNECTED, true );
         $last_msg     = get_user_meta( $user_id, self::META_LAST_MESSAGE, true );
@@ -85,6 +89,7 @@ class Gcrev_Clarity_Client {
             'clarity_has_token'         => $has_token,
             'clarity_token_mask'        => $token_mask,
             'clarity_project_name'      => $project_name ?: '',
+            'clarity_project_id'        => $project_id ?: '',
             'clarity_connection_status' => $status ?: '',
             'clarity_last_connected_at' => $last_conn ?: '',
             'clarity_last_message'      => $last_msg ?: '',
@@ -119,6 +124,13 @@ class Gcrev_Clarity_Client {
         if ( isset( $data['clarity_project_name'] ) ) {
             update_user_meta( $user_id, self::META_PROJECT_NAME,
                 sanitize_text_field( $data['clarity_project_name'] )
+            );
+        }
+
+        // プロジェクトID（ClarityダッシュボードURL用）
+        if ( isset( $data['clarity_project_id'] ) ) {
+            update_user_meta( $user_id, self::META_PROJECT_ID,
+                sanitize_text_field( $data['clarity_project_id'] )
             );
         }
     }

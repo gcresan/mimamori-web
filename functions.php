@@ -5512,6 +5512,8 @@ function gcrev_page_analysis_create_table(): void {
         page_url VARCHAR(500) NOT NULL,
         page_title VARCHAR(255) NOT NULL DEFAULT '',
         page_type VARCHAR(50) NOT NULL DEFAULT 'other',
+        page_purpose VARCHAR(255) NOT NULL DEFAULT '',
+        page_cta VARCHAR(255) NOT NULL DEFAULT '',
         screenshot_pc BIGINT(20) UNSIGNED DEFAULT NULL,
         screenshot_mobile BIGINT(20) UNSIGNED DEFAULT NULL,
         clarity_data LONGTEXT DEFAULT NULL,

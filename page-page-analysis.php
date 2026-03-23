@@ -13,7 +13,7 @@ $user_id      = $current_user->ID;
 
 // ページタイトル設定
 set_query_var( 'gcrev_page_title', 'ページ分析' );
-set_query_var( 'gcrev_page_subtitle', '主要ページのキャプチャ・行動データ・AI所見をまとめて管理できます。' );
+set_query_var( 'gcrev_page_subtitle', '主要ページのページ画像・行動データ・AI改善案をまとめて管理できます。' );
 
 // パンくず設定
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'ページ分析', 'ホームページ' ) );
@@ -387,7 +387,7 @@ get_header();
 .pa-table .data-table td { vertical-align: middle; }
 .pa-table .data-table th { white-space: nowrap; }
 
-/* ===== ヒートマップ解析ビュー ===== */
+/* ===== 行動データビュー ===== */
 .hm-controls {
     padding: 0 0 14px;
     border-bottom: 1px solid #eee;
@@ -397,6 +397,7 @@ get_header();
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
+    align-items: flex-end;
 }
 .hm-control-item {
     display: flex;
@@ -425,49 +426,23 @@ get_header();
     border-color: #2d9cdb;
     box-shadow: 0 0 0 3px rgba(45,156,219,.12);
 }
-/* ビューア */
-.hm-viewer {
-    position: relative;
-    margin-bottom: 16px;
+/* Clarity リンクボタン */
+.pa-clarity-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #6366f1;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    text-decoration: none;
+    background: #fff;
+    transition: background 0.2s;
+    white-space: nowrap;
+    margin-left: auto;
 }
-.hm-canvas-wrap {
-    position: relative;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    min-height: 200px;
-    max-height: 70vh;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-}
-.hm-canvas-wrap .hm-empty {
-    align-self: center;
-}
-.hm-canvas-wrap img {
-    display: block;
-    width: 100%;
-    height: auto;
-    position: relative;
-    z-index: 1;
-}
-.hm-canvas-wrap canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 2;
-    pointer-events: none;
-}
-.hm-empty {
-    text-align: center;
-    padding: 40px 20px;
-    color: #94a3b8;
-    font-size: 13px;
-    line-height: 1.8;
-}
-.hm-empty .pa-placeholder-icon { font-size: 36px; margin-bottom: 8px; }
+.pa-clarity-link:hover { background: #eef2ff; text-decoration: none; color: #6366f1; }
 /* サマリー */
 .hm-summary {
     padding: 14px 0 0;
@@ -511,6 +486,47 @@ get_header();
     color: #94a3b8;
     font-size: 13px;
 }
+/* 概要タブ 編集モード */
+.pa-overview-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.pa-overview-actions .pa-btn-sm { font-size: 13px; padding: 5px 14px; }
+.pa-edit-form .pa-form-group { margin-bottom: 12px; }
+.pa-edit-form .pa-form-group label { font-size: 12px; color: #64748b; margin-bottom: 4px; display: block; }
+.pa-edit-form .pa-form-group input,
+.pa-edit-form .pa-form-group select {
+    width: 100%; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box;
+}
+.pa-edit-form .pa-form-group input:focus,
+.pa-edit-form .pa-form-group select:focus {
+    outline: none; border-color: #2d9cdb; box-shadow: 0 0 0 2px rgba(45,156,219,.15);
+}
+
+/* AI改善案タブ */
+.pa-ai-prereq {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.pa-ai-prereq-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+.pa-ai-prereq-item--ok { background: #e6f7ed; color: #1a9b4a; }
+.pa-ai-prereq-item--ng { background: #f0f0f0; color: #999; }
+.pa-ai-section { margin-bottom: 20px; }
+.pa-ai-section h4 { font-size: 14px; font-weight: 600; color: #1e293b; margin: 0 0 8px; }
+.pa-ai-body { line-height: 1.8; font-size: 14px; color: #333; }
+.pa-behavior-note { font-size: 12px; color: #94a3b8; margin: 0 0 14px; }
+
 /* アップロード進捗バー */
 .pa-progress-bar {
     width: 100%;
@@ -574,7 +590,7 @@ get_header();
                         <th>PC</th>
                         <th>SP</th>
                         <th>Clarity</th>
-                        <th>AI分析</th>
+                        <th>AI改善案</th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -611,6 +627,14 @@ get_header();
                 <option value="other" selected>その他</option>
             </select>
         </div>
+        <div class="pa-form-group">
+            <label for="paPurpose">ページの主な目的（任意）</label>
+            <input type="text" id="paPurpose" placeholder="例: サービス紹介・問い合わせ獲得">
+        </div>
+        <div class="pa-form-group">
+            <label for="paCta">主要CTA（任意）</label>
+            <input type="text" id="paCta" placeholder="例: お問い合わせフォーム">
+        </div>
         <div class="pa-modal-actions">
             <button type="button" class="pa-modal-btn" id="paAddCancel">キャンセル</button>
             <button type="button" class="pa-modal-btn pa-modal-btn--primary" id="paAddSubmit">追加する</button>
@@ -627,9 +651,9 @@ get_header();
     </div>
     <div class="pa-tabs">
         <button type="button" class="pa-tab is-active" data-tab="overview">概要</button>
-        <button type="button" class="pa-tab" data-tab="capture">キャプチャ</button>
-        <button type="button" class="pa-tab" data-tab="behavior">ヒートマップ</button>
-        <button type="button" class="pa-tab" data-tab="ai">AI所見</button>
+        <button type="button" class="pa-tab" data-tab="capture">ページ画像</button>
+        <button type="button" class="pa-tab" data-tab="behavior">行動データ</button>
+        <button type="button" class="pa-tab" data-tab="ai">AI改善案</button>
     </div>
     <div class="pa-tab-content">
         <!-- 概要タブ -->
@@ -640,9 +664,8 @@ get_header();
         <div class="pa-tab-pane" data-pane="capture">
             <div class="pa-capture-grid" id="paCaptureContent"></div>
         </div>
-        <!-- ヒートマップ解析タブ -->
+        <!-- 行動データタブ -->
         <div class="pa-tab-pane" data-pane="behavior">
-            <!-- コントロール -->
             <div class="hm-controls">
                 <div class="hm-control-row">
                     <div class="hm-control-item">
@@ -652,47 +675,26 @@ get_header();
                             <option value="mobile">スマホ版</option>
                         </select>
                     </div>
-                    <div class="hm-control-item">
-                        <label>表示</label>
-                        <select id="hmMetric">
-                            <option value="scroll">スクロール深度</option>
-                            <option value="click">クリック分布</option>
-                            <option value="dead_click">Dead Click</option>
-                            <option value="rage_click">Rage Click</option>
-                        </select>
-                    </div>
+                    <a id="hmClarityLink" href="#" target="_blank" rel="noopener"
+                       class="pa-clarity-link" style="display:none;">
+                        Clarityで詳細を見る &#8599;
+                    </a>
                 </div>
             </div>
-
-            <!-- 画像 + オーバーレイ表示 -->
-            <div class="hm-viewer" id="hmViewer">
-                <div class="hm-canvas-wrap" id="hmCanvasWrap">
-                    <img id="hmImage" src="" alt="" style="display:none;">
-                    <canvas id="hmCanvas"></canvas>
-                    <div class="hm-empty" id="hmEmpty">
-                        <div class="pa-placeholder-icon">&#128444;</div>
-                        <div>キャプチャ画像をアップロードすると<br>ヒートマップ表示が利用できます</div>
-                    </div>
-                </div>
-            </div>
+            <p class="pa-behavior-note">Microsoft Clarityから取得した行動データのサマリーです。詳細な分析はClarityダッシュボードで確認できます。</p>
 
             <!-- 数値サマリー -->
-            <div class="hm-summary" id="hmSummary">
+            <div class="hm-summary" id="hmSummary" style="border-top:none;padding-top:0;">
                 <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
                     <h4 class="hm-summary-title" style="margin:0;">行動データサマリー</h4>
                     <span id="hmDataPeriod" style="font-size:11px;color:#94a3b8;"></span>
                 </div>
-                <div class="hm-summary-grid" id="hmSummaryGrid">
-                    <!-- JS で動的描画 -->
-                </div>
+                <div class="hm-summary-grid" id="hmSummaryGrid"></div>
             </div>
         </div>
-        <!-- AI所見タブ -->
+        <!-- AI改善案タブ -->
         <div class="pa-tab-pane" data-pane="ai">
-            <div class="pa-placeholder">
-                <div class="pa-placeholder-icon">&#129302;</div>
-                <div class="pa-placeholder-text">AI分析は準備中です<br>キャプチャと行動データをもとに、改善提案を自動生成します</div>
-            </div>
+            <div id="paAiContent"></div>
         </div>
     </div>
 </div>
@@ -848,6 +850,8 @@ get_header();
         els.urlInput.value = '';
         els.titleInput.value = '';
         els.typeSelect.value = 'other';
+        document.getElementById('paPurpose').value = '';
+        document.getElementById('paCta').value = '';
         els.addModal.classList.add('is-open');
         els.urlInput.focus();
     });
@@ -869,6 +873,8 @@ get_header();
                 page_url: url,
                 page_title: els.titleInput.value.trim(),
                 page_type: els.typeSelect.value,
+                page_purpose: document.getElementById('paPurpose').value.trim(),
+                page_cta: document.getElementById('paCta').value.trim(),
             }),
         }).then(function(res) {
             els.addSubmit.disabled = false;
@@ -933,33 +939,20 @@ get_header();
 
     function renderDetail(data) {
         els.detailTitle.textContent = data.page_title || '（タイトル未取得）';
+        window._currentDetailData = data;
 
-        // 概要タブ
-        var typeName = PAGE_TYPES[data.page_type] || data.page_type;
-        els.overviewContent.innerHTML = ''
-            + '<div class="pa-info-row"><span class="pa-info-label">URL</span><span class="pa-info-value"><a href="' + escHtml(data.page_url) + '" target="_blank" rel="noopener">' + escHtml(data.page_url) + '</a></span></div>'
-            + '<div class="pa-info-row"><span class="pa-info-label">種別</span><span class="pa-info-value"><span class="pa-badge pa-badge--type">' + escHtml(typeName) + '</span></span></div>'
-            + '<div class="pa-info-row"><span class="pa-info-label">登録日</span><span class="pa-info-value">' + escHtml(data.created_at || '-') + '</span></div>'
-            + '<div class="pa-info-row"><span class="pa-info-label">最新キャプチャ</span><span class="pa-info-value">' + escHtml(data.capture_date || '未取得') + '</span></div>'
-            + '<div class="pa-info-row"><span class="pa-info-label">Clarity同期</span><span class="pa-info-value">' + escHtml(data.clarity_sync_date || '未連携') + '</span></div>'
-            + '<div class="pa-info-row"><span class="pa-info-label">AI分析</span><span class="pa-info-value">' + escHtml(data.ai_analysis_date || '未分析') + '</span></div>';
+        // ===== 概要タブ =====
+        renderOverviewTab(data);
 
-        // AI所見があれば表示
-        if (data.ai_summary) {
-            var aiPane = els.detailPanel.querySelector('[data-pane="ai"]');
-            aiPane.innerHTML = '<div style="padding:8px 0;line-height:1.8;font-size:14px;">' + escHtml(data.ai_summary).replace(/\n/g, '<br>') + '</div>';
-        }
-
-        // キャプチャタブ（サムネイル表示 + クリックで原寸）
-        // キャプチャタブもオリジナル高解像度画像を使用
+        // ===== ページ画像タブ =====
         var pcThumb = data.screenshot_pc_original || data.screenshot_pc_url;
         var spThumb = data.screenshot_mobile_original || data.screenshot_mobile_url;
         var pcImg = data.screenshot_pc_url
             ? '<img src="' + escHtml(pcThumb) + '" class="pa-capture-img" alt="PC版" onclick="window._paLightbox(\'' + escHtml(data.screenshot_pc_url) + '\')">'
-            : '<div class="pa-capture-empty">キャプチャ未取得</div>';
+            : '<div class="pa-capture-empty">画像未登録</div>';
         var spImg = data.screenshot_mobile_url
             ? '<img src="' + escHtml(spThumb) + '" class="pa-capture-img" alt="SP版" onclick="window._paLightbox(\'' + escHtml(data.screenshot_mobile_url) + '\')">'
-            : '<div class="pa-capture-empty">キャプチャ未取得</div>';
+            : '<div class="pa-capture-empty">画像未登録</div>';
 
         var pcDel = data.screenshot_pc_url
             ? '<button type="button" class="pa-delete-btn" onclick="window._paDeleteCapture(' + data.id + ', \'pc\')">削除</button>'
@@ -969,357 +962,161 @@ get_header();
             : '';
 
         els.captureContent.innerHTML = ''
+            + '<p class="pa-behavior-note" style="margin-top:0;">AI分析にも活用するため、PC版・スマホ版の画像を管理します。</p>'
             + '<div class="pa-capture-box"><h4>PC版</h4>' + pcImg
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'pc\')">画像をアップロード</button>' + pcDel + '</div>'
             + '<div class="pa-capture-box"><h4>スマホ版</h4>' + spImg
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'mobile\')">画像をアップロード</button>' + spDel + '</div>';
 
-        // ===== ヒートマップ解析タブ =====
+        // ===== 行動データタブ =====
         window._hmCurrentData = data;
         renderHeatmapTab(data);
+
+        // ===== AI改善案タブ =====
+        renderAiTab(data);
     }
 
-    // ===== ヒートマップ解析 =====
+    function renderOverviewTab(data) {
+        var typeName = PAGE_TYPES[data.page_type] || data.page_type;
+        var pcStatus = data.screenshot_pc_url
+            ? '<span class="pa-badge pa-badge--done">登録済</span>'
+            : '<span class="pa-badge pa-badge--pending">未登録</span>';
+        var spStatus = data.screenshot_mobile_url
+            ? '<span class="pa-badge pa-badge--done">登録済</span>'
+            : '<span class="pa-badge pa-badge--pending">未登録</span>';
+
+        els.overviewContent.innerHTML = ''
+            + '<div class="pa-overview-actions">'
+            + '<button type="button" class="pa-btn-sm" onclick="window._paEditOverview()">編集</button>'
+            + '</div>'
+            + '<div id="paOverviewDisplay">'
+            + '<div class="pa-info-row"><span class="pa-info-label">URL</span><span class="pa-info-value"><a href="' + escHtml(data.page_url) + '" target="_blank" rel="noopener">' + escHtml(data.page_url) + '</a></span></div>'
+            + '<div class="pa-info-row"><span class="pa-info-label">種別</span><span class="pa-info-value"><span class="pa-badge pa-badge--type">' + escHtml(typeName) + '</span></span></div>'
+            + '<div class="pa-info-row"><span class="pa-info-label">主な目的</span><span class="pa-info-value">' + escHtml(data.page_purpose || '未設定') + '</span></div>'
+            + '<div class="pa-info-row"><span class="pa-info-label">主要CTA</span><span class="pa-info-value">' + escHtml(data.page_cta || '未設定') + '</span></div>'
+            + '<div class="pa-info-row"><span class="pa-info-label">ページ画像</span><span class="pa-info-value">PC: ' + pcStatus + '　SP: ' + spStatus + '</span></div>'
+            + '<div class="pa-info-row"><span class="pa-info-label">最新画像</span><span class="pa-info-value">' + escHtml(data.capture_date || '未登録') + '</span></div>'
+            + '<div class="pa-info-row"><span class="pa-info-label">Clarity同期</span><span class="pa-info-value">' + escHtml(data.clarity_sync_date || '未連携') + '</span></div>'
+            + '<div class="pa-info-row"><span class="pa-info-label">AI改善案</span><span class="pa-info-value">' + escHtml(data.ai_analysis_date || '未生成') + '</span></div>'
+            + '<div class="pa-info-row"><span class="pa-info-label">登録日</span><span class="pa-info-value">' + escHtml(data.created_at || '-') + '</span></div>'
+            + '</div>';
+    }
+
+    // --- 概要タブ編集モード ---
+    window._paEditOverview = function() {
+        var data = window._currentDetailData;
+        if (!data) return;
+        var typeOptions = '';
+        for (var k in PAGE_TYPES) {
+            typeOptions += '<option value="' + k + '"' + (data.page_type === k ? ' selected' : '') + '>' + PAGE_TYPES[k] + '</option>';
+        }
+        els.overviewContent.innerHTML = ''
+            + '<div class="pa-overview-actions">'
+            + '<button type="button" class="pa-btn-sm" onclick="renderOverviewTab(window._currentDetailData)">キャンセル</button>'
+            + '<button type="button" class="pa-btn-sm pa-modal-btn--primary" style="color:#fff;" id="paOverviewSave">保存</button>'
+            + '</div>'
+            + '<div class="pa-edit-form">'
+            + '<div class="pa-form-group"><label>種別</label><select id="paEditType">' + typeOptions + '</select></div>'
+            + '<div class="pa-form-group"><label>主な目的</label><input type="text" id="paEditPurpose" value="' + escHtml(data.page_purpose || '') + '" placeholder="例: サービス紹介・問い合わせ獲得"></div>'
+            + '<div class="pa-form-group"><label>主要CTA</label><input type="text" id="paEditCta" value="' + escHtml(data.page_cta || '') + '" placeholder="例: お問い合わせフォーム"></div>'
+            + '</div>';
+
+        document.getElementById('paOverviewSave').addEventListener('click', function() {
+            var btn = this;
+            btn.disabled = true;
+            btn.textContent = '保存中...';
+            apiFetch(API_BASE + '/' + data.id, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    page_type: document.getElementById('paEditType').value,
+                    page_purpose: document.getElementById('paEditPurpose').value.trim(),
+                    page_cta: document.getElementById('paEditCta').value.trim(),
+                }),
+            }).then(function(res) {
+                if (res.success) {
+                    window._paShowDetail(data.id);
+                    loadPages();
+                } else {
+                    alert(res.message || '保存に失敗しました');
+                    btn.disabled = false;
+                    btn.textContent = '保存';
+                }
+            });
+        });
+    };
+
+    // --- AI改善案タブ ---
+    function renderAiTab(data) {
+        var content = document.getElementById('paAiContent');
+        var hasPC = !!data.screenshot_pc_url;
+        var hasSP = !!data.screenshot_mobile_url;
+        var hasClarity = !!(data.clarity_data && data.clarity_data.metrics && Object.keys(data.clarity_data.metrics).length > 0);
+
+        var prereqHtml = '<div class="pa-ai-prereq">'
+            + '<span class="pa-ai-prereq-item ' + (hasPC ? 'pa-ai-prereq-item--ok' : 'pa-ai-prereq-item--ng') + '">'
+            + (hasPC ? '&#10003;' : '&#10007;') + ' PC画像</span>'
+            + '<span class="pa-ai-prereq-item ' + (hasSP ? 'pa-ai-prereq-item--ok' : 'pa-ai-prereq-item--ng') + '">'
+            + (hasSP ? '&#10003;' : '&#10007;') + ' SP画像</span>'
+            + '<span class="pa-ai-prereq-item ' + (hasClarity ? 'pa-ai-prereq-item--ok' : 'pa-ai-prereq-item--ng') + '">'
+            + (hasClarity ? '&#10003;' : '&#10007;') + ' 行動データ</span>'
+            + '</div>';
+
+        var bodyHtml = '';
+        if (data.ai_summary) {
+            bodyHtml = '<div class="pa-ai-section"><h4>AI改善案</h4>'
+                + '<div class="pa-ai-body">' + escHtml(data.ai_summary).replace(/\n/g, '<br>') + '</div></div>';
+            if (data.ai_analysis_date) {
+                bodyHtml += '<div style="font-size:12px;color:#94a3b8;margin-top:8px;">生成日: ' + escHtml(data.ai_analysis_date) + '</div>';
+            }
+        } else {
+            bodyHtml = '<div class="pa-placeholder" style="padding:40px 20px;">'
+                + '<div class="pa-placeholder-icon">&#129302;</div>'
+                + '<div class="pa-placeholder-text">ページ画像と行動データをもとに<br>AI改善案を生成します</div></div>';
+        }
+
+        var btnLabel = data.ai_summary ? '再生成する' : 'AI改善案を生成';
+        var btnHtml = '<div style="text-align:center;margin-top:16px;">'
+            + '<button type="button" class="pa-modal-btn pa-modal-btn--primary" id="paAiGenerate"'
+            + ' onclick="window._paGenerateAi(' + data.id + ')">' + btnLabel + '</button></div>';
+
+        content.innerHTML = prereqHtml + bodyHtml + btnHtml;
+    }
+
+    window._paGenerateAi = function(id) {
+        var btn = document.getElementById('paAiGenerate');
+        if (btn) { btn.disabled = true; btn.textContent = '生成中...'; }
+        apiFetch(API_BASE + '/' + id + '/analyze', { method: 'POST' })
+            .then(function(res) {
+                if (btn) { btn.disabled = false; btn.textContent = 'AI改善案を生成'; }
+                if (res.message) alert(res.message);
+                if (res.success && res.data) window._paShowDetail(id);
+            });
+    };
+
+    // ===== 行動データ（サマリー表示） =====
     var hmDeviceSelect = document.getElementById('hmDevice');
-    var hmMetricSelect = document.getElementById('hmMetric');
-    var hmImage        = document.getElementById('hmImage');
-    var hmCanvas       = document.getElementById('hmCanvas');
-    var hmEmpty        = document.getElementById('hmEmpty');
     var hmSummaryGrid  = document.getElementById('hmSummaryGrid');
 
     if (hmDeviceSelect) {
-        hmDeviceSelect.addEventListener('change', function() { renderHeatmapView(); });
-    }
-    if (hmMetricSelect) {
-        hmMetricSelect.addEventListener('change', function() { renderHeatmapView(); });
+        hmDeviceSelect.addEventListener('change', function() {
+            var data = window._hmCurrentData;
+            if (data) renderHeatmapSummary(data, hmDeviceSelect.value);
+        });
     }
 
     function renderHeatmapTab(data) {
-        // デバイスセレクト初期値
         if (hmDeviceSelect) {
             hmDeviceSelect.value = data.screenshot_pc_url ? 'pc' : (data.screenshot_mobile_url ? 'mobile' : 'pc');
         }
-        renderHeatmapView();
-    }
-
-    function renderHeatmapView() {
-        var data = window._hmCurrentData;
-        if (!data) return;
-
-        var device = hmDeviceSelect ? hmDeviceSelect.value : 'pc';
-        var metric = hmMetricSelect ? hmMetricSelect.value : 'scroll';
-
-        // 画像URL取得（-scaled版は超縦長画像で極細になるため、必ずオリジナルを優先）
-        var imgUrl = device === 'mobile'
-            ? (data.screenshot_mobile_original || data.screenshot_mobile_url)
-            : (data.screenshot_pc_original || data.screenshot_pc_url);
-
-        if (!imgUrl) {
-            hmImage.style.display = 'none';
-            hmCanvas.style.display = 'none';
-            hmEmpty.style.display = 'block';
-            hmSummaryGrid.innerHTML = '<div class="hm-no-data">キャプチャ画像をアップロードしてください</div>';
-            return;
+        // Clarity リンク設定
+        var clarityLink = document.getElementById('hmClarityLink');
+        if (clarityLink && data.clarity_project_id) {
+            clarityLink.href = 'https://clarity.microsoft.com/projects/view/' + encodeURIComponent(data.clarity_project_id) + '/dashboard';
+            clarityLink.style.display = '';
+        } else if (clarityLink) {
+            clarityLink.style.display = 'none';
         }
-
-        hmEmpty.style.display = 'none';
-        hmImage.style.display = 'block';
-        hmCanvas.style.display = 'block';
-
-        // ブラウザ描画上限（約16384px）を超えないよう表示サイズを制限
-        var MAX_RENDER_HEIGHT = 15000;
-
-        function constrainImageSize() {
-            var natW = hmImage.naturalWidth;
-            var natH = hmImage.naturalHeight;
-            if (!natW || !natH) return;
-
-            var containerW = hmImage.parentElement.clientWidth || 500;
-            var displayH = containerW * (natH / natW);
-
-            if (displayH > MAX_RENDER_HEIGHT) {
-                // 表示高さが上限を超える場合、widthを制限して高さを抑える
-                var constrainedW = Math.floor(MAX_RENDER_HEIGHT * (natW / natH));
-                hmImage.style.width = constrainedW + 'px';
-            } else {
-                hmImage.style.width = '100%';
-            }
-        }
-
-        function doDrawOverlay() {
-            var dpr = window.devicePixelRatio || 1;
-            var imgW = hmImage.offsetWidth;
-            var imgH = hmImage.offsetHeight;
-            if (imgW < 10 || imgH < 10) return;
-
-            // Canvas描画上限チェック
-            var canvasH = Math.min(imgH * dpr, 16384);
-            var canvasW = Math.min(imgW * dpr, 16384);
-
-            hmCanvas.width  = canvasW;
-            hmCanvas.height = canvasH;
-            hmCanvas.style.width  = imgW + 'px';
-            hmCanvas.style.height = (canvasH / dpr) + 'px';
-
-            var ctx = hmCanvas.getContext('2d');
-            if (!ctx) return;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            drawOverlay(metric, device, data, imgW, canvasH / dpr);
-        }
-
-        hmImage.onerror = function() {
-            console.error('[Heatmap] Image load failed:', hmImage.src);
-            hmImage.style.display = 'none';
-            hmCanvas.style.display = 'none';
-            hmEmpty.style.display = 'block';
-            hmEmpty.querySelector('div:last-child').innerHTML =
-                '画像の読み込みに失敗しました<br><small style="color:#94a3b8;">キャプチャタブから再アップロードしてください</small>';
-        };
-
-        function onImageReady() {
-            constrainImageSize();
-            doDrawOverlay();
-        }
-
-        // キャッシュ済み画像にも対応
-        if (hmImage.src === imgUrl && hmImage.complete && hmImage.naturalHeight > 0) {
-            onImageReady();
-        } else {
-            hmImage.onload = onImageReady;
-            hmImage.src = imgUrl;
-        }
-        // フォールバック: 少し遅れて再描画（レイアウト完了待ち）
-        setTimeout(onImageReady, 500);
-
-        // サマリー描画
-        renderHeatmapSummary(data, device);
-    }
-
-    function drawOverlay(metric, device, data, cssW, cssH) {
-        var ctx = hmCanvas.getContext('2d');
-        var w = cssW || hmCanvas.width;
-        var h = cssH || hmCanvas.height;
-
-        // 描画クリア
-        ctx.clearRect(0, 0, w, h);
-
-        var clarity = data.clarity_data || {};
-        var metrics = clarity.metrics || {};
-        // データがなくてもスクロール深度のガイドは常に表示
-        if (Object.keys(metrics).length === 0 && metric === 'scroll') {
-            metrics = {}; // 空でも描画関数は呼ぶ
-        }
-        // site_wide（サイト全体の正確なDevice別集計）を優先使用
-        var devKey = device === 'mobile' ? 'Mobile' : 'PC';
-        var siteWide = clarity.site_wide || {};
-        var swDev = (siteWide.by_device && (siteWide.by_device[devKey] || siteWide.by_device['Desktop'])) || {};
-        var urlDev = (clarity.devices && (clarity.devices[devKey] || clarity.devices['Desktop'])) || {};
-        var deviceData = {};
-        var dk; for (dk in urlDev) { deviceData[dk] = urlDev[dk]; }
-        for (dk in swDev) { deviceData[dk] = swDev[dk]; }
-
-        switch (metric) {
-            case 'scroll':
-                drawScrollOverlay(ctx, w, h, metrics, deviceData);
-                break;
-            case 'click':
-                drawClickOverlay(ctx, w, h, metrics);
-                break;
-            case 'dead_click':
-                drawDeadClickOverlay(ctx, w, h, metrics);
-                break;
-            case 'rage_click':
-                drawRageClickOverlay(ctx, w, h, metrics);
-                break;
-        }
-    }
-
-    function drawScrollOverlay(ctx, w, h, metrics, deviceData) {
-        var scrollData = deviceData.scroll_depth || metrics.scroll_depth || {};
-        var trafficData = deviceData.traffic || metrics.traffic || {};
-        var hasData = Object.keys(scrollData).length > 0 || Object.keys(trafficData).length > 0;
-
-        if (!hasData) {
-            drawNoDataLabel(ctx, w, h, 'Clarityデータ未同期');
-            return;
-        }
-
-        // スクロール到達セッション割合(%)
-        var scrollPct = scrollData.sessionsWithMetricPercentage;
-        var avgScroll = (scrollPct !== undefined && scrollPct !== null) ? parseFloat(scrollPct) : -1;
-        var sessions = parseInt(trafficData.sessionsCount || trafficData.totalSessionCount || 0);
-
-        // ===== 段階的スクロール深度バー（左端に到達率バー） =====
-        var barW = 36; // 左端バーの幅
-        var steps = [
-            { pct: 0,   label: 'FV',   color: 'rgba(34,197,94,0.35)' },
-            { pct: 25,  label: '25%',  color: 'rgba(34,197,94,0.25)' },
-            { pct: 50,  label: '50%',  color: 'rgba(251,191,36,0.25)' },
-            { pct: 75,  label: '75%',  color: 'rgba(239,68,68,0.20)' },
-            { pct: 100, label: '100%', color: 'rgba(239,68,68,0.30)' },
-        ];
-
-        // 各区間を色分け（左端バー + 全体に薄くグラデーション）
-        for (var i = 0; i < steps.length - 1; i++) {
-            var y1 = h * (steps[i].pct / 100);
-            var y2 = h * (steps[i + 1].pct / 100);
-            var sh = y2 - y1;
-
-            // 左端バー
-            ctx.fillStyle = steps[i].color;
-            ctx.fillRect(0, y1, barW, sh);
-
-            // 全体に薄く
-            ctx.fillStyle = steps[i].color.replace(/[\d.]+\)$/, '0.06)');
-            ctx.fillRect(barW, y1, w - barW, sh);
-        }
-
-        // 区切り線 + パーセンテージラベル
-        ctx.strokeStyle = 'rgba(100,100,100,0.3)';
-        ctx.lineWidth = 1;
-        [25, 50, 75].forEach(function(pct) {
-            var y = h * (pct / 100);
-            // 破線
-            ctx.setLineDash([3, 3]);
-            ctx.beginPath(); ctx.moveTo(barW, y); ctx.lineTo(w, y); ctx.stroke();
-            ctx.setLineDash([]);
-            // バー内のラベル
-            ctx.fillStyle = 'rgba(30,41,59,0.8)';
-            ctx.font = 'bold 10px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(pct + '%', barW / 2, y + 14);
-            ctx.textAlign = 'start';
-        });
-
-        // FV ラベル
-        ctx.fillStyle = 'rgba(30,41,59,0.7)';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('FV', barW / 2, 14);
-        ctx.textAlign = 'start';
-
-        // ===== 到達率ライン（赤い実線） =====
-        if (avgScroll >= 0) {
-            var scrollLine = h * (avgScroll / 100);
-
-            // 到達ラインより下を暗く
-            ctx.fillStyle = 'rgba(0,0,0,0.08)';
-            ctx.fillRect(barW, scrollLine, w - barW, h - scrollLine);
-
-            // ライン描画
-            ctx.strokeStyle = '#ef4444';
-            ctx.lineWidth = 2.5;
-            ctx.beginPath(); ctx.moveTo(0, scrollLine); ctx.lineTo(w, scrollLine); ctx.stroke();
-
-            // ラベルバッジ
-            var labelText = '▼ 到達率 ' + avgScroll.toFixed(1) + '%';
-            ctx.font = 'bold 12px sans-serif';
-            var tw = ctx.measureText(labelText).width;
-            var badgeX = barW + 8;
-            var badgeY = scrollLine + 4;
-            // バッジ背景
-            ctx.fillStyle = '#ef4444';
-            roundRect(ctx, badgeX, badgeY, tw + 16, 22, 4);
-            ctx.fill();
-            // テキスト
-            ctx.fillStyle = '#fff';
-            ctx.fillText(labelText, badgeX + 8, badgeY + 16);
-        }
-
-        // セッション数（右上）
-        if (sessions > 0) {
-            var sessText = 'セッション: ' + sessions.toLocaleString();
-            ctx.font = '11px sans-serif';
-            var stw = ctx.measureText(sessText).width;
-            ctx.fillStyle = 'rgba(30,41,59,0.75)';
-            roundRect(ctx, w - stw - 20, 6, stw + 14, 20, 3);
-            ctx.fill();
-            ctx.fillStyle = '#fff';
-            ctx.textAlign = 'right';
-            ctx.fillText(sessText, w - 14, 20);
-            ctx.textAlign = 'start';
-        }
-    }
-
-    // 角丸矩形ヘルパー
-    function roundRect(ctx, x, y, w, h, r) {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath();
-    }
-
-    function drawClickOverlay(ctx, w, h, metrics) {
-        var traffic = metrics.traffic || {};
-        var sessions = parseInt(traffic.sessionsCount || traffic.totalSessionCount || traffic.Count || 0);
-        if (sessions <= 0) {
-            drawNoDataLabel(ctx, w, h, 'クリックデータなし');
-            return;
-        }
-        // クリック分布: 座標データなし → ページ上部に集中する傾向を可視化
-        // TODO: 将来CSV/座標データ取り込み時に実座標ベース描画に置換
-        var clickGrad = ctx.createRadialGradient(w * 0.5, h * 0.15, 0, w * 0.5, h * 0.15, w * 0.4);
-        clickGrad.addColorStop(0, 'rgba(59,130,246,0.3)');
-        clickGrad.addColorStop(0.5, 'rgba(59,130,246,0.1)');
-        clickGrad.addColorStop(1, 'rgba(59,130,246,0)');
-        ctx.fillStyle = clickGrad;
-        ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = 'rgba(30,64,175,0.6)';
-        ctx.font = '11px sans-serif';
-        ctx.fillText('セッション数: ' + sessions.toLocaleString(), 8, 18);
-        ctx.fillStyle = 'rgba(30,64,175,0.35)';
-        ctx.font = '10px sans-serif';
-        ctx.fillText('※ 座標データは今後対応予定', 8, 34);
-    }
-
-    function drawDeadClickOverlay(ctx, w, h, metrics) {
-        var dc = metrics.dead_click_count || {};
-        var count = parseInt(dc.subTotal || dc.sessionsCount || dc.Count || dc.value || 0);
-        drawClickBadge(ctx, w, h, count, 'Dead Click', '#f59e0b', 'rgba(245,158,11,0.12)');
-    }
-
-    function drawRageClickOverlay(ctx, w, h, metrics) {
-        var rc = metrics.rage_click_count || {};
-        var count = parseInt(rc.subTotal || rc.sessionsCount || rc.Count || rc.value || 0);
-        drawClickBadge(ctx, w, h, count, 'Rage Click', '#ef4444', 'rgba(239,68,68,0.12)');
-    }
-
-    function drawClickBadge(ctx, w, h, count, label, color, bgColor) {
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = color;
-        ctx.font = 'bold 28px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(count, w / 2, h / 2 - 10);
-        ctx.font = '14px sans-serif';
-        ctx.fillText(label, w / 2, h / 2 + 16);
-        if (count === 0) {
-            ctx.font = '12px sans-serif';
-            ctx.fillStyle = 'rgba(100,100,100,0.5)';
-            ctx.fillText('検出されていません', w / 2, h / 2 + 40);
-        } else {
-            ctx.font = '10px sans-serif';
-            ctx.fillStyle = 'rgba(100,100,100,0.4)';
-            ctx.fillText('※ 座標は今後対応予定', w / 2, h / 2 + 40);
-        }
-        ctx.textAlign = 'start';
-    }
-
-    function drawNoDataLabel(ctx, w, h, text) {
-        ctx.fillStyle = 'rgba(148,163,184,0.15)';
-        ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '13px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(text, w / 2, h / 2);
-        ctx.textAlign = 'start';
+        renderHeatmapSummary(data, hmDeviceSelect ? hmDeviceSelect.value : 'pc');
     }
 
     function renderHeatmapSummary(data, device) {
