@@ -1194,13 +1194,18 @@ get_header();
             return v;
         }
 
-        // スクロール深度: sessionsWithMetricPercentage が到達セッション割合
-        var scrollPct = safeNum(scrollM.sessionsWithMetricPercentage);
-        var scrollDisplay = scrollPct !== null ? (parseFloat(scrollPct).toFixed(1) + '%') : '-';
+        // スクロール深度: averageScrollDepth（平均スクロール深度%）→ sessionsWithMetricPercentage（到達率%）の順
+        var scrollVal = safeNum(scrollM.averageScrollDepth) !== null ? scrollM.averageScrollDepth
+                      : safeNum(scrollM.sessionsWithMetricPercentage) !== null ? scrollM.sessionsWithMetricPercentage
+                      : null;
+        var scrollDisplay = scrollVal !== null ? (parseFloat(scrollVal).toFixed(1) + '%') : '-';
 
-        // エンゲージメント
-        var engPct = safeNum(engM.sessionsWithMetricPercentage);
-        var engDisplay = engPct !== null ? (parseFloat(engPct).toFixed(1) + '%') : '-';
+        // エンゲージメント: activeTime（アクティブ時間秒）→ totalTime → sessionsWithMetricPercentage の順
+        var engVal = safeNum(engM.activeTime) !== null ? engM.activeTime
+                   : safeNum(engM.totalTime) !== null ? engM.totalTime
+                   : safeNum(engM.sessionsWithMetricPercentage) !== null ? engM.sessionsWithMetricPercentage
+                   : null;
+        var engDisplay = engVal !== null ? (parseFloat(engVal).toFixed(0) + '秒') : '-';
 
         // Dead/Rage Click: subTotal がイベント合計数
         var dcCount = safeNum(dcM.subTotal) !== null ? dcM.subTotal : (safeNum(dcM.sessionsCount) !== null ? dcM.sessionsCount : '-');
