@@ -173,7 +173,7 @@ get_header();
     position: fixed;
     inset: 0;
     background: #fff;
-    z-index: 1001;
+    z-index: 10000;
     flex-direction: column;
     overflow: hidden;
 }
@@ -242,6 +242,35 @@ get_header();
     overflow-y: auto;
     padding: 24px;
 }
+/* 画像デバイス切替タブ */
+.pa-img-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.pa-img-tab {
+    flex: 1;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    border: none;
+    background: #f5f5f5;
+    color: #666;
+    transition: all 0.2s;
+}
+.pa-img-tab.is-active {
+    background: #568184;
+    color: #fff;
+}
+.pa-img-tab:hover:not(.is-active) { background: #eee; }
+.pa-img-pane { display: none; }
+.pa-img-pane.is-active { display: block; }
+
 /* セクション見出し */
 .pa-section {
     margin-bottom: 28px;
@@ -1014,13 +1043,35 @@ get_header();
 
         return '<div class="pa-section">'
             + '<h4 class="pa-section-title"><span class="pa-section-icon">&#128247;</span> ページ画像</h4>'
+            + '<div class="pa-img-tabs">'
+            + '<button type="button" class="pa-img-tab is-active" data-img-tab="pc">&#128187; PC版</button>'
+            + '<button type="button" class="pa-img-tab" data-img-tab="mobile">&#128241; スマホ版</button>'
+            + '</div>'
             + legendHtml
-            + '<div class="pa-capture-box" style="margin-bottom:16px;"><h4>PC版</h4>' + buildImgWithScroll(pcImg, pcScroll)
+            + '<div class="pa-img-pane is-active" data-img-pane="pc">'
+            + '<div class="pa-capture-box">' + buildImgWithScroll(pcImg, pcScroll)
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'pc\')">画像をアップロード</button>' + pcDel + '</div>'
-            + '<div class="pa-capture-box"><h4>スマホ版</h4>' + buildImgWithScroll(spImg, spScroll)
+            + '</div>'
+            + '<div class="pa-img-pane" data-img-pane="mobile">'
+            + '<div class="pa-capture-box">' + buildImgWithScroll(spImg, spScroll)
             + '<button type="button" class="pa-upload-btn" onclick="window._paUpload(' + data.id + ', \'mobile\')">画像をアップロード</button>' + spDel + '</div>'
+            + '</div>'
             + '</div>';
     }
+
+    // 画像タブ切替
+    els.detailLeft.addEventListener('click', function(e) {
+        var tab = e.target.closest('.pa-img-tab');
+        if (!tab) return;
+        var target = tab.getAttribute('data-img-tab');
+        var tabs = els.detailLeft.querySelectorAll('.pa-img-tab');
+        var panes = els.detailLeft.querySelectorAll('.pa-img-pane');
+        for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('is-active');
+        for (var i = 0; i < panes.length; i++) panes[i].classList.remove('is-active');
+        tab.classList.add('is-active');
+        var pane = els.detailLeft.querySelector('[data-img-pane="' + target + '"]');
+        if (pane) pane.classList.add('is-active');
+    });
 
     function buildOverviewSection(data) {
         var typeName = PAGE_TYPES[data.page_type] || data.page_type;
@@ -1207,7 +1258,6 @@ get_header();
     };
 
     // ===== 行動データ（PC/SP同時表示） =====
-    var hmBehaviorContent = document.getElementById('hmBehaviorContent');
 
     function renderHeatmapTab(data) {
         renderBehaviorBothDevices(data);
@@ -1279,6 +1329,7 @@ get_header();
     }
 
     function renderBehaviorBothDevices(data) {
+        var hmBehaviorContent = document.getElementById('hmBehaviorContent');
         if (!hmBehaviorContent) return;
         var clarity = data.clarity_data || {};
         var metrics = clarity.metrics || {};
