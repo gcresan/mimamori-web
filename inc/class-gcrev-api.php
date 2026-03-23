@@ -17745,10 +17745,10 @@ PROMPT;
                 : get_attached_file( $att_id );
             if ( ! $file_path || ! file_exists( $file_path ) ) continue;
 
-            // GDでファーストビュー相当を切り出し（AI分析に最適なサイズに）
-            $img_data = $this->prepare_image_for_ai( $file_path, $device_label );
-            if ( $img_data ) {
-                $images[] = $img_data;
+            // GDで自動分割してAI分析に最適なサイズに（超縦長画像は複数枚に分割）
+            $img_parts = $this->prepare_image_for_ai( $file_path, $device_label );
+            foreach ( $img_parts as $part ) {
+                $images[] = $part;
             }
         }
 
@@ -17773,7 +17773,7 @@ PROMPT;
             . "- 主な目的: " . ( $row['page_purpose'] ?: '未設定' ) . "\n"
             . "- 主要CTA: " . ( $row['page_cta'] ?: '未設定' ) . "\n\n"
             . $behavior_text . "\n"
-            . ( count( $images ) > 0 ? "添付画像はこのページのスクリーンショットです（PC版・スマホ版）。\n\n" : '' )
+            . ( count( $images ) > 0 ? "添付画像はこのページのPC版・スマホ版のスクリーンショットです。ページ全体を上から順に分割して添付しています。すべての画像を確認した上でページ全体を評価してください。\n\n" : '' )
             . "改善提案は以下の観点で出してください:\n"
             . "1. ファーストビューの訴求力\n"
             . "2. CTAの見つけやすさ・押しやすさ\n"
@@ -17820,20 +17820,20 @@ PROMPT;
      * Clarityデータからプロンプト用の行動サマリーテキストを構築
      */
     /**
-     * AI分析用に画像を最適化（元画像からFV相当を切り出し + リサイズ）
+     * AI分析用に画像を最適化（超縦長画像は自動分割して複数枚に）
      *
-     * 超縦長スクリーンショットの場合、上部（ファーストビュー〜主要コンテンツ）を
-     * 切り出し、Geminiが読み取れるサイズに変換する。
+     * ページ全体のスクリーンショットを上部から順に自動分割し、
+     * Geminiが各セクションを正確に読み取れるサイズにする。
      *
      * @param string $file_path 元画像ファイルパス
      * @param string $device    'pc' or 'mobile'
-     * @return array|null       ['mime_type' => ..., 'data' => base64] or null
+     * @return array            [ ['mime_type' => ..., 'data' => base64], ... ]
      */
-    private function prepare_image_for_ai( string $file_path, string $device ): ?array {
+    private function prepare_image_for_ai( string $file_path, string $device ): array {
         $log = '/tmp/gcrev_page_analysis_debug.log';
 
         $info = @getimagesize( $file_path );
-        if ( ! $info ) return null;
+        if ( ! $info ) return [];
 
         $orig_w = $info[0];
         $orig_h = $info[1];
@@ -17842,30 +17842,22 @@ PROMPT;
         // 画像サイズが適切なら（幅300px以上 & 高さが幅の4倍以内）そのまま使用
         if ( $orig_w >= 300 && $orig_h <= $orig_w * 4 && filesize( $file_path ) <= 4 * 1024 * 1024 ) {
             file_put_contents( $log,
-                date( 'Y-m-d H:i:s' ) . " ai_img: {$device} using original {$orig_w}x{$orig_h}\n", FILE_APPEND );
-            return [
+                date( 'Y-m-d H:i:s' ) . " ai_img: {$device} using original {$orig_w}x{$orig_h} (1 part)\n", FILE_APPEND );
+            return [[
                 'mime_type' => $mime,
                 'data'      => base64_encode( file_get_contents( $file_path ) ),
-            ];
+            ]];
         }
 
-        // GDで切り出し + リサイズ
+        // GDで分割 + リサイズ
         if ( ! function_exists( 'imagecreatefrompng' ) ) {
-            // GD未対応: 元画像をそのまま送信（大きくても試行）
             file_put_contents( $log,
-                date( 'Y-m-d H:i:s' ) . " ai_img: {$device} GD unavailable, sending raw {$orig_w}x{$orig_h}\n", FILE_APPEND );
-            return [
+                date( 'Y-m-d H:i:s' ) . " ai_img: {$device} GD unavailable, sending raw\n", FILE_APPEND );
+            return [[
                 'mime_type' => $mime,
                 'data'      => base64_encode( file_get_contents( $file_path ) ),
-            ];
+            ]];
         }
-
-        // 切り出し高さ: 元の幅 × 3（PC: 約3スクリーン分、SP: 約3スクリーン分）
-        $crop_h = min( $orig_h, $orig_w * 3 );
-        // リサイズ: 最大幅1200px
-        $max_w  = 1200;
-        $new_w  = min( $orig_w, $max_w );
-        $new_h  = (int) round( $crop_h * ( $new_w / $orig_w ) );
 
         // 元画像読み込み
         $src = null;
@@ -17877,32 +17869,50 @@ PROMPT;
         if ( ! $src ) {
             file_put_contents( $log,
                 date( 'Y-m-d H:i:s' ) . " ai_img: {$device} GD failed to load {$mime}\n", FILE_APPEND );
-            return null;
+            return [];
         }
 
-        // リサイズ + 切り出し
-        $dst = imagecreatetruecolor( $new_w, $new_h );
-        imagealphablending( $dst, false );
-        imagesavealpha( $dst, true );
-        imagecopyresampled( $dst, $src, 0, 0, 0, 0, $new_w, $new_h, $orig_w, $crop_h );
+        // 分割設定: 各パートの高さ = 幅 × 2.5（約2.5画面分）、最大5分割
+        $part_h   = (int) round( $orig_w * 2.5 );
+        $max_parts = 5;
+        $num_parts = min( $max_parts, (int) ceil( $orig_h / $part_h ) );
+        $max_w     = 1200;
+        $out_w     = min( $orig_w, $max_w );
+        $scale     = $out_w / $orig_w;
+
+        $results = [];
+        for ( $i = 0; $i < $num_parts; $i++ ) {
+            $src_y = $i * $part_h;
+            $src_h = min( $part_h, $orig_h - $src_y );
+            if ( $src_h <= 0 ) break;
+
+            $out_h = (int) round( $src_h * $scale );
+
+            $dst = imagecreatetruecolor( $out_w, $out_h );
+            imagealphablending( $dst, false );
+            imagesavealpha( $dst, true );
+            imagecopyresampled( $dst, $src, 0, 0, 0, $src_y, $out_w, $out_h, $orig_w, $src_h );
+
+            ob_start();
+            imagejpeg( $dst, null, 85 );
+            $jpeg_data = ob_get_clean();
+            imagedestroy( $dst );
+
+            $results[] = [
+                'mime_type' => 'image/jpeg',
+                'data'      => base64_encode( $jpeg_data ),
+            ];
+        }
+
         imagedestroy( $src );
 
-        // JPEG出力（サイズ効率）
-        ob_start();
-        imagejpeg( $dst, null, 85 );
-        $jpeg_data = ob_get_clean();
-        imagedestroy( $dst );
-
         file_put_contents( $log,
-            date( 'Y-m-d H:i:s' ) . " ai_img: {$device} cropped {$orig_w}x{$orig_h} → {$new_w}x{$new_h} ("
-            . round( strlen( $jpeg_data ) / 1024 ) . "KB)\n",
+            date( 'Y-m-d H:i:s' ) . " ai_img: {$device} split {$orig_w}x{$orig_h} → {$num_parts} parts"
+            . " (each ~{$out_w}x" . round( $part_h * $scale ) . ")\n",
             FILE_APPEND
         );
 
-        return [
-            'mime_type' => 'image/jpeg',
-            'data'      => base64_encode( $jpeg_data ),
-        ];
+        return $results;
     }
 
     private function build_behavior_summary_text( array $clarity ): string {
