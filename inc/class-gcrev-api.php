@@ -17539,6 +17539,10 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => 'JPEG/PNG/WebP画像のみ対応しています' ], 400 );
         }
 
+        // ファイル名を一意な名前に自動変換（pa_<pageId>_<device>_<タイムスタンプ>_<ランダム>.<拡張子>）
+        $ext = pathinfo( $file['name'], PATHINFO_EXTENSION );
+        $file['name'] = sprintf( 'pa_%d_%s_%s_%s.%s', $id, $device_type, date( 'Ymd_His' ), substr( bin2hex( random_bytes( 4 ) ), 0, 8 ), $ext );
+
         $upload = wp_handle_upload( $file, [ 'test_form' => false ] );
         if ( isset( $upload['error'] ) ) {
             file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " upload_snapshot: wp_handle_upload error=" . $upload['error'] . "\n", FILE_APPEND );
