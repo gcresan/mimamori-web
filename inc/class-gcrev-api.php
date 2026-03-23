@@ -17446,6 +17446,13 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => '対象が見つかりません' ], 404 );
         }
 
+        // デバッグ: screenshot_mobile の生値を確認
+        file_put_contents( '/tmp/gcrev_page_analysis_debug.log',
+            date( 'Y-m-d H:i:s' ) . " detail id={$id}: screenshot_pc=" . var_export( $row['screenshot_pc'], true )
+            . ", screenshot_mobile=" . var_export( $row['screenshot_mobile'], true ) . "\n",
+            FILE_APPEND
+        );
+
         // フルサイズURL（WordPress 5.3+ の -scaled 自動リサイズを回避し、元画像URLを使用）
         $row['screenshot_pc_url']     = $row['screenshot_pc'] ? wp_get_attachment_image_url( (int) $row['screenshot_pc'], 'full' ) : null;
         $row['screenshot_mobile_url'] = $row['screenshot_mobile'] ? wp_get_attachment_image_url( (int) $row['screenshot_mobile'], 'full' ) : null;
@@ -17455,6 +17462,14 @@ PROMPT;
         // サムネイルURL（パネル表示用）
         $row['screenshot_pc_thumb']     = $row['screenshot_pc'] ? ( wp_get_attachment_image_url( (int) $row['screenshot_pc'], 'large' ) ?: $row['screenshot_pc_url'] ) : null;
         $row['screenshot_mobile_thumb'] = $row['screenshot_mobile'] ? ( wp_get_attachment_image_url( (int) $row['screenshot_mobile'], 'medium' ) ?: $row['screenshot_mobile_url'] ) : null;
+
+        // デバッグ: 変換後URL確認
+        file_put_contents( '/tmp/gcrev_page_analysis_debug.log',
+            date( 'Y-m-d H:i:s' ) . " detail id={$id}: mobile_url=" . var_export( $row['screenshot_mobile_url'], true )
+            . ", mobile_original=" . var_export( $row['screenshot_mobile_original'], true ) . "\n",
+            FILE_APPEND
+        );
+
         $row['clarity_data']          = $row['clarity_data'] ? json_decode( $row['clarity_data'], true ) : null;
         $row['ai_insights']           = $row['ai_insights'] ? json_decode( $row['ai_insights'], true ) : null;
 
