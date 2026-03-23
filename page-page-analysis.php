@@ -539,7 +539,7 @@ get_header();
     </div>
 
     <!-- アップロード進捗オーバーレイ -->
-    <div class="loading-overlay" id="uploadOverlay" style="display:none;">
+    <div class="loading-overlay" id="uploadOverlay">
         <div class="loading-spinner" style="min-width:280px;">
             <p id="uploadText" style="margin:0 0 12px;font-weight:600;">アップロード中...</p>
             <div class="pa-progress-bar">
@@ -769,8 +769,8 @@ get_header();
         return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    function showLoading() { els.loading.style.display = 'flex'; }
-    function hideLoading() { els.loading.style.display = 'none'; }
+    function showLoading() { els.loading.classList.add('active'); }
+    function hideLoading() { els.loading.classList.remove('active'); }
 
     function apiFetch(url, options) {
         var opts = options || {};
@@ -1456,7 +1456,7 @@ get_header();
         uploadText.textContent = 'アップロード中... (' + fileSizeMB + 'MB)';
         uploadPercent.textContent = '0%';
         uploadFill.style.width = '0%';
-        uploadOverlay.style.display = 'flex';
+        uploadOverlay.classList.add('active');
 
         var xhr = new XMLHttpRequest();
         xhr.open('POST', API_BASE + '/' + uploadTarget.id + '/snapshot');
@@ -1475,7 +1475,7 @@ get_header();
         });
 
         xhr.addEventListener('load', function() {
-            uploadOverlay.style.display = 'none';
+            uploadOverlay.classList.remove('active');
             if (xhr.status >= 200 && xhr.status < 300) {
                 var res;
                 try { res = JSON.parse(xhr.responseText); } catch (e) { res = {}; }
@@ -1491,7 +1491,7 @@ get_header();
         });
 
         xhr.addEventListener('error', function() {
-            uploadOverlay.style.display = 'none';
+            uploadOverlay.classList.remove('active');
             alert('アップロードエラー: 通信エラー\nファイルサイズ: ' + fileSizeMB + 'MB\n\nサーバーのアップロード上限を超えている可能性があります。');
         });
 
