@@ -77,6 +77,7 @@ get_header();
     font-weight: 500;
 }
 .pa-badge--done { background: #e6f7ed; color: #1a9b4a; }
+.pa-badge--warn { background: #fff8e1; color: #e6a817; }
 .pa-badge--pending { background: #f0f0f0; color: #999; }
 .pa-badge--type { background: #e8f0fe; color: #1967d2; }
 
@@ -649,8 +650,8 @@ get_header();
                         <th>種別</th>
                         <th>PC</th>
                         <th>SP</th>
-                        <th>Clarity</th>
-                        <th>AI改善案</th>
+                        <th>状態</th>
+                        <th>最終分析</th>
                     </tr>
                 </thead>
                 <tbody id="paTableBody"></tbody>
@@ -859,12 +860,23 @@ get_header();
             var spThumb = p.screenshot_mobile_url
                 ? '<img src="' + escHtml(p.screenshot_mobile_url) + '" class="pa-thumb" alt="SP">'
                 : '<div class="pa-thumb-placeholder">未取得</div>';
-            var clarityBadge = p.clarity_data
-                ? '<span class="pa-badge pa-badge--done">取得済み</span>'
-                : '<span class="pa-badge pa-badge--pending">未連携</span>';
-            var aiBadge = p.ai_summary
-                ? '<span class="pa-badge pa-badge--done">分析済み</span>'
-                : '<span class="pa-badge pa-badge--pending">未分析</span>';
+            // 状態判定: 分析済み > データ蓄積中 > 準備中
+            var statusHtml = '';
+            if (p.ai_summary) {
+                statusHtml = '<span class="pa-badge pa-badge--done">分析済み</span>';
+            } else if (p.clarity_data) {
+                statusHtml = '<span class="pa-badge pa-badge--warn">データ蓄積中</span>';
+            } else if (p.screenshot_pc_url || p.screenshot_mobile_url) {
+                statusHtml = '<span class="pa-badge pa-badge--pending">準備中</span>';
+            } else {
+                statusHtml = '<span class="pa-badge pa-badge--pending">未設定</span>';
+            }
+
+            // 最終分析日
+            var lastDate = p.ai_analysis_date || p.clarity_sync_date || '';
+            var lastDateHtml = lastDate
+                ? '<span style="font-size:12px;color:#666;">' + escHtml(lastDate.substring(0, 10)) + '</span>'
+                : '<span style="font-size:12px;color:#bbb;">—</span>';
 
             html += '<tr data-page-id="' + p.id + '">'
                 + '<td><div style="font-weight:500;">' + escHtml(p.page_title || '（タイトル未取得）') + '</div>'
@@ -872,8 +884,8 @@ get_header();
                 + '<td><span class="pa-badge pa-badge--type">' + escHtml(typeName) + '</span></td>'
                 + '<td>' + pcThumb + '</td>'
                 + '<td>' + spThumb + '</td>'
-                + '<td>' + clarityBadge + '</td>'
-                + '<td>' + aiBadge + '</td>'
+                + '<td>' + statusHtml + '</td>'
+                + '<td>' + lastDateHtml + '</td>'
                 + '</tr>';
         }
         els.tbody.innerHTML = html;

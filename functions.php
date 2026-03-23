@@ -5500,6 +5500,35 @@ function gcrev_prefetch_status_create_table(): void {
  *
  * 主要ページごとのキャプチャ画像・Clarity行動データ・AI所見を保存する。
  * 将来的に月次レポート・AIチャットから参照される共通基盤。
+ *
+ * === 版管理拡張計画 (TODO) ===
+ * ページ改修時に改修前後を区別するため、将来的に版管理を導入する。
+ *
+ * 1. gcrev_page_versions テーブル:
+ *    - id, page_id, version_no, revision_note, effective_from, effective_to,
+ *      pc_image_id, sp_image_id, is_current, created_at
+ *    - 改修登録時に新バージョンを作成し、is_current=1 に切替
+ *    - Clarity/AI改善案は version_id に紐づけて蓄積
+ *
+ * 2. gcrev_page_clarity_snapshots テーブル:
+ *    - id, page_version_id, snapshot_date, device_type,
+ *      sessions, scroll_depth, dead_click, rage_click, error_click,
+ *      engagement_time, raw_json, created_at
+ *    - 日次蓄積で長期推移・改修前後比較が可能
+ *
+ * 3. gcrev_page_ai_insights テーブル:
+ *    - id, page_version_id, generated_at, status, summary, detail_json,
+ *      priority, source_data_hash, created_at
+ *    - 版ごとにAI改善案を保存し、改善履歴として参照可能
+ *
+ * 4. 月次レポート連携:
+ *    - class-report-generator.php で月次レポート生成時に
+ *      gcrev_page_analysis から最新 ai_summary を取得
+ *    - 「ページ改善サマリー」セクションとしてレポート本文に組み込み
+ *    - 注記: 「直近の閲覧傾向をもとに補足的に生成」と明記し、
+ *      月次比較データとの期間差を誤解されないようにする
+ *
+ * 現在のテーブルは暫定版。上記拡張時は既存データをマイグレーションする。
  */
 function gcrev_page_analysis_create_table(): void {
     global $wpdb;
