@@ -33,16 +33,17 @@ get_header();
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px;
-    background: #2d9cdb;
-    color: #fff;
+    padding: 10px 20px;
+    background: #568184;
+    color: #FAF9F6;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.25s ease;
 }
-.pa-add-btn:hover { background: #2188c4; }
+.pa-add-btn:hover { background: #476C6F; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(47,58,74,0.12); }
 .pa-count { color: #666; font-size: 14px; }
 
 /* サムネイル */
@@ -395,17 +396,18 @@ get_header();
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 6px 14px;
-    font-size: 12px;
-    color: #6366f1;
-    border: 1px solid #c7d2fe;
-    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #568184;
+    border: 2px solid #568184;
+    border-radius: 8px;
     text-decoration: none;
-    background: #fff;
-    transition: background 0.2s;
+    background: #FAF9F6;
+    transition: all 0.25s ease;
     white-space: nowrap;
 }
-.pa-clarity-link:hover { background: #eef2ff; text-decoration: none; color: #6366f1; }
+.pa-clarity-link:hover { background: #568184; color: #FAF9F6; text-decoration: none; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(47,58,74,0.12); }
 /* デバイスセクション */
 .hm-device-section { margin-bottom: 24px; }
 .hm-device-section:last-child { margin-bottom: 0; }
