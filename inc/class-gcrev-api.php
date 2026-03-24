@@ -17926,21 +17926,52 @@ PROMPT;
             'timezone' => $tz->getName(),
         ];
 
-        // --- GA4データ取得 ---
+        // --- GA4データ取得（既存 GA4 Fetcher を活用） ---
         $ga4_data = null;
         try {
-            $property_id = \Gcrev_Config::get_ga4_property_id( $user_id );
+            $property_id = trim( (string) get_user_meta( $user_id, 'ga4_property_id', true ) );
             if ( $property_id ) {
-                // 国フィルター設定
-                $this->ga4->maybe_set_country_filter( $user_id );
+                // 国フィルター設定（海外除外対応）
+                $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
+                if ( $exclude_foreign ) {
+                    $this->ga4->set_country_filter( 'Japan' );
+                }
 
                 // ページURLのパスを抽出
                 $page_path = wp_parse_url( $row['page_url'], PHP_URL_PATH ) ?: '/';
 
-                // ページ特化GA4データ取得
-                $ga4_data = $this->fetch_page_ga4_for_analysis(
-                    $property_id, $page_path, $period['start'], $period['end'], $user_id
-                );
+                // ページパスで絞り込んでGA4データ取得
+                $this->ga4->set_page_path_filter( $page_path );
+                $pages = $this->ga4->fetch_page_details( $property_id, $period['start'], $period['end'] );
+                $this->ga4->set_page_path_filter( null ); // フィルタクリア
+
+                // 対象ページを特定
+                $target = null;
+                foreach ( $pages as $pg ) {
+                    if ( rtrim( $pg['page'], '/' ) === rtrim( $page_path, '/' ) || $pg['page'] === $page_path ) {
+                        $target = $pg;
+                        break;
+                    }
+                }
+                if ( ! $target && ! empty( $pages ) ) {
+                    $target = $pages[0];
+                }
+
+                if ( $target ) {
+                    $ga4_data = [
+                        'sessions'                => (int) $target['sessions'],
+                        'pageViews'               => (int) $target['pageViews'],
+                        'engagement_rate_percent'  => round( (float) $target['engagementRate'], 1 ),
+                        'avg_duration_sec'         => round( (float) $target['avgDuration'], 1 ),
+                        'bounce_rate_percent'      => round( (float) $target['bounceRate'], 1 ),
+                        'period'                   => "{$period['start']}〜{$period['end']}",
+                    ];
+                }
+
+                // 国フィルタクリア
+                if ( $exclude_foreign ) {
+                    $this->ga4->set_country_filter( null );
+                }
             }
         } catch ( \Exception $e ) {
             file_put_contents( $log,
@@ -17974,158 +18005,6 @@ PROMPT;
             'clarity' => $clarity_data,
             'notes'   => $notes,
         ];
-    }
-
-    /**
-     * GA4からページ特化の分析データを取得
-     */
-    private function fetch_page_ga4_for_analysis(
-        string $property_id, string $page_path,
-        string $start_date, string $end_date, int $user_id
-    ): ?array {
-        // ページパスで絞り込んだメインデータ
-        $this->ga4->set_page_path_filter( $page_path );
-        $pages = $this->ga4->fetch_page_details( $property_id, $start_date, $end_date );
-        $this->ga4->clear_dimension_filters();
-
-        // 対象ページを特定
-        $target = null;
-        foreach ( $pages as $p ) {
-            if ( rtrim( $p['page'], '/' ) === rtrim( $page_path, '/' ) || $p['page'] === $page_path ) {
-                $target = $p;
-                break;
-            }
-        }
-        // 完全一致がなければ先頭を採用
-        if ( ! $target && ! empty( $pages ) ) {
-            $target = $pages[0];
-        }
-
-        if ( ! $target ) return null;
-
-        // デバイス別セッション取得
-        $device_data = $this->fetch_page_device_breakdown(
-            $property_id, $page_path, $start_date, $end_date
-        );
-
-        // 流入元トップ5取得
-        $source_data = $this->fetch_page_source_breakdown(
-            $property_id, $page_path, $start_date, $end_date
-        );
-
-        return [
-            'sessions'                => (int) $target['sessions'],
-            'pageViews'               => (int) $target['pageViews'],
-            'engagement_rate_percent' => round( (float) $target['engagementRate'], 1 ),
-            'avg_duration_sec'        => round( (float) $target['avgDuration'], 1 ),
-            'bounce_rate_percent'     => round( (float) $target['bounceRate'], 1 ),
-            'device_breakdown'        => $device_data,
-            'source_top5'             => $source_data,
-            'period'                  => "{$start_date}〜{$end_date}",
-        ];
-    }
-
-    /**
-     * GA4: ページのデバイス別セッション数を取得
-     */
-    private function fetch_page_device_breakdown(
-        string $property_id, string $page_path,
-        string $start_date, string $end_date
-    ): array {
-        try {
-            $client  = $this->ga4->get_client( $property_id );
-            $request = new \Google\Analytics\Data\V1beta\RunReportRequest( [
-                'property'    => "properties/{$property_id}",
-                'date_ranges' => [ new \Google\Analytics\Data\V1beta\DateRange( [
-                    'start_date' => $start_date,
-                    'end_date'   => $end_date,
-                ] ) ],
-                'dimensions'  => [
-                    new \Google\Analytics\Data\V1beta\Dimension( [ 'name' => 'deviceCategory' ] ),
-                ],
-                'metrics'     => [
-                    new \Google\Analytics\Data\V1beta\Metric( [ 'name' => 'sessions' ] ),
-                ],
-                'dimension_filter' => new \Google\Analytics\Data\V1beta\FilterExpression( [
-                    'filter' => new \Google\Analytics\Data\V1beta\Filter( [
-                        'field_name'    => 'pagePath',
-                        'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter( [
-                            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
-                            'value'      => $page_path,
-                        ] ),
-                    ] ),
-                ] ),
-            ] );
-            $response = $client->runReport( $request );
-            $result   = [];
-            foreach ( $response->getRows() as $r ) {
-                $device   = $r->getDimensionValues()[0]->getValue();
-                $sessions = (int) $r->getMetricValues()[0]->getValue();
-                $label    = $device === 'desktop' ? 'PC' : ( $device === 'mobile' ? 'スマホ' : 'タブレット' );
-                $result[] = [ 'device' => $label, 'sessions' => $sessions ];
-            }
-            return $result;
-        } catch ( \Exception $e ) {
-            return [];
-        }
-    }
-
-    /**
-     * GA4: ページの流入元トップ5を取得
-     */
-    private function fetch_page_source_breakdown(
-        string $property_id, string $page_path,
-        string $start_date, string $end_date
-    ): array {
-        try {
-            $client  = $this->ga4->get_client( $property_id );
-            $request = new \Google\Analytics\Data\V1beta\RunReportRequest( [
-                'property'    => "properties/{$property_id}",
-                'date_ranges' => [ new \Google\Analytics\Data\V1beta\DateRange( [
-                    'start_date' => $start_date,
-                    'end_date'   => $end_date,
-                ] ) ],
-                'dimensions'  => [
-                    new \Google\Analytics\Data\V1beta\Dimension( [ 'name' => 'sessionSource' ] ),
-                    new \Google\Analytics\Data\V1beta\Dimension( [ 'name' => 'sessionMedium' ] ),
-                ],
-                'metrics'     => [
-                    new \Google\Analytics\Data\V1beta\Metric( [ 'name' => 'sessions' ] ),
-                ],
-                'dimension_filter' => new \Google\Analytics\Data\V1beta\FilterExpression( [
-                    'filter' => new \Google\Analytics\Data\V1beta\Filter( [
-                        'field_name'    => 'pagePath',
-                        'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter( [
-                            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
-                            'value'      => $page_path,
-                        ] ),
-                    ] ),
-                ] ),
-                'order_bys' => [
-                    new \Google\Analytics\Data\V1beta\OrderBy( [
-                        'metric' => new \Google\Analytics\Data\V1beta\OrderBy\MetricOrderBy( [
-                            'metric_name' => 'sessions',
-                        ] ),
-                        'desc' => true,
-                    ] ),
-                ],
-                'limit' => 5,
-            ] );
-            $response = $client->runReport( $request );
-            $result   = [];
-            foreach ( $response->getRows() as $r ) {
-                $source   = $r->getDimensionValues()[0]->getValue();
-                $medium   = $r->getDimensionValues()[1]->getValue();
-                $sessions = (int) $r->getMetricValues()[0]->getValue();
-                $result[] = [
-                    'source_medium' => "{$source} / {$medium}",
-                    'sessions'      => $sessions,
-                ];
-            }
-            return $result;
-        } catch ( \Exception $e ) {
-            return [];
-        }
     }
 
     /**
@@ -18198,22 +18077,7 @@ PROMPT;
                 . "- ページビュー: {$ga4['pageViews']}\n"
                 . "- エンゲージメント率: {$ga4['engagement_rate_percent']}%\n"
                 . "- 平均滞在時間: {$ga4['avg_duration_sec']}秒\n"
-                . "- 直帰率: {$ga4['bounce_rate_percent']}%\n";
-            if ( ! empty( $ga4['device_breakdown'] ) ) {
-                $prompt .= "- デバイス別: ";
-                $parts = [];
-                foreach ( $ga4['device_breakdown'] as $db ) {
-                    $parts[] = "{$db['device']} {$db['sessions']}セッション";
-                }
-                $prompt .= implode( ', ', $parts ) . "\n";
-            }
-            if ( ! empty( $ga4['source_top5'] ) ) {
-                $prompt .= "- 流入元トップ:\n";
-                foreach ( $ga4['source_top5'] as $s ) {
-                    $prompt .= "  - {$s['source_medium']}: {$s['sessions']}セッション\n";
-                }
-            }
-            $prompt .= "\n";
+                . "- 直帰率: {$ga4['bounce_rate_percent']}%\n\n";
         } else {
             $prompt .= "【GA4データ】\n未取得（GA4未接続または対象ページのデータなし）\n\n";
         }
