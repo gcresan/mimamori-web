@@ -1390,6 +1390,10 @@ class Gcrev_Insight_API {
             // 分析ページキャッシュ
             $this->prefetch_analysis_caches( $user_id, $config, $period );
 
+            // MEOパフォーマンスキャッシュ（ダッシュボードKPI用）
+            $meo_dates = $this->dates->calculate_period_dates( $period );
+            $this->fetch_meo_metrics_safe( $user_id, $meo_dates['start'], $meo_dates['end'] );
+
         } catch ( \Exception $e ) {
             $had_error = true;
             $error_msg = $e->getMessage();
@@ -1768,6 +1772,20 @@ class Gcrev_Insight_API {
                 }
                 usleep( self::PREFETCH_SLEEP_US );
             }
+
+            // --- (3c) MEOパフォーマンス（ダッシュボードKPI用）---
+            // last30 の current / comparison 期間の MEO perf を事前取得
+            try {
+                $meo_last30      = $this->dates->get_date_range('last30');
+                $meo_last30_comp = $this->dates->get_comparison_range($meo_last30['start'], $meo_last30['end']);
+                $this->fetch_meo_metrics_safe($user_id, $meo_last30['start'], $meo_last30['end']);
+                usleep(self::PREFETCH_SLEEP_US);
+                $this->fetch_meo_metrics_safe($user_id, $meo_last30_comp['start'], $meo_last30_comp['end']);
+                $this->prefetch_log("[PREFETCH] MEO perf OK user_id={$user_id}");
+            } catch (\Exception $e) {
+                $this->prefetch_log("[PREFETCH] MEO perf FAIL user_id={$user_id}: " . $e->getMessage());
+            }
+            usleep(self::PREFETCH_SLEEP_US);
 
             // --- (4) 比較期間キャッシュ + スコア事前計算 ---
             // ダッシュボード表示時にPHPキャッシュヒットで即表示するために
@@ -8936,7 +8954,7 @@ PROMPT;
                 return $this->gbp_empty_metrics();
             }
             $metrics = $this->gbp_fetch_performance_metrics($access_token, $location_id, $start_date, $end_date);
-            set_transient($cache_key, $metrics, 6 * HOUR_IN_SECONDS);
+            set_transient($cache_key, $metrics, 36 * HOUR_IN_SECONDS);
             return $metrics;
         } catch (\Exception $e) {
             error_log("[GCREV] fetch_meo_metrics_safe: Error user_id={$user_id}: " . $e->getMessage());
@@ -9361,8 +9379,8 @@ PROMPT;
                     $daily[$dk] += (int)$row->getMetricValues()[0]->getValue();
                 }
             }
-            // キャッシュ保存（6時間）
-            set_transient($cache_key, $daily, 6 * HOUR_IN_SECONDS);
+            // キャッシュ保存（36時間）
+            set_transient($cache_key, $daily, 36 * HOUR_IN_SECONDS);
         } catch (\Exception $e) {
             error_log("[GCREV] get_ga4_phone_tap_daily ERROR: " . $e->getMessage());
         }
@@ -9412,8 +9430,8 @@ PROMPT;
                 $dk = substr($dr,0,4).'-'.substr($dr,4,2).'-'.substr($dr,6,2);
                 if (isset($daily[$dk])) $daily[$dk] = (int)$row->getMetricValues()[0]->getValue();
             }
-            // キャッシュ保存（6時間）
-            set_transient($cache_key, $daily, 6 * HOUR_IN_SECONDS);
+            // キャッシュ保存（36時間）
+            set_transient($cache_key, $daily, 36 * HOUR_IN_SECONDS);
         } catch (\Exception $e) {
             error_log("[GCREV] get_ga4_cv_daily_totals ERROR: " . $e->getMessage());
         }
@@ -9441,7 +9459,7 @@ PROMPT;
         try {
             $config = $this->config->get_user_config($user_id);
             $result = $this->ga4->fetch_ga4_key_events_daily($config['ga4_id'], $start, $end);
-            set_transient($cache_key, $result, 6 * HOUR_IN_SECONDS);
+            set_transient($cache_key, $result, 36 * HOUR_IN_SECONDS);
         } catch (\Exception $e) {
             error_log("[GCREV] get_ga4_key_events_daily ERROR: " . $e->getMessage());
         }
@@ -9579,7 +9597,7 @@ PROMPT;
             }
 
             $this->effective_cv_cache[$cache_key] = $result;
-            set_transient($transient_key, $result, 2 * HOUR_IN_SECONDS);
+            set_transient($transient_key, $result, 24 * HOUR_IN_SECONDS);
             return $result;
         }
 
@@ -9677,7 +9695,7 @@ PROMPT;
         }
 
         $this->effective_cv_cache[$cache_key] = $result;
-        set_transient($transient_key, $result, 2 * HOUR_IN_SECONDS);
+        set_transient($transient_key, $result, 24 * HOUR_IN_SECONDS);
         return $result;
     }
 
@@ -10443,7 +10461,7 @@ PROMPT;
             });
 
             $now = (new \DateTime('now', wp_timezone()))->format('c');
-            set_transient($cache_key, $merged, 6 * HOUR_IN_SECONDS);
+            set_transient($cache_key, $merged, 36 * HOUR_IN_SECONDS);
             update_option($fallback_key, $merged, false);
             update_option($ts_key, $now, false);
 
@@ -11745,8 +11763,8 @@ PROMPT;
             'view'    => 'daily',
         ];
 
-        // TTL: 6時間
-        set_transient($cache_key, $result, 6 * HOUR_IN_SECONDS);
+        // TTL: 36時間（日次Cronが03:10に更新するため、次回Cronまで持つ長さ）
+        set_transient($cache_key, $result, 36 * HOUR_IN_SECONDS);
 
         return $result;
     }
