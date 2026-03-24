@@ -135,18 +135,53 @@ $profile_guide_texts = [
 
     // --- 設定案内ページ ---
     'guide_title'      => 'Googleマップ用の名前・写真の設定方法',
-    'guide_lead'       => "Googleマップでは、口コミ用の投稿者名と写真を設定できます。\n下の流れを見ながら進めてください。",
+    'guide_lead'       => "Googleマップでは、口コミ用の投稿者名と写真を設定できます。\n下の手順を見ながら進めてください。",
     'guide_note'       => "この設定をすると、Googleマップでの口コミ投稿時に使う名前と写真を変更できます。\nGmailなど、Googleアカウント本体の名前・写真は変わりません。",
-    'step1'            => 'Googleマップのプロフィール編集を開く',
-    'step2'            => 'カスタム投稿者名と写真をオンにする',
-    'step3'            => '名前と写真を設定する',
     'notice_delay'     => '設定の反映まで少し時間がかかる場合があります',
     'notice_past'      => '過去の公開投稿にも反映される場合があります',
     'btn_open_maps'    => 'Googleマップを開く',
     'btn_write_review' => '設定が終わったら口コミを書く',
     'btn_skip_guide'   => '設定せずに口コミを書く',
 ];
-$flow_image_url = content_url('/uploads/flow.jpg');
+
+// 手順ブロック定義（画像 + 見出し + サブステップ）
+$flow_steps = [
+    [
+        'image'    => content_url('/uploads/flow.jpg'),
+        'alt'      => 'Googleマップのメニューから自分の投稿を開く',
+        'heading'  => '手順1〜2：メニューから「自分の投稿」を開く',
+        'steps'    => [
+            ['num' => 1, 'text' => 'Googleマップを開きます'],
+            ['num' => 2, 'text' => '左上のメニューを開き、「自分の投稿」を選びます'],
+        ],
+    ],
+    [
+        'image'    => content_url('/uploads/flow2.jpg'),
+        'alt'      => 'プロフィール編集画面でカスタム表示名と写真を有効にする',
+        'heading'  => '手順3〜4：カスタム投稿者名と写真をオンにする',
+        'steps'    => [
+            ['num' => 3, 'text' => 'プロフィール編集画面を開きます'],
+            ['num' => 4, 'text' => '「カスタム投稿者名と写真を使用する」をオンにします'],
+        ],
+    ],
+    [
+        'image'    => content_url('/uploads/flow3.jpg'),
+        'alt'      => '表示名と写真を設定して保存する',
+        'heading'  => '手順5：表示名と写真を設定して保存',
+        'steps'    => [
+            ['num' => 5, 'text' => 'お好きな表示名と写真を設定して保存します'],
+        ],
+    ],
+];
+
+// 1〜5一覧
+$flow_summary_steps = [
+    'Googleマップを開く',
+    '「自分の投稿」を開く',
+    'プロフィール編集画面へ進む',
+    'カスタム投稿者名と写真をオンにする',
+    '表示名（投稿者名）と写真を設定して保存する',
+];
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -897,22 +932,110 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         text-align: left;
     }
 
-    /* flow.jpg 画像表示 */
-    .profile-flow-image {
-        margin-bottom: 24px;
+    /* 手順ブロック（画像+説明のセット） */
+    .flow-block {
+        margin-bottom: 28px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        overflow: hidden;
+    }
+    .flow-block-heading {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--sv-heading-text, #2C3E40);
+        padding: 14px 16px 0;
+        line-height: 1.6;
+    }
+    .flow-block-image {
+        padding: 12px 16px;
         text-align: center;
     }
-    .profile-flow-image img {
+    .flow-block-image img {
         width: 100%;
-        max-width: 560px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+        border-radius: 8px;
+        box-shadow: 0 1px 6px rgba(0,0,0,0.08);
         cursor: pointer;
         transition: transform 0.2s;
     }
-    .profile-flow-image img:active {
+    .flow-block-image img:active {
         transform: scale(1.02);
     }
+    .flow-block-steps {
+        padding: 0 16px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .flow-block-step {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .flow-block-num {
+        flex-shrink: 0;
+        width: 24px;
+        height: 24px;
+        background: var(--sv-header-bg, #2C3E50);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .flow-block-text {
+        font-size: 13px;
+        color: #444;
+        line-height: 1.6;
+    }
+
+    /* 手順一覧 */
+    .flow-summary {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin-bottom: 24px;
+    }
+    .flow-summary-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--sv-heading-text, #2C3E40);
+        margin-bottom: 10px;
+    }
+    .flow-summary-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        counter-reset: flow-step;
+    }
+    .flow-summary-list li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 0;
+        font-size: 13px;
+        color: #555;
+        line-height: 1.6;
+    }
+    .flow-summary-list li::before {
+        counter-increment: flow-step;
+        content: counter(flow-step);
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        background: var(--sv-header-bg, #2C3E50);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     /* タップで拡大用オーバーレイ */
     .flow-image-overlay {
         display: none;
@@ -941,43 +1064,6 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         font-size: 28px;
         cursor: pointer;
         line-height: 1;
-    }
-
-    /* ステップテキスト（画像の補足） */
-    .profile-steps-compact {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        margin-bottom: 24px;
-    }
-    .profile-step-compact {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 16px;
-        background: #fff;
-        border-radius: 10px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        margin-bottom: 8px;
-    }
-    .step-num-compact {
-        flex-shrink: 0;
-        width: 28px;
-        height: 28px;
-        background: var(--sv-header-bg, #2C3E50);
-        color: #fff;
-        font-size: 14px;
-        font-weight: 700;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .step-label-compact {
-        font-size: 14px;
-        font-weight: 600;
-        color: #333;
-        line-height: 1.6;
     }
 
     .profile-notice {
@@ -1065,15 +1151,6 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         .profile-guide-lead br,
         .profile-desc br {
             display: none;
-        }
-        .profile-flow-steps {
-            gap: 4px;
-        }
-        .flow-step-label {
-            font-size: 11px;
-        }
-        .profile-flow-arrow {
-            font-size: 14px;
         }
     }
 
@@ -1300,23 +1377,30 @@ $flow_image_url = content_url('/uploads/flow.jpg');
                 <?php echo nl2br(esc_html($profile_guide_texts['guide_note'])); ?>
             </div>
 
-            <div class="profile-flow-image">
-                <img src="<?php echo esc_url($flow_image_url); ?>" alt="Googleマップ プロフィール設定の流れ" id="flow-image" loading="lazy">
+            <?php foreach ($flow_steps as $block) : ?>
+            <div class="flow-block">
+                <div class="flow-block-heading"><?php echo esc_html($block['heading']); ?></div>
+                <div class="flow-block-image">
+                    <img src="<?php echo esc_url($block['image']); ?>" alt="<?php echo esc_attr($block['alt']); ?>" class="flow-block-img" loading="lazy">
+                </div>
+                <div class="flow-block-steps">
+                    <?php foreach ($block['steps'] as $s) : ?>
+                    <div class="flow-block-step">
+                        <span class="flow-block-num"><?php echo esc_html($s['num']); ?></span>
+                        <span class="flow-block-text"><?php echo esc_html($s['text']); ?></span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
+            <?php endforeach; ?>
 
-            <div class="profile-steps-compact">
-                <div class="profile-step-compact">
-                    <span class="step-num-compact">1</span>
-                    <span class="step-label-compact"><?php echo esc_html($profile_guide_texts['step1']); ?></span>
-                </div>
-                <div class="profile-step-compact">
-                    <span class="step-num-compact">2</span>
-                    <span class="step-label-compact"><?php echo esc_html($profile_guide_texts['step2']); ?></span>
-                </div>
-                <div class="profile-step-compact">
-                    <span class="step-num-compact">3</span>
-                    <span class="step-label-compact"><?php echo esc_html($profile_guide_texts['step3']); ?></span>
-                </div>
+            <div class="flow-summary">
+                <div class="flow-summary-title">設定の流れ</div>
+                <ol class="flow-summary-list">
+                    <?php foreach ($flow_summary_steps as $step) : ?>
+                    <li><?php echo esc_html($step); ?></li>
+                    <?php endforeach; ?>
+                </ol>
             </div>
 
             <div class="profile-notice">
@@ -1344,7 +1428,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         <!-- 画像拡大オーバーレイ -->
         <div class="flow-image-overlay" id="flow-image-overlay">
             <span class="flow-image-overlay-close" id="flow-overlay-close">&times;</span>
-            <img src="<?php echo esc_url($flow_image_url); ?>" alt="Googleマップ プロフィール設定の流れ">
+            <img src="" alt="" id="flow-overlay-img">
         </div>
 
         <!-- ===== エラー画面 ===== -->
@@ -1857,22 +1941,26 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         });
 
         // =====================================================
-        // flow.jpg 画像タップ拡大
+        // 手順画像タップ拡大
         // =====================================================
         (function() {
-            var img = document.getElementById('flow-image');
             var overlay = document.getElementById('flow-image-overlay');
+            var overlayImg = document.getElementById('flow-overlay-img');
             var closeBtn = document.getElementById('flow-overlay-close');
-            if (img && overlay) {
+            if (!overlay || !overlayImg) return;
+
+            document.querySelectorAll('.flow-block-img').forEach(function(img) {
                 img.addEventListener('click', function() {
+                    overlayImg.src = img.src;
+                    overlayImg.alt = img.alt;
                     overlay.classList.add('active');
                 });
-                overlay.addEventListener('click', function(e) {
-                    if (e.target === overlay || e.target === closeBtn) {
-                        overlay.classList.remove('active');
-                    }
-                });
-            }
+            });
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay || e.target === closeBtn) {
+                    overlay.classList.remove('active');
+                }
+            });
         })();
 
         // =====================================================
