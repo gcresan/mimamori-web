@@ -1548,6 +1548,10 @@ get_header();
 
                 // 反映ボタンも表示（再反映用）
                 genApply.classList.add('visible');
+
+                // モーダルを自動的に閉じる
+                overlay.style.display = 'none';
+                showToast('詳細ペルソナを生成・反映しました');
             } else {
                 alert('生成に失敗しました: ' + (json.message || ''));
             }
