@@ -480,7 +480,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
                         <option value="0">-- ユーザーを選択 --</option>
                         <?php foreach ( $users as $u ) : ?>
                             <option value="<?php echo esc_attr( $u->ID ); ?>" <?php selected( $selected_user, $u->ID ); ?>>
-                                <?php echo esc_html( $u->display_name ); ?> (ID: <?php echo esc_html( $u->ID ); ?>)
+                                <?php echo esc_html( gcrev_get_business_name( $u->ID ) ); ?> (ID: <?php echo esc_html( $u->ID ); ?>)
                             </option>
                         <?php endforeach; ?>
                     </select>

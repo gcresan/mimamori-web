@@ -281,7 +281,7 @@ class Gcrev_Prefetch_Management_Page {
         $msg  = $messages[ $notice ] ?? '操作を完了しました。';
         if ( $uid > 0 ) {
             $user = get_userdata( $uid );
-            $msg = ( $user ? esc_html( $user->display_name ) : "ID:{$uid}" ) . ' — ' . $msg;
+            $msg = ( $user ? esc_html( gcrev_get_business_name( $user->ID ) ) : "ID:{$uid}" ) . ' — ' . $msg;
         }
 
         printf( '<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr( $type ), esc_html( $msg ) );
@@ -509,7 +509,7 @@ class Gcrev_Prefetch_Management_Page {
         ?>
         <tr>
             <td><?php echo esc_html( $uid ); ?></td>
-            <td><?php echo esc_html( $user->display_name ); ?></td>
+            <td><?php echo esc_html( gcrev_get_business_name( $user->ID ) ); ?></td>
             <td><?php echo $has_ga4 ? '<span style="color:#28a745;">✓</span>' : '<span style="color:#ccc;">✕</span>'; ?></td>
             <td><?php echo $has_gsc ? '<span style="color:#28a745;">✓</span>' : '<span style="color:#ccc;">✕</span>'; ?></td>
             <?php foreach ( $periods as $period ): ?>

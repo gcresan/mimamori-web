@@ -306,7 +306,7 @@ class Gcrev_Cron_Monitor_Page {
         foreach ( $tenants as $t ) {
             $user = $t['user'];
             echo '<tr>';
-            echo '<td>' . esc_html( $user->display_name ) . ' (ID:' . esc_html( (string) $user->ID ) . ')</td>';
+            echo '<td>' . esc_html( gcrev_get_business_name( $user->ID ) ) . ' (ID:' . esc_html( (string) $user->ID ) . ')</td>';
             echo '<td>' . esc_html( $user->user_email ) . '</td>';
             echo '<td>' . ( $t['ga4_configured'] ? '<span style="color:green;">&#10003;</span>' : '<span style="color:#ccc;">&mdash;</span>' ) . '</td>';
             echo '<td>' . ( $t['gsc_configured'] ? '<span style="color:green;">&#10003;</span>' : '<span style="color:#ccc;">&mdash;</span>' ) . '</td>';

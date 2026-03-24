@@ -193,7 +193,7 @@ class Gcrev_CV_Settings_Page {
                     ?>
                         <option value="<?php echo esc_attr((string) $user->ID); ?>"
                                 <?php selected($user->ID, $selected_user_id); ?>>
-                            <?php echo esc_html($user->display_name); ?>（<?php echo esc_html($user->user_email); ?>）
+                            <?php echo esc_html( gcrev_get_business_name( $user->ID ) ); ?>（<?php echo esc_html($user->user_email); ?>）
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -241,7 +241,7 @@ class Gcrev_CV_Settings_Page {
         <hr style="margin: 24px 0;">
 
         <h2 style="margin-bottom:16px;">
-            <?php echo esc_html($user_info ? $user_info->display_name : 'ユーザーID: ' . $user_id); ?> のCV設定
+            <?php echo esc_html($user_info ? gcrev_get_business_name( $user_info->ID ) : 'ユーザーID: ' . $user_id); ?> のCV設定
         </h2>
 
         <form method="post" action="" style="max-width:720px;">

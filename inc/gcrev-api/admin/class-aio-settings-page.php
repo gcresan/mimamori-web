@@ -247,7 +247,7 @@ class Gcrev_AIO_Settings_Page {
             $company_name = get_user_meta( $selected_user, 'report_company_name', true );
             if ( empty( $company_name ) ) {
                 $user_obj = get_userdata( $selected_user );
-                $company_name = $user_obj ? $user_obj->display_name : '';
+                $company_name = $user_obj ? gcrev_get_business_name( $user_obj->ID ) : '';
             }
 
             // 別名
@@ -322,7 +322,7 @@ class Gcrev_AIO_Settings_Page {
                         <option value="0">-- ユーザーを選択 --</option>
                         <?php foreach ( $users as $u ) : ?>
                             <option value="<?php echo esc_attr( $u->ID ); ?>" <?php selected( $selected_user, $u->ID ); ?>>
-                                <?php echo esc_html( $u->display_name ); ?> (ID: <?php echo esc_html( $u->ID ); ?>)
+                                <?php echo esc_html( gcrev_get_business_name( $u->ID ) ); ?> (ID: <?php echo esc_html( $u->ID ); ?>)
                             </option>
                         <?php endforeach; ?>
                     </select>

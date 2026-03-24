@@ -296,7 +296,7 @@ class Gcrev_GBP_Settings_Page {
                 $expires_str = $expires > 0 ? wp_date('Y/m/d H:i', $expires) : '—';
             ?>
                 <tr>
-                    <td><strong><?php echo esc_html($user->display_name); ?></strong></td>
+                    <td><strong><?php echo esc_html( gcrev_get_business_name( $user->ID ) ); ?></strong></td>
                     <td><?php echo esc_html($user->user_email); ?></td>
                     <td><?php echo esc_html($expires_str); ?></td>
                     <td>

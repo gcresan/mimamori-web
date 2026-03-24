@@ -255,7 +255,7 @@ class Gcrev_Payment_Settings_Page {
                 $ct_info           = isset($contract_labels[$contract_type]) ? $contract_labels[$contract_type] : $contract_labels['with_site'];
             ?>
                 <tr>
-                    <td><strong><?php echo esc_html($user->display_name); ?></strong></td>
+                    <td><strong><?php echo esc_html( gcrev_get_business_name( $user->ID ) ); ?></strong></td>
                     <td><?php echo esc_html($user->user_email); ?></td>
                     <td>
                         <span style="display:inline-block; padding:1px 6px; border-radius:8px; font-size:11px; font-weight:600;

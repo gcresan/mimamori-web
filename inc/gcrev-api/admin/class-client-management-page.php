@@ -147,11 +147,11 @@ class Gcrev_Client_Management_Page {
         // パターンマッチでメッセージ生成
         if ( preg_match( '/^user_(\d+)_cache_cleared_(\d+)$/', $msg, $m ) ) {
             $user = get_user_by( 'id', (int) $m[1] );
-            $name = $user ? esc_html( $user->display_name ) : "ID:{$m[1]}";
+            $name = $user ? esc_html( gcrev_get_business_name( (int) $m[1] ) ) : "ID:{$m[1]}";
             $text = "{$name} のキャッシュを {$m[2]} 件削除しました。";
         } elseif ( preg_match( '/^user_(\d+)_reports_deleted_(\d+)$/', $msg, $m ) ) {
             $user = get_user_by( 'id', (int) $m[1] );
-            $name = $user ? esc_html( $user->display_name ) : "ID:{$m[1]}";
+            $name = $user ? esc_html( gcrev_get_business_name( (int) $m[1] ) ) : "ID:{$m[1]}";
             $text = "{$name} のレポートを {$m[2]} 件削除しました。";
         } elseif ( preg_match( '/^all_cache_cleared_(\d+)$/', $msg, $m ) ) {
             $text = "全クライアントのキャッシュを {$m[1]} 件削除しました。";
@@ -224,7 +224,7 @@ class Gcrev_Client_Management_Page {
                 <tr>
                     <td style="color: #999;"><?php echo esc_html( $uid ); ?></td>
                     <td>
-                        <strong><?php echo esc_html( $user->display_name ); ?></strong>
+                        <strong><?php echo esc_html( gcrev_get_business_name( $user->ID ) ); ?></strong>
                     </td>
                     <td><?php echo esc_html( $user->user_email ); ?></td>
                     <td>
@@ -276,7 +276,7 @@ class Gcrev_Client_Management_Page {
                     </td>
                     <td style="white-space: nowrap;">
                         <?php if ( $cache_cnt > 0 ) : ?>
-                        <form method="post" style="display: inline;" onsubmit="return confirm('<?php echo esc_js( $user->display_name ); ?> のキャッシュを削除します。よろしいですか？');">
+                        <form method="post" style="display: inline;" onsubmit="return confirm('<?php echo esc_js( gcrev_get_business_name( $user->ID ) ); ?> のキャッシュを削除します。よろしいですか？');">
                             <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
                             <input type="hidden" name="gcrev_action" value="clear_user_cache">
                             <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $uid ); ?>">
@@ -285,7 +285,7 @@ class Gcrev_Client_Management_Page {
                         <?php endif; ?>
 
                         <?php if ( $report_cnt > 0 ) : ?>
-                        <form method="post" style="display: inline;" onsubmit="return confirm('<?php echo esc_js( $user->display_name ); ?> のレポートをすべて削除します。この操作は取り消せません。よろしいですか？');">
+                        <form method="post" style="display: inline;" onsubmit="return confirm('<?php echo esc_js( gcrev_get_business_name( $user->ID ) ); ?> のレポートをすべて削除します。この操作は取り消せません。よろしいですか？');">
                             <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
                             <input type="hidden" name="gcrev_action" value="delete_user_reports">
                             <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $uid ); ?>">

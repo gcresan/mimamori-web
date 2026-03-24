@@ -354,7 +354,7 @@ class Gcrev_Survey_Page {
                     ?>
                         <tr>
                             <?php if ($is_admin): ?>
-                                <td><?php echo esc_html($s->display_name ?? 'ID:' . $s->user_id); ?></td>
+                                <td><?php echo esc_html( $s->user_id ? gcrev_get_business_name( (int) $s->user_id ) : 'ID:' . $s->user_id ); ?></td>
                             <?php endif; ?>
                             <td><a href="<?php echo esc_url($edit_url); ?>" style="font-weight:600;"><?php echo esc_html($s->title); ?></a></td>
                             <td><?php echo $status_label; ?></td>
