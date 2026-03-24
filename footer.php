@@ -13,7 +13,7 @@
 // =============================================
 window.gcrevCache = {
     TTL: 2 * 60 * 60 * 1000, // 2時間（サーバー側Transient 24hより十分短い）
-    PREFIX: 'gcrev_',
+    PREFIX: 'gcrev_u<?php echo is_user_logged_in() ? get_current_user_id() : 0; ?>_',
     MAX_AGE: 24 * 60 * 60 * 1000, // 24時間（古いエントリの自動掃除用）
 
     /** キャッシュからデータを取得（期限切れならnull） */
@@ -84,17 +84,19 @@ window.gcrevCache = {
     }
 };
 
-// sessionStorage → localStorage 移行（一回限り）
+// 旧プレフィックス(user_id無し)のキャッシュをクリーンアップ
 (function() {
     try {
-        if (sessionStorage.getItem('gcrev_migrated')) return;
-        for (var i = 0; i < sessionStorage.length; i++) {
-            var k = sessionStorage.key(i);
-            if (k && k.indexOf('gcrev_') === 0 && !localStorage.getItem(k)) {
-                localStorage.setItem(k, sessionStorage.getItem(k));
+        var newPrefix = window.gcrevCache.PREFIX; // 'gcrev_u{id}_'
+        var keys = [];
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            // gcrev_ で始まるが新プレフィックスでないもの = 旧キャッシュ
+            if (k && k.indexOf('gcrev_') === 0 && k.indexOf(newPrefix) !== 0) {
+                keys.push(k);
             }
         }
-        sessionStorage.setItem('gcrev_migrated', '1');
+        keys.forEach(function(k) { localStorage.removeItem(k); });
     } catch(e) {}
 })();
 
