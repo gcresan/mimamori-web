@@ -52,6 +52,9 @@ if ( is_array( $exclude_paths_raw ) && ! empty( $exclude_paths_raw ) ) {
     $exclude_paths_text = implode( "\n", $exclude_paths_raw );
 }
 
+// 海外アクセス除外
+$exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) ?: '';
+
 get_header();
 ?>
 
@@ -617,6 +620,14 @@ get_header();
                 <label for="cs-exclude-paths">解析除外URL条件 <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
                 <textarea id="cs-exclude-paths" rows="2" placeholder="例:&#10;/example/&#10;/recruit/" style="font-family: monospace; font-size: 13px; line-height: 1.6;"><?php echo esc_textarea( $exclude_paths_text ); ?></textarea>
                 <small class="form-text">このアカウントで集計対象から<strong>除外したい</strong>URL条件を指定します。別LP・採用ページ・キャンペーンページなどを除外したい場合に使用します。1行に1つずつ入力してください。<br>例: <code>/example/</code> と入力すると、<code>/example/</code> 配下のページデータが除外されます。</small>
+            </div>
+            <div class="form-group" style="margin-top:16px;">
+                <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+                    <input type="checkbox" id="cs-exclude-foreign" style="width: 18px; height: 18px; accent-color: var(--mw-primary-blue, #568184);"
+                           <?php checked( $exclude_foreign, '1' ); ?>>
+                    <span>海外アクセスを除外して集計する</span>
+                </label>
+                <small class="form-text" style="display: block; margin-top: 4px; margin-left: 26px;">ONにすると、日本以外の国からのアクセスを除外して集計・分析します。海外からの大量アクセスが含まれる場合、分析結果やAI提案に偏りが出ることがあります。</small>
             </div>
         </div>
 
@@ -1581,6 +1592,7 @@ get_header();
                     maps_domain:            (document.getElementById('cs-maps-domain').value || '').trim(),
                     include_paths:          (document.getElementById('cs-include-paths').value || '').trim(),
                     exclude_paths:          (document.getElementById('cs-exclude-paths').value || '').trim(),
+                    exclude_foreign:        document.getElementById('cs-exclude-foreign').checked ? '1' : '',
                     area_type:              areaType,
                     area_pref:              areaPref,
                     area_city:              areaCity,

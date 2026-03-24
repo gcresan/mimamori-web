@@ -2824,11 +2824,7 @@ class Gcrev_Insight_API {
         }
         update_user_meta($user_id, 'report_output_mode', $output_mode);
 
-        // 海外アクセス除外設定の保存
-        $exclude_foreign = ($params['exclude_foreign'] ?? '') === '1' ? '1' : '';
-        update_user_meta($user_id, 'report_exclude_foreign', $exclude_foreign);
-
-        error_log("[GCREV] Client info saved for user_id={$user_id}, output_mode={$output_mode}, exclude_foreign={$exclude_foreign}");
+        error_log("[GCREV] Client info saved for user_id={$user_id}, output_mode={$output_mode}");
 
         return new WP_REST_Response([
             'success' => true,
@@ -2907,6 +2903,12 @@ class Gcrev_Insight_API {
             }
         }
         update_user_meta( $user_id, '_gcrev_exclude_paths', $exclude_paths );
+
+        // 海外アクセス除外
+        if ( isset( $params['exclude_foreign'] ) ) {
+            $exclude_foreign = $params['exclude_foreign'] === '1' ? '1' : '';
+            update_user_meta( $user_id, 'report_exclude_foreign', $exclude_foreign );
+        }
 
         update_user_meta($user_id, 'gcrev_client_area_type',      $area_type);
         update_user_meta($user_id, 'gcrev_client_area_pref',      sanitize_text_field($params['area_pref'] ?? ''));
