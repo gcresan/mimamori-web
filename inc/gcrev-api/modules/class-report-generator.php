@@ -414,6 +414,7 @@ class Gcrev_Report_Generator {
         if ( ! empty( $persona_lines ) ) {
             $persona_note = "\n# ターゲット顧客像（ペルソナ）\n" . implode( "\n", $persona_lines );
             $persona_note .= "\n※ 上記ペルソナ情報を踏まえ、改善提案やアクション提案はこのターゲット顧客に響く施策を優先してください。";
+            $persona_note .= "\n※ ペルソナに含まれる架空の人物名（例: ○○社長、○○さん等）はレポート本文に絶対に使わないでください。「地元の社長さん」「ターゲット顧客」等の一般的な表現に置き換えてください。";
         }
 
         // 統合型 / 分離型レポートの指示
