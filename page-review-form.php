@@ -1432,7 +1432,8 @@ $flow_image_url = content_url('/uploads/flow.jpg');
             var items = document.querySelectorAll('.option-item');
             items.forEach(function(item) {
                 item.addEventListener('click', function(e) {
-                    if (e.target.tagName === 'INPUT') return; // input直接クリック時はブラウザに任せる
+                    // input / label クリック時はブラウザのネイティブ動作に任せる
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
                     var input = item.querySelector('input');
                     if (!input) return;
 
