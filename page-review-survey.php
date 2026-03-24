@@ -237,6 +237,18 @@ get_header();
 }
 .sv-btn-secondary:hover { background: #f9fafb; }
 
+/* Color customization */
+.sv-color-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.sv-color-group { flex: 1; min-width: 140px; }
+.sv-color-label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px; }
+.sv-color-input { width: 100%; height: 40px; padding: 2px; border: 1.5px solid #e5e7eb; border-radius: 6px; cursor: pointer; background: #f9fafb; }
+.sv-color-preview { margin-top: 16px; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; }
+.sv-color-preview-header { padding: 14px; color: #fff; text-align: center; font-weight: 700; font-size: 14px; }
+.sv-color-preview-body { padding: 16px; background: #f5f6fa; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sv-color-preview-heading { font-weight: 700; font-size: 13px; }
+.sv-color-preview-btn { display: inline-block; padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; border: none; cursor: default; }
+.sv-color-preview-accent { display: inline-block; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 2px solid; background: #fff; cursor: default; }
+
 /* Danger zone */
 .sv-danger-zone {
     border-top: 1px solid #fca5a5; padding-top: 16px; margin-top: 24px;
@@ -337,6 +349,57 @@ get_header();
                 </div>
             </div>
             <button type="button" class="sv-btn-save" id="sv-btn-save-info">保存する</button>
+        </div>
+
+        <!-- デザイン設定（カラーカスタマイズ） -->
+        <div class="sv-form-card" id="sv-color-card" style="display:none;">
+            <div class="sv-form-title">デザイン設定（フォームのカラー）</div>
+            <p style="font-size:13px;color:#6b7280;margin-bottom:16px;">
+                アンケートフォームの色をカスタマイズできます。この設定はアカウント全体のアンケートに適用されます。
+            </p>
+            <div class="sv-color-row">
+                <div class="sv-color-group">
+                    <label class="sv-color-label">ヘッダー背景色</label>
+                    <input type="color" class="sv-color-input" id="sv-color-header-bg" value="#2C3E50">
+                </div>
+                <div class="sv-color-group">
+                    <label class="sv-color-label">見出し文字色</label>
+                    <input type="color" class="sv-color-input" id="sv-color-heading-text" value="#2C3E40">
+                </div>
+            </div>
+            <div class="sv-color-row">
+                <div class="sv-color-group">
+                    <label class="sv-color-label">ボタン背景色</label>
+                    <input type="color" class="sv-color-input" id="sv-color-button-bg" value="#2C3E50">
+                </div>
+                <div class="sv-color-group">
+                    <label class="sv-color-label">ボタン文字色</label>
+                    <input type="color" class="sv-color-input" id="sv-color-button-text" value="#FFFFFF">
+                </div>
+            </div>
+            <div class="sv-color-row">
+                <div class="sv-color-group">
+                    <label class="sv-color-label">アクセントカラー（選択肢・フォーカス等）</label>
+                    <input type="color" class="sv-color-input" id="sv-color-accent" value="#3b82f6">
+                </div>
+                <div class="sv-color-group">
+                    <label class="sv-color-label">アクセント上の文字色</label>
+                    <input type="color" class="sv-color-input" id="sv-color-accent-text" value="#FFFFFF">
+                </div>
+            </div>
+            <!-- ライブプレビュー -->
+            <div class="sv-color-preview" id="sv-color-preview">
+                <div class="sv-color-preview-header" id="sv-preview-header">サンプルヘッダー</div>
+                <div class="sv-color-preview-body">
+                    <span class="sv-color-preview-heading" id="sv-preview-heading">見出しサンプル</span>
+                    <button class="sv-color-preview-btn" id="sv-preview-btn" type="button">ボタン</button>
+                    <span class="sv-color-preview-accent" id="sv-preview-accent">アクセント</span>
+                </div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:8px;">
+                <button type="button" class="sv-btn-save" id="sv-btn-save-colors">カラー設定を保存</button>
+                <button type="button" class="sv-btn-secondary" id="sv-btn-reset-colors">デフォルトに戻す</button>
+            </div>
         </div>
 
         <!-- 質問管理 -->
@@ -585,6 +648,7 @@ get_header();
         document.getElementById('sv-public-url-area').style.display = 'none';
         document.getElementById('sv-questions-card').style.display = 'none';
         document.getElementById('sv-danger-card').style.display = 'none';
+        document.getElementById('sv-color-card').style.display = 'none';
         document.getElementById('sv-questions-container').innerHTML = '';
         resetQForm();
     }
@@ -618,6 +682,10 @@ get_header();
             document.getElementById('sv-questions-card').style.display = 'block';
             document.getElementById('sv-danger-card').style.display = 'block';
             renderQuestionTable(data.questions || []);
+
+            // カラー設定
+            document.getElementById('sv-color-card').style.display = 'block';
+            loadSurveyColors();
         });
     }
 
@@ -977,6 +1045,90 @@ get_header();
         apiPost('delete', { id: currentSurveyId }).then(function(res) {
             if (res.success) { toast('削除しました'); showList(); }
             else { toast(res.message || '削除に失敗しました', 'error'); }
+        });
+    });
+
+    // =====================================================
+    // カラーカスタマイズ
+    // =====================================================
+    var colorDefaults = {
+        header_bg: '#2C3E50', heading_text: '#2C3E40',
+        button_bg: '#2C3E50', button_text: '#FFFFFF',
+        accent: '#3b82f6', accent_text: '#FFFFFF'
+    };
+    var colorInputMap = {
+        header_bg: 'sv-color-header-bg', heading_text: 'sv-color-heading-text',
+        button_bg: 'sv-color-button-bg', button_text: 'sv-color-button-text',
+        accent: 'sv-color-accent', accent_text: 'sv-color-accent-text'
+    };
+
+    function updateColorPreview() {
+        var hBg = document.getElementById('sv-color-header-bg').value;
+        var hTx = document.getElementById('sv-color-heading-text').value;
+        var bBg = document.getElementById('sv-color-button-bg').value;
+        var bTx = document.getElementById('sv-color-button-text').value;
+        var ac  = document.getElementById('sv-color-accent').value;
+        var acT = document.getElementById('sv-color-accent-text').value;
+        document.getElementById('sv-preview-header').style.background = hBg;
+        document.getElementById('sv-preview-heading').style.color = hTx;
+        document.getElementById('sv-preview-btn').style.background = bBg;
+        document.getElementById('sv-preview-btn').style.color = bTx;
+        document.getElementById('sv-preview-accent').style.borderColor = ac;
+        document.getElementById('sv-preview-accent').style.color = ac;
+    }
+
+    function loadSurveyColors() {
+        apiGet('colors').then(function(data) {
+            if (!data.success) return;
+            var c = data.colors || {};
+            Object.keys(colorInputMap).forEach(function(key) {
+                var el = document.getElementById(colorInputMap[key]);
+                if (el && c[key]) el.value = c[key];
+            });
+            updateColorPreview();
+        });
+    }
+
+    // カラーピッカー変更時にプレビュー即時更新
+    Object.keys(colorInputMap).forEach(function(key) {
+        var el = document.getElementById(colorInputMap[key]);
+        if (el) el.addEventListener('input', updateColorPreview);
+    });
+
+    // 保存
+    document.getElementById('sv-btn-save-colors').addEventListener('click', function() {
+        var btn = this;
+        var colors = {};
+        Object.keys(colorInputMap).forEach(function(key) {
+            var el = document.getElementById(colorInputMap[key]);
+            if (el) colors[key] = el.value;
+        });
+        btn.disabled = true;
+        btn.textContent = '保存中...';
+        apiPost('colors', { colors: colors }).then(function(res) {
+            btn.disabled = false;
+            btn.textContent = 'カラー設定を保存';
+            if (res.success) toast('カラー設定を保存しました');
+            else toast('保存に失敗しました', 'error');
+        });
+    });
+
+    // デフォルトに戻す
+    document.getElementById('sv-btn-reset-colors').addEventListener('click', function() {
+        if (!confirm('カラー設定をデフォルトに戻しますか？')) return;
+        Object.keys(colorInputMap).forEach(function(key) {
+            var el = document.getElementById(colorInputMap[key]);
+            if (el) el.value = colorDefaults[key];
+        });
+        updateColorPreview();
+        // デフォルト値で保存
+        var btn = document.getElementById('sv-btn-save-colors');
+        btn.disabled = true;
+        btn.textContent = '保存中...';
+        apiPost('colors', { colors: colorDefaults }).then(function(res) {
+            btn.disabled = false;
+            btn.textContent = 'カラー設定を保存';
+            if (res.success) toast('デフォルトに戻しました');
         });
     });
 

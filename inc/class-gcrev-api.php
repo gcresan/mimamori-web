@@ -1109,6 +1109,18 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_survey_analysis' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/survey/colors', [
+            [
+                'methods'             => 'GET',
+                'callback'            => [ $this, 'rest_survey_colors_get' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
+            [
+                'methods'             => 'POST',
+                'callback'            => [ $this, 'rest_survey_colors_save' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
+        ]);
     }
 
     // =========================================================
@@ -15892,6 +15904,69 @@ PROMPT;
             );
             return new \WP_REST_Response(['success' => false, 'message' => '分析の実行に失敗しました。'], 500);
         }
+    }
+
+    // =========================================================
+    // アンケート カラーカスタマイズ
+    // =========================================================
+
+    /**
+     * アンケートフォームのカラー設定を取得
+     */
+    public function rest_survey_colors_get(\WP_REST_Request $request): \WP_REST_Response {
+        $user_id  = get_current_user_id();
+        $defaults = self::survey_color_defaults();
+        $colors   = [];
+        foreach ($defaults as $key => $default) {
+            $val = get_user_meta($user_id, 'gcrev_survey_color_' . $key, true);
+            $colors[$key] = ($val !== '' && $val !== false) ? $val : $default;
+        }
+        return new \WP_REST_Response([
+            'success'  => true,
+            'colors'   => $colors,
+            'defaults' => $defaults,
+        ]);
+    }
+
+    /**
+     * アンケートフォームのカラー設定を保存
+     */
+    public function rest_survey_colors_save(\WP_REST_Request $request): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $params  = $request->get_json_params();
+        $colors  = $params['colors'] ?? [];
+
+        $valid_keys = array_keys(self::survey_color_defaults());
+        $saved      = [];
+
+        foreach ($valid_keys as $key) {
+            if (isset($colors[$key])) {
+                $val = sanitize_text_field($colors[$key]);
+                if (preg_match('/^#[A-Fa-f0-9]{6}$/', $val)) {
+                    update_user_meta($user_id, 'gcrev_survey_color_' . $key, $val);
+                    $saved[$key] = $val;
+                }
+            }
+        }
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'saved'   => $saved,
+        ]);
+    }
+
+    /**
+     * カラー設定デフォルト値
+     */
+    public static function survey_color_defaults(): array {
+        return [
+            'header_bg'    => '#2C3E50',
+            'heading_text' => '#2C3E40',
+            'button_bg'    => '#2C3E50',
+            'button_text'  => '#FFFFFF',
+            'accent'       => '#3b82f6',
+            'accent_text'  => '#FFFFFF',
+        ];
     }
 
     // =========================================================

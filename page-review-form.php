@@ -101,6 +101,23 @@ if (empty($google_review_url)) {
 $api_url = rest_url('gcrev/v1/review/generate');
 
 // =====================================================
+// カラーカスタマイズ設定の読み込み
+// =====================================================
+$_sv_color_defaults = [
+    'header_bg'    => '#2C3E50',
+    'heading_text' => '#2C3E40',
+    'button_bg'    => '#2C3E50',
+    'button_text'  => '#FFFFFF',
+    'accent'       => '#3b82f6',
+    'accent_text'  => '#FFFFFF',
+];
+$survey_colors = [];
+foreach ($_sv_color_defaults as $_ck => $_cd) {
+    $val = ($target_user_id > 0) ? get_user_meta($target_user_id, 'gcrev_survey_color_' . $_ck, true) : '';
+    $survey_colors[$_ck] = ($val !== '' && $val !== false) ? $val : $_cd;
+}
+
+// =====================================================
 // Googleマップ プロフィール設定案内の文言（テンプレート化）
 // 将来的に管理画面からの変更やフィルターフック対応を想定
 // =====================================================
@@ -158,7 +175,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
 
     /* ===== Header ===== */
     .review-header {
-        background: #2C3E50;
+        background: var(--sv-header-bg, #2C3E50);
         color: #fff;
         text-align: center;
         padding: 28px 20px;
@@ -180,7 +197,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     .survey-intro-title {
         font-size: 17px;
         font-weight: 700;
-        color: #2C3E40;
+        color: var(--sv-heading-text, #2C3E40);
         margin-bottom: 8px;
         line-height: 1.6;
     }
@@ -219,7 +236,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     .question-label {
         font-size: 15px;
         font-weight: 700;
-        color: #2C3E40;
+        color: var(--sv-heading-text, #2C3E40);
         margin-bottom: 4px;
         line-height: 1.8;
         display: flex;
@@ -228,7 +245,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     .question-number {
         flex-shrink: 0;
         width: 1.6em;
-        color: #2C3E40;
+        color: var(--sv-heading-text, #2C3E40);
     }
     .question-label-text {
         flex: 1;
@@ -281,7 +298,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         background: #f0f7ff;
     }
     .option-item.selected {
-        border-color: #3b82f6;
+        border-color: var(--sv-accent, #3b82f6);
         background: #eff6ff;
     }
     .option-item input[type="checkbox"],
@@ -289,7 +306,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         width: 18px;
         height: 18px;
         flex-shrink: 0;
-        accent-color: #3b82f6;
+        accent-color: var(--sv-accent, #3b82f6);
         cursor: pointer;
     }
     .option-item label {
@@ -316,7 +333,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     }
     .review-textarea:focus {
         outline: none;
-        border-color: #3b82f6;
+        border-color: var(--sv-accent, #3b82f6);
         background: #fff;
     }
     .review-textarea::placeholder {
@@ -347,8 +364,8 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         width: 100%;
         max-width: 360px;
         padding: 14px 24px;
-        background: #2C3E50;
-        color: #fff;
+        background: var(--sv-button-bg, #2C3E50);
+        color: var(--sv-button-text, #fff);
         font-size: 16px;
         font-weight: 700;
         border: none;
@@ -357,7 +374,8 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         transition: background 0.15s;
     }
     .btn-submit:hover {
-        background: #1a2a3a;
+        background: var(--sv-button-bg, #2C3E50);
+        filter: brightness(0.85);
     }
     .btn-submit:disabled {
         background: #7f8c9b;
@@ -374,7 +392,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         width: 48px;
         height: 48px;
         border: 4px solid #e5e7eb;
-        border-top-color: #3b82f6;
+        border-top-color: var(--sv-accent, #3b82f6);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
         margin: 0 auto 20px;
@@ -410,7 +428,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     .result-card-header {
         font-size: 14px;
         font-weight: 700;
-        color: #2C3E40;
+        color: var(--sv-heading-text, #2C3E40);
         margin-bottom: 12px;
         display: flex;
         align-items: center;
@@ -442,10 +460,10 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         gap: 6px;
         padding: 8px 16px;
         background: #fff;
-        color: #3b82f6;
+        color: var(--sv-accent, #3b82f6);
         font-size: 13px;
         font-weight: 600;
-        border: 1.5px solid #3b82f6;
+        border: 1.5px solid var(--sv-accent, #3b82f6);
         border-radius: 8px;
         cursor: pointer;
         transition: background 0.15s;
@@ -606,7 +624,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     .consent-title {
         font-size: 16px;
         font-weight: 700;
-        color: #2C3E40;
+        color: var(--sv-heading-text, #2C3E40);
         margin-bottom: 10px;
         line-height: 1.6;
     }
@@ -655,7 +673,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         background: #f0f7ff;
     }
     .consent-review-option.selected {
-        border-color: #3b82f6;
+        border-color: var(--sv-accent, #3b82f6);
         background: #eff6ff;
         color: #1d4ed8;
     }
@@ -663,7 +681,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         width: 18px;
         height: 18px;
         flex-shrink: 0;
-        accent-color: #3b82f6;
+        accent-color: var(--sv-accent, #3b82f6);
         cursor: pointer;
     }
     .consent-review-note {
@@ -687,8 +705,8 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         width: 100%;
         max-width: 360px;
         padding: 14px 24px;
-        background: #3b82f6;
-        color: #fff;
+        background: var(--sv-accent, #3b82f6);
+        color: var(--sv-accent-text, #fff);
         font-size: 16px;
         font-weight: 700;
         border: none;
@@ -696,7 +714,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         cursor: pointer;
         transition: background 0.15s;
     }
-    .btn-ai-support:hover { background: #2563eb; }
+    .btn-ai-support:hover { background: var(--sv-accent, #3b82f6); filter: brightness(0.85); }
     .btn-manual-input {
         display: inline-flex;
         align-items: center;
@@ -731,7 +749,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     }
     .manual-textarea:focus {
         outline: none;
-        border-color: #3b82f6;
+        border-color: var(--sv-accent, #3b82f6);
         background: #fff;
     }
     .manual-hint {
@@ -758,7 +776,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     .profile-main-heading {
         font-size: 18px;
         font-weight: 700;
-        color: #2C3E40;
+        color: var(--sv-heading-text, #2C3E40);
         margin-bottom: 16px;
         line-height: 1.6;
     }
@@ -776,8 +794,8 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         width: 100%;
         max-width: 360px;
         padding: 15px 24px;
-        background: #2C3E50;
-        color: #fff;
+        background: var(--sv-button-bg, #2C3E50);
+        color: var(--sv-button-text, #fff);
         font-size: 16px;
         font-weight: 700;
         border: none;
@@ -785,7 +803,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         cursor: pointer;
         transition: background 0.15s;
     }
-    .btn-profile-setup:hover { background: #1a2a3a; }
+    .btn-profile-setup:hover { background: var(--sv-button-bg, #2C3E50); filter: brightness(0.85); }
     .btn-skip-profile {
         display: inline-block;
         padding: 10px 20px;
@@ -830,7 +848,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         justify-content: center;
         width: 26px;
         height: 26px;
-        background: #2C3E50;
+        background: var(--sv-header-bg, #2C3E50);
         color: #fff;
         font-size: 13px;
         font-weight: 700;
@@ -855,7 +873,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     .profile-guide-title {
         font-size: 17px;
         font-weight: 700;
-        color: #2C3E40;
+        color: var(--sv-heading-text, #2C3E40);
         text-align: center;
         margin-bottom: 12px;
         line-height: 1.6;
@@ -946,7 +964,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
         flex-shrink: 0;
         width: 28px;
         height: 28px;
-        background: #2C3E50;
+        background: var(--sv-header-bg, #2C3E50);
         color: #fff;
         font-size: 14px;
         font-weight: 700;
@@ -1069,7 +1087,7 @@ $flow_image_url = content_url('/uploads/flow.jpg');
     </style>
 </head>
 <body>
-    <div class="review-container">
+    <div class="review-container" style="--sv-header-bg:<?php echo esc_attr($survey_colors['header_bg']); ?>;--sv-heading-text:<?php echo esc_attr($survey_colors['heading_text']); ?>;--sv-button-bg:<?php echo esc_attr($survey_colors['button_bg']); ?>;--sv-button-text:<?php echo esc_attr($survey_colors['button_text']); ?>;--sv-accent:<?php echo esc_attr($survey_colors['accent']); ?>;--sv-accent-text:<?php echo esc_attr($survey_colors['accent_text']); ?>;">
 
         <!-- ヘッダー（クライアント名帯） -->
         <div class="review-header">
