@@ -296,6 +296,56 @@ class Gcrev_Config {
     ];
 
     // =========================================================
+    // OpenAI / レポートAIプロバイダ設定
+    // =========================================================
+
+    /**
+     * 月次レポート生成に使用するAIプロバイダを返す
+     *
+     * 優先順位:
+     *   1. wp-config.php 定数 GCREV_REPORT_AI_PROVIDER ('openai' | 'gemini')
+     *   2. OPENAI_API_KEY が定義されていれば 'openai'
+     *   3. デフォルト 'gemini'
+     *
+     * @return string 'openai' | 'gemini'
+     */
+    public function get_report_ai_provider(): string {
+        if ( defined( 'GCREV_REPORT_AI_PROVIDER' ) && GCREV_REPORT_AI_PROVIDER !== '' ) {
+            $provider = strtolower( (string) GCREV_REPORT_AI_PROVIDER );
+            if ( in_array( $provider, [ 'openai', 'gemini' ], true ) ) {
+                return $provider;
+            }
+        }
+        // OPENAI_API_KEY が定義済みならデフォルトで openai
+        return defined( 'OPENAI_API_KEY' ) && OPENAI_API_KEY !== '' ? 'openai' : 'gemini';
+    }
+
+    /**
+     * OpenAI API キーを返す
+     *
+     * @return string APIキー（未設定時は空文字）
+     */
+    public function get_openai_api_key(): string {
+        return defined( 'OPENAI_API_KEY' ) ? (string) OPENAI_API_KEY : '';
+    }
+
+    /**
+     * OpenAI モデル名を返す
+     *
+     * 優先順位:
+     *   1. wp-config.php 定数 OPENAI_MODEL
+     *   2. デフォルト 'gpt-4o'
+     *
+     * @return string
+     */
+    public function get_openai_model(): string {
+        if ( defined( 'OPENAI_MODEL' ) && OPENAI_MODEL !== '' ) {
+            return (string) OPENAI_MODEL;
+        }
+        return 'gpt-4o';
+    }
+
+    // =========================================================
     // 汎用設定取得
     // =========================================================
 

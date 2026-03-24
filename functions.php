@@ -822,6 +822,19 @@ if ( file_exists( $gcrev_gsc ) ) {
 }
 
 // ========================================
+// Step2.5: modules を読み込む（OpenAI Client / Report Prompt Builder）
+// ========================================
+$gcrev_openai_client     = $gcrev_modules_path . 'class-openai-client.php';
+$gcrev_report_prompt_bld = $gcrev_modules_path . 'class-report-prompt-builder.php';
+
+if ( file_exists( $gcrev_openai_client ) ) {
+    require_once $gcrev_openai_client;
+}
+if ( file_exists( $gcrev_report_prompt_bld ) ) {
+    require_once $gcrev_report_prompt_bld;
+}
+
+// ========================================
 // Step3: modules を読み込む（Repository / Generator）
 // ========================================
 $gcrev_repo = $gcrev_modules_path . 'class-report-repository.php';

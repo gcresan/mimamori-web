@@ -112,7 +112,20 @@ class Gcrev_Insight_API {
 
         // Step3: Report Repository / Generator
         $this->repo      = new Gcrev_Report_Repository($this->config);
-        $this->generator = new Gcrev_Report_Generator($this->config, $this->ai, $this->ga4, $this->repo);
+
+        // OpenAI Client（ChatGPT レポート生成用、設定済みの場合のみ）
+        $openai_client  = null;
+        $prompt_builder = null;
+        if ( $this->config->get_report_ai_provider() === 'openai'
+            && $this->config->get_openai_api_key() !== '' ) {
+            $openai_client  = new Gcrev_OpenAI_Client( $this->config );
+            $prompt_builder = new Gcrev_Report_Prompt_Builder();
+        }
+
+        $this->generator = new Gcrev_Report_Generator(
+            $this->config, $this->ai, $this->ga4, $this->repo,
+            $openai_client, $prompt_builder
+        );
 
         // Step4: Highlights（循環依存解消済み - Generator不要）
         $this->highlights_mod = new Gcrev_Highlights($this->config);
@@ -3287,10 +3300,17 @@ class Gcrev_Insight_API {
             'additional_notes'  => get_user_meta($user_id, 'report_additional_notes', true),
             'output_mode'       => get_user_meta($user_id, 'report_output_mode', true) ?: 'normal',
             'exclude_foreign'   => get_user_meta($user_id, 'report_exclude_foreign', true) === '1',
-            // ペルソナ情報
+            // 業種詳細・成長ステージ・CV定義
+            'industry_subcategory'   => $client['industry_subcategory'] ?? [],
+            'industry_detail'        => $client['industry_detail'] ?? '',
+            'stage'                  => $client['stage'] ?? '',
+            'main_conversions'       => $client['main_conversions'] ?? '',
+            // ペルソナ情報（全フィールド）
             'persona_one_liner'        => $client['persona_one_liner'] ?? '',
             'persona_detail_text'      => $client['persona_detail_text'] ?? '',
             'persona_age_ranges'       => $client['persona_age_ranges'] ?? [],
+            'persona_genders'          => $client['persona_genders'] ?? [],
+            'persona_attributes'       => $client['persona_attributes'] ?? [],
             'persona_decision_factors' => $client['persona_decision_factors'] ?? [],
             'persona_reference_urls'   => $client['persona_reference_urls'] ?? [],
         ];
@@ -3443,8 +3463,8 @@ class Gcrev_Insight_API {
                 $client_info['page_insights'] = $this->condense_page_insights_for_report( $pi );
             }
 
-            // セクション単位（既存Multi-pass）で "文章部" を生成
-            $sections_html = $this->generator->generate_report_multi_pass($prev_data, $two_data, $client_info, $target_area);
+            // セクション単位で "文章部" を生成（プロバイダ自動選択: ChatGPT or Gemini）
+            $sections_html = $this->generator->generate_report($prev_data, $two_data, $client_info, $target_area);
 
             // 最終HTML：sample_report.html のレイアウトに合わせて組み立て
             $report_html = $this->generator->build_sample_layout_report_html(
@@ -3483,6 +3503,14 @@ class Gcrev_Insight_API {
             // === 手動生成時も履歴保存 ===
             $highlights = $this->highlights_mod->extract_highlights_from_html($report_html, $user_id);
             $saved_post_id = $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown);
+
+            // === AI生成メタ情報保存 ===
+            if ( $saved_post_id > 0 ) {
+                $ai_meta = $this->generator->get_last_ai_meta();
+                if ( ! empty( $ai_meta ) ) {
+                    update_post_meta( $saved_post_id, '_gcrev_report_ai_meta', wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) );
+                }
+            }
 
             // === KPIスナップショット保存 ===
             if ( $saved_post_id > 0 ) {
@@ -3926,7 +3954,7 @@ class Gcrev_Insight_API {
                 $auto_client_settings = gcrev_get_client_settings( $user_id );
                 $auto_target_area = gcrev_detect_area_from_client_settings( $auto_client_settings );
 
-                $report_html = $this->generator->generate_report_multi_pass( $prev_data, $two_data, $client_info, $auto_target_area );
+                $report_html = $this->generator->generate_report( $prev_data, $two_data, $client_info, $auto_target_area );
 
                 // === 初心者向けモード：全文リライト（Markdown出力） ===
                 $auto_beginner_md = '';
@@ -3942,6 +3970,14 @@ class Gcrev_Insight_API {
                 // 保存（source=auto）
                 $highlights = $this->highlights_mod->extract_highlights_from_html( $report_html, $user_id );
                 $saved_post_id = $this->repo->save_report_to_history( $user_id, $report_html, $client_info, 'auto', null, $highlights, $auto_beginner_md );
+
+                // === AI生成メタ情報保存 ===
+                if ( $saved_post_id > 0 ) {
+                    $ai_meta = $this->generator->get_last_ai_meta();
+                    if ( ! empty( $ai_meta ) ) {
+                        update_post_meta( $saved_post_id, '_gcrev_report_ai_meta', wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) );
+                    }
+                }
 
                 // === KPIスナップショット保存 ===
                 if ( $saved_post_id > 0 ) {
@@ -4535,8 +4571,8 @@ class Gcrev_Insight_API {
                 $client_info['page_insights'] = $this->condense_page_insights_for_report( $pi );
             }
 
-            // レポートHTML生成
-            $sections_html = $this->generator->generate_report_multi_pass($prev_data, $two_data, $client_info, $target_area);
+            // レポートHTML生成（プロバイダ自動選択: ChatGPT or Gemini）
+            $sections_html = $this->generator->generate_report($prev_data, $two_data, $client_info, $target_area);
 
             // Key events取得
             $ga4_id = $config['ga4_id'];
@@ -4575,6 +4611,14 @@ class Gcrev_Insight_API {
             // 履歴保存
             $highlights = $this->highlights_mod->extract_highlights_from_html($report_html, $user_id);
             $saved_post_id = $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown2);
+
+            // === AI生成メタ情報保存 ===
+            if ( $saved_post_id > 0 ) {
+                $ai_meta = $this->generator->get_last_ai_meta();
+                if ( ! empty( $ai_meta ) ) {
+                    update_post_meta( $saved_post_id, '_gcrev_report_ai_meta', wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) );
+                }
+            }
 
             // === KPIスナップショット保存 ===
             if ( $saved_post_id > 0 ) {

@@ -19,11 +19,22 @@ class Gcrev_Report_Generator {
     private Gcrev_GA4_Fetcher       $ga4;
     private Gcrev_Report_Repository $repo;
 
+    /** @var ?Gcrev_OpenAI_Client ChatGPT 用クライアント（null = 未設定、Gemini のみ） */
+    private ?Gcrev_OpenAI_Client $openai;
+
+    /** @var ?Gcrev_Report_Prompt_Builder ChatGPT 用プロンプトビルダー */
+    private ?Gcrev_Report_Prompt_Builder $prompt_builder;
+
+    /** @var array 直近の generate_report() 実行で得られた AI メタ情報 */
+    private array $last_ai_meta = [];
+
     // ===== レポート・セクション生成設定 =====
     // 1回のGemini呼び出しで生成するセクション数の上限
     private const SECTIONS_PER_CALL    = 2;
     // セクション不完全時の最大リトライ回数（10→3 に削減: 暴走防止）
     private const MAX_SECTION_RETRIES  = 3;
+    // ChatGPT 単一パスのリトライ回数
+    private const CHATGPT_MAX_RETRIES  = 2;
 
     /**
      * セクション定義の順序と必須クラス
@@ -66,12 +77,200 @@ class Gcrev_Report_Generator {
         Gcrev_Config            $config,
         Gcrev_AI_Client         $ai,
         Gcrev_GA4_Fetcher       $ga4,
-        Gcrev_Report_Repository $repo
+        Gcrev_Report_Repository $repo,
+        ?Gcrev_OpenAI_Client         $openai = null,
+        ?Gcrev_Report_Prompt_Builder $prompt_builder = null
     ) {
-        $this->config = $config;
-        $this->ai     = $ai;
-        $this->ga4    = $ga4;
-        $this->repo   = $repo;
+        $this->config         = $config;
+        $this->ai             = $ai;
+        $this->ga4            = $ga4;
+        $this->repo           = $repo;
+        $this->openai         = $openai;
+        $this->prompt_builder = $prompt_builder;
+    }
+
+    /**
+     * 直近の generate_report() 実行で得られた AI メタ情報を返す
+     *
+     * @return array
+     */
+    public function get_last_ai_meta(): array {
+        return $this->last_ai_meta;
+    }
+
+    // =========================================================
+    // プロバイダ分岐ディスパッチャー
+    // =========================================================
+
+    /**
+     * レポートセクションHTMLを生成する（プロバイダ自動選択）
+     *
+     * 設定に応じて ChatGPT（単一パス JSON mode）または Gemini（マルチパス HTML）を使用。
+     * ChatGPT が失敗した場合は Gemini にフォールバックする。
+     *
+     * @param  array   $prev_data    前月データ
+     * @param  array   $two_data     前々月データ
+     * @param  array   $client_info  クライアント情報
+     * @param  ?string $target_area  ターゲットエリア（都道府県）
+     * @return string  セクション HTML
+     */
+    public function generate_report( array $prev_data, array $two_data, array $client_info, ?string $target_area = null ): string {
+
+        $provider = $this->config->get_report_ai_provider();
+
+        if ( $provider === 'openai' && $this->openai !== null && $this->prompt_builder !== null ) {
+            try {
+                $this->log( "[ReportGen] Using ChatGPT (OpenAI) provider" );
+                return $this->generate_report_chatgpt( $prev_data, $two_data, $client_info, $target_area );
+            } catch ( \Exception $e ) {
+                $this->log( "[ReportGen] ChatGPT failed, falling back to Gemini: " . $e->getMessage() );
+                // フォールバック: Gemini マルチパスで生成
+                $this->last_ai_meta = array_merge( $this->last_ai_meta, [
+                    'fallback_used' => true,
+                    'fallback_reason' => $e->getMessage(),
+                ] );
+            }
+        }
+
+        $this->log( "[ReportGen] Using Gemini (multi-pass) provider" );
+        $this->last_ai_meta = [
+            'provider' => 'gemini',
+            'model'    => $this->config->get_gemini_model(),
+            'method'   => 'multi_pass',
+        ];
+
+        return $this->generate_report_multi_pass( $prev_data, $two_data, $client_info, $target_area );
+    }
+
+    // =========================================================
+    // ChatGPT 単一パス生成
+    // =========================================================
+
+    /**
+     * ChatGPT で全セクションを単一パスで生成する（JSON mode）
+     *
+     * @param  array   $prev_data    前月データ
+     * @param  array   $two_data     前々月データ
+     * @param  array   $client_info  クライアント情報
+     * @param  ?string $target_area  ターゲットエリア
+     * @return string  セクション HTML
+     * @throws \Exception 生成失敗時
+     */
+    private function generate_report_chatgpt( array $prev_data, array $two_data, array $client_info, ?string $target_area = null ): string {
+
+        $output_mode  = $client_info['output_mode'] ?? 'normal';
+        $is_easy_mode = ( $output_mode === 'easy' );
+
+        // プロンプト構築
+        $system_prompt = $this->prompt_builder->build_system_prompt( $client_info, $is_easy_mode, $target_area );
+        $user_prompt   = $this->prompt_builder->build_user_prompt( $prev_data, $two_data, $client_info, $target_area, $this );
+
+        $this->log( sprintf(
+            '[ReportGen] ChatGPT prompt built: system_len=%d, user_len=%d, easy_mode=%s, target_area=%s',
+            mb_strlen( $system_prompt ),
+            mb_strlen( $user_prompt ),
+            $is_easy_mode ? 'true' : 'false',
+            $target_area ?? 'null'
+        ) );
+
+        // ペルソナ/設定情報の存在チェック（ログ用）
+        $has_persona = ! empty( $client_info['persona_detail_text'] ) || ! empty( $client_info['persona_one_liner'] );
+        $has_settings = ! empty( $client_info['industry'] ) || ! empty( $client_info['main_conversions'] );
+
+        $last_exception = null;
+        $retry_count = 0;
+
+        for ( $attempt = 0; $attempt <= self::CHATGPT_MAX_RETRIES; $attempt++ ) {
+            try {
+                $start_time = microtime( true );
+
+                $result = $this->openai->call_chat_api( $system_prompt, $user_prompt, [
+                    'temperature'     => 0.4,
+                    'max_tokens'      => 8192,
+                ] );
+
+                $elapsed = round( microtime( true ) - $start_time, 2 );
+
+                // JSON パース
+                $text = $result['text'];
+                // コードフェンスの除去（念のため）
+                $text = preg_replace( '/^```(?:json)?\s*/', '', $text );
+                $text = preg_replace( '/\s*```$/', '', $text );
+
+                $json = json_decode( $text, true );
+                if ( ! is_array( $json ) ) {
+                    throw new \Exception( 'ChatGPT のレスポンスが有効な JSON ではありません: ' . substr( $text, 0, 200 ) );
+                }
+
+                // バリデーション
+                $errors = $this->prompt_builder->validate_json_output( $json, $target_area );
+                if ( ! empty( $errors ) ) {
+                    $error_msg = implode( '; ', $errors );
+                    $this->log( "[ReportGen] JSON validation failed (attempt {$attempt}): {$error_msg}" );
+                    throw new \Exception( 'JSON バリデーションエラー: ' . $error_msg );
+                }
+
+                // JSON → HTML 変換
+                $section_html = $this->prompt_builder->json_to_section_html( $json, $is_easy_mode, $target_area );
+
+                // AI メタ情報を保存
+                $this->last_ai_meta = [
+                    'provider'            => 'openai',
+                    'model'               => $result['model'] ?? $this->config->get_openai_model(),
+                    'method'              => 'single_pass',
+                    'prompt_tokens'       => $result['prompt_tokens'] ?? 0,
+                    'completion_tokens'   => $result['completion_tokens'] ?? 0,
+                    'elapsed_seconds'     => $elapsed,
+                    'retry_count'         => $attempt,
+                    'fallback_used'       => false,
+                    'has_persona'         => $has_persona,
+                    'has_client_settings' => $has_settings,
+                    'finish_reason'       => $result['finish_reason'] ?? 'unknown',
+                ];
+
+                $this->log( sprintf(
+                    '[ReportGen] ChatGPT success: elapsed=%.1fs, tokens=%d+%d, retries=%d',
+                    $elapsed,
+                    $result['prompt_tokens'] ?? 0,
+                    $result['completion_tokens'] ?? 0,
+                    $attempt
+                ) );
+
+                return trim( $section_html );
+
+            } catch ( \Exception $e ) {
+                $last_exception = $e;
+                $retry_count = $attempt + 1;
+                $this->log( "[ReportGen] ChatGPT attempt {$attempt} failed: " . $e->getMessage() );
+
+                if ( $attempt < self::CHATGPT_MAX_RETRIES ) {
+                    sleep( 3 ); // 短いウェイト後にリトライ
+                }
+            }
+        }
+
+        // 全リトライ失敗
+        $this->last_ai_meta = [
+            'provider'     => 'openai',
+            'model'        => $this->config->get_openai_model(),
+            'method'       => 'single_pass',
+            'retry_count'  => $retry_count,
+            'error'        => $last_exception ? $last_exception->getMessage() : 'unknown',
+        ];
+
+        throw $last_exception ?? new \Exception( 'ChatGPT レポート生成に失敗しました（リトライ上限）' );
+    }
+
+    // =========================================================
+    // ログ出力ヘルパー
+    // =========================================================
+
+    private function log( string $message ): void {
+        file_put_contents(
+            '/tmp/gcrev_report_debug.log',
+            date( 'Y-m-d H:i:s' ) . ' ' . $message . "\n",
+            FILE_APPEND
+        );
     }
 
     // =========================================================
