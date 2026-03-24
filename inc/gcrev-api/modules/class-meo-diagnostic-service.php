@@ -299,6 +299,74 @@ class Gcrev_MEO_Diagnostic_Service {
     }
 
     private function collect_posts( int $user_id ): array {
+        // GBP API からGoogle上の実際の投稿を取得（90日以内をフィルタ）
+        $access_token = $this->api->gbp_get_access_token( $user_id );
+        if ( empty( $access_token ) ) {
+            $this->log( 'collect_posts: no access token, falling back to local DB' );
+            return $this->collect_posts_local( $user_id );
+        }
+
+        $account_name = $this->api->gbp_get_account_for_location( $user_id );
+        $location_id  = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( empty( $account_name ) || empty( $location_id ) || strpos( $location_id, 'pending_' ) === 0 ) {
+            $this->log( 'collect_posts: no GBP location, falling back to local DB' );
+            return $this->collect_posts_local( $user_id );
+        }
+
+        $url = "https://mybusiness.googleapis.com/v4/{$account_name}/{$location_id}/localPosts?pageSize=100";
+        $this->log( "collect_posts: fetching url={$url}" );
+
+        $response = wp_remote_get( $url, [
+            'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+            'timeout' => 20,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            $this->log( 'collect_posts API WP_Error: ' . $response->get_error_message() );
+            return $this->collect_posts_local( $user_id );
+        }
+
+        $status   = wp_remote_retrieve_response_code( $response );
+        $raw_body = wp_remote_retrieve_body( $response );
+
+        if ( $status !== 200 ) {
+            $this->log( "collect_posts API HTTP {$status}: " . substr( $raw_body, 0, 500 ) );
+            return $this->collect_posts_local( $user_id );
+        }
+
+        $body  = json_decode( $raw_body, true );
+        $posts = $body['localPosts'] ?? [];
+        $this->log( 'collect_posts: GBP returned ' . count( $posts ) . ' posts' );
+
+        // 90日以内のLIVE投稿のみ抽出し、統一フォーマットに変換
+        $cutoff = ( new \DateTimeImmutable( '-90 days', wp_timezone() ) )->format( 'Y-m-d\TH:i:s' );
+        $result = [];
+        foreach ( $posts as $gp ) {
+            $state       = $gp['state'] ?? 'LIVE';
+            $create_time = $gp['createTime'] ?? '';
+            if ( $state !== 'LIVE' || $create_time < $cutoff ) {
+                continue;
+            }
+            $media_url = $gp['media'][0]['googleUrl'] ?? ( $gp['media'][0]['sourceUrl'] ?? '' );
+            $result[] = [
+                'status'     => 'posted',  // GBP上の投稿 = posted
+                'summary'    => $gp['summary'] ?? '',
+                'title'      => $gp['event']['title'] ?? '',
+                'image_url'  => $media_url,
+                'posted_at'  => $create_time,
+                'created_at' => $create_time,
+                'source'     => 'gbp_api',
+            ];
+        }
+
+        $this->log( 'collect_posts: ' . count( $result ) . ' posts within 90 days' );
+        return $result;
+    }
+
+    /**
+     * ローカルDB（みまもりウェブ内投稿）からのフォールバック取得
+     */
+    private function collect_posts_local( int $user_id ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_gbp_posts';
 
