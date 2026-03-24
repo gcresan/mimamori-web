@@ -419,6 +419,10 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             c.style.display = c.id === 'tab-' + tabId ? '' : 'none';
         });
         history.replaceState(null, '', '#' + tabId);
+        // レビュータブに切り替えた際にデータを再取得
+        if (tabId === 'review') {
+            document.dispatchEvent(new CustomEvent('gcrev:goalSettingsChanged'));
+        }
     }
 
     tabs.forEach(function(t) {
@@ -926,6 +930,11 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
 
     // Init
     document.addEventListener('DOMContentLoaded', init);
+
+    // ゴール設定変更時にレビューデータを再取得
+    document.addEventListener('gcrev:goalSettingsChanged', function() {
+        loadData();
+    });
 })();
 
 // ===== Tab 2: ゴールの数え方設定 =====
@@ -1331,6 +1340,8 @@ document.getElementById('btn-save-cv-routes')?.addEventListener('click', async f
             btn.textContent = '保存完了';
             markCvSettingsClean('btn-save-cv-routes');
             await initCvRoutesUI();
+            // ゴール確認タブのデータも再取得させる
+            document.dispatchEvent(new CustomEvent('gcrev:goalSettingsChanged'));
             setTimeout(function() { btn.textContent = origText; }, 1500);
         } else {
             btn.textContent = (json.message || '保存失敗');
