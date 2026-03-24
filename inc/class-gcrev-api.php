@@ -14516,7 +14516,7 @@ PROMPT;
             $raw_response = $this->ai->call_gemini_api($prompt, [
                 'temperature'     => 0.9,
                 'topP'            => 0.95,
-                'maxOutputTokens' => 2048,
+                'maxOutputTokens' => 4096,
             ]);
 
             // JSONパース
@@ -15513,7 +15513,7 @@ PROMPT;
             $raw_response = $this->ai->call_gemini_api($prompt, [
                 'temperature'     => 0.9,
                 'topP'            => 0.95,
-                'maxOutputTokens' => 2048,
+                'maxOutputTokens' => 4096,
             ]);
             $parsed = $this->parse_review_response($raw_response);
 
