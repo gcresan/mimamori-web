@@ -3067,7 +3067,9 @@ class Gcrev_Insight_API {
         // コンテキスト情報の組み立て
         $industry_category    = sanitize_text_field($context['industry_category'] ?? '');
         $industry_subcategory = $context['industry_subcategory'] ?? [];
+        $industry_sub_labels  = $context['industry_subcategory_labels'] ?? [];
         $industry_label       = sanitize_text_field($context['industry_label'] ?? '');
+        $industry_detail      = sanitize_text_field($context['industry_detail'] ?? '');
         $age_ranges           = $context['persona_age_ranges'] ?? [];
         $genders              = $context['persona_genders'] ?? [];
         $attributes           = $context['persona_attributes'] ?? [];
@@ -3075,6 +3077,22 @@ class Gcrev_Insight_API {
         $one_liner            = sanitize_text_field($context['persona_one_liner'] ?? '');
         $ref_urls             = $context['reference_urls'] ?? [];
         $extra                = $context['extra'] ?? [];
+
+        // 業種詳細: リクエストに含まれていなければ保存済みuser metaをフォールバック
+        if (empty($industry_detail)) {
+            $industry_detail = sanitize_text_field(get_user_meta($user_id, 'gcrev_client_industry_detail', true) ?: '');
+        }
+        // 業態ラベル: リクエストに含まれていなければ保存済みuser metaから解決
+        if (empty($industry_sub_labels) && !empty($industry_subcategory)) {
+            $master = gcrev_get_industry_master();
+            $subs_map = $master[$industry_category]['subcategories'] ?? [];
+            foreach ($industry_subcategory as $sv) {
+                $sv = sanitize_text_field($sv);
+                if (isset($subs_map[$sv])) {
+                    $industry_sub_labels[] = $subs_map[$sv];
+                }
+            }
+        }
 
         // プロンプト構築
         $prompt_parts = [];
@@ -3084,7 +3102,14 @@ class Gcrev_Insight_API {
 
         // 業種・業態
         if ($industry_label) {
-            $prompt_parts[] = "【業種・業態】" . $industry_label;
+            $industry_line = $industry_label;
+            if (!empty($industry_sub_labels)) {
+                $industry_line .= '（' . implode('、', array_map('sanitize_text_field', $industry_sub_labels)) . '）';
+            }
+            $prompt_parts[] = "【業種・業態】" . $industry_line;
+        }
+        if ($industry_detail) {
+            $prompt_parts[] = "【業種の詳細・特徴】" . $industry_detail;
         }
 
         // 簡易ペルソナ情報
@@ -3168,8 +3193,9 @@ class Gcrev_Insight_API {
         $prompt_parts[] = "";
         $prompt_parts[] = "---";
         $prompt_parts[] = "以下のフォーマットで、800〜1600字程度の詳細ペルソナを出力してください。";
-        $prompt_parts[] = "テンプレート的な表現は避け、この業種・条件に固有の具体的な人物像を描写してください。";
-        $prompt_parts[] = "特に「対応エリア」が指定されている場合は、その地域に住んでいる、またはその地域でサービスを探している人物として、地域特有の生活環境・交通事情・地名などを具体的に反映してください。";
+        $prompt_parts[] = "テンプレート的な表現は避け、この業種・業態・詳細情報に固有の具体的な人物像を描写してください。";
+        $prompt_parts[] = "業種・業態・詳細が指定されている場合は、その業界特有のサービス内容・顧客ニーズ・来店動機・不安要素を具体的に反映してください。";
+        $prompt_parts[] = "「対応エリア」が指定されている場合は、その地域に住んでいる、またはその地域でサービスを探している人物として、地域特有の生活環境・交通事情・地名などを具体的に反映してください。";
         $prompt_parts[] = "";
         $prompt_parts[] = "■ 基本プロフィール";
         $prompt_parts[] = "年齢・性別・職業・家族構成・居住エリア（対応エリアが指定されている場合はその地域内の具体的な地名を使用）など";

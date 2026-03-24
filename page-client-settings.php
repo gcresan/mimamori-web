@@ -1410,10 +1410,23 @@ get_header();
                         ? categorySelect.options[categorySelect.selectedIndex].text : '';
         if (indLabel === '選択してください') indLabel = '';
 
+        // 業態（小分類）ラベル収集
+        var subLabels = [];
+        subcategoryGrid.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
+            var lbl = cb.closest('label');
+            if (lbl) { var t = lbl.textContent.trim(); if (t) subLabels.push(t); }
+        });
+        var indDetail = document.getElementById('cs-industry-detail').value.trim();
+
         var areaText = buildAreaText();
 
         var html = '<dl>';
-        if (indLabel) html += '<dt>業種・業態</dt><dd>' + escH(indLabel) + '</dd>';
+        if (indLabel) {
+            var indDisplay = indLabel;
+            if (subLabels.length) indDisplay += '（' + subLabels.join('、') + '）';
+            if (indDetail) indDisplay += ' — ' + indDetail;
+            html += '<dt>業種・業態</dt><dd>' + escH(indDisplay) + '</dd>';
+        }
         if (areaText) html += '<dt>主な商圏</dt><dd>' + escH(areaText) + '</dd>';
         if (ages.length)      html += '<dt>想定年齢層</dt><dd>' + valuesToLabels(ages, ageLabels).join(', ') + '</dd>';
         if (genders.length)   html += '<dt>想定性別</dt><dd>' + valuesToLabels(genders, genderLabels).join(', ') + '</dd>';
@@ -1471,13 +1484,21 @@ get_header();
 
         var indCat = categorySelect.value;
         var indSub = [];
+        var indSubLabels = [];
         subcategoryGrid.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
             indSub.push(cb.value);
+            // チェックボックスの親labelからテキストを取得
+            var lbl = cb.closest('label');
+            if (lbl) {
+                var txt = lbl.textContent.trim();
+                if (txt) indSubLabels.push(txt);
+            }
         });
         var indLabel = '';
         if (categorySelect.selectedIndex > 0) {
             indLabel = categorySelect.options[categorySelect.selectedIndex].text;
         }
+        var indDetail = document.getElementById('cs-industry-detail').value.trim();
 
         var refs = collectRefUrls();
 
@@ -1485,7 +1506,9 @@ get_header();
             context: {
                 industry_category:    indCat,
                 industry_subcategory: indSub,
+                industry_subcategory_labels: indSubLabels,
                 industry_label:       indLabel,
+                industry_detail:      indDetail,
                 persona_age_ranges:       valuesToLabels(ages, ageLabels),
                 persona_genders:          valuesToLabels(genders, genderLabels),
                 persona_attributes:       valuesToLabels(attrs, attrLabels),
