@@ -129,7 +129,7 @@ $profile_guide_texts = [
     'btn_write_review' => '設定が終わったら口コミを書く',
     'btn_skip_guide'   => '設定せずに口コミを書く',
 ];
-$flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
+$flow_image_url = content_url('/uploads/flow.jpg');
 ?>
 <!DOCTYPE html>
 <html lang="ja">
