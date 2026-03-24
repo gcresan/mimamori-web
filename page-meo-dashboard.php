@@ -624,7 +624,7 @@ get_header();
                     </div>
                 </div>
                 <div style="display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 220px;">
-                    <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: #4E8A6B; flex-shrink: 0; margin-top: 3px;"></span>
+                    <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: #E8964D; flex-shrink: 0; margin-top: 3px;"></span>
                     <div>
                         <div style="font-size: 13px; font-weight: 700; color: #2C3E40; margin-bottom: 2px;">マップでの表示</div>
                         <div style="font-size: 12px; color: #777; line-height: 1.6;">Googleマップであなたのビジネス情報が表示された回数です。<br>マップ上で周辺を探している人に、お店や会社の情報が表示された回数を表します。</div>
@@ -955,8 +955,8 @@ get_header();
                     {
                         label: 'マップでの表示',
                         data: mapData,
-                        borderColor: '#4E8A6B',
-                        backgroundColor: 'rgba(78,138,107,0.12)',
+                        borderColor: '#E8964D',
+                        backgroundColor: 'rgba(232,150,77,0.12)',
                         fill: true, tension: 0.3, pointRadius: 2
                     }
                 ]
