@@ -586,7 +586,7 @@ get_header();
 .pa-ai-notice-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
 .pa-ai-notice strong { font-weight: 700; }
 .pa-ai-section { margin-bottom: 24px; }
-.pa-ai-section h4 {
+.pa-ai-section > h4 {
     font-size: 15px;
     font-weight: 700;
     color: #1e293b;
@@ -594,13 +594,33 @@ get_header();
     padding-bottom: 6px;
     border-bottom: 1px solid #e2e8f0;
 }
-/* AI本文の見出し・太字強化 */
-.pa-ai-body { line-height: 1.85; font-size: 14px; color: #333; }
-.pa-ai-body h5 { font-size: 14px; font-weight: 700; color: #1e293b; margin: 20px 0 8px; }
+/* AI本文 全体 */
+.pa-ai-body { line-height: 1.75; font-size: 14px; color: #333; }
 .pa-ai-body strong { font-weight: 700; color: #1e293b; }
-.pa-ai-body p { margin: 0 0 12px; }
-.pa-ai-body ul, .pa-ai-body ol { margin: 0 0 12px; padding-left: 20px; }
-.pa-ai-body li { margin-bottom: 4px; }
+.pa-ai-body p { margin: 0 0 10px; }
+.pa-ai-body ul, .pa-ai-body ol { margin: 0 0 10px; padding-left: 20px; }
+.pa-ai-body li { margin-bottom: 3px; }
+/* セクションブロック（## 見出しの塊） */
+.pa-ai-block { margin-bottom: 20px; padding: 14px 16px; border-radius: 8px; border: 1px solid #e9ecef; background: #fff; }
+.pa-ai-block:last-child { margin-bottom: 0; }
+.pa-ai-block-title {
+    font-size: 14px; font-weight: 700; color: #fff;
+    margin: -14px -16px 12px; padding: 8px 16px;
+    border-radius: 8px 8px 0 0; display: flex; align-items: center; gap: 6px;
+}
+.pa-ai-block--flow .pa-ai-block-title { background: #568184; }
+.pa-ai-block--good .pa-ai-block-title { background: #2d9f6f; }
+.pa-ai-block--status .pa-ai-block-title { background: #4a7fb5; }
+.pa-ai-block--improve .pa-ai-block-title { background: #c57525; }
+/* 各項目カード（### 小見出しの塊） */
+.pa-ai-item { margin-bottom: 12px; padding: 10px 12px; border-radius: 6px; background: #f8f9fa; border-left: 3px solid #cbd5e1; }
+.pa-ai-item:last-child { margin-bottom: 0; }
+.pa-ai-block--good .pa-ai-item { border-left-color: #34d399; background: #f0fdf4; }
+.pa-ai-block--improve .pa-ai-item { border-left-color: #f59e0b; background: #fffbeb; }
+.pa-ai-item-title { font-size: 13px; font-weight: 700; color: #1e293b; margin: 0 0 4px; }
+.pa-ai-item p { margin: 0; font-size: 13px; line-height: 1.7; color: #4a5568; }
+.pa-ai-item ul, .pa-ai-item ol { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+.pa-ai-item li { margin-bottom: 2px; color: #4a5568; }
 .pa-behavior-note { font-size: 12px; color: #94a3b8; margin: 0 0 14px; }
 .pa-behavior-header {
     display: flex; justify-content: space-between; align-items: center;
@@ -1343,33 +1363,111 @@ get_header();
         }
     }
 
-    // AI改善案テキストを見やすく整形（##見出しをHTML化）
+    // AI改善案テキストをセクション・アイテム構造に整形
     function formatAiText(text) {
         if (!text) return '';
-        var html = escHtml(text);
-        // ## 見出し → h5太字
-        html = html.replace(/^## (.+)$/gm, '</p><h5>$1</h5><p>');
-        // ### 小見出し → 太字
-        html = html.replace(/^### (.+)$/gm, '</p><h5 style="font-size:13px;">$1</h5><p>');
-        // **太字** → <strong>
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        // * 箇条書き → リスト（簡易）
-        html = html.replace(/(?:^|\n)\* (.+)/g, function(m, item) {
-            return '\n<li>' + item + '</li>';
-        });
-        // 連続<li>をulで囲む
-        html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>');
-        // 番号付きリスト
-        html = html.replace(/(?:^|\n)(\d+)\. (.+)/g, function(m, num, item) {
-            return '\n<li>' + item + '</li>';
-        });
-        // 改行 → <br>（ただしタグ直後は除く）
-        html = html.replace(/\n/g, '<br>');
-        // 空の<p>タグ除去
-        html = html.replace(/<p><\/p>/g, '').replace(/<br><br>/g, '<br>');
-        // 先頭に<p>がなければ追加
-        if (html.charAt(0) !== '<') html = '<p>' + html;
+
+        // セクション種別→CSS・アイコン対応
+        var sectionMap = {
+            '流入背景': { cls: 'flow', icon: '&#128200;' },
+            '良かった点': { cls: 'good', icon: '&#9989;' },
+            '現状の見立て': { cls: 'status', icon: '&#128202;' },
+            '改善提案': { cls: 'improve', icon: '&#128161;' },
+        };
+
+        var lines = text.split('\n');
+        var blocks = []; // [{title, cls, icon, items:[{title?,lines:[]}]}]
+        var curBlock = null;
+        var curItem = null;
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            // ## セクション見出し
+            var secMatch = line.match(/^##\s+(.+)$/);
+            if (secMatch) {
+                var secTitle = secMatch[1].replace(/\*\*/g, '');
+                var meta = sectionMap[secTitle] || { cls: 'status', icon: '&#128196;' };
+                curBlock = { title: secTitle, cls: meta.cls, icon: meta.icon, items: [] };
+                curItem = null;
+                blocks.push(curBlock);
+                continue;
+            }
+            // ### 項目見出し
+            var itemMatch = line.match(/^###\s+(.+)$/);
+            if (itemMatch) {
+                curItem = { title: itemMatch[1].replace(/\*\*/g, ''), lines: [] };
+                if (curBlock) curBlock.items.push(curItem);
+                continue;
+            }
+            // 通常行
+            if (line.trim() === '') continue;
+            if (curItem) {
+                curItem.lines.push(line);
+            } else if (curBlock) {
+                // セクション直下の本文（項目なし）
+                if (!curBlock._directLines) curBlock._directLines = [];
+                curBlock._directLines.push(line);
+            }
+        }
+
+        // HTML生成
+        var out = '';
+        for (var b = 0; b < blocks.length; b++) {
+            var bl = blocks[b];
+            out += '<div class="pa-ai-block pa-ai-block--' + bl.cls + '">';
+            out += '<div class="pa-ai-block-title">' + bl.icon + ' ' + escHtml(bl.title) + '</div>';
+
+            // セクション直下本文
+            if (bl._directLines && bl._directLines.length) {
+                out += '<div style="margin-bottom:8px;">';
+                out += formatLines(bl._directLines);
+                out += '</div>';
+            }
+
+            // 各項目
+            for (var it = 0; it < bl.items.length; it++) {
+                var item = bl.items[it];
+                out += '<div class="pa-ai-item">';
+                out += '<div class="pa-ai-item-title">' + formatInline(escHtml(item.title)) + '</div>';
+                if (item.lines.length) {
+                    out += formatLines(item.lines);
+                }
+                out += '</div>';
+            }
+            out += '</div>';
+        }
+
+        // どのセクションにも属さないテキスト（冒頭等）
+        if (blocks.length === 0) {
+            out = '<p>' + formatInline(escHtml(text)).replace(/\n/g, '<br>') + '</p>';
+        }
+
+        return out;
+    }
+
+    // 行配列をHTMLに（箇条書き・段落対応）
+    function formatLines(lines) {
+        var html = '';
+        var inList = false;
+        for (var i = 0; i < lines.length; i++) {
+            var ln = lines[i];
+            var bulletMatch = ln.match(/^\* (.+)/);
+            var numMatch = ln.match(/^\d+\.\s+(.+)/);
+            if (bulletMatch || numMatch) {
+                if (!inList) { html += '<ul>'; inList = true; }
+                html += '<li>' + formatInline(escHtml(bulletMatch ? bulletMatch[1] : numMatch[1])) + '</li>';
+            } else {
+                if (inList) { html += '</ul>'; inList = false; }
+                html += '<p>' + formatInline(escHtml(ln)) + '</p>';
+            }
+        }
+        if (inList) html += '</ul>';
         return html;
+    }
+
+    // インラインマークダウン（太字）
+    function formatInline(s) {
+        return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     }
 
     // 自動生成: パネルオープン時にバックグラウンドで実行
