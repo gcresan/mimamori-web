@@ -658,6 +658,12 @@ get_header();
     background: #3b82f6; border-radius: 1px;
 }
 
+/* アップロード・ローディングオーバーレイ: 詳細パネル(z-index:10000)より上に表示 */
+#uploadOverlay,
+#loadingOverlay {
+    z-index: 10100;
+}
+
 /* アップロード進捗バー */
 .pa-progress-bar {
     width: 100%;
