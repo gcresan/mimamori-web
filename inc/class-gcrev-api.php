@@ -1726,6 +1726,7 @@ class Gcrev_Insight_API {
 
             // --- (3) KPIトレンド（過去12ヶ月推移）キャッシュ ---
             $trend_filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $trend_filter_sfx .= '_ex'; }
             foreach (['sessions', 'cv', 'meo'] as $trend_metric) {
                 $trend_cache_key = "gcrev_trend_{$user_id}_{$trend_metric}_" . date('Y-m') . $trend_filter_sfx;
                 if (get_transient($trend_cache_key) !== false) {
@@ -1978,6 +1979,7 @@ class Gcrev_Insight_API {
 
             // --- (3) KPIトレンド ---
             $trend_filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $trend_filter_sfx .= '_ex'; }
             foreach ( ['sessions', 'cv', 'meo'] as $trend_metric ) {
                 $trend_cache_key = "gcrev_trend_{$user_id}_{$trend_metric}_" . date( 'Y-m' ) . $trend_filter_sfx;
                 if ( get_transient( $trend_cache_key ) !== false ) {
@@ -2113,6 +2115,7 @@ class Gcrev_Insight_API {
 
         // フィルタサフィックス（REST エンドポイントと同じキー形式にする）
         $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+        if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
 
         // source 用の period 正規化（get_source_analysis は previousMonth/twoMonthsAgo を期待）
         $source_period = $period;
@@ -5126,6 +5129,7 @@ PROMPT;
 
             // キャッシュ
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
             $cache_key = "gcrev_region_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
 
             file_put_contents('/tmp/gcrev_dash_debug.log',
@@ -5262,6 +5266,7 @@ PROMPT;
 
             // キャッシュ
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
             $cache_key = "gcrev_page_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
@@ -7148,6 +7153,7 @@ PROMPT;
         
         // キャッシュキー
         $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+        if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
         $cache_key = "gcrev_source_{$user_id}_{$period}_" . md5("{$start_date}_{$end_date}") . $filter_sfx;
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
@@ -10482,6 +10488,7 @@ PROMPT;
 
             // キャッシュ
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
             $cache_key = "gcrev_cv_analysis_{$user_id}_{$period}_" . md5("{$start}_{$end}") . $filter_sfx;
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
@@ -10987,6 +10994,7 @@ PROMPT;
             // キャッシュ（24時間）— metric ごとに分離
             // v5: ページラベル絶対URL化に伴い旧キャッシュ無効化
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
             $cache_key = "gcrev_dd6_{$user_id}_{$month}_{$type}_{$metric}{$filter_sfx}";
             $cached = get_transient( $cache_key );
             if ( $cached !== false && is_array( $cached ) ) {
@@ -11152,6 +11160,7 @@ PROMPT;
         // キャッシュ（cronが毎日更新するため24時間）
         $current_month = date('Y-m');
         $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+        if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
         $cache_key = "gcrev_trend_{$user_id}_{$metric}_{$current_month}{$filter_sfx}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
@@ -11263,6 +11272,7 @@ PROMPT;
 
         $today_str = date('Y-m-d');
         $filter_sfx = (isset($this->ga4) && $this->ga4->has_country_filter()) ? '_jp' : '';
+        if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
         $cache_key = "gcrev_trend_daily_{$user_id}_{$metric}_{$today_str}{$filter_sfx}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
