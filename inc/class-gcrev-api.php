@@ -3375,7 +3375,14 @@ class Gcrev_Insight_API {
                 ];
                 error_log("[GCREV] generate_report: effective_cv source={$eff['source']}, total={$eff['total']}");
             }
-            // セクション単位（既存Multi-pass）で “文章部” を生成
+
+            // ページ改善分析データ取得 → client_info に注入
+            $pi = $this->get_page_improvement_summary( $user_id, [ 'limit' => 5, 'full_summary' => true ] );
+            if ( ! empty( $pi['pages'] ) ) {
+                $client_info['page_insights'] = $this->condense_page_insights_for_report( $pi );
+            }
+
+            // セクション単位（既存Multi-pass）で "文章部" を生成
             $sections_html = $this->generator->generate_report_multi_pass($prev_data, $two_data, $client_info, $target_area);
 
             // 最終HTML：sample_report.html のレイアウトに合わせて組み立て
@@ -3847,6 +3854,12 @@ class Gcrev_Insight_API {
                     'detail'     => $eff_auto['breakdown_manual'] ?? [],
                     'components' => $eff_auto['components'],
                 ];
+
+                // ページ改善分析データ取得 → client_info に注入
+                $pi_auto = $this->get_page_improvement_summary( $user_id, [ 'limit' => 5, 'full_summary' => true ] );
+                if ( ! empty( $pi_auto['pages'] ) ) {
+                    $client_info['page_insights'] = $this->condense_page_insights_for_report( $pi_auto );
+                }
 
                 // ターゲットエリア判定（クライアント設定から）
                 $auto_client_settings = gcrev_get_client_settings( $user_id );
@@ -4440,6 +4453,12 @@ class Gcrev_Insight_API {
                     'daily'      => $eff['daily'],
                 ];
                 error_log("[GCREV] generate_monthly_report_manual: effective_cv source={$eff['source']}, total={$eff['total']}");
+            }
+
+            // ページ改善分析データ取得 → client_info に注入
+            $pi = $this->get_page_improvement_summary( $user_id, [ 'limit' => 5, 'full_summary' => true ] );
+            if ( ! empty( $pi['pages'] ) ) {
+                $client_info['page_insights'] = $this->condense_page_insights_for_report( $pi );
             }
 
             // レポートHTML生成
@@ -8801,7 +8820,25 @@ CV情報（GA4+手動ハイブリッド）:
   ※一部のキーイベントは手動入力値で上書きされています。
 CVNOTE;
         }
-        
+
+        // ページ改善知見の補足テキスト生成
+        $page_insights_note = '';
+        if ( $page_insights && ( $page_insights['status'] ?? '' ) === 'ok' && ! empty( $page_insights['pages'] ) ) {
+            $pi_lines = [];
+            foreach ( $page_insights['pages'] as $pi ) {
+                $t = $pi['page_title'] ?: $pi['page_url'];
+                $ex = $pi['ai_excerpt'] ? mb_substr( $pi['ai_excerpt'], 0, 80, 'UTF-8' ) . '...' : '';
+                $beh = [];
+                foreach ( ( $pi['behavior_summary'] ?? [] ) as $bs ) {
+                    $beh[] = "{$bs['device']}:{$bs['sessions']}件" . ( $bs['scroll_depth'] ? ",深度{$bs['scroll_depth']}" : '' );
+                }
+                $pi_lines[] = "  - {$t}" . ( $beh ? ' [' . implode( '/', $beh ) . ']' : '' ) . ( $ex ? " => {$ex}" : '' );
+            }
+            $page_insights_note = "\nページ改善分析の知見:\n" . implode( "\n", $pi_lines ) . "\n"
+                . "  *summaryにページ訴求やCTAの知見を自然に1文織り込むこと\n"
+                . "  *actionにはページ改善の最優先アクションを反映すること\n";
+        }
+
         $prompt = <<<PROMPT
 あなたは日本の中小企業向けWeb解析アドバイザーです。
 以下のデータに基づき、JSONのみを出力してください。説明文は一切不要です。
@@ -8820,18 +8857,20 @@ CVNOTE;
 クライアント目標: {$goal_main}
 重点数値: {$focus_numbers}
 現状の課題: {$issue}
-
+{$page_insights_note}
 出力するJSON（このフォーマット厳守）:
 {
-  "summary": "サイトの現状を2文以内で説明。専門用語禁止。初心者向け。全角80文字以内。「今月は」で始めず自然な書き出しにする。",
-  "action": "全角13文字以内。体言止め。アイコン・記号・句読点なし。単体で意味が通るネクストアクション1つ"
+  "summary": "サイトの現状を2-3文で説明。数値傾向に加え、ページの訴求やCTA導線の知見も自然に1文入れる。専門用語禁止。初心者向け。全角120文字以内。自然な書き出しにする。",
+  "action": "全角15文字以内。体言止め。記号なし。ページ改善知見を踏まえた具体的なネクストアクション1つ"
 }
 
 ルール:
 - JSON以外を出力しない（コードブロック記号も不要）
-- summaryは全角80文字以内、2文まで
-- actionは全角13文字以内、体言止め、記号なし
+- summaryは全角120文字以内、2-3文
+- summaryでは数値だけの薄い要約にせず、ページ内容や訴求の知見も反映する
+- actionは全角15文字以内、体言止め、記号なし
 - scoreやstatusは出力しない（PHP側で計算済み）
+- ページ改善知見がない場合は数値ベースで生成してよい
 PROMPT;
 
         // AIクライアント呼び出し
@@ -9936,6 +9975,13 @@ PROMPT;
         if (function_exists('gcrev_invalidate_user_cv_cache')) {
             gcrev_invalidate_user_cv_cache($user_id);
         }
+        // CVレビューキャッシュもクリア（ゴール設定変更で対象イベントが変わるため）
+        $like_cvr         = $wpdb->esc_like("_transient_gcrev_cvreview_{$user_id}_") . '%';
+        $like_cvr_timeout = $wpdb->esc_like("_transient_timeout_gcrev_cvreview_{$user_id}_") . '%';
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $like_cvr, $like_cvr_timeout
+        ));
 
         if (!empty($errors)) {
             return new WP_REST_Response([
@@ -18690,7 +18736,8 @@ PROMPT;
     public function get_page_improvement_summary( int $user_id, array $args = [] ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_page_analysis';
-        $limit = isset( $args['limit'] ) ? absint( $args['limit'] ) : 5;
+        $limit        = isset( $args['limit'] ) ? absint( $args['limit'] ) : 5;
+        $full_summary = ! empty( $args['full_summary'] );
 
         // 分析済みページを優先度順に取得（AI改善案がある → Clarityデータがある → 画像がある）
         $pages = $wpdb->get_results( $wpdb->prepare(
@@ -18742,10 +18789,12 @@ PROMPT;
                 }
             }
 
-            // AI改善案の要約（先頭200文字）
+            // AI改善案の要約
             $ai_excerpt = '';
             if ( $page['ai_summary'] ) {
-                $ai_excerpt = mb_substr( strip_tags( $page['ai_summary'] ), 0, 200, 'UTF-8' );
+                // full_summary: レポート用セクション別パースのため全文（2000文字上限）
+                $max_len    = $full_summary ? 2000 : 200;
+                $ai_excerpt = mb_substr( strip_tags( $page['ai_summary'] ), 0, $max_len, 'UTF-8' );
             }
 
             $result_pages[] = [
@@ -18777,6 +18826,147 @@ PROMPT;
             'period_note' => $latest_sync ? "Clarity最終同期: {$latest_sync}" : '',
             // TODO: 将来ここに改善優先度サマリーを追加
         ];
+    }
+
+    /* =========================================================================
+     * ページ改善データ → 月次レポート用ヘルパー群
+     * ========================================================================= */
+
+    /**
+     * ページ改善データを月次レポート用に圧縮・構造化する
+     *
+     * get_page_improvement_summary() の結果をスコアリング → 上位3ページに絞り
+     * AI所見のセクション別パース・信頼度判定を付与して返す。
+     */
+    public function condense_page_insights_for_report( array $page_summary ): array {
+        $pages = $page_summary['pages'] ?? [];
+        if ( empty( $pages ) ) {
+            return [ 'available' => false ];
+        }
+
+        // 優先度順にソート → 上位3ページ
+        $scored   = $this->score_pages_for_report( $pages );
+        $selected = array_slice( $scored, 0, 3 );
+
+        $condensed = [];
+        foreach ( $selected as $p ) {
+            $entry = [
+                'title'   => $p['page_title']   ?? '',
+                'url'     => $p['page_url']      ?? '',
+                'type'    => $p['page_type']     ?? 'other',
+                'purpose' => $p['page_purpose']  ?? '',
+            ];
+
+            // AI所見をセクション別にパース
+            if ( ! empty( $p['has_ai_summary'] ) && ! empty( $p['ai_excerpt'] ) ) {
+                $entry['insights'] = $this->parse_ai_summary_sections( $p['ai_excerpt'] );
+            }
+
+            // Clarity 行動サマリー
+            if ( ! empty( $p['behavior_summary'] ) ) {
+                $entry['behavior'] = $p['behavior_summary'];
+            }
+
+            // データ信頼度（セッション数ベース）
+            $total_sessions = 0;
+            foreach ( $p['behavior_summary'] ?? [] as $bs ) {
+                $total_sessions += (int) ( $bs['sessions'] ?? 0 );
+            }
+            if ( $total_sessions >= 100 ) {
+                $entry['reliability'] = 'sufficient';
+            } elseif ( $total_sessions >= 20 ) {
+                $entry['reliability'] = 'reference';
+            } else {
+                $entry['reliability'] = 'hypothesis';
+            }
+
+            $entry['analysis_date'] = $p['ai_analysis_date'] ?? '';
+            $condensed[] = $entry;
+        }
+
+        return [
+            'available'   => true,
+            'pages'       => $condensed,
+            'period_note' => $page_summary['period_note'] ?? '',
+            'note'        => $page_summary['note'] ?? '',
+        ];
+    }
+
+    /**
+     * レポート用ページ優先度スコアリング
+     *
+     * トップページ > AI分析済み > CV関連 > 高トラフィック > 分析鮮度 の順で加点。
+     */
+    private function score_pages_for_report( array $pages ): array {
+        foreach ( $pages as &$p ) {
+            $score = 0;
+            $type  = $p['page_type'] ?? 'other';
+
+            if ( $type === 'top' )                                      $score += 100;
+            if ( ! empty( $p['has_ai_summary'] ) )                      $score += 50;
+            if ( in_array( $type, [ 'contact', 'lp', 'landing' ], true ) ) $score += 30;
+
+            // セッション数（Clarity行動データの豊富さ）
+            $sessions = 0;
+            foreach ( $p['behavior_summary'] ?? [] as $bs ) {
+                $sessions += (int) ( $bs['sessions'] ?? 0 );
+            }
+            $score += min( $sessions, 50 );
+
+            // 分析鮮度（30日以内なら加点）
+            if ( ! empty( $p['ai_analysis_date'] ) ) {
+                $days_ago = ( time() - strtotime( $p['ai_analysis_date'] ) ) / 86400;
+                if ( $days_ago <= 30 )      $score += 20;
+                elseif ( $days_ago <= 60 )  $score += 10;
+            }
+
+            $p['_score'] = $score;
+        }
+        unset( $p );
+
+        usort( $pages, function ( $a, $b ) {
+            return ( $b['_score'] ?? 0 ) - ( $a['_score'] ?? 0 );
+        } );
+        return $pages;
+    }
+
+    /**
+     * AI改善案 Markdown からセクション別要約を抽出
+     *
+     * ## 流入背景 / ## 良かった点 / ## 現状の見立て / ## 改善提案 を分割し、
+     * 各セクション先頭2文のみ返す（トークン節約）。
+     */
+    private function parse_ai_summary_sections( string $ai_text ): array {
+        $section_map = [
+            'traffic_context' => '流入背景',
+            'good_points'     => '良かった点',
+            'assessment'      => '現状の見立て',
+            'improvements'    => '改善提案',
+        ];
+
+        $sections = [];
+        foreach ( $section_map as $key => $heading ) {
+            // ## 見出し で始まるセクションを抽出（次の ## または末尾まで）
+            $pattern = '/##\s*' . preg_quote( $heading, '/' ) . '\s*\n([\s\S]*?)(?=\n##|\z)/u';
+            if ( preg_match( $pattern, $ai_text, $m ) ) {
+                $text = trim( $m[1] );
+                // ### 見出し行を除去し、本文だけにする
+                $text = preg_replace( '/^###\s+.+$/mu', '', $text );
+                $text = preg_replace( '/\*\*([^*]+)\*\*/u', '$1', $text ); // **太字** 除去
+                $text = trim( preg_replace( '/\n{2,}/', "\n", $text ) );
+                // 先頭2文（句点区切り）
+                $sentences = preg_split( '/(?<=[。！？])\s*/u', $text, 3 );
+                $sections[ $key ] = trim( implode( '', array_slice( $sentences, 0, 2 ) ) );
+            }
+        }
+
+        // セクション分割できなかった場合は全体を要約として返す
+        if ( empty( $sections ) && $ai_text !== '' ) {
+            $sentences = preg_split( '/(?<=[。！？])\s*/u', $ai_text, 3 );
+            $sections['summary'] = trim( implode( '', array_slice( $sentences, 0, 2 ) ) );
+        }
+
+        return $sections;
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
