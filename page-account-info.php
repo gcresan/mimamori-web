@@ -33,7 +33,7 @@ $monthly   = $plan_info ? number_format( $plan_info['monthly'] ) : '—';
 // サービスティア
 $service_tier  = gcrev_get_service_tier( $user_id );
 $tier_defs_all = gcrev_get_service_tier_definitions();
-$tier_name     = $tier_defs_all[ $service_tier ]['name'] ?? 'ベーシックプラン';
+$tier_name     = $tier_defs_all[ $service_tier ]['name'] ?? '見える化プラン';
 
 $c_status     = $dates['status'];
 $has_contract = ! empty( $dates['start_at'] );

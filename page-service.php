@@ -72,7 +72,7 @@ get_header();
          ============================= -->
     <section class="sv-section" id="plans">
         <h2 class="sv-section__title">プラン比較</h2>
-        <p class="sv-section__subtitle">ご状況に合わせて、3つのプランからお選びいただけます</p>
+        <p class="sv-section__subtitle">ご状況に合わせて、4つのプランからお選びいただけます</p>
 
         <div class="sv-plans-section">
 
@@ -82,18 +82,18 @@ get_header();
                     <tr>
                         <th class="sv-plan-header">&nbsp;</th>
                         <th class="sv-plan-header">
-                            <div class="sv-plan-name">ベーシックプラン</div>
+                            <div class="sv-plan-name">見える化プラン</div>
                             <div class="sv-plan-price">5,500<small>円/月（税込）</small></div>
                             <div class="sv-plan-tagline">まず始めたい方に</div>
                         </th>
                         <th class="sv-plan-header sv-plan-header--recommended">
                             <div class="sv-recommended-badge">おすすめ</div>
-                            <div class="sv-plan-name">AIサポートプラン</div>
+                            <div class="sv-plan-name">改善提案プラン</div>
                             <div class="sv-plan-price">11,000<small>円/月（税込）</small></div>
                             <div class="sv-plan-tagline">AIの力で改善を加速</div>
                         </th>
                         <th class="sv-plan-header sv-plan-header--premium">
-                            <div class="sv-plan-name">伴走プラン</div>
+                            <div class="sv-plan-name">改善代行プラン</div>
                             <div class="sv-plan-price">33,000<small>円/月（税込）</small></div>
                             <div class="sv-plan-tagline">手厚い専門支援</div>
                         </th>
@@ -151,7 +151,7 @@ get_header();
                 <!-- ベーシック -->
                 <div class="sv-plan-card">
                     <div class="sv-plan-card__header">
-                        <div class="sv-plan-card__name">ベーシックプラン</div>
+                        <div class="sv-plan-card__name">見える化プラン</div>
                         <div class="sv-plan-card__price">5,500<small>円/月（税込）</small></div>
                         <div class="sv-plan-card__tagline">まず始めたい方に</div>
                     </div>
@@ -172,7 +172,7 @@ get_header();
                 <div class="sv-plan-card sv-plan-card--recommended">
                     <div class="sv-plan-card__header">
                         <div class="sv-plan-card__badge">おすすめ</div>
-                        <div class="sv-plan-card__name">AIサポートプラン</div>
+                        <div class="sv-plan-card__name">改善提案プラン</div>
                         <div class="sv-plan-card__price">11,000<small>円/月（税込）</small></div>
                         <div class="sv-plan-card__tagline">AIの力で改善を加速</div>
                     </div>
@@ -189,10 +189,10 @@ get_header();
                     </div>
                 </div>
 
-                <!-- 伴走プラン -->
+                <!-- 改善代行プラン -->
                 <div class="sv-plan-card sv-plan-card--premium">
                     <div class="sv-plan-card__header">
-                        <div class="sv-plan-card__name">伴走プラン</div>
+                        <div class="sv-plan-card__name">改善代行プラン</div>
                         <div class="sv-plan-card__price">33,000<small>円/月（税込）</small></div>
                         <div class="sv-plan-card__tagline">手厚い専門支援</div>
                     </div>
@@ -294,7 +294,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    はい、大丈夫です。専門知識がなくてもわかりやすいダッシュボードとレポートをご提供しています。伴走プランなら専門スタッフが一緒に考えますので、安心してお任せいただけます。
+                    はい、大丈夫です。専門知識がなくてもわかりやすいダッシュボードとレポートをご提供しています。改善代行プランなら専門スタッフが一緒に考えますので、安心してお任せいただけます。
                 </div>
             </div>
             <div class="sv-faq__item">
@@ -303,7 +303,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    はい、いつでもプラン変更が可能です。まずはベーシックプランから始めて、必要に応じてアップグレードされる方が多いです。
+                    はい、いつでもプラン変更が可能です。まずは見える化プランから始めて、必要に応じてアップグレードされる方が多いです。
                 </div>
             </div>
             <div class="sv-faq__item">
@@ -312,7 +312,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    まずはAIサポートプランがおすすめです。AIによる分析レポートと改善提案が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、伴走プランをご検討ください。
+                    まずは改善提案プランがおすすめです。AIによる分析レポートと改善提案が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、改善代行プランをご検討ください。
                 </div>
             </div>
         </div>

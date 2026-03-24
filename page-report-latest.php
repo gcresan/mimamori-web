@@ -819,7 +819,7 @@ get_header();
             <h2 class="section-title">✅ 良かった点（成果）</h2>
             <div class="plan-locked-overlay">
                 <div class="plan-locked-icon">&#x1F512;</div>
-                <p class="plan-locked-message">AIサポートプランで詳しい分析が見られます</p>
+                <p class="plan-locked-message">改善提案プランで詳しい分析が見られます</p>
                 <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
             </div>
         </div>
@@ -877,7 +877,7 @@ get_header();
             <h2 class="section-title">⚠️ 改善が必要な点（課題）</h2>
             <div class="plan-locked-overlay">
                 <div class="plan-locked-icon">&#x1F512;</div>
-                <p class="plan-locked-message">AIサポートプランで課題と対策が見られます</p>
+                <p class="plan-locked-message">改善提案プランで課題と対策が見られます</p>
                 <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
             </div>
         </div>
@@ -900,7 +900,7 @@ get_header();
             <h2 class="section-title">💡 考察とインサイト</h2>
             <div class="plan-locked-overlay">
                 <div class="plan-locked-icon">&#x1F512;</div>
-                <p class="plan-locked-message">AIサポートプランで詳しい考察が見られます</p>
+                <p class="plan-locked-message">改善提案プランで詳しい考察が見られます</p>
                 <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
             </div>
         </div>
@@ -974,7 +974,7 @@ get_header();
             <h2 class="section-title">🎯 ネクストアクション（優先度順）</h2>
             <div class="plan-locked-overlay">
                 <div class="plan-locked-icon">&#x1F512;</div>
-                <p class="plan-locked-message">AIサポートプランで具体的なアクションプランが見られます</p>
+                <p class="plan-locked-message">改善提案プランで具体的なアクションプランが見られます</p>
                 <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
             </div>
         </div>

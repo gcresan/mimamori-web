@@ -1018,7 +1018,7 @@ add_action('wp_enqueue_scripts', function() {
         return;
     }
 
-    // ベーシックプランはAIチャットを一切読み込まない
+    // 見える化プランはAIチャットを一切読み込まない
     if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat' ) ) {
         return;
     }
@@ -1241,7 +1241,7 @@ add_action( 'rest_api_init', function () {
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat' ) ) {
                 return new WP_Error(
                     'tier_insufficient',
-                    'AIチャットはAIサポートプランでご利用いただけます。',
+                    'AIチャットは改善提案プランでご利用いただけます。',
                     [ 'status' => 403 ]
                 );
             }
@@ -1259,7 +1259,7 @@ add_action( 'rest_api_init', function () {
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_voice' ) ) {
                 return new WP_Error(
                     'tier_insufficient',
-                    '音声入力はAIサポートプランでご利用いただけます。',
+                    '音声入力は改善提案プランでご利用いただけます。',
                     [ 'status' => 403 ]
                 );
             }
@@ -6221,19 +6221,19 @@ function gcrev_get_valid_plan_ids(): array {
 function gcrev_get_service_tier_definitions(): array {
     return [
         'basic' => [
-            'name'        => 'ベーシックプラン',
+            'name'        => '見える化プラン',
             'monthly'     => 5500,
             'description' => '見える化中心。AIがホームページの状態を見て、毎月レポートをお届け',
         ],
         'ai_support' => [
-            'name'        => 'AIサポートプラン',
+            'name'        => '改善提案プラン',
             'monthly'     => 11000,
             'description' => '改善提案まで。AIが状態を見て＋改善アドバイスまで提供',
         ],
         'bansou' => [
-            'name'        => '伴走プラン',
-            'monthly'     => 33000,
-            'description' => '人による継続支援。専門スタッフが伴走・MTGで改善をサポート',
+            'name'        => '改善代行プラン',
+            'monthly'     => 55000,
+            'description' => '実行支援込みの最上位。専門スタッフが伴走・MTGで改善をサポート',
         ],
     ];
 }
@@ -7567,9 +7567,9 @@ function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
     $params = $request->get_json_params();
 
     $type_labels = [
-        'plan_basic'      => 'ベーシックプランに変更したい',
-        'plan_ai_support' => 'AIサポートプランに変更したい',
-        'plan_bansou'     => '伴走プランに変更したい',
+        'plan_basic'      => '見える化プランに変更したい',
+        'plan_ai_support' => '改善提案プランに変更したい',
+        'plan_bansou'     => '改善代行プランに変更したい',
         'plan_change'     => 'プラン変更について相談したい',
         'support'         => 'サポートをお願いしたい',
         'other'           => 'その他のお問い合わせ',

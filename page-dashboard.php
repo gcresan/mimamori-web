@@ -1127,11 +1127,11 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
       <?php endif; ?>
 
 <?php if (!$can_highlights): ?>
-<!-- ベーシックプラン: ロック表示 -->
+<!-- 見える化プラン: ロック表示 -->
 <div class="plan-locked-section">
     <div class="plan-locked-overlay">
         <div class="plan-locked-icon">&#x1F512;</div>
-        <p class="plan-locked-message">AIサポートプランで、改善ポイントや<br>次にやるべきことのアドバイスが見られます</p>
+        <p class="plan-locked-message">改善提案プランで、改善ポイントや<br>次にやるべきことのアドバイスが見られます</p>
         <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
     </div>
 </div>
