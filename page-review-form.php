@@ -99,6 +99,26 @@ if (empty($google_review_url)) {
 
 // REST API URL
 $api_url = rest_url('gcrev/v1/review/generate');
+
+// =====================================================
+// Googleマップ プロフィール設定案内の文言（テンプレート化）
+// 将来的に管理画面からの変更やフィルターフック対応を想定
+// =====================================================
+$profile_guide_texts = [
+    'thank_heading'   => 'アンケートのご回答ありがとうございました',
+    'thank_desc'      => "このあと、Googleマップで口コミを書く前に、表示名とアイコンを設定できます。\nGoogleマップ専用の表示名・写真を使えるため、本名をそのまま出したくない方にも安心です。",
+    'btn_setup'       => 'Googleマップ用プロフィールを設定する',
+    'btn_skip'        => '設定せずに口コミを書く',
+    'guide_title'     => 'Googleマップで使う表示名とアイコンを設定できます',
+    'guide_lead'      => "Googleマップでは、口コミ投稿用の表示名と写真を別で設定できます。\nこの設定をしても、GmailなどGoogleアカウント本体の名前や写真は変わりません。",
+    'step1'           => 'Googleマップアプリを開く',
+    'step2'           => '［投稿］→［プロフィールを表示］→［プロフィールを編集］を開く',
+    'step3'           => '［投稿にカスタムの表示名と写真を使用する］をオンにして、表示名と写真を設定する',
+    'notice_delay'    => '設定の反映まで少し時間がかかる場合があります',
+    'notice_past'     => '過去の公開投稿にも反映される場合があります',
+    'btn_open_maps'   => 'Googleマップを開く',
+    'btn_write_review' => '設定が終わったら口コミを書く',
+];
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -684,6 +704,199 @@ $api_url = rest_url('gcrev/v1/review/generate');
         line-height: 1.7;
     }
 
+    /* ===== Profile Setup Guide (プロフィール設定案内) ===== */
+    .profile-section { display: none; }
+    .profile-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+    }
+    .profile-heading {
+        font-size: 17px;
+        font-weight: 700;
+        color: #2C3E40;
+        margin-bottom: 14px;
+        line-height: 1.6;
+    }
+    .profile-desc {
+        font-size: 14px;
+        color: #555;
+        line-height: 1.8;
+        margin-bottom: 28px;
+    }
+    .btn-profile-setup {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        max-width: 360px;
+        padding: 14px 24px;
+        background: #2C3E50;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-profile-setup:hover { background: #1a2a3a; }
+    .btn-skip-profile {
+        display: inline-block;
+        padding: 10px 20px;
+        background: #fff;
+        color: #555;
+        font-size: 14px;
+        font-weight: 600;
+        border: 1.5px solid #d1d5db;
+        border-radius: 8px;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .btn-skip-profile:hover { background: #f9fafb; }
+
+    .profile-guide-section { display: none; }
+    .profile-guide-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: #2C3E40;
+        text-align: center;
+        margin-bottom: 10px;
+        line-height: 1.6;
+    }
+    .profile-guide-lead {
+        font-size: 14px;
+        color: #555;
+        text-align: center;
+        line-height: 1.8;
+        margin-bottom: 28px;
+    }
+    .profile-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        margin-bottom: 24px;
+    }
+    .profile-step {
+        display: flex;
+        gap: 14px;
+        padding: 18px 20px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        margin-bottom: 12px;
+    }
+    .step-number {
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        background: #2C3E50;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 2px;
+    }
+    .step-content {
+        flex: 1;
+        min-width: 0;
+    }
+    .step-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #333;
+        line-height: 1.7;
+    }
+    .step-image-placeholder {
+        display: none;
+    }
+    .step-image-placeholder img {
+        width: 100%;
+        border-radius: 8px;
+        margin-top: 10px;
+        border: 1px solid #e5e7eb;
+    }
+
+    .profile-notice {
+        font-size: 13px;
+        color: #888;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 14px 18px;
+        margin-bottom: 28px;
+        line-height: 1.7;
+    }
+    .profile-notice ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .profile-notice li {
+        padding-left: 1.2em;
+        position: relative;
+    }
+    .profile-notice li::before {
+        content: '※';
+        position: absolute;
+        left: 0;
+        color: #aaa;
+    }
+
+    .profile-guide-actions {
+        text-align: center;
+    }
+    .btn-open-maps {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 360px;
+        padding: 14px 24px;
+        background: #4285F4;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s;
+        margin-bottom: 12px;
+    }
+    .btn-open-maps:hover { background: #3367d6; }
+    .btn-write-review {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        max-width: 360px;
+        padding: 14px 24px;
+        background: #ea4335;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 700;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s;
+    }
+    .btn-write-review:hover { background: #d32f2f; }
+
+    @media (max-width: 640px) {
+        .profile-guide-lead br {
+            display: none;
+        }
+        .profile-desc br {
+            display: none;
+        }
+    }
+
     /* ===== Footer ===== */
     .review-footer {
         text-align: center;
@@ -789,9 +1002,9 @@ $api_url = rest_url('gcrev/v1/review/generate');
                     この文章をコピー
                 </button>
                 <br>
-                <a href="<?php echo esc_url($google_review_url); ?>" target="_blank" rel="noopener noreferrer" class="btn-google-review">
+                <button type="button" class="btn-google-review" id="btn-manual-goto-profile">
                     Google口コミを書く
-                </a>
+                </button>
                 <br>
                 <button type="button" class="btn-retry" id="btn-manual-back">
                     もう一度やり直す
@@ -845,13 +1058,77 @@ $api_url = rest_url('gcrev/v1/review/generate');
             </div>
 
             <div class="result-actions">
-                <a href="<?php echo esc_url($google_review_url); ?>" target="_blank" rel="noopener noreferrer" class="btn-google-review" id="btn-google-review">
+                <button type="button" class="btn-google-review" id="btn-google-review">
                     Google口コミを書く
-                </a>
+                </button>
                 <br>
                 <button type="button" class="btn-retry" id="btn-back-to-form">
                     もう一度やり直す
                 </button>
+            </div>
+        </div>
+
+        <!-- ===== Googleマッププロフィール設定案内（完了メッセージ） ===== -->
+        <div id="review-profile-section" class="profile-section">
+            <div class="review-card" style="text-align:center; padding:36px 24px 28px;">
+                <div class="profile-icon">&#10003;</div>
+                <h2 class="profile-heading"><?php echo esc_html($profile_guide_texts['thank_heading']); ?></h2>
+                <p class="profile-desc"><?php echo nl2br(esc_html($profile_guide_texts['thank_desc'])); ?></p>
+                <button type="button" class="btn-profile-setup" id="btn-goto-profile-guide">
+                    <?php echo esc_html($profile_guide_texts['btn_setup']); ?>
+                </button>
+                <div style="margin-top:16px;">
+                    <button type="button" class="btn-skip-profile" id="btn-skip-profile">
+                        <?php echo esc_html($profile_guide_texts['btn_skip']); ?>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Googleマッププロフィール設定ガイド ===== -->
+        <div id="review-profile-guide-section" class="profile-guide-section">
+            <h2 class="profile-guide-title"><?php echo esc_html($profile_guide_texts['guide_title']); ?></h2>
+            <p class="profile-guide-lead"><?php echo nl2br(esc_html($profile_guide_texts['guide_lead'])); ?></p>
+
+            <div class="profile-steps">
+                <div class="profile-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <div class="step-title"><?php echo esc_html($profile_guide_texts['step1']); ?></div>
+                        <div class="step-image-placeholder" data-step="1"></div>
+                    </div>
+                </div>
+                <div class="profile-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <div class="step-title"><?php echo esc_html($profile_guide_texts['step2']); ?></div>
+                        <div class="step-image-placeholder" data-step="2"></div>
+                    </div>
+                </div>
+                <div class="profile-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <div class="step-title"><?php echo esc_html($profile_guide_texts['step3']); ?></div>
+                        <div class="step-image-placeholder" data-step="3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-notice">
+                <ul>
+                    <li><?php echo esc_html($profile_guide_texts['notice_delay']); ?></li>
+                    <li><?php echo esc_html($profile_guide_texts['notice_past']); ?></li>
+                </ul>
+            </div>
+
+            <div class="profile-guide-actions">
+                <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" class="btn-open-maps" id="btn-open-maps">
+                    <?php echo esc_html($profile_guide_texts['btn_open_maps']); ?>
+                </a>
+                <br>
+                <a href="<?php echo esc_url($google_review_url); ?>" target="_blank" rel="noopener noreferrer" class="btn-write-review" id="btn-write-review-after-profile">
+                    <?php echo esc_html($profile_guide_texts['btn_write_review']); ?>
+                </a>
             </div>
         </div>
 
@@ -892,12 +1169,14 @@ $api_url = rest_url('gcrev/v1/review/generate');
         // =====================================================
         // DOM参照
         // =====================================================
-        var formSection    = document.getElementById('review-form-section');
-        var consentSection = document.getElementById('review-consent-section');
-        var manualSection  = document.getElementById('review-manual-section');
-        var loadingSection = document.getElementById('review-loading-section');
-        var resultSection  = document.getElementById('review-result-section');
-        var errorSection   = document.getElementById('review-error-section');
+        var formSection         = document.getElementById('review-form-section');
+        var consentSection      = document.getElementById('review-consent-section');
+        var manualSection       = document.getElementById('review-manual-section');
+        var loadingSection      = document.getElementById('review-loading-section');
+        var resultSection       = document.getElementById('review-result-section');
+        var profileSection      = document.getElementById('review-profile-section');
+        var profileGuideSection = document.getElementById('review-profile-guide-section');
+        var errorSection        = document.getElementById('review-error-section');
         var form           = document.getElementById('review-form');
         var container      = document.getElementById('questions-container');
 
@@ -1061,12 +1340,14 @@ $api_url = rest_url('gcrev/v1/review/generate');
         // 画面切替
         // =====================================================
         function showSection(section) {
-            formSection.style.display    = 'none';
-            consentSection.style.display = 'none';
-            manualSection.style.display  = 'none';
-            loadingSection.style.display = 'none';
-            resultSection.style.display  = 'none';
-            errorSection.style.display   = 'none';
+            formSection.style.display         = 'none';
+            consentSection.style.display      = 'none';
+            manualSection.style.display       = 'none';
+            loadingSection.style.display      = 'none';
+            resultSection.style.display       = 'none';
+            profileSection.style.display      = 'none';
+            profileGuideSection.style.display = 'none';
+            errorSection.style.display        = 'none';
             section.style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -1281,6 +1562,41 @@ $api_url = rest_url('gcrev/v1/review/generate');
         // 「もう一度試す」（エラー画面から）
         document.getElementById('btn-error-retry').addEventListener('click', function() {
             showSection(formSection);
+        });
+
+        // =====================================================
+        // Google口コミボタン → プロフィール設定案内へ遷移
+        // =====================================================
+        // 結果画面の「Google口コミを書く」ボタン
+        document.getElementById('btn-google-review').addEventListener('click', function() {
+            showSection(profileSection);
+        });
+
+        // 手動入力画面の「Google口コミを書く」ボタン
+        document.getElementById('btn-manual-goto-profile').addEventListener('click', function() {
+            showSection(profileSection);
+        });
+
+        // =====================================================
+        // プロフィール設定案内セクションのボタン
+        // =====================================================
+        // 「Googleマップ用プロフィールを設定する」→ ガイドセクションへ
+        document.getElementById('btn-goto-profile-guide').addEventListener('click', function() {
+            showSection(profileGuideSection);
+        });
+
+        // 「設定せずに口コミを書く」→ Google口コミURLを直接開く
+        document.getElementById('btn-skip-profile').addEventListener('click', function() {
+            window.open(REVIEW_CONFIG.googleReviewUrl, '_blank');
+        });
+
+        // 「設定が終わったら口コミを書く」→ Google口コミURLを開く
+        document.getElementById('btn-write-review-after-profile').addEventListener('click', function(e) {
+            // href属性も設定済みだが、念のためJS側でも制御
+            if (REVIEW_CONFIG.googleReviewUrl && REVIEW_CONFIG.googleReviewUrl !== '#') {
+                e.preventDefault();
+                window.open(REVIEW_CONFIG.googleReviewUrl, '_blank');
+            }
         });
 
         // =====================================================
