@@ -1243,6 +1243,23 @@ get_header();
         var hasSP = !!data.screenshot_mobile_url;
         var hasClarity = !!(data.clarity_data && data.clarity_data.metrics && Object.keys(data.clarity_data.metrics).length > 0);
 
+        // データ信頼度の算出（セッション数ベース）
+        var totalSessions = 0;
+        if (hasClarity && data.clarity_data.site_wide && data.clarity_data.site_wide.by_device) {
+            var byDev = data.clarity_data.site_wide.by_device;
+            ['PC', 'Mobile'].forEach(function(dk) {
+                if (byDev[dk] && byDev[dk].traffic) {
+                    var t = byDev[dk].traffic;
+                    totalSessions += parseInt(t.sessionsWithMetricCount || t.subTotal || t.sessionsCount || 0);
+                }
+            });
+        }
+        var reliabilityLevel = totalSessions >= 100 ? 'sufficient' : (totalSessions >= 20 ? 'reference' : 'hypothesis');
+        var reliabilityLabel = reliabilityLevel === 'sufficient' ? '十分なデータあり'
+            : (reliabilityLevel === 'reference' ? '参考傾向' : '件数不足のため仮説レベル');
+        var reliabilityClass = reliabilityLevel === 'sufficient' ? 'pa-badge--done'
+            : (reliabilityLevel === 'reference' ? 'pa-badge--warn' : 'pa-badge--pending');
+
         var prereqHtml = '<div class="pa-ai-prereq">'
             + '<span class="pa-ai-prereq-item ' + (hasPC ? 'pa-ai-prereq-item--ok' : 'pa-ai-prereq-item--ng') + '">'
             + (hasPC ? '&#10003;' : '&#10007;') + ' PC画像</span>'
@@ -1250,6 +1267,8 @@ get_header();
             + (hasSP ? '&#10003;' : '&#10007;') + ' SP画像</span>'
             + '<span class="pa-ai-prereq-item ' + (hasClarity ? 'pa-ai-prereq-item--ok' : 'pa-ai-prereq-item--ng') + '">'
             + (hasClarity ? '&#10003;' : '&#10007;') + ' 行動データ</span>'
+            + '<span class="pa-badge ' + reliabilityClass + '" style="margin-left:8px;font-size:11px;">'
+            + reliabilityLabel + (totalSessions > 0 ? '（' + totalSessions + '件）' : '') + '</span>'
             + '</div>';
 
         if (data.ai_summary) {

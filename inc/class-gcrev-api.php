@@ -17998,12 +17998,59 @@ PROMPT;
             $notes[] = 'Clarity最終同期: ' . $row['clarity_sync_date'] . '（直近数日のサマリー）';
         }
 
+        // --- データ信頼度の算出 ---
+        $data_reliability = $this->assess_data_reliability( $ga4_data, $clarity_data );
+        if ( $data_reliability['level'] !== 'sufficient' ) {
+            $notes[] = $data_reliability['note'];
+        }
+
         return [
-            'page'    => $page_info,
-            'period'  => $period,
-            'ga4'     => $ga4_data,
-            'clarity' => $clarity_data,
-            'notes'   => $notes,
+            'page'             => $page_info,
+            'period'           => $period,
+            'ga4'              => $ga4_data,
+            'clarity'          => $clarity_data,
+            'notes'            => $notes,
+            'data_reliability' => $data_reliability,
+        ];
+    }
+
+    /**
+     * GA4/Clarityのデータ量からコメント信頼度を判定
+     *
+     * @return array ['level'=>string, 'label'=>string, 'note'=>string]
+     *   level: 'sufficient' | 'reference' | 'hypothesis'
+     */
+    private function assess_data_reliability( ?array $ga4, ?array $clarity ): array {
+        $ga4_sessions = $ga4['sessions'] ?? 0;
+
+        // Clarityの合計セッション
+        $clarity_sessions = 0;
+        if ( $clarity && ! empty( $clarity['devices'] ) ) {
+            foreach ( $clarity['devices'] as $cd ) {
+                $clarity_sessions += (int) ( $cd['sessions'] ?? 0 );
+            }
+        }
+
+        $total = max( $ga4_sessions, $clarity_sessions );
+
+        if ( $total >= 100 ) {
+            return [
+                'level' => 'sufficient',
+                'label' => '十分なデータあり',
+                'note'  => '',
+            ];
+        }
+        if ( $total >= 20 ) {
+            return [
+                'level' => 'reference',
+                'label' => '参考傾向',
+                'note'  => "セッション数が{$total}件のため、改善提案は参考傾向としてお読みください。継続的なデータ蓄積により精度が向上します。",
+            ];
+        }
+        return [
+            'level' => 'hypothesis',
+            'label' => '件数不足のため仮説レベル',
+            'note'  => "セッション数が{$total}件と少ないため、以下の改善提案は仮説レベルです。断定的な判断は避け、データが蓄積されてから再分析することをお勧めします。",
         ];
     }
 
@@ -18101,6 +18148,21 @@ PROMPT;
             $prompt .= "\n";
         } else {
             $prompt .= "【Clarityデータ】\n未取得\n\n";
+        }
+
+        // --- データ信頼度 ---
+        $rel = $ctx['data_reliability'] ?? [ 'level' => 'sufficient', 'label' => '', 'note' => '' ];
+        if ( $rel['level'] !== 'sufficient' ) {
+            $prompt .= "【⚠ データ信頼度: {$rel['label']}】\n"
+                . "{$rel['note']}\n";
+            if ( $rel['level'] === 'hypothesis' ) {
+                $prompt .= "改善提案は断定口調を一切使わず、すべて「〜の可能性があります」「〜かもしれません」「〜を検討する価値があります」のような仮説ベースの表現にしてください。\n"
+                    . "冒頭に「※ データ件数が少ないため、以下は仮説ベースの参考所見です。データが蓄積されてから改めて分析することをお勧めします。」と必ず書いてください。\n";
+            } elseif ( $rel['level'] === 'reference' ) {
+                $prompt .= "改善提案は「〜の傾向が見られます」「〜の可能性があります」のような参考ベースの表現を優先してください。\n"
+                    . "冒頭に「※ データ件数がまだ十分ではないため、以下は参考傾向としてお読みください。」と書いてください。\n";
+            }
+            $prompt .= "\n";
         }
 
         // --- 注記 ---
