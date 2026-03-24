@@ -241,7 +241,10 @@ get_header();
 .sv-color-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
 .sv-color-group { flex: 1; min-width: 140px; }
 .sv-color-label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px; }
-.sv-color-input { width: 100%; height: 40px; padding: 2px; border: 1.5px solid #e5e7eb; border-radius: 6px; cursor: pointer; background: #f9fafb; }
+.sv-color-picker-wrap { display: flex; gap: 8px; align-items: center; }
+.sv-color-input { width: 48px; height: 40px; padding: 2px; border: 1.5px solid #e5e7eb; border-radius: 6px; cursor: pointer; background: #f9fafb; flex-shrink: 0; }
+.sv-color-hex { flex: 1; height: 40px; padding: 0 10px; font-size: 13px; font-family: monospace; border: 1.5px solid #e5e7eb; border-radius: 6px; background: #f9fafb; text-transform: uppercase; }
+.sv-color-hex:focus { outline: none; border-color: var(--mw-primary-blue, #568184); background: #fff; }
 .sv-color-preview { margin-top: 16px; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; }
 .sv-color-preview-header { padding: 14px; color: #fff; text-align: center; font-weight: 700; font-size: 14px; }
 .sv-color-preview-body { padding: 16px; background: #f5f6fa; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -360,31 +363,49 @@ get_header();
             <div class="sv-color-row">
                 <div class="sv-color-group">
                     <label class="sv-color-label">ヘッダー背景色</label>
-                    <input type="color" class="sv-color-input" id="sv-color-header-bg" value="#2C3E50">
+                    <div class="sv-color-picker-wrap">
+                        <input type="color" class="sv-color-input" id="sv-color-header-bg" value="#2C3E50">
+                        <input type="text" class="sv-color-hex" id="sv-hex-header-bg" value="#2C3E50" maxlength="7" placeholder="#2C3E50">
+                    </div>
                 </div>
                 <div class="sv-color-group">
                     <label class="sv-color-label">見出し文字色</label>
-                    <input type="color" class="sv-color-input" id="sv-color-heading-text" value="#2C3E40">
+                    <div class="sv-color-picker-wrap">
+                        <input type="color" class="sv-color-input" id="sv-color-heading-text" value="#2C3E40">
+                        <input type="text" class="sv-color-hex" id="sv-hex-heading-text" value="#2C3E40" maxlength="7" placeholder="#2C3E40">
+                    </div>
                 </div>
             </div>
             <div class="sv-color-row">
                 <div class="sv-color-group">
                     <label class="sv-color-label">ボタン背景色</label>
-                    <input type="color" class="sv-color-input" id="sv-color-button-bg" value="#2C3E50">
+                    <div class="sv-color-picker-wrap">
+                        <input type="color" class="sv-color-input" id="sv-color-button-bg" value="#2C3E50">
+                        <input type="text" class="sv-color-hex" id="sv-hex-button-bg" value="#2C3E50" maxlength="7" placeholder="#2C3E50">
+                    </div>
                 </div>
                 <div class="sv-color-group">
                     <label class="sv-color-label">ボタン文字色</label>
-                    <input type="color" class="sv-color-input" id="sv-color-button-text" value="#FFFFFF">
+                    <div class="sv-color-picker-wrap">
+                        <input type="color" class="sv-color-input" id="sv-color-button-text" value="#FFFFFF">
+                        <input type="text" class="sv-color-hex" id="sv-hex-button-text" value="#FFFFFF" maxlength="7" placeholder="#FFFFFF">
+                    </div>
                 </div>
             </div>
             <div class="sv-color-row">
                 <div class="sv-color-group">
                     <label class="sv-color-label">アクセントカラー（選択肢・フォーカス等）</label>
-                    <input type="color" class="sv-color-input" id="sv-color-accent" value="#3b82f6">
+                    <div class="sv-color-picker-wrap">
+                        <input type="color" class="sv-color-input" id="sv-color-accent" value="#3b82f6">
+                        <input type="text" class="sv-color-hex" id="sv-hex-accent" value="#3b82f6" maxlength="7" placeholder="#3b82f6">
+                    </div>
                 </div>
                 <div class="sv-color-group">
                     <label class="sv-color-label">アクセント上の文字色</label>
-                    <input type="color" class="sv-color-input" id="sv-color-accent-text" value="#FFFFFF">
+                    <div class="sv-color-picker-wrap">
+                        <input type="color" class="sv-color-input" id="sv-color-accent-text" value="#FFFFFF">
+                        <input type="text" class="sv-color-hex" id="sv-hex-accent-text" value="#FFFFFF" maxlength="7" placeholder="#FFFFFF">
+                    </div>
                 </div>
             </div>
             <!-- ライブプレビュー -->
@@ -1056,52 +1077,72 @@ get_header();
         button_bg: '#2C3E50', button_text: '#FFFFFF',
         accent: '#3b82f6', accent_text: '#FFFFFF'
     };
-    var colorInputMap = {
-        header_bg: 'sv-color-header-bg', heading_text: 'sv-color-heading-text',
-        button_bg: 'sv-color-button-bg', button_text: 'sv-color-button-text',
-        accent: 'sv-color-accent', accent_text: 'sv-color-accent-text'
-    };
+    var colorKeys = Object.keys(colorDefaults);
+
+    function colorEl(key)  { return document.getElementById('sv-color-' + key.replace(/_/g, '-')); }
+    function hexEl(key)    { return document.getElementById('sv-hex-' + key.replace(/_/g, '-')); }
+    function isValidHex(v) { return /^#[0-9A-Fa-f]{6}$/.test(v); }
+
+    // 両方の入力を同じ値にセット
+    function setColor(key, val) {
+        var c = colorEl(key), h = hexEl(key);
+        if (c) c.value = val;
+        if (h) h.value = val.toUpperCase();
+    }
 
     function updateColorPreview() {
-        var hBg = document.getElementById('sv-color-header-bg').value;
-        var hTx = document.getElementById('sv-color-heading-text').value;
-        var bBg = document.getElementById('sv-color-button-bg').value;
-        var bTx = document.getElementById('sv-color-button-text').value;
-        var ac  = document.getElementById('sv-color-accent').value;
-        var acT = document.getElementById('sv-color-accent-text').value;
-        document.getElementById('sv-preview-header').style.background = hBg;
-        document.getElementById('sv-preview-heading').style.color = hTx;
-        document.getElementById('sv-preview-btn').style.background = bBg;
-        document.getElementById('sv-preview-btn').style.color = bTx;
-        document.getElementById('sv-preview-accent').style.borderColor = ac;
-        document.getElementById('sv-preview-accent').style.color = ac;
+        var g = function(key) { return colorEl(key) ? colorEl(key).value : colorDefaults[key]; };
+        document.getElementById('sv-preview-header').style.background = g('header_bg');
+        document.getElementById('sv-preview-heading').style.color = g('heading_text');
+        document.getElementById('sv-preview-btn').style.background = g('button_bg');
+        document.getElementById('sv-preview-btn').style.color = g('button_text');
+        document.getElementById('sv-preview-accent').style.borderColor = g('accent');
+        document.getElementById('sv-preview-accent').style.color = g('accent');
     }
 
     function loadSurveyColors() {
         apiGet('colors').then(function(data) {
             if (!data.success) return;
             var c = data.colors || {};
-            Object.keys(colorInputMap).forEach(function(key) {
-                var el = document.getElementById(colorInputMap[key]);
-                if (el && c[key]) el.value = c[key];
-            });
+            colorKeys.forEach(function(key) { if (c[key]) setColor(key, c[key]); });
             updateColorPreview();
         });
     }
 
-    // カラーピッカー変更時にプレビュー即時更新
-    Object.keys(colorInputMap).forEach(function(key) {
-        var el = document.getElementById(colorInputMap[key]);
-        if (el) el.addEventListener('input', updateColorPreview);
+    // カラーピッカー → hex入力に同期 + プレビュー更新
+    colorKeys.forEach(function(key) {
+        var picker = colorEl(key), hex = hexEl(key);
+        if (picker) picker.addEventListener('input', function() {
+            if (hex) hex.value = picker.value.toUpperCase();
+            updateColorPreview();
+        });
+        // hex入力 → カラーピッカーに同期 + プレビュー更新
+        if (hex) hex.addEventListener('input', function() {
+            var v = hex.value.trim();
+            if (v.charAt(0) !== '#') v = '#' + v;
+            hex.value = v;
+            if (isValidHex(v)) {
+                if (picker) picker.value = v;
+                updateColorPreview();
+            }
+        });
+        // hex入力からフォーカスが外れた時に値を正規化
+        if (hex) hex.addEventListener('blur', function() {
+            var v = hex.value.trim();
+            if (v.charAt(0) !== '#') v = '#' + v;
+            if (!isValidHex(v)) v = picker ? picker.value : colorDefaults[key];
+            setColor(key, v);
+            updateColorPreview();
+        });
     });
 
     // 保存
     document.getElementById('sv-btn-save-colors').addEventListener('click', function() {
         var btn = this;
         var colors = {};
-        Object.keys(colorInputMap).forEach(function(key) {
-            var el = document.getElementById(colorInputMap[key]);
-            if (el) colors[key] = el.value;
+        colorKeys.forEach(function(key) {
+            var c = colorEl(key);
+            if (c) colors[key] = c.value;
         });
         btn.disabled = true;
         btn.textContent = '保存中...';
@@ -1116,12 +1157,8 @@ get_header();
     // デフォルトに戻す
     document.getElementById('sv-btn-reset-colors').addEventListener('click', function() {
         if (!confirm('カラー設定をデフォルトに戻しますか？')) return;
-        Object.keys(colorInputMap).forEach(function(key) {
-            var el = document.getElementById(colorInputMap[key]);
-            if (el) el.value = colorDefaults[key];
-        });
+        colorKeys.forEach(function(key) { setColor(key, colorDefaults[key]); });
         updateColorPreview();
-        // デフォルト値で保存
         var btn = document.getElementById('sv-btn-save-colors');
         btn.disabled = true;
         btn.textContent = '保存中...';
