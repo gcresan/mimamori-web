@@ -17761,18 +17761,19 @@ PROMPT;
         // プロンプト構築（構造化コンテキスト + 段階的評価指示）
         $prompt = $this->build_page_analysis_prompt( $analysis_context, count( $images ) > 0 );
 
-        try {
-            $ai_text = $this->ai->call_gemini_multimodal( $prompt, $images );
-        } catch ( \Exception $e ) {
+        // OpenAI Responses API で改善コメント生成（gpt-5.4-mini）
+        $ai_result = $this->call_openai_page_analysis( $prompt, $images );
+        if ( is_wp_error( $ai_result ) ) {
             file_put_contents( $log,
-                date( 'Y-m-d H:i:s' ) . " AI analyze ERROR: " . $e->getMessage() . "\n",
+                date( 'Y-m-d H:i:s' ) . " OpenAI analyze ERROR: " . $ai_result->get_error_message() . "\n",
                 FILE_APPEND
             );
             return new \WP_REST_Response( [
                 'success' => false,
-                'message' => 'AI改善案の生成に失敗しました: ' . $e->getMessage(),
+                'message' => 'AI改善案の生成に失敗しました: ' . $ai_result->get_error_message(),
             ], 500 );
         }
+        $ai_text = $ai_result;
 
         // 結果を保存
         $now = current_time( 'mysql' );
@@ -18294,6 +18295,117 @@ PROMPT;
             . "汎用的なテンプレート改善案ではなく、この画面の実際の状態に即した具体的な内容にしてください。";
 
         return $prompt;
+    }
+
+    /**
+     * OpenAI Responses API を使ってページ改善コメントを生成
+     *
+     * @param string $prompt テキストプロンプト
+     * @param array  $images 画像配列 [['mime_type'=>'image/jpeg','data'=>base64], ...]
+     * @return string|\WP_Error 生成テキストまたはエラー
+     */
+    private function call_openai_page_analysis( string $prompt, array $images ) {
+        $api_key = defined( 'MIMAMORI_OPENAI_API_KEY' ) ? MIMAMORI_OPENAI_API_KEY : '';
+        if ( empty( $api_key ) ) {
+            return new \WP_Error( 'no_api_key', 'MIMAMORI_OPENAI_API_KEY が未設定です' );
+        }
+
+        $log   = '/tmp/gcrev_page_analysis_debug.log';
+        $model = 'gpt-4.1-mini';
+
+        // --- input 配列を構築 ---
+        $content = [];
+
+        // テキストプロンプト
+        $content[] = [
+            'type' => 'input_text',
+            'text' => $prompt,
+        ];
+
+        // 画像（base64 data URL形式）
+        foreach ( $images as $img ) {
+            $mime = $img['mime_type'] ?? 'image/jpeg';
+            $data = $img['data'] ?? '';
+            if ( empty( $data ) ) continue;
+            $content[] = [
+                'type'      => 'input_image',
+                'image_url' => "data:{$mime};base64,{$data}",
+            ];
+        }
+
+        $body = wp_json_encode( [
+            'model' => $model,
+            'input' => [
+                [
+                    'role'    => 'user',
+                    'content' => $content,
+                ],
+            ],
+        ], JSON_UNESCAPED_UNICODE );
+
+        file_put_contents( $log,
+            date( 'Y-m-d H:i:s' ) . " OpenAI request: model={$model}, images=" . count( $images )
+            . ", prompt_len=" . mb_strlen( $prompt ) . "\n",
+            FILE_APPEND
+        );
+
+        // --- API呼び出し ---
+        $response = wp_remote_post( 'https://api.openai.com/v1/responses', [
+            'timeout' => 120,
+            'headers' => [
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $api_key,
+            ],
+            'body' => $body,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            return new \WP_Error( 'request_failed', 'OpenAI APIリクエスト失敗: ' . $response->get_error_message() );
+        }
+
+        $status = wp_remote_retrieve_response_code( $response );
+        $body_text = wp_remote_retrieve_body( $response );
+
+        if ( $status !== 200 ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " OpenAI ERROR: status={$status}, body=" . substr( $body_text, 0, 500 ) . "\n",
+                FILE_APPEND
+            );
+            $err_data = json_decode( $body_text, true );
+            $err_msg  = $err_data['error']['message'] ?? "HTTP {$status}";
+            return new \WP_Error( 'api_error', "OpenAI APIエラー: {$err_msg}" );
+        }
+
+        $result = json_decode( $body_text, true );
+
+        // Responses API のレスポンスからテキストを抽出
+        $output_text = '';
+        $output_items = $result['output'] ?? [];
+        foreach ( $output_items as $item ) {
+            if ( ( $item['type'] ?? '' ) === 'message' ) {
+                $msg_content = $item['content'] ?? [];
+                foreach ( $msg_content as $mc ) {
+                    if ( ( $mc['type'] ?? '' ) === 'output_text' ) {
+                        $output_text .= $mc['text'];
+                    }
+                }
+            }
+        }
+
+        if ( empty( $output_text ) ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " OpenAI: empty output, raw=" . substr( $body_text, 0, 500 ) . "\n",
+                FILE_APPEND
+            );
+            return new \WP_Error( 'empty_response', 'OpenAI APIから空のレスポンスが返されました' );
+        }
+
+        file_put_contents( $log,
+            date( 'Y-m-d H:i:s' ) . " OpenAI OK: output_len=" . mb_strlen( $output_text ) . "\n",
+            FILE_APPEND
+        );
+
+        return $output_text;
     }
 
     private function build_behavior_summary_text( array $clarity ): string {
