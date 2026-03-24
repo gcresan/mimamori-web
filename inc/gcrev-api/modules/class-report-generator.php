@@ -352,6 +352,12 @@ DOMAIN;
 
         $prompt .= "\n\n# 前月データ（最新）\n";
         $prompt .= $this->format_data_for_prompt($prev);
+
+        // ページ改善分析データ（あれば）
+        if ( ! empty( $client['page_insights']['available'] ) ) {
+            $prompt .= $this->format_page_insights_for_prompt( $client['page_insights'] );
+        }
+
         $prompt .= <<<INSTRUCTIONS
 
 
@@ -421,6 +427,19 @@ DOMAIN;
                     $prompt .= "- GA4データとSearch Consoleデータに基づいた実行可能な施策であること\n";
                 }
                 $prompt .= "\n**このセクションを省略した場合、レポートは不完全とみなされます。必ず生成してください。**\n";
+            }
+
+            // ページ改善データ存在時のセクション別指示
+            if ( ! empty( $client['page_insights']['available'] ) ) {
+                if ( $sec['id'] === 'good' ) {
+                    $prompt .= "\n※ ページ改善分析で「良かった点」が指摘されている場合、月次データの傾向と整合する範囲で本文に自然に織り込んでください（例:「トップページではCTAの視認性が良好で…」）。\n";
+                } elseif ( $sec['id'] === 'bad' ) {
+                    $prompt .= "\n※ ページ改善分析で課題が指摘されている場合、月次データの傾向と一致する範囲で言及してください。ただし信頼度が「仮説レベル」のデータは引用しないこと。ページ単位の課題とサイト全体の課題を混同しないよう区別して記述すること。\n";
+                } elseif ( $sec['id'] === 'insight' ) {
+                    $prompt .= "\n※ ページ改善分析データが提供されています。スクロール深度・デッドクリック等の行動傾向を考察に組み込んでください。信頼度に応じた表現（断定/傾向/可能性）を使い分けること。数値だけでなく「ページ内容や訴求も確認した上での考察」であることが伝わるように書くこと。\n";
+                } elseif ( $sec['id'] === 'action' ) {
+                    $prompt .= "\n※ ページ改善分析で改善提案がある場合、ネクストアクションに反映してください。特にトップページや問い合わせページの改善提案は優先的に取り込むこと。\n";
+                }
             }
         }
 
@@ -635,6 +654,78 @@ DOMAIN;
 
                 return $output;
             }
+
+    /**
+     * ページ改善分析データをプロンプト用テキストに整形
+     *
+     * @param array $page_insights client_info['page_insights']
+     * @return string プロンプトテキスト（空文字列 = データなし）
+     */
+    public function format_page_insights_for_prompt( array $page_insights ): string {
+        if ( empty( $page_insights['available'] ) || empty( $page_insights['pages'] ) ) {
+            return '';
+        }
+
+        $output  = "\n\n# ページ改善分析（補足データ）\n";
+        $output .= "※ 以下は直近のページ改善分析で得られた所見です。月次レポートの主データ（GA4/GSC）とは分析期間が異なる場合があるため、補足情報として参照してください。\n";
+        $output .= "※ 月次レポート本文にページ改善の知見を自然に織り込んでください。別枠で機械的に列挙するのではなく、各セクションの文脈に合わせて統合すること。\n\n";
+
+        foreach ( $page_insights['pages'] as $i => $page ) {
+            $num = $i + 1;
+            $output .= "## ページ{$num}: {$page['title']}\n";
+            $output .= "- URL: {$page['url']}\n";
+            $output .= "- ページ種別: {$page['type']}";
+            if ( ! empty( $page['purpose'] ) ) {
+                $output .= " / 目的: {$page['purpose']}";
+            }
+            $output .= "\n";
+
+            // 信頼度注記
+            $rel = $page['reliability'] ?? 'hypothesis';
+            if ( $rel === 'hypothesis' ) {
+                $output .= "- ⚠ データ信頼度: 仮説レベル（セッション少）— この所見は考察セクションでのみ「可能性」として言及可。課題・アクションでは引用禁止\n";
+            } elseif ( $rel === 'reference' ) {
+                $output .= "- △ データ信頼度: 参考傾向 — 「〜の傾向がある」程度の引用に留めること\n";
+            }
+
+            // Clarity 行動データ
+            if ( ! empty( $page['behavior'] ) ) {
+                $parts = [];
+                foreach ( $page['behavior'] as $b ) {
+                    $part = $b['device'];
+                    if ( $b['sessions'] !== null ) $part .= " {$b['sessions']}セッション";
+                    if ( ! empty( $b['scroll_depth'] ) )  $part .= " スクロール{$b['scroll_depth']}";
+                    if ( $b['dead_click'] !== null )  $part .= " デッドクリック{$b['dead_click']}件";
+                    $parts[] = $part;
+                }
+                $output .= "- 行動データ: " . implode( ' / ', $parts ) . "\n";
+            }
+
+            // AI分析所見（セクション別）
+            if ( ! empty( $page['insights'] ) ) {
+                $label_map = [
+                    'traffic_context' => '流入背景',
+                    'good_points'     => '良かった点',
+                    'assessment'      => '現状の見立て',
+                    'improvements'    => '改善提案の要点',
+                    'summary'         => '概要',
+                ];
+                foreach ( $page['insights'] as $sec_key => $text ) {
+                    if ( empty( $text ) ) continue;
+                    $label = $label_map[ $sec_key ] ?? $sec_key;
+                    $output .= "- {$label}: {$text}\n";
+                }
+            }
+
+            $output .= "\n";
+        }
+
+        if ( ! empty( $page_insights['period_note'] ) ) {
+            $output .= "（{$page_insights['period_note']}）\n";
+        }
+
+        return $output;
+    }
 
     public function validate_section_complete(string $html, array $section): bool {
 
@@ -1325,6 +1416,19 @@ DOMAIN;
             $html .= !empty($by_id['action'])
                 ? $by_id['action']
                 : '<div class="actions"><h2>🚀 今すぐやるべき3つのアクション</h2><div class="action-item"><div class="action-priority">Priority 1 - 最優先</div><div class="action-title">（AI生成に失敗しました）</div><div class="action-description">-</div></div></div>';
+        }
+
+        // ページ改善分析の参照注記
+        if ( ! empty( $client_info['page_insights']['available'] ) ) {
+            $pi_count = count( $client_info['page_insights']['pages'] ?? [] );
+            $pi_note  = esc_html( $client_info['page_insights']['period_note'] ?? '' );
+            $html .= '<div style="margin-top:30px;padding:16px 20px;background:#f8f9fa;border-left:4px solid #6366f1;border-radius:6px;font-size:13px;line-height:1.7;color:#4b5563;">';
+            $html .= '<strong>📋 ページ改善分析データの参照について</strong><br>';
+            $html .= "このレポートは、GA4・Search Consoleのデータに加え、直近のページ改善分析（{$pi_count}ページ分）の所見を参考にしています。";
+            if ( $pi_note ) {
+                $html .= "<br><span style=\"color:#6b7280;font-size:12px;\">※ {$pi_note}。ページ行動データは月次レポートの対象期間と異なる場合があります。</span>";
+            }
+            $html .= '</div>';
         }
 
         $html .= '</div></div>'; // container / ai-report
