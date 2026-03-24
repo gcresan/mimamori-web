@@ -1506,9 +1506,7 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
         // =====================================================
         // 画面切替
         // =====================================================
-        var surveyIntroTitle = document.querySelector('.survey-intro-title');
-        var surveyIntroDesc  = document.querySelector('.survey-intro-desc');
-        var originalTitle    = surveyIntroTitle ? surveyIntroTitle.textContent : '';
+        var surveyIntro = document.querySelector('.survey-intro');
 
         function showSection(section) {
             formSection.style.display         = 'none';
@@ -1521,13 +1519,9 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
             errorSection.style.display        = 'none';
             section.style.display = 'block';
 
-            // フォーム入力画面ではオリジナルのタイトル・説明文を表示、それ以外では差し替え
-            if (section === formSection) {
-                if (surveyIntroTitle) surveyIntroTitle.textContent = originalTitle;
-                if (surveyIntroDesc) surveyIntroDesc.style.display = '';
-            } else {
-                if (surveyIntroTitle) surveyIntroTitle.textContent = 'ご回答ありがとうございました';
-                if (surveyIntroDesc) surveyIntroDesc.style.display = 'none';
+            // フォーム入力画面のみタイトル・説明文を表示、それ以外では非表示
+            if (surveyIntro) {
+                surveyIntro.style.display = (section === formSection) ? '' : 'none';
             }
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
