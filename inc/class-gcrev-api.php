@@ -7195,6 +7195,52 @@ PROMPT;
                 // current（最新日のデータ + 前日比）
                 $latest_gkey = $kw_id . '_' . $device . '_' . $latest_day;
                 $latest_row  = $grouped[ $latest_gkey ] ?? null;
+
+                // DB にデータがない場合、Transient キャッシュからフォールバック
+                if ( ! $latest_row ) {
+                    // zoom suffix を推定
+                    $t_meo_lat = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
+                    $t_meo_lng = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
+                    $t_radius  = (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000;
+                    if ( $t_meo_lat === '' || $t_meo_lng === '' ) {
+                        if ( class_exists( 'Gcrev_City_Coordinates' ) ) {
+                            $cc = Gcrev_City_Coordinates::get_for_user( $user_id );
+                            if ( $cc ) { $t_meo_lat = (string) $cc['lat']; $t_meo_lng = (string) $cc['lng']; $t_radius = Gcrev_City_Coordinates::DEFAULT_RADIUS; }
+                        }
+                    }
+                    $t_zoom = ( $t_meo_lat !== '' && $t_meo_lng !== '' ) ? Gcrev_DataForSEO_Client::radius_to_zoom( $t_radius ) : 0;
+                    $t_suffix = $t_zoom ? "_{$t_zoom}" : '';
+                    $t_cache_key = "gcrev_meo_rank_{$user_id}_{$kw_id}_{$device}{$t_suffix}";
+                    $t_cached = get_transient( $t_cache_key );
+                    if ( $t_cached && is_array( $t_cached ) && isset( $t_cached['maps']['rank'] ) && $t_cached['maps']['rank'] !== null ) {
+                        $latest_row = [
+                            'maps_rank'     => $t_cached['maps']['rank'],
+                            'finder_rank'   => $t_cached['local_finder']['rank'] ?? null,
+                            'rating'        => $t_cached['maps']['store']['rating'] ?? null,
+                            'reviews_count' => $t_cached['maps']['store']['reviews_count'] ?? null,
+                            'store_data'    => $t_cached['maps']['store'] ? wp_json_encode( $t_cached['maps']['store'], JSON_UNESCAPED_UNICODE ) : null,
+                            'competitors_data' => ! empty( $t_cached['maps']['competitors'] ) ? wp_json_encode( $t_cached['maps']['competitors'], JSON_UNESCAPED_UNICODE ) : null,
+                            '_from_cache'   => true,
+                        ];
+                        // 今日分の daily にも反映
+                        $entry['daily'][ $device ][ $latest_day ] = [
+                            'maps_rank'   => (int) $t_cached['maps']['rank'],
+                            'finder_rank' => isset( $t_cached['local_finder']['rank'] ) ? (int) $t_cached['local_finder']['rank'] : null,
+                            'rating'      => $t_cached['maps']['store']['rating'] ?? null,
+                            'reviews'     => $t_cached['maps']['store']['reviews_count'] ?? null,
+                        ];
+
+                        // DB にも保存を試行（UPSERT）
+                        $this->meo_save_to_history(
+                            $user_id, $kw_id, $device,
+                            (int) $t_cached['maps']['rank'],
+                            isset( $t_cached['local_finder']['rank'] ) ? (int) $t_cached['local_finder']['rank'] : null,
+                            $t_cached['maps']['store'] ?? null,
+                            $t_cached['maps']['competitors'] ?? []
+                        );
+                    }
+                }
+
                 if ( $latest_row ) {
                     $cur_maps   = $latest_row['maps_rank'] !== null ? (int) $latest_row['maps_rank'] : null;
                     $cur_finder = $latest_row['finder_rank'] !== null ? (int) $latest_row['finder_rank'] : null;
@@ -7239,6 +7285,20 @@ PROMPT;
                         }
                     } else {
                         $summary[ $device ]['rank_out']++;
+                    }
+
+                    // latest_data 補完
+                    if ( ! $latest_data && $latest_row['store_data'] ) {
+                        $sd = is_string( $latest_row['store_data'] ) ? json_decode( $latest_row['store_data'], true ) : $latest_row['store_data'];
+                        $cd = isset( $latest_row['competitors_data'] )
+                            ? ( is_string( $latest_row['competitors_data'] ) ? json_decode( $latest_row['competitors_data'], true ) : $latest_row['competitors_data'] )
+                            : [];
+                        $latest_data = [
+                            'store'       => $sd,
+                            'competitors' => $cd ?: [],
+                            'maps_rank'   => $cur_maps,
+                            'finder_rank' => $cur_finder,
+                        ];
                     }
                 } else {
                     $summary[ $device ]['rank_out']++;
