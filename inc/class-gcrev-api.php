@@ -6384,14 +6384,31 @@ PROMPT;
             $competitors = [];
 
             if ( ! is_wp_error( $maps_items ) && is_array( $maps_items ) ) {
-                $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $match_domain );
+                // ドメインマッチング
+                $my_biz = null;
+                if ( ! empty( $match_domain ) ) {
+                    $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $match_domain );
+                }
 
                 if ( $my_biz ) {
                     $maps_rank  = (int) ( $my_biz['rank_group'] ?? 0 ) ?: null;
                     $store_data = $this->meo_extract_store_info( $my_biz );
                 }
 
+                // GBP ビジネス名フォールバック（ドメインマッチ失敗時）
+                $gbp_biz_name = '';
+                if ( ! $my_biz ) {
+                    $gbp_location_id = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+                    if ( ! empty( $gbp_location_id ) && strpos( $gbp_location_id, 'pending_' ) !== 0 ) {
+                        $gbp_biz_name = (string) get_user_meta( $user_id, '_gcrev_gbp_business_name', true );
+                        if ( empty( $gbp_biz_name ) ) {
+                            $gbp_biz_name = gcrev_get_business_name( $user_id );
+                        }
+                    }
+                }
+
                 $comp_count = 0;
+                $normalized_target = preg_replace( '/^www\./i', '', strtolower( $match_domain ) );
                 foreach ( $maps_items as $item ) {
                     if ( $comp_count >= 10 ) break;
                     $item_type = $item['type'] ?? '';
@@ -6401,8 +6418,25 @@ PROMPT;
 
                     $item_domain = $item['domain'] ?? '';
                     $normalized_item = preg_replace( '/^www\./i', '', strtolower( $item_domain ) );
-                    $normalized_target = preg_replace( '/^www\./i', '', strtolower( $match_domain ) );
-                    $is_self = ( $normalized_item !== '' && $normalized_item === $normalized_target );
+
+                    // ドメイン一致 or ビジネス名一致で自社判定
+                    $is_self = false;
+                    if ( $normalized_item !== '' && $normalized_target !== '' && $normalized_item === $normalized_target ) {
+                        $is_self = true;
+                    } elseif ( $gbp_biz_name !== '' && isset( $item['title'] ) ) {
+                        $item_title_norm = mb_strtolower( trim( $item['title'] ) );
+                        $biz_name_norm   = mb_strtolower( trim( $gbp_biz_name ) );
+                        if ( $item_title_norm === $biz_name_norm || mb_strpos( $item_title_norm, $biz_name_norm ) !== false || mb_strpos( $biz_name_norm, $item_title_norm ) !== false ) {
+                            $is_self = true;
+                        }
+                    }
+
+                    // ドメインマッチ失敗時、ビジネス名マッチでmy_bizを補完
+                    if ( $is_self && ! $my_biz ) {
+                        $my_biz     = $item;
+                        $maps_rank  = (int) ( $item['rank_group'] ?? 0 ) ?: null;
+                        $store_data = $this->meo_extract_store_info( $item );
+                    }
 
                     $rating_obj = $item['rating'] ?? [];
                     $competitors[] = [
@@ -6428,7 +6462,21 @@ PROMPT;
 
             if ( ! is_wp_error( $finder_items ) && is_array( $finder_items ) ) {
                 $finder_total = count( $finder_items );
-                $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $match_domain );
+                $my_finder = null;
+                if ( ! empty( $match_domain ) ) {
+                    $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $match_domain );
+                }
+                // ビジネス名フォールバック
+                if ( ! $my_finder && $gbp_biz_name !== '' ) {
+                    foreach ( $finder_items as $fi ) {
+                        $ft = mb_strtolower( trim( $fi['title'] ?? '' ) );
+                        $fb = mb_strtolower( trim( $gbp_biz_name ) );
+                        if ( $ft !== '' && ( $ft === $fb || mb_strpos( $ft, $fb ) !== false || mb_strpos( $fb, $ft ) !== false ) ) {
+                            $my_finder = $fi;
+                            break;
+                        }
+                    }
+                }
                 if ( $my_finder ) {
                     $finder_rank = (int) ( $my_finder['rank_group'] ?? 0 ) ?: null;
                 }
@@ -6731,19 +6779,44 @@ PROMPT;
                     $competitors = [];
 
                     if ( ! is_wp_error( $maps_items ) && is_array( $maps_items ) ) {
-                        $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $match_domain );
+                        $my_biz = null;
+                        if ( ! empty( $match_domain ) ) {
+                            $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $match_domain );
+                        }
                         if ( $my_biz ) {
                             $maps_rank = (int) ( $my_biz['rank_group'] ?? 0 ) ?: null;
                             $store     = $this->meo_extract_store_info( $my_biz );
                         }
+                        // ビジネス名フォールバック準備
+                        $gbp_biz_name_cron = '';
+                        if ( ! $my_biz ) {
+                            $gbp_biz_name_cron = (string) get_user_meta( $uid, '_gcrev_gbp_business_name', true );
+                            if ( empty( $gbp_biz_name_cron ) ) {
+                                $gbp_biz_name_cron = gcrev_get_business_name( $uid );
+                            }
+                        }
                         $comp_count = 0;
+                        $norm_target = preg_replace( '/^www\./i', '', strtolower( $match_domain ) );
                         foreach ( $maps_items as $item ) {
                             if ( $comp_count >= 10 ) break;
                             if ( empty( $item['title'] ) ) continue;
                             $item_domain = $item['domain'] ?? '';
                             $norm_item   = preg_replace( '/^www\./i', '', strtolower( $item_domain ) );
-                            $norm_target = preg_replace( '/^www\./i', '', strtolower( $match_domain ) );
-                            $is_self = ( $norm_item !== '' && $norm_item === $norm_target );
+                            $is_self = false;
+                            if ( $norm_item !== '' && $norm_target !== '' && $norm_item === $norm_target ) {
+                                $is_self = true;
+                            } elseif ( $gbp_biz_name_cron !== '' && isset( $item['title'] ) ) {
+                                $t = mb_strtolower( trim( $item['title'] ) );
+                                $b = mb_strtolower( trim( $gbp_biz_name_cron ) );
+                                if ( $t === $b || mb_strpos( $t, $b ) !== false || mb_strpos( $b, $t ) !== false ) {
+                                    $is_self = true;
+                                }
+                            }
+                            if ( $is_self && ! $my_biz ) {
+                                $my_biz    = $item;
+                                $maps_rank = (int) ( $item['rank_group'] ?? 0 ) ?: null;
+                                $store     = $this->meo_extract_store_info( $item );
+                            }
                             $rating_obj = $item['rating'] ?? [];
                             $competitors[] = [
                                 'title'         => $item['title'] ?? '',
@@ -6763,7 +6836,21 @@ PROMPT;
 
                     $finder_rank = null;
                     if ( ! is_wp_error( $finder_items ) && is_array( $finder_items ) ) {
-                        $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $match_domain );
+                        $my_finder = null;
+                        if ( ! empty( $match_domain ) ) {
+                            $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $match_domain );
+                        }
+                        // ビジネス名フォールバック
+                        if ( ! $my_finder && $gbp_biz_name_cron !== '' ) {
+                            foreach ( $finder_items as $fi ) {
+                                $ft = mb_strtolower( trim( $fi['title'] ?? '' ) );
+                                $fb = mb_strtolower( trim( $gbp_biz_name_cron ) );
+                                if ( $ft !== '' && ( $ft === $fb || mb_strpos( $ft, $fb ) !== false || mb_strpos( $fb, $ft ) !== false ) ) {
+                                    $my_finder = $fi;
+                                    break;
+                                }
+                            }
+                        }
                         if ( $my_finder ) {
                             $finder_rank = (int) ( $my_finder['rank_group'] ?? 0 ) ?: null;
                         }
