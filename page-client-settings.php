@@ -1368,7 +1368,38 @@ get_header();
         return values.map(function(v) { return labelMap[v] || v; });
     }
 
+    // 商圏設定から対応エリアのテキストを組み立てる
+    function buildAreaText() {
+        var selected = document.querySelector('#areaTypeOptions .area-type-option.selected');
+        if (!selected) return '';
+        var type = selected.dataset.value;
+        if (type === 'nationwide') return '全国';
+        if (type === 'prefecture') {
+            var sel = document.getElementById('cs-pref-select');
+            return sel && sel.value ? sel.value : '';
+        }
+        if (type === 'city') {
+            var pref = document.getElementById('cs-city-pref');
+            var city = document.getElementById('cs-city-input');
+            var parts = [];
+            if (pref && pref.value) parts.push(pref.value);
+            if (city && city.value.trim()) parts.push(city.value.trim());
+            return parts.join(' ');
+        }
+        if (type === 'custom') {
+            var ta = document.getElementById('cs-area-custom');
+            return ta ? ta.value.trim() : '';
+        }
+        return '';
+    }
+
     btnOpen.addEventListener('click', function() {
+        // 「対応エリア」フィールドが未入力なら商圏設定から自動セット
+        var areaInput = document.getElementById('pgExtra-area');
+        if (areaInput && !areaInput.value.trim()) {
+            areaInput.value = buildAreaText();
+        }
+
         // コンテキストサマリーを生成
         var ages      = collectChecked('persona-age');
         var genders   = collectChecked('persona-gender');
@@ -1379,8 +1410,11 @@ get_header();
                         ? categorySelect.options[categorySelect.selectedIndex].text : '';
         if (indLabel === '選択してください') indLabel = '';
 
+        var areaText = buildAreaText();
+
         var html = '<dl>';
         if (indLabel) html += '<dt>業種・業態</dt><dd>' + escH(indLabel) + '</dd>';
+        if (areaText) html += '<dt>主な商圏</dt><dd>' + escH(areaText) + '</dd>';
         if (ages.length)      html += '<dt>想定年齢層</dt><dd>' + valuesToLabels(ages, ageLabels).join(', ') + '</dd>';
         if (genders.length)   html += '<dt>想定性別</dt><dd>' + valuesToLabels(genders, genderLabels).join(', ') + '</dd>';
         if (attrs.length)     html += '<dt>ターゲット属性</dt><dd>' + valuesToLabels(attrs, attrLabels).join(', ') + '</dd>';

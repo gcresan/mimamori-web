@@ -3121,6 +3121,27 @@ class Gcrev_Insight_API {
             }
         }
 
+        // 対応エリア: extra.area が空なら保存済みの商圏設定をフォールバック
+        if (is_array($extra) && empty(trim($extra['area'] ?? ''))) {
+            $area_type   = get_user_meta($user_id, 'gcrev_client_area_type', true);
+            $area_pref   = get_user_meta($user_id, 'gcrev_client_area_pref', true);
+            $area_city   = get_user_meta($user_id, 'gcrev_client_area_city', true);
+            $area_custom = get_user_meta($user_id, 'gcrev_client_area_custom', true);
+            $fallback = '';
+            if ($area_type === 'nationwide') {
+                $fallback = '全国';
+            } elseif ($area_type === 'city' && $area_pref) {
+                $fallback = $area_pref . ($area_city ? ' ' . $area_city : '');
+            } elseif ($area_type === 'prefecture' && $area_pref) {
+                $fallback = $area_pref;
+            } elseif ($area_type === 'custom' && $area_custom) {
+                $fallback = $area_custom;
+            }
+            if ($fallback) {
+                $extra['area'] = $fallback;
+            }
+        }
+
         // 追加情報
         if (!empty($extra) && is_array($extra)) {
             $extra_lines = [];
@@ -3148,9 +3169,10 @@ class Gcrev_Insight_API {
         $prompt_parts[] = "---";
         $prompt_parts[] = "以下のフォーマットで、800〜1600字程度の詳細ペルソナを出力してください。";
         $prompt_parts[] = "テンプレート的な表現は避け、この業種・条件に固有の具体的な人物像を描写してください。";
+        $prompt_parts[] = "特に「対応エリア」が指定されている場合は、その地域に住んでいる、またはその地域でサービスを探している人物として、地域特有の生活環境・交通事情・地名などを具体的に反映してください。";
         $prompt_parts[] = "";
         $prompt_parts[] = "■ 基本プロフィール";
-        $prompt_parts[] = "年齢・性別・職業・家族構成・居住エリアなど";
+        $prompt_parts[] = "年齢・性別・職業・家族構成・居住エリア（対応エリアが指定されている場合はその地域内の具体的な地名を使用）など";
         $prompt_parts[] = "";
         $prompt_parts[] = "■ 日常と課題";
         $prompt_parts[] = "普段の生活・仕事の中で感じている不満や課題";
