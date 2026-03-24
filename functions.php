@@ -8380,27 +8380,64 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
         }
     } catch ( \Throwable $e ) { /* 握りつぶす */ }
 
-    // --- 4. AI検索スコア ---
+    // --- 4. AI検索スコア（サイト診断スコア優先 → AI掲載率フォールバック） ---
     try {
         if ( class_exists( 'Gcrev_AIO_Service' ) && class_exists( 'Gcrev_Config' ) ) {
             $aio = new Gcrev_AIO_Service( new Gcrev_Config() );
-            $sum = $aio->get_results_summary( $user_id );
-            $vis_values = [];
-            foreach ( [ 'chatgpt', 'gemini', 'google_ai' ] as $p ) {
-                if ( isset( $sum[ $p ]['visibility'] ) && ( $sum[ $p ]['total_queries'] ?? 0 ) > 0 ) {
-                    $vis_values[] = (float) $sum[ $p ]['visibility'];
+
+            // サイト診断スコアを軽量に計算（user meta のみ参照）
+            $diagnosis   = $aio->get_site_diagnosis( $user_id );
+            $diag_items  = $diagnosis['items'] ?? [];
+            $diag_score  = null;
+
+            if ( ! empty( $diag_items ) ) {
+                $all_default = true;
+                foreach ( $diag_items as $item ) {
+                    if ( ( $item['source'] ?? 'default' ) !== 'default' ) {
+                        $all_default = false;
+                        break;
+                    }
+                }
+                if ( ! $all_default ) {
+                    $total = 0;
+                    $count = 0;
+                    foreach ( $diag_items as $item ) {
+                        $total += (int) ( $item['score'] ?? 0 );
+                        $count++;
+                    }
+                    $diag_score = $count > 0 ? (int) round( ( $total / $count ) * 10 ) : 0;
                 }
             }
-            if ( ! empty( $vis_values ) ) {
-                $avg = array_sum( $vis_values ) / count( $vis_values );
-                $eval = mimamori_eval_label( $avg );
+
+            if ( $diag_score !== null ) {
+                $eval = mimamori_eval_label( $diag_score );
                 $result['aio_score'] = [
                     'status'  => $eval['status'],
                     'label'   => $eval['label'],
-                    'score'   => round( $avg ),
-                    'summary' => 'AI検索での平均可視性 ' . round( $avg ) . '%',
-                    'link'    => '/aio-score/',
+                    'score'   => $diag_score,
+                    'summary' => 'サイト診断スコア ' . $diag_score . '点',
+                    'link'    => '/ai-report/',
                 ];
+            } else {
+                // 診断未実施時: AI掲載率があれば表示
+                $sum = $aio->get_results_summary( $user_id );
+                $vis_values = [];
+                foreach ( [ 'chatgpt', 'gemini', 'google_ai' ] as $p ) {
+                    if ( isset( $sum[ $p ]['visibility'] ) && ( $sum[ $p ]['total_queries'] ?? 0 ) > 0 ) {
+                        $vis_values[] = (float) $sum[ $p ]['visibility'];
+                    }
+                }
+                if ( ! empty( $vis_values ) ) {
+                    $avg = array_sum( $vis_values ) / count( $vis_values );
+                    $eval = mimamori_eval_label( $avg );
+                    $result['aio_score'] = [
+                        'status'  => $eval['status'],
+                        'label'   => $eval['label'],
+                        'score'   => round( $avg ),
+                        'summary' => 'AI検索での平均可視性 ' . round( $avg ) . '%',
+                        'link'    => '/ai-report/',
+                    ];
+                }
             }
         }
     } catch ( \Throwable $e ) { /* 握りつぶす */ }
