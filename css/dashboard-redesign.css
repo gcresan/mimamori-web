@@ -674,6 +674,18 @@ h3 { font-size: 20px; font-weight: 700; }
 .info-kpi-diff.negative { color: #C95A4F; }
 .info-kpi-diff.neutral  { color: var(--mw-accent-neutral); }
 
+.info-kpi-breakdown {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--mw-text-tertiary, #94a3b8);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.info-kpi-breakdown:empty { display: none; }
+.info-kpi-breakdown .bk-sep { opacity: .5; }
+
 .info-kpi-hint {
   font-size: var(--mw-font-size-xs);
   color: var(--mw-text-tertiary);

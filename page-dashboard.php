@@ -348,6 +348,12 @@ if ($infographic && is_array($infographic)) {
         $meo_prev = (is_array($meo_cache_prev) && $meo_cache_prev !== false)
             ? (int)($meo_cache_prev['total_impressions'] ?? 0) : null;
 
+        // MEO電話タップ数（ゴール数合算用）
+        $call_clicks_curr = (is_array($meo_cache_curr) && $meo_cache_curr !== false)
+            ? (int)($meo_cache_curr['call_clicks'] ?? 0) : null;
+        $call_clicks_prev = (is_array($meo_cache_prev) && $meo_cache_prev !== false)
+            ? (int)($meo_cache_prev['call_clicks'] ?? 0) : null;
+
         // --- KPI値構築 ---
         $sess_curr = (int)str_replace(',', '', (string)($kpi_curr['sessions'] ?? '0'));
         $sess_prev = (int)str_replace(',', '', (string)($kpi_prev['sessions'] ?? '0'));
@@ -362,7 +368,15 @@ if ($infographic && is_array($infographic)) {
 
         // infographic KPI 上書き（訪問数・ゴール数・MEO）
         $infographic['kpi']['visits'] = ['value' => $sess_curr, 'diff' => $sess_curr - $sess_prev];
-        $infographic['kpi']['cv']     = ['value' => $cv_curr,   'diff' => $cv_curr - $cv_prev];
+        // ゴール数: HPゴール + MEO電話タップ
+        $cv_total_curr = $cv_curr + ($call_clicks_curr ?? 0);
+        $cv_total_prev = $cv_prev + ($call_clicks_prev ?? 0);
+        $infographic['kpi']['cv']     = [
+            'value'       => $cv_total_curr,
+            'diff'        => $cv_total_curr - $cv_total_prev,
+            'hp_cv'       => $cv_curr,
+            'call_clicks' => $call_clicks_curr ?? 0,
+        ];
         // MEOはキャッシュがある場合のみ上書き（なければJS非同期で後から更新）
         if ($meo_curr !== null && $meo_prev !== null) {
             $infographic['kpi']['meo'] = ['value' => $meo_curr, 'diff' => $meo_curr - $meo_prev];
@@ -555,7 +569,7 @@ if ($infographic) {
         // クライアントごとのゴール名カスタマイズ（未設定時はデフォルト）
         $cv_label_custom = get_user_meta($user_id, '_gcrev_cv_label', true);
         $cv_label = !empty($cv_label_custom) ? $cv_label_custom : 'ゴール数';
-        $cv_sub   = !empty($cv_label_custom) ? '' : 'お問い合わせ・資料請求など';
+        $cv_sub   = !empty($cv_label_custom) ? '' : 'お問い合わせ・電話タップなど';
 
         $kpi_items = [
           'visits' => ['label' => '訪問数',       'sub' => 'ホームページを見に来た人数', 'icon' => '👥', 'metric' => 'sessions'],
@@ -581,6 +595,19 @@ if ($infographic) {
             <span class="info-kpi-diff <?php echo esc_attr($kpi_diff_class); ?>" data-kpi-role="diff">
               <?php echo esc_html($kpi_diff_icon . ' ' . $kpi_diff_text); ?>
             </span>
+            <?php if ($key === 'cv'): ?>
+            <span class="info-kpi-breakdown" data-kpi-role="breakdown">
+              <?php
+              $hp_cv_val = (int)($kpi['hp_cv'] ?? $kpi_val);
+              $cc_val    = (int)($kpi['call_clicks'] ?? 0);
+              if ($hp_cv_val > 0 || $cc_val > 0) {
+                  echo '<span class="bk-item">HP ' . esc_html(number_format($hp_cv_val)) . '</span>';
+                  echo '<span class="bk-sep">/</span>';
+                  echo '<span class="bk-item">電話タップ ' . esc_html(number_format($cc_val)) . '</span>';
+              }
+              ?>
+            </span>
+            <?php endif; ?>
             <span class="info-kpi-hint">クリックでグラフ切替</span>
           </button>
         <?php $first_kpi = false; endforeach; ?>
@@ -1229,6 +1256,18 @@ if ($infographic) {
             diffEl.className = 'info-kpi-diff ' + cls;
         }
     }
+    // ゴール数カードの内訳を更新
+    function updateCvBreakdown(hpCv, callClicks){
+        var el = document.querySelector('[data-kpi-key="cv"] [data-kpi-role="breakdown"]');
+        if(!el) return;
+        if(hpCv > 0 || callClicks > 0){
+            el.innerHTML = '<span class="bk-item">HP ' + fmt(hpCv) + '</span>'
+                         + '<span class="bk-sep">/</span>'
+                         + '<span class="bk-item">\u96fb\u8a71\u30bf\u30c3\u30d7 ' + fmt(callClicks) + '</span>';
+        } else {
+            el.innerHTML = '';
+        }
+    }
 
     <?php if (!empty($kpi_curr)): ?>
     // --- キャッシュヒット: サーバーサイドで取得済みのデータをそのまま適用 ---
@@ -1245,9 +1284,8 @@ if ($infographic) {
     var prevSessions = prev ? parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10) : 0;
     updateInfoKpi('visits', currSessions, currSessions - prevSessions);
 
-    var currCv = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
-    var prevCv = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
-    updateInfoKpi('cv', currCv, currCv - prevCv);
+    var currHpCv = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
+    var prevHpCv = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
 
     // MEO
     <?php if ($meo_curr !== null && $meo_prev !== null): ?>
@@ -1255,8 +1293,15 @@ if ($infographic) {
     var meoCurr = <?php echo (int)$meo_curr; ?>;
     var meoPrev = <?php echo (int)$meo_prev; ?>;
     updateInfoKpi('meo', meoCurr, meoCurr - meoPrev);
+    // ゴール数: HPゴール + MEO電話タップ
+    var ccCurr = <?php echo (int)($call_clicks_curr ?? 0); ?>;
+    var ccPrev = <?php echo (int)($call_clicks_prev ?? 0); ?>;
+    updateInfoKpi('cv', currHpCv + ccCurr, (currHpCv + ccCurr) - (prevHpCv + ccPrev));
+    updateCvBreakdown(currHpCv, ccCurr);
     <?php else: ?>
-    // MEOキャッシュミス: REST API で非同期取得
+    // MEOキャッシュミス: まずHPゴールのみ表示、MEO非同期で後から合算
+    updateInfoKpi('cv', currHpCv, currHpCv - prevHpCv);
+    updateCvBreakdown(currHpCv, 0);
     (function(){
         var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
         var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
@@ -1272,6 +1317,11 @@ if ($infographic) {
             var mC = (meoData && meoData.metrics) ? parseInt(meoData.metrics.total_impressions || 0, 10) : 0;
             var mP = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.total_impressions || 0, 10) : 0;
             updateInfoKpi('meo', mC, mC - mP);
+            // ゴール数にMEO電話タップを合算
+            var ccC = (meoData && meoData.metrics) ? parseInt(meoData.metrics.call_clicks || 0, 10) : 0;
+            var ccP = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.call_clicks || 0, 10) : 0;
+            updateInfoKpi('cv', currHpCv + ccC, (currHpCv + ccC) - (prevHpCv + ccP));
+            updateCvBreakdown(currHpCv, ccC);
             if (card) {
                 card.classList.remove('is-kpi-loading');
                 card.classList.add('is-kpi-loaded');
@@ -1303,11 +1353,14 @@ if ($infographic) {
 
             var cS = <?php echo (int)$sess_curr; ?>;
             var pS = parseInt(String(prev.sessions || 0).replace(/,/g, ''), 10);
-            var cC = <?php echo (int)$cv_curr; ?>;
-            var pC = parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10);
+            var cHpCv = <?php echo (int)$cv_curr; ?>;
+            var pHpCv = parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10);
+            var cCC = <?php echo (int)($call_clicks_curr ?? 0); ?>;
+            var pCC = <?php echo (int)($call_clicks_prev ?? 0); ?>;
 
             updateInfoKpi('visits', cS, cS - pS);
-            updateInfoKpi('cv', cC, cC - pC);
+            updateInfoKpi('cv', cHpCv + cCC, (cHpCv + cCC) - (pHpCv + pCC));
+            updateCvBreakdown(cHpCv, cCC);
 
             // スコアも再計算（prev=0 で計算された水増しスコアを修正）
             var gscCurr = <?php echo (int)$gsc_curr_val; ?>;
@@ -1423,8 +1476,10 @@ if ($infographic) {
             var meoData = _dashCached.meoData;
             var cS = _dashCached.cS, pS = _dashCached.pS, cC = _dashCached.cC, pC = _dashCached.pC;
             var mCurr = _dashCached.mCurr, mPrev = _dashCached.mPrev;
+            var ccC = _dashCached.ccCurr || 0, ccP = _dashCached.ccPrev || 0;
             updateInfoKpi('visits', cS, cS - pS); finishCard('visits');
-            updateInfoKpi('cv', cC, cC - pC); finishCard('cv');
+            updateInfoKpi('cv', cC + ccC, (cC + ccC) - (pC + ccP)); finishCard('cv');
+            updateCvBreakdown(cC, ccC);
             updateInfoKpi('meo', mCurr, mCurr - mPrev); finishCard('meo');
             if (_dashCached.score !== undefined) updateScoreGauge(_dashCached.score);
             return; // キャッシュヒット — API呼び出しなし
@@ -1475,7 +1530,11 @@ if ($infographic) {
 
                 var cC = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
                 var pC = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
-                updateInfoKpi('cv', cC, cC - pC);
+                // MEO電話タップをゴール数に合算
+                var ccC = (meoData && meoData.metrics) ? parseInt(meoData.metrics.call_clicks || 0, 10) : 0;
+                var ccP = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.call_clicks || 0, 10) : 0;
+                updateInfoKpi('cv', cC + ccC, (cC + ccC) - (pC + ccP));
+                updateCvBreakdown(cC, ccC);
                 finishCard('cv');
             }
 
@@ -1508,6 +1567,7 @@ if ($infographic) {
                             window.gcrevCache.set(_dashCacheKey, {
                                 curr: curr, prev: prev, meoData: meoData,
                                 cS: cS, pS: pS, cC: cC, pC: pC,
+                                ccCurr: ccC, ccPrev: ccP,
                                 mCurr: mCurr, mPrev: mPrev,
                                 score: scoreRes.score
                             });
