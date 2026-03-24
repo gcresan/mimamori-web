@@ -6384,11 +6384,25 @@ PROMPT;
             $competitors = [];
 
             if ( ! is_wp_error( $maps_items ) && is_array( $maps_items ) ) {
+                // デバッグ: マッチング状況を記録
+                $dbg_domains = [];
+                foreach ( array_slice( $maps_items, 0, 10 ) as $_di => $_ditem ) {
+                    $dbg_domains[] = ($_di+1) . ':' . ($_ditem['title'] ?? '?') . '|dom=' . ($_ditem['domain'] ?? '(empty)');
+                }
+                file_put_contents( '/tmp/gcrev_meo_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] kw='{$keyword_text}' match_domain='{$match_domain}' target_domain='{$target_domain}' items=" . count( $maps_items ) . "\n"
+                    . "  results: " . implode( ' | ', $dbg_domains ) . "\n",
+                    FILE_APPEND );
+
                 // ドメインマッチング
                 $my_biz = null;
                 if ( ! empty( $match_domain ) ) {
                     $my_biz = $this->dataforseo->find_business_in_maps_results( $maps_items, $match_domain );
                 }
+
+                file_put_contents( '/tmp/gcrev_meo_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] domain_match=" . ( $my_biz ? 'YES rank=' . ($my_biz['rank_group'] ?? '?') : 'NO' ) . "\n",
+                    FILE_APPEND );
 
                 if ( $my_biz ) {
                     $maps_rank  = (int) ( $my_biz['rank_group'] ?? 0 ) ?: null;
@@ -6405,6 +6419,9 @@ PROMPT;
                             $gbp_biz_name = gcrev_get_business_name( $user_id );
                         }
                     }
+                    file_put_contents( '/tmp/gcrev_meo_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] biz_name_fallback='{$gbp_biz_name}'\n",
+                        FILE_APPEND );
                 }
 
                 $comp_count = 0;
@@ -6530,6 +6547,10 @@ PROMPT;
             ];
 
             set_transient( $cache_key, $result, 86400 );
+
+            file_put_contents( '/tmp/gcrev_meo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [MEO-SAVE] kw='{$keyword_text}' device={$device} maps_rank=" . var_export($maps_rank, true) . " finder_rank=" . var_export($finder_rank, true) . " my_biz=" . ($my_biz ? 'found' : 'NULL') . "\n",
+                FILE_APPEND );
 
             // 日次履歴テーブルにも保存（gcrev_meo_results — UPSERT）
             $this->meo_save_to_history( $user_id, $kw_id, $device, $maps_rank, $finder_rank, $store_data, $competitors );
