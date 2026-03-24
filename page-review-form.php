@@ -105,20 +105,31 @@ $api_url = rest_url('gcrev/v1/review/generate');
 // 将来的に管理画面からの変更やフィルターフック対応を想定
 // =====================================================
 $profile_guide_texts = [
-    'thank_heading'   => 'アンケートのご回答ありがとうございました',
-    'thank_desc'      => "このあと、Googleマップで口コミを書く前に、表示名とアイコンを設定できます。\nGoogleマップ専用の表示名・写真を使えるため、本名をそのまま出したくない方にも安心です。",
-    'btn_setup'       => 'Googleマップ用プロフィールを設定する',
-    'btn_skip'        => '設定せずに口コミを書く',
-    'guide_title'     => 'Googleマップで使う表示名とアイコンを設定できます',
-    'guide_lead'      => "Googleマップでは、口コミ投稿用の表示名と写真を別で設定できます。\nこの設定をしても、GmailなどGoogleアカウント本体の名前や写真は変わりません。",
-    'step1'           => 'Googleマップアプリを開く',
-    'step2'           => '［投稿］→［プロフィールを表示］→［プロフィールを編集］を開く',
-    'step3'           => '［投稿にカスタムの表示名と写真を使用する］をオンにして、表示名と写真を設定する',
-    'notice_delay'    => '設定の反映まで少し時間がかかる場合があります',
-    'notice_past'     => '過去の公開投稿にも反映される場合があります',
-    'btn_open_maps'   => 'Googleマップを開く',
+    // --- 完了画面（意思決定画面） ---
+    'thank_heading'    => 'アンケートのご回答ありがとうございました',
+    'main_heading'     => '口コミを書く前に、表示名と写真を設定できます',
+    'thank_desc'       => "Googleマップでは、口コミ投稿用の名前と写真を別で設定できます。\n本名をそのまま表示したくない方でも、安心して口コミを書いていただけます。\n設定は数分で完了し、このあとそのまま口コミ投稿に進めます。",
+    'btn_setup'        => '表示名と写真を設定する',
+    'btn_skip'         => 'このまま口コミを書く',
+    'flow_heading'     => '口コミ投稿までの流れ',
+    'flow_step1'       => '表示名・写真を設定',
+    'flow_step2'       => 'Googleマップを開く',
+    'flow_step3'       => '口コミを書く',
+
+    // --- 設定案内ページ ---
+    'guide_title'      => 'Googleマップ用の名前・写真の設定方法',
+    'guide_lead'       => "Googleマップでは、口コミ用の表示名と写真を設定できます。\n下の流れを見ながら進めてください。",
+    'guide_note'       => "この設定をすると、Googleマップでの口コミ投稿時に使う名前と写真を変更できます。\nGmailなど、Googleアカウント本体の名前・写真は変わりません。",
+    'step1'            => 'Googleマップのプロフィール編集を開く',
+    'step2'            => 'カスタム表示名と写真をオンにする',
+    'step3'            => '名前と写真を設定する',
+    'notice_delay'     => '設定の反映まで少し時間がかかる場合があります',
+    'notice_past'      => '過去の公開投稿にも反映される場合があります',
+    'btn_open_maps'    => 'Googleマップを開く',
     'btn_write_review' => '設定が終わったら口コミを書く',
+    'btn_skip_guide'   => '設定せずに口コミを書く',
 ];
+$flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -704,24 +715,33 @@ $profile_guide_texts = [
         line-height: 1.7;
     }
 
-    /* ===== Profile Setup Guide (プロフィール設定案内) ===== */
+    /* ===== Profile Setup — 完了画面（意思決定画面） ===== */
     .profile-section { display: none; }
     .profile-icon {
         font-size: 48px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
+        color: #2E7D32;
     }
-    .profile-heading {
-        font-size: 17px;
+    .profile-thank-heading {
+        font-size: 14px;
+        font-weight: 600;
+        color: #888;
+        margin-bottom: 16px;
+        line-height: 1.6;
+    }
+    .profile-main-heading {
+        font-size: 18px;
         font-weight: 700;
         color: #2C3E40;
-        margin-bottom: 14px;
+        margin-bottom: 16px;
         line-height: 1.6;
     }
     .profile-desc {
         font-size: 14px;
         color: #555;
         line-height: 1.8;
-        margin-bottom: 28px;
+        margin-bottom: 24px;
+        text-align: left;
     }
     .btn-profile-setup {
         display: inline-flex;
@@ -729,10 +749,10 @@ $profile_guide_texts = [
         justify-content: center;
         width: 100%;
         max-width: 360px;
-        padding: 14px 24px;
+        padding: 15px 24px;
         background: #2C3E50;
         color: #fff;
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 700;
         border: none;
         border-radius: 10px;
@@ -754,13 +774,64 @@ $profile_guide_texts = [
     }
     .btn-skip-profile:hover { background: #f9fafb; }
 
+    /* 口コミ投稿までの流れ（ミニステッパー） */
+    .profile-flow {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+        text-align: left;
+    }
+    .profile-flow-heading {
+        font-size: 13px;
+        font-weight: 700;
+        color: #374151;
+        margin-bottom: 12px;
+    }
+    .profile-flow-steps {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .profile-flow-step {
+        flex: 1;
+        text-align: center;
+    }
+    .flow-step-num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        background: #2C3E50;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        border-radius: 50%;
+        margin-bottom: 6px;
+    }
+    .flow-step-label {
+        font-size: 12px;
+        color: #555;
+        line-height: 1.5;
+        display: block;
+    }
+    .profile-flow-arrow {
+        flex-shrink: 0;
+        color: #bbb;
+        font-size: 16px;
+        margin-top: 4px;
+    }
+
+    /* ===== Profile Guide — 設定案内ページ ===== */
     .profile-guide-section { display: none; }
     .profile-guide-title {
         font-size: 17px;
         font-weight: 700;
         color: #2C3E40;
         text-align: center;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
         line-height: 1.6;
     }
     .profile-guide-lead {
@@ -768,55 +839,101 @@ $profile_guide_texts = [
         color: #555;
         text-align: center;
         line-height: 1.8;
-        margin-bottom: 28px;
+        margin-bottom: 20px;
     }
-    .profile-steps {
+    .profile-guide-note {
+        font-size: 13px;
+        color: #888;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 24px;
+        line-height: 1.7;
+        text-align: left;
+    }
+
+    /* flow.jpg 画像表示 */
+    .profile-flow-image {
+        margin-bottom: 24px;
+        text-align: center;
+    }
+    .profile-flow-image img {
+        width: 100%;
+        max-width: 560px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .profile-flow-image img:active {
+        transform: scale(1.02);
+    }
+    /* タップで拡大用オーバーレイ */
+    .flow-image-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.85);
+        z-index: 9999;
+        padding: 20px;
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+    }
+    .flow-image-overlay.active {
+        display: flex;
+    }
+    .flow-image-overlay img {
+        max-width: 100%;
+        max-height: 90vh;
+        border-radius: 8px;
+    }
+    .flow-image-overlay-close {
+        position: absolute;
+        top: 16px;
+        right: 20px;
+        color: #fff;
+        font-size: 28px;
+        cursor: pointer;
+        line-height: 1;
+    }
+
+    /* ステップテキスト（画像の補足） */
+    .profile-steps-compact {
         display: flex;
         flex-direction: column;
         gap: 0;
         margin-bottom: 24px;
     }
-    .profile-step {
+    .profile-step-compact {
         display: flex;
-        gap: 14px;
-        padding: 18px 20px;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
         background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-        margin-bottom: 12px;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        margin-bottom: 8px;
     }
-    .step-number {
+    .step-num-compact {
         flex-shrink: 0;
-        width: 32px;
-        height: 32px;
+        width: 28px;
+        height: 28px;
         background: #2C3E50;
         color: #fff;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 700;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-top: 2px;
     }
-    .step-content {
-        flex: 1;
-        min-width: 0;
-    }
-    .step-title {
+    .step-label-compact {
         font-size: 14px;
         font-weight: 600;
         color: #333;
-        line-height: 1.7;
-    }
-    .step-image-placeholder {
-        display: none;
-    }
-    .step-image-placeholder img {
-        width: 100%;
-        border-radius: 8px;
-        margin-top: 10px;
-        border: 1px solid #e5e7eb;
+        line-height: 1.6;
     }
 
     .profile-notice {
@@ -887,13 +1004,32 @@ $profile_guide_texts = [
         transition: background 0.15s;
     }
     .btn-write-review:hover { background: #d32f2f; }
+    .btn-skip-guide {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 0;
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 13px;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+    .btn-skip-guide:hover { color: #555; }
 
     @media (max-width: 640px) {
-        .profile-guide-lead br {
-            display: none;
-        }
+        .profile-guide-lead br,
         .profile-desc br {
             display: none;
+        }
+        .profile-flow-steps {
+            gap: 4px;
+        }
+        .flow-step-label {
+            font-size: 11px;
+        }
+        .profile-flow-arrow {
+            font-size: 14px;
         }
     }
 
@@ -1068,12 +1204,34 @@ $profile_guide_texts = [
             </div>
         </div>
 
-        <!-- ===== Googleマッププロフィール設定案内（完了メッセージ） ===== -->
+        <!-- ===== 完了画面（意思決定画面） ===== -->
         <div id="review-profile-section" class="profile-section">
-            <div class="review-card" style="text-align:center; padding:36px 24px 28px;">
+            <div class="review-card" style="text-align:center; padding:32px 24px 28px;">
                 <div class="profile-icon">&#10003;</div>
-                <h2 class="profile-heading"><?php echo esc_html($profile_guide_texts['thank_heading']); ?></h2>
+                <div class="profile-thank-heading"><?php echo esc_html($profile_guide_texts['thank_heading']); ?></div>
+                <h2 class="profile-main-heading"><?php echo esc_html($profile_guide_texts['main_heading']); ?></h2>
                 <p class="profile-desc"><?php echo nl2br(esc_html($profile_guide_texts['thank_desc'])); ?></p>
+
+                <div class="profile-flow">
+                    <div class="profile-flow-heading"><?php echo esc_html($profile_guide_texts['flow_heading']); ?></div>
+                    <div class="profile-flow-steps">
+                        <div class="profile-flow-step">
+                            <span class="flow-step-num">1</span>
+                            <span class="flow-step-label"><?php echo esc_html($profile_guide_texts['flow_step1']); ?></span>
+                        </div>
+                        <div class="profile-flow-arrow">&#8250;</div>
+                        <div class="profile-flow-step">
+                            <span class="flow-step-num">2</span>
+                            <span class="flow-step-label"><?php echo esc_html($profile_guide_texts['flow_step2']); ?></span>
+                        </div>
+                        <div class="profile-flow-arrow">&#8250;</div>
+                        <div class="profile-flow-step">
+                            <span class="flow-step-num">3</span>
+                            <span class="flow-step-label"><?php echo esc_html($profile_guide_texts['flow_step3']); ?></span>
+                        </div>
+                    </div>
+                </div>
+
                 <button type="button" class="btn-profile-setup" id="btn-goto-profile-guide">
                     <?php echo esc_html($profile_guide_texts['btn_setup']); ?>
                 </button>
@@ -1085,32 +1243,31 @@ $profile_guide_texts = [
             </div>
         </div>
 
-        <!-- ===== Googleマッププロフィール設定ガイド ===== -->
+        <!-- ===== Googleマップ プロフィール設定案内ページ ===== -->
         <div id="review-profile-guide-section" class="profile-guide-section">
             <h2 class="profile-guide-title"><?php echo esc_html($profile_guide_texts['guide_title']); ?></h2>
             <p class="profile-guide-lead"><?php echo nl2br(esc_html($profile_guide_texts['guide_lead'])); ?></p>
 
-            <div class="profile-steps">
-                <div class="profile-step">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <div class="step-title"><?php echo esc_html($profile_guide_texts['step1']); ?></div>
-                        <div class="step-image-placeholder" data-step="1"></div>
-                    </div>
+            <div class="profile-guide-note">
+                <?php echo nl2br(esc_html($profile_guide_texts['guide_note'])); ?>
+            </div>
+
+            <div class="profile-flow-image">
+                <img src="<?php echo esc_url($flow_image_url); ?>" alt="Googleマップ プロフィール設定の流れ" id="flow-image" loading="lazy">
+            </div>
+
+            <div class="profile-steps-compact">
+                <div class="profile-step-compact">
+                    <span class="step-num-compact">1</span>
+                    <span class="step-label-compact"><?php echo esc_html($profile_guide_texts['step1']); ?></span>
                 </div>
-                <div class="profile-step">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <div class="step-title"><?php echo esc_html($profile_guide_texts['step2']); ?></div>
-                        <div class="step-image-placeholder" data-step="2"></div>
-                    </div>
+                <div class="profile-step-compact">
+                    <span class="step-num-compact">2</span>
+                    <span class="step-label-compact"><?php echo esc_html($profile_guide_texts['step2']); ?></span>
                 </div>
-                <div class="profile-step">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <div class="step-title"><?php echo esc_html($profile_guide_texts['step3']); ?></div>
-                        <div class="step-image-placeholder" data-step="3"></div>
-                    </div>
+                <div class="profile-step-compact">
+                    <span class="step-num-compact">3</span>
+                    <span class="step-label-compact"><?php echo esc_html($profile_guide_texts['step3']); ?></span>
                 </div>
             </div>
 
@@ -1129,7 +1286,17 @@ $profile_guide_texts = [
                 <a href="<?php echo esc_url($google_review_url); ?>" target="_blank" rel="noopener noreferrer" class="btn-write-review" id="btn-write-review-after-profile">
                     <?php echo esc_html($profile_guide_texts['btn_write_review']); ?>
                 </a>
+                <br>
+                <button type="button" class="btn-skip-guide" id="btn-skip-guide">
+                    <?php echo esc_html($profile_guide_texts['btn_skip_guide']); ?>
+                </button>
             </div>
+        </div>
+
+        <!-- 画像拡大オーバーレイ -->
+        <div class="flow-image-overlay" id="flow-image-overlay">
+            <span class="flow-image-overlay-close" id="flow-overlay-close">&times;</span>
+            <img src="<?php echo esc_url($flow_image_url); ?>" alt="Googleマップ プロフィール設定の流れ">
         </div>
 
         <!-- ===== エラー画面 ===== -->
@@ -1592,12 +1759,35 @@ $profile_guide_texts = [
 
         // 「設定が終わったら口コミを書く」→ Google口コミURLを開く
         document.getElementById('btn-write-review-after-profile').addEventListener('click', function(e) {
-            // href属性も設定済みだが、念のためJS側でも制御
             if (REVIEW_CONFIG.googleReviewUrl && REVIEW_CONFIG.googleReviewUrl !== '#') {
                 e.preventDefault();
                 window.open(REVIEW_CONFIG.googleReviewUrl, '_blank');
             }
         });
+
+        // 「設定せずに口コミを書く」（ガイドページ内テキストリンク）→ Google口コミURLを直接開く
+        document.getElementById('btn-skip-guide').addEventListener('click', function() {
+            window.open(REVIEW_CONFIG.googleReviewUrl, '_blank');
+        });
+
+        // =====================================================
+        // flow.jpg 画像タップ拡大
+        // =====================================================
+        (function() {
+            var img = document.getElementById('flow-image');
+            var overlay = document.getElementById('flow-image-overlay');
+            var closeBtn = document.getElementById('flow-overlay-close');
+            if (img && overlay) {
+                img.addEventListener('click', function() {
+                    overlay.classList.add('active');
+                });
+                overlay.addEventListener('click', function(e) {
+                    if (e.target === overlay || e.target === closeBtn) {
+                        overlay.classList.remove('active');
+                    }
+                });
+            }
+        })();
 
         // =====================================================
         // ユーティリティ
