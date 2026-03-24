@@ -1076,14 +1076,6 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
             <div class="review-header-client"><?php echo esc_html($client_name ?: 'アンケート'); ?></div>
         </div>
 
-        <!-- アンケートタイトル＋説明文 -->
-        <div class="survey-intro">
-            <h1 class="survey-intro-title"><?php echo esc_html($survey_title); ?></h1>
-            <?php if (!empty($survey_description)) : ?>
-                <p class="survey-intro-desc"><?php echo nl2br(esc_html($survey_description)); ?></p>
-            <?php endif; ?>
-        </div>
-
 <?php if (!empty($survey_error)) : ?>
         <!-- ===== エラー表示（無効なアンケート） ===== -->
         <div class="review-card" style="text-align:center; padding: 48px 24px;">
@@ -1099,6 +1091,14 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
 </body>
 </html>
 <?php return; endif; ?>
+
+        <!-- アンケートタイトル＋説明文（入力画面のみ表示） -->
+        <div class="survey-intro">
+            <h1 class="survey-intro-title"><?php echo esc_html($survey_title); ?></h1>
+            <?php if (!empty($survey_description)) : ?>
+                <p class="survey-intro-desc"><?php echo nl2br(esc_html($survey_description)); ?></p>
+            <?php endif; ?>
+        </div>
 
         <!-- ===== 入力画面 ===== -->
         <div id="review-form-section">
