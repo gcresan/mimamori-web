@@ -324,6 +324,9 @@ get_header();
 .search-diag-card-score {
   font-size: 28px; font-weight: 700; color: var(--mw-text-primary, #1e293b); line-height: 1;
 }
+.search-diag-card-score-unit {
+  font-size: 14px; font-weight: 500; margin-left: 1px;
+}
 .search-diag-card-label {
   font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap;
 }
@@ -748,7 +751,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         <p class="search-diag-card-summary">まだデータがありません</p>
         <?php else: ?>
         <div class="search-diag-card-body">
-          <span class="search-diag-card-score"><?php echo esc_html( (string) round( $sd_card['score'] ) ); ?></span>
+          <span class="search-diag-card-score"><?php echo esc_html( (string) round( $sd_card['score'] ) ); ?><span class="search-diag-card-score-unit">点</span></span>
           <span class="search-diag-card-label search-diag-card-label--<?php echo esc_attr( $sd_st ); ?>">
             <?php echo esc_html( $sd_card['label'] ); ?>
           </span>
