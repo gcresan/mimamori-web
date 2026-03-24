@@ -17755,57 +17755,11 @@ PROMPT;
             }
         }
 
-        // Clarityデータ抽出
-        $clarity = $row['clarity_data'] ? json_decode( $row['clarity_data'], true ) : [];
-        $behavior_text = $this->build_behavior_summary_text( $clarity );
+        // ===== 分析コンテキストの構築 =====
+        $analysis_context = $this->build_page_analysis_context( $row, $user_id );
 
-        // ページ種別名
-        $type_names = [
-            'top' => 'トップページ', 'service' => 'サービス紹介', 'lp' => 'LP',
-            'contact' => 'お問い合わせ', 'blog' => 'ブログ', 'company' => '会社概要',
-            'access' => 'アクセス', 'staff' => 'スタッフ', 'price' => '料金', 'other' => 'その他',
-        ];
-        $type_label = $type_names[ $row['page_type'] ] ?? $row['page_type'];
-
-        // プロンプト構築
-        $prompt = "あなたはWebサイトの改善コンサルタントです。以下のページについて、ホームページ運用の初心者にもわかりやすい改善提案を3〜5点出してください。\n\n"
-            . "【ページ情報】\n"
-            . "- URL: {$row['page_url']}\n"
-            . "- ページ名: {$row['page_title']}\n"
-            . "- 種別: {$type_label}\n"
-            . "- 主な目的: " . ( $row['page_purpose'] ?: '未設定' ) . "\n"
-            . "- 主要CTA: " . ( $row['page_cta'] ?: '未設定' ) . "\n\n"
-            . $behavior_text . "\n"
-            . ( count( $images ) > 0 ? "添付画像はこのページのPC版・スマホ版のスクリーンショットです。ページ全体を上から順に分割して添付しています。すべての画像を確認した上でページ全体を評価してください。\n\n" : '' )
-            . "【重要：スマホ版画像の固定フッターについて】\n"
-            . "スマホ版スクリーンショットの最下部に電話番号ボタンやお問い合わせボタン等が横並びで表示されている場合、それは画面に常時固定表示されている「固定フッターバー（sticky footer）」です。\n"
-            . "ユーザーがページをどこまでスクロールしても、この固定フッターは常に画面下部に表示され続けます。\n"
-            . "そのため「CTAが見つからない」「問い合わせ導線がない」という指摘は不適切です。固定フッターにCTAがある場合は、それを踏まえた上で改善提案をしてください。\n\n"
-            . "【重要：CTA評価ルール】\n"
-            . "CTAボタンについては、以下の順番で評価してください:\n"
-            . "1. ボタンは物理的に見えているか（大きさ・色・位置）\n"
-            . "2. ボタンの意味はすぐ理解できるか（ラベル文言）\n"
-            . "3. 押したくなる理由が周辺情報から自然に伝わるか（訴求導線）\n\n"
-            . "CTAボタンが大きく、配色も強く、画面内で十分に認識できる場合は、単純に「目立ちにくい」「視認性が低い」とは書かないでください。\n"
-            . "その場合は、以下の観点で評価してください:\n"
-            . "- CTAを押す理由づけが十分か（前後の情報とのつながり）\n"
-            . "- 誰向けか、何が得られるかの伝達が明確か\n"
-            . "- キャッチコピー・実績訴求・CTAの流れが自然か\n"
-            . "ボタン自体の見た目が十分な場合は「ボタンの視認性は確保されている一方で、CTAを押す理由づけの補強余地がある」のように、自然で妥当な表現にしてください。\n\n"
-            . "【重要：表現ルール】\n"
-            . "- 数値だけで原因を断定しない。「〜の可能性があります」「〜が影響している可能性があります」のように書く\n"
-            . "- スクロール深度が低い場合でも「情報が多すぎる」「ユーザーが離脱している」と断定せず、「ファーストビュー以降に進んでいない可能性がある」程度に留める\n"
-            . "- 「〜が原因です」ではなく「〜も要因として考えられます」のように書く\n"
-            . "- テンプレ的に「情報を減らす」「縦長を短くする」「要素を絞る」と書くのではなく、実際の画面を見た上で具体的にコメントする\n"
-            . "- 改善の軸は、視認性の強化ではなく「訴求の明確化」「理解の速さ」「行動理由の補強」に置く\n\n"
-            . "改善提案は以下の観点で出してください:\n"
-            . "1. ファーストビューの訴求力（誰向け・何ができるかが瞬時に伝わるか）\n"
-            . "2. CTA訴求導線の自然さ（ボタンの見た目だけでなく、押したくなる文脈が整っているか）\n"
-            . "3. スクロール離脱を防ぐ構成（スクロールしたくなる流れになっているか）\n"
-            . "4. スマホでの操作性と理解の速さ\n"
-            . "5. Dead Click/Rage Clickが示す問題点\n\n"
-            . "各提案は「## 提案タイトル」の見出しと、具体的な改善内容を2〜3行で書いてください。専門用語は避け、わかりやすい日本語で書いてください。\n"
-            . "汎用的なテンプレート改善案ではなく、この画面の実際の状態に即した具体的な内容にしてください。";
+        // プロンプト構築（構造化コンテキスト + 段階的評価指示）
+        $prompt = $this->build_page_analysis_prompt( $analysis_context, count( $images ) > 0 );
 
         try {
             $ai_text = $this->ai->call_gemini_multimodal( $prompt, $images );
@@ -17938,6 +17892,408 @@ PROMPT;
         );
 
         return $results;
+    }
+
+    /**
+     * ページ分析用の構造化コンテキストを構築（GA4 + Clarity + ページ情報統合）
+     */
+    private function build_page_analysis_context( array $row, int $user_id ): array {
+        $log = '/tmp/gcrev_page_analysis_debug.log';
+
+        // --- ページ基本情報 ---
+        $type_names = [
+            'top' => 'トップページ', 'service' => 'サービス紹介', 'lp' => 'LP',
+            'contact' => 'お問い合わせ', 'blog' => 'ブログ', 'company' => '会社概要',
+            'access' => 'アクセス', 'staff' => 'スタッフ', 'price' => '料金', 'other' => 'その他',
+        ];
+        $page_info = [
+            'url'          => $row['page_url'],
+            'title'        => $row['page_title'],
+            'page_type'    => $type_names[ $row['page_type'] ] ?? $row['page_type'],
+            'purpose'      => $row['page_purpose'] ?: '未設定',
+            'main_cta'     => $row['page_cta'] ?: '未設定',
+        ];
+
+        // --- 期間設定（直近30日） ---
+        $tz    = wp_timezone();
+        $end   = new \DateTimeImmutable( 'today', $tz );
+        $start = $end->modify( '-30 days' );
+        $period = [
+            'start'    => $start->format( 'Y-m-d' ),
+            'end'      => $end->format( 'Y-m-d' ),
+            'days'     => 30,
+            'timezone' => $tz->getName(),
+        ];
+
+        // --- GA4データ取得 ---
+        $ga4_data = null;
+        try {
+            $property_id = \Gcrev_Config::get_ga4_property_id( $user_id );
+            if ( $property_id ) {
+                // 国フィルター設定
+                $this->ga4->maybe_set_country_filter( $user_id );
+
+                // ページURLのパスを抽出
+                $page_path = wp_parse_url( $row['page_url'], PHP_URL_PATH ) ?: '/';
+
+                // ページ特化GA4データ取得
+                $ga4_data = $this->fetch_page_ga4_for_analysis(
+                    $property_id, $page_path, $period['start'], $period['end'], $user_id
+                );
+            }
+        } catch ( \Exception $e ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " GA4 for analysis ERROR: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+        }
+
+        // --- Clarityデータ整形 ---
+        $clarity_raw  = $row['clarity_data'] ? json_decode( $row['clarity_data'], true ) : [];
+        $clarity_data = $this->extract_clarity_for_analysis( $clarity_raw );
+
+        // --- 注記 ---
+        $notes = [
+            'CTAは「見えているか」「意味が伝わるか」「押したくなるか」を分けて評価すること',
+        ];
+        // 海外アクセス注意
+        $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
+        if ( $exclude_foreign ) {
+            $notes[] = '海外アクセスはGA4データから除外済み（日本国内のみ）';
+        }
+        // Clarity同期日
+        if ( $row['clarity_sync_date'] ) {
+            $notes[] = 'Clarity最終同期: ' . $row['clarity_sync_date'] . '（直近数日のサマリー）';
+        }
+
+        return [
+            'page'    => $page_info,
+            'period'  => $period,
+            'ga4'     => $ga4_data,
+            'clarity' => $clarity_data,
+            'notes'   => $notes,
+        ];
+    }
+
+    /**
+     * GA4からページ特化の分析データを取得
+     */
+    private function fetch_page_ga4_for_analysis(
+        string $property_id, string $page_path,
+        string $start_date, string $end_date, int $user_id
+    ): ?array {
+        // ページパスで絞り込んだメインデータ
+        $this->ga4->set_page_path_filter( $page_path );
+        $pages = $this->ga4->fetch_page_details( $property_id, $start_date, $end_date );
+        $this->ga4->clear_dimension_filters();
+
+        // 対象ページを特定
+        $target = null;
+        foreach ( $pages as $p ) {
+            if ( rtrim( $p['page'], '/' ) === rtrim( $page_path, '/' ) || $p['page'] === $page_path ) {
+                $target = $p;
+                break;
+            }
+        }
+        // 完全一致がなければ先頭を採用
+        if ( ! $target && ! empty( $pages ) ) {
+            $target = $pages[0];
+        }
+
+        if ( ! $target ) return null;
+
+        // デバイス別セッション取得
+        $device_data = $this->fetch_page_device_breakdown(
+            $property_id, $page_path, $start_date, $end_date
+        );
+
+        // 流入元トップ5取得
+        $source_data = $this->fetch_page_source_breakdown(
+            $property_id, $page_path, $start_date, $end_date
+        );
+
+        return [
+            'sessions'                => (int) $target['sessions'],
+            'pageViews'               => (int) $target['pageViews'],
+            'engagement_rate_percent' => round( (float) $target['engagementRate'], 1 ),
+            'avg_duration_sec'        => round( (float) $target['avgDuration'], 1 ),
+            'bounce_rate_percent'     => round( (float) $target['bounceRate'], 1 ),
+            'device_breakdown'        => $device_data,
+            'source_top5'             => $source_data,
+            'period'                  => "{$start_date}〜{$end_date}",
+        ];
+    }
+
+    /**
+     * GA4: ページのデバイス別セッション数を取得
+     */
+    private function fetch_page_device_breakdown(
+        string $property_id, string $page_path,
+        string $start_date, string $end_date
+    ): array {
+        try {
+            $client  = $this->ga4->get_client( $property_id );
+            $request = new \Google\Analytics\Data\V1beta\RunReportRequest( [
+                'property'    => "properties/{$property_id}",
+                'date_ranges' => [ new \Google\Analytics\Data\V1beta\DateRange( [
+                    'start_date' => $start_date,
+                    'end_date'   => $end_date,
+                ] ) ],
+                'dimensions'  => [
+                    new \Google\Analytics\Data\V1beta\Dimension( [ 'name' => 'deviceCategory' ] ),
+                ],
+                'metrics'     => [
+                    new \Google\Analytics\Data\V1beta\Metric( [ 'name' => 'sessions' ] ),
+                ],
+                'dimension_filter' => new \Google\Analytics\Data\V1beta\FilterExpression( [
+                    'filter' => new \Google\Analytics\Data\V1beta\Filter( [
+                        'field_name'    => 'pagePath',
+                        'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter( [
+                            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+                            'value'      => $page_path,
+                        ] ),
+                    ] ),
+                ] ),
+            ] );
+            $response = $client->runReport( $request );
+            $result   = [];
+            foreach ( $response->getRows() as $r ) {
+                $device   = $r->getDimensionValues()[0]->getValue();
+                $sessions = (int) $r->getMetricValues()[0]->getValue();
+                $label    = $device === 'desktop' ? 'PC' : ( $device === 'mobile' ? 'スマホ' : 'タブレット' );
+                $result[] = [ 'device' => $label, 'sessions' => $sessions ];
+            }
+            return $result;
+        } catch ( \Exception $e ) {
+            return [];
+        }
+    }
+
+    /**
+     * GA4: ページの流入元トップ5を取得
+     */
+    private function fetch_page_source_breakdown(
+        string $property_id, string $page_path,
+        string $start_date, string $end_date
+    ): array {
+        try {
+            $client  = $this->ga4->get_client( $property_id );
+            $request = new \Google\Analytics\Data\V1beta\RunReportRequest( [
+                'property'    => "properties/{$property_id}",
+                'date_ranges' => [ new \Google\Analytics\Data\V1beta\DateRange( [
+                    'start_date' => $start_date,
+                    'end_date'   => $end_date,
+                ] ) ],
+                'dimensions'  => [
+                    new \Google\Analytics\Data\V1beta\Dimension( [ 'name' => 'sessionSource' ] ),
+                    new \Google\Analytics\Data\V1beta\Dimension( [ 'name' => 'sessionMedium' ] ),
+                ],
+                'metrics'     => [
+                    new \Google\Analytics\Data\V1beta\Metric( [ 'name' => 'sessions' ] ),
+                ],
+                'dimension_filter' => new \Google\Analytics\Data\V1beta\FilterExpression( [
+                    'filter' => new \Google\Analytics\Data\V1beta\Filter( [
+                        'field_name'    => 'pagePath',
+                        'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter( [
+                            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+                            'value'      => $page_path,
+                        ] ),
+                    ] ),
+                ] ),
+                'order_bys' => [
+                    new \Google\Analytics\Data\V1beta\OrderBy( [
+                        'metric' => new \Google\Analytics\Data\V1beta\OrderBy\MetricOrderBy( [
+                            'metric_name' => 'sessions',
+                        ] ),
+                        'desc' => true,
+                    ] ),
+                ],
+                'limit' => 5,
+            ] );
+            $response = $client->runReport( $request );
+            $result   = [];
+            foreach ( $response->getRows() as $r ) {
+                $source   = $r->getDimensionValues()[0]->getValue();
+                $medium   = $r->getDimensionValues()[1]->getValue();
+                $sessions = (int) $r->getMetricValues()[0]->getValue();
+                $result[] = [
+                    'source_medium' => "{$source} / {$medium}",
+                    'sessions'      => $sessions,
+                ];
+            }
+            return $result;
+        } catch ( \Exception $e ) {
+            return [];
+        }
+    }
+
+    /**
+     * Clarityデータから分析用構造を抽出
+     */
+    private function extract_clarity_for_analysis( array $clarity ): ?array {
+        if ( empty( $clarity['metrics'] ) ) return null;
+
+        $result = [ 'devices' => [] ];
+        $site_wide = $clarity['site_wide']['by_device'] ?? [];
+
+        foreach ( [ 'PC' => 'PC', 'Mobile' => 'スマホ' ] as $key => $label ) {
+            $dev = $site_wide[ $key ] ?? [];
+            if ( empty( $dev ) ) continue;
+
+            $t  = $dev['traffic'] ?? [];
+            $sd = $dev['scroll_depth'] ?? [];
+            $et = $dev['engagement_time'] ?? [];
+            $dc = $dev['dead_click_count'] ?? [];
+            $rc = $dev['rage_click_count'] ?? [];
+            $ec = $dev['error_click_count'] ?? [];
+            $qb = $dev['quickback_click'] ?? [];
+
+            $sessions = $t['sessionsWithMetricCount'] ?? ( $t['subTotal'] ?? ( $t['sessionsCount'] ?? null ) );
+            $scroll   = $sd['averageScrollDepth'] ?? ( $sd['sessionsWithMetricPercentage'] ?? null );
+            $engage   = $et['activeTime'] ?? ( $et['totalTime'] ?? null );
+            $dead     = $dc['subTotal'] ?? ( $dc['sessionsWithMetricCount'] ?? null );
+            $rage     = $rc['subTotal'] ?? ( $rc['sessionsWithMetricCount'] ?? null );
+            $error    = $ec['subTotal'] ?? ( $ec['sessionsWithMetricCount'] ?? null );
+            $quick    = $qb['subTotal'] ?? ( $qb['sessionsWithMetricCount'] ?? null );
+
+            $result['devices'][] = [
+                'device'                  => $label,
+                'sessions'                => $sessions,
+                'scroll_depth_percent'    => $scroll !== null ? round( (float) $scroll, 1 ) : null,
+                'engagement_time_sec'     => $engage !== null ? round( (float) $engage ) : null,
+                'dead_clicks'             => $dead,
+                'rage_clicks'             => $rage,
+                'error_clicks'            => $error,
+                'quick_backs'             => $quick,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * 分析コンテキストから改善案生成用プロンプトを構築
+     */
+    private function build_page_analysis_prompt( array $ctx, bool $has_images ): string {
+        $p = $ctx['page'];
+        $period = $ctx['period'];
+
+        // --- セクション1: 分析コンテキスト ---
+        $prompt = "あなたはWebサイトの改善コンサルタントです。\n"
+            . "以下の分析データとページ画像を総合的に判断し、ホームページ運用の初心者にもわかりやすい改善提案を3〜5点出してください。\n\n"
+            . "===== 分析データ =====\n\n"
+            . "【ページ情報】\n"
+            . "- URL: {$p['url']}\n"
+            . "- ページ名: {$p['title']}\n"
+            . "- 種別: {$p['page_type']}\n"
+            . "- 主な目的: {$p['purpose']}\n"
+            . "- 主要CTA: {$p['main_cta']}\n\n";
+
+        // --- GA4データ ---
+        $ga4 = $ctx['ga4'];
+        if ( $ga4 ) {
+            $prompt .= "【GA4データ（{$ga4['period']}）】\n"
+                . "- セッション数: {$ga4['sessions']}\n"
+                . "- ページビュー: {$ga4['pageViews']}\n"
+                . "- エンゲージメント率: {$ga4['engagement_rate_percent']}%\n"
+                . "- 平均滞在時間: {$ga4['avg_duration_sec']}秒\n"
+                . "- 直帰率: {$ga4['bounce_rate_percent']}%\n";
+            if ( ! empty( $ga4['device_breakdown'] ) ) {
+                $prompt .= "- デバイス別: ";
+                $parts = [];
+                foreach ( $ga4['device_breakdown'] as $db ) {
+                    $parts[] = "{$db['device']} {$db['sessions']}セッション";
+                }
+                $prompt .= implode( ', ', $parts ) . "\n";
+            }
+            if ( ! empty( $ga4['source_top5'] ) ) {
+                $prompt .= "- 流入元トップ:\n";
+                foreach ( $ga4['source_top5'] as $s ) {
+                    $prompt .= "  - {$s['source_medium']}: {$s['sessions']}セッション\n";
+                }
+            }
+            $prompt .= "\n";
+        } else {
+            $prompt .= "【GA4データ】\n未取得（GA4未接続または対象ページのデータなし）\n\n";
+        }
+
+        // --- Clarityデータ ---
+        $clarity = $ctx['clarity'];
+        if ( $clarity && ! empty( $clarity['devices'] ) ) {
+            $prompt .= "【Clarityデータ（直近数日のサマリー）】\n";
+            foreach ( $clarity['devices'] as $cd ) {
+                $scroll  = $cd['scroll_depth_percent'] !== null ? "{$cd['scroll_depth_percent']}%" : '-';
+                $engage  = $cd['engagement_time_sec'] !== null ? "{$cd['engagement_time_sec']}秒" : '-';
+                $prompt .= "- {$cd['device']}: セッション" . ( $cd['sessions'] ?? '-' )
+                    . ", スクロール深度{$scroll}, エンゲージメント{$engage}"
+                    . ", Dead Click " . ( $cd['dead_clicks'] ?? '-' )
+                    . ", Rage Click " . ( $cd['rage_clicks'] ?? '-' );
+                if ( $cd['quick_backs'] !== null ) {
+                    $prompt .= ", Quick Back {$cd['quick_backs']}";
+                }
+                $prompt .= "\n";
+            }
+            $prompt .= "\n";
+        } else {
+            $prompt .= "【Clarityデータ】\n未取得\n\n";
+        }
+
+        // --- 注記 ---
+        if ( ! empty( $ctx['notes'] ) ) {
+            $prompt .= "【分析上の注記】\n";
+            foreach ( $ctx['notes'] as $note ) {
+                $prompt .= "- {$note}\n";
+            }
+            $prompt .= "\n";
+        }
+
+        // --- セクション2: 画像について ---
+        if ( $has_images ) {
+            $prompt .= "===== 画像について =====\n"
+                . "添付画像はこのページのPC版・スマホ版のスクリーンショットです。ページ全体を上から順に分割して添付しています。\n"
+                . "すべての画像を確認した上でページ全体を評価してください。\n\n";
+        }
+
+        // --- セクション3: 評価ルール ---
+        $prompt .= "===== 評価ルール（必ず従うこと） =====\n\n"
+            . "【スマホ版画像の固定フッターについて】\n"
+            . "スマホ版スクリーンショットの最下部に電話番号ボタンやお問い合わせボタン等が横並びで表示されている場合、それは画面に常時固定表示されている「固定フッターバー」です。\n"
+            . "ユーザーがどこまでスクロールしても常に表示されます。「CTAが見つからない」「問い合わせ導線がない」という指摘は不適切です。\n\n"
+            . "【CTA評価ルール】\n"
+            . "CTAボタンは以下の順で評価すること:\n"
+            . "1. ボタンは物理的に見えているか（大きさ・色・位置）\n"
+            . "2. ボタンの意味はすぐ理解できるか\n"
+            . "3. 押したくなる理由が周辺情報から自然に伝わるか\n"
+            . "大きく目立つCTAに対して「目立ちにくい」「視認性が低い」とは書かないこと。\n"
+            . "課題がある場合は「ボタンの視認性は確保されている一方で、CTAを押す理由づけの補強余地がある」のように書くこと。\n\n"
+            . "【表現ルール】\n"
+            . "- 数値だけで原因を断定しない。「〜の可能性があります」と書く\n"
+            . "- スクロール深度が低くても「情報が多すぎる」と断定しない。「ファーストビュー以降に進んでいない可能性がある」程度に留める\n"
+            . "- テンプレ的な一般論ではなく、実際の画面に即した具体的な内容にする\n"
+            . "- 改善の軸は「訴求の明確化」「理解の速さ」「行動理由の補強」に置く\n\n"
+            . "【分析の段階的アプローチ】\n"
+            . "以下の順で判断した上で改善案を出すこと:\n"
+            . "Step1. 画像から見て言える事実（CTAの有無・大きさ・色、情報量、レイアウト）\n"
+            . "Step2. GA4から言えること（流入量・エンゲージメント・デバイス傾向・流入チャネル）\n"
+            . "Step3. Clarityから言えること（スクロール深度・Dead Click・Quick Back等）\n"
+            . "Step4. 原因仮説を可能性ベースで述べる\n"
+            . "Step5. 改善案を出す\n\n"
+            . "===== 出力形式 =====\n\n"
+            . "以下の構造で出力してください:\n\n"
+            . "## 現状の見立て\n"
+            . "画面と数値から読み取れる状況を2〜3行で簡潔にまとめる\n\n"
+            . "## 改善提案\n"
+            . "3〜5点の改善案を、それぞれ「### 提案タイトル」の見出しと具体的な内容2〜3行で書く\n"
+            . "改善案の観点:\n"
+            . "1. ファーストビューの訴求力（誰向け・何ができるかが瞬時に伝わるか）\n"
+            . "2. CTA訴求導線の自然さ\n"
+            . "3. スクロール離脱を防ぐ構成\n"
+            . "4. スマホでの操作性と理解の速さ\n"
+            . "5. Dead Click/Rage Clickが示す問題点\n\n"
+            . "専門用語は避け、わかりやすい日本語で書いてください。\n"
+            . "汎用的なテンプレート改善案ではなく、この画面の実際の状態に即した具体的な内容にしてください。";
+
+        return $prompt;
     }
 
     private function build_behavior_summary_text( array $clarity ): string {
