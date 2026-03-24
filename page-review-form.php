@@ -461,6 +461,32 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
         text-align: center;
         margin-top: 24px;
     }
+    .copy-hint {
+        display: none;
+        font-size: 13px;
+        color: #dc2626;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 14px;
+        line-height: 1.7;
+        text-align: left;
+    }
+    .copy-hint.visible { display: block; }
+    .copy-success-toast {
+        display: none;
+        font-size: 13px;
+        color: #065f46;
+        background: #d1fae5;
+        border: 1px solid #a7f3d0;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-top: 8px;
+        line-height: 1.6;
+        text-align: left;
+    }
+    .copy-success-toast.visible { display: block; }
     .btn-google-review {
         display: inline-flex;
         align-items: center;
@@ -1194,6 +1220,10 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
             </div>
 
             <div class="result-actions">
+                <div class="copy-hint" id="copy-hint">
+                    口コミを書く前に、どちらかの文章をコピーしてください。<br>
+                    上の「この文章をコピー」ボタンからコピーできます。
+                </div>
                 <button type="button" class="btn-google-review" id="btn-google-review">
                     Google口コミを書く
                 </button>
@@ -1670,8 +1700,10 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
         }
 
         // =====================================================
-        // コピー機能
+        // コピー機能（コピー済み状態管理付き）
         // =====================================================
+        var reviewCopied = false;
+
         function initCopyButtons() {
             document.querySelectorAll('.btn-copy').forEach(function(btn) {
                 btn.addEventListener('click', function() {
@@ -1681,13 +1713,30 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
                     var copyText = textEl.tagName === 'TEXTAREA' ? textEl.value : textEl.textContent;
 
                     navigator.clipboard.writeText(copyText).then(function() {
+                        reviewCopied = true;
+
+                        // 未コピー警告を消す
+                        var hint = document.getElementById('copy-hint');
+                        if (hint) hint.classList.remove('visible');
+
+                        // ボタン表示を「コピーしました」に変更
                         var originalText = btn.innerHTML;
                         btn.classList.add('copied');
                         btn.textContent = 'コピーしました';
+
+                        // コピー成功トーストを表示（既存のものを消してから）
+                        document.querySelectorAll('.copy-success-toast').forEach(function(t) { t.remove(); });
+                        var toast = document.createElement('div');
+                        toast.className = 'copy-success-toast visible';
+                        toast.textContent = 'コピーしました。口コミ投稿画面で貼り付けてご利用ください。';
+                        btn.parentNode.insertBefore(toast, btn.nextSibling);
+
                         setTimeout(function() {
                             btn.classList.remove('copied');
                             btn.innerHTML = originalText;
-                        }, 2000);
+                            toast.classList.remove('visible');
+                            setTimeout(function() { toast.remove(); }, 300);
+                        }, 3000);
                     });
                 });
             });
@@ -1730,6 +1779,9 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
             currentResponseId = null;
             currentVersion = 1;
             lastLabeledAnswers = null;
+            reviewCopied = false;
+            var hint = document.getElementById('copy-hint');
+            if (hint) hint.classList.remove('visible');
             updateVersionDisplay();
             showSection(formSection);
         });
@@ -1742,8 +1794,15 @@ $flow_image_url = get_template_directory_uri() . '/images/flow.jpg';
         // =====================================================
         // Google口コミボタン → プロフィール設定案内へ遷移
         // =====================================================
-        // 結果画面の「Google口コミを書く」ボタン
+        // 結果画面の「Google口コミを書く」ボタン（未コピー時はガード）
         document.getElementById('btn-google-review').addEventListener('click', function() {
+            var hint = document.getElementById('copy-hint');
+            if (!reviewCopied) {
+                if (hint) hint.classList.add('visible');
+                hint.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            if (hint) hint.classList.remove('visible');
             showSection(profileSection);
         });
 
