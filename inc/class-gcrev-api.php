@@ -3307,6 +3307,17 @@ class Gcrev_Insight_API {
         $two_data    = $params['two_months_ago'] ?? null;
         $year_month  = $params['year_month']     ?? null;
 
+        // 当月以降のレポート生成を禁止
+        if ( $year_month ) {
+            $now_ym = ( new DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m' );
+            if ( $year_month >= $now_ym ) {
+                return new WP_REST_Response([
+                    'success' => false,
+                    'message' => '当月のレポートは生成できません。月次レポートは確定済みの前月以前が対象です。',
+                ], 400);
+            }
+        }
+
         if (!is_array($prev_data) || !is_array($two_data)) {
             return new WP_REST_Response([
                 'success' => false,
@@ -3979,7 +3990,11 @@ class Gcrev_Insight_API {
 
         error_log("[GCREV] auto_finalize_monthly_reports: START on " . $now->format('Y-m-d'));
 
-        $year_month = $now->format('Y-m');
+        // auto_generate は毎月1日に「前月分」レポートを draft で生成する。
+        // 例: 3月1日に2月分を生成 → 3月末に2月分を確定。
+        // したがって finalize 対象は「前月」のレポート。
+        $prev = $now->modify('first day of last month');
+        $year_month = $prev->format('Y-m');
 
         // 全ユーザー取得
         $users = get_users(['fields' => ['ID']]);
@@ -4358,14 +4373,23 @@ class Gcrev_Insight_API {
         }
 
         // デフォルトは前月
+        $tz = wp_timezone();
         if (!$year || !$month) {
-            $tz = wp_timezone();
             $prev = new DateTimeImmutable('first day of last month', $tz);
             $year = intval($prev->format('Y'));
             $month = intval($prev->format('n'));
         }
 
+        // 当月以降のレポート生成を禁止（月次レポートは確定済みの前月以前のみ）
+        $now_ym  = (new DateTimeImmutable('now', $tz))->format('Y-m');
         $year_month = sprintf('%04d-%02d', $year, $month);
+        if ($year_month >= $now_ym) {
+            error_log("[GCREV] generate_monthly_report_manual: BLOCKED — {$year_month} is current or future month");
+            return [
+                'success' => false,
+                'message' => '当月のレポートは生成できません。月次レポートは確定済みの前月以前が対象です。',
+            ];
+        }
 
         error_log("[GCREV] generate_monthly_report_manual: user_id={$user_id}, year_month={$year_month}");
 

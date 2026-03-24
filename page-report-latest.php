@@ -30,8 +30,10 @@ $tz = wp_timezone();
 $is_archive_view = false; // 過去月表示かどうか
 
 // ?ym=YYYY-MM パラメータで過去月のレポートを表示可能
+// ただし当月以降は指定不可（月次レポートは確定済みの前月以前のみ）
 $ym_param = isset($_GET['ym']) ? sanitize_text_field($_GET['ym']) : '';
-if ($ym_param && preg_match('/^\d{4}-\d{2}$/', $ym_param)) {
+$max_allowed_ym = (new DateTimeImmutable('first day of last month', $tz))->format('Y-m');
+if ($ym_param && preg_match('/^\d{4}-\d{2}$/', $ym_param) && $ym_param <= $max_allowed_ym) {
     // 指定年月のレポートを表示
     $prev_month_start = new DateTimeImmutable($ym_param . '-01', $tz);
     $prev_month_end   = new DateTimeImmutable($prev_month_start->format('Y-m-t'), $tz);
@@ -72,9 +74,10 @@ $all_report_yms = $wpdb->get_col( $wpdb->prepare(
     $user_id
 ) );
 
-// 年別にグループ化
+// 年別にグループ化（当月以降のレポートは除外）
 $report_years = [];
 foreach ( $all_report_yms as $ym_v ) {
+    if ( $ym_v > $max_allowed_ym ) continue; // 当月以降は表示しない
     $y = (int) substr( $ym_v, 0, 4 );
     $m = (int) substr( $ym_v, 5, 2 );
     $report_years[ $y ][] = $m;
