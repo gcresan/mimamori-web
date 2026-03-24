@@ -237,6 +237,18 @@ get_header();
 }
 .sv-btn-secondary:hover { background: #f9fafb; }
 
+/* Keyword tags */
+.sv-keyword-tag {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+    background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 600;
+    border-radius: 20px; border: 1px solid #bfdbfe;
+}
+.sv-keyword-remove {
+    width: 16px; height: 16px; border: none; background: none; color: #93c5fd;
+    font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
+}
+.sv-keyword-remove:hover { color: #dc2626; }
+
 /* Color customization */
 .sv-color-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
 .sv-color-group { flex: 1; min-width: 140px; }
@@ -349,6 +361,23 @@ get_header();
                         <option value="draft">非公開</option>
                         <option value="published">公開</option>
                     </select>
+                </div>
+            </div>
+            <div style="border-top:1px solid #e5e7eb; margin-top:20px; padding-top:20px;">
+                <div style="font-size:14px; font-weight:700; color:#1A2F33; margin-bottom:12px;">口コミ生成 AI 設定</div>
+                <div class="sv-form-group">
+                    <label class="sv-form-label">口コミに含めるキーワード</label>
+                    <div id="sv-keywords-container" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" class="sv-form-input" id="sv-keyword-input" placeholder="キーワードを入力してEnter" style="flex:1;">
+                        <button type="button" class="sv-btn-secondary" id="sv-keyword-add" style="white-space:nowrap;">追加</button>
+                    </div>
+                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">口コミ文にできるだけ含めたい語句を登録してください（例：丁寧、安心、駅近）</p>
+                </div>
+                <div class="sv-form-group">
+                    <label class="sv-form-label">追加プロンプト（口コミ生成時用）</label>
+                    <textarea class="sv-form-textarea" id="sv-ai-extra-prompt" placeholder="例：文末は「ありがとうございました」で締めてください" style="min-height:60px;"></textarea>
+                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">口コミ生成AIへの追加指示を自由に記述できます</p>
                 </div>
             </div>
             <button type="button" class="sv-btn-save" id="sv-btn-save-info">保存する</button>
@@ -671,6 +700,8 @@ get_header();
         document.getElementById('sv-danger-card').style.display = 'none';
         document.getElementById('sv-color-card').style.display = 'none';
         document.getElementById('sv-questions-container').innerHTML = '';
+        document.getElementById('sv-ai-extra-prompt').value = '';
+        if (typeof loadKeywords === 'function') loadKeywords('');
         resetQForm();
     }
 
@@ -684,6 +715,8 @@ get_header();
             document.getElementById('sv-description').value = s.description || '';
             document.getElementById('sv-google-url').value = s.google_review_url || '';
             document.getElementById('sv-status').value = s.status || 'draft';
+            document.getElementById('sv-ai-extra-prompt').value = s.ai_extra_prompt || '';
+            loadKeywords(s.ai_keywords || '');
 
             // Public URL
             if (data.public_url) {
@@ -727,6 +760,8 @@ get_header();
             description: document.getElementById('sv-description').value.trim(),
             google_review_url: document.getElementById('sv-google-url').value.trim(),
             status: document.getElementById('sv-status').value,
+            ai_keywords: getKeywordsString(),
+            ai_extra_prompt: document.getElementById('sv-ai-extra-prompt').value.trim(),
         };
 
         apiPost('save', payload).then(function(res) {
@@ -1054,6 +1089,53 @@ get_header();
                 toast(res.message || '更新に失敗しました', 'error');
             }
         });
+    });
+
+    // =====================================================
+    // キーワード管理
+    // =====================================================
+    var keywordsContainer = document.getElementById('sv-keywords-container');
+    var keywordInput = document.getElementById('sv-keyword-input');
+    var currentKeywords = [];
+
+    function renderKeywords() {
+        keywordsContainer.innerHTML = '';
+        currentKeywords.forEach(function(kw, i) {
+            var tag = document.createElement('span');
+            tag.className = 'sv-keyword-tag';
+            tag.innerHTML = esc(kw) + '<button type="button" class="sv-keyword-remove" data-idx="' + i + '">&times;</button>';
+            keywordsContainer.appendChild(tag);
+        });
+        keywordsContainer.querySelectorAll('.sv-keyword-remove').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                currentKeywords.splice(parseInt(this.dataset.idx), 1);
+                renderKeywords();
+            });
+        });
+    }
+
+    function addKeyword() {
+        var v = keywordInput.value.trim();
+        if (!v) return;
+        if (currentKeywords.indexOf(v) === -1) {
+            currentKeywords.push(v);
+            renderKeywords();
+        }
+        keywordInput.value = '';
+    }
+
+    function loadKeywords(str) {
+        currentKeywords = str ? str.split('\n').filter(function(s) { return s.trim() !== ''; }) : [];
+        renderKeywords();
+    }
+
+    function getKeywordsString() {
+        return currentKeywords.join('\n');
+    }
+
+    document.getElementById('sv-keyword-add').addEventListener('click', addKeyword);
+    keywordInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); addKeyword(); }
     });
 
     // =====================================================

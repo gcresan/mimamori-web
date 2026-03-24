@@ -14506,7 +14506,9 @@ PROMPT;
             $existing_response_id = absint($params['response_id'] ?? 0);
 
             // AIプロンプト構築 → Gemini API 呼び出し（口コミ用に高 temperature）
-            $prompt       = $this->build_review_prompt($answer_text, $business_name);
+            $ai_keywords     = isset($survey) && !empty($survey->ai_keywords) ? $survey->ai_keywords : '';
+            $ai_extra_prompt = isset($survey) && !empty($survey->ai_extra_prompt) ? $survey->ai_extra_prompt : '';
+            $prompt       = $this->build_review_prompt($answer_text, $business_name, $ai_keywords, $ai_extra_prompt);
             file_put_contents('/tmp/gcrev_review_debug.log',
                 date('Y-m-d H:i:s') . " calling gemini API, prompt_len=" . strlen($prompt) . ", is_regenerate=" . ($is_regenerate ? 'yes' : 'no') . "\n",
                 FILE_APPEND
@@ -14707,10 +14709,25 @@ PROMPT;
     /**
      * 口コミ生成用AIプロンプトを構築
      */
-    private function build_review_prompt(string $answer_text, string $business_name = ''): string {
+    private function build_review_prompt(string $answer_text, string $business_name = '', string $ai_keywords = '', string $ai_extra_prompt = ''): string {
         $business_part = $business_name
             ? "対象のサービス・店舗名: {$business_name}\n"
             : '';
+
+        // キーワード指示
+        $keywords_part = '';
+        if (!empty($ai_keywords)) {
+            $kw_list = array_filter(array_map('trim', explode("\n", $ai_keywords)));
+            if (!empty($kw_list)) {
+                $keywords_part = "\n### 含めるキーワード\n以下のキーワードをできるだけ自然な形で口コミ文に含めてください（無理に全て入れなくてよいが、可能な範囲で盛り込む）:\n- " . implode("\n- ", $kw_list) . "\n";
+            }
+        }
+
+        // 追加プロンプト
+        $extra_part = '';
+        if (!empty($ai_extra_prompt)) {
+            $extra_part = "\n### 追加指示\n{$ai_extra_prompt}\n";
+        }
 
         return <<<PROMPT
 あなたは、実際にサービスを利用した顧客になりきって Google 口コミの下書きを作成するライターです。
@@ -14756,7 +14773,7 @@ PROMPT;
 - 対応の印象をまとめる
 - 実務上助かった点で終わる
 
-### 出力パターン
+{$keywords_part}{$extra_part}### 出力パターン
 
 #### short_review（80〜120文字程度）
 - 短く簡潔にまとめた口コミ文
@@ -14928,6 +14945,8 @@ PROMPT;
                 'google_review_url' => $survey->google_review_url,
                 'status'            => $survey->status,
                 'token'             => $survey->token,
+                'ai_keywords'       => $survey->ai_keywords ?? '',
+                'ai_extra_prompt'   => $survey->ai_extra_prompt ?? '',
                 'created_at'        => $survey->created_at,
                 'updated_at'        => $survey->updated_at,
             ],
@@ -14949,6 +14968,8 @@ PROMPT;
         $description       = sanitize_textarea_field($params['description'] ?? '');
         $google_review_url = esc_url_raw($params['google_review_url'] ?? '');
         $status            = sanitize_text_field($params['status'] ?? 'draft');
+        $ai_keywords       = isset($params['ai_keywords']) ? sanitize_textarea_field($params['ai_keywords']) : null;
+        $ai_extra_prompt   = isset($params['ai_extra_prompt']) ? sanitize_textarea_field($params['ai_extra_prompt']) : null;
 
         if (empty($title)) {
             return new \WP_REST_Response(['success' => false, 'message' => 'タイトルは必須です。'], 400);
@@ -14965,13 +14986,23 @@ PROMPT;
             if (!$this->can_access_survey($id, $user_id)) {
                 return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
             }
-            $wpdb->update($t_surveys, [
+            $update_data = [
                 'title'             => $title,
                 'description'       => $description,
                 'google_review_url' => $google_review_url,
                 'status'            => $status,
                 'updated_at'        => $now,
-            ], ['id' => $id], ['%s', '%s', '%s', '%s', '%s'], ['%d']);
+            ];
+            $update_fmt = ['%s', '%s', '%s', '%s', '%s'];
+            if ($ai_keywords !== null) {
+                $update_data['ai_keywords'] = $ai_keywords;
+                $update_fmt[] = '%s';
+            }
+            if ($ai_extra_prompt !== null) {
+                $update_data['ai_extra_prompt'] = $ai_extra_prompt;
+                $update_fmt[] = '%s';
+            }
+            $wpdb->update($t_surveys, $update_data, ['id' => $id], $update_fmt, ['%d']);
         } else {
             // 新規作成 — 上限チェック
             $count = (int) $wpdb->get_var($wpdb->prepare(
@@ -14994,9 +15025,11 @@ PROMPT;
                 'google_review_url' => $google_review_url,
                 'token'             => $token,
                 'status'            => $status,
+                'ai_keywords'       => $ai_keywords ?? '',
+                'ai_extra_prompt'   => $ai_extra_prompt ?? '',
                 'created_at'        => $now,
                 'updated_at'        => $now,
-            ], ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']);
+            ], ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']);
             $id = (int) $wpdb->insert_id;
         }
 

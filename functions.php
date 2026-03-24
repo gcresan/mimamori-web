@@ -5275,6 +5275,8 @@ function gcrev_survey_create_tables(): void {
         google_review_url VARCHAR(500) NOT NULL DEFAULT '',
         token VARCHAR(32) NOT NULL,
         status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        ai_keywords TEXT,
+        ai_extra_prompt TEXT,
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
