@@ -17968,6 +17968,61 @@ PROMPT;
                     ];
                 }
 
+                // --- 流入チャネル（サイト全体、同期間） ---
+                try {
+                    $source_raw = $this->ga4->fetch_source_data_from_ga4( $property_id, $period['start'], $period['end'] );
+                    if ( ! empty( $source_raw['channels'] ) ) {
+                        $channels_top = array_slice( $source_raw['channels'], 0, 5 );
+                        $ga4_data['channels'] = array_map( function( $ch ) {
+                            return [
+                                'channel'  => $ch['channel'] ?? $ch['sessionDefaultChannelGroup'] ?? '',
+                                'sessions' => (int) ( $ch['sessions'] ?? 0 ),
+                            ];
+                        }, $channels_top );
+                    }
+                    if ( ! empty( $source_raw['sources'] ) ) {
+                        $sources_top = array_slice( $source_raw['sources'], 0, 5 );
+                        $ga4_data['sources'] = array_map( function( $s ) {
+                            return [
+                                'source_medium' => ( $s['source'] ?? '' ) . ' / ' . ( $s['medium'] ?? '' ),
+                                'sessions'      => (int) ( $s['sessions'] ?? 0 ),
+                            ];
+                        }, $sources_top );
+                    }
+                } catch ( \Exception $e ) {
+                    file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " GA4 source ERROR: " . $e->getMessage() . "\n", FILE_APPEND );
+                }
+
+                // --- 地域別（上位5） ---
+                try {
+                    $regions_raw = $this->ga4->fetch_region_details( $property_id, $period['start'], $period['end'] );
+                    if ( ! empty( $regions_raw ) ) {
+                        $ga4_data['regions'] = array_map( function( $r ) {
+                            return [
+                                'region'   => $r['region'] ?? '',
+                                'sessions' => (int) ( $r['sessions'] ?? 0 ),
+                            ];
+                        }, array_slice( $regions_raw, 0, 5 ) );
+                    }
+                } catch ( \Exception $e ) {
+                    file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " GA4 region ERROR: " . $e->getMessage() . "\n", FILE_APPEND );
+                }
+
+                // --- デバイス別 ---
+                try {
+                    $devices_raw = $this->ga4->fetch_device_details( $property_id, $period['start'], $period['end'] );
+                    if ( ! empty( $devices_raw ) ) {
+                        $ga4_data['devices'] = array_map( function( $d ) {
+                            return [
+                                'device'   => $d['device'] ?? $d['deviceCategory'] ?? '',
+                                'sessions' => (int) ( $d['sessions'] ?? 0 ),
+                            ];
+                        }, $devices_raw );
+                    }
+                } catch ( \Exception $e ) {
+                    file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " GA4 device ERROR: " . $e->getMessage() . "\n", FILE_APPEND );
+                }
+
                 // 国フィルタクリア
                 if ( $exclude_foreign ) {
                     $this->ga4->set_country_filter( null );
@@ -17976,6 +18031,29 @@ PROMPT;
         } catch ( \Exception $e ) {
             file_put_contents( $log,
                 date( 'Y-m-d H:i:s' ) . " GA4 for analysis ERROR: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+        }
+
+        // --- GSC（検索キーワード）取得 ---
+        $gsc_data = null;
+        try {
+            $user_config = $this->config->get_user_config( $user_id );
+            $gsc_url = $user_config['gsc_url'] ?? '';
+            if ( $gsc_url ) {
+                $gsc_raw = $this->gsc->fetch_gsc_data( $gsc_url, $period['start'], $period['end'] );
+                if ( ! empty( $gsc_raw['keywords'] ) ) {
+                    $gsc_data = [
+                        'total_impressions' => $gsc_raw['total']['impressions'] ?? 0,
+                        'total_clicks'      => $gsc_raw['total']['clicks'] ?? 0,
+                        'total_ctr'         => $gsc_raw['total']['ctr'] ?? '',
+                        'top_keywords'      => array_slice( $gsc_raw['keywords'], 0, 10 ),
+                    ];
+                }
+            }
+        } catch ( \Exception $e ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " GSC for analysis ERROR: " . $e->getMessage() . "\n",
                 FILE_APPEND
             );
         }
@@ -18008,6 +18086,7 @@ PROMPT;
             'page'             => $page_info,
             'period'           => $period,
             'ga4'              => $ga4_data,
+            'gsc'              => $gsc_data,
             'clarity'          => $clarity_data,
             'notes'            => $notes,
             'data_reliability' => $data_reliability,
@@ -18119,14 +18198,64 @@ PROMPT;
         // --- GA4データ ---
         $ga4 = $ctx['ga4'];
         if ( $ga4 ) {
-            $prompt .= "【GA4データ（{$ga4['period']}）】\n"
+            $prompt .= "【GA4ページデータ（{$ga4['period']}）】\n"
                 . "- セッション数: {$ga4['sessions']}\n"
                 . "- ページビュー: {$ga4['pageViews']}\n"
                 . "- エンゲージメント率: {$ga4['engagement_rate_percent']}%\n"
                 . "- 平均滞在時間: {$ga4['avg_duration_sec']}秒\n"
                 . "- 直帰率: {$ga4['bounce_rate_percent']}%\n\n";
+
+            // 流入チャネル
+            if ( ! empty( $ga4['channels'] ) ) {
+                $prompt .= "【流入チャネル（サイト全体・同期間）】\n";
+                foreach ( $ga4['channels'] as $ch ) {
+                    $prompt .= "- {$ch['channel']}: {$ch['sessions']}セッション\n";
+                }
+                $prompt .= "\n";
+            }
+
+            // 流入元トップ5
+            if ( ! empty( $ga4['sources'] ) ) {
+                $prompt .= "【流入元 Top5】\n";
+                foreach ( $ga4['sources'] as $s ) {
+                    $prompt .= "- {$s['source_medium']}: {$s['sessions']}セッション\n";
+                }
+                $prompt .= "\n";
+            }
+
+            // 地域別
+            if ( ! empty( $ga4['regions'] ) ) {
+                $prompt .= "【アクセス地域 Top5】\n";
+                foreach ( $ga4['regions'] as $r ) {
+                    $prompt .= "- {$r['region']}: {$r['sessions']}セッション\n";
+                }
+                $prompt .= "\n";
+            }
+
+            // デバイス別
+            if ( ! empty( $ga4['devices'] ) ) {
+                $prompt .= "【デバイス別セッション】\n";
+                foreach ( $ga4['devices'] as $d ) {
+                    $prompt .= "- {$d['device']}: {$d['sessions']}セッション\n";
+                }
+                $prompt .= "\n";
+            }
         } else {
             $prompt .= "【GA4データ】\n未取得（GA4未接続または対象ページのデータなし）\n\n";
+        }
+
+        // --- GSC（検索キーワード） ---
+        $gsc = $ctx['gsc'] ?? null;
+        if ( $gsc ) {
+            $prompt .= "【検索キーワード（Google Search Console・同期間）】\n"
+                . "- 合計表示回数: {$gsc['total_impressions']}\n"
+                . "- 合計クリック数: {$gsc['total_clicks']}\n"
+                . "- 平均CTR: {$gsc['total_ctr']}\n"
+                . "上位キーワード:\n";
+            foreach ( $gsc['top_keywords'] as $kw ) {
+                $prompt .= "  - 「{$kw['query']}」 表示:{$kw['impressions']} クリック:{$kw['clicks']} 順位:{$kw['position']}\n";
+            }
+            $prompt .= "\n";
         }
 
         // --- Clarityデータ ---
@@ -18198,38 +18327,57 @@ PROMPT;
             . "- スクロール深度が低くても「情報が多すぎる」と断定しない。「ファーストビュー以降に進んでいない可能性がある」程度に留める\n"
             . "- テンプレ的な一般論ではなく、実際の画面に即した具体的な内容にする\n"
             . "- 改善の軸は「訴求の明確化」「理解の速さ」「行動理由の補強」に置く\n\n"
+            . "【流入背景を踏まえた分析ルール】\n"
+            . "- ページ内行動だけでなく、流入背景（チャネル・地域・キーワード）を見たうえで判断すること\n"
+            . "- ターゲット外流入が多い場合、ページだけの問題とは断定しないこと\n"
+            . "- 流入キーワードとファーストビュー訴求にズレがあるなら、その旨を指摘すること\n"
+            . "- ページ課題と集客課題を分けて評価すること\n"
+            . "- 検索キーワードデータがある場合、検索意図とページ内容の整合性を必ず評価すること\n\n"
             . "【分析の段階的アプローチ】\n"
             . "以下の順で判断した上で改善案を出すこと:\n"
-            . "Step1. 画像から見て言える事実（CTAの有無・大きさ・色、情報量、レイアウト）\n"
-            . "Step2. GA4から言えること（流入量・エンゲージメント・デバイス傾向・流入チャネル）\n"
-            . "Step3. Clarityから言えること（スクロール深度・Dead Click・Quick Back等）\n"
-            . "Step4. 原因仮説を可能性ベースで述べる\n"
-            . "Step5. 改善案を出す\n\n"
+            . "Step1. 流入背景を確認（どこから・誰が・どんな意図で来ているか）\n"
+            . "Step2. 画像から見て言える事実（CTAの有無・大きさ・色、情報量、レイアウト）\n"
+            . "Step3. GA4から言えること（流入量・エンゲージメント・デバイス傾向・流入チャネル）\n"
+            . "Step4. 検索キーワードから言えること（検索意図とページ訴求の一致度）\n"
+            . "Step5. Clarityから言えること（スクロール深度・Dead Click・Quick Back等）\n"
+            . "Step6. ページ課題と流入課題を分けて原因仮説を述べる（可能性ベース）\n"
+            . "Step7. 改善案を出す（ページ改善と集客導線改善を区別）\n\n"
             . "===== 出力形式 =====\n\n"
             . "以下の構造で、必ずこの順番で出力してください:\n\n"
+            . "## 流入背景\n"
+            . "GA4とSearch Consoleのデータから、このページにどんなユーザーが来ているかを2〜4行でまとめる。\n"
+            . "含めるべき情報: 主な流入チャネル、主要流入地域、デバイス比率、主な検索キーワード（あれば）。\n"
+            . "ターゲット地域との一致度、検索意図とページ訴求の整合性についても触れる。\n"
+            . "データが不足している場合は取得できた範囲で書き、不明点は断定しない。\n\n"
             . "## 良かった点\n"
             . "画面やデータから事実ベースで評価できるプラスのポイントを1〜3点挙げる。\n"
-            . "単なる褒めではなく、実際に確認できた具体的な事実に基づくこと。\n"
-            . "例: CTAの視認性が高い、Dead Clickが少なく操作上の混乱がない、PC版で一定のエンゲージメントがある等\n"
+            . "流入背景も含め、総合的に評価できる点を書く。\n"
+            . "例: CTAの視認性が高い、ターゲット地域からの流入が多い、自然検索中心で指名検索もある等\n"
             . "各項目は「### 項目タイトル」の見出しを付け、1〜2行で簡潔に書く。\n\n"
             . "## 現状の見立て\n"
-            . "画面と数値から読み取れる状況を2〜3行で簡潔にまとめる\n\n"
+            . "画面・GA4流入データ・Clarity行動データを総合して、現状を3〜5行でまとめる。\n"
+            . "ページ自体の課題と、流入の質やターゲティングの課題を分けて言及すること。\n"
+            . "例: 「ターゲット地域からの流入は確保できているが、スマホでの離脱が早い」等。\n\n"
             . "## 改善提案\n"
-            . "3〜5点の改善案を、それぞれ「### 提案タイトル」の見出しと具体的な内容2〜3行で書く\n"
-            . "見出しは**太字**にし、本文との区切りを明確にすること\n"
-            . "改善案の観点:\n"
-            . "1. ファーストビューの訴求力（誰向け・何ができるかが瞬時に伝わるか）\n"
+            . "3〜5点の改善案を、それぞれ「### 提案タイトル」の見出しと具体的な内容2〜3行で書く。\n"
+            . "見出しは**太字**にし、本文との区切りを明確にすること。\n"
+            . "改善案の観点（ページ課題と流入課題を区別して提案する）:\n"
+            . "1. ファーストビューの訴求力（流入キーワードの検索意図とマッチしているか）\n"
             . "2. CTA訴求導線の自然さ\n"
             . "3. スクロール離脱を防ぐ構成\n"
             . "4. スマホでの操作性と理解の速さ\n"
-            . "5. Dead Click/Rage Clickが示す問題点\n\n"
+            . "5. Dead Click/Rage Clickが示す問題点\n"
+            . "6. 流入チャネルや検索意図とページ訴求のズレがあればその改善\n"
+            . "7. ターゲット外流入が多い場合、集客導線の見直し余地\n\n"
             . "===== 文体ルール =====\n"
             . "- 専門用語は避け、わかりやすい日本語で書く\n"
             . "- 汎用的なテンプレート改善案ではなく、この画面の実際の状態に即した具体的な内容にする\n"
-            . "- 各セクション見出し（## 良かった点、## 現状の見立て、## 改善提案）は必ず付ける\n"
+            . "- 各セクション見出し（## 流入背景、## 良かった点、## 現状の見立て、## 改善提案）は必ず付ける\n"
             . "- 各改善項目の見出し（### タイトル）も必ず付ける\n"
             . "- 要点は**太字**で強調する\n"
-            . "- 厳しすぎず、前向きで実務的なトーンにする\n";
+            . "- 厳しすぎず、前向きで実務的なトーンにする\n"
+            . "- ページ課題と流入課題は区別して言及する\n"
+            . "- 「この分析はページ画像・GA4の流入データ・Clarityの行動データ・Search Consoleの検索データを総合して判断しています」というニュアンスが伝わるようにする\n";
 
         return $prompt;
     }
