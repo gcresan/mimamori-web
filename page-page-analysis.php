@@ -570,9 +570,37 @@ get_header();
 }
 .pa-ai-prereq-item--ok { background: #e6f7ed; color: #1a9b4a; }
 .pa-ai-prereq-item--ng { background: #f0f0f0; color: #999; }
-.pa-ai-section { margin-bottom: 20px; }
-.pa-ai-section h4 { font-size: 14px; font-weight: 600; color: #1e293b; margin: 0 0 8px; }
-.pa-ai-body { line-height: 1.8; font-size: 14px; color: #333; }
+/* 注意ボックス（件数不足時） */
+.pa-ai-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+.pa-ai-notice--warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+.pa-ai-notice--info { background: #f0f9ff; border: 1px solid #bae6fd; color: #0c4a6e; }
+.pa-ai-notice-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.pa-ai-notice strong { font-weight: 700; }
+.pa-ai-section { margin-bottom: 24px; }
+.pa-ai-section h4 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e2e8f0;
+}
+/* AI本文の見出し・太字強化 */
+.pa-ai-body { line-height: 1.85; font-size: 14px; color: #333; }
+.pa-ai-body h5 { font-size: 14px; font-weight: 700; color: #1e293b; margin: 20px 0 8px; }
+.pa-ai-body strong { font-weight: 700; color: #1e293b; }
+.pa-ai-body p { margin: 0 0 12px; }
+.pa-ai-body ul, .pa-ai-body ol { margin: 0 0 12px; padding-left: 20px; }
+.pa-ai-body li { margin-bottom: 4px; }
 .pa-behavior-note { font-size: 12px; color: #94a3b8; margin: 0 0 14px; }
 .pa-behavior-header {
     display: flex; justify-content: space-between; align-items: center;
@@ -1256,9 +1284,22 @@ get_header();
         }
         var reliabilityLevel = totalSessions >= 100 ? 'sufficient' : (totalSessions >= 20 ? 'reference' : 'hypothesis');
         var reliabilityLabel = reliabilityLevel === 'sufficient' ? '十分なデータあり'
-            : (reliabilityLevel === 'reference' ? '参考傾向' : '件数不足のため仮説レベル');
+            : (reliabilityLevel === 'reference' ? '参考傾向（データ少なめ）' : '参考分析（データ少なめ）');
         var reliabilityClass = reliabilityLevel === 'sufficient' ? 'pa-badge--done'
             : (reliabilityLevel === 'reference' ? 'pa-badge--warn' : 'pa-badge--pending');
+        // 注意ボックスHTML
+        var noticeHtml = '';
+        if (reliabilityLevel === 'hypothesis') {
+            noticeHtml = '<div class="pa-ai-notice pa-ai-notice--warn">'
+                + '<span class="pa-ai-notice-icon">&#9888;&#65039;</span>'
+                + '<div><strong>データ件数が少ないため、以下は参考分析です。</strong><br>'
+                + '現時点では断定的な判断ではなく、今後データが蓄積されてから改めて分析することをお勧めします。</div></div>';
+        } else if (reliabilityLevel === 'reference') {
+            noticeHtml = '<div class="pa-ai-notice pa-ai-notice--info">'
+                + '<span class="pa-ai-notice-icon">&#128712;</span>'
+                + '<div><strong>データ件数がまだ十分ではないため、以下は参考傾向です。</strong><br>'
+                + '継続的な計測により分析精度が向上します。</div></div>';
+        }
 
         var prereqHtml = '<div class="pa-ai-prereq">'
             + '<span class="pa-ai-prereq-item ' + (hasPC ? 'pa-ai-prereq-item--ok' : 'pa-ai-prereq-item--ng') + '">'
@@ -1281,7 +1322,7 @@ get_header();
             var btnHtml = '<div style="text-align:center;margin-top:16px;">'
                 + '<button type="button" class="pa-modal-btn" id="paAiGenerate"'
                 + ' onclick="window._paGenerateAi(' + data.id + ')" style="font-size:13px;">再生成する</button></div>';
-            content.innerHTML = prereqHtml + bodyHtml + btnHtml;
+            content.innerHTML = prereqHtml + noticeHtml + bodyHtml + btnHtml;
         } else if (_aiGenerating) {
             // 自動生成中: ローディング表示
             content.innerHTML = prereqHtml
@@ -1305,9 +1346,30 @@ get_header();
     // AI改善案テキストを見やすく整形（##見出しをHTML化）
     function formatAiText(text) {
         if (!text) return '';
-        return escHtml(text)
-            .replace(/^## (.+)$/gm, '<strong style="display:block;margin:16px 0 4px;font-size:15px;color:#1e293b;">$1</strong>')
-            .replace(/\n/g, '<br>');
+        var html = escHtml(text);
+        // ## 見出し → h5太字
+        html = html.replace(/^## (.+)$/gm, '</p><h5>$1</h5><p>');
+        // ### 小見出し → 太字
+        html = html.replace(/^### (.+)$/gm, '</p><h5 style="font-size:13px;">$1</h5><p>');
+        // **太字** → <strong>
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // * 箇条書き → リスト（簡易）
+        html = html.replace(/(?:^|\n)\* (.+)/g, function(m, item) {
+            return '\n<li>' + item + '</li>';
+        });
+        // 連続<li>をulで囲む
+        html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>');
+        // 番号付きリスト
+        html = html.replace(/(?:^|\n)(\d+)\. (.+)/g, function(m, num, item) {
+            return '\n<li>' + item + '</li>';
+        });
+        // 改行 → <br>（ただしタグ直後は除く）
+        html = html.replace(/\n/g, '<br>');
+        // 空の<p>タグ除去
+        html = html.replace(/<p><\/p>/g, '').replace(/<br><br>/g, '<br>');
+        // 先頭に<p>がなければ追加
+        if (html.charAt(0) !== '<') html = '<p>' + html;
+        return html;
     }
 
     // 自動生成: パネルオープン時にバックグラウンドで実行
