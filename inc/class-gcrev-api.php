@@ -14506,9 +14506,7 @@ PROMPT;
             $existing_response_id = absint($params['response_id'] ?? 0);
 
             // AIプロンプト構築 → Gemini API 呼び出し（口コミ用に高 temperature）
-            $ai_keywords     = (isset($survey) && property_exists($survey, 'ai_keywords') && !empty($survey->ai_keywords)) ? (string) $survey->ai_keywords : '';
-            $ai_extra_prompt = (isset($survey) && property_exists($survey, 'ai_extra_prompt') && !empty($survey->ai_extra_prompt)) ? (string) $survey->ai_extra_prompt : '';
-            $prompt       = $this->build_review_prompt($answer_text, $business_name, $ai_keywords, $ai_extra_prompt);
+            $prompt       = $this->build_review_prompt($answer_text, $business_name);
             file_put_contents('/tmp/gcrev_review_debug.log',
                 date('Y-m-d H:i:s') . " calling gemini API, prompt_len=" . strlen($prompt) . ", is_regenerate=" . ($is_regenerate ? 'yes' : 'no') . "\n",
                 FILE_APPEND
