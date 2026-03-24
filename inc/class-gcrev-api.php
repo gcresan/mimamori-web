@@ -6279,6 +6279,18 @@ PROMPT;
             $location_code = (int) ( $selected_kw['location_code'] ?: 2392 );
             $language_code = $selected_kw['language_code'] ?: 'ja';
 
+            // target_domain が空なら gcrev_client_site_url からフォールバック取得
+            if ( empty( $target_domain ) ) {
+                $site_url = get_user_meta( $user_id, 'gcrev_client_site_url', true );
+                if ( empty( $site_url ) ) {
+                    $site_url = get_user_meta( $user_id, 'report_site_url', true );
+                }
+                if ( ! empty( $site_url ) ) {
+                    $parsed = wp_parse_url( $site_url );
+                    $target_domain = preg_replace( '/^www\./i', '', $parsed['host'] ?? '' );
+                }
+            }
+
             // 座標モード判定
             $meo_lat     = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
             $meo_lng     = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
@@ -6604,9 +6616,10 @@ PROMPT;
         $meo_table = $wpdb->prefix . 'gcrev_meo_results';
 
         // キーワード登録済みユーザーを取得（チャンク）
+        // target_domain が空でも gcrev_client_site_url からフォールバック可能なので条件を緩和
         $user_ids = $wpdb->get_col( $wpdb->prepare(
             "SELECT DISTINCT user_id FROM {$kw_table}
-             WHERE enabled = 1 AND target_domain != ''
+             WHERE enabled = 1
              ORDER BY user_id ASC
              LIMIT %d OFFSET %d",
             $limit, $offset
@@ -6661,7 +6674,7 @@ PROMPT;
 
             $keywords = $wpdb->get_results( $wpdb->prepare(
                 "SELECT * FROM {$kw_table}
-                 WHERE user_id = %d AND enabled = 1 AND target_domain != ''
+                 WHERE user_id = %d AND enabled = 1
                  ORDER BY sort_order ASC, id ASC",
                 $uid
             ), ARRAY_A );
@@ -6682,6 +6695,20 @@ PROMPT;
                 }
 
                 $target_domain = $kw['target_domain'];
+                // target_domain が空なら gcrev_client_site_url からフォールバック取得
+                if ( empty( $target_domain ) ) {
+                    $site_url = get_user_meta( $uid, 'gcrev_client_site_url', true );
+                    if ( empty( $site_url ) ) {
+                        $site_url = get_user_meta( $uid, 'report_site_url', true );
+                    }
+                    if ( ! empty( $site_url ) ) {
+                        $parsed = wp_parse_url( $site_url );
+                        $target_domain = preg_replace( '/^www\./i', '', $parsed['host'] ?? '' );
+                    }
+                    if ( empty( $target_domain ) ) {
+                        continue; // ドメインが特定できないキーワードはスキップ
+                    }
+                }
                 // Maps 用ドメイン（GBP のドメインが target_domain と異なる場合）
                 $maps_domain   = (string) get_user_meta( $uid, '_gcrev_maps_domain', true );
                 $match_domain  = $maps_domain !== '' ? $maps_domain : $target_domain;
