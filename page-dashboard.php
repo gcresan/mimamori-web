@@ -284,6 +284,69 @@ get_header();
 
 /* (DRT + MEO sections removed — see page-map-rank.php, page-rank-tracker.php) */
 
+/* ========== 検索・診断の総合状況 ========== */
+.search-diag-section { margin: 32px 0 24px; }
+.search-diag-title {
+  font-size: 18px; font-weight: 700; color: var(--mw-text-heading, #2C3E40);
+  margin: 0 0 8px; display: flex; align-items: center; gap: 6px;
+}
+.search-diag-title .icon { font-size: 20px; }
+.search-diag-comment {
+  font-size: 14px; color: var(--mw-text-secondary, #64748b);
+  line-height: 1.7; margin: 0 0 16px;
+}
+.search-diag-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+}
+.search-diag-card {
+  display: flex; flex-direction: column;
+  background: var(--mw-bg-primary, #fff);
+  border: 1px solid var(--mw-border-light, #C3CED0);
+  border-radius: var(--mw-radius-md, 16px);
+  box-shadow: var(--mw-shadow-card, 0 2px 12px rgba(0,0,0,.04));
+  padding: 16px; text-decoration: none; color: inherit;
+  transition: box-shadow .2s, border-color .2s;
+}
+.search-diag-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,.1);
+  border-color: var(--mw-primary-blue, #568184);
+}
+.search-diag-card-header {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
+}
+.search-diag-card-icon { font-size: 18px; }
+.search-diag-card-title {
+  font-size: 13px; font-weight: 600; color: var(--mw-text-secondary, #64748b);
+}
+.search-diag-card-body {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px;
+}
+.search-diag-card-score {
+  font-size: 28px; font-weight: 700; color: var(--mw-text-primary, #1e293b); line-height: 1;
+}
+.search-diag-card-label {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+}
+.search-diag-card-label--good      { background: #E8F5E9; color: #2E7D32; }
+.search-diag-card-label--warning   { background: #FFF8E1; color: #F57F17; }
+.search-diag-card-label--attention { background: #FFEBEE; color: #C62828; }
+.search-diag-card-label--none      { background: #F5F5F5; color: #9E9E9E; }
+.search-diag-card-summary {
+  font-size: 12px; color: var(--mw-text-tertiary, #94a3b8);
+  line-height: 1.5; margin: 0; flex: 1;
+}
+.search-diag-card-link {
+  font-size: 12px; color: var(--mw-primary-blue, #568184);
+  margin-top: 10px; font-weight: 500;
+}
+@media (max-width: 1024px) {
+  .search-diag-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 600px) {
+  .search-diag-grid { grid-template-columns: repeat(2, 1fr); }
+  .search-diag-card-score { font-size: 24px; }
+}
+
 </style>
 
 <!-- Chart.js -->
@@ -443,6 +506,9 @@ if ($infographic) {
     }
     $highlight_details = $payload['highlight_details'] ?? [];
 }
+
+// 検索・診断の総合状況
+$search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 ?>
 
 
@@ -648,6 +714,52 @@ if ($infographic) {
       </div>
     </div>
   </div>
+
+  <!-- 検索・診断の総合状況 -->
+  <section class="search-diag-section">
+    <h2 class="search-diag-title"><span class="icon" aria-hidden="true">🔍</span>検索・診断の総合状況</h2>
+    <?php if ( ! empty( $search_diag['overall_comment'] ) ): ?>
+    <p class="search-diag-comment"><?php echo esc_html( $search_diag['overall_comment'] ); ?></p>
+    <?php endif; ?>
+    <div class="search-diag-grid">
+      <?php
+      $sd_cards = [
+        'organic_rank'  => [ 'icon' => '🔍', 'title' => '自然検索順位' ],
+        'map_rank'      => [ 'icon' => '📍', 'title' => 'マップ順位' ],
+        'seo_diagnosis' => [ 'icon' => '🛡️', 'title' => 'SEO診断' ],
+        'aio_score'     => [ 'icon' => '🤖', 'title' => 'AI検索スコア' ],
+        'meo_diagnosis' => [ 'icon' => '📋', 'title' => 'MEO診断' ],
+      ];
+      foreach ( $sd_cards as $sd_key => $sd_meta ):
+        $sd_card  = $search_diag[ $sd_key ] ?? null;
+        $sd_none  = ! $sd_card || ( $sd_card['status'] ?? '' ) === 'none';
+        $sd_st    = $sd_none ? 'none' : $sd_card['status'];
+      ?>
+      <a href="<?php echo esc_url( home_url( $sd_card['link'] ?? '#' ) ); ?>" class="search-diag-card">
+        <div class="search-diag-card-header">
+          <span class="search-diag-card-icon"><?php echo $sd_meta['icon']; ?></span>
+          <span class="search-diag-card-title"><?php echo esc_html( $sd_meta['title'] ); ?></span>
+        </div>
+        <?php if ( $sd_none ): ?>
+        <div class="search-diag-card-body">
+          <span class="search-diag-card-score">--</span>
+          <span class="search-diag-card-label search-diag-card-label--none">未取得</span>
+        </div>
+        <p class="search-diag-card-summary">まだデータがありません</p>
+        <?php else: ?>
+        <div class="search-diag-card-body">
+          <span class="search-diag-card-score"><?php echo esc_html( (string) round( $sd_card['score'] ) ); ?></span>
+          <span class="search-diag-card-label search-diag-card-label--<?php echo esc_attr( $sd_st ); ?>">
+            <?php echo esc_html( $sd_card['label'] ); ?>
+          </span>
+        </div>
+        <p class="search-diag-card-summary"><?php echo esc_html( $sd_card['summary'] ); ?></p>
+        <?php endif; ?>
+        <span class="search-diag-card-link">詳細を見る →</span>
+      </a>
+      <?php endforeach; ?>
+    </div>
+  </section>
 
   <!-- ドリルダウンポップオーバー -->
   <div class="drilldown-popover" id="drilldownPopover" style="display:none;">

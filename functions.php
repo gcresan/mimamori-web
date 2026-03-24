@@ -8218,3 +8218,252 @@ add_action( 'init', function() {
     update_option( 'gcrev_pages_client_settings_created', 1 );
 }, 20 );
 
+// =========================================================
+// 全体ダッシュボード — 検索・診断サマリー
+// =========================================================
+
+/**
+ * スコアから共通評価ラベルを返す
+ */
+function mimamori_eval_label( float $score ): array {
+    if ( $score >= 80 ) {
+        return [ 'status' => 'good',      'label' => '良好' ];
+    }
+    if ( $score >= 60 ) {
+        return [ 'status' => 'warning',   'label' => '改善余地あり' ];
+    }
+    return [ 'status' => 'attention', 'label' => '要対応' ];
+}
+
+/**
+ * 5つのデータソースから検索・診断サマリーを収集
+ *
+ * @param int $user_id
+ * @return array
+ */
+function mimamori_get_search_diagnostic_summary( int $user_id ): array {
+    global $wpdb;
+    $none = [ 'status' => 'none', 'label' => '未取得', 'score' => 0, 'summary' => 'まだデータがありません' ];
+
+    $result = [
+        'organic_rank'  => array_merge( $none, [ 'link' => '/rank-tracker/' ] ),
+        'map_rank'      => array_merge( $none, [ 'link' => '/map-rank/' ] ),
+        'seo_diagnosis' => array_merge( $none, [ 'link' => '/seo-check/' ] ),
+        'aio_score'     => array_merge( $none, [ 'link' => '/aio-score/' ] ),
+        'meo_diagnosis' => array_merge( $none, [ 'link' => '/meo-diagnosis/' ] ),
+        'overall_comment' => '',
+    ];
+
+    $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+    $rr_table  = $wpdb->prefix . 'gcrev_rank_results';
+    $meo_table = $wpdb->prefix . 'gcrev_meo_results';
+
+    // --- 1. 自然検索順位 ---
+    try {
+        $kw_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT id FROM {$kw_table} WHERE user_id = %d AND enabled = 1",
+            $user_id
+        ) );
+        if ( ! empty( $kw_ids ) ) {
+            $ph = implode( ',', array_fill( 0, count( $kw_ids ), '%d' ) );
+            // 各キーワードの最新 mobile 順位を取得
+            $ranks = $wpdb->get_results( $wpdb->prepare(
+                "SELECT r.keyword_id, r.rank_group, r.is_ranked
+                 FROM {$rr_table} r
+                 INNER JOIN (
+                     SELECT keyword_id, MAX(fetched_at) AS max_fa
+                     FROM {$rr_table}
+                     WHERE keyword_id IN ({$ph}) AND device = 'mobile'
+                     GROUP BY keyword_id
+                 ) latest ON r.keyword_id = latest.keyword_id AND r.fetched_at = latest.max_fa
+                 WHERE r.device = 'mobile'",
+                $kw_ids
+            ) );
+            if ( ! empty( $ranks ) ) {
+                $total = count( $ranks );
+                $bands = [ '1_3' => 0, '4_10' => 0, '11_20' => 0, 'out' => 0 ];
+                foreach ( $ranks as $r ) {
+                    $rg = (int) $r->rank_group;
+                    if ( ! $r->is_ranked || $rg === 0 ) { $bands['out']++; }
+                    elseif ( $rg <= 3 )  { $bands['1_3']++; }
+                    elseif ( $rg <= 10 ) { $bands['4_10']++; }
+                    elseif ( $rg <= 20 ) { $bands['11_20']++; }
+                    else { $bands['out']++; }
+                }
+                $score = $total > 0
+                    ? ( $bands['1_3'] * 100 + $bands['4_10'] * 70 + $bands['11_20'] * 30 ) / $total
+                    : 0;
+                $score = min( 100, round( $score ) );
+                $top10 = $bands['1_3'] + $bands['4_10'];
+                $eval  = mimamori_eval_label( $score );
+                $result['organic_rank'] = [
+                    'status'  => $eval['status'],
+                    'label'   => $eval['label'],
+                    'score'   => $score,
+                    'summary' => "{$total}キーワード中{$top10}件がトップ10入り",
+                    'link'    => '/rank-tracker/',
+                ];
+            }
+        }
+    } catch ( \Throwable $e ) { /* 握りつぶす */ }
+
+    // --- 2. マップ順位 ---
+    try {
+        if ( ! empty( $kw_ids ) ) {
+            $ph = implode( ',', array_fill( 0, count( $kw_ids ), '%d' ) );
+            $meo_ranks = $wpdb->get_results( $wpdb->prepare(
+                "SELECT m.keyword_id, m.maps_rank
+                 FROM {$meo_table} m
+                 INNER JOIN (
+                     SELECT keyword_id, MAX(fetched_at) AS max_fa
+                     FROM {$meo_table}
+                     WHERE user_id = %d AND keyword_id IN ({$ph}) AND device = 'mobile'
+                     GROUP BY keyword_id
+                 ) latest ON m.keyword_id = latest.keyword_id AND m.fetched_at = latest.max_fa
+                 WHERE m.user_id = %d AND m.device = 'mobile'",
+                array_merge( [ $user_id ], $kw_ids, [ $user_id ] )
+            ) );
+            if ( ! empty( $meo_ranks ) ) {
+                $total = count( $meo_ranks );
+                $bands = [ '1_3' => 0, '4_10' => 0, '11_20' => 0, 'out' => 0 ];
+                foreach ( $meo_ranks as $r ) {
+                    $rg = (int) $r->maps_rank;
+                    if ( $rg <= 0 )      { $bands['out']++; }
+                    elseif ( $rg <= 3 )  { $bands['1_3']++; }
+                    elseif ( $rg <= 10 ) { $bands['4_10']++; }
+                    elseif ( $rg <= 20 ) { $bands['11_20']++; }
+                    else { $bands['out']++; }
+                }
+                $score = $total > 0
+                    ? ( $bands['1_3'] * 100 + $bands['4_10'] * 70 + $bands['11_20'] * 30 ) / $total
+                    : 0;
+                $score = min( 100, round( $score ) );
+                $top3 = $bands['1_3'];
+                $eval = mimamori_eval_label( $score );
+                $result['map_rank'] = [
+                    'status'  => $eval['status'],
+                    'label'   => $eval['label'],
+                    'score'   => $score,
+                    'summary' => "{$total}キーワード中{$top3}件がトップ3入り",
+                    'link'    => '/map-rank/',
+                ];
+            }
+        }
+    } catch ( \Throwable $e ) { /* 握りつぶす */ }
+
+    // --- 3. SEO診断 ---
+    try {
+        if ( class_exists( 'Gcrev_SEO_Checker' ) ) {
+            $checker = new Gcrev_SEO_Checker();
+            $diag = $checker->get_diagnosis( $user_id );
+            if ( $diag && isset( $diag['siteSummary']['totalScore'] ) ) {
+                $s = $diag['siteSummary'];
+                $score = (float) $s['totalScore'];
+                $eval  = mimamori_eval_label( $score );
+                $crit  = (int) ( $s['criticalCount'] ?? 0 );
+                $warn  = (int) ( $s['warningCount'] ?? 0 );
+                $summary = "スコア{$score}点";
+                if ( $crit > 0 || $warn > 0 ) {
+                    $parts = [];
+                    if ( $crit > 0 ) { $parts[] = "重要{$crit}件"; }
+                    if ( $warn > 0 ) { $parts[] = "注意{$warn}件"; }
+                    $summary .= '（' . implode( '・', $parts ) . '）';
+                }
+                $result['seo_diagnosis'] = [
+                    'status'  => $eval['status'],
+                    'label'   => $eval['label'],
+                    'score'   => round( $score ),
+                    'summary' => $summary,
+                    'link'    => '/seo-check/',
+                ];
+            }
+        }
+    } catch ( \Throwable $e ) { /* 握りつぶす */ }
+
+    // --- 4. AI検索スコア ---
+    try {
+        if ( class_exists( 'Gcrev_AIO_Service' ) && class_exists( 'Gcrev_Config' ) ) {
+            $aio = new Gcrev_AIO_Service( new Gcrev_Config() );
+            $sum = $aio->get_results_summary( $user_id );
+            $vis_values = [];
+            foreach ( [ 'chatgpt', 'gemini', 'google_ai' ] as $p ) {
+                if ( isset( $sum[ $p ]['visibility'] ) && ( $sum[ $p ]['total_queries'] ?? 0 ) > 0 ) {
+                    $vis_values[] = (float) $sum[ $p ]['visibility'];
+                }
+            }
+            if ( ! empty( $vis_values ) ) {
+                $avg = array_sum( $vis_values ) / count( $vis_values );
+                $eval = mimamori_eval_label( $avg );
+                $result['aio_score'] = [
+                    'status'  => $eval['status'],
+                    'label'   => $eval['label'],
+                    'score'   => round( $avg ),
+                    'summary' => 'AI検索での平均可視性 ' . round( $avg ) . '%',
+                    'link'    => '/aio-score/',
+                ];
+            }
+        }
+    } catch ( \Throwable $e ) { /* 握りつぶす */ }
+
+    // --- 5. MEO診断 ---
+    try {
+        $meo_posts = get_posts( [
+            'post_type'      => 'gcrev_report',
+            'meta_query'     => [
+                [ 'key' => '_gcrev_report_type', 'value' => 'meo_diagnostic' ],
+                [ 'key' => '_gcrev_user_id',     'value' => $user_id ],
+            ],
+            'posts_per_page' => 1,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ] );
+        if ( ! empty( $meo_posts ) ) {
+            $json = get_post_meta( $meo_posts[0]->ID, '_gcrev_diagnostic_json', true );
+            $data = json_decode( $json ?: '{}', true );
+            if ( isset( $data['overall_score'] ) ) {
+                $score = (float) $data['overall_score'];
+                $grade = $data['overall_grade'] ?? '';
+                $eval  = mimamori_eval_label( $score );
+                $result['meo_diagnosis'] = [
+                    'status'  => $eval['status'],
+                    'label'   => $eval['label'],
+                    'score'   => round( $score ),
+                    'summary' => 'グレード' . $grade . '（' . round( $score ) . '点）',
+                    'link'    => '/meo-diagnosis/',
+                ];
+            }
+        }
+    } catch ( \Throwable $e ) { /* 握りつぶす */ }
+
+    // --- 総合コメント生成 ---
+    $card_keys  = [ 'organic_rank', 'map_rank', 'seo_diagnosis', 'aio_score', 'meo_diagnosis' ];
+    $card_names = [
+        'organic_rank'  => '自然検索順位',
+        'map_rank'      => 'マップ順位',
+        'seo_diagnosis' => 'SEO診断',
+        'aio_score'     => 'AI検索スコア',
+        'meo_diagnosis' => 'MEO診断',
+    ];
+    $goods = $warnings = $attentions = $nones = [];
+    foreach ( $card_keys as $k ) {
+        $st = $result[ $k ]['status'];
+        if ( $st === 'good' )      { $goods[]      = $card_names[ $k ]; }
+        elseif ( $st === 'warning' ) { $warnings[]   = $card_names[ $k ]; }
+        elseif ( $st === 'attention' ) { $attentions[] = $card_names[ $k ]; }
+        else { $nones[] = $card_names[ $k ]; }
+    }
+    $active_count = count( $goods ) + count( $warnings ) + count( $attentions );
+    if ( $active_count === 0 ) {
+        $result['overall_comment'] = 'まだ診断・計測データがありません。各ページで初回の診断や順位チェックを実行してください。';
+    } elseif ( ! empty( $attentions ) ) {
+        $result['overall_comment'] = implode( '・', $attentions ) . 'で対応が必要な状態です。各診断ページで詳細をご確認ください。';
+    } elseif ( ! empty( $warnings ) ) {
+        $good_text = ! empty( $goods ) ? implode( '・', $goods ) . 'は良好ですが、' : '';
+        $result['overall_comment'] = $good_text . implode( '・', $warnings ) . 'に改善の余地があります。';
+    } else {
+        $result['overall_comment'] = '全体的に良好な状態です。この調子を維持しましょう。';
+    }
+
+    return $result;
+}
+
