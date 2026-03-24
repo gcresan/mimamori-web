@@ -588,13 +588,7 @@ if ($infographic) {
     </div>
   </div>
 
-  <!-- サマリー -->
-  <div class="info-summary">
-    <span class="info-summary-icon" aria-hidden="true">
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 1.5a5.5 5.5 0 0 1 3.16 10.01c-.44.31-.66.56-.76.82-.1.27-.15.61-.15 1.17v.5H7.75v-.5c0-.56-.05-.9-.15-1.17-.1-.26-.32-.51-.76-.82A5.5 5.5 0 0 1 10 1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16.5h4M8.5 14h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10" cy="7" r="1" fill="currentColor"/></svg>
-    </span>
-    <span class="info-summary-text"><?php echo esc_html($infographic['summary'] ?? ''); ?></span>
-  </div>
+  <!-- サマリー（結論サマリーに集約したため削除） -->
 
   <!-- KPI トレンドチャート（インライン常時表示） -->
   <div class="kpi-trend-inline" id="kpiTrendInline">
@@ -923,7 +917,7 @@ if ($infographic) {
         </div>
         <?php if ($can_ai): ?>
         <button type="button" class="ask-ai-btn" data-ai-ask
-          data-ai-instruction="今月の月次レポート結果を見て、いちばん重要な気づきと次にやることを3つ教えて">
+          data-ai-instruction="直近の月次レポート結果を見て、いちばん重要な気づきと次にやることを3つ教えて">
           <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
         </button>
         <?php endif; ?>
@@ -957,7 +951,7 @@ if ($infographic) {
       <div class="info-summary-blocks">
         <div class="info-summary-block">
           <div class="info-summary-block-label">
-            <span class="info-summary-block-icon">📊</span> 今月の状況
+            <span class="info-summary-block-icon">📊</span> 現状
           </div>
           <div class="info-summary-block-text">
             <?php echo enhance_report_text($block_situation, 'default'); ?>
