@@ -1028,6 +1028,8 @@ get_header();
                     if (json.success) {
                         closeBaseModal();
                         showToast(json.message || '基準地点を保存しました。');
+                        // キャッシュを破棄してから再取得（古いデータで表示されるのを防ぐ）
+                        if (window.gcrevCache) window.gcrevCache.clear('map_rank');
                         fetchMeoData(); // Reload to reflect changes
                     } else {
                         showToast(json.message || '保存に失敗しました。', 'error');
