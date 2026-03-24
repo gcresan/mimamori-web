@@ -6533,17 +6533,6 @@ PROMPT;
         $fetch_date    = $now->format( 'Y-m-d' );
         $fetched_at    = $now->format( 'Y-m-d H:i:s' );
 
-        // 当日のデータが既にあればスキップ（キャッシュヒット時の重複書き込み防止）
-        $exists = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$meo_table}
-             WHERE user_id = %d AND keyword_id = %d AND device = %s AND fetch_date = %s
-             LIMIT 1",
-            $user_id, $keyword_id, $device, $fetch_date
-        ) );
-        if ( $exists ) {
-            return;
-        }
-
         // 店舗情報から rating / reviews_count を抽出
         $rating        = null;
         $reviews_count = null;
@@ -6552,25 +6541,36 @@ PROMPT;
             $reviews_count = isset( $store_data['reviews_count'] ) ? (int) $store_data['reviews_count'] : null;
         }
 
-        $wpdb->replace(
-            $meo_table,
-            [
-                'user_id'          => $user_id,
-                'keyword_id'       => $keyword_id,
-                'device'           => $device,
-                'maps_rank'        => $maps_rank,
-                'finder_rank'      => $finder_rank,
-                'rating'           => $rating,
-                'reviews_count'    => $reviews_count,
-                'store_data'       => $store_data ? wp_json_encode( $store_data, JSON_UNESCAPED_UNICODE ) : null,
-                'competitors_data' => ! empty( $competitors ) ? wp_json_encode( $competitors, JSON_UNESCAPED_UNICODE ) : null,
-                'iso_year_week'    => $iso_year_week,
-                'fetch_date'       => $fetch_date,
-                'fetched_at'       => $fetched_at,
-                'created_at'       => $fetched_at,
-            ],
-            [ '%d', '%d', '%s', '%d', '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s' ]
+        // UPSERT: 当日データがあれば最新値で上書き、なければ新規挿入
+        $maps_rank_sql   = $maps_rank !== null ? $wpdb->prepare( '%d', $maps_rank ) : 'NULL';
+        $finder_rank_sql = $finder_rank !== null ? $wpdb->prepare( '%d', $finder_rank ) : 'NULL';
+        $rating_sql      = $rating !== null ? $wpdb->prepare( '%f', $rating ) : 'NULL';
+        $reviews_sql     = $reviews_count !== null ? $wpdb->prepare( '%d', $reviews_count ) : 'NULL';
+        $store_json      = $store_data ? wp_json_encode( $store_data, JSON_UNESCAPED_UNICODE ) : null;
+        $comp_json       = ! empty( $competitors ) ? wp_json_encode( $competitors, JSON_UNESCAPED_UNICODE ) : null;
+        $store_sql       = $store_json !== null ? $wpdb->prepare( '%s', $store_json ) : 'NULL';
+        $comp_sql        = $comp_json !== null ? $wpdb->prepare( '%s', $comp_json ) : 'NULL';
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $sql = $wpdb->prepare(
+            "INSERT INTO {$meo_table}
+             (user_id, keyword_id, device, maps_rank, finder_rank, rating, reviews_count,
+              store_data, competitors_data, iso_year_week, fetch_date, fetched_at, created_at)
+             VALUES (%d, %d, %s, {$maps_rank_sql}, {$finder_rank_sql}, {$rating_sql}, {$reviews_sql},
+                     {$store_sql}, {$comp_sql}, %s, %s, %s, %s)
+             ON DUPLICATE KEY UPDATE
+              maps_rank        = VALUES(maps_rank),
+              finder_rank      = VALUES(finder_rank),
+              rating           = VALUES(rating),
+              reviews_count    = VALUES(reviews_count),
+              store_data       = VALUES(store_data),
+              competitors_data = VALUES(competitors_data),
+              fetched_at       = VALUES(fetched_at)",
+            $user_id, $keyword_id, $device,
+            $iso_year_week, $fetch_date, $fetched_at, $fetched_at
         );
+
+        $wpdb->query( $sql );
     }
 
     // =========================================================
