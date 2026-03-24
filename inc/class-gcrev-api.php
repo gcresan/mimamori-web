@@ -4354,21 +4354,27 @@ class Gcrev_Insight_API {
             'channels_daily_series' => $source_analysis['channels_daily_series'] ?? [],
         ];
 
-        // 実質CVの注入（月単位判定: 月初～月末の範囲であれば適用）
+        // 実質CVの注入（CV設定を反映）
         $tz = wp_timezone();
         $start_dt = new \DateTimeImmutable( $start_date, $tz );
         $end_dt   = new \DateTimeImmutable( $end_date, $tz );
-        if ( $start_dt->format('d') === '01' && $end_dt->format('Y-m-d') === $end_dt->format('Y-m-t') ) {
+        $is_full_month = ( $start_dt->format('d') === '01' && $end_dt->format('Y-m-d') === $end_dt->format('Y-m-t') );
+
+        if ( $is_full_month ) {
             $year_month = $start_dt->format('Y-m');
             $effective  = $this->get_effective_cv_monthly( $year_month, $user_id );
+        } else {
+            $effective = $this->get_effective_cv_for_range( $start_date, $end_date, $user_id );
+        }
 
-            $result['conversions'] = (string) $effective['total'];
-            $result['cv_source']   = $effective['source'];
-            $result['cv_detail']   = $effective['breakdown_manual'] ?? [];
-            $result['ga4_cv']      = $effective['components']['ga4_total'];
-            $result['effective_cv'] = $effective;
+        $result['conversions']  = (string) $effective['total'];
+        $result['cv_source']    = $effective['source'];
+        $result['cv_detail']    = $effective['breakdown_manual'] ?? [];
+        $result['ga4_cv']       = $effective['components']['ga4_total'];
+        $result['effective_cv'] = $effective;
 
-            // CV 増減（前月比）
+        // CV 増減（完全月の場合のみ前月比を計算）
+        if ( $is_full_month ) {
             $comp_ym = $start_dt->modify( 'first day of last month' )->format('Y-m');
             $comp_effective = $this->get_effective_cv_monthly( $comp_ym, $user_id );
             $cur = (float) $effective['total'];
@@ -4402,15 +4408,25 @@ class Gcrev_Insight_API {
 
     /**
      * KPIレスポンスに実質CVデータを注入する
-     * period が月単位（prev-month/prev-prev-month）の場合のみ適用
+     * 月単位期間（prev-month等）は get_effective_cv_monthly、
+     * 日付レンジ期間（last30等）は get_effective_cv_for_range で取得
      */
     private function inject_effective_cv_into_kpi(array $data, string $period, int $user_id): array {
         $year_month = $this->period_to_year_month($period);
-        if ($year_month === null) {
-            return $data;
-        }
 
-        $effective = $this->get_effective_cv_monthly($year_month, $user_id);
+        if ($year_month !== null) {
+            // 月単位期間（prev-month 等）→ 従来通り月単位で取得
+            $effective = $this->get_effective_cv_monthly($year_month, $user_id);
+        } else {
+            // 日付レンジ期間（last30, last90 等）→ current_period から日付レンジで取得
+            $cp = $data['current_period'] ?? [];
+            $start = $cp['start'] ?? '';
+            $end   = $cp['end']   ?? '';
+            if ($start === '' || $end === '') {
+                return $data;
+            }
+            $effective = $this->get_effective_cv_for_range($start, $end, $user_id);
+        }
 
         $data['conversions']  = (string)$effective['total'];
         $data['cv_source']    = $effective['source']; // 'hybrid' | 'ga4'
