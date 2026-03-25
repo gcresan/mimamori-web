@@ -1895,7 +1895,7 @@ $flow_summary_steps = [
         });
 
         // =====================================================
-        // Google口コミボタン → プロフィール設定案内へ遷移
+        // Google口コミボタン → Google口コミ投稿ページへ直接遷移（応急処置）
         // =====================================================
         // 結果画面の「Google口コミを書く」ボタン（未コピー時はガード）
         document.getElementById('btn-google-review').addEventListener('click', function() {
@@ -1906,12 +1906,12 @@ $flow_summary_steps = [
                 return;
             }
             if (hint) hint.classList.remove('visible');
-            showSection(profileSection);
+            window.open(REVIEW_CONFIG.googleReviewUrl, '_blank');
         });
 
         // 手動入力画面の「Google口コミを書く」ボタン
         document.getElementById('btn-manual-goto-profile').addEventListener('click', function() {
-            showSection(profileSection);
+            window.open(REVIEW_CONFIG.googleReviewUrl, '_blank');
         });
 
         // =====================================================
