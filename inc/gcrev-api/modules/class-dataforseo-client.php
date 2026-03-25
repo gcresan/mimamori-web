@@ -723,15 +723,38 @@ class Gcrev_DataForSEO_Client {
         }
         $normalized_target = preg_replace( '/^www\./i', '', strtolower( trim( $host, '/' ) ) );
 
+        // 1st pass: domain フィールドで照合
         foreach ( $items as $item ) {
             $domain = $item['domain'] ?? '';
             if ( $domain === '' ) {
                 continue;
             }
 
-            $item_domain = preg_replace( '/^www\./i', '', strtolower( $domain ) );
+            $item_domain = preg_replace( '/^www\./i', '', strtolower( trim( $domain, '/' ) ) );
 
             if ( $item_domain === $normalized_target ) {
+                return $item;
+            }
+        }
+
+        // 2nd pass: domain が空のアイテムに対して url フィールドからドメインを抽出して照合
+        // DataForSEO が domain を返さなくても url には含まれていることがある
+        foreach ( $items as $item ) {
+            $domain = $item['domain'] ?? '';
+            if ( $domain !== '' ) {
+                continue; // 1st pass で既にチェック済み
+            }
+            $url = $item['url'] ?? '';
+            if ( $url === '' ) {
+                continue;
+            }
+            $url_parsed = wp_parse_url( $url );
+            $url_host   = $url_parsed['host'] ?? '';
+            if ( $url_host === '' ) {
+                continue;
+            }
+            $url_domain = preg_replace( '/^www\./i', '', strtolower( $url_host ) );
+            if ( $url_domain === $normalized_target ) {
                 return $item;
             }
         }

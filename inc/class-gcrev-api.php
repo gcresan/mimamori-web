@@ -6511,6 +6511,31 @@ PROMPT;
                     ];
                     $comp_count++;
                 }
+
+                // セーフティネット: competitor ループで is_self=true が見つかったのに
+                // $maps_rank が null のままの場合、competitor のランクを使う
+                // （ドメインマッチが広告/rank_group=0 のアイテムを先に拾った場合のリカバリ）
+                if ( $maps_rank === null && ! empty( $competitors ) ) {
+                    foreach ( $competitors as $comp ) {
+                        if ( ! empty( $comp['is_self'] ) && $comp['rank'] !== null ) {
+                            $maps_rank = $comp['rank'];
+                            file_put_contents( '/tmp/gcrev_meo_debug.log',
+                                date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] SAFETY-NET: recovered maps_rank={$maps_rank} from competitors (is_self)\n",
+                                FILE_APPEND );
+                            // store_data も未取得なら補完
+                            if ( ! $store_data ) {
+                                // competitors から元の maps_items を再検索
+                                foreach ( $maps_items as $mi ) {
+                                    if ( ( $mi['title'] ?? '' ) === $comp['title'] ) {
+                                        $store_data = $this->meo_extract_store_info( $mi );
+                                        break;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
             } else {
                 $maps_error = is_wp_error( $maps_items ) ? $maps_items->get_error_message() : '';
                 file_put_contents( '/tmp/gcrev_meo_debug.log',
@@ -6893,6 +6918,27 @@ PROMPT;
                                 'is_self'       => $is_self,
                             ];
                             $comp_count++;
+                        }
+
+                        // セーフティネット: is_self=true の competitor からランクをリカバリ
+                        if ( $maps_rank === null && ! empty( $competitors ) ) {
+                            foreach ( $competitors as $comp ) {
+                                if ( ! empty( $comp['is_self'] ) && $comp['rank'] !== null ) {
+                                    $maps_rank = $comp['rank'];
+                                    if ( ! $store ) {
+                                        foreach ( $maps_items as $mi ) {
+                                            if ( ( $mi['title'] ?? '' ) === $comp['title'] ) {
+                                                $store = $this->meo_extract_store_info( $mi );
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    file_put_contents( '/tmp/gcrev_meo_debug.log',
+                                        date( 'Y-m-d H:i:s' ) . " [MEO-CRON] SAFETY-NET: recovered maps_rank={$maps_rank} for uid={$uid} kw={$kw['keyword']} device={$device}\n",
+                                        FILE_APPEND );
+                                    break;
+                                }
+                            }
                         }
                     }
 
