@@ -6447,12 +6447,15 @@ PROMPT;
                 }
 
                 file_put_contents( '/tmp/gcrev_meo_debug.log',
-                    date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] domain_match=" . ( $my_biz ? 'YES rank=' . ($my_biz['rank_group'] ?? '?') : 'NO' ) . "\n",
+                    date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] domain_match=" . ( $my_biz ? 'YES rank_group=' . var_export($my_biz['rank_group'] ?? null, true) . ' type=' . ($my_biz['type'] ?? '?') . ' title=' . ($my_biz['title'] ?? '?') : 'NO' ) . "\n",
                     FILE_APPEND );
 
                 if ( $my_biz ) {
                     $maps_rank  = (int) ( $my_biz['rank_group'] ?? 0 ) ?: null;
                     $store_data = $this->meo_extract_store_info( $my_biz );
+                    file_put_contents( '/tmp/gcrev_meo_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] after_domain: maps_rank=" . var_export($maps_rank, true) . "\n",
+                        FILE_APPEND );
                 }
 
                 // GBP ビジネス名フォールバック（ドメインマッチ失敗時）
@@ -6466,7 +6469,7 @@ PROMPT;
                         }
                     }
                     file_put_contents( '/tmp/gcrev_meo_debug.log',
-                        date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] biz_name_fallback='{$gbp_biz_name}'\n",
+                        date( 'Y-m-d H:i:s' ) . " [MEO-MATCH] biz_name_fallback='{$gbp_biz_name}' gbp_loc_id='{$gbp_location_id}'\n",
                         FILE_APPEND );
                 }
 
