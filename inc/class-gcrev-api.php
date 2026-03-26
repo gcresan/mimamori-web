@@ -81,6 +81,9 @@ class Gcrev_Insight_API {
     // Step6: DataForSEO Client（順位トラッキング）
     private ?Gcrev_DataForSEO_Client $dataforseo = null;
 
+    // Step7: Keyword Research Service（キーワード調査）
+    private ?Gcrev_Keyword_Research_Service $keyword_research = null;
+
     private string $service_account_path = '';
 
     // ===== キャッシュ設定 =====
@@ -139,6 +142,11 @@ class Gcrev_Insight_API {
         // Step6: DataForSEO（定数が未設定でもインスタンスは作成、API呼び出し時にチェック）
         if ( class_exists( 'Gcrev_DataForSEO_Client' ) ) {
             $this->dataforseo = new Gcrev_DataForSEO_Client( $this->config );
+        }
+
+        // Step7: Keyword Research Service
+        if ( class_exists( 'Gcrev_Keyword_Research_Service' ) ) {
+            $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config );
         }
 
         if ($register_routes) {
@@ -1016,6 +1024,13 @@ class Gcrev_Insight_API {
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_run_seo_diagnosis' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/seo/keyword-research', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_seo_keyword_research' ],
+            'permission_callback' => function() {
+                return current_user_can( 'manage_options' );
+            },
         ]);
 
         // =========================================================
@@ -14573,6 +14588,52 @@ PROMPT;
             return new \WP_REST_Response( [
                 'success' => false,
                 'message' => '診断中にエラーが発生しました: ' . esc_html( $e->getMessage() ),
+            ], 500 );
+        }
+    }
+
+    /**
+     * SEOキーワード調査を実行（管理者専用）
+     */
+    public function rest_seo_keyword_research( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = absint( $request->get_param( 'user_id' ) );
+        if ( $user_id < 1 || ! get_userdata( $user_id ) ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'error'   => '有効なクライアントを選択してください。',
+            ], 400 );
+        }
+
+        if ( ! $this->keyword_research ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'error'   => 'キーワード調査サービスが初期化されていません。',
+            ], 500 );
+        }
+
+        // シードキーワード
+        $seed_raw = sanitize_textarea_field( wp_unslash( $request->get_param( 'seed_keywords' ) ?? '' ) );
+        $seeds = [];
+        if ( $seed_raw !== '' ) {
+            $seeds = array_values( array_filter(
+                array_map( 'trim', preg_split( '/[,\n\r]+/', $seed_raw ) ),
+                function( $s ) { return $s !== ''; }
+            ) );
+        }
+
+        @set_time_limit( 180 );
+
+        try {
+            $result = $this->keyword_research->research( $user_id, $seeds );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_seo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " REST keyword-research error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'error'   => 'キーワード調査中にエラーが発生しました: ' . $e->getMessage(),
             ], 500 );
         }
     }

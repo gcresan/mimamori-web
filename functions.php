@@ -921,6 +921,14 @@ if ( file_exists( $gcrev_seo_checker ) ) {
 }
 
 // ========================================
+// Step8.5: Keyword Research Service（キーワード調査）
+// ========================================
+$gcrev_kw_research = $gcrev_modules_path . 'class-keyword-research-service.php';
+if ( file_exists( $gcrev_kw_research ) ) {
+    require_once $gcrev_kw_research;
+}
+
+// ========================================
 // Step9: Clarity Client（Clarity連携）
 // ========================================
 $gcrev_clarity_client = $gcrev_modules_path . 'class-clarity-client.php';
