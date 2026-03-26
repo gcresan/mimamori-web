@@ -111,6 +111,7 @@
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
+      $seo_pages       = array('keyword-research');
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
@@ -125,6 +126,8 @@
       foreach ($website_pages as $_p) { if (is_page($_p)) { $website_child_active = true; break; } }
       $meo_child_active = false;
       foreach ($meo_pages as $_p) { if (is_page($_p)) { $meo_child_active = true; break; } }
+      $seo_child_active = false;
+      foreach ($seo_pages as $_p) { if (is_page($_p)) { $seo_child_active = true; break; } }
       $settings_child_active = false;
       foreach ($settings_pages as $_p) { if (is_page($_p)) { $settings_child_active = true; break; } }
       $support_child_active = false;
@@ -138,6 +141,7 @@
       if ($diagnosis_child_active) $sidebar_active_group = 'diagnosis';
       if ($website_child_active)   $sidebar_active_group = 'website';
       if ($meo_child_active)       $sidebar_active_group = 'meo';
+      if ($seo_child_active)       $sidebar_active_group = 'seo';
       if ($settings_child_active)  $sidebar_active_group = 'settings';
       if ($support_child_active)   $sidebar_active_group = 'support';
       if ($option_child_active)    $sidebar_active_group = 'option';
@@ -337,6 +341,22 @@
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/gbp-posts/') ); ?>" class="nav-link <?php echo is_page('gbp-posts') ? 'active' : ''; ?>">
                         <span>投稿管理</span>
+                        </a>
+                     </li>
+                  </ul>
+               </li>
+
+               <!-- ========== SEO ========== -->
+               <li class="nav-item nav-item-collapsible<?php echo $seo_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'seo' ? ' collapsed' : ''; ?>" data-menu-key="seo">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleSeo" aria-expanded="<?php echo $sidebar_active_group === 'seo' ? 'true' : 'false'; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.5"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 11h6M11 8v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+                  <span>SEO</span>
+                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
+                  </button>
+                  <ul class="nav-submenu" id="navSubmenuSeo">
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/keyword-research/') ); ?>" class="nav-link <?php echo is_page('keyword-research') ? 'active' : ''; ?>">
+                        <span>キーワード調査</span>
                         </a>
                      </li>
                   </ul>

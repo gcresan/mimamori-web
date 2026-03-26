@@ -132,11 +132,6 @@ class Gcrev_Bootstrap {
                 (new Gcrev_AIO_Settings_Page())->register();
             }
 
-            $seo_kw_research_path = __DIR__ . '/admin/class-seo-keyword-research-page.php';
-            if ( file_exists( $seo_kw_research_path ) ) {
-                require_once $seo_kw_research_path;
-                (new Gcrev_SEO_Keyword_Research_Page())->register();
-            }
 
             $prefetch_management_path = __DIR__ . '/admin/class-prefetch-management-page.php';
             if ( file_exists( $prefetch_management_path ) ) {
