@@ -623,4 +623,82 @@ class Gcrev_CLI {
         }
         return $count;
     }
+
+    // =========================================================
+    // google-ads-test: Google Ads API 疎通確認
+    // =========================================================
+
+    /**
+     * Google Ads API の接続テストを実行する。
+     *
+     * ## EXAMPLES
+     *
+     *     wp gcrev google-ads-test
+     *
+     * @param array $args       Positional arguments.
+     * @param array $assoc_args Named arguments.
+     */
+    public function google_ads_test( array $args, array $assoc_args ): void {
+        WP_CLI::log( '=== Google Ads API 疎通確認 ===' );
+        WP_CLI::log( '' );
+
+        // 1. クラスチェック
+        if ( ! class_exists( 'Gcrev_Google_Ads_Client' ) ) {
+            WP_CLI::error( 'Gcrev_Google_Ads_Client クラスが読み込まれていません。' );
+        }
+
+        // 2. 設定チェック
+        if ( ! Gcrev_Google_Ads_Client::is_configured() ) {
+            $missing = Gcrev_Google_Ads_Client::get_missing_config();
+            WP_CLI::error( '未設定の定数: ' . implode( ', ', $missing ) . "\nwp-config.php に define() を追加してください。" );
+        }
+
+        WP_CLI::log( '✓ 認証情報の定数が設定されています' );
+        WP_CLI::log( '  Login Customer ID: ' . GOOGLE_ADS_LOGIN_CUSTOMER_ID );
+        WP_CLI::log( '  Customer ID:       ' . GOOGLE_ADS_CUSTOMER_ID );
+        WP_CLI::log( '' );
+
+        // 3. 疎通テスト実行
+        WP_CLI::log( '接続テストを開始...' );
+        WP_CLI::log( '' );
+
+        $client = new Gcrev_Google_Ads_Client();
+        $result = $client->test_connection();
+
+        // ステップ結果を表示
+        foreach ( $result['steps'] as $step ) {
+            $icon = $step['success'] ? '✓' : '✗';
+            $label = $step['step'];
+            WP_CLI::log( "  {$icon} [{$label}] {$step['message']}" );
+
+            // アクセス可能アカウント一覧
+            if ( $step['step'] === 'list_accessible_customers' && $step['success'] && ! empty( $step['data'] ) ) {
+                foreach ( $step['data'] as $resource ) {
+                    WP_CLI::log( "      - {$resource}" );
+                }
+            }
+        }
+
+        WP_CLI::log( '' );
+
+        // 4. 結果サマリー
+        if ( $result['success'] ) {
+            $s = $result['summary'];
+            WP_CLI::log( '=== 接続成功 ===' );
+            WP_CLI::log( "  Login Customer ID:    {$s['login_customer_id']}" );
+            WP_CLI::log( "  Customer ID:          {$s['customer_id']}" );
+            WP_CLI::log( "  Customer Name:        {$s['customer_name']}" );
+            WP_CLI::log( "  Currency:             {$s['currency']}" );
+            WP_CLI::log( "  Timezone:             {$s['timezone']}" );
+            WP_CLI::log( "  Accessible Accounts:  {$s['accessible_accounts']}" );
+            WP_CLI::log( '' );
+            WP_CLI::success( 'Google Ads API 疎通確認が成功しました。' );
+        } else {
+            WP_CLI::log( '=== 接続失敗 ===' );
+            WP_CLI::log( "  エラー: {$result['error']}" );
+            WP_CLI::log( '' );
+            WP_CLI::log( 'デバッグログ: /tmp/gcrev_google_ads_debug.log' );
+            WP_CLI::error( 'Google Ads API 疎通確認に失敗しました。' );
+        }
+    }
 }

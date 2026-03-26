@@ -84,6 +84,9 @@ class Gcrev_Insight_API {
     // Step7: Keyword Research Service（キーワード調査）
     private ?Gcrev_Keyword_Research_Service $keyword_research = null;
 
+    // Step8: Google Ads Client（Keyword Planner 等）
+    private ?Gcrev_Google_Ads_Client $google_ads = null;
+
     private string $service_account_path = '';
 
     // ===== キャッシュ設定 =====
@@ -151,6 +154,11 @@ class Gcrev_Insight_API {
                 $dataforseo_for_kwr = new Gcrev_DataForSEO_Client( $this->config );
             }
             $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, $dataforseo_for_kwr );
+        }
+
+        // Step8: Google Ads Client
+        if ( class_exists( 'Gcrev_Google_Ads_Client' ) && Gcrev_Google_Ads_Client::is_configured() ) {
+            $this->google_ads = new Gcrev_Google_Ads_Client();
         }
 
         if ($register_routes) {
@@ -1040,6 +1048,13 @@ class Gcrev_Insight_API {
                 'callback'            => [ $this, 'rest_seo_keyword_research_latest' ],
                 'permission_callback' => [ $this->config, 'check_permission' ],
             ],
+        ]);
+
+        // Google Ads API 疎通確認（管理者限定）
+        register_rest_route('gcrev/v1', '/seo/google-ads-test', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_google_ads_test_connection' ],
+            'permission_callback' => function() { return current_user_can('manage_options'); },
         ]);
 
         // =========================================================
@@ -14675,6 +14690,49 @@ PROMPT;
         }
 
         return new \WP_REST_Response( $result );
+    }
+
+    // =========================================================
+    // Google Ads API 疎通確認
+    // =========================================================
+
+    /**
+     * Google Ads API 接続テスト
+     */
+    public function rest_google_ads_test_connection( \WP_REST_Request $request ): \WP_REST_Response {
+        // 設定チェック
+        if ( ! class_exists( 'Gcrev_Google_Ads_Client' ) ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'error'   => 'Google Ads クライアントクラスが読み込まれていません。',
+            ], 500 );
+        }
+
+        if ( ! Gcrev_Google_Ads_Client::is_configured() ) {
+            $missing = Gcrev_Google_Ads_Client::get_missing_config();
+            return new \WP_REST_Response( [
+                'success' => false,
+                'error'   => 'Google Ads API の認証情報が未設定です。',
+                'missing' => $missing,
+            ], 400 );
+        }
+
+        $client = $this->google_ads ?? new Gcrev_Google_Ads_Client();
+
+        try {
+            $result = $client->test_connection();
+            $status = $result['success'] ? 200 : 500;
+            return new \WP_REST_Response( $result, $status );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_google_ads_debug.log',
+                date( 'Y-m-d H:i:s' ) . " REST test_connection error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'error'   => 'Google Ads API 疎通テスト中にエラーが発生しました: ' . $e->getMessage(),
+            ], 500 );
+        }
     }
 
     // =========================================================

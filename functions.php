@@ -939,6 +939,14 @@ if ( file_exists( $gcrev_kw_research ) ) {
 }
 
 // ========================================
+// Step8.6: Google Ads Client（Keyword Planner 等）
+// ========================================
+$gcrev_google_ads = $gcrev_modules_path . 'class-google-ads-client.php';
+if ( file_exists( $gcrev_google_ads ) ) {
+    require_once $gcrev_google_ads;
+}
+
+// ========================================
 // Step9: Clarity Client（Clarity連携）
 // ========================================
 $gcrev_clarity_client = $gcrev_modules_path . 'class-clarity-client.php';
