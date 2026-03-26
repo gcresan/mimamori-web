@@ -1028,9 +1028,7 @@ class Gcrev_Insight_API {
         register_rest_route('gcrev/v1', '/seo/keyword-research', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_seo_keyword_research' ],
-            'permission_callback' => function() {
-                return current_user_can( 'manage_options' );
-            },
+            'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
         // =========================================================
@@ -14593,10 +14591,20 @@ PROMPT;
     }
 
     /**
-     * SEOキーワード調査を実行（管理者専用）
+     * SEOキーワード調査を実行
+     *
+     * 一般ユーザー: 自分自身のデータのみ
+     * 管理者: user_id パラメータで任意ユーザーを指定可能
      */
     public function rest_seo_keyword_research( \WP_REST_Request $request ): \WP_REST_Response {
-        $user_id = absint( $request->get_param( 'user_id' ) );
+        $current_uid = get_current_user_id();
+        $user_id     = absint( $request->get_param( 'user_id' ) );
+
+        // 管理者以外は自分のIDのみ
+        if ( ! current_user_can( 'manage_options' ) ) {
+            $user_id = $current_uid;
+        }
+
         if ( $user_id < 1 || ! get_userdata( $user_id ) ) {
             return new \WP_REST_Response( [
                 'success' => false,
