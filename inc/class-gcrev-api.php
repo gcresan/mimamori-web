@@ -190,6 +190,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'generate_persona' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev_insights/v1', '/suggest-industry', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'suggest_industry' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         // 生成回数取得エンドポイント
         register_rest_route('gcrev_insights/v1', '/report/generation-count', [
             'methods'             => 'GET',
@@ -2998,7 +3003,23 @@ class Gcrev_Insight_API {
         if (mb_strlen($detail) > 160) { $detail = mb_substr($detail, 0, 160); }
         update_user_meta($user_id, 'gcrev_client_industry_detail', $detail);
 
-        update_user_meta($user_id, 'gcrev_client_business_type',  sanitize_text_field($params['business_type'] ?? ''));
+        // ビジネス形態（複数選択 — 配列で保存）
+        $bt_raw = $params['business_type'] ?? '';
+        $valid_bt_keys = array_keys( gcrev_get_business_type_master() );
+        if ( is_array( $bt_raw ) ) {
+            $bt_clean = [];
+            foreach ( $bt_raw as $v ) {
+                $v = sanitize_text_field( $v );
+                if ( in_array( $v, $valid_bt_keys, true ) ) {
+                    $bt_clean[] = $v;
+                }
+            }
+            update_user_meta( $user_id, 'gcrev_client_business_type', $bt_clean );
+        } else {
+            // 後方互換: 旧クライアントからの単一string
+            $v = sanitize_text_field( $bt_raw );
+            update_user_meta( $user_id, 'gcrev_client_business_type', $v !== '' ? [ $v ] : [] );
+        }
 
         // --- 成長ステージ（200文字以内） ---
         $stage = sanitize_text_field( $params['stage'] ?? '' );
@@ -3281,6 +3302,148 @@ class Gcrev_Insight_API {
                 'success' => false,
                 'message' => 'ペルソナ生成中にエラーが発生しました: ' . $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * AI による業種提案
+     */
+    public function suggest_industry( WP_REST_Request $request ): WP_REST_Response {
+        $user_id = get_current_user_id();
+
+        // スロットル（10秒）
+        $throttle_key = 'gcrev_suggest_ind_' . $user_id;
+        if ( get_transient( $throttle_key ) ) {
+            return new WP_REST_Response( [
+                'success' => false,
+                'message' => '連続リクエストはできません。少し待ってから再度お試しください。',
+            ], 429 );
+        }
+        set_transient( $throttle_key, 1, 10 );
+
+        $keyword = sanitize_text_field( $request->get_json_params()['keyword'] ?? '' );
+        if ( mb_strlen( $keyword ) < 2 || mb_strlen( $keyword ) > 100 ) {
+            return new WP_REST_Response( [
+                'success' => false,
+                'message' => 'キーワードは2〜100文字で入力してください。',
+            ], 400 );
+        }
+
+        $industry_master = gcrev_get_industry_master();
+        $btype_master    = gcrev_get_business_type_master();
+
+        // マスターデータをコンパクトにシリアライズ
+        $categories = [];
+        foreach ( $industry_master as $key => $data ) {
+            $categories[ $key ] = [
+                'label'         => $data['label'],
+                'subcategories' => $data['subcategories'],
+            ];
+        }
+        $cat_json = wp_json_encode( $categories, JSON_UNESCAPED_UNICODE );
+        $bt_json  = wp_json_encode( $btype_master, JSON_UNESCAPED_UNICODE );
+
+        $prompt = <<<PROMPT
+あなたは日本のビジネス分類の専門家です。
+
+ユーザーが入力したキーワードから、最も適切な業種分類を提案してください。
+
+【キーワード】
+{$keyword}
+
+【業種マスターデータ（この中から選ぶこと）】
+{$cat_json}
+
+【ビジネス形態マスターデータ（この中から選ぶこと、複数可）】
+{$bt_json}
+
+【出力ルール】
+1. category: 業種マスターのキーから最も適切な1つを選ぶ
+2. subcategories: 選んだcategoryのsubcategoriesキーから適切なものを1〜3個選ぶ
+3. detail: そのビジネスの代表的な特徴・サービス内容を「/」区切りで簡潔に記述（日本語、最大100文字）。例: 小児歯科 / 矯正歯科 / 予防歯科
+4. business_types: ビジネス形態マスターのキーから該当するものを1〜4個選ぶ
+5. confidence: 提案の確信度（high / medium / low）
+
+マスターデータに存在しないキーは絶対に使わないこと。
+JSONのみ出力すること（コードブロック・説明文は不要）。
+
+出力形式:
+{"category":"キー","subcategories":["キー1","キー2"],"detail":"説明文","business_types":["キー1","キー2"],"confidence":"high"}
+PROMPT;
+
+        try {
+            $raw = $this->ai->call_gemini_api( $prompt, [
+                'temperature'     => 0.3,
+                'maxOutputTokens' => 2048,
+            ] );
+
+            // JSON パース（コードブロックが含まれる場合も対応）
+            $json_str = $raw;
+            if ( preg_match( '/```(?:json)?\s*(.*?)\s*```/s', $raw, $m ) ) {
+                $json_str = $m[1];
+            }
+            $suggestion = json_decode( trim( $json_str ), true );
+            if ( ! is_array( $suggestion ) ) {
+                throw new \Exception( 'AI応答のJSONパース失敗: ' . mb_substr( $raw, 0, 200 ) );
+            }
+
+            // マスターデータに対してバリデーション
+            $result = [
+                'category'       => '',
+                'category_label' => '',
+                'subcategories'  => [],
+                'detail'         => '',
+                'business_types' => [],
+                'confidence'     => sanitize_text_field( $suggestion['confidence'] ?? 'low' ),
+            ];
+
+            $cat = $suggestion['category'] ?? '';
+            if ( isset( $industry_master[ $cat ] ) ) {
+                $result['category']       = $cat;
+                $result['category_label'] = $industry_master[ $cat ]['label'];
+
+                $valid_subs = $industry_master[ $cat ]['subcategories'] ?? [];
+                foreach ( ( $suggestion['subcategories'] ?? [] ) as $sub ) {
+                    if ( isset( $valid_subs[ $sub ] ) ) {
+                        $result['subcategories'][] = [
+                            'key'   => $sub,
+                            'label' => $valid_subs[ $sub ],
+                        ];
+                    }
+                }
+            }
+
+            $detail = sanitize_text_field( $suggestion['detail'] ?? '' );
+            if ( mb_strlen( $detail ) > 160 ) {
+                $detail = mb_substr( $detail, 0, 160 );
+            }
+            $result['detail'] = $detail;
+
+            $valid_bt = array_keys( $btype_master );
+            foreach ( ( $suggestion['business_types'] ?? [] ) as $bt ) {
+                if ( in_array( $bt, $valid_bt, true ) ) {
+                    $result['business_types'][] = [
+                        'key'   => $bt,
+                        'label' => $btype_master[ $bt ],
+                    ];
+                }
+            }
+
+            return new WP_REST_Response( [
+                'success'    => true,
+                'suggestion' => $result,
+            ] );
+
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_chat_debug.log',
+                date( 'Y-m-d H:i:s' ) . " suggest_industry ERROR: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            delete_transient( $throttle_key );
+            return new WP_REST_Response( [
+                'success' => false,
+                'message' => '業種の提案に失敗しました。もう一度お試しください。',
+            ], 500 );
         }
     }
 
@@ -4990,7 +5153,7 @@ class Gcrev_Insight_API {
             $client_context .= "業種: {$client_settings['industry']}\n";
         }
         if ( ! empty( $client_settings['business_type'] ) ) {
-            $client_context .= "業態: {$client_settings['business_type']}\n";
+            $client_context .= "業態: " . gcrev_business_type_labels( $client_settings['business_type'] ) . "\n";
         }
         $area_label = function_exists( 'gcrev_get_client_area_label' )
             ? gcrev_get_client_area_label( $client_settings ) : '';

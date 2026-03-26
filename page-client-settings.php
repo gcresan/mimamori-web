@@ -169,7 +169,54 @@ get_header();
 }
 .btype-option:hover { border-color: #94a3b8; }
 .btype-option.selected { border-color: #4E8A6B; background: #f0fdf4; color: #166534; }
-.btype-option input[type="radio"] { accent-color: #4E8A6B; }
+.btype-option input[type="checkbox"] { accent-color: #4E8A6B; width: 14px; height: 14px; margin: 0; }
+
+/* AI業種提案 */
+.ai-suggest-box { margin-bottom: 20px; padding: 16px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; }
+.ai-suggest-box > label { display: block; font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 8px; }
+.ai-suggest-input-row { display: flex; gap: 8px; }
+.ai-suggest-input-row input {
+    flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px;
+    font-size: 14px; line-height: 1.5; transition: border-color .2s; background: #fff;
+}
+.ai-suggest-input-row input:focus { outline: none; border-color: #4E8A6B; box-shadow: 0 0 0 3px rgba(78,138,107,.12); }
+.btn-ai-suggest {
+    padding: 8px 18px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
+    background: #4E8A6B; color: #fff; cursor: pointer; white-space: nowrap; transition: opacity .2s;
+}
+.btn-ai-suggest:disabled { opacity: .4; cursor: not-allowed; }
+.btn-ai-suggest:not(:disabled):hover { opacity: .85; }
+.ai-suggest-result {
+    margin-bottom: 20px; padding: 16px; background: #f0fdf4; border: 1px solid #86efac;
+    border-radius: 8px; animation: suggestFadeIn .3s ease;
+}
+@keyframes suggestFadeIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+.suggest-result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.suggest-result-title { font-weight: 700; font-size: 14px; color: #166534; }
+.suggest-confidence { font-size: 12px; padding: 2px 8px; border-radius: 12px; background: #dcfce7; color: #166534; }
+.suggest-result-body { font-size: 13px; color: #1e293b; }
+.suggest-result-body .suggest-field { margin-bottom: 8px; }
+.suggest-result-body .suggest-label { font-weight: 600; color: #475569; margin-right: 4px; }
+.suggest-result-body .suggest-tag {
+    display: inline-block; padding: 2px 8px; background: #e2e8f0; border-radius: 12px;
+    font-size: 12px; margin: 2px;
+}
+.suggest-result-actions { display: flex; gap: 8px; margin-top: 12px; }
+.btn-apply-suggest {
+    padding: 8px 20px; border: none; border-radius: 6px; background: #4E8A6B; color: #fff;
+    font-weight: 600; font-size: 13px; cursor: pointer; transition: opacity .2s;
+}
+.btn-apply-suggest:hover { opacity: .85; }
+.btn-dismiss-suggest {
+    padding: 8px 20px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+    font-size: 13px; cursor: pointer; color: #64748b;
+}
+.btn-dismiss-suggest:hover { background: #f8fafc; }
+
+@media (max-width: 600px) {
+    .ai-suggest-input-row { flex-direction: column; }
+    .btn-ai-suggest { width: 100%; }
+}
 
 /* 保存ボタン — カード群の外に独立配置 */
 .cs-actions {
@@ -780,6 +827,30 @@ get_header();
             $saved_detail      = $settings['industry_detail'] ?? '';
             ?>
 
+            <!-- AI業種提案 -->
+            <div class="ai-suggest-box" id="aiSuggestBox">
+                <label>キーワードから業種をAIで自動入力</label>
+                <div class="ai-suggest-input-row">
+                    <input type="text" id="cs-ai-keyword" maxlength="100"
+                           placeholder="例: 歯医者、社労士、ラーメン屋、工務店、整体、EC販売">
+                    <button type="button" id="btn-ai-suggest" class="btn-ai-suggest" disabled>提案</button>
+                </div>
+                <p class="field-hint">業種・業態に近い言葉を入力すると、AIが関連する設定候補をまとめて提案します。</p>
+            </div>
+
+            <!-- AI提案結果カード -->
+            <div class="ai-suggest-result" id="aiSuggestResult" style="display:none;">
+                <div class="suggest-result-header">
+                    <span class="suggest-result-title">AIの提案</span>
+                    <span class="suggest-confidence" id="suggestConfidence"></span>
+                </div>
+                <div class="suggest-result-body" id="suggestResultBody"></div>
+                <div class="suggest-result-actions">
+                    <button type="button" id="btn-apply-suggest" class="btn-apply-suggest">この内容を反映する</button>
+                    <button type="button" id="btn-dismiss-suggest" class="btn-dismiss-suggest">閉じる</button>
+                </div>
+            </div>
+
             <!-- 業種（大分類） -->
             <div class="industry-group">
                 <label for="cs-industry-category">業種（任意）</label>
@@ -818,20 +889,17 @@ get_header();
 
             <div class="form-group">
                 <label>ビジネス形態</label>
+                <p class="field-hint" style="margin-top:0;margin-bottom:6px;">当てはまるものを複数選択できます</p>
                 <?php
-                $btype = $settings['business_type'] ?? '';
-                $btypes = [
-                    'visit'       => '来店型',
-                    'non_visit'   => '非来店型',
-                    'reservation' => '予約制',
-                    'ec'          => 'ECサイト',
-                    'other'       => 'その他',
-                ];
+                $btype_arr = $settings['business_type'] ?? [];
+                $btypes    = gcrev_get_business_type_master();
                 ?>
                 <div class="btype-options" id="btypeOptions">
-                    <?php foreach ( $btypes as $val => $label ): ?>
-                    <div class="btype-option <?php echo $btype === $val ? 'selected' : ''; ?>" data-value="<?php echo esc_attr( $val ); ?>">
-                        <input type="radio" name="business_type" value="<?php echo esc_attr( $val ); ?>" id="btype-<?php echo esc_attr( $val ); ?>" <?php checked( $btype, $val ); ?>>
+                    <?php foreach ( $btypes as $val => $label ):
+                        $is_checked = in_array( $val, $btype_arr, true );
+                    ?>
+                    <div class="btype-option <?php echo $is_checked ? 'selected' : ''; ?>" data-value="<?php echo esc_attr( $val ); ?>">
+                        <input type="checkbox" name="business_type[]" value="<?php echo esc_attr( $val ); ?>" id="btype-<?php echo esc_attr( $val ); ?>" <?php checked( $is_checked ); ?>>
                         <label for="btype-<?php echo esc_attr( $val ); ?>"><?php echo esc_html( $label ); ?></label>
                     </div>
                     <?php endforeach; ?>
@@ -1200,6 +1268,127 @@ get_header();
 
     // === 業種マスターデータ（PHP→JS） ===
     var industryMaster = <?php echo wp_json_encode( $industry_master, JSON_UNESCAPED_UNICODE ); ?>;
+    var btypeMaster = <?php echo wp_json_encode( gcrev_get_business_type_master(), JSON_UNESCAPED_UNICODE ); ?>;
+
+    // === AI業種提案 ===
+    (function() {
+        var aiKeywordInput = document.getElementById('cs-ai-keyword');
+        var btnAiSuggest   = document.getElementById('btn-ai-suggest');
+        var suggestResult  = document.getElementById('aiSuggestResult');
+        var suggestBody    = document.getElementById('suggestResultBody');
+        var lastSuggestion = null;
+
+        function escHtml(str) {
+            var d = document.createElement('div');
+            d.textContent = str || '';
+            return d.innerHTML;
+        }
+
+        aiKeywordInput.addEventListener('input', function() {
+            btnAiSuggest.disabled = this.value.trim().length < 2;
+        });
+
+        // Enter キーでも提案実行
+        aiKeywordInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !btnAiSuggest.disabled) {
+                e.preventDefault();
+                btnAiSuggest.click();
+            }
+        });
+
+        btnAiSuggest.addEventListener('click', async function() {
+            var keyword = aiKeywordInput.value.trim();
+            if (keyword.length < 2) return;
+
+            btnAiSuggest.disabled = true;
+            var origText = btnAiSuggest.textContent;
+            btnAiSuggest.textContent = '提案中...';
+
+            try {
+                var res = await fetch(restBase + 'suggest-industry', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': wpNonce },
+                    body: JSON.stringify({ keyword: keyword })
+                });
+                var json = await res.json();
+                if (res.ok && json.success) {
+                    lastSuggestion = json.suggestion;
+                    renderSuggestion(json.suggestion);
+                } else {
+                    alert(json.message || '提案の取得に失敗しました');
+                }
+            } catch(e) {
+                alert('通信エラー: ' + e.message);
+            } finally {
+                btnAiSuggest.disabled = aiKeywordInput.value.trim().length < 2;
+                btnAiSuggest.textContent = origText;
+            }
+        });
+
+        function renderSuggestion(s) {
+            var html = '';
+            if (s.category_label) {
+                html += '<div class="suggest-field"><span class="suggest-label">業種:</span>' + escHtml(s.category_label) + '</div>';
+            }
+            if (s.subcategories && s.subcategories.length) {
+                html += '<div class="suggest-field"><span class="suggest-label">業態:</span>';
+                s.subcategories.forEach(function(sc) { html += '<span class="suggest-tag">' + escHtml(sc.label) + '</span>'; });
+                html += '</div>';
+            }
+            if (s.detail) {
+                html += '<div class="suggest-field"><span class="suggest-label">詳細:</span>' + escHtml(s.detail) + '</div>';
+            }
+            if (s.business_types && s.business_types.length) {
+                html += '<div class="suggest-field"><span class="suggest-label">ビジネス形態:</span>';
+                s.business_types.forEach(function(bt) { html += '<span class="suggest-tag">' + escHtml(bt.label) + '</span>'; });
+                html += '</div>';
+            }
+            suggestBody.innerHTML = html;
+
+            var conf = document.getElementById('suggestConfidence');
+            var confMap = { high: '確信度: 高', medium: '確信度: 中', low: '確信度: 低' };
+            conf.textContent = confMap[s.confidence] || '';
+
+            suggestResult.style.display = 'block';
+        }
+
+        // 反映ボタン
+        document.getElementById('btn-apply-suggest').addEventListener('click', function() {
+            if (!lastSuggestion) return;
+            var s = lastSuggestion;
+
+            // 1. 業種セット
+            if (s.category) {
+                var catSel = document.getElementById('cs-industry-category');
+                catSel.value = s.category;
+                var subKeys = s.subcategories ? s.subcategories.map(function(sc) { return sc.key; }) : [];
+                renderSubcategories(s.category, subKeys);
+            }
+
+            // 2. 詳細セット
+            if (s.detail) {
+                document.getElementById('cs-industry-detail').value = s.detail;
+            }
+
+            // 3. ビジネス形態セット
+            var btKeys = s.business_types ? s.business_types.map(function(bt) { return bt.key; }) : [];
+            document.querySelectorAll('#btypeOptions .btype-option').forEach(function(opt) {
+                var cb = opt.querySelector('input[type="checkbox"]');
+                if (!cb) return;
+                var shouldCheck = btKeys.indexOf(cb.value) !== -1;
+                cb.checked = shouldCheck;
+                opt.classList.toggle('selected', shouldCheck);
+            });
+
+            suggestResult.style.display = 'none';
+            showToast('AIの提案を反映しました。内容を確認して保存してください。');
+        });
+
+        // 閉じるボタン
+        document.getElementById('btn-dismiss-suggest').addEventListener('click', function() {
+            suggestResult.style.display = 'none';
+        });
+    })();
 
     // === 商圏タイプ切替 ===
     const areaOptions = document.querySelectorAll('#areaTypeOptions .area-type-option');
@@ -1270,14 +1459,20 @@ get_header();
         });
     });
 
-    // === ビジネス形態切替 ===
-    var btypeOptions = document.querySelectorAll('#btypeOptions .btype-option');
-    btypeOptions.forEach(function(opt) {
-        opt.addEventListener('click', function() {
-            btypeOptions.forEach(function(o) { o.classList.remove('selected'); });
-            opt.classList.add('selected');
-            opt.querySelector('input[type="radio"]').checked = true;
+    // === ビジネス形態切替（複数選択） ===
+    document.querySelectorAll('#btypeOptions .btype-option').forEach(function(opt) {
+        opt.addEventListener('click', function(e) {
+            if (e.target.tagName === 'INPUT') return; // checkbox 自体のクリックは二重処理しない
+            var cb = opt.querySelector('input[type="checkbox"]');
+            cb.checked = !cb.checked;
+            opt.classList.toggle('selected', cb.checked);
         });
+        var cb = opt.querySelector('input[type="checkbox"]');
+        if (cb) {
+            cb.addEventListener('change', function() {
+                opt.classList.toggle('selected', this.checked);
+            });
+        }
     });
 
     // === ペルソナ チェックボックス イベント ===
@@ -1621,9 +1816,10 @@ get_header();
         });
         var industryDetail = document.getElementById('cs-industry-detail').value.trim();
 
-        var businessType = '';
-        var btRadio = document.querySelector('input[name="business_type"]:checked');
-        if (btRadio) businessType = btRadio.value;
+        var businessTypes = [];
+        document.querySelectorAll('#btypeOptions input[type="checkbox"]:checked').forEach(function(cb) {
+            businessTypes.push(cb.value);
+        });
 
         var stageVal = document.getElementById('cs-stage') ? document.getElementById('cs-stage').value : '';
         var mainConversions = document.getElementById('cs-main-conversions') ? document.getElementById('cs-main-conversions').value.trim() : '';
@@ -1661,7 +1857,7 @@ get_header();
                     industry_category:      industryCategory,
                     industry_subcategory:   industrySubcategory,
                     industry_detail:        industryDetail,
-                    business_type:          businessType,
+                    business_type:          businessTypes,
                     stage:                  stageVal,
                     main_conversions:       mainConversions,
                     persona_age_ranges:       personaAgeRanges,

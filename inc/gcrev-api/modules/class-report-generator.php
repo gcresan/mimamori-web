@@ -523,6 +523,8 @@ DOMAIN;
         MODE;
                 }
 
+                $business_type_label = gcrev_business_type_labels( $client['business_type'] ?? [] );
+
                 $prompt = <<<PROMPT
         あなたは日本企業向けのウェブ解析レポート作成AIです。
 
@@ -536,7 +538,7 @@ DOMAIN;
         - レポートタイプ: {$report_type}（integrated=統合型 / separated=分離型）
         - 商圏・対応エリア: {$client['area_label']}
         - 業種・業態: {$client['industry']}
-        - ビジネス形態: {$client['business_type']}
+        - ビジネス形態: {$business_type_label}
         - ターゲットエリア（都道府県）: {$area_label}
         - 課題: {$client['issue']}
         - 今月の目標: {$client['goal_monthly']}

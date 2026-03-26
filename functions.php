@@ -2823,16 +2823,7 @@ function mimamori_build_context_blocks(
             $client_block .= "業種・業態: {$client_settings_ctx['industry']}\n";
         }
         if ( ! empty( $client_settings_ctx['business_type'] ) ) {
-            $btype_labels = [
-                'visit'       => '来店型',
-                'non_visit'   => '非来店型',
-                'reservation' => '予約制',
-                'ec'          => 'ECサイト',
-                'other'       => 'その他',
-            ];
-            $btype_val   = $client_settings_ctx['business_type'];
-            $btype_label = $btype_labels[ $btype_val ] ?? $btype_val;
-            $client_block .= "ビジネス形態: {$btype_label}\n";
+            $client_block .= "ビジネス形態: " . gcrev_business_type_labels( $client_settings_ctx['business_type'] ) . "\n";
         }
         $blocks[]   = $client_block;
         $ref_list[] = 'クライアント設定（対象サイト・商圏・業種）';
@@ -7936,6 +7927,48 @@ function gcrev_get_industry_master(): array {
 }
 
 /**
+ * ビジネス形態マスター
+ */
+function gcrev_get_business_type_master(): array {
+    return [
+        'visit'       => '来店型',
+        'non_visit'   => '非来店型',
+        'reservation' => '予約制',
+        'ec'          => 'ECサイト',
+        'on_site'     => '出張対応',
+        'online'      => 'オンライン対応',
+        'b2b'         => '法人向け中心',
+        'b2c'         => '個人向け中心',
+        'other'       => 'その他',
+    ];
+}
+
+/**
+ * business_type を配列に正規化（旧 string 値との後方互換）
+ */
+function gcrev_normalize_business_type( $raw ): array {
+    if ( is_array( $raw ) ) {
+        return $raw;
+    }
+    if ( is_string( $raw ) && $raw !== '' ) {
+        return [ $raw ];
+    }
+    return [];
+}
+
+/**
+ * ビジネス形態の配列をラベル文字列に変換
+ */
+function gcrev_business_type_labels( $business_types ): string {
+    $master = gcrev_get_business_type_master();
+    $labels = [];
+    foreach ( (array) $business_types as $bt ) {
+        $labels[] = $master[ $bt ] ?? $bt;
+    }
+    return implode( '、', $labels );
+}
+
+/**
  * 業種・業態の value から日本語ラベルを返す
  *
  * @param string $category    業種 value
@@ -8026,7 +8059,7 @@ function gcrev_get_client_settings( int $user_id = 0 ): array {
         'industry_category'     => get_user_meta( $user_id, 'gcrev_client_industry_category', true ),
         'industry_subcategory'  => $subcategory,
         'industry_detail'       => get_user_meta( $user_id, 'gcrev_client_industry_detail', true ),
-        'business_type'         => get_user_meta( $user_id, 'gcrev_client_business_type', true ),
+        'business_type'         => gcrev_normalize_business_type( get_user_meta( $user_id, 'gcrev_client_business_type', true ) ),
         // 成長ステージ・ゴール種別
         'stage'                 => get_user_meta( $user_id, 'gcrev_client_stage', true ) ?: '',
         'main_conversions'      => get_user_meta( $user_id, 'gcrev_client_main_conversions', true ) ?: '',

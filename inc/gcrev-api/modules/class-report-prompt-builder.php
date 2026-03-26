@@ -249,14 +249,7 @@ ROLE;
             $lines[] = "- 業種の特徴: " . $client_info['industry_detail'];
         }
         if ( ! empty( $client_info['business_type'] ) ) {
-            $type_labels = [
-                'visit'       => '来店型ビジネス',
-                'non_visit'   => '非来店型ビジネス',
-                'reservation' => '予約型ビジネス',
-                'ec'          => 'ECサイト',
-                'other'       => 'その他',
-            ];
-            $lines[] = "- ビジネス形態: " . ( $type_labels[ $client_info['business_type'] ] ?? $client_info['business_type'] );
+            $lines[] = "- ビジネス形態: " . gcrev_business_type_labels( $client_info['business_type'] );
         }
         if ( ! empty( $client_info['stage'] ) ) {
             $stage_labels = [
