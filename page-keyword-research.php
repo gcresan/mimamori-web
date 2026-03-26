@@ -11,17 +11,10 @@ if ( ! is_user_logged_in() ) {
 
 $current_user = wp_get_current_user();
 $user_id      = $current_user->ID;
-$is_admin     = current_user_can( 'manage_options' );
-
-// 管理者は他ユーザーを選択可能
-$target_user_id = $user_id;
-if ( $is_admin && ! empty( $_GET['user_id'] ) ) {
-    $target_user_id = absint( $_GET['user_id'] );
-}
 
 // クライアント情報取得
 $client_settings = function_exists( 'gcrev_get_client_settings' )
-    ? gcrev_get_client_settings( $target_user_id )
+    ? gcrev_get_client_settings( $user_id )
     : [];
 $area_label = function_exists( 'gcrev_get_client_area_label' )
     ? gcrev_get_client_area_label( $client_settings )
@@ -80,28 +73,6 @@ get_header();
 .kwr-client-info__item-value {
     color: var(--mw-text-heading);
     font-weight: 500;
-}
-
-/* ユーザーセレクター（管理者用） */
-.kwr-user-select {
-    margin-bottom: 16px;
-}
-.kwr-user-select select {
-    width: 100%;
-    max-width: 400px;
-    padding: 8px 12px;
-    border: 1px solid var(--mw-border-light);
-    border-radius: 6px;
-    font-size: 13px;
-    background: var(--mw-bg-primary);
-    color: var(--mw-text-primary);
-}
-.kwr-user-select__label {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--mw-text-secondary);
-    margin-bottom: 6px;
 }
 
 /* シード入力 */
@@ -386,29 +357,6 @@ get_header();
     <div class="kwr-conditions">
         <h2 class="kwr-conditions__title">📋 調査条件</h2>
 
-        <?php if ( $is_admin ) : ?>
-            <!-- 管理者：クライアント選択 -->
-            <div class="kwr-user-select">
-                <label class="kwr-user-select__label">対象クライアント</label>
-                <select id="kwrUserSelect" onchange="if(this.value){location.href='<?php echo esc_url( get_permalink() ); ?>?user_id='+this.value}">
-                    <option value="">-- クライアントを選択 --</option>
-                    <?php
-                    $users = get_users( [
-                        'role__not_in' => [ 'administrator' ],
-                        'orderby'      => 'display_name',
-                        'order'        => 'ASC',
-                    ] );
-                    foreach ( $users as $u ) :
-                    ?>
-                        <option value="<?php echo esc_attr( $u->ID ); ?>"
-                            <?php selected( $target_user_id, $u->ID ); ?>>
-                            <?php echo esc_html( $u->display_name ); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        <?php endif; ?>
-
         <!-- クライアント情報 -->
         <?php
         $info_items = array_filter( [
@@ -477,7 +425,7 @@ get_header();
 (function() {
     'use strict';
 
-    var userId = <?php echo (int) $target_user_id; ?>;
+    var userId = <?php echo (int) $user_id; ?>;
     var restUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/seo/keyword-research' ) ) ); ?>;
     var nonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
     var btn = document.getElementById('kwrRunBtn');
