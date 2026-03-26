@@ -22,10 +22,14 @@ $area_label = function_exists( 'gcrev_get_client_area_label' )
 $biz_type_label = function_exists( 'gcrev_get_business_type_label' )
     ? gcrev_get_business_type_label( $client_settings['business_type'] ?? [] )
     : '';
-$industry_label   = $client_settings['industry'] ?? '';
-$industry_detail  = $client_settings['industry_detail'] ?? '';
-$site_url         = $client_settings['site_url'] ?? '';
+$industry_label    = $client_settings['industry'] ?? '';
+$industry_detail   = $client_settings['industry_detail'] ?? '';
+$site_url          = $client_settings['site_url'] ?? '';
 $persona_one_liner = $client_settings['persona_one_liner'] ?? '';
+
+// 参考URL（競合候補）
+$ref_urls = $client_settings['persona_reference_urls'] ?? [];
+$has_competitor_urls = ! empty( $ref_urls );
 
 set_query_var( 'gcrev_page_title', 'キーワード調査' );
 set_query_var( 'gcrev_page_subtitle', 'サイト情報をもとに、SEOで狙うべきキーワード候補を調査・提案します。' );
@@ -35,10 +39,8 @@ get_header();
 ?>
 <style>
 /* =========================================================
-   キーワード調査 — スタイル
+   キーワード調査 — スタイル (Phase 2)
    ========================================================= */
-
-/* 条件エリア */
 .kwr-conditions {
     background: var(--mw-bg-primary);
     border: 1px solid var(--mw-border-light);
@@ -47,250 +49,155 @@ get_header();
     margin-bottom: 28px;
 }
 .kwr-conditions__title {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--mw-text-heading);
-    margin: 0 0 20px;
+    font-size: 16px; font-weight: 600;
+    color: var(--mw-text-heading); margin: 0 0 20px;
 }
-
-/* クライアント情報グリッド */
 .kwr-client-info {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px 24px;
-    padding: 16px 20px;
+    gap: 12px 24px; padding: 16px 20px;
     background: var(--mw-bg-secondary);
     border: 1px solid var(--mw-border-light);
-    border-radius: 8px;
-    margin-bottom: 20px;
-    font-size: 13px;
+    border-radius: 8px; margin-bottom: 20px; font-size: 13px;
 }
-.kwr-client-info__item-label {
-    color: var(--mw-text-tertiary);
-    font-size: 11px;
-    margin-bottom: 2px;
-}
-.kwr-client-info__item-value {
-    color: var(--mw-text-heading);
-    font-weight: 500;
-}
+.kwr-client-info__item-label { color: var(--mw-text-tertiary); font-size: 11px; margin-bottom: 2px; }
+.kwr-client-info__item-value { color: var(--mw-text-heading); font-weight: 500; }
 
-/* シード入力 */
-.kwr-seeds {
-    margin-bottom: 20px;
-}
-.kwr-seeds__label {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--mw-text-secondary);
-    margin-bottom: 6px;
-}
-.kwr-seeds textarea {
-    width: 100%;
-    max-width: 600px;
-    padding: 10px 12px;
+/* 競合URL */
+.kwr-competitor-urls {
+    padding: 14px 20px; background: var(--mw-bg-secondary);
     border: 1px solid var(--mw-border-light);
-    border-radius: 6px;
-    font-size: 13px;
-    resize: vertical;
-    background: var(--mw-bg-primary);
-    color: var(--mw-text-primary);
+    border-radius: 8px; margin-bottom: 20px; font-size: 13px;
+}
+.kwr-competitor-urls__title { font-size: 12px; font-weight: 600; color: var(--mw-text-secondary); margin-bottom: 8px; }
+.kwr-competitor-urls__list { list-style: none; padding: 0; margin: 0; }
+.kwr-competitor-urls__list li { margin-bottom: 4px; display: flex; gap: 8px; align-items: baseline; }
+.kwr-competitor-urls__url { color: var(--mw-primary-blue, #4A90A4); word-break: break-all; }
+.kwr-competitor-urls__note { color: var(--mw-text-tertiary); font-size: 11px; }
+
+/* 競合トグル */
+.kwr-competitor-toggle { margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+.kwr-competitor-toggle label { font-size: 13px; font-weight: 500; color: var(--mw-text-secondary); cursor: pointer; }
+.kwr-competitor-toggle input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
+.kwr-seeds { margin-bottom: 20px; }
+.kwr-seeds__label { display: block; font-size: 13px; font-weight: 600; color: var(--mw-text-secondary); margin-bottom: 6px; }
+.kwr-seeds textarea {
+    width: 100%; max-width: 600px; padding: 10px 12px;
+    border: 1px solid var(--mw-border-light); border-radius: 6px;
+    font-size: 13px; resize: vertical;
+    background: var(--mw-bg-primary); color: var(--mw-text-primary);
 }
 
-/* 実行ボタン */
 .kwr-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 24px;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.15s;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
 }
-.kwr-btn--primary {
-    background: var(--mw-primary-blue, #4A90A4);
-    color: #fff;
-}
+.kwr-btn--primary { background: var(--mw-primary-blue, #4A90A4); color: #fff; }
 .kwr-btn--primary:hover { opacity: 0.9; }
 .kwr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* 警告 */
 .kwr-warning {
-    padding: 10px 14px;
-    background: rgba(201,90,79,0.08);
-    border: 1px solid rgba(201,90,79,0.2);
-    border-radius: 6px;
-    color: #C95A4F;
-    font-size: 13px;
-    margin-bottom: 16px;
+    padding: 10px 14px; background: rgba(201,90,79,0.08);
+    border: 1px solid rgba(201,90,79,0.2); border-radius: 6px;
+    color: #C95A4F; font-size: 13px; margin-bottom: 16px;
+}
+
+/* データソースバッジ */
+.kwr-data-sources { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.kwr-ds-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 10px;
+    font-size: 11px; font-weight: 600;
+}
+.kwr-ds-badge--ai { background: rgba(74,144,164,0.12); color: #2D7A8F; }
+.kwr-ds-badge--gsc { background: rgba(78,138,107,0.12); color: #4E8A6B; }
+.kwr-ds-badge--dataforseo { background: rgba(201,168,76,0.15); color: #C9A84C; }
+.kwr-ds-badge--competitor { background: rgba(201,90,79,0.1); color: #C95A4F; }
+
+/* データ精度表示 */
+.kwr-accuracy {
+    padding: 10px 16px; border-radius: 8px; font-size: 13px;
+    margin-bottom: 20px; display: none;
+    background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light);
+    color: var(--mw-text-secondary);
 }
 
 /* プログレス */
 .kwr-progress {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 9999;
-    display: none;
-    align-items: center;
-    justify-content: center;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); z-index: 9999; display: none;
+    align-items: center; justify-content: center;
 }
 .kwr-progress.active { display: flex; }
-.kwr-progress__inner {
-    background: #fff;
-    border-radius: 16px;
-    padding: 40px;
-    text-align: center;
-    min-width: 300px;
-}
+.kwr-progress__inner { background: #fff; border-radius: 16px; padding: 40px; text-align: center; min-width: 300px; }
 .kwr-progress__spinner {
-    width: 40px; height: 40px;
-    margin: 0 auto 16px;
+    width: 40px; height: 40px; margin: 0 auto 16px;
     border: 3px solid var(--mw-border-light, #e2e8f0);
     border-top-color: var(--mw-primary-teal, #4A90A4);
-    border-radius: 50%;
-    animation: kwr-spin 0.8s linear infinite;
+    border-radius: 50%; animation: kwr-spin 0.8s linear infinite;
 }
 @keyframes kwr-spin { to { transform: rotate(360deg); } }
 .kwr-progress__text { font-size: 14px; color: var(--mw-text-secondary); }
 
 /* トースト */
 .kwr-toast {
-    position: fixed;
-    bottom: 24px;
-    left: 24px;
-    padding: 12px 20px;
-    border-radius: 10px;
-    background: #1A2F33;
-    color: #fff;
-    font-size: 14px;
-    z-index: 10000;
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
+    position: fixed; bottom: 24px; left: 24px; padding: 12px 20px;
+    border-radius: 10px; background: #1A2F33; color: #fff;
+    font-size: 14px; z-index: 10000; opacity: 0; transition: opacity 0.3s; pointer-events: none;
 }
 .kwr-toast.active { opacity: 1; pointer-events: auto; }
 .kwr-toast--error { background: #C95A4F; }
 
-/* サマリーセクション */
+/* サマリー */
 .kwr-summary {
-    background: var(--mw-bg-primary);
-    border: 1px solid var(--mw-border-light);
-    border-radius: var(--mw-radius-md);
-    padding: 28px;
-    margin-bottom: 28px;
+    background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light);
+    border-radius: var(--mw-radius-md); padding: 28px; margin-bottom: 28px;
 }
-.kwr-summary__title {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--mw-text-heading);
-    margin: 0 0 20px;
-}
-.kwr-summary__item {
-    margin-bottom: 16px;
-}
+.kwr-summary__title { font-size: 16px; font-weight: 600; color: var(--mw-text-heading); margin: 0 0 20px; }
+.kwr-summary__item { margin-bottom: 16px; }
 .kwr-summary__item:last-child { margin-bottom: 0; }
-.kwr-summary__item-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mw-text-heading);
-    margin-bottom: 4px;
-}
-.kwr-summary__item-text {
-    font-size: 13px;
-    color: var(--mw-text-secondary);
-    line-height: 1.7;
-}
+.kwr-summary__item-title { font-size: 14px; font-weight: 600; color: var(--mw-text-heading); margin-bottom: 4px; }
+.kwr-summary__item-text { font-size: 13px; color: var(--mw-text-secondary); line-height: 1.7; }
 
-/* グループセクション */
+/* グループ */
 .kwr-group {
-    background: var(--mw-bg-primary);
-    border: 1px solid var(--mw-border-light);
-    border-radius: var(--mw-radius-md);
-    margin-bottom: 20px;
-    overflow: hidden;
+    background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light);
+    border-radius: var(--mw-radius-md); margin-bottom: 20px; overflow: hidden;
 }
 .kwr-group__header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 16px 20px;
-    cursor: pointer;
-    transition: background 0.15s;
-    user-select: none;
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 20px; cursor: pointer; transition: background 0.15s; user-select: none;
 }
 .kwr-group__header:hover { background: var(--mw-bg-secondary); }
 .kwr-group__icon { font-size: 20px; }
-.kwr-group__title {
-    font-size: 15px;
-    font-weight: 600;
-    margin: 0;
-    flex: 1;
-}
-.kwr-group__count {
-    font-size: 13px;
-    font-weight: 400;
-    color: var(--mw-text-tertiary);
-}
-.kwr-group__arrow {
-    font-size: 12px;
-    color: var(--mw-text-tertiary);
-    transition: transform 0.2s;
-}
+.kwr-group__title { font-size: 15px; font-weight: 600; margin: 0; flex: 1; }
+.kwr-group__count { font-size: 13px; font-weight: 400; color: var(--mw-text-tertiary); }
+.kwr-group__arrow { font-size: 12px; color: var(--mw-text-tertiary); transition: transform 0.2s; }
 .kwr-group__arrow.collapsed { transform: rotate(-90deg); }
-.kwr-group__body {
-    border-top: 1px solid var(--mw-border-light);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
+.kwr-group__body { border-top: 1px solid var(--mw-border-light); overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 /* テーブル */
-.kwr-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-}
+.kwr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .kwr-table th {
-    padding: 12px 14px;
-    text-align: left;
-    font-weight: 600;
-    color: var(--mw-text-secondary);
-    font-size: 12px;
+    padding: 10px 12px; text-align: left; font-weight: 600;
+    color: var(--mw-text-secondary); font-size: 11px;
     border-bottom: 1px solid var(--mw-border-light);
-    background: var(--mw-bg-secondary);
-    white-space: nowrap;
+    background: var(--mw-bg-secondary); white-space: nowrap;
 }
-.kwr-table td {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--mw-border-light);
-    vertical-align: top;
-    line-height: 1.5;
-}
+.kwr-table td { padding: 10px 12px; border-bottom: 1px solid var(--mw-border-light); vertical-align: top; line-height: 1.5; }
 .kwr-table tbody tr:hover { background: var(--mw-bg-secondary); }
-.kwr-table .kwr-keyword-cell {
-    font-weight: 600;
-    color: var(--mw-text-heading);
-    white-space: nowrap;
-}
+.kwr-table .kwr-keyword-cell { font-weight: 600; color: var(--mw-text-heading); white-space: nowrap; }
 
 /* バッジ */
-.kwr-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-}
+.kwr-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .kwr-badge--type-core       { background: rgba(74,144,164,0.12); color: #2D7A8F; }
 .kwr-badge--type-support    { background: var(--mw-bg-tertiary, #f1f5f9); color: var(--mw-text-tertiary); }
 .kwr-badge--type-local      { background: rgba(78,138,107,0.12); color: #4E8A6B; }
 .kwr-badge--type-comparison { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .kwr-badge--type-column     { background: rgba(124,58,237,0.1); color: #7C3AED; }
+.kwr-badge--type-competitor { background: rgba(201,90,79,0.1); color: #C95A4F; }
+.kwr-badge--type-diff       { background: rgba(39,174,96,0.12); color: #27AE60; }
 
 .kwr-badge--pri-high   { background: rgba(201,90,79,0.12); color: #C95A4F; }
 .kwr-badge--pri-medium { background: rgba(201,168,76,0.15); color: #C9A84C; }
@@ -302,41 +209,37 @@ get_header();
 .kwr-badge--action-heading  { background: rgba(124,58,237,0.1); color: #7C3AED; }
 .kwr-badge--action-link     { background: rgba(201,90,79,0.08); color: #C95A4F; }
 
+/* 難易度バッジ */
+.kwr-diff-easy   { background: rgba(39,174,96,0.12); color: #27AE60; }
+.kwr-diff-medium { background: rgba(201,168,76,0.15); color: #C9A84C; }
+.kwr-diff-hard   { background: rgba(201,90,79,0.12); color: #C95A4F; }
+
 /* メタ情報 */
-.kwr-meta {
-    font-size: 12px;
-    color: var(--mw-text-tertiary);
-    margin-top: 8px;
-}
+.kwr-meta { font-size: 12px; color: var(--mw-text-tertiary); margin-top: 8px; }
 
 /* 空状態 */
-.kwr-empty {
-    text-align: center;
-    padding: 48px 20px;
-    color: var(--mw-text-tertiary);
-}
+.kwr-empty { text-align: center; padding: 48px 20px; color: var(--mw-text-tertiary); }
 .kwr-empty__icon { font-size: 40px; margin-bottom: 12px; }
 .kwr-empty__text { font-size: 15px; margin-bottom: 8px; color: var(--mw-text-secondary); }
 .kwr-empty__sub { font-size: 13px; }
 
-/* セクションタイトル */
 .kwr-results-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--mw-text-heading);
-    margin: 0 0 20px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-size: 18px; font-weight: 600;
+    color: var(--mw-text-heading); margin: 0 0 20px;
+    display: flex; align-items: center; gap: 8px;
 }
 
-/* レスポンシブ */
+/* ボリューム列 */
+.kwr-vol-cell { text-align: right; font-size: 12px; white-space: nowrap; }
+.kwr-comp-bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--mw-border-light); width: 40px; position: relative; vertical-align: middle; }
+.kwr-comp-bar__fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 3px; background: #C9A84C; }
+
 @media (max-width: 768px) {
     .kwr-conditions { padding: 20px 16px; }
     .kwr-summary { padding: 20px 16px; }
     .kwr-client-info { grid-template-columns: 1fr 1fr; }
     .kwr-group__header { padding: 14px 16px; }
-    .kwr-table th, .kwr-table td { padding: 10px 8px; }
+    .kwr-table th, .kwr-table td { padding: 8px 6px; }
 }
 </style>
 
@@ -355,7 +258,7 @@ get_header();
 
     <!-- ===== 条件エリア ===== -->
     <div class="kwr-conditions">
-        <h2 class="kwr-conditions__title">📋 調査条件</h2>
+        <h2 class="kwr-conditions__title">調査条件</h2>
 
         <!-- クライアント情報 -->
         <?php
@@ -379,9 +282,35 @@ get_header();
             </div>
         <?php endif; ?>
 
+        <!-- 競合・参考URL -->
+        <?php if ( $has_competitor_urls ) : ?>
+            <div class="kwr-competitor-urls">
+                <div class="kwr-competitor-urls__title">参考URL（競合・理想サイト）</div>
+                <ul class="kwr-competitor-urls__list">
+                    <?php foreach ( $ref_urls as $ref ) :
+                        $ref_url  = $ref['url'] ?? '';
+                        $ref_note = $ref['note'] ?? '';
+                        if ( empty( $ref_url ) ) continue;
+                    ?>
+                        <li>
+                            <span class="kwr-competitor-urls__url"><?php echo esc_html( $ref_url ); ?></span>
+                            <?php if ( $ref_note ) : ?>
+                                <span class="kwr-competitor-urls__note">(<?php echo esc_html( $ref_note ); ?>)</span>
+                            <?php endif; ?>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+
+            <div class="kwr-competitor-toggle">
+                <input type="checkbox" id="kwrCompetitor" checked>
+                <label for="kwrCompetitor">競合分析を含める（参考URLのサイトを解析して比較提案を行います）</label>
+            </div>
+        <?php endif; ?>
+
         <?php if ( empty( $site_url ) ) : ?>
             <div class="kwr-warning">
-                ⚠ サイトURLが未設定です。設定画面でサイトURLを登録してから調査を実行してください。
+                サイトURLが未設定です。設定画面でサイトURLを登録してから調査を実行してください。
             </div>
         <?php endif; ?>
 
@@ -395,20 +324,29 @@ get_header();
         <!-- 実行ボタン -->
         <button id="kwrRunBtn" class="kwr-btn kwr-btn--primary" type="button"
                 <?php echo empty( $site_url ) ? 'disabled' : ''; ?>>
-            🔍 キーワード調査を実行
+            キーワード調査を実行
         </button>
-        <span id="kwrMeta" class="kwr-meta"></span>
+        <div id="kwrMeta" class="kwr-meta"></div>
     </div>
+
+    <!-- データ精度表示 -->
+    <div class="kwr-accuracy" id="kwrAccuracy"></div>
 
     <!-- ===== AI戦略サマリー ===== -->
     <div class="kwr-summary" id="kwrSummary" style="display:none;">
-        <h2 class="kwr-summary__title">💡 AI戦略サマリー</h2>
+        <h2 class="kwr-summary__title">AI戦略サマリー</h2>
         <div id="kwrSummaryContent"></div>
+    </div>
+
+    <!-- ===== 競合分析サマリー ===== -->
+    <div class="kwr-summary" id="kwrCompSummary" style="display:none;">
+        <h2 class="kwr-summary__title">競合分析サマリー</h2>
+        <div id="kwrCompSummaryContent"></div>
     </div>
 
     <!-- ===== グループ別キーワード一覧 ===== -->
     <div id="kwrResults" style="display:none;">
-        <h2 class="kwr-results-title">📊 キーワード候補一覧</h2>
+        <h2 class="kwr-results-title">キーワード候補一覧</h2>
         <div id="kwrGroups"></div>
     </div>
 
@@ -433,91 +371,98 @@ get_header();
 
     /* グループ定義 */
     var groupMeta = {
-        immediate:    { icon: '🎯', label: '今すぐ狙うべきキーワード',     color: '#C95A4F' },
-        local_seo:    { icon: '📍', label: '地域SEO向けキーワード',        color: '#4E8A6B' },
-        comparison:   { icon: '🔄', label: '比較・検討流入向けキーワード', color: '#C9A84C' },
-        column:       { icon: '📝', label: 'コラム記事向きキーワード',     color: '#7C3AED' },
-        service_page: { icon: '🛠', label: 'サービスページ向きキーワード', color: '#2D7A8F' }
+        immediate:           { icon: '🎯', label: '今すぐ狙うべきキーワード',                 color: '#C95A4F' },
+        local_seo:           { icon: '📍', label: '地域SEO向けキーワード',                     color: '#4E8A6B' },
+        comparison:          { icon: '🔄', label: '比較・検討流入向けキーワード',               color: '#C9A84C' },
+        column:              { icon: '📝', label: 'コラム記事向きキーワード',                   color: '#7C3AED' },
+        service_page:        { icon: '🛠', label: 'サービスページ向きキーワード',              color: '#2D7A8F' },
+        competitor_core:     { icon: '⚔️', label: '競合も狙っている本命キーワード',            color: '#E74C3C' },
+        competitor_longterm: { icon: '🏔️', label: '競合が強いが中長期で狙うべきキーワード',    color: '#8E44AD' },
+        competitor_gap:      { icon: '✨', label: '競合が弱く自社が狙いやすいキーワード',       color: '#27AE60' },
+        competitor_compare:  { icon: '⚖️', label: '比較検討流入を取れるキーワード',             color: '#F39C12' }
     };
-    var groupOrder = ['immediate', 'local_seo', 'comparison', 'column', 'service_page'];
+    var groupOrder = [
+        'immediate', 'competitor_gap', 'local_seo', 'competitor_core',
+        'comparison', 'competitor_compare', 'column', 'service_page', 'competitor_longterm'
+    ];
 
     /* バッジマッピング */
     var typeClass = {
-        '本命':       'kwr-badge--type-core',
-        '補助':       'kwr-badge--type-support',
-        'ローカルSEO':'kwr-badge--type-local',
-        '比較流入':   'kwr-badge--type-comparison',
-        'コラム向け': 'kwr-badge--type-column'
+        '本命': 'kwr-badge--type-core', '補助': 'kwr-badge--type-support',
+        'ローカルSEO': 'kwr-badge--type-local', '比較流入': 'kwr-badge--type-comparison',
+        'コラム向け': 'kwr-badge--type-column', '競合重複': 'kwr-badge--type-competitor',
+        '差別化': 'kwr-badge--type-diff'
     };
-    var priClass = {
-        '高': 'kwr-badge--pri-high',
-        '中': 'kwr-badge--pri-medium',
-        '低': 'kwr-badge--pri-low'
-    };
+    var priClass = { '高': 'kwr-badge--pri-high', '中': 'kwr-badge--pri-medium', '低': 'kwr-badge--pri-low' };
     var actClass = {
-        '既存ページ改善': 'kwr-badge--action-improve',
-        '新規ページ追加': 'kwr-badge--action-new',
-        'タイトル改善':   'kwr-badge--action-title',
-        '見出し追加':     'kwr-badge--action-heading',
+        '既存ページ改善': 'kwr-badge--action-improve', '新規ページ追加': 'kwr-badge--action-new',
+        'タイトル改善': 'kwr-badge--action-title', '見出し追加': 'kwr-badge--action-heading',
         '内部リンク強化': 'kwr-badge--action-link'
     };
 
-    function esc(s) {
-        if (!s) return '';
-        var d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
-    }
+    function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     function badge(text, map) {
         var cls = map[text] || 'kwr-badge--type-support';
         return '<span class="kwr-badge ' + cls + '">' + esc(text) + '</span>';
+    }
+    function fmtVol(v) {
+        if (v === null || v === undefined) return '<span style="color:var(--mw-text-tertiary);">-</span>';
+        return Number(v).toLocaleString();
+    }
+    function fmtComp(v) {
+        if (v === null || v === undefined) return '<span style="color:var(--mw-text-tertiary);">-</span>';
+        var pct = Math.round(v * 100);
+        return '<span class="kwr-comp-bar"><span class="kwr-comp-bar__fill" style="width:' + pct + '%;"></span></span> <span style="font-size:11px;">' + pct + '%</span>';
+    }
+    function fmtDiff(v) {
+        if (v === null || v === undefined) return '<span style="color:var(--mw-text-tertiary);">-</span>';
+        var n = Math.round(v);
+        var cls = n <= 30 ? 'kwr-diff-easy' : (n <= 60 ? 'kwr-diff-medium' : 'kwr-diff-hard');
+        return '<span class="kwr-badge ' + cls + '">' + n + '</span>';
     }
 
     function showProgress(msg) {
         document.getElementById('kwrProgressText').textContent = msg || 'AIがキーワード候補を分析中です…';
         document.getElementById('kwrProgress').classList.add('active');
     }
-    function hideProgress() {
-        document.getElementById('kwrProgress').classList.remove('active');
-    }
+    function hideProgress() { document.getElementById('kwrProgress').classList.remove('active'); }
     function showToast(msg, isError) {
         var el = document.getElementById('kwrToast');
-        el.textContent = msg;
-        el.className = 'kwr-toast active' + (isError ? ' kwr-toast--error' : '');
+        el.textContent = msg; el.className = 'kwr-toast active' + (isError ? ' kwr-toast--error' : '');
         setTimeout(function() { el.className = 'kwr-toast'; }, 4000);
     }
 
+    /* ===== 調査実行 ===== */
     btn.addEventListener('click', function() {
         var seeds = (document.getElementById('kwrSeeds').value || '').trim();
+        var compEl = document.getElementById('kwrCompetitor');
+        var enableComp = compEl ? compEl.checked : false;
+
         btn.disabled = true;
-        showProgress('AIがキーワード候補を分析中です…（30秒〜1分程度）');
+        showProgress(enableComp ? '競合サイトの分析中です…（1〜2分程度）' : 'AIがキーワード候補を分析中です…（30秒〜1分程度）');
         document.getElementById('kwrEmpty').style.display = 'none';
         document.getElementById('kwrSummary').style.display = 'none';
+        document.getElementById('kwrCompSummary').style.display = 'none';
         document.getElementById('kwrResults').style.display = 'none';
-        document.getElementById('kwrMeta').textContent = '';
+        document.getElementById('kwrAccuracy').style.display = 'none';
+        document.getElementById('kwrMeta').innerHTML = '';
 
         fetch(restUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
-            body: JSON.stringify({ user_id: userId, seed_keywords: seeds })
+            body: JSON.stringify({ user_id: userId, seed_keywords: seeds, enable_competitor: enableComp })
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             hideProgress();
             btn.disabled = false;
-
             if (!data.success) {
                 showToast(data.error || 'エラーが発生しました', true);
                 document.getElementById('kwrEmpty').style.display = '';
                 return;
             }
-
-            renderSummary(data.summary || {});
-            renderGroups(data.groups || {});
-
-            var meta = data.meta || {};
-            document.getElementById('kwrMeta').textContent =
-                '✅ 調査完了（' + (meta.generated_at || '') + '）  GSC: ' + (meta.gsc_count || 0) + '件参照';
+            renderAll(data);
+            btn.textContent = '再調査を実行';
         })
         .catch(function(err) {
             hideProgress();
@@ -526,6 +471,72 @@ get_header();
             document.getElementById('kwrEmpty').style.display = '';
         });
     });
+
+    /* ===== ページ読み込み時に前回結果を取得 ===== */
+    fetch(restUrl, {
+        method: 'GET',
+        headers: { 'X-WP-Nonce': nonce }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data && data.success) {
+            renderAll(data);
+            btn.textContent = '再調査を実行';
+            if (data.is_cached) {
+                var meta = data.meta || {};
+                var metaEl = document.getElementById('kwrMeta');
+                metaEl.innerHTML = '前回の調査結果（' + esc(meta.generated_at || '') + '）';
+            }
+        }
+    })
+    .catch(function() { /* 前回結果なし — 空状態のまま */ });
+
+    /* ===== 統合レンダリング ===== */
+    function renderAll(data) {
+        document.getElementById('kwrEmpty').style.display = 'none';
+        renderAccuracy(data.meta || {});
+        renderSummary(data.summary || {});
+        renderCompSummary(data.summary || {}, data.competitor_data || []);
+        renderGroups(data.groups || {});
+        renderMeta(data.meta || {});
+    }
+
+    /* ===== データ精度表示 ===== */
+    function renderAccuracy(meta) {
+        var sources = meta.data_sources || [];
+        var el = document.getElementById('kwrAccuracy');
+        var msgs = [];
+        if (sources.indexOf('DataForSEO') >= 0 && sources.indexOf('競合分析') >= 0) {
+            msgs.push('GSC + 競合URL解析 + 外部APIの検索データを反映した提案です');
+        } else if (sources.indexOf('DataForSEO') >= 0) {
+            msgs.push('GSC + 外部APIの検索データを反映した提案です');
+        } else if (sources.indexOf('競合分析') >= 0) {
+            msgs.push('GSC + 競合URL解析 + AI推定ベースの提案です');
+        } else {
+            msgs.push('GSC + AI推定ベースの提案です');
+        }
+        el.textContent = msgs[0];
+        el.style.display = '';
+    }
+
+    /* ===== メタ行 ===== */
+    function renderMeta(meta) {
+        var html = '調査完了（' + esc(meta.generated_at || '') + '）';
+        html += ' GSC: ' + (meta.gsc_count || 0) + '件参照';
+        if (meta.competitor_count > 0) html += ' / 競合: ' + meta.competitor_count + 'サイト解析';
+
+        var sources = meta.data_sources || [];
+        if (sources.length > 0) {
+            html += '<div class="kwr-data-sources">';
+            var dsMap = { 'AI': 'ai', 'GSC': 'gsc', 'DataForSEO': 'dataforseo', '競合分析': 'competitor' };
+            sources.forEach(function(s) {
+                var cls = dsMap[s] || 'ai';
+                html += '<span class="kwr-ds-badge kwr-ds-badge--' + cls + '">' + esc(s) + '</span>';
+            });
+            html += '</div>';
+        }
+        document.getElementById('kwrMeta').innerHTML = html;
+    }
 
     /* ===== サマリー描画 ===== */
     function renderSummary(summary) {
@@ -542,12 +553,45 @@ get_header();
             if (!val) return;
             html += '<div class="kwr-summary__item">'
                 + '<div class="kwr-summary__item-title">' + si.icon + ' ' + si.title + '</div>'
-                + '<div class="kwr-summary__item-text">' + esc(val) + '</div>'
-                + '</div>';
+                + '<div class="kwr-summary__item-text">' + esc(val) + '</div></div>';
         });
-        var el = document.getElementById('kwrSummaryContent');
-        el.innerHTML = html;
+        document.getElementById('kwrSummaryContent').innerHTML = html;
         document.getElementById('kwrSummary').style.display = html ? '' : 'none';
+    }
+
+    /* ===== 競合分析サマリー ===== */
+    function renderCompSummary(summary, compData) {
+        var items = [
+            { icon: '💪', title: '競合が強い領域', key: 'competitor_strengths' },
+            { icon: '🎯', title: '自社が狙いやすい領域', key: 'competitor_gaps' },
+            { icon: '✨', title: '差別化候補', key: 'competitor_differentiation' }
+        ];
+        var html = '';
+        items.forEach(function(si) {
+            var val = summary[si.key] || '';
+            if (!val) return;
+            html += '<div class="kwr-summary__item">'
+                + '<div class="kwr-summary__item-title">' + si.icon + ' ' + si.title + '</div>'
+                + '<div class="kwr-summary__item-text">' + esc(val) + '</div></div>';
+        });
+
+        // 競合サイト一覧
+        if (compData && compData.length > 0) {
+            var okSites = compData.filter(function(c) { return c.status === 'ok'; });
+            if (okSites.length > 0) {
+                html += '<div class="kwr-summary__item"><div class="kwr-summary__item-title">🔗 解析済み競合サイト</div>';
+                html += '<div class="kwr-summary__item-text">';
+                okSites.forEach(function(c) {
+                    html += '・' + esc(c.title || c.url);
+                    if (c.note) html += ' (' + esc(c.note) + ')';
+                    html += '<br>';
+                });
+                html += '</div></div>';
+            }
+        }
+
+        document.getElementById('kwrCompSummaryContent').innerHTML = html;
+        document.getElementById('kwrCompSummary').style.display = html ? '' : 'none';
     }
 
     /* ===== グループ別テーブル描画 ===== */
@@ -559,13 +603,13 @@ get_header();
         groupOrder.forEach(function(gk) {
             var items = groups[gk] || [];
             if (items.length === 0) return;
-            hasAny = true;
             var gm = groupMeta[gk];
+            if (!gm) return;
+            hasAny = true;
 
             var div = document.createElement('div');
             div.className = 'kwr-group';
 
-            /* ヘッダー */
             var header = document.createElement('div');
             header.className = 'kwr-group__header';
             header.innerHTML = '<span class="kwr-group__icon">' + gm.icon + '</span>'
@@ -579,18 +623,13 @@ get_header();
             header.addEventListener('click', function() {
                 var hidden = body.style.display === 'none';
                 body.style.display = hidden ? '' : 'none';
-                header.querySelector('.kwr-group__arrow').className =
-                    'kwr-group__arrow' + (hidden ? '' : ' collapsed');
+                header.querySelector('.kwr-group__arrow').className = 'kwr-group__arrow' + (hidden ? '' : ' collapsed');
             });
 
-            /* テーブル */
             var html = '<table class="kwr-table"><thead><tr>'
-                + '<th>キーワード</th>'
-                + '<th>タイプ</th>'
-                + '<th>優先度</th>'
-                + '<th>推奨ページ種別</th>'
-                + '<th>提案理由</th>'
-                + '<th>対応アクション</th>'
+                + '<th>キーワード</th><th>タイプ</th><th>優先度</th>'
+                + '<th>検索Vol.</th><th>競合度</th><th>難易度</th>'
+                + '<th>推奨ページ</th><th>提案理由</th><th>アクション</th>'
                 + '</tr></thead><tbody>';
 
             items.forEach(function(item) {
@@ -598,6 +637,9 @@ get_header();
                     + '<td class="kwr-keyword-cell">' + esc(item.keyword) + '</td>'
                     + '<td>' + badge(item.type, typeClass) + '</td>'
                     + '<td>' + badge(item.priority, priClass) + '</td>'
+                    + '<td class="kwr-vol-cell">' + fmtVol(item.volume) + '</td>'
+                    + '<td class="kwr-vol-cell">' + fmtComp(item.competition) + '</td>'
+                    + '<td class="kwr-vol-cell">' + fmtDiff(item.difficulty) + '</td>'
                     + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
                     + '<td style="font-size:12px;color:var(--mw-text-secondary);">' + esc(item.reason) + '</td>'
                     + '<td>' + badge(item.action, actClass) + '</td>'

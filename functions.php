@@ -79,6 +79,16 @@ add_action('init', function () {
         'supports'        => ['title', 'editor'],
         'capability_type' => 'post',
     ]);
+
+    // キーワード調査結果の保存用
+    register_post_type('gcrev_kw_research', [
+        'label'       => 'キーワード調査',
+        'public'      => false,
+        'show_ui'     => false,
+        'has_archive' => false,
+        'rewrite'     => false,
+        'supports'    => ['title'],
+    ]);
 });
 
 // ----------------------------------------

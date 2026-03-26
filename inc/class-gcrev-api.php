@@ -146,7 +146,11 @@ class Gcrev_Insight_API {
 
         // Step7: Keyword Research Service
         if ( class_exists( 'Gcrev_Keyword_Research_Service' ) ) {
-            $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config );
+            $dataforseo_for_kwr = null;
+            if ( class_exists( 'Gcrev_DataForSEO_Client' ) && Gcrev_DataForSEO_Client::is_configured() ) {
+                $dataforseo_for_kwr = new Gcrev_DataForSEO_Client( $this->config );
+            }
+            $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, $dataforseo_for_kwr );
         }
 
         if ($register_routes) {
@@ -1026,9 +1030,16 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
         register_rest_route('gcrev/v1', '/seo/keyword-research', [
-            'methods'             => 'POST',
-            'callback'            => [ $this, 'rest_seo_keyword_research' ],
-            'permission_callback' => [ $this->config, 'check_permission' ],
+            [
+                'methods'             => 'POST',
+                'callback'            => [ $this, 'rest_seo_keyword_research' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
+            [
+                'methods'             => 'GET',
+                'callback'            => [ $this, 'rest_seo_keyword_research_latest' ],
+                'permission_callback' => [ $this->config, 'check_permission' ],
+            ],
         ]);
 
         // =========================================================
@@ -14629,10 +14640,12 @@ PROMPT;
             ) );
         }
 
-        @set_time_limit( 180 );
+        $enable_competitor = (bool) $request->get_param( 'enable_competitor' );
+
+        @set_time_limit( 300 );
 
         try {
-            $result = $this->keyword_research->research( $user_id, $seeds );
+            $result = $this->keyword_research->research( $user_id, $seeds, $enable_competitor );
             return new \WP_REST_Response( $result );
         } catch ( \Throwable $e ) {
             file_put_contents( '/tmp/gcrev_seo_debug.log',
@@ -14644,6 +14657,24 @@ PROMPT;
                 'error'   => 'キーワード調査中にエラーが発生しました: ' . $e->getMessage(),
             ], 500 );
         }
+    }
+
+    /**
+     * キーワード調査の最新結果を取得
+     */
+    public function rest_seo_keyword_research_latest( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+
+        if ( ! $this->keyword_research ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'no_service' ], 500 );
+        }
+
+        $result = $this->keyword_research->get_latest_result( $user_id );
+        if ( $result === null ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'no_data' ] );
+        }
+
+        return new \WP_REST_Response( $result );
     }
 
     // =========================================================
