@@ -29,7 +29,7 @@ class Gcrev_Google_Ads_Client {
     private const API_BASE = 'https://googleads.googleapis.com';
 
     /** API バージョン */
-    private const API_VERSION = 'v18';
+    private const API_VERSION = 'v23';
 
     /** OAuth2 トークンエンドポイント */
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
