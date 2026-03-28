@@ -539,83 +539,87 @@ get_header();
     <div id="meo-main-content">
 
         <!-- サマリーカード：表示回数系 -->
-        <div class="summary-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px;">
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #dbeafe; color: #3b82f6;">👁️</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">表示回数</div>
+        <div class="meo-summary-grid" id="meoSummaryCards">
+            <button type="button" class="meo-summary-card is-active" data-metric="total-impressions" data-label="表示回数" aria-pressed="true">
+                <div class="meo-card-header">
+                    <div class="meo-card-icon" style="background: #dbeafe; color: #3b82f6;">👁️</div>
+                    <div class="meo-card-label">表示回数</div>
                 </div>
-                <div id="meo-total-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-total-impressions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #d1fae5; color: #10b981;">📱</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">モバイル</div>
+                <div class="meo-card-value" id="meo-total-impressions">---</div>
+                <div class="meo-card-change" id="meo-total-impressions-change">---</div>
+                <span class="meo-card-hint">クリックでグラフ切替</span>
+            </button>
+            <button type="button" class="meo-summary-card" data-metric="mobile-impressions" data-label="モバイル" aria-pressed="false">
+                <div class="meo-card-header">
+                    <div class="meo-card-icon" style="background: #d1fae5; color: #10b981;">📱</div>
+                    <div class="meo-card-label">モバイル</div>
                 </div>
-                <div id="meo-mobile-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-mobile-impressions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #dbeafe; color: #2563eb;">🖥️</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">PC</div>
+                <div class="meo-card-value" id="meo-mobile-impressions">---</div>
+                <div class="meo-card-change" id="meo-mobile-impressions-change">---</div>
+                <span class="meo-card-hint">クリックでグラフ切替</span>
+            </button>
+            <button type="button" class="meo-summary-card" data-metric="desktop-impressions" data-label="PC" aria-pressed="false">
+                <div class="meo-card-header">
+                    <div class="meo-card-icon" style="background: #dbeafe; color: #2563eb;">🖥️</div>
+                    <div class="meo-card-label">PC</div>
                 </div>
-                <div id="meo-desktop-impressions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-desktop-impressions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #fef3c7; color: #f59e0b;">📈</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">平均クリック率</div>
+                <div class="meo-card-value" id="meo-desktop-impressions">---</div>
+                <div class="meo-card-change" id="meo-desktop-impressions-change">---</div>
+                <span class="meo-card-hint">クリックでグラフ切替</span>
+            </button>
+            <button type="button" class="meo-summary-card" data-metric="click-rate" data-label="平均クリック率" aria-pressed="false">
+                <div class="meo-card-header">
+                    <div class="meo-card-icon" style="background: #fef3c7; color: #f59e0b;">📈</div>
+                    <div class="meo-card-label">平均クリック率</div>
                 </div>
-                <div id="meo-click-rate" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-click-rate-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
+                <div class="meo-card-value" id="meo-click-rate">---</div>
+                <div class="meo-card-change" id="meo-click-rate-change">---</div>
+                <span class="meo-card-hint">クリックでグラフ切替</span>
+            </button>
+            <button type="button" class="meo-summary-card" data-metric="calls" data-label="電話クリック数" aria-pressed="false">
+                <div class="meo-card-header">
+                    <div class="meo-card-icon" style="background: #fef3c7; color: #d97706;">📞</div>
+                    <div class="meo-card-label">電話クリック数</div>
+                </div>
+                <div class="meo-card-value" id="meo-calls">---</div>
+                <div class="meo-card-change" id="meo-calls-change">---</div>
+                <span class="meo-card-hint">クリックでグラフ切替</span>
+            </button>
+            <button type="button" class="meo-summary-card" data-metric="directions" data-label="ルート検索回数" aria-pressed="false">
+                <div class="meo-card-header">
+                    <div class="meo-card-icon" style="background: #fee2e2; color: #ef4444;">📍</div>
+                    <div class="meo-card-label">ルート検索回数</div>
+                </div>
+                <div class="meo-card-value" id="meo-directions">---</div>
+                <div class="meo-card-change" id="meo-directions-change">---</div>
+                <span class="meo-card-hint">クリックでグラフ切替</span>
+            </button>
+            <button type="button" class="meo-summary-card" data-metric="website" data-label="ウェブサイトクリック数" aria-pressed="false">
+                <div class="meo-card-header">
+                    <div class="meo-card-icon" style="background: #cffafe; color: #06b6d4;">🌐</div>
+                    <div class="meo-card-label">ウェブサイトクリック数</div>
+                </div>
+                <div class="meo-card-value" id="meo-website">---</div>
+                <div class="meo-card-change" id="meo-website-change">---</div>
+                <span class="meo-card-hint">クリックでグラフ切替</span>
+            </button>
+            <button type="button" class="meo-summary-card" data-metric="menu" data-label="メニュークリック数" aria-pressed="false">
+                <div class="meo-card-header">
+                    <div class="meo-card-icon" style="background: #fce7f3; color: #ec4899;">☰</div>
+                    <div class="meo-card-label">メニュークリック数</div>
+                </div>
+                <div class="meo-card-value" id="meo-menu">---</div>
+                <div class="meo-card-change" id="meo-menu-change">---</div>
+                <span class="meo-card-hint">クリックでグラフ切替</span>
+            </button>
         </div>
 
-        <!-- サマリーカード：アクション系 -->
-        <div class="summary-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 24px;">
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #fef3c7; color: #d97706;">📞</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">電話クリック数</div>
-                </div>
-                <div id="meo-calls" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-calls-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #fee2e2; color: #ef4444;">📍</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">ルート検索回数</div>
-                </div>
-                <div id="meo-directions" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-directions-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #cffafe; color: #06b6d4;">🌐</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">ウェブサイトクリック数</div>
-                </div>
-                <div id="meo-website" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-website-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-            <div class="summary-card" style="background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                    <div style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #fce7f3; color: #ec4899;">☰</div>
-                    <div style="font-size: 13px; color: #666666; font-weight: 600;">メニュークリック数</div>
-                </div>
-                <div id="meo-menu" style="font-size: 32px; font-weight: 700; color: #2C3E40; margin-bottom: 8px;">---</div>
-                <div id="meo-menu-change" style="font-size: 13px; font-weight: 600; color: #666666;">---</div>
-            </div>
-        </div>
-
-        <!-- 表示回数推移グラフ -->
+        <!-- 指標推移グラフ（カード選択に連動） -->
         <div style="background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <div style="font-size: 18px; font-weight: 700; color: #2C3E40;">📈 表示回数の推移</div>
+                <div id="meo-metric-chart-title" style="font-size: 18px; font-weight: 700; color: #2C3E40;">📈 表示回数の推移</div>
             </div>
-            <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; padding: 14px 18px; background: #f8fafa; border-radius: 8px; border: 1px solid #e8eeee;">
+            <div id="meo-impressions-legend" style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; padding: 14px 18px; background: #f8fafa; border-radius: 8px; border: 1px solid #e8eeee;">
                 <div style="display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 220px;">
                     <span style="display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: #568184; flex-shrink: 0; margin-top: 3px;"></span>
                     <div>
@@ -632,7 +636,7 @@ get_header();
                 </div>
             </div>
             <div style="height: 300px;">
-                <canvas id="meo-impressions-chart"></canvas>
+                <canvas id="meo-metric-chart"></canvas>
             </div>
         </div>
 
@@ -686,8 +690,9 @@ get_header();
     let currentData   = null;
 
     // Chart.jsインスタンス
-    let impressionsChart = null;
+    let metricChart      = null;
     let actionsChart     = null;
+    let selectedMetric   = 'total-impressions'; // デフォルト選択
 
     // ===== ローディング制御（標準パターン） =====
     function showLoading() {
@@ -710,6 +715,25 @@ get_header();
         });
     }
 
+    // ===== カード選択ハンドラー =====
+    var cardsContainer = document.getElementById('meoSummaryCards');
+    if (cardsContainer) {
+        cardsContainer.addEventListener('click', function(e) {
+            var card = e.target.closest('.meo-summary-card');
+            if (!card) return;
+            var metric = card.dataset.metric;
+            if (!metric || metric === selectedMetric) return;
+            selectedMetric = metric;
+            // アクティブ状態を更新
+            cardsContainer.querySelectorAll('.meo-summary-card').forEach(function(c) {
+                c.classList.toggle('is-active', c.dataset.metric === metric);
+                c.setAttribute('aria-pressed', c.dataset.metric === metric ? 'true' : 'false');
+            });
+            // グラフを再描画
+            if (currentData) updateMetricChart(currentData);
+        });
+    }
+
     // ===== データ取得（キャッシュ優先 + fetch） =====
     async function loadData(period) {
         // キャッシュチェック（ローディングなしで即表示）
@@ -720,7 +744,7 @@ get_header();
             updatePeriodDisplay(currentData);
             updateSummaryCards(currentData);
             updateKeywordsTable(currentData);
-            updateImpressionsChart(currentData);
+            updateMetricChart(currentData);
             updateActionsChart(currentData);
             return;
         }
@@ -757,7 +781,7 @@ get_header();
             updatePeriodDisplay(currentData);
             updateSummaryCards(currentData);
             updateKeywordsTable(currentData);
-            updateImpressionsChart(currentData);
+            updateMetricChart(currentData);
             updateActionsChart(currentData);
 
         } catch (error) {
@@ -923,49 +947,130 @@ get_header();
         return div.innerHTML;
     }
 
-    // ===== 表示回数推移グラフ =====
-    function updateImpressionsChart(data) {
+    // ===== 指標推移グラフ（カード選択に連動） =====
+    // 指標ごとのグラフ設定マップ
+    var metricConfig = {
+        'total-impressions': {
+            title: '表示回数の推移',
+            showLegend: true,
+            isPercent: false,
+            getDatasets: function(daily) {
+                return [
+                    { label: '検索での表示', data: daily.map(function(d){ return d.search_impressions || 0; }), borderColor: '#568184', backgroundColor: 'rgba(86,129,132,0.12)', fill: true, tension: 0.3, pointRadius: 2 },
+                    { label: 'マップでの表示', data: daily.map(function(d){ return d.map_impressions || 0; }), borderColor: '#E8964D', backgroundColor: 'rgba(232,150,77,0.12)', fill: true, tension: 0.3, pointRadius: 2 }
+                ];
+            }
+        },
+        'mobile-impressions': {
+            title: 'モバイルの推移',
+            showLegend: false,
+            isPercent: false,
+            getDatasets: function(daily) {
+                return [{ label: 'モバイル表示回数', data: daily.map(function(d){ return d.mobile_impressions || 0; }), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.12)', fill: true, tension: 0.3, pointRadius: 2 }];
+            }
+        },
+        'desktop-impressions': {
+            title: 'PCの推移',
+            showLegend: false,
+            isPercent: false,
+            getDatasets: function(daily) {
+                return [{ label: 'PC表示回数', data: daily.map(function(d){ return d.desktop_impressions || 0; }), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.12)', fill: true, tension: 0.3, pointRadius: 2 }];
+            }
+        },
+        'click-rate': {
+            title: '平均クリック率の推移',
+            showLegend: false,
+            isPercent: true,
+            getDatasets: function(daily) {
+                return [{ label: '平均クリック率', data: daily.map(function(d){
+                    var imp = (d.search_impressions || 0) + (d.map_impressions || 0);
+                    var act = (d.call_clicks || 0) + (d.website_clicks || 0);
+                    return imp > 0 ? parseFloat((act / imp * 100).toFixed(2)) : 0;
+                }), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.12)', fill: true, tension: 0.3, pointRadius: 2 }];
+            }
+        },
+        'calls': {
+            title: '電話クリック数の推移',
+            showLegend: false,
+            isPercent: false,
+            getDatasets: function(daily) {
+                return [{ label: '電話クリック数', data: daily.map(function(d){ return d.call_clicks || 0; }), borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.12)', fill: true, tension: 0.3, pointRadius: 2 }];
+            }
+        },
+        'directions': {
+            title: 'ルート検索回数の推移',
+            showLegend: false,
+            isPercent: false,
+            getDatasets: function(daily) {
+                return [{ label: 'ルート検索回数', data: daily.map(function(d){ return d.direction_clicks || 0; }), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.12)', fill: true, tension: 0.3, pointRadius: 2 }];
+            }
+        },
+        'website': {
+            title: 'ウェブサイトクリック数の推移',
+            showLegend: false,
+            isPercent: false,
+            getDatasets: function(daily) {
+                return [{ label: 'ウェブサイトクリック数', data: daily.map(function(d){ return d.website_clicks || 0; }), borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,0.12)', fill: true, tension: 0.3, pointRadius: 2 }];
+            }
+        },
+        'menu': {
+            title: 'メニュークリック数の推移',
+            showLegend: false,
+            isPercent: false,
+            getDatasets: function(daily) {
+                return [{ label: 'メニュークリック数', data: daily.map(function(d){ return d.menu_clicks || 0; }), borderColor: '#ec4899', backgroundColor: 'rgba(236,72,153,0.12)', fill: true, tension: 0.3, pointRadius: 2 }];
+            }
+        }
+    };
+
+    function updateMetricChart(data) {
         var daily = data.daily_metrics || [];
-        if (daily.length === 0) return;
+        var config = metricConfig[selectedMetric];
+        if (!config) return;
+
+        // タイトル更新
+        var titleEl = document.getElementById('meo-metric-chart-title');
+        if (titleEl) titleEl.textContent = '📈 ' + config.title;
+
+        // 凡例表示制御（表示回数のみ検索/マップの2系列凡例を表示）
+        var legendEl = document.getElementById('meo-impressions-legend');
+        if (legendEl) legendEl.style.display = config.showLegend ? '' : 'none';
+
+        var ctx = document.getElementById('meo-metric-chart');
+        if (!ctx) return;
+
+        if (daily.length === 0) {
+            if (metricChart) metricChart.destroy();
+            metricChart = null;
+            return;
+        }
 
         var labels = daily.map(function(d) {
             var parts = (d.date || '').split('-');
             return parts.length === 3 ? parseInt(parts[1]) + '/' + parseInt(parts[2]) : d.date;
         });
-        var searchData = daily.map(function(d) { return d.search_impressions || 0; });
-        var mapData    = daily.map(function(d) { return d.map_impressions || 0; });
+        var datasets = config.getDatasets(daily);
 
-        var ctx = document.getElementById('meo-impressions-chart');
-        if (!ctx) return;
+        if (metricChart) metricChart.destroy();
 
-        if (impressionsChart) impressionsChart.destroy();
+        var yConfig = { beginAtZero: true, ticks: { precision: config.isPercent ? 2 : 0 } };
+        if (config.isPercent) {
+            yConfig.ticks.callback = function(value) { return value + '%'; };
+        }
 
-        impressionsChart = new Chart(ctx, {
+        metricChart = new Chart(ctx, {
             type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: '検索での表示',
-                        data: searchData,
-                        borderColor: '#568184',
-                        backgroundColor: 'rgba(86,129,132,0.12)',
-                        fill: true, tension: 0.3, pointRadius: 2
-                    },
-                    {
-                        label: 'マップでの表示',
-                        data: mapData,
-                        borderColor: '#E8964D',
-                        backgroundColor: 'rgba(232,150,77,0.12)',
-                        fill: true, tension: 0.3, pointRadius: 2
-                    }
-                ]
-            },
+            data: { labels: labels, datasets: datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'top' } },
-                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                plugins: {
+                    legend: { display: config.showLegend, position: 'top' },
+                    tooltip: config.isPercent ? {
+                        callbacks: { label: function(context) { return context.dataset.label + ': ' + context.parsed.y + '%'; } }
+                    } : {}
+                },
+                scales: { y: yConfig }
             }
         });
     }
@@ -1011,9 +1116,107 @@ get_header();
 <style>
 /* page-meo-dashboard — Page-specific overrides only */
 /* All shared styles are in css/dashboard-redesign.css */
-@media (max-width: 1200px) { .summary-grid { grid-template-columns: repeat(3, 1fr) !important; } }
-@media (max-width: 768px)  { .summary-grid { grid-template-columns: repeat(2, 1fr) !important; } }
-@media (max-width: 480px)  { .summary-grid { grid-template-columns: 1fr !important; } }
+
+/* ===== MEO サマリーカード グリッド ===== */
+.meo-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+/* ===== MEO サマリーカード — ボタンリセット + 基本スタイル ===== */
+.meo-summary-card {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+    text-align: left;
+    background: #fff;
+    border: 1px solid #C3CED0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: block;
+    width: 100%;
+}
+
+.meo-summary-card:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.07);
+    border-color: #AEBCBE;
+    transform: translateY(-1px);
+}
+
+/* ===== MEO サマリーカード — アクティブ/選択状態 ===== */
+.meo-summary-card.is-active {
+    border-color: #568184;
+    border-bottom: 3px solid #568184;
+    background: rgba(86, 129, 132, 0.04);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+}
+.meo-summary-card.is-active .meo-card-label {
+    color: #568184;
+    font-weight: 700;
+}
+.meo-summary-card.is-active .meo-card-hint {
+    color: #568184;
+}
+
+/* ===== MEO カード内部要素 ===== */
+.meo-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.meo-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+.meo-card-label {
+    font-size: 13px;
+    color: #666666;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+.meo-card-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #2C3E40;
+    margin-bottom: 8px;
+}
+.meo-card-change {
+    font-size: 13px;
+    font-weight: 600;
+    color: #666666;
+    margin-bottom: 4px;
+}
+.meo-card-hint {
+    display: block;
+    font-size: 11px;
+    color: #aaa;
+    margin-top: 6px;
+    transition: color 0.2s ease;
+}
+
+/* ===== フォーカス状態（アクセシビリティ） ===== */
+.meo-summary-card:focus-visible {
+    outline: 2px solid #568184;
+    outline-offset: 2px;
+}
+
+/* ===== レスポンシブ ===== */
+@media (max-width: 1200px) { .meo-summary-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 768px)  { .meo-summary-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px)  { .meo-summary-grid { grid-template-columns: 1fr; } }
 </style>
 
 <?php get_footer(); ?>
