@@ -1067,10 +1067,11 @@ get_template_part('template-parts/period-selector');
 
         // ラベルを短くする (2026-03-01 → 3/1)
         var shortLabels = labels.map(function(l) {
-            if (!l) return l;
-            var parts = l.split('-');
+            if (l === null || l === undefined) return '';
+            var s = String(l);
+            var parts = s.split('-');
             if (parts.length === 3) return parseInt(parts[1]) + '/' + parseInt(parts[2]);
-            return l;
+            return s;
         });
 
         if (trendChart) trendChart.destroy();
