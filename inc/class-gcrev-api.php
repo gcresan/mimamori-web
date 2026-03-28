@@ -147,18 +147,18 @@ class Gcrev_Insight_API {
             $this->dataforseo = new Gcrev_DataForSEO_Client( $this->config );
         }
 
-        // Step7: Keyword Research Service
+        // Step7: Google Ads Client（Keyword Research で使うため先に初期化）
+        if ( class_exists( 'Gcrev_Google_Ads_Client' ) && Gcrev_Google_Ads_Client::is_configured() ) {
+            $this->google_ads = new Gcrev_Google_Ads_Client();
+        }
+
+        // Step8: Keyword Research Service
         if ( class_exists( 'Gcrev_Keyword_Research_Service' ) ) {
             $dataforseo_for_kwr = null;
             if ( class_exists( 'Gcrev_DataForSEO_Client' ) && Gcrev_DataForSEO_Client::is_configured() ) {
                 $dataforseo_for_kwr = new Gcrev_DataForSEO_Client( $this->config );
             }
-            $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, $dataforseo_for_kwr );
-        }
-
-        // Step8: Google Ads Client
-        if ( class_exists( 'Gcrev_Google_Ads_Client' ) && Gcrev_Google_Ads_Client::is_configured() ) {
-            $this->google_ads = new Gcrev_Google_Ads_Client();
+            $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, $dataforseo_for_kwr, $this->google_ads );
         }
 
         if ($register_routes) {
@@ -8345,18 +8345,35 @@ PROMPT;
             $location_id = 'locations/' . $location_id;
         }
 
+        // 各APIメトリック → 日次データの蓄積先フィールドとモード
+        // mode: 'add' = 値を加算, フィールド名に直接セット
         $metrics = [
-            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH' => 'search',
-            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH'  => 'search',
-            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS'   => 'map',
-            'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => 'map',
+            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH' => ['field' => 'search_impressions', 'also' => 'desktop_impressions'],
+            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH'  => ['field' => 'search_impressions', 'also' => 'mobile_impressions'],
+            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS'   => ['field' => 'map_impressions',    'also' => 'desktop_impressions'],
+            'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => ['field' => 'map_impressions',    'also' => 'mobile_impressions'],
+            'CALL_CLICKS'                         => ['field' => 'call_clicks'],
+            'WEBSITE_CLICKS'                      => ['field' => 'website_clicks'],
+            'BUSINESS_DIRECTION_REQUESTS'         => ['field' => 'direction_clicks'],
+            'BUSINESS_FOOD_MENU_CLICKS'           => ['field' => 'menu_clicks'],
+        ];
+
+        $empty_day = [
+            'search_impressions'  => 0,
+            'map_impressions'     => 0,
+            'mobile_impressions'  => 0,
+            'desktop_impressions' => 0,
+            'call_clicks'         => 0,
+            'website_clicks'      => 0,
+            'direction_clicks'    => 0,
+            'menu_clicks'         => 0,
         ];
 
         $start_obj = $this->gbp_date_obj($start_date);
         $end_obj   = $this->gbp_date_obj($end_date);
-        $daily     = []; // date => [search_impressions, map_impressions]
+        $daily     = [];
 
-        foreach ($metrics as $metric => $type) {
+        foreach ($metrics as $metric => $mapping) {
             $params = [
                 'dailyMetric'                  => $metric,
                 'dailyRange.startDate.year'    => $start_obj['year'],
@@ -8376,6 +8393,14 @@ PROMPT;
             ]);
 
             if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+                $code = is_wp_error($response)
+                    ? $response->get_error_message()
+                    : wp_remote_retrieve_response_code($response);
+                file_put_contents('/tmp/gcrev_gbp_debug.log',
+                    date('Y-m-d H:i:s') . " gbp_fetch_daily_metrics: metric={$metric} code={$code}\n"
+                    . substr(wp_remote_retrieve_body($response), 0, 500) . "\n",
+                    FILE_APPEND
+                );
                 continue;
             }
 
@@ -8387,13 +8412,12 @@ PROMPT;
                 $value    = (int) ($dv['value'] ?? 0);
 
                 if (!isset($daily[$date_str])) {
-                    $daily[$date_str] = ['date' => $date_str, 'search_impressions' => 0, 'map_impressions' => 0];
+                    $daily[$date_str] = array_merge(['date' => $date_str], $empty_day);
                 }
 
-                if ($type === 'search') {
-                    $daily[$date_str]['search_impressions'] += $value;
-                } else {
-                    $daily[$date_str]['map_impressions'] += $value;
+                $daily[$date_str][$mapping['field']] += $value;
+                if (isset($mapping['also'])) {
+                    $daily[$date_str][$mapping['also']] += $value;
                 }
             }
         }

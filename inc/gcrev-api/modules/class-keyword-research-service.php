@@ -15,9 +15,11 @@ class Gcrev_Keyword_Research_Service {
     private Gcrev_AI_Client  $ai;
     private Gcrev_Config     $config;
     private ?object          $dataforseo;
+    private ?object          $google_ads;
 
     private const DEBUG_LOG = '/tmp/gcrev_seo_debug.log';
     private const VOLUME_CACHE_TTL = 86400; // 24h
+    private const PLANNER_BATCH_SIZE = 20;  // generateKeywordIdeas の1回あたり上限
 
     /**
      * キーワードグループ定義
@@ -34,10 +36,11 @@ class Gcrev_Keyword_Research_Service {
         'competitor_compare'  => '比較検討流入を取れるキーワード',
     ];
 
-    public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, $dataforseo = null ) {
+    public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, $dataforseo = null, $google_ads = null ) {
         $this->ai         = $ai;
         $this->config     = $config;
         $this->dataforseo = $dataforseo;
+        $this->google_ads = $google_ads;
     }
 
     // =========================================================
@@ -95,6 +98,21 @@ class Gcrev_Keyword_Research_Service {
             $this->log( "GSC fetch error: " . $e->getMessage() );
         }
 
+        // 2.5. Keyword Planner 関連キーワード取得
+        $planner_keywords = [];
+        $planner_seeds = array_merge(
+            $seed_keywords,
+            array_column( array_slice( $gsc_keywords, 0, 20 ), 'query' )
+        );
+        $planner_seeds = array_unique( array_filter( $planner_seeds ) );
+        if ( ! empty( $planner_seeds ) ) {
+            $planner_keywords = $this->fetch_related_keywords_from_planner( $user_id, $planner_seeds );
+            if ( ! empty( $planner_keywords ) ) {
+                $data_sources[] = 'Google Ads Keyword Planner';
+                $this->log( "Keyword Planner related keywords: " . count( $planner_keywords ) );
+            }
+        }
+
         // 3. 競合URL解析
         $competitor_data = [];
         $ref_urls = $settings['persona_reference_urls'] ?? [];
@@ -114,7 +132,7 @@ class Gcrev_Keyword_Research_Service {
         $prompt = $this->build_prompt(
             $site_url, $area_label, $industry_label, $industry_detail, $biz_type_label,
             $persona_one_liner, $persona_detail, $persona_attributes, $persona_decision,
-            $settings, $gsc_keywords, $seed_keywords, $competitor_data
+            $settings, $gsc_keywords, $seed_keywords, $competitor_data, $planner_keywords
         );
 
         // 5. Gemini呼び出し
@@ -142,16 +160,16 @@ class Gcrev_Keyword_Research_Service {
             ];
         }
 
-        // 7. DataForSEO実データ取得
-        $dataforseo_enriched = false;
+        // 7. キーワードエンリッチメント（Google Ads + DataForSEO 統合）
+        $volume_source = 'none';
         $all_keywords = $this->extract_all_keywords( $parsed['groups'] ?? [] );
         if ( ! empty( $all_keywords ) ) {
-            $volume_data = $this->enrich_with_dataforseo( $user_id, $all_keywords );
+            $enrichment = $this->enrich_keywords( $user_id, $all_keywords );
+            $volume_data   = $enrichment['data'] ?? [];
+            $volume_source = $enrichment['source'] ?? 'none';
             if ( ! empty( $volume_data ) ) {
                 $this->merge_volume_into_groups( $parsed['groups'], $volume_data );
-                $data_sources[] = 'DataForSEO';
-                $dataforseo_enriched = true;
-                $this->log( "DataForSEO enrichment: " . count( $volume_data ) . " keywords" );
+                $this->log( "Enrichment complete: source={$volume_source}, keywords=" . count( $volume_data ) );
             }
         }
 
@@ -170,7 +188,8 @@ class Gcrev_Keyword_Research_Service {
                 'gsc_count'           => count( $gsc_keywords ),
                 'seed_count'          => count( $seed_keywords ),
                 'competitor_count'    => count( $competitor_data ),
-                'dataforseo_enriched' => $dataforseo_enriched,
+                'planner_related'     => count( $planner_keywords ),
+                'volume_source'       => $volume_source,
                 'data_sources'        => $data_sources,
                 'generated_at'        => $now,
             ],
@@ -323,7 +342,279 @@ class Gcrev_Keyword_Research_Service {
     }
 
     // =========================================================
-    // DataForSEO 実データ取得
+    // Google Ads Keyword Planner 連携
+    // =========================================================
+
+    /**
+     * Keyword Planner で関連キーワード候補を取得
+     *
+     * @param  int   $user_id        ユーザーID（キャッシュキー用）
+     * @param  array $seed_keywords  シードキーワード（上位20件を使用）
+     * @return array  関連キーワードのテキスト配列（最大50件）
+     */
+    private function fetch_related_keywords_from_planner( int $user_id, array $seed_keywords ): array {
+        if ( $this->google_ads === null || empty( $seed_keywords ) ) {
+            return [];
+        }
+
+        // キャッシュ確認
+        $cache_key = 'gcrev_kwplanner_rel_' . $user_id . '_' . substr( md5( implode( '|', $seed_keywords ) ), 0, 12 );
+        $cached = get_transient( $cache_key );
+        if ( $cached !== false ) {
+            $this->log( "Keyword Planner related: cache hit ({$cache_key})" );
+            return $cached;
+        }
+
+        $seeds = array_slice( $seed_keywords, 0, self::PLANNER_BATCH_SIZE );
+
+        try {
+            $token = $this->google_ads->get_access_token();
+            if ( is_wp_error( $token ) ) {
+                $this->log( 'Keyword Planner token error: ' . $token->get_error_message() );
+                return [];
+            }
+
+            $customer_id = preg_replace( '/[^0-9]/', '', GOOGLE_ADS_CUSTOMER_ID );
+            $results = $this->google_ads->generate_keyword_ideas( $token, $customer_id, $seeds );
+
+            if ( is_wp_error( $results ) ) {
+                $this->log( 'Keyword Planner related error: ' . $results->get_error_message() );
+                return [];
+            }
+
+            // シードキーワードを除外し、検索ボリューム降順で上位50件を取得
+            $seed_set = array_flip( array_map( 'mb_strtolower', $seeds ) );
+            $ideas = [];
+            foreach ( $results as $item ) {
+                $text = $item['text'] ?? '';
+                if ( $text === '' || isset( $seed_set[ mb_strtolower( $text ) ] ) ) {
+                    continue;
+                }
+                $volume = (int) ( $item['keywordIdeaMetrics']['avgMonthlySearches'] ?? 0 );
+                $ideas[] = [ 'text' => $text, 'volume' => $volume ];
+            }
+
+            // ボリューム降順ソート
+            usort( $ideas, function( $a, $b ) { return $b['volume'] - $a['volume']; } );
+            $related = array_column( array_slice( $ideas, 0, 50 ), 'text' );
+
+            set_transient( $cache_key, $related, self::VOLUME_CACHE_TTL );
+            $this->log( 'Keyword Planner related: ' . count( $related ) . ' keywords found' );
+            return $related;
+
+        } catch ( \Throwable $e ) {
+            $this->log( 'Keyword Planner related exception: ' . $e->getMessage() );
+            return [];
+        }
+    }
+
+    /**
+     * Keyword Planner で検索ボリューム・競合性・CPC を取得
+     *
+     * キーワードを20件ずつバッチ処理し、結果をマージする。
+     *
+     * @param  array $keywords  キーワード配列
+     * @return array  [ 'keyword' => ['volume' => int, 'competition' => float|null, 'cpc' => float|null] ]
+     */
+    private function fetch_keyword_planner_volume( array $keywords ): array {
+        if ( $this->google_ads === null || empty( $keywords ) ) {
+            return [];
+        }
+
+        try {
+            $token = $this->google_ads->get_access_token();
+            if ( is_wp_error( $token ) ) {
+                $this->log( 'Keyword Planner volume token error: ' . $token->get_error_message() );
+                return [];
+            }
+
+            $customer_id = preg_replace( '/[^0-9]/', '', GOOGLE_ADS_CUSTOMER_ID );
+            $batches = array_chunk( $keywords, self::PLANNER_BATCH_SIZE );
+            $merged = [];
+
+            foreach ( $batches as $i => $batch ) {
+                $results = $this->google_ads->generate_keyword_ideas( $token, $customer_id, $batch );
+
+                if ( is_wp_error( $results ) ) {
+                    $this->log( "Keyword Planner volume batch {$i} error: " . $results->get_error_message() );
+                    continue;
+                }
+
+                foreach ( $results as $item ) {
+                    $text = $item['text'] ?? '';
+                    if ( $text === '' ) { continue; }
+
+                    $metrics = $item['keywordIdeaMetrics'] ?? [];
+                    $volume  = isset( $metrics['avgMonthlySearches'] )
+                        ? (int) $metrics['avgMonthlySearches'] : null;
+
+                    // competition: HIGH→0.8, MEDIUM→0.5, LOW→0.2, UNSPECIFIED→null
+                    $comp_str = $metrics['competition'] ?? '';
+                    $competition = null;
+                    if ( $comp_str === 'HIGH' )        { $competition = 0.8; }
+                    elseif ( $comp_str === 'MEDIUM' )   { $competition = 0.5; }
+                    elseif ( $comp_str === 'LOW' )      { $competition = 0.2; }
+
+                    // CPC: highTopOfPageBidMicros → 通貨単位に変換
+                    $cpc = null;
+                    if ( isset( $metrics['highTopOfPageBidMicros'] ) ) {
+                        $cpc = round( (int) $metrics['highTopOfPageBidMicros'] / 1000000, 2 );
+                    }
+
+                    $merged[ mb_strtolower( $text ) ] = [
+                        'volume'      => $volume,
+                        'competition' => $competition,
+                        'cpc'         => $cpc,
+                    ];
+                }
+
+                $this->log( "Keyword Planner volume batch {$i}: " . count( $results ) . " results" );
+            }
+
+            return $merged;
+
+        } catch ( \Throwable $e ) {
+            $this->log( 'Keyword Planner volume exception: ' . $e->getMessage() );
+            return [];
+        }
+    }
+
+    /**
+     * キーワードエンリッチメント — Google Ads + DataForSEO 統合
+     *
+     * 1. Google Ads Keyword Planner → volume/competition/CPC（主データソース）
+     * 2. Planner で取得できなかったキーワード → DataForSEO volume（フォールバック）
+     * 3. DataForSEO → SEO difficulty（Planner にないため常に使用）
+     *
+     * @param  int   $user_id   ユーザーID
+     * @param  array $keywords  キーワード配列
+     * @return array  [ 'data' => merged, 'source' => 'google_ads'|'dataforseo'|'mixed'|'none' ]
+     */
+    private function enrich_keywords( int $user_id, array $keywords ): array {
+        if ( empty( $keywords ) ) {
+            return [ 'data' => [], 'source' => 'none' ];
+        }
+
+        // キャッシュ確認
+        $cache_key = 'gcrev_kwenrich_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
+        $cached = get_transient( $cache_key );
+        if ( $cached !== false ) {
+            $this->log( "enrich_keywords: cache hit ({$cache_key})" );
+            return $cached;
+        }
+
+        $merged = [];
+        $volume_source = 'none';
+
+        // Step 1: Google Ads Keyword Planner でボリューム取得
+        $planner_data = $this->fetch_keyword_planner_volume( $keywords );
+        if ( ! empty( $planner_data ) ) {
+            $volume_source = 'google_ads';
+            foreach ( $planner_data as $kw => $data ) {
+                $merged[ $kw ] = [
+                    'volume'      => $data['volume'],
+                    'competition' => $data['competition'],
+                    'cpc'         => $data['cpc'],
+                    'difficulty'  => null,
+                ];
+            }
+            $this->log( 'enrich_keywords: Planner data for ' . count( $planner_data ) . ' keywords' );
+        }
+
+        // Step 2: Planner で取得できなかったキーワード → DataForSEO フォールバック
+        $missing = [];
+        foreach ( $keywords as $kw ) {
+            if ( ! isset( $merged[ mb_strtolower( $kw ) ] ) ) {
+                $missing[] = $kw;
+            }
+        }
+
+        if ( ! empty( $missing ) && $this->dataforseo !== null ) {
+            try {
+                if ( method_exists( $this->dataforseo, 'is_configured' ) && $this->dataforseo::is_configured() ) {
+                    $vol_result = $this->dataforseo->fetch_search_volume( $missing );
+                    if ( ! is_wp_error( $vol_result ) && ! empty( $vol_result ) ) {
+                        if ( $volume_source === 'google_ads' ) {
+                            $volume_source = 'mixed';
+                        } else {
+                            $volume_source = 'dataforseo';
+                        }
+                        foreach ( $vol_result as $kw => $data ) {
+                            $merged[ mb_strtolower( $kw ) ] = [
+                                'volume'      => $data['search_volume'] ?? null,
+                                'competition' => $data['competition'] ?? null,
+                                'cpc'         => $data['cpc'] ?? null,
+                                'difficulty'  => null,
+                            ];
+                        }
+                        $this->log( 'enrich_keywords: DataForSEO fallback for ' . count( $vol_result ) . ' keywords' );
+                    }
+                }
+            } catch ( \Throwable $e ) {
+                $this->log( 'enrich_keywords: DataForSEO volume exception: ' . $e->getMessage() );
+            }
+        }
+
+        // Planner が完全に失敗した場合 → DataForSEO で全件取得
+        if ( empty( $merged ) && $this->dataforseo !== null ) {
+            try {
+                if ( method_exists( $this->dataforseo, 'is_configured' ) && $this->dataforseo::is_configured() ) {
+                    $vol_result = $this->dataforseo->fetch_search_volume( $keywords );
+                    if ( ! is_wp_error( $vol_result ) && ! empty( $vol_result ) ) {
+                        $volume_source = 'dataforseo';
+                        foreach ( $vol_result as $kw => $data ) {
+                            $merged[ mb_strtolower( $kw ) ] = [
+                                'volume'      => $data['search_volume'] ?? null,
+                                'competition' => $data['competition'] ?? null,
+                                'cpc'         => $data['cpc'] ?? null,
+                                'difficulty'  => null,
+                            ];
+                        }
+                        $this->log( 'enrich_keywords: DataForSEO full fallback for ' . count( $vol_result ) . ' keywords' );
+                    }
+                }
+            } catch ( \Throwable $e ) {
+                $this->log( 'enrich_keywords: DataForSEO full fallback exception: ' . $e->getMessage() );
+            }
+        }
+
+        // Step 3: DataForSEO で SEO 難易度を常に取得（Planner にない指標）
+        if ( $this->dataforseo !== null ) {
+            try {
+                if ( method_exists( $this->dataforseo, 'is_configured' ) && $this->dataforseo::is_configured() ) {
+                    $diff_result = $this->dataforseo->fetch_keyword_difficulty( $keywords );
+                    if ( ! is_wp_error( $diff_result ) && ! empty( $diff_result ) ) {
+                        foreach ( $diff_result as $kw => $data ) {
+                            $kw_lower = mb_strtolower( $kw );
+                            if ( ! isset( $merged[ $kw_lower ] ) ) {
+                                $merged[ $kw_lower ] = [
+                                    'volume'      => null,
+                                    'competition' => null,
+                                    'cpc'         => null,
+                                    'difficulty'  => null,
+                                ];
+                            }
+                            $merged[ $kw_lower ]['difficulty'] = $data['keyword_difficulty'] ?? null;
+                        }
+                        $this->log( 'enrich_keywords: DataForSEO difficulty for ' . count( $diff_result ) . ' keywords' );
+                    }
+                }
+            } catch ( \Throwable $e ) {
+                $this->log( 'enrich_keywords: DataForSEO difficulty exception: ' . $e->getMessage() );
+            }
+        }
+
+        $result = [ 'data' => $merged, 'source' => $volume_source ];
+
+        if ( ! empty( $merged ) ) {
+            set_transient( $cache_key, $result, self::VOLUME_CACHE_TTL );
+        }
+
+        return $result;
+    }
+
+    // =========================================================
+    // DataForSEO 実データ取得（レガシー — enrich_keywords() からは未使用）
     // =========================================================
 
     /**
@@ -425,10 +716,12 @@ class Gcrev_Keyword_Research_Service {
             if ( ! is_array( $items ) ) { continue; }
             foreach ( $items as &$item ) {
                 $kw = $item['keyword'] ?? '';
-                if ( isset( $volume_data[ $kw ] ) ) {
-                    $vd = $volume_data[ $kw ];
+                // enrich_keywords() は mb_strtolower キーを使うため両方チェック
+                $vd = $volume_data[ $kw ] ?? $volume_data[ mb_strtolower( $kw ) ] ?? null;
+                if ( $vd !== null ) {
                     $item['volume']      = $vd['volume'];
                     $item['competition'] = $vd['competition'];
+                    $item['cpc']         = $vd['cpc'] ?? null;
                     $item['difficulty']  = $vd['difficulty'];
                 }
             }
@@ -526,7 +819,8 @@ class Gcrev_Keyword_Research_Service {
         array  $settings,
         array  $gsc_keywords,
         array  $seed_keywords,
-        array  $competitor_data = []
+        array  $competitor_data = [],
+        array  $planner_keywords = []
     ): string {
         $parts = [];
         $has_competitors = ! empty( $competitor_data );
@@ -611,6 +905,14 @@ class Gcrev_Keyword_Research_Service {
         // シードキーワード
         if ( ! empty( $seed_keywords ) ) {
             $parts[] = "## 追加で調査したいキーワード（シード）\n" . implode( ', ', $seed_keywords );
+        }
+
+        // Google Keyword Planner 関連キーワード候補
+        if ( ! empty( $planner_keywords ) ) {
+            $parts[] = "## Google Keyword Planner 関連キーワード候補\n"
+                . "以下はGoogle Keyword Plannerが提案する関連キーワードです。"
+                . "実際の検索需要があるキーワードとして、分類・提案に積極的に活用してください：\n"
+                . implode( ', ', $planner_keywords );
         }
 
         // 地域名CSV
