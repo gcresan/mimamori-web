@@ -662,83 +662,98 @@ get_header();
 
     <!-- 3) KPIサマリーカード -->
     <div class="kpi-grid" id="kpiGrid">
-        <div class="kpi-card">
+        <button type="button" class="kpi-card rpt-kpi-selectable is-active" data-kpi-key="pageViews" data-daily-key="pageViews" data-label="見られた回数" data-color="#568184" data-format="number" aria-pressed="true">
             <div class="kpi-card-header">
-                <span class="kpi-title">見られた回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（ページビュー）</span></span>
+                <span class="kpi-title">見られた回数 <span class="kpi-info-btn-wrap" role="button" tabindex="0" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></span><span class="kpi-term">（ページビュー）</span></span>
                 <div class="kpi-icon" style="background: rgba(86,129,132,0.08);">👁️</div>
             </div>
             <div class="kpi-info-tip">ホームページの各ページが何回見られたかの合計です。同じ人が何ページも見ると、その分だけ数が増えます。</div>
             <div class="kpi-value" id="kpi-pageviews">-</div>
             <div class="kpi-change" id="kpi-pageviews-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-pageviews"></canvas></div>
-        </div>
+            <span class="rpt-kpi-hint">クリックでグラフ切替</span>
+        </button>
 
-        <div class="kpi-card">
+        <button type="button" class="kpi-card rpt-kpi-selectable" data-kpi-key="sessions" data-daily-key="sessions" data-label="訪問回数" data-color="#D4A842" data-format="number" aria-pressed="false">
             <div class="kpi-card-header">
-                <span class="kpi-title">訪問回数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（セッション）</span></span>
+                <span class="kpi-title">訪問回数 <span class="kpi-info-btn-wrap" role="button" tabindex="0" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></span><span class="kpi-term">（セッション）</span></span>
                 <div class="kpi-icon" style="background: rgba(212,168,66,0.12);">🎯</div>
             </div>
             <div class="kpi-info-tip">ホームページに誰かが来た回数です。1人が朝と夜に来たら「2回」とカウントされます。</div>
             <div class="kpi-value" id="kpi-sessions">-</div>
             <div class="kpi-change" id="kpi-sessions-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-sessions"></canvas></div>
-        </div>
+            <span class="rpt-kpi-hint">クリックでグラフ切替</span>
+        </button>
 
-        <div class="kpi-card">
+        <button type="button" class="kpi-card rpt-kpi-selectable" data-kpi-key="users" data-daily-key="users" data-label="見に来た人の数" data-color="#4E8A6B" data-format="number" aria-pressed="false">
             <div class="kpi-card-header">
-                <span class="kpi-title">見に来た人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（ユーザー）</span></span>
+                <span class="kpi-title">見に来た人の数 <span class="kpi-info-btn-wrap" role="button" tabindex="0" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></span><span class="kpi-term">（ユーザー）</span></span>
                 <div class="kpi-icon" style="background: rgba(78,138,107,0.1);">👥</div>
             </div>
             <div class="kpi-info-tip">ホームページを見に来た人数です。同じ人が何回来ても「1人」としてカウントされます。</div>
             <div class="kpi-value" id="kpi-users">-</div>
             <div class="kpi-change" id="kpi-users-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-users"></canvas></div>
-        </div>
+            <span class="rpt-kpi-hint">クリックでグラフ切替</span>
+        </button>
 
-        <div class="kpi-card">
+        <button type="button" class="kpi-card rpt-kpi-selectable" data-kpi-key="newUsers" data-daily-key="newUsers" data-label="はじめての人の数" data-color="#7AA3A6" data-format="number" aria-pressed="false">
             <div class="kpi-card-header">
-                <span class="kpi-title">はじめての人の数 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（新規ユーザー）</span></span>
+                <span class="kpi-title">はじめての人の数 <span class="kpi-info-btn-wrap" role="button" tabindex="0" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></span><span class="kpi-term">（新規ユーザー）</span></span>
                 <div class="kpi-icon" style="background: rgba(122,163,166,0.1);">✨</div>
             </div>
             <div class="kpi-info-tip">この期間にはじめてホームページを訪れた人の数です。新しいお客様候補がどれだけ増えたかがわかります。</div>
             <div class="kpi-value" id="kpi-newusers">-</div>
             <div class="kpi-change" id="kpi-newusers-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-newusers"></canvas></div>
-        </div>
+            <span class="rpt-kpi-hint">クリックでグラフ切替</span>
+        </button>
 
-        <div class="kpi-card">
+        <button type="button" class="kpi-card rpt-kpi-selectable" data-kpi-key="returningUsers" data-daily-key="returning" data-label="また来てくれた人" data-color="#C95A4F" data-format="number" aria-pressed="false">
             <div class="kpi-card-header">
-                <span class="kpi-title">また来てくれた人 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（リピーター）</span></span>
+                <span class="kpi-title">また来てくれた人 <span class="kpi-info-btn-wrap" role="button" tabindex="0" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></span><span class="kpi-term">（リピーター）</span></span>
                 <div class="kpi-icon" style="background: rgba(181,87,75,0.08);">🔁</div>
             </div>
             <div class="kpi-info-tip">以前にもホームページを見たことがある人の数です。多いほど「また見たい」と思われている証拠です。</div>
             <div class="kpi-value" id="kpi-returning">-</div>
             <div class="kpi-change" id="kpi-returning-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-returning"></canvas></div>
-        </div>
+            <span class="rpt-kpi-hint">クリックでグラフ切替</span>
+        </button>
 
-        <div class="kpi-card">
+        <button type="button" class="kpi-card rpt-kpi-selectable" data-kpi-key="avgDuration" data-daily-key="duration" data-label="しっかり見られた時間" data-color="#C9A84C" data-format="duration" aria-pressed="false">
             <div class="kpi-card-header">
-                <span class="kpi-title">しっかり見られた時間 <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（平均滞在時間）</span></span>
+                <span class="kpi-title">しっかり見られた時間 <span class="kpi-info-btn-wrap" role="button" tabindex="0" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></span><span class="kpi-term">（平均滞在時間）</span></span>
                 <div class="kpi-icon" style="background: rgba(212,168,66,0.15);">⏱️</div>
             </div>
             <div class="kpi-info-tip">訪問者がホームページに滞在した平均時間です。長いほど内容に興味を持って読んでもらえています。</div>
             <div class="kpi-value" id="kpi-duration">-</div>
             <div class="kpi-change" id="kpi-duration-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-duration"></canvas></div>
-        </div>
+            <span class="rpt-kpi-hint">クリックでグラフ切替</span>
+        </button>
 
-        <div class="kpi-card">
+        <button type="button" class="kpi-card rpt-kpi-selectable" data-kpi-key="conversions" data-daily-key="conversions" data-label="ゴール数" data-color="#4E8A6B" data-format="number" aria-pressed="false">
             <div class="kpi-card-header">
-                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span> <button type="button" class="kpi-info-btn" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></button><span class="kpi-term">（コンバージョン）</span></span>
+                <span class="kpi-title">ゴール数<span id="kpi-cv-source-label" style="font-size:10px;color:#666666;margin-left:4px;display:none;"></span> <span class="kpi-info-btn-wrap" role="button" tabindex="0" aria-label="説明を表示"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg></span><span class="kpi-term">（コンバージョン）</span></span>
                 <div class="kpi-icon" style="background: rgba(78,138,107,0.1);">🎉</div>
             </div>
             <div class="kpi-info-tip">お問い合わせや申込みなど、ホームページの目標が達成された回数です。この数が増えると、ホームページが成果につながっています。</div>
             <div class="kpi-value" id="kpi-conversions">-</div>
             <div class="kpi-change" id="kpi-conversions-change"><span>-</span></div>
             <div class="kpi-sparkline"><canvas id="sparkline-conversions"></canvas></div>
-        </div>
+            <span class="rpt-kpi-hint">クリックでグラフ切替</span>
+        </button>
     </div><!-- .kpi-grid -->
+
+    <!-- KPIトレンドチャート（カード選択に連動） -->
+    <div class="rpt-trend-chart-wrap" id="rptTrendChartWrap">
+        <div class="rpt-trend-chart-title" id="rptTrendChartTitle">📈 見られた回数の推移</div>
+        <div style="height: 280px;">
+            <canvas id="rptTrendChart"></canvas>
+        </div>
+    </div>
 
     <?php if ($monthly_report): ?>
 
@@ -1328,6 +1343,139 @@ function createSparkline(canvasId, data, color) {
     }
 }
 
+// =============================================
+// KPIカード選択 → トレンドチャート連動
+// =============================================
+let rptTrendChart = null;
+let selectedRptKpi = 'pageViews';
+
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
+function formatDurationLabel(sec) {
+    const s = parseFloat(sec);
+    if (isNaN(s) || s < 0) return '-';
+    const m = Math.floor(s / 60);
+    const ss = Math.floor(s % 60);
+    return m + ':' + (ss < 10 ? '0' : '') + ss;
+}
+
+function renderRptTrendChart() {
+    if (!kpiSnapshot || !kpiSnapshot.daily) return;
+    const daily = kpiSnapshot.daily;
+    const grid = document.getElementById('kpiGrid');
+    const activeCard = grid ? grid.querySelector('.rpt-kpi-selectable[data-kpi-key="' + selectedRptKpi + '"]') : null;
+    if (!activeCard) return;
+
+    const dailyKey = activeCard.dataset.dailyKey;
+    const label = activeCard.dataset.label;
+    const color = activeCard.dataset.color;
+    const fmt = activeCard.dataset.format;
+
+    // タイトル更新
+    const titleEl = document.getElementById('rptTrendChartTitle');
+    if (titleEl) titleEl.textContent = '📈 ' + label + 'の推移';
+
+    // データ取得（CV は effectiveCvData を優先）
+    let sparkData = null;
+    if (selectedRptKpi === 'conversions' && effectiveCvData && effectiveCvData.daily && Object.keys(effectiveCvData.daily).length > 0) {
+        const cvDates = Object.keys(effectiveCvData.daily).sort();
+        sparkData = {
+            labels: cvDates.map(d => { const p = d.split('-'); return parseInt(p[1]) + '/' + parseInt(p[2]); }),
+            values: cvDates.map(d => effectiveCvData.daily[d])
+        };
+    } else {
+        sparkData = daily[dailyKey];
+    }
+
+    const ctx = document.getElementById('rptTrendChart');
+    if (!ctx) return;
+
+    if (!sparkData || !sparkData.values || sparkData.values.length === 0) {
+        if (rptTrendChart) rptTrendChart.destroy();
+        rptTrendChart = null;
+        return;
+    }
+
+    const labels = (sparkData.labels || []).map(l => {
+        if (l === null || l === undefined) return '';
+        const s = String(l);
+        const parts = s.split('-');
+        if (parts.length === 3) return parseInt(parts[1]) + '/' + parseInt(parts[2]);
+        return s;
+    });
+
+    if (rptTrendChart) rptTrendChart.destroy();
+
+    const isDuration = (fmt === 'duration');
+    const yConfig = { beginAtZero: true, ticks: { precision: 0 } };
+    if (isDuration) {
+        yConfig.ticks = { callback: v => formatDurationLabel(v) };
+    }
+
+    rptTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: label,
+                data: sparkData.values,
+                borderColor: color,
+                backgroundColor: hexToRgba(color, 0.12),
+                fill: true, tension: 0.3, pointRadius: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: isDuration ? {
+                    callbacks: { label: ctx => label + ': ' + formatDurationLabel(ctx.parsed.y) }
+                } : {
+                    callbacks: { label: ctx => label + ': ' + formatNumber(ctx.parsed.y) }
+                }
+            },
+            scales: { y: yConfig }
+        }
+    });
+}
+
+// カード選択イベント
+(function() {
+    const grid = document.getElementById('kpiGrid');
+    if (!grid) return;
+
+    // ?ボタンのクリックイベント
+    grid.querySelectorAll('.kpi-info-btn-wrap').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const card = btn.closest('.kpi-card');
+            if (card) card.classList.toggle('info-open');
+        });
+    });
+
+    // カード選択
+    grid.querySelectorAll('.rpt-kpi-selectable').forEach(card => {
+        card.addEventListener('click', e => {
+            if (e.target.closest('.kpi-info-btn-wrap')) return;
+            const key = card.dataset.kpiKey;
+            if (!key || key === selectedRptKpi) return;
+            selectedRptKpi = key;
+            grid.querySelectorAll('.rpt-kpi-selectable').forEach(c => {
+                const isActive = (c.dataset.kpiKey === key);
+                c.classList.toggle('is-active', isActive);
+                c.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+            renderRptTrendChart();
+        });
+    });
+})();
+
 // 数値フォーマット（dashboard同一）
 function formatNumber(num) {
     if (typeof num === 'string') return num;
@@ -1793,6 +1941,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     // KPIデータ取得（レポート対象期間で取得）
     updateKPIData();
+    renderRptTrendChart();
 
     // 集客分析データ取得（常に表示）
     loadAnalysisData();
@@ -1833,6 +1982,68 @@ document.addEventListener('DOMContentLoaded', function() {
         <span style="margin-left:4px; color:#aaa;">mimamori-web.jp</span>
     </div>
 </div>
+
+<style>
+/* --- KPI Card — Selectable button reset --- */
+button.rpt-kpi-selectable {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+.rpt-kpi-selectable:hover {
+    box-shadow: var(--mw-shadow-float, 0 8px 24px rgba(0,0,0,0.07));
+    border-color: var(--mw-border-medium, #AEBCBE);
+    transform: translateY(-1px);
+}
+
+/* --- KPI Card — Active/Selected state --- */
+.rpt-kpi-selectable.is-active {
+    border-color: var(--mw-primary-blue, #568184);
+    border-bottom: 3px solid var(--mw-primary-blue, #568184);
+    background: rgba(86, 129, 132, 0.04);
+    box-shadow: var(--mw-shadow-soft, 0 1px 6px rgba(0,0,0,0.03));
+}
+.rpt-kpi-selectable.is-active .kpi-title {
+    color: var(--mw-primary-blue, #568184);
+}
+.rpt-kpi-selectable.is-active .rpt-kpi-hint {
+    color: var(--mw-primary-blue, #568184);
+}
+
+/* --- KPI Card — Hint text --- */
+.rpt-kpi-hint {
+    display: block;
+    font-size: 11px;
+    color: #aaa;
+    margin-top: 6px;
+    transition: color 0.2s ease;
+}
+
+/* --- KPI Card — Focus visible (accessibility) --- */
+.rpt-kpi-selectable:focus-visible {
+    outline: 2px solid var(--mw-primary-blue, #568184);
+    outline-offset: 2px;
+}
+
+/* --- Trend Chart Section --- */
+.rpt-trend-chart-wrap {
+    background: var(--mw-bg-primary, #FFFFFF);
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    border-radius: var(--mw-radius-md, 16px);
+    padding: 24px;
+    margin-bottom: 32px;
+}
+.rpt-trend-chart-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--mw-text-heading, #1A2F33);
+    margin-bottom: 20px;
+}
+</style>
 
 <style>
 @media print {
