@@ -290,6 +290,68 @@ get_header();
     line-height: 1.6;
 }
 
+/* --- KPI Card — Selectable button reset --- */
+button.sd-kpi-selectable {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+.sd-kpi-selectable:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.07);
+    border-color: var(--mw-border-medium, #AEBCBE);
+    transform: translateY(-1px);
+}
+
+/* --- KPI Card — Active/Selected state --- */
+.sd-kpi-selectable.is-active {
+    border-color: var(--mw-primary-blue, #568184);
+    border-bottom: 3px solid var(--mw-primary-blue, #568184);
+    background: rgba(86, 129, 132, 0.04);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.03);
+}
+.sd-kpi-selectable.is-active .kpi-title {
+    color: var(--mw-primary-blue, #568184);
+}
+.sd-kpi-selectable.is-active .sd-kpi-hint {
+    color: var(--mw-primary-blue, #568184);
+}
+
+/* --- KPI Card — Hint text --- */
+.sd-kpi-hint {
+    display: block;
+    font-size: 11px;
+    color: #aaa;
+    margin-top: 6px;
+    transition: color 0.2s ease;
+}
+
+/* --- KPI Card — Focus visible (accessibility) --- */
+.sd-kpi-selectable:focus-visible {
+    outline: 2px solid var(--mw-primary-blue, #568184);
+    outline-offset: 2px;
+}
+
+/* --- Trend Chart Section --- */
+.sd-trend-chart-wrap {
+    background: var(--mw-bg-primary, #FFFFFF);
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    border-radius: var(--mw-radius-md, 16px);
+    padding: 24px;
+    margin-bottom: 40px;
+}
+.sd-trend-chart-header {
+    margin-bottom: 20px;
+}
+.sd-trend-chart-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--mw-text-heading, #1A2F33);
+}
+
 /* --- Responsive --- */
 @media (max-width: 1024px) {
     .sd-kpi-grid {
@@ -376,6 +438,16 @@ get_template_part('template-parts/period-selector');
         <!-- JS で描画 -->
     </div>
 
+    <!-- KPIトレンドチャート（カード選択に連動） -->
+    <div class="sd-trend-chart-wrap" id="sdTrendChartWrap">
+        <div class="sd-trend-chart-header">
+            <div class="sd-trend-chart-title" id="sdTrendChartTitle">📈 見られた回数の推移</div>
+        </div>
+        <div style="height: 280px;">
+            <canvas id="sdTrendChart"></canvas>
+        </div>
+    </div>
+
     <!-- 分析カード -->
     <h2 class="sd-section-title">📋 分析サマリー</h2>
     <div class="sd-analysis-grid" id="sdAnalysisGrid">
@@ -389,6 +461,7 @@ get_template_part('template-parts/period-selector');
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 (function() {
     'use strict';
@@ -471,6 +544,13 @@ get_template_part('template-parts/period-selector');
         var div = document.createElement('div');
         div.appendChild(document.createTextNode(str));
         return div.innerHTML;
+    }
+
+    function hexToRgba(hex, alpha) {
+        var r = parseInt(hex.slice(1, 3), 16);
+        var g = parseInt(hex.slice(3, 5), 16);
+        var b = parseInt(hex.slice(5, 7), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
     }
 
     function showLoading() {
@@ -568,8 +648,10 @@ get_template_part('template-parts/period-selector');
     var infoBtnSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 6.2a1.8 1.8 0 0 1 3.4.8c0 1.2-1.9 1.4-1.9 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="12" r="0.7" fill="currentColor"/></svg>';
 
     // =============================================
-    // KPI カード描画（月次レポートと同じ構造）
+    // KPI カード描画（月次レポートと同じ構造 + クリックでグラフ切替）
     // =============================================
+    var selectedKpi = kpiDefs[0].key; // デフォルト: 見られた回数
+
     function renderKpiCards(data) {
         var grid = document.getElementById('sdKpiGrid');
         if (!grid) return;
@@ -596,11 +678,13 @@ get_template_part('template-parts/period-selector');
                 sparkHtml = renderSparkline(sparkData.values, def.color);
             }
 
-            // 月次レポートと同じ .kpi-card 構造
-            html += '<div class="kpi-card">' +
+            var isActive = (def.key === selectedKpi);
+
+            // 月次レポートと同じ .kpi-card 構造 + クリック可能
+            html += '<button type="button" class="kpi-card sd-kpi-selectable' + (isActive ? ' is-active' : '') + '" data-kpi-key="' + escapeHtml(def.key) + '" aria-pressed="' + (isActive ? 'true' : 'false') + '">' +
                 '<div class="kpi-card-header">' +
                     '<span class="kpi-title">' + escapeHtml(def.label) +
-                        ' <button type="button" class="kpi-info-btn" aria-label="説明を表示">' + infoBtnSvg + '</button>' +
+                        ' <span class="kpi-info-btn-wrap" role="button" tabindex="0" aria-label="説明を表示">' + infoBtnSvg + '</span>' +
                         '<span class="kpi-term">（' + escapeHtml(def.term) + '）</span>' +
                     '</span>' +
                     '<div class="kpi-icon" style="background:' + def.bg + ';">' + def.emoji + '</div>' +
@@ -609,17 +693,37 @@ get_template_part('template-parts/period-selector');
                 '<div class="kpi-value">' + displayVal + '</div>' +
                 '<div class="kpi-change ' + trendClass + '"><span>' + escapeHtml(trendText) + '</span></div>' +
                 '<div class="kpi-sparkline">' + sparkHtml + '</div>' +
-            '</div>';
+                '<span class="sd-kpi-hint">クリックでグラフ切替</span>' +
+            '</button>';
         }
 
         grid.innerHTML = html;
 
         // ?ボタンのクリックイベント（月次レポートと同じ挙動）
-        grid.querySelectorAll('.kpi-info-btn').forEach(function(btn) {
+        grid.querySelectorAll('.kpi-info-btn-wrap').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 var card = btn.closest('.kpi-card');
                 if (card) card.classList.toggle('info-open');
+            });
+        });
+
+        // カード選択イベント
+        grid.querySelectorAll('.sd-kpi-selectable').forEach(function(card) {
+            card.addEventListener('click', function(e) {
+                // ?ボタンクリック時はグラフ切替しない
+                if (e.target.closest('.kpi-info-btn-wrap')) return;
+                var key = card.dataset.kpiKey;
+                if (!key || key === selectedKpi) return;
+                selectedKpi = key;
+                // アクティブ状態を更新
+                grid.querySelectorAll('.sd-kpi-selectable').forEach(function(c) {
+                    var isActive = (c.dataset.kpiKey === key);
+                    c.classList.toggle('is-active', isActive);
+                    c.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                });
+                // グラフ再描画
+                if (currentData) renderTrendChart(currentData);
             });
         });
     }
@@ -931,6 +1035,91 @@ get_template_part('template-parts/period-selector');
     }
 
     // =============================================
+    // KPIトレンドチャート（カード選択に連動）
+    // =============================================
+    var trendChart = null;
+    var currentData = null;
+
+    function renderTrendChart(data) {
+        var daily = data.daily || {};
+        var def = null;
+        for (var i = 0; i < kpiDefs.length; i++) {
+            if (kpiDefs[i].key === selectedKpi) { def = kpiDefs[i]; break; }
+        }
+        if (!def) return;
+
+        // タイトル更新
+        var titleEl = document.getElementById('sdTrendChartTitle');
+        if (titleEl) titleEl.textContent = '📈 ' + def.label + 'の推移';
+
+        var ctx = document.getElementById('sdTrendChart');
+        if (!ctx) return;
+
+        var sparkData = daily[def.dailyKey];
+        if (!sparkData || !sparkData.values || sparkData.values.length === 0) {
+            if (trendChart) trendChart.destroy();
+            trendChart = null;
+            return;
+        }
+
+        var labels = sparkData.labels || [];
+        var values = sparkData.values || [];
+
+        // ラベルを短くする (2026-03-01 → 3/1)
+        var shortLabels = labels.map(function(l) {
+            if (!l) return l;
+            var parts = l.split('-');
+            if (parts.length === 3) return parseInt(parts[1]) + '/' + parseInt(parts[2]);
+            return l;
+        });
+
+        if (trendChart) trendChart.destroy();
+
+        var isDuration = (def.format === 'duration');
+        var yConfig = { beginAtZero: true, ticks: { precision: 0 } };
+        if (isDuration) {
+            yConfig.ticks = {
+                callback: function(value) {
+                    var m = Math.floor(value / 60);
+                    var s = Math.floor(value % 60);
+                    return m + ':' + (s < 10 ? '0' : '') + s;
+                }
+            };
+        }
+
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: shortLabels,
+                datasets: [{
+                    label: def.label,
+                    data: values,
+                    borderColor: def.color,
+                    backgroundColor: hexToRgba(def.color, 0.12),
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: isDuration ? {
+                        callbacks: {
+                            label: function(context) {
+                                return def.label + ': ' + formatDuration(context.parsed.y);
+                            }
+                        }
+                    } : {}
+                },
+                scales: { y: yConfig }
+            }
+        });
+    }
+
+    // =============================================
     // 期間表示更新
     // =============================================
     function updatePeriodDisplay(data) {
@@ -983,9 +1172,11 @@ get_template_part('template-parts/period-selector');
         // キャッシュがあれば即座に描画（ローディングなし）
         var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
         if (cached) {
+            currentData = cached;
             updatePeriodDisplay(cached);
             checkDataNotice(cached);
             renderKpiCards(cached);
+            renderTrendChart(cached);
             renderAnalysisCards(cached);
             renderInsights(cached);
             return;
@@ -1004,6 +1195,7 @@ get_template_part('template-parts/period-selector');
                 return;
             }
             var data = res.data || res;
+            currentData = data;
 
             // キャッシュに保存
             if (window.gcrevCache) window.gcrevCache.set(cacheKey, data);
@@ -1011,6 +1203,7 @@ get_template_part('template-parts/period-selector');
             updatePeriodDisplay(data);
             checkDataNotice(data);
             renderKpiCards(data);
+            renderTrendChart(data);
             renderAnalysisCards(data);
             renderInsights(data);
         })
