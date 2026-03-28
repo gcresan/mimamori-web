@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // サイドバー アコーディオンメニュー（トグル式：クリックで開閉）
     (function() {
-        var menuIds = ['navToggleReport', 'navToggleRanking', 'navToggleDiagnosis', 'navToggleWebsite', 'navToggleMeo', 'navToggleSettings', 'navToggleSupport'];
+        var menuIds = ['navToggleReport', 'navToggleRanking', 'navToggleDiagnosis', 'navToggleWebsite', 'navToggleMeo', 'navToggleSeo', 'navToggleSettings', 'navToggleSupport'];
         var items = [];
 
         menuIds.forEach(function(id) {
