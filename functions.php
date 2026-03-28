@@ -6249,6 +6249,11 @@ function gcrev_get_service_tier_definitions(): array {
             'monthly'     => 11000,
             'description' => '改善提案まで。AIが状態を見て＋改善アドバイスまで提供',
         ],
+        'content_seo' => [
+            'name'        => '集客強化プラン',
+            'monthly'     => 33000,
+            'description' => 'SEO・コンテンツ強化。キーワード調査・競合分析・コラム記事作成',
+        ],
         'bansou' => [
             'name'        => '改善代行プラン',
             'monthly'     => 55000,
@@ -6301,7 +6306,7 @@ function gcrev_get_service_tier( int $user_id = 0 ): string {
  * @return bool
  */
 function mimamori_can( string $feature, int $user_id = 0 ): bool {
-    $tier_hierarchy = [ 'basic' => 0, 'ai_support' => 1, 'bansou' => 2 ];
+    $tier_hierarchy = [ 'basic' => 0, 'ai_support' => 1, 'content_seo' => 2, 'bansou' => 3 ];
 
     $feature_map = [
         // AI機能（ai_support のみ）
@@ -6313,6 +6318,8 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         'report_improvements'  => 'ai_support',
         'report_consideration' => 'ai_support',
         'report_next_actions'  => 'ai_support',
+        // SEO機能（content_seo 以上）
+        'seo_menu'             => 'content_seo',
         // コア機能（両プラン）
         'dashboard'            => 'basic',
         'report_summary'       => 'basic',
@@ -6326,6 +6333,18 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
     $required_level = $tier_hierarchy[ $required_tier ] ?? 0;
 
     return $user_level >= $required_level;
+}
+
+/**
+ * SEO関連メニュー・ページへのアクセス可否を返す。
+ *
+ * 集客強化プラン以上、または管理者に許可。
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ * @return bool
+ */
+function mimamori_can_access_seo( int $user_id = 0 ): bool {
+    return mimamori_can( 'seo_menu', $user_id );
 }
 
 /**
@@ -7317,6 +7336,7 @@ function gcrev_render_service_tier_field( $user ) {
                 <p class="description">
                     ベーシック: AIがデータを見てレポート作成（総評・スコア・KPI）<br>
                     AIサポート: 上記＋改善アドバイス・AIチャット・ネクストアクション<br>
+                    集客強化: 上記＋SEOキーワード調査・競合分析・コラム記事作成<br>
                     伴走: 上記すべて＋専門スタッフによる伴走・MTG
                 </p>
             </td>
@@ -7328,8 +7348,9 @@ function gcrev_render_service_tier_field( $user ) {
                 <?php
                 $badge_styles = [
                     'basic'      => [ 'color' => '#666',    'bg' => '#f0f0f0',               'label' => 'ベーシック' ],
-                    'ai_support' => [ 'color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)',   'label' => 'AIサポート' ],
-                    'bansou'     => [ 'color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)',  'label' => '伴走' ],
+                    'ai_support'  => [ 'color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)',   'label' => 'AIサポート' ],
+                    'content_seo' => [ 'color' => '#B45309', 'bg' => 'rgba(245,158,11,0.08)', 'label' => '集客強化' ],
+                    'bansou'      => [ 'color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)', 'label' => '伴走' ],
                 ];
                 $bs = $badge_styles[ $current_tier ] ?? $badge_styles['basic'];
                 ?>

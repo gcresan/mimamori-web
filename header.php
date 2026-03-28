@@ -346,7 +346,8 @@
                   </ul>
                </li>
 
-               <!-- ========== SEO ========== -->
+               <!-- ========== SEO（集客強化プラン以上 or 管理者のみ表示） ========== -->
+               <?php if ( mimamori_can_access_seo() ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $seo_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'seo' ? ' collapsed' : ''; ?>" data-menu-key="seo">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleSeo" aria-expanded="<?php echo $sidebar_active_group === 'seo' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.5"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 11h6M11 8v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
@@ -361,6 +362,7 @@
                      </li>
                   </ul>
                </li>
+               <?php endif; ?>
 
                <!-- ========== 各種設定 ========== -->
                <li class="nav-item nav-item-collapsible<?php echo $settings_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'settings' ? ' collapsed' : ''; ?>" data-menu-key="settings">

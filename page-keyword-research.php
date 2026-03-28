@@ -9,6 +9,11 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
+if ( ! mimamori_can_access_seo() ) {
+    wp_safe_redirect( home_url( '/dashboard/' ) );
+    exit;
+}
+
 $current_user = wp_get_current_user();
 $user_id      = $current_user->ID;
 
