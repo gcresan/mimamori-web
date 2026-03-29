@@ -219,7 +219,91 @@ get_header();
     white-space: pre-wrap;
 }
 
-/* ローデ��ング */
+/* 取得ボタン */
+.aio-fetch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--mw-primary-blue);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.aio-fetch-btn:hover { opacity: 0.9; }
+.aio-fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 設定パネル */
+.aio-settings-panel {
+    background: var(--mw-bg-secondary);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 12px;
+}
+.aio-settings-panel label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mw-text-secondary);
+    margin-bottom: 4px;
+}
+.aio-settings-panel textarea,
+.aio-settings-panel select {
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--mw-border-light);
+    border-radius: 6px;
+    background: var(--mw-bg-primary);
+}
+.aio-settings-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+.aio-settings-row > div { flex: 1; min-width: 120px; }
+
+/* トースト */
+.aio-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    background: var(--mw-primary-blue);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 9999;
+}
+.aio-toast.show { transform: translateY(0); opacity: 1; }
+.aio-toast--error { background: #C95A4F; }
+.aio-toast--success { background: #4E8A6B; }
+
+/* プログレス */
+.aio-progress-bar {
+    height: 4px;
+    background: var(--mw-bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+.aio-progress-bar__fill {
+    height: 100%;
+    background: var(--mw-primary-blue);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* ローディング */
 .aio-loading {
     text-align: center;
     padding: 40px 20px;
@@ -299,6 +383,67 @@ get_header();
             <div class="aio-summary-card__sub">週1回の定期取得</div>
         </div>
     </div>
+
+    <!-- ===== 設定 & 手動取得 ===== -->
+    <?php if ( current_user_can( 'manage_options' ) ) : ?>
+    <?php
+        $current_user_id   = get_current_user_id();
+        $self_domains_raw  = get_user_meta( $current_user_id, 'gcrev_aio_self_domains', true ) ?: '';
+        $serp_region       = get_user_meta( $current_user_id, 'gcrev_aio_serp_region', true ) ?: 'jp';
+        $serp_language     = get_user_meta( $current_user_id, 'gcrev_aio_serp_language', true ) ?: 'ja';
+        $serp_device       = get_user_meta( $current_user_id, 'gcrev_aio_serp_device', true ) ?: 'desktop';
+    ?>
+    <div class="aio-section" id="aioSettingsSection">
+        <div class="aio-section__header">
+            <div>
+                <h2 class="aio-section__title">SERP 取得設定</h2>
+                <div class="aio-section__note">自社判定ドメイン・取得条件の設定と、手動データ取得ができます（管理者のみ表示）</div>
+            </div>
+        </div>
+
+        <div class="aio-settings-panel">
+            <div style="margin-bottom:16px;">
+                <label for="aioSelfDomains">自社判定ドメイン（1行1つ）</label>
+                <textarea id="aioSelfDomains" rows="3" style="width:100%;max-width:400px;" placeholder="例:&#10;g-crev.jp&#10;mimamori-web.jp"><?php echo esc_textarea( $self_domains_raw ); ?></textarea>
+            </div>
+
+            <div class="aio-settings-row" style="margin-bottom:16px;">
+                <div>
+                    <label for="aioRegion">地域</label>
+                    <select id="aioRegion">
+                        <option value="jp" <?php selected( $serp_region, 'jp' ); ?>>日本 (jp)</option>
+                        <option value="us" <?php selected( $serp_region, 'us' ); ?>>アメリカ (us)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="aioLanguage">言語</label>
+                    <select id="aioLanguage">
+                        <option value="ja" <?php selected( $serp_language, 'ja' ); ?>>日本語 (ja)</option>
+                        <option value="en" <?php selected( $serp_language, 'en' ); ?>>英語 (en)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="aioDevice">デバイス</label>
+                    <select id="aioDevice">
+                        <option value="desktop" <?php selected( $serp_device, 'desktop' ); ?>>デスクトップ</option>
+                        <option value="mobile" <?php selected( $serp_device, 'mobile' ); ?>>モバイル</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="aio-fetch-btn" id="aioSaveSettingsBtn" onclick="saveSettings()">設定を保存</button>
+                </div>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <button class="aio-fetch-btn" id="aioFetchBtn" onclick="runFetch()">SERP データを取得</button>
+            <span id="aioFetchStatus" style="font-size:13px;color:var(--mw-text-tertiary);"></span>
+        </div>
+        <div class="aio-progress-bar" id="aioProgressBar" style="display:none;">
+            <div class="aio-progress-bar__fill" id="aioProgressFill" style="width:0%;"></div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- ===== Section 2: 上位露出ドメインランキング ===== -->
     <div class="aio-section" id="aioRankingSection">
@@ -385,7 +530,7 @@ get_header();
     fetchAPI('/rankings').then(res => {
         const el = document.getElementById('aioRankingContent');
         if (!res.success || !res.data || res.data.length === 0) {
-            el.innerHTML = '<div class="aio-empty">まだデータがありません。管理画面から SERP 取得を実行してください。</div>';
+            el.innerHTML = '<div class="aio-empty">まだデータがありません。上部の「SERP データを取得」ボタンからデータを取得してください。</div>';
             return;
         }
 
@@ -491,6 +636,96 @@ get_header();
         div.textContent = str;
         return div.innerHTML;
     }
+
+    function showToast(msg, type) {
+        let toast = document.getElementById('aioToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'aioToast';
+            toast.className = 'aio-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.className = 'aio-toast' + (type === 'error' ? ' aio-toast--error' : type === 'success' ? ' aio-toast--success' : '');
+        requestAnimationFrame(() => { toast.classList.add('show'); });
+        setTimeout(() => { toast.classList.remove('show'); }, 3500);
+    }
+
+    function postAPI(endpoint, body) {
+        return fetch(API_BASE + endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>'
+            },
+            body: JSON.stringify(body)
+        }).then(r => r.json());
+    }
+
+    // ===== 設定保存 =====
+    window.saveSettings = function() {
+        const btn = document.getElementById('aioSaveSettingsBtn');
+        btn.disabled = true;
+        btn.textContent = '保存中...';
+
+        postAPI('/settings', {
+            self_domains: document.getElementById('aioSelfDomains').value,
+            region: document.getElementById('aioRegion').value,
+            language: document.getElementById('aioLanguage').value,
+            device: document.getElementById('aioDevice').value,
+        }).then(res => {
+            if (res.success) {
+                showToast('設定を保存しました', 'success');
+            } else {
+                showToast(res.message || '保存に失敗しました', 'error');
+            }
+        }).catch(() => {
+            showToast('通信エラーが発生しました', 'error');
+        }).finally(() => {
+            btn.disabled = false;
+            btn.textContent = '設定を保存';
+        });
+    };
+
+    // ===== SERP 取得 =====
+    window.runFetch = function() {
+        if (!confirm('全 AIO 有効キーワードの SERP データを取得します。\n1キーワードあたり約10〜15秒かかります。\n\n実行しますか？')) {
+            return;
+        }
+
+        const btn = document.getElementById('aioFetchBtn');
+        const status = document.getElementById('aioFetchStatus');
+        const bar = document.getElementById('aioProgressBar');
+        const fill = document.getElementById('aioProgressFill');
+
+        btn.disabled = true;
+        btn.textContent = '取得中...';
+        status.textContent = 'SERP データを取得しています...';
+        bar.style.display = 'block';
+        fill.style.width = '10%';
+
+        postAPI('/fetch', { user_id: <?php echo (int) get_current_user_id(); ?> }).then(res => {
+            fill.style.width = '100%';
+            if (res.success) {
+                const d = res.data;
+                const count = d.processed ?? (Array.isArray(d.results) ? d.results.length : 0);
+                status.textContent = count + ' キーワードの取得が完了しました。';
+                showToast('SERP 取得完了 (' + count + ' KW)', 'success');
+                // 2秒後にページ再読み込みでデータ反映
+                setTimeout(() => { location.reload(); }, 2000);
+            } else {
+                status.textContent = '取得に失敗しました: ' + (res.message || '');
+                showToast(res.message || '取得に失敗しました', 'error');
+            }
+        }).catch(err => {
+            status.textContent = '通信エラーが発生しました。';
+            showToast('通信エラーが発生しました', 'error');
+        }).finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'SERP データを取得';
+        });
+    };
 })();
 </script>
 

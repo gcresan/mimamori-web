@@ -1057,6 +1057,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_get_aio_serp_ai_comment' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/aio-serp/settings', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_save_aio_serp_settings' ],
+            'permission_callback' => function() { return current_user_can('manage_options'); },
+        ]);
 
         // =============================================
         // SEO対策
@@ -19999,6 +20004,35 @@ PROMPT;
                 'success' => true,
                 'data'    => $result,
             ], 200 );
+        } catch ( \Exception $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * POST /aio-serp/settings — 設定保存（管理者のみ）
+     */
+    public function rest_save_aio_serp_settings( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '未ログイン' ], 401 );
+            }
+
+            $self_domains = sanitize_textarea_field( $request->get_param( 'self_domains' ) ?? '' );
+            $region       = sanitize_text_field( $request->get_param( 'region' ) ?? 'jp' );
+            $language     = sanitize_text_field( $request->get_param( 'language' ) ?? 'ja' );
+            $device       = sanitize_text_field( $request->get_param( 'device' ) ?? 'desktop' );
+
+            // 対象ユーザー（管理者は他ユーザーの設定も変更可能）
+            $target_user = absint( $request->get_param( 'target_user_id' ) ) ?: $user_id;
+
+            update_user_meta( $target_user, 'gcrev_aio_self_domains', $self_domains );
+            update_user_meta( $target_user, 'gcrev_aio_serp_region', $region );
+            update_user_meta( $target_user, 'gcrev_aio_serp_language', $language );
+            update_user_meta( $target_user, 'gcrev_aio_serp_device', $device );
+
+            return new \WP_REST_Response( [ 'success' => true, 'message' => '設定を保存しました' ], 200 );
         } catch ( \Exception $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
         }
