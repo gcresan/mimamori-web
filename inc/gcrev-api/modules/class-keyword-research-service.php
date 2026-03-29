@@ -139,7 +139,7 @@ class Gcrev_Keyword_Research_Service {
         try {
             $raw = $this->ai->call_gemini_api( $prompt, [
                 'temperature'       => 0.7,
-                'max_output_tokens' => 8192,
+                'max_output_tokens' => 16384,
             ] );
             $this->log( "Gemini response length: " . strlen( $raw ) );
         } catch ( \Throwable $e ) {
@@ -1043,6 +1043,15 @@ FORMAT;
         $first = strpos( $cleaned, '{' );
         $last  = strrpos( $cleaned, '}' );
         if ( $first === false || $last === false || $last <= $first ) {
+            // JSON が途中で切れている可能性 — 閉じ括弧を補完して再試行
+            if ( $first !== false ) {
+                $partial = substr( $cleaned, $first );
+                $data = $this->try_repair_json( $partial );
+                if ( is_array( $data ) ) {
+                    $this->log( "JSON repaired (truncated response)" );
+                    return $this->normalize_parsed( $data );
+                }
+            }
             return null;
         }
 
@@ -1050,9 +1059,21 @@ FORMAT;
         $data = json_decode( $json_str, true );
 
         if ( ! is_array( $data ) ) {
-            return null;
+            // json_decode 失敗 — 修復を試行
+            $data = $this->try_repair_json( $json_str );
+            if ( ! is_array( $data ) ) {
+                return null;
+            }
+            $this->log( "JSON repaired (malformed)" );
         }
 
+        return $this->normalize_parsed( $data );
+    }
+
+    /**
+     * パース済みデータを正規化
+     */
+    private function normalize_parsed( array $data ): array {
         // 正規化: summary
         $summary_defaults = [
             'direction'                  => '',
@@ -1096,6 +1117,66 @@ FORMAT;
         }
 
         return $data;
+    }
+
+    /**
+     * 途中で切れた JSON を修復して再パース
+     *
+     * Gemini が max_output_tokens に達して不完全な JSON を返す場合に対応。
+     * 文字列の途中で切れていたら閉じ、開きブラケットを数えて閉じる。
+     */
+    private function try_repair_json( string $json ): ?array {
+        // まず AI JSON パーサーが使えれば委譲
+        if ( class_exists( 'Gcrev_AI_Json_Parser' ) ) {
+            $result = Gcrev_AI_Json_Parser::parse( $json );
+            if ( is_array( $result ) && ! empty( $result ) ) {
+                return $result;
+            }
+        }
+
+        // 手動修復: 開いている文字列を閉じ、ブラケットを数えて閉じる
+        $repaired = $json;
+
+        // 末尾の不完全な文字列値を閉じる
+        // 最後の " の前にエスケープされていない " があるか確認
+        $in_string = false;
+        $escape = false;
+        for ( $i = 0, $len = strlen( $repaired ); $i < $len; $i++ ) {
+            $c = $repaired[ $i ];
+            if ( $escape ) {
+                $escape = false;
+                continue;
+            }
+            if ( $c === '\\' ) {
+                $escape = true;
+                continue;
+            }
+            if ( $c === '"' ) {
+                $in_string = ! $in_string;
+            }
+        }
+
+        if ( $in_string ) {
+            $repaired .= '"';
+        }
+
+        // 開きブラケット/ブレースを数えて閉じる
+        $opens  = substr_count( $repaired, '{' ) - substr_count( $repaired, '}' );
+        $arrays = substr_count( $repaired, '[' ) - substr_count( $repaired, ']' );
+
+        // 末尾のカンマを除去
+        $repaired = rtrim( $repaired );
+        $repaired = rtrim( $repaired, ',' );
+
+        for ( $i = 0; $i < $arrays; $i++ ) {
+            $repaired .= ']';
+        }
+        for ( $i = 0; $i < $opens; $i++ ) {
+            $repaired .= '}';
+        }
+
+        $data = json_decode( $repaired, true );
+        return is_array( $data ) ? $data : null;
     }
 
     // =========================================================
