@@ -47,11 +47,12 @@ class Gcrev_AIO_Serp_Service {
     /**
      * 1キーワード分の AIO SERP を取得して保存
      *
-     * @param int $user_id    ユーザーID
-     * @param int $keyword_id gcrev_rank_keywords.id
+     * @param int         $user_id         ユーザーID
+     * @param int         $keyword_id      gcrev_rank_keywords.id
+     * @param string|null $device_override 'desktop'|'mobile'|null
      * @return array { status: string, message: string }
      */
-    public function fetch_and_store( int $user_id, int $keyword_id ): array {
+    public function fetch_and_store( int $user_id, int $keyword_id, ?string $device_override = null ): array {
         global $wpdb;
         $table_kw   = $wpdb->prefix . 'gcrev_rank_keywords';
         $table_serp = $wpdb->prefix . 'gcrev_aio_serp_results';
@@ -72,7 +73,7 @@ class Gcrev_AIO_Serp_Service {
         $options = [
             'region'   => $serp_settings['region'],
             'language' => $serp_settings['language'],
-            'device'   => $serp_settings['device'],
+            'device'   => $device_override ?? $serp_settings['device'],
         ];
 
         self::log( "Fetching SERP for user={$user_id}, kw_id={$keyword_id}, keyword='{$kw['keyword']}'" );
@@ -161,9 +162,11 @@ class Gcrev_AIO_Serp_Service {
     /**
      * ユーザーの全 AIO 有効キーワードを取得・保存
      *
+     * @param int    $user_id
+     * @param string $device_override 'desktop'|'mobile'|null（null時はユーザー設定を使用）
      * @return array { processed: int, results: array }
      */
-    public function fetch_all_keywords( int $user_id ): array {
+    public function fetch_all_keywords( int $user_id, ?string $device_override = null ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_rank_keywords';
 
@@ -183,7 +186,7 @@ class Gcrev_AIO_Serp_Service {
 
         $results = [];
         foreach ( $keywords as $kw ) {
-            $r = $this->fetch_and_store( $user_id, (int) $kw['id'] );
+            $r = $this->fetch_and_store( $user_id, (int) $kw['id'], $device_override );
             $results[] = [
                 'keyword_id' => (int) $kw['id'],
                 'keyword'    => $kw['keyword'],

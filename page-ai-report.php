@@ -384,84 +384,38 @@ get_header();
         </div>
     </div>
 
-    <!-- ===== 設定 & 手動取得 ===== -->
-    <?php if ( current_user_can( 'manage_options' ) ) : ?>
+    <!-- ===== 最新データ取得 ===== -->
     <?php
-        $current_user_id   = get_current_user_id();
-        $self_domains_raw  = get_user_meta( $current_user_id, 'gcrev_aio_self_domains', true ) ?: '';
-        $serp_region       = get_user_meta( $current_user_id, 'gcrev_aio_serp_region', true ) ?: 'jp';
-        $serp_language     = get_user_meta( $current_user_id, 'gcrev_aio_serp_language', true ) ?: 'ja';
-        $serp_device       = get_user_meta( $current_user_id, 'gcrev_aio_serp_device', true ) ?: 'desktop';
+        $current_user_id = get_current_user_id();
+        $is_admin        = current_user_can( 'manage_options' );
 
-        // クライアント設定の site_url から自動判定ドメインを取得
-        $auto_domain = '';
-        $site_url = get_user_meta( $current_user_id, 'gcrev_client_site_url', true );
-        if ( ! empty( $site_url ) ) {
-            $parsed_host = wp_parse_url( $site_url, PHP_URL_HOST );
-            if ( $parsed_host ) {
-                $auto_domain = preg_replace( '/^(www\.|m\.)/', '', strtolower( $parsed_host ) );
-            }
+        // 週1回制限チェック（管理者は免除）
+        $fetch_cooldown_key = "gcrev_aio_serp_last_fetch_{$current_user_id}";
+        $last_fetch_ts      = get_transient( $fetch_cooldown_key );
+        $can_fetch          = $is_admin || ! $last_fetch_ts;
+        $next_available     = '';
+        if ( ! $can_fetch && $last_fetch_ts ) {
+            $next_ts = (int) $last_fetch_ts + ( 7 * DAY_IN_SECONDS );
+            $next_available = wp_date( 'Y/m/d H:i', $next_ts );
         }
     ?>
-    <div class="aio-section" id="aioSettingsSection">
-        <div class="aio-section__header">
-            <div>
-                <h2 class="aio-section__title">SERP 取得設定</h2>
-                <div class="aio-section__note">自社判定ドメイン・取得条件の設定と、手動データ取得ができます（管理者のみ表示）</div>
-            </div>
-        </div>
-
-        <div class="aio-settings-panel">
-            <div style="margin-bottom:16px;">
-                <?php if ( $auto_domain ) : ?>
-                <div style="margin-bottom:8px;font-size:13px;">
-                    <span style="color:var(--mw-text-secondary);font-weight:600;">自動判定ドメイン:</span>
-                    <code style="background:var(--mw-bg-primary);padding:2px 8px;border-radius:4px;font-size:13px;"><?php echo esc_html( $auto_domain ); ?></code>
-                    <span style="color:var(--mw-text-tertiary);font-size:12px;margin-left:4px;">（クライアント設定のサイトURLから自動設定）</span>
-                </div>
+    <div class="aio-section" id="aioFetchSection">
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+            <button class="aio-fetch-btn" id="aioFetchBtn" onclick="runFetch()" <?php echo $can_fetch ? '' : 'disabled'; ?>>
+                最新のAIデータを取得する
+            </button>
+            <span id="aioFetchStatus" style="font-size:13px;color:var(--mw-text-tertiary);">
+                <?php if ( ! $can_fetch ) : ?>
+                    次回取得可能: <?php echo esc_html( $next_available ); ?>
+                <?php else : ?>
+                    Google検索のAI回答データを最新の状態に更新します
                 <?php endif; ?>
-                <label for="aioSelfDomains">追加の自社ドメイン（任意・1行1つ）</label>
-                <textarea id="aioSelfDomains" rows="2" style="width:100%;max-width:400px;" placeholder="別ドメインがあれば追加&#10;例: mimamori-web.jp"><?php echo esc_textarea( $self_domains_raw ); ?></textarea>
-                <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">上記の自動判定ドメインに加え、追加で自社として判定したいドメインがあれば入力してください。</div>
-            </div>
-
-            <div class="aio-settings-row" style="margin-bottom:16px;">
-                <div>
-                    <label for="aioRegion">地域</label>
-                    <select id="aioRegion">
-                        <option value="jp" <?php selected( $serp_region, 'jp' ); ?>>日本 (jp)</option>
-                        <option value="us" <?php selected( $serp_region, 'us' ); ?>>アメリカ (us)</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="aioLanguage">言語</label>
-                    <select id="aioLanguage">
-                        <option value="ja" <?php selected( $serp_language, 'ja' ); ?>>日本語 (ja)</option>
-                        <option value="en" <?php selected( $serp_language, 'en' ); ?>>英語 (en)</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="aioDevice">デバイス</label>
-                    <select id="aioDevice">
-                        <option value="desktop" <?php selected( $serp_device, 'desktop' ); ?>>デスクトップ</option>
-                        <option value="mobile" <?php selected( $serp_device, 'mobile' ); ?>>モバイル</option>
-                    </select>
-                </div>
-                <div>
-                    <button class="aio-fetch-btn" id="aioSaveSettingsBtn" onclick="saveSettings()">設定を保存</button>
-                </div>
-            </div>
-        </div>
-
-        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-            <button class="aio-fetch-btn" id="aioFetchBtn" onclick="runFetch()">SERP データを取得</button>
-            <span id="aioFetchStatus" style="font-size:13px;color:var(--mw-text-tertiary);"></span>
+            </span>
         </div>
         <div class="aio-progress-bar" id="aioProgressBar" style="display:none;">
             <div class="aio-progress-bar__fill" id="aioProgressFill" style="width:0%;"></div>
         </div>
     </div>
-    <?php endif; ?>
 
     <!-- ===== Section 2: 上位露出ドメインランキング ===== -->
     <div class="aio-section" id="aioRankingSection">
@@ -681,34 +635,9 @@ get_header();
         }).then(r => r.json());
     }
 
-    // ===== 設定保存 =====
-    window.saveSettings = function() {
-        const btn = document.getElementById('aioSaveSettingsBtn');
-        btn.disabled = true;
-        btn.textContent = '保存中...';
-
-        postAPI('/settings', {
-            self_domains: document.getElementById('aioSelfDomains').value,
-            region: document.getElementById('aioRegion').value,
-            language: document.getElementById('aioLanguage').value,
-            device: document.getElementById('aioDevice').value,
-        }).then(res => {
-            if (res.success) {
-                showToast('設定を保存しました', 'success');
-            } else {
-                showToast(res.message || '保存に失敗しました', 'error');
-            }
-        }).catch(() => {
-            showToast('通信エラーが発生しました', 'error');
-        }).finally(() => {
-            btn.disabled = false;
-            btn.textContent = '設定を保存';
-        });
-    };
-
-    // ===== SERP 取得 =====
+    // ===== 最新データ取得 =====
     window.runFetch = function() {
-        if (!confirm('全 AIO 有効キーワードの SERP データを取得します。\n1キーワードあたり約10〜15秒かかります。\n\n実行しますか？')) {
+        if (!confirm('登録キーワードのAI回答データを最新に更新します。\n数分かかる場合があります。\n\n実行しますか？')) {
             return;
         }
 
@@ -719,7 +648,7 @@ get_header();
 
         btn.disabled = true;
         btn.textContent = '取得中...';
-        status.textContent = 'SERP データを取得しています...';
+        status.textContent = 'AI回答データを取得しています（しばらくお待ちください）...';
         bar.style.display = 'block';
         fill.style.width = '10%';
 
@@ -728,9 +657,8 @@ get_header();
             if (res.success) {
                 const d = res.data;
                 const count = d.processed ?? (Array.isArray(d.results) ? d.results.length : 0);
-                status.textContent = count + ' キーワードの取得が完了しました。';
-                showToast('SERP 取得完了 (' + count + ' KW)', 'success');
-                // 2秒後にページ再読み込みでデータ反映
+                status.textContent = count + ' キーワード分のデータを更新しました。';
+                showToast('データ更新完了', 'success');
                 setTimeout(() => { location.reload(); }, 2000);
             } else {
                 status.textContent = '取得に失敗しました: ' + (res.message || '');
@@ -741,7 +669,7 @@ get_header();
             showToast('通信エラーが発生しました', 'error');
         }).finally(() => {
             btn.disabled = false;
-            btn.textContent = 'SERP データを取得';
+            btn.textContent = '最新のAIデータを取得する';
         });
     };
 })();

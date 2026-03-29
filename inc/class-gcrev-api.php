@@ -1050,7 +1050,7 @@ class Gcrev_Insight_API {
         register_rest_route('gcrev/v1', '/aio-serp/fetch', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_aio_serp_fetch' ],
-            'permission_callback' => function() { return current_user_can('manage_options'); },
+            'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
         register_rest_route('gcrev/v1', '/aio-serp/ai-comment', [
             'methods'             => 'GET',
@@ -19978,15 +19978,37 @@ PROMPT;
     }
 
     /**
-     * POST /aio-serp/fetch — 手動取得トリガー（管理者のみ）
+     * POST /aio-serp/fetch — 手動取得トリガー
+     *
+     * 全ユーザーが利用可能。一般ユーザーは週1回制限（管理者は制限なし）。
+     * desktop + mobile の両デバイスで自動取得する。
      */
     public function rest_aio_serp_fetch( \WP_REST_Request $request ): \WP_REST_Response {
         try {
-            $target_user_id = absint( $request->get_param( 'user_id' ) );
-            $keyword_id     = absint( $request->get_param( 'keyword_id' ) );
+            $current_user_id = get_current_user_id();
+            if ( ! $current_user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '未ログイン' ], 401 );
+            }
 
+            $is_admin = current_user_can( 'manage_options' );
+
+            // 管理者は target_user_id 指定可能、一般ユーザーは自分のみ
+            $target_user_id = $is_admin ? absint( $request->get_param( 'user_id' ) ) : $current_user_id;
             if ( ! $target_user_id ) {
-                return new \WP_REST_Response( [ 'success' => false, 'message' => 'user_id is required' ], 400 );
+                $target_user_id = $current_user_id;
+            }
+
+            // 週1回制限（管理者は免除）
+            $cooldown_key = "gcrev_aio_serp_last_fetch_{$target_user_id}";
+            if ( ! $is_admin ) {
+                $last_fetch = get_transient( $cooldown_key );
+                if ( $last_fetch ) {
+                    $next_ts = (int) $last_fetch + ( 7 * DAY_IN_SECONDS );
+                    return new \WP_REST_Response( [
+                        'success' => false,
+                        'message' => '次回取得可能日時: ' . wp_date( 'Y/m/d H:i', $next_ts ),
+                    ], 429 );
+                }
             }
 
             $service = $this->get_aio_serp_service();
@@ -19994,15 +20016,22 @@ PROMPT;
                 return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
             }
 
-            if ( $keyword_id > 0 ) {
-                $result = $service->fetch_and_store( $target_user_id, $keyword_id );
-            } else {
-                $result = $service->fetch_all_keywords( $target_user_id );
-            }
+            // desktop + mobile 両方取得
+            $result_desktop = $service->fetch_all_keywords( $target_user_id, 'desktop' );
+            $result_mobile  = $service->fetch_all_keywords( $target_user_id, 'mobile' );
+
+            $total_processed = ( $result_desktop['processed'] ?? 0 ) + ( $result_mobile['processed'] ?? 0 );
+
+            // クールダウン設定（7日間）
+            set_transient( $cooldown_key, time(), 7 * DAY_IN_SECONDS );
 
             return new \WP_REST_Response( [
                 'success' => true,
-                'data'    => $result,
+                'data'    => [
+                    'processed' => $total_processed,
+                    'desktop'   => $result_desktop,
+                    'mobile'    => $result_mobile,
+                ],
             ], 200 );
         } catch ( \Exception $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
