@@ -313,14 +313,13 @@ class Gcrev_AIO_Serp_Service {
         $prompt = $this->build_comment_prompt( $payload );
 
         try {
-            $response = $ai_client->generate_text( $prompt, [
-                'temperature'  => 0.7,
-                'max_tokens'   => 800,
-                'system'       => 'あなたはSEO・AI検索の分析アドバイザーです。クライアント向けに、丁寧で分かりやすい日本語でコメントを作成してください。専門用語は最小限にし、具体的な改善アクションを提案してください。',
+            $raw = $ai_client->call_gemini_api( $prompt, [
+                'temperature'       => 0.7,
+                'max_output_tokens' => 1024,
             ] );
 
             return [
-                'comment' => $response['text'] ?? 'コメント生成に失敗しました。',
+                'comment' => ! empty( $raw ) ? $raw : 'コメント生成に失敗しました。',
                 'payload' => $payload,
             ];
         } catch ( \Exception $e ) {
