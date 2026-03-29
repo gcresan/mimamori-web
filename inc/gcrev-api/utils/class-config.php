@@ -346,6 +346,26 @@ class Gcrev_Config {
     }
 
     // =========================================================
+    // Bright Data
+    // =========================================================
+
+    /**
+     * Bright Data API トークンが設定されているか
+     */
+    public function has_brightdata_token(): bool {
+        return defined( 'BRIGHTDATA_API_TOKEN' ) && BRIGHTDATA_API_TOKEN !== '';
+    }
+
+    /**
+     * Bright Data API トークンを返す
+     *
+     * @return string トークン（未設定時は空文字）
+     */
+    public function get_brightdata_api_token(): string {
+        return defined( 'BRIGHTDATA_API_TOKEN' ) ? (string) BRIGHTDATA_API_TOKEN : '';
+    }
+
+    // =========================================================
     // 汎用設定取得
     // =========================================================
 

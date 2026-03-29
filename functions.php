@@ -923,6 +923,26 @@ if ( file_exists( $gcrev_aio_service ) ) {
 }
 
 // ========================================
+// AIO SERP（Bright Data ベースの AI Overview 分析）
+// ========================================
+$gcrev_brightdata_client = $gcrev_modules_path . 'class-brightdata-serp-client.php';
+if ( file_exists( $gcrev_brightdata_client ) ) {
+    require_once $gcrev_brightdata_client;
+}
+$gcrev_aio_serp_parser = $gcrev_modules_path . 'class-aio-serp-parser.php';
+if ( file_exists( $gcrev_aio_serp_parser ) ) {
+    require_once $gcrev_aio_serp_parser;
+}
+$gcrev_aio_serp_aggregator = $gcrev_modules_path . 'class-aio-serp-aggregator.php';
+if ( file_exists( $gcrev_aio_serp_aggregator ) ) {
+    require_once $gcrev_aio_serp_aggregator;
+}
+$gcrev_aio_serp_service = $gcrev_modules_path . 'class-aio-serp-service.php';
+if ( file_exists( $gcrev_aio_serp_service ) ) {
+    require_once $gcrev_aio_serp_service;
+}
+
+// ========================================
 // Step8: SEO Checker（SEO対策）
 // ========================================
 $gcrev_seo_checker = $gcrev_modules_path . 'class-seo-checker.php';
@@ -4964,6 +4984,7 @@ add_action('after_setup_theme', function () {
     gcrev_rank_results_create_table();
     gcrev_meo_results_create_table(); // MEO週次順位テーブル（マップ順位ページで使用）
     gcrev_aio_results_create_table();
+    gcrev_aio_serp_results_create_table();
     gcrev_survey_create_tables();
     gcrev_review_drafts_create_table();
     gcrev_gbp_posts_create_table();
@@ -5734,6 +5755,45 @@ function gcrev_clarity_daily_create_table(): void {
 }
 
 /**
+ * AIO SERP 結果テーブル（Bright Data SERP API 取得結果）
+ *
+ * キーワードごとの Google AI Overview 引用元・ドメイン露出度を保存する。
+ */
+function gcrev_aio_serp_results_create_table(): void {
+    global $wpdb;
+
+    $table           = $wpdb->prefix . 'gcrev_aio_serp_results';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        keyword_id BIGINT(20) UNSIGNED NOT NULL,
+        keyword VARCHAR(255) NOT NULL,
+        fetched_at DATETIME NOT NULL,
+        region VARCHAR(10) NOT NULL DEFAULT 'jp',
+        language VARCHAR(10) NOT NULL DEFAULT 'ja',
+        device VARCHAR(20) NOT NULL DEFAULT 'desktop',
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        aio_text MEDIUMTEXT DEFAULT NULL,
+        citations MEDIUMTEXT DEFAULT NULL,
+        self_found TINYINT(1) NOT NULL DEFAULT 0,
+        self_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        self_exposure SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+        raw_response MEDIUMTEXT DEFAULT NULL,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        KEY user_status (user_id, status),
+        KEY keyword_id (keyword_id),
+        KEY fetched_at (fetched_at),
+        KEY user_kw_fetched (user_id, keyword_id, fetched_at)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
  * AIO計測のデフォルト地点情報を取得
  *
  * user_meta `gcrev_aio_location` があればそれを返す。
@@ -6320,6 +6380,7 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         'report_next_actions'  => 'ai_support',
         // SEO機能（content_seo 以上）
         'seo_menu'             => 'content_seo',
+        'aio_serp'             => 'content_seo',
         // コア機能（両プラン）
         'dashboard'            => 'basic',
         'report_summary'       => 'basic',

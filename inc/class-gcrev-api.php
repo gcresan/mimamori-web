@@ -1024,6 +1024,40 @@ class Gcrev_Insight_API {
             'permission_callback' => function() { return current_user_can('manage_options'); },
         ]);
 
+        // =========================================================
+        // AIO SERP（Bright Data ベースの AI Overview 分析）
+        // =========================================================
+        register_rest_route('gcrev/v1', '/aio-serp/summary', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_serp_summary' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio-serp/rankings', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_serp_rankings' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio-serp/keywords', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_serp_keywords' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio-serp/keyword/(?P<id>\d+)', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_serp_keyword_detail' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/aio-serp/fetch', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_aio_serp_fetch' ],
+            'permission_callback' => function() { return current_user_can('manage_options'); },
+        ]);
+        register_rest_route('gcrev/v1', '/aio-serp/ai-comment', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_serp_ai_comment' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // =============================================
         // SEO対策
         // =============================================
@@ -19816,6 +19850,184 @@ PROMPT;
         }
 
         return $sections;
+    }
+
+    // =========================================================
+    // AIO SERP（Bright Data ベースの AI Overview 分析）
+    // =========================================================
+
+    /**
+     * AIO SERP サービスインスタンスを取得（遅延初期化）
+     */
+    private function get_aio_serp_service(): ?Gcrev_AIO_Serp_Service {
+        static $instance = null;
+        if ( $instance === null && class_exists( 'Gcrev_AIO_Serp_Service' ) ) {
+            $instance = new Gcrev_AIO_Serp_Service( $this->config );
+        }
+        return $instance;
+    }
+
+    /**
+     * GET /aio-serp/summary — サマリー
+     */
+    public function rest_get_aio_serp_summary( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '未ログイン' ], 401 );
+            }
+
+            $service = $this->get_aio_serp_service();
+            if ( ! $service ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
+            }
+
+            $summary = $service->get_summary( $user_id );
+
+            return new \WP_REST_Response( [
+                'success' => true,
+                'data'    => $summary,
+            ], 200 );
+        } catch ( \Exception $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /aio-serp/rankings — 上位露出ドメインランキング
+     */
+    public function rest_get_aio_serp_rankings( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '未ログイン' ], 401 );
+            }
+
+            $service  = $this->get_aio_serp_service();
+            if ( ! $service ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
+            }
+
+            $rankings = $service->get_rankings( $user_id );
+
+            return new \WP_REST_Response( [
+                'success' => true,
+                'data'    => $rankings,
+            ], 200 );
+        } catch ( \Exception $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /aio-serp/keywords — キーワード別詳細一覧
+     */
+    public function rest_get_aio_serp_keywords( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '未ログイン' ], 401 );
+            }
+
+            $service = $this->get_aio_serp_service();
+            if ( ! $service ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
+            }
+
+            $details = $service->get_keyword_details( $user_id );
+
+            return new \WP_REST_Response( [
+                'success' => true,
+                'data'    => $details,
+            ], 200 );
+        } catch ( \Exception $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /aio-serp/keyword/{id} — 単一キーワード詳細
+     */
+    public function rest_get_aio_serp_keyword_detail( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '未ログイン' ], 401 );
+            }
+
+            $keyword_id = absint( $request['id'] );
+            $service    = $this->get_aio_serp_service();
+            if ( ! $service ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
+            }
+
+            $detail = $service->get_keyword_detail( $keyword_id );
+
+            return new \WP_REST_Response( [
+                'success' => true,
+                'data'    => $detail,
+            ], 200 );
+        } catch ( \Exception $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * POST /aio-serp/fetch — 手動取得トリガー（管理者のみ）
+     */
+    public function rest_aio_serp_fetch( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $target_user_id = absint( $request->get_param( 'user_id' ) );
+            $keyword_id     = absint( $request->get_param( 'keyword_id' ) );
+
+            if ( ! $target_user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'user_id is required' ], 400 );
+            }
+
+            $service = $this->get_aio_serp_service();
+            if ( ! $service ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
+            }
+
+            if ( $keyword_id > 0 ) {
+                $result = $service->fetch_and_store( $target_user_id, $keyword_id );
+            } else {
+                $result = $service->fetch_all_keywords( $target_user_id );
+            }
+
+            return new \WP_REST_Response( [
+                'success' => true,
+                'data'    => $result,
+            ], 200 );
+        } catch ( \Exception $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /aio-serp/ai-comment — AIコメント生成
+     */
+    public function rest_get_aio_serp_ai_comment( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '未ログイン' ], 401 );
+            }
+
+            $service = $this->get_aio_serp_service();
+            if ( ! $service ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
+            }
+
+            $result = $service->generate_ai_comment( $user_id );
+
+            return new \WP_REST_Response( [
+                'success' => true,
+                'data'    => $result,
+            ], 200 );
+        } catch ( \Exception $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

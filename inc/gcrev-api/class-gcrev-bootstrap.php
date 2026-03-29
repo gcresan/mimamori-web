@@ -47,6 +47,10 @@ class Gcrev_Bootstrap {
         // Clarity日次蓄積
         add_action('gcrev_clarity_daily_sync_event', [__CLASS__, 'on_clarity_daily_sync']);
 
+        // AIO SERP 週次取得（Bright Data）
+        add_action('gcrev_aio_serp_weekly_event', [__CLASS__, 'on_aio_serp_weekly_event']);
+        add_action('gcrev_aio_serp_chunk_event', [__CLASS__, 'on_aio_serp_chunk_event'], 10, 2);
+
         // 月次データプリフェッチ（月固定期間: prev-month, prev-prev-month, last180, last365）
         add_action('gcrev_monthly_data_prefetch_event', [__CLASS__, 'on_monthly_data_prefetch_event']);
         add_action('gcrev_monthly_prefetch_chunk_event', [__CLASS__, 'on_monthly_prefetch_chunk_event'], 10, 2);
@@ -752,6 +756,15 @@ class Gcrev_Bootstrap {
             wp_schedule_event( time(), 'ten_minutes', 'gcrev_gbp_posts_publish_event' );
             error_log( '[GCREV] Scheduled gcrev_gbp_posts_publish_event (ten_minutes)' );
         }
+
+        // AIO SERP 週次取得: 毎週月曜 05:30（Bright Data）
+        if ( ! wp_next_scheduled( 'gcrev_aio_serp_weekly_event' ) ) {
+            // 次の月曜 05:30 を計算
+            $tz = wp_timezone();
+            $next_monday = new \DateTimeImmutable( 'next monday 05:30:00', $tz );
+            wp_schedule_event( $next_monday->getTimestamp(), 'weekly', 'gcrev_aio_serp_weekly_event' );
+            error_log( '[GCREV] Scheduled gcrev_aio_serp_weekly_event (weekly, Mon 05:30)' );
+        }
     }
 
     /**
@@ -859,6 +872,74 @@ class Gcrev_Bootstrap {
         }
 
         error_log('[GCREV] Unschedule events done (switch_theme)');
+    }
+
+    // =========================================================
+    // AIO SERP（Bright Data）週次取得
+    // =========================================================
+
+    /**
+     * 週次 AIO SERP 取得イベント
+     * 全ユーザーの aio_enabled キーワードをチャンク処理で取得
+     */
+    public static function on_aio_serp_weekly_event(): void {
+        error_log( '[GCREV] gcrev_aio_serp_weekly_event triggered' );
+
+        if ( ! class_exists( 'Gcrev_Brightdata_Serp_Client' ) || ! Gcrev_Brightdata_Serp_Client::is_configured() ) {
+            error_log( '[GCREV] AIO SERP: Bright Data not configured, skipping' );
+            return;
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_rank_keywords';
+
+        // AIO 有効ユーザー一覧
+        $user_ids = $wpdb->get_col(
+            "SELECT DISTINCT user_id FROM {$table} WHERE aio_enabled = 1 AND enabled = 1"
+        );
+
+        if ( empty( $user_ids ) ) {
+            error_log( '[GCREV] AIO SERP: No users with AIO-enabled keywords' );
+            return;
+        }
+
+        // 最初のチャンクをスケジュール
+        wp_schedule_single_event( time() + 30, 'gcrev_aio_serp_chunk_event', [ $user_ids, 0 ] );
+        error_log( '[GCREV] AIO SERP: Scheduled chunk 0 for ' . count( $user_ids ) . ' users' );
+    }
+
+    /**
+     * AIO SERP チャンクイベント（1ユーザーずつ処理）
+     */
+    public static function on_aio_serp_chunk_event( $user_ids, $offset ): void {
+        if ( ! is_array( $user_ids ) ) {
+            return;
+        }
+        $offset = (int) $offset;
+
+        if ( $offset >= count( $user_ids ) ) {
+            error_log( '[GCREV] AIO SERP: All users processed' );
+            return;
+        }
+
+        $user_id = (int) $user_ids[ $offset ];
+        error_log( "[GCREV] AIO SERP chunk: processing user_id={$user_id} (offset={$offset})" );
+
+        try {
+            $config  = new Gcrev_Config();
+            $service = new Gcrev_AIO_Serp_Service( $config );
+            $result  = $service->fetch_all_keywords( $user_id );
+            error_log( "[GCREV] AIO SERP: user_id={$user_id} processed " . ( $result['processed'] ?? 0 ) . ' keywords' );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_aio_serp_debug.log',
+                date('Y-m-d H:i:s') . " Cron error user_id={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
+        }
+
+        // 次のユーザーを 60 秒後にスケジュール
+        $next_offset = $offset + 1;
+        if ( $next_offset < count( $user_ids ) ) {
+            wp_schedule_single_event( time() + 60, 'gcrev_aio_serp_chunk_event', [ $user_ids, $next_offset ] );
+        }
     }
 }
 

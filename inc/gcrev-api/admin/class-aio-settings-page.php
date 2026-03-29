@@ -178,6 +178,75 @@ class Gcrev_AIO_Settings_Page {
                 }
                 break;
 
+            // --- Bright Data SERP アクション ---
+
+            case 'save_self_domains':
+                if ( $user_id > 0 ) {
+                    $raw = isset($_POST['self_domains']) ? sanitize_textarea_field( wp_unslash( $_POST['self_domains'] ) ) : '';
+                    update_user_meta( $user_id, 'gcrev_aio_self_domains', $raw );
+                    $redirect_args['msg'] = 'self_domains_saved';
+                }
+                break;
+
+            case 'save_serp_settings':
+                if ( $user_id > 0 ) {
+                    $region   = sanitize_text_field( $_POST['serp_region'] ?? 'jp' );
+                    $language = sanitize_text_field( $_POST['serp_language'] ?? 'ja' );
+                    $device   = sanitize_text_field( $_POST['serp_device'] ?? 'desktop' );
+                    update_user_meta( $user_id, 'gcrev_aio_serp_region', $region );
+                    update_user_meta( $user_id, 'gcrev_aio_serp_language', $language );
+                    update_user_meta( $user_id, 'gcrev_aio_serp_device', $device );
+                    $redirect_args['msg'] = 'serp_settings_saved';
+                }
+                break;
+
+            case 'run_serp_all':
+                if ( $user_id > 0 && class_exists( 'Gcrev_AIO_Serp_Service' ) ) {
+                    $config  = new Gcrev_Config();
+                    $service = new Gcrev_AIO_Serp_Service( $config );
+
+                    $lock_key = "gcrev_lock_aio_serp_{$user_id}";
+                    if ( get_transient( $lock_key ) ) {
+                        $redirect_args['msg'] = 'locked';
+                        break;
+                    }
+                    set_transient( $lock_key, 1, 2 * HOUR_IN_SECONDS );
+
+                    try {
+                        $result = $service->fetch_all_keywords( $user_id );
+                        $redirect_args['msg']     = 'serp_run_complete';
+                        $redirect_args['checked'] = $result['processed'] ?? 0;
+                    } catch ( \Throwable $e ) {
+                        file_put_contents( '/tmp/gcrev_aio_serp_debug.log',
+                            date('Y-m-d H:i:s') . " Admin run error: " . $e->getMessage() . "\n", FILE_APPEND );
+                        $redirect_args['msg'] = 'run_error';
+                    } finally {
+                        delete_transient( $lock_key );
+                    }
+                } else {
+                    $redirect_args['msg'] = 'serp_not_configured';
+                }
+                break;
+
+            case 'run_serp_single':
+                $kw_id = absint( $_POST['keyword_id'] ?? 0 );
+                if ( $kw_id > 0 && $user_id > 0 && class_exists( 'Gcrev_AIO_Serp_Service' ) ) {
+                    $config  = new Gcrev_Config();
+                    $service = new Gcrev_AIO_Serp_Service( $config );
+
+                    try {
+                        $result = $service->fetch_and_store( $user_id, $kw_id );
+                        $redirect_args['msg'] = 'serp_single_complete';
+                    } catch ( \Throwable $e ) {
+                        file_put_contents( '/tmp/gcrev_aio_serp_debug.log',
+                            date('Y-m-d H:i:s') . " Admin single run error: " . $e->getMessage() . "\n", FILE_APPEND );
+                        $redirect_args['msg'] = 'run_error';
+                    }
+                } else {
+                    $redirect_args['msg'] = 'serp_not_configured';
+                }
+                break;
+
             default:
                 return;
         }
@@ -211,12 +280,18 @@ class Gcrev_AIO_Settings_Page {
             'run_error'           => '❌ 計測中にエラーが発生しました。ログを確認してください。',
             'locked'              => '⚠️ 計測が進行中です。しばらくお待ちください。',
             'not_configured'      => '⚠️ AIO サービスが利用できません。API 設定を確認してください。',
+            'self_domains_saved'  => '✅ 自社判定ドメインを保存しました。',
+            'serp_settings_saved' => '✅ SERP 取得設定を保存しました。',
+            'serp_run_complete'   => '✅ Bright Data SERP 取得完了（' . absint( $_GET['checked'] ?? 0 ) . ' キーワード）',
+            'serp_single_complete'=> '✅ Bright Data SERP 個別取得完了。',
+            'serp_not_configured' => '⚠️ Bright Data が設定されていません。BRIGHTDATA_API_TOKEN / BRIGHTDATA_ZONE を確認してください。',
         ];
 
         // プロバイダー接続状態
         $has_openai    = defined('MIMAMORI_OPENAI_API_KEY') && MIMAMORI_OPENAI_API_KEY !== '';
         $has_gemini    = defined('GCREV_SA_PATH') && file_exists( GCREV_SA_PATH );
         $has_dataforseo = class_exists('Gcrev_DataForSEO_Client') && Gcrev_DataForSEO_Client::is_configured();
+        $has_brightdata = class_exists('Gcrev_Brightdata_Serp_Client') && Gcrev_Brightdata_Serp_Client::is_configured();
 
         // ユーザー一覧（管理者以外）
         $users = get_users([
@@ -309,6 +384,17 @@ class Gcrev_AIO_Settings_Page {
                                 <?php endif; ?>
                             </td>
                         </tr>
+                        <tr>
+                            <td><strong>Bright Data (SERP API)</strong></td>
+                            <td>
+                                <?php if ( $has_brightdata ) : ?>
+                                    <span style="color:#0a7b0a; font-weight:600;">✅ 設定済み</span>
+                                <?php else : ?>
+                                    <span style="color:#d63638; font-weight:600;">❌ 未設定</span>
+                                    <span style="color:#666; margin-left:4px; font-size:12px;">BRIGHTDATA_API_TOKEN / BRIGHTDATA_ZONE</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -357,6 +443,74 @@ class Gcrev_AIO_Settings_Page {
                         </tr>
                     </table>
                     <p><button type="submit" class="button button-primary">別名を保存</button></p>
+                </form>
+            </div>
+
+            <!-- Bright Data SERP 設定 -->
+            <div class="card" style="max-width:700px; margin-bottom:20px;">
+                <h2>🌐 Bright Data SERP 設定</h2>
+
+                <?php
+                $self_domains_raw = get_user_meta( $selected_user, 'gcrev_aio_self_domains', true ) ?: '';
+                $serp_region      = get_user_meta( $selected_user, 'gcrev_aio_serp_region', true ) ?: 'jp';
+                $serp_language    = get_user_meta( $selected_user, 'gcrev_aio_serp_language', true ) ?: 'ja';
+                $serp_device      = get_user_meta( $selected_user, 'gcrev_aio_serp_device', true ) ?: 'desktop';
+                ?>
+
+                <!-- 自社判定ドメイン -->
+                <form method="post">
+                    <?php wp_nonce_field('gcrev_aio_action', '_gcrev_aio_nonce'); ?>
+                    <input type="hidden" name="gcrev_action" value="save_self_domains">
+                    <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $selected_user ); ?>">
+                    <table class="form-table">
+                        <tr>
+                            <th><label for="self_domains">自社判定ドメイン</label></th>
+                            <td>
+                                <textarea id="self_domains" name="self_domains" rows="4" class="large-text" style="max-width:400px;" placeholder="例:&#10;g-crev.jp&#10;mimamori-web.jp"><?php echo esc_textarea( $self_domains_raw ); ?></textarea>
+                                <p class="description">1行に1つずつ。AIO 引用元にこのドメインが含まれる場合「自社」として集計します。<br>www. / m. は自動で除去されます。</p>
+                            </td>
+                        </tr>
+                    </table>
+                    <p><button type="submit" class="button button-primary">自社ドメインを保存</button></p>
+                </form>
+
+                <hr style="margin:16px 0;">
+
+                <!-- 取得設定 -->
+                <form method="post">
+                    <?php wp_nonce_field('gcrev_aio_action', '_gcrev_aio_nonce'); ?>
+                    <input type="hidden" name="gcrev_action" value="save_serp_settings">
+                    <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $selected_user ); ?>">
+                    <table class="form-table">
+                        <tr>
+                            <th><label for="serp_region">地域</label></th>
+                            <td>
+                                <select id="serp_region" name="serp_region">
+                                    <option value="jp" <?php selected( $serp_region, 'jp' ); ?>>日本 (jp)</option>
+                                    <option value="us" <?php selected( $serp_region, 'us' ); ?>>アメリカ (us)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><label for="serp_language">言語</label></th>
+                            <td>
+                                <select id="serp_language" name="serp_language">
+                                    <option value="ja" <?php selected( $serp_language, 'ja' ); ?>>日本語 (ja)</option>
+                                    <option value="en" <?php selected( $serp_language, 'en' ); ?>>英語 (en)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><label for="serp_device">デバイス</label></th>
+                            <td>
+                                <select id="serp_device" name="serp_device">
+                                    <option value="desktop" <?php selected( $serp_device, 'desktop' ); ?>>デスクトップ</option>
+                                    <option value="mobile" <?php selected( $serp_device, 'mobile' ); ?>>モバイル</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
+                    <p><button type="submit" class="button button-primary">取得設定を保存</button></p>
                 </form>
             </div>
 
@@ -452,6 +606,96 @@ class Gcrev_AIO_Settings_Page {
                     <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $selected_user ); ?>">
                     <button type="submit" class="button button-primary button-hero" onclick="return confirm('全キーワードの AIO 計測を実行します。API 使用量が発生します。よろしいですか？');">🚀 全キーワード計測</button>
                 </form>
+            </div>
+            <?php endif; ?>
+
+            <!-- Bright Data SERP 一括取得 -->
+            <?php if ( $aio_enabled_count > 0 && $has_brightdata ) : ?>
+            <div class="card" style="max-width:700px; margin-bottom:20px;">
+                <h2>🌐 Bright Data SERP 一括取得</h2>
+                <p>AIO 有効キーワード <strong><?php echo esc_html( $aio_enabled_count ); ?></strong> 件の Google 検索結果（AI Overview）を Bright Data で取得します。</p>
+                <p style="color:#92400E; font-size:13px;">
+                    ⚠️ キーワードあたり 1回の SERP API コールが発生します。<br>
+                    取得には 1キーワードあたり約 10〜15 秒かかります。
+                </p>
+                <form method="post">
+                    <?php wp_nonce_field('gcrev_aio_action', '_gcrev_aio_nonce'); ?>
+                    <input type="hidden" name="gcrev_action" value="run_serp_all">
+                    <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $selected_user ); ?>">
+                    <button type="submit" class="button button-primary button-hero" onclick="return confirm('全キーワードの SERP 取得を実行します。よろしいですか？');">🌐 SERP 一括取得</button>
+                </form>
+            </div>
+            <?php endif; ?>
+
+            <!-- Bright Data SERP 取得結果 -->
+            <?php
+            $serp_table = $wpdb->prefix . 'gcrev_aio_serp_results';
+            $serp_results = [];
+            if ( $selected_user > 0 ) {
+                $serp_results = $wpdb->get_results( $wpdb->prepare(
+                    "SELECT s.keyword_id, s.keyword, s.status, s.self_found, s.self_count, s.self_exposure, s.fetched_at,
+                            (SELECT COUNT(*) FROM {$serp_table} s2 WHERE s2.keyword_id = s.keyword_id AND s2.user_id = s.user_id) as result_count
+                     FROM {$serp_table} s
+                     INNER JOIN (
+                         SELECT keyword_id, MAX(fetched_at) AS max_fetched
+                         FROM {$serp_table}
+                         WHERE user_id = %d
+                         GROUP BY keyword_id
+                     ) latest ON s.keyword_id = latest.keyword_id AND s.fetched_at = latest.max_fetched
+                     WHERE s.user_id = %d
+                     ORDER BY s.keyword ASC",
+                    $selected_user, $selected_user
+                ), ARRAY_A );
+            }
+            ?>
+            <?php if ( ! empty( $serp_results ) ) : ?>
+            <div class="card" style="max-width:1000px; margin-bottom:20px;">
+                <h2>🌐 Bright Data SERP 取得結果</h2>
+                <table class="widefat striped" style="margin-top:12px;">
+                    <thead>
+                        <tr>
+                            <th>キーワード</th>
+                            <th>ステータス</th>
+                            <th>自社検出</th>
+                            <th>自社露出点</th>
+                            <th>取得回数</th>
+                            <th>最終取得</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ( $serp_results as $sr ) : ?>
+                        <tr>
+                            <td><strong><?php echo esc_html( $sr['keyword'] ); ?></strong></td>
+                            <td>
+                                <?php
+                                $status_labels = [
+                                    'success' => '<span style="color:#0a7b0a;">✅ AIOあり</span>',
+                                    'no_aio'  => '<span style="color:#2563eb;">ℹ️ AIOなし</span>',
+                                    'failed'  => '<span style="color:#d63638;">❌ 失敗</span>',
+                                ];
+                                echo $status_labels[ $sr['status'] ] ?? esc_html( $sr['status'] );
+                                ?>
+                            </td>
+                            <td><?php echo (int) $sr['self_found'] ? '<span style="color:#0a7b0a; font-weight:600;">✅ あり</span>' : '<span style="color:#999;">なし</span>'; ?></td>
+                            <td><?php echo esc_html( $sr['self_exposure'] ); ?> 点</td>
+                            <td><?php echo esc_html( $sr['result_count'] ); ?> 件</td>
+                            <td><?php echo esc_html( substr( $sr['fetched_at'], 0, 16 ) ); ?></td>
+                            <td>
+                                <?php if ( $has_brightdata ) : ?>
+                                <form method="post" style="display:inline;">
+                                    <?php wp_nonce_field('gcrev_aio_action', '_gcrev_aio_nonce'); ?>
+                                    <input type="hidden" name="gcrev_action" value="run_serp_single">
+                                    <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $selected_user ); ?>">
+                                    <input type="hidden" name="keyword_id" value="<?php echo esc_attr( $sr['keyword_id'] ); ?>">
+                                    <button type="submit" class="button button-small" onclick="return confirm('SERP を再取得します。');">再取得</button>
+                                </form>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
             <?php endif; ?>
 
