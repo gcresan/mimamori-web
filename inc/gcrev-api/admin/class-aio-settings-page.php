@@ -293,11 +293,10 @@ class Gcrev_AIO_Settings_Page {
         $has_dataforseo = class_exists('Gcrev_DataForSEO_Client') && Gcrev_DataForSEO_Client::is_configured();
         $has_brightdata = class_exists('Gcrev_Brightdata_Serp_Client') && Gcrev_Brightdata_Serp_Client::is_configured();
 
-        // ユーザー一覧（管理者以外）
+        // ユーザー一覧（管理者含む全ユーザー）
         $users = get_users([
-            'role__not_in' => ['administrator'],
-            'orderby'      => 'display_name',
-            'order'        => 'ASC',
+            'orderby' => 'display_name',
+            'order'   => 'ASC',
         ]);
 
         // 選択中ユーザー
