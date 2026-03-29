@@ -941,6 +941,14 @@ $gcrev_aio_serp_service = $gcrev_modules_path . 'class-aio-serp-service.php';
 if ( file_exists( $gcrev_aio_serp_service ) ) {
     require_once $gcrev_aio_serp_service;
 }
+$gcrev_aio_page_analyzer = $gcrev_modules_path . 'class-aio-page-analyzer.php';
+if ( file_exists( $gcrev_aio_page_analyzer ) ) {
+    require_once $gcrev_aio_page_analyzer;
+}
+$gcrev_aio_gap_analyzer = $gcrev_modules_path . 'class-aio-gap-analyzer.php';
+if ( file_exists( $gcrev_aio_gap_analyzer ) ) {
+    require_once $gcrev_aio_gap_analyzer;
+}
 
 // ========================================
 // Step8: SEO Checker（SEO対策）
@@ -4985,6 +4993,7 @@ add_action('after_setup_theme', function () {
     gcrev_meo_results_create_table(); // MEO週次順位テーブル（マップ順位ページで使用）
     gcrev_aio_results_create_table();
     gcrev_aio_serp_results_create_table();
+    gcrev_aio_page_analyses_create_table();
     gcrev_survey_create_tables();
     gcrev_review_drafts_create_table();
     gcrev_gbp_posts_create_table();
@@ -5787,6 +5796,47 @@ function gcrev_aio_serp_results_create_table(): void {
         KEY keyword_id (keyword_id),
         KEY fetched_at (fetched_at),
         KEY user_kw_fetched (user_id, keyword_id, fetched_at)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
+ * AIO ページ解析結果テーブル
+ *
+ * AIO引用ページ・自社ページのHTML構造解析結果をキャッシュする。
+ * 同一URLは url_hash (SHA256) で一意管理し、7日以内の結果を再利用する。
+ */
+function gcrev_aio_page_analyses_create_table(): void {
+    global $wpdb;
+
+    $table           = $wpdb->prefix . 'gcrev_aio_page_analyses';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        url VARCHAR(2048) NOT NULL,
+        url_hash VARCHAR(64) NOT NULL,
+        title VARCHAR(500) DEFAULT '',
+        word_count INT UNSIGNED DEFAULT 0,
+        heading_json MEDIUMTEXT DEFAULT NULL,
+        has_faq TINYINT(1) DEFAULT 0,
+        has_list TINYINT(1) DEFAULT 0,
+        list_count SMALLINT UNSIGNED DEFAULT 0,
+        has_definition TINYINT(1) DEFAULT 0,
+        has_howto TINYINT(1) DEFAULT 0,
+        has_eeat TINYINT(1) DEFAULT 0,
+        has_updated_date TINYINT(1) DEFAULT 0,
+        updated_date_text VARCHAR(100) DEFAULT '',
+        internal_link_count SMALLINT UNSIGNED DEFAULT 0,
+        heading_depth TINYINT UNSIGNED DEFAULT 0,
+        fetch_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        fetched_at DATETIME NOT NULL,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY url_hash (url_hash),
+        KEY fetched_at (fetched_at)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

@@ -335,6 +335,131 @@ class Gcrev_AIO_Serp_Service {
     }
 
     // =========================================================
+    // 競合ページ分析 & 改善提案
+    // =========================================================
+
+    /**
+     * 競合ページ分析を実行（バックグラウンドジョブ用）
+     *
+     * SERP結果から引用URLを収集 → クロール → 解析 → 差分分析 → 結果保存
+     */
+    public function analyze_competitor_pages( int $user_id ): array {
+        if ( ! class_exists( 'Gcrev_AIO_Page_Analyzer' ) || ! class_exists( 'Gcrev_AIO_Gap_Analyzer' ) ) {
+            self::log( "Page analyzer classes not available" );
+            update_user_meta( $user_id, 'gcrev_aio_analysis_status', 'failed' );
+            return [ 'success' => false, 'message' => 'Analyzer classes not available' ];
+        }
+
+        update_user_meta( $user_id, 'gcrev_aio_analysis_status', 'analyzing' );
+        self::log( "Starting competitor page analysis for user_id={$user_id}" );
+
+        $page_analyzer = new Gcrev_AIO_Page_Analyzer();
+        $gap_analyzer  = new Gcrev_AIO_Gap_Analyzer();
+
+        $keyword_results = $this->get_latest_results( $user_id );
+        $self_domains    = $this->get_self_domains( $user_id );
+        $site_url        = get_user_meta( $user_id, 'gcrev_client_site_url', true );
+
+        $keyword_gap_results = [];
+
+        foreach ( $keyword_results as $kr ) {
+            if ( ( $kr['status'] ?? '' ) !== 'success' ) {
+                continue;
+            }
+
+            $keyword   = $kr['keyword'] ?? '';
+            $citations = $kr['citations'] ?? [];
+
+            if ( empty( $citations ) ) {
+                continue;
+            }
+
+            // 競合URLの上位5件をクロール・解析
+            $competitor_analyses = [];
+            $urls_done = [];
+            foreach ( array_slice( $citations, 0, 5 ) as $cite ) {
+                $url = $cite['url'] ?? '';
+                if ( empty( $url ) || isset( $urls_done[ $url ] ) ) {
+                    continue;
+                }
+
+                // 自社URLはスキップ
+                $cite_domain = Gcrev_AIO_Serp_Parser::normalize_domain( $cite['domain'] ?? '' );
+                if ( in_array( $cite_domain, $self_domains, true ) ) {
+                    continue;
+                }
+
+                $urls_done[ $url ] = true;
+                $analysis = $page_analyzer->fetch_and_analyze( $url );
+                $competitor_analyses[] = $analysis;
+                $page_analyzer->wait();
+            }
+
+            // 自社ページをクロール・解析
+            $self_analysis = null;
+            if ( ! empty( $site_url ) ) {
+                $self_analysis = $page_analyzer->fetch_and_analyze( $site_url );
+                if ( ( $self_analysis['fetch_status'] ?? '' ) !== 'success' ) {
+                    $self_analysis = null;
+                }
+            }
+
+            // 差分分析
+            $gap_result = $gap_analyzer->analyze_gaps( $competitor_analyses, $self_analysis, $keyword );
+            $keyword_gap_results[] = $gap_result;
+
+            self::log( "Keyword '{$keyword}': " . count( $competitor_analyses ) . " competitors analyzed, " . count( $gap_result['gaps'] ) . " gaps found" );
+        }
+
+        // 全キーワード集約
+        $aggregated = $gap_analyzer->aggregate_all_keywords( $keyword_gap_results );
+
+        // 結果保存
+        $now = current_time( 'mysql' );
+        update_user_meta( $user_id, 'gcrev_aio_analysis_result', wp_json_encode( $aggregated, JSON_UNESCAPED_UNICODE ) );
+        update_user_meta( $user_id, 'gcrev_aio_analysis_updated_at', $now );
+        update_user_meta( $user_id, 'gcrev_aio_analysis_status', 'complete' );
+
+        self::log( "Analysis complete for user_id={$user_id}: " . count( $aggregated['gaps'] ?? [] ) . " total gaps" );
+
+        return [ 'success' => true, 'gaps_count' => count( $aggregated['gaps'] ?? [] ) ];
+    }
+
+    /**
+     * 改善提案データを取得（キャッシュ済み結果を返す）
+     */
+    public function get_improvement_suggestions( int $user_id ): array {
+        $status = get_user_meta( $user_id, 'gcrev_aio_analysis_status', true ) ?: 'not_started';
+
+        if ( $status === 'analyzing' ) {
+            return [ 'status' => 'analyzing' ];
+        }
+
+        if ( $status === 'failed' ) {
+            return [ 'status' => 'failed' ];
+        }
+
+        if ( $status !== 'complete' ) {
+            return [ 'status' => 'not_started' ];
+        }
+
+        $result_json = get_user_meta( $user_id, 'gcrev_aio_analysis_result', true );
+        $result      = json_decode( $result_json, true );
+
+        if ( ! is_array( $result ) ) {
+            return [ 'status' => 'not_started' ];
+        }
+
+        $updated_at = get_user_meta( $user_id, 'gcrev_aio_analysis_updated_at', true );
+
+        return [
+            'status'     => 'complete',
+            'data'       => $result,
+            'updated_at' => $updated_at,
+        ];
+    }
+
+    // =========================================================
     // 内部ヘルパー
     // =========================================================
 

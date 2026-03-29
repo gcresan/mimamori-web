@@ -51,6 +51,9 @@ class Gcrev_Bootstrap {
         add_action('gcrev_aio_serp_weekly_event', [__CLASS__, 'on_aio_serp_weekly_event']);
         add_action('gcrev_aio_serp_chunk_event', [__CLASS__, 'on_aio_serp_chunk_event'], 10, 2);
 
+        // AIO ページ分析（バックグラウンド）
+        add_action('gcrev_aio_page_analysis_event', [__CLASS__, 'on_aio_page_analysis_event']);
+
         // 月次データプリフェッチ（月固定期間: prev-month, prev-prev-month, last180, last365）
         add_action('gcrev_monthly_data_prefetch_event', [__CLASS__, 'on_monthly_data_prefetch_event']);
         add_action('gcrev_monthly_prefetch_chunk_event', [__CLASS__, 'on_monthly_prefetch_chunk_event'], 10, 2);
@@ -939,6 +942,40 @@ class Gcrev_Bootstrap {
         $next_offset = $offset + 1;
         if ( $next_offset < count( $user_ids ) ) {
             wp_schedule_single_event( time() + 60, 'gcrev_aio_serp_chunk_event', [ $user_ids, $next_offset ] );
+        } else {
+            // 全ユーザーの SERP 取得完了 → ページ分析をスケジュール
+            error_log( '[GCREV] AIO SERP: All users done, scheduling page analysis' );
+            foreach ( $user_ids as $uid ) {
+                wp_schedule_single_event( time() + 120 + ( (int) $uid * 30 ), 'gcrev_aio_page_analysis_event', [ (int) $uid ] );
+            }
+        }
+    }
+
+    // =========================================================
+    // AIO ページ分析（バックグラウンド）
+    // =========================================================
+
+    /**
+     * 競合ページ分析バックグラウンドジョブ
+     */
+    public static function on_aio_page_analysis_event( $user_id ): void {
+        $user_id = (int) $user_id;
+        error_log( "[GCREV] AIO page analysis: starting for user_id={$user_id}" );
+
+        @ignore_user_abort( true );
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 0 );
+        }
+
+        try {
+            $config  = new Gcrev_Config();
+            $service = new Gcrev_AIO_Serp_Service( $config );
+            $result  = $service->analyze_competitor_pages( $user_id );
+            error_log( "[GCREV] AIO page analysis: user_id={$user_id} complete, gaps=" . ( $result['gaps_count'] ?? 0 ) );
+        } catch ( \Throwable $e ) {
+            update_user_meta( $user_id, 'gcrev_aio_analysis_status', 'failed' );
+            file_put_contents( '/tmp/gcrev_aio_analysis_debug.log',
+                date('Y-m-d H:i:s') . " Analysis error user_id={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
         }
     }
 }

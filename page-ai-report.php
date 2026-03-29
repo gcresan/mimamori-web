@@ -208,15 +208,80 @@ get_header();
 }
 .aio-bar--self { background: var(--mw-primary-blue); }
 
-/* AIコメント */
-.aio-comment-box {
-    background: var(--mw-bg-secondary);
-    border-radius: 12px;
-    padding: 20px;
+/* 改善提案 */
+.aio-gap-category {
+    margin-bottom: 24px;
+}
+.aio-gap-category__title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mw-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--mw-border-light);
+    margin-bottom: 12px;
+}
+.aio-gap-item {
+    padding: 14px 16px;
+    background: var(--mw-bg-primary);
+    border: 1px solid var(--mw-border-light);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    border-left: 4px solid var(--mw-border-medium);
+}
+.aio-gap-item--high   { border-left-color: #C95A4F; }
+.aio-gap-item--medium { border-left-color: #C9A84C; }
+.aio-gap-item--low    { border-left-color: var(--mw-primary-teal); }
+.aio-gap-item__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.aio-gap-item__title {
     font-size: 14px;
-    line-height: 1.8;
-    color: var(--mw-text-primary);
-    white-space: pre-wrap;
+    font-weight: 600;
+    color: var(--mw-text-heading);
+}
+.aio-priority-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.aio-priority-badge--high   { background: rgba(201,90,79,0.12); color: #C95A4F; }
+.aio-priority-badge--medium { background: rgba(201,168,76,0.15); color: #C9A84C; }
+.aio-priority-badge--low    { background: rgba(122,163,166,0.15); color: var(--mw-primary-teal); }
+.aio-gap-item__detail {
+    font-size: 13px;
+    color: var(--mw-text-secondary);
+    line-height: 1.6;
+}
+.aio-analyzing {
+    text-align: center;
+    padding: 40px 20px;
+}
+.aio-analyzing__spinner {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--mw-border-light);
+    border-top-color: var(--mw-primary-blue);
+    border-radius: 50%;
+    animation: aio-spin 0.8s linear infinite;
+    margin-bottom: 12px;
+}
+.aio-analyzing__text {
+    font-size: 14px;
+    color: var(--mw-text-secondary);
+}
+.aio-analyzing__sub {
+    font-size: 12px;
+    color: var(--mw-text-tertiary);
+    margin-top: 4px;
 }
 
 /* 取得ボタン */
@@ -443,16 +508,16 @@ get_header();
         </div>
     </div>
 
-    <!-- ===== Section 4: AIコメント ===== -->
-    <div class="aio-section" id="aioCommentSection">
+    <!-- ===== Section 4: AIO改善提案 ===== -->
+    <div class="aio-section" id="aioImprovementSection">
         <div class="aio-section__header">
             <div>
-                <h2 class="aio-section__title">AI分析コメント</h2>
-                <div class="aio-section__note">集計データをもとに AI が分析した改善コメントです</div>
+                <h2 class="aio-section__title">AIO改善提案</h2>
+                <div class="aio-section__note">競合サイトとの比較から、AIO掲載に必要な改善ポイントを優先度順に表示します</div>
             </div>
         </div>
-        <div id="aioCommentContent">
-            <div class="aio-loading"><div class="aio-loading__spinner"></div><div>コメント���生成中...</div></div>
+        <div id="aioImprovementContent">
+            <div class="aio-loading"><div class="aio-loading__spinner"></div><div>データを読み込み中...</div></div>
         </div>
     </div>
 
@@ -589,17 +654,94 @@ get_header();
         document.getElementById('aioKeywordContent').innerHTML = '<div class="aio-empty">データの取得に失敗しました。</div>';
     });
 
-    // ===== AIコメント =====
-    fetchAPI('/ai-comment').then(res => {
-        const el = document.getElementById('aioCommentContent');
-        if (!res.success || !res.data || !res.data.comment) {
-            el.innerHTML = '<div class="aio-empty">AIコメントを生成できませんでした。</div>';
-            return;
-        }
-        el.innerHTML = '<div class="aio-comment-box">' + escHtml(res.data.comment) + '</div>';
-    }).catch(() => {
-        document.getElementById('aioCommentContent').innerHTML = '<div class="aio-empty">AIコメントの取得に失敗しました。</div>';
-    });
+    // ===== AIO改善提案 =====
+    const CATEGORY_LABELS = {
+        content_structure: 'コンテンツ構造',
+        information_volume: '情報量',
+        comprehensiveness: '網羅性',
+        trust_signals: '信頼性（E-E-A-T）',
+        structured_content: '構造化コンテンツ',
+        freshness: '最新性',
+    };
+    const PRIORITY_LABELS = { high: '高', medium: '中', low: '低' };
+
+    function loadImprovements() {
+        fetchAPI('/improvements').then(res => {
+            const el = document.getElementById('aioImprovementContent');
+            if (!res.success || !res.data) {
+                el.innerHTML = '<div class="aio-empty">データの取得に失敗しました。</div>';
+                return;
+            }
+
+            const d = res.data;
+
+            // ステータス別表示
+            if (d.status === 'analyzing') {
+                el.innerHTML = '<div class="aio-analyzing">'
+                    + '<div class="aio-analyzing__spinner"></div>'
+                    + '<div class="aio-analyzing__text">競合ページを分析しています...</div>'
+                    + '<div class="aio-analyzing__sub">しばらくお待ちください（自動的に更新されます）</div>'
+                    + '</div>';
+                // 10秒後にポーリング
+                setTimeout(loadImprovements, 10000);
+                return;
+            }
+
+            if (d.status === 'not_started') {
+                el.innerHTML = '<div class="aio-empty">AIOデータを取得すると、自動的に競合ページの分析が開始されます。</div>';
+                return;
+            }
+
+            if (d.status === 'failed') {
+                el.innerHTML = '<div class="aio-empty">分析中にエラーが発生しました。再度データを取得してください。</div>';
+                return;
+            }
+
+            // complete — 改善提案を表示
+            const gaps = d.data?.gaps || [];
+            if (gaps.length === 0) {
+                el.innerHTML = '<div class="aio-empty">現時点で検出された改善項目はありません。</div>';
+                return;
+            }
+
+            // カテゴリ別にグループ化
+            const grouped = {};
+            gaps.forEach(g => {
+                const cat = g.category || 'other';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(g);
+            });
+
+            let html = '';
+            for (const [cat, items] of Object.entries(grouped)) {
+                const catLabel = CATEGORY_LABELS[cat] || cat;
+                html += '<div class="aio-gap-category">';
+                html += '<div class="aio-gap-category__title">' + escHtml(catLabel) + '</div>';
+                items.forEach(g => {
+                    const p = g.priority || 'low';
+                    const pLabel = PRIORITY_LABELS[p] || p;
+                    html += '<div class="aio-gap-item aio-gap-item--' + p + '">'
+                        + '<div class="aio-gap-item__header">'
+                        + '<span class="aio-priority-badge aio-priority-badge--' + p + '">' + pLabel + '</span>'
+                        + '<span class="aio-gap-item__title">' + escHtml(g.title) + '</span>'
+                        + '</div>'
+                        + '<div class="aio-gap-item__detail">' + escHtml(g.detail) + '</div>'
+                        + '</div>';
+                });
+                html += '</div>';
+            }
+
+            // 更新日
+            if (d.updated_at) {
+                html += '<div style="font-size:12px;color:var(--mw-text-tertiary);margin-top:12px;">最終分析: ' + escHtml(d.updated_at) + '</div>';
+            }
+
+            el.innerHTML = html;
+        }).catch(() => {
+            document.getElementById('aioImprovementContent').innerHTML = '<div class="aio-empty">改善提案の取得に失敗しました。</div>';
+        });
+    }
+    loadImprovements();
 
     // ===== ユーティリティ =====
     function escHtml(str) {
