@@ -392,6 +392,16 @@ get_header();
         $serp_region       = get_user_meta( $current_user_id, 'gcrev_aio_serp_region', true ) ?: 'jp';
         $serp_language     = get_user_meta( $current_user_id, 'gcrev_aio_serp_language', true ) ?: 'ja';
         $serp_device       = get_user_meta( $current_user_id, 'gcrev_aio_serp_device', true ) ?: 'desktop';
+
+        // クライアント設定の site_url から自動判定ドメインを取得
+        $auto_domain = '';
+        $site_url = get_user_meta( $current_user_id, 'gcrev_client_site_url', true );
+        if ( ! empty( $site_url ) ) {
+            $parsed_host = wp_parse_url( $site_url, PHP_URL_HOST );
+            if ( $parsed_host ) {
+                $auto_domain = preg_replace( '/^(www\.|m\.)/', '', strtolower( $parsed_host ) );
+            }
+        }
     ?>
     <div class="aio-section" id="aioSettingsSection">
         <div class="aio-section__header">
@@ -403,8 +413,16 @@ get_header();
 
         <div class="aio-settings-panel">
             <div style="margin-bottom:16px;">
-                <label for="aioSelfDomains">自社判定ドメイン（1行1つ）</label>
-                <textarea id="aioSelfDomains" rows="3" style="width:100%;max-width:400px;" placeholder="例:&#10;g-crev.jp&#10;mimamori-web.jp"><?php echo esc_textarea( $self_domains_raw ); ?></textarea>
+                <?php if ( $auto_domain ) : ?>
+                <div style="margin-bottom:8px;font-size:13px;">
+                    <span style="color:var(--mw-text-secondary);font-weight:600;">自動判定ドメイン:</span>
+                    <code style="background:var(--mw-bg-primary);padding:2px 8px;border-radius:4px;font-size:13px;"><?php echo esc_html( $auto_domain ); ?></code>
+                    <span style="color:var(--mw-text-tertiary);font-size:12px;margin-left:4px;">（クライアント設定のサイトURLから自動設定）</span>
+                </div>
+                <?php endif; ?>
+                <label for="aioSelfDomains">追加の自社ドメイン（任意・1行1つ）</label>
+                <textarea id="aioSelfDomains" rows="2" style="width:100%;max-width:400px;" placeholder="別ドメインがあれば追加&#10;例: mimamori-web.jp"><?php echo esc_textarea( $self_domains_raw ); ?></textarea>
+                <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">上記の自動判定ドメインに加え、追加で自社として判定したいドメインがあれば入力してください。</div>
             </div>
 
             <div class="aio-settings-row" style="margin-bottom:16px;">

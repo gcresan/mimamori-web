@@ -338,30 +338,34 @@ class Gcrev_AIO_Serp_Service {
 
     /**
      * ユーザーの自社判定ドメインを取得（正規化済み）
+     *
+     * クライアント設定の site_url を常に自動で含め、
+     * 手動設定（gcrev_aio_self_domains）は追加ドメインとして扱う。
      */
     public function get_self_domains( int $user_id ): array {
-        $raw = get_user_meta( $user_id, 'gcrev_aio_self_domains', true );
-        if ( empty( $raw ) ) {
-            // フォールバック: クライアントの site_url から抽出
-            $site_url = get_user_meta( $user_id, 'gcrev_client_site_url', true );
-            if ( ! empty( $site_url ) ) {
-                $domain = Gcrev_AIO_Serp_Parser::normalize_domain(
-                    Gcrev_AIO_Serp_Parser::extract_domain( $site_url )
-                );
-                return $domain ? [ $domain ] : [];
+        $domains = [];
+
+        // 1. クライアント設定の site_url を自動で含める
+        $site_url = get_user_meta( $user_id, 'gcrev_client_site_url', true );
+        if ( ! empty( $site_url ) ) {
+            $domain = Gcrev_AIO_Serp_Parser::normalize_domain(
+                Gcrev_AIO_Serp_Parser::extract_domain( $site_url )
+            );
+            if ( $domain ) {
+                $domains[] = $domain;
             }
-            return [];
         }
 
-        // 改行区切りで複数ドメイン
-        $lines   = preg_split( '/[\r\n]+/', $raw );
-        $domains = [];
-        foreach ( $lines as $line ) {
-            $line = trim( $line );
-            if ( $line === '' ) {
-                continue;
+        // 2. 手動設定の追加ドメイン（改行区切り）
+        $raw = get_user_meta( $user_id, 'gcrev_aio_self_domains', true );
+        if ( ! empty( $raw ) ) {
+            $lines = preg_split( '/[\r\n]+/', $raw );
+            foreach ( $lines as $line ) {
+                $line = trim( $line );
+                if ( $line !== '' ) {
+                    $domains[] = Gcrev_AIO_Serp_Parser::normalize_domain( $line );
+                }
             }
-            $domains[] = Gcrev_AIO_Serp_Parser::normalize_domain( $line );
         }
 
         return array_unique( array_filter( $domains ) );
