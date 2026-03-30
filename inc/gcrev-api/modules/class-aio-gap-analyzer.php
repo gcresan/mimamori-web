@@ -18,6 +18,7 @@ class Gcrev_AIO_Gap_Analyzer {
 
     /** カテゴリ定義 */
     private const CATEGORIES = [
+        'keyword_relevance'  => 'キーワード対応',
         'content_structure'  => 'コンテンツ構造',
         'information_volume' => '情報量',
         'comprehensiveness'  => '網羅性',
@@ -33,12 +34,20 @@ class Gcrev_AIO_Gap_Analyzer {
     /**
      * 1キーワード分の差分分析
      *
-     * @param array      $competitor_analyses 競合ページの解析結果配列
-     * @param array|null $self_analysis       自社ページの解析結果（null=未特定）
-     * @param string     $keyword             対象キーワード
+     * @param array      $competitor_analyses  競合ページの解析結果配列
+     * @param array|null $self_analysis        自社ページの解析結果（null=未特定）
+     * @param string     $keyword              対象キーワード
+     * @param array      $competitor_relevance 競合ページのキーワード関連性（url => relevance）
+     * @param array|null $self_relevance       自社ページのキーワード関連性
      * @return array { gaps: array, stats: array }
      */
-    public function analyze_gaps( array $competitor_analyses, ?array $self_analysis, string $keyword ): array {
+    public function analyze_gaps(
+        array $competitor_analyses,
+        ?array $self_analysis,
+        string $keyword,
+        array $competitor_relevance = [],
+        ?array $self_relevance = null
+    ): array {
         // 成功した競合のみ
         $competitors = array_filter( $competitor_analyses, function ( $a ) {
             return ( $a['fetch_status'] ?? '' ) === 'success';
@@ -51,6 +60,82 @@ class Gcrev_AIO_Gap_Analyzer {
 
         $gaps  = [];
         $stats = [];
+
+        // --- キーワード関連性（最重要） ---
+
+        // 競合のキーワード専用ページ率
+        $comp_dedicated = 0;
+        $comp_kw_in_title = 0;
+        foreach ( $competitor_relevance as $cr ) {
+            if ( $cr['is_dedicated_page'] ?? false ) { $comp_dedicated++; }
+            if ( $cr['keyword_in_title'] ?? false ) { $comp_kw_in_title++; }
+        }
+        $dedicated_rate = $this->calc_rate( $comp_dedicated, $comp_count );
+        $title_rate     = $this->calc_rate( $comp_kw_in_title, $comp_count );
+
+        $self_page_type   = $self_relevance['page_type'] ?? 'none';
+        $self_dedicated   = $self_relevance['is_dedicated_page'] ?? false;
+        $self_kw_in_title = $self_relevance['keyword_in_title'] ?? false;
+
+        // 自社に専用ページがない場合
+        if ( ! $self_dedicated && $dedicated_rate >= 40 ) {
+            $gaps[] = [
+                'category'        => 'keyword_relevance',
+                'title'           => '「' . $keyword . '」専用ページが存在しない',
+                'detail'          => "AIO に掲載されている競合 {$comp_count} サイト中 {$comp_dedicated} サイトが「{$keyword}」に特化した専用ページを持っています。自社はトップページや汎用ページで対応しており、AIO の引用対象として弱い状態です。専用の解説ページを作成することを強く推奨します。",
+                'priority'        => 'high',
+                'competitor_rate' => $dedicated_rate,
+                'self_has'        => false,
+            ];
+        }
+
+        // タイトルにキーワードが含まれていない
+        if ( ! $self_kw_in_title && $title_rate >= 50 ) {
+            $gaps[] = [
+                'category'        => 'keyword_relevance',
+                'title'           => 'ページタイトルにキーワードが含まれていない',
+                'detail'          => "競合 {$comp_count} サイト中 {$comp_kw_in_title} サイトのタイトルに「{$keyword}」が含まれています。タイトルにキーワードを含めることは、AIO で引用される基本条件です。",
+                'priority'        => 'high',
+                'competitor_rate' => $title_rate,
+                'self_has'        => false,
+            ];
+        }
+
+        // H1 にキーワードが含まれていない
+        $self_kw_in_h1 = $self_relevance['keyword_in_h1'] ?? false;
+        if ( ! $self_kw_in_h1 && $self_analysis !== null ) {
+            $gaps[] = [
+                'category'        => 'keyword_relevance',
+                'title'           => 'H1見出しにキーワードが含まれていない',
+                'detail'          => "対象ページの H1 見出しに「{$keyword}」の主要語が含まれていません。検索意図に合致する見出しを設定してください。",
+                'priority'        => 'medium',
+                'competitor_rate' => 100,
+                'self_has'        => false,
+            ];
+        }
+
+        // 見出し内のキーワード出現が少ない
+        $self_kw_headings = $self_relevance['keyword_in_headings'] ?? 0;
+        $comp_kw_headings = [];
+        foreach ( $competitor_relevance as $cr ) {
+            $comp_kw_headings[] = $cr['keyword_in_headings'] ?? 0;
+        }
+        $avg_comp_kw_headings = count( $comp_kw_headings ) > 0
+            ? round( array_sum( $comp_kw_headings ) / count( $comp_kw_headings ), 1 ) : 0;
+
+        if ( $avg_comp_kw_headings >= 2 && $self_kw_headings < $avg_comp_kw_headings * 0.5 ) {
+            $gaps[] = [
+                'category'        => 'keyword_relevance',
+                'title'           => '見出しでのキーワードカバーが不足',
+                'detail'          => "競合は平均 " . number_format( $avg_comp_kw_headings, 0 ) . " 個の見出しでキーワード関連語を使用していますが、自社は {$self_kw_headings} 個です。キーワードに関連するサブトピックを見出しで網羅してください。",
+                'priority'        => 'medium',
+                'competitor_rate' => 100,
+                'self_has'        => false,
+            ];
+        }
+
+        $stats['self_page_type'] = $self_page_type;
+        $stats['competitor_dedicated_rate'] = $dedicated_rate;
 
         // --- コンテンツ構造 ---
 

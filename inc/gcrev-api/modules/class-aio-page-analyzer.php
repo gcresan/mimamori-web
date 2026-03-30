@@ -471,6 +471,148 @@ class Gcrev_AIO_Page_Analyzer {
         ];
     }
 
+    // =========================================================
+    // キーワード関連性分析
+    // =========================================================
+
+    /**
+     * ページとキーワードの関連性を分析
+     *
+     * @param array  $page_analysis fetch_and_analyze() の結果
+     * @param string $keyword       対象キーワード
+     * @return array {
+     *   keyword_in_title: bool,
+     *   keyword_in_h1: bool,
+     *   keyword_in_headings: int,     // KWを含む見出しの数
+     *   keyword_density: float,       // 本文中のKW出現密度(%)
+     *   keyword_count: int,           // 本文中のKW出現回数
+     *   is_dedicated_page: bool,      // KW専用ページか（タイトルorH1にKW含む）
+     *   page_type: string,            // 'dedicated' | 'related' | 'generic' | 'none'
+     * }
+     */
+    public function analyze_keyword_relevance( array $page_analysis, string $keyword ): array {
+        $result = [
+            'keyword_in_title'    => false,
+            'keyword_in_h1'       => false,
+            'keyword_in_headings' => 0,
+            'keyword_density'     => 0.0,
+            'keyword_count'       => 0,
+            'is_dedicated_page'   => false,
+            'page_type'           => 'none',
+        ];
+
+        if ( ( $page_analysis['fetch_status'] ?? '' ) !== 'success' ) {
+            return $result;
+        }
+
+        // キーワードを分割（スペース区切りの各語）
+        $kw_parts = preg_split( '/[\s　]+/u', trim( $keyword ) );
+        $kw_parts = array_filter( $kw_parts );
+
+        $title = $page_analysis['title'] ?? '';
+        $headings = $page_analysis['headings'] ?? [];
+
+        // タイトルにキーワード含まれるか
+        $result['keyword_in_title'] = $this->text_contains_all_parts( $title, $kw_parts );
+
+        // H1 にキーワード含まれるか
+        foreach ( $headings as $h ) {
+            if ( ( $h['level'] ?? 0 ) === 1 ) {
+                if ( $this->text_contains_all_parts( $h['text'] ?? '', $kw_parts ) ) {
+                    $result['keyword_in_h1'] = true;
+                    break;
+                }
+            }
+        }
+
+        // 見出し全体でキーワードを含むものの数
+        foreach ( $headings as $h ) {
+            if ( $this->text_contains_any_part( $h['text'] ?? '', $kw_parts ) ) {
+                $result['keyword_in_headings']++;
+            }
+        }
+
+        // 本文中のキーワード出現（クロール済みHTMLを再取得してチェック）
+        // word_count と body_text からの推定
+        $word_count = $page_analysis['word_count'] ?? 0;
+        if ( $word_count > 0 ) {
+            // DB からキャッシュされたページを取得して本文テキストで出現チェック
+            $body_text = $this->get_cached_body_text( $page_analysis['url'] ?? '' );
+            if ( $body_text ) {
+                $full_keyword = implode( '', $kw_parts );
+                $result['keyword_count'] = mb_substr_count( $body_text, $full_keyword );
+                // 各パーツの出現もカウント
+                foreach ( $kw_parts as $part ) {
+                    $result['keyword_count'] = max( $result['keyword_count'], mb_substr_count( $body_text, $part ) );
+                }
+                $kw_len = mb_strlen( $full_keyword );
+                if ( $kw_len > 0 && $word_count > 0 ) {
+                    $result['keyword_density'] = round( ( $result['keyword_count'] * $kw_len / $word_count ) * 100, 2 );
+                }
+            }
+        }
+
+        // 専用ページ判定
+        $result['is_dedicated_page'] = $result['keyword_in_title'] || $result['keyword_in_h1'];
+
+        // ページタイプ判定
+        if ( $result['is_dedicated_page'] ) {
+            $result['page_type'] = 'dedicated';
+        } elseif ( $result['keyword_in_headings'] > 0 || $result['keyword_count'] >= 3 ) {
+            $result['page_type'] = 'related';
+        } elseif ( $word_count > 0 ) {
+            $result['page_type'] = 'generic';
+        } else {
+            $result['page_type'] = 'none';
+        }
+
+        return $result;
+    }
+
+    /**
+     * テキストに全パーツが含まれるかチェック
+     */
+    private function text_contains_all_parts( string $text, array $parts ): bool {
+        $text = mb_strtolower( $text );
+        foreach ( $parts as $part ) {
+            if ( mb_strpos( $text, mb_strtolower( $part ) ) === false ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * テキストにいずれかのパーツが含まれるかチェック
+     */
+    private function text_contains_any_part( string $text, array $parts ): bool {
+        $text = mb_strtolower( $text );
+        foreach ( $parts as $part ) {
+            if ( mb_strpos( $text, mb_strtolower( $part ) ) !== false ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * キャッシュされたページの本文テキストを取得
+     */
+    private function get_cached_body_text( string $url ): ?string {
+        if ( empty( $url ) ) { return null; }
+
+        $html = $this->fetch_page( $url );
+        if ( ! $html ) { return null; }
+
+        libxml_use_internal_errors( true );
+        $doc = new \DOMDocument();
+        $doc->loadHTML( '<?xml encoding="utf-8" ?>' . $html, LIBXML_NOERROR | LIBXML_NOWARNING );
+        libxml_clear_errors();
+
+        $xpath = new \DOMXPath( $doc );
+        return $this->extract_body_text( $xpath );
+    }
+
     /**
      * クロール間隔を空ける
      */

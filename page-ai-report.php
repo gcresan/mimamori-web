@@ -656,6 +656,7 @@ get_header();
 
     // ===== AIO改善提案 =====
     const CATEGORY_LABELS = {
+        keyword_relevance: 'キーワード対応',
         content_structure: 'コンテンツ構造',
         information_volume: '情報量',
         comprehensiveness: '網羅性',

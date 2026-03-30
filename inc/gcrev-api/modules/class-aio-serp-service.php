@@ -376,6 +376,7 @@ class Gcrev_AIO_Serp_Service {
 
             // 競合URLの上位5件をクロール・解析
             $competitor_analyses = [];
+            $competitor_relevance = [];
             $urls_done = [];
             foreach ( array_slice( $citations, 0, 5 ) as $cite ) {
                 $url = $cite['url'] ?? '';
@@ -392,20 +393,34 @@ class Gcrev_AIO_Serp_Service {
                 $urls_done[ $url ] = true;
                 $analysis = $page_analyzer->fetch_and_analyze( $url );
                 $competitor_analyses[] = $analysis;
+
+                // 競合のキーワード関連性を分析
+                $relevance = $page_analyzer->analyze_keyword_relevance( $analysis, $keyword );
+                $competitor_relevance[ $url ] = $relevance;
+
                 $page_analyzer->wait();
             }
 
-            // 自社ページをクロール・解析
+            // 自社ページの特定と解析
+            // GSC で該当キーワードのランディングページを探す
+            $self_page_url = $this->find_self_page_for_keyword( $user_id, $keyword, $site_url );
             $self_analysis = null;
-            if ( ! empty( $site_url ) ) {
-                $self_analysis = $page_analyzer->fetch_and_analyze( $site_url );
+            $self_relevance = null;
+
+            if ( ! empty( $self_page_url ) ) {
+                $self_analysis = $page_analyzer->fetch_and_analyze( $self_page_url );
                 if ( ( $self_analysis['fetch_status'] ?? '' ) !== 'success' ) {
                     $self_analysis = null;
+                } else {
+                    $self_relevance = $page_analyzer->analyze_keyword_relevance( $self_analysis, $keyword );
                 }
             }
 
-            // 差分分析
-            $gap_result = $gap_analyzer->analyze_gaps( $competitor_analyses, $self_analysis, $keyword );
+            // 差分分析（キーワード関連性データを含む）
+            $gap_result = $gap_analyzer->analyze_gaps(
+                $competitor_analyses, $self_analysis, $keyword,
+                $competitor_relevance, $self_relevance
+            );
             $keyword_gap_results[] = $gap_result;
 
             self::log( "Keyword '{$keyword}': " . count( $competitor_analyses ) . " competitors analyzed, " . count( $gap_result['gaps'] ) . " gaps found" );
@@ -462,6 +477,51 @@ class Gcrev_AIO_Serp_Service {
     // =========================================================
     // 内部ヘルパー
     // =========================================================
+
+    /**
+     * キーワードに対応する自社ページを特定
+     *
+     * 1. GSC データからこのキーワードで最もインプレッションのあるURLを探す
+     * 2. 見つからなければ site_url（トップページ）を返す
+     */
+    private function find_self_page_for_keyword( int $user_id, string $keyword, string $site_url ): string {
+        // GSC からの特定を試行
+        try {
+            if ( class_exists( 'Gcrev_GSC_Fetcher' ) ) {
+                $gsc = new Gcrev_GSC_Fetcher( $this->config );
+                $tz  = wp_timezone();
+                $end   = new \DateTimeImmutable( 'now', $tz );
+                $start = $end->modify( '-90 days' );
+
+                $gsc_data = $gsc->fetch_gsc_data(
+                    $site_url,
+                    $start->format( 'Y-m-d' ),
+                    $end->format( 'Y-m-d' ),
+                    'page',
+                    $keyword
+                );
+
+                // pages キーから最もインプレッションの多いURLを取得
+                $pages = $gsc_data['pages'] ?? $gsc_data['rows'] ?? [];
+                if ( ! empty( $pages ) ) {
+                    // インプレッション順ソート
+                    usort( $pages, function ( $a, $b ) {
+                        return ( $b['impressions'] ?? $b['_impressions'] ?? 0 ) <=> ( $a['impressions'] ?? $a['_impressions'] ?? 0 );
+                    } );
+                    $best_url = $pages[0]['page'] ?? $pages[0]['keys'][0] ?? '';
+                    if ( ! empty( $best_url ) ) {
+                        self::log( "GSC found self page for '{$keyword}': {$best_url}" );
+                        return $best_url;
+                    }
+                }
+            }
+        } catch ( \Throwable $e ) {
+            self::log( "GSC lookup failed for '{$keyword}': " . $e->getMessage() );
+        }
+
+        // フォールバック: サイトのトップページ
+        return $site_url ?: '';
+    }
 
     /**
      * ユーザーの自社判定ドメインを取得（正規化済み）
