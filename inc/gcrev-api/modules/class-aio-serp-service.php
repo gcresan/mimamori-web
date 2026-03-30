@@ -511,25 +511,37 @@ class Gcrev_AIO_Serp_Service {
 
     /**
      * ユーザーの全 AIO キーワードの最新結果を取得
+     *
+     * AIO は Google が出したり出さなかったりするため、
+     * 直近7日間で success 結果があればそちらを優先する。
+     * success がなければ最新の結果（no_aio / failed）を使用する。
      */
     private function get_latest_results( int $user_id ): array {
         global $wpdb;
         $table_serp = $wpdb->prefix . 'gcrev_aio_serp_results';
-        $table_kw   = $wpdb->prefix . 'gcrev_rank_keywords';
 
-        // 各キーワードの最新結果を取得
+        $cutoff = gmdate( 'Y-m-d H:i:s', time() - 7 * DAY_IN_SECONDS );
+
+        // 各キーワードについて:
+        // 1. 直近7日間の success 結果の最新を優先
+        // 2. なければ最新の結果を使用
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT s.*
              FROM {$table_serp} s
              INNER JOIN (
-                 SELECT keyword_id, MAX(fetched_at) AS max_fetched
-                 FROM {$table_serp}
-                 WHERE user_id = %d
-                 GROUP BY keyword_id
-             ) latest ON s.keyword_id = latest.keyword_id AND s.fetched_at = latest.max_fetched
+                 SELECT keyword_id,
+                        COALESCE(
+                            (SELECT MAX(fetched_at) FROM {$table_serp}
+                             WHERE user_id = %d AND keyword_id = t.keyword_id
+                               AND status = 'success' AND fetched_at > %s),
+                            (SELECT MAX(fetched_at) FROM {$table_serp}
+                             WHERE user_id = %d AND keyword_id = t.keyword_id)
+                        ) AS best_fetched
+                 FROM (SELECT DISTINCT keyword_id FROM {$table_serp} WHERE user_id = %d) t
+             ) best ON s.keyword_id = best.keyword_id AND s.fetched_at = best.best_fetched
              WHERE s.user_id = %d
              ORDER BY s.keyword ASC",
-            $user_id, $user_id
+            $user_id, $cutoff, $user_id, $user_id, $user_id
         ), ARRAY_A );
 
         $results = [];
