@@ -552,12 +552,21 @@ class Gcrev_AIO_Page_Analyzer {
             }
         }
 
+        // トップページ判定（パスが / のみ or 空）
+        $url_path = wp_parse_url( $page_analysis['url'] ?? '', PHP_URL_PATH ) ?? '/';
+        $is_top_page = ( $url_path === '/' || $url_path === '' );
+        $result['is_top_page'] = $is_top_page;
+
         // 専用ページ判定
-        $result['is_dedicated_page'] = $result['keyword_in_title'] || $result['keyword_in_h1'];
+        // トップページは KW がタイトルに含まれていても「専用ページ」とは判定しない
+        // トップページは複数のサービスを網羅する汎用ページであることが多い
+        $result['is_dedicated_page'] = ! $is_top_page && ( $result['keyword_in_title'] || $result['keyword_in_h1'] );
 
         // ページタイプ判定
         if ( $result['is_dedicated_page'] ) {
             $result['page_type'] = 'dedicated';
+        } elseif ( $is_top_page ) {
+            $result['page_type'] = 'top_page';  // KW含んでいてもトップページ
         } elseif ( $result['keyword_in_headings'] > 0 || $result['keyword_count'] >= 3 ) {
             $result['page_type'] = 'related';
         } elseif ( $word_count > 0 ) {

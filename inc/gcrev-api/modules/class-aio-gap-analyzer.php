@@ -78,15 +78,28 @@ class Gcrev_AIO_Gap_Analyzer {
         $self_kw_in_title = $self_relevance['keyword_in_title'] ?? false;
 
         // 自社に専用ページがない場合
-        if ( ! $self_dedicated && $dedicated_rate >= 40 ) {
-            $gaps[] = [
-                'category'        => 'keyword_relevance',
-                'title'           => '「' . $keyword . '」専用ページが存在しない',
-                'detail'          => "AIO に掲載されている競合 {$comp_count} サイト中 {$comp_dedicated} サイトが「{$keyword}」に特化した専用ページを持っています。自社はトップページや汎用ページで対応しており、AIO の引用対象として弱い状態です。専用の解説ページを作成することを強く推奨します。",
-                'priority'        => 'high',
-                'competitor_rate' => $dedicated_rate,
-                'self_has'        => false,
-            ];
+        $self_is_top = $self_relevance['is_top_page'] ?? false;
+        if ( ! $self_dedicated ) {
+            if ( $self_is_top ) {
+                // トップページで対応している場合 — 専用ページ作成を推奨
+                $gaps[] = [
+                    'category'        => 'keyword_relevance',
+                    'title'           => '「' . $keyword . '」の専用ページがなく、トップページで対応している',
+                    'detail'          => "競合 {$comp_count} サイト中 {$comp_dedicated} サイトが「{$keyword}」に特化した専用ページ（解説・料金・事例等を網羅）を持っています。自社はトップページで対応していますが、トップページは複数のサービスを紹介する汎用ページのため、AIO が特定のトピックについて引用する対象としては弱い状態です。「{$keyword}」に特化した解説ページの新規作成を強く推奨します。",
+                    'priority'        => 'high',
+                    'competitor_rate' => $dedicated_rate,
+                    'self_has'        => false,
+                ];
+            } elseif ( $dedicated_rate >= 40 ) {
+                $gaps[] = [
+                    'category'        => 'keyword_relevance',
+                    'title'           => '「' . $keyword . '」専用ページが存在しない',
+                    'detail'          => "AIO に掲載されている競合 {$comp_count} サイト中 {$comp_dedicated} サイトが「{$keyword}」に特化した専用ページを持っています。専用の解説ページを作成することを強く推奨します。",
+                    'priority'        => 'high',
+                    'competitor_rate' => $dedicated_rate,
+                    'self_has'        => false,
+                ];
+            }
         }
 
         // タイトルにキーワードが含まれていない
@@ -413,8 +426,15 @@ class Gcrev_AIO_Gap_Analyzer {
         $result = [];
         foreach ( $keys as $key ) {
             $values = array_column( $all_stats, $key );
-            $values = array_filter( $values, function ( $v ) { return is_numeric( $v ); } );
-            $result[ $key ] = count( $values ) > 0 ? round( array_sum( $values ) / count( $values ), 1 ) : 0;
+            $numeric = array_filter( $values, function ( $v ) { return is_numeric( $v ); } );
+            if ( count( $numeric ) > 0 ) {
+                $result[ $key ] = round( array_sum( $numeric ) / count( $numeric ), 1 );
+            } else {
+                // 文字列値は最頻値を採用（self_page_type 等）
+                $counts = array_count_values( array_filter( $values, 'is_string' ) );
+                arsort( $counts );
+                $result[ $key ] = ! empty( $counts ) ? array_key_first( $counts ) : '';
+            }
         }
         return $result;
     }
