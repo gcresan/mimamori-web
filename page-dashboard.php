@@ -44,6 +44,13 @@ $month = (int)$prev_month_start->format('n');
 
 /**
  * レポートテキスト装飾（結論サマリー表示用）
+ *
+ * AI 生成テキストを初心者向けに読みやすく整形する。
+ * - 句読点の重複・欠落を補正
+ * - スコア表現（0/25 等）を自然な日本語に置換
+ * - 数字＋単位を太字で強調
+ * - 増減・注意キーワードを色付き強調
+ * - 文を段落に分割して読みやすくする
  */
 if ( ! function_exists('enhance_report_text') ) {
 
@@ -62,12 +69,58 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
     }
     if (!is_string($text)) $text = (string)$text;
 
-    // HTML除去
+    // HTML 除去・正規化
     $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $text = strip_tags($text);
     $text = str_replace('**', '', $text);
     $text = preg_replace('/\s+/u', ' ', $text);
     $text = trim($text);
+
+    // ==================================================
+    // 1. 句読点の補正
+    // ==================================================
+    // 句点の重複（。。→ 。）
+    $text = preg_replace('/。{2,}/u', '。', $text);
+    // 「。、」「、。」のような不自然な組み合わせ
+    $text = preg_replace('/。、/u', '。', $text);
+    $text = preg_replace('/、。/u', '。', $text);
+    // 文末に句点がない場合に追加（最後の文字が句点・疑問符・感嘆符でなければ）
+    if ($text !== '' && !preg_match('/[。！？!?]$/u', $text)) {
+        // 文末が中途半端でなければ句点追加
+        if (mb_strlen($text) > 10) {
+            $text .= '。';
+        }
+    }
+
+    // ==================================================
+    // 2. スコア表現の置換（初心者に伝わらない表現を除去）
+    // ==================================================
+    // 「0/25」「12/25」のようなスコア表現を自然な文に置換
+    $text = preg_replace_callback(
+        '/(\S+?)のスコアは\s*(\d+)\s*\/\s*(\d+)\s*で[、,]?\s*(.*?)(?=[。！]|$)/u',
+        function($m) {
+            $label = $m[1];
+            $score = (int) $m[2];
+            $max   = (int) $m[3];
+            $rest  = trim($m[4]);
+            $ratio = $max > 0 ? $score / $max : 0;
+            if ($ratio < 0.3) {
+                $eval = 'は改善が必要な状態です';
+            } elseif ($ratio < 0.6) {
+                $eval = 'はもう少し伸ばせる余地があります';
+            } else {
+                $eval = 'は順調な状態です';
+            }
+            $result = $label . $eval;
+            if (!empty($rest)) {
+                $result .= '。' . $rest;
+            }
+            return $result;
+        },
+        $text
+    );
+    // 「他の指標に比べて改善余地があります」→ より自然に
+    $text = str_replace('他の指標に比べて改善余地があります', '改善の余地があります', $text);
 
     // 色モード
     $color = match($color_mode) {
@@ -76,11 +129,11 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
         'red'    => '#C95A4F',
         'blue'   => '#568184',
         'orange' => '#ea580c',
-        default  => '#111827'
+        default  => 'var(--mw-text-heading, #263335)'
     };
 
     // ==================================================
-    // ✅ 先頭ラベル太字（必要なときだけ）
+    // 3. 先頭ラベル太字（必要なときだけ）
     // ==================================================
     if ($auto_head_bold) {
         $text = preg_replace(
@@ -92,41 +145,66 @@ function enhance_report_text($text, $color_mode = 'default', $auto_head_bold = t
     }
 
     // ==================================================
-    // ✅ 数字＋単位を太字
+    // 4. 数字＋単位を太字強調
     // ==================================================
     $unit_pattern = '(?:PV|ページビュー|セッション|ユーザー|新規ユーザー|クリック|表示|回|件|秒|分|時間|円|%|％|位|ページ|日|月|年|歳|人|社|ヶ所|か所|km|m|cm|mm|GB|MB|KB)';
     $text = preg_replace_callback(
-    '/(?<![A-Za-z])([\+\-]?\d{1,3}(?:,\d{3})*(?:\.\d+)?)(\s*)(' . $unit_pattern . ')?/u',
+        '/(?<![A-Za-z\/])([\+\-]?\d{1,3}(?:,\d{3})*(?:\.\d+)?)(\s*)(' . $unit_pattern . ')/u',
         function($m) use ($color) {
             $num  = $m[1];
-            $sp   = $m[2] ?? '';
             $unit = $m[3] ?? '';
-            $val = $unit !== '' ? ($num . $unit) : $num;
-
-            return '<strong style="color:' . $color . ';font-weight:800;">' . $val . '</strong>' . ($unit !== '' ? '' : $sp);
+            $val  = $num . $unit;
+            return '<strong style="color:' . $color . ';font-weight:700;">' . $val . '</strong>';
         },
         $text
     );
 
     // ==================================================
-    // ✅ キーワード強調
+    // 5. キーワード強調（増減・注意）
     // ==================================================
     if ($color_mode !== 'white') {
-        $keywords = [
-            '増加' => '#16a34a',
-            '改善' => '#16a34a',
-            '減少' => '#C95A4F',
-            '悪化' => '#C95A4F',
-            '前月比' => '#568184',
-            '前年比' => '#568184',
-        ];
-        foreach ($keywords as $kw => $kw_color) {
+        $positive_kw = ['増加', '改善', '上昇', '好調', '順調'];
+        $negative_kw = ['減少', '悪化', '低下', '減って', '離脱', '要注意', '注意'];
+        $neutral_kw  = ['前月比', '前年比', '前月から', '先月から'];
+
+        foreach ($positive_kw as $kw) {
             $text = preg_replace(
                 '/' . preg_quote($kw, '/') . '/u',
-                '<strong style="color:' . $kw_color . ';font-weight:800;">' . $kw . '</strong>',
+                '<strong style="color:#4E8A6B;font-weight:700;">' . $kw . '</strong>',
                 $text
             );
         }
+        foreach ($negative_kw as $kw) {
+            $text = preg_replace(
+                '/' . preg_quote($kw, '/') . '/u',
+                '<strong style="color:#C95A4F;font-weight:700;">' . $kw . '</strong>',
+                $text
+            );
+        }
+        foreach ($neutral_kw as $kw) {
+            $text = preg_replace(
+                '/' . preg_quote($kw, '/') . '/u',
+                '<strong style="color:var(--mw-primary-blue, #568184);font-weight:600;">' . $kw . '</strong>',
+                $text
+            );
+        }
+    }
+
+    // ==================================================
+    // 6. 文を段落に分割（3文ごとに <p> で区切る）
+    // ==================================================
+    // 句点で分割
+    $sentences = preg_split('/(?<=[。！？])\s*/u', $text);
+    $sentences = array_filter($sentences, function($s) { return trim($s) !== ''; });
+
+    if (count($sentences) > 3) {
+        $paragraphs = array_chunk($sentences, 3);
+        $text = '';
+        foreach ($paragraphs as $para) {
+            $text .= '<p style="margin:0 0 10px 0;">' . implode('', $para) . '</p>';
+        }
+    } else {
+        $text = '<p style="margin:0;">' . $text . '</p>';
     }
 
     return $text;
@@ -1073,16 +1151,24 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
       $highlight_detail_fact    = $highlight_details['top_issue']['fact'] ?? '';
       $highlight_detail_causes  = $highlight_details['top_issue']['causes'] ?? [];
 
-      $supplement = '';
+      // 補足テキストを句読点を整えて構築
+      $supplement_parts = [];
       if (!empty($highlight_detail_fact)) {
-          $supplement .= $highlight_detail_fact;
+          $fact = rtrim( $highlight_detail_fact, '。 ' );
+          if ( $fact !== '' ) { $supplement_parts[] = $fact; }
       }
-      if (!empty($highlight_detail_causes)) {
-          $causes_text = implode('。', array_slice($highlight_detail_causes, 0, 3));
-          if (!empty($supplement)) {
-              $supplement .= '。';
-          }
-          $supplement .= $causes_text;
+      foreach ( array_slice($highlight_detail_causes, 0, 3) as $cause ) {
+          $cause = rtrim( $cause, '。 ' );
+          if ( $cause !== '' ) { $supplement_parts[] = $cause; }
+      }
+      $supplement = implode( '。', $supplement_parts );
+      if ( $supplement !== '' ) { $supplement .= '。'; }
+
+      // サマリー全体を結合して enhance_report_text で整形
+      $full_text = $summary_text;
+      if ( !empty($supplement) ) {
+          // サマリーの末尾に句点がなければ追加してから結合
+          $full_text = rtrim( $full_text, '。 ' ) . '。' . $supplement;
       }
       ?>
 
@@ -1092,10 +1178,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             <span class="info-summary-block-icon">📊</span> 現状
           </div>
           <div class="info-summary-block-text">
-            <?php echo enhance_report_text($summary_text, 'default'); ?>
-            <?php if (!empty($supplement)): ?>
-            <p style="margin-top:8px;"><?php echo esc_html($supplement); ?></p>
-            <?php endif; ?>
+            <?php echo enhance_report_text($full_text, 'default'); ?>
           </div>
         </div>
       </div>
