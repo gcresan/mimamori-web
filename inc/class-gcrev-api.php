@@ -1062,6 +1062,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_save_aio_serp_settings' ],
             'permission_callback' => function() { return current_user_can('manage_options'); },
         ]);
+        register_rest_route('gcrev/v1', '/aio-serp/fetch-status', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_serp_fetch_status' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/aio-serp/improvements', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_get_aio_serp_improvements' ],
@@ -20021,31 +20026,19 @@ PROMPT;
                 }
             }
 
-            $service = $this->get_aio_serp_service();
-            if ( ! $service ) {
-                return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
-            }
+            // バックグラウンドで SERP 取得 + ページ分析を実行
+            // 即座にレスポンスを返し、ステータスポーリングで完了を待つ
+            update_user_meta( $target_user_id, 'gcrev_aio_fetch_status', 'fetching' );
 
-            // desktop + mobile 両方取得
-            $result_desktop = $service->fetch_all_keywords( $target_user_id, 'desktop' );
-            $result_mobile  = $service->fetch_all_keywords( $target_user_id, 'mobile' );
-
-            $total_processed = ( $result_desktop['processed'] ?? 0 ) + ( $result_mobile['processed'] ?? 0 );
-
-            // クールダウン設定（7日間）
+            // クールダウン設定（7日間）— 先にセットして二重実行を防止
             set_transient( $cooldown_key, time(), 7 * DAY_IN_SECONDS );
 
-            // ページ分析をバックグラウンドでスケジュール（30秒後）
-            update_user_meta( $target_user_id, 'gcrev_aio_analysis_status', 'analyzing' );
-            wp_schedule_single_event( time() + 30, 'gcrev_aio_page_analysis_event', [ $target_user_id ] );
+            // 5秒後にバックグラウンドジョブを開始
+            wp_schedule_single_event( time() + 5, 'gcrev_aio_serp_bg_fetch_event', [ $target_user_id ] );
 
             return new \WP_REST_Response( [
                 'success' => true,
-                'data'    => [
-                    'processed' => $total_processed,
-                    'desktop'   => $result_desktop,
-                    'mobile'    => $result_mobile,
-                ],
+                'data'    => [ 'status' => 'fetching', 'message' => 'バックグラウンドでデータ取得を開始しました' ],
             ], 200 );
         } catch ( \Exception $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
@@ -20079,6 +20072,18 @@ PROMPT;
         } catch ( \Exception $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
         }
+    }
+
+    /**
+     * GET /aio-serp/fetch-status — 取得ステータス確認
+     */
+    public function rest_get_aio_serp_fetch_status( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response( [ 'success' => false ], 401 );
+        }
+        $status = get_user_meta( $user_id, 'gcrev_aio_fetch_status', true ) ?: 'idle';
+        return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'status' => $status ] ], 200 );
     }
 
     /**

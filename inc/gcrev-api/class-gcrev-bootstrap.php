@@ -51,6 +51,9 @@ class Gcrev_Bootstrap {
         add_action('gcrev_aio_serp_weekly_event', [__CLASS__, 'on_aio_serp_weekly_event']);
         add_action('gcrev_aio_serp_chunk_event', [__CLASS__, 'on_aio_serp_chunk_event'], 10, 2);
 
+        // AIO SERP バックグラウンド取得（手動ボタン用）
+        add_action('gcrev_aio_serp_bg_fetch_event', [__CLASS__, 'on_aio_serp_bg_fetch_event']);
+
         // AIO ページ分析（バックグラウンド）
         add_action('gcrev_aio_page_analysis_event', [__CLASS__, 'on_aio_page_analysis_event']);
 
@@ -875,6 +878,47 @@ class Gcrev_Bootstrap {
         }
 
         error_log('[GCREV] Unschedule events done (switch_theme)');
+    }
+
+    // =========================================================
+    // AIO SERP バックグラウンド取得（手動ボタン用）
+    // =========================================================
+
+    /**
+     * 手動ボタンからの SERP 取得をバックグラウンドで実行
+     * desktop + mobile 両方取得 → 完了後にページ分析をスケジュール
+     */
+    public static function on_aio_serp_bg_fetch_event( $user_id ): void {
+        $user_id = (int) $user_id;
+        error_log( "[GCREV] AIO SERP bg fetch: starting for user_id={$user_id}" );
+
+        @ignore_user_abort( true );
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 0 );
+        }
+
+        try {
+            $config  = new Gcrev_Config();
+            $service = new Gcrev_AIO_Serp_Service( $config );
+
+            $result_desktop = $service->fetch_all_keywords( $user_id, 'desktop' );
+            $result_mobile  = $service->fetch_all_keywords( $user_id, 'mobile' );
+
+            $total = ( $result_desktop['processed'] ?? 0 ) + ( $result_mobile['processed'] ?? 0 );
+            error_log( "[GCREV] AIO SERP bg fetch: user_id={$user_id} complete, {$total} keywords processed" );
+
+            // 完了ステータス
+            update_user_meta( $user_id, 'gcrev_aio_fetch_status', 'complete' );
+
+            // ページ分析をスケジュール
+            update_user_meta( $user_id, 'gcrev_aio_analysis_status', 'analyzing' );
+            wp_schedule_single_event( time() + 30, 'gcrev_aio_page_analysis_event', [ $user_id ] );
+
+        } catch ( \Throwable $e ) {
+            update_user_meta( $user_id, 'gcrev_aio_fetch_status', 'failed' );
+            file_put_contents( '/tmp/gcrev_aio_serp_debug.log',
+                date('Y-m-d H:i:s') . " BG fetch error user_id={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
+        }
     }
 
     // =========================================================

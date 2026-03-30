@@ -796,25 +796,56 @@ get_header();
         fill.style.width = '10%';
 
         postAPI('/fetch', { user_id: <?php echo (int) get_current_user_id(); ?> }).then(res => {
-            fill.style.width = '100%';
             if (res.success) {
-                const d = res.data;
-                const count = d.processed ?? (Array.isArray(d.results) ? d.results.length : 0);
-                status.textContent = count + ' キーワード分のデータを更新しました。';
-                showToast('データ更新完了', 'success');
-                setTimeout(() => { location.reload(); }, 2000);
+                status.textContent = 'バックグラウンドでデータを取得中です...';
+                fill.style.width = '30%';
+                // ポーリングで完了を待つ
+                pollFetchStatus(btn, status, bar, fill);
             } else {
-                status.textContent = '取得に失敗しました: ' + (res.message || '');
+                status.textContent = res.message || '取得に失敗しました';
                 showToast(res.message || '取得に失敗しました', 'error');
+                btn.disabled = false;
+                btn.textContent = '最新のAIデータを取得する';
+                bar.style.display = 'none';
             }
         }).catch(err => {
             status.textContent = '通信エラーが発生しました。';
             showToast('通信エラーが発生しました', 'error');
-        }).finally(() => {
             btn.disabled = false;
             btn.textContent = '最新のAIデータを取得する';
+            bar.style.display = 'none';
         });
     };
+
+    // ===== 取得ステータスポーリング =====
+    function pollFetchStatus(btn, status, bar, fill) {
+        let progress = 30;
+        const timer = setInterval(() => {
+            progress = Math.min(progress + 5, 90);
+            fill.style.width = progress + '%';
+
+            fetchAPI('/fetch-status').then(res => {
+                const st = res.data?.status;
+                if (st === 'complete') {
+                    clearInterval(timer);
+                    fill.style.width = '100%';
+                    status.textContent = 'データ取得が完了しました。ページを更新します...';
+                    showToast('データ取得完了', 'success');
+                    setTimeout(() => { location.reload(); }, 2000);
+                } else if (st === 'failed') {
+                    clearInterval(timer);
+                    status.textContent = 'データ取得に失敗しました。';
+                    showToast('取得に失敗しました', 'error');
+                    btn.disabled = false;
+                    btn.textContent = '最新のAIデータを取得する';
+                    bar.style.display = 'none';
+                }
+                // 'fetching' → 引き続きポーリング
+            }).catch(() => {
+                // ネットワークエラーでも継続（一時的な問題の可能性）
+            });
+        }, 10000); // 10秒ごと
+    }
 })();
 </script>
 
