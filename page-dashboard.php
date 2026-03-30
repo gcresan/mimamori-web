@@ -1067,26 +1067,22 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
       <?php if (!empty($monthly_report['summary'])): ?>
       <?php
-      // サマリーテキストを3ブロック（状況・要因・次の行動）に構造化して表示
       $summary_text = $monthly_report['summary'];
+
+      // ハイライト情報を補足テキストとして統合
       $highlight_detail_fact    = $highlight_details['top_issue']['fact'] ?? '';
       $highlight_detail_causes  = $highlight_details['top_issue']['causes'] ?? [];
-      $highlight_detail_actions = $highlight_details['top_issue']['actions'] ?? [];
-      $next_action = !empty($infographic['action'])
-          ? $infographic['action']
-          : ($highlights['opportunity'] ?? '');
 
-      // ハイライトから3ブロックの素材を組み立て
-      $block_situation = $summary_text;
-      $block_cause     = $highlight_detail_fact;
-      if (empty($block_cause) && !empty($highlight_detail_causes)) {
-          $block_cause = implode('。', array_slice($highlight_detail_causes, 0, 2));
+      $supplement = '';
+      if (!empty($highlight_detail_fact)) {
+          $supplement .= $highlight_detail_fact;
       }
-      $block_action = '';
-      if (!empty($highlight_detail_actions)) {
-          $block_action = implode('。', array_slice($highlight_detail_actions, 0, 2));
-      } elseif (!empty($next_action)) {
-          $block_action = $next_action;
+      if (!empty($highlight_detail_causes)) {
+          $causes_text = implode('。', array_slice($highlight_detail_causes, 0, 3));
+          if (!empty($supplement)) {
+              $supplement .= '。';
+          }
+          $supplement .= $causes_text;
       }
       ?>
 
@@ -1096,31 +1092,12 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             <span class="info-summary-block-icon">📊</span> 現状
           </div>
           <div class="info-summary-block-text">
-            <?php echo enhance_report_text($block_situation, 'default'); ?>
+            <?php echo enhance_report_text($summary_text, 'default'); ?>
+            <?php if (!empty($supplement)): ?>
+            <p style="margin-top:8px;"><?php echo esc_html($supplement); ?></p>
+            <?php endif; ?>
           </div>
         </div>
-
-        <?php if (!empty($block_cause)): ?>
-        <div class="info-summary-block">
-          <div class="info-summary-block-label">
-            <span class="info-summary-block-icon">🔍</span> 主な要因
-          </div>
-          <div class="info-summary-block-text">
-            <p><?php echo esc_html($block_cause); ?></p>
-          </div>
-        </div>
-        <?php endif; ?>
-
-        <?php if (!empty($block_action)): ?>
-        <div class="info-summary-block">
-          <div class="info-summary-block-label">
-            <span class="info-summary-block-icon">✅</span> 次にやること
-          </div>
-          <div class="info-summary-block-text">
-            <p><?php echo esc_html($block_action); ?></p>
-          </div>
-        </div>
-        <?php endif; ?>
       </div>
 
       <?php else: ?>
