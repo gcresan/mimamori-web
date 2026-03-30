@@ -8573,64 +8573,36 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
         }
     } catch ( \Throwable $e ) { /* 握りつぶす */ }
 
-    // --- 4. AI検索スコア（サイト診断スコア優先 → AI掲載率フォールバック） ---
+    // --- 4. AIO診断（Bright Data SERP ベースの AIO 露出スコア） ---
     try {
-        if ( class_exists( 'Gcrev_AIO_Service' ) && class_exists( 'Gcrev_Config' ) ) {
-            $aio = new Gcrev_AIO_Service( new Gcrev_Config() );
+        if ( class_exists( 'Gcrev_AIO_Serp_Service' ) && class_exists( 'Gcrev_Config' ) ) {
+            $aio_serp = new Gcrev_AIO_Serp_Service( new Gcrev_Config() );
+            $summary  = $aio_serp->get_summary( $user_id );
 
-            // サイト診断スコアを軽量に計算（user meta のみ参照）
-            $diagnosis   = $aio->get_site_diagnosis( $user_id );
-            $diag_items  = $diagnosis['items'] ?? [];
-            $diag_score  = null;
+            $aio_kw_count = (int) ( $summary['aio_keyword_count'] ?? 0 );
+            $total_kw     = (int) ( $summary['total_keyword_count'] ?? 0 );
+            $self_score   = (float) ( $summary['self_score'] ?? 0 );
+            $coverage     = (float) ( $summary['self_coverage'] ?? 0 );
 
-            if ( ! empty( $diag_items ) ) {
-                $all_default = true;
-                foreach ( $diag_items as $item ) {
-                    if ( ( $item['source'] ?? 'default' ) !== 'default' ) {
-                        $all_default = false;
-                        break;
-                    }
+            if ( $total_kw > 0 ) {
+                // AIO診断スコア: 露出スコア(60%) + カバレッジ(40%) で100点満点に
+                $combined = round( $self_score * 0.6 + $coverage * 0.4 );
+                $combined = min( 100, max( 0, $combined ) );
+
+                $eval = mimamori_eval_label( $combined );
+
+                $summary_text = "露出スコア {$self_score}点";
+                if ( $aio_kw_count > 0 ) {
+                    $summary_text .= " / カバレッジ {$coverage}%";
                 }
-                if ( ! $all_default ) {
-                    $total = 0;
-                    $count = 0;
-                    foreach ( $diag_items as $item ) {
-                        $total += (int) ( $item['score'] ?? 0 );
-                        $count++;
-                    }
-                    $diag_score = $count > 0 ? (int) round( ( $total / $count ) * 10 ) : 0;
-                }
-            }
 
-            if ( $diag_score !== null ) {
-                $eval = mimamori_eval_label( $diag_score );
                 $result['aio_score'] = [
                     'status'  => $eval['status'],
                     'label'   => $eval['label'],
-                    'score'   => $diag_score,
-                    'summary' => 'サイト診断スコア ' . $diag_score . '点',
+                    'score'   => $combined,
+                    'summary' => $summary_text,
                     'link'    => '/ai-report/',
                 ];
-            } else {
-                // 診断未実施時: AI掲載率があれば表示
-                $sum = $aio->get_results_summary( $user_id );
-                $vis_values = [];
-                foreach ( [ 'chatgpt', 'gemini', 'google_ai' ] as $p ) {
-                    if ( isset( $sum[ $p ]['visibility'] ) && ( $sum[ $p ]['total_queries'] ?? 0 ) > 0 ) {
-                        $vis_values[] = (float) $sum[ $p ]['visibility'];
-                    }
-                }
-                if ( ! empty( $vis_values ) ) {
-                    $avg = array_sum( $vis_values ) / count( $vis_values );
-                    $eval = mimamori_eval_label( $avg );
-                    $result['aio_score'] = [
-                        'status'  => $eval['status'],
-                        'label'   => $eval['label'],
-                        'score'   => round( $avg ),
-                        'summary' => 'AI検索での平均可視性 ' . round( $avg ) . '%',
-                        'link'    => '/ai-report/',
-                    ];
-                }
             }
         }
     } catch ( \Throwable $e ) { /* 握りつぶす */ }
@@ -8671,7 +8643,7 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
         'organic_rank'  => '自然検索順位',
         'map_rank'      => 'マップ順位',
         'seo_diagnosis' => 'SEO診断',
-        'aio_score'     => 'AI検索スコア',
+        'aio_score'     => 'AIO診断',
         'meo_diagnosis' => 'MEO診断',
     ];
     $goods = $warnings = $attentions = $nones = [];

@@ -730,7 +730,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         'organic_rank'  => [ 'icon' => '🔍', 'title' => '自然検索順位' ],
         'map_rank'      => [ 'icon' => '📍', 'title' => 'マップ順位' ],
         'seo_diagnosis' => [ 'icon' => '🛡️', 'title' => 'SEO診断' ],
-        'aio_score'     => [ 'icon' => '🤖', 'title' => 'AI検索スコア' ],
+        'aio_score'     => [ 'icon' => '🤖', 'title' => 'AIO診断' ],
         'meo_diagnosis' => [ 'icon' => '📋', 'title' => 'MEO診断' ],
       ];
       foreach ( $sd_cards as $sd_key => $sd_meta ):
