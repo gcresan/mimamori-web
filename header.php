@@ -223,7 +223,7 @@
                      </li>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/ai-report/') ); ?>" class="nav-link <?php echo is_page('ai-report') ? 'active' : ''; ?>">
-                        <span>AI検索診断</span>
+                        <span>AIO診断</span>
                         </a>
                      </li>
                      <li class="nav-item">
