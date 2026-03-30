@@ -9,9 +9,9 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-set_query_var( 'gcrev_page_title', 'AI Overview 分析' );
+set_query_var( 'gcrev_page_title', 'AIO診断' );
 set_query_var( 'gcrev_page_subtitle', 'Google AI Overview（AI概要）で自社がどれだけ引用されているかを分析します。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'AI Overview 分析', '各種診断' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'AIO診断', '各種診断' ) );
 
 get_header();
 ?>
