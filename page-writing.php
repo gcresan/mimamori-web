@@ -956,12 +956,10 @@ get_header();
         apiFetch('/knowledge', { method: 'POST', body: body }).then(function(res) {
             if (res.success) {
                 showToast('保存しました');
-                // 新規作成の場合、保存後にファイルアップロードを有効化
                 if (!body.id && res.item) {
                     currentKnowledgeItem = res.item;
                     document.getElementById('wrtKnowledgeId').value = res.item.id;
-                    document.getElementById('wrtDropzone').classList.remove('disabled');
-                    document.getElementById('wrtKnowledgeFileInput').disabled = false;
+                    document.getElementById('wrtKnowledgeModalTitle').textContent = '情報を編集';
                     renderKnowledgeFiles([]);
                 } else {
                     closeKnowledgeModal();
@@ -975,8 +973,37 @@ get_header();
     /* ===== ファイルアップロード（ドラッグ&ドロップ + クリック選択） ===== */
     function uploadKnowledgeFile(file) {
         var kid = parseInt(document.getElementById('wrtKnowledgeId').value);
-        if (kid < 1) { showToast('先に情報を保存してからファイルを添付してください', true); return; }
 
+        // 未保存の場合は自動保存してからアップロード
+        if (kid < 1) {
+            var title = document.getElementById('wrtKnowledgeTitleInput').value || '無題';
+            var body = {
+                id: 0,
+                title: title,
+                category: document.getElementById('wrtKnowledgeCategorySelect').value,
+                content: document.getElementById('wrtKnowledgeContent').value,
+                priority: parseInt(document.getElementById('wrtKnowledgePriority').value)
+            };
+            showProgress('情報を保存中…');
+            apiFetch('/knowledge', { method: 'POST', body: body }).then(function(res) {
+                if (res.success && res.item) {
+                    currentKnowledgeItem = res.item;
+                    document.getElementById('wrtKnowledgeId').value = res.item.id;
+                    document.getElementById('wrtKnowledgeModalTitle').textContent = '情報を編集';
+                    loadKnowledge();
+                    doUploadKnowledgeFile(file, res.item.id);
+                } else {
+                    hideProgress();
+                    showToast(res.error || '自動保存に失敗しました', true);
+                }
+            }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+            return;
+        }
+
+        doUploadKnowledgeFile(file, kid);
+    }
+
+    function doUploadKnowledgeFile(file, kid) {
         var formData = new FormData();
         formData.append('file', file);
 
@@ -1017,14 +1044,12 @@ get_header();
     dropzone.addEventListener('drop', function(e) {
         e.preventDefault(); e.stopPropagation();
         this.classList.remove('drag-over');
-        if (this.classList.contains('disabled')) { showToast('先に情報を保存してください', true); return; }
         var files = e.dataTransfer.files;
         if (files.length > 0) uploadKnowledgeFile(files[0]);
     });
     // ドロップゾーン全体クリックでもファイル選択を開く
     dropzone.addEventListener('click', function(e) {
         if (e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') return;
-        if (this.classList.contains('disabled')) return;
         document.getElementById('wrtKnowledgeFileInput').click();
     });
 
