@@ -122,6 +122,12 @@ get_header();
 .wrt-detail__keyword-section { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; padding: 16px 20px; background: var(--mw-bg-secondary); border-radius: 10px; border: 1px solid var(--mw-border-light); }
 .wrt-detail__keyword-label { font-size: 13px; font-weight: 600; color: var(--mw-text-tertiary); white-space: nowrap; }
 .wrt-detail__keyword-value { font-size: 20px; font-weight: 700; color: var(--mw-text-heading); }
+/* 2カラムレイアウト */
+.wrt-detail__body { display: flex; gap: 24px; }
+.wrt-detail__main { flex: 1; min-width: 0; }
+.wrt-detail__sidebar { width: 340px; flex-shrink: 0; }
+.wrt-detail__sidebar .wrt-settings-grid { grid-template-columns: 1fr; }
+
 .wrt-detail-section { margin-bottom: 24px; }
 .wrt-detail-section__title { font-size: 14px; font-weight: 600; color: var(--mw-text-heading); margin-bottom: 12px; border-bottom: 1px solid var(--mw-border-light); padding-bottom: 8px; }
 .wrt-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
@@ -215,6 +221,8 @@ get_header();
 @media (max-width: 768px) {
     .wrt-modal { padding: 20px; max-width: 95%; }
     .wrt-detail { padding: 16px; }
+    .wrt-detail__body { flex-direction: column; }
+    .wrt-detail__sidebar { width: 100%; }
     .wrt-settings-grid { grid-template-columns: 1fr; }
     .wrt-header { flex-direction: column; align-items: stretch; }
     .wrt-search-input { min-width: 0; }
@@ -603,46 +611,15 @@ get_header();
         html += '<span style="flex:1;"></span>';
         html += '<button class="wrt-btn wrt-btn--danger wrt-btn--sm" id="wrtDeleteArticleBtn">削除</button>';
         html += '</div>';
+
+        // ===== 2カラムレイアウト開始 =====
+        html += '<div class="wrt-detail__body">';
+
+        // --- 左カラム: 本文エディター ---
+        html += '<div class="wrt-detail__main">';
         html += '<div class="wrt-detail__keyword-section">';
         html += '<span class="wrt-detail__keyword-label">対策キーワード</span>';
         html += '<span class="wrt-detail__keyword-value">' + esc(a.keyword) + '</span>';
-        html += '</div>';
-
-        // 設定セクション
-        html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">記事設定</div>';
-        html += '<div class="wrt-settings-grid">';
-        html += '<div><label>記事タイプ</label><select id="wrtSetType">';
-        Object.keys(typeLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.type === k ? ' selected' : '') + '>' + esc(typeLabels[k]) + '</option>'; });
-        html += '</select></div>';
-        html += '<div><label>目的</label><select id="wrtSetPurpose">';
-        Object.keys(purposeLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.purpose === k ? ' selected' : '') + '>' + esc(purposeLabels[k]) + '</option>'; });
-        html += '</select></div>';
-        html += '<div><label>文体</label><select id="wrtSetTone">';
-        Object.keys(toneLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.tone === k ? ' selected' : '') + '>' + esc(toneLabels[k]) + '</option>'; });
-        html += '</select></div>';
-        html += '<div style="grid-column:1/-1;"><label>想定読者</label><input type="text" id="wrtSetReader" value="' + esc(a.target_reader) + '" placeholder="例: 松山市で歯医者を探している30代主婦"></div>';
-        html += '</div>';
-
-        // 情報ストック選択
-        html += '<div style="margin-top:12px;"><label>参照する情報ストック（自動選択）</label><div class="wrt-kb-select" id="wrtKbSelect"></div></div>';
-
-        html += '<div style="margin-top:12px;text-align:right;">';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveSettingsBtn">設定を保存</button>';
-        html += '</div></div>';
-
-        // 記事個別メモ
-        html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">記事個別メモ</div>';
-        html += '<div id="wrtNotesArea"></div>';
-        html += '<div style="display:flex;gap:8px;margin-top:8px;"><textarea id="wrtNoteInput" rows="2" placeholder="この記事用のメモ・補足情報を追加" style="flex:1;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);"></textarea>';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtAddNoteBtn" style="align-self:flex-end;">追加</button></div>';
-        html += '</div>';
-
-        // ヒアリングセクション
-        html += '<div class="wrt-detail-section" id="wrtInterviewSection">';
-        html += '<div class="wrt-detail-section__title">追加ヒアリング</div>';
-        html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">情報ストックの内容をもとに、記事執筆に不足している情報をAIが質問します。回答すると本文生成の精度が上がります。</p>';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtGenerateInterviewBtn">' + (a.interview ? 'ヒアリングを再生成' : 'ヒアリング質問を生成') + '</button>';
-        html += '<div id="wrtInterviewArea"></div>';
         html += '</div>';
 
         // 本文生成セクション
@@ -662,8 +639,49 @@ get_header();
         html += '</div>';
         html += '<div id="wrtDraftArea"></div>';
         html += '</div>';
+        html += '</div>'; // .wrt-detail__main 閉じ
 
+        // --- 右カラム: サイドバー ---
+        html += '<div class="wrt-detail__sidebar">';
+
+        // 記事設定
+        html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">記事設定</div>';
+        html += '<div class="wrt-settings-grid">';
+        html += '<div><label>記事タイプ</label><select id="wrtSetType">';
+        Object.keys(typeLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.type === k ? ' selected' : '') + '>' + esc(typeLabels[k]) + '</option>'; });
+        html += '</select></div>';
+        html += '<div><label>目的</label><select id="wrtSetPurpose">';
+        Object.keys(purposeLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.purpose === k ? ' selected' : '') + '>' + esc(purposeLabels[k]) + '</option>'; });
+        html += '</select></div>';
+        html += '<div><label>文体</label><select id="wrtSetTone">';
+        Object.keys(toneLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.tone === k ? ' selected' : '') + '>' + esc(toneLabels[k]) + '</option>'; });
+        html += '</select></div>';
+        html += '<div><label>想定読者</label><input type="text" id="wrtSetReader" value="' + esc(a.target_reader) + '" placeholder="例: 松山市で歯医者を探している30代主婦"></div>';
         html += '</div>';
+        // 情報ストック選択
+        html += '<div style="margin-top:12px;"><label>参照する情報ストック（自動選択）</label><div class="wrt-kb-select" id="wrtKbSelect"></div></div>';
+        html += '<div style="margin-top:12px;text-align:right;">';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveSettingsBtn">設定を保存</button>';
+        html += '</div></div>';
+
+        // 記事個別メモ
+        html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">記事個別メモ</div>';
+        html += '<div id="wrtNotesArea"></div>';
+        html += '<div style="display:flex;gap:8px;margin-top:8px;"><textarea id="wrtNoteInput" rows="2" placeholder="この記事用のメモ・補足情報を追加" style="flex:1;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);"></textarea>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtAddNoteBtn" style="align-self:flex-end;">追加</button></div>';
+        html += '</div>';
+
+        // 追加ヒアリング
+        html += '<div class="wrt-detail-section" id="wrtInterviewSection">';
+        html += '<div class="wrt-detail-section__title">追加ヒアリング</div>';
+        html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">情報ストックの内容をもとに、記事執筆に不足している情報をAIが質問します。回答すると本文生成の精度が上がります。</p>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtGenerateInterviewBtn">' + (a.interview ? 'ヒアリングを再生成' : 'ヒアリング質問を生成') + '</button>';
+        html += '<div id="wrtInterviewArea"></div>';
+        html += '</div>';
+
+        html += '</div>'; // .wrt-detail__sidebar 閉じ
+        html += '</div>'; // .wrt-detail__body 閉じ
+        html += '</div>'; // .wrt-detail 閉じ
         view.innerHTML = html;
 
         // 戻るボタン
