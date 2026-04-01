@@ -86,6 +86,14 @@ get_header();
 .wrt-card__title { font-size: 15px; font-weight: 600; color: var(--mw-text-heading); margin: 0 0 6px; }
 .wrt-card__meta { font-size: 12px; color: var(--mw-text-tertiary); display: flex; gap: 12px; flex-wrap: wrap; }
 
+/* 情報ストック ヘッダー */
+.wrt-kb-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.wrt-kb-filters { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.wrt-kb-filter-btn { padding: 6px 14px; border: 1px solid var(--mw-border-light); border-radius: 20px; font-size: 13px; font-weight: 500; color: var(--mw-text-secondary); background: var(--mw-bg-primary); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.wrt-kb-filter-btn:hover { border-color: var(--mw-primary-blue, #4A90A4); color: var(--mw-text-heading); }
+.wrt-kb-filter-btn.active { background: var(--mw-primary-blue, #4A90A4); border-color: var(--mw-primary-blue, #4A90A4); color: #fff; }
+.wrt-kb-filter-btn__count { font-size: 11px; opacity: 0.8; }
+
 /* 情報ストック */
 .wrt-knowledge-card { display: flex; align-items: flex-start; gap: 12px; }
 .wrt-knowledge-card__body { flex: 1; min-width: 0; }
@@ -296,8 +304,9 @@ get_header();
 
     <!-- ===== 情報ストックタブ ===== -->
     <div class="wrt-tab-panel" id="wrtPanelKnowledge">
-        <div style="margin-bottom:16px;">
-            <button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtNewKnowledgeBtn" type="button">情報を追加</button>
+        <div class="wrt-kb-header">
+            <div class="wrt-kb-filters" id="wrtKbFilters"></div>
+            <button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtNewKnowledgeBtn" type="button">+ 情報を追加</button>
         </div>
         <div id="wrtKnowledgeList"></div>
         <div class="wrt-empty" id="wrtKnowledgeEmpty" style="display:none;">
@@ -1108,18 +1117,53 @@ get_header();
     }
 
     /* ===== 情報ストック CRUD ===== */
+    var knowledgeCategoryFilter = ''; // 空 = すべて
+
     function loadKnowledge() {
         apiFetch('/knowledge').then(function(res) {
             knowledgeData = res.items || [];
+            renderKnowledgeFilters();
             renderKnowledge();
         });
     }
+
+    function renderKnowledgeFilters() {
+        var filtersEl = document.getElementById('wrtKbFilters');
+        // 種別ごとの件数を集計
+        var counts = {};
+        knowledgeData.forEach(function(ki) {
+            counts[ki.category] = (counts[ki.category] || 0) + 1;
+        });
+        var total = knowledgeData.length;
+
+        var html = '<button class="wrt-kb-filter-btn' + (knowledgeCategoryFilter === '' ? ' active' : '') + '" data-cat="">すべて<span class="wrt-kb-filter-btn__count">（' + total + '）</span></button>';
+        Object.keys(catLabels).forEach(function(key) {
+            var count = counts[key] || 0;
+            if (count === 0) return; // 0件の種別は非表示
+            html += '<button class="wrt-kb-filter-btn' + (knowledgeCategoryFilter === key ? ' active' : '') + '" data-cat="' + key + '">'
+                + esc(catLabels[key]) + '<span class="wrt-kb-filter-btn__count">（' + count + '）</span></button>';
+        });
+        filtersEl.innerHTML = html;
+        filtersEl.querySelectorAll('.wrt-kb-filter-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                knowledgeCategoryFilter = btn.dataset.cat;
+                renderKnowledgeFilters();
+                renderKnowledge();
+            });
+        });
+    }
+
     function renderKnowledge() {
         var container = document.getElementById('wrtKnowledgeList');
         var empty = document.getElementById('wrtKnowledgeEmpty');
-        if (knowledgeData.length === 0) { container.innerHTML = ''; empty.style.display = ''; return; }
+
+        var filtered = knowledgeCategoryFilter
+            ? knowledgeData.filter(function(ki) { return ki.category === knowledgeCategoryFilter; })
+            : knowledgeData;
+
+        if (filtered.length === 0) { container.innerHTML = ''; empty.style.display = ''; return; }
         empty.style.display = 'none';
-        container.innerHTML = knowledgeData.map(function(ki) {
+        container.innerHTML = filtered.map(function(ki) {
             return '<div class="wrt-card wrt-knowledge-card" style="cursor:default;">'
                 + '<div class="wrt-knowledge-card__body">'
                 + '<div class="wrt-card__title"><span class="wrt-cat-badge">' + esc(catLabels[ki.category] || ki.category) + '</span> ' + esc(ki.title) + '</div>'
