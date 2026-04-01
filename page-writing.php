@@ -202,6 +202,21 @@ get_header();
 .wrt-voice-btn { flex-shrink: 0; transition: all 0.2s; }
 .wrt-voice-btn:hover { transform: scale(1.1); }
 
+/* 音声入力モーダル */
+.wrt-voice-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 10002; display: none; align-items: center; justify-content: center; }
+.wrt-voice-modal.active { display: flex; }
+.wrt-voice-modal__inner { background: var(--mw-bg-primary); border-radius: 20px; padding: 32px; max-width: 480px; width: 90%; text-align: center; }
+.wrt-voice-modal__title { font-size: 18px; font-weight: 700; color: var(--mw-text-heading); margin-bottom: 8px; }
+.wrt-voice-modal__status { font-size: 14px; color: var(--mw-text-secondary); margin-bottom: 20px; }
+.wrt-voice-modal__wave { width: 100%; height: 80px; margin-bottom: 20px; border-radius: 10px; background: var(--mw-bg-secondary); }
+.wrt-voice-modal__result { width: 100%; min-height: 80px; padding: 12px; border: 1px solid var(--mw-border-light); border-radius: 10px; font-size: 14px; line-height: 1.8; resize: vertical; box-sizing: border-box; background: var(--mw-bg-primary); color: var(--mw-text-primary); display: none; }
+.wrt-voice-modal__result.visible { display: block; }
+.wrt-voice-modal__actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+.wrt-voice-modal__rec-btn { width: 64px; height: 64px; border-radius: 50%; border: none; background: #C95A4F; color: #fff; font-size: 24px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+.wrt-voice-modal__rec-btn:hover { transform: scale(1.05); }
+.wrt-voice-modal__rec-btn.recording { animation: wrt-pulse 1.5s ease-in-out infinite; }
+@keyframes wrt-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(201,90,79,0.4); } 50% { box-shadow: 0 0 0 12px rgba(201,90,79,0); } }
+
 /* 本文プレビュー */
 .wrt-draft-container { margin-top: 16px; border: 1px solid var(--mw-border-light); border-radius: 10px; overflow: hidden; background: #fff; }
 .wrt-draft-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--mw-bg-secondary); border-bottom: 1px solid var(--mw-border-light); gap: 8px; flex-wrap: wrap; }
@@ -386,6 +401,24 @@ get_header();
             <div class="wrt-modal__actions">
                 <button class="wrt-btn wrt-btn--secondary" id="wrtKnowledgeModalCancel" type="button">キャンセル</button>
                 <button class="wrt-btn wrt-btn--primary" id="wrtKnowledgeSaveBtn" type="button">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 音声入力モーダル ===== -->
+    <div class="wrt-voice-modal" id="wrtVoiceModal">
+        <div class="wrt-voice-modal__inner">
+            <div class="wrt-voice-modal__title" id="wrtVoiceTitle">音声入力</div>
+            <div class="wrt-voice-modal__status" id="wrtVoiceStatus">マイクボタンを押して録音開始</div>
+            <canvas class="wrt-voice-modal__wave" id="wrtVoiceWave" width="400" height="80"></canvas>
+            <textarea class="wrt-voice-modal__result" id="wrtVoiceResult" rows="3" placeholder="認識されたテキストがここに表示されます"></textarea>
+            <div class="wrt-voice-modal__actions" id="wrtVoiceActions">
+                <button class="wrt-voice-modal__rec-btn" id="wrtVoiceRecBtn" title="録音開始">🎤</button>
+            </div>
+            <div class="wrt-voice-modal__actions" id="wrtVoiceConfirmActions" style="display:none;">
+                <button class="wrt-btn wrt-btn--secondary" id="wrtVoiceRetryBtn">やり直す</button>
+                <button class="wrt-btn wrt-btn--primary" id="wrtVoiceOkBtn">OK</button>
+                <button class="wrt-btn wrt-btn--secondary" id="wrtVoiceCancelBtn">キャンセル</button>
             </div>
         </div>
     </div>
@@ -845,8 +878,219 @@ get_header();
         });
     };
 
-    var hasSpeechRecognition = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+    /* ===== 音声入力モーダル (MediaRecorder + Whisper API) ===== */
+    var voiceTranscribeUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'mimamori/v1/voice-transcribe' ) ) ); ?>;
+    var voiceTargetEl = null;
+    var voiceMediaRecorder = null;
+    var voiceMediaChunks = [];
+    var voiceStream = null;
+    var voiceAudioCtx = null;
+    var voiceAnalyser = null;
+    var voiceWaveAnimId = null;
+    var voiceMaxTimer = null;
+    var VOICE_MAX_DURATION = 60000;
 
+    var voiceModal = document.getElementById('wrtVoiceModal');
+    var voiceWaveCanvas = document.getElementById('wrtVoiceWave');
+    var voiceWaveCtx = voiceWaveCanvas.getContext('2d');
+    var voiceStatusEl = document.getElementById('wrtVoiceStatus');
+    var voiceResultEl = document.getElementById('wrtVoiceResult');
+    var voiceRecBtn = document.getElementById('wrtVoiceRecBtn');
+    var voiceActions = document.getElementById('wrtVoiceActions');
+    var voiceConfirmActions = document.getElementById('wrtVoiceConfirmActions');
+
+    function openVoiceModal(targetEl) {
+        voiceTargetEl = targetEl;
+        voiceResultEl.value = '';
+        voiceResultEl.classList.remove('visible');
+        voiceStatusEl.textContent = 'ボタンを押して録音開始';
+        voiceRecBtn.textContent = '🎤';
+        voiceRecBtn.classList.remove('recording');
+        voiceActions.style.display = '';
+        voiceConfirmActions.style.display = 'none';
+        clearVoiceWave();
+        voiceModal.classList.add('active');
+    }
+    function closeVoiceModal() {
+        stopVoiceRecording(true);
+        voiceModal.classList.remove('active');
+        voiceTargetEl = null;
+    }
+
+    function startVoiceRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            showToast('お使いのブラウザはマイクに対応していません', true); return;
+        }
+        voiceStatusEl.textContent = 'マイクにアクセス中…';
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+            voiceStream = stream;
+            voiceMediaChunks = [];
+            var mimeOptions = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', ''];
+            var mimeType = '';
+            for (var i = 0; i < mimeOptions.length; i++) {
+                if (mimeOptions[i] === '' || MediaRecorder.isTypeSupported(mimeOptions[i])) { mimeType = mimeOptions[i]; break; }
+            }
+            var opts = mimeType ? { mimeType: mimeType } : {};
+            voiceMediaRecorder = new MediaRecorder(stream, opts);
+            voiceMediaRecorder.addEventListener('dataavailable', function(e) {
+                if (e.data && e.data.size > 0) voiceMediaChunks.push(e.data);
+            });
+            voiceMediaRecorder.start(1000);
+
+            voiceStatusEl.textContent = '録音中… 話してください';
+            voiceRecBtn.textContent = '⏹';
+            voiceRecBtn.classList.add('recording');
+
+            // 波形アニメーション開始
+            startVoiceWave(stream);
+
+            // 最大録音時間
+            voiceMaxTimer = setTimeout(function() { stopVoiceRecording(false); }, VOICE_MAX_DURATION);
+        }).catch(function(err) {
+            if (err.name === 'NotAllowedError') {
+                voiceStatusEl.textContent = 'マイクの使用が許可されていません';
+            } else {
+                voiceStatusEl.textContent = 'マイクにアクセスできませんでした';
+            }
+        });
+    }
+
+    function stopVoiceRecording(isCancel) {
+        if (voiceMaxTimer) { clearTimeout(voiceMaxTimer); voiceMaxTimer = null; }
+        stopVoiceWave();
+
+        if (!voiceMediaRecorder || voiceMediaRecorder.state !== 'recording') return;
+
+        voiceMediaRecorder.addEventListener('stop', function() {
+            if (isCancel) return;
+
+            if (voiceMediaChunks.length === 0) {
+                voiceStatusEl.textContent = '音声が検出されませんでした';
+                return;
+            }
+            var blob = new Blob(voiceMediaChunks, { type: voiceMediaRecorder.mimeType || 'audio/webm' });
+            sendVoiceToWhisper(blob);
+        }, { once: true });
+
+        try { voiceMediaRecorder.stop(); } catch(e) {}
+        stopVoiceStream();
+    }
+
+    function stopVoiceStream() {
+        if (voiceStream) {
+            voiceStream.getTracks().forEach(function(t) { t.stop(); });
+            voiceStream = null;
+        }
+    }
+
+    function sendVoiceToWhisper(blob) {
+        voiceStatusEl.textContent = '文字起こし中…';
+        voiceRecBtn.textContent = '⏳';
+        voiceRecBtn.classList.remove('recording');
+
+        var ext = 'webm';
+        var mime = blob.type || '';
+        if (mime.indexOf('mp4') !== -1 || mime.indexOf('m4a') !== -1) ext = 'm4a';
+        else if (mime.indexOf('ogg') !== -1) ext = 'ogg';
+
+        var formData = new FormData();
+        formData.append('audio', blob, 'recording.' + ext);
+
+        fetch(voiceTranscribeUrl, {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': nonce },
+            body: formData
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res.success && res.data && res.data.text) {
+                voiceResultEl.value = res.data.text;
+                voiceResultEl.classList.add('visible');
+                voiceStatusEl.textContent = '認識結果を確認してください';
+                voiceActions.style.display = 'none';
+                voiceConfirmActions.style.display = '';
+            } else {
+                voiceStatusEl.textContent = res.message || '音声を認識できませんでした';
+                voiceRecBtn.textContent = '🎤';
+            }
+        })
+        .catch(function() {
+            voiceStatusEl.textContent = '通信エラーが発生しました';
+            voiceRecBtn.textContent = '🎤';
+        });
+    }
+
+    // 波形描画
+    function startVoiceWave(stream) {
+        try {
+            voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var source = voiceAudioCtx.createMediaStreamSource(stream);
+            voiceAnalyser = voiceAudioCtx.createAnalyser();
+            voiceAnalyser.fftSize = 128;
+            voiceAnalyser.smoothingTimeConstant = 0.7;
+            source.connect(voiceAnalyser);
+            drawVoiceWave();
+        } catch(e) {}
+    }
+    function stopVoiceWave() {
+        if (voiceWaveAnimId) { cancelAnimationFrame(voiceWaveAnimId); voiceWaveAnimId = null; }
+        if (voiceAudioCtx && voiceAudioCtx.state !== 'closed') {
+            voiceAudioCtx.close().catch(function(){}); voiceAudioCtx = null;
+        }
+        voiceAnalyser = null;
+    }
+    function clearVoiceWave() {
+        voiceWaveCtx.clearRect(0, 0, voiceWaveCanvas.width, voiceWaveCanvas.height);
+    }
+    function drawVoiceWave() {
+        voiceWaveAnimId = requestAnimationFrame(drawVoiceWave);
+        if (!voiceAnalyser) return;
+        var bufLen = voiceAnalyser.frequencyBinCount;
+        var data = new Uint8Array(bufLen);
+        voiceAnalyser.getByteFrequencyData(data);
+        var w = voiceWaveCanvas.width, h = voiceWaveCanvas.height;
+        voiceWaveCtx.clearRect(0, 0, w, h);
+        var barCount = 40, totalW = w * 0.85, startX = (w - totalW) / 2;
+        var barW = totalW / barCount * 0.6, gap = totalW / barCount * 0.4;
+        voiceWaveCtx.fillStyle = '#4A90A4';
+        for (var i = 0; i < barCount; i++) {
+            var idx = Math.floor(i * bufLen / barCount);
+            var amp = data[idx] / 255.0;
+            var barH = Math.max(2, amp * h * 0.85);
+            voiceWaveCtx.fillRect(startX + i * (barW + gap), (h - barH) / 2, barW, barH);
+        }
+    }
+
+    // モーダルイベント
+    voiceRecBtn.addEventListener('click', function() {
+        if (voiceMediaRecorder && voiceMediaRecorder.state === 'recording') {
+            stopVoiceRecording(false);
+        } else {
+            startVoiceRecording();
+        }
+    });
+    document.getElementById('wrtVoiceOkBtn').addEventListener('click', function() {
+        if (voiceTargetEl && voiceResultEl.value) {
+            var existing = voiceTargetEl.value;
+            var sep = existing && !existing.endsWith('\n') && !existing.endsWith(' ') ? ' ' : '';
+            voiceTargetEl.value = existing + sep + voiceResultEl.value;
+        }
+        closeVoiceModal();
+    });
+    document.getElementById('wrtVoiceRetryBtn').addEventListener('click', function() {
+        voiceResultEl.value = '';
+        voiceResultEl.classList.remove('visible');
+        voiceStatusEl.textContent = 'ボタンを押して録音開始';
+        voiceRecBtn.textContent = '🎤';
+        voiceRecBtn.classList.remove('recording');
+        voiceActions.style.display = '';
+        voiceConfirmActions.style.display = 'none';
+        clearVoiceWave();
+    });
+    document.getElementById('wrtVoiceCancelBtn').addEventListener('click', closeVoiceModal);
+    voiceModal.addEventListener('click', function(e) { if (e.target === this) closeVoiceModal(); });
+
+    /* ===== ヒアリング表示 ===== */
     function renderInterview(interview, articleId) {
         var area = document.getElementById('wrtInterviewArea');
         if (!area || !interview || !interview.questions || interview.questions.length === 0) return;
@@ -859,30 +1103,25 @@ get_header();
             if (q.hint) html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">ヒント: ' + esc(q.hint) + '</div>';
             html += '<div style="display:flex;gap:6px;align-items:flex-start;">';
             if (q.field_type === 'textarea') {
-                html += '<textarea class="wrt-interview-ans" data-idx="' + idx + '" rows="3" placeholder="回答を入力（テキスト or 音声）" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">' + esc(ans) + '</textarea>';
+                html += '<textarea class="wrt-interview-ans" data-idx="' + idx + '" rows="3" placeholder="回答を入力" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">' + esc(ans) + '</textarea>';
             } else {
-                html += '<input type="text" class="wrt-interview-ans" data-idx="' + idx + '" value="' + esc(ans).replace(/"/g, '&quot;') + '" placeholder="回答を入力（テキスト or 音声）" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">';
+                html += '<input type="text" class="wrt-interview-ans" data-idx="' + idx + '" value="' + esc(ans).replace(/"/g, '&quot;') + '" placeholder="回答を入力" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">';
             }
-            if (hasSpeechRecognition) {
-                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm wrt-voice-btn" data-target-idx="' + idx + '" title="音声入力" style="padding:6px 10px;font-size:16px;line-height:1;">🎤</button>';
-            }
+            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm wrt-voice-btn" data-target-idx="' + idx + '" title="音声入力" style="padding:6px 10px;font-size:16px;line-height:1;">🎤</button>';
             html += '</div></div>';
         });
         html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveInterviewBtn">回答を保存</button>';
         html += '</div>';
         area.innerHTML = html;
 
-        // 音声入力イベント
-        if (hasSpeechRecognition) {
-            area.querySelectorAll('.wrt-voice-btn').forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    var idx = btn.dataset.targetIdx;
-                    var target = area.querySelector('.wrt-interview-ans[data-idx="' + idx + '"]');
-                    if (!target) return;
-                    startVoiceInput(btn, target);
-                });
+        // 音声入力ボタン → モーダルを開く
+        area.querySelectorAll('.wrt-voice-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var idx = btn.dataset.targetIdx;
+                var target = area.querySelector('.wrt-interview-ans[data-idx="' + idx + '"]');
+                if (target) openVoiceModal(target);
             });
-        }
+        });
 
         document.getElementById('wrtSaveInterviewBtn').addEventListener('click', function() {
             var answersObj = {};
@@ -894,65 +1133,6 @@ get_header();
                 else showToast(res.error || 'エラー', true);
             });
         });
-    }
-
-    /* ===== 音声入力 (Web Speech API) ===== */
-    function startVoiceInput(btn, targetEl) {
-        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) { showToast('お使いのブラウザは音声入力に対応していません', true); return; }
-
-        var recognition = new SpeechRecognition();
-        recognition.lang = 'ja-JP';
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        var origText = btn.textContent;
-        var finalTranscript = '';
-        btn.textContent = '⏹️';
-        btn.style.background = 'rgba(201,90,79,0.15)';
-        btn.title = '音声入力中…クリックで停止';
-
-        recognition.onresult = function(e) {
-            var interim = '';
-            for (var i = e.resultIndex; i < e.results.length; i++) {
-                if (e.results[i].isFinal) {
-                    finalTranscript += e.results[i][0].transcript;
-                } else {
-                    interim += e.results[i][0].transcript;
-                }
-            }
-            var current = targetEl.value || '';
-            // 既存テキストの末尾に追記
-            var separator = current && !current.endsWith('\n') && !current.endsWith(' ') ? ' ' : '';
-            targetEl.value = current.replace(/\s*$/, '') + separator + finalTranscript + interim;
-        };
-
-        recognition.onend = function() {
-            btn.textContent = origText;
-            btn.style.background = '';
-            btn.title = '音声入力';
-            // 最終テキストを確定
-            var current = targetEl.value || '';
-            if (finalTranscript) {
-                showToast('音声入力を完了しました');
-            }
-        };
-
-        recognition.onerror = function(e) {
-            btn.textContent = origText;
-            btn.style.background = '';
-            if (e.error !== 'aborted') {
-                showToast('音声認識エラー: ' + e.error, true);
-            }
-        };
-
-        // 2回目クリックで停止
-        btn.addEventListener('click', function stopHandler() {
-            recognition.stop();
-            btn.removeEventListener('click', stopHandler);
-        }, { once: true });
-
-        recognition.start();
     }
 
     /* ===== 構成案モーダル ===== */
