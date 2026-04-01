@@ -843,7 +843,6 @@ get_header();
                 if (res.success) {
                     currentArticle.draft_content = res.draft_content;
                     renderDraft(res.draft_content);
-                    document.getElementById('wrtRefinePrompt').value = '';
                     showToast('本文を再生成しました');
                 } else {
                     showToast(res.error || 'エラー', true);
