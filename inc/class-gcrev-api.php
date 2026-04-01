@@ -1136,6 +1136,10 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_writing_delete_knowledge' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/writing/knowledge/(?P<id>\d+)/file', [
+            [ 'methods' => 'POST',   'callback' => [ $this, 'rest_writing_upload_knowledge_file' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
+            [ 'methods' => 'DELETE', 'callback' => [ $this, 'rest_writing_delete_knowledge_file' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
+        ]);
         register_rest_route('gcrev/v1', '/writing/articles', [
             [ 'methods' => 'GET',  'callback' => [ $this, 'rest_writing_list_articles' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
             [ 'methods' => 'POST', 'callback' => [ $this, 'rest_writing_create_article' ], 'permission_callback' => [ $this->config, 'check_permission' ] ],
@@ -14955,6 +14959,32 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
         }
         $result = $this->writing_service->delete_knowledge( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_upload_knowledge_file( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $files = $request->get_file_params();
+        $file  = $files['file'] ?? null;
+        if ( ! $file ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'ファイルが送信されていません。' ], 400 );
+        }
+        $result = $this->writing_service->attach_file_to_knowledge( get_current_user_id(), (int) $request->get_param( 'id' ), $file );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_delete_knowledge_file( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $params        = $request->get_json_params();
+        $attachment_id = absint( $params['attachment_id'] ?? 0 );
+        if ( $attachment_id < 1 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => '無効なファイルIDです。' ], 400 );
+        }
+        $result = $this->writing_service->detach_file_from_knowledge( get_current_user_id(), (int) $request->get_param( 'id' ), $attachment_id );
         return new \WP_REST_Response( $result );
     }
 

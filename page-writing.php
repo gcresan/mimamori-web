@@ -141,6 +141,13 @@ get_header();
 .wrt-kb-select__item:hover { border-color: var(--mw-primary-blue); }
 .wrt-kb-select__item.selected { background: rgba(74,144,164,0.1); border-color: var(--mw-primary-blue); }
 
+/* ファイル添付 */
+.wrt-file-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light); border-radius: 6px; font-size: 12px; margin-bottom: 4px; }
+.wrt-file-item__icon { font-size: 16px; }
+.wrt-file-item__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mw-text-heading); }
+.wrt-file-item__size { color: var(--mw-text-tertiary); font-size: 11px; white-space: nowrap; }
+.wrt-file-item__del { background: none; border: none; color: #C95A4F; cursor: pointer; font-size: 14px; padding: 2px; }
+
 @media (max-width: 768px) {
     .wrt-modal { padding: 20px; max-width: 95%; }
     .wrt-detail { padding: 16px; }
@@ -246,6 +253,15 @@ get_header();
                     <option value="4">4</option>
                     <option value="5">5（高）</option>
                 </select>
+            </div>
+            <div class="wrt-modal__field" id="wrtKnowledgeFileSection" style="display:none;">
+                <label>添付ファイル</label>
+                <div id="wrtKnowledgeFileList" style="margin-bottom:8px;"></div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="file" id="wrtKnowledgeFileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.gif,.webp" style="font-size:12px;">
+                    <button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtKnowledgeFileUploadBtn" type="button">アップロード</button>
+                </div>
+                <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">PDF, Word, Excel, CSV, テキスト, 画像ファイルに対応</div>
             </div>
             <div class="wrt-modal__actions">
                 <button class="wrt-btn wrt-btn--secondary" id="wrtKnowledgeModalCancel" type="button">キャンセル</button>
@@ -761,7 +777,9 @@ get_header();
                 + '<div class="wrt-knowledge-card__body">'
                 + '<div class="wrt-card__title"><span class="wrt-cat-badge">' + esc(catLabels[ki.category] || ki.category) + '</span> ' + esc(ki.title) + '</div>'
                 + '<div class="wrt-knowledge-card__excerpt">' + esc((ki.content || '').substring(0, 100)) + '</div>'
-                + '<div class="wrt-card__meta"><span>優先度: ' + ki.priority + '</span><span>' + esc(ki.updated_at) + '</span></div>'
+                + '<div class="wrt-card__meta"><span>優先度: ' + ki.priority + '</span>'
+                + (ki.files && ki.files.length > 0 ? '<span>📎 ' + ki.files.length + '件</span>' : '')
+                + '<span>' + esc(ki.updated_at) + '</span></div>'
                 + '</div>'
                 + '<div class="wrt-knowledge-card__actions">'
                 + '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" data-edit="' + ki.id + '">編集</button>'
@@ -786,15 +804,47 @@ get_header();
             });
         });
     }
+    var currentKnowledgeItem = null;
     function openKnowledgeModal(item) {
+        currentKnowledgeItem = item;
         document.getElementById('wrtKnowledgeId').value = item ? item.id : 0;
         document.getElementById('wrtKnowledgeModalTitle').textContent = item ? '情報を編集' : '情報を追加';
         document.getElementById('wrtKnowledgeTitleInput').value = item ? item.title : '';
         document.getElementById('wrtKnowledgeCategorySelect').value = item ? item.category : 'notes';
         document.getElementById('wrtKnowledgeContent').value = item ? item.content : '';
         document.getElementById('wrtKnowledgePriority').value = item ? item.priority : 3;
+        // ファイルセクション: 保存済みアイテムのみ表示（新規は保存後にファイル添付可能）
+        var fileSection = document.getElementById('wrtKnowledgeFileSection');
+        fileSection.style.display = item ? '' : 'none';
+        if (item) renderKnowledgeFiles(item.files || []);
+        document.getElementById('wrtKnowledgeFileInput').value = '';
         document.getElementById('wrtKnowledgeModal').classList.add('active');
         setTimeout(function() { document.getElementById('wrtKnowledgeTitleInput').focus(); }, 100);
+    }
+    function renderKnowledgeFiles(files) {
+        var container = document.getElementById('wrtKnowledgeFileList');
+        if (!files || files.length === 0) { container.innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">添付ファイルなし</span>'; return; }
+        container.innerHTML = files.map(function(f) {
+            var icon = f.mime && f.mime.indexOf('image') === 0 ? '🖼️' : (f.mime === 'application/pdf' ? '📄' : '📎');
+            var size = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + 'MB' : (f.size / 1024).toFixed(0) + 'KB';
+            return '<div class="wrt-file-item">'
+                + '<span class="wrt-file-item__icon">' + icon + '</span>'
+                + '<a href="' + esc(f.url) + '" target="_blank" class="wrt-file-item__name" title="' + esc(f.name) + '">' + esc(f.name) + '</a>'
+                + '<span class="wrt-file-item__size">' + size + '</span>'
+                + '<button class="wrt-file-item__del" data-file-id="' + f.id + '" title="削除">×</button>'
+                + '</div>';
+        }).join('');
+        container.querySelectorAll('.wrt-file-item__del').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (!confirm('このファイルを削除しますか？')) return;
+                var kid = parseInt(document.getElementById('wrtKnowledgeId').value);
+                var fid = parseInt(btn.dataset.fileId);
+                apiFetch('/knowledge/' + kid + '/file', { method: 'DELETE', body: { attachment_id: fid } }).then(function(res) {
+                    if (res.success) { showToast('ファイルを削除しました'); loadKnowledge(); var item = knowledgeData.find(function(k) { return k.id === kid; }); if (item) renderKnowledgeFiles(item.files || []); }
+                    else showToast(res.error || 'エラー', true);
+                });
+            });
+        });
     }
     function closeKnowledgeModal() { document.getElementById('wrtKnowledgeModal').classList.remove('active'); }
 
@@ -811,9 +861,58 @@ get_header();
             priority: parseInt(document.getElementById('wrtKnowledgePriority').value)
         };
         apiFetch('/knowledge', { method: 'POST', body: body }).then(function(res) {
-            if (res.success) { showToast('保存しました'); closeKnowledgeModal(); loadKnowledge(); }
+            if (res.success) {
+                showToast('保存しました');
+                // 新規作成の場合、保存後にファイルセクションを表示
+                if (!body.id && res.item) {
+                    currentKnowledgeItem = res.item;
+                    document.getElementById('wrtKnowledgeId').value = res.item.id;
+                    document.getElementById('wrtKnowledgeFileSection').style.display = '';
+                    renderKnowledgeFiles([]);
+                } else {
+                    closeKnowledgeModal();
+                }
+                loadKnowledge();
+            }
             else showToast(res.error || 'エラー', true);
         }).catch(function() { showToast('通信エラー', true); });
+    });
+
+    /* ===== ファイルアップロード ===== */
+    document.getElementById('wrtKnowledgeFileUploadBtn').addEventListener('click', function() {
+        var fileInput = document.getElementById('wrtKnowledgeFileInput');
+        var file = fileInput.files[0];
+        if (!file) { showToast('ファイルを選択してください', true); return; }
+        var kid = parseInt(document.getElementById('wrtKnowledgeId').value);
+        if (kid < 1) { showToast('先に情報を保存してからファイルを添付してください', true); return; }
+
+        var formData = new FormData();
+        formData.append('file', file);
+
+        showProgress('ファイルをアップロード中…');
+        fetch(baseUrl + '/knowledge/' + kid + '/file', {
+            method: 'POST',
+            headers: { 'X-WP-Nonce': nonce },
+            body: formData
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            hideProgress();
+            if (res.success) {
+                showToast('ファイルをアップロードしました');
+                fileInput.value = '';
+                loadKnowledge();
+                // ファイルリスト更新
+                apiFetch('/knowledge').then(function(r2) {
+                    knowledgeData = r2.items || [];
+                    var item = knowledgeData.find(function(k) { return k.id === kid; });
+                    if (item) renderKnowledgeFiles(item.files || []);
+                });
+            } else {
+                showToast(res.error || 'アップロード失敗', true);
+            }
+        })
+        .catch(function() { hideProgress(); showToast('通信エラー', true); });
     });
 
     /* ===== 初期化 ===== */

@@ -152,15 +152,138 @@ class Gcrev_Writing_Service {
         return [ 'success' => true ];
     }
 
+    /**
+     * 情報ストックにファイルを添付
+     */
+    public function attach_file_to_knowledge( int $user_id, int $knowledge_id, array $file ): array {
+        $owner = (int) get_post_meta( $knowledge_id, '_gcrev_knowledge_user_id', true );
+        if ( $owner !== $user_id ) {
+            return [ 'success' => false, 'error' => '権限がありません。' ];
+        }
+
+        if ( empty( $file['name'] ) || empty( $file['tmp_name'] ) ) {
+            return [ 'success' => false, 'error' => 'ファイルが選択されていません。' ];
+        }
+
+        // 許可するファイルタイプ
+        $allowed = [
+            'application/pdf',
+            'text/plain', 'text/csv',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        ];
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $upload = wp_handle_upload( $file, [ 'test_form' => false ] );
+        if ( isset( $upload['error'] ) ) {
+            return [ 'success' => false, 'error' => 'アップロード失敗: ' . $upload['error'] ];
+        }
+
+        // MIMEタイプチェック
+        $finfo = finfo_open( FILEINFO_MIME_TYPE );
+        $mime  = finfo_file( $finfo, $upload['file'] );
+        finfo_close( $finfo );
+        if ( ! in_array( $mime, $allowed, true ) ) {
+            @unlink( $upload['file'] );
+            return [ 'success' => false, 'error' => 'このファイル形式はサポートされていません。' ];
+        }
+
+        // WordPress attachment 作成
+        $attachment_id = wp_insert_attachment( [
+            'post_mime_type' => $upload['type'],
+            'post_title'     => sanitize_file_name( $file['name'] ),
+            'post_content'   => '',
+            'post_status'    => 'inherit',
+            'post_parent'    => $knowledge_id,
+        ], $upload['file'] );
+
+        if ( is_wp_error( $attachment_id ) ) {
+            return [ 'success' => false, 'error' => '添付ファイルの保存に失敗しました。' ];
+        }
+
+        $metadata = wp_generate_attachment_metadata( $attachment_id, $upload['file'] );
+        wp_update_attachment_metadata( $attachment_id, $metadata );
+
+        // 情報ストックの添付ファイルリストに追加
+        $attachments_raw = get_post_meta( $knowledge_id, '_gcrev_knowledge_attachments', true );
+        $attachments = is_array( $attachments_raw ) ? $attachments_raw
+            : ( json_decode( $attachments_raw ?: '[]', true ) ?: [] );
+        $attachments[] = $attachment_id;
+        update_post_meta( $knowledge_id, '_gcrev_knowledge_attachments',
+            wp_json_encode( $attachments, JSON_UNESCAPED_UNICODE ) );
+
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        update_post_meta( $knowledge_id, '_gcrev_knowledge_updated_at', $now );
+
+        return [
+            'success' => true,
+            'file'    => $this->format_attachment( $attachment_id ),
+        ];
+    }
+
+    /**
+     * 情報ストックの添付ファイルを削除
+     */
+    public function detach_file_from_knowledge( int $user_id, int $knowledge_id, int $attachment_id ): array {
+        $owner = (int) get_post_meta( $knowledge_id, '_gcrev_knowledge_user_id', true );
+        if ( $owner !== $user_id ) {
+            return [ 'success' => false, 'error' => '権限がありません。' ];
+        }
+
+        $attachments_raw = get_post_meta( $knowledge_id, '_gcrev_knowledge_attachments', true );
+        $attachments = is_array( $attachments_raw ) ? $attachments_raw
+            : ( json_decode( $attachments_raw ?: '[]', true ) ?: [] );
+
+        $attachments = array_values( array_filter( $attachments, function( $id ) use ( $attachment_id ) {
+            return (int) $id !== $attachment_id;
+        } ) );
+
+        update_post_meta( $knowledge_id, '_gcrev_knowledge_attachments',
+            wp_json_encode( $attachments, JSON_UNESCAPED_UNICODE ) );
+
+        wp_delete_attachment( $attachment_id, true );
+
+        return [ 'success' => true ];
+    }
+
+    private function format_attachment( int $attachment_id ): ?array {
+        $post = get_post( $attachment_id );
+        if ( ! $post ) { return null; }
+        return [
+            'id'       => $attachment_id,
+            'name'     => $post->post_title,
+            'url'      => wp_get_attachment_url( $attachment_id ),
+            'mime'     => $post->post_mime_type,
+            'size'     => filesize( get_attached_file( $attachment_id ) ) ?: 0,
+        ];
+    }
+
     private function format_knowledge( \WP_Post $post ): array {
         $tags_raw = get_post_meta( $post->ID, '_gcrev_knowledge_tags', true );
         $tags = is_array( $tags_raw ) ? $tags_raw : ( json_decode( $tags_raw ?: '[]', true ) ?: [] );
+
+        // 添付ファイル
+        $att_raw = get_post_meta( $post->ID, '_gcrev_knowledge_attachments', true );
+        $att_ids = is_array( $att_raw ) ? $att_raw : ( json_decode( $att_raw ?: '[]', true ) ?: [] );
+        $files = [];
+        foreach ( $att_ids as $aid ) {
+            $f = $this->format_attachment( (int) $aid );
+            if ( $f ) { $files[] = $f; }
+        }
+
         return [
             'id'         => $post->ID,
             'title'      => $post->post_title,
             'category'   => get_post_meta( $post->ID, '_gcrev_knowledge_category', true ) ?: 'notes',
             'content'    => get_post_meta( $post->ID, '_gcrev_knowledge_content', true ) ?: '',
             'tags'       => $tags,
+            'files'      => $files,
             'priority'   => (int) ( get_post_meta( $post->ID, '_gcrev_knowledge_priority', true ) ?: 3 ),
             'created_at' => get_post_meta( $post->ID, '_gcrev_knowledge_created_at', true ) ?: '',
             'updated_at' => get_post_meta( $post->ID, '_gcrev_knowledge_updated_at', true ) ?: '',
