@@ -857,20 +857,30 @@ class Gcrev_Writing_Service {
             $parts[] = $profile;
         }
 
-        // 情報ストック
+        // 情報ストック — 「表記ルール・禁止表現」は最優先ルールとして分離
         if ( ! empty( $knowledge_items ) ) {
+            $rules_section = '';
             $kb_section = "## 参照情報（クライアント固有の一次情報）\n";
             $kb_section .= "以下の情報はクライアントから提供された一次情報です。構成案に積極的に活用し、参照した情報を明示してください。\n\n";
             $total_chars = 0;
             foreach ( $knowledge_items as $ki ) {
                 $cat_label = self::KNOWLEDGE_CATEGORIES[ $ki['category'] ] ?? $ki['category'];
                 $content = $ki['content'];
+                if ( $ki['category'] === 'rules' ) {
+                    $rules_section .= "- {$ki['title']}: {$content}\n";
+                    continue;
+                }
                 if ( $total_chars + mb_strlen( $content ) > 8000 ) {
                     $content = mb_substr( $content, 0, max( 0, 8000 - $total_chars ) ) . '…（以下省略）';
                 }
                 $total_chars += mb_strlen( $content );
                 $kb_section .= "### {$ki['title']}（{$cat_label}）\n{$content}\n\n";
                 if ( $total_chars >= 8000 ) { break; }
+            }
+            if ( $rules_section !== '' ) {
+                $parts[] = "## クライアント指定の表記ルール（違反は絶対に許容されない）\n"
+                    . "以下はクライアントが指定した表記・用語ルールです。タイトル案・見出し・すべての出力でこのルールを厳守してください。\n\n"
+                    . $rules_section;
             }
             $parts[] = $kb_section;
         }
@@ -1236,12 +1246,18 @@ INSTRUCTION;
             ? gcrev_get_client_settings( $user_id ) : [];
 
         // 情報ストック（未選択なら全件自動使用）
+        // 「表記ルール・禁止表現」カテゴリは最優先ルールとして分離
         $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
         $knowledge_text = '';
+        $rules_text = '';
         $total = 0;
         foreach ( $knowledge_items as $ki ) {
             $cat_label = self::KNOWLEDGE_CATEGORIES[ $ki['category'] ] ?? $ki['category'];
             $content = $ki['content'];
+            if ( $ki['category'] === 'rules' ) {
+                $rules_text .= "- {$ki['title']}: {$content}\n";
+                continue;
+            }
             if ( $total + mb_strlen( $content ) > 15000 ) {
                 $content = mb_substr( $content, 0, max( 0, 15000 - $total ) ) . '…（以下省略）';
             }
@@ -1286,7 +1302,8 @@ INSTRUCTION;
             $knowledge_text,
             $notes_text,
             $interview_text,
-            $existing_fps
+            $existing_fps,
+            $rules_text
         );
 
         // 追加編集プロンプトがあればドラフトプロンプトに追記
@@ -1338,6 +1355,15 @@ INSTRUCTION;
 
         $this->log( "refine_draft: article_id={$article_id}, prompt_len=" . mb_strlen( $additional_prompt ) );
 
+        // クライアント固有の表記ルールを取得
+        $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
+        $refine_rules = '';
+        foreach ( $knowledge_items as $ki ) {
+            if ( $ki['category'] === 'rules' ) {
+                $refine_rules .= "- {$ki['title']}: {$ki['content']}\n";
+            }
+        }
+
         $prompt = "あなたは日本のローカルビジネス向けコラム記事のライターです。\n"
             . "以下の既存の記事本文に対して、ユーザーの編集指示に従い修正・改善してください。\n\n"
             . "## 編集指示\n{$additional_prompt}\n\n"
@@ -1345,8 +1371,15 @@ INSTRUCTION;
             . "## ルール\n"
             . "- 編集指示に該当する部分のみ修正し、それ以外はできるだけ維持してください\n"
             . "- Markdown形式で出力してください（# タイトル、## 大見出し、### 小見出し）\n"
-            . "- 説明や補足は不要です。修正後の記事本文のみを出力してください\n\n"
-            . "## 文体ガイドライン（修正時も守ること）\n"
+            . "- 説明や補足は不要です。修正後の記事本文のみを出力してください\n\n";
+
+        if ( $refine_rules !== '' ) {
+            $prompt .= "## クライアント指定の表記ルール（違反は絶対に許容されない）\n"
+                . "以下はクライアントが指定した表記・用語ルールです。修正後の本文すべてでこのルールを厳守してください。\n"
+                . $refine_rules . "\n";
+        }
+
+        $prompt .= "## 文体ガイドライン（修正時も守ること）\n"
             . "- 自然で読みやすく、人が書いたような文章にする\n"
             . "- 自画自賛・営業色が強い表現を避ける\n"
             . "- 禁止表現: 期待を超える / 圧倒的 / 可能性を広げる / ビジネスを加速 / 新たな価値を創造 / 魅力を最大限に / 強力な武器 / 欠かせない存在\n"
@@ -1380,7 +1413,7 @@ INSTRUCTION;
         string $keyword, array $outline, string $type, string $purpose,
         string $tone, string $target_reader, array $settings,
         string $knowledge_text, string $notes_text, string $interview_text,
-        array $existing_fingerprints = []
+        array $existing_fingerprints = [], string $rules_text = ''
     ): string {
         $type_label    = self::ARTICLE_TYPES[ $type ] ?? '解説記事';
         $tone_label    = self::TONES[ $tone ] ?? '専門的に';
@@ -1419,6 +1452,14 @@ INSTRUCTION;
             . "- 一次情報（クライアント固有の情報）を最大限に活用し、事実に基づいた記事にする\n"
             . "- 一次情報にないことを断定したり、存在しない実績・数値を捏造してはいけない\n"
             . "- 迷ったら「少し地味なくらいがちょうどよい」と考える";
+
+        // クライアント固有の表記ルール（最優先で適用）
+        if ( $rules_text !== '' ) {
+            $parts[] = "## クライアント指定の表記ルール（違反は絶対に許容されない）\n"
+                . "以下はクライアントが指定した表記・用語ルールです。記事本文のすべての箇所でこのルールを厳守してください。\n"
+                . "見出し・本文・まとめなど記事のあらゆる部分に適用されます。1箇所でも違反があってはいけません。\n\n"
+                . $rules_text;
+        }
 
         // 条件
         $parts[] = "## 記事条件\n"
