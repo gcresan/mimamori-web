@@ -406,6 +406,86 @@ get_header();
     line-height: 1.6;
 }
 
+/* 全体認識サマリー */
+.aio-recognition {
+    background: var(--mw-bg-primary);
+    border: 1px solid var(--mw-border-light);
+    border-radius: var(--mw-radius-md);
+    padding: 28px;
+    margin-bottom: 28px;
+}
+.aio-recognition__header {
+    margin-bottom: 20px;
+}
+.aio-recognition__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--mw-text-heading);
+    margin: 0 0 4px;
+}
+.aio-recognition__quote {
+    background: var(--mw-bg-secondary);
+    border-left: 4px solid var(--mw-primary-blue);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--mw-text-primary);
+}
+.aio-recognition__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+.aio-recognition__block {
+    background: var(--mw-bg-secondary);
+    border-radius: 8px;
+    padding: 20px;
+    border-top: 3px solid var(--mw-border-light);
+}
+.aio-recognition__block--strengths  { border-top-color: #4E8A6B; }
+.aio-recognition__block--weaknesses { border-top-color: #C9A84C; }
+.aio-recognition__block--actions    { border-top-color: var(--mw-primary-blue); }
+.aio-recognition__block-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0 0 12px;
+}
+.aio-recognition__block--strengths  .aio-recognition__block-title { color: #4E8A6B; }
+.aio-recognition__block--weaknesses .aio-recognition__block-title { color: #C9A84C; }
+.aio-recognition__block--actions    .aio-recognition__block-title { color: var(--mw-primary-blue); }
+.aio-recognition__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.aio-recognition__list li {
+    position: relative;
+    padding: 6px 0 6px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--mw-text-secondary);
+}
+.aio-recognition__list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 12px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--mw-border-medium);
+}
+.aio-recognition__block--strengths  .aio-recognition__list li::before { background: #4E8A6B; }
+.aio-recognition__block--weaknesses .aio-recognition__list li::before { background: #C9A84C; }
+.aio-recognition__block--actions    .aio-recognition__list li::before { background: var(--mw-primary-blue); }
+.aio-recognition__fallback {
+    font-size: 13px;
+    color: var(--mw-text-tertiary);
+    line-height: 1.6;
+}
+
 /* レスポンシブ */
 @media (max-width: 768px) {
     .aio-summary-cards { grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -415,6 +495,9 @@ get_header();
     .aio-ranking-table, .aio-kw-table { font-size: 12px; }
     .aio-ranking-table th, .aio-ranking-table td,
     .aio-kw-table th, .aio-kw-table td { padding: 8px 6px; }
+    .aio-recognition { padding: 20px 16px; }
+    .aio-recognition__grid { grid-template-columns: 1fr; }
+    .aio-recognition__quote { padding: 12px 16px; font-size: 14px; }
 }
 </style>
 
@@ -446,6 +529,17 @@ get_header();
             <div class="aio-summary-card__label">最終取得日</div>
             <div class="aio-summary-card__value" id="aioLastFetched" style="font-size:18px;">--</div>
             <div class="aio-summary-card__sub">週1回の定期取得</div>
+        </div>
+    </div>
+
+    <!-- ===== 全体認識サマリー ===== -->
+    <div class="aio-recognition" id="aioRecognition">
+        <div class="aio-recognition__header">
+            <h2 class="aio-recognition__title">AIから見たサイト認識</h2>
+            <div class="aio-section__note">AIO診断データをもとに、AIがこのサイトをどう認識しているかの全体像を要約しています</div>
+        </div>
+        <div id="aioRecognitionContent">
+            <div class="aio-loading"><div class="aio-loading__spinner"></div><div>サマリーを生成中...</div></div>
         </div>
     </div>
 
@@ -561,6 +655,65 @@ get_header();
             : '未取得';
     }).catch(() => {
         document.getElementById('aioScore').textContent = '--';
+    });
+
+    // ===== 全体認識サマリー =====
+    fetchAPI('/recognition-summary').then(res => {
+        const el = document.getElementById('aioRecognitionContent');
+        if (!res.success || !res.data) {
+            el.innerHTML = '<div class="aio-recognition__fallback">認識サマリーの取得に失敗しました。</div>';
+            return;
+        }
+
+        const r = res.data;
+
+        // データなし
+        if (r.status === 'no_data') {
+            el.innerHTML = '<div class="aio-recognition__fallback">' + escHtml(r.message) + '</div>';
+            return;
+        }
+
+        const d = r.data;
+        if (!d || !d.recognition) {
+            el.innerHTML = '<div class="aio-recognition__fallback">現時点ではサマリーを生成できませんでした。データが蓄積されると表示されます。</div>';
+            return;
+        }
+
+        let html = '<div class="aio-recognition__quote">' + escHtml(d.recognition) + '</div>';
+        html += '<div class="aio-recognition__grid">';
+
+        // 強み
+        html += '<div class="aio-recognition__block aio-recognition__block--strengths">';
+        html += '<h3 class="aio-recognition__block-title">現状の強み</h3>';
+        html += '<ul class="aio-recognition__list">';
+        (d.strengths || []).forEach(function(s) { html += '<li>' + escHtml(s) + '</li>'; });
+        html += '</ul></div>';
+
+        // 課題
+        html += '<div class="aio-recognition__block aio-recognition__block--weaknesses">';
+        html += '<h3 class="aio-recognition__block-title">現状の課題</h3>';
+        html += '<ul class="aio-recognition__list">';
+        (d.weaknesses || []).forEach(function(s) { html += '<li>' + escHtml(s) + '</li>'; });
+        html += '</ul></div>';
+
+        // 次の一手
+        html += '<div class="aio-recognition__block aio-recognition__block--actions">';
+        html += '<h3 class="aio-recognition__block-title">次にやるべきこと</h3>';
+        html += '<ul class="aio-recognition__list">';
+        (d.next_actions || []).forEach(function(s) { html += '<li>' + escHtml(s) + '</li>'; });
+        html += '</ul></div>';
+
+        html += '</div>';
+
+        // フォールバック注記
+        if (r.status === 'fallback') {
+            html += '<div style="font-size:12px;color:var(--mw-text-tertiary);margin-top:12px;">※ 現時点の取得データをもとにした暫定的な要約です。今後の計測蓄積により、より正確な傾向が見えるようになります。</div>';
+        }
+
+        el.innerHTML = html;
+    }).catch(function() {
+        var el = document.getElementById('aioRecognitionContent');
+        if (el) el.innerHTML = '<div class="aio-recognition__fallback">認識サマリーの読み込みに失敗しました。</div>';
     });
 
     // ===== ランキング =====

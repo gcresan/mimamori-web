@@ -335,6 +335,243 @@ class Gcrev_AIO_Serp_Service {
     }
 
     // =========================================================
+    // 全体認識サマリー生成
+    // =========================================================
+
+    /**
+     * AIから見たサイト全体の認識サマリーを生成（Gemini）
+     *
+     * Transient キャッシュ（24h）あり。データ不足時はフォールバック。
+     */
+    public function generate_recognition_summary( int $user_id ): array {
+        // キャッシュチェック
+        $cache_key = "gcrev_aio_recog_{$user_id}";
+        $cached    = get_transient( $cache_key );
+        if ( is_array( $cached ) ) {
+            return $cached;
+        }
+
+        // データ収集
+        $keyword_results = $this->get_latest_results( $user_id );
+        $self_domains    = $this->get_self_domains( $user_id );
+        $aggregated      = $this->aggregator->aggregate_all( $keyword_results, $self_domains );
+        $payload         = $this->aggregator->build_ai_comment_payload( $aggregated );
+
+        // データ不足チェック
+        if ( ( $aggregated['aio_keyword_count'] ?? 0 ) === 0 ) {
+            return [
+                'status'  => 'no_data',
+                'message' => 'まだAIOデータが取得されていません。上部のボタンからデータを取得すると、AIから見たサイトの認識傾向を表示します。',
+            ];
+        }
+
+        // 改善提案データも収集（利用可能なら）
+        $improvements = $this->get_improvement_suggestions( $user_id );
+        $gaps_summary = [];
+        if ( ( $improvements['status'] ?? '' ) === 'complete' ) {
+            $gaps = $improvements['data']['gaps'] ?? [];
+            foreach ( array_slice( $gaps, 0, 5 ) as $g ) {
+                $gaps_summary[] = $g['title'] ?? '';
+            }
+        }
+
+        // サイト情報
+        $site_url  = get_user_meta( $user_id, 'gcrev_client_site_url', true ) ?: '';
+        $site_name = get_user_meta( $user_id, 'gcrev_client_company', true ) ?: '';
+
+        // Gemini で構造化サマリー生成
+        if ( ! class_exists( 'Gcrev_AI_Client' ) ) {
+            return $this->build_fallback_summary( $payload, $gaps_summary );
+        }
+
+        $ai_client = new Gcrev_AI_Client( $this->config );
+        $prompt    = $this->build_recognition_prompt( $payload, $gaps_summary, $site_name, $site_url );
+
+        try {
+            $raw = $ai_client->call_gemini_api( $prompt, [
+                'temperature'       => 0.5,
+                'max_output_tokens' => 1024,
+            ] );
+
+            $parsed = $this->parse_recognition_json( $raw );
+            if ( $parsed ) {
+                $result = [
+                    'status' => 'ok',
+                    'data'   => $parsed,
+                ];
+                set_transient( $cache_key, $result, DAY_IN_SECONDS );
+                return $result;
+            }
+
+            // JSON パース失敗 → フォールバック
+            self::log( "Recognition summary JSON parse failed, raw=" . substr( $raw, 0, 500 ) );
+            $fallback = $this->build_fallback_summary( $payload, $gaps_summary );
+            set_transient( $cache_key, $fallback, 6 * HOUR_IN_SECONDS );
+            return $fallback;
+
+        } catch ( \Exception $e ) {
+            self::log( "Recognition summary error: " . $e->getMessage() );
+            $fallback = $this->build_fallback_summary( $payload, $gaps_summary );
+            set_transient( $cache_key, $fallback, 6 * HOUR_IN_SECONDS );
+            return $fallback;
+        }
+    }
+
+    /**
+     * Gemini 向けプロンプト（構造化JSON出力を要求）
+     */
+    private function build_recognition_prompt( array $payload, array $gaps_summary, string $site_name, string $site_url ): string {
+        $json_payload = wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
+        $gaps_text    = ! empty( $gaps_summary ) ? implode( "\n- ", $gaps_summary ) : 'なし';
+        $site_info    = '';
+        if ( $site_name ) {
+            $site_info .= "サイト名: {$site_name}\n";
+        }
+        if ( $site_url ) {
+            $site_info .= "URL: {$site_url}\n";
+        }
+
+        return <<<PROMPT
+あなたはWebマーケティングの専門家です。以下は、あるウェブサイトのGoogle AI Overview（AIO）での露出状況データです。
+
+{$site_info}
+## AIO露出データ
+```json
+{$json_payload}
+```
+
+## 検出された改善課題
+- {$gaps_text}
+
+このデータをもとに、「AIがこのサイトをどう認識しているか」の全体サマリーを、以下のJSON形式で出力してください。
+
+```json
+{
+  "recognition": "AIがこのサイトをどういうサイトとして見ているかの要約（1〜2文、自然な日本語）",
+  "strengths": ["強み1", "強み2", "強み3"],
+  "weaknesses": ["課題1", "課題2", "課題3"],
+  "next_actions": ["次にやるべきこと1", "次にやるべきこと2", "次にやるべきこと3"]
+}
+```
+
+ルール:
+- 各配列は2〜4項目
+- 各項目は1文（20〜60文字程度）で簡潔に
+- 専門用語を避け、初心者でも理解できる平易な日本語で
+- 「現時点の計測データから見ると」のように、断定しすぎない控えめな表現で
+- strong_keywords にあるテーマを「強み」に、weak_keywords にあるテーマを「課題」に反映
+- 出力はJSONのみ（前後の説明文は不要）
+PROMPT;
+    }
+
+    /**
+     * Gemini レスポンスから JSON オブジェクトを抽出・パース
+     */
+    private function parse_recognition_json( string $raw ): ?array {
+        $text = trim( $raw );
+        // コードフェンス除去
+        $text = preg_replace( '/```(?:json)?\s*/i', '', $text );
+        $text = str_replace( '```', '', $text );
+        $text = trim( $text );
+
+        // 最初の { から最後の } を抽出
+        $start = strpos( $text, '{' );
+        $end   = strrpos( $text, '}' );
+        if ( $start === false || $end === false || $end <= $start ) {
+            return null;
+        }
+
+        $json = substr( $text, $start, $end - $start + 1 );
+        $data = json_decode( $json, true );
+
+        if ( ! is_array( $data ) ) {
+            return null;
+        }
+
+        // 必須フィールド検証
+        $required = [ 'recognition', 'strengths', 'weaknesses', 'next_actions' ];
+        foreach ( $required as $key ) {
+            if ( ! isset( $data[ $key ] ) ) {
+                return null;
+            }
+        }
+
+        // サニタイズ
+        return [
+            'recognition'  => sanitize_text_field( $data['recognition'] ),
+            'strengths'    => array_map( 'sanitize_text_field', array_slice( (array) $data['strengths'], 0, 4 ) ),
+            'weaknesses'   => array_map( 'sanitize_text_field', array_slice( (array) $data['weaknesses'], 0, 4 ) ),
+            'next_actions' => array_map( 'sanitize_text_field', array_slice( (array) $data['next_actions'], 0, 4 ) ),
+        ];
+    }
+
+    /**
+     * Gemini 利用不可・失敗時のフォールバックサマリー
+     */
+    private function build_fallback_summary( array $payload, array $gaps_summary ): array {
+        $strong = $payload['strong_keywords'] ?? [];
+        $weak   = $payload['weak_keywords'] ?? [];
+        $score  = $payload['self_score'] ?? 0;
+
+        $recognition = '現時点の計測データをもとにした暫定的な要約です。';
+        if ( $score > 0 ) {
+            $recognition = "AIO露出スコアは{$score}点で、一部のキーワードでAI検索結果に表示されています。";
+        }
+
+        $strengths = [];
+        if ( ! empty( $strong ) ) {
+            $strengths[] = '「' . implode( '」「', array_slice( $strong, 0, 3 ) ) . '」のテーマでAIOに引用されています';
+        }
+        $coverage = $payload['self_coverage'] ?? 0;
+        if ( $coverage > 0 ) {
+            $strengths[] = "設定キーワードの{$coverage}%でAI検索結果に露出しています";
+        }
+        if ( empty( $strengths ) ) {
+            $strengths[] = '今後の計測蓄積により、より正確な傾向が見えるようになります';
+        }
+
+        $weaknesses = [];
+        if ( ! empty( $weak ) ) {
+            $weaknesses[] = '「' . implode( '」「', array_slice( $weak, 0, 3 ) ) . '」のテーマではまだAIOに表示されていません';
+        }
+        if ( ! empty( $gaps_summary ) ) {
+            foreach ( array_slice( $gaps_summary, 0, 2 ) as $g ) {
+                if ( $g ) {
+                    $weaknesses[] = $g;
+                }
+            }
+        }
+        if ( empty( $weaknesses ) ) {
+            $weaknesses[] = '十分な計測データが蓄積されると、課題が明確になります';
+        }
+
+        $next_actions = [];
+        if ( ! empty( $weak ) ) {
+            $next_actions[] = '「' . ( $weak[0] ?? '' ) . '」に関する専用ページの充実を検討する';
+        }
+        if ( ! empty( $gaps_summary ) ) {
+            foreach ( array_slice( $gaps_summary, 0, 2 ) as $g ) {
+                if ( $g ) {
+                    $next_actions[] = $g;
+                }
+            }
+        }
+        if ( empty( $next_actions ) ) {
+            $next_actions[] = 'まずはデータの蓄積を続け、傾向を把握しましょう';
+        }
+
+        return [
+            'status' => 'fallback',
+            'data'   => [
+                'recognition'  => $recognition,
+                'strengths'    => $strengths,
+                'weaknesses'   => $weaknesses,
+                'next_actions' => $next_actions,
+            ],
+        ];
+    }
+
+    // =========================================================
     // 競合ページ分析 & 改善提案
     // =========================================================
 
