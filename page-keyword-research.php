@@ -589,7 +589,7 @@ get_header();
             return '<span class="kwr-badge ' + cls + '">' + n + '</span>';
         }
         if (compIndex !== null && compIndex !== undefined) {
-            return '<span class="kwr-badge kwr-diff-ads" title="SEO難易度は未取得。広告競合度を参考表示">広告:' + Math.round(compIndex) + '</span>';
+            return '<span class="kwr-badge kwr-diff-ads" title="SEO難易度は未取得。広告競争度を参考表示">広告競争度:' + Math.round(compIndex) + '</span>';
         }
         return '<span class="kwr-diff-na" title="データなし">-</span>';
     }
