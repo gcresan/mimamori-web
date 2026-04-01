@@ -1749,6 +1749,7 @@ function mimamori_call_whisper_api( string $file_path, string $language = 'ja', 
             'model'           => 'whisper-1',
             'language'        => $language,
             'response_format' => 'json',
+            'prompt'          => '一人の話者による口述です。話者ラベルや「話し手」等の注釈は付けず、発話内容をそのまま書き起こしてください。',
         ],
     ] );
 
