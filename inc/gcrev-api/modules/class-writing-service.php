@@ -214,12 +214,38 @@ class Gcrev_Writing_Service {
             return [ 'success' => false, 'error' => '記事の作成に失敗しました。' ];
         }
 
+        // クライアント設定からペルソナ情報を取得して想定読者の初期値にする
+        $default_reader = '';
+        if ( function_exists( 'gcrev_get_client_settings' ) ) {
+            $cs = gcrev_get_client_settings( $user_id );
+            $reader_parts = [];
+            if ( ! empty( $cs['persona_one_liner'] ) ) {
+                $reader_parts[] = $cs['persona_one_liner'];
+            } else {
+                if ( ! empty( $cs['persona_age_ranges'] ) ) {
+                    $reader_parts[] = implode( '・', $cs['persona_age_ranges'] );
+                }
+                if ( ! empty( $cs['persona_genders'] ) ) {
+                    $reader_parts[] = implode( '・', $cs['persona_genders'] );
+                }
+                if ( ! empty( $cs['persona_attributes'] ) ) {
+                    $reader_parts[] = implode( '、', $cs['persona_attributes'] );
+                }
+            }
+            $area_label = function_exists( 'gcrev_get_client_area_label' )
+                ? gcrev_get_client_area_label( $cs ) : '';
+            if ( $area_label && ! empty( $cs['industry'] ) ) {
+                $reader_parts[] = "{$area_label}で{$cs['industry']}を探している方";
+            }
+            $default_reader = implode( ' / ', array_filter( $reader_parts ) );
+        }
+
         update_post_meta( $post_id, '_gcrev_article_user_id', $user_id );
         update_post_meta( $post_id, '_gcrev_article_keyword', $keyword );
         update_post_meta( $post_id, '_gcrev_article_type', 'explanation' );
         update_post_meta( $post_id, '_gcrev_article_purpose', 'traffic' );
         update_post_meta( $post_id, '_gcrev_article_tone', 'professional' );
-        update_post_meta( $post_id, '_gcrev_article_target_reader', '' );
+        update_post_meta( $post_id, '_gcrev_article_target_reader', $default_reader );
         update_post_meta( $post_id, '_gcrev_article_outline_json', '' );
         update_post_meta( $post_id, '_gcrev_article_selected_knowledge_ids', '[]' );
         update_post_meta( $post_id, '_gcrev_article_status', 'keyword_set' );
