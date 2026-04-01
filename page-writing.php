@@ -148,6 +148,15 @@ get_header();
 .wrt-file-item__size { color: var(--mw-text-tertiary); font-size: 11px; white-space: nowrap; }
 .wrt-file-item__del { background: none; border: none; color: #C95A4F; cursor: pointer; font-size: 14px; padding: 2px; }
 
+/* ドロップゾーン */
+.wrt-dropzone { border: 2px dashed var(--mw-border-light); border-radius: 10px; padding: 20px; text-align: center; transition: all 0.2s; cursor: pointer; }
+.wrt-dropzone.drag-over { border-color: var(--mw-primary-blue, #4A90A4); background: rgba(74,144,164,0.04); }
+.wrt-dropzone.disabled { opacity: 0.5; pointer-events: none; }
+.wrt-dropzone__icon { font-size: 28px; margin-bottom: 6px; }
+.wrt-dropzone__text { font-size: 13px; font-weight: 600; color: var(--mw-text-secondary); }
+.wrt-dropzone__sub { font-size: 12px; color: var(--mw-text-tertiary); margin-top: 4px; }
+.wrt-dropzone__link { color: var(--mw-primary-blue, #4A90A4); text-decoration: underline; cursor: pointer; }
+
 @media (max-width: 768px) {
     .wrt-modal { padding: 20px; max-width: 95%; }
     .wrt-detail { padding: 16px; }
@@ -257,11 +266,15 @@ get_header();
             <div class="wrt-modal__field" id="wrtKnowledgeFileSection">
                 <label>添付ファイル</label>
                 <div id="wrtKnowledgeFileList" style="margin-bottom:8px;"></div>
-                <div style="display:flex;gap:8px;align-items:center;">
-                    <input type="file" id="wrtKnowledgeFileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.gif,.webp" style="font-size:12px;">
-                    <button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtKnowledgeFileUploadBtn" type="button">アップロード</button>
+                <div class="wrt-dropzone" id="wrtDropzone">
+                    <div class="wrt-dropzone__inner" id="wrtDropzoneInner">
+                        <div class="wrt-dropzone__icon">📎</div>
+                        <div class="wrt-dropzone__text">ファイルをドラッグ＆ドロップ</div>
+                        <div class="wrt-dropzone__sub">または <label for="wrtKnowledgeFileInput" class="wrt-dropzone__link">ファイルを選択</label></div>
+                        <input type="file" id="wrtKnowledgeFileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.gif,.webp" style="display:none;">
+                    </div>
                 </div>
-                <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">PDF, Word, Excel, CSV, テキスト, 画像ファイルに対応</div>
+                <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">PDF, Word, Excel, CSV, テキスト, 画像に対応</div>
             </div>
             <div class="wrt-modal__actions">
                 <button class="wrt-btn wrt-btn--secondary" id="wrtKnowledgeModalCancel" type="button">キャンセル</button>
@@ -853,7 +866,7 @@ get_header();
         } else {
             document.getElementById('wrtKnowledgeFileList').innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">先に保存してからファイルを添付できます</span>';
         }
-        document.getElementById('wrtKnowledgeFileUploadBtn').disabled = isNew;
+        document.getElementById('wrtDropzone').classList.toggle('disabled', isNew);
         document.getElementById('wrtKnowledgeFileInput').disabled = isNew;
         document.getElementById('wrtKnowledgeFileInput').value = '';
         document.getElementById('wrtKnowledgeModal').classList.add('active');
@@ -905,7 +918,7 @@ get_header();
                 if (!body.id && res.item) {
                     currentKnowledgeItem = res.item;
                     document.getElementById('wrtKnowledgeId').value = res.item.id;
-                    document.getElementById('wrtKnowledgeFileUploadBtn').disabled = false;
+                    document.getElementById('wrtDropzone').classList.remove('disabled');
                     document.getElementById('wrtKnowledgeFileInput').disabled = false;
                     renderKnowledgeFiles([]);
                 } else {
@@ -917,11 +930,8 @@ get_header();
         }).catch(function() { showToast('通信エラー', true); });
     });
 
-    /* ===== ファイルアップロード ===== */
-    document.getElementById('wrtKnowledgeFileUploadBtn').addEventListener('click', function() {
-        var fileInput = document.getElementById('wrtKnowledgeFileInput');
-        var file = fileInput.files[0];
-        if (!file) { showToast('ファイルを選択してください', true); return; }
+    /* ===== ファイルアップロード（ドラッグ&ドロップ + クリック選択） ===== */
+    function uploadKnowledgeFile(file) {
         var kid = parseInt(document.getElementById('wrtKnowledgeId').value);
         if (kid < 1) { showToast('先に情報を保存してからファイルを添付してください', true); return; }
 
@@ -939,9 +949,8 @@ get_header();
             hideProgress();
             if (res.success) {
                 showToast('ファイルをアップロードしました');
-                fileInput.value = '';
+                document.getElementById('wrtKnowledgeFileInput').value = '';
                 loadKnowledge();
-                // ファイルリスト更新
                 apiFetch('/knowledge').then(function(r2) {
                     knowledgeData = r2.items || [];
                     var item = knowledgeData.find(function(k) { return k.id === kid; });
@@ -952,6 +961,29 @@ get_header();
             }
         })
         .catch(function() { hideProgress(); showToast('通信エラー', true); });
+    }
+
+    // ファイル選択（クリック）
+    document.getElementById('wrtKnowledgeFileInput').addEventListener('change', function() {
+        if (this.files[0]) uploadKnowledgeFile(this.files[0]);
+    });
+
+    // ドラッグ&ドロップ
+    var dropzone = document.getElementById('wrtDropzone');
+    dropzone.addEventListener('dragover', function(e) { e.preventDefault(); e.stopPropagation(); this.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', function(e) { e.preventDefault(); e.stopPropagation(); this.classList.remove('drag-over'); });
+    dropzone.addEventListener('drop', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        this.classList.remove('drag-over');
+        if (this.classList.contains('disabled')) { showToast('先に情報を保存してください', true); return; }
+        var files = e.dataTransfer.files;
+        if (files.length > 0) uploadKnowledgeFile(files[0]);
+    });
+    // ドロップゾーン全体クリックでもファイル選択を開く
+    dropzone.addEventListener('click', function(e) {
+        if (e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') return;
+        if (this.classList.contains('disabled')) return;
+        document.getElementById('wrtKnowledgeFileInput').click();
     });
 
     /* ===== 初期化 ===== */
