@@ -128,9 +128,21 @@ get_header();
 .kwr-trend-down { color: #C95A4F; }
 .kwr-trend-stable { color: var(--mw-text-tertiary); }
 
-/* 競合キーワード比較セクション */
-.kwr-comp-kw-url { font-size: 12px; font-weight: 600; color: var(--mw-text-heading); margin: 16px 0 8px; word-break: break-all; }
-.kwr-comp-kw-url:first-child { margin-top: 0; }
+/* 競合キーワード比較セクション — トグル */
+.kwr-comp-kw-toggle {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px; margin-top: 12px;
+    background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light);
+    border-radius: 8px; cursor: pointer; user-select: none; transition: background 0.15s;
+}
+.kwr-comp-kw-toggle:first-of-type { margin-top: 0; }
+.kwr-comp-kw-toggle:hover { background: rgba(74,144,164,0.06); }
+.kwr-comp-kw-toggle__arrow { font-size: 11px; color: var(--mw-text-tertiary); transition: transform 0.2s; flex-shrink: 0; }
+.kwr-comp-kw-toggle__arrow.collapsed { transform: rotate(-90deg); }
+.kwr-comp-kw-toggle__url { font-size: 13px; font-weight: 600; color: var(--mw-primary-blue, #4A90A4); word-break: break-all; }
+.kwr-comp-kw-toggle__count { font-size: 12px; color: var(--mw-text-tertiary); margin-left: auto; white-space: nowrap; flex-shrink: 0; }
+.kwr-comp-kw-body { display: none; padding: 4px 0 8px; }
+.kwr-comp-kw-body.open { display: block; }
 .kwr-comp-kw-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
 .kwr-comp-kw-table th { padding: 6px 10px; text-align: left; font-weight: 600; color: var(--mw-text-secondary); font-size: 11px; background: var(--mw-bg-secondary); border-bottom: 1px solid var(--mw-border-light); }
 .kwr-comp-kw-table td { padding: 6px 10px; border-bottom: 1px solid var(--mw-border-light); }
@@ -226,6 +238,18 @@ get_header();
 
 .kwr-badge--action-improve  { background: rgba(74,144,164,0.12); color: #2D7A8F; }
 .kwr-badge--action-new      { background: rgba(78,138,107,0.12); color: #4E8A6B; }
+
+/* 記事作成ボタン */
+.kwr-btn-create {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    background: #4E8A6B; color: #fff; text-decoration: none;
+    white-space: nowrap; transition: background 0.15s, box-shadow 0.15s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.kwr-btn-create:hover { background: #3d7358; box-shadow: 0 2px 6px rgba(78,138,107,0.3); color: #fff; }
+.kwr-btn-create:active { background: #346248; }
+.kwr-btn-create svg { width: 13px; height: 13px; flex-shrink: 0; }
 .kwr-badge--action-title    { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .kwr-badge--action-heading  { background: rgba(124,58,237,0.1); color: #7C3AED; }
 .kwr-badge--action-link     { background: rgba(201,90,79,0.08); color: #C95A4F; }
@@ -465,16 +489,16 @@ get_header();
         <div id="kwrCompSummaryContent"></div>
     </div>
 
-    <!-- ===== 競合キーワード比較（Keyword Planner） ===== -->
-    <div class="kwr-summary" id="kwrCompKeywords" style="display:none;">
-        <h2 class="kwr-summary__title">競合キーワード比較（Google Keyword Planner）</h2>
-        <div id="kwrCompKeywordsContent"></div>
-    </div>
-
     <!-- ===== グループ別キーワード一覧 ===== -->
     <div id="kwrResults" style="display:none;">
         <h2 class="kwr-results-title">キーワード候補一覧</h2>
         <div id="kwrGroups"></div>
+    </div>
+
+    <!-- ===== 競合キーワード比較（Keyword Planner） ===== -->
+    <div class="kwr-summary" id="kwrCompKeywords" style="display:none;">
+        <h2 class="kwr-summary__title">競合キーワード比較（Google Keyword Planner）</h2>
+        <div id="kwrCompKeywordsContent"></div>
     </div>
 
     <!-- ===== 空状態 ===== -->
@@ -846,7 +870,7 @@ get_header();
                 + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
                 + '<td style="font-size:12px;color:var(--mw-text-secondary);">' + esc(item.reason) + '</td>'
                 + '<td>' + badge(item.action, actClass) + '</td>'
-                + '<td><a href="' + writingUrl + '?keyword=' + encodeURIComponent(item.keyword) + '" class="kwr-badge kwr-badge--action-new" style="text-decoration:none;" title="このキーワードで記事を作成">記事作成</a></td>'
+                + '<td><a href="' + writingUrl + '?keyword=' + encodeURIComponent(item.keyword) + '" class="kwr-btn-create" title="このキーワードで記事を作成"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"/><path d="M16 12.25a.75.75 0 01.75.75v2.25H19a.75.75 0 010 1.5h-2.25V19a.75.75 0 01-1.5 0v-2.25H13a.75.75 0 010-1.5h2.25V13a.75.75 0 01.75-.75z"/></svg>記事作成</a></td>'
                 + '</tr>';
         });
         html += '</tbody></table>';
@@ -970,21 +994,46 @@ get_header();
         var hasData = false;
         var wrapper = document.getElementById('kwrCompKeywordsContent');
         wrapper.innerHTML = '<p style="font-size:13px;color:var(--mw-text-secondary);margin-bottom:16px;">'
-            + 'Google Keyword Planner が各競合URLに関連付けているキーワードです。検索ボリュームは Google の実データに基づいています。</p>';
+            + 'Google Keyword Planner が各競合URLに関連付けているキーワードです。検索ボリュームは Google の実データに基づいています。<br>'
+            + '競合URLをクリックするとキーワードデータを表示します。</p>';
 
         urls.forEach(function(url, idx) {
             var kws = compPlannerKeywords[url];
             if (!kws || kws.length === 0) return;
             hasData = true;
-            var urlLabel = document.createElement('div');
-            urlLabel.className = 'kwr-comp-kw-url';
-            urlLabel.textContent = url;
-            wrapper.appendChild(urlLabel);
 
-            var tableContainer = document.createElement('div');
-            wrapper.appendChild(tableContainer);
+            // トグルヘッダー
+            var toggle = document.createElement('div');
+            toggle.className = 'kwr-comp-kw-toggle';
+            toggle.innerHTML = '<span class="kwr-comp-kw-toggle__arrow collapsed">▼</span>'
+                + '<span class="kwr-comp-kw-toggle__url">' + esc(url) + '</span>'
+                + '<span class="kwr-comp-kw-toggle__count">' + kws.length + '件</span>';
+            wrapper.appendChild(toggle);
+
+            // テーブルコンテナ（初期非表示）
+            var body = document.createElement('div');
+            body.className = 'kwr-comp-kw-body';
+            wrapper.appendChild(body);
+
             var urlHash = 'comp_' + idx;
-            renderCompTable(tableContainer, kws, urlHash);
+            var rendered = false;
+
+            toggle.addEventListener('click', (function(b, k, uh) {
+                return function() {
+                    var isOpen = b.classList.contains('open');
+                    if (isOpen) {
+                        b.classList.remove('open');
+                        this.querySelector('.kwr-comp-kw-toggle__arrow').classList.add('collapsed');
+                    } else {
+                        b.classList.add('open');
+                        this.querySelector('.kwr-comp-kw-toggle__arrow').classList.remove('collapsed');
+                        if (!rendered) {
+                            renderCompTable(b, k, uh);
+                            rendered = true;
+                        }
+                    }
+                };
+            })(body, kws, urlHash));
         });
 
         el.style.display = hasData ? '' : 'none';
