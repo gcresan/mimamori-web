@@ -1277,14 +1277,6 @@ FORMAT;
      * 文字列の途中で切れていたら閉じ、開きブラケットを数えて閉じる。
      */
     private function try_repair_json( string $json ): ?array {
-        // まず AI JSON パーサーが使えれば委譲
-        if ( class_exists( 'Gcrev_AI_Json_Parser' ) ) {
-            $result = Gcrev_AI_Json_Parser::parse( $json );
-            if ( is_array( $result ) && ! empty( $result ) ) {
-                return $result;
-            }
-        }
-
         // 手動修復: 開いている文字列を閉じ、ブラケットを数えて閉じる
         $repaired = $json;
 
