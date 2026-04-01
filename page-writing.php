@@ -692,7 +692,7 @@ get_header();
                 html += '<div style="font-size:12px;color:var(--mw-text-tertiary);margin-top:2px;">キーワード: ' + esc(sa.keyword) + '</div>';
                 html += '<div style="font-size:12px;color:' + simColor + ';margin-top:4px;">' + esc(sa.reason) + '</div>';
                 if (sa.differentiation_suggestion) {
-                    html += '<div style="font-size:12px;color:var(--mw-primary-green);margin-top:4px;">→ ' + esc(sa.differentiation_suggestion) + '</div>';
+                    html += '<div style="font-size:12px;color:#4E8A6B;margin-top:4px;">→ ' + esc(sa.differentiation_suggestion) + '</div>';
                 }
                 html += '</div>';
             });
@@ -700,7 +700,7 @@ get_header();
         if (result.suggested_angles && result.suggested_angles.length > 0) {
             html += '<div style="font-size:14px;font-weight:600;margin:12px 0 8px;">別の切り口を提案 <span style="font-size:11px;font-weight:400;color:var(--mw-text-tertiary);">クリックで選択</span></div>';
             result.suggested_angles.forEach(function(angle, idx) {
-                html += '<div class="wrt-suggested-angle" data-angle-idx="' + idx + '" style="padding:8px 12px;background:var(--mw-bg-secondary);border:1px solid var(--mw-border-light);border-radius:6px;margin-bottom:4px;font-size:13px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.background=\'var(--mw-primary-green)\';this.style.color=\'#fff\';this.style.borderColor=\'var(--mw-primary-green)\';" onmouseout="this.style.background=\'var(--mw-bg-secondary)\';this.style.color=\'inherit\';this.style.borderColor=\'var(--mw-border-light)\';">・' + esc(angle) + '</div>';
+                html += '<div class="wrt-suggested-angle" data-angle-idx="' + idx + '" style="padding:8px 12px;background:var(--mw-bg-secondary);border:1px solid var(--mw-border-light);border-radius:6px;margin-bottom:4px;font-size:13px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.background=\'#4E8A6B\';this.style.color=\'#fff\';this.style.borderColor=\'#4E8A6B\';" onmouseout="this.style.background=\'\';this.style.color=\'\';this.style.borderColor=\'\';">・' + esc(angle) + '</div>';
             });
         }
         html += '</div>';
@@ -781,7 +781,7 @@ get_header();
                     html += '<span style="font-weight:500;">' + esc(sa.title || sa.keyword) + '</span>';
                     html += ' — <span style="color:var(--mw-text-tertiary);">' + esc(sa.reason) + '</span>';
                     if (sa.differentiation_suggestion) {
-                        html += '<div style="color:var(--mw-primary-green);margin-top:2px;">→ ' + esc(sa.differentiation_suggestion) + '</div>';
+                        html += '<div style="color:#4E8A6B;margin-top:2px;">→ ' + esc(sa.differentiation_suggestion) + '</div>';
                     }
                     html += '</div>';
                 });
