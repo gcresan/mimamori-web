@@ -89,9 +89,12 @@ get_header();
 
 /* 記事詳細ビュー */
 .wrt-detail { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); padding: 28px; }
-.wrt-detail__header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.wrt-detail__keyword { font-size: 20px; font-weight: 700; color: var(--mw-text-heading); flex: 1; }
-.wrt-detail__back { font-size: 13px; color: var(--mw-text-tertiary); cursor: pointer; text-decoration: underline; }
+.wrt-detail__topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.wrt-detail__back { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border: 1px solid var(--mw-border-light); border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--mw-text-secondary); cursor: pointer; background: var(--mw-bg-secondary); transition: all 0.15s; text-decoration: none; }
+.wrt-detail__back:hover { background: var(--mw-bg-primary); border-color: var(--mw-primary-blue); color: var(--mw-text-heading); }
+.wrt-detail__keyword-section { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; padding: 16px 20px; background: var(--mw-bg-secondary); border-radius: 10px; border: 1px solid var(--mw-border-light); }
+.wrt-detail__keyword-label { font-size: 13px; font-weight: 600; color: var(--mw-text-tertiary); white-space: nowrap; }
+.wrt-detail__keyword-value { font-size: 20px; font-weight: 700; color: var(--mw-text-heading); }
 .wrt-detail-section { margin-bottom: 24px; }
 .wrt-detail-section__title { font-size: 14px; font-weight: 600; color: var(--mw-text-heading); margin-bottom: 12px; border-bottom: 1px solid var(--mw-border-light); padding-bottom: 8px; }
 .wrt-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
@@ -414,10 +417,14 @@ get_header();
         view.style.display = '';
 
         var html = '<div class="wrt-detail">';
-        html += '<div class="wrt-detail__header">';
+        html += '<div class="wrt-detail__topbar">';
         html += '<span class="wrt-detail__back" id="wrtBackBtn">← 一覧に戻る</span>';
-        html += '<span class="wrt-detail__keyword">' + esc(a.keyword) + '</span>';
+        html += '<span style="flex:1;"></span>';
         html += '<button class="wrt-btn wrt-btn--danger wrt-btn--sm" id="wrtDeleteArticleBtn">削除</button>';
+        html += '</div>';
+        html += '<div class="wrt-detail__keyword-section">';
+        html += '<span class="wrt-detail__keyword-label">対策キーワード</span>';
+        html += '<span class="wrt-detail__keyword-value">' + esc(a.keyword) + '</span>';
         html += '</div>';
 
         // 設定セクション

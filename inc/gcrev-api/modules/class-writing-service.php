@@ -240,11 +240,14 @@ class Gcrev_Writing_Service {
             $default_reader = implode( ' / ', array_filter( $reader_parts ) );
         }
 
+        // キーワードから最適な記事タイプ・目的・文体をルールベースで推定
+        $auto = $this->detect_article_settings( $keyword, $cs ?? [] );
+
         update_post_meta( $post_id, '_gcrev_article_user_id', $user_id );
         update_post_meta( $post_id, '_gcrev_article_keyword', $keyword );
-        update_post_meta( $post_id, '_gcrev_article_type', 'explanation' );
-        update_post_meta( $post_id, '_gcrev_article_purpose', 'traffic' );
-        update_post_meta( $post_id, '_gcrev_article_tone', 'professional' );
+        update_post_meta( $post_id, '_gcrev_article_type', $auto['type'] );
+        update_post_meta( $post_id, '_gcrev_article_purpose', $auto['purpose'] );
+        update_post_meta( $post_id, '_gcrev_article_tone', $auto['tone'] );
         update_post_meta( $post_id, '_gcrev_article_target_reader', $default_reader );
         update_post_meta( $post_id, '_gcrev_article_outline_json', '' );
         update_post_meta( $post_id, '_gcrev_article_selected_knowledge_ids', '[]' );
@@ -1055,6 +1058,81 @@ RULES;
         if ( $in_list ) { $html .= "</ul>\n"; }
 
         return $html;
+    }
+
+    // =========================================================
+    // 記事設定の自動推定
+    // =========================================================
+
+    /**
+     * キーワードから最適な記事タイプ・目的・文体をルールベースで推定
+     */
+    private function detect_article_settings( string $keyword, array $client_settings = [] ): array {
+        $kw = mb_strtolower( $keyword );
+
+        // デフォルト
+        $type    = 'explanation';
+        $purpose = 'traffic';
+        $tone    = 'professional';
+
+        // --- 記事タイプ推定 ---
+        // 比較系
+        if ( preg_match( '/比較|vs|おすすめ|ランキング|選び方|違い/', $kw ) ) {
+            $type = 'comparison';
+        }
+        // FAQ系
+        elseif ( preg_match( '/とは|って何|よくある質問|faq|知りたい/', $kw ) ) {
+            $type = 'faq';
+        }
+        // 事例系
+        elseif ( preg_match( '/事例|実績|導入|成功|体験|口コミ|レビュー/', $kw ) ) {
+            $type = 'case_study';
+        }
+        // 地域系（都道府県名・市区町村名を含む）
+        elseif ( preg_match( '/県|市|区|町|村|駅|エリア/', $kw ) ) {
+            $type = 'local';
+        }
+        // クライアントのエリア名を含む場合も地域記事
+        $area_pref   = $client_settings['area_pref'] ?? '';
+        $area_city   = $client_settings['area_city'] ?? '';
+        $area_custom = $client_settings['area_custom'] ?? '';
+        if ( $area_pref && mb_strpos( $kw, mb_strtolower( $area_pref ) ) !== false ) {
+            $type = 'local';
+        }
+        if ( $area_city && mb_strpos( $kw, mb_strtolower( $area_city ) ) !== false ) {
+            $type = 'local';
+        }
+
+        // --- 目的推定 ---
+        if ( preg_match( '/料金|費用|価格|見積|相場|安い/', $kw ) ) {
+            $purpose = 'inquiry'; // 問い合わせ獲得
+        } elseif ( $type === 'local' ) {
+            $purpose = 'local_seo';
+        } elseif ( $type === 'comparison' ) {
+            $purpose = 'comparison';
+        } elseif ( preg_match( '/会社名|サービス名|ブランド/', $kw ) ) {
+            $purpose = 'brand';
+        }
+        // 業種名 + エリア → 問い合わせ獲得
+        $industry = $client_settings['industry'] ?? '';
+        if ( $industry && mb_strpos( $kw, mb_strtolower( $industry ) ) !== false && $type === 'local' ) {
+            $purpose = 'inquiry';
+        }
+
+        // --- 文体推定 ---
+        if ( $type === 'faq' || preg_match( '/初心者|やさしい|わかりやすい|簡単/', $kw ) ) {
+            $tone = 'friendly';
+        } elseif ( $type === 'case_study' ) {
+            $tone = 'trustworthy';
+        } elseif ( $type === 'local' ) {
+            $tone = 'casual';
+        }
+
+        return [
+            'type'    => $type,
+            'purpose' => $purpose,
+            'tone'    => $tone,
+        ];
     }
 
     // =========================================================
