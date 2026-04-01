@@ -84,6 +84,9 @@ class Gcrev_Insight_API {
     // Step7: Keyword Research Service（キーワード調査）
     private ?Gcrev_Keyword_Research_Service $keyword_research = null;
 
+    // Step7b: Writing Service（ライティング・記事生成）
+    private ?Gcrev_Writing_Service $writing_service = null;
+
     // Step8: Google Ads Client（Keyword Planner 等）
     private ?Gcrev_Google_Ads_Client $google_ads = null;
 
@@ -159,6 +162,11 @@ class Gcrev_Insight_API {
                 $dataforseo_for_kwr = new Gcrev_DataForSEO_Client( $this->config );
             }
             $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, $dataforseo_for_kwr, $this->google_ads );
+        }
+
+        // Step8b: Writing Service
+        if ( class_exists( 'Gcrev_Writing_Service' ) ) {
+            $this->writing_service = new Gcrev_Writing_Service( $this->ai, $this->config );
         }
 
         if ($register_routes) {
@@ -1114,6 +1122,42 @@ class Gcrev_Insight_API {
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_google_ads_test_connection' ],
             'permission_callback' => function() { return current_user_can('manage_options'); },
+        ]);
+
+        // =========================================================
+        // ライティング（記事生成）
+        // =========================================================
+        register_rest_route('gcrev/v1', '/writing/knowledge', [
+            [ 'methods' => 'GET',  'callback' => [ $this, 'rest_writing_list_knowledge' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
+            [ 'methods' => 'POST', 'callback' => [ $this, 'rest_writing_save_knowledge' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/knowledge/(?P<id>\d+)', [
+            'methods'             => 'DELETE',
+            'callback'            => [ $this, 'rest_writing_delete_knowledge' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles', [
+            [ 'methods' => 'GET',  'callback' => [ $this, 'rest_writing_list_articles' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
+            [ 'methods' => 'POST', 'callback' => [ $this, 'rest_writing_create_article' ], 'permission_callback' => [ $this->config, 'check_permission' ] ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)', [
+            [ 'methods' => 'GET',    'callback' => [ $this, 'rest_writing_get_article' ],    'permission_callback' => [ $this->config, 'check_permission' ] ],
+            [ 'methods' => 'DELETE', 'callback' => [ $this, 'rest_writing_delete_article' ], 'permission_callback' => [ $this->config, 'check_permission' ] ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/settings', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_update_settings' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/outline', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_generate_outline' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/rank-keywords', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_writing_rank_keywords' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
         // =========================================================
@@ -14864,6 +14908,106 @@ PROMPT;
                 'error'   => 'Google Ads API 疎通テスト中にエラーが発生しました: ' . $e->getMessage(),
             ], 500 );
         }
+    }
+
+    // =========================================================
+    // ライティング（記事生成）
+    // =========================================================
+
+    public function rest_writing_list_knowledge( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $items = $this->writing_service->list_knowledge( get_current_user_id() );
+        return new \WP_REST_Response( [ 'success' => true, 'items' => $items ] );
+    }
+
+    public function rest_writing_save_knowledge( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $result = $this->writing_service->save_knowledge( get_current_user_id(), $request->get_json_params() );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_delete_knowledge( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $result = $this->writing_service->delete_knowledge( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_list_articles( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $items = $this->writing_service->list_articles( get_current_user_id() );
+        return new \WP_REST_Response( [ 'success' => true, 'items' => $items ] );
+    }
+
+    public function rest_writing_create_article( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $result = $this->writing_service->create_article( get_current_user_id(), $request->get_json_params() );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_get_article( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $article = $this->writing_service->get_article( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        if ( ! $article ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => '記事が見つかりません。' ], 404 );
+        }
+        return new \WP_REST_Response( [ 'success' => true, 'article' => $article ] );
+    }
+
+    public function rest_writing_delete_article( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $result = $this->writing_service->delete_article( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_update_settings( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $result = $this->writing_service->update_article_settings(
+            get_current_user_id(),
+            (int) $request->get_param( 'id' ),
+            $request->get_json_params()
+        );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_generate_outline( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        @set_time_limit( 120 );
+        try {
+            $result = $this->writing_service->generate_outline( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_writing_debug.log',
+                date( 'Y-m-d H:i:s' ) . " REST generate_outline error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_writing_rank_keywords( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => true, 'keywords' => [] ] );
+        }
+        $keywords = $this->writing_service->get_rank_keywords( get_current_user_id() );
+        return new \WP_REST_Response( [ 'success' => true, 'keywords' => $keywords ] );
     }
 
     // =========================================================

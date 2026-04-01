@@ -492,6 +492,7 @@ get_header();
 
     var userId = <?php echo (int) $user_id; ?>;
     var restUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/seo/keyword-research' ) ) ); ?>;
+    var writingUrl = <?php echo wp_json_encode( esc_url( home_url( '/writing/' ) ) ); ?>;
     var nonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
     var btn = document.getElementById('kwrRunBtn');
     if (!btn) return;
@@ -814,7 +815,8 @@ get_header();
             { label: '難易度',     key: 'difficulty', type: 'number' },
             { label: '推奨ページ', key: 'page_type', type: 'string' },
             { label: '提案理由',   key: null },
-            { label: 'アクション', key: null }
+            { label: 'アクション', key: null },
+            { label: '', key: null }
         ];
         var st = groupSortState[gk] || {};
         var sorted = st.key ? kwrSortItems(items, st.key, st.dir, st.type) : items;
@@ -844,6 +846,7 @@ get_header();
                 + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
                 + '<td style="font-size:12px;color:var(--mw-text-secondary);">' + esc(item.reason) + '</td>'
                 + '<td>' + badge(item.action, actClass) + '</td>'
+                + '<td><a href="' + writingUrl + '?keyword=' + encodeURIComponent(item.keyword) + '" class="kwr-badge kwr-badge--action-new" style="text-decoration:none;" title="このキーワードで記事を作成">記事作成</a></td>'
                 + '</tr>';
         });
         html += '</tbody></table>';

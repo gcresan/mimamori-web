@@ -89,6 +89,24 @@ add_action('init', function () {
         'rewrite'     => false,
         'supports'    => ['title'],
     ]);
+
+    register_post_type('gcrev_knowledge', [
+        'label'       => '情報ストック',
+        'public'      => false,
+        'show_ui'     => false,
+        'has_archive' => false,
+        'rewrite'     => false,
+        'supports'    => ['title'],
+    ]);
+
+    register_post_type('gcrev_article', [
+        'label'       => '記事',
+        'public'      => false,
+        'show_ui'     => false,
+        'has_archive' => false,
+        'rewrite'     => false,
+        'supports'    => ['title'],
+    ]);
 });
 
 // ----------------------------------------
@@ -968,6 +986,14 @@ if ( file_exists( $gcrev_seo_checker ) ) {
 $gcrev_kw_research = $gcrev_modules_path . 'class-keyword-research-service.php';
 if ( file_exists( $gcrev_kw_research ) ) {
     require_once $gcrev_kw_research;
+}
+
+// ========================================
+// Step8.5b: Writing Service（ライティング・記事生成）
+// ========================================
+$gcrev_writing = $gcrev_modules_path . 'class-writing-service.php';
+if ( file_exists( $gcrev_writing ) ) {
+    require_once $gcrev_writing;
 }
 
 // ========================================

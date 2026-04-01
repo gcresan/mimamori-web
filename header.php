@@ -111,7 +111,7 @@
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
-      $seo_pages       = array('keyword-research');
+      $seo_pages       = array('keyword-research', 'writing');
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
@@ -358,6 +358,11 @@
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/keyword-research/') ); ?>" class="nav-link <?php echo is_page('keyword-research') ? 'active' : ''; ?>">
                         <span>キーワード調査</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/writing/') ); ?>" class="nav-link <?php echo is_page('writing') ? 'active' : ''; ?>">
+                        <span>ライティング</span>
                         </a>
                      </li>
                   </ul>
