@@ -161,6 +161,30 @@ get_header();
 .wrt-voice-btn { flex-shrink: 0; transition: all 0.2s; }
 .wrt-voice-btn:hover { transform: scale(1.1); }
 
+/* 本文プレビュー */
+.wrt-draft-container { margin-top: 16px; border: 1px solid var(--mw-border-light); border-radius: 10px; overflow: hidden; background: #fff; }
+.wrt-draft-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--mw-bg-secondary); border-bottom: 1px solid var(--mw-border-light); gap: 8px; flex-wrap: wrap; }
+.wrt-draft-toolbar__left { display: flex; gap: 6px; align-items: center; }
+.wrt-draft-toolbar__right { display: flex; gap: 6px; align-items: center; }
+.wrt-draft-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 6px; border-radius: 4px; font-size: 12px; color: var(--mw-text-secondary); background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); }
+.wrt-draft-preview { padding: 40px 48px; max-width: 780px; margin: 0 auto; font-family: 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', sans-serif; position: relative; }
+.wrt-draft-h1 { font-size: 26px; font-weight: 800; line-height: 1.4; color: #1a1a1a; margin: 0 0 24px; letter-spacing: -0.02em; }
+.wrt-draft-h2 { font-size: 21px; font-weight: 700; line-height: 1.4; color: #1a1a1a; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
+.wrt-draft-h3 { font-size: 17px; font-weight: 700; line-height: 1.5; color: #2d3748; margin: 32px 0 12px; }
+.wrt-draft-h4 { font-size: 15px; font-weight: 600; line-height: 1.5; color: #4a5568; margin: 24px 0 8px; }
+.wrt-draft-p, .wrt-draft-preview p { font-size: 15.5px; line-height: 2; color: #374151; margin: 0 0 20px; letter-spacing: 0.02em; }
+.wrt-draft-preview li { font-size: 15.5px; line-height: 2; color: #374151; margin-bottom: 4px; list-style: disc inside; }
+.wrt-draft-preview strong { font-weight: 700; color: #1a1a1a; }
+.wrt-draft-stats { display: flex; gap: 20px; justify-content: flex-end; padding: 12px 0 0; margin-top: 24px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #94a3b8; }
+
+@media (max-width: 768px) {
+    .wrt-draft-preview { padding: 24px 20px; }
+    .wrt-draft-h1 { font-size: 22px; }
+    .wrt-draft-h2 { font-size: 18px; }
+    .wrt-draft-p, .wrt-draft-preview p { font-size: 14px; }
+    .wrt-draft-stats { flex-direction: column; gap: 4px; align-items: flex-end; }
+}
+
 @media (max-width: 768px) {
     .wrt-modal { padding: 20px; max-width: 95%; }
     .wrt-detail { padding: 16px; }
@@ -734,25 +758,48 @@ get_header();
         var area = document.getElementById('wrtDraftArea');
         if (!area || !content) return;
 
-        // コピーボタン
-        var html = '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyMarkdown" title="Markdown形式でコピー">Markdownをコピー</button>';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyHtml" title="HTML形式でコピー">HTMLをコピー</button>';
-        html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtCopyText" title="プレーンテキストでコピー">本文をコピー</button>';
+        // タイトル・本文の文字数を算出
+        var titleMatch = content.match(/^# (.+)$/m);
+        var titleText = titleMatch ? titleMatch[1] : '';
+        var titleLen = titleText.length;
+        var bodyText = content.replace(/^#{1,4} .+$/gm, '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/^[-*] /gm, '').replace(/\n+/g, '').trim();
+        var bodyLen = bodyText.length;
+
+        var html = '<div class="wrt-draft-container">';
+
+        // ツールバー
+        html += '<div class="wrt-draft-toolbar">';
+        html += '<div class="wrt-draft-toolbar__left">';
+        html += '<span class="wrt-draft-tag">h1</span><span class="wrt-draft-tag">h2</span><span class="wrt-draft-tag">h3</span><span class="wrt-draft-tag">h4</span>';
+        html += '<span class="wrt-draft-tag"><strong>B</strong></span>';
+        html += '</div>';
+        html += '<div class="wrt-draft-toolbar__right">';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyMarkdown" title="Markdown形式">Markdown</button>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyHtml" title="HTML形式">HTML</button>';
+        html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtCopyText" title="プレーンテキスト">コピー</button>';
+        html += '</div></div>';
+
+        // 本文プレビュー
+        html += '<div class="wrt-draft-preview" id="wrtDraftRendered">';
+
+        var rendered = esc(content)
+            .replace(/^# (.+)$/gm, '<h1 class="wrt-draft-h1">$1</h1>')
+            .replace(/^#### (.+)$/gm, '<h4 class="wrt-draft-h4">$1</h4>')
+            .replace(/^### (.+)$/gm, '<h3 class="wrt-draft-h3">$1</h3>')
+            .replace(/^## (.+)$/gm, '<h2 class="wrt-draft-h2">$1</h2>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+            .replace(/\n\n/g, '</p><p class="wrt-draft-p">')
+            .replace(/\n/g, '<br>');
+        html += '<p class="wrt-draft-p">' + rendered + '</p>';
+
+        // 文字数表示（右下）
+        html += '<div class="wrt-draft-stats">';
+        html += '<span>' + titleLen + '文字/タイトル</span>';
+        html += '<span>' + bodyLen.toLocaleString() + '文字/本文</span>';
         html += '</div>';
 
-        // Markdown → HTML レンダリング（h1 対応）
-        html += '<div style="margin-top:8px;padding:20px;background:var(--mw-bg-secondary);border-radius:8px;border:1px solid var(--mw-border-light);font-size:14px;line-height:1.8;color:var(--mw-text-primary);" id="wrtDraftRendered">';
-        var rendered = esc(content)
-            .replace(/^# (.+)$/gm, '<h1 style="font-size:22px;font-weight:700;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid var(--mw-primary-blue,#4A90A4);color:var(--mw-text-heading);">$1</h1>')
-            .replace(/^#### (.+)$/gm, '<h4 style="font-size:14px;font-weight:700;margin:16px 0 6px;">$1</h4>')
-            .replace(/^### (.+)$/gm, '<h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">$1</h3>')
-            .replace(/^## (.+)$/gm, '<h2 style="font-size:17px;font-weight:700;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--mw-border-light);">$1</h2>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n\n/g, '</p><p>')
-            .replace(/\n/g, '<br>');
-        html += '<p>' + rendered + '</p>';
-        html += '</div>';
+        html += '</div></div>';
         area.innerHTML = html;
 
         // コピーイベント
