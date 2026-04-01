@@ -32,14 +32,45 @@ get_header();
    ========================================================= */
 
 /* ヘッダーアクション */
-.wrt-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
-.wrt-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+.wrt-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.wrt-search-input { flex: 1; min-width: 200px; padding: 10px 16px; border: 1px solid var(--mw-border-light); border-radius: 8px; font-size: 14px; background: var(--mw-bg-primary); color: var(--mw-text-primary); box-sizing: border-box; }
+.wrt-search-input:focus { outline: none; border-color: var(--mw-primary-blue, #4A90A4); }
+.wrt-status-filter { padding: 10px 14px; border: 1px solid var(--mw-border-light); border-radius: 8px; font-size: 14px; background: var(--mw-bg-primary); color: var(--mw-text-primary); cursor: pointer; min-width: 120px; }
+.wrt-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
 .wrt-btn--primary { background: var(--mw-primary-blue, #4A90A4); color: #fff; }
 .wrt-btn--primary:hover { opacity: 0.9; }
 .wrt-btn--secondary { background: var(--mw-bg-secondary); color: var(--mw-text-heading); border: 1px solid var(--mw-border-light); }
 .wrt-btn--sm { padding: 6px 14px; font-size: 12px; }
 .wrt-btn--danger { background: rgba(201,90,79,0.1); color: #C95A4F; }
 .wrt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* テーブル */
+.wrt-table-wrap { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); overflow: hidden; }
+.wrt-table { width: 100%; border-collapse: collapse; }
+.wrt-table thead { border-bottom: 1px solid var(--mw-border-light); }
+.wrt-table th { padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--mw-text-secondary); text-align: left; white-space: nowrap; background: var(--mw-bg-secondary); }
+.wrt-table__th-check { width: 40px; text-align: center; }
+.wrt-table__th-icon { width: 60px; text-align: center; }
+.wrt-table__th-date { width: 110px; }
+.wrt-table__row { border-bottom: 1px solid var(--mw-border-light); cursor: pointer; transition: background 0.1s; }
+.wrt-table__row:last-child { border-bottom: none; }
+.wrt-table__row:hover { background: rgba(74,144,164,0.03); }
+.wrt-table td { padding: 12px 16px; font-size: 14px; color: var(--mw-text-primary); }
+.wrt-table__td-check { width: 40px; text-align: center; }
+.wrt-table__td-title { font-weight: 500; color: var(--mw-text-heading); max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wrt-table__td-keyword { color: var(--mw-text-secondary); font-size: 13px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wrt-table__td-icon { width: 60px; text-align: center; }
+.wrt-table__td-date { font-size: 13px; color: var(--mw-text-tertiary); white-space: nowrap; }
+.wrt-icon-active { color: var(--mw-text-heading); }
+.wrt-icon-inactive { color: var(--mw-border-light); }
+
+/* ページネーション */
+.wrt-pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; font-size: 13px; color: var(--mw-text-tertiary); }
+.wrt-pag__nav { display: flex; align-items: center; gap: 8px; }
+.wrt-pag__btn { background: none; border: 1px solid var(--mw-border-light); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 14px; color: var(--mw-text-secondary); transition: all 0.15s; }
+.wrt-pag__btn:hover:not(:disabled) { border-color: var(--mw-primary-blue); color: var(--mw-text-heading); }
+.wrt-pag__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.wrt-pag__info { font-weight: 600; color: var(--mw-text-secondary); }
 
 /* タブ */
 .wrt-tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid var(--mw-border-light); }
@@ -49,16 +80,11 @@ get_header();
 .wrt-tab-panel { display: none; }
 .wrt-tab-panel.active { display: block; }
 
-/* カード */
+/* カード（情報ストック用） */
 .wrt-card { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); padding: 20px; margin-bottom: 16px; cursor: pointer; transition: box-shadow 0.15s; }
 .wrt-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .wrt-card__title { font-size: 15px; font-weight: 600; color: var(--mw-text-heading); margin: 0 0 6px; }
 .wrt-card__meta { font-size: 12px; color: var(--mw-text-tertiary); display: flex; gap: 12px; flex-wrap: wrap; }
-.wrt-status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-.wrt-status--keyword_set { background: rgba(201,168,76,0.15); color: #C9A84C; }
-.wrt-status--outline_generated { background: rgba(39,174,96,0.12); color: #27AE60; }
-.wrt-status--draft_generated { background: rgba(74,144,164,0.12); color: #2D7A8F; }
-.wrt-status--wp_draft_saved { background: rgba(66,133,244,0.12); color: #4285F4; }
 
 /* 情報ストック */
 .wrt-knowledge-card { display: flex; align-items: flex-start; gap: 12px; }
@@ -190,6 +216,10 @@ get_header();
     .wrt-detail { padding: 16px; }
     .wrt-settings-grid { grid-template-columns: 1fr; }
     .wrt-header { flex-direction: column; align-items: stretch; }
+    .wrt-search-input { min-width: 0; }
+    .wrt-table__td-keyword { display: none; }
+    .wrt-table th:nth-child(3) { display: none; }
+    .wrt-table td, .wrt-table th { padding: 10px 8px; }
 }
 </style>
 
@@ -204,11 +234,6 @@ get_header();
     </div>
     <div class="wrt-toast" id="wrtToast"></div>
 
-    <!-- ===== ヘッダー ===== -->
-    <div class="wrt-header">
-        <button class="wrt-btn wrt-btn--primary" id="wrtNewArticleBtn" type="button">新規記事作成</button>
-    </div>
-
     <!-- ===== タブ ===== -->
     <div class="wrt-tabs">
         <button class="wrt-tabs__tab active" data-tab="articles">記事一覧</button>
@@ -217,11 +242,41 @@ get_header();
 
     <!-- ===== 記事一覧タブ ===== -->
     <div class="wrt-tab-panel active" id="wrtPanelArticles">
-        <div id="wrtArticleList"></div>
+        <!-- ヘッダー: 検索・フィルタ・作成ボタン -->
+        <div class="wrt-header">
+            <input type="text" id="wrtSearchInput" class="wrt-search-input" placeholder="記事タイトルを検索">
+            <select id="wrtStatusFilter" class="wrt-status-filter">
+                <option value="">すべて</option>
+                <option value="keyword_set">キーワード設定済</option>
+                <option value="outline_generated">構成案あり</option>
+                <option value="draft_generated">本文あり</option>
+                <option value="wp_draft_saved">WP下書き済</option>
+            </select>
+            <button class="wrt-btn wrt-btn--primary" id="wrtNewArticleBtn" type="button">+ 作成する</button>
+        </div>
+
+        <!-- テーブル -->
+        <div class="wrt-table-wrap">
+            <table class="wrt-table" id="wrtArticleTable">
+                <thead>
+                    <tr>
+                        <th class="wrt-table__th-check"><input type="checkbox" id="wrtCheckAll"></th>
+                        <th>タイトル</th>
+                        <th>キーワード</th>
+                        <th class="wrt-table__th-icon">企画書</th>
+                        <th class="wrt-table__th-icon">公開</th>
+                        <th class="wrt-table__th-date">作成日</th>
+                    </tr>
+                </thead>
+                <tbody id="wrtArticleList"></tbody>
+            </table>
+        </div>
         <div class="wrt-empty" id="wrtArticleEmpty">
             <div class="wrt-empty__icon">✍️</div>
             <div class="wrt-empty__text">まだ記事がありません</div>
         </div>
+        <!-- ページネーション -->
+        <div class="wrt-pagination" id="wrtPagination"></div>
     </div>
 
     <!-- ===== 情報ストックタブ ===== -->
@@ -368,7 +423,7 @@ get_header();
             document.getElementById('wrtPanel' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1)).classList.add('active');
             // 詳細ビューを閉じる
             document.getElementById('wrtDetailView').style.display = 'none';
-            document.querySelectorAll('.wrt-tabs, .wrt-tab-panel, .wrt-header').forEach(function(el) { el.style.display = ''; });
+            document.querySelectorAll('.wrt-tabs, .wrt-tab-panel').forEach(function(el) { el.style.display = ''; });
         });
     });
 
@@ -425,25 +480,88 @@ get_header();
             renderArticles();
         });
     }
+    var articlesPage = 1;
+    var articlesPerPage = 20;
+
+    function getFilteredArticles() {
+        var search = document.getElementById('wrtSearchInput').value.trim().toLowerCase();
+        var statusFilter = document.getElementById('wrtStatusFilter').value;
+        return articlesData.filter(function(a) {
+            if (search && (a.title || '').toLowerCase().indexOf(search) === -1 && (a.keyword || '').toLowerCase().indexOf(search) === -1) return false;
+            if (statusFilter && a.status !== statusFilter) return false;
+            return true;
+        });
+    }
+
     function renderArticles() {
         var container = document.getElementById('wrtArticleList');
         var empty = document.getElementById('wrtArticleEmpty');
-        if (articlesData.length === 0) { container.innerHTML = ''; empty.style.display = ''; return; }
+        var tableWrap = document.querySelector('.wrt-table-wrap');
+        var filtered = getFilteredArticles();
+
+        if (filtered.length === 0) {
+            container.innerHTML = '';
+            empty.style.display = '';
+            tableWrap.style.display = 'none';
+            document.getElementById('wrtPagination').innerHTML = '';
+            return;
+        }
         empty.style.display = 'none';
-        container.innerHTML = articlesData.map(function(a) {
-            var stCls = 'wrt-status wrt-status--' + a.status;
-            return '<div class="wrt-card" data-id="' + a.id + '">'
-                + '<div class="wrt-card__title">' + esc(a.keyword) + '</div>'
-                + '<div class="wrt-card__meta">'
-                + '<span class="' + stCls + '">' + esc(statusLabels[a.status] || a.status) + '</span>'
-                + '<span>' + esc(typeLabels[a.type] || '') + '</span>'
-                + '<span>' + esc(a.created_at) + '</span>'
-                + '</div></div>';
+        tableWrap.style.display = '';
+
+        var totalPages = Math.ceil(filtered.length / articlesPerPage);
+        if (articlesPage > totalPages) articlesPage = totalPages;
+        var start = (articlesPage - 1) * articlesPerPage;
+        var pageItems = filtered.slice(start, start + articlesPerPage);
+
+        container.innerHTML = pageItems.map(function(a) {
+            var dateStr = a.created_at ? a.created_at.replace(/-/g, '/').substring(0, 10) : '';
+            var docSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+            var outlineIcon = a.has_outline ? '<span class="wrt-icon-active" title="構成案あり">' + docSvg + '</span>' : '<span class="wrt-icon-inactive">' + docSvg + '</span>';
+            var publishIcon = a.wp_draft_id ? '<span class="wrt-icon-active" title="WP下書き済">' + docSvg + '</span>' : '<span class="wrt-icon-inactive">' + docSvg + '</span>';
+            return '<tr class="wrt-table__row" data-id="' + a.id + '">'
+                + '<td class="wrt-table__td-check"><input type="checkbox" class="wrt-article-check" data-id="' + a.id + '"></td>'
+                + '<td class="wrt-table__td-title">' + esc(a.title) + '</td>'
+                + '<td class="wrt-table__td-keyword">' + esc(a.keyword) + '</td>'
+                + '<td class="wrt-table__td-icon">' + outlineIcon + '</td>'
+                + '<td class="wrt-table__td-icon">' + publishIcon + '</td>'
+                + '<td class="wrt-table__td-date">' + esc(dateStr) + '</td>'
+                + '</tr>';
         }).join('');
-        container.querySelectorAll('.wrt-card').forEach(function(card) {
-            card.addEventListener('click', function() { showArticleDetail(parseInt(card.dataset.id)); });
+
+        // 行クリックで詳細
+        container.querySelectorAll('.wrt-table__row').forEach(function(row) {
+            row.addEventListener('click', function(e) {
+                if (e.target.type === 'checkbox') return;
+                showArticleDetail(parseInt(row.dataset.id));
+            });
         });
+
+        // ページネーション
+        renderPagination(filtered.length, totalPages);
     }
+
+    function renderPagination(total, totalPages) {
+        var pag = document.getElementById('wrtPagination');
+        if (totalPages <= 1) { pag.innerHTML = '<span class="wrt-pag__count">記事数: ' + total + '</span>'; return; }
+        pag.innerHTML = '<span class="wrt-pag__count">記事数: ' + total + '</span>'
+            + '<div class="wrt-pag__nav">'
+            + '<button class="wrt-pag__btn" id="wrtPagPrev" ' + (articlesPage <= 1 ? 'disabled' : '') + '>&lt;</button>'
+            + '<span class="wrt-pag__info">' + articlesPage + '/' + totalPages + '</span>'
+            + '<button class="wrt-pag__btn" id="wrtPagNext" ' + (articlesPage >= totalPages ? 'disabled' : '') + '>&gt;</button>'
+            + '</div>';
+        document.getElementById('wrtPagPrev').addEventListener('click', function() { if (articlesPage > 1) { articlesPage--; renderArticles(); } });
+        document.getElementById('wrtPagNext').addEventListener('click', function() { if (articlesPage < totalPages) { articlesPage++; renderArticles(); } });
+    }
+
+    // 検索・フィルタイベント
+    document.getElementById('wrtSearchInput').addEventListener('input', function() { articlesPage = 1; renderArticles(); });
+    document.getElementById('wrtStatusFilter').addEventListener('change', function() { articlesPage = 1; renderArticles(); });
+    // 全選択チェックボックス
+    document.getElementById('wrtCheckAll').addEventListener('change', function() {
+        var checked = this.checked;
+        document.querySelectorAll('.wrt-article-check').forEach(function(cb) { cb.checked = checked; });
+    });
     function createArticle(keyword) {
         closeKeywordModal();
         showProgress('記事を作成中…');
@@ -469,7 +587,7 @@ get_header();
     function renderArticleDetail() {
         var a = currentArticle;
         // タブ・一覧を隠す
-        document.querySelectorAll('.wrt-tabs, .wrt-tab-panel, .wrt-header').forEach(function(el) { el.style.display = 'none'; });
+        document.querySelectorAll('.wrt-tabs, .wrt-tab-panel').forEach(function(el) { el.style.display = 'none'; });
         var view = document.getElementById('wrtDetailView');
         view.style.display = '';
 
@@ -542,7 +660,7 @@ get_header();
         // 戻るボタン
         document.getElementById('wrtBackBtn').addEventListener('click', function() {
             view.style.display = 'none';
-            document.querySelectorAll('.wrt-tabs, .wrt-tab-panel, .wrt-header').forEach(function(el) { el.style.display = ''; });
+            document.querySelectorAll('.wrt-tabs, .wrt-tab-panel').forEach(function(el) { el.style.display = ''; });
             loadArticles();
         });
 
@@ -552,7 +670,7 @@ get_header();
             apiFetch('/articles/' + a.id, { method: 'DELETE' }).then(function() {
                 showToast('削除しました');
                 view.style.display = 'none';
-                document.querySelectorAll('.wrt-tabs, .wrt-tab-panel, .wrt-header').forEach(function(el) { el.style.display = ''; });
+                document.querySelectorAll('.wrt-tabs, .wrt-tab-panel').forEach(function(el) { el.style.display = ''; });
                 loadArticles();
             });
         });

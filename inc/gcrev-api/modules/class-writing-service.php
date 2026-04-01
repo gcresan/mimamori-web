@@ -605,15 +605,28 @@ class Gcrev_Writing_Service {
     }
 
     private function format_article_summary( \WP_Post $post ): array {
+        $keyword     = get_post_meta( $post->ID, '_gcrev_article_keyword', true ) ?: '';
+        $outline_raw = get_post_meta( $post->ID, '_gcrev_article_outline_json', true );
+        $outline     = $outline_raw ? json_decode( $outline_raw, true ) : null;
+
+        // タイトル: outline の title_options[0] があればそれ、なければ keyword
+        $title = $keyword;
+        if ( ! empty( $outline['title_options'][0] ) ) {
+            $title = $outline['title_options'][0];
+        }
+
         return [
-            'id'          => $post->ID,
-            'keyword'     => get_post_meta( $post->ID, '_gcrev_article_keyword', true ) ?: '',
-            'type'        => get_post_meta( $post->ID, '_gcrev_article_type', true ) ?: 'explanation',
-            'purpose'     => get_post_meta( $post->ID, '_gcrev_article_purpose', true ) ?: 'traffic',
-            'status'      => get_post_meta( $post->ID, '_gcrev_article_status', true ) ?: 'keyword_set',
-            'has_outline'  => (bool) get_post_meta( $post->ID, '_gcrev_article_outline_json', true ),
-            'created_at'  => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
-            'updated_at'  => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
+            'id'           => $post->ID,
+            'title'        => $title,
+            'keyword'      => $keyword,
+            'type'         => get_post_meta( $post->ID, '_gcrev_article_type', true ) ?: 'explanation',
+            'purpose'      => get_post_meta( $post->ID, '_gcrev_article_purpose', true ) ?: 'traffic',
+            'status'       => get_post_meta( $post->ID, '_gcrev_article_status', true ) ?: 'keyword_set',
+            'has_outline'  => (bool) $outline_raw,
+            'has_draft'    => (bool) get_post_meta( $post->ID, '_gcrev_article_draft_content', true ),
+            'wp_draft_id'  => (int) get_post_meta( $post->ID, '_gcrev_article_wp_draft_id', true ),
+            'created_at'   => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
+            'updated_at'   => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
         ];
     }
 
