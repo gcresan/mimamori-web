@@ -255,7 +255,45 @@ get_header();
 .kwr-comp-bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--mw-border-light); width: 40px; position: relative; vertical-align: middle; }
 .kwr-comp-bar__fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 3px; background: #C9A84C; }
 
+/* 案内文 */
+.kwr-intro {
+    background: var(--mw-bg-primary);
+    border: 1px solid var(--mw-border-light);
+    border-radius: var(--mw-radius-md);
+    padding: 28px;
+    margin-bottom: 28px;
+}
+.kwr-intro__title {
+    font-size: 17px; font-weight: 700;
+    color: var(--mw-text-heading); margin: 0 0 6px;
+}
+.kwr-intro__lead {
+    font-size: 14px; color: var(--mw-text-secondary);
+    margin: 0 0 20px; line-height: 1.6;
+}
+.kwr-intro__features {
+    display: grid; gap: 16px;
+}
+.kwr-intro__feature {
+    display: flex; gap: 14px; align-items: flex-start;
+}
+.kwr-intro__feature-icon {
+    flex-shrink: 0; width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; font-size: 13px; font-weight: 700;
+    background: rgba(74,144,164,0.1); color: #2D7A8F;
+}
+.kwr-intro__feature-title {
+    font-size: 14px; font-weight: 600;
+    color: var(--mw-text-heading); margin-bottom: 2px;
+}
+.kwr-intro__feature-desc {
+    font-size: 13px; color: var(--mw-text-secondary);
+    line-height: 1.6;
+}
+
 @media (max-width: 768px) {
+    .kwr-intro { padding: 20px 16px; }
     .kwr-conditions { padding: 20px 16px; }
     .kwr-summary { padding: 20px 16px; }
     .kwr-client-info { grid-template-columns: 1fr 1fr; }
@@ -265,6 +303,42 @@ get_header();
 </style>
 
 <div class="content-area">
+
+    <!-- ===== 案内文 ===== -->
+    <div class="kwr-intro">
+        <h2 class="kwr-intro__title">キーワード調査でできること</h2>
+        <p class="kwr-intro__lead">あなたのサイトに合ったSEOキーワードを、Googleの実データとAIで自動提案します。</p>
+        <div class="kwr-intro__features">
+            <div class="kwr-intro__feature">
+                <span class="kwr-intro__feature-icon">1</span>
+                <div>
+                    <div class="kwr-intro__feature-title">狙うべきキーワードの発見</div>
+                    <div class="kwr-intro__feature-desc">業種・エリア・サイト内容をもとに、今すぐ狙えるキーワードからコラム記事向けのロングテールまで、グループ別に提案します。</div>
+                </div>
+            </div>
+            <div class="kwr-intro__feature">
+                <span class="kwr-intro__feature-icon">2</span>
+                <div>
+                    <div class="kwr-intro__feature-title">Google の実データで裏付け</div>
+                    <div class="kwr-intro__feature-desc">各キーワードの月間検索数・競合度・検索トレンド（12ヶ月推移）を Google Keyword Planner の実データで表示します。</div>
+                </div>
+            </div>
+            <div class="kwr-intro__feature">
+                <span class="kwr-intro__feature-icon">3</span>
+                <div>
+                    <div class="kwr-intro__feature-title">競合サイトとのキーワード比較</div>
+                    <div class="kwr-intro__feature-desc">参考URLに登録した競合サイトが狙っているキーワードを分析し、自社との重複・ギャップを可視化します。</div>
+                </div>
+            </div>
+            <div class="kwr-intro__feature">
+                <span class="kwr-intro__feature-icon">4</span>
+                <div>
+                    <div class="kwr-intro__feature-title">AIによる戦略サマリー</div>
+                    <div class="kwr-intro__feature-desc">すべてのデータを総合的に分析し、優先すべきキーワードの方向性・改善すべきページ・新規ページ案をAIが提案します。</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- プログレスオーバーレイ -->
     <div class="kwr-progress" id="kwrProgress">
