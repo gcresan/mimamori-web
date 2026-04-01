@@ -586,7 +586,7 @@ get_header();
     });
     function createArticle(keyword) {
         closeKeywordModal();
-        showProgress('記事を作成中…');
+        showProgress('記事を作成中…（構成案を自動生成しています）');
         apiFetch('/articles', { method: 'POST', body: { keyword: keyword } }).then(function(res) {
             hideProgress();
             if (!res.success) { showToast(res.error || 'エラー', true); return; }

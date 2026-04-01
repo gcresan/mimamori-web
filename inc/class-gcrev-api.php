@@ -15005,6 +15005,7 @@ PROMPT;
         if ( ! $this->writing_service ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
         }
+        @set_time_limit( 120 );
         $result = $this->writing_service->create_article( get_current_user_id(), $request->get_json_params() );
         return new \WP_REST_Response( $result );
     }

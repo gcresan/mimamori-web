@@ -542,6 +542,14 @@ class Gcrev_Writing_Service {
         update_post_meta( $post_id, '_gcrev_article_created_at', $now );
         update_post_meta( $post_id, '_gcrev_article_updated_at', $now );
 
+        // 構成案を自動生成（デフォルト設定ベース）
+        $this->log( "create_article: auto-generating outline for article_id={$post_id}" );
+        $outline_result = $this->generate_outline( $user_id, $post_id );
+        if ( ! $outline_result['success'] ) {
+            $this->log( "create_article: outline auto-generation failed: " . ( $outline_result['error'] ?? '' ) );
+            // 構成案生成失敗でも記事自体は返す
+        }
+
         $post = get_post( $post_id );
         return [ 'success' => true, 'article' => $this->format_article_detail( $post ) ];
     }
