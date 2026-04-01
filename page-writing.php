@@ -208,7 +208,15 @@ get_header();
 .wrt-draft-p, .wrt-draft-preview p { font-size: 15.5px; line-height: 2; color: #374151; margin: 0 0 20px; letter-spacing: 0.02em; }
 .wrt-draft-preview li { font-size: 15.5px; line-height: 2; color: #374151; margin-bottom: 4px; list-style: disc inside; }
 .wrt-draft-preview strong { font-weight: 700; color: #1a1a1a; }
-.wrt-draft-stats { display: flex; gap: 20px; justify-content: flex-end; padding: 12px 0 0; margin-top: 24px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #94a3b8; }
+.wrt-draft-stats { display: flex; gap: 20px; justify-content: flex-end; padding: 8px 16px; font-size: 13px; color: #94a3b8; border-top: 1px solid var(--mw-border-light); }
+
+/* 編集/プレビュータブ */
+.wrt-draft-tab { background: none; border: none; padding: 4px 12px; font-size: 13px; font-weight: 500; color: var(--mw-text-tertiary); cursor: pointer; border-radius: 4px; transition: all 0.15s; }
+.wrt-draft-tab:hover { color: var(--mw-text-heading); }
+.wrt-draft-tab.active { background: var(--mw-bg-primary); color: var(--mw-primary-blue, #4A90A4); font-weight: 600; }
+
+/* 本文エディター */
+.wrt-draft-editor { width: 100%; min-height: 500px; padding: 40px 48px; font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif; font-size: 15px; line-height: 2; color: #374151; border: none; outline: none; resize: vertical; box-sizing: border-box; background: #fff; }
 
 @media (max-width: 768px) {
     .wrt-draft-preview { padding: 24px 20px; }
@@ -679,6 +687,15 @@ get_header();
         html += '<div id="wrtInterviewArea"></div>';
         html += '</div>';
 
+        // 追加編集プロンプト
+        html += '<div class="wrt-detail-section">';
+        html += '<div class="wrt-detail-section__title">追加編集プロンプト</div>';
+        html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">本文に対する修正指示を入力して再生成できます。</p>';
+        html += '<textarea id="wrtRefinePrompt" rows="4" placeholder="例: 導入部分をもっと具体的にしてください" style="width:100%;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);box-sizing:border-box;"></textarea>';
+        html += '<div style="margin-top:8px;text-align:right;">';
+        html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtRefineDraftBtn">この指示で再生成</button>';
+        html += '</div></div>';
+
         html += '</div>'; // .wrt-detail__sidebar 閉じ
         html += '</div>'; // .wrt-detail__body 閉じ
         html += '</div>'; // .wrt-detail 閉じ
@@ -770,6 +787,28 @@ get_header();
                 document.getElementById('wrtOutlineModal').classList.add('active');
             });
         }
+
+        // 追加編集プロンプトで再生成
+        document.getElementById('wrtRefineDraftBtn').addEventListener('click', function() {
+            var prompt = document.getElementById('wrtRefinePrompt').value.trim();
+            if (!prompt) { showToast('編集指示を入力してください', true); return; }
+            // 編集中の本文を取得（エディターから）
+            var editor = document.getElementById('wrtDraftEditor');
+            var content = editor ? editor.value : (currentArticle.draft_content || '');
+            if (!content) { showToast('先に本文を生成してください', true); return; }
+            showProgress('編集指示をもとに再生成中…');
+            apiFetch('/articles/' + a.id + '/refine-draft', { method: 'POST', body: { current_content: content, prompt: prompt } }).then(function(res) {
+                hideProgress();
+                if (res.success) {
+                    currentArticle.draft_content = res.draft_content;
+                    renderDraft(res.draft_content);
+                    document.getElementById('wrtRefinePrompt').value = '';
+                    showToast('本文を再生成しました');
+                } else {
+                    showToast(res.error || 'エラー', true);
+                }
+            }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+        });
 
         // 情報ストック選択肢をロード
         loadKnowledgeForSelect(a.selected_knowledge_ids || []);
@@ -969,11 +1008,13 @@ get_header();
     document.getElementById('wrtOutlineModalCloseBtn').addEventListener('click', closeOutlineModal);
     document.getElementById('wrtOutlineModal').addEventListener('click', function(e) { if (e.target === this) closeOutlineModal(); });
 
+    var draftViewMode = 'preview'; // 'preview' or 'edit'
+
     function renderDraft(content) {
         var area = document.getElementById('wrtDraftArea');
         if (!area || !content) return;
 
-        // タイトル・本文の文字数を算出
+        // 文字数算出
         var titleMatch = content.match(/^# (.+)$/m);
         var titleText = titleMatch ? titleMatch[1] : '';
         var titleLen = titleText.length;
@@ -985,44 +1026,59 @@ get_header();
         // ツールバー
         html += '<div class="wrt-draft-toolbar">';
         html += '<div class="wrt-draft-toolbar__left">';
-        html += '<span class="wrt-draft-tag">h1</span><span class="wrt-draft-tag">h2</span><span class="wrt-draft-tag">h3</span><span class="wrt-draft-tag">h4</span>';
-        html += '<span class="wrt-draft-tag"><strong>B</strong></span>';
+        html += '<button class="wrt-draft-tab' + (draftViewMode === 'preview' ? ' active' : '') + '" id="wrtTabPreview">プレビュー</button>';
+        html += '<button class="wrt-draft-tab' + (draftViewMode === 'edit' ? ' active' : '') + '" id="wrtTabEdit">編集</button>';
         html += '</div>';
         html += '<div class="wrt-draft-toolbar__right">';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyMarkdown" title="Markdown形式">Markdown</button>';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyHtml" title="HTML形式">HTML</button>';
-        html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtCopyText" title="プレーンテキスト">コピー</button>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyHtml" title="HTML形式でコピー">HTMLをコピー</button>';
+        html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtCopyText" title="プレーンテキストでコピー">本文をコピー</button>';
         html += '</div></div>';
 
-        // 本文プレビュー
-        html += '<div class="wrt-draft-preview" id="wrtDraftRendered">';
+        if (draftViewMode === 'edit') {
+            // 編集モード: テキストエリア
+            html += '<textarea id="wrtDraftEditor" class="wrt-draft-editor">' + esc(content) + '</textarea>';
+        } else {
+            // プレビューモード
+            html += '<div class="wrt-draft-preview" id="wrtDraftRendered">';
+            var rendered = esc(content)
+                .replace(/^# (.+)$/gm, '<h1 class="wrt-draft-h1">$1</h1>')
+                .replace(/^#### (.+)$/gm, '<h4 class="wrt-draft-h4">$1</h4>')
+                .replace(/^### (.+)$/gm, '<h3 class="wrt-draft-h3">$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2 class="wrt-draft-h2">$1</h2>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+                .replace(/\n\n/g, '</p><p class="wrt-draft-p">')
+                .replace(/\n/g, '<br>');
+            html += '<p class="wrt-draft-p">' + rendered + '</p>';
+            html += '</div>';
+        }
 
-        var rendered = esc(content)
-            .replace(/^# (.+)$/gm, '<h1 class="wrt-draft-h1">$1</h1>')
-            .replace(/^#### (.+)$/gm, '<h4 class="wrt-draft-h4">$1</h4>')
-            .replace(/^### (.+)$/gm, '<h3 class="wrt-draft-h3">$1</h3>')
-            .replace(/^## (.+)$/gm, '<h2 class="wrt-draft-h2">$1</h2>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
-            .replace(/\n\n/g, '</p><p class="wrt-draft-p">')
-            .replace(/\n/g, '<br>');
-        html += '<p class="wrt-draft-p">' + rendered + '</p>';
-
-        // 文字数表示（右下）
+        // 文字数表示
         html += '<div class="wrt-draft-stats">';
         html += '<span>' + titleLen + '文字/タイトル</span>';
         html += '<span>' + bodyLen.toLocaleString() + '文字/本文</span>';
         html += '</div>';
 
-        html += '</div></div>';
+        html += '</div>';
         area.innerHTML = html;
 
-        // コピーイベント
-        document.getElementById('wrtCopyMarkdown').addEventListener('click', function() {
-            navigator.clipboard.writeText(content).then(function() { showToast('Markdownをコピーしました'); });
+        // タブ切り替え
+        document.getElementById('wrtTabPreview').addEventListener('click', function() {
+            // 編集中の内容を保持
+            var editor = document.getElementById('wrtDraftEditor');
+            if (editor) currentArticle.draft_content = editor.value;
+            draftViewMode = 'preview';
+            renderDraft(currentArticle.draft_content);
         });
+        document.getElementById('wrtTabEdit').addEventListener('click', function() {
+            draftViewMode = 'edit';
+            renderDraft(currentArticle.draft_content);
+        });
+
+        // コピーイベント
         document.getElementById('wrtCopyHtml').addEventListener('click', function() {
-            var htmlContent = content
+            var src = getCurrentDraftContent();
+            var htmlContent = src
                 .replace(/^# (.+)$/gm, '<h1>$1</h1>')
                 .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
                 .replace(/^### (.+)$/gm, '<h3>$1</h3>')
@@ -1034,12 +1090,18 @@ get_header();
             navigator.clipboard.writeText(htmlContent).then(function() { showToast('HTMLをコピーしました'); });
         });
         document.getElementById('wrtCopyText').addEventListener('click', function() {
-            var text = content
+            var src = getCurrentDraftContent();
+            var text = src
                 .replace(/^#{1,4} /gm, '')
                 .replace(/\*\*(.+?)\*\*/g, '$1')
                 .replace(/^[-*] /gm, '・');
             navigator.clipboard.writeText(text).then(function() { showToast('本文をコピーしました'); });
         });
+    }
+
+    function getCurrentDraftContent() {
+        var editor = document.getElementById('wrtDraftEditor');
+        return editor ? editor.value : (currentArticle.draft_content || '');
     }
 
     function loadKnowledgeForSelect(selectedIds) {

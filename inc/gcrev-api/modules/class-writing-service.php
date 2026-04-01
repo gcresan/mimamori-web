@@ -1209,6 +1209,54 @@ INSTRUCTION;
         return [ 'success' => true, 'draft_content' => $content ];
     }
 
+    /**
+     * 追加プロンプトによる本文リファイン
+     */
+    public function refine_draft( int $user_id, int $article_id, string $current_content, string $additional_prompt ): array {
+        $article = $this->get_article( $user_id, $article_id );
+        if ( ! $article ) {
+            return [ 'success' => false, 'error' => '記事が見つかりません。' ];
+        }
+        if ( $current_content === '' ) {
+            return [ 'success' => false, 'error' => '本文がありません。先に本文を生成してください。' ];
+        }
+        if ( $additional_prompt === '' ) {
+            return [ 'success' => false, 'error' => '編集指示を入力してください。' ];
+        }
+
+        $this->log( "refine_draft: article_id={$article_id}, prompt_len=" . mb_strlen( $additional_prompt ) );
+
+        $prompt = "あなたは日本のローカルビジネス向けコラム記事のライターです。\n"
+            . "以下の既存の記事本文に対して、ユーザーの編集指示に従い修正・改善してください。\n\n"
+            . "## 編集指示\n{$additional_prompt}\n\n"
+            . "## 現在の記事本文\n{$current_content}\n\n"
+            . "## ルール\n"
+            . "- 編集指示に該当する部分のみ修正し、それ以外はできるだけ維持してください\n"
+            . "- Markdown形式で出力してください（# タイトル、## 大見出し、### 小見出し）\n"
+            . "- 説明や補足は不要です。修正後の記事本文のみを出力してください\n";
+
+        try {
+            $raw = $this->ai->call_gemini_api( $prompt, [
+                'temperature'       => 0.5,
+                'max_output_tokens' => 32768,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "Refine draft error: " . $e->getMessage() );
+            return [ 'success' => false, 'error' => '本文修正中にエラーが発生しました: ' . $e->getMessage() ];
+        }
+
+        $content = preg_replace( '/^```(?:markdown|html)?\s*/m', '', $raw );
+        $content = preg_replace( '/```\s*$/m', '', $content );
+        $content = trim( $content );
+
+        update_post_meta( $article_id, '_gcrev_article_draft_content', $content );
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
+
+        $this->log( "Refined draft saved for article_id={$article_id}, length=" . mb_strlen( $content ) );
+        return [ 'success' => true, 'draft_content' => $content ];
+    }
+
     private function build_draft_prompt(
         string $keyword, array $outline, string $type, string $purpose,
         string $tone, string $target_reader, array $settings,
