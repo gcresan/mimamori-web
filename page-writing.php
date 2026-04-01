@@ -698,13 +698,23 @@ get_header();
             });
         }
         if (result.suggested_angles && result.suggested_angles.length > 0) {
-            html += '<div style="font-size:14px;font-weight:600;margin:12px 0 8px;">別の切り口を提案</div>';
-            result.suggested_angles.forEach(function(angle) {
-                html += '<div style="padding:6px 10px;background:var(--mw-bg-secondary);border-radius:4px;margin-bottom:4px;font-size:13px;">・' + esc(angle) + '</div>';
+            html += '<div style="font-size:14px;font-weight:600;margin:12px 0 8px;">別の切り口を提案 <span style="font-size:11px;font-weight:400;color:var(--mw-text-tertiary);">クリックで選択</span></div>';
+            result.suggested_angles.forEach(function(angle, idx) {
+                html += '<div class="wrt-suggested-angle" data-angle-idx="' + idx + '" style="padding:8px 12px;background:var(--mw-bg-secondary);border:1px solid var(--mw-border-light);border-radius:6px;margin-bottom:4px;font-size:13px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.background=\'var(--mw-primary-green)\';this.style.color=\'#fff\';this.style.borderColor=\'var(--mw-primary-green)\';" onmouseout="this.style.background=\'var(--mw-bg-secondary)\';this.style.color=\'inherit\';this.style.borderColor=\'var(--mw-border-light)\';">・' + esc(angle) + '</div>';
             });
         }
         html += '</div>';
         content.innerHTML = html;
+        // 別の切り口クリック → その切り口で記事作成
+        content.querySelectorAll('.wrt-suggested-angle').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var angle = result.suggested_angles[parseInt(el.dataset.angleIdx)];
+                if (!angle) return;
+                document.getElementById('wrtSimilarityModal').classList.remove('active');
+                pendingSimilarityKeyword = '';
+                proceedWithArticleCreation(angle);
+            });
+        });
         document.getElementById('wrtSimilarityModal').classList.add('active');
     }
     document.getElementById('wrtSimilarityProceedBtn').addEventListener('click', function() {
