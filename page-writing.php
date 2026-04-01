@@ -104,6 +104,7 @@ get_header();
 .wrt-modal textarea { resize: vertical; min-height: 120px; }
 .wrt-modal__actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 .wrt-modal__field { margin-bottom: 16px; }
+.wrt-modal--wide { max-width: 720px; }
 
 /* 順位計測キーワード選択 */
 .wrt-rank-kw-section { margin-top: 16px; }
@@ -263,7 +264,6 @@ get_header();
                         <th class="wrt-table__th-check"><input type="checkbox" id="wrtCheckAll"></th>
                         <th>タイトル</th>
                         <th>キーワード</th>
-                        <th class="wrt-table__th-icon">企画書</th>
                         <th class="wrt-table__th-date">作成日</th>
                     </tr>
                 </thead>
@@ -361,6 +361,18 @@ get_header();
             <div class="wrt-modal__actions">
                 <button class="wrt-btn wrt-btn--secondary" id="wrtKnowledgeModalCancel" type="button">キャンセル</button>
                 <button class="wrt-btn wrt-btn--primary" id="wrtKnowledgeSaveBtn" type="button">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 構成案モーダル ===== -->
+    <div class="wrt-modal-overlay" id="wrtOutlineModal">
+        <div class="wrt-modal wrt-modal--wide">
+            <button class="wrt-modal__close" id="wrtOutlineModalClose" type="button">&times;</button>
+            <h2 class="wrt-modal__title">構成案</h2>
+            <div id="wrtOutlineModalBody"></div>
+            <div class="wrt-modal__actions">
+                <button class="wrt-btn wrt-btn--secondary" id="wrtOutlineModalCloseBtn" type="button">閉じる</button>
             </div>
         </div>
     </div>
@@ -515,13 +527,10 @@ get_header();
 
         container.innerHTML = pageItems.map(function(a) {
             var dateStr = a.created_at ? a.created_at.replace(/-/g, '/').substring(0, 10) : '';
-            var docSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
-            var outlineIcon = a.has_outline ? '<span class="wrt-icon-active" title="構成案あり">' + docSvg + '</span>' : '<span class="wrt-icon-inactive">' + docSvg + '</span>';
             return '<tr class="wrt-table__row" data-id="' + a.id + '">'
                 + '<td class="wrt-table__td-check"><input type="checkbox" class="wrt-article-check" data-id="' + a.id + '"></td>'
                 + '<td class="wrt-table__td-title">' + esc(a.title) + '</td>'
                 + '<td class="wrt-table__td-keyword">' + esc(a.keyword) + '</td>'
-                + '<td class="wrt-table__td-icon">' + outlineIcon + '</td>'
                 + '<td class="wrt-table__td-date">' + esc(dateStr) + '</td>'
                 + '</tr>';
         }).join('');
@@ -641,6 +650,9 @@ get_header();
         html += '<div class="wrt-detail-section__title">本文生成</div>';
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
         html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
+        if (a.outline) {
+            html += '<button class="wrt-btn wrt-btn--secondary" id="wrtShowOutlineBtn">この記事の構成案を見る</button>';
+        }
         if (a.draft_content) {
             html += '<button class="wrt-btn wrt-btn--secondary" id="wrtSaveWpDraftBtn">WordPress下書き保存</button>';
         }
@@ -729,6 +741,15 @@ get_header();
                     if (res.success) { currentArticle.wp_draft_id = res.draft_id; showToast('WordPress下書きを保存しました'); renderArticleDetail(); }
                     else showToast(res.error || 'エラー', true);
                 }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+            });
+        }
+
+        // 構成案を見るボタン
+        var outlineBtn = document.getElementById('wrtShowOutlineBtn');
+        if (outlineBtn) {
+            outlineBtn.addEventListener('click', function() {
+                renderOutlineModal(a.outline);
+                document.getElementById('wrtOutlineModal').classList.add('active');
             });
         }
 
@@ -868,6 +889,67 @@ get_header();
 
         recognition.start();
     }
+
+    /* ===== 構成案モーダル ===== */
+    function renderOutlineModal(outline) {
+        var body = document.getElementById('wrtOutlineModalBody');
+        if (!outline) { body.innerHTML = '<p style="color:var(--mw-text-tertiary);">構成案がありません</p>'; return; }
+        var html = '';
+
+        // タイトル候補
+        if (outline.title_options && outline.title_options.length > 0) {
+            html += '<div class="wrt-outline__titles">';
+            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:8px;">タイトル候補</div>';
+            outline.title_options.forEach(function(t) {
+                html += '<div class="wrt-outline__title-opt">' + esc(t) + '</div>';
+            });
+            html += '</div>';
+        }
+
+        // 検索意図
+        if (outline.search_intent) {
+            html += '<div class="wrt-outline__intent"><strong>検索意図:</strong> ' + esc(outline.search_intent) + '</div>';
+        }
+
+        // 見出し構成
+        if (outline.headings && outline.headings.length > 0) {
+            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:8px;">見出し構成</div>';
+            outline.headings.forEach(function(h) {
+                var level = h.level || 'h2';
+                html += '<div class="wrt-outline__heading wrt-outline__heading--' + level + '">';
+                html += '<div class="wrt-outline__heading-text">' + esc(level.toUpperCase()) + ': ' + esc(h.text) + '</div>';
+                if (h.description) html += '<div class="wrt-outline__heading-desc">' + esc(h.description) + '</div>';
+                if (h.reference) html += '<div class="wrt-outline__heading-ref">' + esc(h.reference) + '</div>';
+                html += '</div>';
+            });
+        }
+
+        // 不足情報
+        if (outline.missing_info && outline.missing_info.length > 0) {
+            html += '<div class="wrt-outline__missing">';
+            html += '<div class="wrt-outline__missing-title">不足している情報</div>';
+            outline.missing_info.forEach(function(m) {
+                html += '<div class="wrt-outline__missing-item">' + esc(m) + '</div>';
+            });
+            html += '</div>';
+        }
+
+        // 執筆のポイント
+        if (outline.tips && outline.tips.length > 0) {
+            html += '<div class="wrt-outline__tips">';
+            html += '<div class="wrt-outline__tips-title">執筆のポイント</div>';
+            outline.tips.forEach(function(t) {
+                html += '<div class="wrt-outline__tips-item">' + esc(t) + '</div>';
+            });
+            html += '</div>';
+        }
+
+        body.innerHTML = html;
+    }
+    function closeOutlineModal() { document.getElementById('wrtOutlineModal').classList.remove('active'); }
+    document.getElementById('wrtOutlineModalClose').addEventListener('click', closeOutlineModal);
+    document.getElementById('wrtOutlineModalCloseBtn').addEventListener('click', closeOutlineModal);
+    document.getElementById('wrtOutlineModal').addEventListener('click', function(e) { if (e.target === this) closeOutlineModal(); });
 
     function renderDraft(content) {
         var area = document.getElementById('wrtDraftArea');
