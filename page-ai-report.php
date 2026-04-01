@@ -594,7 +594,8 @@ get_header();
         <div class="aio-section__header">
             <div>
                 <h2 class="aio-section__title">キーワード別詳細</h2>
-                <div class="aio-section__note">各キーワードでの AIO 有無・引用ドメイン・自社の順位を確認できます</div>
+                <div class="aio-section__note">各キーワードで、検索結果にAI回答が表示されたか、自社が引用されたか、検索順位や引用サイトを確認できます</div>
+                <div class="aio-section__note" style="margin-top:4px;font-size:11px;">※この結果は、実際に誰かが検索した履歴を示すものではありません。指定キーワードで検索した際の検索結果をもとに確認しています。</div>
             </div>
         </div>
         <div id="aioKeywordContent">
@@ -760,15 +761,15 @@ get_header();
         }
 
         let html = '<table class="aio-kw-table"><thead><tr>'
-            + '<th>キーワード</th><th>AIO</th><th>自社</th><th>自社順位</th><th>引用ドメイン</th>'
+            + '<th>キーワード</th><th>AI回答枠</th><th>自社</th><th>自社順位</th><th>引用ドメイン</th>'
             + '</tr></thead><tbody>';
 
         res.data.forEach(kw => {
             let statusBadge = '';
             if (kw.status === 'success') {
-                statusBadge = '<span class="aio-status aio-status--success">AIOあり</span>';
+                statusBadge = '<span class="aio-status aio-status--success">表示あり</span>';
             } else if (kw.status === 'no_aio') {
-                statusBadge = '<span class="aio-status aio-status--no_aio">AIOなし</span>';
+                statusBadge = '<span class="aio-status aio-status--no_aio">表示なし</span>';
             } else if (kw.status === 'failed') {
                 statusBadge = '<span class="aio-status aio-status--failed">取得失敗</span>';
             } else {
