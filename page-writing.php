@@ -254,7 +254,7 @@ get_header();
                     <option value="5">5（高）</option>
                 </select>
             </div>
-            <div class="wrt-modal__field" id="wrtKnowledgeFileSection" style="display:none;">
+            <div class="wrt-modal__field" id="wrtKnowledgeFileSection">
                 <label>添付ファイル</label>
                 <div id="wrtKnowledgeFileList" style="margin-bottom:8px;"></div>
                 <div style="display:flex;gap:8px;align-items:center;">
@@ -846,10 +846,15 @@ get_header();
         document.getElementById('wrtKnowledgeCategorySelect').value = item ? item.category : 'notes';
         document.getElementById('wrtKnowledgeContent').value = item ? item.content : '';
         document.getElementById('wrtKnowledgePriority').value = item ? item.priority : 3;
-        // ファイルセクション: 保存済みアイテムのみ表示（新規は保存後にファイル添付可能）
-        var fileSection = document.getElementById('wrtKnowledgeFileSection');
-        fileSection.style.display = item ? '' : 'none';
-        if (item) renderKnowledgeFiles(item.files || []);
+        // ファイルセクション: 常に表示、未保存時はアップロード無効
+        var isNew = !item;
+        if (item) {
+            renderKnowledgeFiles(item.files || []);
+        } else {
+            document.getElementById('wrtKnowledgeFileList').innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">先に保存してからファイルを添付できます</span>';
+        }
+        document.getElementById('wrtKnowledgeFileUploadBtn').disabled = isNew;
+        document.getElementById('wrtKnowledgeFileInput').disabled = isNew;
         document.getElementById('wrtKnowledgeFileInput').value = '';
         document.getElementById('wrtKnowledgeModal').classList.add('active');
         setTimeout(function() { document.getElementById('wrtKnowledgeTitleInput').focus(); }, 100);
@@ -896,11 +901,12 @@ get_header();
         apiFetch('/knowledge', { method: 'POST', body: body }).then(function(res) {
             if (res.success) {
                 showToast('保存しました');
-                // 新規作成の場合、保存後にファイルセクションを表示
+                // 新規作成の場合、保存後にファイルアップロードを有効化
                 if (!body.id && res.item) {
                     currentKnowledgeItem = res.item;
                     document.getElementById('wrtKnowledgeId').value = res.item.id;
-                    document.getElementById('wrtKnowledgeFileSection').style.display = '';
+                    document.getElementById('wrtKnowledgeFileUploadBtn').disabled = false;
+                    document.getElementById('wrtKnowledgeFileInput').disabled = false;
                     renderKnowledgeFiles([]);
                 } else {
                     closeKnowledgeModal();
