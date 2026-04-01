@@ -215,33 +215,11 @@ class Gcrev_Writing_Service {
         }
 
         // クライアント設定からペルソナ情報を取得して想定読者の初期値にする
-        $default_reader = '';
-        if ( function_exists( 'gcrev_get_client_settings' ) ) {
-            $cs = gcrev_get_client_settings( $user_id );
-            $reader_parts = [];
-            if ( ! empty( $cs['persona_one_liner'] ) ) {
-                $reader_parts[] = $cs['persona_one_liner'];
-            } else {
-                if ( ! empty( $cs['persona_age_ranges'] ) ) {
-                    $reader_parts[] = implode( '・', $cs['persona_age_ranges'] );
-                }
-                if ( ! empty( $cs['persona_genders'] ) ) {
-                    $reader_parts[] = implode( '・', $cs['persona_genders'] );
-                }
-                if ( ! empty( $cs['persona_attributes'] ) ) {
-                    $reader_parts[] = implode( '、', $cs['persona_attributes'] );
-                }
-            }
-            $area_label = function_exists( 'gcrev_get_client_area_label' )
-                ? gcrev_get_client_area_label( $cs ) : '';
-            if ( $area_label && ! empty( $cs['industry'] ) ) {
-                $reader_parts[] = "{$area_label}で{$cs['industry']}を探している方";
-            }
-            $default_reader = implode( ' / ', array_filter( $reader_parts ) );
-        }
+        $default_reader = $this->build_default_reader( $user_id );
 
         // キーワードから最適な記事タイプ・目的・文体をルールベースで推定
-        $auto = $this->detect_article_settings( $keyword, $cs ?? [] );
+        $cs = function_exists( 'gcrev_get_client_settings' ) ? gcrev_get_client_settings( $user_id ) : [];
+        $auto = $this->detect_article_settings( $keyword, $cs );
 
         update_post_meta( $post_id, '_gcrev_article_user_id', $user_id );
         update_post_meta( $post_id, '_gcrev_article_keyword', $keyword );
@@ -343,13 +321,26 @@ class Gcrev_Writing_Service {
         $interview_raw = get_post_meta( $post->ID, '_gcrev_article_interview_json', true );
         $interview = $interview_raw ? json_decode( $interview_raw, true ) : null;
 
+        // target_reader が空の場合はクライアント設定から補完
+        $target_reader = get_post_meta( $post->ID, '_gcrev_article_target_reader', true ) ?: '';
+        if ( $target_reader === '' && function_exists( 'gcrev_get_client_settings' ) ) {
+            $user_id = (int) get_post_meta( $post->ID, '_gcrev_article_user_id', true );
+            if ( $user_id > 0 ) {
+                $target_reader = $this->build_default_reader( $user_id );
+                // DB にも保存して次回以降は直接取得
+                if ( $target_reader !== '' ) {
+                    update_post_meta( $post->ID, '_gcrev_article_target_reader', $target_reader );
+                }
+            }
+        }
+
         return [
             'id'                     => $post->ID,
             'keyword'                => get_post_meta( $post->ID, '_gcrev_article_keyword', true ) ?: '',
             'type'                   => get_post_meta( $post->ID, '_gcrev_article_type', true ) ?: 'explanation',
             'purpose'                => get_post_meta( $post->ID, '_gcrev_article_purpose', true ) ?: 'traffic',
             'tone'                   => get_post_meta( $post->ID, '_gcrev_article_tone', true ) ?: 'professional',
-            'target_reader'          => get_post_meta( $post->ID, '_gcrev_article_target_reader', true ) ?: '',
+            'target_reader'          => $target_reader,
             'selected_knowledge_ids' => $knowledge_ids,
             'outline'                => $outline,
             'notes'                  => is_array( $notes ) ? $notes : [],
@@ -1058,6 +1049,28 @@ RULES;
         if ( $in_list ) { $html .= "</ul>\n"; }
 
         return $html;
+    }
+
+    // =========================================================
+    // クライアント設定からデフォルト想定読者を生成
+    // =========================================================
+
+    private function build_default_reader( int $user_id ): string {
+        if ( ! function_exists( 'gcrev_get_client_settings' ) ) { return ''; }
+        $cs = gcrev_get_client_settings( $user_id );
+        $parts = [];
+        if ( ! empty( $cs['persona_one_liner'] ) ) {
+            $parts[] = $cs['persona_one_liner'];
+        } else {
+            if ( ! empty( $cs['persona_age_ranges'] ) )  { $parts[] = implode( '・', $cs['persona_age_ranges'] ); }
+            if ( ! empty( $cs['persona_genders'] ) )     { $parts[] = implode( '・', $cs['persona_genders'] ); }
+            if ( ! empty( $cs['persona_attributes'] ) )  { $parts[] = implode( '、', $cs['persona_attributes'] ); }
+        }
+        $area_label = function_exists( 'gcrev_get_client_area_label' ) ? gcrev_get_client_area_label( $cs ) : '';
+        if ( $area_label && ! empty( $cs['industry'] ) ) {
+            $parts[] = "{$area_label}で{$cs['industry']}を探している方";
+        }
+        return implode( ' / ', array_filter( $parts ) );
     }
 
     // =========================================================
