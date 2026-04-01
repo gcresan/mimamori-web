@@ -1193,6 +1193,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_writing_save_wp_draft' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/writing/check-similarity', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_check_similarity' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         // =========================================================
         // 口コミ投稿支援（公開エンドポイント）
@@ -15108,9 +15113,14 @@ PROMPT;
 
     public function rest_writing_generate_draft( \WP_REST_Request $request ): \WP_REST_Response {
         if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
-        @set_time_limit( 180 );
+        @set_time_limit( 300 );
         try {
-            $result = $this->writing_service->generate_draft( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            $additional_prompt = sanitize_textarea_field( $request->get_param( 'additional_prompt' ) ?? '' );
+            $result = $this->writing_service->generate_draft(
+                get_current_user_id(),
+                (int) $request->get_param( 'id' ),
+                $additional_prompt
+            );
             return new \WP_REST_Response( $result );
         } catch ( \Throwable $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
@@ -15151,6 +15161,20 @@ PROMPT;
         if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
         $result = $this->writing_service->save_as_wp_draft( get_current_user_id(), (int) $request->get_param( 'id' ) );
         return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_check_similarity( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 ); }
+        $keyword = sanitize_text_field( $request->get_json_params()['keyword'] ?? '' );
+        if ( $keyword === '' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'キーワードを入力してください。' ], 400 );
+        }
+        try {
+            $result = $this->writing_service->check_similarity( get_current_user_id(), $keyword );
+            return new \WP_REST_Response( [ 'success' => true, 'result' => $result ] );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
     }
 
     // =========================================================

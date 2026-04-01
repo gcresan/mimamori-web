@@ -1217,20 +1217,18 @@ INSTRUCTION;
     /**
      * 本文たたき台を生成
      */
-    public function generate_draft( int $user_id, int $article_id ): array {
+    public function generate_draft( int $user_id, int $article_id, string $additional_prompt = '' ): array {
         $article = $this->get_article( $user_id, $article_id );
         if ( ! $article ) {
             return [ 'success' => false, 'error' => '記事が見つかりません。' ];
         }
-        // 構成案がなければ内部で自動生成
-        if ( empty( $article['outline'] ) ) {
-            $this->log( "generate_draft: no outline, auto-generating for article_id={$article_id}" );
-            $outline_result = $this->generate_outline( $user_id, $article_id );
-            if ( ! $outline_result['success'] ) {
-                return [ 'success' => false, 'error' => '記事構成の準備に失敗しました: ' . ( $outline_result['error'] ?? '' ) ];
-            }
-            $article = $this->get_article( $user_id, $article_id );
+        // 構成案を常に（再）生成
+        $this->log( "generate_draft: generating outline for article_id={$article_id}" );
+        $outline_result = $this->generate_outline( $user_id, $article_id );
+        if ( ! $outline_result['success'] ) {
+            return [ 'success' => false, 'error' => '記事構成の準備に失敗しました: ' . ( $outline_result['error'] ?? '' ) ];
         }
+        $article = $this->get_article( $user_id, $article_id );
 
         $this->log( "generate_draft: article_id={$article_id}" );
 
@@ -1291,6 +1289,12 @@ INSTRUCTION;
             $existing_fps
         );
 
+        // 追加編集プロンプトがあればドラフトプロンプトに追記
+        if ( $additional_prompt !== '' ) {
+            $prompt .= "\n\n## ユーザーからの追加指示（必ず反映すること）\n{$additional_prompt}\n";
+            $this->log( "generate_draft: additional_prompt applied, len=" . mb_strlen( $additional_prompt ) );
+        }
+
         try {
             $raw = $this->ai->call_gemini_api( $prompt, [
                 'temperature'       => 0.7,
@@ -1314,7 +1318,7 @@ INSTRUCTION;
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
         $this->log( "Draft saved for article_id={$article_id}, length=" . mb_strlen( $content ) );
-        return [ 'success' => true, 'draft_content' => $content ];
+        return [ 'success' => true, 'draft_content' => $content, 'outline' => $article['outline'] ];
     }
 
     /**

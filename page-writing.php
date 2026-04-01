@@ -904,10 +904,22 @@ get_header();
 
         // 本文生成
         document.getElementById('wrtGenerateDraftBtn').addEventListener('click', function() {
-            showProgress('本文を生成中…（1〜2分程度）');
-            apiFetch('/articles/' + a.id + '/draft', { method: 'POST' }).then(function(res) {
+            showProgress('構成案と本文を生成中…（2〜3分程度）');
+            var refinePrompt = (document.getElementById('wrtRefinePrompt') || {}).value || '';
+            var body = {};
+            if (refinePrompt.trim()) body.additional_prompt = refinePrompt.trim();
+            apiFetch('/articles/' + a.id + '/draft', { method: 'POST', body: body }).then(function(res) {
                 hideProgress();
-                if (res.success) { currentArticle.draft_content = res.draft_content; currentArticle.status = 'draft_generated'; renderDraft(res.draft_content); showToast('本文を生成しました'); renderArticleDetail(); }
+                if (res.success) {
+                    currentArticle.draft_content = res.draft_content;
+                    if (res.outline) currentArticle.outline = res.outline;
+                    currentArticle.status = 'draft_generated';
+                    draftViewMode = 'preview';
+                    showToast('本文を生成しました');
+                    renderArticleDetail();
+                    var rp = document.getElementById('wrtRefinePrompt');
+                    if (rp && refinePrompt) rp.value = refinePrompt;
+                }
                 else showToast(res.error || 'エラー', true);
             }).catch(function() { hideProgress(); showToast('通信エラー', true); });
         });
