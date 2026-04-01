@@ -400,6 +400,39 @@ class Gcrev_Writing_Service {
     }
 
     /**
+     * 記事に使用する情報ストックのアイテムを取得
+     *
+     * selected_knowledge_ids が空の場合は、全ての有効な情報ストックを自動使用。
+     * 明示的に選択されている場合はその選択を尊重。
+     */
+    private function resolve_knowledge_items( int $user_id, array $article ): array {
+        $kid_ids = $article['selected_knowledge_ids'] ?? [];
+
+        // 選択が空の場合 → 全件自動使用
+        if ( empty( $kid_ids ) ) {
+            $all = $this->list_knowledge( $user_id );
+            $kid_ids = array_column( $all, 'id' );
+        }
+
+        $items = [];
+        foreach ( $kid_ids as $kid ) {
+            $kp = get_post( absint( $kid ) );
+            if ( ! $kp ) { continue; }
+            $content = get_post_meta( $kp->ID, '_gcrev_knowledge_content', true ) ?: '';
+            $file_texts = $this->get_knowledge_file_texts( $kp->ID );
+            if ( $file_texts !== '' ) {
+                $content .= "\n\n【添付資料の内容】\n" . $file_texts;
+            }
+            $items[] = [
+                'title'    => $kp->post_title,
+                'category' => get_post_meta( $kp->ID, '_gcrev_knowledge_category', true ) ?: '',
+                'content'  => $content,
+            ];
+        }
+        return $items;
+    }
+
+    /**
      * 情報ストックの添付ファイルからすべての抽出テキストを取得
      */
     public function get_knowledge_file_texts( int $knowledge_id ): string {
@@ -679,26 +712,8 @@ class Gcrev_Writing_Service {
         $settings = function_exists( 'gcrev_get_client_settings' )
             ? gcrev_get_client_settings( $user_id ) : [];
 
-        // 選択された情報ストック
-        $knowledge_items = [];
-        $kid_ids = $article['selected_knowledge_ids'] ?? [];
-        if ( ! empty( $kid_ids ) ) {
-            foreach ( $kid_ids as $kid ) {
-                $kp = get_post( absint( $kid ) );
-                if ( ! $kp ) { continue; }
-                $content = get_post_meta( $kp->ID, '_gcrev_knowledge_content', true ) ?: '';
-                // 添付ファイルの抽出テキストを追加
-                $file_texts = $this->get_knowledge_file_texts( $kp->ID );
-                if ( $file_texts !== '' ) {
-                    $content .= "\n\n【添付資料の内容】\n" . $file_texts;
-                }
-                $knowledge_items[] = [
-                    'title'    => $kp->post_title,
-                    'category' => get_post_meta( $kp->ID, '_gcrev_knowledge_category', true ) ?: '',
-                    'content'  => $content,
-                ];
-            }
-        }
+        // 情報ストック（未選択なら全件自動使用）
+        $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
 
         // プロンプト構築
         $prompt = $this->build_outline_prompt(
@@ -1105,29 +1120,19 @@ INSTRUCTION;
         $settings = function_exists( 'gcrev_get_client_settings' )
             ? gcrev_get_client_settings( $user_id ) : [];
 
-        // 情報ストック
+        // 情報ストック（未選択なら全件自動使用）
+        $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
         $knowledge_text = '';
-        $kid_ids = $article['selected_knowledge_ids'] ?? [];
-        if ( ! empty( $kid_ids ) ) {
-            $total = 0;
-            foreach ( $kid_ids as $kid ) {
-                $kp = get_post( absint( $kid ) );
-                if ( ! $kp ) { continue; }
-                $cat = get_post_meta( $kp->ID, '_gcrev_knowledge_category', true ) ?: '';
-                $cat_label = self::KNOWLEDGE_CATEGORIES[ $cat ] ?? $cat;
-                $content = get_post_meta( $kp->ID, '_gcrev_knowledge_content', true ) ?: '';
-                // 添付ファイルの抽出テキストを追加
-                $file_texts = $this->get_knowledge_file_texts( $kp->ID );
-                if ( $file_texts !== '' ) {
-                    $content .= "\n\n【添付資料の内容】\n" . $file_texts;
-                }
-                if ( $total + mb_strlen( $content ) > 15000 ) {
-                    $content = mb_substr( $content, 0, max( 0, 15000 - $total ) ) . '…（以下省略）';
-                }
-                $total += mb_strlen( $content );
-                $knowledge_text .= "### {$kp->post_title}（{$cat_label}）\n{$content}\n\n";
-                if ( $total >= 15000 ) { break; }
+        $total = 0;
+        foreach ( $knowledge_items as $ki ) {
+            $cat_label = self::KNOWLEDGE_CATEGORIES[ $ki['category'] ] ?? $ki['category'];
+            $content = $ki['content'];
+            if ( $total + mb_strlen( $content ) > 15000 ) {
+                $content = mb_substr( $content, 0, max( 0, 15000 - $total ) ) . '…（以下省略）';
             }
+            $total += mb_strlen( $content );
+            $knowledge_text .= "### {$ki['title']}（{$cat_label}）\n{$content}\n\n";
+            if ( $total >= 15000 ) { break; }
         }
 
         // 記事個別メモ

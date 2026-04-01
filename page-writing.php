@@ -500,7 +500,7 @@ get_header();
         html += '</div>';
 
         // 情報ストック選択
-        html += '<div style="margin-top:12px;"><label>参照する情報ストック</label><div class="wrt-kb-select" id="wrtKbSelect"></div></div>';
+        html += '<div style="margin-top:12px;"><label>参照する情報ストック（自動選択）</label><div class="wrt-kb-select" id="wrtKbSelect"></div></div>';
 
         html += '<div style="margin-top:12px;text-align:right;">';
         html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveSettingsBtn">設定を保存</button>';
@@ -832,13 +832,17 @@ get_header();
             var items = res.items || [];
             var container = document.getElementById('wrtKbSelect');
             if (!container) return;
-            if (items.length === 0) { container.innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">情報ストックがありません</span>'; return; }
-            container.innerHTML = items.map(function(ki) {
-                var sel = selectedIds.indexOf(ki.id) >= 0 ? ' selected' : '';
-                return '<div class="wrt-kb-select__item' + sel + '" data-id="' + ki.id + '">'
-                    + '<span class="wrt-cat-badge">' + esc(catLabels[ki.category] || ki.category) + '</span> '
-                    + esc(ki.title) + '</div>';
-            }).join('');
+            if (items.length === 0) { container.innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">情報ストックがありません（登録すると自動的に記事生成に活用されます）</span>'; return; }
+            // selectedIds が空 = 全件自動選択（デフォルト）
+            var autoSelectAll = !selectedIds || selectedIds.length === 0;
+            container.innerHTML = '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">すべての情報ストックが自動的に参照されます。除外したい場合はクリックして外してください。</div>'
+                + items.map(function(ki) {
+                    var sel = autoSelectAll || selectedIds.indexOf(ki.id) >= 0 ? ' selected' : '';
+                    var fileIcon = ki.files && ki.files.length > 0 ? ' 📎' : '';
+                    return '<div class="wrt-kb-select__item' + sel + '" data-id="' + ki.id + '">'
+                        + '<span class="wrt-cat-badge">' + esc(catLabels[ki.category] || ki.category) + '</span> '
+                        + esc(ki.title) + fileIcon + '</div>';
+                }).join('');
             container.querySelectorAll('.wrt-kb-select__item').forEach(function(el) {
                 el.addEventListener('click', function() { el.classList.toggle('selected'); });
             });
@@ -898,15 +902,14 @@ get_header();
         document.getElementById('wrtKnowledgeCategorySelect').value = item ? item.category : 'notes';
         document.getElementById('wrtKnowledgeContent').value = item ? item.content : '';
         document.getElementById('wrtKnowledgePriority').value = item ? item.priority : 3;
-        // ファイルセクション: 常に表示、未保存時はアップロード無効
-        var isNew = !item;
+        // ファイルセクション: 常に表示（未保存でもアップロード可能 — 自動保存される）
         if (item) {
             renderKnowledgeFiles(item.files || []);
         } else {
-            document.getElementById('wrtKnowledgeFileList').innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">先に保存してからファイルを添付できます</span>';
+            document.getElementById('wrtKnowledgeFileList').innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">添付ファイルなし</span>';
         }
-        document.getElementById('wrtDropzone').classList.toggle('disabled', isNew);
-        document.getElementById('wrtKnowledgeFileInput').disabled = isNew;
+        document.getElementById('wrtDropzone').classList.remove('disabled');
+        document.getElementById('wrtKnowledgeFileInput').disabled = false;
         document.getElementById('wrtKnowledgeFileInput').value = '';
         document.getElementById('wrtKnowledgeModal').classList.add('active');
         setTimeout(function() { document.getElementById('wrtKnowledgeTitleInput').focus(); }, 100);
