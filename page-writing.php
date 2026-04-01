@@ -638,12 +638,6 @@ get_header();
         if (a.outline) {
             html += '<button class="wrt-btn wrt-btn--secondary" id="wrtShowOutlineBtn">この記事の構成案を見る</button>';
         }
-        if (a.draft_content) {
-            html += '<button class="wrt-btn wrt-btn--secondary" id="wrtSaveWpDraftBtn">WordPress下書き保存</button>';
-        }
-        if (a.wp_draft_id) {
-            html += '<a href="' + <?php echo wp_json_encode( admin_url( 'post.php?action=edit&post=' ) ); ?> + a.wp_draft_id + '" target="_blank" class="wrt-btn wrt-btn--secondary wrt-btn--sm" style="text-decoration:none;">WP編集画面を開く</a>';
-        }
         html += '</div>';
         html += '<div id="wrtDraftArea"></div>';
         html += '</div>';
@@ -765,19 +759,6 @@ get_header();
                 else showToast(res.error || 'エラー', true);
             }).catch(function() { hideProgress(); showToast('通信エラー', true); });
         });
-
-        // WP下書き保存
-        var wpDraftBtn = document.getElementById('wrtSaveWpDraftBtn');
-        if (wpDraftBtn) {
-            wpDraftBtn.addEventListener('click', function() {
-                showProgress('WordPress下書きを保存中…');
-                apiFetch('/articles/' + a.id + '/wp-draft', { method: 'POST' }).then(function(res) {
-                    hideProgress();
-                    if (res.success) { currentArticle.wp_draft_id = res.draft_id; showToast('WordPress下書きを保存しました'); renderArticleDetail(); }
-                    else showToast(res.error || 'エラー', true);
-                }).catch(function() { hideProgress(); showToast('通信エラー', true); });
-            });
-        }
 
         // 構成案を見るボタン
         var outlineBtn = document.getElementById('wrtShowOutlineBtn');
