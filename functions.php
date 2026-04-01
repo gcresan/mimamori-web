@@ -810,6 +810,10 @@ $gcrev_utils_opportunity_scorer = $gcrev_utils_path . 'class-opportunity-scorer.
 if ( file_exists( $gcrev_utils_opportunity_scorer ) ) {
     require_once $gcrev_utils_opportunity_scorer;
 }
+$gcrev_utils_report_queue = $gcrev_utils_path . 'class-report-queue.php';
+if ( file_exists( $gcrev_utils_report_queue ) ) {
+    require_once $gcrev_utils_report_queue;
+}
 // class-city-coordinates.php は DataForSEO MEO座標機能廃止に伴い削除済み
 
 // ========================================
@@ -2942,6 +2946,235 @@ function mimamori_format_keyword_research_for_chat( int $user_id ): string {
     return $out;
 }
 
+/**
+ * ユーザーメッセージが MEO 診断結果の参照を必要とするか判定
+ */
+function mimamori_needs_meo_context( string $message ): bool {
+    if ( $message === '' ) { return false; }
+    $msg = mb_strtolower( $message );
+    $triggers = [
+        'meo', 'meo診断', 'meo対策', 'meoスコア',
+        'googleビジネス', 'ビジネスプロフィール', 'gbp',
+        'マイビジネス', 'マップ対策', 'ローカル検索',
+        'クチコミ', '口コミ対策', '店舗情報',
+    ];
+    foreach ( $triggers as $kw ) {
+        if ( mb_strpos( $msg, $kw ) !== false ) { return true; }
+    }
+    return false;
+}
+
+/**
+ * 最新の MEO 診断結果をAIチャット用テキストにフォーマット
+ */
+function mimamori_format_meo_for_chat( int $user_id ): string {
+    $query = new \WP_Query( [
+        'post_type'      => 'gcrev_report',
+        'posts_per_page' => 1,
+        'orderby'        => 'date',
+        'order'          => 'DESC',
+        'meta_query'     => [
+            'relation' => 'AND',
+            [ 'key' => '_gcrev_user_id',     'value' => $user_id, 'type' => 'NUMERIC' ],
+            [ 'key' => '_gcrev_report_type', 'value' => 'meo_diagnostic' ],
+        ],
+        'no_found_rows' => true,
+    ] );
+    if ( ! $query->have_posts() ) { return ''; }
+
+    $post = $query->posts[0];
+    $json = get_post_meta( $post->ID, '_gcrev_diagnostic_json', true );
+    $data = json_decode( $json ?: '{}', true );
+    if ( empty( $data ) ) { return ''; }
+
+    $score   = $data['overall_score'] ?? '';
+    $grade   = $data['overall_grade'] ?? '';
+    $created = get_post_meta( $post->ID, '_gcrev_created_at', true ) ?: $post->post_date;
+
+    $out = "【MEO診断結果】（{$created} 実施）\n";
+    $out .= "総合スコア: {$score}/100（{$grade}ランク）\n";
+
+    $categories = $data['categories'] ?? [];
+    $cat_labels = [ 'basic_info' => '基本情報', 'posts' => '投稿', 'photos' => '写真', 'reviews' => 'クチコミ' ];
+    if ( ! empty( $categories ) ) {
+        $out .= "\n■ カテゴリ別スコア\n";
+        foreach ( $cat_labels as $ck => $cl ) {
+            $cat = $categories[ $ck ] ?? null;
+            if ( $cat ) { $out .= "・{$cl}: {$cat['score']}/100（{$cat['grade']}）\n"; }
+        }
+    }
+    if ( ! empty( $data['summary_text'] ) ) {
+        $out .= "\n■ 総評\n{$data['summary_text']}\n";
+    }
+    if ( ! empty( $data['good_points'] ) ) {
+        $out .= "\n■ 良い点\n";
+        foreach ( array_slice( $data['good_points'], 0, 5 ) as $gp ) { $out .= "・{$gp}\n"; }
+    }
+    if ( ! empty( $data['improvement_points'] ) ) {
+        $out .= "\n■ 改善点\n";
+        foreach ( array_slice( $data['improvement_points'], 0, 5 ) as $ip ) { $out .= "・{$ip}\n"; }
+    }
+    return $out;
+}
+
+/**
+ * ユーザーメッセージが順位トラッキング（SEO診断）の参照を必要とするか判定
+ */
+function mimamori_needs_rank_tracker_context( string $message ): bool {
+    if ( $message === '' ) { return false; }
+    $msg = mb_strtolower( $message );
+    $triggers = [
+        '順位', 'ランキング', '検索順位', 'seo診断', 'seo対策',
+        '順位トラッキング', 'rank', '何位', '順位変動',
+        '上位表示', '圏外', 'ランクトラッカー',
+    ];
+    foreach ( $triggers as $kw ) {
+        if ( mb_strpos( $msg, $kw ) !== false ) { return true; }
+    }
+    return false;
+}
+
+/**
+ * 最新の順位トラッキング結果をAIチャット用テキストにフォーマット
+ */
+function mimamori_format_rank_tracker_for_chat( int $user_id ): string {
+    global $wpdb;
+    $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+    $res_table = $wpdb->prefix . 'gcrev_rank_results';
+
+    $keywords = $wpdb->get_results( $wpdb->prepare(
+        "SELECT id, keyword, search_volume, keyword_difficulty, opportunity_score
+         FROM {$kw_table}
+         WHERE user_id = %d AND enabled = 1
+         ORDER BY sort_order ASC, id ASC
+         LIMIT 30",
+        $user_id
+    ), ARRAY_A );
+    if ( empty( $keywords ) ) { return ''; }
+
+    $out = "【順位トラッキング結果】\n";
+    foreach ( $keywords as $kw ) {
+        $kw_id = (int) $kw['id'];
+        $latest = $wpdb->get_results( $wpdb->prepare(
+            "SELECT device, rank_group, is_ranked, fetch_date
+             FROM {$res_table}
+             WHERE keyword_id = %d AND user_id = %d
+             ORDER BY fetch_date DESC, fetched_at DESC
+             LIMIT 2",
+            $kw_id, $user_id
+        ), ARRAY_A );
+
+        $ranks = [];
+        foreach ( $latest as $r ) {
+            $dev = $r['device'] ?? 'desktop';
+            if ( ! isset( $ranks[ $dev ] ) ) {
+                $ranks[ $dev ] = $r['is_ranked'] ? "{$r['rank_group']}位" : '圏外';
+            }
+        }
+        $parts = [ $kw['keyword'] ];
+        if ( ! empty( $ranks['desktop'] ) ) { $parts[] = "PC:{$ranks['desktop']}"; }
+        if ( ! empty( $ranks['mobile'] ) )  { $parts[] = "SP:{$ranks['mobile']}"; }
+        if ( $kw['search_volume'] )         { $parts[] = "月間{$kw['search_volume']}"; }
+        if ( $kw['keyword_difficulty'] )    { $parts[] = "難易度:{$kw['keyword_difficulty']}"; }
+        $out .= "・" . implode( ' / ', $parts ) . "\n";
+    }
+    return $out;
+}
+
+/**
+ * ユーザーメッセージが AIO 診断結果の参照を必要とするか判定
+ */
+function mimamori_needs_aio_context( string $message ): bool {
+    if ( $message === '' ) { return false; }
+    $msg = mb_strtolower( $message );
+    $triggers = [
+        'aio', 'aio診断', 'aioスコア', 'ai検索', 'ai overview',
+        'ai検索スコア', 'aiサーチ', 'ai検索対策',
+        'chatgpt検索', 'gemini検索', 'ai生成',
+        'ai検索に出', 'aiに紹介',
+    ];
+    foreach ( $triggers as $kw ) {
+        if ( mb_strpos( $msg, $kw ) !== false ) { return true; }
+    }
+    return false;
+}
+
+/**
+ * 最新の AIO 診断結果をAIチャット用テキストにフォーマット
+ */
+function mimamori_format_aio_for_chat( int $user_id ): string {
+    global $wpdb;
+    $aio_table = $wpdb->prefix . 'gcrev_aio_results';
+    $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+
+    $results = $wpdb->get_results( $wpdb->prepare(
+        "SELECT a.keyword_id, k.keyword, a.provider,
+                AVG(a.self_score) as avg_score,
+                SUM(a.is_mentioned) as mention_count,
+                COUNT(*) as total_queries,
+                MAX(a.fetched_at) as last_fetched
+         FROM {$aio_table} a
+         JOIN {$kw_table} k ON k.id = a.keyword_id
+         WHERE a.user_id = %d AND a.status = 'success'
+         GROUP BY a.keyword_id, a.provider
+         ORDER BY k.sort_order ASC, k.id ASC",
+        $user_id
+    ), ARRAY_A );
+    if ( empty( $results ) ) { return ''; }
+
+    $diagnosis_raw = get_user_meta( $user_id, 'gcrev_ai_report_diagnosis', true );
+    $diagnosis = is_array( $diagnosis_raw ) ? $diagnosis_raw : ( json_decode( $diagnosis_raw ?: '{}', true ) ?: [] );
+
+    $out = "【AIO診断結果】\n";
+
+    $by_keyword = [];
+    foreach ( $results as $r ) {
+        $kw_id = $r['keyword_id'];
+        if ( ! isset( $by_keyword[ $kw_id ] ) ) {
+            $by_keyword[ $kw_id ] = [ 'keyword' => $r['keyword'], 'providers' => [] ];
+        }
+        $visibility = ( $r['total_queries'] > 0 )
+            ? round( ( $r['mention_count'] / $r['total_queries'] ) * 100, 1 ) : 0;
+        $by_keyword[ $kw_id ]['providers'][ $r['provider'] ] = [
+            'visibility' => $visibility,
+            'avg_score'  => round( (float) $r['avg_score'] * 100, 1 ),
+        ];
+    }
+
+    $out .= "\n■ キーワード別 AI検索可視性\n";
+    $provider_labels = [ 'chatgpt' => 'ChatGPT', 'gemini' => 'Gemini', 'google_ai' => 'AI Overview' ];
+    foreach ( $by_keyword as $kw_data ) {
+        $out .= "▼ {$kw_data['keyword']}\n";
+        foreach ( $provider_labels as $pk => $pl ) {
+            $p = $kw_data['providers'][ $pk ] ?? null;
+            if ( $p ) { $out .= "  {$pl}: 可視性 {$p['visibility']}% / スコア {$p['avg_score']}\n"; }
+        }
+    }
+
+    $items = $diagnosis['items'] ?? [];
+    if ( ! empty( $items ) ) {
+        $issues = [];
+        $good   = [];
+        foreach ( $items as $item ) {
+            $st    = $item['status'] ?? 'unknown';
+            $label = $item['label'] ?? '';
+            if ( $label === '' ) { continue; }
+            if ( $st === 'ok' ) { $good[] = $label; }
+            elseif ( in_array( $st, [ 'caution', 'not_addressed' ], true ) ) {
+                $st_label = $st === 'caution' ? '要注意' : '未対応';
+                $issues[] = "{$label}（{$st_label}）";
+            }
+        }
+        if ( ! empty( $issues ) || ! empty( $good ) ) {
+            $out .= "\n■ サイト診断\n";
+            if ( ! empty( $good ) )   { $out .= "対応済: " . implode( '、', array_slice( $good, 0, 10 ) ) . "\n"; }
+            if ( ! empty( $issues ) ) { $out .= "要改善: " . implode( '、', array_slice( $issues, 0, 10 ) ) . "\n"; }
+        }
+    }
+
+    return $out;
+}
+
 function mimamori_build_context_blocks(
     string $page_type,
     array  $intent_result,
@@ -3127,13 +3360,34 @@ function mimamori_build_context_blocks(
         $ref_list[] = '今月の月次レポート設定（課題・目標等）';
     }
 
-    // --- Block 2.9: キーワード調査結果（関連質問時のみ） ---
-    $kwr_message = $intent_result['_message'] ?? '';
-    if ( mimamori_needs_keyword_research_context( $kwr_message ) ) {
+    // --- Block 2.9: 診断結果コンテキスト（関連質問時のみ） ---
+    $diag_message = $intent_result['_message'] ?? '';
+    if ( mimamori_needs_keyword_research_context( $diag_message ) ) {
         $kwr_ctx = mimamori_format_keyword_research_for_chat( $user_id );
         if ( $kwr_ctx !== '' ) {
             $blocks[]   = $kwr_ctx;
             $ref_list[] = 'キーワード調査結果（最新）';
+        }
+    }
+    if ( mimamori_needs_meo_context( $diag_message ) ) {
+        $meo_ctx = mimamori_format_meo_for_chat( $user_id );
+        if ( $meo_ctx !== '' ) {
+            $blocks[]   = $meo_ctx;
+            $ref_list[] = 'MEO診断結果（最新）';
+        }
+    }
+    if ( mimamori_needs_rank_tracker_context( $diag_message ) ) {
+        $rank_ctx = mimamori_format_rank_tracker_for_chat( $user_id );
+        if ( $rank_ctx !== '' ) {
+            $blocks[]   = $rank_ctx;
+            $ref_list[] = '順位トラッキング結果（最新）';
+        }
+    }
+    if ( mimamori_needs_aio_context( $diag_message ) ) {
+        $aio_ctx = mimamori_format_aio_for_chat( $user_id );
+        if ( $aio_ctx !== '' ) {
+            $blocks[]   = $aio_ctx;
+            $ref_list[] = 'AIO診断結果（最新）';
         }
     }
 
@@ -5170,6 +5424,9 @@ add_action('after_setup_theme', function () {
     }
     if ( class_exists( 'Gcrev_DB_Optimizer' ) ) {
         Gcrev_DB_Optimizer::ensure_indexes();
+    }
+    if ( class_exists( 'Gcrev_Report_Queue' ) ) {
+        Gcrev_Report_Queue::create_table();
     }
 });
 
