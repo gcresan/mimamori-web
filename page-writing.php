@@ -261,6 +261,25 @@ get_header();
     .wrt-table th:nth-child(3) { display: none; }
     .wrt-table td, .wrt-table th { padding: 10px 8px; }
 }
+
+/* ヘルプアイコン */
+.wrt-help-trigger { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.wrt-help-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--mw-bg-tertiary, #e2e8f0); color: var(--mw-text-tertiary);
+    font-size: 10px; font-weight: 700; line-height: 1; flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+}
+.wrt-help-trigger:hover .wrt-help-icon { background: var(--mw-primary-blue, #4A90A4); color: #fff; }
+
+/* ヘルプモーダル内部 */
+.wrt-help-items { display: flex; flex-direction: column; gap: 16px; }
+.wrt-help-item { padding: 14px 16px; background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light); border-radius: 8px; }
+.wrt-help-item__name { font-size: 14px; font-weight: 700; color: var(--mw-text-heading); margin-bottom: 6px; }
+.wrt-help-item__desc { margin-bottom: 6px; }
+.wrt-help-item__meta { font-size: 12px; color: var(--mw-text-tertiary); }
+.wrt-help-item__meta strong { color: var(--mw-text-secondary); font-weight: 600; }
 </style>
 
 <div class="content-area">
@@ -424,6 +443,18 @@ get_header();
     </div>
 
     <!-- ===== 類似記事チェックモーダル ===== -->
+    <!-- ===== 記事タイプ・目的ヘルプモーダル ===== -->
+    <div class="wrt-modal-overlay" id="wrtHelpModal">
+        <div class="wrt-modal" style="max-width:540px;">
+            <button class="wrt-modal__close" id="wrtHelpModalClose" type="button">&times;</button>
+            <h2 class="wrt-modal__title" id="wrtHelpModalTitle"></h2>
+            <div id="wrtHelpModalBody" style="font-size:13px;line-height:1.8;color:var(--mw-text-secondary);"></div>
+            <div class="wrt-modal__actions">
+                <button class="wrt-btn wrt-btn--secondary" id="wrtHelpModalCloseBtn" type="button">閉じる</button>
+            </div>
+        </div>
+    </div>
+
     <div class="wrt-modal-overlay" id="wrtSimilarityModal">
         <div class="wrt-modal" style="max-width:600px;">
             <button class="wrt-modal__close" id="wrtSimilarityModalClose" type="button">&times;</button>
@@ -464,6 +495,22 @@ get_header();
     var purposeLabels = <?php echo wp_json_encode( Gcrev_Writing_Service::ARTICLE_PURPOSES, JSON_UNESCAPED_UNICODE ); ?>;
     var toneLabels = <?php echo wp_json_encode( Gcrev_Writing_Service::TONES, JSON_UNESCAPED_UNICODE ); ?>;
     var statusLabels = { keyword_set: 'キーワード設定済', outline_generated: '構成案あり', draft_generated: '本文あり', wp_draft_saved: 'WP下書き済' };
+
+    /* 記事タイプ・目的の解説データ */
+    var typeDescriptions = {
+        explanation: { label: '解説記事', desc: '特定のテーマについて詳しく解説する記事です。読者の「知りたい」に応え、専門知識をわかりやすく伝えます。', example: '「ホームページ制作の流れと費用相場を解説」「SEO対策の基本と始め方」', when: '検索ユーザーが情報収集している段階で接点を作りたいとき。業種の専門性をアピールしたいとき。' },
+        comparison: { label: '比較記事', desc: '複数の選択肢を比較し、読者が判断しやすいように整理する記事です。メリット・デメリットを公平に示します。', example: '「WordPress vs Wix — 中小企業に向いているのはどっち？」', when: '読者が選択肢を比較検討している段階。自社サービスの強みを自然に伝えたいとき。' },
+        faq: { label: 'FAQ記事', desc: 'よくある質問とその回答をまとめた記事です。読者の疑問や不安を解消し、信頼感を高めます。', example: '「ホームページ制作でよくある質問10選」', when: '問い合わせ前の不安を解消し、コンバージョンにつなげたいとき。' },
+        case_study: { label: '事例記事', desc: '実際の事例や成功体験を紹介する記事です。具体的なストーリーで説得力を持たせます。', example: '「松山市の工務店が問い合わせ数を3倍にした方法」', when: '自社の実績を示したいとき。読者に「自分もできそう」と思ってもらいたいとき。' },
+        local: { label: '地域訴求記事', desc: '特定の地域に関連した情報を盛り込み、地域SEOを意識した記事です。エリア名を含むキーワードで上位表示を狙います。', example: '「愛媛県で集客に強いホームページ制作会社の選び方」', when: '地域名で検索するユーザーを取り込みたいとき。MEO・ローカルSEOを強化したいとき。' }
+    };
+    var purposeDescriptions = {
+        traffic: { label: 'アクセス獲得', desc: '検索ボリュームの大きいキーワードで上位表示し、サイトへの流入を増やすことを目的とします。', point: '情報提供を主軸に、幅広い読者に役立つ内容を書きます。直接的な問い合わせ誘導よりも、まずサイトを知ってもらうことを優先します。' },
+        inquiry: { label: '問い合わせ獲得', desc: '記事を読んだ読者が問い合わせや相談につながることを目的とします。', point: '読者の課題を具体的に示し、「相談してみよう」と思える流れを作ります。CTAは自然に、押し売りにならないように配置します。' },
+        local_seo: { label: '地域SEO', desc: '「地域名＋サービス名」などの地域キーワードで検索上位を目指す記事です。', point: '地域の特性やニーズに触れながら、エリア名を自然に盛り込みます。Googleマップ検索との相乗効果も期待できます。' },
+        comparison: { label: '比較検討対策', desc: '競合や代替手段と比較検討している読者に向けた記事です。', point: '読者が「どこに頼むか」「どの方法がいいか」を判断する材料を提供します。自社の優位点は事実ベースで控えめに伝えます。' },
+        brand: { label: '指名検索補強', desc: '会社名やサービス名で検索したときに、充実した情報が表示されることを目的とします。', point: '自社の理念・強み・実績など、指名検索したユーザーが安心できる情報を整理します。信頼感の醸成が最優先です。' }
+    };
 
     // 現在のデータ
     var articlesData = [];
@@ -731,6 +778,50 @@ get_header();
         pendingSimilarityKeyword = '';
     });
 
+    /* ===== 記事タイプ・目的ヘルプモーダル ===== */
+    function closeHelpModal() { document.getElementById('wrtHelpModal').classList.remove('active'); }
+    document.getElementById('wrtHelpModalClose').addEventListener('click', closeHelpModal);
+    document.getElementById('wrtHelpModalCloseBtn').addEventListener('click', closeHelpModal);
+    document.getElementById('wrtHelpModal').addEventListener('click', function(e) { if (e.target === this) closeHelpModal(); });
+
+    function showHelpModal(kind) {
+        var title, items;
+        if (kind === 'type') {
+            title = '記事タイプの解説';
+            items = typeDescriptions;
+        } else {
+            title = '記事の目的の解説';
+            items = purposeDescriptions;
+        }
+        document.getElementById('wrtHelpModalTitle').textContent = title;
+        var html = '<div class="wrt-help-items">';
+        Object.keys(items).forEach(function(k) {
+            var it = items[k];
+            html += '<div class="wrt-help-item">';
+            html += '<div class="wrt-help-item__name">' + esc(it.label) + '</div>';
+            html += '<div class="wrt-help-item__desc">' + esc(it.desc) + '</div>';
+            if (it.example) {
+                html += '<div class="wrt-help-item__meta"><strong>例: </strong>' + esc(it.example) + '</div>';
+            }
+            var when = it.when || it.point || '';
+            if (when) {
+                html += '<div class="wrt-help-item__meta"><strong>' + (it.point ? 'ポイント: ' : '向いている場面: ') + '</strong>' + esc(when) + '</div>';
+            }
+            html += '</div>';
+        });
+        html += '</div>';
+        document.getElementById('wrtHelpModalBody').innerHTML = html;
+        document.getElementById('wrtHelpModal').classList.add('active');
+    }
+
+    document.addEventListener('click', function(e) {
+        var trigger = e.target.closest('.wrt-help-trigger');
+        if (trigger) {
+            e.preventDefault();
+            showHelpModal(trigger.dataset.help);
+        }
+    });
+
     /* ===== 記事詳細 ===== */
     function showArticleDetail(id) {
         showProgress('読み込み中…');
@@ -808,10 +899,10 @@ get_header();
         // 記事設定
         html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">記事設定</div>';
         html += '<div class="wrt-settings-grid">';
-        html += '<div><label>記事タイプ</label><select id="wrtSetType">';
+        html += '<div><label><span class="wrt-help-trigger" data-help="type">記事タイプ <span class="wrt-help-icon">?</span></span></label><select id="wrtSetType">';
         Object.keys(typeLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.type === k ? ' selected' : '') + '>' + esc(typeLabels[k]) + '</option>'; });
         html += '</select></div>';
-        html += '<div><label>目的</label><select id="wrtSetPurpose">';
+        html += '<div><label><span class="wrt-help-trigger" data-help="purpose">目的 <span class="wrt-help-icon">?</span></span></label><select id="wrtSetPurpose">';
         Object.keys(purposeLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.purpose === k ? ' selected' : '') + '>' + esc(purposeLabels[k]) + '</option>'; });
         html += '</select></div>';
         html += '<div><label>文体</label><select id="wrtSetTone">';
