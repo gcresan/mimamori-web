@@ -643,9 +643,10 @@ get_header();
         html += '<div class="wrt-detail-section" id="wrtDraftSection">';
         html += '<div class="wrt-detail-section__title">本文生成</div>';
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-        html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
+        html += '<button class="wrt-btn wrt-btn--primary" id="wrtRegenerateAllBtn">すべて再生成</button>';
+        html += '<button class="wrt-btn wrt-btn--secondary" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文のみ再生成' : '本文たたき台を生成') + '</button>';
         if (a.outline) {
-            html += '<button class="wrt-btn wrt-btn--secondary" id="wrtShowOutlineBtn">この記事の構成案を見る</button>';
+            html += '<button class="wrt-btn wrt-btn--secondary" id="wrtShowOutlineBtn">構成案を見る</button>';
         }
         html += '</div>';
         html += '<div id="wrtDraftArea"></div>';
@@ -759,7 +760,24 @@ get_header();
             }).catch(function() { hideProgress(); showToast('通信エラー', true); });
         });
 
-        // 本文生成
+        // すべて再生成（構成案→ヒアリング→本文）
+        document.getElementById('wrtRegenerateAllBtn').addEventListener('click', function() {
+            if (a.draft_content && !confirm('構成案・ヒアリング・本文をすべて再生成します。よろしいですか？')) return;
+            showProgress('構成案・ヒアリング・本文を再生成中…（2〜3分程度）');
+            apiFetch('/articles/' + a.id + '/regenerate-all', { method: 'POST' }).then(function(res) {
+                hideProgress();
+                if (res.success) {
+                    currentArticle = res.article;
+                    draftViewMode = 'preview';
+                    showToast('すべて再生成しました');
+                    renderArticleDetail();
+                } else {
+                    showToast(res.error || 'エラー', true);
+                }
+            }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+        });
+
+        // 本文のみ生成
         document.getElementById('wrtGenerateDraftBtn').addEventListener('click', function() {
             showProgress('本文を生成中…（1〜2分程度）');
             apiFetch('/articles/' + a.id + '/draft', { method: 'POST' }).then(function(res) {

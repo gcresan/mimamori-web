@@ -1088,6 +1088,41 @@ INSTRUCTION;
     }
 
     /**
+     * 構成案 → ヒアリング → 本文をワンクリックで全再生成
+     */
+    public function regenerate_all( int $user_id, int $article_id ): array {
+        $this->log( "regenerate_all: start article_id={$article_id}" );
+
+        // 1. 構成案を再生成
+        $outline_result = $this->generate_outline( $user_id, $article_id );
+        if ( ! $outline_result['success'] ) {
+            return [ 'success' => false, 'error' => '構成案の再生成に失敗しました: ' . ( $outline_result['error'] ?? '' ), 'step' => 'outline' ];
+        }
+
+        // 2. ヒアリング質問を再生成
+        $interview_result = $this->generate_interview( $user_id, $article_id );
+        if ( ! $interview_result['success'] ) {
+            $this->log( "regenerate_all: interview failed, continuing to draft" );
+            // ヒアリング失敗は致命的ではないので続行
+        }
+
+        // 3. 本文を再生成
+        $draft_result = $this->generate_draft( $user_id, $article_id );
+        if ( ! $draft_result['success'] ) {
+            return [ 'success' => false, 'error' => '本文の再生成に失敗しました: ' . ( $draft_result['error'] ?? '' ), 'step' => 'draft' ];
+        }
+
+        // 最新の記事データを返す
+        $article = $this->get_article( $user_id, $article_id );
+        $this->log( "regenerate_all: complete article_id={$article_id}" );
+
+        return [
+            'success' => true,
+            'article' => $article,
+        ];
+    }
+
+    /**
      * ヒアリング回答を保存
      */
     public function save_interview_answers( int $user_id, int $article_id, array $answers ): array {

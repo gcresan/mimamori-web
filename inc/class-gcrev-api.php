@@ -1178,6 +1178,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_writing_generate_draft' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/regenerate-all', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_regenerate_all' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/refine-draft', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_writing_refine_draft' ],
@@ -15106,6 +15111,20 @@ PROMPT;
         @set_time_limit( 180 );
         try {
             $result = $this->writing_service->generate_draft( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_writing_regenerate_all( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        @set_time_limit( 300 );
+        try {
+            $result = $this->writing_service->regenerate_all(
+                get_current_user_id(),
+                (int) $request->get_param( 'id' )
+            );
             return new \WP_REST_Response( $result );
         } catch ( \Throwable $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
