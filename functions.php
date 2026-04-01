@@ -2792,6 +2792,156 @@ function mimamori_has_keyword( string $message_lower, array $keywords ): bool {
  * @param int    $user_id        WordPress ユーザーID
  * @return string  instructions に追記するテキスト（空文字 = 追記なし）
  */
+/**
+ * ユーザーメッセージがキーワード調査結果の参照を必要とするか判定
+ */
+function mimamori_needs_keyword_research_context( string $message ): bool {
+    if ( $message === '' ) {
+        return false;
+    }
+    $msg = mb_strtolower( $message );
+    $triggers = [
+        'キーワード調査', 'キーワード候補', 'キーワード戦略', 'キーワード提案',
+        'seoキーワード', '狙うべきキーワード', '狙えるキーワード',
+        '競合キーワード', '競合のキーワード',
+        'keyword research', 'keyword strategy',
+        'どのキーワード', 'おすすめのキーワード', 'キーワードを教え',
+        'キーワード分析', 'キーワード比較',
+    ];
+    foreach ( $triggers as $kw ) {
+        if ( mb_strpos( $msg, $kw ) !== false ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * 最新のキーワード調査結果をAIチャット用テキストにフォーマット
+ */
+function mimamori_format_keyword_research_for_chat( int $user_id ): string {
+    if ( ! class_exists( 'Gcrev_Keyword_Research_Service' ) ) {
+        return '';
+    }
+
+    // サービスインスタンスを取得（API クラス経由）
+    global $gcrev_api;
+    $kwr_service = null;
+    if ( isset( $gcrev_api ) && method_exists( $gcrev_api, 'get_keyword_research_service' ) ) {
+        $kwr_service = $gcrev_api->get_keyword_research_service();
+    }
+    if ( $kwr_service === null ) {
+        // フォールバック: 直接 CPT から取得
+        $query = new \WP_Query( [
+            'post_type'      => 'gcrev_kw_research',
+            'posts_per_page' => 1,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'meta_key'       => '_gcrev_kwr_user_id',
+            'meta_value'     => $user_id,
+            'meta_type'      => 'NUMERIC',
+            'no_found_rows'  => true,
+        ] );
+        if ( ! $query->have_posts() ) {
+            return '';
+        }
+        $post    = $query->posts[0];
+        $summary = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_summary', true ) ?: '{}', true );
+        $groups  = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_groups', true ) ?: '{}', true );
+        $meta    = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_meta', true ) ?: '{}', true );
+        $result  = [
+            'summary' => is_array( $summary ) ? $summary : [],
+            'groups'  => is_array( $groups ) ? $groups : [],
+            'meta'    => is_array( $meta ) ? $meta : [],
+        ];
+    } else {
+        $result = $kwr_service->get_latest_result( $user_id );
+        if ( $result === null ) {
+            return '';
+        }
+    }
+
+    $summary = $result['summary'] ?? [];
+    $groups  = $result['groups'] ?? [];
+    $meta    = $result['meta'] ?? [];
+
+    if ( empty( $groups ) ) {
+        return '';
+    }
+
+    // フォーマット開始
+    $generated_at  = $meta['generated_at'] ?? '';
+    $data_sources  = $meta['data_sources'] ?? [];
+    $out  = "【キーワード調査結果】";
+    if ( $generated_at ) {
+        $out .= "（{$generated_at} 実施）";
+    }
+    $out .= "\n";
+    if ( ! empty( $data_sources ) ) {
+        $out .= "データソース: " . implode( ', ', $data_sources ) . "\n";
+    }
+
+    // 戦略サマリー
+    $summary_fields = [
+        'direction'                  => '方向性',
+        'priority_pages'             => '優先ページ',
+        'new_pages'                  => '新規ページ案',
+        'title_tips'                 => 'タイトル・見出し',
+        'local_tips'                 => 'ローカルSEO',
+        'competitor_strengths'       => '競合の強み',
+        'competitor_gaps'            => '狙い目の領域',
+        'competitor_differentiation' => '差別化候補',
+    ];
+    $has_summary = false;
+    foreach ( $summary_fields as $key => $label ) {
+        if ( ! empty( $summary[ $key ] ) ) {
+            if ( ! $has_summary ) {
+                $out .= "\n■ 戦略サマリー\n";
+                $has_summary = true;
+            }
+            $out .= "・{$label}: {$summary[$key]}\n";
+        }
+    }
+
+    // グループ別キーワード（上位5件ずつ）
+    $group_labels = [
+        'immediate'           => '今すぐ狙うべき',
+        'local_seo'           => '地域SEO',
+        'comparison'          => '比較・検討流入',
+        'column'              => 'コラム記事向き',
+        'service_page'        => 'サービスページ向き',
+        'competitor_core'     => '競合も狙う本命',
+        'competitor_longterm' => '中長期で狙うべき',
+        'competitor_gap'      => '競合が弱く狙いやすい',
+        'competitor_compare'  => '比較検討流入',
+    ];
+
+    $out .= "\n■ キーワード候補（グループ別）\n";
+    foreach ( $group_labels as $gk => $label ) {
+        $items = $groups[ $gk ] ?? [];
+        if ( empty( $items ) || ! is_array( $items ) ) {
+            continue;
+        }
+        $total = count( $items );
+        $out .= "▼ {$label}（{$total}件）\n";
+        foreach ( array_slice( $items, 0, 5 ) as $item ) {
+            $kw  = $item['keyword'] ?? '';
+            $vol = $item['volume'] ?? null;
+            $pri = $item['priority'] ?? '';
+            if ( $kw === '' ) { continue; }
+            $parts = [ $kw ];
+            if ( $vol !== null ) { $parts[] = "月間 " . number_format( (int) $vol ); }
+            if ( $pri !== '' )  { $parts[] = "優先度:{$pri}"; }
+            $out .= "  " . implode( ' / ', $parts ) . "\n";
+        }
+        if ( $total > 5 ) {
+            $out .= "  …他 " . ( $total - 5 ) . " 件\n";
+        }
+    }
+
+    return $out;
+}
+
 function mimamori_build_context_blocks(
     string $page_type,
     array  $intent_result,
@@ -2975,6 +3125,16 @@ function mimamori_build_context_blocks(
         $monthly_block .= implode( "\n", $monthly_parts );
         $blocks[]   = $monthly_block;
         $ref_list[] = '今月の月次レポート設定（課題・目標等）';
+    }
+
+    // --- Block 2.9: キーワード調査結果（関連質問時のみ） ---
+    $kwr_message = $intent_result['_message'] ?? '';
+    if ( mimamori_needs_keyword_research_context( $kwr_message ) ) {
+        $kwr_ctx = mimamori_format_keyword_research_for_chat( $user_id );
+        if ( $kwr_ctx !== '' ) {
+            $blocks[]   = $kwr_ctx;
+            $ref_list[] = 'キーワード調査結果（最新）';
+        }
     }
 
     // --- Block 3: ページ文脈情報 ---
@@ -4862,6 +5022,8 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
 
     // システムプロンプト + 意図補正コンテキスト
     $instructions   = mimamori_get_system_prompt();
+    // キーワード調査コンテキスト判定用にメッセージを intent に同梱
+    $intent['_message'] = $effective_message ?? $message;
     $context_blocks = mimamori_build_context_blocks( $page_type, $intent, $sources, $current_page, $user_id, $section_context );
     if ( $context_blocks !== '' ) {
         $instructions .= $context_blocks;
