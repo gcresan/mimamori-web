@@ -1019,21 +1019,22 @@ INSTRUCTION;
         $missing = $article['outline']['missing_info'] ?? [];
         $keyword = $article['keyword'];
 
-        // 情報ストックの内容も渡してより的確な質問を生成
-        $knowledge_summary = '';
-        $kid_ids = $article['selected_knowledge_ids'] ?? [];
-        if ( ! empty( $kid_ids ) ) {
-            $kb_titles = [];
-            foreach ( $kid_ids as $kid ) {
-                $kp = get_post( absint( $kid ) );
-                if ( $kp ) { $kb_titles[] = $kp->post_title; }
+        // 情報ストックの内容（添付ファイルのテキスト含む）を取得
+        $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
+        $knowledge_text  = '';
+        $total           = 0;
+        foreach ( $knowledge_items as $ki ) {
+            $cat_label = self::KNOWLEDGE_CATEGORIES[ $ki['category'] ] ?? $ki['category'];
+            $content   = $ki['content'];
+            if ( $total + mb_strlen( $content ) > 10000 ) {
+                $content = mb_substr( $content, 0, max( 0, 10000 - $total ) ) . '…（以下省略）';
             }
-            if ( ! empty( $kb_titles ) ) {
-                $knowledge_summary = "登録済みの情報ストック: " . implode( '、', $kb_titles );
-            }
+            $total += mb_strlen( $content );
+            $knowledge_text .= "### {$ki['title']}（{$cat_label}）\n{$content}\n\n";
+            if ( $total >= 10000 ) { break; }
         }
 
-        $this->log( "generate_interview: article_id={$article_id}, missing=" . count( $missing ) );
+        $this->log( "generate_interview: article_id={$article_id}, missing=" . count( $missing ) . ", knowledge_chars={$total}" );
 
         $prompt  = "あなたはSEOコラム記事作成のヒアリング担当者です。\n";
         $prompt .= "対策キーワード「{$keyword}」のコラム記事を作成するにあたり、";
@@ -1045,15 +1046,18 @@ INSTRUCTION;
             }
             $prompt .= "\n";
         }
-        if ( $knowledge_summary !== '' ) {
-            $prompt .= "## 現在登録されている参照情報\n{$knowledge_summary}\n\n";
+        if ( $knowledge_text !== '' ) {
+            $prompt .= "## 現在登録されている参照情報（情報ストック・添付ファイルの内容）\n";
+            $prompt .= "以下は既にクライアントから提供されている情報です。この内容を十分に把握した上で、**ここに書かれていない情報のみ**を質問してください。\n\n";
+            $prompt .= $knowledge_text . "\n";
         }
         $prompt .= "## 出力指示\n以下のJSON配列のみを出力してください。\n";
         $prompt .= '[{"question": "質問文", "hint": "回答のヒント（50文字以内）", "field_type": "text"}]' . "\n";
         $prompt .= "- 質問は3〜7個程度\n";
         $prompt .= "- field_type は text（短文）または textarea（長文）\n";
         $prompt .= "- 記事に一次情報（実体験・具体的な数字・独自の強み等）を盛り込むための実用的な質問にしてください\n";
-        $prompt .= "- すでに登録済みの情報と重複する質問は避けてください\n";
+        $prompt .= "- 上記の参照情報に既に含まれている内容（料金、プラン、サービス内容等）については質問しないでください\n";
+        $prompt .= "- 参照情報にない独自の強み・実績・顧客の声・差別化ポイントなど、記事に深みを出す情報を引き出す質問にしてください\n";
 
         try {
             $raw = $this->ai->call_gemini_api( $prompt, [
