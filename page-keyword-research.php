@@ -234,6 +234,31 @@ get_header();
 .kwr-diff-easy   { background: rgba(39,174,96,0.12); color: #27AE60; }
 .kwr-diff-medium { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .kwr-diff-hard   { background: rgba(201,90,79,0.12); color: #C95A4F; }
+.kwr-diff-ads    { background: rgba(66,133,244,0.1); color: #4285F4; font-size: 10px; }
+.kwr-diff-na     { color: var(--mw-text-tertiary); font-size: 10px; }
+
+/* ソート可能ヘッダー */
+.kwr-table th[data-sort], .kwr-comp-kw-table th[data-sort] {
+    cursor: pointer; user-select: none; position: relative; padding-right: 18px;
+}
+.kwr-table th[data-sort]:hover, .kwr-comp-kw-table th[data-sort]:hover {
+    background: rgba(74,144,164,0.08);
+}
+.kwr-table th[data-sort]::after, .kwr-comp-kw-table th[data-sort]::after {
+    content: '⇅'; position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    font-size: 9px; opacity: 0.3;
+}
+.kwr-table th[data-sort].sort-asc::after, .kwr-comp-kw-table th[data-sort].sort-asc::after {
+    content: '▲'; opacity: 0.7;
+}
+.kwr-table th[data-sort].sort-desc::after, .kwr-comp-kw-table th[data-sort].sort-desc::after {
+    content: '▼'; opacity: 0.7;
+}
+
+/* ミニ棒グラフ */
+.kwr-mini-chart { display: inline-flex; align-items: flex-end; gap: 1px; height: 16px; vertical-align: middle; margin-left: 4px; }
+.kwr-mini-bar { width: 3px; border-radius: 1px 1px 0 0; background: rgba(74,144,164,0.5); min-height: 1px; transition: background 0.15s; }
+.kwr-mini-bar:hover { background: rgba(74,144,164,0.9); }
 
 /* メタ情報 */
 .kwr-meta { font-size: 12px; color: var(--mw-text-tertiary); margin-top: 8px; }
@@ -299,6 +324,7 @@ get_header();
     .kwr-client-info { grid-template-columns: 1fr 1fr; }
     .kwr-group__header { padding: 14px 16px; }
     .kwr-table th, .kwr-table td { padding: 8px 6px; }
+    .kwr-mini-chart { display: none; }
 }
 </style>
 
@@ -530,15 +556,67 @@ get_header();
         var prevAvg = prev.reduce(function(s, m) { return s + (m.searches || 0); }, 0) / prev.length;
         if (prevAvg === 0 && recentAvg === 0) return '<span class="kwr-trend kwr-trend-stable" title="データ不足">→</span>';
         var change = prevAvg > 0 ? ((recentAvg - prevAvg) / prevAvg * 100) : (recentAvg > 0 ? 100 : 0);
-        if (change > 10) return '<span class="kwr-trend kwr-trend-up" title="上昇傾向 (+' + Math.round(change) + '%)">↑</span>';
-        if (change < -10) return '<span class="kwr-trend kwr-trend-down" title="下降傾向 (' + Math.round(change) + '%)">↓</span>';
-        return '<span class="kwr-trend kwr-trend-stable" title="安定 (' + (change >= 0 ? '+' : '') + Math.round(change) + '%)">→</span>';
+        var arrow;
+        if (change > 10) arrow = '<span class="kwr-trend kwr-trend-up" title="上昇傾向 (+' + Math.round(change) + '%)">↑</span>';
+        else if (change < -10) arrow = '<span class="kwr-trend kwr-trend-down" title="下降傾向 (' + Math.round(change) + '%)">↓</span>';
+        else arrow = '<span class="kwr-trend kwr-trend-stable" title="安定 (' + (change >= 0 ? '+' : '') + Math.round(change) + '%)">→</span>';
+        // ミニ棒グラフ
+        var maxV = 0;
+        monthlyVolumes.forEach(function(m) { if ((m.searches || 0) > maxV) maxV = m.searches; });
+        if (maxV === 0) return arrow;
+        var bars = '<span class="kwr-mini-chart">';
+        monthlyVolumes.forEach(function(m) {
+            var h = Math.max(1, Math.round((m.searches || 0) / maxV * 16));
+            var label = (m.year || '') + '/' + (m.month || '') + ': ' + (m.searches || 0).toLocaleString();
+            bars += '<span class="kwr-mini-bar" style="height:' + h + 'px;" title="' + label + '"></span>';
+        });
+        bars += '</span>';
+        return arrow + bars;
     }
-    function fmtDiff(v) {
-        if (v === null || v === undefined) return '<span style="color:var(--mw-text-tertiary);">-</span>';
-        var n = Math.round(v);
-        var cls = n <= 30 ? 'kwr-diff-easy' : (n <= 60 ? 'kwr-diff-medium' : 'kwr-diff-hard');
-        return '<span class="kwr-badge ' + cls + '">' + n + '</span>';
+    function getTrendValue(monthlyVolumes) {
+        if (!monthlyVolumes || monthlyVolumes.length < 4) return null;
+        var recent = monthlyVolumes.slice(-3);
+        var prev = monthlyVolumes.slice(-6, -3);
+        if (prev.length === 0) prev = monthlyVolumes.slice(0, 3);
+        var recentAvg = recent.reduce(function(s, m) { return s + (m.searches || 0); }, 0) / recent.length;
+        var prevAvg = prev.reduce(function(s, m) { return s + (m.searches || 0); }, 0) / prev.length;
+        return prevAvg > 0 ? ((recentAvg - prevAvg) / prevAvg * 100) : (recentAvg > 0 ? 100 : 0);
+    }
+    function fmtDiff(v, compIndex) {
+        if (v !== null && v !== undefined) {
+            var n = Math.round(v);
+            var cls = n <= 30 ? 'kwr-diff-easy' : (n <= 60 ? 'kwr-diff-medium' : 'kwr-diff-hard');
+            return '<span class="kwr-badge ' + cls + '">' + n + '</span>';
+        }
+        if (compIndex !== null && compIndex !== undefined) {
+            return '<span class="kwr-badge kwr-diff-ads" title="SEO難易度は未取得。広告競合度を参考表示">広告:' + Math.round(compIndex) + '</span>';
+        }
+        return '<span class="kwr-diff-na" title="データなし">-</span>';
+    }
+    /* ===== ソートユーティリティ ===== */
+    function kwrSortItems(items, key, dir, type) {
+        if (!dir) return items.slice(); // デフォルト順
+        return items.slice().sort(function(a, b) {
+            var va = (type === 'trend') ? getTrendValue(a[key]) : a[key];
+            var vb = (type === 'trend') ? getTrendValue(b[key]) : b[key];
+            var aNull = (va === null || va === undefined);
+            var bNull = (vb === null || vb === undefined);
+            if (aNull && bNull) return 0;
+            if (aNull) return 1;
+            if (bNull) return -1;
+            var cmp;
+            if (type === 'number' || type === 'trend') {
+                cmp = Number(va) - Number(vb);
+            } else {
+                cmp = String(va).localeCompare(String(vb), 'ja');
+            }
+            return dir === 'asc' ? cmp : -cmp;
+        });
+    }
+    function nextSortDir(current) {
+        if (!current) return 'asc';
+        if (current === 'asc') return 'desc';
+        return '';
     }
 
     function showProgress(msg) {
@@ -722,7 +800,68 @@ get_header();
         document.getElementById('kwrCompSummary').style.display = html ? '' : 'none';
     }
 
-    /* ===== グループ別テーブル描画 ===== */
+    /* ===== グループ別テーブル描画（ソート対応） ===== */
+    var groupSortState = {}; // { groupKey: { key, dir } }
+
+    function renderGroupTable(body, items, gk) {
+        var cols = [
+            { label: 'キーワード', key: 'keyword', type: 'string' },
+            { label: 'タイプ',     key: 'type',    type: 'string' },
+            { label: '優先度',     key: 'priority', type: 'string' },
+            { label: '検索Vol.',   key: 'volume',  type: 'number' },
+            { label: 'トレンド',   key: 'monthly_volumes', type: 'trend' },
+            { label: '競合度',     key: 'competition_index', type: 'number' },
+            { label: '難易度',     key: 'difficulty', type: 'number' },
+            { label: '推奨ページ', key: 'page_type', type: 'string' },
+            { label: '提案理由',   key: null },
+            { label: 'アクション', key: null }
+        ];
+        var st = groupSortState[gk] || {};
+        var sorted = st.key ? kwrSortItems(items, st.key, st.dir, st.type) : items;
+
+        var html = '<table class="kwr-table"><thead><tr>';
+        cols.forEach(function(c) {
+            var cls = '';
+            if (c.key) {
+                if (st.key === c.key && st.dir === 'asc') cls = ' class="sort-asc"';
+                else if (st.key === c.key && st.dir === 'desc') cls = ' class="sort-desc"';
+                html += '<th data-sort="' + c.key + '" data-type="' + c.type + '"' + cls + '>' + c.label + '</th>';
+            } else {
+                html += '<th>' + c.label + '</th>';
+            }
+        });
+        html += '</tr></thead><tbody>';
+
+        sorted.forEach(function(item) {
+            html += '<tr>'
+                + '<td class="kwr-keyword-cell">' + esc(item.keyword) + '</td>'
+                + '<td>' + badge(item.type, typeClass) + '</td>'
+                + '<td>' + badge(item.priority, priClass) + '</td>'
+                + '<td class="kwr-vol-cell">' + fmtVol(item.volume) + '</td>'
+                + '<td class="kwr-vol-cell">' + fmtTrend(item.monthly_volumes) + '</td>'
+                + '<td class="kwr-vol-cell">' + fmtComp(item.competition, item.competition_index) + '</td>'
+                + '<td class="kwr-vol-cell">' + fmtDiff(item.difficulty, item.competition_index) + '</td>'
+                + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
+                + '<td style="font-size:12px;color:var(--mw-text-secondary);">' + esc(item.reason) + '</td>'
+                + '<td>' + badge(item.action, actClass) + '</td>'
+                + '</tr>';
+        });
+        html += '</tbody></table>';
+        body.innerHTML = html;
+
+        // ソートイベント
+        body.querySelectorAll('th[data-sort]').forEach(function(th) {
+            th.addEventListener('click', function() {
+                var sortKey = th.getAttribute('data-sort');
+                var sortType = th.getAttribute('data-type');
+                var cur = (st.key === sortKey) ? st.dir : '';
+                var nd = nextSortDir(cur);
+                groupSortState[gk] = nd ? { key: sortKey, dir: nd, type: sortType } : {};
+                renderGroupTable(body, items, gk);
+            });
+        });
+    }
+
     function renderGroups(groups) {
         var container = document.getElementById('kwrGroups');
         container.innerHTML = '';
@@ -754,29 +893,7 @@ get_header();
                 header.querySelector('.kwr-group__arrow').className = 'kwr-group__arrow' + (hidden ? '' : ' collapsed');
             });
 
-            var html = '<table class="kwr-table"><thead><tr>'
-                + '<th>キーワード</th><th>タイプ</th><th>優先度</th>'
-                + '<th>検索Vol.</th><th>トレンド</th><th>競合度</th><th>難易度</th>'
-                + '<th>推奨ページ</th><th>提案理由</th><th>アクション</th>'
-                + '</tr></thead><tbody>';
-
-            items.forEach(function(item) {
-                html += '<tr>'
-                    + '<td class="kwr-keyword-cell">' + esc(item.keyword) + '</td>'
-                    + '<td>' + badge(item.type, typeClass) + '</td>'
-                    + '<td>' + badge(item.priority, priClass) + '</td>'
-                    + '<td class="kwr-vol-cell">' + fmtVol(item.volume) + '</td>'
-                    + '<td class="kwr-vol-cell">' + fmtTrend(item.monthly_volumes) + '</td>'
-                    + '<td class="kwr-vol-cell">' + fmtComp(item.competition, item.competition_index) + '</td>'
-                    + '<td class="kwr-vol-cell">' + fmtDiff(item.difficulty) + '</td>'
-                    + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
-                    + '<td style="font-size:12px;color:var(--mw-text-secondary);">' + esc(item.reason) + '</td>'
-                    + '<td>' + badge(item.action, actClass) + '</td>'
-                    + '</tr>';
-            });
-
-            html += '</tbody></table>';
-            body.innerHTML = html;
+            renderGroupTable(body, items, gk);
             div.appendChild(header);
             div.appendChild(body);
             container.appendChild(div);
@@ -785,54 +902,89 @@ get_header();
         document.getElementById('kwrResults').style.display = hasAny ? '' : 'none';
     }
 
-    /* ===== 競合キーワード比較描画 ===== */
+    /* ===== 競合キーワード比較描画（ソート対応） ===== */
+    var compSortState = {}; // { urlHash: { key, dir, type } }
+    var compDataCache = {}; // { url: kws[] }
+
+    function renderCompTable(container, kws, urlHash) {
+        var st = compSortState[urlHash] || {};
+        var sorted = st.key ? kwrSortItems(kws, st.key, st.dir, st.type) : kws;
+        var cols = [
+            { label: 'キーワード', key: 'text', type: 'string' },
+            { label: '月間検索数', key: 'volume', type: 'number' },
+            { label: 'トレンド',   key: 'monthly_volumes', type: 'trend' },
+            { label: '競合度',     key: 'competition_index', type: 'number' },
+            { label: 'CPC',        key: 'cpc', type: 'number' }
+        ];
+
+        var html = '<table class="kwr-comp-kw-table"><thead><tr>';
+        cols.forEach(function(c) {
+            var cls = '';
+            if (st.key === c.key && st.dir === 'asc') cls = ' class="sort-asc"';
+            else if (st.key === c.key && st.dir === 'desc') cls = ' class="sort-desc"';
+            html += '<th data-sort="' + c.key + '" data-type="' + c.type + '"' + cls + '>' + c.label + '</th>';
+        });
+        html += '</tr></thead><tbody>';
+
+        sorted.forEach(function(kw) {
+            var vol = kw.volume !== null && kw.volume !== undefined ? Number(kw.volume).toLocaleString() : '-';
+            var ci = kw.competition_index;
+            var comp = ci !== null && ci !== undefined
+                ? '<span class="kwr-comp-bar"><span class="kwr-comp-bar__fill" style="width:' + ci + '%;"></span></span> ' + ci
+                : (kw.competition || '-');
+            var cpc = kw.cpc !== null && kw.cpc !== undefined ? '¥' + Number(kw.cpc).toLocaleString() : '-';
+            html += '<tr>'
+                + '<td style="font-weight:500;">' + esc(kw.text) + '</td>'
+                + '<td style="text-align:right;">' + vol + '</td>'
+                + '<td style="text-align:center;">' + fmtTrend(kw.monthly_volumes) + '</td>'
+                + '<td>' + comp + '</td>'
+                + '<td style="text-align:right;font-size:11px;">' + cpc + '</td>'
+                + '</tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('th[data-sort]').forEach(function(th) {
+            th.addEventListener('click', function() {
+                var sortKey = th.getAttribute('data-sort');
+                var sortType = th.getAttribute('data-type');
+                var cur = (st.key === sortKey) ? st.dir : '';
+                var nd = nextSortDir(cur);
+                compSortState[urlHash] = nd ? { key: sortKey, dir: nd, type: sortType } : {};
+                renderCompTable(container, kws, urlHash);
+            });
+        });
+    }
+
     function renderCompKeywords(compPlannerKeywords) {
         var el = document.getElementById('kwrCompKeywords');
         if (!compPlannerKeywords || typeof compPlannerKeywords !== 'object') {
-            el.style.display = 'none';
-            return;
+            el.style.display = 'none'; return;
         }
         var urls = Object.keys(compPlannerKeywords);
-        if (urls.length === 0) {
-            el.style.display = 'none';
-            return;
-        }
+        if (urls.length === 0) { el.style.display = 'none'; return; }
+
         var hasData = false;
-        var html = '<p style="font-size:13px;color:var(--mw-text-secondary);margin-bottom:16px;">'
+        var wrapper = document.getElementById('kwrCompKeywordsContent');
+        wrapper.innerHTML = '<p style="font-size:13px;color:var(--mw-text-secondary);margin-bottom:16px;">'
             + 'Google Keyword Planner が各競合URLに関連付けているキーワードです。検索ボリュームは Google の実データに基づいています。</p>';
 
-        urls.forEach(function(url) {
+        urls.forEach(function(url, idx) {
             var kws = compPlannerKeywords[url];
             if (!kws || kws.length === 0) return;
             hasData = true;
-            html += '<div class="kwr-comp-kw-url">' + esc(url) + '</div>';
-            html += '<table class="kwr-comp-kw-table"><thead><tr>'
-                + '<th>キーワード</th><th>月間検索数</th><th>トレンド</th><th>競合度</th><th>CPC</th>'
-                + '</tr></thead><tbody>';
-            kws.forEach(function(kw) {
-                var vol = kw.volume !== null && kw.volume !== undefined ? Number(kw.volume).toLocaleString() : '-';
-                var ci = kw.competition_index;
-                var comp = ci !== null && ci !== undefined
-                    ? '<span class="kwr-comp-bar"><span class="kwr-comp-bar__fill" style="width:' + ci + '%;"></span></span> ' + ci
-                    : (kw.competition || '-');
-                var cpc = kw.cpc !== null && kw.cpc !== undefined ? '¥' + Number(kw.cpc).toLocaleString() : '-';
-                html += '<tr>'
-                    + '<td style="font-weight:500;">' + esc(kw.text) + '</td>'
-                    + '<td style="text-align:right;">' + vol + '</td>'
-                    + '<td style="text-align:center;">' + fmtTrend(kw.monthly_volumes) + '</td>'
-                    + '<td>' + comp + '</td>'
-                    + '<td style="text-align:right;font-size:11px;">' + cpc + '</td>'
-                    + '</tr>';
-            });
-            html += '</tbody></table>';
+            var urlLabel = document.createElement('div');
+            urlLabel.className = 'kwr-comp-kw-url';
+            urlLabel.textContent = url;
+            wrapper.appendChild(urlLabel);
+
+            var tableContainer = document.createElement('div');
+            wrapper.appendChild(tableContainer);
+            var urlHash = 'comp_' + idx;
+            renderCompTable(tableContainer, kws, urlHash);
         });
 
-        if (!hasData) {
-            el.style.display = 'none';
-            return;
-        }
-        document.getElementById('kwrCompKeywordsContent').innerHTML = html;
-        el.style.display = '';
+        el.style.display = hasData ? '' : 'none';
     }
 
 })();
