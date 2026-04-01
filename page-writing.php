@@ -423,6 +423,19 @@ get_header();
         </div>
     </div>
 
+    <!-- ===== 類似記事チェックモーダル ===== -->
+    <div class="wrt-modal-overlay" id="wrtSimilarityModal">
+        <div class="wrt-modal" style="max-width:600px;">
+            <button class="wrt-modal__close" id="wrtSimilarityModalClose" type="button">&times;</button>
+            <h2 class="wrt-modal__title">類似記事の確認</h2>
+            <div id="wrtSimilarityContent"></div>
+            <div class="wrt-modal__actions">
+                <button class="wrt-btn wrt-btn--secondary" id="wrtSimilarityCancelBtn" type="button">キャンセル</button>
+                <button class="wrt-btn wrt-btn--primary" id="wrtSimilarityProceedBtn" type="button">それでも作成する</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== 構成案モーダル ===== -->
     <div class="wrt-modal-overlay" id="wrtOutlineModal">
         <div class="wrt-modal wrt-modal--wide">
@@ -585,9 +598,15 @@ get_header();
 
         container.innerHTML = pageItems.map(function(a) {
             var dateStr = a.created_at ? a.created_at.replace(/-/g, '/').substring(0, 10) : '';
+            var riskBadge = '';
+            if (a.similarity_risk === 'high') {
+                riskBadge = ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:#C95A4F20;color:#C95A4F;">重複注意</span>';
+            } else if (a.similarity_risk === 'medium') {
+                riskBadge = ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:#D4A84320;color:#D4A843;">類似あり</span>';
+            }
             return '<tr class="wrt-table__row" data-id="' + a.id + '">'
                 + '<td class="wrt-table__td-check"><input type="checkbox" class="wrt-article-check" data-id="' + a.id + '"></td>'
-                + '<td class="wrt-table__td-title">' + esc(a.title) + '</td>'
+                + '<td class="wrt-table__td-title">' + esc(a.title) + riskBadge + '</td>'
                 + '<td class="wrt-table__td-keyword">' + esc(a.keyword) + '</td>'
                 + '<td class="wrt-table__td-date">' + esc(dateStr) + '</td>'
                 + '</tr>';
@@ -628,6 +647,20 @@ get_header();
     });
     function createArticle(keyword) {
         closeKeywordModal();
+        showProgress('類似記事をチェック中…');
+        apiFetch('/check-similarity', { method: 'POST', body: { keyword: keyword } }).then(function(res) {
+            hideProgress();
+            if (res.success && res.result && (res.result.risk_level === 'high' || res.result.risk_level === 'medium')) {
+                showSimilarityWarning(keyword, res.result);
+            } else {
+                proceedWithArticleCreation(keyword);
+            }
+        }).catch(function() {
+            hideProgress();
+            proceedWithArticleCreation(keyword);
+        });
+    }
+    function proceedWithArticleCreation(keyword) {
         showProgress('記事を作成中…（構成案を自動生成しています）');
         apiFetch('/articles', { method: 'POST', body: { keyword: keyword } }).then(function(res) {
             hideProgress();
@@ -637,6 +670,56 @@ get_header();
             showArticleDetail(res.article.id);
         }).catch(function() { hideProgress(); showToast('通信エラー', true); });
     }
+    var pendingSimilarityKeyword = '';
+    function showSimilarityWarning(keyword, result) {
+        pendingSimilarityKeyword = keyword;
+        var content = document.getElementById('wrtSimilarityContent');
+        var riskColors = { high: '#C95A4F', medium: '#D4A843', low: '#4A90A4' };
+        var riskLabels = { high: '重複リスク: 高', medium: '重複リスク: 中', low: '重複リスク: 低' };
+        var html = '<div style="padding:16px 0;">';
+        html += '<div style="background:' + (riskColors[result.risk_level] || '#999') + '15;border-left:4px solid ' + (riskColors[result.risk_level] || '#999') + ';padding:12px 16px;border-radius:4px;margin-bottom:16px;">';
+        html += '<strong style="color:' + (riskColors[result.risk_level] || '#999') + ';">' + esc(riskLabels[result.risk_level] || '') + '</strong>';
+        if (result.overall_suggestion) {
+            html += '<p style="margin:8px 0 0;font-size:13px;color:var(--mw-text-secondary);">' + esc(result.overall_suggestion) + '</p>';
+        }
+        html += '</div>';
+        if (result.similar_articles && result.similar_articles.length > 0) {
+            html += '<div style="font-size:14px;font-weight:600;margin-bottom:8px;">類似する既存記事</div>';
+            result.similar_articles.forEach(function(sa) {
+                var simColor = sa.similarity === 'high' ? '#C95A4F' : '#D4A843';
+                html += '<div style="padding:10px;border:1px solid var(--mw-border-light);border-radius:6px;margin-bottom:8px;">';
+                html += '<div style="font-weight:500;">' + esc(sa.title || sa.keyword) + '</div>';
+                html += '<div style="font-size:12px;color:var(--mw-text-tertiary);margin-top:2px;">キーワード: ' + esc(sa.keyword) + '</div>';
+                html += '<div style="font-size:12px;color:' + simColor + ';margin-top:4px;">' + esc(sa.reason) + '</div>';
+                if (sa.differentiation_suggestion) {
+                    html += '<div style="font-size:12px;color:var(--mw-primary-green);margin-top:4px;">→ ' + esc(sa.differentiation_suggestion) + '</div>';
+                }
+                html += '</div>';
+            });
+        }
+        if (result.suggested_angles && result.suggested_angles.length > 0) {
+            html += '<div style="font-size:14px;font-weight:600;margin:12px 0 8px;">別の切り口を提案</div>';
+            result.suggested_angles.forEach(function(angle) {
+                html += '<div style="padding:6px 10px;background:var(--mw-bg-secondary);border-radius:4px;margin-bottom:4px;font-size:13px;">・' + esc(angle) + '</div>';
+            });
+        }
+        html += '</div>';
+        content.innerHTML = html;
+        document.getElementById('wrtSimilarityModal').classList.add('active');
+    }
+    document.getElementById('wrtSimilarityProceedBtn').addEventListener('click', function() {
+        document.getElementById('wrtSimilarityModal').classList.remove('active');
+        if (pendingSimilarityKeyword) proceedWithArticleCreation(pendingSimilarityKeyword);
+        pendingSimilarityKeyword = '';
+    });
+    document.getElementById('wrtSimilarityCancelBtn').addEventListener('click', function() {
+        document.getElementById('wrtSimilarityModal').classList.remove('active');
+        pendingSimilarityKeyword = '';
+    });
+    document.getElementById('wrtSimilarityModalClose').addEventListener('click', function() {
+        document.getElementById('wrtSimilarityModal').classList.remove('active');
+        pendingSimilarityKeyword = '';
+    });
 
     /* ===== 記事詳細 ===== */
     function showArticleDetail(id) {
@@ -671,6 +754,30 @@ get_header();
         html += '<span class="wrt-detail__keyword-label">対策キーワード</span>';
         html += '<span class="wrt-detail__keyword-value">' + esc(a.keyword) + '</span>';
         html += '</div>';
+
+        // 類似記事の警告
+        if (a.similarity_result && a.similarity_result.risk_level && a.similarity_result.risk_level !== 'none' && a.similarity_result.risk_level !== 'low') {
+            var sr = a.similarity_result;
+            var srColor = sr.risk_level === 'high' ? '#C95A4F' : '#D4A843';
+            var srLabel = sr.risk_level === 'high' ? '重複リスク: 高' : '重複リスク: 中';
+            html += '<div style="background:' + srColor + '10;border:1px solid ' + srColor + '30;border-radius:8px;padding:12px 16px;margin-bottom:16px;">';
+            html += '<div style="font-weight:600;color:' + srColor + ';margin-bottom:4px;">' + srLabel + '</div>';
+            if (sr.overall_suggestion) {
+                html += '<p style="font-size:13px;color:var(--mw-text-secondary);margin:0 0 8px;">' + esc(sr.overall_suggestion) + '</p>';
+            }
+            if (sr.similar_articles && sr.similar_articles.length > 0) {
+                sr.similar_articles.forEach(function(sa) {
+                    html += '<div style="padding:6px 8px;background:var(--mw-bg-primary);border-radius:4px;margin-bottom:4px;font-size:12px;">';
+                    html += '<span style="font-weight:500;">' + esc(sa.title || sa.keyword) + '</span>';
+                    html += ' — <span style="color:var(--mw-text-tertiary);">' + esc(sa.reason) + '</span>';
+                    if (sa.differentiation_suggestion) {
+                        html += '<div style="color:var(--mw-primary-green);margin-top:2px;">→ ' + esc(sa.differentiation_suggestion) + '</div>';
+                    }
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+        }
 
         // 本文生成セクション
         html += '<div class="wrt-detail-section" id="wrtDraftSection">';
@@ -800,6 +907,7 @@ get_header();
         document.getElementById('wrtRegenerateAllBtn').addEventListener('click', function() {
             if (a.draft_content && !confirm('構成案・ヒアリング・本文をすべて再生成します。よろしいですか？')) return;
             showProgress('構成案・ヒアリング・本文を再生成中…（2〜3分程度）');
+            var savedRefinePrompt = (document.getElementById('wrtRefinePrompt') || {}).value || '';
             apiFetch('/articles/' + a.id + '/regenerate-all', { method: 'POST' }).then(function(res) {
                 hideProgress();
                 if (res.success) {
@@ -807,6 +915,8 @@ get_header();
                     draftViewMode = 'preview';
                     showToast('すべて再生成しました');
                     renderArticleDetail();
+                    var rp = document.getElementById('wrtRefinePrompt');
+                    if (rp && savedRefinePrompt) rp.value = savedRefinePrompt;
                 } else {
                     showToast(res.error || 'エラー', true);
                 }

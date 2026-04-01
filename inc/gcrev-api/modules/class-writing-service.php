@@ -542,6 +542,18 @@ class Gcrev_Writing_Service {
         update_post_meta( $post_id, '_gcrev_article_created_at', $now );
         update_post_meta( $post_id, '_gcrev_article_updated_at', $now );
 
+        // 類似チェック（ブロックはしない）
+        $similarity_result = null;
+        try {
+            $similarity_result = $this->check_similarity( $user_id, $keyword );
+            if ( $similarity_result && isset( $similarity_result['risk_level'] ) ) {
+                update_post_meta( $post_id, '_gcrev_article_similarity_result',
+                    wp_json_encode( $similarity_result, JSON_UNESCAPED_UNICODE ) );
+            }
+        } catch ( \Throwable $e ) {
+            $this->log( "create_article: similarity check failed (non-blocking): " . $e->getMessage() );
+        }
+
         // 構成案を自動生成（デフォルト設定ベース）
         $this->log( "create_article: auto-generating outline for article_id={$post_id}" );
         $outline_result = $this->generate_outline( $user_id, $post_id );
@@ -551,7 +563,11 @@ class Gcrev_Writing_Service {
         }
 
         $post = get_post( $post_id );
-        return [ 'success' => true, 'article' => $this->format_article_detail( $post ) ];
+        $result = [ 'success' => true, 'article' => $this->format_article_detail( $post ) ];
+        if ( $similarity_result ) {
+            $result['similarity'] = $similarity_result;
+        }
+        return $result;
     }
 
     /**
@@ -633,6 +649,7 @@ class Gcrev_Writing_Service {
             'has_outline'  => (bool) $outline_raw,
             'has_draft'    => (bool) get_post_meta( $post->ID, '_gcrev_article_draft_content', true ),
             'wp_draft_id'  => (int) get_post_meta( $post->ID, '_gcrev_article_wp_draft_id', true ),
+            'similarity_risk' => $this->get_similarity_risk_level( $post->ID ),
             'created_at'   => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'   => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
         ];
@@ -678,6 +695,7 @@ class Gcrev_Writing_Service {
             'draft_content'          => get_post_meta( $post->ID, '_gcrev_article_draft_content', true ) ?: '',
             'wp_draft_id'            => (int) get_post_meta( $post->ID, '_gcrev_article_wp_draft_id', true ),
             'status'                 => get_post_meta( $post->ID, '_gcrev_article_status', true ) ?: 'keyword_set',
+            'similarity_result'      => json_decode( get_post_meta( $post->ID, '_gcrev_article_similarity_result', true ) ?: 'null', true ),
             'created_at'             => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'             => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
         ];
@@ -736,6 +754,9 @@ class Gcrev_Writing_Service {
         // 情報ストック（未選択なら全件自動使用）
         $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
 
+        // 既存記事フィンガープリント取得（重複回避用）
+        $existing_fps = $this->get_existing_articles_fingerprints( $user_id, $article_id );
+
         // プロンプト構築
         $prompt = $this->build_outline_prompt(
             $keyword,
@@ -744,7 +765,8 @@ class Gcrev_Writing_Service {
             $article['tone'],
             $article['target_reader'],
             $settings,
-            $knowledge_items
+            $knowledge_items,
+            $existing_fps
         );
 
         // Gemini 呼び出し
@@ -773,6 +795,9 @@ class Gcrev_Writing_Service {
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
+        // フィンガープリント保存（重複検知用）
+        $this->save_article_fingerprint( $article_id, $keyword, $article['type'], $article['purpose'], $outline );
+
         $this->log( "Outline saved for article_id={$article_id}" );
 
         return [
@@ -792,7 +817,8 @@ class Gcrev_Writing_Service {
         string $tone,
         string $target_reader,
         array  $settings,
-        array  $knowledge_items
+        array  $knowledge_items,
+        array  $existing_fingerprints = []
     ): string {
         $parts = [];
 
@@ -895,7 +921,16 @@ class Gcrev_Writing_Service {
 - まとめの最後に軽いCTA（お問い合わせ誘導など）を含めてよいが、押し売り的にしない
 - 見出しは「よくある質問」「Q:○○」のようなQ&A形式にせず、読み物として自然な見出しにする
 - 読者が上から順に読み進めて理解が深まる構成にする
+- 既存記事リストがある場合、それらと切り口・見出し構成が重複しないよう差別化する
+- 同じキーワードの既存記事がある場合は、異なるアングル（対象読者を変える、特定の側面に焦点を当てるなど）で構成する
+- 既存記事と同じ導入の流れ・結論を避ける
 INSTRUCTION;
+
+        // 既存記事コンテキスト（重複回避用）
+        $existing_ctx = $this->build_existing_articles_context( $existing_fingerprints );
+        if ( $existing_ctx !== '' ) {
+            $parts[] = $existing_ctx;
+        }
 
         return implode( "\n\n", $parts );
     }
@@ -1075,8 +1110,30 @@ INSTRUCTION;
             return [ 'success' => false, 'error' => '質問の解析に失敗しました。' ];
         }
 
-        // 保存
-        $interview = [ 'questions' => $questions, 'answers' => [] ];
+        // 保存（既存の回答があればキーワードマッチで引き継ぐ）
+        $old_interview_json = get_post_meta( $article_id, '_gcrev_article_interview_json', true );
+        $old_interview      = $old_interview_json ? json_decode( $old_interview_json, true ) : [];
+        $old_questions      = $old_interview['questions'] ?? [];
+        $old_answers        = $old_interview['answers'] ?? [];
+        $new_answers        = [];
+        if ( ! empty( $old_answers ) && ! empty( $old_questions ) ) {
+            // 旧質問テキスト → 回答のマップを作成
+            $qa_map = [];
+            foreach ( $old_questions as $idx => $oq ) {
+                if ( isset( $old_answers[ $idx ] ) && $old_answers[ $idx ] !== '' ) {
+                    $qa_map[ $oq['question'] ?? '' ] = $old_answers[ $idx ];
+                }
+            }
+            // 新しい質問に対して、類似の旧質問の回答を引き継ぐ
+            foreach ( $questions as $idx => $nq ) {
+                $nq_text = $nq['question'] ?? '';
+                // 完全一致を優先
+                if ( isset( $qa_map[ $nq_text ] ) ) {
+                    $new_answers[ $idx ] = $qa_map[ $nq_text ];
+                }
+            }
+        }
+        $interview = [ 'questions' => $questions, 'answers' => $new_answers ];
         update_post_meta( $article_id, '_gcrev_article_interview_json',
             wp_json_encode( $interview, JSON_UNESCAPED_UNICODE ) );
 
@@ -1216,6 +1273,9 @@ INSTRUCTION;
             }
         }
 
+        // 既存記事フィンガープリント取得（重複回避用）
+        $existing_fps = $this->get_existing_articles_fingerprints( $user_id, $article_id );
+
         // プロンプト構築
         $prompt = $this->build_draft_prompt(
             $article['keyword'],
@@ -1227,7 +1287,8 @@ INSTRUCTION;
             $settings,
             $knowledge_text,
             $notes_text,
-            $interview_text
+            $interview_text,
+            $existing_fps
         );
 
         try {
@@ -1314,7 +1375,8 @@ INSTRUCTION;
     private function build_draft_prompt(
         string $keyword, array $outline, string $type, string $purpose,
         string $tone, string $target_reader, array $settings,
-        string $knowledge_text, string $notes_text, string $interview_text
+        string $knowledge_text, string $notes_text, string $interview_text,
+        array $existing_fingerprints = []
     ): string {
         $type_label    = self::ARTICLE_TYPES[ $type ] ?? '解説記事';
         $tone_label    = self::TONES[ $tone ] ?? '専門的に';
@@ -1395,6 +1457,12 @@ INSTRUCTION;
             if ( $area_label ) $profile .= "- エリア: {$area_label}\n";
             if ( ! empty( $settings['industry'] ) ) $profile .= "- 業種: {$settings['industry']}\n";
             $parts[] = $profile;
+        }
+
+        // 既存記事コンテキスト（重複回避用）
+        $existing_ctx = $this->build_existing_articles_context( $existing_fingerprints );
+        if ( $existing_ctx !== '' ) {
+            $parts[] = $existing_ctx;
         }
 
         // 執筆ルール
@@ -1662,6 +1730,235 @@ RULES;
         $json_str = substr( $cleaned, $first, $last - $first + 1 );
         $data = json_decode( $json_str, true );
         return is_array( $data ) ? $data : null;
+    }
+
+    // =========================================================
+    // 重複検知: フィンガープリント & 類似チェック
+    // =========================================================
+
+    /**
+     * 構成案データからフィンガープリントを抽出・保存（API呼び出しなし）
+     */
+    private function save_article_fingerprint( int $article_id, string $keyword, string $type, string $purpose, array $outline ): void {
+        $h2_topics = [];
+        foreach ( $outline['headings'] ?? [] as $h ) {
+            if ( count( $h2_topics ) >= 6 ) break;
+            $h2_topics[] = $h['text'] ?? '';
+        }
+
+        $fingerprint = [
+            'keyword'     => $keyword,
+            'type'        => $type,
+            'purpose'     => $purpose,
+            'summary'     => $outline['search_intent'] ?? '',
+            'angle'       => $outline['target_reader_detail'] ?? '',
+            'main_topics' => $h2_topics,
+            'title'       => $outline['title_options'][0] ?? $keyword,
+        ];
+
+        update_post_meta( $article_id, '_gcrev_article_fingerprint',
+            wp_json_encode( $fingerprint, JSON_UNESCAPED_UNICODE ) );
+    }
+
+    /**
+     * ユーザーの全記事フィンガープリントを取得
+     */
+    private function get_existing_articles_fingerprints( int $user_id, int $exclude_id = 0 ): array {
+        $query = new \WP_Query( [
+            'post_type'      => 'gcrev_article',
+            'posts_per_page' => 100,
+            'meta_key'       => '_gcrev_article_user_id',
+            'meta_value'     => $user_id,
+            'meta_type'      => 'NUMERIC',
+            'no_found_rows'  => true,
+        ] );
+
+        $fingerprints = [];
+        foreach ( $query->posts as $post ) {
+            if ( $post->ID === $exclude_id ) continue;
+
+            $fp_raw = get_post_meta( $post->ID, '_gcrev_article_fingerprint', true );
+            if ( $fp_raw ) {
+                $fp = json_decode( $fp_raw, true );
+                if ( is_array( $fp ) ) {
+                    $fp['id'] = $post->ID;
+                    $fingerprints[] = $fp;
+                    continue;
+                }
+            }
+            // fallback: フィンガープリント未生成の既存記事
+            $kw = get_post_meta( $post->ID, '_gcrev_article_keyword', true ) ?: '';
+            if ( $kw === '' ) continue;
+
+            $outline_raw = get_post_meta( $post->ID, '_gcrev_article_outline_json', true );
+            $outline = $outline_raw ? json_decode( $outline_raw, true ) : null;
+
+            $title = $kw;
+            $summary = '';
+            $topics = [];
+            if ( is_array( $outline ) ) {
+                $title   = $outline['title_options'][0] ?? $kw;
+                $summary = $outline['search_intent'] ?? '';
+                foreach ( $outline['headings'] ?? [] as $h ) {
+                    if ( count( $topics ) >= 6 ) break;
+                    $topics[] = $h['text'] ?? '';
+                }
+            }
+
+            $fingerprints[] = [
+                'id'          => $post->ID,
+                'keyword'     => $kw,
+                'type'        => get_post_meta( $post->ID, '_gcrev_article_type', true ) ?: '',
+                'purpose'     => get_post_meta( $post->ID, '_gcrev_article_purpose', true ) ?: '',
+                'summary'     => $summary,
+                'angle'       => '',
+                'main_topics' => $topics,
+                'title'       => $title,
+            ];
+        }
+        return $fingerprints;
+    }
+
+    /**
+     * 既存記事リストをプロンプト用テキストに変換
+     */
+    private function build_existing_articles_context( array $fingerprints ): string {
+        if ( empty( $fingerprints ) ) return '';
+
+        $section  = "## 既存記事リスト（重複を避けてください）\n";
+        $section .= "以下は同じサイトで既に作成済みの記事です。これらと切り口・構成・結論が重複しないように、差別化された記事を作成してください。\n\n";
+
+        foreach ( $fingerprints as $idx => $fp ) {
+            $num = $idx + 1;
+            $section .= "記事{$num}: 「{$fp['keyword']}」— {$fp['title']}\n";
+            if ( ! empty( $fp['summary'] ) ) {
+                $section .= "  テーマ: {$fp['summary']}\n";
+            }
+            if ( ! empty( $fp['main_topics'] ) ) {
+                $section .= "  トピック: " . implode( '、', $fp['main_topics'] ) . "\n";
+            }
+            $section .= "\n";
+        }
+
+        return $section;
+    }
+
+    /**
+     * キーワードの類似度をチェック（Gemini API使用）
+     */
+    public function check_similarity( int $user_id, string $keyword ): array {
+        $fingerprints = $this->get_existing_articles_fingerprints( $user_id );
+
+        // 既存記事が0件
+        if ( empty( $fingerprints ) ) {
+            return [ 'risk_level' => 'none', 'similar_articles' => [], 'overall_suggestion' => '', 'suggested_angles' => [] ];
+        }
+
+        // 完全一致キーワードがある場合は即座に high 判定（API不要）
+        $exact_matches = [];
+        foreach ( $fingerprints as $fp ) {
+            if ( mb_strtolower( trim( $fp['keyword'] ) ) === mb_strtolower( trim( $keyword ) ) ) {
+                $exact_matches[] = [
+                    'id'                          => $fp['id'],
+                    'keyword'                     => $fp['keyword'],
+                    'title'                       => $fp['title'] ?? '',
+                    'similarity'                  => 'high',
+                    'reason'                      => '同一キーワードの記事が既に存在します',
+                    'differentiation_suggestion'  => '切り口・ターゲット読者・目的を変えれば別記事として成立します',
+                ];
+            }
+        }
+        if ( ! empty( $exact_matches ) ) {
+            return [
+                'risk_level'        => 'high',
+                'similar_articles'  => $exact_matches,
+                'overall_suggestion' => '同じキーワードの記事が既にあります。切り口を変えることで共存可能です。',
+                'suggested_angles'  => [],
+            ];
+        }
+
+        // Gemini で類似チェック
+        $list_text = '';
+        foreach ( $fingerprints as $idx => $fp ) {
+            $num = $idx + 1;
+            $list_text .= "記事{$num}（ID:{$fp['id']}）: キーワード「{$fp['keyword']}」\n";
+            $list_text .= "  タイトル: {$fp['title']}\n";
+            if ( ! empty( $fp['summary'] ) ) {
+                $list_text .= "  テーマ: {$fp['summary']}\n";
+            }
+            if ( ! empty( $fp['main_topics'] ) ) {
+                $list_text .= "  主要トピック: " . implode( '、', $fp['main_topics'] ) . "\n";
+            }
+            $list_text .= "\n";
+        }
+
+        $prompt = "あなたはSEO記事の重複分析の専門家です。\n\n"
+            . "以下の「新しいキーワード」と「既存記事リスト」を比較し、テーマや切り口が重複・類似する記事がないか分析してください。\n\n"
+            . "## 新しいキーワード\n{$keyword}\n\n"
+            . "## 既存記事リスト\n{$list_text}\n"
+            . "## 判定基準\n"
+            . "- \"high\": 同じまたはほぼ同義のキーワードで、同じ切り口。読者にとって同じ記事に見える可能性が高い\n"
+            . "- \"medium\": キーワードが関連しており、一部トピックが重複。切り口を明確にすれば差別化可能\n"
+            . "- \"low\": 関連分野だがテーマ・切り口が異なる。共存可能\n"
+            . "- \"none\": 関連性なし\n\n"
+            . "## 出力形式（JSONのみ出力してください）\n"
+            . "{\n"
+            . "  \"risk_level\": \"high|medium|low|none\",\n"
+            . "  \"similar_articles\": [\n"
+            . "    {\n"
+            . "      \"id\": 記事ID（数値）,\n"
+            . "      \"keyword\": \"既存記事のキーワード\",\n"
+            . "      \"title\": \"既存記事のタイトル\",\n"
+            . "      \"similarity\": \"high|medium|low\",\n"
+            . "      \"reason\": \"類似と判断した理由（50文字以内）\",\n"
+            . "      \"differentiation_suggestion\": \"差別化の具体的な提案（80文字以内）\"\n"
+            . "    }\n"
+            . "  ],\n"
+            . "  \"overall_suggestion\": \"全体的なアドバイス（100文字以内）\",\n"
+            . "  \"suggested_angles\": [\"新しい記事で取れる切り口1\", \"切り口2\", \"切り口3\"]\n"
+            . "}\n\n"
+            . "similar_articles には similarity が medium 以上のもののみ含めてください。\n"
+            . "1件も類似がなければ similar_articles は空配列にしてください。\n";
+
+        try {
+            $raw = $this->ai->call_gemini_api( $prompt, [
+                'temperature'     => 0.3,
+                'maxOutputTokens' => 4096,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "check_similarity error: " . $e->getMessage() );
+            return [ 'risk_level' => 'none', 'similar_articles' => [], 'overall_suggestion' => '', 'suggested_angles' => [] ];
+        }
+
+        // JSON パース
+        $cleaned = preg_replace( '/^```(?:json)?\s*/m', '', $raw );
+        $cleaned = preg_replace( '/```\s*$/m', '', $cleaned );
+        $cleaned = trim( $cleaned );
+
+        $first = strpos( $cleaned, '{' );
+        $last  = strrpos( $cleaned, '}' );
+        if ( $first === false || $last === false || $last <= $first ) {
+            $this->log( "check_similarity parse error. Raw: " . substr( $raw, 0, 500 ) );
+            return [ 'risk_level' => 'none', 'similar_articles' => [], 'overall_suggestion' => '', 'suggested_angles' => [] ];
+        }
+
+        $result = json_decode( substr( $cleaned, $first, $last - $first + 1 ), true );
+        if ( ! is_array( $result ) || ! isset( $result['risk_level'] ) ) {
+            $this->log( "check_similarity invalid JSON" );
+            return [ 'risk_level' => 'none', 'similar_articles' => [], 'overall_suggestion' => '', 'suggested_angles' => [] ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * 類似リスクレベル取得ヘルパー
+     */
+    private function get_similarity_risk_level( int $post_id ): string {
+        $raw = get_post_meta( $post_id, '_gcrev_article_similarity_result', true );
+        if ( ! $raw ) return 'none';
+        $data = json_decode( $raw, true );
+        return $data['risk_level'] ?? 'none';
     }
 
     // =========================================================
