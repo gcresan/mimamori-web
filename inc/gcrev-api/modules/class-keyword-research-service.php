@@ -113,9 +113,19 @@ class Gcrev_Keyword_Research_Service {
             }
         }
 
-        // 3. 競合URL解析
-        $competitor_data = [];
+        // 2.7. 競合URLからKeyword Plannerキーワード取得
+        $competitor_planner_keywords = [];
         $ref_urls = $settings['persona_reference_urls'] ?? [];
+        if ( $enable_competitor && ! empty( $ref_urls ) && $this->google_ads !== null ) {
+            $competitor_planner_keywords = $this->fetch_competitor_keywords_from_planner( $ref_urls );
+            if ( ! empty( $competitor_planner_keywords ) ) {
+                $data_sources[] = 'Google Ads 競合分析';
+                $this->log( 'Competitor Planner: ' . count( $competitor_planner_keywords ) . ' URLs analyzed' );
+            }
+        }
+
+        // 3. 競合URL解析（HTML スクレイピング — 見出し・メタ情報取得用に継続）
+        $competitor_data = [];
         if ( $enable_competitor && ! empty( $ref_urls ) ) {
             $competitor_data = $this->fetch_competitor_data( $ref_urls );
             $ok_count = 0;
@@ -132,7 +142,8 @@ class Gcrev_Keyword_Research_Service {
         $prompt = $this->build_prompt(
             $site_url, $area_label, $industry_label, $industry_detail, $biz_type_label,
             $persona_one_liner, $persona_detail, $persona_attributes, $persona_decision,
-            $settings, $gsc_keywords, $seed_keywords, $competitor_data, $planner_keywords
+            $settings, $gsc_keywords, $seed_keywords, $competitor_data, $planner_keywords,
+            $competitor_planner_keywords
         );
 
         // 5. Gemini呼び出し
@@ -176,11 +187,12 @@ class Gcrev_Keyword_Research_Service {
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
 
         $result = [
-            'success'          => true,
-            'summary'          => $parsed['summary'] ?? [],
-            'groups'           => $parsed['groups'] ?? [],
-            'competitor_data'  => $competitor_data,
-            'meta'             => [
+            'success'                     => true,
+            'summary'                     => $parsed['summary'] ?? [],
+            'groups'                      => $parsed['groups'] ?? [],
+            'competitor_data'             => $competitor_data,
+            'competitor_planner_keywords' => $competitor_planner_keywords,
+            'meta'                        => [
                 'user_id'             => $user_id,
                 'site_url'            => $site_url,
                 'area'                => $area_label,
@@ -346,6 +358,97 @@ class Gcrev_Keyword_Research_Service {
     // =========================================================
 
     /**
+     * 競合URL から Keyword Planner のキーワード候補を取得
+     *
+     * Google が各 URL に関連付けているキーワードを返す。
+     * HTML スクレイピングよりも信頼性の高い競合キーワードデータ。
+     *
+     * @param  array $ref_urls  競合URL配列 [ ['url' => '...', 'note' => '...'], ... ]
+     * @return array  [ 'url' => [ parsed keyword ideas ], ... ]
+     */
+    private function fetch_competitor_keywords_from_planner( array $ref_urls ): array {
+        if ( $this->google_ads === null || empty( $ref_urls ) ) {
+            return [];
+        }
+
+        try {
+            $token = $this->google_ads->get_access_token();
+            if ( is_wp_error( $token ) ) {
+                $this->log( 'Competitor Planner token error: ' . $token->get_error_message() );
+                return [];
+            }
+
+            $customer_id = preg_replace( '/[^0-9]/', '', GOOGLE_ADS_CUSTOMER_ID );
+            $result = [];
+
+            foreach ( $ref_urls as $i => $entry ) {
+                $url = $entry['url'] ?? '';
+                if ( empty( $url ) || ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
+                    continue;
+                }
+
+                // キャッシュ確認
+                $cache_key = 'gcrev_kwcomp_url_' . substr( md5( $url ), 0, 16 );
+                $cached = get_transient( $cache_key );
+                if ( $cached !== false ) {
+                    $result[ $url ] = $cached;
+                    $this->log( "Competitor Planner cache hit: {$url}" );
+                    continue;
+                }
+
+                // API 呼び出し（0.5秒間隔）
+                if ( $i > 0 ) {
+                    usleep( 500000 );
+                }
+
+                $raw = $this->google_ads->generate_keyword_ideas_by_url( $token, $customer_id, $url );
+                if ( is_wp_error( $raw ) ) {
+                    $this->log( "Competitor Planner error [{$url}]: " . $raw->get_error_message() );
+                    $result[ $url ] = [];
+                    continue;
+                }
+
+                // パースしてボリューム降順で上位30件
+                $parsed = Gcrev_Google_Ads_Client::parse_keyword_idea_results( $raw );
+                usort( $parsed, function( $a, $b ) {
+                    return ( $b['volume'] ?? 0 ) - ( $a['volume'] ?? 0 );
+                } );
+                $parsed = array_slice( $parsed, 0, 30 );
+
+                set_transient( $cache_key, $parsed, self::VOLUME_CACHE_TTL );
+                $result[ $url ] = $parsed;
+                $this->log( "Competitor Planner [{$url}]: " . count( $parsed ) . ' keywords' );
+            }
+
+            return $result;
+
+        } catch ( \Throwable $e ) {
+            $this->log( 'Competitor Planner exception: ' . $e->getMessage() );
+            return [];
+        }
+    }
+
+    /**
+     * monthlySearchVolumes 配列をパース
+     */
+    private function parse_monthly_volumes( array $raw ): array {
+        $month_map = [
+            'JANUARY' => 1, 'FEBRUARY' => 2, 'MARCH' => 3, 'APRIL' => 4,
+            'MAY' => 5, 'JUNE' => 6, 'JULY' => 7, 'AUGUST' => 8,
+            'SEPTEMBER' => 9, 'OCTOBER' => 10, 'NOVEMBER' => 11, 'DECEMBER' => 12,
+        ];
+        $result = [];
+        foreach ( $raw as $item ) {
+            $result[] = [
+                'year'     => (int) ( $item['year'] ?? 0 ),
+                'month'    => $month_map[ $item['month'] ?? '' ] ?? 0,
+                'searches' => (int) ( $item['monthlySearches'] ?? 0 ),
+            ];
+        }
+        return $result;
+    }
+
+    /**
      * Keyword Planner で関連キーワード候補を取得
      *
      * @param  int   $user_id        ユーザーID（キャッシュキー用）
@@ -455,16 +558,25 @@ class Gcrev_Keyword_Research_Service {
                     elseif ( $comp_str === 'MEDIUM' )   { $competition = 0.5; }
                     elseif ( $comp_str === 'LOW' )      { $competition = 0.2; }
 
+                    // competitionIndex: 0-100
+                    $competition_index = isset( $metrics['competitionIndex'] )
+                        ? (int) $metrics['competitionIndex'] : null;
+
                     // CPC: highTopOfPageBidMicros → 通貨単位に変換
                     $cpc = null;
                     if ( isset( $metrics['highTopOfPageBidMicros'] ) ) {
                         $cpc = round( (int) $metrics['highTopOfPageBidMicros'] / 1000000, 2 );
                     }
 
+                    // monthlySearchVolumes
+                    $monthly_volumes = $this->parse_monthly_volumes( $metrics['monthlySearchVolumes'] ?? [] );
+
                     $merged[ mb_strtolower( $text ) ] = [
-                        'volume'      => $volume,
-                        'competition' => $competition,
-                        'cpc'         => $cpc,
+                        'volume'            => $volume,
+                        'competition'       => $competition,
+                        'competition_index' => $competition_index,
+                        'cpc'               => $cpc,
+                        'monthly_volumes'   => $monthly_volumes,
                     ];
                 }
 
@@ -512,10 +624,12 @@ class Gcrev_Keyword_Research_Service {
             $volume_source = 'google_ads';
             foreach ( $planner_data as $kw => $data ) {
                 $merged[ $kw ] = [
-                    'volume'      => $data['volume'],
-                    'competition' => $data['competition'],
-                    'cpc'         => $data['cpc'],
-                    'difficulty'  => null,
+                    'volume'            => $data['volume'],
+                    'competition'       => $data['competition'],
+                    'competition_index' => $data['competition_index'] ?? null,
+                    'cpc'               => $data['cpc'],
+                    'monthly_volumes'   => $data['monthly_volumes'] ?? [],
+                    'difficulty'        => null,
                 ];
             }
             $this->log( 'enrich_keywords: Planner data for ' . count( $planner_data ) . ' keywords' );
@@ -541,10 +655,12 @@ class Gcrev_Keyword_Research_Service {
                         }
                         foreach ( $vol_result as $kw => $data ) {
                             $merged[ mb_strtolower( $kw ) ] = [
-                                'volume'      => $data['search_volume'] ?? null,
-                                'competition' => $data['competition'] ?? null,
-                                'cpc'         => $data['cpc'] ?? null,
-                                'difficulty'  => null,
+                                'volume'            => $data['search_volume'] ?? null,
+                                'competition'       => $data['competition'] ?? null,
+                                'competition_index' => null,
+                                'cpc'               => $data['cpc'] ?? null,
+                                'monthly_volumes'   => [],
+                                'difficulty'        => null,
                             ];
                         }
                         $this->log( 'enrich_keywords: DataForSEO fallback for ' . count( $vol_result ) . ' keywords' );
@@ -564,10 +680,12 @@ class Gcrev_Keyword_Research_Service {
                         $volume_source = 'dataforseo';
                         foreach ( $vol_result as $kw => $data ) {
                             $merged[ mb_strtolower( $kw ) ] = [
-                                'volume'      => $data['search_volume'] ?? null,
-                                'competition' => $data['competition'] ?? null,
-                                'cpc'         => $data['cpc'] ?? null,
-                                'difficulty'  => null,
+                                'volume'            => $data['search_volume'] ?? null,
+                                'competition'       => $data['competition'] ?? null,
+                                'competition_index' => null,
+                                'cpc'               => $data['cpc'] ?? null,
+                                'monthly_volumes'   => [],
+                                'difficulty'        => null,
                             ];
                         }
                         $this->log( 'enrich_keywords: DataForSEO full fallback for ' . count( $vol_result ) . ' keywords' );
@@ -588,10 +706,12 @@ class Gcrev_Keyword_Research_Service {
                             $kw_lower = mb_strtolower( $kw );
                             if ( ! isset( $merged[ $kw_lower ] ) ) {
                                 $merged[ $kw_lower ] = [
-                                    'volume'      => null,
-                                    'competition' => null,
-                                    'cpc'         => null,
-                                    'difficulty'  => null,
+                                    'volume'            => null,
+                                    'competition'       => null,
+                                    'competition_index' => null,
+                                    'cpc'               => null,
+                                    'monthly_volumes'   => [],
+                                    'difficulty'        => null,
                                 ];
                             }
                             $merged[ $kw_lower ]['difficulty'] = $data['keyword_difficulty'] ?? null;
@@ -719,10 +839,12 @@ class Gcrev_Keyword_Research_Service {
                 // enrich_keywords() は mb_strtolower キーを使うため両方チェック
                 $vd = $volume_data[ $kw ] ?? $volume_data[ mb_strtolower( $kw ) ] ?? null;
                 if ( $vd !== null ) {
-                    $item['volume']      = $vd['volume'];
-                    $item['competition'] = $vd['competition'];
-                    $item['cpc']         = $vd['cpc'] ?? null;
-                    $item['difficulty']  = $vd['difficulty'];
+                    $item['volume']            = $vd['volume'];
+                    $item['competition']       = $vd['competition'];
+                    $item['competition_index'] = $vd['competition_index'] ?? null;
+                    $item['cpc']               = $vd['cpc'] ?? null;
+                    $item['monthly_volumes']   = $vd['monthly_volumes'] ?? [];
+                    $item['difficulty']        = $vd['difficulty'];
                 }
             }
             unset( $item );
@@ -757,6 +879,8 @@ class Gcrev_Keyword_Research_Service {
             wp_json_encode( $result['groups'] ?? [], JSON_UNESCAPED_UNICODE ) );
         update_post_meta( $post_id, '_gcrev_kwr_competitor_data',
             wp_json_encode( $result['competitor_data'] ?? [], JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $post_id, '_gcrev_kwr_competitor_planner',
+            wp_json_encode( $result['competitor_planner_keywords'] ?? [], JSON_UNESCAPED_UNICODE ) );
         update_post_meta( $post_id, '_gcrev_kwr_meta',
             wp_json_encode( $result['meta'] ?? [], JSON_UNESCAPED_UNICODE ) );
         update_post_meta( $post_id, '_gcrev_kwr_created_at', $now );
@@ -784,18 +908,20 @@ class Gcrev_Keyword_Research_Service {
         }
 
         $post = $query->posts[0];
-        $summary         = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_summary', true ) ?: '{}', true );
-        $groups          = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_groups', true ) ?: '{}', true );
-        $competitor_data = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_competitor_data', true ) ?: '[]', true );
-        $meta            = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_meta', true ) ?: '{}', true );
+        $summary              = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_summary', true ) ?: '{}', true );
+        $groups               = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_groups', true ) ?: '{}', true );
+        $competitor_data      = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_competitor_data', true ) ?: '[]', true );
+        $competitor_planner   = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_competitor_planner', true ) ?: '{}', true );
+        $meta                 = json_decode( get_post_meta( $post->ID, '_gcrev_kwr_meta', true ) ?: '{}', true );
 
         return [
-            'success'         => true,
-            'summary'         => is_array( $summary ) ? $summary : [],
-            'groups'          => is_array( $groups ) ? $groups : [],
-            'competitor_data' => is_array( $competitor_data ) ? $competitor_data : [],
-            'meta'            => is_array( $meta ) ? $meta : [],
-            'is_cached'       => true,
+            'success'                     => true,
+            'summary'                     => is_array( $summary ) ? $summary : [],
+            'groups'                      => is_array( $groups ) ? $groups : [],
+            'competitor_data'             => is_array( $competitor_data ) ? $competitor_data : [],
+            'competitor_planner_keywords' => is_array( $competitor_planner ) ? $competitor_planner : [],
+            'meta'                        => is_array( $meta ) ? $meta : [],
+            'is_cached'                   => true,
         ];
     }
 
@@ -820,7 +946,8 @@ class Gcrev_Keyword_Research_Service {
         array  $gsc_keywords,
         array  $seed_keywords,
         array  $competitor_data = [],
-        array  $planner_keywords = []
+        array  $planner_keywords = [],
+        array  $competitor_planner_keywords = []
     ): string {
         $parts = [];
         $has_competitors = ! empty( $competitor_data );
@@ -900,6 +1027,28 @@ class Gcrev_Keyword_Research_Service {
                 $comp_section .= "\n";
             }
             $parts[] = $comp_section;
+        }
+
+        // 競合URLのKeyword Plannerデータ
+        if ( ! empty( $competitor_planner_keywords ) ) {
+            $comp_planner_section = "## 競合URLに関連するキーワード（Google Keyword Planner 実データ）\n\n";
+            $comp_planner_section .= "以下はGoogle Keyword Plannerが各競合URLに関連付けているキーワードです。\n";
+            $comp_planner_section .= "Googleが実際に保有する検索データに基づいており、HTMLスクレイピングよりも信頼性が高いです。\n";
+            $comp_planner_section .= "自社サイトとの重複・ギャップを特定し、競合分析に積極的に活用してください。\n\n";
+
+            foreach ( $competitor_planner_keywords as $comp_url => $kw_list ) {
+                if ( empty( $kw_list ) ) { continue; }
+                $comp_planner_section .= "### {$comp_url}\n";
+                $comp_planner_section .= "| キーワード | 月間検索数 | 競合度 |\n|---|---|---|\n";
+                foreach ( array_slice( $kw_list, 0, 20 ) as $kw ) {
+                    $vol  = $kw['volume'] ?? '-';
+                    $comp = $kw['competition'] ?? '-';
+                    $comp_planner_section .= "| {$kw['text']} | {$vol} | {$comp} |\n";
+                }
+                $comp_planner_section .= "\n";
+            }
+
+            $parts[] = $comp_planner_section;
         }
 
         // シードキーワード
@@ -1089,16 +1238,18 @@ FORMAT;
 
         // 正規化: groups
         $kw_defaults = [
-            'keyword'      => '',
-            'type'         => '補助',
-            'priority'     => '中',
-            'page_type'    => '',
-            'reason'       => '',
-            'action'       => '',
-            'volume'       => null,
-            'competition'  => null,
-            'difficulty'   => null,
-            'current_rank' => null,
+            'keyword'           => '',
+            'type'              => '補助',
+            'priority'          => '中',
+            'page_type'         => '',
+            'reason'            => '',
+            'action'            => '',
+            'volume'            => null,
+            'competition'       => null,
+            'competition_index' => null,
+            'monthly_volumes'   => [],
+            'difficulty'        => null,
+            'current_rank'      => null,
         ];
 
         foreach ( array_keys( self::GROUPS ) as $group_key ) {

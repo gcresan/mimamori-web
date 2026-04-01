@@ -119,6 +119,22 @@ get_header();
 .kwr-ds-badge--gsc { background: rgba(78,138,107,0.12); color: #4E8A6B; }
 .kwr-ds-badge--dataforseo { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .kwr-ds-badge--competitor { background: rgba(201,90,79,0.1); color: #C95A4F; }
+.kwr-ds-badge--kwplanner { background: rgba(66,133,244,0.12); color: #4285F4; }
+.kwr-ds-badge--kwplanner-comp { background: rgba(234,67,53,0.1); color: #EA4335; }
+
+/* トレンドインジケーター */
+.kwr-trend { font-weight: 700; font-size: 14px; }
+.kwr-trend-up { color: #27AE60; }
+.kwr-trend-down { color: #C95A4F; }
+.kwr-trend-stable { color: var(--mw-text-tertiary); }
+
+/* 競合キーワード比較セクション */
+.kwr-comp-kw-url { font-size: 12px; font-weight: 600; color: var(--mw-text-heading); margin: 16px 0 8px; word-break: break-all; }
+.kwr-comp-kw-url:first-child { margin-top: 0; }
+.kwr-comp-kw-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
+.kwr-comp-kw-table th { padding: 6px 10px; text-align: left; font-weight: 600; color: var(--mw-text-secondary); font-size: 11px; background: var(--mw-bg-secondary); border-bottom: 1px solid var(--mw-border-light); }
+.kwr-comp-kw-table td { padding: 6px 10px; border-bottom: 1px solid var(--mw-border-light); }
+.kwr-comp-kw-table tbody tr:hover { background: var(--mw-bg-secondary); }
 
 /* データ精度表示 */
 .kwr-accuracy {
@@ -349,6 +365,12 @@ get_header();
         <div id="kwrCompSummaryContent"></div>
     </div>
 
+    <!-- ===== 競合キーワード比較（Keyword Planner） ===== -->
+    <div class="kwr-summary" id="kwrCompKeywords" style="display:none;">
+        <h2 class="kwr-summary__title">競合キーワード比較（Google Keyword Planner）</h2>
+        <div id="kwrCompKeywordsContent"></div>
+    </div>
+
     <!-- ===== グループ別キーワード一覧 ===== -->
     <div id="kwrResults" style="display:none;">
         <h2 class="kwr-results-title">キーワード候補一覧</h2>
@@ -414,10 +436,29 @@ get_header();
         if (v === null || v === undefined) return '<span style="color:var(--mw-text-tertiary);">-</span>';
         return Number(v).toLocaleString();
     }
-    function fmtComp(v) {
+    function fmtComp(v, compIndex) {
+        // competition_index (0-100) を優先表示
+        if (compIndex !== null && compIndex !== undefined) {
+            var ci = Math.round(compIndex);
+            return '<span class="kwr-comp-bar"><span class="kwr-comp-bar__fill" style="width:' + ci + '%;"></span></span> <span style="font-size:11px;">' + ci + '</span>';
+        }
+        // フォールバック: competition (0-1)
         if (v === null || v === undefined) return '<span style="color:var(--mw-text-tertiary);">-</span>';
         var pct = Math.round(v * 100);
-        return '<span class="kwr-comp-bar"><span class="kwr-comp-bar__fill" style="width:' + pct + '%;"></span></span> <span style="font-size:11px;">' + pct + '%</span>';
+        return '<span class="kwr-comp-bar"><span class="kwr-comp-bar__fill" style="width:' + pct + '%;"></span></span> <span style="font-size:11px;">' + pct + '</span>';
+    }
+    function fmtTrend(monthlyVolumes) {
+        if (!monthlyVolumes || monthlyVolumes.length < 4) return '<span style="color:var(--mw-text-tertiary);">-</span>';
+        var recent = monthlyVolumes.slice(-3);
+        var prev = monthlyVolumes.slice(-6, -3);
+        if (prev.length === 0) prev = monthlyVolumes.slice(0, 3);
+        var recentAvg = recent.reduce(function(s, m) { return s + (m.searches || 0); }, 0) / recent.length;
+        var prevAvg = prev.reduce(function(s, m) { return s + (m.searches || 0); }, 0) / prev.length;
+        if (prevAvg === 0 && recentAvg === 0) return '<span class="kwr-trend kwr-trend-stable" title="データ不足">→</span>';
+        var change = prevAvg > 0 ? ((recentAvg - prevAvg) / prevAvg * 100) : (recentAvg > 0 ? 100 : 0);
+        if (change > 10) return '<span class="kwr-trend kwr-trend-up" title="上昇傾向 (+' + Math.round(change) + '%)">↑</span>';
+        if (change < -10) return '<span class="kwr-trend kwr-trend-down" title="下降傾向 (' + Math.round(change) + '%)">↓</span>';
+        return '<span class="kwr-trend kwr-trend-stable" title="安定 (' + (change >= 0 ? '+' : '') + Math.round(change) + '%)">→</span>';
     }
     function fmtDiff(v) {
         if (v === null || v === undefined) return '<span style="color:var(--mw-text-tertiary);">-</span>';
@@ -448,6 +489,7 @@ get_header();
         document.getElementById('kwrEmpty').style.display = 'none';
         document.getElementById('kwrSummary').style.display = 'none';
         document.getElementById('kwrCompSummary').style.display = 'none';
+        document.getElementById('kwrCompKeywords').style.display = 'none';
         document.getElementById('kwrResults').style.display = 'none';
         document.getElementById('kwrAccuracy').style.display = 'none';
         document.getElementById('kwrMeta').innerHTML = '';
@@ -502,6 +544,7 @@ get_header();
         renderAccuracy(data.meta || {});
         renderSummary(data.summary || {});
         renderCompSummary(data.summary || {}, data.competitor_data || []);
+        renderCompKeywords(data.competitor_planner_keywords || {});
         renderGroups(data.groups || {});
         renderMeta(data.meta || {});
     }
@@ -510,17 +553,23 @@ get_header();
     function renderAccuracy(meta) {
         var sources = meta.data_sources || [];
         var el = document.getElementById('kwrAccuracy');
-        var msgs = [];
-        if (sources.indexOf('DataForSEO') >= 0 && sources.indexOf('競合分析') >= 0) {
-            msgs.push('GSC + 競合URL解析 + 外部APIの検索データを反映した提案です');
-        } else if (sources.indexOf('DataForSEO') >= 0) {
-            msgs.push('GSC + 外部APIの検索データを反映した提案です');
-        } else if (sources.indexOf('競合分析') >= 0) {
-            msgs.push('GSC + 競合URL解析 + AI推定ベースの提案です');
-        } else {
-            msgs.push('GSC + AI推定ベースの提案です');
+        var parts = [];
+        if (sources.indexOf('Keyword Planner') >= 0 || sources.indexOf('Google Ads Keyword Planner') >= 0) {
+            parts.push('Google Ads Keyword Planner の実データ');
         }
-        el.textContent = msgs[0];
+        if (sources.indexOf('Google Ads 競合分析') >= 0) {
+            parts.push('競合URL のキーワード分析');
+        }
+        if (sources.indexOf('GSC') >= 0) {
+            parts.push('Search Console');
+        }
+        if (sources.indexOf('DataForSEO') >= 0) {
+            parts.push('外部API補完データ');
+        }
+        var msg = parts.length > 0
+            ? parts.join(' + ') + ' を反映した提案です'
+            : 'AI推定ベースの提案です';
+        el.textContent = msg;
         el.style.display = '';
     }
 
@@ -533,7 +582,7 @@ get_header();
         var sources = meta.data_sources || [];
         if (sources.length > 0) {
             html += '<div class="kwr-data-sources">';
-            var dsMap = { 'AI': 'ai', 'GSC': 'gsc', 'DataForSEO': 'dataforseo', '競合分析': 'competitor' };
+            var dsMap = { 'AI': 'ai', 'GSC': 'gsc', 'Keyword Planner': 'kwplanner', 'Google Ads Keyword Planner': 'kwplanner', 'Google Ads 競合分析': 'kwplanner-comp', 'DataForSEO': 'dataforseo', '競合分析': 'competitor' };
             sources.forEach(function(s) {
                 var cls = dsMap[s] || 'ai';
                 html += '<span class="kwr-ds-badge kwr-ds-badge--' + cls + '">' + esc(s) + '</span>';
@@ -633,7 +682,7 @@ get_header();
 
             var html = '<table class="kwr-table"><thead><tr>'
                 + '<th>キーワード</th><th>タイプ</th><th>優先度</th>'
-                + '<th>検索Vol.</th><th>競合度</th><th>難易度</th>'
+                + '<th>検索Vol.</th><th>トレンド</th><th>競合度</th><th>難易度</th>'
                 + '<th>推奨ページ</th><th>提案理由</th><th>アクション</th>'
                 + '</tr></thead><tbody>';
 
@@ -643,7 +692,8 @@ get_header();
                     + '<td>' + badge(item.type, typeClass) + '</td>'
                     + '<td>' + badge(item.priority, priClass) + '</td>'
                     + '<td class="kwr-vol-cell">' + fmtVol(item.volume) + '</td>'
-                    + '<td class="kwr-vol-cell">' + fmtComp(item.competition) + '</td>'
+                    + '<td class="kwr-vol-cell">' + fmtTrend(item.monthly_volumes) + '</td>'
+                    + '<td class="kwr-vol-cell">' + fmtComp(item.competition, item.competition_index) + '</td>'
                     + '<td class="kwr-vol-cell">' + fmtDiff(item.difficulty) + '</td>'
                     + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
                     + '<td style="font-size:12px;color:var(--mw-text-secondary);">' + esc(item.reason) + '</td>'
@@ -659,6 +709,56 @@ get_header();
         });
 
         document.getElementById('kwrResults').style.display = hasAny ? '' : 'none';
+    }
+
+    /* ===== 競合キーワード比較描画 ===== */
+    function renderCompKeywords(compPlannerKeywords) {
+        var el = document.getElementById('kwrCompKeywords');
+        if (!compPlannerKeywords || typeof compPlannerKeywords !== 'object') {
+            el.style.display = 'none';
+            return;
+        }
+        var urls = Object.keys(compPlannerKeywords);
+        if (urls.length === 0) {
+            el.style.display = 'none';
+            return;
+        }
+        var hasData = false;
+        var html = '<p style="font-size:13px;color:var(--mw-text-secondary);margin-bottom:16px;">'
+            + 'Google Keyword Planner が各競合URLに関連付けているキーワードです。検索ボリュームは Google の実データに基づいています。</p>';
+
+        urls.forEach(function(url) {
+            var kws = compPlannerKeywords[url];
+            if (!kws || kws.length === 0) return;
+            hasData = true;
+            html += '<div class="kwr-comp-kw-url">' + esc(url) + '</div>';
+            html += '<table class="kwr-comp-kw-table"><thead><tr>'
+                + '<th>キーワード</th><th>月間検索数</th><th>トレンド</th><th>競合度</th><th>CPC</th>'
+                + '</tr></thead><tbody>';
+            kws.forEach(function(kw) {
+                var vol = kw.volume !== null && kw.volume !== undefined ? Number(kw.volume).toLocaleString() : '-';
+                var ci = kw.competition_index;
+                var comp = ci !== null && ci !== undefined
+                    ? '<span class="kwr-comp-bar"><span class="kwr-comp-bar__fill" style="width:' + ci + '%;"></span></span> ' + ci
+                    : (kw.competition || '-');
+                var cpc = kw.cpc !== null && kw.cpc !== undefined ? '¥' + Number(kw.cpc).toLocaleString() : '-';
+                html += '<tr>'
+                    + '<td style="font-weight:500;">' + esc(kw.text) + '</td>'
+                    + '<td style="text-align:right;">' + vol + '</td>'
+                    + '<td style="text-align:center;">' + fmtTrend(kw.monthly_volumes) + '</td>'
+                    + '<td>' + comp + '</td>'
+                    + '<td style="text-align:right;font-size:11px;">' + cpc + '</td>'
+                    + '</tr>';
+            });
+            html += '</tbody></table>';
+        });
+
+        if (!hasData) {
+            el.style.display = 'none';
+            return;
+        }
+        document.getElementById('kwrCompKeywordsContent').innerHTML = html;
+        el.style.display = '';
     }
 
 })();

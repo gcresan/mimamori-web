@@ -374,13 +374,11 @@ class Gcrev_Google_Ads_Client {
     }
 
     // =========================================================
-    // Keyword Planner（今後実装予定 — スタブ）
+    // Keyword Planner
     // =========================================================
 
     /**
-     * KeywordPlanIdeaService — キーワード候補取得
-     *
-     * Basic Access 承認後に実装。現時点ではスタブ。
+     * KeywordPlanIdeaService — キーワードシードからキーワード候補取得
      *
      * @param  string $access_token
      * @param  string $customer_id
@@ -390,16 +388,75 @@ class Gcrev_Google_Ads_Client {
      * @return array|WP_Error
      */
     public function generate_keyword_ideas( string $access_token, string $customer_id, array $seed_keywords, string $language_code = 'languageConstants/1005', array $geo_targets = [ 'geoTargetConstants/2392' ] ) {
-        $url = self::API_BASE . '/' . self::API_VERSION
-             . '/customers/' . $customer_id . ':generateKeywordIdeas';
-
         $payload = [
             'language'           => $language_code,
             'geoTargetConstants' => $geo_targets,
             'keywordSeed'        => [
-                'keywords' => array_slice( $seed_keywords, 0, 20 ), // 最大 20
+                'keywords' => array_slice( $seed_keywords, 0, 20 ),
             ],
         ];
+        return $this->call_generate_keyword_ideas( $access_token, $customer_id, $payload, 'keywordSeed' );
+    }
+
+    /**
+     * KeywordPlanIdeaService — URL からキーワード候補取得
+     *
+     * Google が URL に関連付けているキーワードを返す。
+     * 競合 URL の分析に有用。
+     *
+     * @param  string $access_token
+     * @param  string $customer_id
+     * @param  string $url           対象 URL
+     * @param  string $language_code
+     * @param  array  $geo_targets
+     * @return array|WP_Error
+     */
+    public function generate_keyword_ideas_by_url( string $access_token, string $customer_id, string $url, string $language_code = 'languageConstants/1005', array $geo_targets = [ 'geoTargetConstants/2392' ] ) {
+        $payload = [
+            'language'           => $language_code,
+            'geoTargetConstants' => $geo_targets,
+            'urlSeed'            => [
+                'url' => $url,
+            ],
+        ];
+        return $this->call_generate_keyword_ideas( $access_token, $customer_id, $payload, 'urlSeed' );
+    }
+
+    /**
+     * KeywordPlanIdeaService — キーワード + URL 複合シード
+     *
+     * @param  string $access_token
+     * @param  string $customer_id
+     * @param  array  $seed_keywords  シードキーワード（最大20件）
+     * @param  string $url            対象 URL
+     * @param  string $language_code
+     * @param  array  $geo_targets
+     * @return array|WP_Error
+     */
+    public function generate_keyword_ideas_combined( string $access_token, string $customer_id, array $seed_keywords, string $url, string $language_code = 'languageConstants/1005', array $geo_targets = [ 'geoTargetConstants/2392' ] ) {
+        $payload = [
+            'language'           => $language_code,
+            'geoTargetConstants' => $geo_targets,
+            'keywordAndUrlSeed'  => [
+                'keywords' => array_slice( $seed_keywords, 0, 20 ),
+                'url'      => $url,
+            ],
+        ];
+        return $this->call_generate_keyword_ideas( $access_token, $customer_id, $payload, 'keywordAndUrlSeed' );
+    }
+
+    /**
+     * generateKeywordIdeas 共通呼び出し
+     *
+     * @param  string $access_token
+     * @param  string $customer_id
+     * @param  array  $payload       リクエストボディ
+     * @param  string $seed_type     ログ用ラベル
+     * @return array|WP_Error
+     */
+    private function call_generate_keyword_ideas( string $access_token, string $customer_id, array $payload, string $seed_type ) {
+        $url = self::API_BASE . '/' . self::API_VERSION
+             . '/customers/' . $customer_id . ':generateKeywordIdeas';
 
         $response = wp_remote_post( $url, [
             'timeout' => self::HTTP_TIMEOUT,
@@ -411,7 +468,7 @@ class Gcrev_Google_Ads_Client {
         ]);
 
         if ( is_wp_error( $response ) ) {
-            $msg = 'generateKeywordIdeas HTTP error: ' . $response->get_error_message();
+            $msg = "generateKeywordIdeas({$seed_type}) HTTP error: " . $response->get_error_message();
             $this->log( $msg );
             return new \WP_Error( 'api_error', $msg );
         }
@@ -421,13 +478,104 @@ class Gcrev_Google_Ads_Client {
 
         if ( $code !== 200 ) {
             $error_detail = $this->parse_api_error( $body );
-            $msg = "generateKeywordIdeas HTTP {$code}: {$error_detail}";
+            $msg = "generateKeywordIdeas({$seed_type}) HTTP {$code}: {$error_detail}";
             $this->log( $msg );
             return new \WP_Error( 'api_error', $msg );
         }
 
         $data = json_decode( $body, true );
-        return $data['results'] ?? [];
+        $results = $data['results'] ?? [];
+
+        $this->increment_operation_count();
+        $this->log( "generateKeywordIdeas({$seed_type}): " . count( $results ) . ' results' );
+        return $results;
+    }
+
+    /**
+     * generateKeywordIdeas レスポンスをパースして統一形式に変換
+     *
+     * @param  array $results  API レスポンスの results 配列
+     * @return array  [ ['text' => ..., 'volume' => ..., 'competition' => ...,
+     *                   'competition_index' => ..., 'cpc' => ..., 'monthly_volumes' => [...]] ]
+     */
+    public static function parse_keyword_idea_results( array $results ): array {
+        $month_map = [
+            'JANUARY' => 1, 'FEBRUARY' => 2, 'MARCH' => 3, 'APRIL' => 4,
+            'MAY' => 5, 'JUNE' => 6, 'JULY' => 7, 'AUGUST' => 8,
+            'SEPTEMBER' => 9, 'OCTOBER' => 10, 'NOVEMBER' => 11, 'DECEMBER' => 12,
+        ];
+
+        $parsed = [];
+        foreach ( $results as $item ) {
+            $text = $item['text'] ?? '';
+            if ( $text === '' ) { continue; }
+
+            $metrics = $item['keywordIdeaMetrics'] ?? [];
+
+            $volume = isset( $metrics['avgMonthlySearches'] )
+                ? (int) $metrics['avgMonthlySearches'] : null;
+
+            // competition: HIGH / MEDIUM / LOW / UNSPECIFIED
+            $competition = $metrics['competition'] ?? null;
+
+            // competitionIndex: 0-100
+            $competition_index = isset( $metrics['competitionIndex'] )
+                ? (int) $metrics['competitionIndex'] : null;
+
+            // CPC: highTopOfPageBidMicros → 通貨単位（円）に変換
+            $cpc = null;
+            if ( isset( $metrics['highTopOfPageBidMicros'] ) ) {
+                $cpc = round( (int) $metrics['highTopOfPageBidMicros'] / 1000000, 2 );
+            }
+            $cpc_low = null;
+            if ( isset( $metrics['lowTopOfPageBidMicros'] ) ) {
+                $cpc_low = round( (int) $metrics['lowTopOfPageBidMicros'] / 1000000, 2 );
+            }
+
+            // monthlySearchVolumes
+            $monthly_volumes = [];
+            if ( ! empty( $metrics['monthlySearchVolumes'] ) && is_array( $metrics['monthlySearchVolumes'] ) ) {
+                foreach ( $metrics['monthlySearchVolumes'] as $mv ) {
+                    $monthly_volumes[] = [
+                        'year'     => (int) ( $mv['year'] ?? 0 ),
+                        'month'    => $month_map[ $mv['month'] ?? '' ] ?? 0,
+                        'searches' => (int) ( $mv['monthlySearches'] ?? 0 ),
+                    ];
+                }
+            }
+
+            $parsed[] = [
+                'text'              => $text,
+                'volume'            => $volume,
+                'competition'       => $competition,
+                'competition_index' => $competition_index,
+                'cpc'               => $cpc,
+                'cpc_low'           => $cpc_low,
+                'monthly_volumes'   => $monthly_volumes,
+            ];
+        }
+
+        return $parsed;
+    }
+
+    // =========================================================
+    // API クォータ管理
+    // =========================================================
+
+    /**
+     * API 操作カウンターを更新（Basic Access: 15,000 ops/day）
+     */
+    private function increment_operation_count(): void {
+        $key   = 'gcrev_gads_ops_' . date( 'Y-m-d' );
+        $count = (int) get_transient( $key );
+        set_transient( $key, $count + 1, 86400 );
+    }
+
+    /**
+     * 本日の API 操作数を取得
+     */
+    public function get_daily_operation_count(): int {
+        return (int) get_transient( 'gcrev_gads_ops_' . date( 'Y-m-d' ) );
     }
 
     // =========================================================
