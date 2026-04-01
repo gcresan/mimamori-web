@@ -1702,7 +1702,7 @@ function mimamori_call_openai_responses_api( array $payload ) {
 function mimamori_call_whisper_api( string $file_path, string $language = 'ja', string $mime_type = '', string $filename = '' ) {
     $api_key  = defined( 'MIMAMORI_OPENAI_API_KEY' )  ? MIMAMORI_OPENAI_API_KEY  : '';
     $base_url = defined( 'MIMAMORI_OPENAI_BASE_URL' ) ? MIMAMORI_OPENAI_BASE_URL : 'https://api.openai.com/v1';
-    $timeout  = defined( 'MIMAMORI_OPENAI_TIMEOUT' )  ? (int) MIMAMORI_OPENAI_TIMEOUT : 60;
+    $timeout  = defined( 'MIMAMORI_OPENAI_TIMEOUT' )  ? (int) MIMAMORI_OPENAI_TIMEOUT : 120;
 
     if ( $api_key === '' ) {
         return new WP_Error( 'no_api_key', 'OpenAI APIキーが設定されていません' );

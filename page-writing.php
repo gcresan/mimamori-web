@@ -888,7 +888,7 @@ get_header();
     var voiceAnalyser = null;
     var voiceWaveAnimId = null;
     var voiceMaxTimer = null;
-    var VOICE_MAX_DURATION = 60000;
+    var VOICE_MAX_DURATION = 300000;
 
     var voiceModal = document.getElementById('wrtVoiceModal');
     var voiceWaveCanvas = document.getElementById('wrtVoiceWave');
