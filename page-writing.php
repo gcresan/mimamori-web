@@ -728,7 +728,10 @@ get_header();
         html += '<div class="wrt-detail-section">';
         html += '<div class="wrt-detail-section__title">追加編集プロンプト</div>';
         html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">本文に対する修正指示を入力して再生成できます。</p>';
-        html += '<textarea id="wrtRefinePrompt" rows="4" placeholder="例: 導入部分をもっと具体的にしてください" style="width:100%;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);box-sizing:border-box;"></textarea>';
+        html += '<div style="display:flex;gap:6px;align-items:flex-start;">';
+        html += '<textarea id="wrtRefinePrompt" rows="4" placeholder="例: 導入部分をもっと具体的にしてください" style="flex:1;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);box-sizing:border-box;"></textarea>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtRefineVoiceBtn" title="音声入力" style="padding:6px 10px;font-size:16px;line-height:1;flex-shrink:0;">🎤</button>';
+        html += '</div>';
         html += '<div style="margin-top:8px;text-align:right;">';
         html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtRefineDraftBtn">この指示で再生成</button>';
         html += '</div></div>';
@@ -828,6 +831,11 @@ get_header();
                 document.getElementById('wrtOutlineModal').classList.add('active');
             });
         }
+
+        // 追加編集プロンプト 音声入力
+        document.getElementById('wrtRefineVoiceBtn').addEventListener('click', function() {
+            openVoiceModal(document.getElementById('wrtRefinePrompt'));
+        });
 
         // 追加編集プロンプトで再生成
         document.getElementById('wrtRefineDraftBtn').addEventListener('click', function() {
