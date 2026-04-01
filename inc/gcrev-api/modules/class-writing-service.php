@@ -211,6 +211,13 @@ class Gcrev_Writing_Service {
         $metadata = wp_generate_attachment_metadata( $attachment_id, $upload['file'] );
         wp_update_attachment_metadata( $attachment_id, $metadata );
 
+        // ファイルからテキストを自動抽出
+        $extracted_text = $this->extract_text_from_file( $upload['file'], $mime );
+        if ( $extracted_text !== '' ) {
+            update_post_meta( $attachment_id, '_gcrev_extracted_text', $extracted_text );
+            $this->log( "Text extracted from file: " . mb_strlen( $extracted_text ) . " chars, attachment_id={$attachment_id}" );
+        }
+
         // 情報ストックの添付ファイルリストに追加
         $attachments_raw = get_post_meta( $knowledge_id, '_gcrev_knowledge_attachments', true );
         $attachments = is_array( $attachments_raw ) ? $attachments_raw
@@ -222,9 +229,15 @@ class Gcrev_Writing_Service {
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         update_post_meta( $knowledge_id, '_gcrev_knowledge_updated_at', $now );
 
+        $file_info = $this->format_attachment( $attachment_id );
+        if ( $extracted_text !== '' ) {
+            $file_info['has_text'] = true;
+            $file_info['text_length'] = mb_strlen( $extracted_text );
+        }
+
         return [
             'success' => true,
-            'file'    => $this->format_attachment( $attachment_id ),
+            'file'    => $file_info,
         ];
     }
 
@@ -256,13 +269,152 @@ class Gcrev_Writing_Service {
     private function format_attachment( int $attachment_id ): ?array {
         $post = get_post( $attachment_id );
         if ( ! $post ) { return null; }
+        $extracted = get_post_meta( $attachment_id, '_gcrev_extracted_text', true );
         return [
-            'id'       => $attachment_id,
-            'name'     => $post->post_title,
-            'url'      => wp_get_attachment_url( $attachment_id ),
-            'mime'     => $post->post_mime_type,
-            'size'     => filesize( get_attached_file( $attachment_id ) ) ?: 0,
+            'id'          => $attachment_id,
+            'name'        => $post->post_title,
+            'url'         => wp_get_attachment_url( $attachment_id ),
+            'mime'        => $post->post_mime_type,
+            'size'        => filesize( get_attached_file( $attachment_id ) ) ?: 0,
+            'has_text'    => ( $extracted !== '' && $extracted !== false ),
+            'text_length' => $extracted ? mb_strlen( $extracted ) : 0,
         ];
+    }
+
+    /**
+     * ファイルからテキストを抽出
+     */
+    private function extract_text_from_file( string $file_path, string $mime ): string {
+        $text = '';
+
+        try {
+            switch ( $mime ) {
+                case 'application/pdf':
+                    $text = $this->extract_pdf_text( $file_path );
+                    break;
+
+                case 'text/plain':
+                case 'text/csv':
+                    $text = file_get_contents( $file_path );
+                    if ( $text === false ) { $text = ''; }
+                    // UTF-8 でない場合は変換
+                    if ( $text !== '' && ! mb_check_encoding( $text, 'UTF-8' ) ) {
+                        $text = mb_convert_encoding( $text, 'UTF-8', 'SJIS-win,EUC-JP,ASCII' );
+                    }
+                    break;
+
+                case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                    $text = $this->extract_docx_text( $file_path );
+                    break;
+
+                case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+                    $text = $this->extract_xlsx_text( $file_path );
+                    break;
+
+                default:
+                    // 画像、古い .doc, .xls 等はテキスト抽出対象外
+                    break;
+            }
+        } catch ( \Throwable $e ) {
+            $this->log( "Text extraction error ({$mime}): " . $e->getMessage() );
+        }
+
+        // 長すぎる場合は切り詰め（50000文字まで）
+        if ( mb_strlen( $text ) > 50000 ) {
+            $text = mb_substr( $text, 0, 50000 ) . "\n…（以下省略）";
+        }
+
+        return trim( $text );
+    }
+
+    /**
+     * PDF からテキスト抽出（pdftotext コマンド使用）
+     */
+    private function extract_pdf_text( string $file_path ): string {
+        $cmd = 'pdftotext -layout ' . escapeshellarg( $file_path ) . ' - 2>/dev/null';
+        $output = shell_exec( $cmd );
+        return is_string( $output ) ? $output : '';
+    }
+
+    /**
+     * DOCX からテキスト抽出（ZIP + XML パース）
+     */
+    private function extract_docx_text( string $file_path ): string {
+        if ( ! class_exists( 'ZipArchive' ) ) { return ''; }
+        $zip = new \ZipArchive();
+        if ( $zip->open( $file_path ) !== true ) { return ''; }
+
+        $xml = $zip->getFromName( 'word/document.xml' );
+        $zip->close();
+        if ( $xml === false ) { return ''; }
+
+        // XML タグを除去してテキストのみ取得
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors( true );
+        $dom->loadXML( $xml );
+        libxml_clear_errors();
+
+        $text = '';
+        $paragraphs = $dom->getElementsByTagNameNS( 'http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'p' );
+        foreach ( $paragraphs as $p ) {
+            $line = '';
+            $runs = $p->getElementsByTagNameNS( 'http://schemas.openxmlformats.org/wordprocessingml/2006/main', 't' );
+            foreach ( $runs as $r ) {
+                $line .= $r->textContent;
+            }
+            if ( $line !== '' ) {
+                $text .= $line . "\n";
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * XLSX からテキスト抽出（ZIP + shared strings）
+     */
+    private function extract_xlsx_text( string $file_path ): string {
+        if ( ! class_exists( 'ZipArchive' ) ) { return ''; }
+        $zip = new \ZipArchive();
+        if ( $zip->open( $file_path ) !== true ) { return ''; }
+
+        $xml = $zip->getFromName( 'xl/sharedStrings.xml' );
+        $zip->close();
+        if ( $xml === false ) { return ''; }
+
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors( true );
+        $dom->loadXML( $xml );
+        libxml_clear_errors();
+
+        $text = '';
+        $items = $dom->getElementsByTagNameNS( 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', 't' );
+        foreach ( $items as $item ) {
+            $val = trim( $item->textContent );
+            if ( $val !== '' ) {
+                $text .= $val . "\n";
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * 情報ストックの添付ファイルからすべての抽出テキストを取得
+     */
+    public function get_knowledge_file_texts( int $knowledge_id ): string {
+        $att_raw = get_post_meta( $knowledge_id, '_gcrev_knowledge_attachments', true );
+        $att_ids = is_array( $att_raw ) ? $att_raw : ( json_decode( $att_raw ?: '[]', true ) ?: [] );
+
+        $texts = [];
+        foreach ( $att_ids as $aid ) {
+            $extracted = get_post_meta( (int) $aid, '_gcrev_extracted_text', true );
+            if ( $extracted ) {
+                $name = get_the_title( (int) $aid );
+                $texts[] = "--- {$name} ---\n{$extracted}";
+            }
+        }
+        return implode( "\n\n", $texts );
     }
 
     private function format_knowledge( \WP_Post $post ): array {
@@ -534,10 +686,16 @@ class Gcrev_Writing_Service {
             foreach ( $kid_ids as $kid ) {
                 $kp = get_post( absint( $kid ) );
                 if ( ! $kp ) { continue; }
+                $content = get_post_meta( $kp->ID, '_gcrev_knowledge_content', true ) ?: '';
+                // 添付ファイルの抽出テキストを追加
+                $file_texts = $this->get_knowledge_file_texts( $kp->ID );
+                if ( $file_texts !== '' ) {
+                    $content .= "\n\n【添付資料の内容】\n" . $file_texts;
+                }
                 $knowledge_items[] = [
                     'title'    => $kp->post_title,
                     'category' => get_post_meta( $kp->ID, '_gcrev_knowledge_category', true ) ?: '',
-                    'content'  => get_post_meta( $kp->ID, '_gcrev_knowledge_content', true ) ?: '',
+                    'content'  => $content,
                 ];
             }
         }
@@ -811,26 +969,55 @@ INSTRUCTION;
         if ( ! $article ) {
             return [ 'success' => false, 'error' => '記事が見つかりません。' ];
         }
+
+        // 構成案がなければ内部で自動生成（UIには表示しない）
         if ( empty( $article['outline'] ) ) {
-            return [ 'success' => false, 'error' => '先に構成案を生成してください。' ];
+            $this->log( "generate_interview: no outline, auto-generating for article_id={$article_id}" );
+            $outline_result = $this->generate_outline( $user_id, $article_id );
+            if ( ! $outline_result['success'] ) {
+                return [ 'success' => false, 'error' => 'ヒアリング質問生成の準備に失敗しました: ' . ( $outline_result['error'] ?? '' ) ];
+            }
+            $article = $this->get_article( $user_id, $article_id ); // 再取得
         }
 
         $missing = $article['outline']['missing_info'] ?? [];
         $keyword = $article['keyword'];
 
+        // 情報ストックの内容も渡してより的確な質問を生成
+        $knowledge_summary = '';
+        $kid_ids = $article['selected_knowledge_ids'] ?? [];
+        if ( ! empty( $kid_ids ) ) {
+            $kb_titles = [];
+            foreach ( $kid_ids as $kid ) {
+                $kp = get_post( absint( $kid ) );
+                if ( $kp ) { $kb_titles[] = $kp->post_title; }
+            }
+            if ( ! empty( $kb_titles ) ) {
+                $knowledge_summary = "登録済みの情報ストック: " . implode( '、', $kb_titles );
+            }
+        }
+
         $this->log( "generate_interview: article_id={$article_id}, missing=" . count( $missing ) );
 
-        $prompt  = "あなたはSEO記事作成のヒアリング担当者です。\n";
-        $prompt .= "対策キーワード「{$keyword}」の記事を作成するにあたり、以下の不足情報を補うための質問を作成してください。\n\n";
-        $prompt .= "## 不足している情報\n";
-        foreach ( $missing as $m ) {
-            $prompt .= "- {$m}\n";
+        $prompt  = "あなたはSEOコラム記事作成のヒアリング担当者です。\n";
+        $prompt .= "対策キーワード「{$keyword}」のコラム記事を作成するにあたり、";
+        $prompt .= "記事の質を高めるために追加で聞いておくべき質問を作成してください。\n\n";
+        if ( ! empty( $missing ) ) {
+            $prompt .= "## 構成案で不足と判定された情報\n";
+            foreach ( $missing as $m ) {
+                $prompt .= "- {$m}\n";
+            }
+            $prompt .= "\n";
         }
-        $prompt .= "\n## 出力指示\n以下のJSON配列のみを出力してください。\n";
+        if ( $knowledge_summary !== '' ) {
+            $prompt .= "## 現在登録されている参照情報\n{$knowledge_summary}\n\n";
+        }
+        $prompt .= "## 出力指示\n以下のJSON配列のみを出力してください。\n";
         $prompt .= '[{"question": "質問文", "hint": "回答のヒント（50文字以内）", "field_type": "text"}]' . "\n";
         $prompt .= "- 質問は3〜7個程度\n";
         $prompt .= "- field_type は text（短文）または textarea（長文）\n";
-        $prompt .= "- 実用的で具体的な質問にしてください\n";
+        $prompt .= "- 記事に一次情報（実体験・具体的な数字・独自の強み等）を盛り込むための実用的な質問にしてください\n";
+        $prompt .= "- すでに登録済みの情報と重複する質問は避けてください\n";
 
         try {
             $raw = $this->ai->call_gemini_api( $prompt, [
@@ -903,8 +1090,14 @@ INSTRUCTION;
         if ( ! $article ) {
             return [ 'success' => false, 'error' => '記事が見つかりません。' ];
         }
+        // 構成案がなければ内部で自動生成
         if ( empty( $article['outline'] ) ) {
-            return [ 'success' => false, 'error' => '先に構成案を生成してください。' ];
+            $this->log( "generate_draft: no outline, auto-generating for article_id={$article_id}" );
+            $outline_result = $this->generate_outline( $user_id, $article_id );
+            if ( ! $outline_result['success'] ) {
+                return [ 'success' => false, 'error' => '記事構成の準備に失敗しました: ' . ( $outline_result['error'] ?? '' ) ];
+            }
+            $article = $this->get_article( $user_id, $article_id );
         }
 
         $this->log( "generate_draft: article_id={$article_id}" );
@@ -923,12 +1116,17 @@ INSTRUCTION;
                 $cat = get_post_meta( $kp->ID, '_gcrev_knowledge_category', true ) ?: '';
                 $cat_label = self::KNOWLEDGE_CATEGORIES[ $cat ] ?? $cat;
                 $content = get_post_meta( $kp->ID, '_gcrev_knowledge_content', true ) ?: '';
-                if ( $total + mb_strlen( $content ) > 10000 ) {
-                    $content = mb_substr( $content, 0, max( 0, 10000 - $total ) ) . '…';
+                // 添付ファイルの抽出テキストを追加
+                $file_texts = $this->get_knowledge_file_texts( $kp->ID );
+                if ( $file_texts !== '' ) {
+                    $content .= "\n\n【添付資料の内容】\n" . $file_texts;
+                }
+                if ( $total + mb_strlen( $content ) > 15000 ) {
+                    $content = mb_substr( $content, 0, max( 0, 15000 - $total ) ) . '…（以下省略）';
                 }
                 $total += mb_strlen( $content );
                 $knowledge_text .= "### {$kp->post_title}（{$cat_label}）\n{$content}\n\n";
-                if ( $total >= 10000 ) { break; }
+                if ( $total >= 15000 ) { break; }
             }
         }
 

@@ -157,6 +157,10 @@ get_header();
 .wrt-dropzone__sub { font-size: 12px; color: var(--mw-text-tertiary); margin-top: 4px; }
 .wrt-dropzone__link { color: var(--mw-primary-blue, #4A90A4); text-decoration: underline; cursor: pointer; }
 
+/* 音声入力ボタン */
+.wrt-voice-btn { flex-shrink: 0; transition: all 0.2s; }
+.wrt-voice-btn:hover { transform: scale(1.1); }
+
 @media (max-width: 768px) {
     .wrt-modal { padding: 20px; max-width: 95%; }
     .wrt-detail { padding: 16px; }
@@ -485,21 +489,16 @@ get_header();
         html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtAddNoteBtn" style="align-self:flex-end;">追加</button></div>';
         html += '</div>';
 
-        // 構成案セクション
-        html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">構成案</div>';
-        html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateOutlineBtn">' + (a.outline ? '構成案を再生成' : '構成案を生成') + '</button>';
-        html += '<div id="wrtOutlineArea"></div>';
-        html += '</div>';
-
         // ヒアリングセクション
-        html += '<div class="wrt-detail-section" id="wrtInterviewSection" style="' + (a.outline ? '' : 'display:none;') + '">';
+        html += '<div class="wrt-detail-section" id="wrtInterviewSection">';
         html += '<div class="wrt-detail-section__title">追加ヒアリング</div>';
+        html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">情報ストックの内容をもとに、記事執筆に不足している情報をAIが質問します。回答すると本文生成の精度が上がります。</p>';
         html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtGenerateInterviewBtn">' + (a.interview ? 'ヒアリングを再生成' : 'ヒアリング質問を生成') + '</button>';
         html += '<div id="wrtInterviewArea"></div>';
         html += '</div>';
 
         // 本文生成セクション
-        html += '<div class="wrt-detail-section" id="wrtDraftSection" style="' + (a.outline ? '' : 'display:none;') + '">';
+        html += '<div class="wrt-detail-section" id="wrtDraftSection">';
         html += '<div class="wrt-detail-section__title">本文生成</div>';
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
         html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
@@ -550,33 +549,6 @@ get_header();
             });
         });
 
-        // 構成案生成
-        document.getElementById('wrtGenerateOutlineBtn').addEventListener('click', function() {
-            // まず設定を保存してから生成
-            var selectedIds = [];
-            document.querySelectorAll('.wrt-kb-select__item.selected').forEach(function(el) { selectedIds.push(parseInt(el.dataset.id)); });
-            showProgress('構成案を生成中…（30秒〜1分程度）');
-            apiFetch('/articles/' + a.id + '/settings', { method: 'POST', body: {
-                type: document.getElementById('wrtSetType').value,
-                purpose: document.getElementById('wrtSetPurpose').value,
-                tone: document.getElementById('wrtSetTone').value,
-                target_reader: document.getElementById('wrtSetReader').value,
-                selected_knowledge_ids: selectedIds
-            }}).then(function() {
-                return apiFetch('/articles/' + a.id + '/outline', { method: 'POST' });
-            }).then(function(res) {
-                hideProgress();
-                if (res.success) {
-                    showToast('構成案を生成しました');
-                    currentArticle.outline = res.outline;
-                    currentArticle.status = 'outline_generated';
-                    renderOutline(res.outline);
-                } else {
-                    showToast(res.error || 'エラー', true);
-                }
-            }).catch(function(err) { hideProgress(); showToast('通信エラー: ' + (err.message || ''), true); });
-        });
-
         // メモ追加
         document.getElementById('wrtAddNoteBtn').addEventListener('click', function() {
             var text = document.getElementById('wrtNoteInput').value.trim();
@@ -625,7 +597,6 @@ get_header();
         loadKnowledgeForSelect(a.selected_knowledge_ids || []);
 
         // 既存データ表示
-        if (a.outline) renderOutline(a.outline);
         if (a.interview) renderInterview(a.interview, a.id);
         if (a.draft_content) renderDraft(a.draft_content);
     }
@@ -649,6 +620,8 @@ get_header();
         });
     };
 
+    var hasSpeechRecognition = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+
     function renderInterview(interview, articleId) {
         var area = document.getElementById('wrtInterviewArea');
         if (!area || !interview || !interview.questions || interview.questions.length === 0) return;
@@ -659,16 +632,32 @@ get_header();
             html += '<div style="margin-bottom:16px;padding:12px;background:var(--mw-bg-secondary);border-radius:8px;">';
             html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-heading);margin-bottom:6px;">Q' + (idx+1) + '. ' + esc(q.question) + '</div>';
             if (q.hint) html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">ヒント: ' + esc(q.hint) + '</div>';
+            html += '<div style="display:flex;gap:6px;align-items:flex-start;">';
             if (q.field_type === 'textarea') {
-                html += '<textarea class="wrt-interview-ans" data-idx="' + idx + '" rows="3" placeholder="回答を入力" style="width:100%;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">' + esc(ans) + '</textarea>';
+                html += '<textarea class="wrt-interview-ans" data-idx="' + idx + '" rows="3" placeholder="回答を入力（テキスト or 音声）" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">' + esc(ans) + '</textarea>';
             } else {
-                html += '<input type="text" class="wrt-interview-ans" data-idx="' + idx + '" value="' + esc(ans).replace(/"/g, '&quot;') + '" placeholder="回答を入力" style="width:100%;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">';
+                html += '<input type="text" class="wrt-interview-ans" data-idx="' + idx + '" value="' + esc(ans).replace(/"/g, '&quot;') + '" placeholder="回答を入力（テキスト or 音声）" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">';
             }
-            html += '</div>';
+            if (hasSpeechRecognition) {
+                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm wrt-voice-btn" data-target-idx="' + idx + '" title="音声入力" style="padding:6px 10px;font-size:16px;line-height:1;">🎤</button>';
+            }
+            html += '</div></div>';
         });
         html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveInterviewBtn">回答を保存</button>';
         html += '</div>';
         area.innerHTML = html;
+
+        // 音声入力イベント
+        if (hasSpeechRecognition) {
+            area.querySelectorAll('.wrt-voice-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var idx = btn.dataset.targetIdx;
+                    var target = area.querySelector('.wrt-interview-ans[data-idx="' + idx + '"]');
+                    if (!target) return;
+                    startVoiceInput(btn, target);
+                });
+            });
+        }
 
         document.getElementById('wrtSaveInterviewBtn').addEventListener('click', function() {
             var answersObj = {};
@@ -680,6 +669,65 @@ get_header();
                 else showToast(res.error || 'エラー', true);
             });
         });
+    }
+
+    /* ===== 音声入力 (Web Speech API) ===== */
+    function startVoiceInput(btn, targetEl) {
+        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) { showToast('お使いのブラウザは音声入力に対応していません', true); return; }
+
+        var recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        var origText = btn.textContent;
+        var finalTranscript = '';
+        btn.textContent = '⏹️';
+        btn.style.background = 'rgba(201,90,79,0.15)';
+        btn.title = '音声入力中…クリックで停止';
+
+        recognition.onresult = function(e) {
+            var interim = '';
+            for (var i = e.resultIndex; i < e.results.length; i++) {
+                if (e.results[i].isFinal) {
+                    finalTranscript += e.results[i][0].transcript;
+                } else {
+                    interim += e.results[i][0].transcript;
+                }
+            }
+            var current = targetEl.value || '';
+            // 既存テキストの末尾に追記
+            var separator = current && !current.endsWith('\n') && !current.endsWith(' ') ? ' ' : '';
+            targetEl.value = current.replace(/\s*$/, '') + separator + finalTranscript + interim;
+        };
+
+        recognition.onend = function() {
+            btn.textContent = origText;
+            btn.style.background = '';
+            btn.title = '音声入力';
+            // 最終テキストを確定
+            var current = targetEl.value || '';
+            if (finalTranscript) {
+                showToast('音声入力を完了しました');
+            }
+        };
+
+        recognition.onerror = function(e) {
+            btn.textContent = origText;
+            btn.style.background = '';
+            if (e.error !== 'aborted') {
+                showToast('音声認識エラー: ' + e.error, true);
+            }
+        };
+
+        // 2回目クリックで停止
+        btn.addEventListener('click', function stopHandler() {
+            recognition.stop();
+            btn.removeEventListener('click', stopHandler);
+        }, { once: true });
+
+        recognition.start();
     }
 
     function renderDraft(content) {
@@ -748,62 +796,6 @@ get_header();
                 el.addEventListener('click', function() { el.classList.toggle('selected'); });
             });
         });
-    }
-
-    function renderOutline(outline) {
-        var area = document.getElementById('wrtOutlineArea');
-        if (!area || !outline) return;
-        var html = '<div class="wrt-outline">';
-
-        // タイトル候補
-        if (outline.title_options && outline.title_options.length > 0) {
-            html += '<div class="wrt-outline__titles">';
-            outline.title_options.forEach(function(t) { html += '<div class="wrt-outline__title-opt">' + esc(t) + '</div>'; });
-            html += '</div>';
-        }
-
-        // 検索意図
-        if (outline.search_intent) {
-            html += '<div class="wrt-outline__intent"><strong>検索意図:</strong> ' + esc(outline.search_intent) + '</div>';
-        }
-
-        // 見出し構成
-        if (outline.headings) {
-            outline.headings.forEach(function(h) {
-                html += '<div class="wrt-outline__heading wrt-outline__heading--h2">';
-                html += '<div class="wrt-outline__heading-text">' + esc(h.text) + '</div>';
-                if (h.description) html += '<div class="wrt-outline__heading-desc">' + esc(h.description) + '</div>';
-                if (h.referenced_knowledge && h.referenced_knowledge.length > 0) {
-                    html += '<div class="wrt-outline__heading-ref">参照: ' + h.referenced_knowledge.map(esc).join(', ') + '</div>';
-                }
-                html += '</div>';
-                if (h.children) {
-                    h.children.forEach(function(c) {
-                        html += '<div class="wrt-outline__heading wrt-outline__heading--h3">';
-                        html += '<div class="wrt-outline__heading-text">' + esc(c.text) + '</div>';
-                        if (c.description) html += '<div class="wrt-outline__heading-desc">' + esc(c.description) + '</div>';
-                        html += '</div>';
-                    });
-                }
-            });
-        }
-
-        // 不足情報
-        if (outline.missing_info && outline.missing_info.length > 0) {
-            html += '<div class="wrt-outline__missing"><div class="wrt-outline__missing-title">不足している情報</div>';
-            outline.missing_info.forEach(function(m) { html += '<div class="wrt-outline__missing-item">・' + esc(m) + '</div>'; });
-            html += '</div>';
-        }
-
-        // SEOヒント
-        if (outline.seo_tips && outline.seo_tips.length > 0) {
-            html += '<div class="wrt-outline__tips"><div class="wrt-outline__tips-title">SEOヒント</div>';
-            outline.seo_tips.forEach(function(t) { html += '<div class="wrt-outline__tips-item">・' + esc(t) + '</div>'; });
-            html += '</div>';
-        }
-
-        html += '</div>';
-        area.innerHTML = html;
     }
 
     /* ===== 情報ストック CRUD ===== */
