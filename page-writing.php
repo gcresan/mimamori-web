@@ -672,9 +672,18 @@ get_header();
     function renderDraft(content) {
         var area = document.getElementById('wrtDraftArea');
         if (!area || !content) return;
-        // Markdown簡易レンダリング
-        var html = '<div style="margin-top:16px;padding:20px;background:var(--mw-bg-secondary);border-radius:8px;border:1px solid var(--mw-border-light);font-size:14px;line-height:1.8;color:var(--mw-text-primary);">';
+
+        // コピーボタン
+        var html = '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyMarkdown" title="Markdown形式でコピー">Markdownをコピー</button>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtCopyHtml" title="HTML形式でコピー">HTMLをコピー</button>';
+        html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtCopyText" title="プレーンテキストでコピー">本文をコピー</button>';
+        html += '</div>';
+
+        // Markdown → HTML レンダリング（h1 対応）
+        html += '<div style="margin-top:8px;padding:20px;background:var(--mw-bg-secondary);border-radius:8px;border:1px solid var(--mw-border-light);font-size:14px;line-height:1.8;color:var(--mw-text-primary);" id="wrtDraftRendered">';
         var rendered = esc(content)
+            .replace(/^# (.+)$/gm, '<h1 style="font-size:22px;font-weight:700;margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid var(--mw-primary-blue,#4A90A4);color:var(--mw-text-heading);">$1</h1>')
             .replace(/^#### (.+)$/gm, '<h4 style="font-size:14px;font-weight:700;margin:16px 0 6px;">$1</h4>')
             .replace(/^### (.+)$/gm, '<h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">$1</h3>')
             .replace(/^## (.+)$/gm, '<h2 style="font-size:17px;font-weight:700;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--mw-border-light);">$1</h2>')
@@ -684,6 +693,30 @@ get_header();
         html += '<p>' + rendered + '</p>';
         html += '</div>';
         area.innerHTML = html;
+
+        // コピーイベント
+        document.getElementById('wrtCopyMarkdown').addEventListener('click', function() {
+            navigator.clipboard.writeText(content).then(function() { showToast('Markdownをコピーしました'); });
+        });
+        document.getElementById('wrtCopyHtml').addEventListener('click', function() {
+            var htmlContent = content
+                .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+                .replace(/\n\n/g, '\n</p>\n<p>\n')
+                .replace(/^(?!<[hluop])/gm, function(m) { return m ? '<p>' + m : m; });
+            navigator.clipboard.writeText(htmlContent).then(function() { showToast('HTMLをコピーしました'); });
+        });
+        document.getElementById('wrtCopyText').addEventListener('click', function() {
+            var text = content
+                .replace(/^#{1,4} /gm, '')
+                .replace(/\*\*(.+?)\*\*/g, '$1')
+                .replace(/^[-*] /gm, '・');
+            navigator.clipboard.writeText(text).then(function() { showToast('本文をコピーしました'); });
+        });
     }
 
     function loadKnowledgeForSelect(selectedIds) {
