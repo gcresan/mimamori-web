@@ -149,6 +149,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Prefetch_Management_Page())->register();
             }
 
+            $report_queue_path = __DIR__ . '/admin/class-report-queue-page.php';
+            if ( file_exists( $report_queue_path ) ) {
+                require_once $report_queue_path;
+                (new Gcrev_Report_Queue_Page())->register();
+            }
+
             // アンケート管理は表側ダッシュボード (page-review-survey.php + REST API) に移行済み
             // $survey_page_path = __DIR__ . '/admin/class-survey-page.php';
             // if ( file_exists( $survey_page_path ) ) {
@@ -195,14 +201,18 @@ class Gcrev_Bootstrap {
     }
 
     /**
-     * 月次レポート生成チャンクイベント
+     * 月次レポート生成チャンクイベント（キューベース）
      * auto_generate_monthly_reports() からスケジュールされ、
-     * 3社ずつ自己チェーンで処理する。
+     * キューテーブルの pending アイテムを REPORT_CHUNK_LIMIT ずつ処理する。
+     *
+     * @param int|mixed $job_id Cron Logger の job_id（= キューの job_id）
+     * @param int|mixed $limit  チャンクサイズ
      */
-    public static function on_monthly_report_generate_chunk_event( $offset, $limit ): void {
-        error_log("[GCREV] gcrev_monthly_report_generate_chunk_event triggered: offset={$offset}, limit={$limit}");
+    public static function on_monthly_report_generate_chunk_event( $job_id, $limit ): void {
+        file_put_contents( '/tmp/gcrev_report_debug.log',
+            date( 'Y-m-d H:i:s' ) . " chunk_event triggered: job_id={$job_id}, limit={$limit}\n", FILE_APPEND );
         $api = new Gcrev_Insight_API(false);
-        $api->report_generate_chunk( (int) $offset, (int) $limit );
+        $api->report_generate_chunk( (int) $job_id, (int) $limit );
     }
 
     public static function on_monthly_report_finalize_event(): void {
@@ -412,6 +422,10 @@ class Gcrev_Bootstrap {
         if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
             $deleted = Gcrev_Cron_Logger::cleanup_old( 90 );
             error_log( "[GCREV] Cron log cleanup: {$deleted} old entries removed" );
+        }
+        if ( class_exists( 'Gcrev_Report_Queue' ) ) {
+            $deleted_q = Gcrev_Report_Queue::cleanup_old( 90 );
+            error_log( "[GCREV] Report queue cleanup: {$deleted_q} old entries removed" );
         }
     }
 
@@ -909,6 +923,9 @@ class Gcrev_Bootstrap {
 
             // 完了ステータス
             update_user_meta( $user_id, 'gcrev_aio_fetch_status', 'complete' );
+
+            // 認識サマリーキャッシュを無効化（新データで再生成させる）
+            delete_transient( "gcrev_aio_recog_{$user_id}" );
 
             // ページ分析をスケジュール
             update_user_meta( $user_id, 'gcrev_aio_analysis_status', 'analyzing' );

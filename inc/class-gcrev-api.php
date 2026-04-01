@@ -1077,6 +1077,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_aio_serp_analyze' ],
             'permission_callback' => function() { return current_user_can('manage_options'); },
         ]);
+        register_rest_route('gcrev/v1', '/aio-serp/recognition-summary', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_aio_serp_recognition_summary' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         // =============================================
         // SEO対策
@@ -3546,7 +3551,7 @@ PROMPT;
      * @param int $user_id ユーザーID
      * @return array client_info 配列
      */
-    private function build_client_info_for_report(int $user_id): array {
+    public function build_client_info_for_report(int $user_id): array {
         $client = gcrev_get_client_settings($user_id);
 
         // ドメイン判定（統合型 / 分離型）
@@ -4099,99 +4104,141 @@ PROMPT;
 
         // ─── 重複実行防止ロック ───
         if ( get_transient( self::LOCK_REPORT_GEN ) ) {
-            error_log( '[GCREV] auto_generate_monthly_reports: LOCKED, skipping duplicate run' );
+            file_put_contents( '/tmp/gcrev_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . " auto_generate: LOCKED, skipping duplicate run\n", FILE_APPEND );
             if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
                 $locked_id = Gcrev_Cron_Logger::start( 'report_generate', [ 'note' => 'locked' ] );
                 Gcrev_Cron_Logger::finish( $locked_id, 'locked' );
             }
             return;
         }
-        set_transient( self::LOCK_REPORT_GEN, 1, self::LOCK_TTL );
+        set_transient( self::LOCK_REPORT_GEN, time(), self::LOCK_TTL );
 
         $tz  = wp_timezone();
         $now = new DateTimeImmutable( 'now', $tz );
 
-        // 1日以外は何もしない（冪等性）
-        if ( (int) $now->format( 'd' ) !== 1 ) {
-            error_log( '[GCREV] auto_generate_monthly_reports: Not 1st of month, skipping.' );
+        // 前月の年月を取得（レポート対象）
+        $prev_dt    = $now->modify( 'first day of last month' );
+        $year_month = $prev_dt->format( 'Y-m' );
+
+        // Cron Logger: ジョブ開始
+        $log_id = 0;
+        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
+            $log_id = Gcrev_Cron_Logger::start( 'report_generate', [
+                'chunk_limit' => self::REPORT_CHUNK_LIMIT,
+                'year_month'  => $year_month,
+                'mode'        => 'queue',
+            ] );
+            set_transient( 'gcrev_current_report_gen_log_id', $log_id, self::LOCK_TTL );
+        }
+
+        file_put_contents( '/tmp/gcrev_report_debug.log',
+            date( 'Y-m-d H:i:s' ) . " auto_generate: START on " . $now->format( 'Y-m-d' ) . " — year_month={$year_month}, job_id={$log_id}\n", FILE_APPEND );
+
+        // ─── キューテーブルに全対象ユーザーを登録 ───
+        if ( class_exists( 'Gcrev_Report_Queue' ) && $log_id > 0 ) {
+            $enqueued = Gcrev_Report_Queue::enqueue_all_users(
+                $log_id,
+                $year_month,
+                [ $this, 'build_client_info_for_report' ]
+            );
+
+            file_put_contents( '/tmp/gcrev_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . " auto_generate: Enqueued {$enqueued} users for {$year_month}\n", FILE_APPEND );
+
+            // 最初のチャンクをスケジュール（10秒後）
+            wp_schedule_single_event(
+                time() + 10,
+                'gcrev_monthly_report_generate_chunk_event',
+                [ $log_id, self::REPORT_CHUNK_LIMIT ]
+            );
+        } else {
+            // Queue クラスが未ロードまたは job_id 取得失敗 → ロック解放
+            file_put_contents( '/tmp/gcrev_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . " auto_generate: ERROR — Queue class not available or job_id=0\n", FILE_APPEND );
+            delete_transient( self::LOCK_REPORT_GEN );
+            if ( $log_id > 0 ) {
+                Gcrev_Cron_Logger::finish( $log_id, 'error', 'Queue class not available' );
+                delete_transient( 'gcrev_current_report_gen_log_id' );
+            }
+        }
+    }
+
+    /**
+     * レポート生成チャンク処理（キューベース）
+     *
+     * キューテーブルから pending アイテムを取得し、レポートを生成する。
+     * 残りキューがあれば次のチャンクを自己スケジュール。
+     *
+     * @param int $job_id Cron Logger のジョブID（= キューの job_id）
+     * @param int $limit  チャンクサイズ
+     */
+    public function report_generate_chunk( int $job_id, int $limit ): void {
+
+        // Cron Logger: log_id を取得（引数の job_id をそのまま使う）
+        $log_id = $job_id;
+
+        file_put_contents( '/tmp/gcrev_report_debug.log',
+            date( 'Y-m-d H:i:s' ) . " report_generate_chunk START: job_id={$job_id}, limit={$limit}\n", FILE_APPEND );
+
+        $tz  = wp_timezone();
+        $now = new DateTimeImmutable( 'now', $tz );
+
+        // ─── ストール復旧: processing のまま 30分超のアイテムを pending に戻す ───
+        if ( class_exists( 'Gcrev_Report_Queue' ) ) {
+            $recovered = Gcrev_Report_Queue::recover_stale_items( $job_id );
+            if ( $recovered > 0 ) {
+                file_put_contents( '/tmp/gcrev_report_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " report_generate_chunk: Recovered {$recovered} stale items\n", FILE_APPEND );
+            }
+        }
+
+        // ─── キューから次のバッチを取得 ───
+        if ( ! class_exists( 'Gcrev_Report_Queue' ) ) {
+            file_put_contents( '/tmp/gcrev_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . " report_generate_chunk: ERROR — Queue class not available\n", FILE_APPEND );
             delete_transient( self::LOCK_REPORT_GEN );
             return;
         }
 
-        // Cron Logger: ジョブ開始
-        if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-            $log_id = Gcrev_Cron_Logger::start( 'report_generate', [ 'chunk_limit' => self::REPORT_CHUNK_LIMIT ] );
-            set_transient( 'gcrev_current_report_gen_log_id', $log_id, self::LOCK_TTL );
-        }
+        $items = Gcrev_Report_Queue::claim_next( $job_id, $limit );
 
-        error_log( '[GCREV] auto_generate_monthly_reports: START on ' . $now->format( 'Y-m-d' ) . ' — scheduling chunk(0)' );
-
-        // 最初のチャンクをスケジュール（10秒後）
-        wp_schedule_single_event(
-            time() + 10,
-            'gcrev_monthly_report_generate_chunk_event',
-            [ 0, self::REPORT_CHUNK_LIMIT ]
-        );
-    }
-
-    /**
-     * レポート生成チャンク処理
-     *
-     * prefetch_chunk() と同じ自己チェーンパターン。
-     * REPORT_CHUNK_LIMIT 人分のレポートを生成し、
-     * まだ残りユーザーがいれば次のチャンクをスケジュールする。
-     *
-     * @param int $offset ユーザーリストのオフセット
-     * @param int $limit  チャンクサイズ
-     */
-    public function report_generate_chunk( int $offset, int $limit ): void {
-
-        // Cron Logger: log_id を取得
-        $log_id = class_exists( 'Gcrev_Cron_Logger' ) ? (int) get_transient( 'gcrev_current_report_gen_log_id' ) : 0;
-
-        error_log( "[GCREV] report_generate_chunk START: offset={$offset}, limit={$limit}" );
-
-        $tz         = wp_timezone();
-        $now        = new DateTimeImmutable( 'now', $tz );
-        $year_month = $now->format( 'Y-m' );
-
-        $users = get_users( [
-            'number' => $limit,
-            'offset' => $offset,
-            'fields' => ['ID'],
-        ] );
-
-        if ( empty( $users ) ) {
+        if ( empty( $items ) ) {
+            // 残りアイテムなし → 完了
             delete_transient( self::LOCK_REPORT_GEN );
-            error_log( "[GCREV] report_generate_chunk: No users at offset={$offset}. DONE." );
-            if ( $log_id > 0 ) {
+            file_put_contents( '/tmp/gcrev_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . " report_generate_chunk: No more items for job_id={$job_id}. DONE.\n", FILE_APPEND );
+            if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
                 Gcrev_Cron_Logger::finish( $log_id, 'success' );
                 delete_transient( 'gcrev_current_report_gen_log_id' );
             }
             return;
         }
 
-        foreach ( $users as $u ) {
-            $user_id = (int) $u->ID;
+        foreach ( $items as $item ) {
+            $queue_id   = (int) $item->id;
+            $user_id    = (int) $item->user_id;
+            $year_month = $item->year_month;
 
-            // 当月レポートが既に存在するかチェック
-            $existing = $this->repo->get_reports_by_month( $user_id, $year_month );
-            if ( ! empty( $existing ) ) {
-                error_log( "[GCREV] auto_generate: user_id={$user_id} already has report for {$year_month}, skipping." );
-                if ( $log_id > 0 ) {
-                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Report already exists' );
+            // スナップショットからクライアント情報を復元
+            $client_info = ! empty( $item->client_info_snapshot )
+                ? json_decode( $item->client_info_snapshot, true )
+                : [];
+
+            if ( empty( $client_info ) ) {
+                Gcrev_Report_Queue::mark_skipped( $queue_id, 'Empty client_info snapshot' );
+                if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Empty client_info snapshot' );
                 }
                 continue;
             }
 
-            // クライアント情報取得（クライアント設定 + 月次設定を統合）
-            $client_info = $this->build_client_info_for_report( $user_id );
-
-            // 必須項目チェック（クライアント設定のサイトURL）
-            if ( empty( $client_info['site_url'] ) ) {
-                error_log( "[GCREV] auto_generate: user_id={$user_id} missing client site_url, skipping." );
-                if ( $log_id > 0 ) {
-                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Missing client site_url' );
+            // 当月レポートが既に存在するかチェック（手動生成されている可能性）
+            $existing = $this->repo->get_reports_by_month( $user_id, $year_month );
+            if ( ! empty( $existing ) ) {
+                Gcrev_Report_Queue::mark_skipped( $queue_id, 'Report already exists' );
+                if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'Report already exists' );
                 }
                 continue;
             }
@@ -4199,19 +4246,22 @@ PROMPT;
             // GA4プロパティ設定チェック
             $prev2_check = $this->has_prev2_data( $user_id );
             if ( ! $prev2_check['available'] ) {
-                error_log( "[GCREV] auto_generate: user_id={$user_id} GA4_NOT_READY, skipping: " . ( $prev2_check['reason'] ?? '' ) );
-                if ( $log_id > 0 ) {
-                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'GA4 not ready: ' . ( $prev2_check['reason'] ?? '' ) );
+                $reason = 'GA4 not ready: ' . ( $prev2_check['reason'] ?? '' );
+                Gcrev_Report_Queue::mark_skipped( $queue_id, $reason );
+                if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', $reason );
                 }
                 continue;
             }
 
+            $exclude_foreign_auto = false;
+
             try {
                 // 前月・前々月データ取得
-                $config    = $this->config->get_user_config( $user_id );
+                $config = $this->config->get_user_config( $user_id );
 
                 // 海外アクセス除外フィルタ（CV取得まで維持、finally で解除）
-                $exclude_foreign_auto = get_user_meta( $user_id, 'report_exclude_foreign', true ) === '1';
+                $exclude_foreign_auto = ( $client_info['exclude_foreign'] ?? false );
                 if ( $exclude_foreign_auto ) {
                     $this->ga4->set_country_filter( 'Japan' );
                 }
@@ -4238,7 +4288,7 @@ PROMPT;
 
                 // ターゲットエリア判定（クライアント設定から）
                 $auto_client_settings = gcrev_get_client_settings( $user_id );
-                $auto_target_area = gcrev_detect_area_from_client_settings( $auto_client_settings );
+                $auto_target_area     = gcrev_detect_area_from_client_settings( $auto_client_settings );
 
                 $report_html = $this->generator->generate_report( $prev_data, $two_data, $client_info, $auto_target_area );
 
@@ -4253,8 +4303,8 @@ PROMPT;
                     );
                 }
 
-                // 保存（source=auto）
-                $highlights = $this->highlights_mod->extract_highlights_from_html( $report_html, $user_id );
+                // 保存（source=auto、スナップショットの client_info を使用）
+                $highlights    = $this->highlights_mod->extract_highlights_from_html( $report_html, $user_id );
                 $saved_post_id = $this->repo->save_report_to_history( $user_id, $report_html, $client_info, 'auto', null, $highlights, $auto_beginner_md );
 
                 // === AI生成メタ情報保存 ===
@@ -4278,22 +4328,26 @@ PROMPT;
                         $ig_year  = (int) $prev_dt->format( 'Y' );
                         $ig_month = (int) $prev_dt->format( 'n' );
                         $this->save_monthly_infographic( $ig_year, $ig_month, $user_id, $infographic );
-                        error_log( "[GCREV] auto_generate: Infographic saved for user_id={$user_id}" );
-                    } else {
-                        error_log( "[GCREV] auto_generate: Infographic generation returned null for user_id={$user_id}" );
                     }
                 } catch ( \Exception $ig_e ) {
-                    error_log( "[GCREV] auto_generate: Infographic error for user_id={$user_id}: " . $ig_e->getMessage() );
+                    file_put_contents( '/tmp/gcrev_report_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " auto_generate: Infographic error user_id={$user_id}: " . $ig_e->getMessage() . "\n", FILE_APPEND );
                 }
 
-                error_log( "[GCREV] auto_generate: SUCCESS user_id={$user_id}, year_month={$year_month}" );
-                if ( $log_id > 0 ) {
+                // ─── 成功 ───
+                Gcrev_Report_Queue::mark_success( $queue_id );
+                file_put_contents( '/tmp/gcrev_report_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " auto_generate: SUCCESS user_id={$user_id}, year_month={$year_month}\n", FILE_APPEND );
+                if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
                     Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'success' );
                 }
 
             } catch ( \Exception $e ) {
-                error_log( "[GCREV] auto_generate: ERROR user_id={$user_id}: " . $e->getMessage() );
-                if ( $log_id > 0 ) {
+                // ─── 失敗 ───
+                Gcrev_Report_Queue::mark_failed( $queue_id, $e->getMessage() );
+                file_put_contents( '/tmp/gcrev_report_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " auto_generate: ERROR user_id={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
+                if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
                     Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'error', $e->getMessage() );
                 }
             } finally {
@@ -4305,20 +4359,19 @@ PROMPT;
         }
 
         // ─── 次チャンクのスケジュール ───
-        $next_offset = $offset + $limit;
-        $next_users  = get_users( [ 'number' => 1, 'offset' => $next_offset, 'fields' => ['ID'] ] );
-
-        if ( ! empty( $next_users ) ) {
+        if ( Gcrev_Report_Queue::has_pending_or_processing( $job_id ) ) {
             wp_schedule_single_event(
                 time() + 10,
                 'gcrev_monthly_report_generate_chunk_event',
-                [ $next_offset, $limit ]
+                [ $job_id, $limit ]
             );
-            error_log( "[GCREV] report_generate_chunk: Scheduled next chunk offset={$next_offset}" );
+            file_put_contents( '/tmp/gcrev_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . " report_generate_chunk: Scheduled next chunk for job_id={$job_id}\n", FILE_APPEND );
         } else {
             delete_transient( self::LOCK_REPORT_GEN );
-            error_log( '[GCREV] report_generate_chunk: All users processed. DONE.' );
-            if ( $log_id > 0 ) {
+            file_put_contents( '/tmp/gcrev_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . " report_generate_chunk: All items processed for job_id={$job_id}. DONE.\n", FILE_APPEND );
+            if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
                 Gcrev_Cron_Logger::finish( $log_id, 'success' );
                 delete_transient( 'gcrev_current_report_gen_log_id' );
             }
@@ -20102,6 +20155,32 @@ PROMPT;
             }
 
             $result = $service->get_improvement_suggestions( $user_id );
+
+            return new \WP_REST_Response( [
+                'success' => true,
+                'data'    => $result,
+            ], 200 );
+        } catch ( \Exception $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /aio-serp/recognition-summary — 全体認識サマリー
+     */
+    public function rest_get_aio_serp_recognition_summary( \WP_REST_Request $request ): \WP_REST_Response {
+        try {
+            $user_id = get_current_user_id();
+            if ( ! $user_id ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '未ログイン' ], 401 );
+            }
+
+            $service = $this->get_aio_serp_service();
+            if ( ! $service ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );
+            }
+
+            $result = $service->generate_recognition_summary( $user_id );
 
             return new \WP_REST_Response( [
                 'success' => true,
