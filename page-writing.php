@@ -57,6 +57,8 @@ get_header();
 .wrt-status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
 .wrt-status--keyword_set { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .wrt-status--outline_generated { background: rgba(39,174,96,0.12); color: #27AE60; }
+.wrt-status--draft_generated { background: rgba(74,144,164,0.12); color: #2D7A8F; }
+.wrt-status--wp_draft_saved { background: rgba(66,133,244,0.12); color: #4285F4; }
 
 /* 情報ストック */
 .wrt-knowledge-card { display: flex; align-items: flex-start; gap: 12px; }
@@ -264,7 +266,7 @@ get_header();
     var typeLabels = <?php echo wp_json_encode( Gcrev_Writing_Service::ARTICLE_TYPES, JSON_UNESCAPED_UNICODE ); ?>;
     var purposeLabels = <?php echo wp_json_encode( Gcrev_Writing_Service::ARTICLE_PURPOSES, JSON_UNESCAPED_UNICODE ); ?>;
     var toneLabels = <?php echo wp_json_encode( Gcrev_Writing_Service::TONES, JSON_UNESCAPED_UNICODE ); ?>;
-    var statusLabels = { keyword_set: 'キーワード設定済', outline_generated: '構成案あり' };
+    var statusLabels = { keyword_set: 'キーワード設定済', outline_generated: '構成案あり', draft_generated: '本文あり', wp_draft_saved: 'WP下書き済' };
 
     // 現在のデータ
     var articlesData = [];
@@ -440,10 +442,39 @@ get_header();
         html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveSettingsBtn">設定を保存</button>';
         html += '</div></div>';
 
+        // 記事個別メモ
+        html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">記事個別メモ</div>';
+        html += '<div id="wrtNotesArea"></div>';
+        html += '<div style="display:flex;gap:8px;margin-top:8px;"><textarea id="wrtNoteInput" rows="2" placeholder="この記事用のメモ・補足情報を追加" style="flex:1;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);"></textarea>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtAddNoteBtn" style="align-self:flex-end;">追加</button></div>';
+        html += '</div>';
+
         // 構成案セクション
         html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">構成案</div>';
         html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateOutlineBtn">' + (a.outline ? '構成案を再生成' : '構成案を生成') + '</button>';
         html += '<div id="wrtOutlineArea"></div>';
+        html += '</div>';
+
+        // ヒアリングセクション
+        html += '<div class="wrt-detail-section" id="wrtInterviewSection" style="' + (a.outline ? '' : 'display:none;') + '">';
+        html += '<div class="wrt-detail-section__title">追加ヒアリング</div>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtGenerateInterviewBtn">' + (a.interview ? 'ヒアリングを再生成' : 'ヒアリング質問を生成') + '</button>';
+        html += '<div id="wrtInterviewArea"></div>';
+        html += '</div>';
+
+        // 本文生成セクション
+        html += '<div class="wrt-detail-section" id="wrtDraftSection" style="' + (a.outline ? '' : 'display:none;') + '">';
+        html += '<div class="wrt-detail-section__title">本文生成</div>';
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
+        if (a.draft_content) {
+            html += '<button class="wrt-btn wrt-btn--secondary" id="wrtSaveWpDraftBtn">WordPress下書き保存</button>';
+        }
+        if (a.wp_draft_id) {
+            html += '<a href="' + <?php echo wp_json_encode( admin_url( 'post.php?action=edit&post=' ) ); ?> + a.wp_draft_id + '" target="_blank" class="wrt-btn wrt-btn--secondary wrt-btn--sm" style="text-decoration:none;">WP編集画面を開く</a>';
+        }
+        html += '</div>';
+        html += '<div id="wrtDraftArea"></div>';
         html += '</div>';
 
         html += '</div>';
@@ -510,11 +541,126 @@ get_header();
             }).catch(function(err) { hideProgress(); showToast('通信エラー: ' + (err.message || ''), true); });
         });
 
+        // メモ追加
+        document.getElementById('wrtAddNoteBtn').addEventListener('click', function() {
+            var text = document.getElementById('wrtNoteInput').value.trim();
+            if (!text) return;
+            apiFetch('/articles/' + a.id + '/notes', { method: 'POST', body: { text: text } }).then(function(res) {
+                if (res.success) { document.getElementById('wrtNoteInput').value = ''; currentArticle.notes = res.notes; renderNotes(res.notes, a.id); showToast('メモを追加しました'); }
+                else showToast(res.error || 'エラー', true);
+            });
+        });
+        renderNotes(a.notes || [], a.id);
+
+        // ヒアリング生成
+        document.getElementById('wrtGenerateInterviewBtn').addEventListener('click', function() {
+            showProgress('ヒアリング質問を生成中…');
+            apiFetch('/articles/' + a.id + '/interview', { method: 'POST' }).then(function(res) {
+                hideProgress();
+                if (res.success) { currentArticle.interview = res.interview; renderInterview(res.interview, a.id); showToast('ヒアリング質問を生成しました'); }
+                else showToast(res.error || 'エラー', true);
+            }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+        });
+
+        // 本文生成
+        document.getElementById('wrtGenerateDraftBtn').addEventListener('click', function() {
+            showProgress('本文を生成中…（1〜2分程度）');
+            apiFetch('/articles/' + a.id + '/draft', { method: 'POST' }).then(function(res) {
+                hideProgress();
+                if (res.success) { currentArticle.draft_content = res.draft_content; currentArticle.status = 'draft_generated'; renderDraft(res.draft_content); showToast('本文を生成しました'); renderArticleDetail(); }
+                else showToast(res.error || 'エラー', true);
+            }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+        });
+
+        // WP下書き保存
+        var wpDraftBtn = document.getElementById('wrtSaveWpDraftBtn');
+        if (wpDraftBtn) {
+            wpDraftBtn.addEventListener('click', function() {
+                showProgress('WordPress下書きを保存中…');
+                apiFetch('/articles/' + a.id + '/wp-draft', { method: 'POST' }).then(function(res) {
+                    hideProgress();
+                    if (res.success) { currentArticle.wp_draft_id = res.draft_id; showToast('WordPress下書きを保存しました'); renderArticleDetail(); }
+                    else showToast(res.error || 'エラー', true);
+                }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+            });
+        }
+
         // 情報ストック選択肢をロード
         loadKnowledgeForSelect(a.selected_knowledge_ids || []);
 
-        // 既存の構成案表示
+        // 既存データ表示
         if (a.outline) renderOutline(a.outline);
+        if (a.interview) renderInterview(a.interview, a.id);
+        if (a.draft_content) renderDraft(a.draft_content);
+    }
+
+    function renderNotes(notes, articleId) {
+        var area = document.getElementById('wrtNotesArea');
+        if (!area) return;
+        if (!notes || notes.length === 0) { area.innerHTML = '<p style="font-size:12px;color:var(--mw-text-tertiary);">メモはまだありません</p>'; return; }
+        area.innerHTML = notes.map(function(n) {
+            return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--mw-border-light);">'
+                + '<div style="flex:1;font-size:13px;color:var(--mw-text-secondary);white-space:pre-wrap;">' + esc(n.text) + '</div>'
+                + '<span style="font-size:11px;color:var(--mw-text-tertiary);white-space:nowrap;">' + esc(n.created_at || '') + '</span>'
+                + '<button class="wrt-btn wrt-btn--danger wrt-btn--sm" onclick="deleteNote(\'' + articleId + '\',\'' + n.id + '\')" style="padding:2px 8px;font-size:11px;">×</button>'
+                + '</div>';
+        }).join('');
+    }
+    // グローバルに公開
+    window.deleteNote = function(articleId, noteId) {
+        apiFetch('/articles/' + articleId + '/notes', { method: 'DELETE', body: { note_id: noteId } }).then(function(res) {
+            if (res.success) { currentArticle.notes = res.notes; renderNotes(res.notes, articleId); }
+        });
+    };
+
+    function renderInterview(interview, articleId) {
+        var area = document.getElementById('wrtInterviewArea');
+        if (!area || !interview || !interview.questions || interview.questions.length === 0) return;
+        var answers = interview.answers || {};
+        var html = '<div style="margin-top:12px;">';
+        interview.questions.forEach(function(q, idx) {
+            var ans = answers[idx] || '';
+            html += '<div style="margin-bottom:16px;padding:12px;background:var(--mw-bg-secondary);border-radius:8px;">';
+            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-heading);margin-bottom:6px;">Q' + (idx+1) + '. ' + esc(q.question) + '</div>';
+            if (q.hint) html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">ヒント: ' + esc(q.hint) + '</div>';
+            if (q.field_type === 'textarea') {
+                html += '<textarea class="wrt-interview-ans" data-idx="' + idx + '" rows="3" placeholder="回答を入力" style="width:100%;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">' + esc(ans) + '</textarea>';
+            } else {
+                html += '<input type="text" class="wrt-interview-ans" data-idx="' + idx + '" value="' + esc(ans).replace(/"/g, '&quot;') + '" placeholder="回答を入力" style="width:100%;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">';
+            }
+            html += '</div>';
+        });
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveInterviewBtn">回答を保存</button>';
+        html += '</div>';
+        area.innerHTML = html;
+
+        document.getElementById('wrtSaveInterviewBtn').addEventListener('click', function() {
+            var answersObj = {};
+            document.querySelectorAll('.wrt-interview-ans').forEach(function(el) {
+                answersObj[el.dataset.idx] = el.value;
+            });
+            apiFetch('/articles/' + articleId + '/interview', { method: 'PUT', body: { answers: answersObj } }).then(function(res) {
+                if (res.success) { currentArticle.interview = res.interview; showToast('回答を保存しました'); }
+                else showToast(res.error || 'エラー', true);
+            });
+        });
+    }
+
+    function renderDraft(content) {
+        var area = document.getElementById('wrtDraftArea');
+        if (!area || !content) return;
+        // Markdown簡易レンダリング
+        var html = '<div style="margin-top:16px;padding:20px;background:var(--mw-bg-secondary);border-radius:8px;border:1px solid var(--mw-border-light);font-size:14px;line-height:1.8;color:var(--mw-text-primary);">';
+        var rendered = esc(content)
+            .replace(/^#### (.+)$/gm, '<h4 style="font-size:14px;font-weight:700;margin:16px 0 6px;">$1</h4>')
+            .replace(/^### (.+)$/gm, '<h3 style="font-size:15px;font-weight:700;margin:20px 0 8px;">$1</h3>')
+            .replace(/^## (.+)$/gm, '<h2 style="font-size:17px;font-weight:700;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--mw-border-light);">$1</h2>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+        html += '<p>' + rendered + '</p>';
+        html += '</div>';
+        area.innerHTML = html;
     }
 
     function loadKnowledgeForSelect(selectedIds) {

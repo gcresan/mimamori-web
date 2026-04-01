@@ -1160,6 +1160,26 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // Phase 2: 記事個別情報・ヒアリング・本文生成・WP下書き
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/notes', [
+            [ 'methods' => 'POST',   'callback' => [ $this, 'rest_writing_add_note' ],    'permission_callback' => [ $this->config, 'check_permission' ] ],
+            [ 'methods' => 'DELETE', 'callback' => [ $this, 'rest_writing_delete_note' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/interview', [
+            [ 'methods' => 'POST', 'callback' => [ $this, 'rest_writing_generate_interview' ], 'permission_callback' => [ $this->config, 'check_permission' ] ],
+            [ 'methods' => 'PUT',  'callback' => [ $this, 'rest_writing_save_interview' ],     'permission_callback' => [ $this->config, 'check_permission' ] ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/draft', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_generate_draft' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/wp-draft', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_save_wp_draft' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // =========================================================
         // 口コミ投稿支援（公開エンドポイント）
         // =========================================================
@@ -15008,6 +15028,58 @@ PROMPT;
         }
         $keywords = $this->writing_service->get_rank_keywords( get_current_user_id() );
         return new \WP_REST_Response( [ 'success' => true, 'keywords' => $keywords ] );
+    }
+
+    // --- Phase 2: 記事個別情報・ヒアリング・本文生成・WP下書き ---
+
+    public function rest_writing_add_note( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        $result = $this->writing_service->add_article_note( get_current_user_id(), (int) $request->get_param( 'id' ), $request->get_json_params() );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_delete_note( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        $params  = $request->get_json_params();
+        $note_id = sanitize_text_field( $params['note_id'] ?? '' );
+        $result  = $this->writing_service->delete_article_note( get_current_user_id(), (int) $request->get_param( 'id' ), $note_id );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_generate_interview( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        @set_time_limit( 120 );
+        try {
+            $result = $this->writing_service->generate_interview( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_writing_save_interview( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        $params  = $request->get_json_params();
+        $answers = $params['answers'] ?? [];
+        $result  = $this->writing_service->save_interview_answers( get_current_user_id(), (int) $request->get_param( 'id' ), $answers );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_generate_draft( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        @set_time_limit( 180 );
+        try {
+            $result = $this->writing_service->generate_draft( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_writing_save_wp_draft( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        $result = $this->writing_service->save_as_wp_draft( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        return new \WP_REST_Response( $result );
     }
 
     // =========================================================
