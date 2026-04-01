@@ -264,7 +264,6 @@ get_header();
                         <th>タイトル</th>
                         <th>キーワード</th>
                         <th class="wrt-table__th-icon">企画書</th>
-                        <th class="wrt-table__th-icon">公開</th>
                         <th class="wrt-table__th-date">作成日</th>
                     </tr>
                 </thead>
@@ -518,13 +517,11 @@ get_header();
             var dateStr = a.created_at ? a.created_at.replace(/-/g, '/').substring(0, 10) : '';
             var docSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
             var outlineIcon = a.has_outline ? '<span class="wrt-icon-active" title="構成案あり">' + docSvg + '</span>' : '<span class="wrt-icon-inactive">' + docSvg + '</span>';
-            var publishIcon = a.wp_draft_id ? '<span class="wrt-icon-active" title="WP下書き済">' + docSvg + '</span>' : '<span class="wrt-icon-inactive">' + docSvg + '</span>';
             return '<tr class="wrt-table__row" data-id="' + a.id + '">'
                 + '<td class="wrt-table__td-check"><input type="checkbox" class="wrt-article-check" data-id="' + a.id + '"></td>'
                 + '<td class="wrt-table__td-title">' + esc(a.title) + '</td>'
                 + '<td class="wrt-table__td-keyword">' + esc(a.keyword) + '</td>'
                 + '<td class="wrt-table__td-icon">' + outlineIcon + '</td>'
-                + '<td class="wrt-table__td-icon">' + publishIcon + '</td>'
                 + '<td class="wrt-table__td-date">' + esc(dateStr) + '</td>'
                 + '</tr>';
         }).join('');
