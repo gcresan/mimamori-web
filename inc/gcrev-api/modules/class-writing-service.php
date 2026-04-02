@@ -746,6 +746,7 @@ class Gcrev_Writing_Service {
             'target_reader'          => $target_reader,
             'selected_knowledge_ids' => $knowledge_ids,
             'outline'                => $outline,
+            'outline_json'           => ! empty( $outline ),
             'notes'                  => is_array( $notes ) ? $notes : [],
             'interview'              => is_array( $interview ) ? $interview : null,
             'draft_content'          => get_post_meta( $post->ID, '_gcrev_article_draft_content', true ) ?: '',

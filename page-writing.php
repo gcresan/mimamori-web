@@ -1121,10 +1121,15 @@ get_header();
         html += '<div class="wrt-detail-section__title">本文生成</div>';
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
         html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
-        if (a.outline) {
+        if (a.outline && a.draft_content) {
+            // 本文生成済み → モーダルで構成案を見る
             html += '<button class="wrt-btn wrt-btn--secondary" id="wrtShowOutlineBtn">構成案を見る</button>';
         }
         html += '</div>';
+        // 本文未生成 + 構成案あり → インライン表示
+        if (a.outline && !a.draft_content) {
+            html += '<div id="wrtOutlineInline" style="margin-top:16px;"></div>';
+        }
         html += '<div id="wrtDraftArea"></div>';
         html += '</div>';
 
@@ -1337,20 +1342,39 @@ get_header();
 
         // 競合調査ボタン＋自動実行
         function runCompetitorResearch(force) {
+            var section = document.getElementById('wrtCompetitorSection');
+            if (section) {
+                var prevErr = section.querySelector('.wrt-cr-error');
+                if (prevErr) prevErr.remove();
+            }
             showProgress('競合調査中…（上位記事をクロール・分析しています。2〜3分かかります）');
             apiFetch('/articles/' + a.id + '/competitor-research', {
                 method: 'POST',
                 body: { force: !!force }
             }).then(function(res) {
                 hideProgress();
-                if (!res.success) { showToast(res.error || 'エラー', true); return; }
+                if (!res.success) {
+                    showToast(res.error || '競合調査でエラーが発生しました', true);
+                    // エラー時はフラグを解除して再試行可能に
+                    delete _competitorAutoRanFor[a.id];
+                    if (section) {
+                        var errDiv = document.createElement('div');
+                        errDiv.className = 'wrt-cr-error';
+                        errDiv.style.cssText = 'padding:10px 14px;background:#C95A4F10;border:1px solid #C95A4F30;border-radius:6px;margin-top:8px;font-size:12px;color:#C95A4F;';
+                        errDiv.textContent = res.error || '競合調査でエラーが発生しました。「競合調査を実行」ボタンで再試行してください。';
+                        section.appendChild(errDiv);
+                    }
+                    return;
+                }
                 var crRes = res.research || {};
                 var crOk = (crRes.competitors || []).filter(function(c) { return c.status === 'ok'; }).length;
                 showToast('競合調査が完了しました（' + crOk + '件の上位記事を分析）');
+                _competitorAutoRanFor[a.id] = true;
                 showArticleDetail(a.id);
-            }).catch(function() {
+            }).catch(function(err) {
                 hideProgress();
-                showToast('通信エラー', true);
+                showToast('競合調査の通信エラー', true);
+                delete _competitorAutoRanFor[a.id];
             });
         }
         var competitorBtn = document.getElementById('wrtRunCompetitorBtn') || document.getElementById('wrtRerunCompetitorBtn');
@@ -1359,7 +1383,7 @@ get_header();
                 runCompetitorResearch(this.id === 'wrtRerunCompetitorBtn');
             });
         }
-        // 競合調査が一度も実行されていない場合のみ自動実行（1記事1回のみ）
+        // 競合調査が一度も実行されていない場合のみ自動実行
         if (!a.competitor_research) {
             if (!_competitorAutoRanFor[a.id]) {
                 _competitorAutoRanFor[a.id] = true;
@@ -1399,13 +1423,17 @@ get_header();
             }).catch(function() { hideProgress(); showToast('通信エラー', true); });
         });
 
-        // 構成案を見るボタン
+        // 構成案: 本文未生成ならインライン表示、生成済みならモーダルボタン
         var outlineBtn = document.getElementById('wrtShowOutlineBtn');
         if (outlineBtn) {
             outlineBtn.addEventListener('click', function() {
                 renderOutlineModal(a.outline);
                 document.getElementById('wrtOutlineModal').classList.add('active');
             });
+        }
+        var inlineOutlineEl = document.getElementById('wrtOutlineInline');
+        if (inlineOutlineEl && a.outline) {
+            renderOutlineInline(inlineOutlineEl, a.outline);
         }
 
         // 追加編集プロンプト 音声入力
@@ -1868,6 +1896,126 @@ get_header();
     }
 
     /* ===== 構成案モーダル ===== */
+    /**
+     * 構成案をインライン表示（本文未生成時にセクション内に直接表示）
+     */
+    function renderOutlineInline(container, outline) {
+        if (!outline) { container.innerHTML = ''; return; }
+        var html = '<div class="wrt-outline-inline" style="background:var(--mw-bg-secondary);border-radius:8px;padding:20px;border:1px solid var(--mw-border-light);">';
+
+        // タイトル候補
+        if (outline.title_options && outline.title_options.length > 0) {
+            var currentTitle = (currentArticle && currentArticle.title) ? currentArticle.title : '';
+            html += '<div style="margin-bottom:16px;">';
+            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:8px;">タイトル候補 <span style="font-weight:400;font-size:11px;color:var(--mw-text-tertiary);">— クリックで選択、ダブルクリックで編集</span></div>';
+            outline.title_options.forEach(function(t, idx) {
+                var isSelected = (t === currentTitle) || (idx === 0 && !currentTitle);
+                html += '<div class="wrt-outline__title-opt' + (isSelected ? ' selected' : '') + '" data-title-idx="' + idx + '">'
+                    + '<span class="wrt-title-radio"></span>'
+                    + '<span class="wrt-title-text">' + esc(t) + '</span>'
+                    + '</div>';
+            });
+            html += '<div class="wrt-title-actions">'
+                + '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtInlineTitleConfirmBtn">このタイトルに決定</button>'
+                + '</div>';
+            html += '</div>';
+        }
+
+        // 検索意図
+        if (outline.search_intent) {
+            html += '<div class="wrt-outline__intent"><strong>検索意図:</strong> ' + esc(outline.search_intent) + '</div>';
+        }
+
+        // 記事の到達ゴール
+        if (outline.article_goal) {
+            html += '<div class="wrt-outline__intent" style="margin-top:8px;"><strong>記事の到達ゴール:</strong> ' + esc(outline.article_goal) + '</div>';
+        }
+
+        // 見出し構成
+        if (outline.headings && outline.headings.length > 0) {
+            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-secondary);margin:16px 0 8px;">見出し構成</div>';
+            outline.headings.forEach(function(h) {
+                var level = h.level || 'h2';
+                html += '<div class="wrt-outline__heading wrt-outline__heading--' + level + '">';
+                html += '<div class="wrt-outline__heading-text">' + esc(level.toUpperCase()) + ': ' + esc(h.text) + '</div>';
+                if (h.description) html += '<div class="wrt-outline__heading-desc">' + esc(h.description) + '</div>';
+                if (h.reference) html += '<div class="wrt-outline__heading-ref">' + esc(h.reference) + '</div>';
+                html += '</div>';
+            });
+        }
+
+        // 不足情報
+        if (outline.missing_info && outline.missing_info.length > 0) {
+            html += '<div class="wrt-outline__missing">';
+            html += '<div class="wrt-outline__missing-title">不足している情報</div>';
+            outline.missing_info.forEach(function(m) {
+                html += '<div class="wrt-outline__missing-item">' + esc(m) + '</div>';
+            });
+            html += '</div>';
+        }
+
+        // 執筆のポイント
+        if (outline.tips && outline.tips.length > 0) {
+            html += '<div class="wrt-outline__tips">';
+            html += '<div class="wrt-outline__tips-title">執筆のポイント</div>';
+            outline.tips.forEach(function(t) {
+                html += '<div class="wrt-outline__tips-item">' + esc(t) + '</div>';
+            });
+            html += '</div>';
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+
+        // タイトル選択イベント
+        container.querySelectorAll('.wrt-outline__title-opt').forEach(function(opt) {
+            opt.addEventListener('click', function(e) {
+                if (e.target.classList.contains('wrt-title-edit-input')) return;
+                container.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); });
+                opt.classList.add('selected');
+            });
+            opt.addEventListener('dblclick', function() {
+                var textEl = opt.querySelector('.wrt-title-text');
+                if (!textEl || opt.querySelector('.wrt-title-edit-input')) return;
+                var currentVal = textEl.textContent;
+                textEl.style.display = 'none';
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'wrt-title-edit-input';
+                input.value = currentVal;
+                opt.appendChild(input);
+                input.focus();
+                input.select();
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { textEl.textContent = input.value; textEl.style.display = ''; input.remove(); container.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); }); opt.classList.add('selected'); }
+                    else if (e.key === 'Escape') { textEl.style.display = ''; input.remove(); }
+                });
+                input.addEventListener('blur', function() { if (input.parentNode) { textEl.textContent = input.value; textEl.style.display = ''; input.remove(); } });
+            });
+        });
+
+        // 「このタイトルに決定」ボタン
+        var confirmBtn = document.getElementById('wrtInlineTitleConfirmBtn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function() {
+                var selected = container.querySelector('.wrt-outline__title-opt.selected .wrt-title-text');
+                if (!selected) { showToast('タイトルを選択してください', true); return; }
+                var newTitle = selected.textContent.trim();
+                if (!newTitle) return;
+                apiFetch('/articles/' + currentArticle.id + '/settings', {
+                    method: 'POST',
+                    body: { title: newTitle }
+                }).then(function(res) {
+                    if (res.success) {
+                        showToast('タイトルを「' + newTitle + '」に変更しました');
+                        currentArticle.title = newTitle;
+                        loadArticles();
+                    } else { showToast(res.error || 'エラー', true); }
+                });
+            });
+        }
+    }
+
     function renderOutlineModal(outline) {
         var body = document.getElementById('wrtOutlineModalBody');
         if (!outline) { body.innerHTML = '<p style="color:var(--mw-text-tertiary);">構成案がありません</p>'; return; }
