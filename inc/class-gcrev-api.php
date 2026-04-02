@@ -15287,6 +15287,17 @@ PROMPT;
         $day_names = [ '日', '月', '火', '水', '木', '金', '土' ];
         $run_day_names = array_map( fn( $d ) => $day_names[ $d ], $freq_schedule[ $frequency ] ?? $freq_schedule['weekly_2'] );
 
+        // FREQUENCY_LABELS を安全に取得（クラス未読み込み時はフォールバック）
+        $frequency_labels = [
+            'weekly_1' => '週1回（火曜）',
+            'weekly_2' => '週2回（火・金）',
+            'weekly_3' => '週3回（月・水・金）',
+            'daily'    => '毎日',
+        ];
+        if ( class_exists( 'Gcrev_Auto_Article_Service' ) && defined( 'Gcrev_Auto_Article_Service::FREQUENCY_LABELS' ) ) {
+            $frequency_labels = Gcrev_Auto_Article_Service::FREQUENCY_LABELS;
+        }
+
         $settings = [
             'enabled'            => get_user_meta( $user_id, 'gcrev_auto_article_enabled', true ) === '1',
             'frequency'          => $frequency,
@@ -15298,7 +15309,7 @@ PROMPT;
             'excluded_keywords'  => json_decode( get_user_meta( $user_id, 'gcrev_auto_article_excluded_keywords', true ) ?: '[]', true ),
             'preferred_tone'     => get_user_meta( $user_id, 'gcrev_auto_article_preferred_tone', true ) ?: 'natural',
             'run_days'           => implode( '・', $run_day_names ),
-            'frequency_labels'   => Gcrev_Auto_Article_Service::FREQUENCY_LABELS,
+            'frequency_labels'   => $frequency_labels,
         ];
 
         return new \WP_REST_Response( [ 'success' => true, 'settings' => $settings ] );
