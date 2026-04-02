@@ -547,7 +547,7 @@ class Gcrev_Writing_Service {
         // 類似チェック（ブロックはしない）
         $similarity_result = null;
         try {
-            $similarity_result = $this->check_similarity( $user_id, $keyword );
+            $similarity_result = $this->check_similarity( $user_id, $keyword, $post_id );
             if ( $similarity_result && isset( $similarity_result['risk_level'] ) ) {
                 update_post_meta( $post_id, '_gcrev_article_similarity_result',
                     wp_json_encode( $similarity_result, JSON_UNESCAPED_UNICODE ) );
@@ -2412,8 +2412,8 @@ RULES;
     /**
      * キーワードの類似度をチェック（Gemini API使用）
      */
-    public function check_similarity( int $user_id, string $keyword ): array {
-        $fingerprints = $this->get_existing_articles_fingerprints( $user_id );
+    public function check_similarity( int $user_id, string $keyword, int $exclude_id = 0 ): array {
+        $fingerprints = $this->get_existing_articles_fingerprints( $user_id, $exclude_id );
 
         // 既存記事が0件
         if ( empty( $fingerprints ) ) {
