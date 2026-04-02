@@ -1026,6 +1026,7 @@ get_header();
     });
 
     /* ===== 記事詳細 ===== */
+    var _competitorAutoRanFor = {};  // { articleId: true } — 自動競合調査の実行済みフラグ
     function showArticleDetail(id) {
         showProgress('読み込み中…');
         apiFetch('/articles/' + id).then(function(res) {
@@ -1278,10 +1279,10 @@ get_header();
                 runCompetitorResearch(this.id === 'wrtRerunCompetitorBtn');
             });
         }
-        // 競合調査が未実施かつまだ自動実行していない場合のみ自動実行
+        // 競合調査が未実施かつまだ自動実行していない場合のみ自動実行（1記事1回のみ）
         if (!a.competitor_research || !a.competitor_research.analysis) {
-            if (!a._competitor_auto_attempted) {
-                a._competitor_auto_attempted = true;
+            if (!_competitorAutoRanFor[a.id]) {
+                _competitorAutoRanFor[a.id] = true;
                 setTimeout(function() { runCompetitorResearch(false); }, 500);
             }
         }
