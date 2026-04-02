@@ -2531,6 +2531,24 @@ STRUCTURE_FORMAT;
         $content = preg_replace( '/```\s*$/m', '', $content );
         $content = trim( $content );
 
+        // H1タグからタイトルを抽出して post_title に反映
+        if ( preg_match( '/^# (.+)$/m', $content, $h1_match ) ) {
+            $h1_title = trim( $h1_match[1] );
+            if ( $h1_title !== '' ) {
+                wp_update_post( [ 'ID' => $article_id, 'post_title' => $h1_title ] );
+                $outline_raw = get_post_meta( $article_id, '_gcrev_article_outline_json', true );
+                if ( $outline_raw ) {
+                    $outline_data = json_decode( $outline_raw, true );
+                    if ( is_array( $outline_data ) ) {
+                        if ( ! isset( $outline_data['title_options'] ) ) { $outline_data['title_options'] = []; }
+                        $outline_data['title_options'][0] = $h1_title;
+                        update_post_meta( $article_id, '_gcrev_article_outline_json',
+                            wp_json_encode( $outline_data, JSON_UNESCAPED_UNICODE ) );
+                    }
+                }
+            }
+        }
+
         update_post_meta( $article_id, '_gcrev_article_draft_content', $content );
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
@@ -2721,7 +2739,15 @@ RULES;
             return [ 'success' => false, 'error' => '本文がまだ生成されていません。' ];
         }
 
-        $title = get_the_title( $article_id ) ?: $article['keyword'];
+        // H1行からタイトルを抽出し、本文からはH1行を除去（WordPressではpost_titleがH1相当）
+        $title = '';
+        if ( preg_match( '/^# (.+)$/m', $content, $h1m ) ) {
+            $title = trim( $h1m[1] );
+            $content = trim( preg_replace( '/^# .+\n?/m', '', $content, 1 ) );
+        }
+        if ( $title === '' ) {
+            $title = get_the_title( $article_id ) ?: $article['keyword'];
+        }
         $html_content = Gcrev_WP_Publish_Client::markdown_to_wp_html( $content );
 
         $options = [];
@@ -2799,7 +2825,16 @@ RULES;
 
         $keyword = $article['keyword'];
         $outline = $article['outline'] ?? [];
-        $title   = ! empty( $outline['title_options'] ) ? $outline['title_options'][0] : $keyword;
+
+        // H1行からタイトルを抽出し、本文からはH1行を除去（WordPressではpost_titleがH1相当）
+        $title = '';
+        if ( preg_match( '/^# (.+)$/m', $content, $h1m ) ) {
+            $title = trim( $h1m[1] );
+            $content = trim( preg_replace( '/^# .+\n?/m', '', $content, 1 ) );
+        }
+        if ( $title === '' ) {
+            $title = ! empty( $outline['title_options'] ) ? $outline['title_options'][0] : $keyword;
+        }
 
         // Markdown → HTML 簡易変換
         $html_content = $this->markdown_to_html( $content );

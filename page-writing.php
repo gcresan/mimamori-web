@@ -1204,9 +1204,9 @@ get_header();
         html += '<div class="wrt-detail-section" id="wrtDraftSection">';
         html += '<div class="wrt-detail-section__title">本文生成</div>';
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
-        html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
+        html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
         if (a.outline && a.draft_content) {
-            html += '<button class="wrt-btn wrt-btn--secondary" id="wrtShowOutlineBtn">構成案を見る</button>';
+            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtShowOutlineBtn">構成案を見る</button>';
         }
         // 品質スコアバッジ + 詳細ボタン
         if (a.score && a.score.status === 'success') {
