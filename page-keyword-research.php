@@ -202,7 +202,7 @@ get_header();
 .kwr-summary__item:last-child { margin-bottom: 0; }
 .kwr-summary__item-title { font-size: 15px; font-weight: 700; color: var(--mw-text-heading); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; padding-left: 12px; border-left: 3px solid var(--mw-primary-blue, #568184); }
 .kwr-summary--competitor .kwr-summary__item-title { border-left-color: var(--mw-accent-attention, #C9A84C); }
-.kwr-summary__item-text { font-size: 14.5px; color: var(--mw-text-body, #263335); line-height: 1.9; max-width: 880px; }
+.kwr-summary__item-text { font-size: 14.5px; color: var(--mw-text-body, #263335); line-height: 1.9; }
 .kwr-summary__item-text p { margin: 0 0 8px; }
 .kwr-summary__item-text p:last-child { margin-bottom: 0; }
 
