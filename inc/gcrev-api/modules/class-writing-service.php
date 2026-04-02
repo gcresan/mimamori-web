@@ -1219,8 +1219,14 @@ INSTRUCTION;
             'analysis'     => $analysis,
         ];
 
-        update_post_meta( $article_id, '_gcrev_article_competitor_research_json',
-            wp_json_encode( $research, JSON_UNESCAPED_UNICODE ) );
+        $json = wp_json_encode( $research, JSON_UNESCAPED_UNICODE );
+        // UTF-8不正バイトでエンコード失敗した場合のフォールバック
+        if ( $json === false ) {
+            $this->log( "generate_competitor_research: JSON encode failed, sanitizing" );
+            $research = json_decode( wp_json_encode( $research, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ), true );
+            $json = wp_json_encode( $research, JSON_UNESCAPED_UNICODE );
+        }
+        update_post_meta( $article_id, '_gcrev_article_competitor_research_json', $json );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
         $this->log( "generate_competitor_research: saved for article_id={$article_id}" );
@@ -1312,6 +1318,10 @@ INSTRUCTION;
                     $results[] = $item;
                     continue;
                 }
+
+                // UTF-8 不正バイト除去（JSON保存時のエラーを防止）
+                $html = mb_convert_encoding( $html, 'UTF-8', 'UTF-8' );
+                $html = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $html );
 
                 $parsed = $this->parse_competitor_html_for_writing( $html );
                 $item = array_merge( $item, $parsed );
