@@ -62,6 +62,10 @@
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
 }
+.dashboard .btn-latest-report-top:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
+}
 .dashboard .btn-latest-report-top span {
   margin-right: 6px;
   font-size: 16px;
@@ -670,6 +674,10 @@
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
 }
+.dashboard .content-area .btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
+}
 .dashboard .content-area .btn-lg {
   padding: 16px 40px;
   font-size: 16px;
@@ -754,10 +762,20 @@
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: all 0.25s ease;
 }
 .register .btn-primary:hover {
   background: #476C6F;
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+  transform: translateY(-1px);
+}
+.register .btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
+}
+.register .btn-primary:focus-visible {
+  outline: 2px solid #568184;
+  outline-offset: 2px;
 }
 .register .links {
   margin-top: 20px;
@@ -848,7 +866,7 @@
   color: #FAF9F6;
   text-decoration: none;
   border-radius: 6px;
-  transition: background 0.3s;
+  transition: all 0.25s ease;
   font-size: 14px;
   border: none;
   cursor: pointer;
@@ -856,18 +874,40 @@
 }
 .account .btn:hover {
   background: #476C6F;
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+  transform: translateY(-1px);
+}
+.account .btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
+}
+.account .btn:focus-visible {
+  outline: 2px solid #568184;
+  outline-offset: 2px;
 }
 .account .btn-secondary {
   background: #8C8A85;
 }
 .account .btn-secondary:hover {
   background: #726F6A;
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+  transform: translateY(-1px);
+}
+.account .btn-secondary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 .account .btn-danger {
   background: #B5574B;
 }
 .account .btn-danger:hover {
   background: #9C4940;
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+  transform: translateY(-1px);
+}
+.account .btn-danger:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 .account .toggle-switch {
   position: relative;
@@ -1492,6 +1532,11 @@
 .service .btn-primary:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(47, 58, 74, 0.2);
+  background: #476C6F;
+}
+.service .btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 .service .btn-secondary {
   background: #FAF9F6;
@@ -1501,6 +1546,11 @@
 .service .btn-secondary:hover {
   background: #F2F5F5;
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+}
+.service .btn-secondary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 @media (max-width: 768px) {
   .service .container {

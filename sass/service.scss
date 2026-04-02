@@ -129,14 +129,16 @@
     &--primary {
       background: $primary-color;
       color: #fff;
-      &:hover { background: $primary-hover; transform: translateY(-1px); }
+      &:hover { background: $primary-hover; transform: translateY(-1px); box-shadow: $shadow-lg; }
+      &:active { transform: translateY(0); box-shadow: $shadow-sm; }
     }
 
     &--outline {
       background: transparent;
       color: $primary-color;
       border: 1.5px solid $primary-color;
-      &:hover { background: $primary-color; color: #fff; }
+      &:hover { background: $primary-color; color: #fff; box-shadow: $shadow-lg; transform: translateY(-1px); }
+      &:active { transform: translateY(0); box-shadow: $shadow-sm; }
     }
   }
 

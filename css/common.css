@@ -273,6 +273,7 @@
   padding: 8px 20px 8px 52px;
   font-size: 13px;
 }
+
 /* かんたん解説（リテラシー低め向け） */
 .help-lead {
   margin: 12px 0 20px;
@@ -344,9 +345,17 @@
   text-decoration: none;
   color: #FAF9F6;
   white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 .topbar .topbar-right .report-setting-btn:hover {
   background: #476C6F;
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+  transform: translateY(-1px);
+}
+.topbar .topbar-right .report-setting-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 .topbar .topbar-right .topbar-user-info {
   text-align: right;
@@ -376,9 +385,17 @@
   font-size: 13px;
   text-decoration: none;
   color: #FAF9F6;
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 .topbar .topbar-right .logout-btn:hover {
   background: #568184;
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+  transform: translateY(-1px);
+}
+.topbar .topbar-right .logout-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 
 .user-menu {
@@ -426,13 +443,9 @@
   text-decoration: underline;
 }
 
-.breadcrumb .breadcrumb-sep {
+.breadcrumb span {
   margin: 0 8px;
-  color: #C5C3BC;
-}
-
-.breadcrumb .breadcrumb-parent {
-  color: #888883;
+  color: #E5E3DC;
 }
 
 /* コンテンツエリア */

@@ -36,6 +36,11 @@
     box-shadow: $shadow-lg;
 }
 
+.btn-latest-report-top:active {
+    transform: translateY(0);
+    box-shadow: $shadow-sm;
+}
+
 .btn-latest-report-top span {
     margin-right: 6px;
     font-size: 16px;
@@ -790,6 +795,11 @@
         box-shadow: $shadow-lg;
     }
 
+    .content-area .btn-primary:active {
+        transform: translateY(0);
+        box-shadow: $shadow-sm;
+    }
+
     .content-area .btn-lg {
         padding: 16px 40px;
         font-size: 16px;
@@ -906,10 +916,22 @@
         font-size: 16px;
         font-weight: 600;
         cursor: pointer;
-        transition: background 0.3s;
+        transition: all 0.25s ease;
 
         &:hover {
             background: $primary-hover;
+            box-shadow: $shadow-lg;
+            transform: translateY(-1px);
+        }
+
+        &:active {
+            transform: translateY(0);
+            box-shadow: $shadow-sm;
+        }
+
+        &:focus-visible {
+            outline: 2px solid $primary-color;
+            outline-offset: 2px;
         }
     }
 
@@ -1028,7 +1050,7 @@
         color: $bg-card;
         text-decoration: none;
         border-radius: $border-radius-sm;
-        transition: background 0.3s;
+        transition: all 0.25s ease;
         font-size: 14px;
         border: none;
         cursor: pointer;
@@ -1036,6 +1058,18 @@
 
         &:hover {
             background: $primary-hover;
+            box-shadow: $shadow-lg;
+            transform: translateY(-1px);
+        }
+
+        &:active {
+            transform: translateY(0);
+            box-shadow: $shadow-sm;
+        }
+
+        &:focus-visible {
+            outline: 2px solid $primary-color;
+            outline-offset: 2px;
         }
 
         &-secondary {
@@ -1043,6 +1077,13 @@
 
             &:hover {
                 background: $neutral-hover;
+                box-shadow: $shadow-lg;
+                transform: translateY(-1px);
+            }
+
+            &:active {
+                transform: translateY(0);
+                box-shadow: $shadow-sm;
             }
         }
 
@@ -1051,6 +1092,13 @@
 
             &:hover {
                 background: $danger-hover;
+                box-shadow: $shadow-lg;
+                transform: translateY(-1px);
+            }
+
+            &:active {
+                transform: translateY(0);
+                box-shadow: $shadow-sm;
             }
         }
     }
@@ -1797,6 +1845,12 @@
     .btn-primary:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 16px rgba(47, 58, 74, 0.2);
+        background: $primary-hover;
+    }
+
+    .btn-primary:active {
+        transform: translateY(0);
+        box-shadow: $shadow-sm;
     }
 
     .btn-secondary {
@@ -1808,6 +1862,12 @@
     .btn-secondary:hover {
         background: $bg-light;
         transform: translateY(-2px);
+        box-shadow: $shadow-lg;
+    }
+
+    .btn-secondary:active {
+        transform: translateY(0);
+        box-shadow: $shadow-sm;
     }
 
     /* レスポンシブ */

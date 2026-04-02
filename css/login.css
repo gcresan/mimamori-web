@@ -100,12 +100,24 @@
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: all 0.25s ease;
   display: block;
 }
 .login .buttons:hover,
 .login input[type="submit"]:hover {
   background: #476C6F;
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+  transform: translateY(-1px);
+}
+.login .buttons:active,
+.login input[type="submit"]:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
+}
+.login .buttons:focus-visible,
+.login input[type="submit"]:focus-visible {
+  outline: 2px solid #568184;
+  outline-offset: 2px;
 }
 .login .link-text {
   text-align: center;

@@ -146,11 +146,23 @@ $border-radius-sm: 6px;
         font-size: 16px;
         font-weight: 600;
         cursor: pointer;
-        transition: background 0.3s;
+        transition: all 0.25s ease;
         display: block;
 
         &:hover {
             background: $primary-hover;
+            box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+            transform: translateY(-1px);
+        }
+
+        &:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
+        }
+
+        &:focus-visible {
+            outline: 2px solid $primary-color;
+            outline-offset: 2px;
         }
     }
 

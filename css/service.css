@@ -107,6 +107,11 @@
 .service .content-area .sv-btn--primary:hover {
   background: #476C6F;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+}
+.service .content-area .sv-btn--primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 .service .content-area .sv-btn--outline {
   background: transparent;
@@ -116,6 +121,12 @@
 .service .content-area .sv-btn--outline:hover {
   background: #568184;
   color: #fff;
+  box-shadow: 0 4px 12px rgba(47, 58, 74, 0.12);
+  transform: translateY(-1px);
+}
+.service .content-area .sv-btn--outline:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(43, 43, 43, 0.06);
 }
 .service .content-area .sv-pain {
   display: grid;

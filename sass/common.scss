@@ -360,10 +360,19 @@
             text-decoration: none;
             color: #FAF9F6;
             white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.25s ease;
         }
 
         .report-setting-btn:hover {
             background: $primary-hover;
+            box-shadow: $shadow-lg;
+            transform: translateY(-1px);
+        }
+
+        .report-setting-btn:active {
+            transform: translateY(0);
+            box-shadow: $shadow-sm;
         }
 
         /* ユーザー情報 */
@@ -400,10 +409,19 @@
             font-size: 13px;
             text-decoration: none;
             color: #FAF9F6;
+            cursor: pointer;
+            transition: all 0.25s ease;
         }
 
         .logout-btn:hover {
             background: $primary-color;
+            box-shadow: $shadow-lg;
+            transform: translateY(-1px);
+        }
+
+        .logout-btn:active {
+            transform: translateY(0);
+            box-shadow: $shadow-sm;
         }
     }
 }

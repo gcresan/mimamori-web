@@ -458,6 +458,14 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(86, 129, 132, 0.4);
 }
+.content-area .mw_wp_form input[type="submit"]:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(86, 129, 132, 0.2);
+}
+.content-area .mw_wp_form input[type="submit"]:focus-visible {
+    outline: 2px solid #568184;
+    outline-offset: 2px;
+}
 .content-area .mw_wp_form input[type="submit"]:disabled {
     background: #8A9197;
     cursor: not-allowed;
@@ -509,6 +517,14 @@
     background: #476C6F;
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(86, 129, 132, 0.4);
+}
+.signup-cta-button:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(86, 129, 132, 0.2);
+}
+.signup-cta-button:focus-visible {
+    outline: 2px solid #568184;
+    outline-offset: 2px;
 }
 .signup-cta-button:disabled {
     background: #8A9197;
@@ -649,6 +665,9 @@
 }
 .thanks-payment-btn:hover {
     transform: translateY(-2px);
+}
+.thanks-payment-btn:active {
+    transform: translateY(0);
 }
 .thanks-payment-btn--primary {
     background: linear-gradient(135deg, #568184 0%, #476C6F 100%);

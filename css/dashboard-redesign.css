@@ -4507,6 +4507,252 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   margin-bottom: 2px;
 }
 
+/* ========== Global Button Hover / Focus / Active Enhancement ========== */
+
+/*
+ * 全ボタン要素の統一的なインタラクション強化
+ * - cursor: pointer の保証
+ * - hover 時の視覚的変化（背景色・影・浮き上がり）
+ * - focus-visible でキーボード操作時の視認性
+ * - active 時の押下フィードバック
+ * - disabled 時は hover/active を無効化
+ */
+
+/* --- 基本ボタンリセット: cursor と transition の保証 --- */
+button:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+[role="button"]:not(:disabled) {
+  cursor: pointer;
+}
+
+/* --- Primary 系ボタン hover 強化 --- */
+/* .btn (汎用) — primary背景のデフォルト */
+.btn:not(.btn-secondary):not(.btn-outline):not(.btn-remove-route):not(.btn-reset-cv):not(:disabled):hover {
+  background: var(--mw-btn-primary-hover, #476C6F);
+  box-shadow: var(--mw-shadow-float);
+  transform: translateY(-1px);
+}
+.btn:not(.btn-secondary):not(.btn-outline):not(.btn-remove-route):not(.btn-reset-cv):not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: var(--mw-shadow-soft);
+}
+
+/* --- btn-generate hover 強化 --- */
+.btn-generate:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn-generate:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--mw-shadow-soft);
+}
+
+/* --- btn-secondary hover 強化 --- */
+.btn-secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--mw-shadow-soft);
+}
+.btn-secondary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- btn-refresh hover 強化 --- */
+.btn-refresh:hover {
+  box-shadow: var(--mw-shadow-float);
+  transform: translateY(-1px);
+}
+.btn-refresh:active {
+  transform: translateY(0);
+  box-shadow: var(--mw-shadow-soft);
+}
+
+/* --- btn-outline hover 強化 --- */
+.btn-outline:hover {
+  background: rgba(86, 129, 132, 0.06);
+  box-shadow: var(--mw-shadow-soft);
+  transform: translateY(-1px);
+}
+.btn-outline:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- btn-report hover 強化 --- */
+.btn-report.btn-secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mw-shadow-soft);
+}
+.btn-report.btn-primary:hover {
+  transform: translateY(-1px);
+}
+.btn-report:active {
+  transform: translateY(0);
+  box-shadow: var(--mw-shadow-soft) !important;
+}
+
+/* --- btn-reset-cv hover 強化 --- */
+.btn-reset-cv:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mw-shadow-soft);
+}
+.btn-reset-cv:active {
+  transform: translateY(0);
+}
+
+/* --- btn-remove-route hover 強化 --- */
+.btn-remove-route:hover {
+  transform: scale(1.15);
+}
+.btn-remove-route:active {
+  transform: scale(0.95);
+}
+
+/* --- monthly-empty-btn hover 強化 --- */
+.monthly-empty-btn:hover {
+  transform: translateY(-1px);
+}
+.monthly-empty-btn:active {
+  transform: translateY(0);
+  box-shadow: var(--mw-shadow-soft);
+}
+
+/* --- period-btn hover 強化 --- */
+.period-btn:hover {
+  transform: translateY(-1px);
+}
+.period-btn:active:not(.active) {
+  transform: translateY(0);
+}
+
+/* --- chart-btn hover 強化 --- */
+.chart-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mw-shadow-soft);
+}
+.chart-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- filter-btn hover 強化 --- */
+.filter-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mw-shadow-soft);
+}
+.filter-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- table-btn hover 強化 --- */
+.table-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mw-shadow-soft);
+}
+.table-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- pagination-btn hover 強化 --- */
+.pagination-btn:not(:disabled):not(.active):hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mw-shadow-soft);
+}
+.pagination-btn:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- month-nav-btn hover 強化 --- */
+.month-nav-btn:hover {
+  background: rgba(86, 129, 132, 0.06);
+  box-shadow: var(--mw-shadow-soft);
+  transform: translateY(-1px);
+}
+.month-nav-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- cv-tab-btn hover（未定義だったので追加） --- */
+.cv-tab-btn:not(.active):hover {
+  background: rgba(86, 129, 132, 0.08);
+  color: var(--mw-text-secondary);
+}
+.cv-tab-btn:active:not(.active) {
+  background: rgba(86, 129, 132, 0.12);
+}
+
+/* --- info-kpi-retry-btn hover 強化 --- */
+.info-kpi-retry-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mw-shadow-soft);
+}
+.info-kpi-retry-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- info-breakdown-toggle hover 強化 --- */
+.info-breakdown-toggle:hover {
+  transform: translateY(-1px);
+}
+.info-breakdown-toggle:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* --- highlight-detail-toggle hover（未定義だったので追加） --- */
+.highlight-detail-toggle:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* --- kpi-trend-toggle-btn hover 強化 --- */
+.kpi-trend-toggle-btn:not(.is-active):hover {
+  box-shadow: var(--mw-shadow-soft);
+}
+.kpi-trend-toggle-btn:active {
+  background: #e4e4e4;
+}
+
+/* --- plan-locked-link hover 強化 --- */
+.plan-locked-link:active {
+  transform: translateY(0);
+  box-shadow: var(--mw-shadow-soft);
+}
+
+/* --- info-kpi-item (KPIカード) active 強化 --- */
+.info-kpi-item:active:not(.is-active) {
+  transform: translateY(0);
+  box-shadow: var(--mw-shadow-card);
+}
+
+/* --- 全ボタン共通 focus-visible（キーボード操作対応） --- */
+button:focus-visible,
+input[type="submit"]:focus-visible,
+input[type="button"]:focus-visible,
+input[type="reset"]:focus-visible,
+a.btn:focus-visible,
+a.btn-report:focus-visible,
+a.btn-outline:focus-visible,
+.plan-locked-link:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--mw-primary-blue, #568184);
+  outline-offset: 2px;
+}
+
+/* --- disabled ボタンの hover/active を無効化 --- */
+button:disabled,
+input[type="submit"]:disabled,
+input[type="button"]:disabled,
+.btn:disabled {
+  pointer-events: none;
+}
+
 /* ========== Print ========== */
 @media print {
   /* === レイアウトリセット === */
