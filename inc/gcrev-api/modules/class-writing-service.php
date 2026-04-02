@@ -719,6 +719,7 @@ class Gcrev_Writing_Service {
 
         $interview_raw = get_post_meta( $post->ID, '_gcrev_article_interview_json', true );
         $interview = $interview_raw ? json_decode( $interview_raw, true ) : null;
+        $interview = $this->migrate_interview_v1_to_v2( $interview );
 
         $cr_raw = get_post_meta( $post->ID, '_gcrev_article_competitor_research_json', true );
         $competitor_research = $cr_raw ? json_decode( $cr_raw, true ) : null;
@@ -1512,11 +1513,46 @@ INSTRUCTION;
     }
 
     // =========================================================
-    // Phase 2: ヒアリング質問生成
+    // Phase 2: インタビュー（一次情報抽出）
     // =========================================================
 
     /**
-     * 構成案の不足情報をもとにヒアリング質問を生成
+     * インタビューデータを v1 → v2 にマイグレーション
+     *
+     * v1: { questions: [...], answers: { 0: "...", 1: "..." } }
+     * v2: { version: 2, rounds: [ { round: 0, type: "initial", questions: [ { id: "q0_0", answer: "...", ... } ] } ], structured_insights: null }
+     */
+    private function migrate_interview_v1_to_v2( ?array $interview ): ?array {
+        if ( $interview === null ) { return null; }
+        if ( isset( $interview['version'] ) && $interview['version'] >= 2 ) { return $interview; }
+
+        $old_questions = $interview['questions'] ?? [];
+        $old_answers   = $interview['answers'] ?? [];
+
+        $new_questions = [];
+        foreach ( $old_questions as $idx => $q ) {
+            $q['id']          = 'q0_' . $idx;
+            $q['answer']      = $old_answers[ $idx ] ?? ( $old_answers[ (string) $idx ] ?? '' );
+            $q['answered_at'] = ( $q['answer'] !== '' ) ? '(migrated)' : null;
+            $new_questions[]   = $q;
+        }
+
+        return [
+            'version' => 2,
+            'rounds'  => [
+                [
+                    'round'        => 0,
+                    'type'         => 'initial',
+                    'generated_at' => null,
+                    'questions'    => $new_questions,
+                ],
+            ],
+            'structured_insights' => null,
+        ];
+    }
+
+    /**
+     * 構成案の不足情報をもとにインタビュー質問を生成（一次情報抽出型）
      */
     public function generate_interview( int $user_id, int $article_id ): array {
         $article = $this->get_article( $user_id, $article_id );
@@ -1529,9 +1565,9 @@ INSTRUCTION;
             $this->log( "generate_interview: no outline, auto-generating for article_id={$article_id}" );
             $outline_result = $this->generate_outline( $user_id, $article_id );
             if ( ! $outline_result['success'] ) {
-                return [ 'success' => false, 'error' => 'ヒアリング質問生成の準備に失敗しました: ' . ( $outline_result['error'] ?? '' ) ];
+                return [ 'success' => false, 'error' => 'インタビュー質問生成の準備に失敗しました: ' . ( $outline_result['error'] ?? '' ) ];
             }
-            $article = $this->get_article( $user_id, $article_id ); // 再取得
+            $article = $this->get_article( $user_id, $article_id );
         }
 
         $missing = $article['outline']['missing_info'] ?? [];
@@ -1560,10 +1596,27 @@ INSTRUCTION;
             if ( ! empty( $h['text'] ) ) { $heading_texts[] = $h['text']; }
         }
 
-        $prompt  = "あなたはSEOコラム記事作成のヒアリング担当者です。\n";
+        // --- プロンプト構築（一次情報抽出型インタビュー） ---
+        $prompt  = "あなたはプロのインタビュアーです。\n";
         $prompt .= "対策キーワード「{$keyword}」のコラム記事を作成するにあたり、";
-        $prompt .= "記事の独自性と信頼性を高めるために追加で聞いておくべき質問を作成してください。\n";
-        $prompt .= "一般論だけで終わらない記事にするため、クライアント固有の一次情報を引き出す質問を重視してください。\n\n";
+        $prompt .= "クライアントの**実体験・エピソード・ストーリー**を引き出すインタビュー質問を作成してください。\n\n";
+        $prompt .= "## インタビューの目的\n";
+        $prompt .= "一般論ではなく「この会社にしか書けない記事」を作るための一次情報を抽出すること。\n";
+        $prompt .= "表面的な情報収集（特徴・強み・ターゲットの確認）ではなく、体験・ストーリー・感情を引き出す質問を設計してください。\n\n";
+
+        $prompt .= "## 質問設計のルール\n";
+        $prompt .= "### 禁止する質問パターン（絶対に使わないこと）\n";
+        $prompt .= "- 「御社の強みは何ですか？」「サービスの特徴は？」のような抽象的な質問\n";
+        $prompt .= "- 「ターゲットは誰ですか？」のような基本情報の確認\n";
+        $prompt .= "- 「〜は重要ですか？」のようなYes/Noで終わる質問\n";
+        $prompt .= "- はい/いいえで答えられる閉じた質問\n\n";
+        $prompt .= "### 必ず使う質問パターン\n";
+        $prompt .= "- 「最近あった具体的な〜を教えてください」（エピソードの引き出し）\n";
+        $prompt .= "- 「なぜその判断をしたのですか？」（意思決定の背景）\n";
+        $prompt .= "- 「その時どう感じましたか？」（感情の抽出）\n";
+        $prompt .= "- 「具体的にどういう状況でしたか？」（場面の具体化）\n";
+        $prompt .= "- 「他社と比べて違いを感じた瞬間は？」（比較の明確化）\n\n";
+
         if ( ! empty( $missing ) ) {
             $prompt .= "## 構成案で不足と判定された情報\n";
             foreach ( $missing as $m ) {
@@ -1601,25 +1654,25 @@ INSTRUCTION;
                     $prompt .= "- {$a}\n";
                 }
             }
-            $prompt .= "上記のギャップや差別化ポイントについて、クライアントの実体験・独自情報を引き出す質問を含めてください。\n\n";
+            $prompt .= "上記のギャップや差別化ポイントについて、クライアントの実体験・独自エピソードを引き出す質問を含めてください。\n\n";
         }
 
-        $prompt .= "## 特に拾いたい一次情報のカテゴリ\n";
-        $prompt .= "- 実際によくある相談内容\n";
-        $prompt .= "- 現場で感じる傾向\n";
-        $prompt .= "- お客様が困りやすい点\n";
-        $prompt .= "- 他社との違い・独自の強み\n";
-        $prompt .= "- 実際の事例（成功例・失敗例）\n";
-        $prompt .= "- 失敗しやすいポイント・注意点\n";
-        $prompt .= "- 地域特有の事情\n";
-        $prompt .= "- 業界特有の事情\n";
-        $prompt .= "- 会社独自の考え方や対応方針\n\n";
+        $prompt .= "## 引き出したい一次情報の種類\n";
+        $prompt .= "- 実際の顧客対応エピソード（成功・失敗の両方）\n";
+        $prompt .= "- 特定の顧客が抱えていた課題と解決までの経緯\n";
+        $prompt .= "- なぜその方法を選んだのか（意思決定の背景）\n";
+        $prompt .= "- 競合と比較して実際に違いを感じた場面\n";
+        $prompt .= "- 現場で直面した予想外のトラブルとその対処\n";
+        $prompt .= "- 数字で語れる実績（期間・件数・割合など）\n";
+        $prompt .= "- お客様から直接言われた言葉・反応\n";
+        $prompt .= "- 現場でよくある課題やリアルな悩み\n";
+        $prompt .= "- 業界・地域特有の事情やあるあるネタ\n\n";
 
         $prompt .= "## 出力指示\n以下のJSON配列のみを出力してください。前後に説明文やコードブロック記号を入れないでください。\n\n";
         $prompt .= <<<'INTERVIEW_FORMAT'
 [
   {
-    "question": "質問文",
+    "question": "質問文（必ず具体的なエピソード・場面を引き出す形にすること）",
     "reason": "この質問が必要な理由（30〜60文字）",
     "target_headings": ["この回答が反映される見出し名"],
     "priority": "high",
@@ -1632,21 +1685,20 @@ INTERVIEW_FORMAT;
         $prompt .= "- 質問は5〜10個\n";
         $prompt .= "- priority は high（必須級）/ medium（あると良い）/ low（余裕があれば）の3段階\n";
         $prompt .= "- target_headings は記事の見出し構成から該当する見出し名を配列で指定\n";
-        $prompt .= "- field_type は text（短文1行）または textarea（長文複数行）\n";
-        $prompt .= "- hint には具体的な回答例を含めて、回答しやすくする\n";
-        $prompt .= "- 記事に一次情報（実体験・具体的な数字・独自の強み等）を盛り込むための実用的な質問にしてください\n";
-        $prompt .= "- 上記の参照情報に既に含まれている内容については質問しないでください\n";
-        $prompt .= "- 参照情報にない独自の強み・実績・顧客の声・差別化ポイントなど、記事に深みを出す情報を引き出す質問にしてください\n";
-        $prompt .= "- 回答がなくても本文生成は可能だが、回答があれば独自性の高い記事になることを前提にしてください\n";
+        $prompt .= "- field_type は text（短文1行）または textarea（長文複数行）。エピソード系は必ず textarea\n";
+        $prompt .= "- hint には具体的な回答例を含めて、回答しやすくする。「例えば〜」の形式で\n";
+        $prompt .= "- 質問は必ずオープンエンド（自由回答形式）にすること\n";
+        $prompt .= "- 参照情報に既に含まれている内容については質問しないこと\n";
+        $prompt .= "- 音声で答えやすい質問にすること（話すように答えられる聞き方）\n";
 
         try {
             $raw = $this->ai->call_gemini_api( $prompt, [
-                'temperature'       => 0.5,
+                'temperature'     => 0.5,
                 'maxOutputTokens' => 8192,
             ] );
         } catch ( \Throwable $e ) {
             $this->log( "Gemini interview error: " . $e->getMessage() );
-            return [ 'success' => false, 'error' => 'ヒアリング質問の生成に失敗しました。' ];
+            return [ 'success' => false, 'error' => 'インタビュー質問の生成に失敗しました。' ];
         }
 
         $questions = $this->parse_json_array( $raw );
@@ -1655,42 +1707,57 @@ INTERVIEW_FORMAT;
             return [ 'success' => false, 'error' => '質問の解析に失敗しました。' ];
         }
 
-        // 保存（既存の回答があればキーワードマッチで引き継ぐ）
+        // 既存の回答があればキーワードマッチで引き継ぐ（v1/v2 両対応）
         $old_interview_json = get_post_meta( $article_id, '_gcrev_article_interview_json', true );
-        $old_interview      = $old_interview_json ? json_decode( $old_interview_json, true ) : [];
-        $old_questions      = $old_interview['questions'] ?? [];
-        $old_answers        = $old_interview['answers'] ?? [];
-        $new_answers        = [];
-        if ( ! empty( $old_answers ) && ! empty( $old_questions ) ) {
-            // 旧質問テキスト → 回答のマップを作成
-            $qa_map = [];
-            foreach ( $old_questions as $idx => $oq ) {
-                if ( isset( $old_answers[ $idx ] ) && $old_answers[ $idx ] !== '' ) {
-                    $qa_map[ $oq['question'] ?? '' ] = $old_answers[ $idx ];
-                }
-            }
-            // 新しい質問に対して、類似の旧質問の回答を引き継ぐ
-            foreach ( $questions as $idx => $nq ) {
-                $nq_text = $nq['question'] ?? '';
-                // 完全一致を優先
-                if ( isset( $qa_map[ $nq_text ] ) ) {
-                    $new_answers[ $idx ] = $qa_map[ $nq_text ];
+        $old_interview_raw  = $old_interview_json ? json_decode( $old_interview_json, true ) : null;
+        $old_interview      = $this->migrate_interview_v1_to_v2( $old_interview_raw );
+
+        // 旧質問テキスト → 回答のマップを作成（全ラウンド横断）
+        $qa_map = [];
+        if ( $old_interview ) {
+            foreach ( $old_interview['rounds'] ?? [] as $round ) {
+                foreach ( $round['questions'] ?? [] as $oq ) {
+                    $ans = $oq['answer'] ?? '';
+                    if ( $ans !== '' ) {
+                        $qa_map[ $oq['question'] ?? '' ] = $ans;
+                    }
                 }
             }
         }
-        $interview = [ 'questions' => $questions, 'answers' => $new_answers ];
+
+        // v2 形式で保存
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        $new_questions = [];
+        foreach ( $questions as $idx => $q ) {
+            $q['id']          = 'q0_' . $idx;
+            $q['answer']      = $qa_map[ $q['question'] ?? '' ] ?? '';
+            $q['answered_at'] = ( $q['answer'] !== '' ) ? $now : null;
+            $new_questions[]   = $q;
+        }
+
+        $interview = [
+            'version' => 2,
+            'rounds'  => [
+                [
+                    'round'        => 0,
+                    'type'         => 'initial',
+                    'generated_at' => $now,
+                    'questions'    => $new_questions,
+                ],
+            ],
+            'structured_insights' => null,
+        ];
+
         update_post_meta( $article_id, '_gcrev_article_interview_json',
             wp_json_encode( $interview, JSON_UNESCAPED_UNICODE ) );
-
-        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
-        $this->log( "Interview saved: " . count( $questions ) . " questions" );
+        $this->log( "Interview saved: " . count( $new_questions ) . " questions (v2)" );
         return [ 'success' => true, 'interview' => $interview ];
     }
 
     /**
-     * 構成案 → ヒアリング → 本文をワンクリックで全再生成
+     * 構成案 → インタビュー → 本文をワンクリックで全再生成
      */
     public function regenerate_all( int $user_id, int $article_id ): array {
         $this->log( "regenerate_all: start article_id={$article_id}" );
@@ -1708,11 +1775,11 @@ INTERVIEW_FORMAT;
             return [ 'success' => false, 'error' => '構成案の再生成に失敗しました: ' . ( $outline_result['error'] ?? '' ), 'step' => 'outline' ];
         }
 
-        // 2. ヒアリング質問を再生成
+        // 2. インタビュー質問を再生成
         $interview_result = $this->generate_interview( $user_id, $article_id );
         if ( ! $interview_result['success'] ) {
             $this->log( "regenerate_all: interview failed, continuing to draft" );
-            // ヒアリング失敗は致命的ではないので続行
+            // インタビュー失敗は致命的ではないので続行
         }
 
         // 3. 本文を再生成
@@ -1732,9 +1799,9 @@ INTERVIEW_FORMAT;
     }
 
     /**
-     * ヒアリング回答を保存
+     * インタビュー回答を保存（v2 ラウンドベース対応）
      */
-    public function save_interview_answers( int $user_id, int $article_id, array $answers ): array {
+    public function save_interview_answers( int $user_id, int $article_id, array $answers, int $round = 0 ): array {
         $owner = (int) get_post_meta( $article_id, '_gcrev_article_user_id', true );
         if ( $owner !== $user_id ) {
             return [ 'success' => false, 'error' => '権限がありません。' ];
@@ -1742,23 +1809,295 @@ INTERVIEW_FORMAT;
 
         $interview_raw = get_post_meta( $article_id, '_gcrev_article_interview_json', true );
         $interview = $interview_raw ? json_decode( $interview_raw, true ) : null;
-        if ( ! is_array( $interview ) || empty( $interview['questions'] ) ) {
-            return [ 'success' => false, 'error' => 'ヒアリングデータが見つかりません。' ];
+        $interview = $this->migrate_interview_v1_to_v2( $interview );
+
+        if ( ! is_array( $interview ) || empty( $interview['rounds'] ) ) {
+            return [ 'success' => false, 'error' => 'インタビューデータが見つかりません。' ];
         }
 
-        // 回答をサニタイズして保存
-        $sanitized = [];
-        foreach ( $answers as $idx => $ans ) {
-            $sanitized[ $idx ] = sanitize_textarea_field( $ans );
+        // 該当ラウンドを検索
+        $round_found = false;
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        foreach ( $interview['rounds'] as &$r ) {
+            if ( (int) $r['round'] === $round ) {
+                foreach ( $r['questions'] as &$q ) {
+                    $q_idx = (int) str_replace( 'q' . $round . '_', '', $q['id'] ?? '' );
+                    if ( isset( $answers[ $q_idx ] ) || isset( $answers[ (string) $q_idx ] ) ) {
+                        $ans = sanitize_textarea_field( $answers[ $q_idx ] ?? $answers[ (string) $q_idx ] );
+                        $q['answer']      = $ans;
+                        $q['answered_at'] = ( $ans !== '' ) ? $now : null;
+                    }
+                }
+                unset( $q );
+                $round_found = true;
+                break;
+            }
         }
-        $interview['answers'] = $sanitized;
+        unset( $r );
+
+        if ( ! $round_found ) {
+            return [ 'success' => false, 'error' => '指定されたラウンドが見つかりません。' ];
+        }
 
         update_post_meta( $article_id, '_gcrev_article_interview_json',
             wp_json_encode( $interview, JSON_UNESCAPED_UNICODE ) );
-
-        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
+        return [ 'success' => true, 'interview' => $interview ];
+    }
+
+    /**
+     * 深掘りフォローアップ質問を生成
+     *
+     * 前ラウンドの回答を分析し、抽象→具体、理由掘り下げ、感情抽出、比較明確化の
+     * パターンで追加質問を生成する。最大2回（round 1, 2）まで。
+     */
+    public function generate_followup_questions( int $user_id, int $article_id ): array {
+        $article = $this->get_article( $user_id, $article_id );
+        if ( ! $article ) {
+            return [ 'success' => false, 'error' => '記事が見つかりません。' ];
+        }
+
+        $interview = $article['interview'] ?? null;
+        if ( ! $interview || empty( $interview['rounds'] ) ) {
+            return [ 'success' => false, 'error' => 'インタビューデータがありません。先にインタビュー質問を生成してください。' ];
+        }
+
+        $current_round_count = count( $interview['rounds'] );
+        $target_round = $current_round_count; // 次のラウンド番号
+        if ( $target_round > 2 ) {
+            return [ 'success' => false, 'error' => '深掘りは最大2回までです。' ];
+        }
+
+        // 前ラウンドに回答済みの質問があるか確認
+        $prev_round = $interview['rounds'][ $current_round_count - 1 ] ?? null;
+        if ( ! $prev_round ) {
+            return [ 'success' => false, 'error' => '前のラウンドが見つかりません。' ];
+        }
+        $answered_count = 0;
+        foreach ( $prev_round['questions'] ?? [] as $q ) {
+            if ( ! empty( $q['answer'] ) ) { $answered_count++; }
+        }
+        if ( $answered_count === 0 ) {
+            return [ 'success' => false, 'error' => '前のラウンドの質問に回答してから深掘りを実行してください。' ];
+        }
+
+        // 全ラウンドのQ&A履歴を組み立て
+        $qa_history = '';
+        foreach ( $interview['rounds'] as $round ) {
+            $round_label = $round['type'] === 'initial' ? '初回インタビュー' : '深掘り' . $round['round'];
+            $qa_history .= "### {$round_label}\n";
+            foreach ( $round['questions'] as $q ) {
+                $qa_history .= "Q ({$q['id']}): {$q['question']}\n";
+                $ans = $q['answer'] ?? '';
+                $qa_history .= "A: " . ( $ans !== '' ? $ans : '（未回答）' ) . "\n\n";
+            }
+        }
+
+        // 構成案の見出し一覧
+        $heading_texts = [];
+        foreach ( $article['outline']['headings'] ?? [] as $h ) {
+            if ( ! empty( $h['text'] ) ) { $heading_texts[] = $h['text']; }
+        }
+
+        $prompt  = "あなたはプロのインタビュアーです。以下は記事作成のためのインタビュー履歴です。\n\n";
+        $prompt .= "## これまでのインタビュー履歴\n{$qa_history}\n";
+        $prompt .= "## 記事の対策キーワード\n{$article['keyword']}\n\n";
+        if ( ! empty( $heading_texts ) ) {
+            $prompt .= "## 記事の見出し構成\n";
+            foreach ( $heading_texts as $ht ) {
+                $prompt .= "- {$ht}\n";
+            }
+            $prompt .= "\n";
+        }
+
+        $prompt .= "## 深掘りの目的\n";
+        $prompt .= "回答の中にある「もっと詳しく聞きたい部分」を見つけて、追加質問を作成してください。\n";
+        $prompt .= "目標は、記事に使える具体的なエピソード・数字・感情・判断理由を引き出すことです。\n\n";
+
+        $prompt .= "## 深掘りパターン（いずれかを適用）\n";
+        $prompt .= "- **abstract_to_concrete**: 抽象的な回答を具体化「それは具体的にどういう状況でしたか？」\n";
+        $prompt .= "- **reason_digging**: 理由の掘り下げ「なぜその判断になったのですか？」\n";
+        $prompt .= "- **emotion_extraction**: 感情の抽出「その時どう感じましたか？」「お客様はどんな反応でしたか？」\n";
+        $prompt .= "- **comparison_clarification**: 比較の明確化「他社と比べて何が違うと感じましたか？」\n\n";
+
+        $prompt .= "## ルール\n";
+        $prompt .= "- 回答済みの質問のうち、深掘りの余地がある回答に対してのみ追加質問を作る\n";
+        $prompt .= "- 十分に具体的な回答には深掘り不要\n";
+        $prompt .= "- 未回答の質問を再度聞き直さない\n";
+        $prompt .= "- 質問は3〜5個に絞る\n\n";
+
+        $prompt .= "## 出力指示\n以下のJSON配列のみを出力してください。\n\n";
+        $prompt .= <<<'FOLLOWUP_FORMAT'
+[
+  {
+    "question": "深掘り質問文",
+    "reason": "この深掘りが必要な理由（30〜60文字）",
+    "followup_pattern": "abstract_to_concrete",
+    "parent_id": "q0_2",
+    "target_headings": ["反映先の見出し名"],
+    "priority": "high",
+    "hint": "回答のヒント（50〜100文字）",
+    "field_type": "textarea"
+  }
+]
+FOLLOWUP_FORMAT;
+        $prompt .= "\n\n";
+        $prompt .= "- parent_id は深掘り元の質問IDを指定\n";
+        $prompt .= "- followup_pattern は上記4パターンのいずれかを指定\n";
+
+        try {
+            $raw = $this->ai->call_gemini_api( $prompt, [
+                'temperature'     => 0.5,
+                'maxOutputTokens' => 8192,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "Gemini followup error: " . $e->getMessage() );
+            return [ 'success' => false, 'error' => '深掘り質問の生成に失敗しました。' ];
+        }
+
+        $questions = $this->parse_json_array( $raw );
+        if ( $questions === null ) {
+            $this->log( "Followup parse error. Raw: " . substr( $raw, 0, 500 ) );
+            return [ 'success' => false, 'error' => '深掘り質問の解析に失敗しました。' ];
+        }
+
+        // v2 形式で新ラウンドを追加
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        $new_questions = [];
+        foreach ( $questions as $idx => $q ) {
+            $q['id']          = 'q' . $target_round . '_' . $idx;
+            $q['answer']      = '';
+            $q['answered_at'] = null;
+            $new_questions[]   = $q;
+        }
+
+        $interview['rounds'][] = [
+            'round'        => $target_round,
+            'type'         => 'followup',
+            'generated_at' => $now,
+            'questions'    => $new_questions,
+        ];
+
+        update_post_meta( $article_id, '_gcrev_article_interview_json',
+            wp_json_encode( $interview, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
+
+        $this->log( "Followup round {$target_round} saved: " . count( $new_questions ) . " questions" );
+        return [ 'success' => true, 'interview' => $interview ];
+    }
+
+    /**
+     * インタビュー回答を構造化（FCARL: 事実・課題・行動・結果・学び）
+     *
+     * 全ラウンドのQ&Aを分析し、記事に使える体験データに変換する。
+     */
+    public function structure_interview_insights( int $user_id, int $article_id ): array {
+        $article = $this->get_article( $user_id, $article_id );
+        if ( ! $article ) {
+            return [ 'success' => false, 'error' => '記事が見つかりません。' ];
+        }
+
+        $interview = $article['interview'] ?? null;
+        if ( ! $interview || empty( $interview['rounds'] ) ) {
+            return [ 'success' => false, 'error' => 'インタビューデータがありません。' ];
+        }
+
+        // 全ラウンドのQ&Aを収集
+        $qa_text = '';
+        $answered_count = 0;
+        foreach ( $interview['rounds'] as $round ) {
+            foreach ( $round['questions'] as $q ) {
+                $ans = $q['answer'] ?? '';
+                if ( $ans !== '' ) {
+                    $qa_text .= "Q ({$q['id']}): {$q['question']}\nA: {$ans}\n\n";
+                    $answered_count++;
+                }
+            }
+        }
+
+        if ( $answered_count === 0 ) {
+            return [ 'success' => false, 'error' => '回答がありません。インタビューに回答してから整理してください。' ];
+        }
+
+        // 構成案の見出し一覧
+        $heading_texts = [];
+        foreach ( $article['outline']['headings'] ?? [] as $h ) {
+            if ( ! empty( $h['text'] ) ) { $heading_texts[] = $h['text']; }
+        }
+
+        $prompt  = "あなたは編集者です。以下のインタビュー回答から、記事に使える一次情報を抽出・構造化してください。\n\n";
+        $prompt .= "## インタビュー回答\n{$qa_text}\n";
+        $prompt .= "## 記事の対策キーワード\n{$article['keyword']}\n\n";
+        if ( ! empty( $heading_texts ) ) {
+            $prompt .= "## 記事の見出し構成\n";
+            foreach ( $heading_texts as $ht ) {
+                $prompt .= "- {$ht}\n";
+            }
+            $prompt .= "\n";
+        }
+
+        $prompt .= "## 構造化の指示\n";
+        $prompt .= "回答内容を以下の5カテゴリに分類してください。1つの回答が複数カテゴリにまたがることもあります。\n";
+        $prompt .= "- **facts**: 事実（何が起きたか、具体的な数字・データ）\n";
+        $prompt .= "- **challenges**: 課題（どんな問題・困難があったか）\n";
+        $prompt .= "- **actions**: 行動（どう対応・判断したか）\n";
+        $prompt .= "- **results**: 結果（どうなったか、成果・変化）\n";
+        $prompt .= "- **learnings**: 学び（何が得られたか、教訓・知見）\n\n";
+        $prompt .= "さらに、特に記事に活用できるエピソードを `key_experiences` として抽出してください。\n\n";
+
+        $prompt .= "## 出力形式（JSONのみ出力、説明文不要）\n";
+        $prompt .= <<<'STRUCTURE_FORMAT'
+{
+  "facts": ["具体的な事実1", "具体的な事実2"],
+  "challenges": ["課題1"],
+  "actions": ["行動1"],
+  "results": ["結果1"],
+  "learnings": ["学び1"],
+  "key_experiences": [
+    {
+      "summary": "エピソードの一行要約",
+      "detail": "記事に使える形に整理した詳細テキスト（100〜200文字）",
+      "category": "fact",
+      "source_question_ids": ["q0_2", "q1_0"],
+      "target_headings": ["この体験を反映すべき見出し名"]
+    }
+  ]
+}
+STRUCTURE_FORMAT;
+        $prompt .= "\n\n";
+        $prompt .= "- facts/challenges/actions/results/learnings は箇条書きの文字列配列\n";
+        $prompt .= "- key_experiences は記事に直接使えるレベルまで整理したエピソード（3〜8個）\n";
+        $prompt .= "- target_headings は記事の見出し構成から最も関連する見出しを指定\n";
+        $prompt .= "- 回答の内容を捏造・誇張しないこと。事実に基づいて整理する\n";
+
+        try {
+            $raw = $this->ai->call_gemini_api( $prompt, [
+                'temperature'     => 0.3,
+                'maxOutputTokens' => 8192,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "Gemini structure error: " . $e->getMessage() );
+            return [ 'success' => false, 'error' => '回答の構造化に失敗しました。' ];
+        }
+
+        // JSON パース（オブジェクト形式）
+        $cleaned = preg_replace( '/^```(?:json)?\s*/m', '', $raw );
+        $cleaned = preg_replace( '/```\s*$/m', '', $cleaned );
+        $structured = json_decode( trim( $cleaned ), true );
+        if ( ! is_array( $structured ) ) {
+            $this->log( "Structure parse error. Raw: " . substr( $raw, 0, 500 ) );
+            return [ 'success' => false, 'error' => '構造化データの解析に失敗しました。' ];
+        }
+
+        $interview['structured_insights'] = $structured;
+
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        update_post_meta( $article_id, '_gcrev_article_interview_json',
+            wp_json_encode( $interview, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
+
+        $this->log( "Interview structured: " . count( $structured['key_experiences'] ?? [] ) . " key experiences" );
         return [ 'success' => true, 'interview' => $interview ];
     }
 
@@ -1817,14 +2156,45 @@ INTERVIEW_FORMAT;
             }
         }
 
-        // ヒアリング回答
+        // インタビュー回答（v2 ラウンドベース対応）
         $interview_text = '';
         $interview = $article['interview'] ?? null;
-        if ( $interview && ! empty( $interview['questions'] ) && ! empty( $interview['answers'] ) ) {
-            foreach ( $interview['questions'] as $idx => $q ) {
-                $ans = $interview['answers'][ $idx ] ?? '';
-                if ( $ans !== '' ) {
-                    $interview_text .= "Q: {$q['question']}\nA: {$ans}\n\n";
+        if ( $interview ) {
+            $structured = $interview['structured_insights'] ?? null;
+            if ( $structured && ! empty( $structured['key_experiences'] ) ) {
+                // 構造化済みデータを優先使用
+                $categories = [
+                    'facts'      => '事実（Fact）',
+                    'challenges' => '課題（Challenge）',
+                    'actions'    => '行動（Action）',
+                    'results'    => '結果（Result）',
+                    'learnings'  => '学び（Learning）',
+                ];
+                foreach ( $categories as $key => $label ) {
+                    $items = $structured[ $key ] ?? [];
+                    if ( ! empty( $items ) ) {
+                        $interview_text .= "### {$label}\n";
+                        foreach ( $items as $item ) {
+                            $interview_text .= "- {$item}\n";
+                        }
+                        $interview_text .= "\n";
+                    }
+                }
+                $interview_text .= "### 記事に使えるエピソード\n";
+                foreach ( $structured['key_experiences'] as $exp ) {
+                    $headings = ! empty( $exp['target_headings'] ) ? implode( '、', $exp['target_headings'] ) : '';
+                    $interview_text .= "- **{$exp['summary']}**" . ( $headings ? "（反映先: {$headings}）" : '' ) . "\n";
+                    $interview_text .= "  {$exp['detail']}\n\n";
+                }
+            } elseif ( ! empty( $interview['rounds'] ) ) {
+                // v2: 全ラウンドのQ&Aをフラットに展開
+                foreach ( $interview['rounds'] as $round ) {
+                    foreach ( $round['questions'] ?? [] as $q ) {
+                        $ans = $q['answer'] ?? '';
+                        if ( $ans !== '' ) {
+                            $interview_text .= "Q: {$q['question']}\nA: {$ans}\n\n";
+                        }
+                    }
                 }
             }
         }
@@ -2031,7 +2401,9 @@ INTERVIEW_FORMAT;
             $parts[] = "## 記事専用のメモ・補足情報\n{$notes_text}";
         }
         if ( $interview_text !== '' ) {
-            $parts[] = "## ヒアリング回答（不足情報の補完）\n{$interview_text}";
+            $parts[] = "## 一次情報（インタビューから抽出した体験データ）【最優先で記事に反映すること】\n"
+                . "各見出しには可能な限り以下の一次情報を織り込んでください。一般論だけの見出しは極力避け、体験・エピソードを軸に書いてください。\n\n"
+                . $interview_text;
         }
 
         // クライアント情報
@@ -2793,18 +3165,47 @@ RULES;
             if ( $total >= 15000 ) { break; }
         }
 
-        // メモ・ヒアリング
+        // メモ・インタビュー
         $notes_text = '';
         foreach ( $article['notes'] ?? [] as $n ) {
             $notes_text .= "- {$n['text']}\n";
         }
         $interview_text = '';
         $interview = $article['interview'] ?? null;
-        if ( $interview && ! empty( $interview['questions'] ) && ! empty( $interview['answers'] ) ) {
-            foreach ( $interview['questions'] as $idx => $q ) {
-                $ans = $interview['answers'][ $idx ] ?? '';
-                if ( $ans !== '' ) {
-                    $interview_text .= "Q: {$q['question']}\nA: {$ans}\n\n";
+        if ( $interview ) {
+            $structured = $interview['structured_insights'] ?? null;
+            if ( $structured && ! empty( $structured['key_experiences'] ) ) {
+                $categories = [
+                    'facts'      => '事実（Fact）',
+                    'challenges' => '課題（Challenge）',
+                    'actions'    => '行動（Action）',
+                    'results'    => '結果（Result）',
+                    'learnings'  => '学び（Learning）',
+                ];
+                foreach ( $categories as $key => $label ) {
+                    $items = $structured[ $key ] ?? [];
+                    if ( ! empty( $items ) ) {
+                        $interview_text .= "### {$label}\n";
+                        foreach ( $items as $item ) {
+                            $interview_text .= "- {$item}\n";
+                        }
+                        $interview_text .= "\n";
+                    }
+                }
+                $interview_text .= "### 記事に使えるエピソード\n";
+                foreach ( $structured['key_experiences'] as $exp ) {
+                    $headings = ! empty( $exp['target_headings'] ) ? implode( '、', $exp['target_headings'] ) : '';
+                    $interview_text .= "- **{$exp['summary']}**" . ( $headings ? "（反映先: {$headings}）" : '' ) . "\n";
+                    $interview_text .= "  {$exp['detail']}\n\n";
+                }
+            } elseif ( ! empty( $interview['rounds'] ) ) {
+                foreach ( $interview['rounds'] as $round ) {
+                    foreach ( $round['questions'] ?? [] as $q ) {
+                        $ans = $q['answer'] ?? '';
+                        if ( $ans !== '' ) {
+                            $interview_text .= "Q: {$q['question']}\nA: {$ans}\n\n";
+                        }
+                    }
                 }
             }
         }
@@ -3039,7 +3440,9 @@ SYSTEM;
             $parts[] = "## 記事専用のメモ・補足情報\n{$notes_text}";
         }
         if ( $interview_text !== '' ) {
-            $parts[] = "## ヒアリング回答（不足情報の補完）\n{$interview_text}";
+            $parts[] = "## 一次情報（インタビューから抽出した体験データ）【最優先で記事に反映すること】\n"
+                . "各見出しには可能な限り以下の一次情報を織り込んでください。一般論だけの見出しは極力避け、体験・エピソードを軸に書いてください。\n\n"
+                . $interview_text;
         }
 
         // クライアント情報

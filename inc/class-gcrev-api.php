@@ -1185,7 +1185,7 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
-        // Phase 2: 記事個別情報・ヒアリング・本文生成・WP下書き
+        // Phase 2: 記事個別情報・インタビュー・本文生成・WP下書き
         register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/notes', [
             [ 'methods' => 'POST',   'callback' => [ $this, 'rest_writing_add_note' ],    'permission_callback' => [ $this->config, 'check_permission' ] ],
             [ 'methods' => 'DELETE', 'callback' => [ $this, 'rest_writing_delete_note' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
@@ -1193,6 +1193,16 @@ class Gcrev_Insight_API {
         register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/interview', [
             [ 'methods' => 'POST', 'callback' => [ $this, 'rest_writing_generate_interview' ], 'permission_callback' => [ $this->config, 'check_permission' ] ],
             [ 'methods' => 'PUT',  'callback' => [ $this, 'rest_writing_save_interview' ],     'permission_callback' => [ $this->config, 'check_permission' ] ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/interview/followup', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_generate_followup' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/interview/structure', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_structure_interview' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
         register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/draft', [
             'methods'             => 'POST',
@@ -15152,7 +15162,7 @@ PROMPT;
         return new \WP_REST_Response( [ 'success' => true, 'keywords' => $keywords ] );
     }
 
-    // --- Phase 2: 記事個別情報・ヒアリング・本文生成・WP下書き ---
+    // --- Phase 2: 記事個別情報・インタビュー・本文生成・WP下書き ---
 
     public function rest_writing_add_note( \WP_REST_Request $request ): \WP_REST_Response {
         if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
@@ -15183,8 +15193,31 @@ PROMPT;
         if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
         $params  = $request->get_json_params();
         $answers = $params['answers'] ?? [];
-        $result  = $this->writing_service->save_interview_answers( get_current_user_id(), (int) $request->get_param( 'id' ), $answers );
+        $round   = isset( $params['round'] ) ? (int) $params['round'] : 0;
+        $result  = $this->writing_service->save_interview_answers( get_current_user_id(), (int) $request->get_param( 'id' ), $answers, $round );
         return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_generate_followup( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        @set_time_limit( 120 );
+        try {
+            $result = $this->writing_service->generate_followup_questions( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_writing_structure_interview( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        @set_time_limit( 120 );
+        try {
+            $result = $this->writing_service->structure_interview_insights( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
     }
 
     public function rest_writing_generate_draft( \WP_REST_Request $request ): \WP_REST_Response {

@@ -836,7 +836,7 @@ get_header();
                     autoBadge += ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:' + qc + '20;color:' + qc + ';">Q' + Math.round(a.auto_quality_score) + '</span>';
                 }
                 if (a.needs_hearing) {
-                    autoBadge += ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:#E67E2220;color:#E67E22;">要ヒアリング</span>';
+                    autoBadge += ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:#E67E2220;color:#E67E22;">要インタビュー</span>';
                 }
             }
             return '<tr class="wrt-table__row" data-id="' + a.id + '">'
@@ -1265,11 +1265,11 @@ get_header();
         html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtAddNoteBtn" style="align-self:flex-end;">追加</button></div>';
         html += '</div>';
 
-        // 追加ヒアリング
+        // インタビュー（一次情報抽出）
         html += '<div class="wrt-detail-section" id="wrtInterviewSection">';
-        html += '<div class="wrt-detail-section__title">追加ヒアリング</div>';
-        html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">情報ストックの内容をもとに、記事執筆に不足している情報をAIが質問します。回答すると本文生成の精度が上がります。</p>';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtGenerateInterviewBtn">' + (a.interview ? 'ヒアリングを再生成' : 'ヒアリング質問を生成') + '</button>';
+        html += '<div class="wrt-detail-section__title">インタビュー</div>';
+        html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">記事の独自性を高めるためのインタビューです。体験やエピソードをAIが質問し、回答に応じて深掘りします。</p>';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtGenerateInterviewBtn">' + (a.interview ? 'インタビューを再生成' : 'インタビュー質問を生成') + '</button>';
         html += '<div id="wrtInterviewArea"></div>';
         html += '</div>';
 
@@ -1367,12 +1367,12 @@ get_header();
             }
         }
 
-        // ヒアリング生成
+        // インタビュー生成
         document.getElementById('wrtGenerateInterviewBtn').addEventListener('click', function() {
-            showProgress('ヒアリング質問を生成中…');
+            showProgress('インタビュー質問を生成中…');
             apiFetch('/articles/' + a.id + '/interview', { method: 'POST' }).then(function(res) {
                 hideProgress();
-                if (res.success) { currentArticle.interview = res.interview; renderInterview(res.interview, a.id); showToast('ヒアリング質問を生成しました'); }
+                if (res.success) { currentArticle.interview = res.interview; renderInterviewTimeline(res.interview, a.id); showToast('インタビュー質問を生成しました'); }
                 else showToast(res.error || 'エラー', true);
             }).catch(function() { hideProgress(); showToast('通信エラー', true); });
         });
@@ -1438,7 +1438,7 @@ get_header();
         loadKnowledgeForSelect(a.selected_knowledge_ids || []);
 
         // 既存データ表示
-        if (a.interview) renderInterview(a.interview, a.id);
+        if (a.interview) renderInterviewTimeline(a.interview, a.id);
         if (a.draft_content) renderDraft(a.draft_content);
     }
 
@@ -1673,66 +1673,198 @@ get_header();
     document.getElementById('wrtVoiceCancelBtn').addEventListener('click', closeVoiceModal);
     voiceModal.addEventListener('click', function(e) { if (e.target === this) closeVoiceModal(); });
 
-    /* ===== ヒアリング表示 ===== */
+    /* ===== インタビュータイムライン表示 ===== */
     var priorityLabels = { high: '高', medium: '中', low: '低' };
     var priorityColors = { high: '#ef4444', medium: '#f59e0b', low: '#9ca3af' };
-    function renderInterview(interview, articleId) {
+    var followupPatternLabels = {
+        abstract_to_concrete: '具体化',
+        reason_digging: '理由の掘り下げ',
+        emotion_extraction: '感情の抽出',
+        comparison_clarification: '比較の明確化'
+    };
+
+    function renderInterviewTimeline(interview, articleId) {
         var area = document.getElementById('wrtInterviewArea');
-        if (!area || !interview || !interview.questions || interview.questions.length === 0) return;
-        var answers = interview.answers || {};
+        if (!area || !interview) { if (area) area.innerHTML = ''; return; }
+
+        var rounds = interview.rounds || [];
+        if (rounds.length === 0) { area.innerHTML = ''; return; }
+
         var html = '<div style="margin-top:12px;">';
-        interview.questions.forEach(function(q, idx) {
-            var ans = answers[idx] || '';
-            html += '<div style="margin-bottom:16px;padding:12px;background:var(--mw-bg-secondary);border-radius:8px;">';
-            // 質問ヘッダー（優先度バッジ付き）
-            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
-            if (q.priority && priorityColors[q.priority]) {
-                html += '<span style="font-size:10px;font-weight:700;color:#fff;background:' + priorityColors[q.priority] + ';padding:1px 6px;border-radius:3px;white-space:nowrap;">優先度: ' + esc(priorityLabels[q.priority] || q.priority) + '</span>';
+
+        // 各ラウンドを描画
+        rounds.forEach(function(round, roundIdx) {
+            var roundLabel = round.type === 'initial' ? 'インタビュー' : '深掘り ' + round.round;
+            var timeStr = round.generated_at ? ' (' + round.generated_at.substring(0, 16).replace('T', ' ') + ')' : '';
+
+            // ラウンドヘッダー
+            html += '<div style="display:flex;align-items:center;gap:8px;margin:' + (roundIdx > 0 ? '20px' : '0') + ' 0 10px 0;">';
+            html += '<div style="width:8px;height:8px;border-radius:50%;background:' + (round.type === 'initial' ? '#3b82f6' : '#8b5cf6') + ';flex-shrink:0;"></div>';
+            html += '<div style="font-size:12px;font-weight:700;color:var(--mw-text-heading);">' + esc(roundLabel) + '</div>';
+            html += '<div style="font-size:11px;color:var(--mw-text-tertiary);">' + esc(timeStr) + '</div>';
+            if (roundIdx > 0) {
+                html += '<span style="font-size:10px;padding:1px 6px;border-radius:3px;background:#8b5cf620;color:#8b5cf6;">ラウンド ' + (roundIdx + 1) + '/3</span>';
             }
-            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-heading);">Q' + (idx+1) + '. ' + esc(q.question) + '</div>';
             html += '</div>';
-            // 質問の理由
-            if (q.reason) {
-                html += '<div style="font-size:11px;color:var(--mw-text-secondary);margin-bottom:4px;">理由: ' + esc(q.reason) + '</div>';
-            }
-            // 反映先見出し
-            if (q.target_headings && q.target_headings.length) {
-                html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:4px;">反映先: ' + q.target_headings.map(function(h) { return esc(h); }).join(', ') + '</div>';
-            }
-            // ヒント・回答例
-            if (q.hint) html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">回答例: ' + esc(q.hint) + '</div>';
-            html += '<div style="display:flex;gap:6px;align-items:flex-start;">';
-            if (q.field_type === 'textarea') {
-                html += '<textarea class="wrt-interview-ans" data-idx="' + idx + '" rows="3" placeholder="回答を入力" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">' + esc(ans) + '</textarea>';
-            } else {
-                html += '<input type="text" class="wrt-interview-ans" data-idx="' + idx + '" value="' + esc(ans).replace(/"/g, '&quot;') + '" placeholder="回答を入力" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">';
-            }
-            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm wrt-voice-btn" data-target-idx="' + idx + '" title="音声入力" style="padding:6px 10px;font-size:16px;line-height:1;">🎤</button>';
-            html += '</div></div>';
+
+            // 質問リスト
+            (round.questions || []).forEach(function(q, qIdx) {
+                var ans = q.answer || '';
+                html += '<div style="margin-bottom:14px;padding:12px;background:var(--mw-bg-secondary);border-radius:8px;' + (round.type === 'followup' ? 'border-left:3px solid #8b5cf6;' : '') + '">';
+
+                // フォローアップの場合は親質問参照を表示
+                if (q.parent_id) {
+                    var patternLabel = followupPatternLabels[q.followup_pattern] || '';
+                    html += '<div style="font-size:10px;color:#8b5cf6;margin-bottom:4px;">↳ ' + esc(q.parent_id) + 'への深掘り' + (patternLabel ? '（' + esc(patternLabel) + '）' : '') + '</div>';
+                }
+
+                // 質問ヘッダー（優先度バッジ付き）
+                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+                if (q.priority && priorityColors[q.priority]) {
+                    html += '<span style="font-size:10px;font-weight:700;color:#fff;background:' + priorityColors[q.priority] + ';padding:1px 6px;border-radius:3px;white-space:nowrap;">優先度: ' + esc(priorityLabels[q.priority] || q.priority) + '</span>';
+                }
+                html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-heading);">Q' + (qIdx+1) + '. ' + esc(q.question) + '</div>';
+                html += '</div>';
+
+                if (q.reason) {
+                    html += '<div style="font-size:11px;color:var(--mw-text-secondary);margin-bottom:4px;">理由: ' + esc(q.reason) + '</div>';
+                }
+                if (q.target_headings && q.target_headings.length) {
+                    html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:4px;">反映先: ' + q.target_headings.map(function(h) { return esc(h); }).join(', ') + '</div>';
+                }
+                if (q.hint) {
+                    html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">回答例: ' + esc(q.hint) + '</div>';
+                }
+
+                html += '<div style="display:flex;gap:6px;align-items:flex-start;">';
+                if (q.field_type === 'textarea' || round.type === 'followup') {
+                    html += '<textarea class="wrt-interview-ans" data-round="' + round.round + '" data-idx="' + qIdx + '" rows="3" placeholder="回答を入力（音声入力も可能）" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">' + esc(ans) + '</textarea>';
+                } else {
+                    html += '<input type="text" class="wrt-interview-ans" data-round="' + round.round + '" data-idx="' + qIdx + '" value="' + esc(ans).replace(/"/g, '&quot;') + '" placeholder="回答を入力" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">';
+                }
+                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm wrt-voice-btn" data-target-round="' + round.round + '" data-target-idx="' + qIdx + '" title="音声入力" style="padding:6px 10px;font-size:16px;line-height:1;">🎤</button>';
+                html += '</div></div>';
+            });
+
+            // ラウンドごとの保存ボタン
+            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm wrt-save-round-btn" data-round="' + round.round + '" style="margin-top:4px;">回答を保存</button>';
         });
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveInterviewBtn">回答を保存</button>';
+
+        // 深掘りボタン（最大2ラウンドまで）
+        var lastRound = rounds[rounds.length - 1];
+        var hasAnsweredInLast = (lastRound.questions || []).some(function(q) { return q.answer && q.answer !== ''; });
+        if (rounds.length < 3 && hasAnsweredInLast) {
+            html += '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--mw-border-light);">';
+            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtFollowupBtn" style="display:flex;align-items:center;gap:6px;">';
+            html += '<span style="font-size:14px;">🔍</span> 深掘り質問を生成（回答をさらに掘り下げる）</button>';
+            html += '</div>';
+        }
+
+        // 構造化ボタン
+        var totalAnswered = 0;
+        rounds.forEach(function(r) { (r.questions || []).forEach(function(q) { if (q.answer && q.answer !== '') totalAnswered++; }); });
+        if (totalAnswered > 0) {
+            html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--mw-border-light);display:flex;gap:8px;flex-wrap:wrap;">';
+            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtStructureBtn" style="display:flex;align-items:center;gap:6px;">';
+            html += '<span style="font-size:14px;">📋</span> 回答を整理する</button>';
+            html += '</div>';
+        }
+
+        // 構造化結果の表示
+        var si = interview.structured_insights;
+        if (si) {
+            html += '<div style="margin-top:16px;padding:14px;background:var(--mw-bg-secondary);border-radius:8px;border:1px solid var(--mw-border-light);">';
+            html += '<div style="font-size:13px;font-weight:700;color:var(--mw-text-heading);margin-bottom:10px;">整理された一次情報</div>';
+            var cats = [
+                { key: 'facts', label: '事実', icon: '📌' },
+                { key: 'challenges', label: '課題', icon: '⚡' },
+                { key: 'actions', label: '行動', icon: '🔧' },
+                { key: 'results', label: '結果', icon: '✅' },
+                { key: 'learnings', label: '学び', icon: '💡' }
+            ];
+            cats.forEach(function(cat) {
+                var items = si[cat.key] || [];
+                if (items.length > 0) {
+                    html += '<div style="margin-bottom:8px;">';
+                    html += '<div style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:3px;">' + cat.icon + ' ' + esc(cat.label) + '</div>';
+                    items.forEach(function(item) {
+                        html += '<div style="font-size:12px;color:var(--mw-text-primary);margin-left:12px;margin-bottom:2px;">- ' + esc(item) + '</div>';
+                    });
+                    html += '</div>';
+                }
+            });
+            // エピソード
+            var exps = si.key_experiences || [];
+            if (exps.length > 0) {
+                html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--mw-border-light);">';
+                html += '<div style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:6px;">🎯 記事に使えるエピソード</div>';
+                exps.forEach(function(exp) {
+                    html += '<div style="margin-bottom:8px;padding:8px;background:var(--mw-bg-primary);border-radius:6px;">';
+                    html += '<div style="font-size:12px;font-weight:600;color:var(--mw-text-heading);">' + esc(exp.summary) + '</div>';
+                    if (exp.target_headings && exp.target_headings.length) {
+                        html += '<div style="font-size:10px;color:var(--mw-text-tertiary);">反映先: ' + exp.target_headings.map(function(h) { return esc(h); }).join(', ') + '</div>';
+                    }
+                    html += '<div style="font-size:12px;color:var(--mw-text-secondary);margin-top:3px;">' + esc(exp.detail) + '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+        }
+
         html += '</div>';
         area.innerHTML = html;
 
-        // 音声入力ボタン → モーダルを開く
+        // イベントリスナー: 音声入力ボタン
         area.querySelectorAll('.wrt-voice-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
+                var round = btn.dataset.targetRound;
                 var idx = btn.dataset.targetIdx;
-                var target = area.querySelector('.wrt-interview-ans[data-idx="' + idx + '"]');
+                var target = area.querySelector('.wrt-interview-ans[data-round="' + round + '"][data-idx="' + idx + '"]');
                 if (target) openVoiceModal(target);
             });
         });
 
-        document.getElementById('wrtSaveInterviewBtn').addEventListener('click', function() {
-            var answersObj = {};
-            document.querySelectorAll('.wrt-interview-ans').forEach(function(el) {
-                answersObj[el.dataset.idx] = el.value;
-            });
-            apiFetch('/articles/' + articleId + '/interview', { method: 'PUT', body: { answers: answersObj } }).then(function(res) {
-                if (res.success) { currentArticle.interview = res.interview; showToast('回答を保存しました'); }
-                else showToast(res.error || 'エラー', true);
+        // イベントリスナー: ラウンドごとの保存
+        area.querySelectorAll('.wrt-save-round-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var roundNum = parseInt(btn.dataset.round);
+                var answersObj = {};
+                area.querySelectorAll('.wrt-interview-ans[data-round="' + roundNum + '"]').forEach(function(el) {
+                    answersObj[el.dataset.idx] = el.value;
+                });
+                apiFetch('/articles/' + articleId + '/interview', { method: 'PUT', body: { answers: answersObj, round: roundNum } }).then(function(res) {
+                    if (res.success) { currentArticle.interview = res.interview; showToast('回答を保存しました'); renderInterviewTimeline(res.interview, articleId); }
+                    else showToast(res.error || 'エラー', true);
+                });
             });
         });
+
+        // イベントリスナー: 深掘り生成
+        var followupBtn = document.getElementById('wrtFollowupBtn');
+        if (followupBtn) {
+            followupBtn.addEventListener('click', function() {
+                showProgress('深掘り質問を生成中…');
+                apiFetch('/articles/' + articleId + '/interview/followup', { method: 'POST' }).then(function(res) {
+                    hideProgress();
+                    if (res.success) { currentArticle.interview = res.interview; renderInterviewTimeline(res.interview, articleId); showToast('深掘り質問を生成しました'); }
+                    else showToast(res.error || 'エラー', true);
+                }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+            });
+        }
+
+        // イベントリスナー: 構造化
+        var structureBtn = document.getElementById('wrtStructureBtn');
+        if (structureBtn) {
+            structureBtn.addEventListener('click', function() {
+                showProgress('回答を整理中…');
+                apiFetch('/articles/' + articleId + '/interview/structure', { method: 'POST' }).then(function(res) {
+                    hideProgress();
+                    if (res.success) { currentArticle.interview = res.interview; renderInterviewTimeline(res.interview, articleId); showToast('回答を整理しました'); }
+                    else showToast(res.error || 'エラー', true);
+                }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+            });
+        }
     }
 
     /* ===== 構成案モーダル ===== */
