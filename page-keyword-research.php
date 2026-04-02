@@ -187,44 +187,54 @@ get_header();
 /* サマリー共通 */
 .kwr-summary {
     background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light);
-    border-radius: var(--mw-radius-md); padding: 28px; margin-bottom: 28px;
+    border-radius: var(--mw-radius-md); padding: 28px 28px 24px; margin-bottom: 28px;
 }
-.kwr-summary__title { font-size: 17px; font-weight: 700; color: var(--mw-text-heading); margin: 0; }
-.kwr-summary__item { margin-bottom: 20px; }
+.kwr-summary__title { font-size: 18px; font-weight: 700; color: var(--mw-text-heading); margin: 0; }
+.kwr-summary__item { margin-bottom: 24px; padding-top: 20px; border-top: 1px solid var(--mw-border-light); }
+.kwr-summary__item:first-child { border-top: none; padding-top: 0; }
 .kwr-summary__item:last-child { margin-bottom: 0; }
-.kwr-summary__item-title { font-size: 14px; font-weight: 600; color: var(--mw-text-heading); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-.kwr-summary__item-text { font-size: 13.5px; color: var(--mw-text-secondary); line-height: 1.8; }
+.kwr-summary__item-title { font-size: 14px; font-weight: 700; color: var(--mw-text-heading); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; padding-left: 12px; border-left: 3px solid var(--mw-primary-blue, #568184); }
+.kwr-summary--competitor .kwr-summary__item-title { border-left-color: var(--mw-accent-attention, #C9A84C); }
+.kwr-summary__item-text { font-size: 13.5px; color: var(--mw-text-secondary); line-height: 1.85; max-width: 740px; }
 
 /* サマリー修飾子 — AI戦略 */
-.kwr-summary--strategy { background: rgba(86,129,132,0.03); border-left: 4px solid var(--mw-primary-blue, #568184); }
+.kwr-summary--strategy { background: rgba(86,129,132,0.04); border-left: 4px solid var(--mw-primary-blue, #568184); border-top: 1px solid rgba(86,129,132,0.15); }
 /* サマリー修飾子 — 競合分析 */
-.kwr-summary--competitor { background: rgba(201,168,76,0.03); border-left: 4px solid var(--mw-accent-attention, #C9A84C); }
+.kwr-summary--competitor { background: rgba(201,168,76,0.035); border-left: 4px solid var(--mw-accent-attention, #C9A84C); border-top: 1px solid rgba(201,168,76,0.18); }
 
 /* ヘッダー */
 .kwr-summary__header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-.kwr-summary__badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; white-space: nowrap; }
-.kwr-summary__badge--strategy { background: rgba(86,129,132,0.12); color: #476C6F; }
-.kwr-summary__badge--competitor { background: rgba(201,168,76,0.15); color: #8A7028; }
+.kwr-summary__badge { font-size: 11px; font-weight: 700; padding: 3px 12px; border-radius: 12px; white-space: nowrap; letter-spacing: 0.02em; }
+.kwr-summary__badge--strategy { background: rgba(86,129,132,0.15); color: #3D6264; }
+.kwr-summary__badge--competitor { background: rgba(201,168,76,0.18); color: #7A5F1E; }
 .kwr-summary__subtitle { font-size: 13px; color: var(--mw-text-tertiary); margin: 0 0 20px; line-height: 1.5; }
 
 /* 要点カード */
-.kwr-summary__keypoints { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.kwr-summary__keypoint { padding: 14px 16px; border-radius: 10px; border: 1px solid var(--mw-border-light); }
-.kwr-summary--strategy .kwr-summary__keypoint { background: rgba(86,129,132,0.05); }
-.kwr-summary--competitor .kwr-summary__keypoint { background: rgba(201,168,76,0.05); }
-.kwr-summary__keypoint-label { font-size: 11px; font-weight: 600; color: var(--mw-text-tertiary); margin-bottom: 6px; letter-spacing: 0.03em; }
-.kwr-summary__keypoint-text { font-size: 14px; font-weight: 600; color: var(--mw-text-heading); line-height: 1.6; }
+.kwr-summary__keypoints { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+.kwr-summary__keypoint { padding: 16px 18px; border-radius: 10px; border: 1px solid var(--mw-border-light); display: flex; flex-direction: column; }
+.kwr-summary--strategy .kwr-summary__keypoint { background: rgba(86,129,132,0.06); border-color: rgba(86,129,132,0.18); }
+.kwr-summary--competitor .kwr-summary__keypoint { background: rgba(201,168,76,0.06); border-color: rgba(201,168,76,0.22); }
+.kwr-summary__keypoint-label { font-size: 11px; font-weight: 700; margin-bottom: 8px; letter-spacing: 0.04em; }
+.kwr-summary--strategy .kwr-summary__keypoint-label { color: #3D6264; }
+.kwr-summary--competitor .kwr-summary__keypoint-label { color: #7A5F1E; }
+.kwr-summary__keypoint-text { font-size: 15px; font-weight: 700; color: var(--mw-text-heading); line-height: 1.5; }
 
 /* 重要語強調 */
-.kwr-hl { background: rgba(86,129,132,0.10); color: var(--mw-text-heading); padding: 1px 4px; border-radius: 3px; font-weight: 600; }
-.kwr-summary--competitor .kwr-hl { background: rgba(201,168,76,0.12); }
+.kwr-hl { background: rgba(86,129,132,0.12); color: var(--mw-text-heading); padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+.kwr-summary--competitor .kwr-hl { background: rgba(201,168,76,0.14); }
+
+/* 重要文ハイライト */
+.kwr-key-sentence { display: block; background: rgba(86,129,132,0.04); border-left: 3px solid var(--mw-primary-blue, #568184); padding: 8px 14px; margin: 10px 0; border-radius: 0 6px 6px 0; font-weight: 600; color: var(--mw-text-heading); font-size: 13.5px; line-height: 1.7; }
+.kwr-summary--competitor .kwr-key-sentence { background: rgba(201,168,76,0.04); border-left-color: var(--mw-accent-attention, #C9A84C); }
 
 /* 次にやること */
-.kwr-summary__actions { margin-top: 20px; padding: 16px 20px; background: var(--mw-bg-secondary, #F5F8F8); border-radius: 10px; border: 1px solid var(--mw-border-light); }
+.kwr-summary__actions { margin-top: 24px; padding: 18px 22px; background: var(--mw-bg-secondary, #F5F8F8); border-radius: 10px; border: 1px solid var(--mw-border-light); }
+.kwr-summary--strategy .kwr-summary__actions { border-left: 3px solid var(--mw-primary-blue, #568184); }
+.kwr-summary--competitor .kwr-summary__actions { border-left: 3px solid var(--mw-accent-attention, #C9A84C); }
 .kwr-summary__actions-title { font-size: 13px; font-weight: 700; color: var(--mw-text-heading); margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
 .kwr-summary__actions-list { list-style: none; margin: 0; padding: 0; }
-.kwr-summary__actions-list li { font-size: 13px; color: var(--mw-text-secondary); line-height: 1.7; padding: 4px 0 4px 18px; position: relative; }
-.kwr-summary__actions-list li::before { content: '▸'; position: absolute; left: 0; color: var(--mw-primary-blue, #568184); font-weight: 700; }
+.kwr-summary__actions-list li { font-size: 13.5px; color: var(--mw-text-primary, #263335); line-height: 1.7; padding: 5px 0 5px 20px; position: relative; font-weight: 500; }
+.kwr-summary__actions-list li::before { content: '▸'; position: absolute; left: 0; color: var(--mw-primary-blue, #568184); font-weight: 700; font-size: 14px; }
 .kwr-summary--competitor .kwr-summary__actions-list li::before { color: var(--mw-accent-attention, #C9A84C); }
 
 /* グループ */
@@ -379,8 +389,9 @@ get_header();
     .kwr-intro { padding: 20px 16px; }
     .kwr-conditions { padding: 20px 16px; }
     .kwr-summary { padding: 20px 16px; }
-    .kwr-summary__keypoints { grid-template-columns: 1fr; }
+    .kwr-summary__keypoints { grid-template-columns: 1fr; gap: 10px; }
     .kwr-summary__header { flex-wrap: wrap; }
+    .kwr-summary__keypoint-text { font-size: 14px; }
     .kwr-client-info { grid-template-columns: 1fr 1fr; }
     .kwr-group__header { padding: 14px 16px; }
     .kwr-table th, .kwr-table td { padding: 8px 6px; }
@@ -516,20 +527,20 @@ get_header();
     <!-- ===== AI戦略サマリー ===== -->
     <div class="kwr-summary kwr-summary--strategy" id="kwrSummary" style="display:none;">
         <div class="kwr-summary__header">
-            <h2 class="kwr-summary__title">🧭 AI戦略サマリー</h2>
-            <span class="kwr-summary__badge kwr-summary__badge--strategy">先に確認</span>
+            <h2 class="kwr-summary__title">🧭 攻め方の整理</h2>
+            <span class="kwr-summary__badge kwr-summary__badge--strategy">まず確認</span>
         </div>
-        <p class="kwr-summary__subtitle">このキーワードで、どの方向を優先して狙うべきかを整理しています</p>
+        <p class="kwr-summary__subtitle">このキーワードで、どこを優先的に狙うべきかをAIが整理しました</p>
         <div id="kwrSummaryContent"></div>
     </div>
 
     <!-- ===== 競合分析サマリー ===== -->
     <div class="kwr-summary kwr-summary--competitor" id="kwrCompSummary" style="display:none;">
         <div class="kwr-summary__header">
-            <h2 class="kwr-summary__title">🔍 競合分析サマリー</h2>
-            <span class="kwr-summary__badge kwr-summary__badge--competitor">差別化のヒント</span>
+            <h2 class="kwr-summary__title">⚔️ 競合との比較</h2>
+            <span class="kwr-summary__badge kwr-summary__badge--competitor">勝ち筋を見る</span>
         </div>
-        <p class="kwr-summary__subtitle">競合の傾向と、自社が差別化しやすいポイントをまとめています</p>
+        <p class="kwr-summary__subtitle">競合の傾向と、自社が差をつけやすいポイントをまとめています</p>
         <div id="kwrCompSummaryContent"></div>
     </div>
 
@@ -838,48 +849,67 @@ get_header();
         return escaped;
     }
 
-    /* ===== ユーティリティ: 最初の文を抽出 ===== */
-    function extractFirstSentence(text, maxLen) {
+    /* ===== ユーティリティ: 要点抽出（短く言い切り） ===== */
+    function extractKeypoint(text, maxLen) {
         if (!text) return '';
-        maxLen = maxLen || 80;
+        maxLen = maxLen || 50;
         var idx = text.indexOf('。');
-        var sentence = idx >= 0 ? text.substring(0, idx + 1) : text;
+        var sentence = idx >= 0 ? text.substring(0, idx) : text;
+        // 冒頭の接続詞や前置きを除去
+        sentence = sentence.replace(/^(そのため|したがって|まず|また|具体的には|特に)[、，]?\s*/,'');
         if (sentence.length > maxLen) sentence = sentence.substring(0, maxLen) + '…';
         return sentence;
     }
 
-    /* ===== ユーティリティ: アクション抽出 ===== */
+    /* ===== ユーティリティ: アクション抽出（短く行動指示寄り） ===== */
     function extractActions(texts, max) {
         max = max || 3;
         var actions = [];
+        var actionPatterns = /追加|作成|強化|改善|配置|設置|掲載|修正|入れる|増やす|載せる|書く|加える|整備|対策|見直/;
         texts.forEach(function(t) {
             if (!t || actions.length >= max) return;
             var sentences = t.split(/。|！/).filter(function(s) { return s.trim().length > 5; });
-            sentences.forEach(function(s) {
+            // アクション的な文を優先
+            var actionSentences = sentences.filter(function(s) { return actionPatterns.test(s); });
+            var pool = actionSentences.length > 0 ? actionSentences : sentences;
+            pool.forEach(function(s) {
                 if (actions.length >= max) return;
-                var trimmed = s.trim();
-                if (trimmed.length > 5 && trimmed.length < 120) actions.push(trimmed);
+                var trimmed = s.trim().replace(/^(そのため|したがって|まず|また|具体的には)[、，]?\s*/,'');
+                if (trimmed.length > 5 && trimmed.length < 80) actions.push(trimmed);
             });
         });
         return actions;
     }
 
+    /* ===== ユーティリティ: 本文を段落分割＋冒頭文ハイライト ===== */
+    function formatBodyText(text) {
+        if (!text) return '';
+        var highlighted = highlightKeywords(text);
+        // 。で区切って段落化（長い文を読みやすくする）
+        var sentences = highlighted.split(/。/).filter(function(s) { return s.trim().length > 0; });
+        if (sentences.length <= 2) return '<p>' + highlighted + '</p>';
+        // 最初の文を重要文として強調
+        var first = sentences[0].trim() + '。';
+        var rest = sentences.slice(1).map(function(s) { return s.trim() + '。'; }).join('');
+        return '<span class="kwr-key-sentence">' + first + '</span><p>' + rest + '</p>';
+    }
+
     /* ===== サマリー描画 ===== */
     function renderSummary(summary) {
         var items = [
-            { icon: '🎯', title: '優先すべきキーワードの方向性', key: 'direction' },
-            { icon: '📄', title: 'まず改善すべきページ',         key: 'priority_pages' },
-            { icon: '➕', title: '新規作成すべきページ案',       key: 'new_pages' },
-            { icon: '✏️', title: 'タイトル・見出しに含めるべき語句', key: 'title_tips' },
-            { icon: '📍', title: 'ローカルSEO 地域掛け合わせ案', key: 'local_tips' }
+            { icon: '🎯', title: '狙うべき方向性', key: 'direction' },
+            { icon: '📄', title: '優先して改善するページ', key: 'priority_pages' },
+            { icon: '➕', title: '新規で作るべきページ', key: 'new_pages' },
+            { icon: '✏️', title: 'タイトル・見出しに入れるべき語句', key: 'title_tips' },
+            { icon: '📍', title: 'ローカルSEO・地域掛け合わせ', key: 'local_tips' }
         ];
         var html = '';
 
-        // 要点カード（冒頭）
+        // 要点カード（冒頭 — 結論を短く言い切り）
         var keypoints = [
-            { label: '狙うべき方向', text: extractFirstSentence(summary.direction) },
-            { label: '優先して強化すべき内容', text: extractFirstSentence(summary.priority_pages) },
-            { label: '注目ポイント', text: extractFirstSentence(summary.new_pages || summary.local_tips) }
+            { label: '狙う方向', text: extractKeypoint(summary.direction) },
+            { label: '優先施策', text: extractKeypoint(summary.priority_pages) },
+            { label: '注目ポイント', text: extractKeypoint(summary.new_pages || summary.local_tips) }
         ].filter(function(kp) { return kp.text; });
 
         if (keypoints.length > 0) {
@@ -892,13 +922,13 @@ get_header();
             html += '</div>';
         }
 
-        // 構造化本文
+        // 構造化本文（冒頭文ハイライト付き）
         items.forEach(function(si) {
             var val = summary[si.key] || '';
             if (!val) return;
             html += '<div class="kwr-summary__item">'
                 + '<div class="kwr-summary__item-title">' + si.icon + ' ' + si.title + '</div>'
-                + '<div class="kwr-summary__item-text">' + highlightKeywords(val) + '</div></div>';
+                + '<div class="kwr-summary__item-text">' + formatBodyText(val) + '</div></div>';
         });
 
         // 次にやること
@@ -918,17 +948,17 @@ get_header();
     /* ===== 競合分析サマリー ===== */
     function renderCompSummary(summary, compData) {
         var items = [
-            { icon: '💪', title: '競合が強い領域', key: 'competitor_strengths' },
-            { icon: '🎯', title: '自社が狙いやすい領域', key: 'competitor_gaps' },
-            { icon: '✨', title: '差別化候補', key: 'competitor_differentiation' }
+            { icon: '🛡️', title: '競合が押さえている領域', key: 'competitor_strengths' },
+            { icon: '🎯', title: '自社が狙えるスキマ', key: 'competitor_gaps' },
+            { icon: '✨', title: '差別化で勝てるポイント', key: 'competitor_differentiation' }
         ];
         var html = '';
 
-        // 要点カード（冒頭）
+        // 要点カード（冒頭 — 結論を短く言い切り）
         var keypoints = [
-            { label: '競合の特徴', text: extractFirstSentence(summary.competitor_strengths) },
-            { label: '勝ちやすい切り口', text: extractFirstSentence(summary.competitor_gaps) },
-            { label: '差別化の方向性', text: extractFirstSentence(summary.competitor_differentiation) }
+            { label: '競合の傾向', text: extractKeypoint(summary.competitor_strengths) },
+            { label: '狙い目', text: extractKeypoint(summary.competitor_gaps) },
+            { label: '差別化の軸', text: extractKeypoint(summary.competitor_differentiation) }
         ].filter(function(kp) { return kp.text; });
 
         if (keypoints.length > 0) {
@@ -941,13 +971,13 @@ get_header();
             html += '</div>';
         }
 
-        // 構造化本文
+        // 構造化本文（冒頭文ハイライト付き）
         items.forEach(function(si) {
             var val = summary[si.key] || '';
             if (!val) return;
             html += '<div class="kwr-summary__item">'
                 + '<div class="kwr-summary__item-title">' + si.icon + ' ' + si.title + '</div>'
-                + '<div class="kwr-summary__item-text">' + highlightKeywords(val) + '</div></div>';
+                + '<div class="kwr-summary__item-text">' + formatBodyText(val) + '</div></div>';
         });
 
         // 競合サイト一覧
@@ -969,7 +999,7 @@ get_header();
         var actions = extractActions([summary.competitor_gaps, summary.competitor_differentiation]);
         if (actions.length > 0) {
             html += '<div class="kwr-summary__actions">'
-                + '<div class="kwr-summary__actions-title">✅ 優先して取り組みたいこと</div>'
+                + '<div class="kwr-summary__actions-title">✅ 競合に差をつけるには</div>'
                 + '<ul class="kwr-summary__actions-list">';
             actions.forEach(function(a) { html += '<li>' + esc(a) + '</li>'; });
             html += '</ul></div>';
