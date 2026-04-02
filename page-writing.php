@@ -1278,9 +1278,12 @@ get_header();
                 runCompetitorResearch(this.id === 'wrtRerunCompetitorBtn');
             });
         }
-        // 競合調査が未実施なら自動実行
+        // 競合調査が未実施かつまだ自動実行していない場合のみ自動実行
         if (!a.competitor_research || !a.competitor_research.analysis) {
-            setTimeout(function() { runCompetitorResearch(false); }, 500);
+            if (!a._competitor_auto_attempted) {
+                a._competitor_auto_attempted = true;
+                setTimeout(function() { runCompetitorResearch(false); }, 500);
+            }
         }
 
         // ヒアリング生成
