@@ -1266,7 +1266,7 @@ INSTRUCTION;
             if ( $skip ) { continue; }
 
             $result[] = [
-                'rank' => (int) ( $item['rank_absolute'] ?? $item['rank_group'] ?? count( $result ) + 1 ),
+                'rank' => (int) ( $item['rank_group'] ?? count( $result ) + 1 ),
                 'url'  => $url,
             ];
             if ( count( $result ) >= $max ) { break; }
