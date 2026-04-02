@@ -1903,6 +1903,9 @@ get_header();
         if (!outline) { container.innerHTML = ''; return; }
         var html = '<div class="wrt-outline-inline" style="background:var(--mw-bg-secondary);border-radius:8px;padding:20px;border:1px solid var(--mw-border-light);">';
 
+        // 構成案 見出し
+        html += '<div style="font-size:16px;font-weight:700;color:var(--mw-text-heading);margin-bottom:16px;">📝 構成案</div>';
+
         // タイトル候補
         if (outline.title_options && outline.title_options.length > 0) {
             var currentTitle = (currentArticle && currentArticle.title) ? currentArticle.title : '';
@@ -1915,9 +1918,6 @@ get_header();
                     + '<span class="wrt-title-text">' + esc(t) + '</span>'
                     + '</div>';
             });
-            html += '<div class="wrt-title-actions">'
-                + '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtInlineTitleConfirmBtn">このタイトルに決定</button>'
-                + '</div>';
             html += '</div>';
         }
 
@@ -1967,12 +1967,24 @@ get_header();
         html += '</div>';
         container.innerHTML = html;
 
-        // タイトル選択イベント
+        // タイトル選択イベント（選択時に即座に自動保存）
+        function saveSelectedTitle(titleText) {
+            if (!titleText || !currentArticle) return;
+            currentArticle.title = titleText;
+            apiFetch('/articles/' + currentArticle.id + '/settings', {
+                method: 'POST',
+                body: { title: titleText }
+            }).then(function(res) {
+                if (res.success) { loadArticles(); }
+            });
+        }
         container.querySelectorAll('.wrt-outline__title-opt').forEach(function(opt) {
             opt.addEventListener('click', function(e) {
                 if (e.target.classList.contains('wrt-title-edit-input')) return;
                 container.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); });
                 opt.classList.add('selected');
+                var textEl = opt.querySelector('.wrt-title-text');
+                if (textEl) saveSelectedTitle(textEl.textContent.trim());
             });
             opt.addEventListener('dblclick', function() {
                 var textEl = opt.querySelector('.wrt-title-text');
@@ -1986,34 +1998,22 @@ get_header();
                 opt.appendChild(input);
                 input.focus();
                 input.select();
+                function confirmEdit() {
+                    var newVal = input.value.trim();
+                    textEl.textContent = newVal || currentVal;
+                    textEl.style.display = '';
+                    input.remove();
+                    container.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); });
+                    opt.classList.add('selected');
+                    if (newVal) saveSelectedTitle(newVal);
+                }
                 input.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') { textEl.textContent = input.value; textEl.style.display = ''; input.remove(); container.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); }); opt.classList.add('selected'); }
+                    if (e.key === 'Enter') { confirmEdit(); }
                     else if (e.key === 'Escape') { textEl.style.display = ''; input.remove(); }
                 });
-                input.addEventListener('blur', function() { if (input.parentNode) { textEl.textContent = input.value; textEl.style.display = ''; input.remove(); } });
+                input.addEventListener('blur', function() { if (input.parentNode) confirmEdit(); });
             });
         });
-
-        // 「このタイトルに決定」ボタン
-        var confirmBtn = document.getElementById('wrtInlineTitleConfirmBtn');
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', function() {
-                var selected = container.querySelector('.wrt-outline__title-opt.selected .wrt-title-text');
-                if (!selected) { showToast('タイトルを選択してください', true); return; }
-                var newTitle = selected.textContent.trim();
-                if (!newTitle) return;
-                apiFetch('/articles/' + currentArticle.id + '/settings', {
-                    method: 'POST',
-                    body: { title: newTitle }
-                }).then(function(res) {
-                    if (res.success) {
-                        showToast('タイトルを「' + newTitle + '」に変更しました');
-                        currentArticle.title = newTitle;
-                        loadArticles();
-                    } else { showToast(res.error || 'エラー', true); }
-                });
-            });
-        }
     }
 
     function renderOutlineModal(outline) {
@@ -2021,10 +2021,13 @@ get_header();
         if (!outline) { body.innerHTML = '<p style="color:var(--mw-text-tertiary);">構成案がありません</p>'; return; }
         var html = '';
 
-        // 現在のタイトル（post_title の先頭 = title_options[0]）
+        // 構成案 見出し
+        html += '<div style="font-size:16px;font-weight:700;color:var(--mw-text-heading);margin-bottom:16px;">📝 構成案</div>';
+
+        // 現在のタイトル
         var currentTitle = (currentArticle && currentArticle.title) ? currentArticle.title : '';
 
-        // タイトル候補（選択・編集可能）
+        // タイトル候補（選択・編集可能 — 選択で即自動保存）
         if (outline.title_options && outline.title_options.length > 0) {
             html += '<div class="wrt-outline__titles">';
             html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:8px;">タイトル候補 <span style="font-weight:400;font-size:11px;color:var(--mw-text-tertiary);">— クリックで選択、ダブルクリックで編集</span></div>';
@@ -2035,9 +2038,6 @@ get_header();
                     + '<span class="wrt-title-text">' + esc(t) + '</span>'
                     + '</div>';
             });
-            html += '<div class="wrt-title-actions">'
-                + '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtTitleConfirmBtn">このタイトルに決定</button>'
-                + '</div>';
             html += '</div>';
         }
 
@@ -2086,15 +2086,25 @@ get_header();
 
         body.innerHTML = html;
 
-        // タイトル選択イベント
+        // タイトル選択イベント（選択時に即座に自動保存）
+        function modalSaveTitle(titleText) {
+            if (!titleText || !currentArticle) return;
+            currentArticle.title = titleText;
+            apiFetch('/articles/' + currentArticle.id + '/settings', {
+                method: 'POST',
+                body: { title: titleText }
+            }).then(function(res) {
+                if (res.success) { loadArticles(); }
+            });
+        }
         body.querySelectorAll('.wrt-outline__title-opt').forEach(function(opt) {
-            // シングルクリック: 選択
             opt.addEventListener('click', function(e) {
                 if (e.target.classList.contains('wrt-title-edit-input')) return;
                 body.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); });
                 opt.classList.add('selected');
+                var textEl = opt.querySelector('.wrt-title-text');
+                if (textEl) modalSaveTitle(textEl.textContent.trim());
             });
-            // ダブルクリック: 編集モード
             opt.addEventListener('dblclick', function() {
                 var textEl = opt.querySelector('.wrt-title-text');
                 if (!textEl || opt.querySelector('.wrt-title-edit-input')) return;
@@ -2107,52 +2117,22 @@ get_header();
                 opt.appendChild(input);
                 input.focus();
                 input.select();
-                // Enter で確定、Escape でキャンセル
+                function confirmEdit() {
+                    var newVal = input.value.trim();
+                    textEl.textContent = newVal || currentVal;
+                    textEl.style.display = '';
+                    input.remove();
+                    body.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); });
+                    opt.classList.add('selected');
+                    if (newVal) modalSaveTitle(newVal);
+                }
                 input.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') {
-                        textEl.textContent = input.value;
-                        textEl.style.display = '';
-                        input.remove();
-                        body.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); });
-                        opt.classList.add('selected');
-                    } else if (e.key === 'Escape') {
-                        textEl.style.display = '';
-                        input.remove();
-                    }
+                    if (e.key === 'Enter') { confirmEdit(); }
+                    else if (e.key === 'Escape') { textEl.style.display = ''; input.remove(); }
                 });
-                input.addEventListener('blur', function() {
-                    if (input.parentNode) {
-                        textEl.textContent = input.value;
-                        textEl.style.display = '';
-                        input.remove();
-                    }
-                });
+                input.addEventListener('blur', function() { if (input.parentNode) confirmEdit(); });
             });
         });
-
-        // 「このタイトルに決定」ボタン
-        var confirmBtn = document.getElementById('wrtTitleConfirmBtn');
-        if (confirmBtn) {
-            confirmBtn.addEventListener('click', function() {
-                var selected = body.querySelector('.wrt-outline__title-opt.selected .wrt-title-text');
-                if (!selected) { showToast('タイトルを選択してください', true); return; }
-                var newTitle = selected.textContent.trim();
-                if (!newTitle) return;
-                apiFetch('/articles/' + currentArticle.id + '/settings', {
-                    method: 'POST',
-                    body: { title: newTitle }
-                }).then(function(res) {
-                    if (res.success) {
-                        showToast('タイトルを「' + newTitle + '」に変更しました');
-                        currentArticle.title = newTitle;
-                        // 記事一覧も更新
-                        loadArticles();
-                    } else {
-                        showToast(res.error || 'エラー', true);
-                    }
-                });
-            });
-        }
     }
     function closeOutlineModal() { document.getElementById('wrtOutlineModal').classList.remove('active'); }
     document.getElementById('wrtOutlineModalClose').addEventListener('click', closeOutlineModal);
