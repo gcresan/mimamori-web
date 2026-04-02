@@ -1254,7 +1254,14 @@ get_header();
 
         // 本文生成セクション
         html += '<div class="wrt-detail-section" id="wrtDraftSection">';
-        html += '<div class="wrt-detail-section__title">本文生成</div>';
+        html += '<div class="wrt-detail-section__title" style="display:flex;align-items:center;gap:10px;">本文生成';
+        if (a.wp_publish && a.wp_publish.remote_post_id && !a.wp_publish.error) {
+            var wpStatus = a.wp_publish.status === 'publish' ? 'WordPressで公開済み' : 'WordPressで下書き保存済み';
+            var wpColor = a.wp_publish.status === 'publish' ? '#3D7559' : 'var(--mw-text-tertiary)';
+            var wpBg = a.wp_publish.status === 'publish' ? 'rgba(78,138,107,0.12)' : 'var(--mw-bg-secondary)';
+            html += '<span style="font-size:11px;font-weight:500;color:' + wpColor + ';background:' + wpBg + ';padding:2px 10px;border-radius:10px;white-space:nowrap;">' + wpStatus + '</span>';
+        }
+        html += '</div>';
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
         html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
         if (a.outline && a.draft_content) {
@@ -1275,7 +1282,6 @@ get_header();
                 if (a.wp_publish.remote_url) {
                     html += '<a href="' + esc(a.wp_publish.remote_url) + '" target="_blank" rel="noopener" class="wrt-btn wrt-btn--secondary wrt-btn--sm">投稿記事を開く ↗</a>';
                 }
-                html += '<span style="font-size:11px;color:var(--mw-text-tertiary);white-space:nowrap;">下書き保存済み</span>';
             } else {
                 html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtPublishWpBtn">WordPressへ下書き保存</button>';
             }
@@ -1283,7 +1289,19 @@ get_header();
                 html += '<span style="font-size:11px;color:#C95A4F;">前回エラー: ' + esc(a.wp_publish.error) + '</span>';
             }
         }
+        // アイキャッチ画像生成ボタン（本文生成済みの場合のみ）
+        if (a.draft_content) {
+            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtGenerateEyecatchBtn">'
+                + (a.eyecatch_url ? 'アイキャッチ再生成' : 'アイキャッチ生成') + '</button>';
+        }
         html += '</div>';
+
+        // アイキャッチプレビュー
+        if (a.eyecatch_url) {
+            html += '<div id="wrtEyecatchPreview" style="margin-top:12px;"><img src="' + esc(a.eyecatch_url) + '" alt="アイキャッチ画像" style="max-width:400px;width:100%;border-radius:8px;border:1px solid var(--mw-border-light);"></div>';
+        } else {
+            html += '<div id="wrtEyecatchPreview"></div>';
+        }
 
         // 本文未生成 + 構成案あり → インライン表示
         if (a.outline && !a.draft_content) {
@@ -1630,6 +1648,29 @@ get_header();
                         renderArticleDetail();
                     } else {
                         showToast(res.error || 'WordPress投稿に失敗しました', true);
+                    }
+                }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+            });
+        }
+
+        // アイキャッチ画像生成ボタン
+        var eyecatchBtn = document.getElementById('wrtGenerateEyecatchBtn');
+        if (eyecatchBtn) {
+            eyecatchBtn.addEventListener('click', function() {
+                showProgress('アイキャッチ画像を生成中…（30秒〜1分程度）');
+                apiFetch('/articles/' + a.id + '/eyecatch', { method: 'POST' }).then(function(res) {
+                    hideProgress();
+                    if (res.success) {
+                        currentArticle.eyecatch_id = res.eyecatch_id;
+                        currentArticle.eyecatch_url = res.eyecatch_url;
+                        showToast('アイキャッチ画像を生成しました');
+                        var preview = document.getElementById('wrtEyecatchPreview');
+                        if (preview) {
+                            preview.innerHTML = '<img src="' + esc(res.eyecatch_url) + '?t=' + Date.now() + '" alt="アイキャッチ画像" style="max-width:400px;width:100%;border-radius:8px;border:1px solid var(--mw-border-light);">';
+                        }
+                        eyecatchBtn.textContent = 'アイキャッチ再生成';
+                    } else {
+                        showToast(res.error || 'アイキャッチ生成に失敗しました', true);
                     }
                 }).catch(function() { hideProgress(); showToast('通信エラー', true); });
             });
