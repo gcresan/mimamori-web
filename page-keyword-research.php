@@ -47,10 +47,10 @@ get_header();
    キーワード調査 — スタイル (Phase 2)
    ========================================================= */
 
-/* ページ固有: コンテンツ幅を広げ中央寄りに */
+/* ページ固有: コンテンツ幅を広げ、右余白を解消 */
 .page-template-page-keyword-research .content-area {
-    max-width: 1600px;
-    padding: 44px 56px 64px;
+    max-width: none;
+    padding: 44px 48px 64px;
 }
 
 .kwr-conditions {
