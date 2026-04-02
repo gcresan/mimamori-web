@@ -49,7 +49,7 @@ get_header();
 .wrt-btn--secondary { background: var(--mw-bg-secondary); color: var(--mw-text-heading); border: 1px solid var(--mw-border-light); }
 .wrt-btn--secondary:hover:not(:disabled) { background: var(--mw-bg-tertiary, #E6EEF0); border-color: var(--mw-border-medium, #AEBCBE); box-shadow: 0 2px 8px rgba(0,0,0,0.06); transform: translateY(-1px); }
 .wrt-btn--secondary:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
-.wrt-btn--sm { padding: 6px 14px; font-size: 12px; }
+.wrt-btn--sm { padding: 8px 14px; font-size: 13px; }
 .wrt-btn--danger { background: rgba(201,90,79,0.1); color: #C95A4F; }
 .wrt-btn--danger:hover:not(:disabled) { background: rgba(201,90,79,0.18); box-shadow: 0 2px 8px rgba(201,90,79,0.15); transform: translateY(-1px); }
 .wrt-btn--danger:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
@@ -1293,7 +1293,7 @@ get_header();
             var _s = a.score.total_score || 0;
             var _sc = _s >= 85 ? 'high' : _s >= 70 ? 'mid' : _s >= 60 ? 'low' : 'poor';
             html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtShowScoreBtn" style="display:inline-flex;align-items:center;gap:6px;">'
-                + '<span class="wrt-score__grade wrt-score__grade--' + _sc + '" style="font-size:13px;padding:2px 8px;">' + _s + '点</span>'
+                + '<span class="wrt-score__grade wrt-score__grade--' + _sc + '" style="font-size:12px;padding:1px 8px;">' + _s + '点</span>'
                 + '品質チェック詳細</button>';
         }
         // WordPress外部投稿ボタン

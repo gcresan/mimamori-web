@@ -815,6 +815,10 @@ class Gcrev_Writing_Service {
             'wp_publish'             => ( function() use ( $post ) { $r = get_post_meta( $post->ID, '_gcrev_article_wp_publish_json', true ); return $r ? json_decode( $r, true ) : null; } )(),
             'needs_hearing'          => (bool) get_post_meta( $post->ID, '_gcrev_article_needs_hearing_enhancement', true ),
             'eyecatch_id'            => (int) get_post_meta( $post->ID, '_gcrev_article_eyecatch_id', true ),
+            'wp_categories'          => ( function() use ( $post ) {
+                $raw = get_post_meta( $post->ID, '_gcrev_article_wp_categories', true );
+                return $raw ? ( json_decode( $raw, true ) ?: [] ) : [];
+            } )(),
             'eyecatch_url'           => ( function() use ( $post ) {
                 $eid = (int) get_post_meta( $post->ID, '_gcrev_article_eyecatch_id', true );
                 return $eid > 0 ? wp_get_attachment_url( $eid ) : '';
@@ -2804,7 +2808,7 @@ RULES;
     /**
      * 記事を外部 WordPress へ投稿（create or update）。
      */
-    public function publish_to_wp( int $user_id, int $article_id ): array {
+    public function publish_to_wp( int $user_id, int $article_id, array $publish_options = [] ): array {
         require_once __DIR__ . '/class-wp-publish-client.php';
 
         $settings = Gcrev_WP_Publish_Client::get_settings( $user_id );
@@ -2833,12 +2837,39 @@ RULES;
         }
         $html_content = Gcrev_WP_Publish_Client::markdown_to_wp_html( $content );
 
-        $options = [];
-        if ( $settings['default_category'] > 0 ) {
-            $options['categories'] = [ $settings['default_category'] ];
+        // ステータス: リクエストで指定 → 設定のデフォルト
+        $status = $publish_options['status'] ?? $settings['default_status'];
+        if ( ! in_array( $status, [ 'draft', 'pending', 'publish' ], true ) ) {
+            $status = 'draft';
         }
 
-        $payload = Gcrev_WP_Publish_Client::build_payload( $title, $html_content, $settings['default_status'], $options );
+        // カテゴリ: リクエストで指定 → 記事メタに保存済み → 設定のデフォルト
+        $categories = [];
+        if ( ! empty( $publish_options['categories'] ) ) {
+            $categories = array_map( 'absint', $publish_options['categories'] );
+            // 選択を記事メタにも保存（次回以降の記憶用）
+            update_post_meta( $article_id, '_gcrev_article_wp_categories',
+                wp_json_encode( $categories, JSON_UNESCAPED_UNICODE ) );
+        } else {
+            // 記事メタに保存済みのカテゴリを使用
+            $saved_cats = get_post_meta( $article_id, '_gcrev_article_wp_categories', true );
+            if ( $saved_cats ) {
+                $decoded = json_decode( $saved_cats, true );
+                if ( is_array( $decoded ) && ! empty( $decoded ) ) {
+                    $categories = array_map( 'absint', $decoded );
+                }
+            }
+        }
+        if ( empty( $categories ) && $settings['default_category'] > 0 ) {
+            $categories = [ $settings['default_category'] ];
+        }
+
+        $options = [];
+        if ( ! empty( $categories ) ) {
+            $options['categories'] = $categories;
+        }
+
+        $payload = Gcrev_WP_Publish_Client::build_payload( $title, $html_content, $status, $options );
 
         $client = new Gcrev_WP_Publish_Client();
 
@@ -2902,7 +2933,12 @@ RULES;
         update_post_meta( $article_id, '_gcrev_article_wp_publish_json',
             wp_slash( wp_json_encode( $publish_data, JSON_UNESCAPED_UNICODE ) ) );
 
-        $this->log( "publish_to_wp: " . ( $remote_post_id ? 'updated' : 'created' ) . " remote_id=" . $result['remote_post_id'] );
+        // 記事ステータスを更新
+        $article_status = $status === 'publish' ? 'wp_published' : 'wp_draft_saved';
+        update_post_meta( $article_id, '_gcrev_article_status', $article_status );
+        update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
+
+        $this->log( "publish_to_wp: " . ( $remote_post_id ? 'updated' : 'created' ) . " remote_id=" . $result['remote_post_id'] . " status={$status}" );
 
         return [
             'success'  => true,
