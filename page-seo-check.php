@@ -150,8 +150,12 @@ get_header();
     background: var(--mw-primary-blue);
     color: #fff;
     border-color: var(--mw-primary-blue);
+    transition: all 0.25s ease;
 }
-.seo-btn--primary:hover { opacity: 0.9; }
+.seo-btn--primary:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.seo-btn--primary:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.seo-btn--primary:focus-visible { outline: 2px solid var(--mw-primary-blue); outline-offset: 2px; }
+.seo-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 /* 診断グリッド */
 .seo-diagnosis-grid {

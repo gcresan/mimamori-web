@@ -297,10 +297,12 @@ get_header();
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.15s;
+    transition: all 0.25s ease;
 }
-.aio-fetch-btn:hover { opacity: 0.9; }
-.aio-fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.aio-fetch-btn:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.aio-fetch-btn:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.aio-fetch-btn:focus-visible { outline: 2px solid var(--mw-primary-blue); outline-offset: 2px; }
+.aio-fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 /* 設定パネル */
 .aio-settings-panel {

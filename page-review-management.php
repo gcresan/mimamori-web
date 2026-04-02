@@ -173,11 +173,13 @@ get_header();
 .rm-reply-actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .rm-btn {
     padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
-    cursor: pointer; border: none; transition: opacity 0.15s;
+    cursor: pointer; border: none; transition: all 0.25s ease;
     display: inline-flex; align-items: center; gap: 6px;
 }
-.rm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.rm-btn:hover:not(:disabled) { opacity: 0.85; }
+.rm-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.rm-btn:hover:not(:disabled) { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.rm-btn:active:not(:disabled) { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.rm-btn:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
 .rm-btn-ai { background: #7c3aed; color: #fff; }
 .rm-btn-regen { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
 .rm-btn-post { background: var(--mw-primary-blue, #568184); color: #fff; }

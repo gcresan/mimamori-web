@@ -37,10 +37,12 @@ get_header();
     padding: 10px 20px;
     background: var(--mw-primary-blue, #568184); color: #fff;
     font-size: 14px; font-weight: 600; border: none; border-radius: 8px;
-    cursor: pointer; transition: opacity 0.15s;
+    cursor: pointer; transition: all 0.25s ease;
 }
-.sv-filter-bar .sv-btn-aggregate:hover { opacity: 0.9; }
-.sv-filter-bar .sv-btn-aggregate:disabled { opacity: 0.5; cursor: not-allowed; }
+.sv-filter-bar .sv-btn-aggregate:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.sv-filter-bar .sv-btn-aggregate:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.sv-filter-bar .sv-btn-aggregate:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
+.sv-filter-bar .sv-btn-aggregate:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 /* KPI row */
 .sv-kpi-row {

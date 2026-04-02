@@ -38,10 +38,12 @@ get_header();
 .sv-filter-btn {
     padding: 8px 20px; font-size: 13px; font-weight: 600;
     background: var(--mw-primary-blue, #568184); color: #fff;
-    border: none; border-radius: 8px; cursor: pointer; transition: opacity 0.15s;
+    border: none; border-radius: 8px; cursor: pointer; transition: all 0.25s ease;
     white-space: nowrap;
 }
-.sv-filter-btn:hover { opacity: 0.9; }
+.sv-filter-btn:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.sv-filter-btn:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.sv-filter-btn:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
 
 /* Form card (reuse) */
 .sv-form-card {
@@ -221,10 +223,12 @@ get_header();
     padding: 6px 16px; font-size: 13px; font-weight: 600;
     background: var(--mw-primary-blue, #568184); color: #fff;
     border: none; border-radius: 6px; cursor: pointer; margin-top: 8px;
-    transition: opacity 0.15s;
+    transition: all 0.25s ease;
 }
-.sv-btn-save-notes:hover { opacity: 0.9; }
-.sv-btn-save-notes:disabled { opacity: 0.5; cursor: not-allowed; }
+.sv-btn-save-notes:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.sv-btn-save-notes:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.sv-btn-save-notes:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
+.sv-btn-save-notes:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 /* Detail status change */
 .sv-detail-status-row {
@@ -240,9 +244,11 @@ get_header();
 .sv-btn-status-save {
     padding: 6px 14px; font-size: 13px; font-weight: 600;
     background: var(--mw-primary-blue, #568184); color: #fff;
-    border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.15s;
+    border: none; border-radius: 6px; cursor: pointer; transition: all 0.25s ease;
 }
-.sv-btn-status-save:hover { opacity: 0.9; }
+.sv-btn-status-save:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.sv-btn-status-save:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.sv-btn-status-save:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
 
 /* Empty / Loading */
 .sv-empty {

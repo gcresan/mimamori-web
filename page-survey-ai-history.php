@@ -44,10 +44,12 @@ get_header();
 .sv-filter-btn {
     padding: 8px 16px; font-size: 13px; font-weight: 600;
     background: var(--mw-primary-blue, #568184); color: #fff;
-    border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.15s;
+    border: none; border-radius: 6px; cursor: pointer; transition: all 0.25s ease;
     white-space: nowrap;
 }
-.sv-filter-btn:hover { opacity: 0.9; }
+.sv-filter-btn:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.sv-filter-btn:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.sv-filter-btn:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
 .sv-filter-btn-reset {
     padding: 8px 12px; font-size: 13px; font-weight: 600;
     background: #fff; color: #6b7280; border: 1.5px solid #d1d5db;

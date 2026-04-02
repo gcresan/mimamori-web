@@ -54,10 +54,12 @@ get_header();
     padding: 10px 20px;
     background: var(--mw-primary-blue, #568184); color: #fff;
     font-size: 14px; font-weight: 600; border: none; border-radius: 8px;
-    cursor: pointer; transition: opacity 0.15s;
+    cursor: pointer; transition: all 0.25s ease;
 }
-.sv-btn-new:hover { opacity: 0.9; }
-.sv-btn-new:disabled { opacity: 0.4; cursor: not-allowed; }
+.sv-btn-new:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.sv-btn-new:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.sv-btn-new:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
+.sv-btn-new:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 
 /* Survey cards */
 .sv-card {
@@ -155,10 +157,12 @@ get_header();
     display: inline-flex; align-items: center; gap: 6px;
     padding: 10px 24px; background: var(--mw-primary-blue, #568184);
     color: #fff; font-size: 14px; font-weight: 600; border: none; border-radius: 8px;
-    cursor: pointer; transition: opacity 0.15s;
+    cursor: pointer; transition: all 0.25s ease;
 }
-.sv-btn-save:hover { opacity: 0.9; }
-.sv-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.sv-btn-save:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.sv-btn-save:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.sv-btn-save:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
+.sv-btn-save:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 /* Public URL */
 .sv-public-url {

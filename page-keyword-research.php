@@ -97,11 +97,13 @@ get_header();
 .kwr-btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 10px 24px; border: none; border-radius: 8px;
-    font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.25s ease;
 }
 .kwr-btn--primary { background: var(--mw-primary-blue, #4A90A4); color: #fff; }
-.kwr-btn--primary:hover { opacity: 0.9; }
-.kwr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.kwr-btn--primary:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.kwr-btn--primary:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.kwr-btn--primary:focus-visible { outline: 2px solid var(--mw-primary-blue, #4A90A4); outline-offset: 2px; }
+.kwr-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 .kwr-warning {
     padding: 10px 14px; background: rgba(201,90,79,0.08);

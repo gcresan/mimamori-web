@@ -182,10 +182,12 @@ get_header();
 .ai-suggest-input-row input:focus { outline: none; border-color: #4E8A6B; box-shadow: 0 0 0 3px rgba(78,138,107,.12); }
 .btn-ai-suggest {
     padding: 8px 18px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600;
-    background: #4E8A6B; color: #fff; cursor: pointer; white-space: nowrap; transition: opacity .2s;
+    background: #4E8A6B; color: #fff; cursor: pointer; white-space: nowrap; transition: all 0.25s ease;
 }
-.btn-ai-suggest:disabled { opacity: .4; cursor: not-allowed; }
-.btn-ai-suggest:not(:disabled):hover { opacity: .85; }
+.btn-ai-suggest:disabled { opacity: .4; cursor: not-allowed; pointer-events: none; }
+.btn-ai-suggest:not(:disabled):hover { background: #3D7559; box-shadow: 0 4px 12px rgba(78,138,107,0.25); transform: translateY(-1px); }
+.btn-ai-suggest:not(:disabled):active { transform: translateY(0); box-shadow: 0 1px 3px rgba(78,138,107,0.15); }
+.btn-ai-suggest:focus-visible { outline: 2px solid #4E8A6B; outline-offset: 2px; }
 .ai-suggest-result {
     margin-bottom: 20px; padding: 16px; background: #f0fdf4; border: 1px solid #86efac;
     border-radius: 8px; animation: suggestFadeIn .3s ease;
@@ -204,9 +206,11 @@ get_header();
 .suggest-result-actions { display: flex; gap: 8px; margin-top: 12px; }
 .btn-apply-suggest {
     padding: 8px 20px; border: none; border-radius: 6px; background: #4E8A6B; color: #fff;
-    font-weight: 600; font-size: 13px; cursor: pointer; transition: opacity .2s;
+    font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.25s ease;
 }
-.btn-apply-suggest:hover { opacity: .85; }
+.btn-apply-suggest:hover { background: #3D7559; box-shadow: 0 4px 12px rgba(78,138,107,0.25); transform: translateY(-1px); }
+.btn-apply-suggest:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(78,138,107,0.15); }
+.btn-apply-suggest:focus-visible { outline: 2px solid #4E8A6B; outline-offset: 2px; }
 .btn-dismiss-suggest {
     padding: 8px 20px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
     font-size: 13px; cursor: pointer; color: #64748b;
