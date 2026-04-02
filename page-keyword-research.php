@@ -671,8 +671,8 @@ get_header();
         return '<span class="kwr-badge-tracked"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>追加済み</span>';
     }
 
-    // ページ読み込み時に登録済みキーワードを取得
-    loadTrackedKeywords();
+    // ページ読み込み時に登録済みキーワードを取得（Promise を保持して待機可能に）
+    var trackedReady = loadTrackedKeywords();
 
     /* グループ定義 */
     var groupMeta = {
@@ -838,8 +838,11 @@ get_header();
                 document.getElementById('kwrEmpty').style.display = '';
                 return;
             }
-            renderAll(data);
-            btn.textContent = '再調査を実行';
+            // 計測キーワード最新状態を取得してから描画
+            loadTrackedKeywords().then(function() {
+                renderAll(data);
+                btn.textContent = '再調査を実行';
+            });
         })
         .catch(function(err) {
             hideProgress();
@@ -849,13 +852,16 @@ get_header();
         });
     });
 
-    /* ===== ページ読み込み時に前回結果を取得 ===== */
-    fetch(restUrl, {
-        method: 'GET',
-        headers: { 'X-WP-Nonce': nonce }
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+    /* ===== ページ読み込み時に前回結果を取得（計測キーワード取得完了後に描画） ===== */
+    Promise.all([
+        trackedReady,
+        fetch(restUrl, {
+            method: 'GET',
+            headers: { 'X-WP-Nonce': nonce }
+        }).then(function(r) { return r.json(); })
+    ])
+    .then(function(results) {
+        var data = results[1];
         if (data && data.success) {
             renderAll(data);
             btn.textContent = '再調査を実行';
