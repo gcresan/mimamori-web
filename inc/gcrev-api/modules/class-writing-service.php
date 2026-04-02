@@ -729,6 +729,11 @@ class Gcrev_Writing_Service {
             'status'                 => get_post_meta( $post->ID, '_gcrev_article_status', true ) ?: 'keyword_set',
             'competitor_research'    => $competitor_research,
             'similarity_result'      => json_decode( get_post_meta( $post->ID, '_gcrev_article_similarity_result', true ) ?: 'null', true ),
+            'auto_generated'         => (bool) get_post_meta( $post->ID, '_gcrev_article_auto_generated', true ),
+            'auto_angle'             => get_post_meta( $post->ID, '_gcrev_article_auto_angle', true ) ?: null,
+            'auto_quality_score'     => get_post_meta( $post->ID, '_gcrev_article_auto_quality_score', true ) ?: null,
+            'auto_keyword_group'     => get_post_meta( $post->ID, '_gcrev_article_auto_keyword_group', true ) ?: null,
+            'needs_hearing'          => (bool) get_post_meta( $post->ID, '_gcrev_article_needs_hearing_enhancement', true ),
             'created_at'             => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'             => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
         ];
@@ -813,6 +818,15 @@ class Gcrev_Writing_Service {
             $existing_fps,
             $competitor_research
         );
+
+        // 自動記事生成の切り口指定があればプロンプトに追記
+        $auto_angle = get_post_meta( $article_id, '_gcrev_article_auto_angle', true );
+        if ( $auto_angle !== '' && $auto_angle !== false ) {
+            $prompt .= "\n\n## 記事の切り口指定\n"
+                . "この記事は既存記事との差別化のため、以下の切り口で書いてください:\n"
+                . "{$auto_angle}\n"
+                . "この切り口に沿ったタイトル案・構成案を作成してください。\n";
+        }
 
         // Gemini 呼び出し
         try {
@@ -2313,7 +2327,7 @@ RULES;
     /**
      * ユーザーの全記事フィンガープリントを取得
      */
-    private function get_existing_articles_fingerprints( int $user_id, int $exclude_id = 0 ): array {
+    public function get_existing_articles_fingerprints( int $user_id, int $exclude_id = 0 ): array {
         $query = new \WP_Query( [
             'post_type'      => 'gcrev_article',
             'posts_per_page' => 100,

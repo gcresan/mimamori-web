@@ -1209,6 +1209,27 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // 自動記事生成
+        register_rest_route('gcrev/v1', '/writing/auto-article/settings', [
+            [ 'methods' => 'GET',  'callback' => [ $this, 'rest_auto_article_get_settings' ],  'permission_callback' => [ $this->config, 'check_permission' ] ],
+            [ 'methods' => 'POST', 'callback' => [ $this, 'rest_auto_article_save_settings' ], 'permission_callback' => [ $this->config, 'check_permission' ] ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/auto-article/preview', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_auto_article_preview' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/auto-article/history', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_auto_article_history' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/writing/auto-article/trigger', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_auto_article_trigger' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // =========================================================
         // 口コミ投稿支援（公開エンドポイント）
         // =========================================================
@@ -15216,6 +15237,155 @@ PROMPT;
         try {
             $result = $this->writing_service->check_similarity( get_current_user_id(), $keyword );
             return new \WP_REST_Response( [ 'success' => true, 'result' => $result ] );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    // =========================================================
+    // 自動記事生成
+    // =========================================================
+
+    /**
+     * 自動記事生成の Auto Article Service インスタンスを遅延生成。
+     */
+    private function get_auto_article_service(): ?Gcrev_Auto_Article_Service {
+        static $instance = null;
+        if ( $instance !== null ) { return $instance; }
+        if ( ! $this->writing_service ) { return null; }
+
+        require_once __DIR__ . '/gcrev-api/utils/class-auto-article-queue.php';
+        require_once __DIR__ . '/gcrev-api/modules/class-keyword-research-service.php';
+        require_once __DIR__ . '/gcrev-api/modules/class-auto-article-service.php';
+
+        $kw_service = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, null, null );
+        $instance = new Gcrev_Auto_Article_Service( $this->writing_service, $this->ai, $this->config, $kw_service );
+        return $instance;
+    }
+
+    /**
+     * GET /writing/auto-article/settings — 自動記事生成設定取得
+     */
+    public function rest_auto_article_get_settings( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+
+        $settings = [
+            'enabled'            => get_user_meta( $user_id, 'gcrev_auto_article_enabled', true ) === '1',
+            'daily_limit'        => (int) ( get_user_meta( $user_id, 'gcrev_auto_article_daily_limit', true ) ?: 1 ),
+            'min_score'          => (int) ( get_user_meta( $user_id, 'gcrev_auto_article_min_score', true ) ?: 40 ),
+            'quality_threshold'  => (int) ( get_user_meta( $user_id, 'gcrev_auto_article_quality_threshold', true ) ?: 60 ),
+            'auto_publish'       => get_user_meta( $user_id, 'gcrev_auto_article_auto_publish', true ) === '1',
+            'preferred_groups'   => json_decode( get_user_meta( $user_id, 'gcrev_auto_article_preferred_groups', true ) ?: '["immediate","local_seo","column"]', true ),
+            'excluded_keywords'  => json_decode( get_user_meta( $user_id, 'gcrev_auto_article_excluded_keywords', true ) ?: '[]', true ),
+            'preferred_tone'     => get_user_meta( $user_id, 'gcrev_auto_article_preferred_tone', true ) ?: 'natural',
+        ];
+
+        return new \WP_REST_Response( [ 'success' => true, 'settings' => $settings ] );
+    }
+
+    /**
+     * POST /writing/auto-article/settings — 自動記事生成設定保存
+     */
+    public function rest_auto_article_save_settings( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $params  = $request->get_json_params();
+
+        if ( isset( $params['enabled'] ) ) {
+            update_user_meta( $user_id, 'gcrev_auto_article_enabled', $params['enabled'] ? '1' : '0' );
+        }
+        if ( isset( $params['daily_limit'] ) ) {
+            update_user_meta( $user_id, 'gcrev_auto_article_daily_limit', (string) max( 1, min( 5, (int) $params['daily_limit'] ) ) );
+        }
+        if ( isset( $params['min_score'] ) ) {
+            update_user_meta( $user_id, 'gcrev_auto_article_min_score', (string) max( 0, min( 100, (int) $params['min_score'] ) ) );
+        }
+        if ( isset( $params['quality_threshold'] ) ) {
+            update_user_meta( $user_id, 'gcrev_auto_article_quality_threshold', (string) max( 0, min( 100, (int) $params['quality_threshold'] ) ) );
+        }
+        if ( isset( $params['auto_publish'] ) ) {
+            update_user_meta( $user_id, 'gcrev_auto_article_auto_publish', $params['auto_publish'] ? '1' : '0' );
+        }
+        if ( isset( $params['preferred_groups'] ) && is_array( $params['preferred_groups'] ) ) {
+            $groups = array_map( 'sanitize_text_field', $params['preferred_groups'] );
+            update_user_meta( $user_id, 'gcrev_auto_article_preferred_groups', wp_json_encode( $groups, JSON_UNESCAPED_UNICODE ) );
+        }
+        if ( isset( $params['excluded_keywords'] ) && is_array( $params['excluded_keywords'] ) ) {
+            $excluded = array_map( 'sanitize_text_field', $params['excluded_keywords'] );
+            update_user_meta( $user_id, 'gcrev_auto_article_excluded_keywords', wp_json_encode( $excluded, JSON_UNESCAPED_UNICODE ) );
+        }
+        if ( isset( $params['preferred_tone'] ) ) {
+            $tone = sanitize_text_field( $params['preferred_tone'] );
+            $valid_tones = [ 'natural', 'friendly', 'trustworthy', 'professional', 'casual' ];
+            if ( in_array( $tone, $valid_tones, true ) ) {
+                update_user_meta( $user_id, 'gcrev_auto_article_preferred_tone', $tone );
+            }
+        }
+
+        return new \WP_REST_Response( [ 'success' => true, 'message' => '設定を保存しました。' ] );
+    }
+
+    /**
+     * GET /writing/auto-article/preview — 記事化候補キーワードのプレビュー
+     */
+    public function rest_auto_article_preview( \WP_REST_Request $request ): \WP_REST_Response {
+        $service = $this->get_auto_article_service();
+        if ( ! $service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Service not available' ], 500 );
+        }
+
+        try {
+            $scored = $service->score_keywords( get_current_user_id() );
+            return new \WP_REST_Response( [ 'success' => true, 'candidates' => $scored ] );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * GET /writing/auto-article/history — 自動記事生成履歴
+     */
+    public function rest_auto_article_history( \WP_REST_Request $request ): \WP_REST_Response {
+        require_once __DIR__ . '/gcrev-api/utils/class-auto-article-queue.php';
+
+        $limit   = min( 100, max( 1, (int) ( $request->get_param( 'limit' ) ?: 50 ) ) );
+        $history = Gcrev_Auto_Article_Queue::get_user_history( get_current_user_id(), $limit );
+
+        $items = array_map( function ( $row ) {
+            return [
+                'id'               => (int) $row->id,
+                'keyword'          => $row->keyword,
+                'final_keyword'    => $row->final_keyword,
+                'keyword_group'    => $row->keyword_group,
+                'priority_score'   => (float) $row->priority_score,
+                'status'           => $row->status,
+                'article_id'       => $row->article_id ? (int) $row->article_id : null,
+                'wp_draft_id'      => $row->wp_draft_id ? (int) $row->wp_draft_id : null,
+                'quality_score'    => $row->quality_score !== null ? (float) $row->quality_score : null,
+                'quality_feedback' => $row->quality_feedback ?: null,
+                'error_message'    => $row->error_message ?: null,
+                'angle_json'       => $row->angle_json ? json_decode( $row->angle_json, true ) : null,
+                'created_at'       => $row->created_at,
+                'finished_at'      => $row->finished_at,
+            ];
+        }, $history );
+
+        return new \WP_REST_Response( [ 'success' => true, 'history' => $items ] );
+    }
+
+    /**
+     * POST /writing/auto-article/trigger — 手動で即時記事生成をトリガー
+     */
+    public function rest_auto_article_trigger( \WP_REST_Request $request ): \WP_REST_Response {
+        $service = $this->get_auto_article_service();
+        if ( ! $service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Service not available' ], 500 );
+        }
+
+        $keyword = sanitize_text_field( $request->get_json_params()['keyword'] ?? '' );
+
+        try {
+            $result = $service->trigger_single( get_current_user_id(), $keyword );
+            return new \WP_REST_Response( $result );
         } catch ( \Throwable $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
         }

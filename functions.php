@@ -5455,6 +5455,10 @@ add_action('after_setup_theme', function () {
     if ( class_exists( 'Gcrev_Report_Queue' ) ) {
         Gcrev_Report_Queue::create_table();
     }
+    require_once get_template_directory() . '/inc/gcrev-api/utils/class-auto-article-queue.php';
+    if ( class_exists( 'Gcrev_Auto_Article_Queue' ) ) {
+        Gcrev_Auto_Article_Queue::create_table();
+    }
 });
 
 function gcrev_actual_cv_table_name(): string {

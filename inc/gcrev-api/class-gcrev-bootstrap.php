@@ -57,6 +57,10 @@ class Gcrev_Bootstrap {
         // AIO ページ分析（バックグラウンド）
         add_action('gcrev_aio_page_analysis_event', [__CLASS__, 'on_aio_page_analysis_event']);
 
+        // 自動記事生成（日次）
+        add_action('gcrev_auto_article_daily_event', [__CLASS__, 'on_auto_article_daily_event']);
+        add_action('gcrev_auto_article_chunk_event', [__CLASS__, 'on_auto_article_chunk_event'], 10, 1);
+
         // 月次データプリフェッチ（月固定期間: prev-month, prev-prev-month, last180, last365）
         add_action('gcrev_monthly_data_prefetch_event', [__CLASS__, 'on_monthly_data_prefetch_event']);
         add_action('gcrev_monthly_prefetch_chunk_event', [__CLASS__, 'on_monthly_prefetch_chunk_event'], 10, 2);
@@ -777,6 +781,9 @@ class Gcrev_Bootstrap {
             error_log( '[GCREV] Scheduled gcrev_gbp_posts_publish_event (ten_minutes)' );
         }
 
+        // 自動記事生成: 毎日 07:00（他の日次Cronの後）
+        self::schedule_daily_if_missing('gcrev_auto_article_daily_event', 'tomorrow 07:00:00');
+
         // AIO SERP 週次取得: 毎週月曜 05:30（Bright Data）
         if ( ! wp_next_scheduled( 'gcrev_aio_serp_weekly_event' ) ) {
             // 次の月曜 05:30 を計算
@@ -861,6 +868,7 @@ class Gcrev_Bootstrap {
             'gcrev_monthly_data_prefetch_event',
             'gcrev_gbp_posts_publish_event',
             'gcrev_meo_dashboard_prefetch_event',
+            'gcrev_auto_article_daily_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',
@@ -1038,6 +1046,47 @@ class Gcrev_Bootstrap {
             file_put_contents( '/tmp/gcrev_aio_analysis_debug.log',
                 date('Y-m-d H:i:s') . " Analysis error user_id={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
         }
+    }
+    // =========================================================
+    // 自動記事生成
+    // =========================================================
+
+    public static function on_auto_article_daily_event(): void {
+        file_put_contents( '/tmp/gcrev_autoarticle_debug.log',
+            date( 'Y-m-d H:i:s' ) . " daily_event triggered\n", FILE_APPEND );
+
+        require_once __DIR__ . '/utils/class-auto-article-queue.php';
+        require_once __DIR__ . '/modules/class-ai-client.php';
+        require_once __DIR__ . '/utils/class-config.php';
+        require_once __DIR__ . '/modules/class-writing-service.php';
+        require_once __DIR__ . '/modules/class-keyword-research-service.php';
+        require_once __DIR__ . '/modules/class-auto-article-service.php';
+
+        $ai         = new Gcrev_AI_Client();
+        $config     = new Gcrev_Config();
+        $writing    = new Gcrev_Writing_Service( $ai, $config );
+        $kw_service = new Gcrev_Keyword_Research_Service( $ai, $config, null, null );
+        $service    = new Gcrev_Auto_Article_Service( $writing, $ai, $config, $kw_service );
+        $service->build_daily_queue();
+    }
+
+    public static function on_auto_article_chunk_event( $job_id ): void {
+        file_put_contents( '/tmp/gcrev_autoarticle_debug.log',
+            date( 'Y-m-d H:i:s' ) . " chunk_event triggered: job_id={$job_id}\n", FILE_APPEND );
+
+        require_once __DIR__ . '/utils/class-auto-article-queue.php';
+        require_once __DIR__ . '/modules/class-ai-client.php';
+        require_once __DIR__ . '/utils/class-config.php';
+        require_once __DIR__ . '/modules/class-writing-service.php';
+        require_once __DIR__ . '/modules/class-keyword-research-service.php';
+        require_once __DIR__ . '/modules/class-auto-article-service.php';
+
+        $ai         = new Gcrev_AI_Client();
+        $config     = new Gcrev_Config();
+        $writing    = new Gcrev_Writing_Service( $ai, $config );
+        $kw_service = new Gcrev_Keyword_Research_Service( $ai, $config, null, null );
+        $service    = new Gcrev_Auto_Article_Service( $writing, $ai, $config, $kw_service );
+        $service->process_chunk( (int) $job_id );
     }
 }
 

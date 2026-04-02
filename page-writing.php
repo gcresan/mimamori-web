@@ -313,6 +313,7 @@ get_header();
     <div class="wrt-tabs">
         <button class="wrt-tabs__tab active" data-tab="articles">記事一覧</button>
         <button class="wrt-tabs__tab" data-tab="knowledge">情報ストック</button>
+        <button class="wrt-tabs__tab" data-tab="auto-article">自動記事</button>
     </div>
 
     <!-- ===== 記事一覧タブ ===== -->
@@ -368,6 +369,110 @@ get_header();
         <div class="wrt-empty" id="wrtKnowledgeEmpty" style="display:none;">
             <div class="wrt-empty__icon">📚</div>
             <div class="wrt-empty__text">情報ストックがありません</div>
+        </div>
+    </div>
+
+    <!-- ===== 自動記事タブ ===== -->
+    <div class="wrt-tab-panel" id="wrtPanelAutoArticle">
+        <!-- 設定パネル -->
+        <div class="aa-settings-panel" style="background:var(--mw-bg-primary);border:1px solid var(--mw-border-light);border-radius:12px;padding:20px;margin-bottom:20px;">
+            <h3 style="margin:0 0 16px;font-size:16px;color:var(--mw-text-heading);">自動記事生成 設定</h3>
+            <div class="aa-settings-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+                <div class="aa-setting-item">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mw-text-primary);cursor:pointer;">
+                        <input type="checkbox" id="aaEnabled">
+                        <span>自動記事生成を有効にする</span>
+                    </label>
+                </div>
+                <div class="aa-setting-item">
+                    <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">1日あたりの生成上限</label>
+                    <select id="aaDailyLimit" style="padding:8px 12px;border:1px solid var(--mw-border-light);border-radius:8px;font-size:14px;background:var(--mw-bg-primary);color:var(--mw-text-primary);width:100%;">
+                        <option value="1">1件</option>
+                        <option value="2">2件</option>
+                        <option value="3">3件</option>
+                    </select>
+                </div>
+                <div class="aa-setting-item">
+                    <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">最低優先スコア</label>
+                    <input type="number" id="aaMinScore" min="0" max="100" value="40" style="padding:8px 12px;border:1px solid var(--mw-border-light);border-radius:8px;font-size:14px;background:var(--mw-bg-primary);color:var(--mw-text-primary);width:100%;box-sizing:border-box;">
+                </div>
+                <div class="aa-setting-item">
+                    <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">品質閾値</label>
+                    <input type="number" id="aaQualityThreshold" min="0" max="100" value="60" style="padding:8px 12px;border:1px solid var(--mw-border-light);border-radius:8px;font-size:14px;background:var(--mw-bg-primary);color:var(--mw-text-primary);width:100%;box-sizing:border-box;">
+                </div>
+                <div class="aa-setting-item">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mw-text-primary);cursor:pointer;">
+                        <input type="checkbox" id="aaAutoPublish">
+                        <span>品質基準を満たした記事を自動公開する</span>
+                    </label>
+                </div>
+                <div class="aa-setting-item">
+                    <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">デフォルト文体</label>
+                    <select id="aaPreferredTone" style="padding:8px 12px;border:1px solid var(--mw-border-light);border-radius:8px;font-size:14px;background:var(--mw-bg-primary);color:var(--mw-text-primary);width:100%;">
+                        <option value="natural">自然で読みやすく</option>
+                        <option value="friendly">やさしく丁寧に</option>
+                        <option value="trustworthy">信頼感重視</option>
+                        <option value="professional">専門的に</option>
+                        <option value="casual">親しみやすく</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:8px;">
+                <button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="aaSaveSettings" type="button">設定を保存</button>
+            </div>
+        </div>
+
+        <!-- 候補プレビュー -->
+        <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                <h3 style="margin:0;font-size:16px;color:var(--mw-text-heading);">記事化候補キーワード</h3>
+                <button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="aaLoadPreview" type="button">候補を確認</button>
+            </div>
+            <div class="wrt-table-wrap" id="aaPreviewWrap" style="display:none;">
+                <table class="wrt-table">
+                    <thead>
+                        <tr>
+                            <th>キーワード</th>
+                            <th>グループ</th>
+                            <th style="text-align:right;">スコア</th>
+                            <th style="text-align:right;">ボリューム</th>
+                            <th style="text-align:right;">難易度</th>
+                            <th style="width:100px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="aaPreviewBody"></tbody>
+                </table>
+            </div>
+            <div id="aaPreviewEmpty" style="display:none;text-align:center;padding:40px;color:var(--mw-text-tertiary);font-size:14px;">
+                キーワード調査結果がないか、条件に合う候補がありません。
+            </div>
+            <div id="aaPreviewLoading" style="display:none;text-align:center;padding:40px;color:var(--mw-text-tertiary);font-size:14px;">
+                候補を分析中...
+            </div>
+        </div>
+
+        <!-- 生成履歴 -->
+        <div>
+            <h3 style="margin:0 0 12px;font-size:16px;color:var(--mw-text-heading);">生成履歴</h3>
+            <div class="wrt-table-wrap" id="aaHistoryWrap" style="display:none;">
+                <table class="wrt-table">
+                    <thead>
+                        <tr>
+                            <th>キーワード</th>
+                            <th>グループ</th>
+                            <th style="text-align:center;">ステータス</th>
+                            <th style="text-align:right;">スコア</th>
+                            <th style="text-align:right;">品質</th>
+                            <th>日時</th>
+                            <th style="width:80px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="aaHistoryBody"></tbody>
+                </table>
+            </div>
+            <div id="aaHistoryEmpty" style="text-align:center;padding:40px;color:var(--mw-text-tertiary);font-size:14px;">
+                まだ自動生成の履歴はありません。
+            </div>
         </div>
     </div>
 
@@ -673,9 +778,20 @@ get_header();
             } else if (a.similarity_risk === 'medium') {
                 riskBadge = ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:#D4A84320;color:#D4A843;">類似あり</span>';
             }
+            var autoBadge = '';
+            if (a.auto_generated) {
+                autoBadge = ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:rgba(86,129,132,0.12);color:var(--mw-primary-blue);">自動</span>';
+                if (a.auto_quality_score !== null) {
+                    var qc = a.auto_quality_score >= 70 ? '#27AE60' : (a.auto_quality_score >= 50 ? '#E67E22' : '#E74C3C');
+                    autoBadge += ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:' + qc + '20;color:' + qc + ';">Q' + Math.round(a.auto_quality_score) + '</span>';
+                }
+                if (a.needs_hearing) {
+                    autoBadge += ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:#E67E2220;color:#E67E22;">要ヒアリング</span>';
+                }
+            }
             return '<tr class="wrt-table__row" data-id="' + a.id + '">'
                 + '<td class="wrt-table__td-check"><input type="checkbox" class="wrt-article-check" data-id="' + a.id + '"></td>'
-                + '<td class="wrt-table__td-title">' + esc(a.title) + riskBadge + '</td>'
+                + '<td class="wrt-table__td-title">' + esc(a.title) + riskBadge + autoBadge + '</td>'
                 + '<td class="wrt-table__td-keyword">' + esc(a.keyword) + '</td>'
                 + '<td class="wrt-table__td-date">' + esc(dateStr) + '</td>'
                 + '</tr>';
@@ -1932,6 +2048,144 @@ get_header();
     dropzone.addEventListener('click', function(e) {
         if (e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') return;
         document.getElementById('wrtKnowledgeFileInput').click();
+    });
+
+    /* ===== 自動記事生成タブ ===== */
+    var AA_API = BASE + '/writing/auto-article';
+    var AA_GROUP_LABELS = {
+        immediate: '今すぐ', local_seo: 'ローカルSEO', comparison: '比較',
+        column: 'コラム', service_page: 'サービス', competitor_core: '競合コア',
+        competitor_longterm: '長期', competitor_gap: '競合ギャップ', competitor_compare: '競合比較'
+    };
+    var AA_STATUS_LABELS = {
+        pending: ['待機中', '#999'], processing: ['処理中', '#E67E22'],
+        draft_created: ['下書き生成', '#27AE60'], published: ['公開済', '#2980B9'],
+        skipped: ['スキップ', '#95A5A6'], angle_shifted: ['切り口変更', '#8E44AD'],
+        failed: ['失敗', '#E74C3C']
+    };
+
+    function aaLoadSettings() {
+        fetch(AA_API + '/settings', { headers: { 'X-WP-Nonce': nonce } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) return;
+                var s = d.settings;
+                document.getElementById('aaEnabled').checked = s.enabled;
+                document.getElementById('aaDailyLimit').value = s.daily_limit;
+                document.getElementById('aaMinScore').value = s.min_score;
+                document.getElementById('aaQualityThreshold').value = s.quality_threshold;
+                document.getElementById('aaAutoPublish').checked = s.auto_publish;
+                document.getElementById('aaPreferredTone').value = s.preferred_tone;
+            });
+    }
+
+    document.getElementById('aaSaveSettings').addEventListener('click', function() {
+        var body = {
+            enabled: document.getElementById('aaEnabled').checked,
+            daily_limit: parseInt(document.getElementById('aaDailyLimit').value) || 1,
+            min_score: parseInt(document.getElementById('aaMinScore').value) || 40,
+            quality_threshold: parseInt(document.getElementById('aaQualityThreshold').value) || 60,
+            auto_publish: document.getElementById('aaAutoPublish').checked,
+            preferred_tone: document.getElementById('aaPreferredTone').value
+        };
+        fetch(AA_API + '/settings', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+            body: JSON.stringify(body)
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            showToast(d.success ? '設定を保存しました' : (d.error || 'エラー'));
+        });
+    });
+
+    document.getElementById('aaLoadPreview').addEventListener('click', function() {
+        var wrap = document.getElementById('aaPreviewWrap');
+        var empty = document.getElementById('aaPreviewEmpty');
+        var loading = document.getElementById('aaPreviewLoading');
+        wrap.style.display = 'none'; empty.style.display = 'none'; loading.style.display = 'block';
+        fetch(AA_API + '/preview', { headers: { 'X-WP-Nonce': nonce } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                loading.style.display = 'none';
+                if (!d.success || !d.candidates || d.candidates.length === 0) {
+                    empty.style.display = 'block'; return;
+                }
+                var html = '';
+                d.candidates.slice(0, 30).forEach(function(c) {
+                    html += '<tr class="wrt-table__row">'
+                        + '<td style="font-weight:500;">' + esc(c.keyword) + '</td>'
+                        + '<td><span style="font-size:12px;padding:2px 8px;border-radius:4px;background:rgba(86,129,132,0.08);color:var(--mw-primary-blue);">' + (AA_GROUP_LABELS[c.group] || c.group) + '</span></td>'
+                        + '<td style="text-align:right;font-weight:600;">' + Math.round(c.score) + '</td>'
+                        + '<td style="text-align:right;">' + (c.volume || '-') + '</td>'
+                        + '<td style="text-align:right;">' + (c.difficulty || '-') + '</td>'
+                        + '<td><button class="wrt-btn wrt-btn--primary wrt-btn--sm aa-trigger-btn" data-keyword="' + esc(c.keyword) + '" type="button">生成</button></td>'
+                        + '</tr>';
+                });
+                document.getElementById('aaPreviewBody').innerHTML = html;
+                wrap.style.display = 'block';
+            }).catch(function() { loading.style.display = 'none'; empty.style.display = 'block'; });
+    });
+
+    document.getElementById('aaPreviewBody').addEventListener('click', function(e) {
+        var btn = e.target.closest('.aa-trigger-btn');
+        if (!btn) return;
+        btn.disabled = true; btn.textContent = '開始中...';
+        var kw = btn.getAttribute('data-keyword');
+        fetch(AA_API + '/trigger', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+            body: JSON.stringify({ keyword: kw })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            showToast(d.message || (d.success ? '生成開始' : 'エラー'));
+            btn.textContent = d.success ? '開始済' : '生成';
+            if (!d.success) btn.disabled = false;
+            aaLoadHistory();
+        });
+    });
+
+    function aaLoadHistory() {
+        fetch(AA_API + '/history?limit=50', { headers: { 'X-WP-Nonce': nonce } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                var wrap = document.getElementById('aaHistoryWrap');
+                var empty = document.getElementById('aaHistoryEmpty');
+                if (!d.success || !d.history || d.history.length === 0) {
+                    wrap.style.display = 'none'; empty.style.display = 'block'; return;
+                }
+                var html = '';
+                d.history.forEach(function(h) {
+                    var sl = AA_STATUS_LABELS[h.status] || [h.status, '#999'];
+                    var qColor = h.quality_score >= 70 ? '#27AE60' : (h.quality_score >= 50 ? '#E67E22' : '#E74C3C');
+                    html += '<tr class="wrt-table__row">'
+                        + '<td style="font-weight:500;">' + esc(h.keyword) + (h.final_keyword && h.final_keyword !== h.keyword ? '<br><span style="font-size:11px;color:var(--mw-text-tertiary);">→ ' + esc(h.final_keyword) + '</span>' : '') + '</td>'
+                        + '<td><span style="font-size:12px;padding:2px 8px;border-radius:4px;background:rgba(86,129,132,0.08);color:var(--mw-primary-blue);">' + (AA_GROUP_LABELS[h.keyword_group] || h.keyword_group || '-') + '</span></td>'
+                        + '<td style="text-align:center;"><span style="font-size:12px;padding:2px 10px;border-radius:4px;color:#fff;background:' + sl[1] + ';">' + sl[0] + '</span></td>'
+                        + '<td style="text-align:right;">' + Math.round(h.priority_score) + '</td>'
+                        + '<td style="text-align:right;">' + (h.quality_score !== null ? '<span style="color:' + qColor + ';font-weight:600;">' + Math.round(h.quality_score) + '</span>' : '-') + '</td>'
+                        + '<td style="font-size:12px;color:var(--mw-text-tertiary);">' + (h.created_at ? h.created_at.substring(0, 16) : '-') + '</td>'
+                        + '<td>' + (h.article_id ? '<a href="#" class="wrt-btn wrt-btn--secondary wrt-btn--sm aa-open-article" data-id="' + h.article_id + '">詳細</a>' : (h.error_message ? '<span title="' + esc(h.error_message) + '" style="cursor:help;font-size:12px;color:#E74C3C;">!</span>' : '')) + '</td>'
+                        + '</tr>';
+                });
+                document.getElementById('aaHistoryBody').innerHTML = html;
+                wrap.style.display = 'block'; empty.style.display = 'none';
+            });
+    }
+
+    document.getElementById('aaHistoryBody').addEventListener('click', function(e) {
+        var link = e.target.closest('.aa-open-article');
+        if (!link) return;
+        e.preventDefault();
+        var id = parseInt(link.getAttribute('data-id'));
+        if (id) openArticleDetail(id);
+    });
+
+    // タブ切替時に自動記事タブの初期化
+    var aaLoaded = false;
+    document.querySelectorAll('.wrt-tabs__tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            if (this.getAttribute('data-tab') === 'auto-article' && !aaLoaded) {
+                aaLoaded = true;
+                aaLoadSettings();
+                aaLoadHistory();
+            }
+        });
     });
 
     /* ===== 初期化 ===== */
