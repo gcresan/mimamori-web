@@ -1131,9 +1131,9 @@ get_header();
         // 競合調査セクション
         html += '<div class="wrt-detail-section" id="wrtCompetitorSection">';
         html += '<div class="wrt-detail-section__title">競合調査</div>';
-        if (a.competitor_research && a.competitor_research.analysis) {
+        if (a.competitor_research) {
             var cr = a.competitor_research;
-            var an = cr.analysis;
+            var an = cr.analysis || {};
             var okCompetitors = (cr.competitors || []).filter(function(c) { return c.status === 'ok'; });
             var ranks = okCompetitors.map(function(c) { return c.rank; }).sort(function(a,b) { return a-b; });
             var rankRange = ranks.length ? ranks[0] + '位〜' + ranks[ranks.length-1] + '位' : '';
@@ -1359,8 +1359,8 @@ get_header();
                 runCompetitorResearch(this.id === 'wrtRerunCompetitorBtn');
             });
         }
-        // 競合調査が未実施かつまだ自動実行していない場合のみ自動実行（1記事1回のみ）
-        if (!a.competitor_research || !a.competitor_research.analysis) {
+        // 競合調査が一度も実行されていない場合のみ自動実行（1記事1回のみ）
+        if (!a.competitor_research) {
             if (!_competitorAutoRanFor[a.id]) {
                 _competitorAutoRanFor[a.id] = true;
                 setTimeout(function() { runCompetitorResearch(false); }, 500);
