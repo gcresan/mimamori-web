@@ -692,7 +692,9 @@ get_header();
             document.querySelectorAll('.wrt-tabs__tab').forEach(function(t) { t.classList.remove('active'); });
             document.querySelectorAll('.wrt-tab-panel').forEach(function(p) { p.classList.remove('active'); });
             tab.classList.add('active');
-            document.getElementById('wrtPanel' + tab.dataset.tab.charAt(0).toUpperCase() + tab.dataset.tab.slice(1)).classList.add('active');
+            var panelId = 'wrtPanel' + tab.dataset.tab.split('-').map(function(s) { return s.charAt(0).toUpperCase() + s.slice(1); }).join('');
+            var panel = document.getElementById(panelId);
+            if (panel) panel.classList.add('active');
             // 詳細ビューを閉じる
             document.getElementById('wrtDetailView').style.display = 'none';
             document.querySelectorAll('.wrt-tabs, .wrt-tab-panel').forEach(function(el) { el.style.display = ''; });
