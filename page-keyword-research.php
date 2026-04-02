@@ -218,9 +218,9 @@ get_header();
 .kwr-summary__badge--competitor { background: rgba(201,168,76,0.18); color: #7A5F1E; }
 .kwr-summary__subtitle { font-size: 14px; color: var(--mw-text-secondary); margin: 0 0 24px; line-height: 1.6; }
 
-/* 重要語強調 */
-.kwr-hl { background: rgba(86,129,132,0.12); color: var(--mw-text-heading); padding: 1px 5px; border-radius: 3px; font-weight: 600; }
-.kwr-summary--competitor .kwr-hl { background: rgba(201,168,76,0.14); }
+/* 重要語強調（控えめ） */
+.kwr-hl { background: rgba(86,129,132,0.08); color: inherit; padding: 1px 3px; border-radius: 3px; font-weight: 600; }
+.kwr-summary--competitor .kwr-hl { background: rgba(201,168,76,0.10); }
 
 /* 重要文ハイライト */
 .kwr-key-sentence { display: block; background: rgba(86,129,132,0.04); border-left: 3px solid var(--mw-primary-blue, #568184); padding: 10px 16px; margin: 0 0 12px; border-radius: 0 6px 6px 0; font-weight: 600; color: var(--mw-text-heading); font-size: 14.5px; line-height: 1.8; }
@@ -827,22 +827,23 @@ get_header();
         document.getElementById('kwrMeta').innerHTML = html;
     }
 
-    /* ===== ユーティリティ: 重要語強調 ===== */
-    var kwrHighlightWords = [
-        '勝ちやすい', '狙い目', '狙いやすい', '競合が強い', '競合が多い',
-        '差別化', '実績', '料金', '比較', '相談', '優先度が高い', '優先',
-        '地域名', 'ローカル', '口コミ', 'レビュー', '事例', '導入',
-        '無料', '見積', '費用', '価格', '評判', 'おすすめ',
-        '強み', '弱み', '手薄', '不足', '充実', 'チャンス'
+    /* ===== ユーティリティ: 重要語強調（フレーズ単位・控えめ） ===== */
+    var kwrHighlightPhrases = [
+        '差別化しやすい', '差別化が難しい', '差別化できる', '差別化ポイント',
+        '狙い目', '狙いやすい', '勝ちやすい',
+        '競合が強い', '競合が多い', '競合が手薄',
+        '優先度が高い', '優先的に', '最優先',
+        '実績や事例', '実績の掲載', '料金の見せ方', '料金比較',
+        '地域名を含め', '地域密着'
     ];
     function highlightKeywords(text) {
         if (!text) return '';
         var escaped = esc(text);
         var count = 0;
-        var maxHighlights = 4;
-        kwrHighlightWords.forEach(function(word) {
+        var maxHighlights = 2;
+        kwrHighlightPhrases.forEach(function(phrase) {
             if (count >= maxHighlights) return;
-            var regex = new RegExp('(' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'g');
+            var regex = new RegExp('(' + phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'g');
             escaped = escaped.replace(regex, function(m) {
                 if (count >= maxHighlights) return m;
                 count++;
@@ -875,14 +876,15 @@ get_header();
     /* ===== ユーティリティ: 本文を段落分割＋冒頭文ハイライト ===== */
     function formatBodyText(text) {
         if (!text) return '';
-        var highlighted = highlightKeywords(text);
-        // 。で区切って段落化（長い文を読みやすくする）
-        var sentences = highlighted.split(/。/).filter(function(s) { return s.trim().length > 0; });
-        if (sentences.length <= 2) return '<p>' + highlighted + '</p>';
-        // 最初の文を重要文として強調
-        var first = sentences[0].trim() + '。';
-        var rest = sentences.slice(1).map(function(s) { return s.trim() + '。'; }).join('');
-        return '<span class="kwr-key-sentence">' + first + '</span><p>' + rest + '</p>';
+        // 。で区切って段落化
+        var sentences = text.split(/。/).filter(function(s) { return s.trim().length > 0; });
+        if (sentences.length <= 2) return '<p>' + highlightKeywords(text) + '</p>';
+        // 最初の文は冒頭ハイライト（強調マークなし — 既に目立つため二重装飾しない）
+        var first = esc(sentences[0].trim()) + '。';
+        // 残りの文にだけ控えめに強調を適用
+        var restText = sentences.slice(1).map(function(s) { return s.trim() + '。'; }).join('');
+        var restHighlighted = highlightKeywords(restText);
+        return '<span class="kwr-key-sentence">' + first + '</span><p>' + restHighlighted + '</p>';
     }
 
     /* ===== サマリー描画 ===== */
