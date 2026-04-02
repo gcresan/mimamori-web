@@ -289,6 +289,13 @@ get_header();
 .wrt-title-edit-input { width: 100%; padding: 8px 10px; border: 1px solid var(--mw-primary-blue, #568184); border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--mw-text-heading); background: #fff; box-sizing: border-box; }
 .wrt-title-actions { display: flex; gap: 8px; margin-top: 12px; }
 
+/* 未保存状態のボタン色変化 */
+.wrt-btn--has-changes { background: var(--mw-primary-blue, #568184) !important; color: #fff !important; border-color: var(--mw-primary-blue, #568184) !important; }
+.wrt-btn--has-changes:hover { background: var(--mw-btn-primary-hover, #476C6F) !important; }
+/* 本文再生成ボタンの未反映警告 */
+.wrt-btn--pending-regen { position: relative; }
+.wrt-regen-hint { display: block; font-size: 11px; font-weight: 400; color: rgba(255,255,255,0.85); margin-top: 2px; }
+
 @media (max-width: 768px) {
     .wrt-draft-preview { padding: 24px 20px; }
     .wrt-draft-h1 { font-size: 22px; }
@@ -1068,8 +1075,36 @@ get_header();
             renderArticleDetail();
         }).catch(function() { hideProgress(); showToast('通信エラー', true); });
     }
+    /* ===== 未保存・未反映 状態管理 ===== */
+    var _hasUnsavedInterview = false;
+    var _hasPendingRegen = false;
+
+    function setUnsavedInterview(val) {
+        _hasUnsavedInterview = val;
+        // ラウンドごとの保存ボタンすべてに反映
+        document.querySelectorAll('.wrt-save-round-btn').forEach(function(btn) {
+            if (val) { btn.classList.add('wrt-btn--has-changes'); }
+            else { btn.classList.remove('wrt-btn--has-changes'); }
+        });
+    }
+    function setPendingRegen(val) {
+        _hasPendingRegen = val;
+        var btn = document.getElementById('wrtGenerateDraftBtn');
+        if (!btn) return;
+        if (val && currentArticle && currentArticle.draft_content) {
+            btn.innerHTML = '変更した設定で本文を再生成';
+            btn.classList.add('wrt-btn--pending-regen');
+        } else {
+            btn.textContent = currentArticle && currentArticle.draft_content ? '本文を再生成' : '本文たたき台を生成';
+            btn.classList.remove('wrt-btn--pending-regen');
+        }
+    }
+
     function renderArticleDetail() {
         var a = currentArticle;
+        // 状態リセット
+        _hasUnsavedInterview = false;
+        _hasPendingRegen = false;
         // タブ・一覧を隠す
         document.querySelectorAll('.wrt-tabs, .wrt-tab-panel').forEach(function(el) { el.style.display = 'none'; });
         var view = document.getElementById('wrtDetailView');
@@ -1324,7 +1359,7 @@ get_header();
                 target_reader: document.getElementById('wrtSetReader').value,
                 selected_knowledge_ids: selectedIds
             }}).then(function(res) {
-                if (res.success) { showToast('設定を保存しました'); currentArticle = res.article; }
+                if (res.success) { showToast('設定を保存しました'); currentArticle = res.article; setPendingRegen(true); }
                 else showToast(res.error || 'エラー', true);
             });
         });
@@ -1454,6 +1489,7 @@ get_header();
                 hideProgress();
                 if (res.success) {
                     currentArticle.draft_content = res.draft_content;
+                    setPendingRegen(false);
                     renderDraft(res.draft_content);
                     showToast('本文を再生成しました');
                 } else {
@@ -1843,6 +1879,11 @@ get_header();
         html += '</div>';
         area.innerHTML = html;
 
+        // イベントリスナー: 回答入力で未保存フラグをON
+        area.querySelectorAll('.wrt-interview-ans').forEach(function(el) {
+            el.addEventListener('input', function() { setUnsavedInterview(true); });
+        });
+
         // イベントリスナー: 音声入力ボタン
         area.querySelectorAll('.wrt-voice-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -1862,7 +1903,13 @@ get_header();
                     answersObj[el.dataset.idx] = el.value;
                 });
                 apiFetch('/articles/' + articleId + '/interview', { method: 'PUT', body: { answers: answersObj, round: roundNum } }).then(function(res) {
-                    if (res.success) { currentArticle.interview = res.interview; showToast('回答を保存しました'); renderInterviewTimeline(res.interview, articleId); }
+                    if (res.success) {
+                        currentArticle.interview = res.interview;
+                        showToast('回答を保存しました');
+                        setUnsavedInterview(false);
+                        setPendingRegen(true);
+                        renderInterviewTimeline(res.interview, articleId);
+                    }
                     else showToast(res.error || 'エラー', true);
                 });
             });
