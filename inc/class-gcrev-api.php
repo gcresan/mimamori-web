@@ -1240,6 +1240,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_wp_publish_test' ],
             'permission_callback' => function() { return current_user_can( 'manage_options' ); },
         ]);
+        register_rest_route('gcrev/v1', '/wp-publish/categories', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_wp_publish_categories' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         register_rest_route('gcrev/v1', '/writing/check-similarity', [
             'methods'             => 'POST',
@@ -15293,7 +15298,15 @@ PROMPT;
     public function rest_writing_publish_wp( \WP_REST_Request $request ): \WP_REST_Response {
         if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
         try {
-            $result = $this->writing_service->publish_to_wp( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            $params = $request->get_json_params();
+            $options = [];
+            if ( ! empty( $params['status'] ) && in_array( $params['status'], [ 'draft', 'pending', 'publish' ], true ) ) {
+                $options['status'] = $params['status'];
+            }
+            if ( ! empty( $params['categories'] ) && is_array( $params['categories'] ) ) {
+                $options['categories'] = array_map( 'absint', $params['categories'] );
+            }
+            $result = $this->writing_service->publish_to_wp( get_current_user_id(), (int) $request->get_param( 'id' ), $options );
             return new \WP_REST_Response( $result );
         } catch ( \Throwable $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
@@ -15320,6 +15333,18 @@ PROMPT;
         }
         $client = new Gcrev_WP_Publish_Client();
         $result = $client->test_connection( $settings['site_url'], $settings['username'], $settings['app_password'] );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_wp_publish_categories( \WP_REST_Request $request ): \WP_REST_Response {
+        require_once __DIR__ . '/gcrev-api/modules/class-wp-publish-client.php';
+        $user_id  = get_current_user_id();
+        $settings = Gcrev_WP_Publish_Client::get_settings( $user_id );
+        if ( ! $settings['enabled'] || $settings['site_url'] === '' || $settings['username'] === '' || $settings['app_password'] === '' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'WordPress連携が設定されていません。' ] );
+        }
+        $client = new Gcrev_WP_Publish_Client();
+        $result = $client->get_categories( $settings['site_url'], $settings['username'], $settings['app_password'] );
         return new \WP_REST_Response( $result );
     }
 

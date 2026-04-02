@@ -51,7 +51,7 @@ class Gcrev_WP_Publish_Client {
             update_user_meta( $user_id, 'gcrev_wp_publish_app_password', self::encrypt_password( $data['app_password'] ) );
         }
         if ( isset( $data['default_status'] ) ) {
-            $status = in_array( $data['default_status'], [ 'draft', 'pending' ], true ) ? $data['default_status'] : 'draft';
+            $status = in_array( $data['default_status'], [ 'draft', 'pending', 'publish' ], true ) ? $data['default_status'] : 'draft';
             update_user_meta( $user_id, 'gcrev_wp_publish_default_status', $status );
         }
         if ( isset( $data['default_category'] ) ) {
@@ -197,6 +197,54 @@ class Gcrev_WP_Publish_Client {
             $result[] = [ 'id' => $cat['id'], 'name' => $cat['name'], 'slug' => $cat['slug'] ];
         }
         return [ 'success' => true, 'categories' => $result ];
+    }
+
+    // =========================================================
+    // メディアアップロード
+    // =========================================================
+
+    /**
+     * 画像ファイルをリモート WordPress にアップロードする。
+     *
+     * @return array{ success: bool, media_id?: int, error?: string }
+     */
+    public function upload_media( string $site_url, string $username, string $app_password, string $file_path, string $filename ): array {
+        $endpoint = rtrim( $site_url, '/' ) . '/wp-json/wp/v2/media';
+        self::log( "upload_media: {$endpoint}, file={$filename}" );
+
+        $mime = wp_check_filetype( $filename )['type'] ?: 'image/png';
+        $file_data = file_get_contents( $file_path );
+        if ( $file_data === false ) {
+            return [ 'success' => false, 'error' => 'ファイルの読み込みに失敗しました。' ];
+        }
+
+        $response = wp_remote_post( $endpoint, [
+            'timeout' => 60,
+            'headers' => [
+                'Authorization'       => 'Basic ' . base64_encode( $username . ':' . $app_password ),
+                'Content-Type'        => $mime,
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ],
+            'body' => $file_data,
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            $msg = $response->get_error_message();
+            self::log( "upload_media: WP_Error: {$msg}" );
+            return [ 'success' => false, 'error' => '通信エラー: ' . $msg ];
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code === 201 && ! empty( $body['id'] ) ) {
+            self::log( "upload_media: success, media_id=" . $body['id'] );
+            return [ 'success' => true, 'media_id' => (int) $body['id'] ];
+        }
+
+        $wp_msg = $body['message'] ?? '';
+        self::log( "upload_media: HTTP {$code} msg={$wp_msg}" );
+        return [ 'success' => false, 'error' => "メディアアップロードに失敗しました（HTTP {$code}）" . ( $wp_msg ? ": {$wp_msg}" : '' ) ];
     }
 
     // =========================================================
