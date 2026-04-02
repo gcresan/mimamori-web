@@ -1280,7 +1280,31 @@ get_header();
 
         // 記事設定
         html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">記事設定</div>';
-        html += '<div class="wrt-settings-grid">';
+
+        // 想定読者
+        html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">想定読者</label>';
+        html += '<input type="text" id="wrtSetReader" value="' + esc(a.target_reader) + '" placeholder="例: WEBで集客改善を考えている地域事業者" style="width:100%;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;background:var(--mw-bg-primary);color:var(--mw-text-primary);box-sizing:border-box;">';
+        html += '</div>';
+
+        // 参照する情報ストック
+        html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">参照する情報ストック</label>';
+        html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">関連する情報ストックが自動で選択されています。外したい場合はクリックしてください。</div>';
+        html += '<div class="wrt-kb-select" id="wrtKbSelect"></div></div>';
+
+        // 補足指示
+        html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">補足指示</label>';
+        html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:4px;">この記事で特に入れたい内容や、避けたい表現などがあれば記入してください</div>';
+        html += '<textarea id="wrtSupplementPrompt" rows="3" placeholder="例: 伴走支援の強みをしっかり入れてほしい / 補助金の話題は入れないでほしい" style="width:100%;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);box-sizing:border-box;">' + esc(a.supplement || '') + '</textarea>';
+        html += '</div>';
+
+        // 保存ボタン
+        html += '<div style="text-align:right;margin-bottom:12px;">';
+        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveSettingsBtn">設定を保存</button>';
+        html += '</div>';
+
+        // 詳細設定（折りたたみ）
+        html += '<details style="margin-top:4px;"><summary style="font-size:12px;color:var(--mw-text-tertiary);cursor:pointer;user-select:none;">詳細設定（記事タイプ・目的・文体）</summary>';
+        html += '<div class="wrt-settings-grid" style="margin-top:10px;">';
         html += '<div><label><span class="wrt-help-trigger" data-help="type">記事タイプ <span class="wrt-help-icon">?</span></span></label><select id="wrtSetType">';
         Object.keys(typeLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.type === k ? ' selected' : '') + '>' + esc(typeLabels[k]) + '</option>'; });
         html += '</select></div>';
@@ -1290,19 +1314,10 @@ get_header();
         html += '<div><label>文体</label><select id="wrtSetTone">';
         Object.keys(toneLabels).forEach(function(k) { html += '<option value="' + k + '"' + (a.tone === k ? ' selected' : '') + '>' + esc(toneLabels[k]) + '</option>'; });
         html += '</select></div>';
-        html += '<div><label>想定読者</label><input type="text" id="wrtSetReader" value="' + esc(a.target_reader) + '" placeholder="例: 松山市で歯医者を探している30代主婦"></div>';
         html += '</div>';
-        // 情報ストック選択
-        html += '<div style="margin-top:12px;"><label>参照する情報ストック（自動選択）</label><div class="wrt-kb-select" id="wrtKbSelect"></div></div>';
-        html += '<div style="margin-top:12px;text-align:right;">';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSaveSettingsBtn">設定を保存</button>';
-        html += '</div></div>';
+        html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:6px;">通常はAIが自動判定します。変更した場合は「設定を保存」を押してください。</div>';
+        html += '</details>';
 
-        // 記事個別メモ
-        html += '<div class="wrt-detail-section"><div class="wrt-detail-section__title">記事個別メモ</div>';
-        html += '<div id="wrtNotesArea"></div>';
-        html += '<div style="display:flex;gap:8px;margin-top:8px;"><textarea id="wrtNoteInput" rows="2" placeholder="この記事用のメモ・補足情報を追加" style="flex:1;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);"></textarea>';
-        html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtAddNoteBtn" style="align-self:flex-end;">追加</button></div>';
         html += '</div>';
 
         // インタビュー（一次情報抽出）
@@ -1316,7 +1331,7 @@ get_header();
         // 追加編集プロンプト
         html += '<div class="wrt-detail-section">';
         html += '<div class="wrt-detail-section__title">追加編集プロンプト</div>';
-        html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">本文に対する修正指示を入力して再生成できます。</p>';
+        html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">生成された本文を調整したい場合は、修正内容を入力してください。<br>例: 導入をもっと具体的にしたい、表現をやわらかくしたい、事例を追加したい など</p>';
         html += '<div style="display:flex;gap:6px;align-items:flex-start;">';
         html += '<textarea id="wrtRefinePrompt" rows="4" placeholder="例: 導入部分をもっと具体的にしてください" style="flex:1;padding:8px 10px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;background:var(--mw-bg-primary);color:var(--mw-text-primary);box-sizing:border-box;"></textarea>';
         html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtRefineVoiceBtn" title="音声入力" style="padding:6px 10px;font-size:16px;line-height:1;flex-shrink:0;">🎤</button>';
@@ -1352,28 +1367,21 @@ get_header();
         document.getElementById('wrtSaveSettingsBtn').addEventListener('click', function() {
             var selectedIds = [];
             document.querySelectorAll('.wrt-kb-select__item.selected').forEach(function(el) { selectedIds.push(parseInt(el.dataset.id)); });
+            var supplementEl = document.getElementById('wrtSupplementPrompt');
             apiFetch('/articles/' + a.id + '/settings', { method: 'POST', body: {
                 type: document.getElementById('wrtSetType').value,
                 purpose: document.getElementById('wrtSetPurpose').value,
                 tone: document.getElementById('wrtSetTone').value,
                 target_reader: document.getElementById('wrtSetReader').value,
-                selected_knowledge_ids: selectedIds
+                selected_knowledge_ids: selectedIds,
+                supplement: supplementEl ? supplementEl.value : ''
             }}).then(function(res) {
                 if (res.success) { showToast('設定を保存しました'); currentArticle = res.article; setPendingRegen(true); }
                 else showToast(res.error || 'エラー', true);
             });
         });
 
-        // メモ追加
-        document.getElementById('wrtAddNoteBtn').addEventListener('click', function() {
-            var text = document.getElementById('wrtNoteInput').value.trim();
-            if (!text) return;
-            apiFetch('/articles/' + a.id + '/notes', { method: 'POST', body: { text: text } }).then(function(res) {
-                if (res.success) { document.getElementById('wrtNoteInput').value = ''; currentArticle.notes = res.notes; renderNotes(res.notes, a.id); showToast('メモを追加しました'); }
-                else showToast(res.error || 'エラー', true);
-            });
-        });
-        renderNotes(a.notes || [], a.id);
+        // （旧メモセクションは補足指示に統合済み）
 
         // 競合調査ボタン＋自動実行
         function runCompetitorResearch(force) {

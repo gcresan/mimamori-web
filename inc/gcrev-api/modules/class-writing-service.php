@@ -673,6 +673,11 @@ class Gcrev_Writing_Service {
             }
         }
 
+        // 補足指示
+        if ( isset( $data['supplement'] ) ) {
+            update_post_meta( $article_id, '_gcrev_article_supplement', sanitize_textarea_field( $data['supplement'] ) );
+        }
+
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
@@ -758,6 +763,7 @@ class Gcrev_Writing_Service {
             'auto_angle'             => get_post_meta( $post->ID, '_gcrev_article_auto_angle', true ) ?: null,
             'auto_quality_score'     => get_post_meta( $post->ID, '_gcrev_article_auto_quality_score', true ) ?: null,
             'auto_keyword_group'     => get_post_meta( $post->ID, '_gcrev_article_auto_keyword_group', true ) ?: null,
+            'supplement'             => get_post_meta( $post->ID, '_gcrev_article_supplement', true ) ?: '',
             'needs_hearing'          => (bool) get_post_meta( $post->ID, '_gcrev_article_needs_hearing_enhancement', true ),
             'created_at'             => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'             => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
@@ -2235,6 +2241,12 @@ STRUCTURE_FORMAT;
             $rules_text
         );
 
+        // 補足指示（記事設定で保存された生成前の指示）
+        $supplement = get_post_meta( $article_id, '_gcrev_article_supplement', true );
+        if ( $supplement !== '' && $supplement !== false ) {
+            $prompt .= "\n\n## 補足指示（記事の方向性に関する指示。必ず反映すること）\n{$supplement}\n";
+            $this->log( "generate_draft: supplement applied, len=" . mb_strlen( $supplement ) );
+        }
         // 追加編集プロンプトがあればドラフトプロンプトに追記
         if ( $additional_prompt !== '' ) {
             $prompt .= "\n\n## ユーザーからの追加指示（必ず反映すること）\n{$additional_prompt}\n";
