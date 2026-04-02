@@ -2067,7 +2067,7 @@ get_header();
     });
 
     /* ===== 自動記事生成タブ ===== */
-    var AA_API = BASE + '/writing/auto-article';
+    var AA_API = baseUrl + '/auto-article';
     var AA_GROUP_LABELS = {
         immediate: '今すぐ', local_seo: 'ローカルSEO', comparison: '比較',
         column: 'コラム', service_page: 'サービス', competitor_core: '競合コア',
