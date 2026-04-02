@@ -31,6 +31,12 @@ get_header();
    ライティング — スタイル (Phase 1)
    ========================================================= */
 
+/* ページ固有: コンテンツ幅を広げ、左右余白を縮小 */
+.content-area {
+    max-width: none !important;
+    padding: 44px 48px 64px;
+}
+
 /* ヘッダーアクション */
 .wrt-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 .wrt-search-input { flex: 1; min-width: 200px; padding: 10px 16px; border: 1px solid var(--mw-border-light); border-radius: 8px; font-size: 14px; background: var(--mw-bg-primary); color: var(--mw-text-primary); box-sizing: border-box; }
@@ -195,6 +201,8 @@ get_header();
 .wrt-kb-select__item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--mw-border-light); border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
 .wrt-kb-select__item:hover { border-color: var(--mw-primary-blue); }
 .wrt-kb-select__item.selected { background: rgba(74,144,164,0.1); border-color: var(--mw-primary-blue); }
+.wrt-kb-select__item.locked { opacity: 0.85; cursor: default; }
+.wrt-kb-select__item.locked:hover { border-color: var(--mw-primary-blue); }
 
 /* ファイル添付 */
 .wrt-file-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light); border-radius: 6px; font-size: 12px; margin-bottom: 4px; }
@@ -256,6 +264,20 @@ get_header();
 
 /* 本文エディター */
 .wrt-draft-editor { width: 100%; min-height: 500px; padding: 40px 48px; font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif; font-size: 15px; line-height: 2; color: #374151; border: none; outline: none; resize: vertical; box-sizing: border-box; background: #fff; }
+/* 選択テキスト修正フローティングボタン */
+.wrt-sel-float { position: absolute; z-index: 9999; display: none; }
+.wrt-sel-float.visible { display: flex; }
+.wrt-sel-float__btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px; background: var(--mw-primary-blue, #568184); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.18); transition: all 0.2s; white-space: nowrap; }
+.wrt-sel-float__btn:hover { background: #476b6e; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.22); }
+/* 選択テキスト修正モーダル */
+.wrt-sel-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10003; display: none; align-items: center; justify-content: center; }
+.wrt-sel-modal.active { display: flex; }
+.wrt-sel-modal__inner { background: var(--mw-bg-primary); border-radius: 16px; padding: 28px; max-width: 560px; width: 92%; max-height: 80vh; overflow-y: auto; }
+.wrt-sel-modal__title { font-size: 16px; font-weight: 700; color: var(--mw-text-heading); margin-bottom: 16px; }
+.wrt-sel-modal__label { font-size: 12px; font-weight: 600; color: var(--mw-text-secondary); margin-bottom: 6px; }
+.wrt-sel-modal__preview { background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.8; color: var(--mw-text-body, #374151); max-height: 150px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-bottom: 16px; }
+.wrt-sel-modal__prompt { width: 100%; padding: 10px 12px; border: 1px solid var(--mw-border-light); border-radius: 8px; font-size: 13px; line-height: 1.6; resize: vertical; background: var(--mw-bg-primary); color: var(--mw-text-primary); box-sizing: border-box; }
+.wrt-sel-modal__actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; align-items: center; }
 
 /* 競合調査結果 */
 .wrt-cr-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -617,6 +639,13 @@ get_header();
                     <option value="5">5（高）</option>
                 </select>
             </div>
+            <div class="wrt-modal__field">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                    <input type="checkbox" id="wrtKnowledgeAlwaysRef" style="width:16px;height:16px;accent-color:var(--mw-primary-blue,#568184);">
+                    <span>必ず参照する</span>
+                </label>
+                <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">チェックすると、記事作成時に必ずこの情報が参照されます</div>
+            </div>
             <div class="wrt-modal__field" id="wrtKnowledgeFileSection">
                 <label>添付ファイル</label>
                 <div id="wrtKnowledgeFileList" style="margin-bottom:8px;"></div>
@@ -700,6 +729,29 @@ get_header();
             <div id="wrtScoreModalBody"></div>
             <div class="wrt-modal__actions">
                 <button class="wrt-btn wrt-btn--secondary" id="wrtScoreModalCloseBtn" type="button">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 選択テキスト修正フローティングボタン ===== -->
+    <div class="wrt-sel-float" id="wrtSelFloat">
+        <button class="wrt-sel-float__btn" id="wrtSelFloatBtn" type="button">選択範囲を修正</button>
+    </div>
+
+    <!-- ===== 選択テキスト修正モーダル ===== -->
+    <div class="wrt-sel-modal" id="wrtSelModal">
+        <div class="wrt-sel-modal__inner">
+            <div class="wrt-sel-modal__title">選択テキストを修正</div>
+            <div class="wrt-sel-modal__label">選択中のテキスト</div>
+            <div class="wrt-sel-modal__preview" id="wrtSelPreview"></div>
+            <div class="wrt-sel-modal__label">修正指示</div>
+            <div style="display:flex;gap:6px;align-items:flex-start;">
+                <textarea id="wrtSelPrompt" class="wrt-sel-modal__prompt" rows="3" placeholder="例: もっと具体的にしてください、表現をやわらかくしてください"></textarea>
+                <button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSelVoiceBtn" title="音声入力" style="padding:6px 10px;font-size:16px;line-height:1;flex-shrink:0;">🎤</button>
+            </div>
+            <div class="wrt-sel-modal__actions">
+                <button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtSelCancelBtn" type="button">キャンセル</button>
+                <button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtSelExecBtn" type="button">この指示で修正</button>
             </div>
         </div>
     </div>
@@ -1221,7 +1273,7 @@ get_header();
             if (a.wp_publish && a.wp_publish.remote_post_id && !a.wp_publish.error) {
                 html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtPublishWpBtn">WordPress記事を更新</button>';
                 if (a.wp_publish.remote_url) {
-                    html += '<a href="' + esc(a.wp_publish.remote_url) + '" target="_blank" rel="noopener" style="font-size:12px;color:var(--mw-primary-blue);white-space:nowrap;">投稿記事を開く ↗</a>';
+                    html += '<a href="' + esc(a.wp_publish.remote_url) + '" target="_blank" rel="noopener" class="wrt-btn wrt-btn--secondary wrt-btn--sm">投稿記事を開く ↗</a>';
                 }
                 html += '<span style="font-size:11px;color:var(--mw-text-tertiary);white-space:nowrap;">下書き保存済み</span>';
             } else {
@@ -1896,13 +1948,11 @@ get_header();
                     html += '<div style="font-size:10px;color:#8b5cf6;margin-bottom:4px;">↳ ' + esc(q.parent_id) + 'への深掘り' + (patternLabel ? '（' + esc(patternLabel) + '）' : '') + '</div>';
                 }
 
-                // 質問ヘッダー（優先度バッジ付き）
-                html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+                // 質問ヘッダー（優先度バッジを質問文の上に配置）
                 if (q.priority && priorityColors[q.priority]) {
-                    html += '<span style="font-size:10px;font-weight:700;color:#fff;background:' + priorityColors[q.priority] + ';padding:1px 6px;border-radius:3px;white-space:nowrap;">優先度: ' + esc(priorityLabels[q.priority] || q.priority) + '</span>';
+                    html += '<div style="margin-bottom:4px;"><span style="font-size:10px;font-weight:700;color:#fff;background:' + priorityColors[q.priority] + ';padding:1px 6px;border-radius:3px;white-space:nowrap;">優先度: ' + esc(priorityLabels[q.priority] || q.priority) + '</span></div>';
                 }
-                html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-heading);">Q' + (qIdx+1) + '. ' + esc(q.question) + '</div>';
-                html += '</div>';
+                html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-heading);margin-bottom:4px;">Q' + (qIdx+1) + '. ' + esc(q.question) + '</div>';
 
                 if (q.reason) {
                     html += '<div style="font-size:11px;color:var(--mw-text-secondary);margin-bottom:4px;">理由: ' + esc(q.reason) + '</div>';
@@ -2470,18 +2520,24 @@ get_header();
             var container = document.getElementById('wrtKbSelect');
             if (!container) return;
             if (items.length === 0) { container.innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">情報ストックがありません（登録すると自動的に記事生成に活用されます）</span>'; return; }
-            // selectedIds が空 = 全件自動選択（デフォルト）
-            var autoSelectAll = !selectedIds || selectedIds.length === 0;
-            container.innerHTML = '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">すべての情報ストックが自動的に参照されます。除外したい場合はクリックして外してください。</div>'
+            // selectedIds が空 = always_ref のアイテムのみ自動選択
+            var noExplicitSelection = !selectedIds || selectedIds.length === 0;
+            container.innerHTML = '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">「常時参照」の情報は自動で選択されます。追加で参照したい情報はクリックして選択してください。</div>'
                 + items.map(function(ki) {
-                    var sel = autoSelectAll || selectedIds.indexOf(ki.id) >= 0 ? ' selected' : '';
+                    var isAlwaysRef = !!ki.always_ref;
+                    var sel = isAlwaysRef || (!noExplicitSelection && selectedIds.indexOf(ki.id) >= 0) ? ' selected' : '';
+                    var locked = isAlwaysRef ? ' locked' : '';
                     var fileIcon = ki.files && ki.files.length > 0 ? ' 📎' : '';
-                    return '<div class="wrt-kb-select__item' + sel + '" data-id="' + ki.id + '">'
+                    var lockLabel = isAlwaysRef ? ' <span style="font-size:10px;color:var(--mw-primary-blue);">常時参照</span>' : '';
+                    return '<div class="wrt-kb-select__item' + sel + locked + '" data-id="' + ki.id + '" data-always="' + (isAlwaysRef ? '1' : '0') + '">'
                         + '<span class="wrt-cat-badge">' + esc(catLabels[ki.category] || ki.category) + '</span> '
-                        + esc(ki.title) + fileIcon + '</div>';
+                        + esc(ki.title) + fileIcon + lockLabel + '</div>';
                 }).join('');
             container.querySelectorAll('.wrt-kb-select__item').forEach(function(el) {
-                el.addEventListener('click', function() { el.classList.toggle('selected'); });
+                el.addEventListener('click', function() {
+                    if (el.dataset.always === '1') return;
+                    el.classList.toggle('selected');
+                });
             });
         });
     }
@@ -2538,7 +2594,7 @@ get_header();
                 + '<div class="wrt-knowledge-card__body">'
                 + '<div class="wrt-card__title"><span class="wrt-cat-badge">' + esc(catLabels[ki.category] || ki.category) + '</span> ' + esc(ki.title) + '</div>'
                 + '<div class="wrt-knowledge-card__excerpt">' + esc((ki.content || '').substring(0, 100)) + '</div>'
-                + '<div class="wrt-card__meta"><span>優先度: ' + ki.priority + '</span>'
+                + '<div class="wrt-card__meta">' + (ki.always_ref ? '<span style="color:var(--mw-primary-blue);font-weight:600;">常時参照</span>' : '<span>優先度: ' + ki.priority + '</span>')
                 + (ki.files && ki.files.length > 0 ? '<span>📎 ' + ki.files.length + '件</span>' : '')
                 + '<span>' + esc(ki.updated_at) + '</span></div>'
                 + '</div>'
@@ -2574,6 +2630,7 @@ get_header();
         document.getElementById('wrtKnowledgeCategorySelect').value = item ? item.category : 'notes';
         document.getElementById('wrtKnowledgeContent').value = item ? item.content : '';
         document.getElementById('wrtKnowledgePriority').value = item ? item.priority : 3;
+        document.getElementById('wrtKnowledgeAlwaysRef').checked = item ? !!item.always_ref : (document.getElementById('wrtKnowledgeCategorySelect').value === 'rules');
         // ファイルセクション: 常に表示（未保存でもアップロード可能 — 自動保存される）
         if (item) {
             renderKnowledgeFiles(item.files || []);
@@ -2617,13 +2674,20 @@ get_header();
     document.getElementById('wrtKnowledgeModalClose').addEventListener('click', closeKnowledgeModal);
     document.getElementById('wrtKnowledgeModalCancel').addEventListener('click', closeKnowledgeModal);
     document.getElementById('wrtKnowledgeModal').addEventListener('click', function(e) { if (e.target === this) closeKnowledgeModal(); });
+    // カテゴリ変更時: rules なら「必ず参照する」を自動ON（新規作成時のみ）
+    document.getElementById('wrtKnowledgeCategorySelect').addEventListener('change', function() {
+        if (!currentKnowledgeItem && this.value === 'rules') {
+            document.getElementById('wrtKnowledgeAlwaysRef').checked = true;
+        }
+    });
     document.getElementById('wrtKnowledgeSaveBtn').addEventListener('click', function() {
         var body = {
             id: parseInt(document.getElementById('wrtKnowledgeId').value),
             title: document.getElementById('wrtKnowledgeTitleInput').value,
             category: document.getElementById('wrtKnowledgeCategorySelect').value,
             content: document.getElementById('wrtKnowledgeContent').value,
-            priority: parseInt(document.getElementById('wrtKnowledgePriority').value)
+            priority: parseInt(document.getElementById('wrtKnowledgePriority').value),
+            always_ref: document.getElementById('wrtKnowledgeAlwaysRef').checked ? 1 : 0
         };
         apiFetch('/knowledge', { method: 'POST', body: body }).then(function(res) {
             if (res.success) {
