@@ -196,9 +196,14 @@ get_header();
 .wrt-toast.active { opacity: 1; pointer-events: auto; }
 .wrt-toast--error { background: #C95A4F; }
 
-/* 情報ストック選択チェックボックス */
-.wrt-kb-select { display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px; overflow-y: auto; background: var(--mw-bg-secondary, #f5f6f7); border-radius: 8px; padding: 10px; }
-.wrt-kb-select__item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--mw-border-light); border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+/* 情報ストック選択エリア */
+.wrt-kb-select-wrap { background: var(--mw-bg-secondary, #f5f6f7); border: 1px solid var(--mw-border-light, #e2e5e9); border-radius: 10px; padding: 12px 14px; }
+.wrt-kb-select { display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow-y: auto; padding: 2px; }
+.wrt-kb-select::-webkit-scrollbar { width: 5px; }
+.wrt-kb-select::-webkit-scrollbar-track { background: transparent; border-radius: 3px; }
+.wrt-kb-select::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+.wrt-kb-select::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+.wrt-kb-select__item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--mw-border-light); border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.15s; background: var(--mw-bg-primary, #fff); }
 .wrt-kb-select__item:hover { border-color: var(--mw-primary-blue); }
 .wrt-kb-select__item.selected { background: rgba(74,144,164,0.1); border-color: var(--mw-primary-blue); }
 .wrt-kb-select__item.locked { opacity: 0.85; cursor: default; }
@@ -1467,9 +1472,12 @@ get_header();
         html += '</div>';
 
         // 参照する情報ストック
-        html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">参照する情報ストック</label>';
-        html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">関連する情報ストックが自動で選択されています。外したい場合はクリックしてください。</div>';
-        html += '<div class="wrt-kb-select" id="wrtKbSelect"></div></div>';
+        html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);display:block;margin-bottom:6px;">参照する情報ストック</label>';
+        html += '<div class="wrt-kb-select-wrap">';
+        html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:8px;">関連する情報ストックが自動で選択されています。外したい場合はクリックしてください。</div>';
+        html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:8px;">「常時参照」の情報は自動で選択されます。追加で参照したい情報はクリックして選択してください。</div>';
+        html += '<div class="wrt-kb-select" id="wrtKbSelect"></div>';
+        html += '</div></div>';
 
         // 補足指示
         html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">補足指示</label>';
