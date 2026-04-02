@@ -2394,16 +2394,18 @@ STRUCTURE_FORMAT;
         try {
             $raw = $this->ai->call_gemini_api( $prompt, [
                 'temperature'     => 0.3,
-                'maxOutputTokens' => 4096,
+                'maxOutputTokens' => 8192,
             ] );
         } catch ( \Throwable $e ) {
             $this->log( "score_article: Gemini error: " . $e->getMessage() );
             return [ 'success' => false, 'error' => '採点中にエラーが発生しました。' ];
         }
 
+        $this->log( "score_article: raw response length=" . strlen( $raw ) );
+
         $parsed = $this->parse_json_object( $raw );
         if ( ! $parsed || ! isset( $parsed['scores'] ) ) {
-            $this->log( "score_article: parse error. Raw: " . substr( $raw, 0, 500 ) );
+            $this->log( "score_article: parse error. Raw (last 300): " . substr( $raw, -300 ) );
             return [ 'success' => false, 'error' => '採点結果の解析に失敗しました。' ];
         }
 
