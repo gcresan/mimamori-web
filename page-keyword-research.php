@@ -48,8 +48,8 @@ get_header();
    ========================================================= */
 
 /* ページ固有: コンテンツ幅を広げ、右余白を解消 */
-.page-template-page-keyword-research .content-area {
-    max-width: none;
+.content-area {
+    max-width: none !important;
     padding: 44px 48px 64px;
 }
 
@@ -385,10 +385,10 @@ get_header();
 }
 
 @media (max-width: 1024px) {
-    .page-template-page-keyword-research .content-area { padding: 32px 32px 48px; }
+    .content-area { padding: 32px 32px 48px; }
 }
 @media (max-width: 768px) {
-    .page-template-page-keyword-research .content-area { padding: 20px 16px 32px; }
+    .content-area { padding: 20px 16px 32px; }
     .kwr-intro { padding: 20px 16px; }
     .kwr-conditions { padding: 20px 16px; }
     .kwr-summary { padding: 24px 18px 20px; }
