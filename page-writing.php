@@ -197,7 +197,7 @@ get_header();
 .wrt-toast--error { background: #C95A4F; }
 
 /* 情報ストック選択チェックボックス */
-.wrt-kb-select { display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px; overflow-y: auto; }
+.wrt-kb-select { display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px; overflow-y: auto; background: var(--mw-bg-secondary, #f5f6f7); border-radius: 8px; padding: 10px; }
 .wrt-kb-select__item { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--mw-border-light); border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
 .wrt-kb-select__item:hover { border-color: var(--mw-primary-blue); }
 .wrt-kb-select__item.selected { background: rgba(74,144,164,0.1); border-color: var(--mw-primary-blue); }
@@ -419,6 +419,7 @@ get_header();
                 <option value="outline_generated">構成案あり</option>
                 <option value="draft_generated">本文あり</option>
                 <option value="wp_draft_saved">WP下書き済</option>
+                <option value="wp_published">WP公開済</option>
             </select>
             <button class="wrt-btn wrt-btn--primary" id="wrtNewArticleBtn" type="button">+ 作成する</button>
         </div>
@@ -764,6 +765,7 @@ get_header();
 
     var userId = <?php echo (int) $user_id; ?>;
     var baseUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/writing' ) ) ); ?>;
+    var gcrevBaseUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1' ) ) ); ?>;
     var nonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
     var initialKeyword = <?php echo wp_json_encode( $initial_keyword ); ?>;
 
@@ -771,7 +773,7 @@ get_header();
     var typeLabels = <?php echo wp_json_encode( Gcrev_Writing_Service::ARTICLE_TYPES, JSON_UNESCAPED_UNICODE ); ?>;
     var purposeLabels = <?php echo wp_json_encode( Gcrev_Writing_Service::ARTICLE_PURPOSES, JSON_UNESCAPED_UNICODE ); ?>;
     var toneLabels = <?php echo wp_json_encode( Gcrev_Writing_Service::TONES, JSON_UNESCAPED_UNICODE ); ?>;
-    var statusLabels = { keyword_set: 'キーワード設定済', outline_generated: '構成案あり', draft_generated: '本文あり', wp_draft_saved: 'WP下書き済' };
+    var statusLabels = { keyword_set: 'キーワード設定済', outline_generated: '構成案あり', draft_generated: '本文あり', wp_draft_saved: 'WP下書き済', wp_published: 'WP公開済' };
 
     /* 記事タイプ・目的の解説データ */
     var typeDescriptions = {
@@ -793,8 +795,27 @@ get_header();
     var articlesData = [];
     var knowledgeData = [];
     var currentArticle = null;
+    var wpCategoriesCache = null; // リモートWPカテゴリのキャッシュ
 
     function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function renderWpCategories(categories, selectedIds) {
+        var el = document.getElementById('wrtWpCategoryList');
+        if (!el) return;
+        if (!categories || categories.length === 0) {
+            el.innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">カテゴリがありません</span>';
+            return;
+        }
+        selectedIds = selectedIds || [];
+        var html = '';
+        categories.forEach(function(cat) {
+            var checked = selectedIds.indexOf(cat.id) !== -1 ? ' checked' : '';
+            html += '<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--mw-text-secondary);cursor:pointer;padding:4px 10px;border:1px solid var(--mw-border-light);border-radius:6px;background:var(--mw-bg-primary);transition:all 0.15s;">'
+                + '<input type="checkbox" value="' + cat.id + '"' + checked + ' style="accent-color:var(--mw-primary);margin:0;">'
+                + esc(cat.name) + '</label>';
+        });
+        el.innerHTML = html;
+    }
 
     /* ===== API ===== */
     function apiFetch(path, opts) {
@@ -1275,15 +1296,18 @@ get_header();
                 + '<span class="wrt-score__grade wrt-score__grade--' + _sc + '" style="font-size:13px;padding:2px 8px;">' + _s + '点</span>'
                 + '品質チェック詳細</button>';
         }
-        // WordPress外部投稿ボタン（同じ行に並列）
+        // WordPress外部投稿ボタン
         if (a.draft_content) {
-            if (a.wp_publish && a.wp_publish.remote_post_id && !a.wp_publish.error) {
-                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtPublishWpBtn">WordPress記事を更新</button>';
+            var isWpUpdate = a.wp_publish && a.wp_publish.remote_post_id && !a.wp_publish.error;
+            if (isWpUpdate) {
+                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtPublishWpDraftBtn">WP下書き更新</button>';
+                html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtPublishWpPublishBtn">WP公開更新</button>';
                 if (a.wp_publish.remote_url) {
                     html += '<a href="' + esc(a.wp_publish.remote_url) + '" target="_blank" rel="noopener" class="wrt-btn wrt-btn--secondary wrt-btn--sm">投稿記事を開く ↗</a>';
                 }
             } else {
-                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtPublishWpBtn">WordPressへ下書き保存</button>';
+                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtPublishWpDraftBtn">WPへ下書き保存</button>';
+                html += '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtPublishWpPublishBtn">WPへ公開</button>';
             }
             if (a.wp_publish && a.wp_publish.error) {
                 html += '<span style="font-size:11px;color:#C95A4F;">前回エラー: ' + esc(a.wp_publish.error) + '</span>';
@@ -1301,6 +1325,17 @@ get_header();
             html += '<div id="wrtEyecatchPreview" style="margin-top:12px;"><img src="' + esc(a.eyecatch_url) + '" alt="アイキャッチ画像" style="max-width:400px;width:100%;border-radius:8px;border:1px solid var(--mw-border-light);"></div>';
         } else {
             html += '<div id="wrtEyecatchPreview"></div>';
+        }
+
+        // WordPress カテゴリ選択（本文生成済みの場合のみ）
+        if (a.draft_content) {
+            html += '<div id="wrtWpCategorySection" style="margin-top:12px;">'
+                + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+                + '<span style="font-size:13px;font-weight:600;color:var(--mw-text-secondary);">投稿カテゴリ</span>'
+                + '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtLoadCategoriesBtn" style="font-size:11px;padding:2px 8px;">カテゴリを読み込む</button>'
+                + '</div>'
+                + '<div id="wrtWpCategoryList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>'
+                + '</div>';
         }
 
         // 本文未生成 + 構成案あり → インライン表示
@@ -1633,23 +1668,68 @@ get_header();
             renderOutlineInline(inlineOutlineEl, a.outline);
         }
 
-        // WordPress外部投稿ボタン
-        var wpPubBtn = document.getElementById('wrtPublishWpBtn');
-        if (wpPubBtn) {
-            wpPubBtn.addEventListener('click', function() {
-                var isUpdate = a.wp_publish && a.wp_publish.remote_post_id && !a.wp_publish.error;
-                if (!confirm(isUpdate ? 'WordPress記事を更新しますか？' : 'WordPressへ下書き保存しますか？')) return;
-                showProgress(isUpdate ? 'WordPress記事を更新中…' : 'WordPressへ下書き保存中…');
-                apiFetch('/articles/' + a.id + '/publish-wp', { method: 'POST' }).then(function(res) {
-                    hideProgress();
+        // WordPress外部投稿ボタン（下書き保存 / 公開）
+        function doWpPublish(status) {
+            var isUpdate = a.wp_publish && a.wp_publish.remote_post_id && !a.wp_publish.error;
+            var statusLabel = status === 'publish' ? '公開' : '下書き保存';
+            var msg = isUpdate ? 'WordPress記事を' + statusLabel + 'で更新しますか？' : 'WordPressへ' + statusLabel + 'しますか？';
+            if (!confirm(msg)) return;
+            // 選択中のカテゴリIDを収集
+            var selectedCats = [];
+            document.querySelectorAll('#wrtWpCategoryList input[type="checkbox"]:checked').forEach(function(cb) {
+                selectedCats.push(parseInt(cb.value, 10));
+            });
+            var body = { status: status };
+            if (selectedCats.length > 0) body.categories = selectedCats;
+            showProgress('WordPress' + statusLabel + '中…');
+            apiFetch('/articles/' + a.id + '/publish-wp', { method: 'POST', body: body }).then(function(res) {
+                hideProgress();
+                if (res.success) {
+                    currentArticle.wp_publish = res.publish;
+                    currentArticle.wp_categories = selectedCats.length > 0 ? selectedCats : (currentArticle.wp_categories || []);
+                    showToast(res.action === 'updated' ? 'WordPress記事を更新しました' : 'WordPressへ' + statusLabel + 'しました');
+                    renderArticleDetail();
+                } else {
+                    showToast(res.error || 'WordPress投稿に失敗しました', true);
+                }
+            }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+        }
+        var wpDraftBtn = document.getElementById('wrtPublishWpDraftBtn');
+        if (wpDraftBtn) wpDraftBtn.addEventListener('click', function() { doWpPublish('draft'); });
+        var wpPublishBtn = document.getElementById('wrtPublishWpPublishBtn');
+        if (wpPublishBtn) wpPublishBtn.addEventListener('click', function() { doWpPublish('publish'); });
+
+        // WordPress カテゴリ読み込み・選択
+        var loadCatBtn = document.getElementById('wrtLoadCategoriesBtn');
+        if (loadCatBtn) {
+            // 記事に保存済みカテゴリがあれば初期表示
+            if (a.wp_categories && a.wp_categories.length > 0 && wpCategoriesCache) {
+                renderWpCategories(wpCategoriesCache, a.wp_categories);
+            } else if (a.wp_categories && a.wp_categories.length > 0) {
+                // キャッシュがなければ自動読み込み
+                loadCatBtn.click();
+            }
+            loadCatBtn.addEventListener('click', function() {
+                if (wpCategoriesCache) {
+                    renderWpCategories(wpCategoriesCache, a.wp_categories || []);
+                    return;
+                }
+                loadCatBtn.textContent = '読み込み中…';
+                loadCatBtn.disabled = true;
+                fetch(gcrevBaseUrl + '/wp-publish/categories', { headers: { 'X-WP-Nonce': nonce } }).then(function(r) { return r.json(); }).then(function(res) {
+                    loadCatBtn.textContent = 'カテゴリを読み込む';
+                    loadCatBtn.disabled = false;
                     if (res.success) {
-                        currentArticle.wp_publish = res.publish;
-                        showToast(res.action === 'updated' ? 'WordPress記事を更新しました' : 'WordPressへ下書き保存しました');
-                        renderArticleDetail();
+                        wpCategoriesCache = res.categories;
+                        renderWpCategories(res.categories, a.wp_categories || []);
                     } else {
-                        showToast(res.error || 'WordPress投稿に失敗しました', true);
+                        showToast(res.error || 'カテゴリ取得に失敗しました', true);
                     }
-                }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+                }).catch(function() {
+                    loadCatBtn.textContent = 'カテゴリを読み込む';
+                    loadCatBtn.disabled = false;
+                    showToast('通信エラー', true);
+                });
             });
         }
 
