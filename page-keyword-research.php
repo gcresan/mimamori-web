@@ -1196,6 +1196,8 @@ get_header();
         var cols = [
             { label: 'キーワード', key: 'text', type: 'string' },
             { label: '月間検索数', key: 'volume', type: 'number' },
+            { label: '順位',       key: 'rank', type: 'number' },
+            { label: '推定流入',   key: 'etv', type: 'number' },
             { label: 'トレンド',   key: 'monthly_volumes', type: 'trend' },
             { label: '競合度',     key: 'competition_index', type: 'number' },
             { label: 'CPC',        key: 'cpc', type: 'number' }
@@ -1212,6 +1214,8 @@ get_header();
 
         sorted.forEach(function(kw) {
             var vol = kw.volume !== null && kw.volume !== undefined ? Number(kw.volume).toLocaleString() : '-';
+            var rank = kw.rank !== null && kw.rank !== undefined ? kw.rank + '位' : '-';
+            var etv = kw.etv !== null && kw.etv !== undefined ? Number(Math.round(kw.etv)).toLocaleString() : '-';
             var ci = kw.competition_index;
             var comp = ci !== null && ci !== undefined
                 ? '<span class="kwr-comp-bar"><span class="kwr-comp-bar__fill" style="width:' + ci + '%;"></span></span> ' + ci
@@ -1220,6 +1224,8 @@ get_header();
             html += '<tr>'
                 + '<td style="font-weight:500;">' + esc(kw.text) + '</td>'
                 + '<td style="text-align:right;">' + vol + '</td>'
+                + '<td style="text-align:center;">' + rank + '</td>'
+                + '<td style="text-align:right;">' + etv + '</td>'
                 + '<td style="text-align:center;">' + fmtTrend(kw.monthly_volumes) + '</td>'
                 + '<td>' + comp + '</td>'
                 + '<td style="text-align:right;font-size:11px;">' + cpc + '</td>'
@@ -1253,6 +1259,7 @@ get_header();
         wrapper.innerHTML = '<p style="font-size:13px;color:var(--mw-text-secondary);margin-bottom:16px;">'
             + '競合サイトが「どんな検索キーワードで見つけてもらえているか」を一覧にしたものです。<br>'
             + '月間検索数は、そのキーワードが毎月どれくらい検索されているかを示します（Googleの実データ）。<br>'
+            + '順位と推定流入は、競合サイトが実際にそのキーワードで何位に表示され、月に何人くらい訪問しているかの推定値です。<br>'
             + '下の競合URLをクリックすると、そのサイトのキーワード一覧が開きます。</p>';
 
         urls.forEach(function(url, idx) {

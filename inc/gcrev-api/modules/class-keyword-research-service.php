@@ -124,6 +124,11 @@ class Gcrev_Keyword_Research_Service {
             }
         }
 
+        // 2.8. DataForSEO Ranked Keywords で順位・推定流入数を付加
+        if ( ! empty( $competitor_planner_keywords ) && $this->dataforseo !== null ) {
+            $competitor_planner_keywords = $this->enrich_planner_with_ranked_data( $competitor_planner_keywords );
+        }
+
         // 3. 競合URL解析（HTML スクレイピング — 見出し・メタ情報取得用に継続）
         $competitor_data = [];
         if ( $enable_competitor && ! empty( $ref_urls ) ) {
@@ -426,6 +431,79 @@ class Gcrev_Keyword_Research_Service {
             $this->log( 'Competitor Planner exception: ' . $e->getMessage() );
             return [];
         }
+    }
+
+    /**
+     * 競合 Planner キーワードに DataForSEO Ranked Keywords の順位・推定流入数を付加
+     *
+     * @param array $planner_keywords  [ url => [ {text, volume, ...}, ... ], ... ]
+     * @return array 同構造（各キーワードに rank, etv フィールド追加済み）
+     */
+    private function enrich_planner_with_ranked_data( array $planner_keywords ): array {
+        $ranked_cache = []; // domain → ranked data
+
+        foreach ( $planner_keywords as $url => &$keywords ) {
+            // URL からドメインを抽出
+            $parsed_url = wp_parse_url( $url );
+            $domain = $parsed_url['host'] ?? '';
+            if ( $domain === '' ) {
+                // rank/etv を null で初期化して次へ
+                foreach ( $keywords as &$kw ) {
+                    $kw['rank'] = null;
+                    $kw['etv']  = null;
+                }
+                unset( $kw );
+                continue;
+            }
+
+            // www. を除去して正規化
+            $domain = preg_replace( '/^www\./i', '', $domain );
+
+            // ドメイン単位でキャッシュ（同じドメインの別URLなら再取得不要）
+            if ( ! isset( $ranked_cache[ $domain ] ) ) {
+                $cache_key = 'gcrev_kwrank_' . substr( md5( $domain ), 0, 16 );
+                $cached = get_transient( $cache_key );
+
+                if ( $cached !== false ) {
+                    $ranked_cache[ $domain ] = $cached;
+                    $this->log( "Ranked keywords cache hit: {$domain}" );
+                } else {
+                    $result = $this->dataforseo->fetch_ranked_keywords( $domain );
+                    if ( is_wp_error( $result ) ) {
+                        $this->log( "Ranked keywords error [{$domain}]: " . $result->get_error_message() );
+                        $ranked_cache[ $domain ] = [];
+                    } else {
+                        $ranked_cache[ $domain ] = $result;
+                        set_transient( $cache_key, $result, self::VOLUME_CACHE_TTL );
+                        $this->log( "Ranked keywords [{$domain}]: " . count( $result ) . ' keywords' );
+                    }
+                    // API 間隔を空ける
+                    usleep( 500000 );
+                }
+            }
+
+            $ranked = $ranked_cache[ $domain ];
+
+            // Planner キーワードとマッチング
+            foreach ( $keywords as &$kw ) {
+                $text = $kw['text'] ?? '';
+                $norm = mb_strtolower( trim( $text ), 'UTF-8' );
+                $norm = str_replace( "\xE3\x80\x80", ' ', $norm );
+                $norm = preg_replace( '/\s+/u', ' ', $norm );
+
+                if ( isset( $ranked[ $norm ] ) ) {
+                    $kw['rank'] = $ranked[ $norm ]['rank'];
+                    $kw['etv']  = $ranked[ $norm ]['etv'];
+                } else {
+                    $kw['rank'] = null;
+                    $kw['etv']  = null;
+                }
+            }
+            unset( $kw );
+        }
+        unset( $keywords );
+
+        return $planner_keywords;
     }
 
     /**

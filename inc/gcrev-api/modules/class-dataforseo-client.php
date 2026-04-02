@@ -784,6 +784,94 @@ class Gcrev_DataForSEO_Client {
     }
 
     // =========================================================
+    // Ranked Keywords（競合ドメインの順位＋推定流入数）
+    // =========================================================
+
+    /**
+     * DataForSEO Labs Ranked Keywords API で
+     * 指定ドメインがランクインしているキーワード・順位・推定流入数を取得
+     *
+     * @param string $target        ドメイン（例: example.com）
+     * @param int    $location_code ロケーションコード（デフォルト: Japan 2392）
+     * @param string $language_code 言語コード（デフォルト: 'ja'）
+     * @param int    $limit         取得件数上限（デフォルト: 100）
+     * @return array|WP_Error [ 'keyword_text' => ['rank' => int, 'etv' => float, 'volume' => int], ... ]
+     */
+    public function fetch_ranked_keywords(
+        string $target,
+        int    $location_code = 2392,
+        string $language_code = 'ja',
+        int    $limit         = 100
+    ) {
+        if ( ! self::is_configured() ) {
+            return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
+        }
+
+        if ( class_exists( 'Gcrev_Rate_Limiter' ) ) {
+            Gcrev_Rate_Limiter::check_and_wait( 'dataforseo', self::RATE_LIMIT_PER_MINUTE );
+        }
+
+        $post_data = [
+            [
+                'target'        => $target,
+                'location_code' => $location_code,
+                'language_code' => $language_code,
+                'limit'         => $limit,
+                'order_by'      => [ 'ranked_serp_element.serp_item.etv,desc' ],
+            ]
+        ];
+
+        $response = $this->api_request( '/dataforseo_labs/google/ranked_keywords/live', $post_data );
+
+        if ( is_wp_error( $response ) ) {
+            file_put_contents( '/tmp/gcrev_dataforseo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " ranked_keywords ERROR [{$target}]: " . $response->get_error_message() . "\n",
+                FILE_APPEND
+            );
+            return $response;
+        }
+
+        $status_code = (int) ( $response['status_code'] ?? 0 );
+        if ( $status_code !== 20000 ) {
+            $msg = $response['status_message'] ?? 'Unknown error';
+            file_put_contents( '/tmp/gcrev_dataforseo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " ranked_keywords API error [{$target}]: {$msg} (code: {$status_code})\n",
+                FILE_APPEND
+            );
+            return new \WP_Error( 'api_error', $msg );
+        }
+
+        $tasks = $response['tasks'] ?? [];
+        if ( empty( $tasks ) || empty( $tasks[0]['result'] ) ) {
+            return [];
+        }
+
+        $items = $tasks[0]['result'][0]['items'] ?? [];
+        $results = [];
+
+        foreach ( $items as $item ) {
+            $kw_data = $item['keyword_data'] ?? [];
+            $kw_text = $kw_data['keyword'] ?? '';
+            if ( $kw_text === '' ) {
+                continue;
+            }
+
+            $serp_item = $item['ranked_serp_element']['serp_item'] ?? [];
+            $kw_info   = $kw_data['keyword_info'] ?? [];
+
+            $norm = $this->normalize_keyword( $kw_text );
+            $results[ $norm ] = [
+                'rank'   => $serp_item['rank_group'] ?? null,
+                'etv'    => $serp_item['etv'] ?? null,
+                'volume' => $kw_info['search_volume'] ?? null,
+                'url'    => $serp_item['url'] ?? '',
+            ];
+        }
+
+        return $results;
+    }
+
+    // =========================================================
     // HTTP リクエスト（内部）
     // =========================================================
 
