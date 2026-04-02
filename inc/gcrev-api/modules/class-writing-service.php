@@ -790,6 +790,7 @@ class Gcrev_Writing_Service {
             'auto_keyword_group'     => get_post_meta( $post->ID, '_gcrev_article_auto_keyword_group', true ) ?: null,
             'supplement'             => get_post_meta( $post->ID, '_gcrev_article_supplement', true ) ?: '',
             'score'                  => ( function() use ( $post ) { $r = get_post_meta( $post->ID, '_gcrev_article_score_json', true ); return $r ? json_decode( $r, true ) : null; } )(),
+            'wp_publish'             => ( function() use ( $post ) { $r = get_post_meta( $post->ID, '_gcrev_article_wp_publish_json', true ); return $r ? json_decode( $r, true ) : null; } )(),
             'needs_hearing'          => (bool) get_post_meta( $post->ID, '_gcrev_article_needs_hearing_enhancement', true ),
             'created_at'             => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'             => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
@@ -2673,6 +2674,93 @@ RULES;
     // =========================================================
     // Phase 2: WordPress 下書き保存
     // =========================================================
+
+    // =========================================================
+    // 外部 WordPress 投稿連携
+    // =========================================================
+
+    /**
+     * 記事を外部 WordPress へ投稿（create or update）。
+     */
+    public function publish_to_wp( int $user_id, int $article_id ): array {
+        require_once __DIR__ . '/class-wp-publish-client.php';
+
+        $settings = Gcrev_WP_Publish_Client::get_settings( $user_id );
+        if ( ! $settings['enabled'] || $settings['site_url'] === '' || $settings['username'] === '' || $settings['app_password'] === '' ) {
+            return [ 'success' => false, 'error' => 'WordPress連携が設定されていません。管理画面から設定してください。' ];
+        }
+
+        $article = $this->get_article( $user_id, $article_id );
+        if ( ! $article ) {
+            return [ 'success' => false, 'error' => '記事が見つかりません。' ];
+        }
+
+        $content = get_post_meta( $article_id, '_gcrev_article_draft_content', true );
+        if ( ! $content ) {
+            return [ 'success' => false, 'error' => '本文がまだ生成されていません。' ];
+        }
+
+        $title = get_the_title( $article_id ) ?: $article['keyword'];
+        $html_content = Gcrev_WP_Publish_Client::markdown_to_wp_html( $content );
+
+        $options = [];
+        if ( $settings['default_category'] > 0 ) {
+            $options['categories'] = [ $settings['default_category'] ];
+        }
+
+        $payload = Gcrev_WP_Publish_Client::build_payload( $title, $html_content, $settings['default_status'], $options );
+
+        $client = new Gcrev_WP_Publish_Client();
+
+        // 既存投稿があれば更新、なければ新規作成
+        $existing_raw = get_post_meta( $article_id, '_gcrev_article_wp_publish_json', true );
+        $existing = $existing_raw ? json_decode( $existing_raw, true ) : null;
+        $remote_post_id = $existing['remote_post_id'] ?? null;
+
+        if ( $remote_post_id ) {
+            $result = $client->update_post( $settings['site_url'], $settings['username'], $settings['app_password'], $remote_post_id, $payload );
+        } else {
+            $result = $client->create_post( $settings['site_url'], $settings['username'], $settings['app_password'], $payload );
+        }
+
+        if ( ! $result['success'] ) {
+            // エラーを保存
+            $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+            $error_data = [
+                'remote_post_id' => $remote_post_id,
+                'status'         => 'error',
+                'error'          => $result['error'],
+                'updated_at'     => $now,
+            ];
+            if ( $existing ) { $error_data = array_merge( $existing, $error_data ); }
+            update_post_meta( $article_id, '_gcrev_article_wp_publish_json',
+                wp_slash( wp_json_encode( $error_data, JSON_UNESCAPED_UNICODE ) ) );
+
+            return $result;
+        }
+
+        // 成功時に保存
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        $publish_data = [
+            'remote_post_id'  => $result['remote_post_id'],
+            'remote_url'      => $result['remote_url'],
+            'remote_edit_url' => $result['remote_edit_url'],
+            'status'          => $result['status'],
+            'published_at'    => $existing['published_at'] ?? $now,
+            'updated_at'      => $remote_post_id ? $now : null,
+            'error'           => null,
+        ];
+        update_post_meta( $article_id, '_gcrev_article_wp_publish_json',
+            wp_slash( wp_json_encode( $publish_data, JSON_UNESCAPED_UNICODE ) ) );
+
+        $this->log( "publish_to_wp: " . ( $remote_post_id ? 'updated' : 'created' ) . " remote_id=" . $result['remote_post_id'] );
+
+        return [
+            'success'  => true,
+            'action'   => $remote_post_id ? 'updated' : 'created',
+            'publish'  => $publish_data,
+        ];
+    }
 
     /**
      * 生成した記事を WordPress 下書きとして保存

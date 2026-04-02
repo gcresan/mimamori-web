@@ -1224,6 +1224,18 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_writing_save_wp_draft' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        // WordPress外部投稿連携
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/publish-wp', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_publish_wp' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/wp-publish/test-connection', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_wp_publish_test' ],
+            'permission_callback' => function() { return current_user_can( 'manage_options' ); },
+        ]);
+
         register_rest_route('gcrev/v1', '/writing/check-similarity', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_writing_check_similarity' ],
@@ -15269,6 +15281,29 @@ PROMPT;
     public function rest_writing_save_wp_draft( \WP_REST_Request $request ): \WP_REST_Response {
         if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
         $result = $this->writing_service->save_as_wp_draft( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_publish_wp( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        try {
+            $result = $this->writing_service->publish_to_wp( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_wp_publish_test( \WP_REST_Request $request ): \WP_REST_Response {
+        require_once __DIR__ . '/gcrev-api/modules/class-wp-publish-client.php';
+        $user_id = absint( $request->get_param( 'user_id' ) );
+        if ( $user_id <= 0 ) { return new \WP_REST_Response( [ 'success' => false, 'error' => 'ユーザーIDが必要です' ] ); }
+        $settings = Gcrev_WP_Publish_Client::get_settings( $user_id );
+        if ( ! $settings['site_url'] || ! $settings['username'] || ! $settings['app_password'] ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => '接続情報が不足しています' ] );
+        }
+        $client = new Gcrev_WP_Publish_Client();
+        $result = $client->test_connection( $settings['site_url'], $settings['username'], $settings['app_password'] );
         return new \WP_REST_Response( $result );
     }
 

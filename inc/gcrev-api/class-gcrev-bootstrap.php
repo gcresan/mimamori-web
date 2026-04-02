@@ -147,6 +147,13 @@ class Gcrev_Bootstrap {
             }
 
 
+            // WordPress投稿連携設定
+            $wp_publish_settings_path = __DIR__ . '/admin/class-wp-publish-settings-page.php';
+            if ( file_exists( $wp_publish_settings_path ) ) {
+                require_once $wp_publish_settings_path;
+                (new Gcrev_WP_Publish_Settings_Page())->register();
+            }
+
             $prefetch_management_path = __DIR__ . '/admin/class-prefetch-management-page.php';
             if ( file_exists( $prefetch_management_path ) ) {
                 require_once $prefetch_management_path;
