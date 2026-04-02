@@ -46,6 +46,13 @@ get_header();
 /* =========================================================
    キーワード調査 — スタイル (Phase 2)
    ========================================================= */
+
+/* ページ固有: コンテンツ幅を広げ中央寄りに */
+.page-template-page-keyword-research .content-area {
+    max-width: 1600px;
+    padding: 44px 56px 64px;
+}
+
 .kwr-conditions {
     background: var(--mw-bg-primary);
     border: 1px solid var(--mw-border-light);
@@ -195,7 +202,7 @@ get_header();
 .kwr-summary__item:last-child { margin-bottom: 0; }
 .kwr-summary__item-title { font-size: 15px; font-weight: 700; color: var(--mw-text-heading); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; padding-left: 12px; border-left: 3px solid var(--mw-primary-blue, #568184); }
 .kwr-summary--competitor .kwr-summary__item-title { border-left-color: var(--mw-accent-attention, #C9A84C); }
-.kwr-summary__item-text { font-size: 14.5px; color: var(--mw-text-body, #263335); line-height: 1.9; max-width: 760px; }
+.kwr-summary__item-text { font-size: 14.5px; color: var(--mw-text-body, #263335); line-height: 1.9; max-width: 880px; }
 .kwr-summary__item-text p { margin: 0 0 8px; }
 .kwr-summary__item-text p:last-child { margin-bottom: 0; }
 
@@ -377,7 +384,11 @@ get_header();
     line-height: 1.6;
 }
 
+@media (max-width: 1024px) {
+    .page-template-page-keyword-research .content-area { padding: 32px 32px 48px; }
+}
 @media (max-width: 768px) {
+    .page-template-page-keyword-research .content-area { padding: 20px 16px 32px; }
     .kwr-intro { padding: 20px 16px; }
     .kwr-conditions { padding: 20px 16px; }
     .kwr-summary { padding: 24px 18px 20px; }
