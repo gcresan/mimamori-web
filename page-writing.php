@@ -692,6 +692,18 @@ get_header();
         </div>
     </div>
 
+    <!-- ===== 品質チェックモーダル ===== -->
+    <div class="wrt-modal-overlay" id="wrtScoreModal">
+        <div class="wrt-modal wrt-modal--wide">
+            <button class="wrt-modal__close" id="wrtScoreModalClose" type="button">&times;</button>
+            <h2 class="wrt-modal__title">📊 品質チェック</h2>
+            <div id="wrtScoreModalBody"></div>
+            <div class="wrt-modal__actions">
+                <button class="wrt-btn wrt-btn--secondary" id="wrtScoreModalCloseBtn" type="button">閉じる</button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -1185,11 +1197,18 @@ get_header();
         // 本文生成セクション
         html += '<div class="wrt-detail-section" id="wrtDraftSection">';
         html += '<div class="wrt-detail-section__title">本文生成</div>';
-        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
         html += '<button class="wrt-btn wrt-btn--primary" id="wrtGenerateDraftBtn">' + (a.draft_content ? '本文を再生成' : '本文たたき台を生成') + '</button>';
         if (a.outline && a.draft_content) {
-            // 本文生成済み → モーダルで構成案を見る
             html += '<button class="wrt-btn wrt-btn--secondary" id="wrtShowOutlineBtn">構成案を見る</button>';
+        }
+        // 品質スコアバッジ + 詳細ボタン
+        if (a.score && a.score.status === 'success') {
+            var _s = a.score.total_score || 0;
+            var _sc = _s >= 85 ? 'high' : _s >= 70 ? 'mid' : _s >= 60 ? 'low' : 'poor';
+            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtShowScoreBtn" style="display:inline-flex;align-items:center;gap:6px;">'
+                + '<span class="wrt-score__grade wrt-score__grade--' + _sc + '" style="font-size:13px;padding:2px 8px;">' + _s + '点</span>'
+                + '品質チェック詳細</button>';
         }
         html += '</div>';
         // 本文未生成 + 構成案あり → インライン表示
@@ -1198,14 +1217,7 @@ get_header();
         }
         html += '<div id="wrtDraftArea"></div>';
 
-        // 採点結果セクション
-        html += '<div id="wrtScoreArea">';
-        if (a.score && a.score.status === 'success') {
-            html += renderScoreSection(a.score);
-        } else if (a.draft_content && !a.score) {
-            html += '<div class="wrt-score wrt-score--pending">記事の品質チェックは、次回生成時に自動で実行されます</div>';
-        }
-        html += '</div>';
+        // 採点結果（モーダル表示のみ。インラインは廃止）
 
         html += '</div>';
 
@@ -1516,6 +1528,14 @@ get_header();
                 document.getElementById('wrtOutlineModal').classList.add('active');
             });
         }
+        // 品質チェック詳細ボタン
+        var scoreBtn = document.getElementById('wrtShowScoreBtn');
+        if (scoreBtn && a.score) {
+            scoreBtn.addEventListener('click', function() {
+                document.getElementById('wrtScoreModalBody').innerHTML = renderScoreSection(a.score);
+                document.getElementById('wrtScoreModal').classList.add('active');
+            });
+        }
         var inlineOutlineEl = document.getElementById('wrtOutlineInline');
         if (inlineOutlineEl && a.outline) {
             renderOutlineInline(inlineOutlineEl, a.outline);
@@ -1542,9 +1562,7 @@ get_header();
                     currentArticle.score = res.score || currentArticle.score;
                     setPendingRegen(false);
                     renderDraft(res.draft_content);
-                    // 採点結果も更新
-                    var scoreArea = document.getElementById('wrtScoreArea');
-                    if (scoreArea && res.score) { scoreArea.innerHTML = renderScoreSection(res.score); }
+                    // （採点結果はボタン経由のモーダルで表示）
                     showToast(res.score ? '本文を再生成し、品質チェックも完了しました' : '本文を再生成しました');
                 } else {
                     showToast(res.error || 'エラー', true);
@@ -2301,6 +2319,12 @@ get_header();
     document.getElementById('wrtOutlineModalClose').addEventListener('click', closeOutlineModal);
     document.getElementById('wrtOutlineModalCloseBtn').addEventListener('click', closeOutlineModal);
     document.getElementById('wrtOutlineModal').addEventListener('click', function(e) { if (e.target === this) closeOutlineModal(); });
+
+    // 品質チェックモーダル
+    function closeScoreModal() { document.getElementById('wrtScoreModal').classList.remove('active'); }
+    document.getElementById('wrtScoreModalClose').addEventListener('click', closeScoreModal);
+    document.getElementById('wrtScoreModalCloseBtn').addEventListener('click', closeScoreModal);
+    document.getElementById('wrtScoreModal').addEventListener('click', function(e) { if (e.target === this) closeScoreModal(); });
 
     var draftViewMode = 'preview'; // 'preview' or 'edit'
 
