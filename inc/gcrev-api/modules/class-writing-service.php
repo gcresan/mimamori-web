@@ -15,6 +15,7 @@ class Gcrev_Writing_Service {
     private Gcrev_AI_Client      $ai;
     private Gcrev_Config         $config;
     private ?Gcrev_OpenAI_Client $openai;
+    private ?object              $dataforseo;
 
     private const DEBUG_LOG = '/tmp/gcrev_writing_debug.log';
 
@@ -56,10 +57,11 @@ class Gcrev_Writing_Service {
         'casual'       => '親しみやすく',
     ];
 
-    public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, ?Gcrev_OpenAI_Client $openai = null ) {
-        $this->ai     = $ai;
-        $this->config = $config;
-        $this->openai = $openai;
+    public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, ?Gcrev_OpenAI_Client $openai = null, ?object $dataforseo = null ) {
+        $this->ai         = $ai;
+        $this->config     = $config;
+        $this->openai     = $openai;
+        $this->dataforseo = $dataforseo;
     }
 
     // =========================================================

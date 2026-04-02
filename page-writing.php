@@ -1256,25 +1256,31 @@ get_header();
         });
         renderNotes(a.notes || [], a.id);
 
-        // 競合調査ボタン
+        // 競合調査ボタン＋自動実行
+        function runCompetitorResearch(force) {
+            showProgress('競合調査中…（上位記事をクロール・分析しています。2〜3分かかります）');
+            apiFetch('/articles/' + a.id + '/competitor-research', {
+                method: 'POST',
+                body: { force: !!force }
+            }).then(function(res) {
+                hideProgress();
+                if (!res.success) { showToast(res.error || 'エラー', true); return; }
+                showToast('競合調査が完了しました');
+                showArticleDetail(a.id);
+            }).catch(function() {
+                hideProgress();
+                showToast('通信エラー', true);
+            });
+        }
         var competitorBtn = document.getElementById('wrtRunCompetitorBtn') || document.getElementById('wrtRerunCompetitorBtn');
         if (competitorBtn) {
             competitorBtn.addEventListener('click', function() {
-                var isRerun = this.id === 'wrtRerunCompetitorBtn';
-                showProgress('競合調査中…（上位記事をクロール・分析しています。2〜3分かかります）');
-                apiFetch('/articles/' + a.id + '/competitor-research', {
-                    method: 'POST',
-                    body: { force: isRerun }
-                }).then(function(res) {
-                    hideProgress();
-                    if (!res.success) { showToast(res.error || 'エラー', true); return; }
-                    showToast('競合調査が完了しました');
-                    showArticleDetail(a.id); // 画面リロード
-                }).catch(function() {
-                    hideProgress();
-                    showToast('通信エラー', true);
-                });
+                runCompetitorResearch(this.id === 'wrtRerunCompetitorBtn');
             });
+        }
+        // 競合調査が未実施なら自動実行
+        if (!a.competitor_research || !a.competitor_research.analysis) {
+            setTimeout(function() { runCompetitorResearch(false); }, 500);
         }
 
         // ヒアリング生成

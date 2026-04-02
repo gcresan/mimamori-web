@@ -173,7 +173,11 @@ class Gcrev_Insight_API {
             ) {
                 $writing_openai = new Gcrev_OpenAI_Client( $this->config );
             }
-            $this->writing_service = new Gcrev_Writing_Service( $this->ai, $this->config, $writing_openai );
+            $writing_dataforseo = null;
+            if ( class_exists( 'Gcrev_DataForSEO_Client' ) && Gcrev_DataForSEO_Client::is_configured() ) {
+                $writing_dataforseo = new Gcrev_DataForSEO_Client( $this->config );
+            }
+            $this->writing_service = new Gcrev_Writing_Service( $this->ai, $this->config, $writing_openai, $writing_dataforseo );
         }
 
         if ($register_routes) {
