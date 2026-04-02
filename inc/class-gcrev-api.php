@@ -15267,17 +15267,31 @@ PROMPT;
      * GET /writing/auto-article/settings — 自動記事生成設定取得
      */
     public function rest_auto_article_get_settings( \WP_REST_Request $request ): \WP_REST_Response {
-        $user_id = get_current_user_id();
+        $user_id   = get_current_user_id();
+        $frequency = get_user_meta( $user_id, 'gcrev_auto_article_frequency', true ) ?: 'weekly_2';
+
+        // 実行曜日ラベル生成
+        $freq_schedule = [
+            'weekly_1' => [ 2 ],
+            'weekly_2' => [ 2, 5 ],
+            'weekly_3' => [ 1, 3, 5 ],
+            'daily'    => [ 0, 1, 2, 3, 4, 5, 6 ],
+        ];
+        $day_names = [ '日', '月', '火', '水', '木', '金', '土' ];
+        $run_day_names = array_map( fn( $d ) => $day_names[ $d ], $freq_schedule[ $frequency ] ?? $freq_schedule['weekly_2'] );
 
         $settings = [
             'enabled'            => get_user_meta( $user_id, 'gcrev_auto_article_enabled', true ) === '1',
-            'daily_limit'        => (int) ( get_user_meta( $user_id, 'gcrev_auto_article_daily_limit', true ) ?: 1 ),
+            'frequency'          => $frequency,
+            'batch_size'         => max( 1, min( 5, (int) ( get_user_meta( $user_id, 'gcrev_auto_article_batch_size', true ) ?: 1 ) ) ),
             'min_score'          => (int) ( get_user_meta( $user_id, 'gcrev_auto_article_min_score', true ) ?: 40 ),
             'quality_threshold'  => (int) ( get_user_meta( $user_id, 'gcrev_auto_article_quality_threshold', true ) ?: 60 ),
             'auto_publish'       => get_user_meta( $user_id, 'gcrev_auto_article_auto_publish', true ) === '1',
             'preferred_groups'   => json_decode( get_user_meta( $user_id, 'gcrev_auto_article_preferred_groups', true ) ?: '["immediate","local_seo","column"]', true ),
             'excluded_keywords'  => json_decode( get_user_meta( $user_id, 'gcrev_auto_article_excluded_keywords', true ) ?: '[]', true ),
             'preferred_tone'     => get_user_meta( $user_id, 'gcrev_auto_article_preferred_tone', true ) ?: 'natural',
+            'run_days'           => implode( '・', $run_day_names ),
+            'frequency_labels'   => Gcrev_Auto_Article_Service::FREQUENCY_LABELS,
         ];
 
         return new \WP_REST_Response( [ 'success' => true, 'settings' => $settings ] );
@@ -15293,8 +15307,15 @@ PROMPT;
         if ( isset( $params['enabled'] ) ) {
             update_user_meta( $user_id, 'gcrev_auto_article_enabled', $params['enabled'] ? '1' : '0' );
         }
-        if ( isset( $params['daily_limit'] ) ) {
-            update_user_meta( $user_id, 'gcrev_auto_article_daily_limit', (string) max( 1, min( 5, (int) $params['daily_limit'] ) ) );
+        if ( isset( $params['frequency'] ) ) {
+            $freq = sanitize_text_field( $params['frequency'] );
+            $valid_freq = [ 'weekly_1', 'weekly_2', 'weekly_3', 'daily' ];
+            if ( in_array( $freq, $valid_freq, true ) ) {
+                update_user_meta( $user_id, 'gcrev_auto_article_frequency', $freq );
+            }
+        }
+        if ( isset( $params['batch_size'] ) ) {
+            update_user_meta( $user_id, 'gcrev_auto_article_batch_size', (string) max( 1, min( 5, (int) $params['batch_size'] ) ) );
         }
         if ( isset( $params['min_score'] ) ) {
             update_user_meta( $user_id, 'gcrev_auto_article_min_score', (string) max( 0, min( 100, (int) $params['min_score'] ) ) );

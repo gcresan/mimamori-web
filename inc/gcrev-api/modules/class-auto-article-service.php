@@ -234,11 +234,66 @@ class Gcrev_Auto_Article_Service {
     }
 
     // =========================================================
-    // 2. 日次キュー構築
+    // 2. 実行頻度判定
+    // =========================================================
+
+    /** 頻度ごとの実行曜日（0=日, 1=月, ..., 6=土） */
+    private const FREQUENCY_SCHEDULE = [
+        'weekly_1' => [ 2 ],           // 火曜
+        'weekly_2' => [ 2, 5 ],        // 火曜・金曜
+        'weekly_3' => [ 1, 3, 5 ],     // 月曜・水曜・金曜
+        'daily'    => [ 0, 1, 2, 3, 4, 5, 6 ],
+    ];
+
+    /** 頻度の表示ラベル */
+    public const FREQUENCY_LABELS = [
+        'weekly_1' => '週1回（火）',
+        'weekly_2' => '週2回（火・金）',
+        'weekly_3' => '週3回（月・水・金）',
+        'daily'    => '毎日',
+    ];
+
+    /**
+     * 指定した頻度設定で、指定曜日が実行日かどうかを返す。
+     *
+     * @param string   $frequency 頻度キー（weekly_1, weekly_2, weekly_3, daily）
+     * @param int|null $weekday   曜日 (0=日〜6=土)。null なら今日。
+     * @return bool
+     */
+    public static function is_auto_article_run_day( string $frequency, ?int $weekday = null ): bool {
+        if ( $weekday === null ) {
+            $weekday = (int) ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'w' );
+        }
+        $days = self::FREQUENCY_SCHEDULE[ $frequency ] ?? self::FREQUENCY_SCHEDULE['weekly_2'];
+        return in_array( $weekday, $days, true );
+    }
+
+    /**
+     * クライアントが当日自動記事生成の対象かを返す。
+     */
+    public function should_run_for_client( int $user_id ): bool {
+        if ( get_user_meta( $user_id, 'gcrev_auto_article_enabled', true ) !== '1' ) {
+            return false;
+        }
+        $frequency = get_user_meta( $user_id, 'gcrev_auto_article_frequency', true ) ?: 'weekly_2';
+        return self::is_auto_article_run_day( $frequency );
+    }
+
+    /**
+     * クライアントの1回あたり生成数を取得する。
+     */
+    public static function get_batch_size( int $user_id ): int {
+        $val = get_user_meta( $user_id, 'gcrev_auto_article_batch_size', true );
+        return max( 1, min( 5, (int) ( $val ?: 1 ) ) );
+    }
+
+    // =========================================================
+    // 3. 日次キュー構築
     // =========================================================
 
     /**
      * 日次キュー構築（Cron daily event から呼ばれる）。
+     * 頻度設定を見て、当日実行対象のクライアントのみキュー投入する。
      */
     public function build_daily_queue(): void {
         $this->log( '[DAILY] build_daily_queue started' );
@@ -271,18 +326,20 @@ class Gcrev_Auto_Article_Service {
                 continue;
             }
 
-            // 自動記事生成が有効か
-            if ( get_user_meta( $user_id, 'gcrev_auto_article_enabled', true ) !== '1' ) {
+            // 頻度判定（enabled + frequency）
+            if ( ! $this->should_run_for_client( $user_id ) ) {
+                $freq = get_user_meta( $user_id, 'gcrev_auto_article_frequency', true ) ?: 'weekly_2';
+                $this->log( "[DAILY] user={$user_id} not a run day (freq={$freq})" );
                 continue;
             }
 
-            $daily_limit = max( 1, min( 5, (int) ( get_user_meta( $user_id, 'gcrev_auto_article_daily_limit', true ) ?: 1 ) ) );
+            $batch_size  = self::get_batch_size( $user_id );
             $today_count = Gcrev_Auto_Article_Queue::get_today_count( $user_id );
 
-            if ( $today_count >= $daily_limit ) {
-                $this->log( "[DAILY] user={$user_id} already at daily limit ({$today_count}/{$daily_limit})" );
+            if ( $today_count >= $batch_size ) {
+                $this->log( "[DAILY] user={$user_id} already at batch limit ({$today_count}/{$batch_size})" );
                 if ( $log_id ) {
-                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', "daily limit reached ({$today_count}/{$daily_limit})" );
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', "batch limit reached ({$today_count}/{$batch_size})" );
                 }
                 continue;
             }
@@ -297,7 +354,7 @@ class Gcrev_Auto_Article_Service {
                 continue;
             }
 
-            $slots = $daily_limit - $today_count;
+            $slots = $batch_size - $today_count;
             $queued_count = 0;
 
             foreach ( $scored as $kw ) {
@@ -322,9 +379,9 @@ class Gcrev_Auto_Article_Service {
                 }
             }
 
-            $this->log( "[DAILY] user={$user_id} queued={$queued_count}" );
+            $this->log( "[DAILY] user={$user_id} queued={$queued_count} (batch_size={$batch_size})" );
             if ( $log_id ) {
-                Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'success', "queued {$queued_count} keywords" );
+                Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'success', "queued {$queued_count} keywords (batch={$batch_size})" );
             }
         }
 

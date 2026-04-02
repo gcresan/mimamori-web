@@ -377,6 +377,8 @@ get_header();
         <!-- 設定パネル -->
         <div class="aa-settings-panel" style="background:var(--mw-bg-primary);border:1px solid var(--mw-border-light);border-radius:12px;padding:20px;margin-bottom:20px;">
             <h3 style="margin:0 0 16px;font-size:16px;color:var(--mw-text-heading);">自動記事生成 設定</h3>
+            <!-- 現在の設定サマリー -->
+            <div id="aaSettingsSummary" style="display:none;margin-bottom:16px;padding:12px 16px;background:rgba(86,129,132,0.06);border-radius:8px;font-size:13px;color:var(--mw-text-secondary);line-height:1.6;"></div>
             <div class="aa-settings-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
                 <div class="aa-setting-item">
                     <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--mw-text-primary);cursor:pointer;">
@@ -385,12 +387,25 @@ get_header();
                     </label>
                 </div>
                 <div class="aa-setting-item">
-                    <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">1日あたりの生成上限</label>
-                    <select id="aaDailyLimit" style="padding:8px 12px;border:1px solid var(--mw-border-light);border-radius:8px;font-size:14px;background:var(--mw-bg-primary);color:var(--mw-text-primary);width:100%;">
-                        <option value="1">1件</option>
+                    <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">実行頻度</label>
+                    <select id="aaFrequency" style="padding:8px 12px;border:1px solid var(--mw-border-light);border-radius:8px;font-size:14px;background:var(--mw-bg-primary);color:var(--mw-text-primary);width:100%;">
+                        <option value="weekly_1">週1回（火曜）</option>
+                        <option value="weekly_2" selected>週2回（火・金）</option>
+                        <option value="weekly_3">週3回（月・水・金）</option>
+                        <option value="daily">毎日</option>
+                    </select>
+                    <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">週2回が品質と運用負荷のバランスが取りやすいおすすめ設定です</div>
+                </div>
+                <div class="aa-setting-item">
+                    <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">1回あたり生成数</label>
+                    <select id="aaBatchSize" style="padding:8px 12px;border:1px solid var(--mw-border-light);border-radius:8px;font-size:14px;background:var(--mw-bg-primary);color:var(--mw-text-primary);width:100%;">
+                        <option value="1" selected>1件</option>
                         <option value="2">2件</option>
                         <option value="3">3件</option>
+                        <option value="4">4件</option>
+                        <option value="5">5件</option>
                     </select>
+                    <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">生成数を増やすとAPIコストや重複判定負荷が増えます</div>
                 </div>
                 <div class="aa-setting-item">
                     <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">最低優先スコア</label>
@@ -405,6 +420,7 @@ get_header();
                         <input type="checkbox" id="aaAutoPublish">
                         <span>品質基準を満たした記事を自動公開する</span>
                     </label>
+                    <div style="font-size:11px;color:var(--mw-text-tertiary);margin-top:4px;">自動公開は別設定で制御してください</div>
                 </div>
                 <div class="aa-setting-item">
                     <label style="font-size:13px;color:var(--mw-text-secondary);display:block;margin-bottom:4px;">デフォルト文体</label>
@@ -2064,6 +2080,11 @@ get_header();
         failed: ['失敗', '#E74C3C']
     };
 
+    var AA_FREQ_LABELS = {
+        weekly_1: '週1回（火曜）', weekly_2: '週2回（火・金）',
+        weekly_3: '週3回（月・水・金）', daily: '毎日'
+    };
+
     function aaLoadSettings() {
         fetch(AA_API + '/settings', { headers: { 'X-WP-Nonce': nonce } })
             .then(function(r) { return r.json(); })
@@ -2071,18 +2092,31 @@ get_header();
                 if (!d.success) return;
                 var s = d.settings;
                 document.getElementById('aaEnabled').checked = s.enabled;
-                document.getElementById('aaDailyLimit').value = s.daily_limit;
+                document.getElementById('aaFrequency').value = s.frequency || 'weekly_2';
+                document.getElementById('aaBatchSize').value = s.batch_size || 1;
                 document.getElementById('aaMinScore').value = s.min_score;
                 document.getElementById('aaQualityThreshold').value = s.quality_threshold;
                 document.getElementById('aaAutoPublish').checked = s.auto_publish;
                 document.getElementById('aaPreferredTone').value = s.preferred_tone;
+                // サマリー表示
+                var summary = document.getElementById('aaSettingsSummary');
+                if (s.enabled) {
+                    var freqLabel = AA_FREQ_LABELS[s.frequency] || '週2回（火・金）';
+                    summary.innerHTML = '現在の設定: <strong>' + freqLabel + '</strong> / 1回あたり <strong>' + s.batch_size + '記事</strong>'
+                        + (s.run_days ? ' / 実行日: <strong>' + esc(s.run_days) + '</strong>' : '');
+                    summary.style.display = 'block';
+                } else {
+                    summary.innerHTML = '自動記事生成: <strong>OFF</strong>';
+                    summary.style.display = 'block';
+                }
             });
     }
 
     document.getElementById('aaSaveSettings').addEventListener('click', function() {
         var body = {
             enabled: document.getElementById('aaEnabled').checked,
-            daily_limit: parseInt(document.getElementById('aaDailyLimit').value) || 1,
+            frequency: document.getElementById('aaFrequency').value,
+            batch_size: parseInt(document.getElementById('aaBatchSize').value) || 1,
             min_score: parseInt(document.getElementById('aaMinScore').value) || 40,
             quality_threshold: parseInt(document.getElementById('aaQualityThreshold').value) || 60,
             auto_publish: document.getElementById('aaAutoPublish').checked,
@@ -2093,6 +2127,7 @@ get_header();
             body: JSON.stringify(body)
         }).then(function(r) { return r.json(); }).then(function(d) {
             showToast(d.success ? '設定を保存しました' : (d.error || 'エラー'));
+            if (d.success) aaLoadSettings(); // サマリー更新
         });
     });
 
