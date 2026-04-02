@@ -769,6 +769,7 @@ class Gcrev_Writing_Service {
 
         return [
             'id'                     => $post->ID,
+            'title'                  => $post->post_title,
             'keyword'                => get_post_meta( $post->ID, '_gcrev_article_keyword', true ) ?: '',
             'type'                   => get_post_meta( $post->ID, '_gcrev_article_type', true ) ?: 'explanation',
             'purpose'                => get_post_meta( $post->ID, '_gcrev_article_purpose', true ) ?: 'traffic',
@@ -2295,6 +2296,26 @@ STRUCTURE_FORMAT;
         $content = preg_replace( '/^```(?:markdown|html)?\s*/m', '', $raw );
         $content = preg_replace( '/```\s*$/m', '', $content );
         $content = trim( $content );
+
+        // H1タグからタイトルを抽出して post_title に反映
+        if ( preg_match( '/^# (.+)$/m', $content, $h1_match ) ) {
+            $h1_title = trim( $h1_match[1] );
+            if ( $h1_title !== '' ) {
+                wp_update_post( [ 'ID' => $article_id, 'post_title' => $h1_title ] );
+                // outline の title_options[0] も更新
+                $outline_raw = get_post_meta( $article_id, '_gcrev_article_outline_json', true );
+                if ( $outline_raw ) {
+                    $outline_data = json_decode( $outline_raw, true );
+                    if ( is_array( $outline_data ) ) {
+                        if ( ! isset( $outline_data['title_options'] ) ) { $outline_data['title_options'] = []; }
+                        $outline_data['title_options'][0] = $h1_title;
+                        update_post_meta( $article_id, '_gcrev_article_outline_json',
+                            wp_json_encode( $outline_data, JSON_UNESCAPED_UNICODE ) );
+                    }
+                }
+                $this->log( "Draft title extracted from H1: {$h1_title}" );
+            }
+        }
 
         // 保存
         update_post_meta( $article_id, '_gcrev_article_draft_content', $content );

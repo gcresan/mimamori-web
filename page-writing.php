@@ -1165,6 +1165,12 @@ get_header();
 
         // --- 左カラム: 本文エディター ---
         html += '<div class="wrt-detail__main">';
+        // タイトル表示（H1から抽出されたタイトル）
+        var displayTitle = a.title && a.title !== a.keyword ? a.title : '';
+        if (displayTitle) {
+            html += '<div style="margin-bottom:12px;"><span style="font-size:11px;color:var(--mw-text-tertiary);display:block;margin-bottom:4px;">記事タイトル</span>';
+            html += '<span style="font-size:18px;font-weight:700;color:var(--mw-text-heading);line-height:1.4;">' + esc(displayTitle) + '</span></div>';
+        }
         html += '<div class="wrt-detail__keyword-section">';
         html += '<span class="wrt-detail__keyword-label">対策キーワード</span>';
         html += '<span class="wrt-detail__keyword-value">' + esc(a.keyword) + '</span>';
@@ -1210,25 +1216,22 @@ get_header();
                 + '<span class="wrt-score__grade wrt-score__grade--' + _sc + '" style="font-size:13px;padding:2px 8px;">' + _s + '点</span>'
                 + '品質チェック詳細</button>';
         }
-        html += '</div>';
-
-        // WordPress外部投稿ボタン（本文がある場合のみ）
+        // WordPress外部投稿ボタン（同じ行に並列）
         if (a.draft_content) {
-            html += '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
             if (a.wp_publish && a.wp_publish.remote_post_id && !a.wp_publish.error) {
                 html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtPublishWpBtn">WordPress記事を更新</button>';
                 if (a.wp_publish.remote_url) {
-                    html += '<a href="' + esc(a.wp_publish.remote_url) + '" target="_blank" rel="noopener" style="font-size:12px;color:var(--mw-primary-blue);">投稿記事を開く ↗</a>';
+                    html += '<a href="' + esc(a.wp_publish.remote_url) + '" target="_blank" rel="noopener" style="font-size:12px;color:var(--mw-primary-blue);white-space:nowrap;">投稿記事を開く ↗</a>';
                 }
-                html += '<span style="font-size:11px;color:var(--mw-text-tertiary);">下書き保存済み</span>';
+                html += '<span style="font-size:11px;color:var(--mw-text-tertiary);white-space:nowrap;">下書き保存済み</span>';
             } else {
                 html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtPublishWpBtn">WordPressへ下書き保存</button>';
             }
             if (a.wp_publish && a.wp_publish.error) {
                 html += '<span style="font-size:11px;color:#C95A4F;">前回エラー: ' + esc(a.wp_publish.error) + '</span>';
             }
-            html += '</div>';
         }
+        html += '</div>';
 
         // 本文未生成 + 構成案あり → インライン表示
         if (a.outline && !a.draft_content) {
