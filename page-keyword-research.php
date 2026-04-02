@@ -1137,8 +1137,9 @@ get_header();
         var hasData = false;
         var wrapper = document.getElementById('kwrCompKeywordsContent');
         wrapper.innerHTML = '<p style="font-size:13px;color:var(--mw-text-secondary);margin-bottom:16px;">'
-            + 'Google Keyword Planner が各競合URLに関連付けているキーワードです。検索ボリュームは Google の実データに基づいています。<br>'
-            + '競合URLをクリックするとキーワードデータを表示します。</p>';
+            + '競合サイトが「どんな検索キーワードで見つけてもらえているか」を一覧にしたものです。<br>'
+            + '月間検索数は、そのキーワードが毎月どれくらい検索されているかを示します（Googleの実データ）。<br>'
+            + '下の競合URLをクリックすると、そのサイトのキーワード一覧が開きます。</p>';
 
         urls.forEach(function(url, idx) {
             var kws = compPlannerKeywords[url];
