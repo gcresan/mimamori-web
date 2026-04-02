@@ -654,6 +654,25 @@ class Gcrev_Writing_Service {
             update_post_meta( $article_id, $meta_key, $val );
         }
 
+        // タイトル更新
+        if ( isset( $data['title'] ) ) {
+            $new_title = sanitize_text_field( $data['title'] );
+            if ( $new_title !== '' ) {
+                wp_update_post( [ 'ID' => $article_id, 'post_title' => $new_title ] );
+                // outline_json 内の title_options[0] も更新
+                $outline_raw = get_post_meta( $article_id, '_gcrev_article_outline_json', true );
+                if ( $outline_raw ) {
+                    $outline = json_decode( $outline_raw, true );
+                    if ( is_array( $outline ) ) {
+                        if ( ! isset( $outline['title_options'] ) ) { $outline['title_options'] = []; }
+                        $outline['title_options'][0] = $new_title;
+                        update_post_meta( $article_id, '_gcrev_article_outline_json',
+                            wp_json_encode( $outline, JSON_UNESCAPED_UNICODE ) );
+                    }
+                }
+            }
+        }
+
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 

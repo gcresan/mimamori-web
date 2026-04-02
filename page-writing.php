@@ -257,6 +257,38 @@ get_header();
 /* 本文エディター */
 .wrt-draft-editor { width: 100%; min-height: 500px; padding: 40px 48px; font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif; font-size: 15px; line-height: 2; color: #374151; border: none; outline: none; resize: vertical; box-sizing: border-box; background: #fff; }
 
+/* 競合調査結果 */
+.wrt-cr-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.wrt-cr-count { font-size: 13px; color: var(--mw-text-secondary); }
+.wrt-cr-count strong { color: var(--mw-text-heading); }
+.wrt-cr-reflected-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; background: rgba(78,138,107,0.12); color: #3D7559; }
+.wrt-cr-section { margin-bottom: 16px; }
+.wrt-cr-section-title { font-size: 12px; font-weight: 700; color: var(--mw-text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+.wrt-cr-text { font-size: 13px; color: var(--mw-text-body, #374151); line-height: 1.7; }
+.wrt-cr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wrt-cr-chip { padding: 4px 12px; background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light); border-radius: 14px; font-size: 12px; color: var(--mw-text-secondary); }
+.wrt-cr-card { padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; }
+.wrt-cr-card--gap { background: rgba(78,138,107,0.06); border-left: 3px solid #4E8A6B; }
+.wrt-cr-card--angle { background: rgba(86,129,132,0.06); border-left: 3px solid var(--mw-primary-blue, #568184); }
+.wrt-cr-card--strength { background: var(--mw-bg-secondary); border-left: 3px solid var(--mw-border-medium); }
+.wrt-cr-card-label { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.wrt-cr-card--gap .wrt-cr-card-label { color: #3D7559; }
+.wrt-cr-card--angle .wrt-cr-card-label { color: var(--mw-primary-blue, #568184); }
+.wrt-cr-card-text { font-size: 13px; color: var(--mw-text-body, #374151); line-height: 1.6; }
+.wrt-cr-stats { display: flex; gap: 16px; font-size: 12px; color: var(--mw-text-tertiary); margin-bottom: 12px; }
+.wrt-cr-stats strong { color: var(--mw-text-secondary); }
+.wrt-cr-reflected-msg { display: flex; align-items: center; gap: 6px; padding: 10px 14px; background: rgba(78,138,107,0.06); border: 1px solid rgba(78,138,107,0.15); border-radius: 8px; font-size: 12px; color: #3D7559; font-weight: 500; margin-top: 16px; }
+
+/* タイトル選択・編集 */
+.wrt-outline__title-opt { cursor: pointer; transition: all 0.2s ease; border-left: 3px solid transparent; position: relative; }
+.wrt-outline__title-opt:hover { background: rgba(86,129,132,0.04); border-left-color: var(--mw-border-medium); }
+.wrt-outline__title-opt.selected { border-left-color: var(--mw-primary-blue, #568184); background: rgba(86,129,132,0.06); font-weight: 700; }
+.wrt-outline__title-opt .wrt-title-radio { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; border: 2px solid var(--mw-border-medium); border-radius: 50%; background: #fff; }
+.wrt-outline__title-opt.selected .wrt-title-radio { border-color: var(--mw-primary-blue); background: var(--mw-primary-blue); box-shadow: inset 0 0 0 3px #fff; }
+.wrt-outline__title-opt { padding-left: 32px !important; }
+.wrt-title-edit-input { width: 100%; padding: 8px 10px; border: 1px solid var(--mw-primary-blue, #568184); border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--mw-text-heading); background: #fff; box-sizing: border-box; }
+.wrt-title-actions { display: flex; gap: 8px; margin-top: 12px; }
+
 @media (max-width: 768px) {
     .wrt-draft-preview { padding: 24px 20px; }
     .wrt-draft-h1 { font-size: 22px; }
@@ -1101,45 +1133,86 @@ get_header();
         html += '<div class="wrt-detail-section__title">競合調査</div>';
         if (a.competitor_research && a.competitor_research.analysis) {
             var cr = a.competitor_research;
-            var okCount = (cr.competitors || []).filter(function(c) { return c.status === 'ok'; }).length;
-            html += '<div style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:10px;">'
-                  + okCount + '件の競合記事を分析済み'
-                  + '（' + esc(cr.fetched_at || '') + '）</div>';
+            var an = cr.analysis;
+            var okCompetitors = (cr.competitors || []).filter(function(c) { return c.status === 'ok'; });
+            var ranks = okCompetitors.map(function(c) { return c.rank; }).sort(function(a,b) { return a-b; });
+            var rankRange = ranks.length ? ranks[0] + '位〜' + ranks[ranks.length-1] + '位' : '';
 
-            if (cr.analysis.search_intent) {
-                html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:4px;">検索意図</div>'
-                      + '<p style="font-size:13px;margin:0;line-height:1.6;">' + esc(cr.analysis.search_intent) + '</p></div>';
+            // ヘッダー（件数・順位範囲・日時 + 構成案反映バッジ）
+            html += '<div class="wrt-cr-header">';
+            html += '<div class="wrt-cr-count">🔎 <strong>' + okCompetitors.length + '件</strong>の競合記事（' + rankRange + '）を分析しました';
+            if (cr.fetched_at) html += '　' + esc(cr.fetched_at);
+            html += '</div>';
+            if (a.outline_json) {
+                html += '<span class="wrt-cr-reflected-badge">✓ 構成案に反映済み</span>';
             }
-            if (cr.analysis.common_topics && cr.analysis.common_topics.length) {
-                html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:4px;">共通トピック</div>'
-                      + '<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">';
-                cr.analysis.common_topics.forEach(function(t) { html += '<li>' + esc(t) + '</li>'; });
-                html += '</ul></div>';
+            html += '</div>';
+
+            // 統計情報
+            if (an.average_word_count || an.average_heading_count) {
+                html += '<div class="wrt-cr-stats">';
+                if (an.average_word_count) html += '競合の平均文字数: <strong>約' + an.average_word_count.toLocaleString() + '字</strong>';
+                if (an.average_heading_count) html += '平均見出し数: <strong>' + an.average_heading_count + '個</strong>';
+                html += '</div>';
             }
-            if (cr.analysis.content_gaps && cr.analysis.content_gaps.length) {
-                html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:600;color:var(--mw-accent-green,#22c55e);margin-bottom:4px;">コンテンツギャップ（差別化チャンス）</div>'
-                      + '<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">';
-                cr.analysis.content_gaps.forEach(function(g) { html += '<li>' + esc(g) + '</li>'; });
-                html += '</ul></div>';
+
+            // 検索意図
+            if (an.search_intent) {
+                html += '<div class="wrt-cr-section">';
+                html += '<div class="wrt-cr-section-title">💡 このキーワードの検索意図</div>';
+                html += '<div class="wrt-cr-text">' + esc(an.search_intent) + '</div>';
+                html += '</div>';
             }
-            if (cr.analysis.recommended_angles && cr.analysis.recommended_angles.length) {
-                html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:4px;">推奨差別化アングル</div>'
-                      + '<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">';
-                cr.analysis.recommended_angles.forEach(function(a_) { html += '<li>' + esc(a_) + '</li>'; });
-                html += '</ul></div>';
+
+            // 共通トピック（チップ）
+            if (an.common_topics && an.common_topics.length) {
+                html += '<div class="wrt-cr-section">';
+                html += '<div class="wrt-cr-section-title">📋 競合が共通して扱っているトピック</div>';
+                html += '<div class="wrt-cr-chips">';
+                an.common_topics.forEach(function(t) { html += '<span class="wrt-cr-chip">' + esc(t) + '</span>'; });
+                html += '</div></div>';
+            }
+
+            // コンテンツギャップ（差別化チャンス）
+            if (an.content_gaps && an.content_gaps.length) {
+                html += '<div class="wrt-cr-section">';
+                html += '<div class="wrt-cr-section-title">🎯 差別化チャンス（競合が扱っていないトピック）</div>';
+                an.content_gaps.forEach(function(g) {
+                    html += '<div class="wrt-cr-card wrt-cr-card--gap"><div class="wrt-cr-card-label">狙い目</div><div class="wrt-cr-card-text">' + esc(g) + '</div></div>';
+                });
+                html += '</div>';
+            }
+
+            // 競合の強み
+            if (an.competitor_strengths && an.competitor_strengths.length) {
+                html += '<div class="wrt-cr-section">';
+                html += '<div class="wrt-cr-section-title">💪 競合の強い点・参考になる点</div>';
+                an.competitor_strengths.forEach(function(s) {
+                    html += '<div class="wrt-cr-card wrt-cr-card--strength"><div class="wrt-cr-card-text">' + esc(s) + '</div></div>';
+                });
+                html += '</div>';
+            }
+
+            // 推奨差別化アングル
+            if (an.recommended_angles && an.recommended_angles.length) {
+                html += '<div class="wrt-cr-section">';
+                html += '<div class="wrt-cr-section-title">✨ おすすめの差別化アングル</div>';
+                an.recommended_angles.forEach(function(a_) {
+                    html += '<div class="wrt-cr-card wrt-cr-card--angle"><div class="wrt-cr-card-label">差別化ポイント</div><div class="wrt-cr-card-text">' + esc(a_) + '</div></div>';
+                });
+                html += '</div>';
             }
 
             // 競合記事一覧（折りたたみ）
-            var okCompetitors = (cr.competitors || []).filter(function(c) { return c.status === 'ok'; });
             if (okCompetitors.length) {
-                html += '<details style="margin-top:8px;"><summary style="font-size:12px;color:var(--mw-text-tertiary);cursor:pointer;">競合記事一覧（' + okCompetitors.length + '件）</summary>';
+                html += '<details style="margin-top:12px;"><summary style="font-size:12px;color:var(--mw-text-tertiary);cursor:pointer;">📄 競合記事の詳細一覧（' + okCompetitors.length + '件）</summary>';
                 html += '<div style="margin-top:8px;">';
                 okCompetitors.forEach(function(comp) {
-                    html += '<div style="margin-bottom:10px;padding:8px;background:var(--mw-bg-secondary);border-radius:6px;">';
-                    html += '<div style="font-size:12px;font-weight:600;">' + esc(comp.rank) + '位: ' + esc(comp.title) + '</div>';
-                    html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin:2px 0;">' + esc(comp.url) + '</div>';
+                    html += '<div style="margin-bottom:10px;padding:10px 12px;background:var(--mw-bg-secondary);border-radius:6px;">';
+                    html += '<div style="font-size:12px;font-weight:600;color:var(--mw-text-heading);">' + esc(comp.rank) + '位: ' + esc(comp.title) + '</div>';
+                    html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin:2px 0;word-break:break-all;">' + esc(comp.url) + '</div>';
                     if (comp.headings && comp.headings.h2 && comp.headings.h2.length) {
-                        html += '<ul style="margin:4px 0 0;padding-left:16px;font-size:12px;color:var(--mw-text-secondary);">';
+                        html += '<ul style="margin:6px 0 0;padding-left:16px;font-size:12px;color:var(--mw-text-secondary);line-height:1.6;">';
                         comp.headings.h2.forEach(function(h) { html += '<li>' + esc(h) + '</li>'; });
                         html += '</ul>';
                     }
@@ -1148,7 +1221,12 @@ get_header();
                 html += '</div></details>';
             }
 
-            html += '<div style="margin-top:10px;"><button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtRerunCompetitorBtn">競合調査を再実行</button></div>';
+            // 構成案反映メッセージ
+            if (a.outline_json) {
+                html += '<div class="wrt-cr-reflected-msg">✅ この調査結果は構成案に自動で反映されています</div>';
+            }
+
+            html += '<div style="margin-top:12px;"><button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtRerunCompetitorBtn">競合調査を再実行</button></div>';
         } else {
             html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">競合上位記事を分析して構成案に反映します。構成案生成時に自動実行されます。</p>';
             html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtRunCompetitorBtn">競合調査を実行</button>';
@@ -1266,7 +1344,9 @@ get_header();
             }).then(function(res) {
                 hideProgress();
                 if (!res.success) { showToast(res.error || 'エラー', true); return; }
-                showToast('競合調査が完了しました');
+                var crRes = res.research || {};
+                var crOk = (crRes.competitors || []).filter(function(c) { return c.status === 'ok'; }).length;
+                showToast('競合調査が完了しました（' + crOk + '件の上位記事を分析）');
                 showArticleDetail(a.id);
             }).catch(function() {
                 hideProgress();
@@ -1661,13 +1741,23 @@ get_header();
         if (!outline) { body.innerHTML = '<p style="color:var(--mw-text-tertiary);">構成案がありません</p>'; return; }
         var html = '';
 
-        // タイトル候補
+        // 現在のタイトル（post_title の先頭 = title_options[0]）
+        var currentTitle = (currentArticle && currentArticle.title) ? currentArticle.title : '';
+
+        // タイトル候補（選択・編集可能）
         if (outline.title_options && outline.title_options.length > 0) {
             html += '<div class="wrt-outline__titles">';
-            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:8px;">タイトル候補</div>';
-            outline.title_options.forEach(function(t) {
-                html += '<div class="wrt-outline__title-opt">' + esc(t) + '</div>';
+            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:8px;">タイトル候補 <span style="font-weight:400;font-size:11px;color:var(--mw-text-tertiary);">— クリックで選択、ダブルクリックで編集</span></div>';
+            outline.title_options.forEach(function(t, idx) {
+                var isSelected = (t === currentTitle) || (idx === 0 && !currentTitle);
+                html += '<div class="wrt-outline__title-opt' + (isSelected ? ' selected' : '') + '" data-title-idx="' + idx + '">'
+                    + '<span class="wrt-title-radio"></span>'
+                    + '<span class="wrt-title-text">' + esc(t) + '</span>'
+                    + '</div>';
             });
+            html += '<div class="wrt-title-actions">'
+                + '<button class="wrt-btn wrt-btn--primary wrt-btn--sm" id="wrtTitleConfirmBtn">このタイトルに決定</button>'
+                + '</div>';
             html += '</div>';
         }
 
@@ -1715,6 +1805,74 @@ get_header();
         }
 
         body.innerHTML = html;
+
+        // タイトル選択イベント
+        body.querySelectorAll('.wrt-outline__title-opt').forEach(function(opt) {
+            // シングルクリック: 選択
+            opt.addEventListener('click', function(e) {
+                if (e.target.classList.contains('wrt-title-edit-input')) return;
+                body.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); });
+                opt.classList.add('selected');
+            });
+            // ダブルクリック: 編集モード
+            opt.addEventListener('dblclick', function() {
+                var textEl = opt.querySelector('.wrt-title-text');
+                if (!textEl || opt.querySelector('.wrt-title-edit-input')) return;
+                var currentVal = textEl.textContent;
+                textEl.style.display = 'none';
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'wrt-title-edit-input';
+                input.value = currentVal;
+                opt.appendChild(input);
+                input.focus();
+                input.select();
+                // Enter で確定、Escape でキャンセル
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        textEl.textContent = input.value;
+                        textEl.style.display = '';
+                        input.remove();
+                        body.querySelectorAll('.wrt-outline__title-opt').forEach(function(o) { o.classList.remove('selected'); });
+                        opt.classList.add('selected');
+                    } else if (e.key === 'Escape') {
+                        textEl.style.display = '';
+                        input.remove();
+                    }
+                });
+                input.addEventListener('blur', function() {
+                    if (input.parentNode) {
+                        textEl.textContent = input.value;
+                        textEl.style.display = '';
+                        input.remove();
+                    }
+                });
+            });
+        });
+
+        // 「このタイトルに決定」ボタン
+        var confirmBtn = document.getElementById('wrtTitleConfirmBtn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function() {
+                var selected = body.querySelector('.wrt-outline__title-opt.selected .wrt-title-text');
+                if (!selected) { showToast('タイトルを選択してください', true); return; }
+                var newTitle = selected.textContent.trim();
+                if (!newTitle) return;
+                apiFetch('/articles/' + currentArticle.id + '/settings', {
+                    method: 'POST',
+                    body: { title: newTitle }
+                }).then(function(res) {
+                    if (res.success) {
+                        showToast('タイトルを「' + newTitle + '」に変更しました');
+                        currentArticle.title = newTitle;
+                        // 記事一覧も更新
+                        loadArticles();
+                    } else {
+                        showToast(res.error || 'エラー', true);
+                    }
+                });
+            });
+        }
     }
     function closeOutlineModal() { document.getElementById('wrtOutlineModal').classList.remove('active'); }
     document.getElementById('wrtOutlineModalClose').addEventListener('click', closeOutlineModal);
