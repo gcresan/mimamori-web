@@ -293,6 +293,27 @@ get_header();
 .kwr-btn-create:hover { background: #3d7358; box-shadow: 0 2px 6px rgba(78,138,107,0.3); color: #fff; }
 .kwr-btn-create:active { background: #346248; }
 .kwr-btn-create svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+/* 計測キーワード追加ボタン */
+.kwr-btn-track {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    background: var(--mw-primary-blue, #4A90A4); color: #fff; border: none; cursor: pointer;
+    white-space: nowrap; transition: background 0.15s, box-shadow 0.15s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.kwr-btn-track:hover { background: #3a7a90; box-shadow: 0 2px 6px rgba(74,144,164,0.3); }
+.kwr-btn-track:active { background: #2d6a7f; }
+.kwr-btn-track:disabled { opacity: 0.5; cursor: not-allowed; }
+.kwr-btn-track svg { width: 12px; height: 12px; flex-shrink: 0; }
+.kwr-badge-tracked {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    background: rgba(74,144,164,0.12); color: var(--mw-primary-blue, #4A90A4);
+    white-space: nowrap;
+}
+.kwr-badge-tracked svg { width: 11px; height: 11px; flex-shrink: 0; }
+
 .kwr-badge--action-title    { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .kwr-badge--action-heading  { background: rgba(124,58,237,0.1); color: #7C3AED; }
 .kwr-badge--action-link     { background: rgba(201,90,79,0.08); color: #C95A4F; }
@@ -574,10 +595,84 @@ get_header();
 
     var userId = <?php echo (int) $user_id; ?>;
     var restUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/seo/keyword-research' ) ) ); ?>;
+    var rankTrackerUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/rank-tracker/my-keywords' ) ) ); ?>;
     var writingUrl = <?php echo wp_json_encode( esc_url( home_url( '/writing/' ) ) ); ?>;
     var nonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
     var btn = document.getElementById('kwrRunBtn');
     if (!btn) return;
+
+    /* 計測キーワード管理 */
+    var trackedKeywords = [];   // 登録済みキーワード文字列の配列（小文字正規化）
+    var trackCanAdd     = true; // 上限に達していないか
+    var trackLoaded     = false;
+
+    function loadTrackedKeywords() {
+        return fetch(rankTrackerUrl, {
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+            if (json.success && json.data) {
+                trackedKeywords = (json.data.keywords || []).map(function(k) {
+                    return k.keyword.toLowerCase();
+                });
+                trackCanAdd = json.data.can_add;
+            }
+            trackLoaded = true;
+        })
+        .catch(function() { trackLoaded = true; });
+    }
+
+    function isKeywordTracked(keyword) {
+        return trackedKeywords.indexOf(keyword.toLowerCase()) !== -1;
+    }
+
+    function addToTracker(keyword, btnEl) {
+        if (!trackCanAdd) {
+            alert('計測キーワードの登録上限に達しています。不要なキーワードを削除してから追加してください。');
+            return;
+        }
+        btnEl.disabled = true;
+        btnEl.textContent = '追加中…';
+        fetch(rankTrackerUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+            body: JSON.stringify({ keyword: keyword })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+            if (json.success) {
+                trackedKeywords.push(keyword.toLowerCase());
+                // ボタンをバッジに差し替え
+                var td = btnEl.parentNode;
+                td.innerHTML = trackBadgeHtml();
+                // 上限再チェック
+                loadTrackedKeywords();
+            } else {
+                alert(json.message || '追加に失敗しました。');
+                btnEl.disabled = false;
+                btnEl.innerHTML = trackBtnInner();
+            }
+        })
+        .catch(function() {
+            alert('通信エラーが発生しました。');
+            btnEl.disabled = false;
+            btnEl.innerHTML = trackBtnInner();
+        });
+    }
+
+    function trackBtnInner() {
+        return '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>計測に追加';
+    }
+
+    function trackBadgeHtml() {
+        return '<span class="kwr-badge-tracked"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>追加済み</span>';
+    }
+
+    // ページ読み込み時に登録済みキーワードを取得
+    loadTrackedKeywords();
 
     /* グループ定義 */
     var groupMeta = {
@@ -983,6 +1078,7 @@ get_header();
             { label: '推奨ページ', key: 'page_type', type: 'string' },
             { label: '提案理由',   key: null },
             { label: 'アクション', key: null },
+            { label: '計測', key: null },
             { label: '', key: null }
         ];
         var st = groupSortState[gk] || {};
@@ -1013,6 +1109,10 @@ get_header();
                 + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
                 + '<td style="font-size:12px;color:var(--mw-text-secondary);">' + esc(item.reason) + '</td>'
                 + '<td>' + badge(item.action, actClass) + '</td>'
+                + '<td>' + (isKeywordTracked(item.keyword)
+                    ? trackBadgeHtml()
+                    : '<button type="button" class="kwr-btn-track" data-keyword="' + esc(item.keyword).replace(/"/g, '&quot;') + '">' + trackBtnInner() + '</button>')
+                + '</td>'
                 + '<td><a href="' + writingUrl + '?keyword=' + encodeURIComponent(item.keyword) + '" class="kwr-btn-create" title="このキーワードで記事を作成"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"/><path d="M16 12.25a.75.75 0 01.75.75v2.25H19a.75.75 0 010 1.5h-2.25V19a.75.75 0 01-1.5 0v-2.25H13a.75.75 0 010-1.5h2.25V13a.75.75 0 01.75-.75z"/></svg>記事作成</a></td>'
                 + '</tr>';
         });
@@ -1028,6 +1128,14 @@ get_header();
                 var nd = nextSortDir(cur);
                 groupSortState[gk] = nd ? { key: sortKey, dir: nd, type: sortType } : {};
                 renderGroupTable(body, items, gk);
+            });
+        });
+
+        // 計測キーワード追加ボタン
+        body.querySelectorAll('.kwr-btn-track').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var kw = btn.getAttribute('data-keyword');
+                if (kw) addToTracker(kw, btn);
             });
         });
     }
