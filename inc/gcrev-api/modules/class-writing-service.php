@@ -438,8 +438,8 @@ class Gcrev_Writing_Service {
     /**
      * 記事に使用する情報ストックのアイテムを取得
      *
-     * selected_knowledge_ids が空の場合は、全ての有効な情報ストックを自動使用。
-     * 明示的に選択されている場合はその選択を尊重。
+     * selected_knowledge_ids が空の場合は always_ref のアイテムのみ自動使用。
+     * 明示的に選択されている場合はその選択を尊重しつつ always_ref は強制追加。
      */
     private function resolve_knowledge_items( int $user_id, array $article ): array {
         $kid_ids = $article['selected_knowledge_ids'] ?? [];
@@ -878,7 +878,7 @@ class Gcrev_Writing_Service {
         $settings = function_exists( 'gcrev_get_client_settings' )
             ? gcrev_get_client_settings( $user_id ) : [];
 
-        // 情報ストック（未選択なら全件自動使用）
+        // 情報ストック（未選択なら always_ref のみ自動使用）
         $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
 
         // 既存記事フィンガープリント取得（重複回避用）
@@ -2207,7 +2207,7 @@ STRUCTURE_FORMAT;
         $settings = function_exists( 'gcrev_get_client_settings' )
             ? gcrev_get_client_settings( $user_id ) : [];
 
-        // 情報ストック（未選択なら全件自動使用）
+        // 情報ストック（未選択なら always_ref のみ自動使用）
         // 「表記ルール・禁止表現」カテゴリは最優先ルールとして分離
         $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
         $knowledge_text = '';

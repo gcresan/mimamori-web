@@ -1474,7 +1474,6 @@ get_header();
         // 参照する情報ストック
         html += '<div style="margin-bottom:12px;"><label style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);display:block;margin-bottom:6px;">参照する情報ストック</label>';
         html += '<div class="wrt-kb-select-wrap">';
-        html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:8px;">関連する情報ストックが自動で選択されています。外したい場合はクリックしてください。</div>';
         html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:8px;">「常時参照」の情報は自動で選択されます。追加で参照したい情報はクリックして選択してください。</div>';
         html += '<div class="wrt-kb-select" id="wrtKbSelect"></div>';
         html += '</div></div>';
@@ -2793,8 +2792,7 @@ get_header();
             if (items.length === 0) { container.innerHTML = '<span style="font-size:12px;color:var(--mw-text-tertiary);">情報ストックがありません（登録すると自動的に記事生成に活用されます）</span>'; return; }
             // selectedIds が空 = always_ref のアイテムのみ自動選択
             var noExplicitSelection = !selectedIds || selectedIds.length === 0;
-            container.innerHTML = '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">「常時参照」の情報は自動で選択されます。追加で参照したい情報はクリックして選択してください。</div>'
-                + items.map(function(ki) {
+            container.innerHTML = items.map(function(ki) {
                     var isAlwaysRef = !!ki.always_ref;
                     var sel = isAlwaysRef || (!noExplicitSelection && selectedIds.indexOf(ki.id) >= 0) ? ' selected' : '';
                     var locked = isAlwaysRef ? ' locked' : '';
