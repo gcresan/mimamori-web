@@ -346,6 +346,72 @@ class Gcrev_Config {
     }
 
     // =========================================================
+    // Writing (記事生成) AI 設定
+    // =========================================================
+
+    /**
+     * 記事生成で使用する AI プロバイダーを返す
+     *
+     * 優先順位:
+     *   1. wp-config.php 定数 GCREV_WRITING_AI_PROVIDER
+     *   2. OPENAI_API_KEY が定義済みなら 'openai'
+     *   3. デフォルト 'gemini'
+     */
+    public function get_writing_ai_provider(): string {
+        if ( defined( 'GCREV_WRITING_AI_PROVIDER' ) && GCREV_WRITING_AI_PROVIDER !== '' ) {
+            $provider = strtolower( (string) GCREV_WRITING_AI_PROVIDER );
+            if ( in_array( $provider, [ 'openai', 'gemini' ], true ) ) {
+                return $provider;
+            }
+        }
+        return defined( 'OPENAI_API_KEY' ) && OPENAI_API_KEY !== '' ? 'openai' : 'gemini';
+    }
+
+    /**
+     * 記事生成の設定一式を返す
+     *
+     * wp-config.php の GCREV_WRITING_* 定数から読み取り、未定義はデフォルト値を使用。
+     * 将来的に管理画面UIからの設定保存にも対応できる構造。
+     */
+    public function get_writing_settings(): array {
+        return [
+            'ai_provider'              => $this->get_writing_ai_provider(),
+            'tone_strength'            => $this->get_writing_const( 'GCREV_WRITING_TONE_STRENGTH', 'standard', [ 'soft', 'standard', 'firm' ] ),
+            'jargon_level'             => $this->get_writing_const( 'GCREV_WRITING_JARGON_LEVEL', 'standard', [ 'low', 'standard', 'high' ] ),
+            'sales_tone'               => $this->get_writing_const( 'GCREV_WRITING_SALES_TONE', 'subtle', [ 'subtle', 'standard', 'moderate' ] ),
+            'quality_check_enabled'    => $this->get_writing_bool( 'GCREV_WRITING_QUALITY_CHECK', true ),
+            'auto_rewrite_enabled'     => $this->get_writing_bool( 'GCREV_WRITING_AUTO_REWRITE', true ),
+            'auto_rewrite_max_retries' => $this->get_writing_int( 'GCREV_WRITING_REWRITE_MAX_RETRIES', 2, 0, 5 ),
+            'quality_pass_score'       => $this->get_writing_int( 'GCREV_WRITING_QUALITY_PASS_SCORE', 60, 0, 80 ),
+        ];
+    }
+
+    private function get_writing_const( string $const_name, string $default, array $allowed ): string {
+        if ( defined( $const_name ) && constant( $const_name ) !== '' ) {
+            $val = strtolower( (string) constant( $const_name ) );
+            if ( in_array( $val, $allowed, true ) ) {
+                return $val;
+            }
+        }
+        return $default;
+    }
+
+    private function get_writing_bool( string $const_name, bool $default ): bool {
+        if ( defined( $const_name ) ) {
+            return (bool) constant( $const_name );
+        }
+        return $default;
+    }
+
+    private function get_writing_int( string $const_name, int $default, int $min, int $max ): int {
+        if ( defined( $const_name ) ) {
+            $val = (int) constant( $const_name );
+            return max( $min, min( $max, $val ) );
+        }
+        return $default;
+    }
+
+    // =========================================================
     // Bright Data
     // =========================================================
 

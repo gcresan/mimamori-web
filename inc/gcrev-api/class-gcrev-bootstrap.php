@@ -1057,14 +1057,19 @@ class Gcrev_Bootstrap {
 
         require_once __DIR__ . '/utils/class-auto-article-queue.php';
         require_once __DIR__ . '/modules/class-ai-client.php';
+        require_once __DIR__ . '/modules/class-openai-client.php';
         require_once __DIR__ . '/utils/class-config.php';
         require_once __DIR__ . '/modules/class-writing-service.php';
         require_once __DIR__ . '/modules/class-keyword-research-service.php';
         require_once __DIR__ . '/modules/class-auto-article-service.php';
 
-        $ai         = new Gcrev_AI_Client();
         $config     = new Gcrev_Config();
-        $writing    = new Gcrev_Writing_Service( $ai, $config );
+        $ai         = new Gcrev_AI_Client( $config );
+        $openai     = null;
+        if ( $config->get_writing_ai_provider() === 'openai' && $config->get_openai_api_key() !== '' ) {
+            $openai = new Gcrev_OpenAI_Client( $config );
+        }
+        $writing    = new Gcrev_Writing_Service( $ai, $config, $openai );
         $kw_service = new Gcrev_Keyword_Research_Service( $ai, $config, null, null );
         $service    = new Gcrev_Auto_Article_Service( $writing, $ai, $config, $kw_service );
         $service->build_daily_queue();
@@ -1076,14 +1081,19 @@ class Gcrev_Bootstrap {
 
         require_once __DIR__ . '/utils/class-auto-article-queue.php';
         require_once __DIR__ . '/modules/class-ai-client.php';
+        require_once __DIR__ . '/modules/class-openai-client.php';
         require_once __DIR__ . '/utils/class-config.php';
         require_once __DIR__ . '/modules/class-writing-service.php';
         require_once __DIR__ . '/modules/class-keyword-research-service.php';
         require_once __DIR__ . '/modules/class-auto-article-service.php';
 
-        $ai         = new Gcrev_AI_Client();
         $config     = new Gcrev_Config();
-        $writing    = new Gcrev_Writing_Service( $ai, $config );
+        $ai         = new Gcrev_AI_Client( $config );
+        $openai     = null;
+        if ( $config->get_writing_ai_provider() === 'openai' && $config->get_openai_api_key() !== '' ) {
+            $openai = new Gcrev_OpenAI_Client( $config );
+        }
+        $writing    = new Gcrev_Writing_Service( $ai, $config, $openai );
         $kw_service = new Gcrev_Keyword_Research_Service( $ai, $config, null, null );
         $service    = new Gcrev_Auto_Article_Service( $writing, $ai, $config, $kw_service );
         $service->process_chunk( (int) $job_id );

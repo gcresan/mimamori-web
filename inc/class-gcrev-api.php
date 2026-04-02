@@ -166,7 +166,14 @@ class Gcrev_Insight_API {
 
         // Step8b: Writing Service
         if ( class_exists( 'Gcrev_Writing_Service' ) ) {
-            $this->writing_service = new Gcrev_Writing_Service( $this->ai, $this->config );
+            $writing_openai = null;
+            if ( class_exists( 'Gcrev_OpenAI_Client' )
+                && $this->config->get_writing_ai_provider() === 'openai'
+                && $this->config->get_openai_api_key() !== ''
+            ) {
+                $writing_openai = new Gcrev_OpenAI_Client( $this->config );
+            }
+            $this->writing_service = new Gcrev_Writing_Service( $this->ai, $this->config, $writing_openai );
         }
 
         if ($register_routes) {

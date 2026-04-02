@@ -12,8 +12,9 @@ if ( class_exists('Gcrev_Writing_Service') ) { return; }
  */
 class Gcrev_Writing_Service {
 
-    private Gcrev_AI_Client $ai;
-    private Gcrev_Config    $config;
+    private Gcrev_AI_Client      $ai;
+    private Gcrev_Config         $config;
+    private ?Gcrev_OpenAI_Client $openai;
 
     private const DEBUG_LOG = '/tmp/gcrev_writing_debug.log';
 
@@ -55,9 +56,10 @@ class Gcrev_Writing_Service {
         'casual'       => '親しみやすく',
     ];
 
-    public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config ) {
+    public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, ?Gcrev_OpenAI_Client $openai = null ) {
         $this->ai     = $ai;
         $this->config = $config;
+        $this->openai = $openai;
     }
 
     // =========================================================
@@ -2535,5 +2537,821 @@ RULES;
             date( 'Y-m-d H:i:s' ) . " [Writing] {$message}\n",
             FILE_APPEND
         );
+    }
+
+    // =========================================================
+    // ChatGPT 4ステップパイプライン
+    // =========================================================
+
+    /**
+     * AI プロバイダーディスパッチ — JSON mode
+     *
+     * provider=openai の場合は OpenAI を使用、それ以外は Gemini にフォールバック。
+     * 返却値は正規化された配列。
+     *
+     * @return array ['text', 'prompt_tokens', 'completion_tokens', 'elapsed_seconds', 'model']
+     */
+    private function call_ai_json( string $system_prompt, string $user_prompt, array $options = [] ): array {
+        $provider = $this->config->get_writing_ai_provider();
+
+        if ( $provider === 'openai' && $this->openai !== null ) {
+            $result = $this->openai->call_chat_api( $system_prompt, $user_prompt, $options );
+            return [
+                'text'              => $result['text'],
+                'prompt_tokens'     => $result['prompt_tokens'] ?? 0,
+                'completion_tokens' => $result['completion_tokens'] ?? 0,
+                'elapsed_seconds'   => $result['elapsed_seconds'] ?? 0,
+                'model'             => $result['model'] ?? 'unknown',
+                'provider'          => 'openai',
+            ];
+        }
+
+        // Gemini フォールバック（system + user を結合して1プロンプトに）
+        if ( $provider === 'openai' && $this->openai === null ) {
+            $this->log( '[DISPATCH] openai configured but client is null — falling back to gemini' );
+        }
+        $combined = $system_prompt . "\n\n" . $user_prompt;
+        $start = microtime( true );
+        $raw = $this->ai->call_gemini_api( $combined, $options );
+        $elapsed = round( microtime( true ) - $start, 2 );
+
+        return [
+            'text'              => $raw,
+            'prompt_tokens'     => 0,
+            'completion_tokens' => 0,
+            'elapsed_seconds'   => $elapsed,
+            'model'             => 'gemini',
+            'provider'          => 'gemini',
+        ];
+    }
+
+    /**
+     * AI プロバイダーディスパッチ — テキスト mode
+     */
+    private function call_ai_text( string $system_prompt, string $user_prompt, array $options = [] ): array {
+        $provider = $this->config->get_writing_ai_provider();
+
+        if ( $provider === 'openai' && $this->openai !== null ) {
+            $start = microtime( true );
+            $text = $this->openai->call_chat_text( $system_prompt, $user_prompt, $options );
+            $elapsed = round( microtime( true ) - $start, 2 );
+            return [
+                'text'              => $text,
+                'prompt_tokens'     => 0,
+                'completion_tokens' => 0,
+                'elapsed_seconds'   => $elapsed,
+                'model'             => $options['model'] ?? $this->config->get_openai_model(),
+                'provider'          => 'openai',
+            ];
+        }
+
+        if ( $provider === 'openai' && $this->openai === null ) {
+            $this->log( '[DISPATCH] openai configured but client is null — falling back to gemini' );
+        }
+        $combined = $system_prompt . "\n\n" . $user_prompt;
+        $start = microtime( true );
+        $raw = $this->ai->call_gemini_api( $combined, $options );
+        $elapsed = round( microtime( true ) - $start, 2 );
+
+        return [
+            'text'              => $raw,
+            'prompt_tokens'     => 0,
+            'completion_tokens' => 0,
+            'elapsed_seconds'   => $elapsed,
+            'model'             => 'gemini',
+            'provider'          => 'gemini',
+        ];
+    }
+
+    // =========================================================
+    // パイプラインオーケストレーター
+    // =========================================================
+
+    /**
+     * 4ステップ記事生成パイプライン
+     *
+     * 1. 構成生成 → 2. 本文生成 → 3. 品質評価 → 4. 自動リライト（必要時）
+     *
+     * @param  int    $user_id
+     * @param  int    $article_id
+     * @param  string $additional_prompt 追加プロンプト（切り口指定等）
+     * @return array  ['success', 'structure', 'draft_content', 'quality', 'rewrite_attempts', 'generation_log']
+     */
+    public function generate_article_pipeline( int $user_id, int $article_id, string $additional_prompt = '' ): array {
+        $settings = $this->config->get_writing_settings();
+        $gen_log = [];
+
+        $this->log( "[PIPELINE] START article_id={$article_id}, provider={$settings['ai_provider']}" );
+
+        // Step 1: 構成生成
+        $step1 = $this->pipeline_step1_structure( $user_id, $article_id, $additional_prompt );
+        $gen_log[] = $step1['log'] ?? [];
+        if ( ! $step1['success'] ) {
+            $this->save_generation_log( $article_id, $gen_log );
+            return [ 'success' => false, 'error' => '構成生成失敗: ' . ( $step1['error'] ?? '' ), 'generation_log' => $gen_log ];
+        }
+
+        // Step 2: 本文生成
+        $step2 = $this->pipeline_step2_body( $user_id, $article_id, $settings, $additional_prompt );
+        $gen_log[] = $step2['log'] ?? [];
+        if ( ! $step2['success'] ) {
+            $this->save_generation_log( $article_id, $gen_log );
+            return [ 'success' => false, 'error' => '本文生成失敗: ' . ( $step2['error'] ?? '' ), 'generation_log' => $gen_log ];
+        }
+
+        // Step 3: 品質評価
+        $quality = [ 'score' => 0, 'passed' => true, 'feedback' => '' ];
+        $rewrite_attempts = 0;
+
+        if ( $settings['quality_check_enabled'] ) {
+            $step3 = $this->pipeline_step3_quality( $user_id, $article_id, $settings );
+            $gen_log[] = $step3['log'] ?? [];
+            $quality = $step3['quality'];
+
+            // Step 4: 自動リライト（品質不合格時）
+            if ( ! $quality['passed'] && $settings['auto_rewrite_enabled'] ) {
+                $max_retries = $settings['auto_rewrite_max_retries'];
+                for ( $i = 1; $i <= $max_retries; $i++ ) {
+                    $this->log( "[PIPELINE] rewrite attempt {$i}/{$max_retries}, score={$quality['score']}" );
+
+                    $step4 = $this->pipeline_step4_rewrite( $user_id, $article_id, $quality, $i, $settings );
+                    $gen_log[] = $step4['log'] ?? [];
+                    $rewrite_attempts = $i;
+
+                    if ( ! $step4['success'] ) {
+                        $this->log( "[PIPELINE] rewrite attempt {$i} failed: " . ( $step4['error'] ?? '' ) );
+                        break;
+                    }
+
+                    // リライト後に再評価
+                    $re_eval = $this->pipeline_step3_quality( $user_id, $article_id, $settings );
+                    $gen_log[] = $re_eval['log'] ?? [];
+                    $quality = $re_eval['quality'];
+
+                    if ( $quality['passed'] ) {
+                        $this->log( "[PIPELINE] rewrite passed on attempt {$i}, score={$quality['score']}" );
+                        break;
+                    }
+                }
+            }
+        }
+
+        // パイプライン完了メタ保存
+        update_post_meta( $article_id, '_gcrev_article_pipeline_version', 'v2_4step' );
+        $this->save_generation_log( $article_id, $gen_log );
+
+        $this->log( "[PIPELINE] DONE article_id={$article_id}, score={$quality['score']}, passed=" . ( $quality['passed'] ? 'yes' : 'no' ) . ", rewrites={$rewrite_attempts}" );
+
+        return [
+            'success'           => true,
+            'structure'         => $step1['outline'] ?? null,
+            'draft_content'     => get_post_meta( $article_id, '_gcrev_article_draft_content', true ),
+            'quality'           => $quality,
+            'rewrite_attempts'  => $rewrite_attempts,
+            'generation_log'    => $gen_log,
+        ];
+    }
+
+    // =========================================================
+    // Step 1: 構成生成
+    // =========================================================
+
+    private function pipeline_step1_structure( int $user_id, int $article_id, string $additional_prompt = '' ): array {
+        // 既存の generate_outline ロジックを再利用
+        $result = $this->generate_outline( $user_id, $article_id );
+        if ( ! $result['success'] ) {
+            return [
+                'success' => false,
+                'error'   => $result['error'] ?? '',
+                'log'     => [ 'step' => 'structure', 'success' => false ],
+            ];
+        }
+
+        return [
+            'success' => true,
+            'outline' => $result['outline'],
+            'log'     => [ 'step' => 'structure', 'success' => true ],
+        ];
+    }
+
+    // =========================================================
+    // Step 2: 本文生成（構造化 JSON → Markdown）
+    // =========================================================
+
+    private function pipeline_step2_body( int $user_id, int $article_id, array $settings, string $additional_prompt = '' ): array {
+        $article = $this->get_article( $user_id, $article_id );
+        if ( ! $article ) {
+            return [ 'success' => false, 'error' => '記事が見つかりません。' ];
+        }
+
+        $outline = $article['outline'] ?? null;
+        if ( ! $outline || empty( $outline['headings'] ) ) {
+            return [ 'success' => false, 'error' => '構成案がありません。' ];
+        }
+
+        $client_settings = function_exists( 'gcrev_get_client_settings' )
+            ? gcrev_get_client_settings( $user_id ) : [];
+
+        // 情報ストック
+        $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
+        $knowledge_text = '';
+        $rules_text = '';
+        $total = 0;
+        foreach ( $knowledge_items as $ki ) {
+            $cat_label = self::KNOWLEDGE_CATEGORIES[ $ki['category'] ] ?? $ki['category'];
+            $content = $ki['content'];
+            if ( $ki['category'] === 'rules' ) {
+                $rules_text .= "- {$ki['title']}: {$content}\n";
+                continue;
+            }
+            if ( $total + mb_strlen( $content ) > 15000 ) {
+                $content = mb_substr( $content, 0, max( 0, 15000 - $total ) ) . '…（以下省略）';
+            }
+            $total += mb_strlen( $content );
+            $knowledge_text .= "### {$ki['title']}（{$cat_label}）\n{$content}\n\n";
+            if ( $total >= 15000 ) { break; }
+        }
+
+        // メモ・ヒアリング
+        $notes_text = '';
+        foreach ( $article['notes'] ?? [] as $n ) {
+            $notes_text .= "- {$n['text']}\n";
+        }
+        $interview_text = '';
+        $interview = $article['interview'] ?? null;
+        if ( $interview && ! empty( $interview['questions'] ) && ! empty( $interview['answers'] ) ) {
+            foreach ( $interview['questions'] as $idx => $q ) {
+                $ans = $interview['answers'][ $idx ] ?? '';
+                if ( $ans !== '' ) {
+                    $interview_text .= "Q: {$q['question']}\nA: {$ans}\n\n";
+                }
+            }
+        }
+
+        // 既存記事フィンガープリント
+        $existing_fps = $this->get_existing_articles_fingerprints( $user_id, $article_id );
+        $existing_ctx = $this->build_existing_articles_context( $existing_fps );
+
+        // システムプロンプト構築
+        $system_prompt = $this->build_body_system_prompt( $settings, $rules_text );
+
+        // ユーザープロンプト構築
+        $user_prompt = $this->build_body_user_prompt(
+            $article, $outline, $client_settings,
+            $knowledge_text, $notes_text, $interview_text,
+            $existing_ctx, $additional_prompt
+        );
+
+        $this->log( "[PIPELINE:BODY] article_id={$article_id}, system_len=" . mb_strlen( $system_prompt ) . ", user_len=" . mb_strlen( $user_prompt ) );
+
+        try {
+            $result = $this->call_ai_json( $system_prompt, $user_prompt, [
+                'temperature'     => 0.7,
+                'max_tokens'      => 16384,
+                'maxOutputTokens' => 16384,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "[PIPELINE:BODY] AI error: " . $e->getMessage() );
+            return [ 'success' => false, 'error' => $e->getMessage(), 'log' => [ 'step' => 'body', 'success' => false, 'error' => $e->getMessage() ] ];
+        }
+
+        // JSON パース
+        $raw_text = $result['text'];
+        $cleaned = preg_replace( '/^```(?:json)?\s*/m', '', $raw_text );
+        $cleaned = preg_replace( '/```\s*$/m', '', $cleaned );
+        $cleaned = trim( $cleaned );
+
+        $first = strpos( $cleaned, '{' );
+        $last  = strrpos( $cleaned, '}' );
+        $structure = null;
+        if ( $first !== false && $last !== false && $last > $first ) {
+            $structure = json_decode( substr( $cleaned, $first, $last - $first + 1 ), true );
+        }
+
+        if ( ! is_array( $structure ) || empty( $structure['title'] ) ) {
+            $this->log( "[PIPELINE:BODY] JSON parse failed, raw (first 500): " . substr( $raw_text, 0, 500 ) );
+            // フォールバック: テキストとしてそのまま使用
+            $content = preg_replace( '/^```(?:markdown|html)?\s*/m', '', $raw_text );
+            $content = preg_replace( '/```\s*$/m', '', $content );
+            $content = trim( $content );
+
+            update_post_meta( $article_id, '_gcrev_article_draft_content', $content );
+            update_post_meta( $article_id, '_gcrev_article_status', 'draft_generated' );
+            $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+            update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
+
+            return [
+                'success' => true,
+                'log'     => $this->make_step_log( 'body', $result, [ 'structured' => false ] ),
+            ];
+        }
+
+        // 構造化 JSON → Markdown 変換
+        $markdown = $this->structure_to_markdown( $structure );
+
+        // 保存
+        update_post_meta( $article_id, '_gcrev_article_draft_content', $markdown );
+        update_post_meta( $article_id, '_gcrev_article_draft_structure_json',
+            wp_json_encode( $structure, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $article_id, '_gcrev_article_status', 'draft_generated' );
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
+
+        $this->log( "[PIPELINE:BODY] article_id={$article_id}, length=" . mb_strlen( $markdown ) );
+
+        return [
+            'success' => true,
+            'log'     => $this->make_step_log( 'body', $result, [ 'structured' => true, 'content_length' => mb_strlen( $markdown ) ] ),
+        ];
+    }
+
+    /**
+     * 本文生成用システムプロンプト
+     */
+    private function build_body_system_prompt( array $settings, string $rules_text ): string {
+        $tone_map = [
+            'soft'     => 'やわらかめのです・ます調。語りかけるような雰囲気で。',
+            'standard' => 'やややわらかめのです・ます調。読みやすさ優先。',
+            'firm'     => '丁寧なです・ます調。専門的な信頼感を維持しつつ読みやすく。',
+        ];
+        $jargon_map = [
+            'low'      => '専門用語はできるだけ避け、一般読者にも伝わる平易な表現を使ってください。',
+            'standard' => '専門用語は必要最小限にし、使う場合は簡単に補足してください。',
+            'high'     => '業界知識がある読者を想定し、専門用語も適度に使ってください（ただし初出は簡潔に補足）。',
+        ];
+        $sales_map = [
+            'subtle'   => '営業色は極力排除。情報提供・読み物として成立させてください。売り込み・誘導は一切しないでください。',
+            'standard' => '営業色は控えめに。記事の最後にさりげなく問い合わせへの導線を設ける程度。',
+            'moderate' => 'サービスの紹介を自然に含めてOKですが、押しつけがましくならないよう注意してください。',
+        ];
+
+        $tone_inst   = $tone_map[ $settings['tone_strength'] ] ?? $tone_map['standard'];
+        $jargon_inst = $jargon_map[ $settings['jargon_level'] ] ?? $jargon_map['standard'];
+        $sales_inst  = $sales_map[ $settings['sales_tone'] ] ?? $sales_map['subtle'];
+
+        $system = <<<SYSTEM
+あなたは日本のローカルビジネス向けコラム記事のライターです。
+指定された構成案に従い、コラム記事本文を執筆してください。
+
+あなたの出力は必ず以下のJSON形式で返してください（JSONのみ出力、前後に説明文やコードブロック記号は不要）:
+{
+  "title": "記事タイトル",
+  "lead": "導入文（150〜300文字。読者の関心を引き、記事を読む動機を作る）",
+  "sections": [
+    {
+      "heading": "見出しテキスト",
+      "body": "本文（Markdown記法可。100〜400文字程度。段落分けは\\n\\nで）"
+    }
+  ],
+  "conclusion": "まとめ（100〜250文字。押し売り感なく自然に締める）",
+  "meta_description": "検索結果に表示するメタディスクリプション（120文字以内）",
+  "suggested_slug": "url-slug-in-english",
+  "quality_notes": "執筆時に気をつけた点や注意事項（任意）"
+}
+
+## 最優先ルール（すべてに優先する）
+1. 自然に読めること
+2. 読者が不快にならないこと
+3. 自画自賛に見えないこと
+4. 内容が具体的であること
+5. 人が書いたように見えること
+
+## 文体設定
+{$tone_inst}
+
+## 専門用語レベル
+{$jargon_inst}
+
+## 営業色設定
+{$sales_inst}
+
+## 文章スタイル指針
+- 日本語として自然で読みやすい文章を書く
+- コラム記事として自然な流れを意識する
+- FAQ一覧のような不自然な構成にしない
+- 箇条書きばかりにしない
+- 説明しすぎて読みにくくしない
+- 「〜が重要です」「〜すべきです」を連発しない
+- 自社・サービス・事業者を過度に持ち上げない
+- わざとらしい褒め表現を使わない
+- 根拠が弱いことを断定しない
+- SEOのための不自然なキーワード連呼をしない
+- AIが書いたような定型的で硬い表現を避ける
+- 人間が書いたような自然な抑揚を持たせる
+- 文章はやさしく、初心者にも読みやすくする
+- 読者を不安だけで過剰に煽らない
+- 売り込み色を強くしすぎない
+- ただし、内容が薄くならないよう具体性は持たせる
+- 誇張表現、過剰な断定、過度な煽りは禁止
+- 1文を長くしすぎない
+- 接続詞を不自然に多用しない
+- 同じ語尾を連続させすぎない
+- 小見出しごとに役割を明確にする
+- 導入文は入りやすくする
+- まとめは押し売り感なく自然に締める
+
+## 禁止表現（以下は原則使用禁止）
+**自画自賛系:** 期待を超える / 圧倒的 / 強力なパートナー / 最大限に引き出す / 未来を切り拓く / 理想を形にする / 目覚ましい成果 / 驚きの結果 / 選ばれ続ける理由 / 唯一無二 / 圧倒的な強み
+**抽象・大げさ系:** 可能性を広げる / ビジネスを加速させる / 新たな価値を創造する / 成長を後押しする / 未来につながる / 魅力を最大限に伝える / 強力な武器になる / 欠かせない存在 / 新たな出会いを創出する
+**AIっぽい語尾:** 〜と言えるでしょう / 〜ではないでしょうか / 〜していきます / 〜してまいります / 〜を実現します / 〜が可能です / 〜に貢献します / 〜をサポートします / 〜をお手伝いします
+
+## 文章ルール
+- 文の長さに変化をつけ、同じ語尾・同じ構文を続けない
+- 漢字が多すぎる文は避け、ひらがなとのバランスを取る
+- きれいすぎる定型文の連続を避け、少しやわらかい言い回しを混ぜて人間らしい流れにする
+- 読者が「読んでよかった」と思えるノウハウ・考え方・判断ポイントを含める
+- 一次情報（クライアント固有の情報）を最大限に活用し、事実に基づいた記事にする
+- 一次情報にないことを断定したり、存在しない実績・数値を捏造してはいけない
+- 迷ったら「少し地味なくらいがちょうどよい」と考える
+SYSTEM;
+
+        if ( $rules_text !== '' ) {
+            $system .= "\n\n## クライアント指定の表記ルール（違反は絶対に許容されない）\n"
+                . "以下はクライアントが指定した表記・用語ルールです。記事本文のすべての箇所でこのルールを厳守してください。\n"
+                . $rules_text;
+        }
+
+        return $system;
+    }
+
+    /**
+     * 本文生成用ユーザープロンプト
+     */
+    private function build_body_user_prompt(
+        array $article, array $outline, array $client_settings,
+        string $knowledge_text, string $notes_text, string $interview_text,
+        string $existing_ctx, string $additional_prompt
+    ): string {
+        $keyword       = $article['keyword'];
+        $type_label    = self::ARTICLE_TYPES[ $article['type'] ] ?? '解説記事';
+        $tone_label    = self::TONES[ $article['tone'] ] ?? '自然で読みやすい';
+        $target_reader = $article['target_reader'] ?? '';
+        $word_count    = $outline['target_word_count'] ?? 3000;
+
+        $parts = [];
+
+        // 記事条件
+        $parts[] = "## 記事条件\n"
+            . "- 対策キーワード: {$keyword}\n"
+            . "- 記事タイプ: {$type_label}\n"
+            . "- 文体: {$tone_label}\n"
+            . ( $target_reader ? "- 想定読者: {$target_reader}\n" : '' )
+            . "- 目標文字数: {$word_count}文字\n";
+
+        // 構成案
+        $headings_text = "## 構成案（この見出し構造に従って書いてください）\n";
+        foreach ( $outline['headings'] ?? [] as $h ) {
+            $headings_text .= "### {$h['text']}\n";
+            if ( ! empty( $h['description'] ) ) { $headings_text .= "  → {$h['description']}\n"; }
+            foreach ( $h['children'] ?? [] as $c ) {
+                $headings_text .= "#### {$c['text']}\n";
+                if ( ! empty( $c['description'] ) ) { $headings_text .= "  → {$c['description']}\n"; }
+            }
+        }
+        $parts[] = $headings_text;
+
+        // 一次情報
+        if ( $knowledge_text !== '' ) {
+            $parts[] = "## 参照情報（クライアント固有の一次情報）\n{$knowledge_text}";
+        }
+        if ( $notes_text !== '' ) {
+            $parts[] = "## 記事専用のメモ・補足情報\n{$notes_text}";
+        }
+        if ( $interview_text !== '' ) {
+            $parts[] = "## ヒアリング回答（不足情報の補完）\n{$interview_text}";
+        }
+
+        // クライアント情報
+        $site_url = $client_settings['site_url'] ?? '';
+        if ( $site_url !== '' ) {
+            $profile  = "## クライアント情報\n";
+            $profile .= "- サイトURL: {$site_url}\n";
+            $area_label = function_exists( 'gcrev_get_client_area_label' )
+                ? gcrev_get_client_area_label( $client_settings ) : '';
+            if ( $area_label ) $profile .= "- エリア: {$area_label}\n";
+            if ( ! empty( $client_settings['industry'] ) ) $profile .= "- 業種: {$client_settings['industry']}\n";
+            $parts[] = $profile;
+        }
+
+        // 既存記事コンテキスト
+        if ( $existing_ctx !== '' ) {
+            $parts[] = $existing_ctx;
+        }
+
+        // 追加指示
+        if ( $additional_prompt !== '' ) {
+            $parts[] = "## 追加指示（必ず反映すること）\n{$additional_prompt}";
+        }
+
+        // 切り口指定
+        $auto_angle = get_post_meta( $article['id'], '_gcrev_article_auto_angle', true );
+        if ( $auto_angle !== '' && $auto_angle !== false ) {
+            $parts[] = "## 記事の切り口指定\n"
+                . "この記事は既存記事との差別化のため、以下の切り口で書いてください:\n"
+                . "{$auto_angle}\n";
+        }
+
+        return implode( "\n\n", $parts );
+    }
+
+    /**
+     * 構造化 JSON → Markdown 変換
+     */
+    private function structure_to_markdown( array $structure ): string {
+        $parts = [];
+
+        // タイトル
+        $parts[] = '# ' . ( $structure['title'] ?? '無題' );
+
+        // 導入文
+        if ( ! empty( $structure['lead'] ) ) {
+            $parts[] = $structure['lead'];
+        }
+
+        // セクション
+        foreach ( $structure['sections'] ?? [] as $section ) {
+            if ( ! empty( $section['heading'] ) ) {
+                $parts[] = '## ' . $section['heading'];
+            }
+            if ( ! empty( $section['body'] ) ) {
+                $parts[] = $section['body'];
+            }
+        }
+
+        // まとめ
+        if ( ! empty( $structure['conclusion'] ) ) {
+            $parts[] = "## まとめ\n\n" . $structure['conclusion'];
+        }
+
+        return implode( "\n\n", $parts );
+    }
+
+    // =========================================================
+    // Step 3: 品質評価（8項目）
+    // =========================================================
+
+    private function pipeline_step3_quality( int $user_id, int $article_id, array $settings ): array {
+        $draft = get_post_meta( $article_id, '_gcrev_article_draft_content', true ) ?: '';
+        $keyword = get_post_meta( $article_id, '_gcrev_article_keyword', true ) ?: '';
+
+        if ( mb_strlen( $draft ) < 200 ) {
+            return [
+                'quality' => [ 'score' => 0, 'passed' => false, 'feedback' => '本文が短すぎます。' ],
+                'log'     => [ 'step' => 'quality', 'success' => false, 'reason' => 'too_short' ],
+            ];
+        }
+
+        // 記事全体を送信（長すぎる場合は先頭6000文字に制限）
+        $sample = mb_strlen( $draft ) > 6000 ? mb_substr( $draft, 0, 6000 ) . "\n\n…（以下省略）" : $draft;
+
+        $system_prompt = <<<'EVAL_SYSTEM'
+あなたはSEO記事の品質評価の専門家です。
+記事を以下の8つの観点で採点し、問題点と修正方針を出力してください。
+
+出力は必ず以下のJSON形式のみで返してください:
+{
+  "scores": {
+    "naturalness": 0-10,
+    "readability": 0-10,
+    "lack_of_self_praise": 0-10,
+    "lack_of_pushiness": 0-10,
+    "appropriate_jargon": 0-10,
+    "column_flow": 0-10,
+    "lack_of_verbosity": 0-10,
+    "natural_keyword_integration": 0-10
+  },
+  "total_score": 合計点(0-80),
+  "issues": ["問題点1", "問題点2", ...],
+  "fix_plan": "修正方針の要約（200文字以内）",
+  "verdict": "pass" or "fail"
+}
+
+## 採点基準
+- naturalness（自然さ）: 人が書いたように読めるか。AI特有の硬さ・定型感がないか
+- readability（読みやすさ）: 文が適度な長さか。段落分けは適切か。冗長でないか
+- lack_of_self_praise（自画自賛の少なさ）: サービス・事業者を過度に持ち上げていないか
+- lack_of_pushiness（押しつけがましさの少なさ）: 営業トーク的な表現がないか。読者に判断を委ねているか
+- appropriate_jargon（専門用語の適切さ）: 専門用語が多すぎないか。初心者にも読みやすいか
+- column_flow（コラムとしての流れ）: 導入→展開→まとめの流れが自然か。FAQ的になっていないか
+- lack_of_verbosity（冗長さの少なさ）: 同じことの繰り返しがないか。情報密度は適切か
+- natural_keyword_integration（キーワード挿入の自然さ）: キーワードが不自然に詰め込まれていないか
+
+## 要修正判定の基準
+以下のいずれかに該当したらfail:
+- 自画自賛が強い
+- 営業トークっぽさが強すぎる
+- AI特有の硬さが強い
+- 同じ言い回しの繰り返しが多い
+- キーワードの入れ方が不自然
+- 専門用語が多く初心者に読みにくい
+- 内容が抽象的すぎる
+- コラムなのにFAQっぽい
+- 1見出しごとの文章量バランスが悪い
+EVAL_SYSTEM;
+
+        $user_prompt = "## 対策キーワード\n{$keyword}\n\n## 評価対象の記事\n{$sample}";
+
+        try {
+            $result = $this->call_ai_json( $system_prompt, $user_prompt, [
+                'temperature'     => 0.3,
+                'max_tokens'      => 2048,
+                'maxOutputTokens' => 2048,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "[PIPELINE:QUALITY] AI error: " . $e->getMessage() );
+            // AI評価失敗時はデフォルト合格
+            return [
+                'quality' => [ 'score' => 60, 'passed' => true, 'feedback' => 'AI品質評価に失敗（デフォルト合格扱い）' ],
+                'log'     => [ 'step' => 'quality', 'success' => false, 'error' => $e->getMessage() ],
+            ];
+        }
+
+        // JSON パース
+        $raw_text = $result['text'];
+        $cleaned = preg_replace( '/^```(?:json)?\s*/m', '', $raw_text );
+        $cleaned = preg_replace( '/```\s*$/m', '', $cleaned );
+        $cleaned = trim( $cleaned );
+
+        $first = strpos( $cleaned, '{' );
+        $last  = strrpos( $cleaned, '}' );
+        $eval = null;
+        if ( $first !== false && $last !== false && $last > $first ) {
+            $eval = json_decode( substr( $cleaned, $first, $last - $first + 1 ), true );
+        }
+
+        if ( ! is_array( $eval ) || ! isset( $eval['scores'] ) ) {
+            $this->log( "[PIPELINE:QUALITY] parse failed, raw (first 300): " . substr( $raw_text, 0, 300 ) );
+            return [
+                'quality' => [ 'score' => 60, 'passed' => true, 'feedback' => 'AI品質評価の解析に失敗（デフォルト合格扱い）' ],
+                'log'     => [ 'step' => 'quality', 'success' => false, 'error' => 'json_parse_failed' ],
+            ];
+        }
+
+        $total = (int) ( $eval['total_score'] ?? array_sum( $eval['scores'] ?? [] ) );
+        $total = max( 0, min( 80, $total ) );
+        $threshold = $settings['quality_pass_score'];
+        $verdict = $eval['verdict'] ?? ( $total >= $threshold ? 'pass' : 'fail' );
+        $passed = ( $verdict === 'pass' ) && ( $total >= $threshold );
+
+        $issues = $eval['issues'] ?? [];
+        $fix_plan = $eval['fix_plan'] ?? '';
+        $feedback = implode( '。', $issues );
+
+        // メタ保存
+        update_post_meta( $article_id, '_gcrev_article_quality_evaluation',
+            wp_json_encode( $eval, JSON_UNESCAPED_UNICODE ) );
+
+        $this->log( "[PIPELINE:QUALITY] article_id={$article_id}, score={$total}/{$threshold}, verdict={$verdict}" );
+
+        return [
+            'quality' => [
+                'score'     => (float) $total,
+                'passed'    => $passed,
+                'feedback'  => $feedback,
+                'scores'    => $eval['scores'] ?? [],
+                'issues'    => $issues,
+                'fix_plan'  => $fix_plan,
+            ],
+            'log' => $this->make_step_log( 'quality', $result, [ 'score' => $total, 'passed' => $passed ] ),
+        ];
+    }
+
+    // =========================================================
+    // Step 4: 自動リライト
+    // =========================================================
+
+    private function pipeline_step4_rewrite( int $user_id, int $article_id, array $quality_result, int $attempt, array $settings ): array {
+        $draft = get_post_meta( $article_id, '_gcrev_article_draft_content', true ) ?: '';
+        if ( $draft === '' ) {
+            return [ 'success' => false, 'error' => '本文がありません。' ];
+        }
+
+        $before_score = $quality_result['score'] ?? 0;
+        $issues = $quality_result['issues'] ?? [];
+        $fix_plan = $quality_result['fix_plan'] ?? '';
+        $low_scores = [];
+        foreach ( $quality_result['scores'] ?? [] as $key => $val ) {
+            if ( $val < 7 ) {
+                $low_scores[] = $key . '=' . $val;
+            }
+        }
+
+        // 表記ルール取得
+        $article = $this->get_article( $user_id, $article_id );
+        $knowledge_items = $article ? $this->resolve_knowledge_items( $user_id, $article ) : [];
+        $rules_text = '';
+        foreach ( $knowledge_items as $ki ) {
+            if ( $ki['category'] === 'rules' ) {
+                $rules_text .= "- {$ki['title']}: {$ki['content']}\n";
+            }
+        }
+
+        $system_prompt = "あなたは日本のローカルビジネス向けコラム記事のリライト専門家です。\n"
+            . "品質評価で指摘された問題点を修正し、記事の品質を改善してください。\n\n"
+            . "## ルール\n"
+            . "- 指摘された問題点に該当する部分のみ修正し、それ以外はできるだけ維持する\n"
+            . "- Markdown形式で出力する（# タイトル、## 大見出し、### 小見出し）\n"
+            . "- 前後の説明文やコードブロック記号は出力しない。修正後の記事本文のみを出力する\n"
+            . "- 自然で読みやすく、人が書いたような文章にする\n"
+            . "- 自画自賛・営業色が強い表現を避ける\n"
+            . "- AIっぽい語尾を避ける\n"
+            . "- 迷ったら「少し地味なくらいがちょうどよい」と考える\n";
+
+        if ( $rules_text !== '' ) {
+            $system_prompt .= "\n## クライアント指定の表記ルール（違反は絶対に許容されない）\n" . $rules_text;
+        }
+
+        $user_prompt = "## 品質評価の結果\n";
+        if ( ! empty( $issues ) ) {
+            $user_prompt .= "### 問題点\n";
+            foreach ( $issues as $issue ) {
+                $user_prompt .= "- {$issue}\n";
+            }
+        }
+        if ( $fix_plan !== '' ) {
+            $user_prompt .= "\n### 修正方針\n{$fix_plan}\n";
+        }
+        if ( ! empty( $low_scores ) ) {
+            $user_prompt .= "\n### 低スコア項目\n" . implode( ', ', $low_scores ) . "\n";
+        }
+        $user_prompt .= "\n## 現在の記事本文\n{$draft}\n";
+
+        $this->log( "[PIPELINE:REWRITE] article_id={$article_id}, attempt={$attempt}, before_score={$before_score}" );
+
+        try {
+            $result = $this->call_ai_text( $system_prompt, $user_prompt, [
+                'temperature'     => 0.5,
+                'max_tokens'      => 16384,
+                'maxOutputTokens' => 16384,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "[PIPELINE:REWRITE] AI error: " . $e->getMessage() );
+            return [ 'success' => false, 'error' => $e->getMessage(), 'log' => [ 'step' => 'rewrite', 'success' => false, 'attempt' => $attempt ] ];
+        }
+
+        // Markdown クリーンアップ
+        $content = $result['text'];
+        $content = preg_replace( '/^```(?:markdown|html)?\s*/m', '', $content );
+        $content = preg_replace( '/```\s*$/m', '', $content );
+        $content = trim( $content );
+
+        // 保存
+        update_post_meta( $article_id, '_gcrev_article_draft_content', $content );
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
+
+        // リライトログ
+        $rewrite_log_raw = get_post_meta( $article_id, '_gcrev_article_rewrite_log', true );
+        $rewrite_log = is_string( $rewrite_log_raw ) && $rewrite_log_raw !== '' ? json_decode( $rewrite_log_raw, true ) : [];
+        if ( ! is_array( $rewrite_log ) ) { $rewrite_log = []; }
+        $rewrite_log[] = [
+            'attempt'           => $attempt,
+            'before_score'      => $before_score,
+            'issues_addressed'  => $issues,
+            'elapsed_seconds'   => $result['elapsed_seconds'] ?? 0,
+            'provider'          => $result['provider'] ?? 'unknown',
+        ];
+        update_post_meta( $article_id, '_gcrev_article_rewrite_log',
+            wp_json_encode( $rewrite_log, JSON_UNESCAPED_UNICODE ) );
+
+        $this->log( "[PIPELINE:REWRITE] article_id={$article_id}, attempt={$attempt}, new_length=" . mb_strlen( $content ) );
+
+        return [
+            'success' => true,
+            'log'     => $this->make_step_log( 'rewrite', $result, [ 'attempt' => $attempt, 'before_score' => $before_score ] ),
+        ];
+    }
+
+    // =========================================================
+    // パイプライン ヘルパー
+    // =========================================================
+
+    private function make_step_log( string $step, array $api_result, array $extra = [] ): array {
+        $log = array_merge( [
+            'step'              => $step,
+            'success'           => true,
+            'provider'          => $api_result['provider'] ?? 'unknown',
+            'model'             => $api_result['model'] ?? 'unknown',
+            'prompt_tokens'     => $api_result['prompt_tokens'] ?? 0,
+            'completion_tokens' => $api_result['completion_tokens'] ?? 0,
+            'elapsed_seconds'   => $api_result['elapsed_seconds'] ?? 0,
+        ], $extra );
+
+        $this->log( sprintf(
+            '[PIPELINE] step=%s, provider=%s, model=%s, prompt_tokens=%d, completion_tokens=%d, elapsed=%.1fs',
+            $step,
+            $log['provider'],
+            $log['model'],
+            $log['prompt_tokens'],
+            $log['completion_tokens'],
+            $log['elapsed_seconds']
+        ) );
+
+        return $log;
+    }
+
+    private function save_generation_log( int $article_id, array $gen_log ): void {
+        update_post_meta( $article_id, '_gcrev_article_generation_log',
+            wp_json_encode( $gen_log, JSON_UNESCAPED_UNICODE ) );
     }
 }

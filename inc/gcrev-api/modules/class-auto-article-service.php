@@ -535,34 +535,43 @@ class Gcrev_Auto_Article_Service {
             $this->log( "[PROCESS] queue_id={$queue_id} competitor research failed: " . $e->getMessage() );
         }
 
-        // ── ステップ5: 構成案生成 ──
-        $outline_result = $this->writing->generate_outline( $user_id, $article_id );
-        if ( empty( $outline_result['success'] ) ) {
-            Gcrev_Auto_Article_Queue::mark_failed( $queue_id, '構成案生成失敗: ' . ( $outline_result['error'] ?? 'unknown' ) );
-            return;
-        }
-        $this->log( "[PROCESS] queue_id={$queue_id} outline generated" );
-
-        // ── ステップ6: 本文生成 ──
+        // ── ステップ5-7: 4ステップパイプライン（構成→本文→品質評価→自動リライト）──
         $draft_prompt = '';
         if ( $angle !== '' ) {
             $draft_prompt = "この記事は以下の切り口・差別化ポイントで書いてください:\n{$angle}";
         }
 
-        $draft_result = $this->writing->generate_draft( $user_id, $article_id, $draft_prompt );
-        if ( empty( $draft_result['success'] ) ) {
-            Gcrev_Auto_Article_Queue::mark_failed( $queue_id, '本文生成失敗: ' . ( $draft_result['error'] ?? 'unknown' ) );
-            return;
-        }
-        $this->log( "[PROCESS] queue_id={$queue_id} draft generated" );
+        $w_settings = $this->config->get_writing_settings();
 
-        // ── ステップ7: 品質チェック ──
-        $quality = $this->check_quality( $user_id, $article_id );
+        if ( $w_settings['quality_check_enabled'] ) {
+            // 新パイプライン: 構成→本文→品質評価→自動リライト
+            $pipeline_result = $this->writing->generate_article_pipeline( $user_id, $article_id, $draft_prompt );
+            if ( empty( $pipeline_result['success'] ) ) {
+                Gcrev_Auto_Article_Queue::mark_failed( $queue_id, 'パイプライン失敗: ' . ( $pipeline_result['error'] ?? 'unknown' ) );
+                return;
+            }
+            $quality = $pipeline_result['quality'] ?? [ 'score' => 0, 'passed' => false, 'feedback' => '' ];
+            $this->log( "[PROCESS] queue_id={$queue_id} pipeline done, score={$quality['score']}, rewrites=" . ( $pipeline_result['rewrite_attempts'] ?? 0 ) );
+        } else {
+            // フォールバック: 旧フロー（品質チェックなし）
+            $outline_result = $this->writing->generate_outline( $user_id, $article_id );
+            if ( empty( $outline_result['success'] ) ) {
+                Gcrev_Auto_Article_Queue::mark_failed( $queue_id, '構成案生成失敗: ' . ( $outline_result['error'] ?? 'unknown' ) );
+                return;
+            }
+            $draft_result = $this->writing->generate_draft( $user_id, $article_id, $draft_prompt );
+            if ( empty( $draft_result['success'] ) ) {
+                Gcrev_Auto_Article_Queue::mark_failed( $queue_id, '本文生成失敗: ' . ( $draft_result['error'] ?? 'unknown' ) );
+                return;
+            }
+            $quality = [ 'score' => 70.0, 'passed' => true, 'feedback' => '' ];
+            $this->log( "[PROCESS] queue_id={$queue_id} fallback flow (no quality check)" );
+        }
+
         update_post_meta( $article_id, '_gcrev_article_auto_quality_score', (string) $quality['score'] );
 
         $threshold = (int) ( get_user_meta( $user_id, 'gcrev_auto_article_quality_threshold', true ) ?: 60 );
         if ( ! $quality['passed'] && $quality['score'] < $threshold ) {
-            // 品質不足でも記事自体は保持（ヒアリング追加で強化可能）
             update_post_meta( $article_id, '_gcrev_article_needs_hearing_enhancement', '1' );
             $this->log( "[PROCESS] queue_id={$queue_id} quality below threshold: {$quality['score']}/{$threshold}" );
         }
