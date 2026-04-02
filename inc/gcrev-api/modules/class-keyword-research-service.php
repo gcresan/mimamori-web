@@ -126,6 +126,14 @@ class Gcrev_Keyword_Research_Service {
 
         // 2.8. DataForSEO Ranked Keywords で順位・推定流入数を付加
         if ( ! empty( $competitor_planner_keywords ) && $this->dataforseo !== null ) {
+            // 再調査時はランクキャッシュをクリアして最新データを取得
+            foreach ( $competitor_planner_keywords as $comp_url => $_kws ) {
+                $p = wp_parse_url( $comp_url );
+                $d = preg_replace( '/^www\./i', '', $p['host'] ?? '' );
+                if ( $d !== '' ) {
+                    delete_transient( 'gcrev_kwrank_' . substr( md5( $d ), 0, 16 ) );
+                }
+            }
             $competitor_planner_keywords = $this->enrich_planner_with_ranked_data( $competitor_planner_keywords );
         }
 
@@ -474,7 +482,10 @@ class Gcrev_Keyword_Research_Service {
                         $ranked_cache[ $domain ] = [];
                     } else {
                         $ranked_cache[ $domain ] = $result;
-                        set_transient( $cache_key, $result, self::VOLUME_CACHE_TTL );
+                        // 空結果はキャッシュしない（再調査時にAPIを再実行するため）
+                        if ( ! empty( $result ) ) {
+                            set_transient( $cache_key, $result, self::VOLUME_CACHE_TTL );
+                        }
                         $this->log( "Ranked keywords [{$domain}]: " . count( $result ) . ' keywords' );
                     }
                     // API 間隔を空ける
@@ -485,6 +496,7 @@ class Gcrev_Keyword_Research_Service {
             $ranked = $ranked_cache[ $domain ];
 
             // Planner キーワードとマッチング
+            $match_count = 0;
             foreach ( $keywords as &$kw ) {
                 $text = $kw['text'] ?? '';
                 $norm = mb_strtolower( trim( $text ), 'UTF-8' );
@@ -494,11 +506,13 @@ class Gcrev_Keyword_Research_Service {
                 if ( isset( $ranked[ $norm ] ) ) {
                     $kw['rank'] = $ranked[ $norm ]['rank'];
                     $kw['etv']  = $ranked[ $norm ]['etv'];
+                    $match_count++;
                 } else {
                     $kw['rank'] = null;
                     $kw['etv']  = null;
                 }
             }
+            $this->log( "Ranked match [{$domain}]: {$match_count}/" . count( $keywords ) . " keywords matched (ranked pool: " . count( $ranked ) . ")" );
             unset( $kw );
         }
         unset( $keywords );

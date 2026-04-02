@@ -801,7 +801,7 @@ class Gcrev_DataForSEO_Client {
         string $target,
         int    $location_code = 2392,
         string $language_code = 'ja',
-        int    $limit         = 100
+        int    $limit         = 700
     ) {
         if ( ! self::is_configured() ) {
             return new \WP_Error( 'not_configured', 'DataForSEO API が未設定です。' );
