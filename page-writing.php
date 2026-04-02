@@ -70,6 +70,9 @@ get_header();
 .wrt-icon-active { color: var(--mw-text-heading); }
 .wrt-icon-inactive { color: var(--mw-border-light); }
 
+/* 一括操作バー */
+.wrt-bulk-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; margin-bottom: 8px; background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); font-size: 13px; color: var(--mw-text-secondary); }
+
 /* ページネーション */
 .wrt-pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; font-size: 13px; color: var(--mw-text-tertiary); }
 .wrt-pag__nav { display: flex; align-items: center; gap: 8px; }
@@ -325,6 +328,12 @@ get_header();
                 <option value="wp_draft_saved">WP下書き済</option>
             </select>
             <button class="wrt-btn wrt-btn--primary" id="wrtNewArticleBtn" type="button">+ 作成する</button>
+        </div>
+
+        <!-- 一括操作バー -->
+        <div class="wrt-bulk-bar" id="wrtBulkBar" style="display:none;">
+            <span id="wrtBulkCount">0</span>件選択中
+            <button class="wrt-btn wrt-btn--danger wrt-btn--sm" id="wrtBulkDeleteBtn" type="button">選択した記事を削除</button>
         </div>
 
         <!-- テーブル -->
@@ -704,7 +713,54 @@ get_header();
     document.getElementById('wrtCheckAll').addEventListener('change', function() {
         var checked = this.checked;
         document.querySelectorAll('.wrt-article-check').forEach(function(cb) { cb.checked = checked; });
+        updateBulkBar();
     });
+
+    // チェックボックス変更でバルクバー更新（イベント委任）
+    document.getElementById('wrtArticleList').addEventListener('change', function(e) {
+        if (e.target.classList.contains('wrt-article-check')) {
+            updateBulkBar();
+        }
+    });
+
+    function getSelectedArticleIds() {
+        var ids = [];
+        document.querySelectorAll('.wrt-article-check:checked').forEach(function(cb) {
+            ids.push(parseInt(cb.dataset.id));
+        });
+        return ids;
+    }
+
+    function updateBulkBar() {
+        var ids = getSelectedArticleIds();
+        var bar = document.getElementById('wrtBulkBar');
+        if (ids.length > 0) {
+            bar.style.display = '';
+            document.getElementById('wrtBulkCount').textContent = ids.length;
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+
+    // 一括削除ボタン
+    document.getElementById('wrtBulkDeleteBtn').addEventListener('click', function() {
+        var ids = getSelectedArticleIds();
+        if (ids.length === 0) return;
+        if (!confirm(ids.length + '件の記事を削除しますか？この操作は取り消せません。')) return;
+        showProgress(ids.length + '件の記事を削除中…');
+        apiFetch('/articles/bulk-delete', { method: 'POST', body: { ids: ids } }).then(function(res) {
+            hideProgress();
+            if (res.success) {
+                showToast(res.deleted + '件の記事を削除しました');
+                document.getElementById('wrtCheckAll').checked = false;
+                updateBulkBar();
+                loadArticles();
+            } else {
+                showToast(res.error || 'エラーが発生しました', true);
+            }
+        }).catch(function() { hideProgress(); showToast('通信エラー', true); });
+    });
+
     function createArticle(keyword) {
         closeKeywordModal();
         showProgress('類似記事をチェック中…');

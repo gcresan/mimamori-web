@@ -594,6 +594,35 @@ class Gcrev_Writing_Service {
     }
 
     /**
+     * 記事一括削除
+     */
+    public function bulk_delete_articles( int $user_id, array $ids ): array {
+        $deleted = 0;
+        $errors  = [];
+        foreach ( $ids as $post_id ) {
+            $post_id = absint( $post_id );
+            if ( $post_id <= 0 ) { continue; }
+            $owner = (int) get_post_meta( $post_id, '_gcrev_article_user_id', true );
+            if ( $owner !== $user_id ) {
+                $errors[] = "ID {$post_id}: 権限がありません。";
+                continue;
+            }
+            $post = get_post( $post_id );
+            if ( ! $post || $post->post_type !== 'gcrev_article' ) {
+                $errors[] = "ID {$post_id}: 記事が見つかりません。";
+                continue;
+            }
+            wp_delete_post( $post_id, true );
+            $deleted++;
+        }
+        return [
+            'success' => true,
+            'deleted' => $deleted,
+            'errors'  => $errors,
+        ];
+    }
+
+    /**
      * 記事設定更新
      */
     public function update_article_settings( int $user_id, int $article_id, array $data ): array {

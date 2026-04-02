@@ -1148,6 +1148,11 @@ class Gcrev_Insight_API {
             [ 'methods' => 'GET',    'callback' => [ $this, 'rest_writing_get_article' ],    'permission_callback' => [ $this->config, 'check_permission' ] ],
             [ 'methods' => 'DELETE', 'callback' => [ $this, 'rest_writing_delete_article' ], 'permission_callback' => [ $this->config, 'check_permission' ] ],
         ]);
+        register_rest_route('gcrev/v1', '/writing/articles/bulk-delete', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_bulk_delete_articles' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/settings', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_writing_update_settings' ],
@@ -15041,6 +15046,18 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
         }
         $result = $this->writing_service->delete_article( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        return new \WP_REST_Response( $result );
+    }
+
+    public function rest_writing_bulk_delete_articles( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        $ids = $request->get_param( 'ids' );
+        if ( ! is_array( $ids ) || empty( $ids ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => '削除する記事を選択してください。' ], 400 );
+        }
+        $result = $this->writing_service->bulk_delete_articles( get_current_user_id(), $ids );
         return new \WP_REST_Response( $result );
     }
 
