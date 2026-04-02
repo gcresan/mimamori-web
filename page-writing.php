@@ -2514,6 +2514,148 @@ get_header();
         return editor ? editor.value : (currentArticle.draft_content || '');
     }
 
+    /* ===== 選択テキスト修正機能 ===== */
+    var selFloat = document.getElementById('wrtSelFloat');
+    var selModal = document.getElementById('wrtSelModal');
+    var selPreview = document.getElementById('wrtSelPreview');
+    var selPrompt = document.getElementById('wrtSelPrompt');
+    var _selSelectedText = '';
+    var _selEditorStart = -1;
+    var _selEditorEnd = -1;
+
+    // テキスト選択検知 — textarea（編集モード）
+    function handleEditorSelection(e) {
+        var editor = e.target;
+        if (!editor || editor.id !== 'wrtDraftEditor') return;
+        var start = editor.selectionStart;
+        var end = editor.selectionEnd;
+        if (start === end) { hideSelFloat(); return; }
+        var text = editor.value.substring(start, end).trim();
+        if (!text || text.length < 2) { hideSelFloat(); return; }
+        _selSelectedText = text;
+        _selEditorStart = start;
+        _selEditorEnd = end;
+        positionSelFloat(editor, start, end);
+    }
+
+    // テキスト選択検知 — プレビューモード
+    function handlePreviewSelection() {
+        var sel = window.getSelection();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideSelFloat(); return; }
+        var range = sel.getRangeAt(0);
+        var container = document.getElementById('wrtDraftRendered');
+        if (!container || !container.contains(range.commonAncestorContainer)) { hideSelFloat(); return; }
+        var text = sel.toString().trim();
+        if (!text || text.length < 2) { hideSelFloat(); return; }
+        _selSelectedText = text;
+        _selEditorStart = -1;
+        _selEditorEnd = -1;
+        // プレビュー内の選択位置にフロートを表示
+        var rect = range.getBoundingClientRect();
+        var containerRect = container.closest('.wrt-draft-container').getBoundingClientRect();
+        selFloat.style.top = (rect.top - containerRect.top - 36) + 'px';
+        selFloat.style.left = (rect.left - containerRect.left + rect.width / 2 - 50) + 'px';
+        selFloat.classList.add('visible');
+    }
+
+    function positionSelFloat(editor, start, end) {
+        // textarea 内の選択位置を概算して配置
+        var container = editor.closest('.wrt-draft-container');
+        if (!container) return;
+        var textBefore = editor.value.substring(0, start);
+        var lines = textBefore.split('\n');
+        var lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 30;
+        var paddingTop = parseFloat(getComputedStyle(editor).paddingTop) || 40;
+        var paddingLeft = parseFloat(getComputedStyle(editor).paddingLeft) || 48;
+        var topOffset = paddingTop + (lines.length - 1) * lineHeight - editor.scrollTop - 36;
+        selFloat.style.top = Math.max(0, topOffset) + 'px';
+        selFloat.style.left = paddingLeft + 'px';
+        selFloat.classList.add('visible');
+    }
+
+    function hideSelFloat() {
+        selFloat.classList.remove('visible');
+    }
+
+    // mouseup イベントのデリゲーション
+    document.addEventListener('mouseup', function(e) {
+        // 少し遅延させて選択状態が確定してから処理
+        setTimeout(function() {
+            var editor = document.getElementById('wrtDraftEditor');
+            if (editor && (e.target === editor || editor.contains(e.target))) {
+                handleEditorSelection({ target: editor });
+                return;
+            }
+            var preview = document.getElementById('wrtDraftRendered');
+            if (preview && (e.target === preview || preview.contains(e.target))) {
+                handlePreviewSelection();
+                return;
+            }
+            // フロートボタンやモーダル以外をクリックしたら非表示
+            if (!selFloat.contains(e.target) && !selModal.contains(e.target)) {
+                hideSelFloat();
+            }
+        }, 10);
+    });
+
+    // フロートボタンクリック → モーダル表示
+    document.getElementById('wrtSelFloatBtn').addEventListener('click', function() {
+        if (!_selSelectedText) return;
+        selPreview.textContent = _selSelectedText;
+        selPrompt.value = '';
+        selModal.classList.add('active');
+        hideSelFloat();
+        selPrompt.focus();
+    });
+
+    // モーダル: キャンセル
+    document.getElementById('wrtSelCancelBtn').addEventListener('click', function() {
+        selModal.classList.remove('active');
+    });
+    selModal.addEventListener('click', function(e) {
+        if (e.target === selModal) selModal.classList.remove('active');
+    });
+
+    // モーダル: 音声入力
+    document.getElementById('wrtSelVoiceBtn').addEventListener('click', function() {
+        openVoiceModal(selPrompt);
+    });
+
+    // モーダル: 修正実行
+    document.getElementById('wrtSelExecBtn').addEventListener('click', function() {
+        var prompt = selPrompt.value.trim();
+        if (!prompt) { showToast('修正指示を入力してください', true); return; }
+        if (!_selSelectedText) { showToast('選択テキストがありません', true); return; }
+        if (!currentArticle || !currentArticle.id) return;
+
+        var fullContent = getCurrentDraftContent();
+        selModal.classList.remove('active');
+        showProgress('選択テキストを修正中…');
+
+        apiFetch('/articles/' + currentArticle.id + '/refine-draft', {
+            method: 'POST',
+            body: {
+                current_content: fullContent,
+                prompt: prompt,
+                selected_text: _selSelectedText
+            }
+        }).then(function(res) {
+            hideProgress();
+            if (res.success) {
+                currentArticle.draft_content = res.draft_content;
+                if (res.score) currentArticle.score = res.score;
+                setPendingRegen(false);
+                renderDraft(res.draft_content);
+                showToast('選択テキストを修正しました');
+            } else {
+                showToast(res.error || 'エラー', true);
+            }
+        }).catch(function() {
+            hideProgress();
+            showToast('通信エラー', true);
+        });
+    });
+
     function loadKnowledgeForSelect(selectedIds) {
         apiFetch('/knowledge').then(function(res) {
             var items = res.items || [];

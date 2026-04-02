@@ -128,6 +128,12 @@ class Gcrev_Writing_Service {
         $tags     = isset( $data['tags'] ) && is_array( $data['tags'] )
             ? array_map( 'sanitize_text_field', $data['tags'] ) : [];
         $priority = max( 1, min( 5, absint( $data['priority'] ?? 3 ) ) );
+        // always_ref: 明示指定がなければ rules カテゴリはデフォルト ON
+        if ( isset( $data['always_ref'] ) ) {
+            $always_ref = ! empty( $data['always_ref'] ) ? '1' : '0';
+        } else {
+            $always_ref = ( $category === 'rules' ) ? '1' : '0';
+        }
 
         if ( $title === '' ) {
             return [ 'success' => false, 'error' => 'タイトルを入力してください。' ];
@@ -164,6 +170,7 @@ class Gcrev_Writing_Service {
         update_post_meta( $id, '_gcrev_knowledge_content', $content );
         update_post_meta( $id, '_gcrev_knowledge_tags', wp_json_encode( $tags, JSON_UNESCAPED_UNICODE ) );
         update_post_meta( $id, '_gcrev_knowledge_priority', $priority );
+        update_post_meta( $id, '_gcrev_knowledge_always_ref', $always_ref );
         update_post_meta( $id, '_gcrev_knowledge_updated_at', $now );
 
         $post = get_post( $id );
@@ -437,10 +444,23 @@ class Gcrev_Writing_Service {
     private function resolve_knowledge_items( int $user_id, array $article ): array {
         $kid_ids = $article['selected_knowledge_ids'] ?? [];
 
-        // 選択が空の場合 → 全件自動使用
+        // 選択が空の場合 → always_ref のアイテムのみ自動使用
+        // 選択がある場合でも → always_ref のアイテムは強制追加
+        $all = $this->list_knowledge( $user_id );
         if ( empty( $kid_ids ) ) {
-            $all = $this->list_knowledge( $user_id );
-            $kid_ids = array_column( $all, 'id' );
+            $kid_ids = [];
+            foreach ( $all as $ki ) {
+                if ( ! empty( $ki['always_ref'] ) ) {
+                    $kid_ids[] = $ki['id'];
+                }
+            }
+        } else {
+            // 明示選択がある場合でも always_ref は強制追加
+            foreach ( $all as $ki ) {
+                if ( ! empty( $ki['always_ref'] ) && ! in_array( $ki['id'], $kid_ids, false ) ) {
+                    $kid_ids[] = $ki['id'];
+                }
+            }
         }
 
         $items = [];
@@ -500,6 +520,7 @@ class Gcrev_Writing_Service {
             'tags'       => $tags,
             'files'      => $files,
             'priority'   => (int) ( get_post_meta( $post->ID, '_gcrev_knowledge_priority', true ) ?: 3 ),
+            'always_ref' => get_post_meta( $post->ID, '_gcrev_knowledge_always_ref', true ) === '1',
             'created_at' => get_post_meta( $post->ID, '_gcrev_knowledge_created_at', true ) ?: '',
             'updated_at' => get_post_meta( $post->ID, '_gcrev_knowledge_updated_at', true ) ?: '',
         ];
@@ -793,6 +814,11 @@ class Gcrev_Writing_Service {
             'score'                  => ( function() use ( $post ) { $r = get_post_meta( $post->ID, '_gcrev_article_score_json', true ); return $r ? json_decode( $r, true ) : null; } )(),
             'wp_publish'             => ( function() use ( $post ) { $r = get_post_meta( $post->ID, '_gcrev_article_wp_publish_json', true ); return $r ? json_decode( $r, true ) : null; } )(),
             'needs_hearing'          => (bool) get_post_meta( $post->ID, '_gcrev_article_needs_hearing_enhancement', true ),
+            'eyecatch_id'            => (int) get_post_meta( $post->ID, '_gcrev_article_eyecatch_id', true ),
+            'eyecatch_url'           => ( function() use ( $post ) {
+                $eid = (int) get_post_meta( $post->ID, '_gcrev_article_eyecatch_id', true );
+                return $eid > 0 ? wp_get_attachment_url( $eid ) : '';
+            } )(),
             'created_at'             => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'             => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
         ];
@@ -2471,7 +2497,7 @@ STRUCTURE_FORMAT;
     /**
      * 追加プロンプトによる本文リファイン
      */
-    public function refine_draft( int $user_id, int $article_id, string $current_content, string $additional_prompt ): array {
+    public function refine_draft( int $user_id, int $article_id, string $current_content, string $additional_prompt, string $selected_text = '' ): array {
         $article = $this->get_article( $user_id, $article_id );
         if ( ! $article ) {
             return [ 'success' => false, 'error' => '記事が見つかりません。' ];
@@ -2483,7 +2509,8 @@ STRUCTURE_FORMAT;
             return [ 'success' => false, 'error' => '編集指示を入力してください。' ];
         }
 
-        $this->log( "refine_draft: article_id={$article_id}, prompt_len=" . mb_strlen( $additional_prompt ) );
+        $is_partial = $selected_text !== '';
+        $this->log( "refine_draft: article_id={$article_id}, prompt_len=" . mb_strlen( $additional_prompt ) . ( $is_partial ? ', selected_len=' . mb_strlen( $selected_text ) : '' ) );
 
         // クライアント固有の表記ルールを取得
         $knowledge_items = $this->resolve_knowledge_items( $user_id, $article );
@@ -2494,22 +2521,7 @@ STRUCTURE_FORMAT;
             }
         }
 
-        $prompt = "あなたは日本のローカルビジネス向けコラム記事のライターです。\n"
-            . "以下の既存の記事本文に対して、ユーザーの編集指示に従い修正・改善してください。\n\n"
-            . "## 編集指示\n{$additional_prompt}\n\n"
-            . "## 現在の記事本文\n{$current_content}\n\n"
-            . "## ルール\n"
-            . "- 編集指示に該当する部分のみ修正し、それ以外はできるだけ維持してください\n"
-            . "- Markdown形式で出力してください（# タイトル、## 大見出し、### 小見出し）\n"
-            . "- 説明や補足は不要です。修正後の記事本文のみを出力してください\n\n";
-
-        if ( $refine_rules !== '' ) {
-            $prompt .= "## クライアント指定の表記ルール（違反は絶対に許容されない）\n"
-                . "以下はクライアントが指定した表記・用語ルールです。修正後の本文すべてでこのルールを厳守してください。\n"
-                . $refine_rules . "\n";
-        }
-
-        $prompt .= "## 文体ガイドライン（修正時も守ること）\n"
+        $style_guidelines = "## 文体ガイドライン（修正時も守ること）\n"
             . "- 自然で読みやすく、人が書いたような文章にする\n"
             . "- 自画自賛・営業色が強い表現を避ける\n"
             . "- 禁止表現: 期待を超える / 圧倒的 / 可能性を広げる / ビジネスを加速 / 新たな価値を創造 / 魅力を最大限に / 強力な武器 / 欠かせない存在\n"
@@ -2517,19 +2529,59 @@ STRUCTURE_FORMAT;
             . "- 抽象語より具体語を優先し、読者目線で書く\n"
             . "- 落ち着いたトーンを維持し、テンションを上げすぎない\n";
 
+        if ( $is_partial ) {
+            // 選択テキストのみ修正モード
+            $prompt = "あなたは日本のローカルビジネス向けコラム記事のライターです。\n"
+                . "記事の一部分のみを修正してください。\n\n"
+                . "## 編集指示\n{$additional_prompt}\n\n"
+                . "## 修正対象テキスト（この部分のみ修正すること）\n{$selected_text}\n\n"
+                . "## 記事全文（文脈の参照用。修正対象以外は出力しないこと）\n{$current_content}\n\n"
+                . "## ルール\n"
+                . "- 【修正対象テキスト】の部分のみを編集指示に従い修正してください\n"
+                . "- 修正後のテキストのみを出力してください（修正対象部分の修正結果だけ）\n"
+                . "- 記事全文を出力しないでください。修正した部分のテキストだけを返してください\n"
+                . "- Markdown書式がある場合はそのまま維持してください\n"
+                . "- 説明・補足・前置きは一切不要です\n\n";
+        } else {
+            // 全文修正モード（従来動作）
+            $prompt = "あなたは日本のローカルビジネス向けコラム記事のライターです。\n"
+                . "以下の既存の記事本文に対して、ユーザーの編集指示に従い修正・改善してください。\n\n"
+                . "## 編集指示\n{$additional_prompt}\n\n"
+                . "## 現在の記事本文\n{$current_content}\n\n"
+                . "## ルール\n"
+                . "- 編集指示に該当する部分のみ修正し、それ以外はできるだけ維持してください\n"
+                . "- Markdown形式で出力してください（# タイトル、## 大見出し、### 小見出し）\n"
+                . "- 説明や補足は不要です。修正後の記事本文のみを出力してください\n\n";
+        }
+
+        if ( $refine_rules !== '' ) {
+            $prompt .= "## クライアント指定の表記ルール（違反は絶対に許容されない）\n"
+                . "以下はクライアントが指定した表記・用語ルールです。修正後の本文すべてでこのルールを厳守してください。\n"
+                . $refine_rules . "\n";
+        }
+
+        $prompt .= $style_guidelines;
+
         try {
             $raw = $this->ai->call_gemini_api( $prompt, [
                 'temperature'       => 0.5,
-                'maxOutputTokens'   => 32768,
+                'maxOutputTokens'   => $is_partial ? 8192 : 32768,
             ] );
         } catch ( \Throwable $e ) {
             $this->log( "Refine draft error: " . $e->getMessage() );
             return [ 'success' => false, 'error' => '本文修正中にエラーが発生しました: ' . $e->getMessage() ];
         }
 
-        $content = preg_replace( '/^```(?:markdown|html)?\s*/m', '', $raw );
-        $content = preg_replace( '/```\s*$/m', '', $content );
-        $content = trim( $content );
+        $refined = preg_replace( '/^```(?:markdown|html)?\s*/m', '', $raw );
+        $refined = preg_replace( '/```\s*$/m', '', $refined );
+        $refined = trim( $refined );
+
+        if ( $is_partial ) {
+            // 選択テキストを修正後テキストで置換して全文を構成
+            $content = $this->replace_selected_text( $current_content, $selected_text, $refined );
+        } else {
+            $content = $refined;
+        }
 
         // H1タグからタイトルを抽出して post_title に反映
         if ( preg_match( '/^# (.+)$/m', $content, $h1_match ) ) {
@@ -2553,18 +2605,49 @@ STRUCTURE_FORMAT;
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
-        $this->log( "Refined draft saved for article_id={$article_id}, length=" . mb_strlen( $content ) );
+        $this->log( "Refined draft saved for article_id={$article_id}, length=" . mb_strlen( $content ) . ( $is_partial ? ' (partial)' : '' ) );
 
-        // 自動再採点
+        // 自動再採点（部分修正では省略してレスポンスを速くする）
         $score = null;
-        try {
-            $score_result = $this->score_article( $user_id, $article_id );
-            if ( $score_result['success'] ?? false ) { $score = $score_result['score']; }
-        } catch ( \Throwable $e ) {
-            $this->log( "refine_draft: auto-scoring failed: " . $e->getMessage() );
+        if ( ! $is_partial ) {
+            try {
+                $score_result = $this->score_article( $user_id, $article_id );
+                if ( $score_result['success'] ?? false ) { $score = $score_result['score']; }
+            } catch ( \Throwable $e ) {
+                $this->log( "refine_draft: auto-scoring failed: " . $e->getMessage() );
+            }
         }
 
         return [ 'success' => true, 'draft_content' => $content, 'score' => $score ];
+    }
+
+    /**
+     * 選択テキストを修正後テキストで置換する
+     */
+    private function replace_selected_text( string $full_content, string $selected_text, string $replacement ): string {
+        $pos = mb_strpos( $full_content, $selected_text );
+        if ( $pos === false ) {
+            // 完全一致しない場合、前後の空白・改行を正規化して再検索
+            $normalized_content  = preg_replace( '/\s+/', ' ', $full_content );
+            $normalized_selected = preg_replace( '/\s+/', ' ', $selected_text );
+            $norm_pos = mb_strpos( $normalized_content, $normalized_selected );
+            if ( $norm_pos !== false ) {
+                // 正規化後の位置から元テキストの対応範囲を特定
+                // フォールバック: str_replace で最初の一致を置換
+                $pos_byte = strpos( $full_content, $selected_text );
+                if ( $pos_byte !== false ) {
+                    return substr_replace( $full_content, $replacement, $pos_byte, strlen( $selected_text ) );
+                }
+            }
+            // どうしても見つからない場合は全文をAI結果で置換せず、replacement をそのまま全文末尾に追記せず、
+            // 安全策として str_replace を試みる
+            $result = preg_replace( '/' . preg_quote( $selected_text, '/' ) . '/', $replacement, $full_content, 1 );
+            return $result !== null ? $result : $full_content;
+        }
+        // mb_string で正確に置換
+        $before = mb_substr( $full_content, 0, $pos );
+        $after  = mb_substr( $full_content, $pos + mb_strlen( $selected_text ) );
+        return $before . $replacement . $after;
     }
 
     private function build_draft_prompt(
@@ -2759,6 +2842,25 @@ RULES;
 
         $client = new Gcrev_WP_Publish_Client();
 
+        // アイキャッチ画像をリモートWPにアップロード
+        $eyecatch_id = (int) get_post_meta( $article_id, '_gcrev_article_eyecatch_id', true );
+        if ( $eyecatch_id > 0 ) {
+            $file_path = get_attached_file( $eyecatch_id );
+            if ( $file_path && file_exists( $file_path ) ) {
+                $filename = basename( $file_path );
+                $media_result = $client->upload_media(
+                    $settings['site_url'], $settings['username'], $settings['app_password'],
+                    $file_path, $filename
+                );
+                if ( $media_result['success'] ) {
+                    $payload['featured_media'] = $media_result['media_id'];
+                    $this->log( "publish_to_wp: eyecatch uploaded, remote_media_id=" . $media_result['media_id'] );
+                } else {
+                    $this->log( "publish_to_wp: eyecatch upload failed: " . ( $media_result['error'] ?? 'unknown' ) );
+                }
+            }
+        }
+
         // 既存投稿があれば更新、なければ新規作成
         $existing_raw = get_post_meta( $article_id, '_gcrev_article_wp_publish_json', true );
         $existing = $existing_raw ? json_decode( $existing_raw, true ) : null;
@@ -2869,6 +2971,12 @@ RULES;
         // カスタムフィールドに対策キーワードを保存
         update_post_meta( $draft_id, '_gcrev_target_keyword', $keyword );
 
+        // アイキャッチ画像をサムネイルに設定
+        $eyecatch_id = (int) get_post_meta( $article_id, '_gcrev_article_eyecatch_id', true );
+        if ( $eyecatch_id > 0 ) {
+            set_post_thumbnail( $draft_id, $eyecatch_id );
+        }
+
         // 記事側に下書きIDを記録
         update_post_meta( $article_id, '_gcrev_article_wp_draft_id', $draft_id );
         update_post_meta( $article_id, '_gcrev_article_status', 'wp_draft_saved' );
@@ -2880,6 +2988,131 @@ RULES;
             'draft_id' => $draft_id,
             'edit_url' => admin_url( "post.php?post={$draft_id}&action=edit" ),
         ];
+    }
+
+    // =========================================================
+    // アイキャッチ画像生成
+    // =========================================================
+
+    /**
+     * 記事の内容からアイキャッチ画像を生成し WordPress アタッチメントとして保存する。
+     */
+    public function generate_eyecatch_image( int $user_id, int $article_id ): array {
+        $article = $this->get_article( $user_id, $article_id );
+        if ( ! $article ) {
+            return [ 'success' => false, 'error' => '記事が見つかりません。' ];
+        }
+
+        $keyword = $article['keyword'] ?? '';
+        $title   = get_the_title( $article_id ) ?: $keyword;
+        $outline = $article['outline'] ?? [];
+        $intent  = $outline['search_intent'] ?? '';
+
+        // 英語プロンプトを Gemini で生成（記事内容に合った画像のために）
+        $prompt_for_image = $this->build_eyecatch_prompt( $keyword, $title, $intent );
+
+        $this->log( "generate_eyecatch: article_id={$article_id}, prompt_len=" . strlen( $prompt_for_image ) );
+
+        $result = $this->ai->generate_image( $prompt_for_image, [
+            'aspect_ratio' => '16:9',
+        ] );
+
+        if ( ! $result['success'] ) {
+            $this->log( "generate_eyecatch: failed: " . $result['error'] );
+            return [ 'success' => false, 'error' => 'アイキャッチ画像の生成に失敗しました: ' . $result['error'] ];
+        }
+
+        // Base64 デコード → ファイル保存
+        $image_data = base64_decode( $result['base64_data'] );
+        if ( $image_data === false || strlen( $image_data ) < 100 ) {
+            return [ 'success' => false, 'error' => '画像データのデコードに失敗しました。' ];
+        }
+
+        $mime = $result['mime_type'] ?: 'image/png';
+        $ext  = $mime === 'image/jpeg' ? 'jpg' : 'png';
+
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+
+        $upload_dir = wp_upload_dir();
+        $filename   = "eyecatch-{$article_id}-" . time() . ".{$ext}";
+        $file_path  = $upload_dir['path'] . '/' . $filename;
+
+        if ( file_put_contents( $file_path, $image_data ) === false ) {
+            return [ 'success' => false, 'error' => '画像ファイルの保存に失敗しました。' ];
+        }
+
+        // 既存アイキャッチを削除
+        $old_id = (int) get_post_meta( $article_id, '_gcrev_article_eyecatch_id', true );
+        if ( $old_id > 0 ) {
+            wp_delete_attachment( $old_id, true );
+        }
+
+        // WordPress アタッチメント作成
+        $attachment = [
+            'post_mime_type' => $mime,
+            'post_title'     => sanitize_file_name( $filename ),
+            'post_content'   => '',
+            'post_status'    => 'inherit',
+        ];
+        $attach_id = wp_insert_attachment( $attachment, $file_path, $article_id );
+        if ( is_wp_error( $attach_id ) || $attach_id === 0 ) {
+            @unlink( $file_path );
+            return [ 'success' => false, 'error' => 'アタッチメントの作成に失敗しました。' ];
+        }
+
+        $metadata = wp_generate_attachment_metadata( $attach_id, $file_path );
+        wp_update_attachment_metadata( $attach_id, $metadata );
+
+        update_post_meta( $article_id, '_gcrev_article_eyecatch_id', $attach_id );
+
+        $eyecatch_url = wp_get_attachment_url( $attach_id );
+        $this->log( "generate_eyecatch: saved attachment_id={$attach_id}, url={$eyecatch_url}" );
+
+        return [
+            'success'      => true,
+            'eyecatch_id'  => $attach_id,
+            'eyecatch_url' => $eyecatch_url,
+        ];
+    }
+
+    /**
+     * アイキャッチ画像用の英語プロンプトを構築する。
+     */
+    private function build_eyecatch_prompt( string $keyword, string $title, string $intent ): string {
+        // Gemini で記事内容に基づく画像生成プロンプトを作成
+        $jp_context = "記事タイトル: {$title}\nキーワード: {$keyword}";
+        if ( $intent !== '' ) {
+            $jp_context .= "\n検索意図: {$intent}";
+        }
+
+        $meta_prompt = "以下の日本語の記事情報をもとに、ブログのアイキャッチ画像を生成するための英語プロンプトを1つだけ作成してください。\n\n"
+            . $jp_context . "\n\n"
+            . "## ルール\n"
+            . "- 英語で出力\n"
+            . "- 画像内にテキストや文字を一切含めないこと（no text, no letters, no words, no typography）\n"
+            . "- プロフェッショナルで落ち着いたトーンの写真風画像\n"
+            . "- ブログ記事のヘッダー画像にふさわしいクリーンな構図\n"
+            . "- プロンプト文のみを出力（説明や前置き不要）\n";
+
+        try {
+            $prompt = $this->ai->call_gemini_api( $meta_prompt, [
+                'temperature'     => 0.7,
+                'maxOutputTokens' => 512,
+            ] );
+            $prompt = trim( $prompt );
+            if ( strlen( $prompt ) > 20 ) {
+                return $prompt;
+            }
+        } catch ( \Throwable $e ) {
+            $this->log( "build_eyecatch_prompt: Gemini meta-prompt failed: " . $e->getMessage() );
+        }
+
+        // フォールバック: テンプレートベースの英語プロンプト
+        return "Professional blog header photograph for an article about {$keyword}. "
+            . "Clean, modern composition with soft natural lighting. No text, no letters, no watermarks. "
+            . "Suitable as a website featured image.";
     }
 
     /**

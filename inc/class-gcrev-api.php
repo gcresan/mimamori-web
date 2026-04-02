@@ -1230,6 +1230,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_writing_publish_wp' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/eyecatch', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_generate_eyecatch' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/wp-publish/test-connection', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_wp_publish_test' ],
@@ -15270,7 +15275,8 @@ PROMPT;
                 get_current_user_id(),
                 (int) $request->get_param( 'id' ),
                 sanitize_textarea_field( $request->get_param( 'current_content' ) ?: '' ),
-                sanitize_textarea_field( $request->get_param( 'prompt' ) ?: '' )
+                sanitize_textarea_field( $request->get_param( 'prompt' ) ?: '' ),
+                sanitize_textarea_field( $request->get_param( 'selected_text' ) ?: '' )
             );
             return new \WP_REST_Response( $result );
         } catch ( \Throwable $e ) {
@@ -15288,6 +15294,16 @@ PROMPT;
         if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
         try {
             $result = $this->writing_service->publish_to_wp( get_current_user_id(), (int) $request->get_param( 'id' ) );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_writing_generate_eyecatch( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) { return new \WP_REST_Response( [ 'success' => false ], 500 ); }
+        try {
+            $result = $this->writing_service->generate_eyecatch_image( get_current_user_id(), (int) $request->get_param( 'id' ) );
             return new \WP_REST_Response( $result );
         } catch ( \Throwable $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
