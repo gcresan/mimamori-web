@@ -289,6 +289,37 @@ get_header();
 .wrt-title-edit-input { width: 100%; padding: 8px 10px; border: 1px solid var(--mw-primary-blue, #568184); border-radius: 6px; font-size: 14px; font-weight: 600; color: var(--mw-text-heading); background: #fff; box-sizing: border-box; }
 .wrt-title-actions { display: flex; gap: 8px; margin-top: 12px; }
 
+/* 採点結果 */
+.wrt-score { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); padding: 24px; margin-top: 20px; }
+.wrt-score__header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.wrt-score__total { font-size: 40px; font-weight: 700; line-height: 1; }
+.wrt-score__total--high { color: #4E8A6B; }
+.wrt-score__total--mid { color: var(--mw-primary-blue, #568184); }
+.wrt-score__total--low { color: #C9A84C; }
+.wrt-score__total--poor { color: #C95A4F; }
+.wrt-score__meta { display: flex; flex-direction: column; gap: 4px; }
+.wrt-score__grade { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+.wrt-score__grade--high { background: rgba(78,138,107,0.12); color: #3D7559; }
+.wrt-score__grade--mid { background: rgba(86,129,132,0.12); color: #476C6F; }
+.wrt-score__grade--low { background: rgba(201,168,76,0.12); color: #8A7028; }
+.wrt-score__grade--poor { background: rgba(201,90,79,0.12); color: #9C4940; }
+.wrt-score__date { font-size: 11px; color: var(--mw-text-tertiary); }
+.wrt-score__items { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.wrt-score__item { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--mw-border-light); background: var(--mw-bg-secondary); }
+.wrt-score__item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.wrt-score__item-label { font-size: 13px; font-weight: 600; color: var(--mw-text-heading); }
+.wrt-score__item-pts { font-size: 14px; font-weight: 700; }
+.wrt-score__bar { height: 4px; border-radius: 2px; background: var(--mw-bg-tertiary); margin-bottom: 8px; overflow: hidden; }
+.wrt-score__bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+.wrt-score__item-comment { font-size: 12px; color: var(--mw-text-secondary); line-height: 1.6; }
+.wrt-score__feedback { margin-top: 16px; }
+.wrt-score__feedback-section { margin-bottom: 12px; }
+.wrt-score__feedback-title { font-size: 13px; font-weight: 600; color: var(--mw-text-heading); margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+.wrt-score__feedback-list { list-style: none; margin: 0; padding: 0; }
+.wrt-score__feedback-list li { font-size: 12px; color: var(--mw-text-secondary); line-height: 1.6; padding: 3px 0 3px 16px; position: relative; }
+.wrt-score__feedback-list li::before { content: '•'; position: absolute; left: 0; color: var(--mw-text-tertiary); }
+.wrt-score--pending { text-align: center; padding: 20px; color: var(--mw-text-tertiary); font-size: 13px; }
+
 /* 未保存状態のボタン色変化 */
 .wrt-btn--has-changes { background: var(--mw-primary-blue, #568184) !important; color: #fff !important; border-color: var(--mw-primary-blue, #568184) !important; }
 .wrt-btn--has-changes:hover { background: var(--mw-btn-primary-hover, #476C6F) !important; }
@@ -1166,6 +1197,16 @@ get_header();
             html += '<div id="wrtOutlineInline" style="margin-top:16px;"></div>';
         }
         html += '<div id="wrtDraftArea"></div>';
+
+        // 採点結果セクション
+        html += '<div id="wrtScoreArea">';
+        if (a.score && a.score.status === 'success') {
+            html += renderScoreSection(a.score);
+        } else if (a.draft_content && !a.score) {
+            html += '<div class="wrt-score wrt-score--pending">記事の品質チェックは、次回生成時に自動で実行されます</div>';
+        }
+        html += '</div>';
+
         html += '</div>';
 
         // 競合調査セクション
@@ -1455,9 +1496,10 @@ get_header();
                 if (res.success) {
                     currentArticle.draft_content = res.draft_content;
                     if (res.outline) currentArticle.outline = res.outline;
+                    currentArticle.score = res.score || null;
                     currentArticle.status = 'draft_generated';
                     draftViewMode = 'preview';
-                    showToast('本文を生成しました');
+                    showToast(res.score ? '本文を生成し、品質チェックも完了しました' : '本文を生成しました');
                     renderArticleDetail();
                     var rp = document.getElementById('wrtRefinePrompt');
                     if (rp && refinePrompt) rp.value = refinePrompt;
@@ -1497,9 +1539,13 @@ get_header();
                 hideProgress();
                 if (res.success) {
                     currentArticle.draft_content = res.draft_content;
+                    currentArticle.score = res.score || currentArticle.score;
                     setPendingRegen(false);
                     renderDraft(res.draft_content);
-                    showToast('本文を再生成しました');
+                    // 採点結果も更新
+                    var scoreArea = document.getElementById('wrtScoreArea');
+                    if (scoreArea && res.score) { scoreArea.innerHTML = renderScoreSection(res.score); }
+                    showToast(res.score ? '本文を再生成し、品質チェックも完了しました' : '本文を再生成しました');
                 } else {
                     showToast(res.error || 'エラー', true);
                 }
@@ -1954,6 +2000,68 @@ get_header();
     /**
      * 構成案をインライン表示（本文未生成時にセクション内に直接表示）
      */
+    /* ===== 採点結果表示 ===== */
+    function renderScoreSection(score) {
+        if (!score || score.status !== 'success') return '';
+        var total = score.total_score || 0;
+        var colorClass = total >= 85 ? 'high' : total >= 70 ? 'mid' : total >= 60 ? 'low' : 'poor';
+        var html = '<div class="wrt-score">';
+        html += '<div class="wrt-detail-section__title">📊 品質チェック</div>';
+
+        // ヘッダー（総合点 + ランク）
+        html += '<div class="wrt-score__header">';
+        html += '<div class="wrt-score__total wrt-score__total--' + colorClass + '">' + total + '<span style="font-size:16px;font-weight:400;color:var(--mw-text-tertiary);">/100</span></div>';
+        html += '<div class="wrt-score__meta">';
+        html += '<span class="wrt-score__grade wrt-score__grade--' + colorClass + '">' + esc(score.grade_label || '') + '</span>';
+        if (score.scored_at) html += '<span class="wrt-score__date">' + esc(score.scored_at) + ' 採点</span>';
+        html += '</div></div>';
+
+        // 各項目
+        if (score.scores) {
+            html += '<div class="wrt-score__items">';
+            Object.keys(score.scores).forEach(function(key) {
+                var item = score.scores[key];
+                var s = item.score || 0;
+                var barColor = s >= 85 ? '#4E8A6B' : s >= 70 ? '#568184' : s >= 60 ? '#C9A84C' : '#C95A4F';
+                html += '<div class="wrt-score__item">';
+                html += '<div class="wrt-score__item-header"><span class="wrt-score__item-label">' + esc(item.label || key) + '</span>';
+                html += '<span class="wrt-score__item-pts" style="color:' + barColor + ';">' + s + '</span></div>';
+                html += '<div class="wrt-score__bar"><div class="wrt-score__bar-fill" style="width:' + s + '%;background:' + barColor + ';"></div></div>';
+                if (item.comment) html += '<div class="wrt-score__item-comment">' + esc(item.comment) + '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+        }
+
+        // フィードバック
+        html += '<div class="wrt-score__feedback">';
+        if (score.strengths && score.strengths.length) {
+            html += '<div class="wrt-score__feedback-section">';
+            html += '<div class="wrt-score__feedback-title">✅ 良い点</div>';
+            html += '<ul class="wrt-score__feedback-list">';
+            score.strengths.forEach(function(s) { html += '<li>' + esc(s) + '</li>'; });
+            html += '</ul></div>';
+        }
+        if (score.weaknesses && score.weaknesses.length) {
+            html += '<div class="wrt-score__feedback-section">';
+            html += '<div class="wrt-score__feedback-title">⚠️ 改善が必要な点</div>';
+            html += '<ul class="wrt-score__feedback-list">';
+            score.weaknesses.forEach(function(s) { html += '<li>' + esc(s) + '</li>'; });
+            html += '</ul></div>';
+        }
+        if (score.improvement_suggestions && score.improvement_suggestions.length) {
+            html += '<div class="wrt-score__feedback-section">';
+            html += '<div class="wrt-score__feedback-title">💡 改善提案</div>';
+            html += '<ul class="wrt-score__feedback-list">';
+            score.improvement_suggestions.forEach(function(s) { html += '<li>' + esc(s) + '</li>'; });
+            html += '</ul></div>';
+        }
+        html += '</div>';
+
+        html += '</div>';
+        return html;
+    }
+
     function renderOutlineInline(container, outline) {
         if (!outline) { container.innerHTML = ''; return; }
         var html = '<div class="wrt-outline-inline" style="background:var(--mw-bg-secondary);border-radius:8px;padding:20px;border:1px solid var(--mw-border-light);">';

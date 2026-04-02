@@ -57,6 +57,31 @@ class Gcrev_Writing_Service {
         'casual'       => '親しみやすく',
     ];
 
+    /** 採点項目 */
+    private const SCORE_CRITERIA = [
+        'readability'    => '読みやすさ',
+        'persuasiveness' => '訴求力',
+        'originality'    => 'オリジナル性',
+        'clarity'        => 'わかりやすさ',
+        'structure'      => '構成の自然さ',
+        'seo'            => 'SEO適性',
+        'trust'          => '信頼感',
+        'cta'            => '行動喚起力',
+    ];
+
+    /** 記事タイプ別スコア重み */
+    private const SCORE_WEIGHTS = [
+        'explanation' => [ 'readability'=>0.18, 'clarity'=>0.18, 'originality'=>0.18, 'structure'=>0.14, 'seo'=>0.14, 'trust'=>0.10, 'persuasiveness'=>0.08 ],
+        'comparison'  => [ 'readability'=>0.15, 'clarity'=>0.15, 'seo'=>0.20, 'originality'=>0.15, 'structure'=>0.12, 'trust'=>0.13, 'persuasiveness'=>0.10 ],
+        'faq'         => [ 'readability'=>0.20, 'clarity'=>0.25, 'seo'=>0.15, 'structure'=>0.15, 'trust'=>0.10, 'originality'=>0.10, 'persuasiveness'=>0.05 ],
+        'case_study'  => [ 'readability'=>0.15, 'trust'=>0.20, 'originality'=>0.20, 'persuasiveness'=>0.15, 'clarity'=>0.12, 'structure'=>0.10, 'seo'=>0.08 ],
+        'local'       => [ 'readability'=>0.15, 'seo'=>0.22, 'trust'=>0.15, 'persuasiveness'=>0.15, 'clarity'=>0.12, 'structure'=>0.11, 'originality'=>0.10 ],
+        '_default'    => [ 'readability'=>0.16, 'clarity'=>0.14, 'seo'=>0.14, 'originality'=>0.14, 'structure'=>0.12, 'trust'=>0.12, 'persuasiveness'=>0.10, 'cta'=>0.08 ],
+    ];
+
+    /** 評価ランク */
+    private const GRADE_THRESHOLDS = [ 90 => 'とても良い', 80 => '良い', 70 => 'まずまず', 60 => '改善余地あり', 0 => '要改善' ];
+
     public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, ?Gcrev_OpenAI_Client $openai = null, ?object $dataforseo = null ) {
         $this->ai         = $ai;
         $this->config     = $config;
@@ -764,6 +789,7 @@ class Gcrev_Writing_Service {
             'auto_quality_score'     => get_post_meta( $post->ID, '_gcrev_article_auto_quality_score', true ) ?: null,
             'auto_keyword_group'     => get_post_meta( $post->ID, '_gcrev_article_auto_keyword_group', true ) ?: null,
             'supplement'             => get_post_meta( $post->ID, '_gcrev_article_supplement', true ) ?: '',
+            'score'                  => ( function() use ( $post ) { $r = get_post_meta( $post->ID, '_gcrev_article_score_json', true ); return $r ? json_decode( $r, true ) : null; } )(),
             'needs_hearing'          => (bool) get_post_meta( $post->ID, '_gcrev_article_needs_hearing_enhancement', true ),
             'created_at'             => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'             => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
@@ -2276,7 +2302,146 @@ STRUCTURE_FORMAT;
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
         $this->log( "Draft saved for article_id={$article_id}, length=" . mb_strlen( $content ) );
-        return [ 'success' => true, 'draft_content' => $content, 'outline' => $article['outline'] ];
+
+        // 自動採点（失敗しても本文は保持）
+        $score = null;
+        try {
+            $score_result = $this->score_article( $user_id, $article_id );
+            if ( $score_result['success'] ?? false ) { $score = $score_result['score']; }
+        } catch ( \Throwable $e ) {
+            $this->log( "generate_draft: auto-scoring failed (non-blocking): " . $e->getMessage() );
+        }
+
+        return [ 'success' => true, 'draft_content' => $content, 'outline' => $article['outline'], 'score' => $score ];
+    }
+
+    // =========================================================
+    // 記事自動採点
+    // =========================================================
+
+    /**
+     * 記事を自動採点し結果をメタに保存する。
+     */
+    public function score_article( int $user_id, int $article_id ): array {
+        $article = $this->get_article( $user_id, $article_id );
+        if ( ! $article ) {
+            return [ 'success' => false, 'error' => '記事が見つかりません。' ];
+        }
+        $content = get_post_meta( $article_id, '_gcrev_article_draft_content', true );
+        if ( ! $content || mb_strlen( $content ) < 100 ) {
+            return [ 'success' => false, 'error' => '本文が短すぎるため採点できません。' ];
+        }
+
+        $keyword       = $article['keyword'];
+        $type          = $article['type'] ?? 'explanation';
+        $purpose       = $article['purpose'] ?? 'traffic';
+        $tone          = $article['tone'] ?? 'natural';
+        $target_reader = $article['target_reader'] ?? '';
+        $title         = get_the_title( $article_id ) ?: $keyword;
+
+        // 重み取得
+        $weights = self::SCORE_WEIGHTS[ $type ] ?? self::SCORE_WEIGHTS['_default'];
+        $criteria_list = '';
+        foreach ( $weights as $key => $w ) {
+            $label = self::SCORE_CRITERIA[ $key ] ?? $key;
+            $pct   = (int) ( $w * 100 );
+            $criteria_list .= "- {$key}（{$label}）: 重み {$pct}%\n";
+        }
+
+        $type_label    = self::ARTICLE_TYPES[ $type ] ?? $type;
+        $purpose_label = self::ARTICLE_PURPOSES[ $purpose ] ?? $purpose;
+        $tone_label    = self::TONES[ $tone ] ?? $tone;
+
+        $prompt = "あなたはWebライティング品質評価の厳しい編集者です。\n"
+            . "以下の記事を、**公開品質の観点で厳しめに**採点してください。甘い評価は不要です。\n\n"
+            . "## 減点対象\n"
+            . "- AIっぽい不自然な言い回し・自画自賛\n"
+            . "- 中身が薄い・具体性がない・既視感が強い\n"
+            . "- 読者視点ではなく書き手視点\n"
+            . "- 検索意図からズレている\n"
+            . "- 冗長・同じことの繰り返し\n"
+            . "- 専門用語が多く読みにくい\n"
+            . "- CTAが唐突または弱い\n"
+            . "- 見出し構成が不自然\n"
+            . "- タイトルと本文の整合性が弱い\n\n"
+            . "## 記事情報\n"
+            . "- タイトル: {$title}\n"
+            . "- 対象キーワード: {$keyword}\n"
+            . "- 記事タイプ: {$type_label}\n"
+            . "- 目的: {$purpose_label}\n"
+            . "- 文体: {$tone_label}\n"
+            . "- 想定読者: {$target_reader}\n\n"
+            . "## 評価項目（重み付き）\n{$criteria_list}\n"
+            . "## 記事本文\n{$content}\n\n"
+            . "## 出力形式\n"
+            . "以下のJSON形式のみ出力してください。余計なテキストは不要です。\n"
+            . "各項目の score は 0〜100 の整数。comment は日本語で2〜3文。\n\n"
+            . "```json\n"
+            . "{\n"
+            . "  \"scores\": {\n";
+        foreach ( $weights as $key => $w ) {
+            $label = self::SCORE_CRITERIA[ $key ] ?? $key;
+            $prompt .= "    \"{$key}\": { \"label\": \"{$label}\", \"score\": 整数, \"comment\": \"...\" },\n";
+        }
+        $prompt .= "  },\n"
+            . "  \"strengths\": [\"良い点1\", \"良い点2\"],\n"
+            . "  \"weaknesses\": [\"弱い点1\", \"弱い点2\"],\n"
+            . "  \"improvement_suggestions\": [\"改善提案1\", \"改善提案2\", \"改善提案3\"]\n"
+            . "}\n```\n";
+
+        $this->log( "score_article: start article_id={$article_id}, type={$type}" );
+
+        try {
+            $raw = $this->ai->call_gemini_api( $prompt, [
+                'temperature'     => 0.3,
+                'maxOutputTokens' => 4096,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "score_article: Gemini error: " . $e->getMessage() );
+            return [ 'success' => false, 'error' => '採点中にエラーが発生しました。' ];
+        }
+
+        $parsed = $this->parse_json_object( $raw );
+        if ( ! $parsed || ! isset( $parsed['scores'] ) ) {
+            $this->log( "score_article: parse error. Raw: " . substr( $raw, 0, 500 ) );
+            return [ 'success' => false, 'error' => '採点結果の解析に失敗しました。' ];
+        }
+
+        // 重み付き総合点を計算
+        $total = 0.0;
+        $weight_sum = 0.0;
+        foreach ( $weights as $key => $w ) {
+            $s = (int) ( $parsed['scores'][ $key ]['score'] ?? 0 );
+            $total += $s * $w;
+            $weight_sum += $w;
+        }
+        $total_score = $weight_sum > 0 ? (int) round( $total / $weight_sum ) : 0;
+
+        // ランク判定
+        $grade_label = '要改善';
+        foreach ( self::GRADE_THRESHOLDS as $threshold => $label ) {
+            if ( $total_score >= $threshold ) { $grade_label = $label; break; }
+        }
+
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        $score_data = [
+            'total_score'             => $total_score,
+            'grade_label'             => $grade_label,
+            'scores'                  => $parsed['scores'],
+            'strengths'               => $parsed['strengths'] ?? [],
+            'weaknesses'              => $parsed['weaknesses'] ?? [],
+            'improvement_suggestions' => $parsed['improvement_suggestions'] ?? [],
+            'scored_at'               => $now,
+            'status'                  => 'success',
+            'article_type'            => $type,
+        ];
+
+        $json = wp_json_encode( $score_data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+        update_post_meta( $article_id, '_gcrev_article_score_json', wp_slash( $json ) );
+
+        $this->log( "score_article: done article_id={$article_id}, total={$total_score} ({$grade_label})" );
+
+        return [ 'success' => true, 'score' => $score_data ];
     }
 
     /**
@@ -2347,7 +2512,17 @@ STRUCTURE_FORMAT;
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
         $this->log( "Refined draft saved for article_id={$article_id}, length=" . mb_strlen( $content ) );
-        return [ 'success' => true, 'draft_content' => $content ];
+
+        // 自動再採点
+        $score = null;
+        try {
+            $score_result = $this->score_article( $user_id, $article_id );
+            if ( $score_result['success'] ?? false ) { $score = $score_result['score']; }
+        } catch ( \Throwable $e ) {
+            $this->log( "refine_draft: auto-scoring failed: " . $e->getMessage() );
+        }
+
+        return [ 'success' => true, 'draft_content' => $content, 'score' => $score ];
     }
 
     private function build_draft_prompt(
