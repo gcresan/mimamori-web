@@ -1219,17 +1219,23 @@ INSTRUCTION;
             'analysis'     => $analysis,
         ];
 
-        $json = wp_json_encode( $research, JSON_UNESCAPED_UNICODE );
-        // UTF-8不正バイトでエンコード失敗した場合のフォールバック
+        $json = wp_json_encode( $research, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
         if ( $json === false ) {
-            $this->log( "generate_competitor_research: JSON encode failed, sanitizing" );
-            $research = json_decode( wp_json_encode( $research, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ), true );
-            $json = wp_json_encode( $research, JSON_UNESCAPED_UNICODE );
+            $this->log( "generate_competitor_research: JSON encode failed" );
+            return [ 'success' => false, 'error' => '競合分析結果の保存に失敗しました。' ];
         }
-        update_post_meta( $article_id, '_gcrev_article_competitor_research_json', $json );
+        // wp_slash: update_post_meta 内部の wp_unslash によるエスケープ消失を防止
+        update_post_meta( $article_id, '_gcrev_article_competitor_research_json', wp_slash( $json ) );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
-        $this->log( "generate_competitor_research: saved for article_id={$article_id}" );
+        // 保存後の検証
+        $verify = get_post_meta( $article_id, '_gcrev_article_competitor_research_json', true );
+        $verify_decoded = json_decode( $verify, true );
+        if ( $verify_decoded === null ) {
+            $this->log( "generate_competitor_research: VERIFY FAILED - json_decode error after save: " . json_last_error_msg() );
+        }
+
+        $this->log( "generate_competitor_research: saved for article_id={$article_id}, json_len=" . strlen( $json ) );
 
         return [ 'success' => true, 'research' => $research ];
     }
