@@ -721,7 +721,7 @@ get_header();
         });
     }
     function proceedWithArticleCreation(keyword) {
-        showProgress('記事を作成中…（構成案を自動生成しています）');
+        showProgress('記事を作成中…（競合調査・構成案を自動生成しています。2〜3分かかります）');
         apiFetch('/articles', { method: 'POST', body: { keyword: keyword } }).then(function(res) {
             hideProgress();
             if (!res.success) { showToast(res.error || 'エラー', true); return; }
@@ -904,6 +904,66 @@ get_header();
         html += '</div>';
         html += '<div id="wrtDraftArea"></div>';
         html += '</div>';
+
+        // 競合調査セクション
+        html += '<div class="wrt-detail-section" id="wrtCompetitorSection">';
+        html += '<div class="wrt-detail-section__title">競合調査</div>';
+        if (a.competitor_research && a.competitor_research.analysis) {
+            var cr = a.competitor_research;
+            var okCount = (cr.competitors || []).filter(function(c) { return c.status === 'ok'; }).length;
+            html += '<div style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:10px;">'
+                  + okCount + '件の競合記事を分析済み'
+                  + '（' + esc(cr.fetched_at || '') + '）</div>';
+
+            if (cr.analysis.search_intent) {
+                html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:4px;">検索意図</div>'
+                      + '<p style="font-size:13px;margin:0;line-height:1.6;">' + esc(cr.analysis.search_intent) + '</p></div>';
+            }
+            if (cr.analysis.common_topics && cr.analysis.common_topics.length) {
+                html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:4px;">共通トピック</div>'
+                      + '<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">';
+                cr.analysis.common_topics.forEach(function(t) { html += '<li>' + esc(t) + '</li>'; });
+                html += '</ul></div>';
+            }
+            if (cr.analysis.content_gaps && cr.analysis.content_gaps.length) {
+                html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:600;color:var(--mw-accent-green,#22c55e);margin-bottom:4px;">コンテンツギャップ（差別化チャンス）</div>'
+                      + '<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">';
+                cr.analysis.content_gaps.forEach(function(g) { html += '<li>' + esc(g) + '</li>'; });
+                html += '</ul></div>';
+            }
+            if (cr.analysis.recommended_angles && cr.analysis.recommended_angles.length) {
+                html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:600;color:var(--mw-text-secondary);margin-bottom:4px;">推奨差別化アングル</div>'
+                      + '<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">';
+                cr.analysis.recommended_angles.forEach(function(a_) { html += '<li>' + esc(a_) + '</li>'; });
+                html += '</ul></div>';
+            }
+
+            // 競合記事一覧（折りたたみ）
+            var okCompetitors = (cr.competitors || []).filter(function(c) { return c.status === 'ok'; });
+            if (okCompetitors.length) {
+                html += '<details style="margin-top:8px;"><summary style="font-size:12px;color:var(--mw-text-tertiary);cursor:pointer;">競合記事一覧（' + okCompetitors.length + '件）</summary>';
+                html += '<div style="margin-top:8px;">';
+                okCompetitors.forEach(function(comp) {
+                    html += '<div style="margin-bottom:10px;padding:8px;background:var(--mw-bg-secondary);border-radius:6px;">';
+                    html += '<div style="font-size:12px;font-weight:600;">' + esc(comp.rank) + '位: ' + esc(comp.title) + '</div>';
+                    html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin:2px 0;">' + esc(comp.url) + '</div>';
+                    if (comp.headings && comp.headings.h2 && comp.headings.h2.length) {
+                        html += '<ul style="margin:4px 0 0;padding-left:16px;font-size:12px;color:var(--mw-text-secondary);">';
+                        comp.headings.h2.forEach(function(h) { html += '<li>' + esc(h) + '</li>'; });
+                        html += '</ul>';
+                    }
+                    html += '</div>';
+                });
+                html += '</div></details>';
+            }
+
+            html += '<div style="margin-top:10px;"><button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtRerunCompetitorBtn">競合調査を再実行</button></div>';
+        } else {
+            html += '<p style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:8px;">競合上位記事を分析して構成案に反映します。構成案生成時に自動実行されます。</p>';
+            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtRunCompetitorBtn">競合調査を実行</button>';
+        }
+        html += '</div>';
+
         html += '</div>'; // .wrt-detail__main 閉じ
 
         // --- 右カラム: サイドバー ---
@@ -1005,6 +1065,27 @@ get_header();
             });
         });
         renderNotes(a.notes || [], a.id);
+
+        // 競合調査ボタン
+        var competitorBtn = document.getElementById('wrtRunCompetitorBtn') || document.getElementById('wrtRerunCompetitorBtn');
+        if (competitorBtn) {
+            competitorBtn.addEventListener('click', function() {
+                var isRerun = this.id === 'wrtRerunCompetitorBtn';
+                showProgress('競合調査中…（上位記事をクロール・分析しています。2〜3分かかります）');
+                apiFetch('/articles/' + a.id + '/competitor-research', {
+                    method: 'POST',
+                    body: { force: isRerun }
+                }).then(function(res) {
+                    hideProgress();
+                    if (!res.success) { showToast(res.error || 'エラー', true); return; }
+                    showToast('競合調査が完了しました');
+                    showArticleDetail(a.id); // 画面リロード
+                }).catch(function() {
+                    hideProgress();
+                    showToast('通信エラー', true);
+                });
+            });
+        }
 
         // ヒアリング生成
         document.getElementById('wrtGenerateInterviewBtn').addEventListener('click', function() {
@@ -1313,6 +1394,8 @@ get_header();
     voiceModal.addEventListener('click', function(e) { if (e.target === this) closeVoiceModal(); });
 
     /* ===== ヒアリング表示 ===== */
+    var priorityLabels = { high: '高', medium: '中', low: '低' };
+    var priorityColors = { high: '#ef4444', medium: '#f59e0b', low: '#9ca3af' };
     function renderInterview(interview, articleId) {
         var area = document.getElementById('wrtInterviewArea');
         if (!area || !interview || !interview.questions || interview.questions.length === 0) return;
@@ -1321,8 +1404,23 @@ get_header();
         interview.questions.forEach(function(q, idx) {
             var ans = answers[idx] || '';
             html += '<div style="margin-bottom:16px;padding:12px;background:var(--mw-bg-secondary);border-radius:8px;">';
-            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-heading);margin-bottom:6px;">Q' + (idx+1) + '. ' + esc(q.question) + '</div>';
-            if (q.hint) html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">ヒント: ' + esc(q.hint) + '</div>';
+            // 質問ヘッダー（優先度バッジ付き）
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+            if (q.priority && priorityColors[q.priority]) {
+                html += '<span style="font-size:10px;font-weight:700;color:#fff;background:' + priorityColors[q.priority] + ';padding:1px 6px;border-radius:3px;white-space:nowrap;">優先度: ' + esc(priorityLabels[q.priority] || q.priority) + '</span>';
+            }
+            html += '<div style="font-size:13px;font-weight:600;color:var(--mw-text-heading);">Q' + (idx+1) + '. ' + esc(q.question) + '</div>';
+            html += '</div>';
+            // 質問の理由
+            if (q.reason) {
+                html += '<div style="font-size:11px;color:var(--mw-text-secondary);margin-bottom:4px;">理由: ' + esc(q.reason) + '</div>';
+            }
+            // 反映先見出し
+            if (q.target_headings && q.target_headings.length) {
+                html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:4px;">反映先: ' + q.target_headings.map(function(h) { return esc(h); }).join(', ') + '</div>';
+            }
+            // ヒント・回答例
+            if (q.hint) html += '<div style="font-size:11px;color:var(--mw-text-tertiary);margin-bottom:6px;">回答例: ' + esc(q.hint) + '</div>';
             html += '<div style="display:flex;gap:6px;align-items:flex-start;">';
             if (q.field_type === 'textarea') {
                 html += '<textarea class="wrt-interview-ans" data-idx="' + idx + '" rows="3" placeholder="回答を入力" style="flex:1;padding:8px;border:1px solid var(--mw-border-light);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;background:var(--mw-bg-primary);color:var(--mw-text-primary);">' + esc(ans) + '</textarea>';
@@ -1376,6 +1474,11 @@ get_header();
         // 検索意図
         if (outline.search_intent) {
             html += '<div class="wrt-outline__intent"><strong>検索意図:</strong> ' + esc(outline.search_intent) + '</div>';
+        }
+
+        // 記事の到達ゴール
+        if (outline.article_goal) {
+            html += '<div class="wrt-outline__intent" style="margin-top:8px;"><strong>記事の到達ゴール:</strong> ' + esc(outline.article_goal) + '</div>';
         }
 
         // 見出し構成

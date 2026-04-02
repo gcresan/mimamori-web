@@ -1158,6 +1158,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_writing_generate_outline' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/writing/articles/(?P<id>\d+)/competitor-research', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_writing_competitor_research' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/writing/rank-keywords', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'rest_writing_rank_keywords' ],
@@ -15015,7 +15020,7 @@ PROMPT;
         if ( ! $this->writing_service ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
         }
-        @set_time_limit( 120 );
+        @set_time_limit( 300 ); // 競合調査 + 構成案自動生成で最大5分
         $result = $this->writing_service->create_article( get_current_user_id(), $request->get_json_params() );
         return new \WP_REST_Response( $result );
     }
@@ -15055,13 +15060,35 @@ PROMPT;
         if ( ! $this->writing_service ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
         }
-        @set_time_limit( 120 );
+        @set_time_limit( 300 ); // 競合調査 + 構成案生成で最大5分
         try {
             $result = $this->writing_service->generate_outline( get_current_user_id(), (int) $request->get_param( 'id' ) );
             return new \WP_REST_Response( $result );
         } catch ( \Throwable $e ) {
             file_put_contents( '/tmp/gcrev_writing_debug.log',
                 date( 'Y-m-d H:i:s' ) . " REST generate_outline error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    public function rest_writing_competitor_research( \WP_REST_Request $request ): \WP_REST_Response {
+        if ( ! $this->writing_service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Writing service not available' ], 500 );
+        }
+        @set_time_limit( 300 );
+        try {
+            $force = (bool) $request->get_param( 'force' );
+            $result = $this->writing_service->generate_competitor_research(
+                get_current_user_id(),
+                (int) $request->get_param( 'id' ),
+                $force
+            );
+            return new \WP_REST_Response( $result );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_writing_debug.log',
+                date( 'Y-m-d H:i:s' ) . " REST competitor_research error: " . $e->getMessage() . "\n",
                 FILE_APPEND
             );
             return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );

@@ -668,6 +668,9 @@ class Gcrev_Writing_Service {
         $interview_raw = get_post_meta( $post->ID, '_gcrev_article_interview_json', true );
         $interview = $interview_raw ? json_decode( $interview_raw, true ) : null;
 
+        $cr_raw = get_post_meta( $post->ID, '_gcrev_article_competitor_research_json', true );
+        $competitor_research = $cr_raw ? json_decode( $cr_raw, true ) : null;
+
         // target_reader が空の場合はクライアント設定から補完
         $target_reader = get_post_meta( $post->ID, '_gcrev_article_target_reader', true ) ?: '';
         if ( $target_reader === '' && function_exists( 'gcrev_get_client_settings' ) ) {
@@ -695,6 +698,7 @@ class Gcrev_Writing_Service {
             'draft_content'          => get_post_meta( $post->ID, '_gcrev_article_draft_content', true ) ?: '',
             'wp_draft_id'            => (int) get_post_meta( $post->ID, '_gcrev_article_wp_draft_id', true ),
             'status'                 => get_post_meta( $post->ID, '_gcrev_article_status', true ) ?: 'keyword_set',
+            'competitor_research'    => $competitor_research,
             'similarity_result'      => json_decode( get_post_meta( $post->ID, '_gcrev_article_similarity_result', true ) ?: 'null', true ),
             'created_at'             => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'             => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
@@ -757,6 +761,17 @@ class Gcrev_Writing_Service {
         // 既存記事フィンガープリント取得（重複回避用）
         $existing_fps = $this->get_existing_articles_fingerprints( $user_id, $article_id );
 
+        // 競合調査（未実施なら自動実行、失敗は非ブロッキング）
+        $competitor_research = null;
+        try {
+            $cr_result = $this->generate_competitor_research( $user_id, $article_id );
+            if ( $cr_result['success'] ?? false ) {
+                $competitor_research = $cr_result['research'];
+            }
+        } catch ( \Throwable $e ) {
+            $this->log( "generate_outline: competitor research failed (non-blocking): " . $e->getMessage() );
+        }
+
         // プロンプト構築
         $prompt = $this->build_outline_prompt(
             $keyword,
@@ -766,7 +781,8 @@ class Gcrev_Writing_Service {
             $article['target_reader'],
             $settings,
             $knowledge_items,
-            $existing_fps
+            $existing_fps,
+            $competitor_research
         );
 
         // Gemini 呼び出し
@@ -818,7 +834,8 @@ class Gcrev_Writing_Service {
         string $target_reader,
         array  $settings,
         array  $knowledge_items,
-        array  $existing_fingerprints = []
+        array  $existing_fingerprints = [],
+        ?array $competitor_research = null
     ): string {
         $parts = [];
 
@@ -885,6 +902,53 @@ class Gcrev_Writing_Service {
             $parts[] = $kb_section;
         }
 
+        // 競合調査データ
+        if ( $competitor_research && ! empty( $competitor_research['analysis'] ) ) {
+            $cr = $competitor_research['analysis'];
+            $cr_section = "## 競合調査結果（上位表示記事の分析）\n";
+            $cr_section .= "以下は「{$keyword}」で上位表示されている競合記事の分析結果です。\n";
+            $cr_section .= "競合の内容をなぞるのではなく、検索意図を踏まえて再設計し、差別化した構成にしてください。\n\n";
+
+            if ( ! empty( $cr['search_intent'] ) ) {
+                $cr_section .= "### 検索意図の分析\n{$cr['search_intent']}\n\n";
+            }
+            if ( ! empty( $cr['common_topics'] ) ) {
+                $cr_section .= "### 競合が共通して扱っているトピック（網羅性の参考）\n";
+                foreach ( $cr['common_topics'] as $t ) { $cr_section .= "- {$t}\n"; }
+                $cr_section .= "\n";
+            }
+            if ( ! empty( $cr['content_gaps'] ) ) {
+                $cr_section .= "### コンテンツギャップ（差別化チャンス）\n";
+                foreach ( $cr['content_gaps'] as $g ) { $cr_section .= "- {$g}\n"; }
+                $cr_section .= "\n";
+            }
+            if ( ! empty( $cr['recommended_angles'] ) ) {
+                $cr_section .= "### 推奨される差別化アングル\n";
+                foreach ( $cr['recommended_angles'] as $a ) { $cr_section .= "- {$a}\n"; }
+                $cr_section .= "\n";
+            }
+
+            // 競合見出し一覧（上位3記事分）
+            $competitors = $competitor_research['competitors'] ?? [];
+            $shown = 0;
+            foreach ( $competitors as $comp ) {
+                if ( ( $comp['status'] ?? '' ) !== 'ok' || $shown >= 3 ) { continue; }
+                $cr_section .= "### 競合 #{$comp['rank']}: {$comp['title']}\n";
+                foreach ( $comp['headings']['h2'] ?? [] as $h ) { $cr_section .= "  - {$h}\n"; }
+                $cr_section .= "\n";
+                $shown++;
+            }
+
+            if ( ! empty( $cr['average_word_count'] ) ) {
+                $cr_section .= "- 競合記事の平均文字数: 約{$cr['average_word_count']}文字\n";
+            }
+            if ( ! empty( $cr['average_heading_count'] ) ) {
+                $cr_section .= "- 競合記事の平均見出し数: 約{$cr['average_heading_count']}個\n";
+            }
+
+            $parts[] = $cr_section;
+        }
+
         // 出力指示
         $parts[] = <<<'INSTRUCTION'
 ## 出力指示
@@ -894,6 +958,7 @@ class Gcrev_Writing_Service {
 {
   "title_options": ["タイトル案1", "タイトル案2", "タイトル案3"],
   "search_intent": "このキーワードの検索意図の分析（100〜200文字）",
+  "article_goal": "この記事の到達ゴール（読者が記事を読み終えた後にどうなっているべきか。50〜100文字）",
   "target_reader_detail": "想定読者の詳細（100〜150文字）",
   "target_word_count": 3000,
   "headings": [
@@ -934,6 +999,9 @@ class Gcrev_Writing_Service {
 - 既存記事リストがある場合、それらと切り口・見出し構成が重複しないよう差別化する
 - 同じキーワードの既存記事がある場合は、異なるアングル（対象読者を変える、特定の側面に焦点を当てるなど）で構成する
 - 既存記事と同じ導入の流れ・結論を避ける
+- 競合調査データがある場合、競合が扱っている重要トピックは網羅しつつ、コンテンツギャップを活かした独自の切り口を入れる
+- 競合の構成を丸写しせず、検索意図を踏まえて再設計する
+- 表現や文章を競合から流用しない
 INSTRUCTION;
 
         // 既存記事コンテキスト（重複回避用）
@@ -975,12 +1043,351 @@ INSTRUCTION;
         // デフォルト値の補完
         $data['title_options']       = $data['title_options'] ?? [];
         $data['search_intent']       = $data['search_intent'] ?? '';
+        $data['article_goal']        = $data['article_goal'] ?? '';
         $data['target_reader_detail'] = $data['target_reader_detail'] ?? '';
         $data['target_word_count']   = (int) ( $data['target_word_count'] ?? 3000 );
         $data['missing_info']        = $data['missing_info'] ?? [];
         $data['seo_tips']            = $data['seo_tips'] ?? [];
 
         return $data;
+    }
+
+    // =========================================================
+    // 競合調査
+    // =========================================================
+
+    /** 競合調査でスキップするドメイン */
+    private const EXCLUDED_DOMAINS = [
+        'youtube.com', 'youtu.be', 'google.com', 'google.co.jp',
+        'amazon.co.jp', 'amazon.com', 'wikipedia.org', 'twitter.com',
+        'x.com', 'instagram.com', 'facebook.com', 'tiktok.com',
+        'pinterest.com', 'linkedin.com', 'note.com', 'ameblo.jp',
+    ];
+
+    /**
+     * 競合調査を実行し記事メタに保存
+     */
+    public function generate_competitor_research( int $user_id, int $article_id, bool $force = false ): array {
+        $article = $this->get_article( $user_id, $article_id );
+        if ( ! $article ) {
+            return [ 'success' => false, 'error' => '記事が見つかりません。' ];
+        }
+
+        $keyword = $article['keyword'];
+        if ( $keyword === '' ) {
+            return [ 'success' => false, 'error' => 'キーワードが設定されていません。' ];
+        }
+
+        // キャッシュチェック
+        if ( ! $force ) {
+            $cached_raw = get_post_meta( $article_id, '_gcrev_article_competitor_research_json', true );
+            if ( $cached_raw !== '' && $cached_raw !== false ) {
+                $cached = json_decode( $cached_raw, true );
+                if ( is_array( $cached ) && ! empty( $cached['analysis'] ) ) {
+                    $this->log( "generate_competitor_research: using cached data for article_id={$article_id}" );
+                    return [ 'success' => true, 'research' => $cached ];
+                }
+            }
+        }
+
+        $this->log( "generate_competitor_research: start article_id={$article_id}, keyword={$keyword}" );
+
+        // DataForSEO が利用可能か
+        if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
+            $this->log( "generate_competitor_research: DataForSEO not available" );
+            return [ 'success' => false, 'error' => '競合調査サービスが利用できません。' ];
+        }
+
+        // SERP 取得
+        $serp_items = $this->dataforseo->fetch_serp( $keyword );
+        if ( is_wp_error( $serp_items ) ) {
+            $this->log( "generate_competitor_research: SERP fetch error: " . $serp_items->get_error_message() );
+            return [ 'success' => false, 'error' => 'SERP データの取得に失敗しました。' ];
+        }
+
+        // オーガニック結果をフィルタ
+        $organic = $this->filter_organic_serp_items( $serp_items, 8 );
+        if ( empty( $organic ) ) {
+            $this->log( "generate_competitor_research: no organic results found" );
+            return [ 'success' => false, 'error' => 'オーガニック検索結果が見つかりませんでした。' ];
+        }
+
+        $this->log( "generate_competitor_research: " . count( $organic ) . " organic results" );
+
+        // 競合ページをクロール
+        $crawled = $this->crawl_competitor_pages( $organic );
+        $ok_count = count( array_filter( $crawled, function( $c ) { return $c['status'] === 'ok'; } ) );
+        $this->log( "generate_competitor_research: crawled {$ok_count}/" . count( $crawled ) . " pages" );
+
+        if ( $ok_count === 0 ) {
+            return [ 'success' => false, 'error' => '競合ページのクロールに失敗しました。' ];
+        }
+
+        // Gemini で分析
+        $analysis_prompt = $this->build_competitor_analysis_prompt( $keyword, $crawled );
+        try {
+            $raw = $this->ai->call_gemini_api( $analysis_prompt, [
+                'temperature'     => 0.4,
+                'maxOutputTokens' => 8192,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( "generate_competitor_research: Gemini error: " . $e->getMessage() );
+            return [ 'success' => false, 'error' => '競合分析中にエラーが発生しました。' ];
+        }
+
+        $analysis = $this->parse_json_object( $raw );
+        if ( $analysis === null ) {
+            $this->log( "generate_competitor_research: parse error. Raw: " . substr( $raw, 0, 500 ) );
+            return [ 'success' => false, 'error' => '競合分析結果の解析に失敗しました。' ];
+        }
+
+        // 結果を保存
+        $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        $research = [
+            'keyword'      => $keyword,
+            'fetched_at'   => $now,
+            'serp_count'   => count( $organic ),
+            'competitors'  => $crawled,
+            'analysis'     => $analysis,
+        ];
+
+        update_post_meta( $article_id, '_gcrev_article_competitor_research_json',
+            wp_json_encode( $research, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
+
+        $this->log( "generate_competitor_research: saved for article_id={$article_id}" );
+
+        return [ 'success' => true, 'research' => $research ];
+    }
+
+    /**
+     * DataForSEO SERP結果からオーガニック項目をフィルタ
+     */
+    private function filter_organic_serp_items( array $items, int $max = 8 ): array {
+        $result = [];
+        foreach ( $items as $item ) {
+            if ( ( $item['type'] ?? '' ) !== 'organic' ) {
+                continue;
+            }
+            $url = $item['url'] ?? '';
+            if ( $url === '' ) { continue; }
+
+            // 除外ドメインチェック
+            $host = wp_parse_url( $url, PHP_URL_HOST );
+            if ( ! $host ) { continue; }
+            $host = strtolower( preg_replace( '/^www\./', '', $host ) );
+            $skip = false;
+            foreach ( self::EXCLUDED_DOMAINS as $excluded ) {
+                if ( $host === $excluded || str_ends_with( $host, '.' . $excluded ) ) {
+                    $skip = true;
+                    break;
+                }
+            }
+            if ( $skip ) { continue; }
+
+            $result[] = [
+                'rank' => (int) ( $item['rank_absolute'] ?? $item['rank_group'] ?? count( $result ) + 1 ),
+                'url'  => $url,
+            ];
+            if ( count( $result ) >= $max ) { break; }
+        }
+        return $result;
+    }
+
+    /**
+     * 競合ページをクロールしてHTML構造を抽出
+     */
+    private function crawl_competitor_pages( array $organic_items, int $max = 8 ): array {
+        $results = [];
+        foreach ( $organic_items as $i => $entry ) {
+            if ( $i >= $max ) { break; }
+            $url  = $entry['url'];
+            $rank = $entry['rank'];
+
+            $item = [
+                'rank'             => $rank,
+                'url'              => $url,
+                'title'            => '',
+                'meta_description' => '',
+                'headings'         => [ 'h1' => [], 'h2' => [], 'h3' => [] ],
+                'body_excerpt'     => '',
+                'status'           => 'error',
+            ];
+
+            // クロール間隔
+            if ( $i > 0 ) {
+                usleep( 500000 );
+            }
+
+            try {
+                $response = wp_remote_get( $url, [
+                    'timeout'    => 15,
+                    'user-agent' => 'MimamoriSEO/1.0 (+https://mimamori-web.jp)',
+                    'sslverify'  => false,
+                ] );
+
+                if ( is_wp_error( $response ) ) {
+                    $this->log( "crawl_competitor: error [{$url}]: " . $response->get_error_message() );
+                    $results[] = $item;
+                    continue;
+                }
+
+                $status_code = wp_remote_retrieve_response_code( $response );
+                if ( $status_code !== 200 ) {
+                    $this->log( "crawl_competitor: HTTP {$status_code} [{$url}]" );
+                    $results[] = $item;
+                    continue;
+                }
+
+                $html = wp_remote_retrieve_body( $response );
+                if ( empty( $html ) ) {
+                    $results[] = $item;
+                    continue;
+                }
+
+                $parsed = $this->parse_competitor_html_for_writing( $html );
+                $item = array_merge( $item, $parsed );
+                $item['status'] = 'ok';
+
+            } catch ( \Throwable $e ) {
+                $this->log( "crawl_competitor: exception [{$url}]: " . $e->getMessage() );
+            }
+
+            $results[] = $item;
+        }
+        return $results;
+    }
+
+    /**
+     * 競合HTMLからタイトル・見出し・メタ情報を抽出
+     */
+    private function parse_competitor_html_for_writing( string $html ): array {
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors( true );
+        @$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
+        libxml_clear_errors();
+        $xpath = new \DOMXPath( $dom );
+
+        $title = '';
+        $titles = $xpath->query( '//title' );
+        if ( $titles && $titles->length > 0 ) {
+            $title = trim( $titles->item( 0 )->textContent );
+        }
+
+        $meta_desc = '';
+        $metas = $xpath->query( '//meta[@name="description"]/@content' );
+        if ( $metas && $metas->length > 0 ) {
+            $meta_desc = trim( $metas->item( 0 )->nodeValue );
+        }
+
+        $headings = [ 'h1' => [], 'h2' => [], 'h3' => [] ];
+        foreach ( [ 'h1', 'h2', 'h3' ] as $tag ) {
+            $nodes = $xpath->query( "//{$tag}" );
+            if ( $nodes ) {
+                $limit = ( $tag === 'h3' ) ? 10 : 20;
+                for ( $j = 0; $j < min( $nodes->length, $limit ); $j++ ) {
+                    $text = trim( $nodes->item( $j )->textContent );
+                    if ( $text !== '' && mb_strlen( $text ) < 200 ) {
+                        $headings[ $tag ][] = $text;
+                    }
+                }
+            }
+        }
+
+        $body_excerpt = '';
+        $body_nodes = $xpath->query( '//body' );
+        if ( $body_nodes && $body_nodes->length > 0 ) {
+            $raw_text = $body_nodes->item( 0 )->textContent;
+            $raw_text = preg_replace( '/\s+/', ' ', $raw_text );
+            $body_excerpt = mb_substr( trim( $raw_text ), 0, 500 );
+        }
+
+        return [
+            'title'            => $title,
+            'meta_description' => $meta_desc,
+            'headings'         => $headings,
+            'body_excerpt'     => $body_excerpt,
+        ];
+    }
+
+    /**
+     * 競合分析プロンプトを構築
+     */
+    private function build_competitor_analysis_prompt( string $keyword, array $crawled_pages ): string {
+        $parts = [];
+        $parts[] = "あなたはSEOコンテンツ分析の専門家です。\n"
+            . "対策キーワード「{$keyword}」で上位表示されている競合記事を分析し、"
+            . "構成案作成に活用できるインサイトを抽出してください。\n"
+            . "競合の内容をコピーするためではなく、検索意図を理解し、差別化するための分析です。";
+
+        $parts[] = "## 競合記事データ";
+        foreach ( $crawled_pages as $page ) {
+            if ( $page['status'] !== 'ok' ) { continue; }
+            $section = "### 順位 {$page['rank']}: {$page['title']}\n";
+            $section .= "URL: {$page['url']}\n";
+            if ( ! empty( $page['meta_description'] ) ) {
+                $section .= "メタディスクリプション: {$page['meta_description']}\n";
+            }
+            if ( ! empty( $page['headings']['h2'] ) ) {
+                $section .= "h2見出し:\n";
+                foreach ( $page['headings']['h2'] as $h ) {
+                    $section .= "  - {$h}\n";
+                }
+            }
+            if ( ! empty( $page['headings']['h3'] ) ) {
+                $section .= "h3見出し:\n";
+                foreach ( array_slice( $page['headings']['h3'], 0, 5 ) as $h ) {
+                    $section .= "  - {$h}\n";
+                }
+            }
+            if ( ! empty( $page['body_excerpt'] ) ) {
+                $section .= "本文冒頭: " . mb_substr( $page['body_excerpt'], 0, 300 ) . "\n";
+            }
+            $parts[] = $section;
+        }
+
+        $parts[] = <<<'INSTRUCTION'
+## 出力指示
+
+以下のJSON形式のみを出力してください。前後に説明文やマークダウンのコードブロック記号を入れないでください。
+
+{
+  "search_intent": "このキーワードの検索意図の分析（150〜250文字。ユーザーが何を知りたいのか、どんな状況で検索するのかを具体的に）",
+  "common_topics": ["競合が共通して扱っているトピック（5〜10個）"],
+  "content_gaps": ["競合が扱っていないが検索者にとって有用なトピック（3〜7個）"],
+  "competitor_strengths": ["競合記事の強い点・参考にすべき点（3〜5個）"],
+  "recommended_angles": ["差別化できる切り口・アングル（3〜5個。一次情報や専門性を活かせる方向性）"],
+  "average_word_count": 3500,
+  "average_heading_count": 8
+}
+
+### 分析ルール
+- 検索意図は、競合記事の共通パターンから推測するだけでなく、検索者の「本当の悩み」まで掘り下げる
+- common_topics は網羅的に、content_gaps は「ここを書けば差別化できる」視点で
+- recommended_angles は抽象的な提案ではなく、具体的に書くべき内容の方向性を示す
+- average_word_count と average_heading_count はクロールできた競合記事の平均値を算出
+INSTRUCTION;
+
+        return implode( "\n\n", $parts );
+    }
+
+    /**
+     * JSON オブジェクトをパース（コードブロック記号除去対応）
+     */
+    private function parse_json_object( string $raw ): ?array {
+        $cleaned = preg_replace( '/^```(?:json)?\s*/m', '', $raw );
+        $cleaned = preg_replace( '/```\s*$/m', '', $cleaned );
+        $cleaned = trim( $cleaned );
+
+        $first = strpos( $cleaned, '{' );
+        $last  = strrpos( $cleaned, '}' );
+        if ( $first === false || $last === false || $last <= $first ) {
+            return null;
+        }
+
+        $json_str = substr( $cleaned, $first, $last - $first + 1 );
+        $data = json_decode( $json_str, true );
+        return is_array( $data ) ? $data : null;
     }
 
     // =========================================================
@@ -1081,13 +1488,27 @@ INSTRUCTION;
 
         $this->log( "generate_interview: article_id={$article_id}, missing=" . count( $missing ) . ", knowledge_chars={$total}" );
 
+        // 構成案の見出し一覧を抽出（target_headings 用）
+        $heading_texts = [];
+        foreach ( $article['outline']['headings'] ?? [] as $h ) {
+            if ( ! empty( $h['text'] ) ) { $heading_texts[] = $h['text']; }
+        }
+
         $prompt  = "あなたはSEOコラム記事作成のヒアリング担当者です。\n";
         $prompt .= "対策キーワード「{$keyword}」のコラム記事を作成するにあたり、";
-        $prompt .= "記事の質を高めるために追加で聞いておくべき質問を作成してください。\n\n";
+        $prompt .= "記事の独自性と信頼性を高めるために追加で聞いておくべき質問を作成してください。\n";
+        $prompt .= "一般論だけで終わらない記事にするため、クライアント固有の一次情報を引き出す質問を重視してください。\n\n";
         if ( ! empty( $missing ) ) {
             $prompt .= "## 構成案で不足と判定された情報\n";
             foreach ( $missing as $m ) {
                 $prompt .= "- {$m}\n";
+            }
+            $prompt .= "\n";
+        }
+        if ( ! empty( $heading_texts ) ) {
+            $prompt .= "## 記事の見出し構成\n";
+            foreach ( $heading_texts as $ht ) {
+                $prompt .= "- {$ht}\n";
             }
             $prompt .= "\n";
         }
@@ -1096,18 +1517,66 @@ INSTRUCTION;
             $prompt .= "以下は既にクライアントから提供されている情報です。この内容を十分に把握した上で、**ここに書かれていない情報のみ**を質問してください。\n\n";
             $prompt .= $knowledge_text . "\n";
         }
-        $prompt .= "## 出力指示\n以下のJSON配列のみを出力してください。\n";
-        $prompt .= '[{"question": "質問文", "hint": "回答のヒント（50文字以内）", "field_type": "text"}]' . "\n";
-        $prompt .= "- 質問は3〜7個程度\n";
-        $prompt .= "- field_type は text（短文）または textarea（長文）\n";
+
+        // 競合調査データがあれば質問に活用
+        $cr_raw = get_post_meta( $article_id, '_gcrev_article_competitor_research_json', true );
+        $cr_data = $cr_raw ? json_decode( $cr_raw, true ) : null;
+        if ( $cr_data && ! empty( $cr_data['analysis'] ) ) {
+            $prompt .= "## 競合調査から判明したポイント\n";
+            if ( ! empty( $cr_data['analysis']['content_gaps'] ) ) {
+                $prompt .= "競合が扱っていないトピック（差別化チャンス）:\n";
+                foreach ( $cr_data['analysis']['content_gaps'] as $g ) {
+                    $prompt .= "- {$g}\n";
+                }
+            }
+            if ( ! empty( $cr_data['analysis']['recommended_angles'] ) ) {
+                $prompt .= "推奨される差別化アングル:\n";
+                foreach ( $cr_data['analysis']['recommended_angles'] as $a ) {
+                    $prompt .= "- {$a}\n";
+                }
+            }
+            $prompt .= "上記のギャップや差別化ポイントについて、クライアントの実体験・独自情報を引き出す質問を含めてください。\n\n";
+        }
+
+        $prompt .= "## 特に拾いたい一次情報のカテゴリ\n";
+        $prompt .= "- 実際によくある相談内容\n";
+        $prompt .= "- 現場で感じる傾向\n";
+        $prompt .= "- お客様が困りやすい点\n";
+        $prompt .= "- 他社との違い・独自の強み\n";
+        $prompt .= "- 実際の事例（成功例・失敗例）\n";
+        $prompt .= "- 失敗しやすいポイント・注意点\n";
+        $prompt .= "- 地域特有の事情\n";
+        $prompt .= "- 業界特有の事情\n";
+        $prompt .= "- 会社独自の考え方や対応方針\n\n";
+
+        $prompt .= "## 出力指示\n以下のJSON配列のみを出力してください。前後に説明文やコードブロック記号を入れないでください。\n\n";
+        $prompt .= <<<'INTERVIEW_FORMAT'
+[
+  {
+    "question": "質問文",
+    "reason": "この質問が必要な理由（30〜60文字）",
+    "target_headings": ["この回答が反映される見出し名"],
+    "priority": "high",
+    "hint": "回答のヒント・回答例（具体的に。50〜100文字）",
+    "field_type": "textarea"
+  }
+]
+INTERVIEW_FORMAT;
+        $prompt .= "\n\n";
+        $prompt .= "- 質問は5〜10個\n";
+        $prompt .= "- priority は high（必須級）/ medium（あると良い）/ low（余裕があれば）の3段階\n";
+        $prompt .= "- target_headings は記事の見出し構成から該当する見出し名を配列で指定\n";
+        $prompt .= "- field_type は text（短文1行）または textarea（長文複数行）\n";
+        $prompt .= "- hint には具体的な回答例を含めて、回答しやすくする\n";
         $prompt .= "- 記事に一次情報（実体験・具体的な数字・独自の強み等）を盛り込むための実用的な質問にしてください\n";
-        $prompt .= "- 上記の参照情報に既に含まれている内容（料金、プラン、サービス内容等）については質問しないでください\n";
+        $prompt .= "- 上記の参照情報に既に含まれている内容については質問しないでください\n";
         $prompt .= "- 参照情報にない独自の強み・実績・顧客の声・差別化ポイントなど、記事に深みを出す情報を引き出す質問にしてください\n";
+        $prompt .= "- 回答がなくても本文生成は可能だが、回答があれば独自性の高い記事になることを前提にしてください\n";
 
         try {
             $raw = $this->ai->call_gemini_api( $prompt, [
                 'temperature'       => 0.5,
-                'maxOutputTokens' => 4096,
+                'maxOutputTokens' => 8192,
             ] );
         } catch ( \Throwable $e ) {
             $this->log( "Gemini interview error: " . $e->getMessage() );
@@ -1159,6 +1628,13 @@ INSTRUCTION;
      */
     public function regenerate_all( int $user_id, int $article_id ): array {
         $this->log( "regenerate_all: start article_id={$article_id}" );
+
+        // 0. 競合調査を再実行（失敗は非ブロッキング）
+        try {
+            $this->generate_competitor_research( $user_id, $article_id, true );
+        } catch ( \Throwable $e ) {
+            $this->log( "regenerate_all: competitor research failed (non-blocking): " . $e->getMessage() );
+        }
 
         // 1. 構成案を再生成
         $outline_result = $this->generate_outline( $user_id, $article_id );
