@@ -999,9 +999,9 @@ wp_enqueue_media();
             if (!confirm('予約日時を過ぎた投稿をすべてGBPに投稿します。よろしいですか？')) return;
             overdueBtn.disabled = true;
             overdueBtn.textContent = '⏳ 処理中...';
-            fetch(GCREV.restBase + 'gcrev/v1/meo/posts/process-overdue', {
+            fetch(restBase + 'meo/posts/process-overdue', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': GCREV.nonce },
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
                 credentials: 'same-origin'
             })
             .then(function(r) { return r.json(); })
