@@ -1280,6 +1280,35 @@ class Gcrev_Insight_API {
         ]);
 
         // =========================================================
+        // 実行ダッシュボード
+        // =========================================================
+        register_rest_route('gcrev/v1', '/execution/dashboard', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_execution_dashboard' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/execution/action/(?P<id>\d+)/execute', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_execute_action' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/execution/action/(?P<id>\d+)/complete', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_complete_action' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/execution/action/(?P<id>\d+)/skip', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_skip_action' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/execution/refresh', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_refresh_execution' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
+        // =========================================================
         // 口コミ投稿支援（公開エンドポイント）
         // =========================================================
         register_rest_route('gcrev/v1', '/review/generate', [
@@ -15387,6 +15416,100 @@ PROMPT;
         $kw_service = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, null, null );
         $instance = new Gcrev_Auto_Article_Service( $this->writing_service, $this->ai, $this->config, $kw_service );
         return $instance;
+    }
+
+    /* ==================================================================
+       実行ダッシュボード — Lazy Getter & Handlers
+       ================================================================== */
+
+    private function get_execution_service(): ?Gcrev_Execution_Service {
+        static $instance = null;
+        if ( $instance !== null ) { return $instance; }
+        require_once __DIR__ . '/gcrev-api/modules/class-execution-service.php';
+        $instance = new Gcrev_Execution_Service( $this->config, $this->ai, $this->ga4, $this->gsc );
+        return $instance;
+    }
+
+    /**
+     * GET /execution/dashboard
+     */
+    public function rest_get_execution_dashboard( \WP_REST_Request $request ): \WP_REST_Response {
+        $service = $this->get_execution_service();
+        if ( ! $service ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'Service unavailable' ], 500 );
+        }
+        try {
+            $data = $service->get_dashboard( get_current_user_id() );
+            return new \WP_REST_Response( [ 'success' => true ] + $data );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
+    }
+
+    /**
+     * POST /execution/action/{id}/execute — 自動実行トリガー
+     */
+    public function rest_execute_action( \WP_REST_Request $request ): \WP_REST_Response {
+        $exec      = $this->get_execution_service();
+        $action_id = (int) $request->get_param( 'id' );
+        $user_id   = get_current_user_id();
+
+        $action = $exec->get_action( $user_id, $action_id );
+        if ( ! $action ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => 'アクションが見つかりません。' ], 404 );
+        }
+
+        if ( $action['action_type'] === 'article_create' ) {
+            $auto = $this->get_auto_article_service();
+            if ( ! $auto ) {
+                return new \WP_REST_Response( [ 'success' => false, 'error' => '記事生成サービスが利用できません。' ], 500 );
+            }
+            try {
+                $keyword = $action['target_keyword'] ?? '';
+                $result  = $auto->trigger_single( $user_id, $keyword );
+                if ( ! empty( $result['success'] ) ) {
+                    $exec->update_action_status( $action_id, 'in_progress' );
+                }
+                return new \WP_REST_Response( $result );
+            } catch ( \Throwable $e ) {
+                return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+            }
+        }
+
+        return new \WP_REST_Response( [ 'success' => false, 'error' => 'このアクションは自動実行に対応していません。' ], 400 );
+    }
+
+    /**
+     * POST /execution/action/{id}/complete
+     */
+    public function rest_complete_action( \WP_REST_Request $request ): \WP_REST_Response {
+        $exec = $this->get_execution_service();
+        $result = $exec->complete_action( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        $code = ! empty( $result['success'] ) ? 200 : 404;
+        return new \WP_REST_Response( $result, $code );
+    }
+
+    /**
+     * POST /execution/action/{id}/skip
+     */
+    public function rest_skip_action( \WP_REST_Request $request ): \WP_REST_Response {
+        $exec = $this->get_execution_service();
+        $result = $exec->skip_action( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        $code = ! empty( $result['success'] ) ? 200 : 404;
+        return new \WP_REST_Response( $result, $code );
+    }
+
+    /**
+     * POST /execution/refresh — アクション再生成
+     */
+    public function rest_refresh_execution( \WP_REST_Request $request ): \WP_REST_Response {
+        $exec = $this->get_execution_service();
+        try {
+            $actions = $exec->refresh_actions( get_current_user_id() );
+            return new \WP_REST_Response( [ 'success' => true, 'actions' => $actions ] );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
+        }
     }
 
     /**

@@ -5442,6 +5442,7 @@ add_action('after_setup_theme', function () {
     gcrev_gbp_posts_create_table();
     gcrev_prefetch_status_create_table();
     gcrev_page_analysis_create_table();
+    gcrev_execution_actions_create_table();
     gcrev_page_snapshots_create_table();
     gcrev_clarity_sync_log_create_table();
     gcrev_heatmap_data_create_table();
@@ -9118,4 +9119,69 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
 
     return $result;
 }
+
+/* ======================================================================
+   実行ダッシュボード — DB テーブル & スクリプト
+   ====================================================================== */
+
+/**
+ * 実行アクションテーブル作成
+ */
+function gcrev_execution_actions_create_table(): void {
+    global $wpdb;
+
+    $table           = $wpdb->prefix . 'gcrev_execution_actions';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        year_month VARCHAR(7) NOT NULL,
+        action_type VARCHAR(30) NOT NULL,
+        priority VARCHAR(10) NOT NULL DEFAULT 'medium',
+        title VARCHAR(255) NOT NULL,
+        reason TEXT NOT NULL,
+        target_keyword VARCHAR(255) NULL,
+        target_url VARCHAR(2083) NULL,
+        quantity INT NULL,
+        unit VARCHAR(20) NULL,
+        expected_effect VARCHAR(500) NULL,
+        comparison_self VARCHAR(255) NULL,
+        comparison_competitor VARCHAR(255) NULL,
+        guide_text TEXT NULL,
+        is_auto_executable TINYINT(1) NOT NULL DEFAULT 0,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        completed_at DATETIME NULL,
+        result_post_id BIGINT(20) UNSIGNED NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_month_status (user_id, year_month, status),
+        KEY user_month (user_id, year_month)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
+ * 実行ダッシュボード用 JS enqueue
+ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_page( 'execution-dashboard' ) ) { return; }
+    if ( ! is_user_logged_in() )              { return; }
+
+    wp_enqueue_script(
+        'gcrev-execution-dashboard',
+        get_template_directory_uri() . '/assets/js/execution-dashboard.js',
+        [],
+        '1.0.0',
+        true
+    );
+    wp_localize_script( 'gcrev-execution-dashboard', 'gcrevExecVars', [
+        'nonce'   => wp_create_nonce( 'wp_rest' ),
+        'apiBase' => rest_url( 'gcrev/v1/execution' ),
+    ] );
+} );
 
