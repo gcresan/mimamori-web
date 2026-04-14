@@ -3,6 +3,41 @@
    v1.0.0
    ======================================== */
 
+/* ---------- Guide Button ---------- */
+.topbar-guide-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    background: #22a045;
+    color: #fff;
+    border: 1px solid #22a045;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background 0.15s, box-shadow 0.15s;
+}
+.topbar-guide-btn:hover {
+    background: #1b8a38;
+    border-color: #1b8a38;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(34, 160, 69, 0.3);
+}
+.topbar-guide-btn svg {
+    stroke: #fff;
+}
+@media (max-width: 768px) {
+    .topbar-guide-btn span {
+        display: none;
+    }
+    .topbar-guide-btn {
+        padding: 6px 8px;
+    }
+}
+
 /* ---------- Menu Button ---------- */
 .settings-menu {
     position: relative;
