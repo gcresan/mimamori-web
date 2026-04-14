@@ -519,8 +519,10 @@
 
          <!-- 初めての方へボタン -->
          <a href="<?php echo esc_url( home_url( '/tutorials/' ) ); ?>" class="topbar-guide-btn">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-               <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+               <path d="M12 2C10 2 8.5 4 8.5 4L2 22h9l1-4 1 4h9l-6.5-18S14 2 12 2z" fill="#fff" stroke="#fff" stroke-width="0.5" stroke-linejoin="round"/>
+               <path d="M12 2C10 2 8.5 4 8.5 4L2 22h9l1-4" fill="#f4d946" stroke="#f4d946" stroke-width="0.5" stroke-linejoin="round"/>
+               <path d="M12 2C14 2 15.5 4 15.5 4L22 22h-9l-1-4" fill="#4caf50" stroke="#4caf50" stroke-width="0.5" stroke-linejoin="round"/>
             </svg>
             <span>初めての方へ</span>
          </a>
