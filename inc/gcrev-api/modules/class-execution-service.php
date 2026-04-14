@@ -303,8 +303,16 @@ class Gcrev_Execution_Service {
         $table = $wpdb->prefix . 'gcrev_execution_actions';
         $now   = current_time( 'mysql' );
 
+        // テーブル存在チェック
+        $table_exists = $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" );
+        if ( ! $table_exists ) {
+            $this->log( "generate: TABLE NOT FOUND: {$table}" );
+            gcrev_execution_actions_create_table();
+        }
+
+        $inserted = 0;
         foreach ( $actions as $i => $action ) {
-            $wpdb->insert( $table, [
+            $result = $wpdb->insert( $table, [
                 'user_id'               => $user_id,
                 'year_month'            => $year_month,
                 'action_type'           => sanitize_text_field( $action['action_type'] ?? 'article_create' ),
@@ -324,11 +332,14 @@ class Gcrev_Execution_Service {
                 'sort_order'            => $i,
                 'created_at'            => $now,
                 'updated_at'            => $now,
-            ], [
-                '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s',
-                '%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%d', '%s', '%s',
             ] );
+            if ( $result === false ) {
+                $this->log( "generate INSERT FAILED: " . $wpdb->last_error );
+            } else {
+                $inserted++;
+            }
         }
+        $this->log( "generate_and_store: inserted={$inserted}/" . count( $actions ) );
 
         return $this->get_or_generate_actions( $user_id, $year_month );
     }
@@ -838,10 +849,20 @@ PROMPT;
         }
 
         $now_str = current_time( 'mysql' );
-        $sort    = 100; // completed/skipped の後に配置
+        $sort    = 100;
 
+        // テーブル存在チェック
+        $table_exists = $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" );
+        if ( ! $table_exists ) {
+            $this->log( "TABLE NOT FOUND: {$table} — running dbDelta" );
+            gcrev_execution_actions_create_table();
+            $table_exists = $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" );
+            $this->log( "After dbDelta: table_exists=" . ( $table_exists ? 'YES' : 'NO' ) );
+        }
+
+        $inserted = 0;
         foreach ( $new_actions as $action ) {
-            $wpdb->insert( $table, [
+            $result = $wpdb->insert( $table, [
                 'user_id'               => $user_id,
                 'year_month'            => $year_month,
                 'action_type'           => sanitize_text_field( $action['action_type'] ?? 'article_create' ),
@@ -862,9 +883,15 @@ PROMPT;
                 'created_at'            => $now_str,
                 'updated_at'            => $now_str,
             ] );
+            if ( $result === false ) {
+                $this->log( "INSERT FAILED: " . $wpdb->last_error );
+            } else {
+                $inserted++;
+            }
         }
+        $this->log( "refresh_actions: inserted={$inserted}/" . count( $new_actions ) . " actions" );
 
-        // フルダッシュボードデータを返す（get_dashboardはDB/キャッシュのみなので高速）
+        // フルダッシュボードデータを返す
         return $this->get_dashboard( $user_id );
     }
 
