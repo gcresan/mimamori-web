@@ -354,21 +354,51 @@ class Gcrev_Execution_Service {
             // 順位変動（DBクエリのみ）
             $context['rank_alerts'] = $this->build_rank_alerts( $user_id );
 
-            // GA4/GSC: 既存のダッシュボードキャッシュから取得
+            // GA4/GSC: キャッシュ優先 → なければAPI直接取得
+            $ga4_data = null;
+            $gsc_data = null;
+
+            // 1) Transientキャッシュから試す
             $dash_cache = get_transient( "gcrev_dash_{$user_id}_last30" );
-            if ( is_array( $dash_cache ) ) {
-                $context['ga4'] = [
+            if ( is_array( $dash_cache ) && ( ( $dash_cache['sessions'] ?? $dash_cache['visits'] ?? 0 ) > 0 ) ) {
+                $ga4_data = [
                     'sessions'    => $dash_cache['sessions'] ?? $dash_cache['visits'] ?? 0,
                     'users'       => $dash_cache['users'] ?? 0,
                     'pageviews'   => $dash_cache['pageViews'] ?? $dash_cache['pv'] ?? 0,
                     'conversions' => $dash_cache['conversions'] ?? $dash_cache['cv'] ?? 0,
                     'avg_duration'=> $dash_cache['avgDuration'] ?? 0,
                 ];
-                $context['gsc_keywords'] = array_slice( $dash_cache['keywords'] ?? [], 0, 20 );
-            } else {
-                $context['ga4'] = [ 'sessions' => 0, 'users' => 0, 'pageviews' => 0, 'conversions' => 0, 'avg_duration' => 0 ];
-                $context['gsc_keywords'] = [];
+                $gsc_data = $dash_cache['keywords'] ?? [];
             }
+
+            // 2) キャッシュなし or 空 → GA4/GSC APIを直接呼ぶ（refresh時のみ実行されるので許容）
+            if ( ! $ga4_data ) {
+                $this->log( "collect_context: cache miss — calling GA4/GSC APIs" );
+                try {
+                    $user_config = $this->config->get_user_config( $user_id );
+                    $date_helper = new Gcrev_Date_Helper();
+                    $last30 = $date_helper->get_date_range( 'last30' );
+
+                    $ga4_raw = $this->ga4->fetch_ga4_summary( $user_config['ga4_id'], $last30['start'], $last30['end'], $user_id );
+                    $ga4_data = [
+                        'sessions'    => $ga4_raw['sessions'] ?? 0,
+                        'users'       => $ga4_raw['users'] ?? 0,
+                        'pageviews'   => $ga4_raw['pageViews'] ?? 0,
+                        'conversions' => $ga4_raw['conversions'] ?? 0,
+                        'avg_duration'=> $ga4_raw['avgDuration'] ?? 0,
+                    ];
+
+                    $gsc_raw = $this->gsc->fetch_gsc_data( $user_config['gsc_url'], $last30['start'], $last30['end'] );
+                    $gsc_data = $gsc_raw['keywords'] ?? [];
+                } catch ( \Throwable $e ) {
+                    $this->log( "collect_context GA4/GSC API error: " . $e->getMessage() );
+                    $ga4_data = [ 'sessions' => 0, 'users' => 0, 'pageviews' => 0, 'conversions' => 0, 'avg_duration' => 0 ];
+                    $gsc_data = [];
+                }
+            }
+
+            $context['ga4'] = $ga4_data;
+            $context['gsc_keywords'] = array_slice( $gsc_data, 0, 20 );
 
             // 記事公開履歴（DBクエリのみ）
             global $wpdb;
