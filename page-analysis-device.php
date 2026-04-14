@@ -544,12 +544,18 @@ function updateShareChart(data) {
     
     const labels = [];
     const sessions = [];
-    const colors = ['#568184', '#A68B5B', '#7B8EAA'];
-    
+    const colors = [];
+    const colorMap = {
+        'mobile': '#568184',
+        'desktop': '#4E8A6B',
+        'tablet': '#D4A842'
+    };
+
     devices_detail.forEach(device => {
         const name = getDeviceLabel(device.device);
         labels.push(name);
         sessions.push(device.sessions || 0);
+        colors.push(colorMap[device.device.toLowerCase()] || '#999999');
     });
     
     const ctx = document.getElementById('shareChart');
