@@ -23,12 +23,31 @@
         if (NONCE) { opts.headers['X-WP-Nonce'] = NONCE; }
         if (body)  { opts.body = JSON.stringify(body); }
 
-        const res  = await fetch(API + path, opts);
-        const json = await res.json();
-        if (!res.ok || json.success === false) {
-            throw new Error(json.error || json.message || 'API Error');
+        // タイムアウト: GETは30秒、POSTは120秒（AI生成は時間がかかる）
+        var timeoutMs = (method === 'POST') ? 120000 : 30000;
+        var controller = new AbortController();
+        opts.signal = controller.signal;
+        var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+
+        try {
+            var res  = await fetch(API + path, opts);
+            clearTimeout(timer);
+            var text = await res.text();
+            var json;
+            try { json = JSON.parse(text); } catch (e) {
+                throw new Error('サーバーから不正なレスポンスが返されました。');
+            }
+            if (!res.ok || json.success === false) {
+                throw new Error(json.error || json.message || 'API Error (' + res.status + ')');
+            }
+            return json;
+        } catch (e) {
+            clearTimeout(timer);
+            if (e.name === 'AbortError') {
+                throw new Error('リクエストがタイムアウトしました。しばらく待ってから再試行してください。');
+            }
+            throw e;
         }
-        return json;
     }
 
     /* ==================================================================

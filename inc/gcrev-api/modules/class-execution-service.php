@@ -279,10 +279,16 @@ class Gcrev_Execution_Service {
     }
 
     private function generate_and_store_actions( int $user_id, string $year_month ): array {
+        $this->log( "generate_and_store_actions START user={$user_id} month={$year_month}" );
+
         $context = $this->collect_context_for_ai( $user_id );
+        $this->log( "context collected: rank_alerts=" . count( $context['rank_alerts'] ?? [] ) . " ga4_sessions=" . ( $context['ga4']['sessions'] ?? 'N/A' ) );
+
         $actions = $this->call_ai_for_actions( $context, $user_id );
+        $this->log( "AI returned " . count( $actions ) . " actions" );
 
         if ( empty( $actions ) ) {
+            $this->log( "Using fallback actions" );
             $actions = $this->get_fallback_actions();
         }
 
@@ -320,32 +326,33 @@ class Gcrev_Execution_Service {
         return $this->get_or_generate_actions( $user_id, $year_month );
     }
 
+    /**
+     * AI分析用コンテキスト収集（外部API呼び出しなし — DB/キャッシュのみ）
+     */
     private function collect_context_for_ai( int $user_id ): array {
         $context = [];
 
         try {
-            // 順位変動
+            // 順位変動（DBクエリのみ）
             $context['rank_alerts'] = $this->build_rank_alerts( $user_id );
 
-            // GA4 サマリー
-            $date_helper = new Gcrev_Date_Helper();
-            $last30      = $date_helper->get_date_range( 'last30' );
-            $ga4_prop    = $this->config->get_ga4_property( $user_id );
-            $ga4_curr    = $this->ga4->fetch_ga4_summary( $ga4_prop, $last30['start'], $last30['end'], $user_id );
-            $context['ga4'] = [
-                'sessions'    => $ga4_curr['sessions'] ?? 0,
-                'users'       => $ga4_curr['users'] ?? 0,
-                'pageviews'   => $ga4_curr['pageViews'] ?? 0,
-                'conversions' => $ga4_curr['conversions'] ?? 0,
-                'avg_duration'=> $ga4_curr['avgDuration'] ?? 0,
-            ];
+            // GA4/GSC: 既存のダッシュボードキャッシュから取得
+            $dash_cache = get_transient( "gcrev_dash_{$user_id}_last30" );
+            if ( is_array( $dash_cache ) ) {
+                $context['ga4'] = [
+                    'sessions'    => $dash_cache['sessions'] ?? $dash_cache['visits'] ?? 0,
+                    'users'       => $dash_cache['users'] ?? 0,
+                    'pageviews'   => $dash_cache['pageViews'] ?? $dash_cache['pv'] ?? 0,
+                    'conversions' => $dash_cache['conversions'] ?? $dash_cache['cv'] ?? 0,
+                    'avg_duration'=> $dash_cache['avgDuration'] ?? 0,
+                ];
+                $context['gsc_keywords'] = array_slice( $dash_cache['keywords'] ?? [], 0, 20 );
+            } else {
+                $context['ga4'] = [ 'sessions' => 0, 'users' => 0, 'pageviews' => 0, 'conversions' => 0, 'avg_duration' => 0 ];
+                $context['gsc_keywords'] = [];
+            }
 
-            // GSC キーワード上位20
-            $site_url = $this->config->get_gsc_site_url( $user_id );
-            $gsc_data = $this->gsc->fetch_gsc_data( $site_url, $last30['start'], $last30['end'] );
-            $context['gsc_keywords'] = array_slice( $gsc_data['keywords'] ?? [], 0, 20 );
-
-            // 記事公開履歴（直近30日）
+            // 記事公開履歴（DBクエリのみ）
             global $wpdb;
             $articles = $wpdb->get_results( $wpdb->prepare(
                 "SELECT post_title, post_date, post_name
@@ -357,7 +364,7 @@ class Gcrev_Execution_Service {
             ), ARRAY_A );
             $context['recent_articles'] = $articles;
 
-            // クライアント情報
+            // クライアント情報（user_meta のみ）
             $client_info = get_user_meta( $user_id, 'gcrev_client_info', true );
             if ( is_array( $client_info ) ) {
                 $context['business'] = [
@@ -897,11 +904,7 @@ PROMPT;
             ] );
         }
 
-        // 原因分析も再生成
-        $rank_alerts = $this->build_rank_alerts( $user_id );
-        $this->get_or_generate_root_cause( $user_id, $rank_alerts );
-
-        // フルダッシュボードデータを返す
+        // フルダッシュボードデータを返す（get_dashboardはDB/キャッシュのみなので高速）
         return $this->get_dashboard( $user_id );
     }
 
