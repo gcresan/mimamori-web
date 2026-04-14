@@ -45,12 +45,44 @@
             hide('exec-loading');
             show('exec-content');
             renderAll(currentData);
+
+            // アクションがまだ生成されていない場合、バックグラウンドで生成
+            if (currentData.needs_generate) {
+                triggerGenerate();
+            }
         } catch (e) {
             hide('exec-loading');
             var el = document.getElementById('exec-error');
             if (el) {
                 el.textContent = 'データの読み込みに失敗しました: ' + e.message;
                 el.style.display = '';
+            }
+        }
+    }
+
+    /**
+     * バックグラウンドでアクション生成（初回のみ自動実行）
+     */
+    async function triggerGenerate() {
+        var actionsList = document.getElementById('exec-actions-list');
+        if (actionsList) {
+            actionsList.innerHTML =
+                '<div class="exec-empty">' +
+                '<div class="exec-loading__spinner" style="margin-bottom:12px"></div>' +
+                '<div>AIがアクションを分析中です...<br>（初回は30秒ほどかかります）</div>' +
+                '</div>';
+        }
+        try {
+            var result = await apiFetch('/refresh', 'POST');
+            currentData = result;
+            renderAll(currentData);
+        } catch (e) {
+            if (actionsList) {
+                actionsList.innerHTML =
+                    '<div class="exec-empty" style="color:#C95A4F">' +
+                    'アクション生成に失敗しました: ' + esc(e.message) +
+                    '<br><button class="exec-btn exec-btn--secondary exec-btn--sm" style="margin-top:12px" onclick="location.reload()">再試行</button>' +
+                    '</div>';
             }
         }
     }
@@ -306,6 +338,10 @@
         var container = document.getElementById('exec-root-cause');
         if (!container) return;
 
+        if (!cause) {
+            container.innerHTML = '<div class="exec-empty">「再分析する」ボタンで分析を開始できます。</div>';
+            return;
+        }
         var bullets = cause.bullets || [];
         if (!bullets.length) {
             container.innerHTML = '<div class="exec-empty">分析データがありません。</div>';
@@ -383,21 +419,26 @@
        再分析
        ================================================================== */
 
-    var refreshBtn = document.getElementById('exec-refresh-btn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', async function () {
-            refreshBtn.disabled = true;
-            refreshBtn.textContent = '分析中...';
-            try {
-                await apiFetch('/refresh', 'POST');
-                await loadDashboard();
-            } catch (e) {
-                alert('エラー: ' + e.message);
-            }
-            refreshBtn.disabled = false;
-            refreshBtn.textContent = '再分析する';
-        });
-    }
+    document.addEventListener('click', function (e) {
+        var refreshBtn = e.target.closest('#exec-refresh-btn');
+        if (!refreshBtn) return;
+
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '分析中...';
+
+        apiFetch('/refresh', 'POST')
+            .then(function (result) {
+                currentData = result;
+                renderAll(currentData);
+            })
+            .catch(function (err) {
+                alert('エラー: ' + err.message);
+            })
+            .finally(function () {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '再分析する';
+            });
+    });
 
     /* ==================================================================
        モーダル

@@ -41,22 +41,31 @@ class Gcrev_Execution_Service {
         $now        = new \DateTimeImmutable( 'now', $tz );
         $year_month = $now->format( 'Y-m' );
 
-        $status      = $this->build_status_summary( $user_id );
-        $actions     = $this->get_or_generate_actions( $user_id, $year_month );
+        // ---- 高速パス: DB/キャッシュのみ（外部API呼び出しなし） ----
         $rank_alerts = $this->build_rank_alerts( $user_id );
         $progress    = $this->build_progress( $user_id, $year_month );
-        $root_cause  = $this->get_or_generate_root_cause( $user_id, $rank_alerts );
 
-        // AIメッセージ生成（軽量）
+        // アクション: DBに既存があればそのまま返す。なければ空（生成はフロント側で /refresh を呼ぶ）
+        $actions        = $this->get_existing_actions( $user_id, $year_month );
+        $needs_generate = empty( $actions );
+
+        // ステータス: キャッシュがあれば使う。なければ順位変動カウントだけ返す（GA4/GSCは呼ばない）
+        $status = $this->build_status_summary_fast( $user_id );
+
+        // 原因分析: キャッシュのみ（なければ null）
+        $root_cause = $this->get_cached_root_cause( $user_id );
+
+        // AIメッセージ（ローカル生成、軽量）
         $status['ai_message'] = $this->generate_status_message( $status, $progress, $rank_alerts );
 
         return [
-            'status'      => $status,
-            'actions'     => $actions,
-            'rank_alerts' => $rank_alerts,
-            'progress'    => $progress,
-            'root_cause'  => $root_cause,
-            'year_month'  => $year_month,
+            'status'         => $status,
+            'actions'        => $actions,
+            'rank_alerts'    => $rank_alerts,
+            'progress'       => $progress,
+            'root_cause'     => $root_cause,
+            'year_month'     => $year_month,
+            'needs_generate' => $needs_generate,
         ];
     }
 
@@ -64,11 +73,26 @@ class Gcrev_Execution_Service {
        A. ステータスサマリー
        ================================================================== */
 
-    private function build_status_summary( int $user_id ): array {
-        // 健康スコア: 既存の calc_monthly_health_score を利用
-        $score_data = $this->get_health_score( $user_id );
+    /**
+     * 高速ステータス（キャッシュ + DB のみ、外部API呼び出しなし）
+     */
+    private function build_status_summary_fast( int $user_id ): array {
+        // キャッシュ済みスコアがあれば使う
+        $cached = get_transient( "gcrev_exec_score_{$user_id}" );
+        $score_data = is_array( $cached ) ? $cached : [ 'score' => 0, 'status' => 'none', 'breakdown' => [] ];
 
-        // 順位変動カウント
+        // 既存のダッシュボードキャッシュからスコアを取得（main dashboardが先に訪問済みなら存在する）
+        if ( ! is_array( $cached ) ) {
+            $dash_cache = get_transient( "gcrev_dash_{$user_id}_last30" );
+            if ( is_array( $dash_cache ) && isset( $dash_cache['health_score'] ) ) {
+                $score_data = [
+                    'score'     => (int)( $dash_cache['health_score']['score'] ?? 0 ),
+                    'status'    => $dash_cache['health_score']['status'] ?? 'none',
+                    'breakdown' => $dash_cache['health_score']['breakdown'] ?? [],
+                ];
+            }
+        }
+
         $rank_counts = $this->count_rank_changes( $user_id );
 
         return [
@@ -79,7 +103,27 @@ class Gcrev_Execution_Service {
             'rank_down'      => $rank_counts['down'],
             'rank_stable'    => $rank_counts['stable'],
             'rank_new'       => $rank_counts['new'],
-            'ai_message'     => '', // 後で設定
+            'ai_message'     => '',
+        ];
+    }
+
+    /**
+     * 完全版ステータス（外部API呼び出しあり — refresh時に使用）
+     */
+    private function build_status_summary( int $user_id ): array {
+        $score_data = $this->get_health_score( $user_id );
+
+        $rank_counts = $this->count_rank_changes( $user_id );
+
+        return [
+            'score'          => $score_data['score'] ?? 0,
+            'score_status'   => $score_data['status'] ?? 'none',
+            'score_breakdown'=> $score_data['breakdown'] ?? [],
+            'rank_up'        => $rank_counts['up'],
+            'rank_down'      => $rank_counts['down'],
+            'rank_stable'    => $rank_counts['stable'],
+            'rank_new'       => $rank_counts['new'],
+            'ai_message'     => '',
         ];
     }
 
@@ -207,21 +251,30 @@ class Gcrev_Execution_Service {
        B. アクションリスト
        ================================================================== */
 
-    public function get_or_generate_actions( int $user_id, string $year_month ): array {
+    /**
+     * DB既存アクションのみ取得（AI生成しない）
+     */
+    public function get_existing_actions( int $user_id, string $year_month ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_execution_actions';
 
-        // DBに今月分があるか確認
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT * FROM {$table} WHERE user_id = %d AND year_month = %s ORDER BY sort_order ASC, id ASC",
             $user_id, $year_month
         ), ARRAY_A );
 
-        if ( ! empty( $rows ) ) {
-            return $this->format_actions( $rows );
+        return ! empty( $rows ) ? $this->format_actions( $rows ) : [];
+    }
+
+    /**
+     * アクション取得（なければAI生成）— refresh 時に使用
+     */
+    public function get_or_generate_actions( int $user_id, string $year_month ): array {
+        $existing = $this->get_existing_actions( $user_id, $year_month );
+        if ( ! empty( $existing ) ) {
+            return $existing;
         }
 
-        // なければAI生成してDB保存
         return $this->generate_and_store_actions( $user_id, $year_month );
     }
 
@@ -654,6 +707,14 @@ PROMPT;
        E. 原因分析
        ================================================================== */
 
+    /**
+     * キャッシュ済み原因分析のみ返す（なければ null）
+     */
+    private function get_cached_root_cause( int $user_id ): ?array {
+        $cached = get_transient( "gcrev_exec_rootcause_{$user_id}" );
+        return is_array( $cached ) ? $cached : null;
+    }
+
     private function get_or_generate_root_cause( int $user_id, array $rank_alerts ): array {
         $cache_key = "gcrev_exec_rootcause_{$user_id}";
         $cached    = get_transient( $cache_key );
@@ -836,7 +897,12 @@ PROMPT;
             ] );
         }
 
-        return $this->get_or_generate_actions( $user_id, $year_month );
+        // 原因分析も再生成
+        $rank_alerts = $this->build_rank_alerts( $user_id );
+        $this->get_or_generate_root_cause( $user_id, $rank_alerts );
+
+        // フルダッシュボードデータを返す
+        return $this->get_dashboard( $user_id );
     }
 
     /* ==================================================================

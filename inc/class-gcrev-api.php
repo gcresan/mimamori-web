@@ -15505,8 +15505,8 @@ PROMPT;
     public function rest_refresh_execution( \WP_REST_Request $request ): \WP_REST_Response {
         $exec = $this->get_execution_service();
         try {
-            $actions = $exec->refresh_actions( get_current_user_id() );
-            return new \WP_REST_Response( [ 'success' => true, 'actions' => $actions ] );
+            $data = $exec->refresh_actions( get_current_user_id() );
+            return new \WP_REST_Response( [ 'success' => true ] + $data );
         } catch ( \Throwable $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'error' => $e->getMessage() ], 500 );
         }
