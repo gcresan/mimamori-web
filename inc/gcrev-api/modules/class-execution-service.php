@@ -131,27 +131,34 @@ class Gcrev_Execution_Service {
         $cached = get_transient( "gcrev_exec_score_{$user_id}" );
         if ( is_array( $cached ) ) { return $cached; }
 
+        // 既存のダッシュボードキャッシュから取得（外部API呼び出し不要）
+        $dash_cache = get_transient( "gcrev_dash_{$user_id}_last30" );
+        if ( is_array( $dash_cache ) && isset( $dash_cache['health_score'] ) ) {
+            $health = $dash_cache['health_score'];
+            set_transient( "gcrev_exec_score_{$user_id}", $health, 3600 );
+            return $health;
+        }
+
         try {
+            $user_config = $this->config->get_user_config( $user_id );
+            $ga4_id  = $user_config['ga4_id'];
+            $gsc_url = $user_config['gsc_url'];
+
             $api = new Gcrev_Insight_API( false );
             $date_helper = new Gcrev_Date_Helper();
             $last30      = $date_helper->get_date_range( 'last30' );
             $last30_comp = $date_helper->get_comparison_range( $last30['start'], $last30['end'] );
 
-            $site_url = $this->config->get_gsc_site_url( $user_id );
-            $ga4_prop = $this->config->get_ga4_property( $user_id );
-
-            // GA4
-            $ga4_curr = $this->ga4->fetch_ga4_summary( $ga4_prop, $last30['start'], $last30['end'], $user_id );
-            $ga4_prev = $this->ga4->fetch_ga4_summary( $ga4_prop, $last30_comp['start'], $last30_comp['end'], $user_id );
+            $ga4_curr = $this->ga4->fetch_ga4_summary( $ga4_id, $last30['start'], $last30['end'], $user_id );
+            $ga4_prev = $this->ga4->fetch_ga4_summary( $ga4_id, $last30_comp['start'], $last30_comp['end'], $user_id );
 
             $sess_curr = (int)( $ga4_curr['sessions'] ?? 0 );
             $sess_prev = (int)( $ga4_prev['sessions'] ?? 0 );
             $cv_curr   = (int)( $ga4_curr['conversions'] ?? 0 );
             $cv_prev   = (int)( $ga4_prev['conversions'] ?? 0 );
 
-            // GSC
-            $gsc_curr = $this->gsc->fetch_gsc_data( $site_url, $last30['start'], $last30['end'] );
-            $gsc_prev = $this->gsc->fetch_gsc_data( $site_url, $last30_comp['start'], $last30_comp['end'] );
+            $gsc_curr = $this->gsc->fetch_gsc_data( $gsc_url, $last30['start'], $last30['end'] );
+            $gsc_prev = $this->gsc->fetch_gsc_data( $gsc_url, $last30_comp['start'], $last30_comp['end'] );
             $gsc_c = (int)( $gsc_curr['total']['impressions'] ?? 0 );
             $gsc_p = (int)( $gsc_prev['total']['impressions'] ?? 0 );
 
@@ -419,69 +426,36 @@ class Gcrev_Execution_Service {
         $article_count = count( $context['recent_articles'] ?? [] );
 
         $prompt = <<<PROMPT
-あなたはSEOコンサルタントです。以下のデータに基づいて、このWebサイトの集客を改善するための具体的なアクションリストをJSON配列で生成してください。
+SEOコンサルとして、以下データからアクション5個をJSON配列で出力せよ。
 
-【サイト情報】
-- 業種: {$industry}
-- 地域: {$area}
-- URL: {$site_url}
+業種:{$industry} 地域:{$area} URL:{$site_url}
 
-【順位データ（直近変動）】
+順位変動:
 {$rank_summary}
+GA4(30日):{$ga4_summary}
+記事:60日で{$article_count}本
 
-【GA4サマリー（直近30日）】
-{$ga4_summary}
+ルール:
+- action_type: article_create/rewrite/internal_link/meo_post/meta_fix/page_speed
+- priority: high(最大2個)/medium/low
+- reason: 1文30字以内
+- expected_effect: 1文20字以内
+- guide_text: 空文字（不要）
+- comparison: {self:"値",competitor_avg:"値"}
+- JSON配列のみ出力。コードブロック記法(```)禁止
 
-【GSC検索クエリ（上位15件）】
-{$gsc_lines}
-
-【記事公開状況】
-直近60日で{$article_count}本公開
-
-【出力ルール】
-- 5〜8個のアクションをJSON配列で出力
-- action_type は次のいずれか: article_create, rewrite, internal_link, meo_post, meta_fix, page_speed
-- priority は high（最大2個）, medium, low のいずれか
-- title に具体的な数量を含める（例：「ブログ記事を2本追加する」）
-- reason は2文以内、データの裏付けを含める
-- expected_effect は1文で期待される成果を記述
-- quantity は数値（記事なら本数、リライトならページ数）
-- unit は「本」「ページ」「箇所」「回」のいずれか
-- guide_text は手動アクション（rewrite, internal_link, meta_fix, page_speed）のみ、3〜5ステップの具体的手順をHTMLリストで記述
-- comparison オブジェクトに self と competitor_avg を含める
-- target_keyword は対象キーワード（あれば）
-- JSON以外は一切出力しないこと
-
-【出力形式の例】
-[
-  {
-    "action_type": "article_create",
-    "priority": "high",
-    "title": "ブログ記事を2本追加する",
-    "reason": "競合サイトは月平均4本公開しています。御社は先月1本のみで差が広がっています。",
-    "target_keyword": "渋谷 歯医者 おすすめ",
-    "target_url": "",
-    "quantity": 2,
-    "unit": "本",
-    "expected_effect": "関連キーワードでの検索表示が増え、2〜4週間で順位改善が期待できます。",
-    "guide_text": "",
-    "comparison": {"self": "月1本", "competitor_avg": "月4本"}
-  }
-]
+[{"action_type":"article_create","priority":"high","title":"記事を2本追加","reason":"競合月4本、御社月1本","target_keyword":"","target_url":"","quantity":2,"unit":"本","expected_effect":"検索表示増加","guide_text":"","comparison":{"self":"月1本","competitor_avg":"月4本"}}]
 PROMPT;
 
         try {
             $response = $this->ai->call_gemini_api( $prompt, [
                 'temperature'     => 0.3,
-                'maxOutputTokens' => 4096,
+                'maxOutputTokens' => 8192,
             ] );
 
-            // JSONパース（コードブロック記法を除去）
-            $json_str = preg_replace( '/^```(?:json)?\s*/i', '', trim( $response ) );
-            $json_str = preg_replace( '/\s*```$/', '', $json_str );
-
-            $parsed = json_decode( $json_str, true );
+            $parsed = $this->parse_ai_json( $response );
             if ( is_array( $parsed ) && ! empty( $parsed ) ) {
+                $this->log( "AI parse success: " . count( $parsed ) . " actions" );
                 return $parsed;
             }
 
@@ -750,23 +724,11 @@ PROMPT;
         }
 
         $prompt = <<<PROMPT
-以下のキーワードで順位が下がっています。考えられる主な原因を3つ、簡潔に分析してください。
+順位下落の原因を3つ、JSON配列で出力せよ。コードブロック記法(```)禁止。
 
-【順位変動】
 {$alert_summary}
 
-【出力ルール】
-- JSON配列で3つの原因を出力
-- 各原因は title（20文字以内）と detail（50文字以内）
-- 抽象論禁止、具体的に
-- JSON以外は出力しないこと
-
-【出力例】
-[
-  {"title": "コンテンツ量の不足", "detail": "競合は平均30ページ、御社は15ページです。特に症例紹介が不足しています。"},
-  {"title": "更新頻度の低下", "detail": "直近30日の記事公開が0本です。競合は月3〜4本更新しています。"},
-  {"title": "ページ滞在時間が短い", "detail": "平均滞在45秒は競合の半分以下です。コンテンツの充実が必要です。"}
-]
+[{"title":"原因(15字以内)","detail":"説明(30字以内)"}]
 PROMPT;
 
         try {
@@ -775,9 +737,7 @@ PROMPT;
                 'maxOutputTokens' => 2048,
             ] );
 
-            $json_str = preg_replace( '/^```(?:json)?\s*/i', '', trim( $response ) );
-            $json_str = preg_replace( '/\s*```$/', '', $json_str );
-            $parsed   = json_decode( $json_str, true );
+            $parsed = $this->parse_ai_json( $response );
 
             if ( is_array( $parsed ) && ! empty( $parsed ) ) {
                 $result = [
@@ -911,6 +871,43 @@ PROMPT;
     /* ==================================================================
        ユーティリティ
        ================================================================== */
+
+    /**
+     * AI応答からJSON配列をパース（切り詰め対応）
+     */
+    private function parse_ai_json( string $raw ): ?array {
+        $text = trim( $raw );
+
+        // コードブロック記法を除去
+        $text = preg_replace( '/^```(?:json)?\s*/i', '', $text );
+        $text = preg_replace( '/\s*```\s*$/', '', $text );
+        $text = trim( $text );
+
+        // 1. そのままパース
+        $parsed = json_decode( $text, true );
+        if ( is_array( $parsed ) && ! empty( $parsed ) ) {
+            return $parsed;
+        }
+
+        // 2. 切り詰められたJSONの修復: 最後の完全なオブジェクト `}` までで閉じる
+        //    パターン: [..., {...}, {...}, {途中で切れ ← ここを除去して ] で閉じる
+        $last_complete = strrpos( $text, '}' );
+        if ( $last_complete !== false ) {
+            $repaired = substr( $text, 0, $last_complete + 1 );
+            // 末尾に ] がなければ追加
+            $repaired = rtrim( $repaired, " ,\n\r\t" );
+            if ( substr( $repaired, -1 ) !== ']' ) {
+                $repaired .= ']';
+            }
+            $parsed = json_decode( $repaired, true );
+            if ( is_array( $parsed ) && ! empty( $parsed ) ) {
+                $this->log( "JSON repaired successfully (" . count( $parsed ) . " items)" );
+                return $parsed;
+            }
+        }
+
+        return null;
+    }
 
     private function log( string $msg ): void {
         file_put_contents(
