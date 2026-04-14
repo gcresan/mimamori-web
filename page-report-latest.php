@@ -749,7 +749,7 @@ get_header();
 
     <!-- KPIトレンドチャート（カード選択に連動） -->
     <div class="rpt-trend-chart-wrap" id="rptTrendChartWrap">
-        <div class="rpt-trend-chart-title" id="rptTrendChartTitle">📈 見られた回数の推移</div>
+        <div class="rpt-trend-chart-title" id="rptTrendChartTitle">📈 <?php echo (int)$month; ?>月の見られた回数の推移</div>
         <div style="height: 280px;">
             <canvas id="rptTrendChart"></canvas>
         </div>
@@ -1175,6 +1175,7 @@ const effectiveCvData = <?php echo $effective_cv_json ?? '{}'; ?>;
 
 // KPIスナップショット（保存済みデータのみ — API再取得なし）
 const kpiSnapshot = <?php echo $kpi_snapshot_json; ?>;
+const reportMonth = <?php echo (int)$month; ?>;
 
 let sparklineCharts = {};
 
@@ -1378,14 +1379,14 @@ function renderRptTrendChart() {
 
     // タイトル更新
     const titleEl = document.getElementById('rptTrendChartTitle');
-    if (titleEl) titleEl.textContent = '📈 ' + label + 'の推移';
+    if (titleEl) titleEl.textContent = '📈 ' + reportMonth + '月の' + label + 'の推移';
 
     // データ取得（CV は effectiveCvData を優先）
     let sparkData = null;
     if (selectedRptKpi === 'conversions' && effectiveCvData && effectiveCvData.daily && Object.keys(effectiveCvData.daily).length > 0) {
         const cvDates = Object.keys(effectiveCvData.daily).sort();
         sparkData = {
-            labels: cvDates.map(d => { const p = d.split('-'); return parseInt(p[1]) + '/' + parseInt(p[2]); }),
+            labels: cvDates.map(d => { const p = d.split('-'); return parseInt(p[2]) + '日'; }),
             values: cvDates.map(d => effectiveCvData.daily[d])
         };
     } else {
@@ -1405,7 +1406,11 @@ function renderRptTrendChart() {
         if (l === null || l === undefined) return '';
         const s = String(l);
         const parts = s.split('-');
-        if (parts.length === 3) return parseInt(parts[1]) + '/' + parseInt(parts[2]);
+        if (parts.length === 3) return parseInt(parts[2]) + '日';
+        // YYYYMMDD 形式（8桁数値）
+        if (/^\d{8}$/.test(s)) return parseInt(s.slice(6, 8)) + '日';
+        // M/D 形式
+        if (s.includes('/')) return parseInt(s.split('/')[1]) + '日';
         return s;
     });
 
