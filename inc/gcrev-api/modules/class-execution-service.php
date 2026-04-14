@@ -853,6 +853,26 @@ PROMPT;
         return [ 'success' => true, 'message' => 'スキップしました。' ];
     }
 
+    public function revert_action( int $user_id, int $action_id ): array {
+        $action = $this->get_action( $user_id, $action_id );
+        if ( ! $action ) {
+            return [ 'success' => false, 'error' => 'アクションが見つかりません。' ];
+        }
+        if ( $action['status'] === 'pending' ) {
+            return [ 'success' => false, 'error' => 'このアクションは未着手です。' ];
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_execution_actions';
+        $wpdb->update( $table, [
+            'status'       => 'pending',
+            'completed_at' => null,
+            'updated_at'   => current_time( 'mysql' ),
+        ], [ 'id' => $action_id ], [ '%s', '%s', '%s' ], [ '%d' ] );
+
+        return [ 'success' => true, 'message' => '未着手に戻しました。' ];
+    }
+
     public function refresh_actions( int $user_id ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_execution_actions';

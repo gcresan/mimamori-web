@@ -1302,6 +1302,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_skip_action' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/execution/action/(?P<id>\d+)/revert', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_revert_action' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/execution/refresh', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_refresh_execution' ],
@@ -15495,6 +15500,16 @@ PROMPT;
     public function rest_skip_action( \WP_REST_Request $request ): \WP_REST_Response {
         $exec = $this->get_execution_service();
         $result = $exec->skip_action( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        $code = ! empty( $result['success'] ) ? 200 : 404;
+        return new \WP_REST_Response( $result, $code );
+    }
+
+    /**
+     * POST /execution/action/{id}/revert — 完了/スキップを未着手に戻す
+     */
+    public function rest_revert_action( \WP_REST_Request $request ): \WP_REST_Response {
+        $exec = $this->get_execution_service();
+        $result = $exec->revert_action( get_current_user_id(), (int) $request->get_param( 'id' ) );
         $code = ! empty( $result['success'] ) ? 200 : 404;
         return new \WP_REST_Response( $result, $code );
     }

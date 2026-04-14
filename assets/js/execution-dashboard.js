@@ -217,6 +217,7 @@
                 if (type === 'execute')  { handleExecute(actionId, btn); }
                 if (type === 'complete') { handleComplete(actionId, btn); }
                 if (type === 'skip')     { handleSkip(actionId, btn); }
+                if (type === 'revert')   { handleRevert(actionId, btn); }
                 if (type === 'guide')    { handleGuide(actionId); }
             });
         });
@@ -266,6 +267,13 @@
             }
 
             html += '<button class="exec-btn exec-btn--ghost" data-exec-action="' + a.id + '" data-exec-type="skip">スキップ</button>';
+            html += '</div>';
+        }
+
+        // 完了・スキップ済み → 「元に戻す」ボタン
+        if (a.status === 'completed' || a.status === 'skipped') {
+            html += '<div class="exec-action-card__buttons">';
+            html += '<button class="exec-btn exec-btn--ghost" data-exec-action="' + a.id + '" data-exec-type="revert">元に戻す</button>';
             html += '</div>';
         }
 
@@ -416,6 +424,19 @@
         } catch (e) {
             alert('エラー: ' + e.message);
             btn.disabled = false;
+        }
+    }
+
+    async function handleRevert(actionId, btn) {
+        btn.disabled = true;
+        btn.textContent = '戻しています...';
+        try {
+            await apiFetch('/action/' + actionId + '/revert', 'POST');
+            await loadDashboard();
+        } catch (e) {
+            alert('エラー: ' + e.message);
+            btn.disabled = false;
+            btn.textContent = '元に戻す';
         }
     }
 
