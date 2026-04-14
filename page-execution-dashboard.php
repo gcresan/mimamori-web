@@ -207,4 +207,51 @@ get_header();
     </div>
 </div>
 
+<script>
+// フォールバック: 外部JSのキャッシュに依存せず、再分析ボタンの動作を保証
+(function(){
+    var API  = <?php echo wp_json_encode( rest_url( 'gcrev/v1/execution' ) ); ?>;
+    var NONCE = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+
+    // 再分析ボタン
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('#exec-refresh-btn');
+        if (!btn) return;
+        e.preventDefault();
+        btn.disabled = true;
+        btn.textContent = '分析中...';
+        var actionsList = document.getElementById('exec-actions-list');
+        if (actionsList) {
+            actionsList.innerHTML = '<div style="text-align:center;padding:40px 0;color:#888">' +
+                '<div style="display:inline-block;width:28px;height:28px;border:3px solid #ddd;border-top-color:#568184;border-radius:50%;animation:exec-spin 0.8s linear infinite;margin-bottom:12px"></div>' +
+                '<div>AIがアクションを分析中です...<br>（30秒ほどかかります）</div></div>';
+        }
+        fetch(API + '/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': NONCE },
+            credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success && typeof window.GCREV !== 'undefined' && window.GCREV._renderAll) {
+                window.GCREV._currentData = data;
+                window.GCREV._renderAll(data);
+            } else {
+                location.reload();
+            }
+        })
+        .catch(function(err) {
+            if (actionsList) {
+                actionsList.innerHTML = '<div style="text-align:center;padding:40px 0;color:#C95A4F">' +
+                    'エラー: ' + (err.message || '不明なエラー') +
+                    '<br><button onclick="location.reload()" style="margin-top:12px;padding:6px 16px;border:1px solid #ddd;border-radius:6px;cursor:pointer">再試行</button></div>';
+            }
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.textContent = '再分析する';
+        });
+    });
+})();
+</script>
 <?php get_footer(); ?>

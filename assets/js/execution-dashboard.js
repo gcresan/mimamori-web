@@ -508,6 +508,11 @@
        Init
        ================================================================== */
 
+    // 外部からアクセス可能にする（インラインスクリプトのフォールバック用）
+    window.GCREV = window.GCREV || {};
+    window.GCREV._renderAll = renderAll;
+    window.GCREV._currentData = currentData;
+
     document.addEventListener('DOMContentLoaded', loadDashboard);
 
 })();

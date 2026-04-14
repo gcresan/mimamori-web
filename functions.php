@@ -9172,11 +9172,13 @@ add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_page( 'execution-dashboard' ) ) { return; }
     if ( ! is_user_logged_in() )              { return; }
 
+    $js_path = get_template_directory() . '/assets/js/execution-dashboard.js';
+    $js_ver  = file_exists( $js_path ) ? filemtime( $js_path ) : '1.0.0';
     wp_enqueue_script(
         'gcrev-execution-dashboard',
         get_template_directory_uri() . '/assets/js/execution-dashboard.js',
         [],
-        '1.0.0',
+        $js_ver,
         true
     );
     wp_localize_script( 'gcrev-execution-dashboard', 'gcrevExecVars', [
