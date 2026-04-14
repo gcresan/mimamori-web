@@ -467,25 +467,41 @@ class Gcrev_Execution_Service {
         $article_count = count( $context['recent_articles'] ?? [] );
 
         $prompt = <<<PROMPT
-SEOコンサルとして、以下データからアクション5個をJSON配列で出力せよ。
+あなたは中小企業のWeb集客コンサルタントです。
+以下のデータに基づき、このサイトの順位改善に必要な「具体的な作業指示」を5個、JSON配列で出力してください。
 
-業種:{$industry} 地域:{$area} URL:{$site_url}
+【重要ルール】
+- titleは「〜してください」の命令形。必ず数量を含める
+  ✅「コラム記事を2本追加してください」
+  ✅「料金ページを1,500文字リライトしてください」
+  ❌「コンテンツを充実させましょう」（抽象的すぎてNG）
+  ❌「内部リンク最適化」（何をすればいいか分からないのでNG）
+- reasonは1文で、競合との比較データを含める
+  ✅「競合は月4本公開、あなたは月1本で差が広がっています」
+  ❌「SEO改善のため」（抽象的すぎてNG）
+- expected_effectは1文で数値を含める
+  ✅「2〜4週間で順位5〜10位改善が見込めます」
+- guide_textは空文字（不要）
+- comparison.self と comparison.competitor_avg は具体的な数値
 
-順位変動:
+【サイト情報】
+業種:{$industry} / 地域:{$area} / URL:{$site_url}
+
+【順位変動（直近）】
 {$rank_summary}
-GA4(30日):{$ga4_summary}
-記事:60日で{$article_count}本
 
-ルール:
-- action_type: article_create/rewrite/internal_link/meo_post/meta_fix/page_speed
-- priority: high(最大2個)/medium/low
-- reason: 1文30字以内
-- expected_effect: 1文20字以内
-- guide_text: 空文字（不要）
-- comparison: {self:"値",competitor_avg:"値"}
-- JSON配列のみ出力。コードブロック記法(```)禁止
+【アクセスデータ（30日間）】
+{$ga4_summary}
 
-[{"action_type":"article_create","priority":"high","title":"記事を2本追加","reason":"競合月4本、御社月1本","target_keyword":"","target_url":"","quantity":2,"unit":"本","expected_effect":"検索表示増加","guide_text":"","comparison":{"self":"月1本","competitor_avg":"月4本"}}]
+【記事公開状況】
+直近60日で{$article_count}本公開
+
+【出力形式】
+action_type: article_create/rewrite/internal_link/meo_post/meta_fix/page_speed
+priority: high(最大2個)/medium/low
+JSON配列のみ出力。コードブロック記法禁止。
+
+[{"action_type":"article_create","priority":"high","title":"コラム記事を2本追加してください","reason":"競合は月平均4本公開、あなたは月1本で差が広がっています","target_keyword":"愛媛 Web制作","target_url":"","quantity":2,"unit":"本","expected_effect":"2〜4週間で関連キーワードの検索表示が増加します","guide_text":"","comparison":{"self":"月1本","competitor_avg":"月4本"}}]
 PROMPT;
 
         try {
@@ -514,40 +530,66 @@ PROMPT;
             [
                 'action_type'     => 'article_create',
                 'priority'        => 'high',
-                'title'           => 'ブログ記事を2本追加する',
-                'reason'          => '定期的なコンテンツ更新はSEOの基本です。まずは記事を追加しましょう。',
+                'title'           => 'コラム記事を2本追加してください',
+                'reason'          => 'コンテンツ量を増やすことで、検索でヒットするキーワードが増えます',
                 'target_keyword'  => '',
                 'target_url'      => '',
                 'quantity'        => 2,
                 'unit'            => '本',
-                'expected_effect' => '新しいキーワードでの検索表示が期待できます。',
+                'expected_effect' => '2〜4週間で新しいキーワードからの流入が見込めます',
+                'guide_text'      => '',
+                'comparison'      => [ 'self' => '', 'competitor_avg' => '' ],
+            ],
+            [
+                'action_type'     => 'rewrite',
+                'priority'        => 'high',
+                'title'           => '主要ページを1ページリライトしてください',
+                'reason'          => '既存ページの情報量を増やすことで、順位改善が期待できます',
+                'target_keyword'  => '',
+                'target_url'      => '',
+                'quantity'        => 1,
+                'unit'            => 'ページ',
+                'expected_effect' => '1〜3週間で対象キーワードの順位が改善します',
                 'guide_text'      => '',
                 'comparison'      => [ 'self' => '', 'competitor_avg' => '' ],
             ],
             [
                 'action_type'     => 'meo_post',
                 'priority'        => 'medium',
-                'title'           => 'Googleビジネスプロフィールに投稿する',
-                'reason'          => '定期的な投稿はマップ検索での表示に効果があります。',
+                'title'           => 'Googleビジネスプロフィールに1件投稿してください',
+                'reason'          => '定期的な投稿でマップ検索の表示回数が増えます',
                 'target_keyword'  => '',
                 'target_url'      => '',
                 'quantity'        => 1,
                 'unit'            => '回',
-                'expected_effect' => 'マップ検索での露出が増加します。',
+                'expected_effect' => 'マップ検索での露出が増加します',
                 'guide_text'      => '',
                 'comparison'      => [ 'self' => '', 'competitor_avg' => '' ],
             ],
             [
-                'action_type'     => 'rewrite',
+                'action_type'     => 'internal_link',
                 'priority'        => 'medium',
-                'title'           => '既存ページを1ページリライトする',
-                'reason'          => 'コンテンツの充実は順位改善の基本です。',
+                'title'           => '内部リンクを3箇所追加してください',
+                'reason'          => 'ページ同士をつなぐことで、サイト全体の評価が上がります',
+                'target_keyword'  => '',
+                'target_url'      => '',
+                'quantity'        => 3,
+                'unit'            => '箇所',
+                'expected_effect' => 'サイト全体の評価向上と回遊率改善が見込めます',
+                'guide_text'      => '',
+                'comparison'      => [ 'self' => '', 'competitor_avg' => '' ],
+            ],
+            [
+                'action_type'     => 'meta_fix',
+                'priority'        => 'low',
+                'title'           => 'ページタイトルと説明文を見直してください',
+                'reason'          => '検索結果でのクリック率を上げるために重要です',
                 'target_keyword'  => '',
                 'target_url'      => '',
                 'quantity'        => 1,
                 'unit'            => 'ページ',
-                'expected_effect' => 'ページの評価が上がり、順位改善が期待できます。',
-                'guide_text'      => '<ol><li>対象ページのアクセスデータを確認する</li><li>競合上位ページの見出し構成を調べる</li><li>不足しているトピックを追加する</li><li>文字数を1.5倍以上に増やす</li></ol>',
+                'expected_effect' => 'クリック率が改善し、アクセスが増加します',
+                'guide_text'      => '',
                 'comparison'      => [ 'self' => '', 'competitor_avg' => '' ],
             ],
         ];
