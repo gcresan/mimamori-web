@@ -430,8 +430,14 @@ function updateTrendChart(data) {
         'Paid Search': '#C95A4F',
         'Social': '#7AA3A6',
         'Organic Social': '#7AA3A6',
-        'Email': '#D4A842',
-        'Display': '#C95A4F',
+        'Paid Social': '#5A9AA6',
+        'Email': '#B08A3E',
+        'Display': '#B85A4F',
+        'Unassigned': '#8B7BAA',
+        'Cross-network': '#A6856B',
+        'Organic Shopping': '#6B9A7B',
+        'Organic Maps': '#6B8A9A',
+        'Affiliates': '#9A7B6B',
     };
     
     
@@ -515,12 +521,29 @@ function updateShareChart(data) {
     const labels = [];
     const enLabels = [];
     const sessions = [];
-    const colors = ['#568184', '#A68B5B', '#7B8EAA', '#C95A4F', '#8B7BAA', '#7AA3A6', '#A68B5B'];
-    
-    channels_summary.forEach((channel, idx) => {
+    const colors = [];
+    const channelColorMap = {
+        'Direct': '#568184',
+        'Organic Search': '#4E8A6B',
+        'Referral': '#D4A842',
+        'Paid Search': '#C95A4F',
+        'Social': '#7AA3A6',
+        'Organic Social': '#7AA3A6',
+        'Paid Social': '#5A9AA6',
+        'Email': '#B08A3E',
+        'Display': '#B85A4F',
+        'Unassigned': '#8B7BAA',
+        'Cross-network': '#A6856B',
+        'Organic Shopping': '#6B9A7B',
+        'Organic Maps': '#6B8A9A',
+        'Affiliates': '#9A7B6B',
+    };
+
+    channels_summary.forEach(channel => {
         labels.push(channelJa(channel.channel));
         enLabels.push(channel.channel);
         sessions.push(channel.sessions || 0);
+        colors.push(channelColorMap[channel.channel] || '#888888');
     });
     
     const ctx = document.getElementById('shareChart');
