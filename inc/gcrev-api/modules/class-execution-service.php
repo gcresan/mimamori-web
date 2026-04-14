@@ -39,14 +39,14 @@ class Gcrev_Execution_Service {
     public function get_dashboard( int $user_id ): array {
         $tz         = wp_timezone();
         $now        = new \DateTimeImmutable( 'now', $tz );
-        $year_month = $now->format( 'Y-m' );
+        $action_month = $now->format( 'Y-m' );
 
         // ---- 高速パス: DB/キャッシュのみ（外部API呼び出しなし） ----
         $rank_alerts = $this->build_rank_alerts( $user_id );
-        $progress    = $this->build_progress( $user_id, $year_month );
+        $progress    = $this->build_progress( $user_id, $action_month );
 
         // アクション: DBに既存があればそのまま返す。なければ空（生成はフロント側で /refresh を呼ぶ）
-        $actions        = $this->get_existing_actions( $user_id, $year_month );
+        $actions        = $this->get_existing_actions( $user_id, $action_month );
         $needs_generate = empty( $actions );
 
         // ステータス: キャッシュがあれば使う。なければ順位変動カウントだけ返す（GA4/GSCは呼ばない）
@@ -64,7 +64,7 @@ class Gcrev_Execution_Service {
             'rank_alerts'    => $rank_alerts,
             'progress'       => $progress,
             'root_cause'     => $root_cause,
-            'year_month'     => $year_month,
+            'action_month'     => $action_month,
             'needs_generate' => $needs_generate,
         ];
     }
@@ -261,13 +261,13 @@ class Gcrev_Execution_Service {
     /**
      * DB既存アクションのみ取得（AI生成しない）
      */
-    public function get_existing_actions( int $user_id, string $year_month ): array {
+    public function get_existing_actions( int $user_id, string $action_month ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_execution_actions';
 
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT * FROM {$table} WHERE user_id = %d AND year_month = %s ORDER BY sort_order ASC, id ASC",
-            $user_id, $year_month
+            "SELECT * FROM {$table} WHERE user_id = %d AND action_month = %s ORDER BY sort_order ASC, id ASC",
+            $user_id, $action_month
         ), ARRAY_A );
 
         return ! empty( $rows ) ? $this->format_actions( $rows ) : [];
@@ -276,17 +276,17 @@ class Gcrev_Execution_Service {
     /**
      * アクション取得（なければAI生成）— refresh 時に使用
      */
-    public function get_or_generate_actions( int $user_id, string $year_month ): array {
-        $existing = $this->get_existing_actions( $user_id, $year_month );
+    public function get_or_generate_actions( int $user_id, string $action_month ): array {
+        $existing = $this->get_existing_actions( $user_id, $action_month );
         if ( ! empty( $existing ) ) {
             return $existing;
         }
 
-        return $this->generate_and_store_actions( $user_id, $year_month );
+        return $this->generate_and_store_actions( $user_id, $action_month );
     }
 
-    private function generate_and_store_actions( int $user_id, string $year_month ): array {
-        $this->log( "generate_and_store_actions START user={$user_id} month={$year_month}" );
+    private function generate_and_store_actions( int $user_id, string $action_month ): array {
+        $this->log( "generate_and_store_actions START user={$user_id} month={$action_month}" );
 
         $context = $this->collect_context_for_ai( $user_id );
         $this->log( "context collected: rank_alerts=" . count( $context['rank_alerts'] ?? [] ) . " ga4_sessions=" . ( $context['ga4']['sessions'] ?? 'N/A' ) );
@@ -314,7 +314,7 @@ class Gcrev_Execution_Service {
         foreach ( $actions as $i => $action ) {
             $result = $wpdb->insert( $table, [
                 'user_id'               => $user_id,
-                'year_month'            => $year_month,
+                'action_month'            => $action_month,
                 'action_type'           => sanitize_text_field( $action['action_type'] ?? 'article_create' ),
                 'priority'              => sanitize_text_field( $action['priority'] ?? 'medium' ),
                 'title'                 => sanitize_text_field( $action['title'] ?? '' ),
@@ -341,7 +341,7 @@ class Gcrev_Execution_Service {
         }
         $this->log( "generate_and_store: inserted={$inserted}/" . count( $actions ) );
 
-        return $this->get_or_generate_actions( $user_id, $year_month );
+        return $this->get_or_generate_actions( $user_id, $action_month );
     }
 
     /**
@@ -640,13 +640,13 @@ PROMPT;
        D. 進捗トラッカー
        ================================================================== */
 
-    private function build_progress( int $user_id, string $year_month ): array {
+    private function build_progress( int $user_id, string $action_month ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_execution_actions';
 
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT action_type, status FROM {$table} WHERE user_id = %d AND year_month = %s",
-            $user_id, $year_month
+            "SELECT action_type, status FROM {$table} WHERE user_id = %d AND action_month = %s",
+            $user_id, $action_month
         ), ARRAY_A );
 
         $total     = count( $rows );
@@ -828,12 +828,12 @@ PROMPT;
         $table = $wpdb->prefix . 'gcrev_execution_actions';
         $tz    = wp_timezone();
         $now   = new \DateTimeImmutable( 'now', $tz );
-        $year_month = $now->format( 'Y-m' );
+        $action_month = $now->format( 'Y-m' );
 
         // pending のみ削除（completed/skipped は保持）
         $wpdb->query( $wpdb->prepare(
-            "DELETE FROM {$table} WHERE user_id = %d AND year_month = %s AND status = 'pending'",
-            $user_id, $year_month
+            "DELETE FROM {$table} WHERE user_id = %d AND action_month = %s AND status = 'pending'",
+            $user_id, $action_month
         ) );
 
         // Transient もクリア
@@ -864,7 +864,7 @@ PROMPT;
         foreach ( $new_actions as $action ) {
             $result = $wpdb->insert( $table, [
                 'user_id'               => $user_id,
-                'year_month'            => $year_month,
+                'action_month'            => $action_month,
                 'action_type'           => sanitize_text_field( $action['action_type'] ?? 'article_create' ),
                 'priority'              => sanitize_text_field( $action['priority'] ?? 'medium' ),
                 'title'                 => sanitize_text_field( $action['title'] ?? '' ),

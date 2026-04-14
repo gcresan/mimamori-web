@@ -5528,7 +5528,7 @@ function gcrev_cv_review_create_table(): void {
     $sql = "CREATE TABLE {$table} (
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        `year_month` VARCHAR(7) NOT NULL,
+        `action_month` VARCHAR(7) NOT NULL,
         row_hash VARCHAR(32) NOT NULL,
         event_name VARCHAR(100) NOT NULL DEFAULT '',
         date_hour_minute VARCHAR(12) NOT NULL DEFAULT '',
@@ -5542,8 +5542,8 @@ function gcrev_cv_review_create_table(): void {
         updated_by BIGINT(20) UNSIGNED NULL,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
-        UNIQUE KEY user_month_hash (user_id, `year_month`, row_hash),
-        KEY user_month (user_id, `year_month`),
+        UNIQUE KEY user_month_hash (user_id, `action_month`, row_hash),
+        KEY user_month (user_id, `action_month`),
         KEY status (status)
     ) {$charset_collate};";
 
@@ -9136,7 +9136,7 @@ function gcrev_execution_actions_create_table(): void {
     $sql = "CREATE TABLE {$table} (
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
-        year_month VARCHAR(7) NOT NULL,
+        action_month VARCHAR(7) NOT NULL,
         action_type VARCHAR(30) NOT NULL,
         priority VARCHAR(10) NOT NULL DEFAULT 'medium',
         title VARCHAR(255) NOT NULL,
@@ -9157,8 +9157,8 @@ function gcrev_execution_actions_create_table(): void {
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
-        KEY user_month_status (user_id, year_month, status),
-        KEY user_month (user_id, year_month)
+        KEY user_month_status (user_id, action_month, status),
+        KEY user_month (user_id, action_month)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
