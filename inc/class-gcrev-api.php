@@ -613,6 +613,12 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_bulk_delete_gbp_posts' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        // 予約投稿の手動一括実行（管理者限定）
+        register_rest_route('gcrev/v1', '/meo/posts/process-overdue', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_process_overdue_gbp_posts' ],
+            'permission_callback' => function() { return current_user_can( 'manage_options' ); },
+        ]);
         // AI画像生成
         register_rest_route('gcrev/v1', '/meo/posts/(?P<id>\d+)/generate-image', [
             'methods'             => 'POST',
@@ -17784,7 +17790,7 @@ PROMPT;
     /**
      * GBP にローカル投稿を作成
      */
-    private function gbp_create_local_post( int $user_id, array $post_data ): array {
+    public function gbp_create_local_post( int $user_id, array $post_data ): array {
         $access_token = $this->gbp_get_access_token( $user_id );
         if ( ! $access_token ) {
             return [ 'success' => false, 'gbp_post_name' => '', 'message' => 'アクセストークンの取得に失敗しました。GBP連携を確認してください。' ];
@@ -18366,6 +18372,21 @@ PROMPT;
             'posted_kept'  => $posted_count,
             'failed_count' => count( $failed_ids ),
             'message'      => $message,
+        ], 200 );
+    }
+
+    /**
+     * 期限超過の予約投稿を手動で一括処理（管理者限定）
+     */
+    public function rest_process_overdue_gbp_posts( \WP_REST_Request $request ): \WP_REST_Response {
+        $result = Gcrev_Bootstrap::process_overdue_gbp_posts();
+        return new \WP_REST_Response( [
+            'success'   => true,
+            'message'   => "処理完了: {$result['processed']}件中 成功={$result['success']} 失敗={$result['failed']}",
+            'processed' => $result['processed'],
+            'success_count' => $result['success'],
+            'failed_count'  => $result['failed'],
+            'details'   => $result['details'],
         ], 200 );
     }
 

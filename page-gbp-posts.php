@@ -255,6 +255,9 @@ wp_enqueue_media();
             <option value="scheduled_asc">予約日時順</option>
         </select>
         <button class="gp-refresh-btn" id="refreshBtn">🔄 更新</button>
+        <?php if ( current_user_can( 'manage_options' ) ) : ?>
+        <button class="gp-refresh-btn" id="processOverdueBtn" style="background:#f59e0b;color:#fff;border-color:#f59e0b;" title="予約日時を過ぎた投稿を今すぐGBPに投稿します">⚡ 予約投稿を今すぐ実行</button>
+        <?php endif; ?>
     </div>
 
     <!-- 一括操作バー -->
@@ -988,6 +991,32 @@ wp_enqueue_media();
         loadSummary();
         loadPosts();
     });
+
+    // 予約投稿を今すぐ実行（管理者限定）
+    var overdueBtn = document.getElementById('processOverdueBtn');
+    if (overdueBtn) {
+        overdueBtn.addEventListener('click', function() {
+            if (!confirm('予約日時を過ぎた投稿をすべてGBPに投稿します。よろしいですか？')) return;
+            overdueBtn.disabled = true;
+            overdueBtn.textContent = '⏳ 処理中...';
+            fetch(GCREV.restBase + 'gcrev/v1/meo/posts/process-overdue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': GCREV.nonce },
+                credentials: 'same-origin'
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                alert(data.message || '処理完了');
+                loadSummary();
+                loadPosts();
+            })
+            .catch(function(e) { alert('エラー: ' + e.message); })
+            .finally(function() {
+                overdueBtn.disabled = false;
+                overdueBtn.textContent = '⚡ 予約投稿を今すぐ実行';
+            });
+        });
+    }
 
     // New post
     document.getElementById('newPostBtn').addEventListener('click', openNewModal);

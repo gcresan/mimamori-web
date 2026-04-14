@@ -634,6 +634,10 @@ class Gcrev_Bootstrap {
     public static function on_gbp_posts_publish(): void {
         $lock_key = 'gcrev_lock_gbp_publish';
         if ( get_transient( $lock_key ) ) {
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [PostPublish] ロック中 — スキップ\n",
+                FILE_APPEND
+            );
             return;
         }
         set_transient( $lock_key, 1, 300 ); // 5分ロック
@@ -641,6 +645,11 @@ class Gcrev_Bootstrap {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_gbp_posts';
         $now   = current_time( 'mysql' );
+
+        file_put_contents( '/tmp/gcrev_gbp_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [PostPublish] バッチ開始 now={$now}\n",
+            FILE_APPEND
+        );
 
         $posts = $wpdb->get_results( $wpdb->prepare(
             "SELECT * FROM {$table} WHERE status = 'scheduled' AND scheduled_at <= %s ORDER BY scheduled_at ASC LIMIT 10",
@@ -653,7 +662,7 @@ class Gcrev_Bootstrap {
         }
 
         file_put_contents( '/tmp/gcrev_gbp_debug.log',
-            date( 'Y-m-d H:i:s' ) . " [PostPublish] found " . count( $posts ) . " scheduled posts to publish\n",
+            date( 'Y-m-d H:i:s' ) . " [PostPublish] 対象 " . count( $posts ) . " 件を投稿開始\n",
             FILE_APPEND
         );
 
@@ -683,8 +692,10 @@ class Gcrev_Bootstrap {
             } else {
                 $retry = (int) $post['retry_count'] + 1;
                 $new_status = $retry >= 3 ? 'failed' : 'scheduled';
+                // リスケジュール: current_time ベースで10分後（タイムゾーン統一）
+                $tz = wp_timezone();
                 $new_scheduled = $retry < 3
-                    ? gmdate( 'Y-m-d H:i:s', strtotime( $post['scheduled_at'] ) + 600 )
+                    ? ( new \DateTimeImmutable( 'now', $tz ) )->modify( '+10 minutes' )->format( 'Y-m-d H:i:s' )
                     : $post['scheduled_at'];
 
                 $wpdb->update( $table, [
@@ -714,7 +725,10 @@ class Gcrev_Bootstrap {
 
     public static function maybe_schedule_events(): void {
 
-        // Dev/Staging 環境では Cron スケジュール登録を完全スキップ
+        // GBP予約投稿: 環境を問わず常に登録（予約投稿はDev/Prodどちらでも動く必要がある）
+        self::maybe_schedule_gbp_publish();
+
+        // Dev/Staging 環境では以降の日次バッチCronスケジュール登録をスキップ
         if ( defined( 'MIMAMORI_ENV' ) && MIMAMORI_ENV !== 'production' ) {
             return;
         }
@@ -782,11 +796,7 @@ class Gcrev_Bootstrap {
         // MEOダッシュボード日次プリフェッチ: 毎日 02:30
         self::schedule_daily_if_missing('gcrev_meo_dashboard_prefetch_event', 'tomorrow 02:30:00');
 
-        // GBP予約投稿: 10分ごと
-        if ( ! wp_next_scheduled( 'gcrev_gbp_posts_publish_event' ) ) {
-            wp_schedule_event( time(), 'ten_minutes', 'gcrev_gbp_posts_publish_event' );
-            error_log( '[GCREV] Scheduled gcrev_gbp_posts_publish_event (ten_minutes)' );
-        }
+        // GBP予約投稿: 環境ガード前に移動済み（maybe_schedule_gbp_publish()）
 
         // 自動記事生成: 毎日 07:00（他の日次Cronの後）
         self::schedule_daily_if_missing('gcrev_auto_article_daily_event', 'tomorrow 07:00:00');
@@ -824,6 +834,96 @@ class Gcrev_Bootstrap {
             ];
         }
         return $schedules;
+    }
+
+    /**
+     * GBP予約投稿Cronを環境非依存で登録
+     */
+    private static function maybe_schedule_gbp_publish(): void {
+        if ( ! wp_next_scheduled( 'gcrev_gbp_posts_publish_event' ) ) {
+            wp_schedule_event( time(), 'ten_minutes', 'gcrev_gbp_posts_publish_event' );
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [Cron] Scheduled gcrev_gbp_posts_publish_event (ten_minutes)\n",
+                FILE_APPEND
+            );
+        }
+    }
+
+    /**
+     * 期限超過の予約投稿を手動で一括処理する（管理者用）
+     * REST API やWP-CLIから呼び出し可能
+     */
+    public static function process_overdue_gbp_posts(): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_gbp_posts';
+        $now   = current_time( 'mysql' );
+
+        $posts = $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$table} WHERE status = 'scheduled' AND scheduled_at <= %s ORDER BY scheduled_at ASC",
+            $now
+        ), ARRAY_A );
+
+        $log = date( 'Y-m-d H:i:s' ) . " [ManualPublish] 手動実行開始 対象={$now} 件数=" . count( $posts ) . "\n";
+
+        if ( empty( $posts ) ) {
+            $log .= date( 'Y-m-d H:i:s' ) . " [ManualPublish] 対象なし — 終了\n";
+            file_put_contents( '/tmp/gcrev_gbp_debug.log', $log, FILE_APPEND );
+            return [ 'processed' => 0, 'success' => 0, 'failed' => 0, 'details' => [] ];
+        }
+
+        $api       = new \Gcrev_Insight_API( false );
+        $success   = 0;
+        $failed    = 0;
+        $details   = [];
+        $saved_uid = get_current_user_id();
+
+        foreach ( $posts as $post ) {
+            $uid     = (int) $post['user_id'];
+            $post_id = (int) $post['id'];
+            wp_set_current_user( $uid );
+
+            $log .= date( 'Y-m-d H:i:s' ) . " [ManualPublish] post_id={$post_id} user={$uid} scheduled_at={$post['scheduled_at']} — API送信中\n";
+
+            $result = $api->gbp_create_local_post( $uid, $post );
+
+            if ( $result['success'] ) {
+                $wpdb->update( $table, [
+                    'status'        => 'posted',
+                    'posted_at'     => current_time( 'mysql' ),
+                    'gbp_post_name' => $result['gbp_post_name'],
+                    'error_message' => null,
+                    'updated_at'    => current_time( 'mysql' ),
+                ], [ 'id' => $post_id ] );
+                $success++;
+                $log .= date( 'Y-m-d H:i:s' ) . " [ManualPublish] post_id={$post_id} 成功\n";
+                $details[] = [ 'id' => $post_id, 'result' => 'posted' ];
+            } else {
+                $retry      = (int) $post['retry_count'] + 1;
+                $new_status = $retry >= 3 ? 'failed' : 'scheduled';
+                $wpdb->update( $table, [
+                    'status'        => $new_status,
+                    'retry_count'   => $retry,
+                    'error_message' => $result['message'],
+                    'updated_at'    => current_time( 'mysql' ),
+                ], [ 'id' => $post_id ] );
+                $failed++;
+                $log .= date( 'Y-m-d H:i:s' ) . " [ManualPublish] post_id={$post_id} 失敗 (retry={$retry}): {$result['message']}\n";
+                $details[] = [ 'id' => $post_id, 'result' => $new_status, 'error' => $result['message'] ];
+            }
+            sleep( 1 );
+        }
+
+        wp_set_current_user( $saved_uid );
+
+        $log .= date( 'Y-m-d H:i:s' ) . " [ManualPublish] 完了 成功={$success} 失敗={$failed}\n";
+        file_put_contents( '/tmp/gcrev_gbp_debug.log', $log, FILE_APPEND );
+
+        return [
+            'processed' => count( $posts ),
+            'success'   => $success,
+            'failed'    => $failed,
+            'details'   => $details,
+        ];
     }
 
     private static function schedule_daily_if_missing(string $hook, string $when): void {
