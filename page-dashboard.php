@@ -1965,7 +1965,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         if (view === 'daily') {
             shortLabels = json.labels.map(function(d){
                 var parts = d.split('-');
-                return parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10);
+                return parseInt(parts[2], 10) + '日';
             });
         } else {
             shortLabels = json.labels.map(function(ym){
@@ -2022,7 +2022,14 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            title: function(ctx){ return json.labels[ctx[0].dataIndex]; },
+                            title: function(ctx){
+                                var raw = json.labels[ctx[0].dataIndex];
+                                if (view === 'daily') {
+                                    var p = raw.split('-');
+                                    return parseInt(p[1],10) + '月' + parseInt(p[2],10) + '日';
+                                }
+                                return raw;
+                            },
                             label: function(ctx){ return label + ': ' + ctx.parsed.y.toLocaleString(); },
                             afterLabel: function(){
                                 return canDrill ? 'クリックして詳細を表示' : '';
