@@ -1065,12 +1065,12 @@ get_template_part('template-parts/period-selector');
         var labels = sparkData.labels || [];
         var values = sparkData.values || [];
 
-        // ラベルを短くする (2026-03-01 → 3/1)
+        // ラベルを短くする (2026-03-01 → 1日)
         var shortLabels = labels.map(function(l) {
             if (l === null || l === undefined) return '';
             var s = String(l);
             var parts = s.split('-');
-            if (parts.length === 3) return parseInt(parts[1]) + '/' + parseInt(parts[2]);
+            if (parts.length === 3) return parseInt(parts[2]) + '日';
             return s;
         });
 
@@ -1107,13 +1107,21 @@ get_template_part('template-parts/period-selector');
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false },
-                    tooltip: isDuration ? {
+                    tooltip: {
                         callbacks: {
-                            label: function(context) {
+                            title: function(ctx) {
+                                var raw = labels[ctx[0].dataIndex];
+                                if (raw) {
+                                    var p = String(raw).split('-');
+                                    if (p.length === 3) return parseInt(p[1]) + '月' + parseInt(p[2]) + '日';
+                                }
+                                return raw;
+                            },
+                            label: isDuration ? function(context) {
                                 return def.label + ': ' + formatDuration(context.parsed.y);
-                            }
+                            } : undefined
                         }
-                    } : {}
+                    }
                 },
                 scales: { y: yConfig }
             }
