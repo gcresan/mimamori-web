@@ -12453,20 +12453,29 @@ PROMPT;
             ], 200);
         }
 
-        // 海外アクセス除外 → GA4 国フィルタを設定
-        $filter_set = $this->maybe_set_country_filter( $user_id );
+        // 海外アクセス除外 → GA4 国フィルタのみ設定
+        // 注: maybe_set_country_filter() は path filter も設定してしまうが、
+        //     CV 検出コンテキストでは /thanks/ 等の除外パスで発火する CV（お問い合わせ完了など）も
+        //     拾いたいため、国フィルタのみをここでインラインで適用する。
+        $country_filter_set = false;
+        if ( ! $this->ga4->has_country_filter() && $this->is_exclude_foreign( $user_id ) ) {
+            $this->ga4->set_country_filter( 'Japan' );
+            $country_filter_set = true;
+        }
 
         // Transientキャッシュ（30分）— フィルタ状態でキーを差別化
-        $cache_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+        // v2: country-only フィルタ版（path filter を適用しないように修正）
+        $cache_sfx = $this->ga4->has_country_filter() ? '_jp_v2' : '_v2';
         $cache_key = "gcrev_cvreview_{$user_id}_{$month}{$cache_sfx}";
         $cached = get_transient($cache_key);
 
         if ($cached !== false && is_array($cached)) {
             // キャッシュヒットでも重複統合 + DB statusマージを適用
-            // （restore_country_filter は末尾の finally で実行される）
             $deduped = $this->dedup_cv_review_rows($cached['rows']);
             $merged  = $this->merge_cv_review_statuses($deduped, $user_id, $month);
-            $this->restore_country_filter( $filter_set );
+            if ( $country_filter_set ) {
+                $this->ga4->set_country_filter( null );
+            }
             return new WP_REST_Response([
                 'success'      => true,
                 'rows'         => $merged,
@@ -12507,7 +12516,9 @@ PROMPT;
                 'message' => 'GA4データの取得に失敗しました: ' . $e->getMessage(),
             ], 500);
         } finally {
-            $this->restore_country_filter( $filter_set );
+            if ( $country_filter_set ) {
+                $this->ga4->set_country_filter( null );
+            }
         }
     }
 
