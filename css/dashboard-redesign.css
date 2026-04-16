@@ -3533,6 +3533,94 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   background: var(--mw-border-light);
 }
 
+/* CV Label Breakdown（表示ラベル別ゴール内訳） */
+.cv-label-breakdown {
+  background: var(--mw-bg-secondary);
+  border: 1px solid var(--mw-border-light);
+  border-radius: var(--mw-radius-sm);
+  padding: 18px 22px;
+  margin-bottom: 24px;
+}
+.cv-label-breakdown-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.cv-label-breakdown-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mw-text-primary);
+}
+.cv-label-breakdown-note {
+  font-size: 12px;
+  color: var(--mw-text-tertiary);
+}
+.cv-label-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.cv-label-breakdown-item {
+  background: var(--mw-bg-primary);
+  border: 1px solid var(--mw-border-light);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cv-label-breakdown-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.cv-label-breakdown-item-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mw-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cv-label-breakdown-src {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cv-label-breakdown-src.manual {
+  background: #fef3c7;
+  color: #92400e;
+}
+.cv-label-breakdown-src.reviewed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.cv-label-breakdown-src.ga4 {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+.cv-label-breakdown-item-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #568184;
+  line-height: 1.2;
+}
+.cv-label-breakdown-item-unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mw-text-tertiary);
+  margin-left: 2px;
+}
+.cv-label-breakdown-item-ratio {
+  font-size: 11px;
+  color: var(--mw-text-tertiary);
+}
+
 /* CV Tab Toggle */
 .cv-tab-toggle {
   display: inline-flex;

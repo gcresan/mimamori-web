@@ -117,11 +117,6 @@ get_template_part('template-parts/analysis-help');
     <!-- CV構成比較（手動オーバーライド時のみ表示） -->
     <div class="cv-compare-box" id="cvCompareBox" style="display:none;">
         <div class="cv-compare-item">
-            <div class="cv-compare-item-label">📝 手動入力ゴール</div>
-            <div class="cv-compare-item-value" id="cvActualTotal">-</div>
-        </div>
-        <div class="cv-compare-divider"></div>
-        <div class="cv-compare-item">
             <div class="cv-compare-item-label">📊 GA4計測ゴール</div>
             <div class="cv-compare-item-value" id="cvPhoneTotal">-</div>
         </div>
@@ -130,6 +125,15 @@ get_template_part('template-parts/analysis-help');
             <div class="cv-compare-item-label">🎯 確定ゴール合計</div>
             <div class="cv-compare-item-value" id="cvEffectiveTotal" style="color:#568184;">-</div>
         </div>
+    </div>
+
+    <!-- 表示ラベル別 ゴール内訳 -->
+    <div class="cv-label-breakdown" id="cvLabelBreakdown" style="display:none;">
+        <div class="cv-label-breakdown-header">
+            <span class="cv-label-breakdown-title">🏷️ ゴール種類別の内訳</span>
+            <span class="cv-label-breakdown-note">ゴール設定で指定した表示ラベルごとの達成数</span>
+        </div>
+        <div class="cv-label-breakdown-grid" id="cvLabelBreakdownGrid"></div>
     </div>
 
     <!-- ③ 流入元別 × CV分析 -->
@@ -429,13 +433,63 @@ function renderCvCompare(data) {
     const eff = data.effective_cv || {};
     if (eff.source === 'ga4' || !eff.source) {
         document.getElementById('cvCompareBox').style.display = 'none';
+    } else {
+        document.getElementById('cvCompareBox').style.display = 'flex';
+        const comp = eff.components || {};
+        document.getElementById('cvPhoneTotal').textContent = fmtNum(comp.ga4_total || comp.phone_total || 0) + '件';
+        document.getElementById('cvEffectiveTotal').textContent = fmtNum(eff.total || 0) + '件';
+    }
+
+    // ===== 表示ラベル別ゴール内訳 =====
+    renderLabelBreakdown(eff);
+}
+
+function renderLabelBreakdown(eff) {
+    const box = document.getElementById('cvLabelBreakdown');
+    const grid = document.getElementById('cvLabelBreakdownGrid');
+    if (!box || !grid) return;
+
+    const breakdown = eff && eff.breakdown_by_label ? eff.breakdown_by_label : null;
+    if (!breakdown) {
+        box.style.display = 'none';
         return;
     }
-    document.getElementById('cvCompareBox').style.display = 'flex';
-    const comp = eff.components || {};
-    document.getElementById('cvActualTotal').textContent = fmtNum(comp.manual_total || comp.actual_total || 0) + '件';
-    document.getElementById('cvPhoneTotal').textContent = fmtNum(comp.ga4_total || comp.phone_total || 0) + '件';
-    document.getElementById('cvEffectiveTotal').textContent = fmtNum(eff.total || 0) + '件';
+
+    // オブジェクト → 配列化し、件数降順にソート
+    const rows = Object.keys(breakdown)
+        .map(k => ({
+            key: k,
+            label: breakdown[k].label || k,
+            count: Number(breakdown[k].count || 0),
+            source: breakdown[k].source || '',
+        }))
+        .filter(r => r.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+    if (rows.length === 0) {
+        box.style.display = 'none';
+        return;
+    }
+
+    const total = rows.reduce((s, r) => s + r.count, 0);
+
+    box.style.display = 'block';
+    grid.innerHTML = rows.map(r => {
+        const ratio = total > 0 ? (r.count / total * 100) : 0;
+        const srcTag = r.source === 'manual' ? '<span class="cv-label-breakdown-src manual">手動入力</span>'
+                     : r.source === 'reviewed' ? '<span class="cv-label-breakdown-src reviewed">精査済み</span>'
+                     : '<span class="cv-label-breakdown-src ga4">GA4計測</span>';
+        return `
+            <div class="cv-label-breakdown-item">
+                <div class="cv-label-breakdown-item-head">
+                    <span class="cv-label-breakdown-item-label">${esc(r.label)}</span>
+                    ${srcTag}
+                </div>
+                <div class="cv-label-breakdown-item-value">${fmtNum(r.count)}<span class="cv-label-breakdown-item-unit">件</span></div>
+                <div class="cv-label-breakdown-item-ratio">全体の ${ratio.toFixed(1)}%</div>
+            </div>
+        `;
+    }).join('');
 }
 
 // ===== ④ デバイス別 × CV =====
@@ -511,6 +565,7 @@ function renderDeviceCvChart(deviceData) {
                     backgroundColor: bgColors,
                     borderRadius: 8,
                     yAxisID: 'y',
+                    order: 2,
                 },
                 {
                     label: 'ゴール達成率(%)',
@@ -521,6 +576,7 @@ function renderDeviceCvChart(deviceData) {
                     pointBackgroundColor: '#C95A4F',
                     tension: 0.4,
                     yAxisID: 'y1',
+                    order: 1,
                 }
             ]
         },
@@ -604,6 +660,7 @@ function renderSourceCvChart(sourceData) {
                     backgroundColor: bgColors,
                     borderRadius: 8,
                     yAxisID: 'y',
+                    order: 2,
                 },
                 {
                     label: 'ゴール達成率(%)',
@@ -613,6 +670,7 @@ function renderSourceCvChart(sourceData) {
                     pointBackgroundColor: '#C95A4F',
                     tension: 0.4,
                     yAxisID: 'y1',
+                    order: 1,
                 }
             ]
         },

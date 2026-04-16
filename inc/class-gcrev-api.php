@@ -2106,7 +2106,7 @@ class Gcrev_Insight_API {
                 $last30_dates = $this->dates->get_date_range('last30');
                 $last30_comp  = $this->dates->get_comparison_range($last30_dates['start'], $last30_dates['end']);
                 $filter_suffix_pf = $exclude_foreign ? '_filtered' : '';
-                $comp_cache_key   = "gcrev_dash_bydate_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
+                $comp_cache_key   = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
                 $comp_cached      = get_transient( $comp_cache_key );
 
                 if ( ! $comp_cached ) {
@@ -2357,7 +2357,7 @@ class Gcrev_Insight_API {
                 $last30_dates = $this->dates->get_date_range('last30');
                 $last30_comp  = $this->dates->get_comparison_range($last30_dates['start'], $last30_dates['end']);
                 $filter_suffix_pf = $exclude_foreign ? '_filtered' : '';
-                $comp_cache_key   = "gcrev_dash_bydate_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
+                $comp_cache_key   = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
                 $comp_cached      = get_transient( $comp_cache_key );
 
                 if ( ! $comp_cached ) {
@@ -4796,7 +4796,8 @@ PROMPT;
         // --- Transient キャッシュ（12+ API呼び出しを回避）---
         $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
         $filter_suffix   = $exclude_foreign ? '_filtered' : '';
-        $cache_key       = "gcrev_dash_bydate_{$user_id}_{$start_date}_{$end_date}{$filter_suffix}";
+        // v2: ga4_phone_tap フィールド追加に伴いキャッシュキーを更新
+        $cache_key       = "gcrev_dash_bydate_v2_{$user_id}_{$start_date}_{$end_date}{$filter_suffix}";
         $cached          = get_transient( $cache_key );
         if ( $cached !== false && is_array( $cached ) ) {
             return $cached;
@@ -4885,11 +4886,12 @@ PROMPT;
             $effective = $this->get_effective_cv_for_range( $start_date, $end_date, $user_id );
         }
 
-        $result['conversions']  = (string) $effective['total'];
-        $result['cv_source']    = $effective['source'];
-        $result['cv_detail']    = $effective['breakdown_manual'] ?? [];
-        $result['ga4_cv']       = $effective['components']['ga4_total'];
-        $result['effective_cv'] = $effective;
+        $result['conversions']    = (string) $effective['total'];
+        $result['cv_source']      = $effective['source'];
+        $result['cv_detail']      = $effective['breakdown_manual'] ?? [];
+        $result['ga4_cv']         = $effective['components']['ga4_total'];
+        $result['ga4_phone_tap']  = (int) ( $effective['components']['phone_tap_total'] ?? 0 );
+        $result['effective_cv']   = $effective;
 
         // CV 増減（完全月の場合のみ前月比を計算）
         if ( $is_full_month ) {
@@ -4946,11 +4948,12 @@ PROMPT;
             $effective = $this->get_effective_cv_for_range($start, $end, $user_id);
         }
 
-        $data['conversions']  = (string)$effective['total'];
-        $data['cv_source']    = $effective['source']; // 'hybrid' | 'ga4'
-        $data['cv_detail']    = $effective['breakdown_manual'] ?? [];
-        $data['ga4_cv']       = $effective['components']['ga4_total'];
-        $data['effective_cv'] = $effective; // 全データ（テンプレート・スコア計算で利用）
+        $data['conversions']    = (string)$effective['total'];
+        $data['cv_source']      = $effective['source']; // 'hybrid' | 'ga4'
+        $data['cv_detail']      = $effective['breakdown_manual'] ?? [];
+        $data['ga4_cv']         = $effective['components']['ga4_total'];
+        $data['ga4_phone_tap']  = (int) ( $effective['components']['phone_tap_total'] ?? 0 );
+        $data['effective_cv']   = $effective; // 全データ（テンプレート・スコア計算で利用）
 
         // --- CV増減（trends.conversions）も実質CVベースで再計算 ---
         $comp_period = ($period === 'prev-month' || $period === 'previousMonth')
@@ -10181,16 +10184,41 @@ PROMPT;
         // オーバーライド設定なし → pure GA4
         if (empty($override_keys)) {
             $ga4_daily = $this->get_ga4_cv_daily_totals($year_month, $user_id);
+            // 電話タップ起源CVを別カウント（pure GA4 経路でも内訳を返す）
+            $phone_event = get_user_meta($user_id, '_gcrev_phone_event_name', true) ?: '';
+            $ga4_events_daily_for_phone = $this->get_ga4_key_events_daily($year_month, $user_id);
+            // 表示ラベル解決用（無効化済みルートも含む全ルートからラベルマップを作る）
+            $all_routes_for_label = $this->get_cv_routes($user_id);
+            $all_label_map = array_column($all_routes_for_label, 'label', 'route_key');
+            $phone_tap_total = 0;
+            $breakdown_by_label = [];
+            foreach ($ga4_events_daily_for_phone as $en => $dates) {
+                $is_pt = ($en === '電話タップ' || $en === 'phone_tap'
+                          || ($phone_event !== '' && $en === $phone_event));
+                $event_sum = array_sum($dates);
+                if ($is_pt) {
+                    $phone_tap_total += $event_sum;
+                }
+                if ($event_sum > 0) {
+                    $breakdown_by_label[$en] = [
+                        'label'  => $all_label_map[$en] ?? $en,
+                        'count'  => $event_sum,
+                        'source' => 'ga4',
+                    ];
+                }
+            }
             $result = [
-                'source'           => 'ga4',
-                'total'            => array_sum($ga4_daily),
-                'daily'            => $ga4_daily,
-                'components'       => [
-                    'manual_total' => 0,
-                    'ga4_total'    => array_sum($ga4_daily),
+                'source'             => 'ga4',
+                'total'              => array_sum($ga4_daily),
+                'daily'              => $ga4_daily,
+                'components'         => [
+                    'manual_total'    => 0,
+                    'ga4_total'       => array_sum($ga4_daily),
+                    'phone_tap_total' => $phone_tap_total,
                 ],
-                'breakdown_manual' => [],
-                'has_overrides'    => false,
+                'breakdown_manual'   => [],
+                'breakdown_by_label' => $breakdown_by_label,
+                'has_overrides'      => false,
             ];
 
             // CVレビュー結果があれば上書き
@@ -10201,6 +10229,9 @@ PROMPT;
                 // 日別データをレビュー結果でマージ
                 $result['daily'] = array_merge($empty_daily, $reviewed['daily']);
                 $result['components']['reviewed_total'] = $reviewed['total'];
+                if (isset($reviewed['breakdown_by_label'])) {
+                    $result['breakdown_by_label'] = $reviewed['breakdown_by_label'];
+                }
             }
 
             $this->effective_cv_cache[$cache_key] = $result;
@@ -10215,6 +10246,7 @@ PROMPT;
         $manual_total = 0;
         $ga4_only_total = 0;
         $breakdown_manual = [];
+        $breakdown_by_label = [];
         $has_manual_data = false;
 
         // 「設定イベントのみ」フラグ（セクション1・2 両方で参照）
@@ -10233,6 +10265,9 @@ PROMPT;
             if ($label === '電話タップ') return true;
             return false;
         };
+
+        // ダッシュボード「電話タップ」内訳用に、電話タップ起源 CV の合計を別カウント
+        $phone_tap_total = 0;
 
         // 1) オーバーライドイベントの処理
         foreach ($override_keys as $event_name) {
@@ -10275,6 +10310,19 @@ PROMPT;
             } else {
                 $ga4_only_total += $route_ga4_sum;
             }
+            if ($route_is_phone_tap) {
+                $phone_tap_total += ($route_manual_sum + $route_ga4_sum);
+            }
+
+            // 表示ラベル別内訳（手動値があれば手動値、なければGA4値）
+            $route_total = $route_has_manual ? $route_manual_sum : $route_ga4_sum;
+            if ($route_total > 0) {
+                $breakdown_by_label[$event_name] = [
+                    'label'  => $route_label_map[$event_name] ?? $event_name,
+                    'count'  => $route_total,
+                    'source' => $route_has_manual ? 'manual' : 'ga4',
+                ];
+            }
         }
 
         // 2) 非オーバーライドGA4イベントの合算
@@ -10290,21 +10338,35 @@ PROMPT;
                     $daily[$date] += $val;
                 }
             }
-            $ga4_only_total += array_sum($dates);
+            $event_sum = array_sum($dates);
+            $ga4_only_total += $event_sum;
+            if ($is_phone_tap($event_name)) {
+                $phone_tap_total += $event_sum;
+            }
+
+            if ($event_sum > 0) {
+                $breakdown_by_label[$event_name] = [
+                    'label'  => $route_label_map[$event_name] ?? $event_name,
+                    'count'  => $event_sum,
+                    'source' => 'ga4',
+                ];
+            }
         }
 
         $source = $has_manual_data ? 'hybrid' : 'ga4';
 
         $result = [
-            'source'           => $source,
-            'total'            => array_sum($daily),
-            'daily'            => $daily,
-            'components'       => [
-                'manual_total' => $manual_total,
-                'ga4_total'    => $ga4_only_total,
+            'source'             => $source,
+            'total'              => array_sum($daily),
+            'daily'              => $daily,
+            'components'         => [
+                'manual_total'    => $manual_total,
+                'ga4_total'       => $ga4_only_total,
+                'phone_tap_total' => $phone_tap_total,
             ],
-            'breakdown_manual' => $breakdown_manual,
-            'has_overrides'    => true,
+            'breakdown_manual'   => $breakdown_manual,
+            'breakdown_by_label' => $breakdown_by_label,
+            'has_overrides'      => true,
         ];
 
         // CVレビュー結果があれば上書き
@@ -10315,6 +10377,9 @@ PROMPT;
             // 日別データをレビュー結果でマージ
             $result['daily'] = array_merge($empty_daily, $reviewed['daily']);
             $result['components']['reviewed_total'] = $reviewed['total'];
+            if (isset($reviewed['breakdown_by_label'])) {
+                $result['breakdown_by_label'] = $reviewed['breakdown_by_label'];
+            }
         }
 
         $this->effective_cv_cache[$cache_key] = $result;
@@ -10344,10 +10409,12 @@ PROMPT;
         $merged_daily   = [];
         $manual_total   = 0;
         $ga4_total      = 0;
+        $phone_tap_total = 0;
         $reviewed_total = null;
         $source         = 'ga4';
         $has_overrides  = false;
         $breakdown_manual = [];
+        $breakdown_by_label = [];
 
         foreach ($months as $ym) {
             $eff = $this->get_effective_cv_monthly($ym, $user_id);
@@ -10355,14 +10422,31 @@ PROMPT;
             if (!empty($eff['has_overrides'])) $has_overrides = true;
 
             $comp = $eff['components'] ?? [];
-            $manual_total += $comp['manual_total'] ?? 0;
-            $ga4_total    += $comp['ga4_total'] ?? 0;
+            $manual_total    += $comp['manual_total'] ?? 0;
+            $ga4_total       += $comp['ga4_total'] ?? 0;
+            $phone_tap_total += $comp['phone_tap_total'] ?? 0;
             if (isset($comp['reviewed_total'])) {
                 $reviewed_total = ($reviewed_total ?? 0) + $comp['reviewed_total'];
             }
 
             foreach ($eff['breakdown_manual'] ?? [] as $k => $v) {
                 $breakdown_manual[$k] = ($breakdown_manual[$k] ?? 0) + $v;
+            }
+
+            foreach ($eff['breakdown_by_label'] ?? [] as $key => $item) {
+                if (isset($breakdown_by_label[$key])) {
+                    $breakdown_by_label[$key]['count'] += (int)($item['count'] ?? 0);
+                    // いずれかの月で manual なら manual を維持
+                    if (($item['source'] ?? '') === 'manual') {
+                        $breakdown_by_label[$key]['source'] = 'manual';
+                    }
+                } else {
+                    $breakdown_by_label[$key] = [
+                        'label'  => $item['label'] ?? $key,
+                        'count'  => (int)($item['count'] ?? 0),
+                        'source' => $item['source'] ?? 'ga4',
+                    ];
+                }
             }
 
             // 日別データをマージ（レンジ内の日のみ）
@@ -10376,15 +10460,17 @@ PROMPT;
         ksort($merged_daily);
 
         $result = [
-            'source'           => $source,
-            'total'            => array_sum($merged_daily),
-            'daily'            => $merged_daily,
-            'components'       => [
-                'manual_total' => $manual_total,
-                'ga4_total'    => $ga4_total,
+            'source'             => $source,
+            'total'              => array_sum($merged_daily),
+            'daily'              => $merged_daily,
+            'components'         => [
+                'manual_total'    => $manual_total,
+                'ga4_total'       => $ga4_total,
+                'phone_tap_total' => $phone_tap_total,
             ],
-            'breakdown_manual' => $breakdown_manual,
-            'has_overrides'    => $has_overrides,
+            'breakdown_manual'   => $breakdown_manual,
+            'breakdown_by_label' => $breakdown_by_label,
+            'has_overrides'      => $has_overrides,
         ];
         if ($reviewed_total !== null) {
             $result['components']['reviewed_total'] = $reviewed_total;
@@ -10421,23 +10507,38 @@ PROMPT;
 
         // status=1（有効CV）の行を取得
         $valid_rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT date_hour_minute FROM {$table} WHERE user_id = %d AND `year_month` = %s AND status = 1",
+            "SELECT date_hour_minute, event_name FROM {$table} WHERE user_id = %d AND `year_month` = %s AND status = 1",
             $user_id, $year_month
         ), ARRAY_A);
 
         // 日別集計: "202601150930" → "2026-01-15"
         $daily = [];
+        // 表示ラベル別内訳（event_name ごとの有効CV数）
+        $routes = $this->get_cv_routes($user_id);
+        $label_map = array_column($routes, 'label', 'route_key');
+        $breakdown_by_label = [];
         foreach ($valid_rows as $row) {
             $dhm = (string) $row['date_hour_minute'];
             if (strlen($dhm) >= 8) {
                 $date = substr($dhm, 0, 4) . '-' . substr($dhm, 4, 2) . '-' . substr($dhm, 6, 2);
                 $daily[$date] = ($daily[$date] ?? 0) + 1;
             }
+            $en = (string) ($row['event_name'] ?? '');
+            $key = $en !== '' ? $en : '(unknown)';
+            if (!isset($breakdown_by_label[$key])) {
+                $breakdown_by_label[$key] = [
+                    'label'  => $label_map[$en] ?? ($en !== '' ? $en : '(不明)'),
+                    'count'  => 0,
+                    'source' => 'reviewed',
+                ];
+            }
+            $breakdown_by_label[$key]['count'] += 1;
         }
 
         return [
-            'total' => count($valid_rows),
-            'daily' => $daily,
+            'total'              => count($valid_rows),
+            'daily'              => $daily,
+            'breakdown_by_label' => $breakdown_by_label,
         ];
     }
 
