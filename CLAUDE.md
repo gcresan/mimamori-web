@@ -487,7 +487,7 @@ systemctl restart php-fpm
 
 ### Templates (page-*.php)
 
-- 未ログインチェック: `if (!is_user_logged_in()) { wp_safe_redirect(...); exit; }`
+- 未ログインチェック: `if (!is_user_logged_in()) { wp_safe_redirect(home_url('/login/')); exit; }`
 - パンくず用: `set_query_var()` でタイトル等を渡す
 - テキスト装飾はテンプレート内の関数で処理
 
@@ -680,8 +680,8 @@ sudo -u kusanagi /opt/kusanagi/php/bin/php /opt/kusanagi/bin/wp transient delete
 
 ### ログインリダイレクトがおかしい
 
-1. WP-Members 設定: ログイン後 → `/mypage/dashboard/`
-2. `page-*.php` の未ログインチェック: `wp_safe_redirect(home_url('/'))` を確認
+1. WP-Members 設定: ログイン後 → `/dashboard/`
+2. `page-*.php` の未ログインチェック: `wp_safe_redirect(home_url('/login/'))` を確認（2026-04-16 以降、ログインページは `/login/` = `page-login.php`。ルート `/` は `front-page.php` がルーティングする）
 3. SSL リダイレクトループ: KUSANAGI の nginx 設定を確認
 
 ### vendor/autoload.php が見つからない
@@ -732,10 +732,13 @@ php -l <file>
 
 | ページ | URL | テンプレート |
 |---|---|---|
+| ログイン | `/login/` | `page-login.php` |
 | ダッシュボード | `/dashboard/` | `page-dashboard.php` |
 | 順位トラッキング | `/rank-tracker/` | `page-rank-tracker.php` |
 | AI検索スコア | `/aio-score/` | `page-aio-score.php` |
 | レポート | `/report-latest/` | `page-report-latest.php` |
+
+> ルート (`/`) は `front-page.php` がルーターとして動作し、未ログイン → `/login/`、ログイン済み → `/dashboard/` or `/payment-status/` に振り分ける。
 
 ## 付録: WP-Members
 

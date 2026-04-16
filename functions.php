@@ -599,9 +599,9 @@ function is_mobile() {
 // WP-Members
 // ----------------------------------------
 
-// ログイン失敗時 → トップページへリダイレクト（エラー表示付き）
+// ログイン失敗時 → ログインページへリダイレクト（エラー表示付き）
 add_action( 'wpmem_login_failed', function () {
-    wp_safe_redirect( home_url( '/?login_error=1' ) );
+    wp_safe_redirect( home_url( '/login/?login_error=1' ) );
     exit;
 } );
 
@@ -658,8 +658,8 @@ add_action( 'login_init', function () {
         return;
     }
 
-    // 上記以外（一般ユーザーが直接 wp-login.php を開いた場合）→ トップへリダイレクト
-    wp_safe_redirect( home_url( '/' ) );
+    // 上記以外（一般ユーザーが直接 wp-login.php を開いた場合）→ ログインページへリダイレクト
+    wp_safe_redirect( home_url( '/login/' ) );
     exit;
 } );
 
