@@ -12510,7 +12510,7 @@ PROMPT;
         if ($cached !== false && is_array($cached)) {
             // キャッシュヒットでも重複統合 + DB statusマージを適用
             $deduped = $this->dedup_cv_review_rows($cached['rows']);
-            $merged  = $this->merge_cv_review_statuses($deduped, $user_id, $month);
+            $merged  = $this->merge_cv_review_statuses($deduped, $user_id, $month, $route_label_map);
             $merged  = $attach_labels($merged);
             if ( $country_filter_set ) {
                 $this->ga4->set_country_filter( null );
@@ -12540,7 +12540,7 @@ PROMPT;
             set_transient($cache_key, $result, 1800); // 30分
 
             // DBステータスマージ + 表示ラベル付与
-            $merged = $this->merge_cv_review_statuses($result['rows'], $user_id, $month);
+            $merged = $this->merge_cv_review_statuses($result['rows'], $user_id, $month, $route_label_map);
             $merged = $attach_labels($merged);
 
             return new WP_REST_Response([
@@ -12899,16 +12899,38 @@ PROMPT;
 
     /**
      * GA4行データにDB保存済みのstatus/memoをマージ
+     *
+     * 電話タップのCVは手動レビュー不要のため、DB未保存の場合はデフォルトで
+     * status=1（有効）として返す。ユーザーが手動で未判定/除外に変更した場合は
+     * DB値が優先される。
+     *
+     * @param array  $route_label_map  route_key => label の対応マップ（ラベル一致判定用）
      */
-    private function merge_cv_review_statuses(array $rows, int $user_id, string $month): array {
+    private function merge_cv_review_statuses(array $rows, int $user_id, string $month, array $route_label_map = []): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_cv_review';
 
+        // 電話タップ判定ヘルパー
+        $phone_event_meta = (string) get_user_meta($user_id, '_gcrev_phone_event_name', true);
+        $is_phone_tap = function (string $event_name) use ($phone_event_meta, $route_label_map): bool {
+            if ($event_name === '') return false;
+            if ($phone_event_meta !== '' && $event_name === $phone_event_meta) return true;
+            if ($event_name === '電話タップ' || $event_name === 'phone_tap') return true;
+            $label = $route_label_map[$event_name] ?? '';
+            if ($label === '電話タップ') return true;
+            return false;
+        };
+
+        // 行ごとのデフォルト status を決定（電話タップ → 有効, それ以外 → 未判定）
+        $default_status_for = function (array $row) use ($is_phone_tap): int {
+            return $is_phone_tap((string)($row['event_name'] ?? '')) ? 1 : 0;
+        };
+
         // テーブル存在チェック（INFORMATION_SCHEMA で正確に確認）
         if (!$this->table_exists($table)) {
-            // テーブル未作成: status=0, memo='' で返す
-            return array_map(function($row) {
-                $row['status'] = 0;
+            // テーブル未作成: 電話タップはデフォルト有効、それ以外は未判定
+            return array_map(function($row) use ($default_status_for) {
+                $row['status'] = $default_status_for($row);
                 $row['memo']   = '';
                 return $row;
             }, $rows);
@@ -12926,13 +12948,15 @@ PROMPT;
         }
 
         // マージ
-        return array_map(function($row) use ($saved_map) {
+        return array_map(function($row) use ($saved_map, $default_status_for) {
             $hash = $row['row_hash'];
             if (isset($saved_map[$hash])) {
+                // DBにユーザー保存あり → その値を優先
                 $row['status'] = (int)$saved_map[$hash]['status'];
                 $row['memo']   = $saved_map[$hash]['memo'] ?? '';
             } else {
-                $row['status'] = 0;
+                // DB未保存 → 電話タップならデフォルト有効、それ以外は未判定
+                $row['status'] = $default_status_for($row);
                 $row['memo']   = '';
             }
             return $row;
