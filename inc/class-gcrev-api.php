@@ -10952,8 +10952,9 @@ PROMPT;
         $cache_key    = "gcrev_ga4_kevt_v3_{$user_id}";
         $fallback_key = "gcrev_ga4_kevt_fb3_{$user_id}";
         $ts_key       = "gcrev_ga4_kevt_ts3_{$user_id}";
+        $lock_key     = "gcrev_ga4_kevt_lock_{$user_id}";
 
-        // --- Transient キャッシュ確認（6h） ---
+        // --- Transient キャッシュ確認（36h） ---
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached) && !empty($cached)) {
             $first = reset($cached);
@@ -10966,6 +10967,47 @@ PROMPT;
                 ], 200);
             }
         }
+
+        // --- キャッシュ Miss 時のスタンピード対策 ---
+        // GA4 ライブフェッチは 60秒以上かかる。並列で走ると全部遅くなり、
+        // JS がタイムアウトで失敗する（「候補の取得に失敗しました」の原因）。
+        // 他プロセスが fetch 中なら fallback を即返し、ライブフェッチは 1 プロセスに限定する。
+        if ( get_transient( $lock_key ) ) {
+            $fallback = get_option( $fallback_key, [] );
+            if ( ! empty( $fallback ) && is_array( $fallback ) ) {
+                $first = reset( $fallback );
+                if ( is_array( $first ) && isset( $first['name'] ) ) {
+                    return new WP_REST_Response([
+                        'success'    => true,
+                        'source'     => 'stale-cache-while-refreshing',
+                        'events'     => $fallback,
+                        'fetched_at' => get_option( $ts_key, '' ),
+                    ], 200);
+                }
+            }
+            // fallback も無い初回同時アクセス: 軽く待ってキャッシュが埋まるか確認
+            for ( $i = 0; $i < 20; $i++ ) { // 最大 ~10秒（0.5s * 20）
+                usleep( 500000 );
+                $late = get_transient( $cache_key );
+                if ( $late !== false && is_array( $late ) && ! empty( $late ) ) {
+                    return new WP_REST_Response([
+                        'success'    => true,
+                        'source'     => 'cache-after-wait',
+                        'events'     => $late,
+                        'fetched_at' => get_option( $ts_key, '' ),
+                    ], 200);
+                }
+            }
+            return new WP_REST_Response([
+                'success' => true,
+                'source'  => 'processing',
+                'events'  => [],
+                'message' => 'GA4候補を取得中です。しばらくしてから再読み込みしてください。',
+            ], 200);
+        }
+
+        // ライブフェッチ前にロックを取得（TTL 120秒）
+        set_transient( $lock_key, '1', 120 );
 
         try {
             $config      = $this->config->get_user_config($user_id);
@@ -11072,6 +11114,8 @@ PROMPT;
             update_option($fallback_key, $merged, false);
             update_option($ts_key, $now, false);
 
+            delete_transient( $lock_key );
+
             return new WP_REST_Response([
                 'success'    => true,
                 'source'     => 'live',
@@ -11081,6 +11125,8 @@ PROMPT;
 
         } catch (\Throwable $e) {
             error_log("[GCREV] rest_get_ga4_key_events ERROR: " . get_class($e) . ": " . $e->getMessage());
+
+            delete_transient( $lock_key );
 
             // フォールバック: 最後に成功したキャッシュを返す
             $fallback = get_option($fallback_key, []);

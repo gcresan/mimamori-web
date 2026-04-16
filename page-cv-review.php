@@ -973,9 +973,11 @@ function markCvSettingsClean(btnId) {
     btn.style.color = '';
 }
 
-// GA4イベント候補取得（指数バックオフリトライ付き）
+// GA4イベント候補取得
+// サーバー側のコールドキャッシュ時は GA4 API 呼び出しで 60秒以上かかるため、
+// タイムアウトは 120秒、リトライは 1回のみ（サーバー側にロックがあるので同時多発させない）。
 async function fetchGa4Events(retries) {
-    if (typeof retries === 'undefined') retries = 3;
+    if (typeof retries === 'undefined') retries = 2;
     ga4EventsLoading = true;
     ga4EventsError   = false;
     updateAllSpinners(true);
@@ -983,7 +985,7 @@ async function fetchGa4Events(retries) {
     for (var attempt = 0; attempt < retries; attempt++) {
         try {
             var controller = new AbortController();
-            var tid = setTimeout(function() { controller.abort(); }, 10000);
+            var tid = setTimeout(function() { controller.abort(); }, 120000); // 120秒
 
             var res = await fetch(
                 restBase + 'ga4-key-events?user_id=' + userId + '&_=' + Date.now(),
@@ -995,6 +997,12 @@ async function fetchGa4Events(retries) {
 
             var json = await res.json();
             if (json.success && Array.isArray(json.events)) {
+                // processing（ライブフェッチ中・fallback 無し）の場合は短時間後にもう一度取得を試みる
+                if (json.source === 'processing' && json.events.length === 0 && attempt < retries - 1) {
+                    console.info('[GCREV] GA4 events still processing, will retry after wait');
+                    await new Promise(function(r) { setTimeout(r, 8000); });
+                    continue;
+                }
                 GA4_EVENTS_CACHE = json.events;
                 ga4EventsLoading = false;
                 ga4EventsError   = false;
@@ -1006,7 +1014,7 @@ async function fetchGa4Events(retries) {
         } catch (e) {
             console.warn('[GCREV] GA4 events fetch attempt ' + (attempt + 1) + ' failed:', e.message);
             if (attempt < retries - 1) {
-                await new Promise(function(r) { setTimeout(r, 1000 * Math.pow(2, attempt)); });
+                await new Promise(function(r) { setTimeout(r, 3000); });
             }
         }
     }
