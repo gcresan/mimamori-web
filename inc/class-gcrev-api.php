@@ -10606,22 +10606,42 @@ PROMPT;
         $review_table = $wpdb->prefix . 'gcrev_cv_review';
         $items = [];
 
+        // 日別ドリルダウン（YYYY-MM-DD）か月次（YYYY-MM）か判別
+        $is_daily = ( strlen( $year_month ) === 10 );
+        $month_only = $is_daily ? substr( $year_month, 0, 7 ) : $year_month;
+
         // ── 確定CV合計を取得（effective CV = ダッシュボードのゴール数と同一値）──
-        $eff = $this->get_effective_cv_monthly( $year_month, $user_id );
+        if ( $is_daily ) {
+            // 日別: 1日のレンジで集計
+            $eff = $this->get_effective_cv_for_range( $start, $end, $user_id );
+        } else {
+            $eff = $this->get_effective_cv_monthly( $year_month, $user_id );
+        }
         $confirmed_total = (int) ( $eff['total'] ?? 0 );
         if ( $confirmed_total === 0 ) {
             return [ 'items' => [], 'metric_key' => 'conversions' ];
         }
 
         // ── cv_review にレビュー済みデータがあるか判定 ──
+        // 日別の場合は当該日の date_hour_minute prefix で絞り込む
         $has_review = false;
         $review_count = 0;
         if ( $this->table_exists( $review_table ) ) {
-            $review_count = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$review_table}
-                 WHERE user_id = %d AND year_month = %s AND status = 1",
-                $user_id, $year_month
-            ) );
+            if ( $is_daily ) {
+                $dhm_prefix = str_replace( '-', '', $year_month ); // "20260402"
+                $review_count = (int) $wpdb->get_var( $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$review_table}
+                     WHERE user_id = %d AND year_month = %s AND status = 1
+                     AND date_hour_minute LIKE %s",
+                    $user_id, $month_only, $dhm_prefix . '%'
+                ) );
+            } else {
+                $review_count = (int) $wpdb->get_var( $wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$review_table}
+                     WHERE user_id = %d AND year_month = %s AND status = 1",
+                    $user_id, $year_month
+                ) );
+            }
             $has_review = ( $review_count > 0 );
         }
 
@@ -10660,7 +10680,12 @@ PROMPT;
                 if ( $has_review ) {
                     // ── cv_review 直接集計 ──
                     $exclude_sql  = '';
-                    $prepare_args = [ $user_id, $year_month ];
+                    $daily_sql    = '';
+                    $prepare_args = [ $user_id, $month_only ];
+                    if ( $is_daily ) {
+                        $daily_sql      = ' AND date_hour_minute LIKE %s';
+                        $prepare_args[] = str_replace( '-', '', $year_month ) . '%';
+                    }
                     foreach ( $page_exclude as $pat ) {
                         $exclude_sql    .= ' AND page_path NOT LIKE %s';
                         $prepare_args[] = '%' . $wpdb->esc_like( $pat ) . '%';
@@ -10670,6 +10695,7 @@ PROMPT;
                             "SELECT page_path, SUM(event_count) AS cv_count
                              FROM {$review_table}
                              WHERE user_id = %d AND year_month = %s AND status = 1
+                             {$daily_sql}
                              {$exclude_sql}
                              GROUP BY page_path
                              HAVING cv_count > 0
@@ -10739,13 +10765,20 @@ PROMPT;
             case 'source':
                 if ( $has_review ) {
                     // ── cv_review 直接集計 ──
+                    $daily_sql    = '';
+                    $prepare_args = [ $user_id, $month_only ];
+                    if ( $is_daily ) {
+                        $daily_sql      = ' AND date_hour_minute LIKE %s';
+                        $prepare_args[] = str_replace( '-', '', $year_month ) . '%';
+                    }
                     $rows = $wpdb->get_results( $wpdb->prepare(
                         "SELECT source_medium, SUM(event_count) AS cv_count
                          FROM {$review_table}
                          WHERE user_id = %d AND year_month = %s AND status = 1
+                         {$daily_sql}
                          GROUP BY source_medium
                          ORDER BY cv_count DESC",
-                        $user_id, $year_month
+                        ...$prepare_args
                     ), ARRAY_A );
 
                     $channel_totals = [];

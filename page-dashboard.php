@@ -474,7 +474,7 @@ if ($infographic && is_array($infographic)) {
         if (!empty($kpi_curr)) {
             $exclude_foreign_prev = get_user_meta( $user_id, 'report_exclude_foreign', true );
             $filter_suffix_prev   = $exclude_foreign_prev ? '_filtered' : '';
-            $prev_cache_key = "gcrev_dash_bydate_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_prev}";
+            $prev_cache_key = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_prev}";
             $prev_cached    = get_transient( $prev_cache_key );
             if ( $prev_cached !== false && is_array( $prev_cached ) ) {
                 $kpi_prev = $prev_cached;
@@ -513,13 +513,20 @@ if ($infographic && is_array($infographic)) {
         // infographic KPI 上書き（訪問数・ゴール数・MEO）
         $infographic['kpi']['visits'] = ['value' => $sess_curr, 'diff' => $sess_curr - $sess_prev];
         // ゴール数: HPゴール + MEO電話タップ
+        // GA4 由来の電話タップ数を分離（HP表示は「フォーム系等」、電話タップは GA4電話タップ + MEO電話タップ）
+        $ga4_phone_tap_curr = (int) ($kpi_curr['ga4_phone_tap'] ?? 0);
+        $ga4_phone_tap_prev = (int) ($kpi_prev['ga4_phone_tap'] ?? 0);
+        $hp_form_curr = max(0, $cv_curr - $ga4_phone_tap_curr);
+        $hp_form_prev = max(0, $cv_prev - $ga4_phone_tap_prev);
+        $tap_total_curr = $ga4_phone_tap_curr + ($call_clicks_curr ?? 0);
+        $tap_total_prev = $ga4_phone_tap_prev + ($call_clicks_prev ?? 0);
         $cv_total_curr = $cv_curr + ($call_clicks_curr ?? 0);
         $cv_total_prev = $cv_prev + ($call_clicks_prev ?? 0);
         $infographic['kpi']['cv']     = [
             'value'       => $cv_total_curr,
             'diff'        => $cv_total_curr - $cv_total_prev,
-            'hp_cv'       => $cv_curr,
-            'call_clicks' => $call_clicks_curr ?? 0,
+            'hp_cv'       => $hp_form_curr,    // フォーム等（GA4 CV − GA4 電話タップ）
+            'call_clicks' => $tap_total_curr,  // GA4 電話タップ + MEO 電話タップ
         ];
         // MEOはキャッシュがある場合のみ上書き（なければJS非同期で後から更新）
         if ($meo_curr !== null && $meo_prev !== null) {
@@ -1461,6 +1468,11 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
     var currHpCv = parseInt(String(curr.conversions || 0).replace(/,/g, ''), 10);
     var prevHpCv = prev ? parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10) : 0;
+    // GA4 由来の電話タップ（ダッシュボード API が返す ga4_phone_tap）
+    var currGa4Tap = parseInt(String(curr.ga4_phone_tap || 0), 10) || 0;
+    var prevGa4Tap = prev ? (parseInt(String(prev.ga4_phone_tap || 0), 10) || 0) : 0;
+    var currHpForm = Math.max(0, currHpCv - currGa4Tap);
+    var prevHpForm = Math.max(0, prevHpCv - prevGa4Tap);
 
     // MEO
     <?php if ($meo_curr !== null && $meo_prev !== null): ?>
@@ -1472,11 +1484,12 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     var ccCurr = <?php echo (int)($call_clicks_curr ?? 0); ?>;
     var ccPrev = <?php echo (int)($call_clicks_prev ?? 0); ?>;
     updateInfoKpi('cv', currHpCv + ccCurr, (currHpCv + ccCurr) - (prevHpCv + ccPrev));
-    updateCvBreakdown(currHpCv, ccCurr);
+    // 電話タップ表示は GA4電話タップ + MEO電話タップ
+    updateCvBreakdown(currHpForm, currGa4Tap + ccCurr);
     <?php else: ?>
     // MEOキャッシュミス: まずHPゴールのみ表示、MEO非同期で後から合算
     updateInfoKpi('cv', currHpCv, currHpCv - prevHpCv);
-    updateCvBreakdown(currHpCv, 0);
+    updateCvBreakdown(currHpForm, currGa4Tap);
     (function(){
         var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
         var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
@@ -1496,7 +1509,8 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             var ccC = (meoData && meoData.metrics) ? parseInt(meoData.metrics.call_clicks || 0, 10) : 0;
             var ccP = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.call_clicks || 0, 10) : 0;
             updateInfoKpi('cv', currHpCv + ccC, (currHpCv + ccC) - (prevHpCv + ccP));
-            updateCvBreakdown(currHpCv, ccC);
+            // 電話タップ表示は GA4電話タップ + MEO電話タップ
+            updateCvBreakdown(currHpForm, currGa4Tap + ccC);
             if (card) {
                 card.classList.remove('is-kpi-loading');
                 card.classList.add('is-kpi-loaded');
@@ -1532,10 +1546,15 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             var pHpCv = parseInt(String(prev.conversions || 0).replace(/,/g, ''), 10);
             var cCC = <?php echo (int)($call_clicks_curr ?? 0); ?>;
             var pCC = <?php echo (int)($call_clicks_prev ?? 0); ?>;
+            var cGa4Tap = <?php echo (int)($ga4_phone_tap_curr ?? 0); ?>;
+            var pGa4Tap = parseInt(String(prev.ga4_phone_tap || 0), 10) || 0;
+            var cHpForm = Math.max(0, cHpCv - cGa4Tap);
+            var pHpForm = Math.max(0, pHpCv - pGa4Tap);
 
             updateInfoKpi('visits', cS, cS - pS);
             updateInfoKpi('cv', cHpCv + cCC, (cHpCv + cCC) - (pHpCv + pCC));
-            updateCvBreakdown(cHpCv, cCC);
+            // 電話タップ表示は GA4電話タップ + MEO電話タップ
+            updateCvBreakdown(cHpForm, cGa4Tap + cCC);
 
             // スコアも再計算（prev=0 で計算された水増しスコアを修正）
             var gscCurr = <?php echo (int)$gsc_curr_val; ?>;
