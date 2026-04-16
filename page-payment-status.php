@@ -15,8 +15,8 @@ if ( ! is_user_logged_in() ) {
 
 $uid = get_current_user_id();
 
-// お試し中（期限内）or プラン設定済み or 支払い済み → ダッシュボードへ
-if ( gcrev_is_trial_active( $uid ) || gcrev_has_plan_configured( $uid ) || gcrev_is_payment_active( $uid ) ) {
+// お試し中（期限内）or 支払い済み → ダッシュボードへ
+if ( gcrev_is_trial_active( $uid ) || gcrev_is_payment_active( $uid ) ) {
     wp_safe_redirect( home_url('/dashboard/') );
     exit;
 }

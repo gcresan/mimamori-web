@@ -216,10 +216,9 @@ class Gcrev_Client_Management_Page {
                     $uid       = $user->ID;
                     $site_url  = get_user_meta( $uid, 'report_site_url', true )
                                  ?: get_user_meta( $uid, 'weisite_url', true );
-                    $is_test     = ( get_user_meta( $uid, 'gcrev_test_operation', true ) === '1' );
-                    $is_paid     = function_exists( 'gcrev_is_payment_active' ) ? gcrev_is_payment_active( $uid ) : false;
-                    $has_plan    = function_exists( 'gcrev_has_plan_configured' ) ? gcrev_has_plan_configured( $uid ) : false;
-                    $cache_cnt   = $this->get_user_cache_count( $uid );
+                    $is_test   = ( get_user_meta( $uid, 'gcrev_test_operation', true ) === '1' );
+                    $is_paid   = function_exists( 'gcrev_is_payment_active' ) ? gcrev_is_payment_active( $uid ) : false;
+                    $cache_cnt = $this->get_user_cache_count( $uid );
                     $report_cnt = $this->get_user_report_count( $uid );
                 ?>
                 <tr>
@@ -255,7 +254,7 @@ class Gcrev_Client_Management_Page {
                     <td>
                         <?php if ( $is_test ) : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#d97706; background:rgba(217,119,6,0.08); border:1px solid rgba(217,119,6,0.2); border-radius:3px;">お試し中</span>
-                        <?php elseif ( $is_paid || $has_plan ) : ?>
+                        <?php elseif ( $is_paid ) : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#4E8A6B; background:rgba(78,138,107,0.08); border-radius:3px;">利用中</span>
                         <?php else : ?>
                             <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#999; background:#f5f5f5; border-radius:3px;">手続中</span>

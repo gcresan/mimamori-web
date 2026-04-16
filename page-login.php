@@ -10,7 +10,7 @@
 // ログイン済み → ダッシュボード / 決済ステータスへリダイレクト
 if ( is_user_logged_in() ) {
     $uid = get_current_user_id();
-    if ( gcrev_is_trial_active( $uid ) || gcrev_has_plan_configured( $uid ) || gcrev_is_payment_active( $uid ) ) {
+    if ( gcrev_is_trial_active( $uid ) || gcrev_is_payment_active( $uid ) ) {
         wp_safe_redirect( home_url('/dashboard/') );
     } else {
         wp_safe_redirect( home_url('/payment-status/') );

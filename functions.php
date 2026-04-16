@@ -6857,29 +6857,6 @@ function gcrev_get_service_tier( int $user_id = 0 ): string {
 }
 
 /**
- * ユーザーにサービスプランが明示的に設定されているかどうか。
- *
- * gcrev_get_service_tier() は未設定時にデフォルト 'basic' を返すため
- * 「明示的にプランが割り当てられているか」を区別できない。ここでは
- * user_meta に有効なプラン値が保存されているかだけを判定する。
- *
- * @param  int  $user_id  0 の場合はログイン中ユーザー
- */
-function gcrev_has_plan_configured( int $user_id = 0 ): bool {
-    if ( $user_id <= 0 ) {
-        $user_id = get_current_user_id();
-    }
-    if ( $user_id <= 0 ) {
-        return false;
-    }
-    if ( user_can( $user_id, 'manage_options' ) ) {
-        return true;
-    }
-    $tier = get_user_meta( $user_id, 'gcrev_service_tier', true );
-    return in_array( $tier, gcrev_get_valid_service_tiers(), true );
-}
-
-/**
  * フィーチャー権限チェック。
  *
  * ティア階層: basic(0) < ai_support(1)
@@ -7254,7 +7231,12 @@ function gcrev_get_payment_status( int $user_id = 0 ): string {
     if ( user_can( $user_id, 'manage_options' ) ) {
         return 'paid';
     }
-    // 新ロジック: 契約タイプ + 完了フラグで判定（旧 gcrev_payment_status は参照しない）
+    // シンプル判定: 「決済完了」チェックが入っていれば paid
+    // （管理画面のチェックボックスで手動管理）
+    if ( get_user_meta( $user_id, 'gcrev_payment_completed', true ) === '1' ) {
+        return 'paid';
+    }
+    // 後方互換: 旧 契約タイプ + 完了フラグ判定（既存データがある場合のフォールバック）
     $steps = gcrev_get_payment_steps( $user_id );
     if ( $steps['contract_type'] === 'with_site' ) {
         // 制作込み: 初回決済 + サブスク両方完了で paid
@@ -8027,6 +8009,69 @@ function gcrev_save_test_operation_field( int $user_id ) {
 }
 
 // --------------------------------------------------
+// WP管理画面 — 決済完了チェックボックス（シンプル版: 2026-04-16 再導入）
+// 複雑な契約管理UI（contract_type / initial_payment_completed 等）は非表示のまま、
+// 単一の「決済完了」チェックだけを提供。ON で即 利用中 / ダッシュボード表示可。
+// --------------------------------------------------
+add_action( 'edit_user_profile', 'gcrev_render_payment_completed_field' );
+add_action( 'show_user_profile', 'gcrev_render_payment_completed_field' );
+add_action( 'user_new_form',     'gcrev_render_payment_completed_field' );
+
+function gcrev_render_payment_completed_field( $user ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    $is_new = ! ( $user instanceof WP_User );
+    if ( ! $is_new && user_can( $user->ID, 'manage_options' ) ) {
+        return;
+    }
+
+    $is_paid = $is_new ? false : ( get_user_meta( $user->ID, 'gcrev_payment_completed', true ) === '1' );
+    ?>
+    <h3>決済ステータス</h3>
+    <table class="form-table" role="presentation">
+        <tr>
+            <th><label for="gcrev_payment_completed">決済完了</label></th>
+            <td>
+                <label>
+                    <input type="checkbox"
+                           id="gcrev_payment_completed"
+                           name="gcrev_payment_completed"
+                           value="1"
+                           <?php checked( $is_paid ); ?>>
+                    このユーザーの決済は完了済み（利用中として扱う）
+                </label>
+                <p class="description">
+                    チェックを入れるとダッシュボード等の全機能が利用可能になります。<br>
+                    外すとログイン後に「ご利用のご案内」ページが表示され、お支払いへの誘導が行われます。<br>
+                    ※ お試し期間が有効な場合は、このチェックに関わらず全機能が利用できます。
+                </p>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+
+add_action( 'edit_user_profile_update', 'gcrev_save_payment_completed_field' );
+add_action( 'personal_options_update',  'gcrev_save_payment_completed_field' );
+add_action( 'user_register',            'gcrev_save_payment_completed_field' );
+
+function gcrev_save_payment_completed_field( int $user_id ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    if ( user_can( $user_id, 'manage_options' ) ) {
+        return;
+    }
+
+    if ( ! empty( $_POST['gcrev_payment_completed'] ) ) {
+        update_user_meta( $user_id, 'gcrev_payment_completed', '1' );
+    } else {
+        delete_user_meta( $user_id, 'gcrev_payment_completed' );
+    }
+}
+
+// --------------------------------------------------
 // WP管理画面 — 決済チェックボックスの保存処理（UI非表示: 2026-03-18）
 // --------------------------------------------------
 // add_action( 'edit_user_profile_update', 'gcrev_save_payment_status_fields' );
@@ -8145,11 +8190,6 @@ add_action( 'template_redirect', function () {
                 return;
             }
         }
-    }
-
-    // プラン設定あり（gcrev_service_tier が明示的にセット済み）→ 通常アクセスOK
-    if ( gcrev_has_plan_configured( $user_id ) ) {
-        return;
     }
 
     if ( ! gcrev_is_payment_active() ) {
