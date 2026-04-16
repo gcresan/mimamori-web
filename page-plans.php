@@ -390,7 +390,7 @@ get_header();
             'id'           => 'basic',
             'label'        => '見える化中心',
             'name'         => '見える化プラン',
-            'price'        => '5,500',
+            'price'        => '11,000',
             'badge'        => false,
             'coming_soon'  => false,
             'features'     => [
@@ -409,7 +409,7 @@ get_header();
             'id'           => 'ai_support',
             'label'        => '改善提案まで',
             'name'         => '改善提案プラン',
-            'price'        => '11,000',
+            'price'        => '22,000',
             'badge'        => '★ おすすめ',
             'coming_soon'  => false,
             'features'     => [
@@ -428,7 +428,7 @@ get_header();
             'id'           => 'content_seo',
             'label'        => 'SEO・コンテンツ強化',
             'name'         => '集客強化プラン',
-            'price'        => '33,000',
+            'price'        => '55,000',
             'badge'        => '近日公開予定',
             'coming_soon'  => true,
             'features'     => [
@@ -453,7 +453,7 @@ get_header();
             'id'           => 'bansou',
             'label'        => '実行支援込みの最上位',
             'name'         => '改善代行プラン',
-            'price'        => '55,000',
+            'price'        => '99,000',
             'badge'        => false,
             'coming_soon'  => false,
             'features'     => [

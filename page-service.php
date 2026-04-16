@@ -83,18 +83,18 @@ get_header();
                         <th class="sv-plan-header">&nbsp;</th>
                         <th class="sv-plan-header">
                             <div class="sv-plan-name">見える化プラン</div>
-                            <div class="sv-plan-price">5,500<small>円/月（税込）</small></div>
+                            <div class="sv-plan-price">11,000<small>円/月（税込）</small></div>
                             <div class="sv-plan-tagline">まず始めたい方に</div>
                         </th>
                         <th class="sv-plan-header sv-plan-header--recommended">
                             <div class="sv-recommended-badge">おすすめ</div>
                             <div class="sv-plan-name">改善提案プラン</div>
-                            <div class="sv-plan-price">11,000<small>円/月（税込）</small></div>
+                            <div class="sv-plan-price">22,000<small>円/月（税込）</small></div>
                             <div class="sv-plan-tagline">AIの力で改善を加速</div>
                         </th>
                         <th class="sv-plan-header sv-plan-header--premium">
                             <div class="sv-plan-name">改善代行プラン</div>
-                            <div class="sv-plan-price">33,000<small>円/月（税込）</small></div>
+                            <div class="sv-plan-price">99,000<small>円/月（税込）</small></div>
                             <div class="sv-plan-tagline">手厚い専門支援</div>
                         </th>
                     </tr>
@@ -152,7 +152,7 @@ get_header();
                 <div class="sv-plan-card">
                     <div class="sv-plan-card__header">
                         <div class="sv-plan-card__name">見える化プラン</div>
-                        <div class="sv-plan-card__price">5,500<small>円/月（税込）</small></div>
+                        <div class="sv-plan-card__price">11,000<small>円/月（税込）</small></div>
                         <div class="sv-plan-card__tagline">まず始めたい方に</div>
                     </div>
                     <div class="sv-plan-card__body">
@@ -173,7 +173,7 @@ get_header();
                     <div class="sv-plan-card__header">
                         <div class="sv-plan-card__badge">おすすめ</div>
                         <div class="sv-plan-card__name">改善提案プラン</div>
-                        <div class="sv-plan-card__price">11,000<small>円/月（税込）</small></div>
+                        <div class="sv-plan-card__price">22,000<small>円/月（税込）</small></div>
                         <div class="sv-plan-card__tagline">AIの力で改善を加速</div>
                     </div>
                     <div class="sv-plan-card__body">
@@ -193,7 +193,7 @@ get_header();
                 <div class="sv-plan-card sv-plan-card--premium">
                     <div class="sv-plan-card__header">
                         <div class="sv-plan-card__name">改善代行プラン</div>
-                        <div class="sv-plan-card__price">33,000<small>円/月（税込）</small></div>
+                        <div class="sv-plan-card__price">99,000<small>円/月（税込）</small></div>
                         <div class="sv-plan-card__tagline">手厚い専門支援</div>
                     </div>
                     <div class="sv-plan-card__body">
