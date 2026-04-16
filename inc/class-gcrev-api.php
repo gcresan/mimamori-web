@@ -12454,10 +12454,22 @@ PROMPT;
         $routes = $this->get_enabled_cv_routes($user_id);
         $event_names = array_map(fn($r) => $r['route_key'], $routes);
 
+        // route_key → label のマップ（フロントで表示ラベル列に使う）
+        $route_label_map = [];
+        foreach ($routes as $r) {
+            $key = $r['route_key'] ?? '';
+            if ($key !== '') {
+                $route_label_map[$key] = (string) ($r['label'] ?? '');
+            }
+        }
+
         // 電話タップイベントも追加
         $phone_event = get_user_meta($user_id, '_gcrev_phone_event_name', true);
         if ($phone_event && !in_array($phone_event, $event_names, true)) {
             $event_names[] = $phone_event;
+            if (!isset($route_label_map[$phone_event])) {
+                $route_label_map[$phone_event] = '電話タップ';
+            }
         }
 
         if (empty($event_names)) {
@@ -12485,10 +12497,21 @@ PROMPT;
         $cache_key = "gcrev_cvreview_{$user_id}_{$month}{$cache_sfx}";
         $cached = get_transient($cache_key);
 
+        // 各行に表示ラベル (label) を付与するクロージャ
+        $attach_labels = function (array $rows) use ($route_label_map): array {
+            foreach ($rows as &$r) {
+                $en = $r['event_name'] ?? '';
+                $r['label'] = $route_label_map[$en] ?? $en;
+            }
+            unset($r);
+            return $rows;
+        };
+
         if ($cached !== false && is_array($cached)) {
             // キャッシュヒットでも重複統合 + DB statusマージを適用
             $deduped = $this->dedup_cv_review_rows($cached['rows']);
             $merged  = $this->merge_cv_review_statuses($deduped, $user_id, $month);
+            $merged  = $attach_labels($merged);
             if ( $country_filter_set ) {
                 $this->ga4->set_country_filter( null );
             }
@@ -12516,8 +12539,9 @@ PROMPT;
             // キャッシュ保存（統合済みGA4データ）
             set_transient($cache_key, $result, 1800); // 30分
 
-            // DBステータスマージ
+            // DBステータスマージ + 表示ラベル付与
             $merged = $this->merge_cv_review_statuses($result['rows'], $user_id, $month);
+            $merged = $attach_labels($merged);
 
             return new WP_REST_Response([
                 'success'      => true,

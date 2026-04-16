@@ -82,6 +82,7 @@ get_header();
 .cv-review-table tr.status-excluded { border-left:3px solid #dc2626; opacity:0.7; }
 .col-check { width:32px; text-align:center; }
 .col-datetime { width:130px; white-space:nowrap; }
+.col-label { max-width:140px; font-weight:600; }
 .col-event { max-width:150px; }
 .col-count { width:50px; text-align:center; }
 .col-page { max-width:200px; }
@@ -89,10 +90,8 @@ get_header();
 .col-device { width:70px; }
 .col-country { width:60px; }
 .col-status { width:100px; }
-.col-memo { min-width:120px; }
-.col-page, .col-source { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.col-label, .col-event, .col-page, .col-source { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 td .status-select { width:100%; border:1px solid #e2e8f0; border-radius:4px; padding:4px; font-size:12px; }
-td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; padding:4px 6px; font-size:12px; }
 .badge-group { display:inline-block; background:#fbbf24; color:#78350f; font-size:11px; padding:1px 6px; border-radius:10px; font-weight:600; }
 
 /* Save bar */
@@ -325,6 +324,7 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
                     <tr>
                         <th class="col-check"><input type="checkbox" id="thCheckAll"></th>
                         <th class="col-datetime">日時</th>
+                        <th class="col-label">表示ラベル</th>
                         <th class="col-event">イベント名</th>
                         <th class="col-count">件数</th>
                         <th class="col-page">ページ</th>
@@ -332,7 +332,6 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
                         <th class="col-device">デバイス</th>
                         <th class="col-country">国</th>
                         <th class="col-status">判定</th>
-                        <th class="col-memo">メモ</th>
                     </tr>
                 </thead>
                 <tbody id="cvReviewBody"></tbody>
@@ -653,6 +652,14 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             tdDt.textContent = formatDateTime(row.date_hour_minute);
             tr.appendChild(tdDt);
 
+            // Display label (from cv_routes.label; falls back to event_name)
+            var tdLabel = document.createElement('td');
+            tdLabel.className = 'col-label';
+            var labelText = row.label || row.event_name || '';
+            tdLabel.title = labelText;
+            tdLabel.textContent = labelText;
+            tr.appendChild(tdLabel);
+
             // Event name
             var tdEv = document.createElement('td');
             tdEv.className = 'col-event';
@@ -724,25 +731,6 @@ td .memo-input { width:100%; border:1px solid #e2e8f0; border-radius:4px; paddin
             });
             tdStatus.appendChild(sel);
             tr.appendChild(tdStatus);
-
-            // Memo
-            var tdMemo = document.createElement('td');
-            tdMemo.className = 'col-memo';
-            var inp = document.createElement('input');
-            inp.type = 'text';
-            inp.className = 'memo-input';
-            inp.value = row.memo || '';
-            inp.placeholder = 'メモ...';
-            inp.addEventListener('blur', function() {
-                if (inp.value !== (row.memo || '')) {
-                    row.memo = inp.value;
-                    markDirty(row.row_hash);
-                    tr.classList.add('row-dirty');
-                    updateSaveBar();
-                }
-            });
-            tdMemo.appendChild(inp);
-            tr.appendChild(tdMemo);
 
             elBody.appendChild(tr);
         });
