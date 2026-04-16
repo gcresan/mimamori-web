@@ -10191,13 +10191,23 @@ PROMPT;
             $all_routes_for_label = $this->get_cv_routes($user_id);
             $all_label_map = array_column($all_routes_for_label, 'label', 'route_key');
             $phone_tap_total = 0;
+            $phone_tap_daily = $empty_daily;
             $breakdown_by_label = [];
+            // pure GA4 経路用の電話タップ判定クロージャ
+            $is_phone_tap_pure = function (string $en) use ($phone_event, $all_label_map): bool {
+                if ($en === '') return false;
+                if ($phone_event !== '' && $en === $phone_event) return true;
+                if ($en === '電話タップ' || $en === 'phone_tap') return true;
+                return ($all_label_map[$en] ?? '') === '電話タップ';
+            };
             foreach ($ga4_events_daily_for_phone as $en => $dates) {
-                $is_pt = ($en === '電話タップ' || $en === 'phone_tap'
-                          || ($phone_event !== '' && $en === $phone_event));
+                $is_pt = $is_phone_tap_pure($en);
                 $event_sum = array_sum($dates);
                 if ($is_pt) {
                     $phone_tap_total += $event_sum;
+                    foreach ($dates as $date => $val) {
+                        $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + (int) $val;
+                    }
                 }
                 if ($event_sum > 0) {
                     $breakdown_by_label[$en] = [
@@ -10221,13 +10231,16 @@ PROMPT;
                 'has_overrides'      => false,
             ];
 
-            // CVレビュー結果があれば上書き
-            $reviewed = $this->get_reviewed_cv_data($year_month, $user_id);
+            // CVレビュー結果があれば上書き（電話タップは加算）
+            $reviewed = $this->get_reviewed_cv_data($year_month, $user_id, $is_phone_tap_pure);
             if ($reviewed !== null) {
                 $result['source'] = 'reviewed';
-                $result['total']  = $reviewed['total'];
-                // 日別データをレビュー結果でマージ
-                $result['daily'] = array_merge($empty_daily, $reviewed['daily']);
+                $merged_daily = array_merge($empty_daily, $reviewed['daily_non_phone_tap'] ?? $reviewed['daily']);
+                foreach ($phone_tap_daily as $date => $val) {
+                    $merged_daily[$date] = ($merged_daily[$date] ?? 0) + (int) $val;
+                }
+                $result['daily'] = $merged_daily;
+                $result['total'] = array_sum($merged_daily);
                 $result['components']['reviewed_total'] = $reviewed['total'];
                 if (isset($reviewed['breakdown_by_label'])) {
                     $result['breakdown_by_label'] = $reviewed['breakdown_by_label'];
@@ -10266,8 +10279,9 @@ PROMPT;
             return false;
         };
 
-        // ダッシュボード「電話タップ」内訳用に、電話タップ起源 CV の合計を別カウント
+        // ダッシュボード「電話タップ」内訳用に、電話タップ起源 CV の合計と日別を別カウント
         $phone_tap_total = 0;
+        $phone_tap_daily = $empty_daily;
 
         // 1) オーバーライドイベントの処理
         foreach ($override_keys as $event_name) {
@@ -10293,12 +10307,18 @@ PROMPT;
                     if ($manual_val !== null) {
                         $daily[$date] += $manual_val;
                         $route_manual_sum += $manual_val;
+                        if ($route_is_phone_tap) {
+                            $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $manual_val;
+                        }
                     }
                 } elseif (!$only_configured || $route_is_phone_tap) {
                     // ルートに手動データなし & (設定イベントのみOFF or 電話タップ) → GA4値を使用
                     $ga4_val = $ga4_event_daily[$date] ?? 0;
                     $daily[$date] += $ga4_val;
                     $route_ga4_sum += $ga4_val;
+                    if ($route_is_phone_tap) {
+                        $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $ga4_val;
+                    }
                 }
                 // only_configured ON & 手動データなし & 電話タップ以外 → 0
             }
@@ -10333,14 +10353,18 @@ PROMPT;
             // 「設定イベントのみ」ON時: 電話タップ以外のGA4イベントはスキップ
             if ($only_configured && !$is_phone_tap($event_name)) continue;
 
+            $event_is_phone_tap = $is_phone_tap($event_name);
             foreach ($dates as $date => $val) {
                 if (isset($daily[$date])) {
                     $daily[$date] += $val;
                 }
+                if ($event_is_phone_tap) {
+                    $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $val;
+                }
             }
             $event_sum = array_sum($dates);
             $ga4_only_total += $event_sum;
-            if ($is_phone_tap($event_name)) {
+            if ($event_is_phone_tap) {
                 $phone_tap_total += $event_sum;
             }
 
@@ -10370,12 +10394,20 @@ PROMPT;
         ];
 
         // CVレビュー結果があれば上書き
-        $reviewed = $this->get_reviewed_cv_data($year_month, $user_id);
+        // 注: 電話タップは「自動有効」（明示的にレビューしなくても常に有効カウント）
+        //     ため、reviewed total に GA4 の電話タップ件数を加算する。
+        //     これにより、ユーザーが手動レビューを始めた途端に電話タップが
+        //     表示から消える問題を回避。
+        $reviewed = $this->get_reviewed_cv_data($year_month, $user_id, $is_phone_tap);
         if ($reviewed !== null) {
             $result['source'] = 'reviewed';
-            $result['total']  = $reviewed['total'];
-            // 日別データをレビュー結果でマージ
-            $result['daily'] = array_merge($empty_daily, $reviewed['daily']);
+            // reviewed daily（status=1 行のうち電話タップ以外）+ GA4 電話タップ daily
+            $merged_daily = array_merge($empty_daily, $reviewed['daily_non_phone_tap'] ?? $reviewed['daily']);
+            foreach ($phone_tap_daily as $date => $val) {
+                $merged_daily[$date] = ($merged_daily[$date] ?? 0) + (int) $val;
+            }
+            $result['daily'] = $merged_daily;
+            $result['total'] = array_sum($merged_daily);
             $result['components']['reviewed_total'] = $reviewed['total'];
             if (isset($reviewed['breakdown_by_label'])) {
                 $result['breakdown_by_label'] = $reviewed['breakdown_by_label'];
@@ -10485,9 +10517,18 @@ PROMPT;
      * gcrev_cv_review で status=1（有効CV）の行数をカウント。
      * 1行＝1CV（event_count は常に1）。date_hour_minute から日別集計も行う。
      *
-     * @return array|null レビューデータがなければ null。あれば ['total'=>int, 'daily'=>[date=>count]]
+     * @param  callable|null $is_phone_tap  電話タップ判定クロージャ（オプション）。
+     *                                       渡すと daily_non_phone_tap / phone_tap_daily が分離される。
+     * @return array|null レビューデータがなければ null。あれば
+     *                    [
+     *                      'total' => int,                  // 全 status=1 件数
+     *                      'daily' => [date => count],      // 全 status=1 日別
+     *                      'daily_non_phone_tap' => [...],  // 電話タップを除いた status=1 日別
+     *                      'phone_tap_daily'     => [...],  // 電話タップのみ status=1 日別
+     *                      'breakdown_by_label'  => [...],
+     *                    ]
      */
-    private function get_reviewed_cv_data(string $year_month, int $user_id): ?array {
+    private function get_reviewed_cv_data(string $year_month, int $user_id, ?callable $is_phone_tap = null): ?array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_cv_review';
 
@@ -10512,18 +10553,29 @@ PROMPT;
         ), ARRAY_A);
 
         // 日別集計: "202601150930" → "2026-01-15"
-        $daily = [];
+        $daily               = [];
+        $daily_non_phone_tap = [];
+        $phone_tap_daily     = [];
         // 表示ラベル別内訳（event_name ごとの有効CV数）
         $routes = $this->get_cv_routes($user_id);
         $label_map = array_column($routes, 'label', 'route_key');
         $breakdown_by_label = [];
         foreach ($valid_rows as $row) {
             $dhm = (string) $row['date_hour_minute'];
+            $date = '';
             if (strlen($dhm) >= 8) {
                 $date = substr($dhm, 0, 4) . '-' . substr($dhm, 4, 2) . '-' . substr($dhm, 6, 2);
                 $daily[$date] = ($daily[$date] ?? 0) + 1;
             }
             $en = (string) ($row['event_name'] ?? '');
+            $row_is_phone_tap = $is_phone_tap ? (bool) $is_phone_tap($en) : false;
+            if ($date !== '') {
+                if ($row_is_phone_tap) {
+                    $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + 1;
+                } else {
+                    $daily_non_phone_tap[$date] = ($daily_non_phone_tap[$date] ?? 0) + 1;
+                }
+            }
             $key = $en !== '' ? $en : '(unknown)';
             if (!isset($breakdown_by_label[$key])) {
                 $breakdown_by_label[$key] = [
@@ -10536,9 +10588,11 @@ PROMPT;
         }
 
         return [
-            'total'              => count($valid_rows),
-            'daily'              => $daily,
-            'breakdown_by_label' => $breakdown_by_label,
+            'total'               => count($valid_rows),
+            'daily'               => $daily,
+            'daily_non_phone_tap' => $daily_non_phone_tap,
+            'phone_tap_daily'     => $phone_tap_daily,
+            'breakdown_by_label'  => $breakdown_by_label,
         ];
     }
 
