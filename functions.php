@@ -6857,6 +6857,29 @@ function gcrev_get_service_tier( int $user_id = 0 ): string {
 }
 
 /**
+ * ユーザーにサービスプランが明示的に設定されているかどうか。
+ *
+ * gcrev_get_service_tier() は未設定時にデフォルト 'basic' を返すため
+ * 「明示的にプランが割り当てられているか」を区別できない。ここでは
+ * user_meta に有効なプラン値が保存されているかだけを判定する。
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ */
+function gcrev_has_plan_configured( int $user_id = 0 ): bool {
+    if ( $user_id <= 0 ) {
+        $user_id = get_current_user_id();
+    }
+    if ( $user_id <= 0 ) {
+        return false;
+    }
+    if ( user_can( $user_id, 'manage_options' ) ) {
+        return true;
+    }
+    $tier = get_user_meta( $user_id, 'gcrev_service_tier', true );
+    return in_array( $tier, gcrev_get_valid_service_tiers(), true );
+}
+
+/**
  * フィーチャー権限チェック。
  *
  * ティア階層: basic(0) < ai_support(1)
@@ -8122,6 +8145,11 @@ add_action( 'template_redirect', function () {
                 return;
             }
         }
+    }
+
+    // プラン設定あり（gcrev_service_tier が明示的にセット済み）→ 通常アクセスOK
+    if ( gcrev_has_plan_configured( $user_id ) ) {
+        return;
     }
 
     if ( ! gcrev_is_payment_active() ) {
