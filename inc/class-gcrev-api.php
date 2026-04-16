@@ -10221,6 +10221,7 @@ PROMPT;
                 'source'             => 'ga4',
                 'total'              => array_sum($ga4_daily),
                 'daily'              => $ga4_daily,
+                'phone_tap_daily'    => $phone_tap_daily,
                 'components'         => [
                     'manual_total'    => 0,
                     'ga4_total'       => array_sum($ga4_daily),
@@ -10383,6 +10384,7 @@ PROMPT;
             'source'             => $source,
             'total'              => array_sum($daily),
             'daily'              => $daily,
+            'phone_tap_daily'    => $phone_tap_daily,
             'components'         => [
                 'manual_total'    => $manual_total,
                 'ga4_total'       => $ga4_only_total,
@@ -10441,7 +10443,7 @@ PROMPT;
         $merged_daily   = [];
         $manual_total   = 0;
         $ga4_total      = 0;
-        $phone_tap_total = 0;
+        $phone_tap_total = 0;  // レンジ内の合計（月次合計の単純和ではない）
         $reviewed_total = null;
         $source         = 'ga4';
         $has_overrides  = false;
@@ -10456,7 +10458,12 @@ PROMPT;
             $comp = $eff['components'] ?? [];
             $manual_total    += $comp['manual_total'] ?? 0;
             $ga4_total       += $comp['ga4_total'] ?? 0;
-            $phone_tap_total += $comp['phone_tap_total'] ?? 0;
+            // phone_tap_total は月次の単純和ではなく、phone_tap_daily からレンジ内のみ集計
+            foreach ($eff['phone_tap_daily'] ?? [] as $date => $val) {
+                if ($date >= $start && $date <= $end) {
+                    $phone_tap_total += (int) $val;
+                }
+            }
             if (isset($comp['reviewed_total'])) {
                 $reviewed_total = ($reviewed_total ?? 0) + $comp['reviewed_total'];
             }
