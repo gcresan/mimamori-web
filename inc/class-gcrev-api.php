@@ -10221,6 +10221,19 @@ PROMPT;
         $only_configured = (bool)get_user_meta($user_id, '_gcrev_cv_only_configured', true);
         $phone_event = get_user_meta($user_id, '_gcrev_phone_event_name', true) ?: '';
 
+        // 電話タップ判定ヘルパー: 以下いずれかで true
+        //  - ユーザー設定の _gcrev_phone_event_name と一致
+        //  - GA4 イベント名 / ラベルが '電話タップ' or 'phone_tap'（デフォルト慣習）
+        $route_label_map = array_column( $override_routes, 'label', 'route_key' );
+        $is_phone_tap = function (string $event_name) use ($phone_event, $route_label_map): bool {
+            if ($event_name === '') return false;
+            if ($phone_event !== '' && $event_name === $phone_event) return true;
+            if ($event_name === '電話タップ' || $event_name === 'phone_tap') return true;
+            $label = $route_label_map[$event_name] ?? '';
+            if ($label === '電話タップ') return true;
+            return false;
+        };
+
         // 1) オーバーライドイベントの処理
         foreach ($override_keys as $event_name) {
             $manual_daily = $this->get_actual_cv_daily_for_route($year_month, $user_id, $event_name);
@@ -10235,6 +10248,9 @@ PROMPT;
             $route_manual_sum = 0;
             $route_ga4_sum = 0;
 
+            // 電話タップのルートは only_configured ON でも GA4 フォールバックを許可
+            $route_is_phone_tap = $is_phone_tap($event_name);
+
             foreach ($empty_daily as $date => $_) {
                 if ($route_has_manual) {
                     // ルートに手動データあり → 手動値のみ使用（未入力日は0）
@@ -10243,13 +10259,13 @@ PROMPT;
                         $daily[$date] += $manual_val;
                         $route_manual_sum += $manual_val;
                     }
-                } elseif (!$only_configured) {
-                    // ルートに手動データなし & 設定イベントのみOFF → GA4値を使用
+                } elseif (!$only_configured || $route_is_phone_tap) {
+                    // ルートに手動データなし & (設定イベントのみOFF or 電話タップ) → GA4値を使用
                     $ga4_val = $ga4_event_daily[$date] ?? 0;
                     $daily[$date] += $ga4_val;
                     $route_ga4_sum += $ga4_val;
                 }
-                // only_configured ON & 手動データなし → 0（GA4フォールバックなし）
+                // only_configured ON & 手動データなし & 電話タップ以外 → 0
             }
 
             if ($route_has_manual) {
@@ -10267,7 +10283,7 @@ PROMPT;
             if (in_array($event_name, $override_keys, true)) continue;
 
             // 「設定イベントのみ」ON時: 電話タップ以外のGA4イベントはスキップ
-            if ($only_configured && $event_name !== $phone_event) continue;
+            if ($only_configured && !$is_phone_tap($event_name)) continue;
 
             foreach ($dates as $date => $val) {
                 if (isset($daily[$date])) {
