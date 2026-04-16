@@ -2250,6 +2250,9 @@ class Gcrev_GA4_Fetcher {
             $request_params['dimension_filter'] = $filter_expression;
         }
 
+        // 国フィルタ / パスフィルタをイベント名フィルタと AND で合成
+        $this->apply_country_filter( $request_params );
+
         $request  = new RunReportRequest( $request_params );
         $response = $client->runReport( $request );
 

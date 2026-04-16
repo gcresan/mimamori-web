@@ -12453,14 +12453,20 @@ PROMPT;
             ], 200);
         }
 
-        // Transientキャッシュ（30分）
-        $cache_key = "gcrev_cvreview_{$user_id}_{$month}";
+        // 海外アクセス除外 → GA4 国フィルタを設定
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        // Transientキャッシュ（30分）— フィルタ状態でキーを差別化
+        $cache_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+        $cache_key = "gcrev_cvreview_{$user_id}_{$month}{$cache_sfx}";
         $cached = get_transient($cache_key);
 
         if ($cached !== false && is_array($cached)) {
             // キャッシュヒットでも重複統合 + DB statusマージを適用
+            // （restore_country_filter は末尾の finally で実行される）
             $deduped = $this->dedup_cv_review_rows($cached['rows']);
             $merged  = $this->merge_cv_review_statuses($deduped, $user_id, $month);
+            $this->restore_country_filter( $filter_set );
             return new WP_REST_Response([
                 'success'      => true,
                 'rows'         => $merged,
@@ -12500,6 +12506,8 @@ PROMPT;
                 'success' => false,
                 'message' => 'GA4データの取得に失敗しました: ' . $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
 
