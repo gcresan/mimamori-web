@@ -10232,13 +10232,24 @@ PROMPT;
                 'has_overrides'      => false,
             ];
 
-            // CVレビュー結果があれば上書き（電話タップは加算）
+            // CVレビュー結果があれば上書き
+            // 電話タップは「自動有効（GA4 keyEvents 由来）」と「レビュー status=1」の
+            // いずれか大きい方を採用する。これにより、以下の両方を正しく処理:
+            //  (a) GA4 側で keyEvents として記録されている → 自動カウント
+            //  (b) keyEvents 未設定だが、レビューで status=1 に手動判定 → ユーザー意思を反映
             $reviewed = $this->get_reviewed_cv_data($year_month, $user_id, $is_phone_tap_pure);
             if ($reviewed !== null) {
                 $result['source'] = 'reviewed';
-                $merged_daily = array_merge($empty_daily, $reviewed['daily_non_phone_tap'] ?? $reviewed['daily']);
-                foreach ($phone_tap_daily as $date => $val) {
-                    $merged_daily[$date] = ($merged_daily[$date] ?? 0) + (int) $val;
+                $merged_daily = array_merge($empty_daily, $reviewed['daily_non_phone_tap'] ?? []);
+                $reviewed_phone_tap_daily = $reviewed['phone_tap_daily'] ?? [];
+                $phone_tap_dates = array_unique(array_merge(
+                    array_keys($phone_tap_daily),
+                    array_keys($reviewed_phone_tap_daily)
+                ));
+                foreach ($phone_tap_dates as $date) {
+                    $local_val = (int) ($phone_tap_daily[$date] ?? 0);
+                    $rev_val   = (int) ($reviewed_phone_tap_daily[$date] ?? 0);
+                    $merged_daily[$date] = ($merged_daily[$date] ?? 0) + max($local_val, $rev_val);
                 }
                 $result['daily'] = $merged_daily;
                 $result['total'] = array_sum($merged_daily);
@@ -10396,17 +10407,25 @@ PROMPT;
         ];
 
         // CVレビュー結果があれば上書き
-        // 注: 電話タップは「自動有効」（明示的にレビューしなくても常に有効カウント）
-        //     ため、reviewed total に GA4 の電話タップ件数を加算する。
-        //     これにより、ユーザーが手動レビューを始めた途端に電話タップが
-        //     表示から消える問題を回避。
+        // 電話タップの扱い:
+        //   - GA4 keyEvents 側に計上されている分 → 自動有効（ユーザー操作不要で常にカウント）
+        //   - GA4 keyEvents 未設定だが、レビュー画面で status=1 にした分 → ユーザー判定を尊重
+        //   両者は重複しうるので「日別に max」を取り、二重計上を避ける
         $reviewed = $this->get_reviewed_cv_data($year_month, $user_id, $is_phone_tap);
         if ($reviewed !== null) {
             $result['source'] = 'reviewed';
-            // reviewed daily（status=1 行のうち電話タップ以外）+ GA4 電話タップ daily
-            $merged_daily = array_merge($empty_daily, $reviewed['daily_non_phone_tap'] ?? $reviewed['daily']);
-            foreach ($phone_tap_daily as $date => $val) {
-                $merged_daily[$date] = ($merged_daily[$date] ?? 0) + (int) $val;
+            // status=1 のうち電話タップ以外を base に採用
+            $merged_daily = array_merge($empty_daily, $reviewed['daily_non_phone_tap'] ?? []);
+            // 電話タップは local（GA4 由来）と reviewed の max を加算
+            $reviewed_phone_tap_daily = $reviewed['phone_tap_daily'] ?? [];
+            $phone_tap_dates = array_unique(array_merge(
+                array_keys($phone_tap_daily),
+                array_keys($reviewed_phone_tap_daily)
+            ));
+            foreach ($phone_tap_dates as $date) {
+                $local_val = (int) ($phone_tap_daily[$date] ?? 0);
+                $rev_val   = (int) ($reviewed_phone_tap_daily[$date] ?? 0);
+                $merged_daily[$date] = ($merged_daily[$date] ?? 0) + max($local_val, $rev_val);
             }
             $result['daily'] = $merged_daily;
             $result['total'] = array_sum($merged_daily);
