@@ -7915,15 +7915,16 @@ function gcrev_render_service_tier_field( $user ) {
             <td>
                 <?php
                 $badge_styles = [
-                    'basic'      => [ 'color' => '#666',    'bg' => '#f0f0f0',               'label' => 'ベーシック' ],
-                    'ai_support'  => [ 'color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)',   'label' => 'AIサポート' ],
-                    'content_seo' => [ 'color' => '#B45309', 'bg' => 'rgba(245,158,11,0.08)', 'label' => '集客強化' ],
-                    'bansou'      => [ 'color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)', 'label' => '伴走' ],
+                    'basic'       => [ 'color' => '#666',    'bg' => '#f0f0f0' ],
+                    'ai_support'  => [ 'color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)' ],
+                    'content_seo' => [ 'color' => '#B45309', 'bg' => 'rgba(245,158,11,0.08)' ],
+                    'bansou'      => [ 'color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)' ],
                 ];
-                $bs = $badge_styles[ $current_tier ] ?? $badge_styles['basic'];
+                $bs    = $badge_styles[ $current_tier ] ?? $badge_styles['basic'];
+                $label = $tier_defs[ $current_tier ]['name'] ?? ( $tier_defs['basic']['name'] ?? 'ベーシック' );
                 ?>
                 <span style="display:inline-block; padding:4px 12px; border-radius:12px; font-size:13px; font-weight:600; color:<?php echo esc_attr( $bs['color'] ); ?>; background:<?php echo esc_attr( $bs['bg'] ); ?>;">
-                    <?php echo esc_html( $bs['label'] ); ?>
+                    <?php echo esc_html( $label ); ?>
                 </span>
             </td>
         </tr>
