@@ -10223,8 +10223,8 @@ PROMPT;
         }
 
         // トランジェントキャッシュ（リクエスト間で共有、2時間）
-        // v3: 電話タップを eventCount で補完するよう修正（キー変更で旧キャッシュ失効）
-        $transient_key = "gcrev_effcv_v3_{$user_id}_{$year_month}{$filter_suffix}";
+        // v4: daily_by_label を追加して日付レンジ別内訳を正確に集計
+        $transient_key = "gcrev_effcv_v4_{$user_id}_{$year_month}{$filter_suffix}";
         $transient = get_transient($transient_key);
         if ($transient !== false && is_array($transient)) {
             $this->effective_cv_cache[$cache_key] = $transient;
@@ -10255,6 +10255,7 @@ PROMPT;
             $phone_tap_total = 0;
             $phone_tap_daily = $empty_daily;
             $breakdown_by_label = [];
+            $daily_by_label = [];
             // pure GA4 経路用の電話タップ判定クロージャ
             $is_phone_tap_pure = function (string $en) use ($phone_event, $all_label_map): bool {
                 if ($en === '') return false;
@@ -10310,6 +10311,16 @@ PROMPT;
                         'count'  => $event_sum,
                         'source' => 'ga4',
                     ];
+                    $event_daily_vals = [];
+                    foreach ($effective_dates as $d => $v) {
+                        $v = (int) $v;
+                        if ($v > 0) $event_daily_vals[$d] = $v;
+                    }
+                    $daily_by_label[$en] = [
+                        'label'  => $all_label_map[$en] ?? $en,
+                        'source' => 'ga4',
+                        'daily'  => $event_daily_vals,
+                    ];
                 }
             }
 
@@ -10320,16 +10331,23 @@ PROMPT;
                 if (!$is_phone_tap_pure($en)) continue;
                 $event_sum = array_sum($ec_dates);
                 $phone_tap_total += $event_sum;
+                $event_daily_vals = [];
                 foreach ($ec_dates as $date => $val) {
                     $val = (int) $val;
                     $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $val;
                     $ga4_daily[$date] = ($ga4_daily[$date] ?? 0) + $val;
+                    if ($val > 0) $event_daily_vals[$date] = $val;
                 }
                 if ($event_sum > 0) {
                     $breakdown_by_label[$en] = [
                         'label'  => $all_label_map[$en] ?? $en,
                         'count'  => $event_sum,
                         'source' => 'ga4',
+                    ];
+                    $daily_by_label[$en] = [
+                        'label'  => $all_label_map[$en] ?? $en,
+                        'source' => 'ga4',
+                        'daily'  => $event_daily_vals,
                     ];
                 }
             }
@@ -10345,6 +10363,7 @@ PROMPT;
                 ],
                 'breakdown_manual'   => [],
                 'breakdown_by_label' => $breakdown_by_label,
+                'daily_by_label'     => $daily_by_label,
                 'has_overrides'      => false,
             ];
 
@@ -10372,6 +10391,9 @@ PROMPT;
                 $result['components']['reviewed_total'] = $reviewed['total'];
                 if (isset($reviewed['breakdown_by_label'])) {
                     $result['breakdown_by_label'] = $reviewed['breakdown_by_label'];
+                }
+                if (isset($reviewed['daily_by_label'])) {
+                    $result['daily_by_label'] = $reviewed['daily_by_label'];
                 }
             }
 
@@ -10437,6 +10459,10 @@ PROMPT;
         $phone_tap_total = 0;
         $phone_tap_daily = $empty_daily;
 
+        // 表示ラベル別の日別内訳（日付レンジ集計時に正確な期間内件数を算出するために必要）
+        // 構造: [event_name => [ 'label' => string, 'source' => string, 'daily' => [date => count] ]]
+        $daily_by_label = [];
+
         // 1) オーバーライドイベントの処理
         foreach ($override_keys as $event_name) {
             $manual_daily = $this->get_actual_cv_daily_for_route($year_month, $user_id, $event_name);
@@ -10450,6 +10476,7 @@ PROMPT;
 
             $route_manual_sum = 0;
             $route_ga4_sum = 0;
+            $route_daily_vals = [];
 
             // 電話タップのルートは only_configured ON でも GA4 フォールバックを許可
             $route_is_phone_tap = $is_phone_tap($event_name);
@@ -10461,12 +10488,14 @@ PROMPT;
                 : [];
 
             foreach ($empty_daily as $date => $_) {
+                $day_added = 0;
                 if ($route_has_manual) {
                     // ルートに手動データあり → 手動値のみ使用（未入力日は0）
                     $manual_val = $manual_daily[$date] ?? null;
                     if ($manual_val !== null) {
                         $daily[$date] += $manual_val;
                         $route_manual_sum += $manual_val;
+                        $day_added = (int) $manual_val;
                         if ($route_is_phone_tap) {
                             $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $manual_val;
                         }
@@ -10479,11 +10508,15 @@ PROMPT;
                     $ga4_val = $route_is_phone_tap ? max($key_val, $ec_val) : $key_val;
                     $daily[$date] += $ga4_val;
                     $route_ga4_sum += $ga4_val;
+                    $day_added = (int) $ga4_val;
                     if ($route_is_phone_tap) {
                         $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $ga4_val;
                     }
                 }
                 // only_configured ON & 手動データなし & 電話タップ以外 → 0
+                if ($day_added > 0) {
+                    $route_daily_vals[$date] = $day_added;
+                }
             }
 
             if ($route_has_manual) {
@@ -10505,6 +10538,11 @@ PROMPT;
                     'count'  => $route_total,
                     'source' => $route_has_manual ? 'manual' : 'ga4',
                 ];
+                $daily_by_label[$event_name] = [
+                    'label'  => $route_label_map[$event_name] ?? $event_name,
+                    'source' => $route_has_manual ? 'manual' : 'ga4',
+                    'daily'  => $route_daily_vals,
+                ];
             }
         }
 
@@ -10525,12 +10563,17 @@ PROMPT;
                     $effective_dates[$d] = max((int)($dates[$d] ?? 0), (int) $v);
                 }
             }
+            $event_daily_vals = [];
             foreach ($effective_dates as $date => $val) {
+                $val = (int) $val;
                 if (isset($daily[$date])) {
                     $daily[$date] += $val;
                 }
                 if ($event_is_phone_tap) {
                     $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $val;
+                }
+                if ($val > 0) {
+                    $event_daily_vals[$date] = $val;
                 }
             }
             $event_sum = array_sum($effective_dates);
@@ -10545,6 +10588,11 @@ PROMPT;
                     'count'  => $event_sum,
                     'source' => 'ga4',
                 ];
+                $daily_by_label[$event_name] = [
+                    'label'  => $route_label_map[$event_name] ?? $event_name,
+                    'source' => 'ga4',
+                    'daily'  => $event_daily_vals,
+                ];
             }
         }
 
@@ -10558,12 +10606,16 @@ PROMPT;
         foreach ($phone_tap_event_count_daily as $event_name => $ec_dates) {
             if (in_array($event_name, $already_counted_phone_tap_events, true)) continue;
             if (!$is_phone_tap($event_name)) continue;
+            $event_daily_vals = [];
             foreach ($ec_dates as $date => $val) {
                 $val = (int) $val;
                 if (isset($daily[$date])) {
                     $daily[$date] += $val;
                 }
                 $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $val;
+                if ($val > 0) {
+                    $event_daily_vals[$date] = $val;
+                }
             }
             $event_sum = array_sum($ec_dates);
             $ga4_only_total += $event_sum;
@@ -10573,6 +10625,11 @@ PROMPT;
                     'label'  => $route_label_map[$event_name] ?? $event_name,
                     'count'  => $event_sum,
                     'source' => 'ga4',
+                ];
+                $daily_by_label[$event_name] = [
+                    'label'  => $route_label_map[$event_name] ?? $event_name,
+                    'source' => 'ga4',
+                    'daily'  => $event_daily_vals,
                 ];
             }
         }
@@ -10591,6 +10648,7 @@ PROMPT;
             ],
             'breakdown_manual'   => $breakdown_manual,
             'breakdown_by_label' => $breakdown_by_label,
+            'daily_by_label'     => $daily_by_label,
             'has_overrides'      => true,
         ];
 
@@ -10620,6 +10678,9 @@ PROMPT;
             $result['components']['reviewed_total'] = $reviewed['total'];
             if (isset($reviewed['breakdown_by_label'])) {
                 $result['breakdown_by_label'] = $reviewed['breakdown_by_label'];
+            }
+            if (isset($reviewed['daily_by_label'])) {
+                $result['daily_by_label'] = $reviewed['daily_by_label'];
             }
         }
 
@@ -10655,7 +10716,8 @@ PROMPT;
         $source         = 'ga4';
         $has_overrides  = false;
         $breakdown_manual = [];
-        $breakdown_by_label = [];
+        $breakdown_by_label = [];   // レンジ内のカウントに再集計
+        $daily_by_label_merged = []; // [event_name => [label, source, daily]]
 
         foreach ($months as $ym) {
             $eff = $this->get_effective_cv_monthly($ym, $user_id);
@@ -10679,19 +10741,23 @@ PROMPT;
                 $breakdown_manual[$k] = ($breakdown_manual[$k] ?? 0) + $v;
             }
 
-            foreach ($eff['breakdown_by_label'] ?? [] as $key => $item) {
-                if (isset($breakdown_by_label[$key])) {
-                    $breakdown_by_label[$key]['count'] += (int)($item['count'] ?? 0);
-                    // いずれかの月で manual なら manual を維持
-                    if (($item['source'] ?? '') === 'manual') {
-                        $breakdown_by_label[$key]['source'] = 'manual';
-                    }
-                } else {
-                    $breakdown_by_label[$key] = [
+            // 表示ラベル別の日別内訳をマージ（レンジ内の日のみ）
+            foreach ($eff['daily_by_label'] ?? [] as $key => $item) {
+                if (!isset($daily_by_label_merged[$key])) {
+                    $daily_by_label_merged[$key] = [
                         'label'  => $item['label'] ?? $key,
-                        'count'  => (int)($item['count'] ?? 0),
                         'source' => $item['source'] ?? 'ga4',
+                        'daily'  => [],
                     ];
+                }
+                if (($item['source'] ?? '') === 'manual') {
+                    $daily_by_label_merged[$key]['source'] = 'manual';
+                }
+                foreach ($item['daily'] ?? [] as $date => $val) {
+                    if ($date >= $start && $date <= $end) {
+                        $daily_by_label_merged[$key]['daily'][$date] =
+                            ($daily_by_label_merged[$key]['daily'][$date] ?? 0) + (int) $val;
+                    }
                 }
             }
 
@@ -10705,6 +10771,18 @@ PROMPT;
 
         ksort($merged_daily);
 
+        // daily_by_label_merged → breakdown_by_label をレンジ内カウントで再集計
+        foreach ($daily_by_label_merged as $key => $item) {
+            $cnt = array_sum($item['daily'] ?? []);
+            if ($cnt > 0) {
+                $breakdown_by_label[$key] = [
+                    'label'  => $item['label'],
+                    'count'  => (int) $cnt,
+                    'source' => $item['source'],
+                ];
+            }
+        }
+
         $result = [
             'source'             => $source,
             'total'              => array_sum($merged_daily),
@@ -10716,6 +10794,7 @@ PROMPT;
             ],
             'breakdown_manual'   => $breakdown_manual,
             'breakdown_by_label' => $breakdown_by_label,
+            'daily_by_label'     => $daily_by_label_merged,
             'has_overrides'      => $has_overrides,
         ];
         if ($reviewed_total !== null) {
@@ -10774,6 +10853,8 @@ PROMPT;
         $routes = $this->get_cv_routes($user_id);
         $label_map = array_column($routes, 'label', 'route_key');
         $breakdown_by_label = [];
+        // 表示ラベル別の日別内訳（日付レンジ集計時の正確な期間内件数に利用）
+        $daily_by_label = [];
         foreach ($valid_rows as $row) {
             $dhm = (string) $row['date_hour_minute'];
             $date = '';
@@ -10797,8 +10878,16 @@ PROMPT;
                     'count'  => 0,
                     'source' => 'reviewed',
                 ];
+                $daily_by_label[$key] = [
+                    'label'  => $label_map[$en] ?? ($en !== '' ? $en : '(不明)'),
+                    'source' => 'reviewed',
+                    'daily'  => [],
+                ];
             }
             $breakdown_by_label[$key]['count'] += 1;
+            if ($date !== '') {
+                $daily_by_label[$key]['daily'][$date] = ($daily_by_label[$key]['daily'][$date] ?? 0) + 1;
+            }
         }
 
         return [
@@ -10807,6 +10896,7 @@ PROMPT;
             'daily_non_phone_tap' => $daily_non_phone_tap,
             'phone_tap_daily'     => $phone_tap_daily,
             'breakdown_by_label'  => $breakdown_by_label,
+            'daily_by_label'      => $daily_by_label,
         ];
     }
 
