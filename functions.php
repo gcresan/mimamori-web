@@ -6880,6 +6880,8 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         'report_improvements'  => 'ai_support',
         'report_consideration' => 'ai_support',
         'report_next_actions'  => 'ai_support',
+        // MEO機能（ai_support 以上：MEO・口コミ対策プランから提供）
+        'meo_menu'             => 'ai_support',
         // SEO機能（content_seo 以上）
         'seo_menu'             => 'content_seo',
         'aio_serp'             => 'content_seo',
@@ -6908,6 +6910,29 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
  */
 function mimamori_can_access_seo( int $user_id = 0 ): bool {
     return mimamori_can( 'seo_menu', $user_id );
+}
+
+/**
+ * MEO関連メニュー・ページへのアクセス可否を返す。
+ *
+ * MEO・口コミ対策プラン以上、または管理者に許可。
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ * @return bool
+ */
+function mimamori_can_access_meo( int $user_id = 0 ): bool {
+    return mimamori_can( 'meo_menu', $user_id );
+}
+
+/**
+ * MEO アクセス権限がなければダッシュボードへリダイレクトして終了する。
+ * MEO 関連の固定ページテンプレートの先頭で呼び出す。
+ */
+function mimamori_guard_meo_access(): void {
+    if ( ! mimamori_can_access_meo() ) {
+        wp_safe_redirect( home_url( '/dashboard/' ) );
+        exit;
+    }
 }
 
 /**

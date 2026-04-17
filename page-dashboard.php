@@ -14,6 +14,7 @@ $user_id = $current_user->ID;
 // サービスティア判定
 $can_ai         = mimamori_can( 'ai_chat', $user_id );
 $can_highlights = mimamori_can( 'dashboard_highlights', $user_id );
+$can_meo        = mimamori_can_access_meo( $user_id );
 
 // ページタイトル設定
 set_query_var('gcrev_page_title', '全体ダッシュボード');
@@ -728,8 +729,10 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         $kpi_items = [
           'visits' => ['label' => '訪問数',       'sub' => 'ホームページを見に来た人数', 'icon' => '👥', 'metric' => 'sessions'],
           'cv'     => ['label' => $cv_label,      'sub' => $cv_sub,                     'icon' => '🎯', 'metric' => 'cv'],
-          'meo'    => ['label' => 'マップ表示回数', 'sub' => 'Googleマップで見られた回数', 'icon' => '📍', 'metric' => 'meo'],
         ];
+        if ( $can_meo ) {
+          $kpi_items['meo'] = ['label' => 'マップ表示回数', 'sub' => 'Googleマップで見られた回数', 'icon' => '📍', 'metric' => 'meo'];
+        }
         $first_kpi = true;
         foreach ($kpi_items as $key => $meta):
           $kpi = $infographic['kpi'][$key] ?? ['value' => 0, 'diff' => 0];
@@ -813,11 +816,15 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
       <?php
       $sd_cards = [
         'organic_rank'  => [ 'icon' => '🔍', 'title' => '自然検索順位' ],
-        'map_rank'      => [ 'icon' => '📍', 'title' => 'マップ順位' ],
-        'seo_diagnosis' => [ 'icon' => '🛡️', 'title' => 'SEO診断' ],
-        'aio_score'     => [ 'icon' => '🤖', 'title' => 'AIO診断' ],
-        'meo_diagnosis' => [ 'icon' => '📋', 'title' => 'MEO診断' ],
       ];
+      if ( $can_meo ) {
+        $sd_cards['map_rank'] = [ 'icon' => '📍', 'title' => 'マップ順位' ];
+      }
+      $sd_cards['seo_diagnosis'] = [ 'icon' => '🛡️', 'title' => 'SEO診断' ];
+      $sd_cards['aio_score']     = [ 'icon' => '🤖', 'title' => 'AIO診断' ];
+      if ( $can_meo ) {
+        $sd_cards['meo_diagnosis'] = [ 'icon' => '📋', 'title' => 'MEO診断' ];
+      }
       foreach ( $sd_cards as $sd_key => $sd_meta ):
         $sd_card  = $search_diag[ $sd_key ] ?? null;
         $sd_none  = ! $sd_card || ( $sd_card['status'] ?? '' ) === 'none';
@@ -1195,17 +1202,6 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
           <p class="info-monthly-wait">今月のレポートサマリーを生成中です...</p>
         </div>
       <?php endif; ?>
-
-<?php if (!$can_highlights): ?>
-<!-- ハイライト未許可プラン: ロック表示 -->
-<div class="plan-locked-section">
-    <div class="plan-locked-overlay">
-        <div class="plan-locked-icon">&#x1F512;</div>
-        <p class="plan-locked-message">MEO・口コミ対策プラン以上で、改善ポイントや<br>次にやるべきことのアドバイスが見られます</p>
-        <a href="<?php echo esc_url( home_url( '/service/' ) ); ?>" class="plan-locked-link">プランを見る →</a>
-    </div>
-</div>
-<?php endif; ?>
 
     </div>
 

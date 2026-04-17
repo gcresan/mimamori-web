@@ -200,11 +200,13 @@
                         <span>自然検索順位</span>
                         </a>
                      </li>
+                     <?php if ( mimamori_can_access_meo() ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/map-rank/') ); ?>" class="nav-link <?php echo is_page('map-rank') ? 'active' : ''; ?>">
                         <span>マップ順位</span>
                         </a>
                      </li>
+                     <?php endif; ?>
                   </ul>
                </li>
 
@@ -226,11 +228,13 @@
                         <span>AIO診断</span>
                         </a>
                      </li>
+                     <?php if ( mimamori_can_access_meo() ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/meo-diagnosis/') ); ?>" class="nav-link <?php echo is_page('meo-diagnosis') ? 'active' : ''; ?>">
                         <span>MEO診断</span>
                         </a>
                      </li>
+                     <?php endif; ?>
                   </ul>
                </li>
 
@@ -285,7 +289,8 @@
                   </ul>
                </li>
 
-               <!-- ========== MEO ========== -->
+               <!-- ========== MEO（MEO・口コミ対策プラン以上 or 管理者のみ表示） ========== -->
+               <?php if ( mimamori_can_access_meo() ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $meo_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'meo' ? ' collapsed' : ''; ?>" data-menu-key="meo">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleMeo" aria-expanded="<?php echo $sidebar_active_group === 'meo' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
@@ -345,6 +350,7 @@
                      </li>
                   </ul>
                </li>
+               <?php endif; ?>
 
                <!-- ========== SEO（コンテンツSEO強化プラン以上 or 管理者のみ表示） ========== -->
                <?php if ( mimamori_can_access_seo() ) : ?>

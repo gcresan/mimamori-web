@@ -8,6 +8,8 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
+mimamori_guard_meo_access();
+
 set_query_var( 'gcrev_page_title', 'アンケート分析' );
 set_query_var( 'gcrev_page_subtitle', 'AIがアンケート回答を分析し、改善のヒントを提供します。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'アンケート分析', 'MEO' ) );

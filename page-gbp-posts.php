@@ -8,6 +8,8 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
+mimamori_guard_meo_access();
+
 $user_id       = get_current_user_id();
 $gbp_connected = (bool) get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
 $location_name = get_user_meta( $user_id, '_gcrev_gbp_location_name', true ) ?: '';

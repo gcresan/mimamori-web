@@ -8,6 +8,8 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
+mimamori_guard_meo_access();
+
 set_query_var( 'gcrev_page_title', 'アンケート集計' );
 set_query_var( 'gcrev_page_subtitle', 'アンケートの回答傾向を集計・可視化します。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'アンケート集計', 'MEO' ) );

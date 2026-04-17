@@ -8,6 +8,8 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
+mimamori_guard_meo_access();
+
 set_query_var( 'gcrev_page_title', 'AI生成履歴' );
 set_query_var( 'gcrev_page_subtitle', 'AIが生成した口コミ文の履歴を確認・管理できます。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'AI生成履歴', 'MEO' ) );
