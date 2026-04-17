@@ -6887,10 +6887,11 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         // AI機能（ai_support 以上）
         'ai_voice'             => 'ai_support',
         'dashboard_highlights' => 'ai_support',
-        'report_good_points'   => 'ai_support',
-        'report_improvements'  => 'ai_support',
-        'report_consideration' => 'ai_support',
-        'report_next_actions'  => 'ai_support',
+        // AIレポート分析機能（basic = AI分析・レポートプランから提供）
+        'report_good_points'   => 'basic',
+        'report_improvements'  => 'basic',
+        'report_consideration' => 'basic',
+        'report_next_actions'  => 'basic',
         // MEO機能（ai_support 以上：MEO・口コミ対策プランから提供）
         'meo_menu'             => 'ai_support',
         // SEO機能（content_seo 以上）
