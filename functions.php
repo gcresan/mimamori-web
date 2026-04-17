@@ -6663,6 +6663,7 @@ function gcrev_invalidate_user_cv_cache(int $user_id): void {
         'gcrev_effcv_',
         'gcrev_effcv_v2_',
         'gcrev_effcv_v3_',
+        'gcrev_effcv_v4_',
         // CV トレンドグラフ（月別 / 日別）— ダッシュボードの CV カードと整合させるため無効化
         'gcrev_trend_',
         'gcrev_trend_v2_',
@@ -6899,6 +6900,8 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         // SEO機能（content_seo 以上）
         'seo_menu'             => 'content_seo',
         'aio_serp'             => 'content_seo',
+        // SEO診断（basic 以上：AI分析・レポートプランから提供）
+        'seo_check'            => 'basic',
         // コア機能（全プラン）
         'dashboard'            => 'basic',
         'report_summary'       => 'basic',
@@ -6924,6 +6927,19 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
  */
 function mimamori_can_access_seo( int $user_id = 0 ): bool {
     return mimamori_can( 'seo_menu', $user_id );
+}
+
+/**
+ * SEO診断ページへのアクセス可否を返す。
+ *
+ * SEO診断は AI分析・レポートプラン以上で利用可能。
+ * （キーワード調査・ライティング等の他SEO機能は content_seo プラン以上）
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ * @return bool
+ */
+function mimamori_can_access_seo_check( int $user_id = 0 ): bool {
+    return mimamori_can( 'seo_check', $user_id );
 }
 
 /**
