@@ -10162,7 +10162,8 @@ PROMPT;
         }
 
         // トランジェントキャッシュ（リクエスト間で共有、2時間）
-        $transient_key = "gcrev_effcv_{$user_id}_{$year_month}{$filter_suffix}";
+        // v2: reviewed phone_tap を max 合成するよう修正（キー変更で旧キャッシュ失効）
+        $transient_key = "gcrev_effcv_v2_{$user_id}_{$year_month}{$filter_suffix}";
         $transient = get_transient($transient_key);
         if ($transient !== false && is_array($transient)) {
             $this->effective_cv_cache[$cache_key] = $transient;

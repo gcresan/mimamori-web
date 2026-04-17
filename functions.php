@@ -6661,6 +6661,7 @@ function gcrev_invalidate_user_cv_cache(int $user_id): void {
         'gcrev_dash_',
         'gcrev_report_',
         'gcrev_effcv_',
+        'gcrev_effcv_v2_',
         // CV トレンドグラフ（月別 / 日別）— ダッシュボードの CV カードと整合させるため無効化
         'gcrev_trend_',
         'gcrev_trend_v2_',
