@@ -346,7 +346,7 @@
                   </ul>
                </li>
 
-               <!-- ========== SEO（集客強化プラン以上 or 管理者のみ表示） ========== -->
+               <!-- ========== SEO（コンテンツSEO強化プラン以上 or 管理者のみ表示） ========== -->
                <?php if ( mimamori_can_access_seo() ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $seo_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'seo' ? ' collapsed' : ''; ?>" data-menu-key="seo">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleSeo" aria-expanded="<?php echo $sidebar_active_group === 'seo' ? 'true' : 'false'; ?>">

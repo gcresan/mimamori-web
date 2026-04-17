@@ -141,7 +141,7 @@ get_header();
             
             <div class="info-display">
                 <strong>契約プラン:</strong>
-                <span>見える化プラン</span>
+                <span>AI分析・レポートプラン</span>
             </div>
         </div>
         

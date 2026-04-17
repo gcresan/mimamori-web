@@ -61,15 +61,18 @@ get_header();
 
 /* --- おすすめカード --- */
 .plan-card--recommended {
-    border: 2px solid #4ECDC4;
-    box-shadow: 0 4px 20px rgba(78,205,196,0.10);
+    border: 2px solid #C0392B;
+    box-shadow: 0 4px 20px rgba(192,57,43,0.10);
+}
+.plan-card--recommended .plan-card__price-amount {
+    color: #C0392B;
 }
 .plan-card__badge {
     position: absolute;
     top: -14px;
     left: 50%;
     transform: translateX(-50%);
-    background: #4ECDC4;
+    background: #C0392B;
     color: #fff;
     font-size: 12px;
     font-weight: 700;
@@ -99,22 +102,17 @@ get_header();
     padding-bottom: 20px;
     border-bottom: 1px solid #f0f0f0;
 }
-.plan-card__label {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    margin-bottom: 4px;
-}
-.plan-card__label--basic        { color: #888; }
-.plan-card__label--ai_support   { color: #4ECDC4; }
-.plan-card__label--content_seo  { color: #F59E0B; }
-.plan-card__label--bansou       { color: #9333ea; }
-
 .plan-card__name {
     font-size: 17px;
     font-weight: 700;
     color: #333;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
+}
+.plan-card__subtitle {
+    font-size: 12px;
+    color: #888;
+    line-height: 1.6;
+    margin-bottom: 14px;
 }
 .plan-card__price {
     display: flex;
@@ -132,6 +130,23 @@ get_header();
     font-size: 13px;
     color: #888;
     font-weight: 500;
+}
+
+/* --- 上位プランへの積み上げラベル --- */
+.plan-card__cumulative {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #C0392B;
+    font-size: 13px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    padding-bottom: 2px;
+}
+.plan-card__cumulative::before {
+    content: "+";
+    font-weight: 800;
+    font-size: 15px;
 }
 
 /* --- 機能リスト --- */
@@ -168,9 +183,9 @@ get_header();
     height: 18px;
     margin-top: 1px;
 }
-.plan-feature-icon--check { color: #4ECDC4; }
+.plan-feature-icon--check { color: #C0392B; }
 .plan-feature-icon--dash  { color: #ddd; }
-.plan-feature-icon--new   { color: #F59E0B; }
+.plan-feature-icon--new   { color: #C0392B; }
 
 .plan-feature-text {
     flex: 1;
@@ -186,7 +201,7 @@ get_header();
     display: inline-block;
     font-size: 10px;
     font-weight: 700;
-    color: #F59E0B;
+    color: #C0392B;
     margin-left: 4px;
 }
 
@@ -196,7 +211,7 @@ get_header();
     padding: 10px 0 4px;
     font-size: 11px;
     font-weight: 700;
-    color: #F59E0B;
+    color: #C0392B;
     letter-spacing: 0.05em;
 }
 .plan-card__features li.feature-divider .plan-feature-icon { display: none; }
@@ -217,11 +232,11 @@ get_header();
     box-sizing: border-box;
 }
 .plan-card__cta--primary {
-    background: #4ECDC4;
+    background: #C0392B;
     color: #fff;
 }
 .plan-card__cta--primary:hover {
-    background: #3dbdb5;
+    background: #a4301f;
     color: #fff;
 }
 .plan-card__cta--secondary {
@@ -294,7 +309,7 @@ get_header();
     border-radius: 10px;
 }
 .plans-guide__item-plan--basic        { color: #888; background: #f0f0f0; }
-.plans-guide__item-plan--ai_support   { color: #4ECDC4; background: rgba(78,205,196,0.08); }
+.plans-guide__item-plan--ai_support   { color: #C0392B; background: rgba(192,57,43,0.08); }
 .plans-guide__item-plan--content_seo  { color: #B45309; background: rgba(245,158,11,0.08); }
 .plans-guide__item-plan--bansou       { color: #9333ea; background: rgba(147,51,234,0.08); }
 
@@ -384,91 +399,68 @@ get_header();
         ? gcrev_get_service_tier( get_current_user_id() )
         : 'basic';
 
-    // プラン定義（4プラン）
+    // プラン定義（4プラン・累積構造）
     $plans = [
         [
             'id'           => 'basic',
-            'label'        => '見える化中心',
-            'name'         => '見える化プラン',
+            'subtitle'     => 'AIがデータを分析しサイトの状態をレポート化',
+            'name'         => 'AI分析・レポートプラン',
             'price'        => '11,000',
             'badge'        => false,
             'coming_soon'  => false,
+            'cumulative'   => '',
             'features'     => [
-                [ 'text' => '基本保守・管理',             'on' => true ],
                 [ 'text' => 'サイト健康スコア',           'on' => true ],
-                [ 'text' => 'アクセスダッシュボード',     'on' => true ],
+                [ 'text' => 'アクセス状況ダッシュボード', 'on' => true ],
+                [ 'text' => '基本データの可視化',         'on' => true ],
                 [ 'text' => '月次レポート総評',           'on' => true ],
-                [ 'text' => 'AI改善提案・アクション提示', 'on' => false ],
-                [ 'text' => 'AIチャット相談',             'on' => false ],
-                [ 'text' => 'MEO専用ダッシュボード',      'on' => false ],
-                [ 'text' => '口コミアンケート機能',       'on' => false ],
-                [ 'text' => '投稿機能',                   'on' => false ],
+                [ 'text' => '基本保守・管理',             'on' => true ],
+                [ 'text' => 'AI改善アクション提示',       'on' => true ],
+                [ 'text' => 'AIチャット相談',             'on' => true ],
             ],
         ],
         [
             'id'           => 'ai_support',
-            'label'        => '改善提案まで',
-            'name'         => '改善提案プラン',
+            'subtitle'     => 'MEO対策や口コミ獲得で地域集客を強化',
+            'name'         => 'MEO・口コミ対策プラン',
             'price'        => '22,000',
             'badge'        => '★ おすすめ',
             'coming_soon'  => false,
+            'cumulative'   => 'AI分析・レポートに加え',
             'features'     => [
-                [ 'text' => '基本保守・管理',             'on' => true ],
-                [ 'text' => 'サイト健康スコア',           'on' => true ],
-                [ 'text' => 'アクセスダッシュボード',     'on' => true ],
-                [ 'text' => '詳細レポート閲覧',           'on' => true ],
-                [ 'text' => 'AI改善提案・アクション提示', 'on' => true ],
-                [ 'text' => 'AIチャット相談',             'on' => true ],
-                [ 'text' => 'MEO専用ダッシュボード',      'on' => true, 'note' => 'Googleビジネスプロフィールの状況確認' ],
-                [ 'text' => '口コミアンケート機能',       'on' => true, 'note' => 'お客様の声を集めて口コミ活用' ],
-                [ 'text' => '投稿機能',                   'on' => true, 'note' => '最新情報やお知らせの発信' ],
+                [ 'text' => 'MEOダッシュボード',          'on' => true ],
+                [ 'text' => '口コミ返信機能',             'on' => true ],
+                [ 'text' => '口コミアンケート＋AI機能',   'on' => true ],
+                [ 'text' => 'MEO運用代行',                'on' => true ],
             ],
         ],
         [
             'id'           => 'content_seo',
-            'label'        => 'SEO・コンテンツ強化',
-            'name'         => '集客強化プラン',
-            'price'        => '55,000',
-            'badge'        => '近日公開予定',
-            'coming_soon'  => true,
+            'subtitle'     => 'コンテンツSEOを強化し検索流入を拡大',
+            'name'         => 'コンテンツSEO強化プラン',
+            'price'        => '44,000',
+            'badge'        => false,
+            'coming_soon'  => false,
+            'cumulative'   => 'MEO・口コミ対策に加え',
             'features'     => [
-                [ 'text' => '基本保守・管理',             'on' => true ],
-                [ 'text' => 'サイト健康スコア',           'on' => true ],
-                [ 'text' => 'アクセスダッシュボード',     'on' => true ],
-                [ 'text' => '詳細レポート閲覧',           'on' => true ],
-                [ 'text' => 'AI改善提案・アクション提示', 'on' => true ],
-                [ 'text' => 'AIチャット相談',             'on' => true ],
-                [ 'text' => 'MEO専用ダッシュボード',      'on' => true ],
-                [ 'text' => '口コミアンケート機能',       'on' => true ],
-                [ 'text' => '投稿機能',                   'on' => true ],
-                [ 'text' => '── コンテンツSEO機能 ──',    'on' => true, 'divider' => true ],
-                [ 'text' => 'コンテンツSEO機能',          'on' => true, 'new' => true, 'note' => '検索に強いコンテンツ戦略を支援' ],
-                [ 'text' => 'キーワード調査',             'on' => true, 'new' => true, 'note' => '狙うべき検索語の整理' ],
-                [ 'text' => '競合分析',                   'on' => true, 'new' => true, 'note' => '競合サイトの傾向把握' ],
-                [ 'text' => 'コラム記事作成機能',         'on' => true, 'new' => true, 'note' => 'SEOに強い記事をAIで作成' ],
-                [ 'text' => '一次情報ストック機能',       'on' => true, 'new' => true, 'note' => '記事ネタや現場情報の蓄積' ],
+                [ 'text' => 'コンテンツSEO機能',          'on' => true ],
+                [ 'text' => 'キーワード調査・競合分析',   'on' => true ],
+                [ 'text' => 'コラム記事作成機能',         'on' => true ],
+                [ 'text' => '一次情報ストック機能',       'on' => true ],
             ],
         ],
         [
             'id'           => 'bansou',
-            'label'        => '実行支援込みの最上位',
-            'name'         => '改善代行プラン',
-            'price'        => '99,000',
+            'subtitle'     => 'プロが伴走し改善施策の実行まで全面サポート',
+            'name'         => 'プロ伴走・改善実行プラン',
+            'price'        => '110,000',
             'badge'        => false,
             'coming_soon'  => false,
+            'cumulative'   => 'コンテンツSEO強化に加え',
             'features'     => [
-                [ 'text' => '基本保守・管理',             'on' => true ],
-                [ 'text' => 'サイト健康スコア',           'on' => true ],
-                [ 'text' => 'アクセスダッシュボード',     'on' => true ],
-                [ 'text' => '詳細レポート閲覧',           'on' => true ],
-                [ 'text' => 'AI改善提案・アクション提示', 'on' => true ],
-                [ 'text' => 'AIチャット相談',             'on' => true ],
-                [ 'text' => 'MEO専用ダッシュボード',      'on' => true ],
-                [ 'text' => '口コミアンケート機能',       'on' => true ],
-                [ 'text' => '投稿機能',                   'on' => true ],
-                [ 'text' => 'MEO運用代行',                'on' => true, 'note' => 'Googleビジネスプロフィールの運用をおまかせ' ],
-                [ 'text' => '改善指示に基づく改善作業',   'on' => true, 'note' => 'みまもりウェブの提案を実際にサイトへ反映' ],
-                [ 'text' => '専門スタッフ伴走支援・定期MTG', 'on' => true, 'note' => '定期ミーティングで一緒に改善を進めます' ],
+                [ 'text' => '改善指示に基づく作業',       'on' => true ],
+                [ 'text' => '専門スタッフ伴走支援',       'on' => true ],
+                [ 'text' => '定例ミーティング',           'on' => true ],
             ],
         ],
     ];
@@ -496,15 +488,19 @@ get_header();
             <?php endif; ?>
 
             <div class="plan-card__header">
-                <div class="plan-card__label plan-card__label--<?php echo esc_attr( $plan['id'] ); ?>">
-                    <?php echo esc_html( $plan['label'] ); ?>
-                </div>
                 <div class="plan-card__name"><?php echo esc_html( $plan['name'] ); ?></div>
+                <?php if ( ! empty( $plan['subtitle'] ) ) : ?>
+                    <div class="plan-card__subtitle"><?php echo esc_html( $plan['subtitle'] ); ?></div>
+                <?php endif; ?>
                 <div class="plan-card__price">
                     <span class="plan-card__price-amount"><?php echo esc_html( $plan['price'] ); ?></span>
                     <span class="plan-card__price-unit">円 / 月（税込）</span>
                 </div>
             </div>
+
+            <?php if ( ! empty( $plan['cumulative'] ) ) : ?>
+                <div class="plan-card__cumulative"><?php echo esc_html( $plan['cumulative'] ); ?></div>
+            <?php endif; ?>
 
             <ul class="plan-card__features">
                 <?php foreach ( $plan['features'] as $feat ) :
@@ -559,27 +555,27 @@ get_header();
         <div class="plans-guide__list">
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">📊</div>
-                <div class="plans-guide__item-heading">まずは現状を把握したい</div>
-                <p class="plans-guide__item-text">アクセス数やサイトの状態を<br>定期的にチェックしたい方に</p>
-                <span class="plans-guide__item-plan plans-guide__item-plan--basic">見える化</span>
+                <div class="plans-guide__item-heading">まずはデータで現状把握したい</div>
+                <p class="plans-guide__item-text">AIの分析と月次レポートで<br>サイトの状態を見える化したい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--basic">AI分析・レポート</span>
             </div>
             <div class="plans-guide__item">
-                <div class="plans-guide__item-icon">💡</div>
-                <div class="plans-guide__item-heading">改善のヒントもほしい</div>
-                <p class="plans-guide__item-text">データを見るだけでなく<br>AIの提案で次のアクションを見つけたい方に</p>
-                <span class="plans-guide__item-plan plans-guide__item-plan--ai_support">改善提案</span>
+                <div class="plans-guide__item-icon">📍</div>
+                <div class="plans-guide__item-heading">地域集客を強化したい</div>
+                <p class="plans-guide__item-text">MEO対策と口コミ獲得で<br>地元からの問い合わせを増やしたい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--ai_support">MEO・口コミ対策</span>
             </div>
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">🚀</div>
-                <div class="plans-guide__item-heading">集客をさらに伸ばしたい</div>
-                <p class="plans-guide__item-text">SEO・記事作成・競合分析で<br>集客導線を強化したい方に</p>
-                <span class="plans-guide__item-plan plans-guide__item-plan--content_seo">集客強化<span style="font-size:10px; font-weight:400; margin-left:4px;">（近日公開）</span></span>
+                <div class="plans-guide__item-heading">検索流入を拡大したい</div>
+                <p class="plans-guide__item-text">SEO・記事作成・競合分析で<br>コンテンツからの集客を強化したい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--content_seo">コンテンツSEO強化</span>
             </div>
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">🤝</div>
-                <div class="plans-guide__item-heading">改善作業も任せたい</div>
-                <p class="plans-guide__item-text">提案だけでなく実際の改善作業も<br>専門スタッフに任せたい方に</p>
-                <span class="plans-guide__item-plan plans-guide__item-plan--bansou">改善代行</span>
+                <div class="plans-guide__item-heading">改善実行まで任せたい</div>
+                <p class="plans-guide__item-text">提案だけでなく改善施策の実行まで<br>プロに伴走してほしい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--bansou">プロ伴走・改善実行</span>
             </div>
         </div>
     </div>

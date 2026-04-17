@@ -68,147 +68,195 @@ get_header();
     </section>
 
     <!-- =============================
-         4. プラン比較表（最重要）
+         4. プラン紹介（最重要）
          ============================= -->
     <section class="sv-section" id="plans">
-        <h2 class="sv-section__title">プラン比較</h2>
+        <h2 class="sv-section__title">プラン紹介</h2>
         <p class="sv-section__subtitle">ご状況に合わせて、4つのプランからお選びいただけます</p>
+
+        <style>
+        .sv-plans-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        .sv-plan2 {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            padding: 28px 20px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .sv-plan2--recommended {
+            border: 2px solid #C0392B;
+            box-shadow: 0 4px 20px rgba(192,57,43,0.10);
+        }
+        .sv-plan2__badge {
+            position: absolute;
+            top: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #C0392B;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 16px;
+            border-radius: 20px;
+            letter-spacing: 0.05em;
+        }
+        .sv-plan2__name {
+            font-size: 17px;
+            font-weight: 700;
+            color: #333;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .sv-plan2__subtitle {
+            font-size: 12px;
+            color: #888;
+            line-height: 1.6;
+            text-align: center;
+            margin-bottom: 14px;
+        }
+        .sv-plan2__price {
+            text-align: center;
+            padding-bottom: 18px;
+            border-bottom: 1px solid #f0f0f0;
+            margin-bottom: 16px;
+        }
+        .sv-plan2__price-amount {
+            font-size: 30px;
+            font-weight: 800;
+            color: #333;
+        }
+        .sv-plan2--recommended .sv-plan2__price-amount {
+            color: #C0392B;
+        }
+        .sv-plan2__price-unit {
+            font-size: 13px;
+            color: #888;
+            margin-left: 2px;
+        }
+        .sv-plan2__cumulative {
+            color: #C0392B;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .sv-plan2__cumulative::before {
+            content: "+ ";
+            font-weight: 800;
+        }
+        .sv-plan2__features {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .sv-plan2__features li {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 7px 0;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #444;
+            border-bottom: 1px solid #f8f8f8;
+        }
+        .sv-plan2__features li:last-child { border-bottom: none; }
+        .sv-plan2__features li::before {
+            content: "✓";
+            color: #C0392B;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        @media (max-width: 1200px) {
+            .sv-plans-grid {
+                grid-template-columns: repeat(2, 1fr);
+                max-width: 720px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+        }
+        @media (max-width: 700px) {
+            .sv-plans-grid {
+                grid-template-columns: 1fr;
+                max-width: 440px;
+            }
+            .sv-plan2--recommended { order: -1; }
+        }
+        </style>
 
         <div class="sv-plans-section">
 
-            <!-- デスクトップ: テーブル形式 -->
-            <table class="sv-plan-table">
-                <thead>
-                    <tr>
-                        <th class="sv-plan-header">&nbsp;</th>
-                        <th class="sv-plan-header">
-                            <div class="sv-plan-name">見える化プラン</div>
-                            <div class="sv-plan-price">11,000<small>円/月（税込）</small></div>
-                            <div class="sv-plan-tagline">まず始めたい方に</div>
-                        </th>
-                        <th class="sv-plan-header sv-plan-header--recommended">
-                            <div class="sv-recommended-badge">おすすめ</div>
-                            <div class="sv-plan-name">改善提案プラン</div>
-                            <div class="sv-plan-price">22,000<small>円/月（税込）</small></div>
-                            <div class="sv-plan-tagline">AIの力で改善を加速</div>
-                        </th>
-                        <th class="sv-plan-header sv-plan-header--premium">
-                            <div class="sv-plan-name">改善代行プラン</div>
-                            <div class="sv-plan-price">99,000<small>円/月（税込）</small></div>
-                            <div class="sv-plan-tagline">手厚い専門支援</div>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>サイトの見える化</td>
-                        <td><span class="sv-check">◯</span></td>
-                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
-                        <td><span class="sv-check">◯</span></td>
-                    </tr>
-                    <tr>
-                        <td>アクセスダッシュボード</td>
-                        <td><span class="sv-check">◯</span></td>
-                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
-                        <td><span class="sv-check">◯</span></td>
-                    </tr>
-                    <tr>
-                        <td>AI分析レポート</td>
-                        <td><span class="sv-cross">—</span></td>
-                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
-                        <td><span class="sv-check">◯</span></td>
-                    </tr>
-                    <tr>
-                        <td>AI改善提案</td>
-                        <td><span class="sv-cross">—</span></td>
-                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
-                        <td><span class="sv-check">◯</span></td>
-                    </tr>
-                    <tr>
-                        <td>AIチャット相談</td>
-                        <td><span class="sv-cross">—</span></td>
-                        <td class="sv-col-recommended"><span class="sv-check">◯</span></td>
-                        <td><span class="sv-check">◯</span></td>
-                    </tr>
-                    <tr>
-                        <td>定期ミーティング</td>
-                        <td><span class="sv-cross">—</span></td>
-                        <td class="sv-col-recommended"><span class="sv-cross">—</span></td>
-                        <td><span class="sv-check">◯</span></td>
-                    </tr>
-                    <tr>
-                        <td>専門スタッフの伴走支援</td>
-                        <td><span class="sv-cross">—</span></td>
-                        <td class="sv-col-recommended"><span class="sv-cross">—</span></td>
-                        <td><span class="sv-check">◯</span></td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <!-- スマホ: カード形式 -->
-            <div class="sv-plan-cards">
-
-                <!-- ベーシック -->
-                <div class="sv-plan-card">
-                    <div class="sv-plan-card__header">
-                        <div class="sv-plan-card__name">見える化プラン</div>
-                        <div class="sv-plan-card__price">11,000<small>円/月（税込）</small></div>
-                        <div class="sv-plan-card__tagline">まず始めたい方に</div>
+            <div class="sv-plans-grid">
+                <!-- プラン1: AI分析・レポートプラン -->
+                <div class="sv-plan2">
+                    <div class="sv-plan2__name">AI分析・レポートプラン</div>
+                    <div class="sv-plan2__subtitle">AIがデータを分析し<br>サイトの状態をレポート化</div>
+                    <div class="sv-plan2__price">
+                        <span class="sv-plan2__price-amount">11,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
-                    <div class="sv-plan-card__body">
-                        <ul class="sv-plan-card__list">
-                            <li>サイトの見える化<span class="sv-check">◯</span></li>
-                            <li>アクセスダッシュボード<span class="sv-check">◯</span></li>
-                            <li>AI分析レポート<span class="sv-cross">—</span></li>
-                            <li>AI改善提案<span class="sv-cross">—</span></li>
-                            <li>AIチャット相談<span class="sv-cross">—</span></li>
-                            <li>定期ミーティング<span class="sv-cross">—</span></li>
-                            <li>専門スタッフの伴走支援<span class="sv-cross">—</span></li>
-                        </ul>
-                    </div>
+                    <ul class="sv-plan2__features">
+                        <li>サイト健康スコア</li>
+                        <li>アクセス状況ダッシュボード</li>
+                        <li>基本データの可視化</li>
+                        <li>月次レポート総評</li>
+                        <li>基本保守・管理</li>
+                        <li>AI改善アクション提示</li>
+                        <li>AIチャット相談</li>
+                    </ul>
                 </div>
 
-                <!-- AIサポート（おすすめ） -->
-                <div class="sv-plan-card sv-plan-card--recommended">
-                    <div class="sv-plan-card__header">
-                        <div class="sv-plan-card__badge">おすすめ</div>
-                        <div class="sv-plan-card__name">改善提案プラン</div>
-                        <div class="sv-plan-card__price">22,000<small>円/月（税込）</small></div>
-                        <div class="sv-plan-card__tagline">AIの力で改善を加速</div>
+                <!-- プラン2: MEO・口コミ対策プラン（おすすめ） -->
+                <div class="sv-plan2 sv-plan2--recommended">
+                    <span class="sv-plan2__badge">★ おすすめ</span>
+                    <div class="sv-plan2__name">MEO・口コミ対策プラン</div>
+                    <div class="sv-plan2__subtitle">MEO対策や口コミ獲得で<br>地域集客を強化</div>
+                    <div class="sv-plan2__price">
+                        <span class="sv-plan2__price-amount">22,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
-                    <div class="sv-plan-card__body">
-                        <ul class="sv-plan-card__list">
-                            <li>サイトの見える化<span class="sv-check">◯</span></li>
-                            <li>アクセスダッシュボード<span class="sv-check">◯</span></li>
-                            <li>AI分析レポート<span class="sv-check">◯</span></li>
-                            <li>AI改善提案<span class="sv-check">◯</span></li>
-                            <li>AIチャット相談<span class="sv-check">◯</span></li>
-                            <li>定期ミーティング<span class="sv-cross">—</span></li>
-                            <li>専門スタッフの伴走支援<span class="sv-cross">—</span></li>
-                        </ul>
-                    </div>
+                    <div class="sv-plan2__cumulative">AI分析・レポートに加え</div>
+                    <ul class="sv-plan2__features">
+                        <li>MEOダッシュボード</li>
+                        <li>口コミ返信機能</li>
+                        <li>口コミアンケート＋AI機能</li>
+                        <li>MEO運用代行</li>
+                    </ul>
                 </div>
 
-                <!-- 改善代行プラン -->
-                <div class="sv-plan-card sv-plan-card--premium">
-                    <div class="sv-plan-card__header">
-                        <div class="sv-plan-card__name">改善代行プラン</div>
-                        <div class="sv-plan-card__price">99,000<small>円/月（税込）</small></div>
-                        <div class="sv-plan-card__tagline">手厚い専門支援</div>
+                <!-- プラン3: コンテンツSEO強化プラン -->
+                <div class="sv-plan2">
+                    <div class="sv-plan2__name">コンテンツSEO強化プラン</div>
+                    <div class="sv-plan2__subtitle">コンテンツSEOを強化し<br>検索流入を拡大</div>
+                    <div class="sv-plan2__price">
+                        <span class="sv-plan2__price-amount">44,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
-                    <div class="sv-plan-card__body">
-                        <ul class="sv-plan-card__list">
-                            <li>サイトの見える化<span class="sv-check">◯</span></li>
-                            <li>アクセスダッシュボード<span class="sv-check">◯</span></li>
-                            <li>AI分析レポート<span class="sv-check">◯</span></li>
-                            <li>AI改善提案<span class="sv-check">◯</span></li>
-                            <li>AIチャット相談<span class="sv-check">◯</span></li>
-                            <li>定期ミーティング<span class="sv-check">◯</span></li>
-                            <li>専門スタッフの伴走支援<span class="sv-check">◯</span></li>
-                        </ul>
-                    </div>
+                    <div class="sv-plan2__cumulative">MEO・口コミ対策に加え</div>
+                    <ul class="sv-plan2__features">
+                        <li>コンテンツSEO機能</li>
+                        <li>キーワード調査・競合分析</li>
+                        <li>コラム記事作成機能</li>
+                        <li>一次情報ストック機能</li>
+                    </ul>
                 </div>
 
+                <!-- プラン4: プロ伴走・改善実行プラン -->
+                <div class="sv-plan2">
+                    <div class="sv-plan2__name">プロ伴走・改善実行プラン</div>
+                    <div class="sv-plan2__subtitle">プロが伴走し<br>改善施策の実行まで全面サポート</div>
+                    <div class="sv-plan2__price">
+                        <span class="sv-plan2__price-amount">110,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
+                    </div>
+                    <div class="sv-plan2__cumulative">コンテンツSEO強化に加え</div>
+                    <ul class="sv-plan2__features">
+                        <li>改善指示に基づく作業</li>
+                        <li>専門スタッフ伴走支援</li>
+                        <li>定例ミーティング</li>
+                    </ul>
+                </div>
             </div>
 
             <!-- 補足 -->
@@ -294,7 +342,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    はい、大丈夫です。専門知識がなくてもわかりやすいダッシュボードとレポートをご提供しています。改善代行プランなら専門スタッフが一緒に考えますので、安心してお任せいただけます。
+                    はい、大丈夫です。専門知識がなくてもわかりやすいダッシュボードとレポートをご提供しています。プロ伴走・改善実行プランなら専門スタッフが一緒に考えますので、安心してお任せいただけます。
                 </div>
             </div>
             <div class="sv-faq__item">
@@ -303,7 +351,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    はい、いつでもプラン変更が可能です。まずは見える化プランから始めて、必要に応じてアップグレードされる方が多いです。
+                    はい、いつでもプラン変更が可能です。まずはAI分析・レポートプランから始めて、必要に応じてアップグレードされる方が多いです。
                 </div>
             </div>
             <div class="sv-faq__item">
@@ -312,7 +360,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    まずは改善提案プランがおすすめです。AIによる分析レポートと改善提案が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、改善代行プランをご検討ください。
+                    まずはMEO・口コミ対策プランがおすすめです。AI分析に加えて地域集客の強化機能が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、プロ伴走・改善実行プランをご検討ください。
                 </div>
             </div>
         </div>

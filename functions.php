@@ -1102,7 +1102,7 @@ add_action('wp_enqueue_scripts', function() {
         return;
     }
 
-    // 見える化プランはAIチャットを一切読み込まない
+    // AIチャット権限がないプランでは読み込まない
     if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat' ) ) {
         return;
     }
@@ -1325,7 +1325,7 @@ add_action( 'rest_api_init', function () {
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat' ) ) {
                 return new WP_Error(
                     'tier_insufficient',
-                    'AIチャットは改善提案プランでご利用いただけます。',
+                    'AIチャットはMEO・口コミ対策プラン以上でご利用いただけます。',
                     [ 'status' => 403 ]
                 );
             }
@@ -1343,7 +1343,7 @@ add_action( 'rest_api_init', function () {
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_voice' ) ) {
                 return new WP_Error(
                     'tier_insufficient',
-                    '音声入力は改善提案プランでご利用いただけます。',
+                    '音声入力はMEO・口コミ対策プラン以上でご利用いただけます。',
                     [ 'status' => 403 ]
                 );
             }
@@ -6801,24 +6801,24 @@ function gcrev_get_valid_plan_ids(): array {
 function gcrev_get_service_tier_definitions(): array {
     return [
         'basic' => [
-            'name'        => '見える化プラン',
-            'monthly'     => 5500,
-            'description' => '見える化中心。AIがホームページの状態を見て、毎月レポートをお届け',
+            'name'        => 'AI分析・レポートプラン',
+            'monthly'     => 11000,
+            'description' => 'AIがデータを分析しサイトの状態をレポート化',
         ],
         'ai_support' => [
-            'name'        => '改善提案プラン',
-            'monthly'     => 11000,
-            'description' => '改善提案まで。AIが状態を見て＋改善アドバイスまで提供',
+            'name'        => 'MEO・口コミ対策プラン',
+            'monthly'     => 22000,
+            'description' => 'MEO対策や口コミ獲得で地域集客を強化',
         ],
         'content_seo' => [
-            'name'        => '集客強化プラン',
-            'monthly'     => 33000,
-            'description' => 'SEO・コンテンツ強化。キーワード調査・競合分析・コラム記事作成',
+            'name'        => 'コンテンツSEO強化プラン',
+            'monthly'     => 44000,
+            'description' => 'コンテンツSEOを強化し検索流入を拡大',
         ],
         'bansou' => [
-            'name'        => '改善代行プラン',
-            'monthly'     => 55000,
-            'description' => '実行支援込みの最上位。専門スタッフが伴走・MTGで改善をサポート',
+            'name'        => 'プロ伴走・改善実行プラン',
+            'monthly'     => 110000,
+            'description' => 'プロが伴走し改善施策の実行まで全面サポート',
         ],
     ];
 }
@@ -6900,7 +6900,7 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
 /**
  * SEO関連メニュー・ページへのアクセス可否を返す。
  *
- * 集客強化プラン以上、または管理者に許可。
+ * コンテンツSEO強化プラン以上、または管理者に許可。
  *
  * @param  int  $user_id  0 の場合はログイン中ユーザー
  * @return bool
@@ -8237,12 +8237,13 @@ function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
     $params = $request->get_json_params();
 
     $type_labels = [
-        'plan_basic'      => '見える化プランに変更したい',
-        'plan_ai_support' => '改善提案プランに変更したい',
-        'plan_bansou'     => '改善代行プランに変更したい',
-        'plan_change'     => 'プラン変更について相談したい',
-        'support'         => 'サポートをお願いしたい',
-        'other'           => 'その他のお問い合わせ',
+        'plan_basic'       => 'AI分析・レポートプランに変更したい',
+        'plan_ai_support'  => 'MEO・口コミ対策プランに変更したい',
+        'plan_content_seo' => 'コンテンツSEO強化プランに変更したい',
+        'plan_bansou'      => 'プロ伴走・改善実行プランに変更したい',
+        'plan_change'      => 'プラン変更について相談したい',
+        'support'          => 'サポートをお願いしたい',
+        'other'            => 'その他のお問い合わせ',
     ];
 
     $inquiry_type = sanitize_text_field( $params['inquiry_type'] ?? '' );
