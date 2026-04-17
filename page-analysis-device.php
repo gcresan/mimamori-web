@@ -83,7 +83,7 @@ get_template_part('template-parts/analysis-help');
                         <span>-</span>
                     </div>
                 </div>
-                <div class="summary-card-icon" style="background: rgba(86,129,132,0.1); color: #568184;">📱</div>
+                <div class="summary-card-icon" style="background: rgba(59,111,184,0.12); color: #3B6FB8;">📱</div>
             </div>
             <div style="font-size: 14px; color: #555555; margin-top: 12px;">
                 全体の <strong style="color: #333333;" id="mobileShare">-</strong> を占める
@@ -104,7 +104,7 @@ get_template_part('template-parts/analysis-help');
                         <span>-</span>
                     </div>
                 </div>
-                <div class="summary-card-icon" style="background: rgba(78,138,107,0.1); color: #4E8A6B;">💻</div>
+                <div class="summary-card-icon" style="background: rgba(46,153,96,0.12); color: #2E9960;">💻</div>
             </div>
             <div style="font-size: 14px; color: #555555; margin-top: 12px;">
                 全体の <strong style="color: #333333;" id="desktopShare">-</strong> を占める
@@ -125,7 +125,7 @@ get_template_part('template-parts/analysis-help');
                         <span>-</span>
                     </div>
                 </div>
-                <div class="summary-card-icon" style="background: rgba(212,168,66,0.12); color: #D4A842;">📲</div>
+                <div class="summary-card-icon" style="background: rgba(224,160,32,0.14); color: #E0A020;">📲</div>
             </div>
             <div style="font-size: 14px; color: #555555; margin-top: 12px;">
                 全体の <strong style="color: #333333;" id="tabletShare">-</strong> を占める
@@ -464,24 +464,24 @@ function updateTrendChart(data) {
                 {
                     label: 'Mobile',
                     data: mobile,
-                    borderColor: '#568184',
-                    backgroundColor: 'rgba(86, 129, 132, 0.15)',
+                    borderColor: '#3B6FB8',
+                    backgroundColor: 'rgba(59, 111, 184, 0.15)',
                     tension: 0.4,
                     fill: true
                 },
                 {
                     label: 'Desktop',
                     data: desktop,
-                    borderColor: '#4E8A6B',
-                    backgroundColor: 'rgba(78, 138, 107, 0.12)',
+                    borderColor: '#2E9960',
+                    backgroundColor: 'rgba(46, 153, 96, 0.15)',
                     tension: 0.4,
                     fill: true
                 },
                 {
                     label: 'Tablet',
                     data: tablet,
-                    borderColor: '#D4A842',
-                    backgroundColor: 'rgba(166, 139, 91, 0.12)',
+                    borderColor: '#E0A020',
+                    backgroundColor: 'rgba(224, 160, 32, 0.15)',
                     tension: 0.4,
                     fill: true
                 }
@@ -546,9 +546,9 @@ function updateShareChart(data) {
     const sessions = [];
     const colors = [];
     const colorMap = {
-        'mobile': '#568184',
-        'desktop': '#4E8A6B',
-        'tablet': '#D4A842'
+        'mobile': '#3B6FB8',
+        'desktop': '#2E9960',
+        'tablet': '#E0A020'
     };
 
     devices_detail.forEach(device => {

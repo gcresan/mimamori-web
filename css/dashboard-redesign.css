@@ -1943,9 +1943,9 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   transition: width 0.6s ease;
   background: var(--mw-primary-teal);
 }
-.progress-fill.mobile  { background: var(--mw-primary-blue); }
-.progress-fill.desktop { background: var(--mw-primary-teal); }
-.progress-fill.tablet  { background: var(--mw-accent-attention); }
+.progress-fill.mobile  { background: #3B6FB8; }
+.progress-fill.desktop { background: #2E9960; }
+.progress-fill.tablet  { background: #E0A020; }
 
 /* ========== Chart Section (全 analysis ページ共通) ========== */
 .chart-section {

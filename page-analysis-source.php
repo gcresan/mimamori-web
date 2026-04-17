@@ -362,14 +362,14 @@ function updateSummaryCards(data) {
     
     // チャネルアイコンとカラー設定
     const channelConfig = {
-        'Direct': { icon: '🔗', bg: 'rgba(86,129,132,0.1)', color: '#568184' },
-        'Organic Search': { icon: '🔍', bg: 'rgba(78,138,107,0.1)', color: '#4E8A6B' },
-        'Referral': { icon: '🌐', bg: 'rgba(212,168,66,0.12)', color: '#D4A842' },
-        'Paid Search': { icon: '💰', bg: 'rgba(181,87,75,0.08)', color: '#C95A4F' },
-        'Social': { icon: '📱', bg: 'rgba(122,163,166,0.1)', color: '#7AA3A6' },
-        'Organic Social': { icon: '📱', bg: 'rgba(122,163,166,0.1)', color: '#7AA3A6' },
-        'Email': { icon: '✉️', bg: 'rgba(212,168,66,0.12)', color: '#D4A842' },
-        'Display': { icon: '🖼️', bg: 'rgba(181,87,75,0.08)', color: '#C95A4F' },
+        'Direct': { icon: '🔗', bg: 'rgba(59,111,184,0.12)', color: '#3B6FB8' },
+        'Organic Search': { icon: '🔍', bg: 'rgba(46,153,96,0.12)', color: '#2E9960' },
+        'Referral': { icon: '🌐', bg: 'rgba(224,160,32,0.14)', color: '#E0A020' },
+        'Paid Search': { icon: '💰', bg: 'rgba(212,87,78,0.10)', color: '#D4574E' },
+        'Social': { icon: '📱', bg: 'rgba(123,95,176,0.12)', color: '#7B5FB0' },
+        'Organic Social': { icon: '📱', bg: 'rgba(123,95,176,0.12)', color: '#7B5FB0' },
+        'Email': { icon: '✉️', bg: 'rgba(23,167,155,0.12)', color: '#17A79B' },
+        'Display': { icon: '🖼️', bg: 'rgba(214,107,154,0.12)', color: '#D66B9A' },
     };
     
     const cards = channels_summary.map(channel => {
@@ -424,20 +424,20 @@ function updateTrendChart(data) {
     
     // チャネル別色設定
     const channelColors = {
-        'Direct': '#568184',
-        'Organic Search': '#4E8A6B',
-        'Referral': '#D4A842',
-        'Paid Search': '#C95A4F',
-        'Social': '#7AA3A6',
-        'Organic Social': '#7AA3A6',
-        'Paid Social': '#5A9AA6',
-        'Email': '#B08A3E',
-        'Display': '#B85A4F',
-        'Unassigned': '#8B7BAA',
-        'Cross-network': '#A6856B',
-        'Organic Shopping': '#6B9A7B',
-        'Organic Maps': '#6B8A9A',
-        'Affiliates': '#9A7B6B',
+        'Direct': '#3B6FB8',
+        'Organic Search': '#2E9960',
+        'Referral': '#E0A020',
+        'Paid Search': '#D4574E',
+        'Social': '#7B5FB0',
+        'Organic Social': '#7B5FB0',
+        'Paid Social': '#9B4DCA',
+        'Email': '#17A79B',
+        'Display': '#D66B9A',
+        'Unassigned': '#6B7280',
+        'Cross-network': '#F97316',
+        'Organic Shopping': '#0EA5E9',
+        'Organic Maps': '#84CC16',
+        'Affiliates': '#A16207',
     };
     
     
@@ -523,20 +523,20 @@ function updateShareChart(data) {
     const sessions = [];
     const colors = [];
     const channelColorMap = {
-        'Direct': '#568184',
-        'Organic Search': '#4E8A6B',
-        'Referral': '#D4A842',
-        'Paid Search': '#C95A4F',
-        'Social': '#7AA3A6',
-        'Organic Social': '#7AA3A6',
-        'Paid Social': '#5A9AA6',
-        'Email': '#B08A3E',
-        'Display': '#B85A4F',
-        'Unassigned': '#8B7BAA',
-        'Cross-network': '#A6856B',
-        'Organic Shopping': '#6B9A7B',
-        'Organic Maps': '#6B8A9A',
-        'Affiliates': '#9A7B6B',
+        'Direct': '#3B6FB8',
+        'Organic Search': '#2E9960',
+        'Referral': '#E0A020',
+        'Paid Search': '#D4574E',
+        'Social': '#7B5FB0',
+        'Organic Social': '#7B5FB0',
+        'Paid Social': '#9B4DCA',
+        'Email': '#17A79B',
+        'Display': '#D66B9A',
+        'Unassigned': '#6B7280',
+        'Cross-network': '#F97316',
+        'Organic Shopping': '#0EA5E9',
+        'Organic Maps': '#84CC16',
+        'Affiliates': '#A16207',
     };
 
     channels_summary.forEach(channel => {

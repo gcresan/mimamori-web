@@ -2348,8 +2348,8 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         var metricLabel = json.metric_label || json.metric || '';
 
         var barColors = [
-            '#568184','#7AA3A6','#a3c9a9','#bddac0','#C95A4F',
-            '#D4756A','#DFA192','#E8C5BE','#A8A29E','#C5BFB9'
+            '#3B6FB8','#2E9960','#E0A020','#D4574E','#7B5FB0',
+            '#17A79B','#D66B9A','#F97316','#0EA5E9','#6B7280'
         ];
 
         ddChart = new Chart('drilldownChart', {

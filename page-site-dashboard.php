@@ -507,10 +507,10 @@ get_template_part('template-parts/period-selector');
     };
 
     // ドーナツチャートの色
-    var donutColors = ['#568184', '#7AA3A6', '#C9A84C'];
+    var donutColors = ['#3B6FB8', '#2E9960', '#E0A020'];
 
     // 横棒チャートの色
-    var hbarColors = ['#568184', '#7AA3A6', '#A0BFC1', '#C3CED0', '#D9E2E3'];
+    var hbarColors = ['#3B6FB8', '#2E9960', '#E0A020', '#D4574E', '#7B5FB0'];
 
     // =============================================
     // ユーティリティ

@@ -502,7 +502,7 @@ function renderDeviceCv(data) {
 
     function renderGrid(useRealloc) {
         const icons = { 'mobile': '📱', 'desktop': '💻', 'tablet': '📟' };
-        const colors = { 'mobile': '#568184', 'desktop': '#4E8A6B', 'tablet': '#D4A842' };
+        const colors = { 'mobile': '#3B6FB8', 'desktop': '#2E9960', 'tablet': '#E0A020' };
 
         const deviceData = useRealloc ? rows.map(r => ({
             dimension: r.label,
@@ -550,8 +550,8 @@ function renderDeviceCvChart(deviceData) {
     const cvData = deviceData.map(d => d.allocatedCv);
     const cvrData = deviceData.map(d => d.cvr);
     const bgColors = deviceData.map(d => {
-        const c = { 'mobile': '#568184', 'desktop': '#4E8A6B', 'tablet': '#D4A842' };
-        return c[d.dimension.toLowerCase()] || '#888888';
+        const c = { 'mobile': '#3B6FB8', 'desktop': '#2E9960', 'tablet': '#E0A020' };
+        return c[d.dimension.toLowerCase()] || '#6B7280';
     });
 
     deviceCvChart = new Chart(ctx, {
@@ -645,7 +645,7 @@ function renderSourceCvChart(sourceData) {
     if (sourceCvChart) sourceCvChart.destroy();
 
     const bgColors = sourceData.map((_, i) => {
-        const palette = ['#568184','#4E8A6B','#A68B5B','#C95A4F','#8B7BAA','#5B8A8E','#6B9E72','#6BAA5E'];
+        const palette = ['#3B6FB8','#2E9960','#E0A020','#D4574E','#7B5FB0','#17A79B','#D66B9A','#F97316'];
         return palette[i % palette.length];
     });
 

@@ -564,22 +564,22 @@ const otherData = gender_age_cross.map(item => {
                 {
                     label: '男性',
                     data: maleData,
-                    backgroundColor: 'rgba(86, 129, 132, 0.8)',
-                    borderColor: '#568184',
+                    backgroundColor: 'rgba(59, 111, 184, 0.8)',
+                    borderColor: '#3B6FB8',
                     borderWidth: 1
                 },
                 {
                     label: '女性',
                     data: femaleData,
-                    backgroundColor: 'rgba(236, 72, 153, 0.8)',
-                    borderColor: '#C95A4F',
+                    backgroundColor: 'rgba(214, 107, 154, 0.85)',
+                    borderColor: '#D66B9A',
                     borderWidth: 1
                 },
                 {
                     label: 'その他',
                     data: otherData,
-                    backgroundColor: 'rgba(156, 163, 175, 0.8)',
-                    borderColor: '#888888',
+                    backgroundColor: 'rgba(148, 163, 184, 0.8)',
+                    borderColor: '#6B7280',
                     borderWidth: 1
                 }
             ]

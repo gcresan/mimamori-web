@@ -764,7 +764,7 @@ function createDeviceChart(devices) {
     // データ準備
     const labels = [];
     const data = [];
-    const colors = ['#568184', '#A68B5B', '#7B8EAA', '#C95A4F', '#8B7BAA'];
+    const colors = ['#3B6FB8', '#2E9960', '#E0A020', '#D4574E', '#7B5FB0'];
     
     devices.slice(0, 5).forEach(item => {
         const name = getDeviceName(item.device || item.deviceCategory || 'unknown');
