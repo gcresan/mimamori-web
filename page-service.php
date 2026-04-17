@@ -91,15 +91,15 @@ get_header();
             position: relative;
         }
         .sv-plan2--recommended {
-            border: 2px solid #C0392B;
-            box-shadow: 0 4px 20px rgba(192,57,43,0.10);
+            border: 2px solid #4ECDC4;
+            box-shadow: 0 4px 20px rgba(78,205,196,0.10);
         }
         .sv-plan2__badge {
             position: absolute;
             top: -14px;
             left: 50%;
             transform: translateX(-50%);
-            background: #C0392B;
+            background: #4ECDC4;
             color: #fff;
             font-size: 12px;
             font-weight: 700;
@@ -132,16 +132,13 @@ get_header();
             font-weight: 800;
             color: #333;
         }
-        .sv-plan2--recommended .sv-plan2__price-amount {
-            color: #C0392B;
-        }
         .sv-plan2__price-unit {
             font-size: 13px;
             color: #888;
             margin-left: 2px;
         }
         .sv-plan2__cumulative {
-            color: #C0392B;
+            color: #4ECDC4;
             font-size: 13px;
             font-weight: 700;
             margin-bottom: 10px;
@@ -168,7 +165,7 @@ get_header();
         .sv-plan2__features li:last-child { border-bottom: none; }
         .sv-plan2__features li::before {
             content: "✓";
-            color: #C0392B;
+            color: #4ECDC4;
             font-weight: 700;
             flex-shrink: 0;
         }

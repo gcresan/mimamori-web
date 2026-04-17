@@ -61,18 +61,15 @@ get_header();
 
 /* --- おすすめカード --- */
 .plan-card--recommended {
-    border: 2px solid #C0392B;
-    box-shadow: 0 4px 20px rgba(192,57,43,0.10);
-}
-.plan-card--recommended .plan-card__price-amount {
-    color: #C0392B;
+    border: 2px solid #4ECDC4;
+    box-shadow: 0 4px 20px rgba(78,205,196,0.10);
 }
 .plan-card__badge {
     position: absolute;
     top: -14px;
     left: 50%;
     transform: translateX(-50%);
-    background: #C0392B;
+    background: #4ECDC4;
     color: #fff;
     font-size: 12px;
     font-weight: 700;
@@ -137,7 +134,7 @@ get_header();
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #C0392B;
+    color: #4ECDC4;
     font-size: 13px;
     font-weight: 700;
     margin: 0 0 10px;
@@ -183,9 +180,9 @@ get_header();
     height: 18px;
     margin-top: 1px;
 }
-.plan-feature-icon--check { color: #C0392B; }
+.plan-feature-icon--check { color: #4ECDC4; }
 .plan-feature-icon--dash  { color: #ddd; }
-.plan-feature-icon--new   { color: #C0392B; }
+.plan-feature-icon--new   { color: #F59E0B; }
 
 .plan-feature-text {
     flex: 1;
@@ -201,7 +198,7 @@ get_header();
     display: inline-block;
     font-size: 10px;
     font-weight: 700;
-    color: #C0392B;
+    color: #F59E0B;
     margin-left: 4px;
 }
 
@@ -211,7 +208,7 @@ get_header();
     padding: 10px 0 4px;
     font-size: 11px;
     font-weight: 700;
-    color: #C0392B;
+    color: #F59E0B;
     letter-spacing: 0.05em;
 }
 .plan-card__features li.feature-divider .plan-feature-icon { display: none; }
@@ -232,11 +229,11 @@ get_header();
     box-sizing: border-box;
 }
 .plan-card__cta--primary {
-    background: #C0392B;
+    background: #4ECDC4;
     color: #fff;
 }
 .plan-card__cta--primary:hover {
-    background: #a4301f;
+    background: #3dbdb5;
     color: #fff;
 }
 .plan-card__cta--secondary {
@@ -309,7 +306,7 @@ get_header();
     border-radius: 10px;
 }
 .plans-guide__item-plan--basic        { color: #888; background: #f0f0f0; }
-.plans-guide__item-plan--ai_support   { color: #C0392B; background: rgba(192,57,43,0.08); }
+.plans-guide__item-plan--ai_support   { color: #4ECDC4; background: rgba(78,205,196,0.08); }
 .plans-guide__item-plan--content_seo  { color: #B45309; background: rgba(245,158,11,0.08); }
 .plans-guide__item-plan--bansou       { color: #9333ea; background: rgba(147,51,234,0.08); }
 
