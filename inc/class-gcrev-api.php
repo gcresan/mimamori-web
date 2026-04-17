@@ -4955,6 +4955,28 @@ PROMPT;
         $data['ga4_phone_tap']  = (int) ( $effective['components']['phone_tap_total'] ?? 0 );
         $data['effective_cv']   = $effective; // 全データ（テンプレート・スコア計算で利用）
 
+        // 表示ラベル別内訳（ダッシュボードカード・グラフの凡例用）
+        // ゴール関連設定で指定した「表示ラベル」ごとにカウントをまとめる
+        $breakdown_items = [];
+        foreach ($effective['breakdown_by_label'] ?? [] as $key => $item) {
+            $cnt = (int) ($item['count'] ?? 0);
+            if ($cnt <= 0) continue;
+            $label = (string) ($item['label'] ?? $key);
+            // 同じ表示ラベルを持つイベントは合算（例: phone_click と 電話タップ の両方にラベル '電話タップ' が付いている場合）
+            if (isset($breakdown_items[$label])) {
+                $breakdown_items[$label]['count'] += $cnt;
+            } else {
+                $breakdown_items[$label] = [
+                    'label'  => $label,
+                    'count'  => $cnt,
+                    'source' => (string) ($item['source'] ?? 'ga4'),
+                ];
+            }
+        }
+        // count 降順に並び替え → 配列化
+        usort($breakdown_items, function ($a, $b) { return $b['count'] <=> $a['count']; });
+        $data['cv_breakdown_items'] = array_values($breakdown_items);
+
         // --- CV増減（trends.conversions）も実質CVベースで再計算 ---
         $comp_period = ($period === 'prev-month' || $period === 'previousMonth')
             ? 'prev-prev-month'

@@ -523,11 +523,36 @@ if ($infographic && is_array($infographic)) {
         $tap_total_prev = $ga4_phone_tap_prev + ($call_clicks_prev ?? 0);
         $cv_total_curr = $cv_curr + ($call_clicks_curr ?? 0);
         $cv_total_prev = $cv_prev + ($call_clicks_prev ?? 0);
+        // 表示ラベル別内訳（GA4 の effective_cv.breakdown_by_label に MEO 電話タップを合算）
+        $cv_breakdown_items = [];
+        foreach (($kpi_curr['cv_breakdown_items'] ?? []) as $item) {
+            $cv_breakdown_items[(string)($item['label'] ?? '')] = [
+                'label'  => (string)($item['label'] ?? ''),
+                'count'  => (int)($item['count'] ?? 0),
+                'source' => (string)($item['source'] ?? 'ga4'),
+            ];
+        }
+        // MEO 電話タップを「電話タップ」ラベルに合算（なければ新規作成）
+        if (($call_clicks_curr ?? 0) > 0) {
+            if (isset($cv_breakdown_items['電話タップ'])) {
+                $cv_breakdown_items['電話タップ']['count'] += (int) $call_clicks_curr;
+            } else {
+                $cv_breakdown_items['電話タップ'] = [
+                    'label'  => '電話タップ',
+                    'count'  => (int) $call_clicks_curr,
+                    'source' => 'meo',
+                ];
+            }
+        }
+        $cv_breakdown_items = array_values($cv_breakdown_items);
+        usort($cv_breakdown_items, function ($a, $b) { return $b['count'] <=> $a['count']; });
+
         $infographic['kpi']['cv']     = [
-            'value'       => $cv_total_curr,
-            'diff'        => $cv_total_curr - $cv_total_prev,
-            'hp_cv'       => $hp_form_curr,    // フォーム等（GA4 CV − GA4 電話タップ）
-            'call_clicks' => $tap_total_curr,  // GA4 電話タップ + MEO 電話タップ
+            'value'              => $cv_total_curr,
+            'diff'               => $cv_total_curr - $cv_total_prev,
+            'hp_cv'              => $hp_form_curr,    // 互換（他の箇所で参照されている可能性）
+            'call_clicks'        => $tap_total_curr,  // 互換
+            'breakdown_items'    => $cv_breakdown_items,
         ];
         // MEOはキャッシュがある場合のみ上書き（なければJS非同期で後から更新）
         if ($meo_curr !== null && $meo_prev !== null) {
@@ -755,12 +780,19 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             <?php if ($key === 'cv'): ?>
             <span class="info-kpi-breakdown" data-kpi-role="breakdown">
               <?php
-              $hp_cv_val = (int)($kpi['hp_cv'] ?? $kpi_val);
-              $cc_val    = (int)($kpi['call_clicks'] ?? 0);
-              if ($hp_cv_val > 0 || $cc_val > 0) {
-                  echo '<span class="bk-item">HP ' . esc_html(number_format($hp_cv_val)) . '</span>';
-                  echo '<span class="bk-sep">/</span>';
-                  echo '<span class="bk-item">電話タップ ' . esc_html(number_format($cc_val)) . '</span>';
+              // ゴール関連設定で定義した表示ラベル別のカウント数を表示
+              $items = $kpi['breakdown_items'] ?? [];
+              $pieces = [];
+              foreach ($items as $it) {
+                  $cnt = (int) ($it['count'] ?? 0);
+                  if ($cnt <= 0) continue;
+                  $pieces[] = '<span class="bk-item">'
+                      . esc_html((string)($it['label'] ?? '')) . ' '
+                      . esc_html(number_format($cnt))
+                      . '</span>';
+              }
+              if (!empty($pieces)) {
+                  echo implode('<span class="bk-sep">/</span>', $pieces);
               }
               ?>
             </span>
@@ -1434,17 +1466,39 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             diffEl.className = 'info-kpi-diff ' + cls;
         }
     }
-    // ゴール数カードの内訳を更新
-    function updateCvBreakdown(hpCv, callClicks){
+    // ゴール数カードの内訳を更新（ゴール関連設定の表示ラベル別）
+    // items: [{label: string, count: number, source?: string}, ...]
+    function updateCvBreakdown(items){
         var el = document.querySelector('[data-kpi-key="cv"] [data-kpi-role="breakdown"]');
         if(!el) return;
-        if(hpCv > 0 || callClicks > 0){
-            el.innerHTML = '<span class="bk-item">HP ' + fmt(hpCv) + '</span>'
-                         + '<span class="bk-sep">/</span>'
-                         + '<span class="bk-item">\u96fb\u8a71\u30bf\u30c3\u30d7 ' + fmt(callClicks) + '</span>';
-        } else {
-            el.innerHTML = '';
+        var list = (items || []).filter(function(i){ return i && (i.count|0) > 0; });
+        if(list.length === 0){ el.innerHTML = ''; return; }
+        list.sort(function(a, b){ return (b.count|0) - (a.count|0); });
+        var esc = function(s){ var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; };
+        el.innerHTML = list.map(function(i, idx){
+            return (idx > 0 ? '<span class="bk-sep">/</span>' : '')
+                 + '<span class="bk-item">' + esc(i.label) + ' ' + fmt(i.count|0) + '</span>';
+        }).join('');
+    }
+
+    // GA4 の cv_breakdown_items に MEO 電話タップを合算して返す（JS 版）
+    function mergeCvBreakdown(ga4Items, meoCallClicks){
+        var map = {};
+        (ga4Items || []).forEach(function(i){
+            if (!i || !i.label) return;
+            var lbl = String(i.label);
+            map[lbl] = { label: lbl, count: (map[lbl] ? map[lbl].count : 0) + (i.count|0), source: i.source || 'ga4' };
+        });
+        var cc = (meoCallClicks|0);
+        if (cc > 0) {
+            var key = '電話タップ';
+            if (map[key]) {
+                map[key].count += cc;
+            } else {
+                map[key] = { label: key, count: cc, source: 'meo' };
+            }
         }
+        return Object.keys(map).map(function(k){ return map[k]; });
     }
 
     <?php if (!empty($kpi_curr)): ?>
@@ -1452,6 +1506,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     var curr = <?php echo wp_json_encode([
         'sessions'    => $kpi_curr['sessions'] ?? 0,
         'conversions' => $kpi_curr['conversions'] ?? 0,
+        'cv_breakdown_items' => $kpi_curr['cv_breakdown_items'] ?? [],
     ]); ?>;
     var prev = <?php echo wp_json_encode($kpi_prev ? [
         'sessions'    => $kpi_prev['sessions'] ?? 0,
@@ -1476,16 +1531,16 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     var meoCurr = <?php echo (int)$meo_curr; ?>;
     var meoPrev = <?php echo (int)$meo_prev; ?>;
     updateInfoKpi('meo', meoCurr, meoCurr - meoPrev);
-    // ゴール数: HPゴール + MEO電話タップ
+    // ゴール数: GA4 effective CV + MEO電話タップ
     var ccCurr = <?php echo (int)($call_clicks_curr ?? 0); ?>;
     var ccPrev = <?php echo (int)($call_clicks_prev ?? 0); ?>;
     updateInfoKpi('cv', currHpCv + ccCurr, (currHpCv + ccCurr) - (prevHpCv + ccPrev));
-    // 電話タップ表示は GA4電話タップ + MEO電話タップ
-    updateCvBreakdown(currHpForm, currGa4Tap + ccCurr);
+    // 表示ラベル別内訳（GA4側 + MEO電話タップ合算）
+    updateCvBreakdown(mergeCvBreakdown(curr.cv_breakdown_items, ccCurr));
     <?php else: ?>
-    // MEOキャッシュミス: まずHPゴールのみ表示、MEO非同期で後から合算
+    // MEOキャッシュミス: まずGA4側のみ表示、MEO非同期で後から合算
     updateInfoKpi('cv', currHpCv, currHpCv - prevHpCv);
-    updateCvBreakdown(currHpForm, currGa4Tap);
+    updateCvBreakdown(mergeCvBreakdown(curr.cv_breakdown_items, 0));
     (function(){
         var restBase = <?php echo wp_json_encode(esc_url_raw(rest_url('gcrev/v1/'))); ?>;
         var nonce    = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
@@ -1505,8 +1560,8 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             var ccC = (meoData && meoData.metrics) ? parseInt(meoData.metrics.call_clicks || 0, 10) : 0;
             var ccP = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.call_clicks || 0, 10) : 0;
             updateInfoKpi('cv', currHpCv + ccC, (currHpCv + ccC) - (prevHpCv + ccP));
-            // 電話タップ表示は GA4電話タップ + MEO電話タップ
-            updateCvBreakdown(currHpForm, currGa4Tap + ccC);
+            // 表示ラベル別内訳（GA4側 + MEO電話タップ合算）
+            updateCvBreakdown(mergeCvBreakdown(curr.cv_breakdown_items, ccC));
             if (card) {
                 card.classList.remove('is-kpi-loading');
                 card.classList.add('is-kpi-loaded');
@@ -1549,8 +1604,8 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
             updateInfoKpi('visits', cS, cS - pS);
             updateInfoKpi('cv', cHpCv + cCC, (cHpCv + cCC) - (pHpCv + pCC));
-            // 電話タップ表示は GA4電話タップ + MEO電話タップ
-            updateCvBreakdown(cHpForm, cGa4Tap + cCC);
+            // 表示ラベル別内訳（GA4側 + MEO電話タップ合算）
+            updateCvBreakdown(mergeCvBreakdown(curr.cv_breakdown_items, cCC));
 
             // スコアも再計算（prev=0 で計算された水増しスコアを修正）
             var gscCurr = <?php echo (int)$gsc_curr_val; ?>;
@@ -1657,7 +1712,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         }
 
         // キャッシュチェック（sessionStorage）
-        var _dashCacheKey = 'main_dash_kpi';
+        var _dashCacheKey = 'main_dash_kpi_v2'; // v2: breakdown_items 追加に伴いキー変更
         var _dashCached = window.gcrevCache && window.gcrevCache.get(_dashCacheKey);
         if (_dashCached && _dashCached.curr && _dashCached.meoData) {
             clearTimeout(timeoutId);
@@ -1669,7 +1724,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             var ccC = _dashCached.ccCurr || 0, ccP = _dashCached.ccPrev || 0;
             updateInfoKpi('visits', cS, cS - pS); finishCard('visits');
             updateInfoKpi('cv', cC + ccC, (cC + ccC) - (pC + ccP)); finishCard('cv');
-            updateCvBreakdown(cC, ccC);
+            updateCvBreakdown(mergeCvBreakdown(curr.cv_breakdown_items || [], ccC));
             updateInfoKpi('meo', mCurr, mCurr - mPrev); finishCard('meo');
             if (_dashCached.score !== undefined) updateScoreGauge(_dashCached.score);
             return; // キャッシュヒット — API呼び出しなし
@@ -1724,7 +1779,8 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
                 var ccC = (meoData && meoData.metrics) ? parseInt(meoData.metrics.call_clicks || 0, 10) : 0;
                 var ccP = (meoData && meoData.metrics_previous) ? parseInt(meoData.metrics_previous.call_clicks || 0, 10) : 0;
                 updateInfoKpi('cv', cC + ccC, (cC + ccC) - (pC + ccP));
-                updateCvBreakdown(cC, ccC);
+                // 表示ラベル別内訳（GA4側 + MEO電話タップ合算）
+                updateCvBreakdown(mergeCvBreakdown(curr.cv_breakdown_items || [], ccC));
                 finishCard('cv');
             }
 
