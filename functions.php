@@ -1325,7 +1325,7 @@ add_action( 'rest_api_init', function () {
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat' ) ) {
                 return new WP_Error(
                     'tier_insufficient',
-                    'AIチャットはMEO・口コミ対策プラン以上でご利用いただけます。',
+                    'AIチャットをご利用いただけるプランではありません。',
                     [ 'status' => 403 ]
                 );
             }
@@ -6870,9 +6870,10 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
     $tier_hierarchy = [ 'basic' => 0, 'ai_support' => 1, 'content_seo' => 2, 'bansou' => 3 ];
 
     $feature_map = [
-        // AI機能（ai_support のみ）
-        'ai_chat'              => 'ai_support',
-        'ai_ask_button'        => 'ai_support',
+        // AIチャット相談（全プラン共通）
+        'ai_chat'              => 'basic',
+        'ai_ask_button'        => 'basic',
+        // AI機能（ai_support 以上）
         'ai_voice'             => 'ai_support',
         'dashboard_highlights' => 'ai_support',
         'report_good_points'   => 'ai_support',
@@ -6882,7 +6883,7 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         // SEO機能（content_seo 以上）
         'seo_menu'             => 'content_seo',
         'aio_serp'             => 'content_seo',
-        // コア機能（両プラン）
+        // コア機能（全プラン）
         'dashboard'            => 'basic',
         'report_summary'       => 'basic',
         'report_kpi'           => 'basic',
