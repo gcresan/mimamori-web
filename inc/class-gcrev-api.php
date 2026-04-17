@@ -10049,6 +10049,45 @@ PROMPT;
     }
 
     /**
+     * 指定イベント（電話タップ系）の eventCount 日別取得（キャッシュ付きラッパー）
+     *
+     * レビュー画面では電話タップを「デフォルト有効」扱いで表示するが、
+     * GA4 側で keyEvent フラグを立てていないクライアントも多い。
+     * その場合、keyEvents メトリクスでは 0 になってしまうため、
+     * eventCount で補完して集計する。
+     *
+     * @return array [eventName => [YYYY-MM-DD => count, ...], ...]
+     */
+    public function get_ga4_event_count_daily(string $year_month, int $user_id, array $event_names): array {
+        if (empty($event_names)) {
+            return [];
+        }
+        sort($event_names);
+        $filter_suffix = $this->ga4->has_country_filter() ? '_jp' : '';
+        $names_hash = substr(md5(implode('|', $event_names)), 0, 8);
+        $cache_key = "gcrev_ga4evc_daily_{$user_id}_{$year_month}_{$names_hash}{$filter_suffix}";
+        $cached = get_transient($cache_key);
+        if ($cached !== false && is_array($cached)) {
+            return $cached;
+        }
+
+        $dt = new \DateTime($year_month . '-01');
+        $days = (int)$dt->format('t');
+        $start = $year_month . '-01';
+        $end   = $year_month . '-' . str_pad((string)$days, 2, '0', STR_PAD_LEFT);
+
+        $result = [];
+        try {
+            $config = $this->config->get_user_config($user_id);
+            $result = $this->ga4->fetch_ga4_event_count_daily($config['ga4_id'], $start, $end, $event_names);
+            set_transient($cache_key, $result, 36 * HOUR_IN_SECONDS);
+        } catch (\Exception $e) {
+            error_log("[GCREV] get_ga4_event_count_daily ERROR: " . $e->getMessage());
+        }
+        return $result;
+    }
+
+    /**
      * GA4キーイベント日別取得（キャッシュ付きラッパー）
      * @return array [eventName => [YYYY-MM-DD => count, ...], ...]
      */
@@ -10162,8 +10201,8 @@ PROMPT;
         }
 
         // トランジェントキャッシュ（リクエスト間で共有、2時間）
-        // v2: reviewed phone_tap を max 合成するよう修正（キー変更で旧キャッシュ失効）
-        $transient_key = "gcrev_effcv_v2_{$user_id}_{$year_month}{$filter_suffix}";
+        // v3: 電話タップを eventCount で補完するよう修正（キー変更で旧キャッシュ失効）
+        $transient_key = "gcrev_effcv_v3_{$user_id}_{$year_month}{$filter_suffix}";
         $transient = get_transient($transient_key);
         if ($transient !== false && is_array($transient)) {
             $this->effective_cv_cache[$cache_key] = $transient;
@@ -10201,14 +10240,68 @@ PROMPT;
                 if ($en === '電話タップ' || $en === 'phone_tap') return true;
                 return ($all_label_map[$en] ?? '') === '電話タップ';
             };
+            // 電話タップ系は GA4 keyEvents に含まれていなくても eventCount で補完
+            $phone_tap_event_names_pure = [];
+            foreach (array_keys($ga4_events_daily_for_phone) as $en) {
+                if ($is_phone_tap_pure($en)) $phone_tap_event_names_pure[] = $en;
+            }
+            foreach (['電話タップ', 'phone_tap'] as $en) {
+                if (!in_array($en, $phone_tap_event_names_pure, true)) {
+                    $phone_tap_event_names_pure[] = $en;
+                }
+            }
+            if ($phone_event !== '' && !in_array($phone_event, $phone_tap_event_names_pure, true)) {
+                $phone_tap_event_names_pure[] = $phone_event;
+            }
+            $phone_tap_ec_daily = $this->get_ga4_event_count_daily(
+                $year_month, $user_id, $phone_tap_event_names_pure
+            );
+
             foreach ($ga4_events_daily_for_phone as $en => $dates) {
                 $is_pt = $is_phone_tap_pure($en);
-                $event_sum = array_sum($dates);
+                // 電話タップは keyEvents と eventCount の max
+                $effective_dates = $dates;
+                if ($is_pt) {
+                    $ec_dates = $phone_tap_ec_daily[$en] ?? [];
+                    foreach ($ec_dates as $d => $v) {
+                        $effective_dates[$d] = max((int)($dates[$d] ?? 0), (int) $v);
+                    }
+                }
+                $event_sum = array_sum($effective_dates);
                 if ($is_pt) {
                     $phone_tap_total += $event_sum;
-                    foreach ($dates as $date => $val) {
+                    foreach ($effective_dates as $date => $val) {
                         $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + (int) $val;
                     }
+                    // ga4_daily にも差分（eventCount - keyEvents）を足す
+                    foreach ($effective_dates as $date => $val) {
+                        $existing_key = (int) ($dates[$date] ?? 0);
+                        $extra = (int) $val - $existing_key;
+                        if ($extra > 0) {
+                            $ga4_daily[$date] = ($ga4_daily[$date] ?? 0) + $extra;
+                        }
+                    }
+                }
+                if ($event_sum > 0) {
+                    $breakdown_by_label[$en] = [
+                        'label'  => $all_label_map[$en] ?? $en,
+                        'count'  => $event_sum,
+                        'source' => 'ga4',
+                    ];
+                }
+            }
+
+            // keyEvents に含まれていない電話タップ系イベントを補完
+            $already_seen = array_keys($ga4_events_daily_for_phone);
+            foreach ($phone_tap_ec_daily as $en => $ec_dates) {
+                if (in_array($en, $already_seen, true)) continue;
+                if (!$is_phone_tap_pure($en)) continue;
+                $event_sum = array_sum($ec_dates);
+                $phone_tap_total += $event_sum;
+                foreach ($ec_dates as $date => $val) {
+                    $val = (int) $val;
+                    $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $val;
+                    $ga4_daily[$date] = ($ga4_daily[$date] ?? 0) + $val;
                 }
                 if ($event_sum > 0) {
                     $breakdown_by_label[$en] = [
@@ -10292,6 +10385,32 @@ PROMPT;
             return false;
         };
 
+        // 電話タップ系イベントは GA4 側で keyEvent に設定されていない場合でも
+        // レビュー画面では「デフォルト有効」として扱われるため、
+        // eventCount ベースで別途取得して keyEvents 値と max を取る。
+        // （これにより、GA4 で keyEvent 未設定のクライアントでも電話タップが集計される）
+        $phone_tap_event_names = [];
+        foreach ($override_keys as $en) {
+            if ($is_phone_tap($en)) $phone_tap_event_names[] = $en;
+        }
+        foreach (array_keys($ga4_events_daily) as $en) {
+            if ($is_phone_tap($en) && !in_array($en, $phone_tap_event_names, true)) {
+                $phone_tap_event_names[] = $en;
+            }
+        }
+        // 慣習的イベント名も追加（GA4 側で keyEvents 応答に含まれていなくても拾う）
+        foreach (['電話タップ', 'phone_tap'] as $en) {
+            if (!in_array($en, $phone_tap_event_names, true)) {
+                $phone_tap_event_names[] = $en;
+            }
+        }
+        if ($phone_event !== '' && !in_array($phone_event, $phone_tap_event_names, true)) {
+            $phone_tap_event_names[] = $phone_event;
+        }
+        $phone_tap_event_count_daily = $this->get_ga4_event_count_daily(
+            $year_month, $user_id, $phone_tap_event_names
+        );
+
         // ダッシュボード「電話タップ」内訳用に、電話タップ起源 CV の合計と日別を別カウント
         $phone_tap_total = 0;
         $phone_tap_daily = $empty_daily;
@@ -10313,6 +10432,12 @@ PROMPT;
             // 電話タップのルートは only_configured ON でも GA4 フォールバックを許可
             $route_is_phone_tap = $is_phone_tap($event_name);
 
+            // 電話タップは eventCount（全イベント）と keyEvents の max を取る
+            // → GA4 側で keyEvent 未設定でも、レビュー画面のデフォルト有効と整合する値になる
+            $route_event_count_daily = $route_is_phone_tap
+                ? ($phone_tap_event_count_daily[$event_name] ?? [])
+                : [];
+
             foreach ($empty_daily as $date => $_) {
                 if ($route_has_manual) {
                     // ルートに手動データあり → 手動値のみ使用（未入力日は0）
@@ -10326,7 +10451,10 @@ PROMPT;
                     }
                 } elseif (!$only_configured || $route_is_phone_tap) {
                     // ルートに手動データなし & (設定イベントのみOFF or 電話タップ) → GA4値を使用
-                    $ga4_val = $ga4_event_daily[$date] ?? 0;
+                    // 電話タップは keyEvents と eventCount の max（どちらが大きい方）
+                    $key_val = (int) ($ga4_event_daily[$date] ?? 0);
+                    $ec_val  = (int) ($route_event_count_daily[$date] ?? 0);
+                    $ga4_val = $route_is_phone_tap ? max($key_val, $ec_val) : $key_val;
                     $daily[$date] += $ga4_val;
                     $route_ga4_sum += $ga4_val;
                     if ($route_is_phone_tap) {
@@ -10367,7 +10495,15 @@ PROMPT;
             if ($only_configured && !$is_phone_tap($event_name)) continue;
 
             $event_is_phone_tap = $is_phone_tap($event_name);
-            foreach ($dates as $date => $val) {
+            // 電話タップは keyEvents と eventCount の日別 max を使う
+            $ec_dates = $event_is_phone_tap ? ($phone_tap_event_count_daily[$event_name] ?? []) : [];
+            $effective_dates = $dates;
+            if ($event_is_phone_tap && !empty($ec_dates)) {
+                foreach ($ec_dates as $d => $v) {
+                    $effective_dates[$d] = max((int)($dates[$d] ?? 0), (int) $v);
+                }
+            }
+            foreach ($effective_dates as $date => $val) {
                 if (isset($daily[$date])) {
                     $daily[$date] += $val;
                 }
@@ -10375,12 +10511,41 @@ PROMPT;
                     $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $val;
                 }
             }
-            $event_sum = array_sum($dates);
+            $event_sum = array_sum($effective_dates);
             $ga4_only_total += $event_sum;
             if ($event_is_phone_tap) {
                 $phone_tap_total += $event_sum;
             }
 
+            if ($event_sum > 0) {
+                $breakdown_by_label[$event_name] = [
+                    'label'  => $route_label_map[$event_name] ?? $event_name,
+                    'count'  => $event_sum,
+                    'source' => 'ga4',
+                ];
+            }
+        }
+
+        // 3) 電話タップ系で keyEvents にも override_keys にも現れなかったイベントを補完
+        //    （GA4 側で keyEvent 未設定で、ルートにも登録されていないが
+        //      慣習イベント名 '電話タップ'/'phone_tap' に一致するケース）
+        $already_counted_phone_tap_events = array_merge(
+            $override_keys,
+            array_keys($ga4_events_daily)
+        );
+        foreach ($phone_tap_event_count_daily as $event_name => $ec_dates) {
+            if (in_array($event_name, $already_counted_phone_tap_events, true)) continue;
+            if (!$is_phone_tap($event_name)) continue;
+            foreach ($ec_dates as $date => $val) {
+                $val = (int) $val;
+                if (isset($daily[$date])) {
+                    $daily[$date] += $val;
+                }
+                $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $val;
+            }
+            $event_sum = array_sum($ec_dates);
+            $ga4_only_total += $event_sum;
+            $phone_tap_total += $event_sum;
             if ($event_sum > 0) {
                 $breakdown_by_label[$event_name] = [
                     'label'  => $route_label_map[$event_name] ?? $event_name,

@@ -1459,6 +1459,92 @@ class Gcrev_GA4_Fetcher {
         return $out;
     }
 
+    /**
+     * 指定イベント名の eventCount を日別で取得（keyEvents 未設定でもカウントされる）
+     *
+     * 用途: 電話タップなど GA4 側で keyEvent フラグを立てていない
+     * イベントを「レビュー画面のデフォルト有効」扱いで集計するため。
+     *
+     * @param string   $property_id GA4 プロパティID
+     * @param string   $start       YYYY-MM-DD
+     * @param string   $end         YYYY-MM-DD
+     * @param string[] $event_names 対象イベント名（EXACT マッチで OR）
+     * @return array [eventName => [YYYY-MM-DD => count, ...], ...]
+     */
+    public function fetch_ga4_event_count_daily(string $property_id, string $start, string $end, array $event_names): array {
+        if (empty($event_names)) {
+            return [];
+        }
+
+        $this->prepare_ga4_call();
+        $client = new BetaAnalyticsDataClient();
+
+        // eventName EXACT フィルタ（単一 or OR）
+        if (count($event_names) === 1) {
+            $filter_expression = new FilterExpression([
+                'filter' => new Filter([
+                    'field_name'    => 'eventName',
+                    'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter([
+                        'value'      => $event_names[0],
+                        'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+                    ]),
+                ]),
+            ]);
+        } else {
+            $filters = [];
+            foreach ($event_names as $name) {
+                $filters[] = new FilterExpression([
+                    'filter' => new Filter([
+                        'field_name'    => 'eventName',
+                        'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter([
+                            'value'      => $name,
+                            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+                        ]),
+                    ]),
+                ]);
+            }
+            $filter_expression = new FilterExpression([
+                'or_group' => new FilterExpressionList([
+                    'expressions' => $filters,
+                ]),
+            ]);
+        }
+
+        $params = [
+            'property'         => 'properties/' . $property_id,
+            'date_ranges'      => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
+            'dimensions'       => [
+                new Dimension(['name' => 'eventName']),
+                new Dimension(['name' => 'date']),
+            ],
+            'metrics'          => [ new Metric(['name' => 'eventCount']) ],
+            'dimension_filter' => $filter_expression,
+            'limit'            => 10000,
+        ];
+        $this->apply_country_filter($params);
+
+        $request  = new RunReportRequest($params);
+        $response = $client->runReport($request);
+
+        $out = [];
+        foreach ($response->getRows() as $row) {
+            $name    = (string) ($row->getDimensionValues()[0]->getValue() ?? '');
+            $dateRaw = (string) ($row->getDimensionValues()[1]->getValue() ?? '');
+            $val     = (int) ($row->getMetricValues()[0]->getValue() ?? 0);
+
+            if ($name === '' || $dateRaw === '') continue;
+
+            $dk = substr($dateRaw, 0, 4) . '-' . substr($dateRaw, 4, 2) . '-' . substr($dateRaw, 6, 2);
+
+            if (!isset($out[$name])) {
+                $out[$name] = [];
+            }
+            $out[$name][$dk] = ($out[$name][$dk] ?? 0) + $val;
+        }
+
+        return $out;
+    }
+
     public function is_likely_contact_event(string $name): bool {
         $n = mb_strtolower($name);
         $keywords = ['contact', 'inquiry', 'form', 'lead', 'cv', 'conversion', 'submit', 'toiawase', 'お問い合わせ', '問合せ', '問い合わせ', '送信', '完了'];
