@@ -436,8 +436,8 @@ get_header();
             'subtitle'     => 'コンテンツSEOを強化し検索流入を拡大',
             'name'         => 'コンテンツSEO強化プラン',
             'price'        => '44,000',
-            'badge'        => false,
-            'coming_soon'  => false,
+            'badge'        => '近日公開予定',
+            'coming_soon'  => true,
             'cumulative'   => 'MEO・口コミ対策に加え',
             'features'     => [
                 [ 'text' => 'コンテンツSEO機能',          'on' => true ],
