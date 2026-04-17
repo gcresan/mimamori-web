@@ -12402,7 +12402,8 @@ PROMPT;
         $current_month = date('Y-m');
         $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
         if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
-        $cache_key = "gcrev_trend_{$user_id}_{$metric}_{$current_month}{$filter_sfx}";
+        // v2: CV は effective CV + MEO電話タップの合計に変更（ダッシュボードカードと整合）
+        $cache_key = "gcrev_trend_v2_{$user_id}_{$metric}_{$current_month}{$filter_sfx}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             return $cached;
@@ -12441,9 +12442,35 @@ PROMPT;
                 break;
 
             case 'cv':
+                // ダッシュボードカードと同じ計算: effective CV + MEO 電話タップ
+                // まず MEO 日別 call_clicks を一括取得（API呼び出しを最小化）
+                $meo_call_clicks_monthly = array_fill_keys($labels, 0);
+                $meo_location_id = get_user_meta($user_id, '_gcrev_gbp_location_id', true);
+                $meo_is_pending  = (!empty($meo_location_id) && strpos($meo_location_id, 'pending_') === 0);
+                if (!empty($meo_location_id) && !$meo_is_pending) {
+                    $meo_token = $this->gbp_get_access_token($user_id);
+                    if (!empty($meo_token)) {
+                        try {
+                            $range_start = $labels[0] . '-01';
+                            $range_end   = date('Y-m-t', strtotime($labels[count($labels) - 1] . '-01'));
+                            $meo_daily_rows = $this->gbp_fetch_daily_metrics($meo_token, $meo_location_id, $range_start, $range_end);
+                            foreach ($meo_daily_rows as $row) {
+                                $ym = substr($row['date'] ?? '', 0, 7);
+                                if (isset($meo_call_clicks_monthly[$ym])) {
+                                    $meo_call_clicks_monthly[$ym] += (int)($row['call_clicks'] ?? 0);
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            file_put_contents('/tmp/gcrev_gbp_debug.log',
+                                date('Y-m-d H:i:s') . " [Trend cv] MEO call_clicks monthly error: " . $e->getMessage() . "\n",
+                                FILE_APPEND
+                            );
+                        }
+                    }
+                }
                 foreach ($labels as $ym) {
                     $cv = $this->get_effective_cv_monthly($ym, $user_id);
-                    $values[] = $cv['total'] ?? 0;
+                    $values[] = (int)($cv['total'] ?? 0) + (int)($meo_call_clicks_monthly[$ym] ?? 0);
                 }
                 break;
 
@@ -12514,7 +12541,8 @@ PROMPT;
         $today_str = date('Y-m-d');
         $filter_sfx = (isset($this->ga4) && $this->ga4->has_country_filter()) ? '_jp' : '';
         if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
-        $cache_key = "gcrev_trend_daily_{$user_id}_{$metric}_{$today_str}{$filter_sfx}";
+        // v2: CV を effective CV（gcrev_cv_routes / レビュー結果を反映）+ MEO電話タップに変更
+        $cache_key = "gcrev_trend_daily_v2_{$user_id}_{$metric}_{$today_str}{$filter_sfx}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             return $cached;
@@ -12566,24 +12594,34 @@ PROMPT;
                 break;
 
             case 'cv':
-                $config = $this->config->get_user_config($user_id);
-                $ga4_id = $config['ga4_id'] ?? '';
-                if (empty($ga4_id)) {
-                    $values = array_fill(0, $days, 0);
-                    break;
-                }
+                // ダッシュボードカードと同じ計算: effective CV（gcrev_cv_routes / レビュー結果を反映）
+                // + MEO 電話タップ（call_clicks）を日別に加算
                 try {
-                    $daily = $this->ga4->fetch_ga4_daily_series($ga4_id, $start_str, $end_str);
-                    $conv_data = $daily['conversions'] ?? [];
-                    $conv_labels = $conv_data['labels'] ?? [];
-                    $conv_values = $conv_data['values'] ?? [];
-                    $conv_map = [];
-                    foreach ($conv_labels as $i => $lbl) {
-                        $conv_map[$lbl] = $conv_values[$i] ?? 0;
+                    $effective = $this->get_effective_cv_for_range($start_str, $end_str, $user_id);
+                    $cv_daily  = $effective['daily'] ?? [];
+
+                    // MEO 日別電話タップ
+                    $meo_daily_map = [];
+                    $location_id = get_user_meta($user_id, '_gcrev_gbp_location_id', true);
+                    if (!empty($location_id) && strpos($location_id, 'pending_') !== 0) {
+                        $access_token = $this->gbp_get_access_token($user_id);
+                        if (!empty($access_token)) {
+                            try {
+                                $meo_daily = $this->gbp_fetch_daily_metrics($access_token, $location_id, $start_str, $end_str);
+                                foreach ($meo_daily as $d) {
+                                    $meo_daily_map[$d['date']] = (int)($d['call_clicks'] ?? 0);
+                                }
+                            } catch (\Exception $e) {
+                                file_put_contents('/tmp/gcrev_gbp_debug.log',
+                                    date('Y-m-d H:i:s') . " [DailyTrend cv] MEO call_clicks error: " . $e->getMessage() . "\n",
+                                    FILE_APPEND
+                                );
+                            }
+                        }
                     }
+
                     foreach ($labels as $d) {
-                        $key = str_replace('-', '', $d);
-                        $values[] = (int)($conv_map[$key] ?? 0);
+                        $values[] = (int)($cv_daily[$d] ?? 0) + (int)($meo_daily_map[$d] ?? 0);
                     }
                 } catch (\Exception $e) {
                     error_log("[GCREV][DailyTrend] cv error: " . $e->getMessage());

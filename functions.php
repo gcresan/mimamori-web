@@ -6656,7 +6656,18 @@ function gcrev_rest_post_actual_cv(\WP_REST_Request $req): \WP_REST_Response {
  */
 function gcrev_invalidate_user_cv_cache(int $user_id): void {
     global $wpdb;
-    foreach (['gcrev_dash_', 'gcrev_report_', 'gcrev_effcv_'] as $prefix) {
+    // prefix は `{prefix}{user_id}_...` の形のものを一括削除
+    $prefixes = [
+        'gcrev_dash_',
+        'gcrev_report_',
+        'gcrev_effcv_',
+        // CV トレンドグラフ（月別 / 日別）— ダッシュボードの CV カードと整合させるため無効化
+        'gcrev_trend_',
+        'gcrev_trend_v2_',
+        'gcrev_trend_daily_',
+        'gcrev_trend_daily_v2_',
+    ];
+    foreach ($prefixes as $prefix) {
         $wpdb->query($wpdb->prepare(
             "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
             $wpdb->esc_like('_transient_' . $prefix . $user_id . '_') . '%',
