@@ -161,7 +161,11 @@ class Gcrev_Insight_API {
             if ( class_exists( 'Gcrev_DataForSEO_Client' ) && Gcrev_DataForSEO_Client::is_configured() ) {
                 $dataforseo_for_kwr = new Gcrev_DataForSEO_Client( $this->config );
             }
-            $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, $dataforseo_for_kwr, $this->google_ads );
+            $brightdata_for_kwr = null;
+            if ( class_exists( 'Gcrev_Brightdata_Serp_Client' ) && Gcrev_Brightdata_Serp_Client::is_configured() ) {
+                $brightdata_for_kwr = new Gcrev_Brightdata_Serp_Client();
+            }
+            $this->keyword_research = new Gcrev_Keyword_Research_Service( $this->ai, $this->config, $dataforseo_for_kwr, $this->google_ads, $brightdata_for_kwr );
         }
 
         // Step8b: Writing Service

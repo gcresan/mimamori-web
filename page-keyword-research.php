@@ -325,6 +325,14 @@ get_header();
 .kwr-diff-ads    { background: rgba(66,133,244,0.1); color: #4285F4; font-size: 10px; }
 .kwr-diff-na     { color: var(--mw-text-tertiary); font-size: 10px; }
 
+/* 戦略バッジ（ROI / 勝ちやすさ） */
+.kwr-roi-high { background: rgba(39,174,96,0.15); color: #15803d; font-weight: 600; }
+.kwr-roi-mid  { background: rgba(201,168,76,0.15); color: #a16207; font-weight: 600; }
+.kwr-roi-low  { background: rgba(201,90,79,0.12); color: #991b1b; font-weight: 600; }
+.kwr-win-high { background: rgba(39,174,96,0.10); color: #27ae60; }
+.kwr-win-mid  { background: rgba(201,168,76,0.12); color: #c9a84c; }
+.kwr-win-low  { background: rgba(201,90,79,0.10); color: #c0392b; }
+
 /* ソート可能ヘッダー */
 .kwr-table th[data-sort], .kwr-comp-kw-table th[data-sort] {
     cursor: pointer; user-select: none; position: relative; padding-right: 18px;
@@ -706,7 +714,11 @@ get_header();
     var actClass = {
         '既存ページ改善': 'kwr-badge--action-improve', '新規ページ追加': 'kwr-badge--action-new',
         'タイトル改善': 'kwr-badge--action-title', '見出し追加': 'kwr-badge--action-heading',
-        '内部リンク強化': 'kwr-badge--action-link'
+        '内部リンク強化': 'kwr-badge--action-link',
+        '新規記事作成':     'kwr-badge--action-new',
+        'コンテンツ蓄積型': 'kwr-badge--action-link',
+        '補助記事':         'kwr-badge--action-heading',
+        '検証用コンテンツ': 'kwr-badge--action-heading'
     };
 
     function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -764,11 +776,14 @@ get_header();
         var prevAvg = prev.reduce(function(s, m) { return s + (m.searches || 0); }, 0) / prev.length;
         return prevAvg > 0 ? ((recentAvg - prevAvg) / prevAvg * 100) : (recentAvg > 0 ? 100 : 0);
     }
-    function fmtDiff(v, compIndex) {
+    function fmtDiff(v, compIndex, source) {
         if (v !== null && v !== undefined) {
             var n = Math.round(v);
             var cls = n <= 30 ? 'kwr-diff-easy' : (n <= 60 ? 'kwr-diff-medium' : 'kwr-diff-hard');
-            return '<span class="kwr-badge ' + cls + '">' + n + '</span>';
+            var mark = (source === 'brightdata_serp')
+                ? '<sup title="SERP分析による推定値" style="font-size:9px;color:#888;margin-left:2px;">SERP</sup>'
+                : '';
+            return '<span class="kwr-badge ' + cls + '">' + n + '</span>' + mark;
         }
         if (compIndex !== null && compIndex !== undefined) {
             return '<span class="kwr-badge kwr-diff-ads" title="SEO難易度は未取得。広告競争度を参考表示">広告競争度:' + Math.round(compIndex) + '</span>';
@@ -819,7 +834,7 @@ get_header();
         var enableComp = compEl ? compEl.checked : false;
 
         btn.disabled = true;
-        showProgress(enableComp ? '競合サイトの分析中です…（1〜2分程度）' : 'AIがキーワード候補を分析中です…（30秒〜1分程度）');
+        showProgress(enableComp ? '競合サイトの分析中です…（2〜3分程度）' : 'AIと外部データで分析中です…（1〜2分程度）');
         document.getElementById('kwrEmpty').style.display = 'none';
         document.getElementById('kwrSummary').style.display = 'none';
         document.getElementById('kwrCompSummary').style.display = 'none';
@@ -946,7 +961,54 @@ get_header();
             if (!d.planner_available) {
                 html += '<br><span style="color:#c0392b;">⚠ Google Ads Keyword Planner が未設定のため検索ボリュームが欠損する可能性があります</span>';
             }
+            if (d.brightdata_available && (d.bd_processed || 0) > 0) {
+                html += '<br>SERP分析: ' + (d.bd_processed || 0) + '件処理 / '
+                     + (d.bd_computed || 0) + '件で難易度算出 / '
+                     + (d.bd_cache_hit || 0) + '件キャッシュ利用'
+                     + ((d.bd_failed || 0) > 0 ? ' / 失敗 ' + d.bd_failed + '件' : '');
+            }
+            if (!d.brightdata_available) {
+                html += '<br><span style="color:#a16207;">⚠ Bright Data が未設定のため SERP 補強は無効</span>';
+            }
             html += '</div>';
+        }
+
+        // 戦略指標（平均 ROI / 勝ちやすさ + NG 集計）
+        var roi = (meta.avg_roi_score !== undefined && meta.avg_roi_score !== null) ? meta.avg_roi_score : null;
+        var winavg = (meta.avg_win_probability !== undefined && meta.avg_win_probability !== null) ? meta.avg_win_probability : null;
+        if (roi !== null || winavg !== null) {
+            html += '<div style="margin-top:6px;font-size:11px;color:var(--mw-text-secondary);">';
+            var parts2 = [];
+            if (roi !== null)    parts2.push('<strong>平均ROI</strong>: ' + roi + '/100');
+            if (winavg !== null) parts2.push('<strong>平均勝ちやすさ</strong>: ' + winavg + '/100');
+            html += parts2.join(' / ');
+            html += '</div>';
+        }
+        if (meta.ng_counts) {
+            var sev = meta.ng_counts.severe || {};
+            var warn = meta.ng_counts.warn || {};
+            var sev_total = (sev.winnable_no_demand||0) + (sev.demand_no_sale||0) + (sev.sellable_too_competitive||0);
+            var warn_total = (warn.low_impact||0) + (warn.borderline_competition||0);
+            if (sev_total > 0 || warn_total > 0) {
+                html += '<div style="margin-top:4px;font-size:11px;">';
+                if (sev_total > 0) {
+                    html += '<span style="color:#c0392b;">NG検出(深刻)</span>: ' + sev_total + '件'
+                         + ' <span style="color:var(--mw-text-secondary);">('
+                         + '需要不足 ' + (sev.winnable_no_demand||0)
+                         + ' / 売上不向き ' + (sev.demand_no_sale||0)
+                         + ' / 競争激化 ' + (sev.sellable_too_competitive||0)
+                         + ')</span>';
+                }
+                if (warn_total > 0) {
+                    html += (sev_total > 0 ? ' / ' : '')
+                         + '<span style="color:#a16207;">注意</span>: ' + warn_total + '件'
+                         + ' <span style="color:var(--mw-text-secondary);">('
+                         + '影響小 ' + (warn.low_impact||0)
+                         + ' / 境界競争 ' + (warn.borderline_competition||0)
+                         + ')</span>';
+                }
+                html += '</div>';
+            }
         }
 
         document.getElementById('kwrMeta').innerHTML = html;
@@ -1114,6 +1176,58 @@ get_header();
         return '<span class="kwr-badge" style="background:#fff;border:1px solid ' + color + ';color:' + color + ';font-size:10px;margin-right:4px;">CV ' + esc(v) + '</span>';
     }
 
+    /* ===== 戦略判定バッジ（Phase B: ROI / win / 難易度バンド / 需要バンド / NG） ===== */
+    function fmtRoi(v) {
+        if (v === null || v === undefined) return '';
+        var n = Math.round(Number(v));
+        var cls;
+        if (n >= 70) cls = 'kwr-roi-high';
+        else if (n >= 50) cls = 'kwr-roi-mid';
+        else cls = 'kwr-roi-low';
+        return '<span class="kwr-badge ' + cls + '" title="ROIスコア（勝ちやすさ×0.5 + ビジネス適合×0.3 + ボリューム×0.2 + CV補正）" style="font-size:10px;margin-right:4px;">ROI ' + n + '</span>';
+    }
+    function fmtWin(v) {
+        if (v === null || v === undefined) return '';
+        var n = Math.round(Number(v));
+        var cls, label;
+        if (n >= 70)      { cls = 'kwr-win-high'; label = '勝てる'; }
+        else if (n >= 50) { cls = 'kwr-win-mid';  label = '狙える'; }
+        else              { cls = 'kwr-win-low';  label = '厳しい'; }
+        return '<span class="kwr-badge ' + cls + '" title="勝ちやすさ（難易度×0.4 + 適合×0.4 + CV距離×0.2）" style="font-size:10px;margin-right:4px;">' + label + ' ' + n + '</span>';
+    }
+    function fmtDiffBand(band) {
+        if (!band) return '';
+        var map = {
+            short_term: { label: '短期狙い', color: '#27ae60' },
+            mid_term:   { label: '中期',     color: '#c9a84c' },
+            long_term:  { label: '長期戦略', color: '#95a5a6' }
+        };
+        var m = map[band];
+        if (!m) return '';
+        return '<span class="kwr-badge" style="border:1px solid ' + m.color + ';color:' + m.color + ';background:#fff;font-size:10px;margin-right:4px;">' + m.label + '</span>';
+    }
+    function fmtVolBand(band) {
+        if (band !== 'very_low' && band !== 'low') return '';
+        var label = (band === 'very_low') ? '需要微小' : '需要小';
+        return '<span class="kwr-badge" style="background:#f4f0fb;color:#8e44ad;font-size:10px;margin-right:4px;" title="月間検索ボリュームが少ない">' + label + '</span>';
+    }
+    function fmtNgType(ng, severity) {
+        if (!ng) return '';
+        var map = {
+            winnable_no_demand:       { icon: '⚠', label: '需要不足',   tip: '勝てそうだが検索ボリュームが少ない' },
+            demand_no_sale:           { icon: '⚠', label: '売上不向き', tip: '需要はあるがビジネス適合度が低い' },
+            sellable_too_competitive: { icon: '⚠', label: '競争激化',   tip: 'ビジネス適合は高いが競争が激しい' },
+            low_impact:               { icon: '!', label: '影響小',     tip: 'volume 10〜30 + fit<60：取れても影響限定' },
+            borderline_competition:   { icon: '!', label: '境界競争',   tip: '難易度 60〜70 のボーダー：時間がかかる可能性' }
+        };
+        var m = map[ng]; if (!m) return '';
+        var bg, fg;
+        if (severity === 'severe') { bg = '#fdecea'; fg = '#c0392b'; }
+        else                         { bg = '#fff4e6'; fg = '#a16207'; }
+        return '<span class="kwr-badge" style="background:' + bg + ';color:' + fg + ';font-size:10px;margin-right:4px;" title="' + m.tip + '">'
+            + m.icon + ' ' + m.label + '</span>';
+    }
+
     /* ===== グループ別テーブル描画（ソート対応） ===== */
     var groupSortState = {}; // { groupKey: { key, dir } }
 
@@ -1156,10 +1270,15 @@ get_header();
                 + '<td class="kwr-vol-cell">' + fmtVol(item.volume) + '</td>'
                 + '<td class="kwr-vol-cell">' + fmtTrend(item.monthly_volumes) + '</td>'
                 + '<td class="kwr-vol-cell">' + fmtComp(item.competition, item.competition_index) + '</td>'
-                + '<td class="kwr-vol-cell">' + fmtDiff(item.difficulty, item.competition_index) + '</td>'
+                + '<td class="kwr-vol-cell">' + fmtDiff(item.difficulty, item.competition_index, item.difficulty_source) + '</td>'
                 + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
                 + '<td style="font-size:12px;color:var(--mw-text-secondary);">'
-                + '<div style="margin-bottom:3px;">'
+                + '<div style="margin-bottom:3px;display:flex;flex-wrap:wrap;gap:2px;">'
+                + fmtRoi(item.roi_score)
+                + fmtWin(item.win_probability)
+                + fmtNgType(item.ng_type, item.ng_severity)
+                + fmtDiffBand(item.difficulty_band)
+                + fmtVolBand(item.volume_band)
                 + fmtScore(item.relevance_score, '関連', 70)
                 + fmtScore(item.business_fit, '適合', 60)
                 + fmtIntent(item.intent)

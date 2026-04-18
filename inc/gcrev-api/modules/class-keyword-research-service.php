@@ -16,6 +16,7 @@ class Gcrev_Keyword_Research_Service {
     private Gcrev_Config     $config;
     private ?object          $dataforseo;
     private ?object          $google_ads;
+    private ?object          $brightdata;
 
     private const DEBUG_LOG = '/tmp/gcrev_seo_debug.log';
     private const VOLUME_CACHE_TTL = 86400; // 24h
@@ -24,6 +25,23 @@ class Gcrev_Keyword_Research_Service {
     private const MAX_PROMPT_BYTES  = 15360; // 15KB 目安
     private const MAX_OWN_PAGES     = 15;    // 要約入力のページ上限
     private const IMAGE_MAX_BYTES   = 4 * 1024 * 1024; // 4MB
+
+    // Bright Data SERP
+    private const BD_SERP_MAX_KEYWORDS = 30;
+    private const BD_SERP_INTERVAL_SEC = 3;
+    private const BD_SERP_CACHE_TTL    = 604800; // 7日
+
+    /** SERP 難易度算出で「大手ドメイン」と判定するホスト */
+    private const MAJOR_DOMAINS_JP = [
+        'youtube.com', 'wikipedia.org', 'amazon.co.jp', 'rakuten.co.jp',
+        'yahoo.co.jp', 'yahoo.com', 'hotpepper.jp', 'tabelog.com', 'retrip.jp',
+        'jalan.net', 'recruit.co.jp', 'goo.ne.jp', 'ekiten.jp',
+        'facebook.com', 'instagram.com', 'twitter.com', 'x.com',
+        'note.com', 'qiita.com', 'zenn.dev', 'ameblo.jp',
+        'nhk.or.jp', 'asahi.com', 'nikkei.com', 'yomiuri.co.jp',
+        'medical-note.com', 'doctor-search.tv', 'biglobe.ne.jp',
+        'mynavi.jp', 'doda.jp', 'indeed.com', 'linkedin.com',
+    ];
 
     /**
      * キーワードグループ定義
@@ -42,11 +60,12 @@ class Gcrev_Keyword_Research_Service {
         'excluded'            => '自社サイトと関連性が低く除外したキーワード',
     ];
 
-    public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, $dataforseo = null, $google_ads = null ) {
+    public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, $dataforseo = null, $google_ads = null, $brightdata = null ) {
         $this->ai         = $ai;
         $this->config     = $config;
         $this->dataforseo = $dataforseo;
         $this->google_ads = $google_ads;
+        $this->brightdata = $brightdata;
     }
 
     // =========================================================
@@ -257,6 +276,18 @@ class Gcrev_Keyword_Research_Service {
             }
         }
 
+        // 7.5 戦略判定層（Step 6〜9）を全グループに適用し、ROI 降順にソート
+        $this->apply_strategy_layer( $parsed['groups'] );
+        $strategy_metrics = $this->aggregate_strategy_metrics( $parsed['groups'] );
+        $this->log( sprintf(
+            'strategy: total=%d avg_roi=%s avg_win=%s severe_ng=%d warn_ng=%d',
+            $strategy_metrics['total_kw'],
+            $strategy_metrics['avg_roi_score'] ?? '-',
+            $strategy_metrics['avg_win_probability'] ?? '-',
+            array_sum( $strategy_metrics['ng_counts']['severe'] ?? [] ),
+            array_sum( $strategy_metrics['ng_counts']['warn'] ?? [] )
+        ) );
+
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
 
         $result = [
@@ -277,6 +308,9 @@ class Gcrev_Keyword_Research_Service {
                 'volume_source'       => $volume_source,
                 'data_sources'        => $data_sources,
                 'enrichment'          => $enrichment_diagnostics,
+                'avg_roi_score'       => $strategy_metrics['avg_roi_score'],
+                'avg_win_probability' => $strategy_metrics['avg_win_probability'],
+                'ng_counts'           => $strategy_metrics['ng_counts'],
                 'generated_at'        => $now,
             ],
         ];
@@ -760,8 +794,8 @@ class Gcrev_Keyword_Research_Service {
             return [ 'data' => [], 'source' => 'none' ];
         }
 
-        // キャッシュ確認（v4: clickstream / bing フォールバック追加で旧キャッシュ無効化）
-        $cache_key = 'gcrev_kwenrich_v4_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
+        // キャッシュ確認（v5: Bright Data SERP 補強 + 戦略判定層追加で旧キャッシュ無効化）
+        $cache_key = 'gcrev_kwenrich_v5_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
         $cached = get_transient( $cache_key );
         if ( $cached !== false ) {
             $this->log( "enrich_keywords: cache hit ({$cache_key})" );
@@ -932,7 +966,24 @@ class Gcrev_Keyword_Research_Service {
             ) );
         }
 
-        // Step 4: 最終フォールバック — competition_index がまだ null の KW には
+        // Step 4: Bright Data SERP で欠損KW（および高難度検証対象）を独自算出
+        $bd_stats = [ 'processed' => 0, 'computed' => 0, 'cache_hit' => 0, 'failed' => 0, 'skipped_no_data' => 0 ];
+        if ( $this->brightdata !== null && Gcrev_Brightdata_Serp_Client::is_configured() ) {
+            $bd_stats = $this->enrich_with_brightdata_serp( $keywords, $merged );
+            $this->log( sprintf(
+                'enrich_keywords: brightdata serp — processed=%d computed=%d cache_hit=%d failed=%d skipped=%d',
+                $bd_stats['processed'], $bd_stats['computed'],
+                $bd_stats['cache_hit'], $bd_stats['failed'],
+                $bd_stats['skipped_no_data']
+            ) );
+            if ( $bd_stats['computed'] > 0 ) {
+                $volume_source = ( $volume_source === 'none' )
+                    ? 'brightdata_serp'
+                    : $volume_source . '+bd';
+            }
+        }
+
+        // Step 5: 最終フォールバック — competition_index がまだ null の KW には
         // Planner の competition (HIGH=0.8 / MEDIUM=0.5 / LOW=0.2) を ×100 して変換
         foreach ( $merged as $k => &$row ) {
             if ( $row['competition_index'] === null && $row['competition'] !== null ) {
@@ -961,6 +1012,11 @@ class Gcrev_Keyword_Research_Service {
             'diagnostics' => [
                 'planner_available'    => $planner_available,
                 'dataforseo_available' => $df_probe,
+                'brightdata_available' => ( $this->brightdata !== null && Gcrev_Brightdata_Serp_Client::is_configured() ),
+                'bd_processed'         => $bd_stats['processed'] ?? 0,
+                'bd_computed'          => $bd_stats['computed'] ?? 0,
+                'bd_cache_hit'         => $bd_stats['cache_hit'] ?? 0,
+                'bd_failed'            => $bd_stats['failed'] ?? 0,
                 'total'                => $total,
                 'got_volume'           => $got_volume,
                 'got_competition'      => $got_comp,
@@ -1088,6 +1144,12 @@ class Gcrev_Keyword_Research_Service {
                     $item['cpc']               = $vd['cpc'] ?? null;
                     $item['monthly_volumes']   = $vd['monthly_volumes'] ?? [];
                     $item['difficulty']        = $vd['difficulty'];
+                    if ( isset( $vd['difficulty_source'] ) && $vd['difficulty_source'] !== '' ) {
+                        $item['difficulty_source'] = $vd['difficulty_source'];
+                    } elseif ( $vd['difficulty'] !== null ) {
+                        // DataForSEO で取れた難易度にはソース明示（Bright Data 以外）
+                        $item['difficulty_source'] = 'dataforseo';
+                    }
                 }
             }
             unset( $item );
@@ -1523,6 +1585,13 @@ FORMAT;
             'competition_index' => null,
             'monthly_volumes'   => [],
             'difficulty'        => null,
+            'difficulty_source' => '',          // 'dataforseo'|'brightdata_serp'|''
+            'difficulty_band'   => '',          // 'short_term'|'mid_term'|'long_term'|''
+            'volume_band'       => '',          // 'very_low'|'low'|'normal'|'unknown'|''
+            'win_probability'   => null,         // 0-100
+            'roi_score'         => null,         // 0-100
+            'ng_type'           => '',          // 'winnable_no_demand'|'demand_no_sale'|'sellable_too_competitive'|'low_impact'|'borderline_competition'|''
+            'ng_severity'       => '',          // 'severe'|'warn'|''
             'current_rank'      => null,
             'relevance_score'   => null,
             'business_fit'      => null,
@@ -2024,6 +2093,495 @@ CRITERIA;
             return mb_substr( implode( ' / ', array_filter( $parts ) ), 0, 400 );
         }
         return mb_substr( (string) $v, 0, 400 );
+    }
+
+    // =========================================================
+    // Bright Data SERP 補強（Step 4）
+    // =========================================================
+
+    /**
+     * 欠損 KW に Bright Data SERP 分析で難易度・競合度を算出して補強
+     *
+     * 対象:
+     *   - $merged に存在しない KW
+     *   - または difficulty が null
+     *   - または difficulty > 60（高難度判定の検証目的）
+     *
+     * @param array $keywords 全キーワード配列
+     * @param array &$merged 参照渡しでマージ対象
+     * @return array 統計 ['processed', 'computed', 'cache_hit', 'failed', 'skipped_no_data']
+     */
+    private function enrich_with_brightdata_serp( array $keywords, array &$merged ): array {
+        $stats = [ 'processed' => 0, 'computed' => 0, 'cache_hit' => 0, 'failed' => 0, 'skipped_no_data' => 0 ];
+        if ( $this->brightdata === null ) { return $stats; }
+        if ( ! Gcrev_Brightdata_Serp_Client::is_configured() ) { return $stats; }
+
+        // 対象選定: null 優先、次に >60
+        $priority_missing = [];
+        $verify_kws = [];
+        foreach ( $keywords as $kw ) {
+            $kl  = mb_strtolower( $kw );
+            $row = $merged[ $kl ] ?? null;
+            if ( $row === null || $row['difficulty'] === null ) {
+                $priority_missing[] = $kw;
+            } elseif ( (int) $row['difficulty'] > 60 ) {
+                $verify_kws[] = $kw;
+            }
+        }
+        $target_kws = array_merge( $priority_missing, $verify_kws );
+        $target_kws = array_slice( $target_kws, 0, self::BD_SERP_MAX_KEYWORDS );
+
+        $this->log( sprintf(
+            'bd_serp: missing_null=%d, verify=%d, target=%d',
+            count( $priority_missing ), count( $verify_kws ), count( $target_kws )
+        ) );
+
+        $first_request = true;
+        foreach ( $target_kws as $i => $kw ) {
+            $cache_key = 'gcrev_bd_serp_' . substr( md5( $kw ), 0, 16 );
+            $cached = get_transient( $cache_key );
+            $serp_data = null;
+
+            if ( is_array( $cached ) ) {
+                $serp_data = $cached;
+                $stats['cache_hit']++;
+            } else {
+                // 初回以外は 3 秒間隔
+                if ( ! $first_request ) {
+                    sleep( self::BD_SERP_INTERVAL_SEC );
+                }
+                $first_request = false;
+                $start_ms = (int) round( microtime( true ) * 1000 );
+                $result = $this->brightdata->fetch_serp( $kw );
+                $elapsed = (int) round( microtime( true ) * 1000 ) - $start_ms;
+
+                if ( empty( $result['success'] ) || empty( $result['data'] ) ) {
+                    $err = $result['error'] ?? 'unknown';
+                    $this->log( sprintf( 'bd_serp kw[%d]: "%s" — FAILED (%dms): %s', $i + 1, mb_substr( $kw, 0, 40 ), $elapsed, $err ) );
+                    $stats['failed']++;
+                    continue;
+                }
+                $serp_data = $result['data'];
+                set_transient( $cache_key, $serp_data, self::BD_SERP_CACHE_TTL );
+                $this->log( sprintf( 'bd_serp kw[%d]: "%s" — fetched (%dms)', $i + 1, mb_substr( $kw, 0, 40 ), $elapsed ) );
+            }
+            $stats['processed']++;
+
+            $metrics = $this->compute_serp_metrics( $serp_data, $kw );
+            if ( $metrics === null ) {
+                $stats['skipped_no_data']++;
+                $this->log( sprintf( 'bd_serp kw[%d]: "%s" — no organic data', $i + 1, mb_substr( $kw, 0, 40 ) ) );
+                continue;
+            }
+
+            $kl = mb_strtolower( $kw );
+            if ( ! isset( $merged[ $kl ] ) ) {
+                $merged[ $kl ] = [
+                    'volume'            => null,
+                    'competition'       => null,
+                    'competition_index' => null,
+                    'cpc'               => null,
+                    'monthly_volumes'   => [],
+                    'difficulty'        => null,
+                ];
+            }
+            // 既存の値を尊重しつつ、null なら補填
+            if ( $merged[ $kl ]['difficulty'] === null ) {
+                $merged[ $kl ]['difficulty'] = $metrics['difficulty'];
+                $merged[ $kl ]['difficulty_source'] = 'brightdata_serp';
+            } elseif ( (int) $merged[ $kl ]['difficulty'] > 60 ) {
+                // 検証モード: SERP 実測値を採用（DataForSEO の高難度判定を上書き）
+                $merged[ $kl ]['difficulty'] = $metrics['difficulty'];
+                $merged[ $kl ]['difficulty_source'] = 'brightdata_serp';
+            }
+            if ( $merged[ $kl ]['competition_index'] === null ) {
+                $merged[ $kl ]['competition_index'] = $metrics['competition_index'];
+                if ( $merged[ $kl ]['competition'] === null ) {
+                    $merged[ $kl ]['competition'] = round( $metrics['competition_index'] / 100, 2 );
+                }
+            }
+            $stats['computed']++;
+
+            $this->log( sprintf(
+                'bd_serp metrics: big=%d/10 title=%d/10 ads=%d aio=%d paa=%d -> diff=%d comp=%d',
+                $metrics['signals']['big_domain_count'],
+                $metrics['signals']['title_match_count'],
+                $metrics['signals']['ad_count'],
+                $metrics['signals']['has_aio'] ? 1 : 0,
+                $metrics['signals']['has_paa'] ? 1 : 0,
+                $metrics['difficulty'],
+                $metrics['competition_index']
+            ) );
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Bright Data SERP JSON から難易度・競合度メトリクスを算出
+     *
+     * 総合式:
+     *   大手ドメイン占有率 × 40%
+     *   + title 完全一致率 × 20%
+     *   + 広告枠数 × 20%
+     *   + AI Overview × 10%
+     *   + People Also Ask × 10%
+     *
+     * @param array $serp_data Bright Data の brd_json レスポンス
+     * @param string $keyword  検索KW（title 一致判定用）
+     * @return array|null ['difficulty', 'competition_index', 'signals']
+     */
+    private function compute_serp_metrics( array $serp_data, string $keyword ): ?array {
+        // Bright Data は 'organic' キー、フォールバックで 'organic_results'
+        $organic = $serp_data['organic'] ?? $serp_data['organic_results'] ?? [];
+        if ( ! is_array( $organic ) || empty( $organic ) ) {
+            return null;
+        }
+        $top10 = array_slice( $organic, 0, 10 );
+        $total = count( $top10 );
+        if ( $total === 0 ) { return null; }
+
+        // 1) 大手ドメイン占有率
+        $big_count = 0;
+        foreach ( $top10 as $r ) {
+            $url = $r['link'] ?? $r['url'] ?? '';
+            $host = strtolower( (string) ( parse_url( $url, PHP_URL_HOST ) ?? '' ) );
+            $host = preg_replace( '/^www\./', '', $host );
+            if ( $host === '' ) { continue; }
+            foreach ( self::MAJOR_DOMAINS_JP as $major ) {
+                if ( $host === $major || ( strlen( $host ) > strlen( $major ) && substr( $host, -strlen( $major ) - 1 ) === '.' . $major ) ) {
+                    $big_count++;
+                    break;
+                }
+            }
+        }
+        $big_score = ( $big_count / $total ) * 100;
+
+        // 2) title 完全一致率
+        $kl = mb_strtolower( $keyword );
+        $title_match = 0;
+        foreach ( $top10 as $r ) {
+            $title = mb_strtolower( (string) ( $r['title'] ?? '' ) );
+            if ( $title !== '' && mb_strpos( $title, $kl ) !== false ) {
+                $title_match++;
+            }
+        }
+        $title_score = ( $title_match / $total ) * 100;
+
+        // 3) 広告枠数
+        $ads = $serp_data['ads'] ?? $serp_data['paid'] ?? [];
+        $ad_count = is_array( $ads ) ? count( $ads ) : 0;
+        $ad_score = min( 100, $ad_count * 25 );
+
+        // 4) AI Overview 存在
+        $aio = $serp_data['ai_overview'] ?? null;
+        $has_aio = ! empty( $aio ) && ( is_array( $aio ) ? ! empty( $aio ) : true );
+        $aio_score = $has_aio ? 100 : 0;
+
+        // 5) People Also Ask 存在
+        $paa = $serp_data['people_also_ask'] ?? $serp_data['related_questions'] ?? null;
+        $has_paa = is_array( $paa ) && ! empty( $paa );
+        $paa_score = $has_paa ? 100 : 0;
+
+        // 総合難易度
+        $difficulty = round(
+            $big_score * 0.40
+            + $title_score * 0.20
+            + $ad_score * 0.20
+            + $aio_score * 0.10
+            + $paa_score * 0.10
+        );
+        $difficulty = (int) max( 0, min( 100, $difficulty ) );
+
+        // 競合度インデックス: 大手占有 × 0.5 + 広告スコア × 0.5
+        $competition_index = (int) round( $big_score * 0.5 + $ad_score * 0.5 );
+        $competition_index = max( 0, min( 100, $competition_index ) );
+
+        return [
+            'difficulty'        => $difficulty,
+            'competition_index' => $competition_index,
+            'signals' => [
+                'big_domain_count'  => $big_count,
+                'title_match_count' => $title_match,
+                'ad_count'          => $ad_count,
+                'has_aio'           => $has_aio,
+                'has_paa'           => $has_paa,
+            ],
+        ];
+    }
+
+    // =========================================================
+    // 戦略判定層（Step 6〜9）
+    // =========================================================
+
+    /**
+     * volume ペナルティ免除 = 高単価モード発動条件
+     */
+    private function is_high_value_mode( array $item ): bool {
+        $fit = $item['business_fit'] ?? null;
+        $cv  = $item['cv_distance'] ?? '';
+        return ( $cv === '近い' ) || ( $fit !== null && (int) $fit >= 80 );
+    }
+
+    /**
+     * Step 6: 難易度ベースで action/priority を調整し、difficulty_band を付与
+     */
+    private function apply_difficulty_rules( array &$item ): void {
+        $diff = $item['difficulty'];
+        $fit  = $item['business_fit'];
+        if ( $diff === null ) {
+            $item['difficulty_band'] = '';
+            return;
+        }
+        $d = (int) $diff;
+
+        if ( $d <= 39 ) {
+            // 短期で狙える
+            if ( $fit !== null && (int) $fit >= 60 ) {
+                if ( $item['priority'] === '中' )      $item['priority'] = '高';
+                elseif ( $item['priority'] === '低' )  $item['priority'] = '中';
+            }
+            if ( in_array( $item['action'], [ '', '既存ページ改善' ], true ) ) {
+                $item['action'] = '新規記事作成';
+            }
+            $item['difficulty_band'] = 'short_term';
+        } elseif ( $d >= 70 ) {
+            // 長期戦略
+            if ( ( $fit === null || (int) $fit < 80 ) && $item['priority'] === '高' ) {
+                $item['priority'] = '中';
+            }
+            if ( ! in_array( $item['action'], [ '内部リンク強化' ], true ) ) {
+                $item['action'] = 'コンテンツ蓄積型';
+            }
+            $item['difficulty_band'] = 'long_term';
+        } else {
+            // 中難易度
+            $item['difficulty_band'] = 'mid_term';
+            if ( $item['action'] === '' ) {
+                $item['action'] = '既存ページ改善';
+            }
+        }
+    }
+
+    /**
+     * Step 7: win_probability（勝ちやすさ 0-100）を計算
+     */
+    private function compute_win_probability( array $item ): ?int {
+        $diff = $item['difficulty'];
+        $fit  = $item['business_fit'];
+        $cv   = $item['cv_distance'];
+
+        if ( $diff === null && $fit === null ) { return null; }
+
+        $diff_score = ( $diff !== null ) ? max( 0, 100 - (int) $diff ) : 50;
+        $fit_score  = ( $fit !== null ) ? (int) $fit : 50;
+        $cv_score = 50;
+        if ( $cv === '近い' )      $cv_score = 100;
+        elseif ( $cv === '中' )     $cv_score = 60;
+        elseif ( $cv === '遠い' )   $cv_score = 20;
+
+        $win = $diff_score * 0.40 + $fit_score * 0.40 + $cv_score * 0.20;
+        return (int) max( 0, min( 100, round( $win ) ) );
+    }
+
+    /**
+     * Step 8: ボリュームベースの action/priority 最終調整
+     */
+    private function apply_volume_rules( array &$item ): void {
+        $vol = $item['volume'];
+        $fit = $item['business_fit'];
+
+        if ( $vol === null ) {
+            $item['volume_band'] = 'unknown';
+            return;
+        }
+        $exempt = $this->is_high_value_mode( $item );
+        $v = (int) $vol;
+
+        if ( $v < 10 ) {
+            $item['volume_band'] = 'very_low';
+            if ( ! $exempt ) {
+                if ( $item['priority'] === '高' )      $item['priority'] = '中';
+                elseif ( $item['priority'] === '中' )   $item['priority'] = '低';
+                if ( in_array( $item['action'], [ '新規記事作成', '既存ページ改善', 'タイトル改善', '新規ページ追加', '' ], true ) ) {
+                    $item['action'] = '補助記事';
+                }
+            }
+        } elseif ( $v < 100 ) {
+            $item['volume_band'] = 'low';
+            if ( ! $exempt && ( $fit === null || (int) $fit < 70 ) && $item['priority'] === '高' ) {
+                $item['priority'] = '中';
+            }
+        } else {
+            $item['volume_band'] = 'normal';
+        }
+    }
+
+    /**
+     * Step 9: roi_score（ROI 0-100）を計算
+     * 高単価モードでは重み切替、CV距離で補正
+     */
+    private function compute_roi_score( array $item ): ?int {
+        $win = $item['win_probability'];
+        $fit = $item['business_fit'];
+        $vol = $item['volume'];
+        $cv  = $item['cv_distance'];
+
+        if ( $win === null && $fit === null && $vol === null ) { return null; }
+
+        $win_s = ( $win !== null ) ? (int) $win : 50;
+        $fit_s = ( $fit !== null ) ? (int) $fit : 50;
+
+        $vol_s = 50;
+        if ( $vol !== null ) {
+            $v = max( 0, (int) $vol );
+            if ( $v >= 1000 )      $vol_s = 90;
+            elseif ( $v >= 300 )   $vol_s = 75;
+            elseif ( $v >= 100 )   $vol_s = 60;
+            elseif ( $v >= 30 )    $vol_s = 45;
+            elseif ( $v >= 10 )    $vol_s = 30;
+            elseif ( $v >= 1 )     $vol_s = 15;
+            else                   $vol_s = 5;
+        }
+
+        // 重み切替
+        if ( $this->is_high_value_mode( $item ) ) {
+            $w_win = 0.40; $w_fit = 0.50; $w_vol = 0.10;
+        } else {
+            $w_win = 0.50; $w_fit = 0.30; $w_vol = 0.20;
+        }
+
+        $roi = $win_s * $w_win + $fit_s * $w_fit + $vol_s * $w_vol;
+
+        // CV価値補正
+        if ( $cv === '近い' )      $roi += 15;
+        elseif ( $cv === '遠い' )  $roi -= 10;
+
+        return (int) max( 0, min( 100, round( $roi ) ) );
+    }
+
+    /**
+     * Step 9: NG パターン検出（Severe + Warn の2レベル）
+     * @return array ['type' => string, 'severity' => 'severe'|'warn'|'']
+     */
+    private function detect_ng_type( array $item ): array {
+        $win  = $item['win_probability'];
+        $fit  = $item['business_fit'];
+        $vol  = $item['volume'];
+        $diff = $item['difficulty'];
+        $exempt = $this->is_high_value_mode( $item );
+
+        // Severe
+        if ( $win !== null && (int) $win >= 70
+             && $vol !== null && (int) $vol < 10
+             && ! $exempt ) {
+            return [ 'type' => 'winnable_no_demand', 'severity' => 'severe' ];
+        }
+        if ( $vol !== null && (int) $vol >= 1000
+             && $fit !== null && (int) $fit < 40 ) {
+            return [ 'type' => 'demand_no_sale', 'severity' => 'severe' ];
+        }
+        if ( $fit !== null && (int) $fit >= 80
+             && $diff !== null && (int) $diff >= 80 ) {
+            return [ 'type' => 'sellable_too_competitive', 'severity' => 'severe' ];
+        }
+
+        // Warn
+        if ( $vol !== null && (int) $vol >= 10 && (int) $vol <= 30
+             && $fit !== null && (int) $fit < 60 ) {
+            return [ 'type' => 'low_impact', 'severity' => 'warn' ];
+        }
+        if ( $diff !== null && (int) $diff >= 60 && (int) $diff <= 70 ) {
+            return [ 'type' => 'borderline_competition', 'severity' => 'warn' ];
+        }
+
+        return [ 'type' => '', 'severity' => '' ];
+    }
+
+    /**
+     * Severe NG のときに priority を調整
+     */
+    private function apply_ng_adjustment( array &$item ): void {
+        if ( ( $item['ng_severity'] ?? '' ) !== 'severe' ) { return; }
+        $ng = $item['ng_type'] ?? '';
+        if ( $ng === 'winnable_no_demand' || $ng === 'sellable_too_competitive' ) {
+            if ( $item['priority'] === '高' ) {
+                $item['priority'] = '中';
+            }
+        }
+    }
+
+    /**
+     * Step 6〜9 をグループ全体に適用し、ROI 降順でソート
+     */
+    private function apply_strategy_layer( array &$groups ): void {
+        foreach ( $groups as $gk => &$items ) {
+            if ( ! is_array( $items ) ) { continue; }
+            if ( $gk === 'excluded' ) { continue; }
+            foreach ( $items as &$it ) {
+                $this->apply_difficulty_rules( $it );
+                $it['win_probability'] = $this->compute_win_probability( $it );
+                $this->apply_volume_rules( $it );
+                $it['roi_score'] = $this->compute_roi_score( $it );
+                $ng = $this->detect_ng_type( $it );
+                $it['ng_type']     = $ng['type'];
+                $it['ng_severity'] = $ng['severity'];
+                $this->apply_ng_adjustment( $it );
+            }
+            unset( $it );
+            usort( $items, function( $a, $b ) {
+                $ra = $a['roi_score'] ?? -1;
+                $rb = $b['roi_score'] ?? -1;
+                if ( $ra !== $rb ) return $rb <=> $ra;
+                $wa = $a['win_probability'] ?? -1;
+                $wb = $b['win_probability'] ?? -1;
+                return $wb <=> $wa;
+            } );
+        }
+        unset( $items );
+    }
+
+    /**
+     * グループ全体から平均 ROI / win_probability と NG カウントを集計
+     */
+    private function aggregate_strategy_metrics( array $groups ): array {
+        $total_kw = 0;
+        $roi_sum = 0; $win_sum = 0;
+        $roi_n = 0; $win_n = 0;
+        $ng_counts = [
+            'severe' => [
+                'winnable_no_demand' => 0,
+                'demand_no_sale' => 0,
+                'sellable_too_competitive' => 0,
+            ],
+            'warn' => [
+                'low_impact' => 0,
+                'borderline_competition' => 0,
+            ],
+        ];
+        foreach ( $groups as $gk => $items ) {
+            if ( $gk === 'excluded' || ! is_array( $items ) ) { continue; }
+            foreach ( $items as $it ) {
+                $total_kw++;
+                if ( isset( $it['roi_score'] ) && $it['roi_score'] !== null ) {
+                    $roi_sum += (int) $it['roi_score']; $roi_n++;
+                }
+                if ( isset( $it['win_probability'] ) && $it['win_probability'] !== null ) {
+                    $win_sum += (int) $it['win_probability']; $win_n++;
+                }
+                $sev = $it['ng_severity'] ?? '';
+                $ng  = $it['ng_type'] ?? '';
+                if ( $sev && $ng && isset( $ng_counts[ $sev ][ $ng ] ) ) {
+                    $ng_counts[ $sev ][ $ng ]++;
+                }
+            }
+        }
+        return [
+            'total_kw'             => $total_kw,
+            'avg_roi_score'        => $roi_n > 0 ? (int) round( $roi_sum / $roi_n ) : null,
+            'avg_win_probability'  => $win_n > 0 ? (int) round( $win_sum / $win_n ) : null,
+            'ng_counts'            => $ng_counts,
+        ];
     }
 
     // =========================================================
