@@ -34,6 +34,7 @@ class Gcrev_Keyword_Research_Service {
         'comparison'          => '比較・検討流入向けキーワード',
         'column'              => 'コラム記事向きキーワード',
         'service_page'        => 'サービスページ向きキーワード',
+        'traffic_expansion'   => '集客拡張キーワード（潜在層・認知獲得）',
         'competitor_core'     => '競合も狙っている本命キーワード',
         'competitor_longterm' => '競合が強いが中長期で狙うべきキーワード',
         'competitor_gap'      => '競合が弱く自社が狙いやすいキーワード',
@@ -1251,6 +1252,7 @@ class Gcrev_Keyword_Research_Service {
 3. **comparison（比較・検討流入向けキーワード）**: 「○○ vs △△」「○○ おすすめ」「○○ 比較」「○○ 口コミ」など比較検討段階のユーザーが検索するキーワード
 4. **column（コラム記事向きキーワード）**: 「○○とは」「○○ やり方」「○○ メリット」など情報収集段階のロングテールキーワード
 5. **service_page（サービスページ向きキーワード）**: 具体的なサービス名や料金に関するキーワード。サービスページや料金ページで対策すべきもの
+6. **traffic_expansion（集客拡張キーワード）**: 将来の顧客（潜在層）を獲得するための教育・認知向けキーワード。自社サービスと関連のある話題で検索ボリュームが比較的大きく、直接CVには繋がらないが長期的な集客資産になるもの。intent は「潜在」または「情報収集」限定。not_provided 領域は絶対に含めない
 INSTRUCTION;
 
         if ( $has_competitors ) {
@@ -1286,6 +1288,7 @@ COMP;
 - comparison: 5〜10件
 - column: 5〜10件
 - service_page: 5〜10件
+- traffic_expansion: 8〜15件（ボリューム優先、潜在層向けの話題を広く）
 - excluded: 5〜15件（採択基準で落としたKWを必ず列挙。why_not_target 必須）
 DETAILS;
 
@@ -1318,7 +1321,7 @@ COMP_COUNT;
         $parts[] = $summary_instruction;
 
         // 出力フォーマット
-        $group_keys = '"immediate": [...], "local_seo": [...], "comparison": [...], "column": [...], "service_page": [...]';
+        $group_keys = '"immediate": [...], "local_seo": [...], "comparison": [...], "column": [...], "service_page": [...], "traffic_expansion": [...]';
         if ( $has_competitors ) {
             $group_keys .= ', "competitor_core": [...], "competitor_longterm": [...], "competitor_gap": [...], "competitor_compare": [...]';
         }
@@ -1851,6 +1854,16 @@ PROMPT;
 - **CV直結キーワード**: business_fit 70以上かつ cv_distance=近い → relevance_score 60以上で採択可
 - **ローカルキーワード**（地域×自社サービス）: 優先採用。business_fit 50以上で採択可
 - **競合比較系**（「○○ 比較」「○○ おすすめ」「○○ vs △△」）: business_fit 60以上で採択可
+
+### 集客拡張キーワード（traffic_expansion）の採用ルール
+将来の顧客（潜在層）を獲得するための教育・認知コンテンツ向けとして独立グループを設ける。
+以下をすべて満たすキーワードは `traffic_expansion` グループへ採択：
+- relevance_score 50以上
+- business_fit 40以上
+- intent が「潜在」または「情報収集」
+- **not_provided に該当する領域は除外**（必ず excluded へ）
+- 検索ボリュームが比較的大きいものを優先
+- 直接CVには繋がらないが、教育・認知目的で自社サービスと関連のある話題を扱う
 
 ### 絶対除外条件（スコアに関わらず必ず excluded へ）
 - サイト要約の **not_provided** に含まれる領域に触れるキーワード（business_fit は自動的に 0〜20 とする）

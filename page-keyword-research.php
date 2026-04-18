@@ -681,6 +681,7 @@ get_header();
         comparison:          { icon: '🔄', label: '比較・検討流入向けキーワード',               color: '#C9A84C' },
         column:              { icon: '📝', label: 'コラム記事向きキーワード',                   color: '#7C3AED' },
         service_page:        { icon: '🛠', label: 'サービスページ向きキーワード',              color: '#2D7A8F' },
+        traffic_expansion:   { icon: '🌱', label: '集客拡張キーワード（潜在層・認知獲得）',    color: '#5B8DEF' },
         competitor_core:     { icon: '⚔️', label: '競合も狙っている本命キーワード',            color: '#E74C3C' },
         competitor_longterm: { icon: '🏔️', label: '競合が強いが中長期で狙うべきキーワード',    color: '#8E44AD' },
         competitor_gap:      { icon: '✨', label: '競合が弱く自社が狙いやすいキーワード',       color: '#27AE60' },
@@ -689,7 +690,8 @@ get_header();
     };
     var groupOrder = [
         'immediate', 'competitor_gap', 'local_seo', 'competitor_core',
-        'comparison', 'competitor_compare', 'column', 'service_page', 'competitor_longterm',
+        'comparison', 'competitor_compare', 'service_page', 'column',
+        'traffic_expansion', 'competitor_longterm',
         'excluded'
     ];
 
