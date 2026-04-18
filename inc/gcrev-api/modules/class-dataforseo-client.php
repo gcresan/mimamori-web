@@ -483,14 +483,16 @@ class Gcrev_DataForSEO_Client {
     /**
      * DataForSEO Labs Keyword Overview API でキーワードの SEO 難易度を取得
      *
-     * bulk_keyword_difficulty/live は日本語ローカルキーワードで keyword_difficulty: null を
-     * 返すため、keyword_overview/live を使用する。
-     * レスポンスパス: tasks[n].result[0].items[0].keyword_properties.keyword_difficulty
+     * レスポンス構造（2026-04 実測）:
+     *   tasks[0].result[0].items[n].keyword                                 ← キーワード
+     *   tasks[0].result[0].items[n].keyword_properties.keyword_difficulty    ← 難易度
+     *   tasks[0].result[0].items[n].keyword_info.search_volume               ← ボリューム
+     *   tasks[0].result[0].items[n].keyword_info.competition                 ← 競合度
      *
      * @param array  $keywords       キーワード配列（最大1000件）
      * @param int    $location_code  ロケーションコード（デフォルト: Japan 2392）
      * @param string $language_code  言語コード（デフォルト: 'ja'）
-     * @return array|WP_Error [ 'keyword' => { keyword_difficulty } ] 形式
+     * @return array|WP_Error [ 'keyword' => { keyword_difficulty, search_volume, competition, cpc } ]
      */
     public function fetch_keyword_difficulty( array $keywords, int $location_code = 2392, string $language_code = 'ja' ) {
         if ( ! self::is_configured() ) {
@@ -579,35 +581,46 @@ class Gcrev_DataForSEO_Client {
                 continue;
             }
 
-            foreach ( ( $task['result'] ?? [] ) as $task_result ) {
-                $kw = $task_result['keyword'] ?? '';
-                if ( $kw === '' ) {
+            // 正しい構造: result[n] は集約ブロック（keyword を持たない）、items[n] が個別キーワード
+            foreach ( ( $task['result'] ?? [] ) as $result_block ) {
+                $items = $result_block['items'] ?? [];
+                if ( ! is_array( $items ) || empty( $items ) ) {
                     continue;
                 }
+                foreach ( $items as $item ) {
+                    $kw = $item['keyword'] ?? '';
+                    if ( $kw === '' ) {
+                        continue;
+                    }
 
-                // パターンA: result[n].items[0].keyword_properties.keyword_difficulty
-                $difficulty = null;
-                $item = $task_result['items'][0] ?? null;
-                if ( $item && is_array( $item ) ) {
+                    // 難易度（多層フォールバック）
                     $difficulty = $item['keyword_properties']['keyword_difficulty']
                         ?? $item['keyword_info']['keyword_difficulty']
                         ?? $item['keyword_difficulty']
                         ?? null;
-                }
 
-                // パターンB: result[n].keyword_properties.keyword_difficulty（items が無い場合）
-                if ( $difficulty === null ) {
-                    $difficulty = $task_result['keyword_properties']['keyword_difficulty']
-                        ?? $task_result['keyword_info']['keyword_difficulty']
-                        ?? $task_result['keyword_difficulty']
-                        ?? null;
-                }
+                    // ボーナス: keyword_overview には keyword_info に volume/competition/cpc も含まれる
+                    $kw_info = $item['keyword_info'] ?? [];
+                    $sv = $kw_info['search_volume'] ?? null;
+                    $cp = $kw_info['competition'] ?? null;
+                    // competition_level (LOW/MEDIUM/HIGH) を 0-1 に変換するフォールバック
+                    if ( $cp === null && isset( $kw_info['competition_level'] ) ) {
+                        $lv = strtoupper( (string) $kw_info['competition_level'] );
+                        if ( $lv === 'HIGH' )        { $cp = 0.8; }
+                        elseif ( $lv === 'MEDIUM' )   { $cp = 0.5; }
+                        elseif ( $lv === 'LOW' )      { $cp = 0.2; }
+                    }
+                    $cpc = $kw_info['cpc'] ?? null;
 
-                $norm        = $this->normalize_keyword( $kw );
-                $original_kw = $normalized_to_original[ $norm ] ?? $kw;
-                $results[ $original_kw ] = [
-                    'keyword_difficulty' => ( $difficulty !== null ) ? (int) $difficulty : null,
-                ];
+                    $norm        = $this->normalize_keyword( $kw );
+                    $original_kw = $normalized_to_original[ $norm ] ?? $kw;
+                    $results[ $original_kw ] = [
+                        'keyword_difficulty' => ( $difficulty !== null ) ? (int) $difficulty : null,
+                        'search_volume'      => $sv,
+                        'competition'        => $cp,
+                        'cpc'                => $cpc,
+                    ];
+                }
             }
         }
 

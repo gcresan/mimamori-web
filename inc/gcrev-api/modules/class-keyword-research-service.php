@@ -760,8 +760,8 @@ class Gcrev_Keyword_Research_Service {
             return [ 'data' => [], 'source' => 'none' ];
         }
 
-        // キャッシュ確認（v2: 競合度・難易度補強ロジック対応で旧キャッシュ無効化）
-        $cache_key = 'gcrev_kwenrich_v2_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
+        // キャッシュ確認（v3: keyword_overview パーサー修正で旧キャッシュ無効化）
+        $cache_key = 'gcrev_kwenrich_v3_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
         $cached = get_transient( $cache_key );
         if ( $cached !== false ) {
             $this->log( "enrich_keywords: cache hit ({$cache_key})" );
@@ -863,21 +863,23 @@ class Gcrev_Keyword_Research_Service {
             }
         }
 
-        // Step 3: DataForSEO で難易度をバッチ分割取得（日本語ロングテールで欠損しやすいため）
+        // Step 3: DataForSEO keyword_overview でバッチ分割取得
+        //   — 難易度に加え、keyword_info.search_volume / competition / cpc も同時取得して
+        //     search_volume API で null だった KW の補強に使う（ボーナス効果）
         if ( $df_available ) {
             $batches = array_chunk( $keywords, 20 );
-            $total_got = 0;
+            $total_diff = 0; $total_vol_aug = 0; $total_comp_aug = 0;
             foreach ( $batches as $bi => $batch ) {
                 try {
-                    $diff_result = $this->dataforseo->fetch_keyword_difficulty( $batch );
-                    if ( is_wp_error( $diff_result ) ) {
-                        $this->log( "enrich_keywords: difficulty batch {$bi} error: " . $diff_result->get_error_message() );
+                    $ov_result = $this->dataforseo->fetch_keyword_difficulty( $batch );
+                    if ( is_wp_error( $ov_result ) ) {
+                        $this->log( "enrich_keywords: overview batch {$bi} error: " . $ov_result->get_error_message() );
                         continue;
                     }
-                    if ( ! is_array( $diff_result ) ) { continue; }
+                    if ( ! is_array( $ov_result ) ) { continue; }
 
-                    $got_in_batch = 0;
-                    foreach ( $diff_result as $kw => $data ) {
+                    $got_diff = $got_vol = $got_comp = 0;
+                    foreach ( $ov_result as $kw => $data ) {
                         $kw_lower = mb_strtolower( $kw );
                         if ( ! isset( $merged[ $kw_lower ] ) ) {
                             $merged[ $kw_lower ] = [
@@ -889,23 +891,44 @@ class Gcrev_Keyword_Research_Service {
                                 'difficulty'        => null,
                             ];
                         }
+                        $row = &$merged[ $kw_lower ];
+
+                        // 難易度
                         if ( isset( $data['keyword_difficulty'] ) && $data['keyword_difficulty'] !== null ) {
-                            $merged[ $kw_lower ]['difficulty'] = (int) $data['keyword_difficulty'];
-                            $got_in_batch++;
+                            $row['difficulty'] = (int) $data['keyword_difficulty'];
+                            $got_diff++;
                         }
+                        // 検索ボリューム（欠損時のみ補強）
+                        if ( $row['volume'] === null && isset( $data['search_volume'] ) && $data['search_volume'] !== null ) {
+                            $row['volume'] = (int) $data['search_volume'];
+                            $got_vol++;
+                        }
+                        // 競合度（欠損時のみ補強、0-1 を 0-100 に変換）
+                        if ( $row['competition_index'] === null && isset( $data['competition'] ) && $data['competition'] !== null ) {
+                            $row['competition']       = (float) $data['competition'];
+                            $row['competition_index'] = (int) round( (float) $data['competition'] * 100 );
+                            $got_comp++;
+                        }
+                        // CPC
+                        if ( $row['cpc'] === null && isset( $data['cpc'] ) && $data['cpc'] !== null ) {
+                            $row['cpc'] = (float) $data['cpc'];
+                        }
+                        unset( $row );
                     }
-                    $total_got += $got_in_batch;
+                    $total_diff     += $got_diff;
+                    $total_vol_aug  += $got_vol;
+                    $total_comp_aug += $got_comp;
                     $this->log( sprintf(
-                        'enrich_keywords: difficulty batch %d — got=%d/%d',
-                        $bi, $got_in_batch, count( $batch )
+                        'enrich_keywords: overview batch %d — got_diff=%d got_vol_aug=%d got_comp_aug=%d size=%d',
+                        $bi, $got_diff, $got_vol, $got_comp, count( $batch )
                     ) );
                 } catch ( \Throwable $e ) {
-                    $this->log( "enrich_keywords: difficulty batch {$bi} exception: " . $e->getMessage() );
+                    $this->log( "enrich_keywords: overview batch {$bi} exception: " . $e->getMessage() );
                 }
             }
             $this->log( sprintf(
-                'enrich_keywords: difficulty total got=%d/%d',
-                $total_got, count( $keywords )
+                'enrich_keywords: overview total — diff=%d/%d vol_aug=%d comp_aug=%d',
+                $total_diff, count( $keywords ), $total_vol_aug, $total_comp_aug
             ) );
         }
 
