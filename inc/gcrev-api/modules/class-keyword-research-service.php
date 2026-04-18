@@ -20,6 +20,10 @@ class Gcrev_Keyword_Research_Service {
     private const DEBUG_LOG = '/tmp/gcrev_seo_debug.log';
     private const VOLUME_CACHE_TTL = 86400; // 24h
     private const PLANNER_BATCH_SIZE = 20;  // generateKeywordIdeas の1回あたり上限
+    private const SITE_SUMMARY_TTL  = 21600; // 6h
+    private const MAX_PROMPT_BYTES  = 15360; // 15KB 目安
+    private const MAX_OWN_PAGES     = 15;    // 要約入力のページ上限
+    private const IMAGE_MAX_BYTES   = 4 * 1024 * 1024; // 4MB
 
     /**
      * キーワードグループ定義
@@ -34,6 +38,7 @@ class Gcrev_Keyword_Research_Service {
         'competitor_longterm' => '競合が強いが中長期で狙うべきキーワード',
         'competitor_gap'      => '競合が弱く自社が狙いやすいキーワード',
         'competitor_compare'  => '比較検討流入を取れるキーワード',
+        'excluded'            => '自社サイトと関連性が低く除外したキーワード',
     ];
 
     public function __construct( Gcrev_AI_Client $ai, Gcrev_Config $config, $dataforseo = null, $google_ads = null ) {
@@ -151,20 +156,53 @@ class Gcrev_Keyword_Research_Service {
             $this->log( "Competitor data fetched: " . count( $competitor_data ) . " total, {$ok_count} ok" );
         }
 
+        // 3.5 自社サイトの実体収集 → 意味圧縮（Phase A）
+        $own_raw = $this->fetch_own_site_raw( $user_id, $site_url );
+        $site_summary = [];
+        $top_page_attachment = 0;
+        if ( ! empty( $own_raw['pages'] ) ) {
+            $site_summary = $this->summarize_own_site( $user_id, $own_raw );
+            $top_page_attachment = (int) ( $own_raw['screenshot_pc_attachment_id'] ?? 0 );
+            if ( ! empty( $site_summary['services'] ) ) {
+                $data_sources[] = ( ( $own_raw['source'] ?? '' ) === 'diagnosis' )
+                    ? 'ページ診断' : '自社サイト簡易クロール';
+            }
+        }
+
         // 4. プロンプト構築
         $prompt = $this->build_prompt(
             $site_url, $area_label, $industry_label, $industry_detail, $biz_type_label,
             $persona_one_liner, $persona_detail, $persona_attributes, $persona_decision,
             $settings, $gsc_keywords, $seed_keywords, $competitor_data, $planner_keywords,
-            $competitor_planner_keywords
+            $competitor_planner_keywords, $site_summary
         );
 
-        // 5. Gemini呼び出し
+        $prompt_bytes = strlen( $prompt );
+        $this->log( sprintf( 'prompt_bytes=%d (limit=%d)', $prompt_bytes, self::MAX_PROMPT_BYTES ) );
+        if ( $prompt_bytes > self::MAX_PROMPT_BYTES ) {
+            $this->log( 'WARN: prompt exceeded size limit' );
+        }
+
+        // 5. Gemini呼び出し（トップページ画像があればマルチモーダル、補助情報として）
+        $image_payload = ( $top_page_attachment > 0 )
+            ? $this->pick_top_page_image( $top_page_attachment ) : null;
+
         try {
-            $raw = $this->ai->call_gemini_api( $prompt, [
-                'temperature'       => 0.7,
-                'max_output_tokens' => 16384,
-            ] );
+            if ( $image_payload !== null ) {
+                $raw = $this->ai->call_gemini_multimodal(
+                    $prompt,
+                    [ $image_payload ],
+                    [ 'temperature' => 0.7, 'maxOutputTokens' => 16384 ]
+                );
+                $data_sources[] = 'トップページ画像解析(補助)';
+                $this->log( 'Gemini mode: multimodal' );
+            } else {
+                $raw = $this->ai->call_gemini_api( $prompt, [
+                    'temperature'     => 0.7,
+                    'maxOutputTokens' => 16384,
+                ] );
+                $this->log( 'Gemini mode: text-only' );
+            }
             $this->log( "Gemini response length: " . strlen( $raw ) );
         } catch ( \Throwable $e ) {
             $this->log( "Gemini API error: " . $e->getMessage() );
@@ -184,8 +222,13 @@ class Gcrev_Keyword_Research_Service {
             ];
         }
 
-        // 7. キーワードエンリッチメント（Google Ads + DataForSEO 統合）
+        // 7. キーワードエンリッチメント（excluded はクォータ節約のため対象外）
         $volume_source = 'none';
+        $excluded_saved = null;
+        if ( isset( $parsed['groups']['excluded'] ) ) {
+            $excluded_saved = $parsed['groups']['excluded'];
+            unset( $parsed['groups']['excluded'] );
+        }
         $all_keywords = $this->extract_all_keywords( $parsed['groups'] ?? [] );
         if ( ! empty( $all_keywords ) ) {
             $enrichment = $this->enrich_keywords( $user_id, $all_keywords );
@@ -194,6 +237,20 @@ class Gcrev_Keyword_Research_Service {
             if ( ! empty( $volume_data ) ) {
                 $this->merge_volume_into_groups( $parsed['groups'], $volume_data );
                 $this->log( "Enrichment complete: source={$volume_source}, keywords=" . count( $volume_data ) );
+            }
+        }
+        if ( $excluded_saved !== null ) {
+            $parsed['groups']['excluded'] = $excluded_saved;
+            $avg_rel = $avg_fit = 0; $cnt = count( $excluded_saved );
+            foreach ( $excluded_saved as $ex ) {
+                $avg_rel += (int) ( $ex['relevance_score'] ?? 0 );
+                $avg_fit += (int) ( $ex['business_fit'] ?? 0 );
+            }
+            if ( $cnt > 0 ) {
+                $this->log( sprintf(
+                    'excluded count=%d, avg_relevance=%d, avg_business_fit=%d',
+                    $cnt, (int) ( $avg_rel / $cnt ), (int) ( $avg_fit / $cnt )
+                ) );
             }
         }
 
@@ -1039,10 +1096,12 @@ class Gcrev_Keyword_Research_Service {
         array  $seed_keywords,
         array  $competitor_data = [],
         array  $planner_keywords = [],
-        array  $competitor_planner_keywords = []
+        array  $competitor_planner_keywords = [],
+        array  $site_summary = []
     ): string {
         $parts = [];
         $has_competitors = ! empty( $competitor_data );
+        $has_site_summary = ! empty( $site_summary['services'] );
 
         // 役割定義
         $role = "あなたは日本のローカルビジネスSEOキーワード戦略の専門家です。\n"
@@ -1050,6 +1109,9 @@ class Gcrev_Keyword_Research_Service {
             . "SEOで優先的に狙うべきキーワード候補を調査・提案してください。";
         if ( $has_competitors ) {
             $role .= "\n競合サイトの分析結果も踏まえ、差別化戦略まで含めた提案を行ってください。";
+        }
+        if ( $has_site_summary ) {
+            $role .= "\n判断の主軸は必ずテキスト情報（特に自社サイトの要約）とし、画像は補助情報として扱ってください。";
         }
         $parts[] = $role;
 
@@ -1088,12 +1150,18 @@ class Gcrev_Keyword_Research_Service {
             $parts[] = $persona;
         }
 
-        // GSCデータ
+        // 自社サイト要約（意味圧縮済み）
+        if ( $has_site_summary ) {
+            $parts[] = $this->build_own_site_summary_section( $site_summary );
+        }
+
+        // GSCデータ（上位30件に圧縮）
         if ( ! empty( $gsc_keywords ) ) {
-            $gsc_section = "## 現在の検索流入キーワード（Google Search Console 直近90日）\n";
+            $gsc_top = array_slice( $gsc_keywords, 0, 30 );
+            $gsc_section = "## 現在の検索流入キーワード（Google Search Console 直近90日・上位30件）\n";
             $gsc_section .= "| キーワード | クリック | 表示回数 | CTR | 平均順位 |\n";
             $gsc_section .= "|---|---|---|---|---|\n";
-            foreach ( $gsc_keywords as $kw ) {
+            foreach ( $gsc_top as $kw ) {
                 $gsc_section .= sprintf( "| %s | %s | %s | %s | %s |\n",
                     $kw['query'] ?? '', $kw['clicks'] ?? '0',
                     $kw['impressions'] ?? '0', $kw['ctr'] ?? '0%', $kw['position'] ?? '-'
@@ -1115,7 +1183,7 @@ class Gcrev_Keyword_Research_Service {
                 $h2s = $cd['headings']['h2'] ?? [];
                 if ( ! empty( $h1s ) ) $comp_section .= "- H1: " . implode( ' / ', array_slice( $h1s, 0, 3 ) ) . "\n";
                 if ( ! empty( $h2s ) ) $comp_section .= "- 主要見出し(H2): " . implode( ' / ', array_slice( $h2s, 0, 10 ) ) . "\n";
-                if ( $cd['body_excerpt'] ) $comp_section .= "- ページ概要: " . mb_substr( $cd['body_excerpt'], 0, 300 ) . "\n";
+                if ( $cd['body_excerpt'] ) $comp_section .= "- ページ概要: " . mb_substr( $cd['body_excerpt'], 0, 200 ) . "\n";
                 $comp_section .= "\n";
             }
             $parts[] = $comp_section;
@@ -1132,7 +1200,7 @@ class Gcrev_Keyword_Research_Service {
                 if ( empty( $kw_list ) ) { continue; }
                 $comp_planner_section .= "### {$comp_url}\n";
                 $comp_planner_section .= "| キーワード | 月間検索数 | 競合度 |\n|---|---|---|\n";
-                foreach ( array_slice( $kw_list, 0, 20 ) as $kw ) {
+                foreach ( array_slice( $kw_list, 0, 15 ) as $kw ) {
                     $vol  = $kw['volume'] ?? '-';
                     $comp = $kw['competition'] ?? '-';
                     $comp_planner_section .= "| {$kw['text']} | {$vol} | {$comp} |\n";
@@ -1165,6 +1233,11 @@ class Gcrev_Keyword_Research_Service {
             if ( $custom_parts ) $area_names = array_merge( $area_names, $custom_parts );
         }
         $area_csv = ! empty( $area_names ) ? implode( '、', array_unique( $area_names ) ) : '（エリア情報なし）';
+
+        // キーワード採択基準（site_summary を踏まえた最重要ルール）
+        if ( $has_site_summary ) {
+            $parts[] = $this->build_acceptance_criteria_section();
+        }
 
         // 分類指示
         $group_instruction = <<<INSTRUCTION
@@ -1200,8 +1273,12 @@ COMP;
 - type: 本命 / 補助 / 比較流入 / ローカルSEO / コラム向け / 競合重複 / 差別化 のいずれか
 - priority: 高 / 中 / 低
 - page_type: トップページ / サービスページ / 料金ページ / よくある質問 / コラム記事 / 事例紹介 のいずれか
-- reason: このキーワードを狙うべき理由（30〜60文字）
+- reason: このキーワードを狙うべき理由（30〜60文字。自社サービスとの紐づけを必ず含める）
 - action: 既存ページ改善 / 新規ページ追加 / タイトル改善 / 見出し追加 / 内部リンク強化 のいずれか
+- relevance_score: 0〜100の整数（サイト要約との意味的関連度）
+- business_fit: 0〜100の整数（ビジネス適合度）
+- intent: 顕在 / 潜在 / 比較検討 / 情報収集 のいずれか
+- cv_distance: 近い / 中 / 遠い のいずれか
 
 ### 各グループの目安件数
 - immediate: 5〜10件
@@ -1209,6 +1286,7 @@ COMP;
 - comparison: 5〜10件
 - column: 5〜10件
 - service_page: 5〜10件
+- excluded: 5〜15件（採択基準で落としたKWを必ず列挙。why_not_target 必須）
 DETAILS;
 
         if ( $has_competitors ) {
@@ -1244,6 +1322,7 @@ COMP_COUNT;
         if ( $has_competitors ) {
             $group_keys .= ', "competitor_core": [...], "competitor_longterm": [...], "competitor_gap": [...], "competitor_compare": [...]';
         }
+        $group_keys .= ', "excluded": [...]';
 
         $summary_keys = '"direction": "...", "priority_pages": "...", "new_pages": "...", "title_tips": "...", "local_tips": "..."';
         if ( $has_competitors ) {
@@ -1262,8 +1341,15 @@ COMP_COUNT;
   }
 }
 
-各キーワードアイテムの形式:
-{ "keyword": "...", "type": "本命", "priority": "高", "page_type": "サービスページ", "reason": "...", "action": "既存ページ改善" }
+採択KW（excluded 以外）のアイテム形式:
+{ "keyword": "...", "type": "本命", "priority": "高", "page_type": "サービスページ",
+  "reason": "自社が提供する〇〇への検索意図と合致", "action": "既存ページ改善",
+  "relevance_score": 85, "business_fit": 80, "intent": "顕在", "cv_distance": "近い" }
+
+excluded グループのアイテム形式:
+{ "keyword": "...", "relevance_score": 45, "business_fit": 20,
+  "intent": "情報収集", "cv_distance": "遠い",
+  "why_not_target": "このサイトでは〇〇を提供していないため対象外" }
 FORMAT;
 
         return implode( "\n\n", $parts );
@@ -1342,6 +1428,11 @@ FORMAT;
             'monthly_volumes'   => [],
             'difficulty'        => null,
             'current_rank'      => null,
+            'relevance_score'   => null,
+            'business_fit'      => null,
+            'intent'            => '',
+            'cv_distance'       => '',
+            'why_not_target'    => '',
         ];
 
         foreach ( array_keys( self::GROUPS ) as $group_key ) {
@@ -1354,7 +1445,19 @@ FORMAT;
                 if ( ! is_array( $item ) || empty( $item['keyword'] ) ) {
                     continue;
                 }
-                $normalized[] = array_merge( $kw_defaults, $item );
+                $merged = array_merge( $kw_defaults, $item );
+                // 0-100 範囲バリデーション
+                if ( $merged['relevance_score'] !== null ) {
+                    $merged['relevance_score'] = max( 0, min( 100, (int) $merged['relevance_score'] ) );
+                }
+                if ( $merged['business_fit'] !== null ) {
+                    $merged['business_fit'] = max( 0, min( 100, (int) $merged['business_fit'] ) );
+                }
+                // 文字列型強制
+                $merged['intent']         = is_string( $merged['intent'] ) ? $merged['intent'] : '';
+                $merged['cv_distance']    = is_string( $merged['cv_distance'] ) ? $merged['cv_distance'] : '';
+                $merged['why_not_target'] = is_string( $merged['why_not_target'] ) ? $merged['why_not_target'] : '';
+                $normalized[] = $merged;
             }
             $data['groups'][ $group_key ] = $normalized;
         }
@@ -1412,6 +1515,409 @@ FORMAT;
 
         $data = json_decode( $repaired, true );
         return is_array( $data ) ? $data : null;
+    }
+
+    // =========================================================
+    // 自社サイト要約（Phase A: 意味理解ベース）
+    // =========================================================
+
+    /**
+     * 自社サイトの生データを収集する（意味圧縮前の入力源）
+     *
+     * 優先順位:
+     *   1. wp_gcrev_page_analysis（ページ診断済みデータ）
+     *   2. フォールバック: site_url の簡易クロール（トップ + 内部リンク3件）
+     *
+     * @return array {
+     *   source: 'diagnosis' | 'fallback' | 'none',
+     *   pages:  [ {url, title, page_type, purpose, cta, ai_summary, insights, body_excerpt}, ... ],
+     *   screenshot_pc_attachment_id: int,
+     * }
+     */
+    private function fetch_own_site_raw( int $user_id, string $site_url ): array {
+        global $wpdb;
+
+        // --- 1. ページ診断テーブル優先 ---
+        $table = $wpdb->prefix . 'gcrev_page_analysis';
+        $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        $pages  = [];
+        $top_attachment = 0;
+
+        if ( $exists === $table ) {
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT id, page_url, page_title, page_type, page_purpose, page_cta,
+                            ai_summary, ai_insights, screenshot_pc
+                       FROM {$table}
+                      WHERE user_id = %d AND status = %s
+                   ORDER BY FIELD(page_type, %s) DESC, id ASC
+                      LIMIT %d",
+                    $user_id, 'active', 'top', self::MAX_OWN_PAGES
+                ),
+                ARRAY_A
+            );
+            if ( is_array( $rows ) && ! empty( $rows ) ) {
+                foreach ( $rows as $r ) {
+                    $insights = [];
+                    if ( ! empty( $r['ai_insights'] ) ) {
+                        $decoded = json_decode( (string) $r['ai_insights'], true );
+                        if ( is_array( $decoded ) ) { $insights = $decoded; }
+                    }
+                    $pages[] = [
+                        'url'          => (string) ( $r['page_url'] ?? '' ),
+                        'title'        => (string) ( $r['page_title'] ?? '' ),
+                        'page_type'    => (string) ( $r['page_type'] ?? 'other' ),
+                        'purpose'      => (string) ( $r['page_purpose'] ?? '' ),
+                        'cta'          => (string) ( $r['page_cta'] ?? '' ),
+                        'ai_summary'   => (string) ( $r['ai_summary'] ?? '' ),
+                        'insights'     => $insights,
+                        'body_excerpt' => '',
+                    ];
+                    if ( $top_attachment === 0 && (string) ( $r['page_type'] ?? '' ) === 'top' ) {
+                        $top_attachment = (int) ( $r['screenshot_pc'] ?? 0 );
+                    }
+                }
+                $this->log( sprintf(
+                    'fetch_own_site_raw: source=diagnosis, pages=%d, top_attachment=%d',
+                    count( $pages ), $top_attachment
+                ) );
+                return [
+                    'source' => 'diagnosis',
+                    'pages'  => $pages,
+                    'screenshot_pc_attachment_id' => $top_attachment,
+                ];
+            }
+        }
+
+        // --- 2. フォールバック: 簡易クロール ---
+        if ( $site_url !== '' && filter_var( $site_url, FILTER_VALIDATE_URL ) ) {
+            $urls = $this->collect_fallback_urls( $site_url );
+            if ( ! empty( $urls ) ) {
+                $entries = array_map( fn( $u ) => [ 'url' => $u, 'note' => '' ], $urls );
+                $crawled = $this->fetch_competitor_data( $entries );
+                foreach ( $crawled as $c ) {
+                    if ( ( $c['status'] ?? '' ) !== 'ok' ) { continue; }
+                    $h1 = $c['headings']['h1'][0] ?? '';
+                    $h2 = implode( ' / ', array_slice( $c['headings']['h2'] ?? [], 0, 5 ) );
+                    $pages[] = [
+                        'url'          => (string) $c['url'],
+                        'title'        => (string) ( $c['title'] ?? '' ),
+                        'page_type'    => '',
+                        'purpose'      => $h1 ? "H1: {$h1}" : '',
+                        'cta'          => '',
+                        'ai_summary'   => (string) ( $c['meta_description'] ?? '' ),
+                        'insights'     => $h2 ? [ 'headings_h2' => $h2 ] : [],
+                        'body_excerpt' => (string) ( $c['body_excerpt'] ?? '' ),
+                    ];
+                }
+                $this->log( sprintf(
+                    'fetch_own_site_raw: source=fallback, pages=%d',
+                    count( $pages )
+                ) );
+                if ( ! empty( $pages ) ) {
+                    return [
+                        'source' => 'fallback',
+                        'pages'  => $pages,
+                        'screenshot_pc_attachment_id' => 0,
+                    ];
+                }
+            }
+        }
+
+        $this->log( 'fetch_own_site_raw: source=none' );
+        return [ 'source' => 'none', 'pages' => [], 'screenshot_pc_attachment_id' => 0 ];
+    }
+
+    /**
+     * フォールバック用に、site_url から最大4URL（トップ + 内部リンク3件）を収集
+     */
+    private function collect_fallback_urls( string $site_url ): array {
+        $urls = [ $site_url ];
+
+        $response = wp_remote_get( $site_url, [
+            'timeout'    => 10,
+            'user-agent' => 'MimamoriSEO/1.0 (+https://mimamori-web.jp)',
+            'sslverify'  => false,
+        ] );
+        if ( is_wp_error( $response ) ) {
+            return $urls;
+        }
+        $status = (int) wp_remote_retrieve_response_code( $response );
+        if ( $status !== 200 ) { return $urls; }
+        $html = (string) wp_remote_retrieve_body( $response );
+        if ( $html === '' ) { return $urls; }
+
+        $parsed_base = wp_parse_url( $site_url );
+        $base_host   = $parsed_base['host'] ?? '';
+        if ( $base_host === '' ) { return $urls; }
+
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors( true );
+        @$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
+        libxml_clear_errors();
+        $xpath = new \DOMXPath( $dom );
+        $links = $xpath->query( '//a[@href]' );
+        if ( ! $links ) { return $urls; }
+
+        $candidates = [];
+        foreach ( $links as $a ) {
+            $href = trim( (string) $a->getAttribute( 'href' ) );
+            if ( $href === '' || $href[0] === '#' ) { continue; }
+            if ( strpos( $href, 'javascript:' ) === 0 || strpos( $href, 'mailto:' ) === 0 ) { continue; }
+            // 相対URLを絶対URLに
+            if ( strpos( $href, '//' ) === 0 ) {
+                $href = ( $parsed_base['scheme'] ?? 'https' ) . ':' . $href;
+            } elseif ( $href[0] === '/' ) {
+                $href = ( $parsed_base['scheme'] ?? 'https' ) . '://' . $base_host . $href;
+            } elseif ( ! preg_match( '#^https?://#i', $href ) ) {
+                continue;
+            }
+            $p = wp_parse_url( $href );
+            if ( ( $p['host'] ?? '' ) !== $base_host ) { continue; }
+            // クエリ・フラグメント除去
+            $clean = ( $p['scheme'] ?? 'https' ) . '://' . $base_host . ( $p['path'] ?? '/' );
+            if ( rtrim( $clean, '/' ) === rtrim( $site_url, '/' ) ) { continue; }
+            $candidates[ $clean ] = true;
+            if ( count( $candidates ) >= 3 ) { break; }
+        }
+        return array_merge( $urls, array_keys( $candidates ) );
+    }
+
+    /**
+     * 自社サイトの生データを5項目に意味圧縮する（Gemini 1回呼び出し + Transient キャッシュ）
+     *
+     * 出力: [ services, target, strengths, weaknesses, not_provided ] — 各200〜300字
+     */
+    private function summarize_own_site( int $user_id, array $raw ): array {
+        $pages = $raw['pages'] ?? [];
+        if ( empty( $pages ) ) { return []; }
+
+        // キャッシュキー: ページ診断データの内容ハッシュ
+        $sig_parts = [];
+        foreach ( $pages as $p ) {
+            $sig_parts[] = ( $p['url'] ?? '' ) . '|' . mb_substr( $p['ai_summary'] ?? '', 0, 80 )
+                . '|' . mb_substr( $p['purpose'] ?? '', 0, 80 );
+        }
+        $hash = substr( md5( implode( "\n", $sig_parts ) . '|' . ( $raw['source'] ?? '' ) ), 0, 16 );
+        $cache_key = 'gcrev_sitesum_' . $user_id . '_' . $hash;
+        $cached = get_transient( $cache_key );
+        if ( is_array( $cached ) && ! empty( $cached['services'] ) ) {
+            $this->log( sprintf(
+                'summarize_own_site: cache=hit, user=%d, bytes=%d',
+                $user_id, strlen( wp_json_encode( $cached, JSON_UNESCAPED_UNICODE ) )
+            ) );
+            return $cached;
+        }
+
+        // 要約元の入力を構築
+        $input_parts = [];
+        foreach ( $pages as $i => $p ) {
+            $n = $i + 1;
+            $line  = "### ページ{$n}: " . $p['title'] . " ({$p['url']})";
+            if ( $p['page_type'] )  $line .= "\n- 種別: {$p['page_type']}";
+            if ( $p['purpose'] )    $line .= "\n- 目的/訴求: " . mb_substr( $p['purpose'], 0, 300 );
+            if ( $p['cta'] )        $line .= "\n- CTA: " . mb_substr( $p['cta'], 0, 200 );
+            if ( $p['ai_summary'] ) $line .= "\n- 要約: " . mb_substr( $p['ai_summary'], 0, 400 );
+            $ins = $p['insights'];
+            if ( ! empty( $ins['strengths'] ) )       $line .= "\n- 強み: "   . $this->flatten_insight( $ins['strengths'] );
+            if ( ! empty( $ins['weaknesses'] ) )      $line .= "\n- 弱み: "   . $this->flatten_insight( $ins['weaknesses'] );
+            if ( ! empty( $ins['suggestions'] ) )     $line .= "\n- 改善案: " . $this->flatten_insight( $ins['suggestions'] );
+            if ( ! empty( $ins['target_audience'] ) ) $line .= "\n- ターゲット: " . $this->flatten_insight( $ins['target_audience'] );
+            if ( ! empty( $ins['headings_h2'] ) )     $line .= "\n- H2見出し: " . $this->flatten_insight( $ins['headings_h2'] );
+            if ( ! empty( $p['body_excerpt'] ) )      $line .= "\n- 本文抜粋: " . mb_substr( $p['body_excerpt'], 0, 200 );
+            $input_parts[] = $line;
+        }
+        $input_text = implode( "\n\n", $input_parts );
+
+        $prompt = <<<PROMPT
+あなたはSEO戦略のために、サイトの実体を「意味」として圧縮する専門家です。
+以下のページ情報群から、このサイトを5項目で簡潔に要約してください。
+
+出力は必ず以下のJSON形式のみで返してください（前後に説明文・マークダウン記号なし）。
+各項目 200〜300文字。重複排除・具体名詞中心・抽象語を避けてください。
+特に「not_provided」は「このサイトで明確に扱っていない領域」を入力に書かれていないものから列挙してください（推測ではなく不在領域の明示）。
+
+{
+  "services": "このサイトが提供している具体サービス・商品を列挙",
+  "target": "想定ターゲットペルソナ（属性・課題・検索意図）",
+  "strengths": "サイトの強み・差別化ポイント（訴求・実績・独自性）",
+  "weaknesses": "弱み・不足領域（ページが薄い・訴求が弱い箇所）",
+  "not_provided": "このサイトが扱っていないサービス・商品領域（重要）"
+}
+
+=== 入力 ===
+{$input_text}
+PROMPT;
+
+        try {
+            $raw_text = $this->ai->call_gemini_api( $prompt, [
+                'temperature'     => 0.3,
+                'maxOutputTokens' => 2048,
+            ] );
+        } catch ( \Throwable $e ) {
+            $this->log( 'summarize_own_site: gemini error: ' . $e->getMessage() );
+            return $this->summarize_fallback( $pages );
+        }
+
+        // JSON抽出
+        $cleaned = preg_replace( '/^```(?:json)?\s*/m', '', $raw_text );
+        $cleaned = preg_replace( '/```\s*$/m', '', $cleaned );
+        $cleaned = trim( (string) $cleaned );
+        $first = strpos( $cleaned, '{' );
+        $last  = strrpos( $cleaned, '}' );
+        if ( $first === false || $last === false || $last <= $first ) {
+            $this->log( 'summarize_own_site: JSON not found in response' );
+            return $this->summarize_fallback( $pages );
+        }
+        $data = json_decode( substr( $cleaned, $first, $last - $first + 1 ), true );
+        if ( ! is_array( $data ) ) {
+            $this->log( 'summarize_own_site: JSON decode failed' );
+            return $this->summarize_fallback( $pages );
+        }
+
+        // 5項目正規化＋300字切り詰め
+        $summary = [
+            'services'     => mb_substr( (string) ( $data['services'] ?? '' ), 0, 320 ),
+            'target'       => mb_substr( (string) ( $data['target'] ?? '' ), 0, 320 ),
+            'strengths'    => mb_substr( (string) ( $data['strengths'] ?? '' ), 0, 320 ),
+            'weaknesses'   => mb_substr( (string) ( $data['weaknesses'] ?? '' ), 0, 320 ),
+            'not_provided' => mb_substr( (string) ( $data['not_provided'] ?? '' ), 0, 320 ),
+        ];
+
+        if ( $summary['services'] === '' ) {
+            $this->log( 'summarize_own_site: services empty, using fallback' );
+            return $this->summarize_fallback( $pages );
+        }
+
+        set_transient( $cache_key, $summary, self::SITE_SUMMARY_TTL );
+        $this->log( sprintf(
+            'summarize_own_site: cache=miss, user=%d, bytes=%d',
+            $user_id, strlen( wp_json_encode( $summary, JSON_UNESCAPED_UNICODE ) )
+        ) );
+        return $summary;
+    }
+
+    /**
+     * Gemini 要約失敗時のフォールバック: タイトル連結のみ
+     */
+    private function summarize_fallback( array $pages ): array {
+        $titles = [];
+        foreach ( $pages as $p ) {
+            if ( ! empty( $p['title'] ) ) { $titles[] = $p['title']; }
+        }
+        return [
+            'services'     => mb_substr( implode( ' / ', $titles ), 0, 320 ),
+            'target'       => '',
+            'strengths'    => '',
+            'weaknesses'   => '',
+            'not_provided' => '',
+        ];
+    }
+
+    /**
+     * 要約をプロンプト用 Markdown に整形
+     */
+    private function build_own_site_summary_section( array $summary ): string {
+        if ( empty( $summary['services'] ) ) { return ''; }
+        $s  = "## 自社サイトの要約（一次情報・キーワード採択の根拠）\n\n";
+        $s .= "**サービス:**\n{$summary['services']}\n\n";
+        if ( ! empty( $summary['target'] ) )       $s .= "**ターゲット:**\n{$summary['target']}\n\n";
+        if ( ! empty( $summary['strengths'] ) )    $s .= "**強み:**\n{$summary['strengths']}\n\n";
+        if ( ! empty( $summary['weaknesses'] ) )   $s .= "**弱み:**\n{$summary['weaknesses']}\n\n";
+        if ( ! empty( $summary['not_provided'] ) ) $s .= "**提供していない領域（重要）:**\n{$summary['not_provided']}\n";
+        return $s;
+    }
+
+    /**
+     * キーワード採択基準セクション（固定文言）
+     */
+    private function build_acceptance_criteria_section(): string {
+        return <<<CRITERIA
+## キーワード採択基準（絶対遵守）
+
+### 4要素による最終判断
+単純な関連度スコアではなく、以下4要素で総合判断してください：
+
+1. **relevance_score** (0-100): 上記サイト要約の services/strengths との意味的関連度
+2. **business_fit** (0-100): ビジネス適合度。100=完全一致・CV直結、50=関連あるが収益に繋がりにくい、0=ビジネス的に無意味
+3. **intent**: 顕在 / 潜在 / 比較検討 / 情報収集 のいずれか
+4. **cv_distance**: 近い / 中 / 遠い のいずれか
+
+### 基本閾値
+- relevance_score 70以上 **かつ** business_fit 60以上 → 通常採択
+- いずれか下回るキーワードは `excluded` グループへ
+
+### 例外ルール（基本閾値を下回っても採択）
+- **CV直結キーワード**: business_fit 70以上かつ cv_distance=近い → relevance_score 60以上で採択可
+- **ローカルキーワード**（地域×自社サービス）: 優先採用。business_fit 50以上で採択可
+- **競合比較系**（「○○ 比較」「○○ おすすめ」「○○ vs △△」）: business_fit 60以上で採択可
+
+### 絶対除外条件（スコアに関わらず必ず excluded へ）
+- サイト要約の **not_provided** に含まれる領域に触れるキーワード（business_fit は自動的に 0〜20 とする）
+- 情報収集のみでCVに繋がらないキーワード
+- 一般論・広すぎるワード（単体「健康」「子育て」「ビジネス」等）
+- ペルソナ（target）の検索意図と明確に不一致のキーワード
+
+### excluded キーワードに必須のフィールド
+- `why_not_target`: 「このサイトでは〇〇を提供していないため対象外」のように、自社サービスとの不一致を具体的に明示（30〜100文字）
+
+### 採択KWの reason フィールドには
+自社サービス（サイト要約の services）との紐づけを必ず含めてください。
+例: 「自社が提供する『〇〇』への検索意図と合致」「強み〇〇を訴求できる」
+CRITERIA;
+    }
+
+    /**
+     * トップページのスクリーンショット attachment_id から base64 画像ペイロードを生成
+     *
+     * @return array|null ['mime_type' => '...', 'data' => '<base64>'] または null
+     */
+    private function pick_top_page_image( int $attachment_id ): ?array {
+        if ( $attachment_id <= 0 ) { return null; }
+        $path = get_attached_file( $attachment_id );
+        if ( ! $path || ! file_exists( $path ) ) {
+            $this->log( 'pick_top_page_image: file not found, attachment=' . $attachment_id );
+            return null;
+        }
+        $size = filesize( $path );
+        if ( $size === false || $size <= 0 || $size > self::IMAGE_MAX_BYTES ) {
+            $this->log( sprintf(
+                'pick_top_page_image: size out of range, attachment=%d, size=%d',
+                $attachment_id, (int) $size
+            ) );
+            return null;
+        }
+        $bin = @file_get_contents( $path );
+        if ( $bin === false || $bin === '' ) {
+            $this->log( 'pick_top_page_image: read failed, attachment=' . $attachment_id );
+            return null;
+        }
+        $ext = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+        $mime = 'image/jpeg';
+        if ( $ext === 'png' ) { $mime = 'image/png'; }
+        elseif ( $ext === 'webp' ) { $mime = 'image/webp'; }
+        $this->log( sprintf(
+            'pick_top_page_image: ok, attachment=%d, size=%dKB, mime=%s',
+            $attachment_id, (int) ( $size / 1024 ), $mime
+        ) );
+        return [
+            'mime_type' => $mime,
+            'data'      => base64_encode( $bin ),
+        ];
+    }
+
+    /**
+     * insights 配列/文字列を安全にフラット化（プロンプト用）
+     */
+    private function flatten_insight( $v ): string {
+        if ( is_array( $v ) ) {
+            $parts = array_map(
+                fn( $x ) => is_array( $x ) ? wp_json_encode( $x, JSON_UNESCAPED_UNICODE ) : (string) $x,
+                $v
+            );
+            return mb_substr( implode( ' / ', array_filter( $parts ) ), 0, 400 );
+        }
+        return mb_substr( (string) $v, 0, 400 );
     }
 
     // =========================================================

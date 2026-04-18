@@ -684,11 +684,13 @@ get_header();
         competitor_core:     { icon: '⚔️', label: '競合も狙っている本命キーワード',            color: '#E74C3C' },
         competitor_longterm: { icon: '🏔️', label: '競合が強いが中長期で狙うべきキーワード',    color: '#8E44AD' },
         competitor_gap:      { icon: '✨', label: '競合が弱く自社が狙いやすいキーワード',       color: '#27AE60' },
-        competitor_compare:  { icon: '⚖️', label: '比較検討流入を取れるキーワード',             color: '#F39C12' }
+        competitor_compare:  { icon: '⚖️', label: '比較検討流入を取れるキーワード',             color: '#F39C12' },
+        excluded:            { icon: '🚫', label: '自社と関連性が低く除外したキーワード',      color: '#95A5A6' }
     };
     var groupOrder = [
         'immediate', 'competitor_gap', 'local_seo', 'competitor_core',
-        'comparison', 'competitor_compare', 'column', 'service_page', 'competitor_longterm'
+        'comparison', 'competitor_compare', 'column', 'service_page', 'competitor_longterm',
+        'excluded'
     ];
 
     /* バッジマッピング */
@@ -1069,6 +1071,27 @@ get_header();
         document.getElementById('kwrCompSummary').style.display = html ? '' : 'none';
     }
 
+    /* ===== スコア／意図バッジ（Phase A 追加） ===== */
+    function fmtScore(v, label, lowThreshold) {
+        if (v === null || v === undefined) return '';
+        var n = Math.round(Number(v));
+        var isLow = (typeof lowThreshold === 'number') && n < lowThreshold;
+        var style = isLow
+            ? 'background:#fdecea;color:#c0392b;'
+            : 'background:#eaf5ef;color:#2d7a8f;';
+        return '<span class="kwr-badge" style="' + style + 'font-size:10px;margin-right:4px;">'
+            + esc(label) + ' ' + n + '</span>';
+    }
+    function fmtIntent(v) {
+        if (!v) return '';
+        return '<span class="kwr-badge" style="background:#f4f0fb;color:#7c3aed;font-size:10px;margin-right:4px;">' + esc(v) + '</span>';
+    }
+    function fmtCvDist(v) {
+        if (!v) return '';
+        var color = (v === '近い') ? '#27ae60' : ((v === '遠い') ? '#95a5a6' : '#c9a84c');
+        return '<span class="kwr-badge" style="background:#fff;border:1px solid ' + color + ';color:' + color + ';font-size:10px;margin-right:4px;">CV ' + esc(v) + '</span>';
+    }
+
     /* ===== グループ別テーブル描画（ソート対応） ===== */
     var groupSortState = {}; // { groupKey: { key, dir } }
 
@@ -1113,7 +1136,14 @@ get_header();
                 + '<td class="kwr-vol-cell">' + fmtComp(item.competition, item.competition_index) + '</td>'
                 + '<td class="kwr-vol-cell">' + fmtDiff(item.difficulty, item.competition_index) + '</td>'
                 + '<td style="font-size:12px;">' + esc(item.page_type) + '</td>'
-                + '<td style="font-size:12px;color:var(--mw-text-secondary);">' + esc(item.reason) + '</td>'
+                + '<td style="font-size:12px;color:var(--mw-text-secondary);">'
+                + '<div style="margin-bottom:3px;">'
+                + fmtScore(item.relevance_score, '関連', 70)
+                + fmtScore(item.business_fit, '適合', 60)
+                + fmtIntent(item.intent)
+                + fmtCvDist(item.cv_distance)
+                + '</div>'
+                + esc(item.reason) + '</td>'
                 + '<td>' + badge(item.action, actClass) + '</td>'
                 + '<td>' + (isKeywordTracked(item.keyword)
                     ? trackBadgeHtml()
@@ -1146,6 +1176,30 @@ get_header();
         });
     }
 
+    /* excluded 専用テーブル（採択基準を満たさず除外されたKW） */
+    function renderExcludedTable(body, items) {
+        var html = '<table class="kwr-table"><thead><tr>'
+            + '<th>キーワード</th>'
+            + '<th>関連度</th>'
+            + '<th>適合度</th>'
+            + '<th>検索意図</th>'
+            + '<th>CV距離</th>'
+            + '<th>除外理由</th>'
+            + '</tr></thead><tbody>';
+        items.forEach(function(item) {
+            html += '<tr>'
+                + '<td class="kwr-keyword-cell" style="color:var(--mw-text-secondary);">' + esc(item.keyword) + '</td>'
+                + '<td>' + fmtScore(item.relevance_score, '', 70).replace(/margin-right:4px;/, '') + '</td>'
+                + '<td>' + fmtScore(item.business_fit, '', 60).replace(/margin-right:4px;/, '') + '</td>'
+                + '<td>' + fmtIntent(item.intent) + '</td>'
+                + '<td>' + fmtCvDist(item.cv_distance) + '</td>'
+                + '<td style="font-size:12px;color:#c0392b;">' + esc(item.why_not_target || item.reason || '') + '</td>'
+                + '</tr>';
+        });
+        html += '</tbody></table>';
+        body.innerHTML = html;
+    }
+
     function renderGroups(groups) {
         var container = document.getElementById('kwrGroups');
         container.innerHTML = '';
@@ -1158,6 +1212,8 @@ get_header();
             if (!gm) return;
             hasAny = true;
 
+            var isExcluded = (gk === 'excluded');
+
             var div = document.createElement('div');
             div.className = 'kwr-group';
 
@@ -1166,10 +1222,11 @@ get_header();
             header.innerHTML = '<span class="kwr-group__icon">' + gm.icon + '</span>'
                 + '<h3 class="kwr-group__title" style="color:' + gm.color + ';">' + esc(gm.label)
                 + ' <span class="kwr-group__count">(' + items.length + '件)</span></h3>'
-                + '<span class="kwr-group__arrow">▼</span>';
+                + '<span class="kwr-group__arrow' + (isExcluded ? ' collapsed' : '') + '">▼</span>';
 
             var body = document.createElement('div');
             body.className = 'kwr-group__body';
+            if (isExcluded) { body.style.display = 'none'; }
 
             header.addEventListener('click', function() {
                 var hidden = body.style.display === 'none';
@@ -1177,7 +1234,11 @@ get_header();
                 header.querySelector('.kwr-group__arrow').className = 'kwr-group__arrow' + (hidden ? '' : ' collapsed');
             });
 
-            renderGroupTable(body, items, gk);
+            if (isExcluded) {
+                renderExcludedTable(body, items);
+            } else {
+                renderGroupTable(body, items, gk);
+            }
             div.appendChild(header);
             div.appendChild(body);
             container.appendChild(div);
