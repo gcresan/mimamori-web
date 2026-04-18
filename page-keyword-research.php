@@ -929,6 +929,26 @@ get_header();
             });
             html += '</div>';
         }
+
+        // エンリッチメント診断情報（取得率を表示）
+        var d = meta.enrichment || null;
+        if (d && d.total > 0) {
+            var pct = function(x) { return Math.round((x / d.total) * 100); };
+            html += '<div style="margin-top:8px;font-size:11px;color:var(--mw-text-secondary);">'
+                + '<strong>取得率</strong>: '
+                + '検索Vol ' + pct(d.got_volume) + '% (' + d.got_volume + '/' + d.total + ') / '
+                + '競合度 ' + pct(d.got_competition) + '% (' + d.got_competition + '/' + d.total + ') / '
+                + '難易度 ' + pct(d.got_difficulty) + '% (' + d.got_difficulty + '/' + d.total + ') / '
+                + 'トレンド ' + pct(d.got_trend) + '% (' + d.got_trend + '/' + d.total + ')';
+            if (!d.dataforseo_available) {
+                html += '<br><span style="color:#c0392b;">⚠ DataForSEO が未設定のため難易度・競合度が一部欠損する可能性があります</span>';
+            }
+            if (!d.planner_available) {
+                html += '<br><span style="color:#c0392b;">⚠ Google Ads Keyword Planner が未設定のため検索ボリュームが欠損する可能性があります</span>';
+            }
+            html += '</div>';
+        }
+
         document.getElementById('kwrMeta').innerHTML = html;
     }
 

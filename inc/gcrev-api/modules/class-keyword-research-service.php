@@ -225,6 +225,7 @@ class Gcrev_Keyword_Research_Service {
 
         // 7. キーワードエンリッチメント（excluded はクォータ節約のため対象外）
         $volume_source = 'none';
+        $enrichment_diagnostics = null;
         $excluded_saved = null;
         if ( isset( $parsed['groups']['excluded'] ) ) {
             $excluded_saved = $parsed['groups']['excluded'];
@@ -235,6 +236,7 @@ class Gcrev_Keyword_Research_Service {
             $enrichment = $this->enrich_keywords( $user_id, $all_keywords );
             $volume_data   = $enrichment['data'] ?? [];
             $volume_source = $enrichment['source'] ?? 'none';
+            $enrichment_diagnostics = $enrichment['diagnostics'] ?? null;
             if ( ! empty( $volume_data ) ) {
                 $this->merge_volume_into_groups( $parsed['groups'], $volume_data );
                 $this->log( "Enrichment complete: source={$volume_source}, keywords=" . count( $volume_data ) );
@@ -274,6 +276,7 @@ class Gcrev_Keyword_Research_Service {
                 'planner_related'     => count( $planner_keywords ),
                 'volume_source'       => $volume_source,
                 'data_sources'        => $data_sources,
+                'enrichment'          => $enrichment_diagnostics,
                 'generated_at'        => $now,
             ],
         ];
@@ -757,13 +760,25 @@ class Gcrev_Keyword_Research_Service {
             return [ 'data' => [], 'source' => 'none' ];
         }
 
-        // キャッシュ確認
-        $cache_key = 'gcrev_kwenrich_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
+        // キャッシュ確認（v2: 競合度・難易度補強ロジック対応で旧キャッシュ無効化）
+        $cache_key = 'gcrev_kwenrich_v2_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
         $cached = get_transient( $cache_key );
         if ( $cached !== false ) {
             $this->log( "enrich_keywords: cache hit ({$cache_key})" );
             return $cached;
         }
+
+        // API 可用性を最初にログに記録（診断用）
+        $planner_available = ( $this->google_ads !== null ) && defined( 'GOOGLE_ADS_CUSTOMER_ID' );
+        $df_probe = ( $this->dataforseo !== null )
+            && method_exists( $this->dataforseo, 'is_configured' )
+            && $this->dataforseo::is_configured();
+        $this->log( sprintf(
+            'enrich_keywords: START keywords=%d, planner_available=%s, dataforseo_available=%s',
+            count( $keywords ),
+            $planner_available ? 'yes' : 'no',
+            $df_probe ? 'yes' : 'no'
+        ) );
 
         $merged = [];
         $volume_source = 'none';
@@ -903,7 +918,33 @@ class Gcrev_Keyword_Research_Service {
         }
         unset( $row );
 
-        $result = [ 'data' => $merged, 'source' => $volume_source ];
+        // 診断: 各指標の取得率を集計
+        $total = count( $merged );
+        $got_volume = $got_comp = $got_diff = $got_trend = 0;
+        foreach ( $merged as $m ) {
+            if ( $m['volume'] !== null )            $got_volume++;
+            if ( $m['competition_index'] !== null ) $got_comp++;
+            if ( $m['difficulty'] !== null )        $got_diff++;
+            if ( ! empty( $m['monthly_volumes'] ) ) $got_trend++;
+        }
+        $this->log( sprintf(
+            'enrich_keywords: SUMMARY total=%d vol=%d/%d comp=%d/%d diff=%d/%d trend=%d/%d source=%s',
+            $total, $got_volume, $total, $got_comp, $total, $got_diff, $total, $got_trend, $total, $volume_source
+        ) );
+
+        $result = [
+            'data'   => $merged,
+            'source' => $volume_source,
+            'diagnostics' => [
+                'planner_available'    => $planner_available,
+                'dataforseo_available' => $df_probe,
+                'total'                => $total,
+                'got_volume'           => $got_volume,
+                'got_competition'      => $got_comp,
+                'got_difficulty'       => $got_diff,
+                'got_trend'            => $got_trend,
+            ],
+        ];
 
         if ( ! empty( $merged ) ) {
             set_transient( $cache_key, $result, self::VOLUME_CACHE_TTL );
