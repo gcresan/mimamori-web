@@ -587,36 +587,83 @@ class Gcrev_DataForSEO_Client {
                 if ( ! is_array( $items ) || empty( $items ) ) {
                     continue;
                 }
-                foreach ( $items as $item ) {
+                foreach ( $items as $item_idx => $item ) {
                     $kw = $item['keyword'] ?? '';
                     if ( $kw === '' ) {
                         continue;
                     }
 
-                    // 難易度（多層フォールバック）
+                    // === 難易度: keyword_properties 優先、フォールバック多段 ===
                     $difficulty = $item['keyword_properties']['keyword_difficulty']
                         ?? $item['keyword_info']['keyword_difficulty']
                         ?? $item['keyword_difficulty']
                         ?? null;
 
-                    // ボーナス: keyword_overview には keyword_info に volume/competition/cpc も含まれる
-                    $kw_info = $item['keyword_info'] ?? [];
-                    $sv = $kw_info['search_volume'] ?? null;
-                    $cp = $kw_info['competition'] ?? null;
-                    // competition_level (LOW/MEDIUM/HIGH) を 0-1 に変換するフォールバック
-                    if ( $cp === null && isset( $kw_info['competition_level'] ) ) {
-                        $lv = strtoupper( (string) $kw_info['competition_level'] );
-                        if ( $lv === 'HIGH' )        { $cp = 0.8; }
-                        elseif ( $lv === 'MEDIUM' )   { $cp = 0.5; }
-                        elseif ( $lv === 'LOW' )      { $cp = 0.2; }
+                    // === ボリューム: 複数ソースから最も信頼できる値を採用 ===
+                    // 優先度: keyword_info (Google Ads) > normalized_with_clickstream > normalized_with_bing > clickstream_keyword_info
+                    $kw_info          = $item['keyword_info'] ?? [];
+                    $kw_info_clicks   = $item['keyword_info_normalized_with_clickstream'] ?? [];
+                    $kw_info_bing     = $item['keyword_info_normalized_with_bing'] ?? [];
+                    $clickstream_info = $item['clickstream_keyword_info'] ?? [];
+
+                    $sv = $kw_info['search_volume']
+                        ?? $kw_info_clicks['search_volume']
+                        ?? $kw_info_bing['search_volume']
+                        ?? $clickstream_info['search_volume']
+                        ?? null;
+
+                    // === 競合度: keyword_info 優先、competition_level も考慮 ===
+                    $cp = $kw_info['competition']
+                        ?? $kw_info_clicks['competition']
+                        ?? $kw_info_bing['competition']
+                        ?? null;
+                    if ( $cp === null ) {
+                        foreach ( [ $kw_info, $kw_info_clicks, $kw_info_bing ] as $src ) {
+                            if ( isset( $src['competition_level'] ) ) {
+                                $lv = strtoupper( (string) $src['competition_level'] );
+                                if ( $lv === 'HIGH' )        { $cp = 0.8; break; }
+                                elseif ( $lv === 'MEDIUM' )   { $cp = 0.5; break; }
+                                elseif ( $lv === 'LOW' )      { $cp = 0.2; break; }
+                            }
+                        }
                     }
-                    $cpc = $kw_info['cpc'] ?? null;
+
+                    $cpc = $kw_info['cpc']
+                        ?? $kw_info_clicks['cpc']
+                        ?? $kw_info_bing['cpc']
+                        ?? null;
+
+                    // 初回アイテムのみフィールド有無を詳細ログ出力（診断用）
+                    if ( $task_i === 0 && $item_idx === 0 ) {
+                        $field_diag = [
+                            'keyword' => mb_substr( $kw, 0, 40 ),
+                            'kw_props_has_diff'   => isset( $item['keyword_properties']['keyword_difficulty'] ),
+                            'kw_props_diff_val'   => $item['keyword_properties']['keyword_difficulty'] ?? null,
+                            'kw_info_has_vol'     => isset( $kw_info['search_volume'] ),
+                            'kw_info_vol_val'     => $kw_info['search_volume'] ?? null,
+                            'kw_info_has_comp'    => isset( $kw_info['competition'] ),
+                            'kw_info_comp_val'    => $kw_info['competition'] ?? null,
+                            'clicks_has_vol'      => isset( $kw_info_clicks['search_volume'] ),
+                            'clicks_vol_val'      => $kw_info_clicks['search_volume'] ?? null,
+                            'bing_has_vol'        => isset( $kw_info_bing['search_volume'] ),
+                            'bing_vol_val'        => $kw_info_bing['search_volume'] ?? null,
+                            'clickstream_has_vol' => isset( $clickstream_info['search_volume'] ),
+                            'clickstream_vol_val' => $clickstream_info['search_volume'] ?? null,
+                            'resolved_sv'         => $sv,
+                            'resolved_cp'         => $cp,
+                            'resolved_diff'       => $difficulty,
+                        ];
+                        file_put_contents( '/tmp/gcrev_seo_debug.log',
+                            date( 'Y-m-d H:i:s' ) . " [DataForSEO] item[0] fields=" . wp_json_encode( $field_diag, JSON_UNESCAPED_UNICODE ) . "\n",
+                            FILE_APPEND
+                        );
+                    }
 
                     $norm        = $this->normalize_keyword( $kw );
                     $original_kw = $normalized_to_original[ $norm ] ?? $kw;
                     $results[ $original_kw ] = [
                         'keyword_difficulty' => ( $difficulty !== null ) ? (int) $difficulty : null,
-                        'search_volume'      => $sv,
+                        'search_volume'      => ( $sv !== null ) ? (int) $sv : null,
                         'competition'        => $cp,
                         'cpc'                => $cpc,
                     ];

@@ -760,8 +760,8 @@ class Gcrev_Keyword_Research_Service {
             return [ 'data' => [], 'source' => 'none' ];
         }
 
-        // キャッシュ確認（v3: keyword_overview パーサー修正で旧キャッシュ無効化）
-        $cache_key = 'gcrev_kwenrich_v3_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
+        // キャッシュ確認（v4: clickstream / bing フォールバック追加で旧キャッシュ無効化）
+        $cache_key = 'gcrev_kwenrich_v4_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
         $cached = get_transient( $cache_key );
         if ( $cached !== false ) {
             $this->log( "enrich_keywords: cache hit ({$cache_key})" );
