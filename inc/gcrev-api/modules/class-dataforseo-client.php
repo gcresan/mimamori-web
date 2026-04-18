@@ -446,6 +446,7 @@ class Gcrev_DataForSEO_Client {
         }
 
         $results = [];
+        $null_vol = 0; $null_comp = 0;
         foreach ( $tasks[0]['result'] as $item ) {
             $kw = $item['keyword'] ?? '';
             if ( $kw === '' ) {
@@ -453,12 +454,24 @@ class Gcrev_DataForSEO_Client {
             }
             $norm = $this->normalize_keyword( $kw );
             $original_kw = $normalized_to_original[ $norm ] ?? $kw;
+            $sv = $item['search_volume'] ?? null;
+            $cp = $item['competition'] ?? null;
+            if ( $sv === null ) $null_vol++;
+            if ( $cp === null ) $null_comp++;
             $results[ $original_kw ] = [
-                'search_volume' => $item['search_volume'] ?? null,
-                'competition'   => $item['competition'] ?? null,
+                'search_volume' => $sv,
+                'competition'   => $cp,
                 'cpc'           => $item['cpc'] ?? null,
             ];
         }
+
+        file_put_contents( '/tmp/gcrev_seo_debug.log',
+            date( 'Y-m-d H:i:s' ) . sprintf(
+                " [DataForSEO] search_volume: sent=%d returned=%d null_volume=%d null_competition=%d\n",
+                count( $keywords ), count( $results ), $null_vol, $null_comp
+            ),
+            FILE_APPEND
+        );
 
         return $results;
     }
@@ -512,6 +525,10 @@ class Gcrev_DataForSEO_Client {
         if ( $status_code !== 20000 ) {
             $msg = $response['status_message'] ?? 'Unknown error';
             error_log( "[GCREV][DataForSEO] keyword_overview API error: {$msg} (code: {$status_code})" );
+            file_put_contents( '/tmp/gcrev_seo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [DataForSEO] keyword_overview top-level error: code={$status_code} msg={$msg}\n",
+                FILE_APPEND
+            );
             return new \WP_Error( 'api_error', $msg );
         }
 
@@ -523,29 +540,73 @@ class Gcrev_DataForSEO_Client {
 
         $results = [];
         $tasks = $response['tasks'] ?? [];
-        foreach ( $tasks as $task ) {
-            // タスクレベルのエラーはスキップ
-            if ( (int) ( $task['status_code'] ?? 0 ) !== 20000 ) {
+
+        // 診断: 最初のレスポンス構造を1回だけログ出力
+        $diag = [
+            'tasks_count'      => count( $tasks ),
+            'first_task_keys'  => [],
+            'first_result_keys' => [],
+            'first_items_keys' => [],
+            'task_status'      => null,
+            'task_msg'         => null,
+        ];
+        if ( ! empty( $tasks[0] ) ) {
+            $diag['first_task_keys'] = array_keys( $tasks[0] );
+            $diag['task_status']     = $tasks[0]['status_code'] ?? null;
+            $diag['task_msg']        = $tasks[0]['status_message'] ?? null;
+            $first_result = $tasks[0]['result'][0] ?? null;
+            if ( is_array( $first_result ) ) {
+                $diag['first_result_keys'] = array_keys( $first_result );
+                $first_item = $first_result['items'][0] ?? null;
+                if ( is_array( $first_item ) ) {
+                    $diag['first_items_keys'] = array_keys( $first_item );
+                }
+            }
+        }
+        file_put_contents( '/tmp/gcrev_seo_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [DataForSEO] keyword_overview diag=" . wp_json_encode( $diag, JSON_UNESCAPED_UNICODE ) . "\n",
+            FILE_APPEND
+        );
+
+        foreach ( $tasks as $task_i => $task ) {
+            // タスクレベルのエラーはスキップ（ただしログに残す）
+            $t_status = (int) ( $task['status_code'] ?? 0 );
+            if ( $t_status !== 20000 ) {
+                file_put_contents( '/tmp/gcrev_seo_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [DataForSEO] keyword_overview task[{$task_i}] error: code={$t_status} msg=" . ( $task['status_message'] ?? '-' ) . "\n",
+                    FILE_APPEND
+                );
                 continue;
             }
-            // keywords 配列形式: result[] に各キーワードの結果が並ぶ
+
             foreach ( ( $task['result'] ?? [] ) as $task_result ) {
                 $kw = $task_result['keyword'] ?? '';
                 if ( $kw === '' ) {
                     continue;
                 }
 
-                // items[0].keyword_properties.keyword_difficulty から難易度取得
-                $item       = $task_result['items'][0] ?? null;
+                // パターンA: result[n].items[0].keyword_properties.keyword_difficulty
                 $difficulty = null;
-                if ( $item ) {
-                    $difficulty = $item['keyword_properties']['keyword_difficulty'] ?? null;
+                $item = $task_result['items'][0] ?? null;
+                if ( $item && is_array( $item ) ) {
+                    $difficulty = $item['keyword_properties']['keyword_difficulty']
+                        ?? $item['keyword_info']['keyword_difficulty']
+                        ?? $item['keyword_difficulty']
+                        ?? null;
+                }
+
+                // パターンB: result[n].keyword_properties.keyword_difficulty（items が無い場合）
+                if ( $difficulty === null ) {
+                    $difficulty = $task_result['keyword_properties']['keyword_difficulty']
+                        ?? $task_result['keyword_info']['keyword_difficulty']
+                        ?? $task_result['keyword_difficulty']
+                        ?? null;
                 }
 
                 $norm        = $this->normalize_keyword( $kw );
                 $original_kw = $normalized_to_original[ $norm ] ?? $kw;
                 $results[ $original_kw ] = [
-                    'keyword_difficulty' => $difficulty,
+                    'keyword_difficulty' => ( $difficulty !== null ) ? (int) $difficulty : null,
                 ];
             }
         }
