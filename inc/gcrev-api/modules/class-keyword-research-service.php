@@ -785,94 +785,123 @@ class Gcrev_Keyword_Research_Service {
             $this->log( 'enrich_keywords: Planner data for ' . count( $planner_data ) . ' keywords' );
         }
 
-        // Step 2: Planner で取得できなかったキーワード → DataForSEO フォールバック
-        $missing = [];
-        foreach ( $keywords as $kw ) {
-            if ( ! isset( $merged[ mb_strtolower( $kw ) ] ) ) {
-                $missing[] = $kw;
-            }
-        }
+        // Step 2: DataForSEO fetch_search_volume を全KWに呼び、
+        //         Planner で取れていない or 欠損したフィールドを補強する。
+        //         Planner で取れたKWも競合度/CPC の補強対象とする（competition_index が null のケースが多いため）。
+        $df_available = ( $this->dataforseo !== null )
+            && method_exists( $this->dataforseo, 'is_configured' )
+            && $this->dataforseo::is_configured();
 
-        if ( ! empty( $missing ) && $this->dataforseo !== null ) {
+        if ( $df_available ) {
             try {
-                if ( method_exists( $this->dataforseo, 'is_configured' ) && $this->dataforseo::is_configured() ) {
-                    $vol_result = $this->dataforseo->fetch_search_volume( $missing );
-                    if ( ! is_wp_error( $vol_result ) && ! empty( $vol_result ) ) {
-                        if ( $volume_source === 'google_ads' ) {
-                            $volume_source = 'mixed';
-                        } else {
-                            $volume_source = 'dataforseo';
-                        }
-                        foreach ( $vol_result as $kw => $data ) {
-                            $merged[ mb_strtolower( $kw ) ] = [
-                                'volume'            => $data['search_volume'] ?? null,
-                                'competition'       => $data['competition'] ?? null,
-                                'competition_index' => null,
-                                'cpc'               => $data['cpc'] ?? null,
+                $vol_result = $this->dataforseo->fetch_search_volume( $keywords );
+                if ( ! is_wp_error( $vol_result ) && is_array( $vol_result ) && ! empty( $vol_result ) ) {
+                    $added = 0; $augmented = 0;
+                    foreach ( $vol_result as $kw => $data ) {
+                        $kw_lower = mb_strtolower( $kw );
+                        $df_vol  = $data['search_volume'] ?? null;
+                        $df_comp = $data['competition'] ?? null;
+                        $df_cpc  = $data['cpc'] ?? null;
+
+                        if ( ! isset( $merged[ $kw_lower ] ) ) {
+                            // Planner で取れていないKW → DataForSEO をプライマリとして登録
+                            $merged[ $kw_lower ] = [
+                                'volume'            => $df_vol,
+                                'competition'       => $df_comp,
+                                'competition_index' => ( $df_comp !== null )
+                                    ? (int) round( (float) $df_comp * 100 ) : null,
+                                'cpc'               => $df_cpc,
                                 'monthly_volumes'   => [],
                                 'difficulty'        => null,
                             ];
+                            $added++;
+                            continue;
                         }
-                        $this->log( 'enrich_keywords: DataForSEO fallback for ' . count( $vol_result ) . ' keywords' );
+
+                        // Planner で取れていたKW → 欠損フィールドのみ補強
+                        $row = &$merged[ $kw_lower ];
+                        if ( $row['volume'] === null && $df_vol !== null ) {
+                            $row['volume'] = $df_vol;
+                        }
+                        if ( $row['competition_index'] === null && $df_comp !== null ) {
+                            $row['competition_index'] = (int) round( (float) $df_comp * 100 );
+                            if ( $row['competition'] === null ) { $row['competition'] = $df_comp; }
+                            $augmented++;
+                        }
+                        if ( $row['cpc'] === null && $df_cpc !== null ) {
+                            $row['cpc'] = $df_cpc;
+                        }
+                        unset( $row );
                     }
+                    if ( $added > 0 || $augmented > 0 ) {
+                        $volume_source = ( $volume_source === 'google_ads' ) ? 'mixed' : 'dataforseo';
+                    }
+                    $this->log( sprintf(
+                        'enrich_keywords: DataForSEO volume — added=%d, augmented=%d, total=%d',
+                        $added, $augmented, count( $vol_result )
+                    ) );
+                } elseif ( is_wp_error( $vol_result ) ) {
+                    $this->log( 'enrich_keywords: DataForSEO volume error: ' . $vol_result->get_error_message() );
                 }
             } catch ( \Throwable $e ) {
                 $this->log( 'enrich_keywords: DataForSEO volume exception: ' . $e->getMessage() );
             }
         }
 
-        // Planner が完全に失敗した場合 → DataForSEO で全件取得
-        if ( empty( $merged ) && $this->dataforseo !== null ) {
-            try {
-                if ( method_exists( $this->dataforseo, 'is_configured' ) && $this->dataforseo::is_configured() ) {
-                    $vol_result = $this->dataforseo->fetch_search_volume( $keywords );
-                    if ( ! is_wp_error( $vol_result ) && ! empty( $vol_result ) ) {
-                        $volume_source = 'dataforseo';
-                        foreach ( $vol_result as $kw => $data ) {
-                            $merged[ mb_strtolower( $kw ) ] = [
-                                'volume'            => $data['search_volume'] ?? null,
-                                'competition'       => $data['competition'] ?? null,
+        // Step 3: DataForSEO で難易度をバッチ分割取得（日本語ロングテールで欠損しやすいため）
+        if ( $df_available ) {
+            $batches = array_chunk( $keywords, 20 );
+            $total_got = 0;
+            foreach ( $batches as $bi => $batch ) {
+                try {
+                    $diff_result = $this->dataforseo->fetch_keyword_difficulty( $batch );
+                    if ( is_wp_error( $diff_result ) ) {
+                        $this->log( "enrich_keywords: difficulty batch {$bi} error: " . $diff_result->get_error_message() );
+                        continue;
+                    }
+                    if ( ! is_array( $diff_result ) ) { continue; }
+
+                    $got_in_batch = 0;
+                    foreach ( $diff_result as $kw => $data ) {
+                        $kw_lower = mb_strtolower( $kw );
+                        if ( ! isset( $merged[ $kw_lower ] ) ) {
+                            $merged[ $kw_lower ] = [
+                                'volume'            => null,
+                                'competition'       => null,
                                 'competition_index' => null,
-                                'cpc'               => $data['cpc'] ?? null,
+                                'cpc'               => null,
                                 'monthly_volumes'   => [],
                                 'difficulty'        => null,
                             ];
                         }
-                        $this->log( 'enrich_keywords: DataForSEO full fallback for ' . count( $vol_result ) . ' keywords' );
+                        if ( isset( $data['keyword_difficulty'] ) && $data['keyword_difficulty'] !== null ) {
+                            $merged[ $kw_lower ]['difficulty'] = (int) $data['keyword_difficulty'];
+                            $got_in_batch++;
+                        }
                     }
+                    $total_got += $got_in_batch;
+                    $this->log( sprintf(
+                        'enrich_keywords: difficulty batch %d — got=%d/%d',
+                        $bi, $got_in_batch, count( $batch )
+                    ) );
+                } catch ( \Throwable $e ) {
+                    $this->log( "enrich_keywords: difficulty batch {$bi} exception: " . $e->getMessage() );
                 }
-            } catch ( \Throwable $e ) {
-                $this->log( 'enrich_keywords: DataForSEO full fallback exception: ' . $e->getMessage() );
             }
+            $this->log( sprintf(
+                'enrich_keywords: difficulty total got=%d/%d',
+                $total_got, count( $keywords )
+            ) );
         }
 
-        // Step 3: DataForSEO で SEO 難易度を常に取得（Planner にない指標）
-        if ( $this->dataforseo !== null ) {
-            try {
-                if ( method_exists( $this->dataforseo, 'is_configured' ) && $this->dataforseo::is_configured() ) {
-                    $diff_result = $this->dataforseo->fetch_keyword_difficulty( $keywords );
-                    if ( ! is_wp_error( $diff_result ) && ! empty( $diff_result ) ) {
-                        foreach ( $diff_result as $kw => $data ) {
-                            $kw_lower = mb_strtolower( $kw );
-                            if ( ! isset( $merged[ $kw_lower ] ) ) {
-                                $merged[ $kw_lower ] = [
-                                    'volume'            => null,
-                                    'competition'       => null,
-                                    'competition_index' => null,
-                                    'cpc'               => null,
-                                    'monthly_volumes'   => [],
-                                    'difficulty'        => null,
-                                ];
-                            }
-                            $merged[ $kw_lower ]['difficulty'] = $data['keyword_difficulty'] ?? null;
-                        }
-                        $this->log( 'enrich_keywords: DataForSEO difficulty for ' . count( $diff_result ) . ' keywords' );
-                    }
-                }
-            } catch ( \Throwable $e ) {
-                $this->log( 'enrich_keywords: DataForSEO difficulty exception: ' . $e->getMessage() );
+        // Step 4: 最終フォールバック — competition_index がまだ null の KW には
+        // Planner の competition (HIGH=0.8 / MEDIUM=0.5 / LOW=0.2) を ×100 して変換
+        foreach ( $merged as $k => &$row ) {
+            if ( $row['competition_index'] === null && $row['competition'] !== null ) {
+                $row['competition_index'] = (int) round( (float) $row['competition'] * 100 );
             }
         }
+        unset( $row );
 
         $result = [ 'data' => $merged, 'source' => $volume_source ];
 
