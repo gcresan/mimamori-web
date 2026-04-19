@@ -468,9 +468,14 @@ class Gcrev_Execution_Service {
 
         $prompt = <<<PROMPT
 あなたは中小企業のWeb集客コンサルタントです。
-以下のデータに基づき、このサイトの順位改善に必要な「具体的な作業指示」を5個、JSON配列で出力してください。
+以下のデータに基づき、このサイトの順位改善に必要な「具体的な作業指示」を **ちょうど5個** 、JSON配列で出力してください。
 
 【重要ルール】
+- **出力は必ず5件以内**。6件以上は禁止
+- **重複禁止**: action_type と target_keyword の組合せは配列内で必ずユニーク
+  - 例: 「コラム記事を3本追加」と「コラム記事を2本追加」の2件は重複なのでNG。1件にまとめる
+  - 例: 同じ target_keyword で action_type が rewrite の項目を複数出すのもNG
+  - target_keyword が空の article_create / internal_link / meta_fix / page_speed などは **配列内で高々1件**
 - titleは「〜してください」の命令形。必ず数量を含める
   ✅「コラム記事を2本追加してください」
   ✅「料金ページを1,500文字リライトしてください」
@@ -498,7 +503,7 @@ class Gcrev_Execution_Service {
 【出力形式】
 action_type: article_create/rewrite/internal_link/meo_post/meta_fix/page_speed
 priority: high(最大2個)/medium/low
-JSON配列のみ出力。コードブロック記法禁止。
+JSON配列のみ出力。コードブロック記法禁止。最大5件。
 
 [{"action_type":"article_create","priority":"high","title":"コラム記事を2本追加してください","reason":"競合は月平均4本公開、あなたは月1本で差が広がっています","target_keyword":"愛媛 Web制作","target_url":"","quantity":2,"unit":"本","expected_effect":"2〜4週間で関連キーワードの検索表示が増加します","comparison":{"self":"月1本","competitor_avg":"月4本"}}]
 PROMPT;
@@ -511,8 +516,9 @@ PROMPT;
 
             $parsed = $this->parse_ai_json( $response );
             if ( is_array( $parsed ) && ! empty( $parsed ) ) {
-                $this->log( "AI parse success: " . count( $parsed ) . " actions" );
-                return $parsed;
+                $deduped = $this->dedupe_and_cap_actions( $parsed );
+                $this->log( "AI parse success: raw=" . count( $parsed ) . " deduped=" . count( $deduped ) );
+                return $deduped;
             }
 
             $this->log( "AI JSON parse failed. Raw: " . substr( $response, 0, 500 ) );
@@ -522,6 +528,53 @@ PROMPT;
         }
 
         return [];
+    }
+
+    /**
+     * AIが生成した重複・過剰アクションを除去
+     *
+     * ルール:
+     * - (action_type, target_keyword) の組合せで重複排除
+     * - 同じキーの場合、priority が高い方を優先、次いで quantity が大きい方を優先
+     * - 全体を $max 件までに切り詰める
+     */
+    private function dedupe_and_cap_actions( array $actions, int $max = 5 ): array {
+        $prio_rank = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
+        $seen = [];
+
+        foreach ( $actions as $a ) {
+            if ( ! is_array( $a ) ) { continue; }
+            $type = (string) ( $a['action_type'] ?? '' );
+            $kw   = trim( (string) ( $a['target_keyword'] ?? '' ) );
+            if ( $type === '' ) { continue; }
+            $key = $type . '|' . $kw;
+
+            if ( ! isset( $seen[ $key ] ) ) {
+                $seen[ $key ] = $a;
+                continue;
+            }
+
+            $existing = $seen[ $key ];
+            $new_prio = $prio_rank[ $a['priority'] ?? 'medium' ] ?? 1;
+            $cur_prio = $prio_rank[ $existing['priority'] ?? 'medium' ] ?? 1;
+
+            if ( $new_prio < $cur_prio ) {
+                $seen[ $key ] = $a;
+            } elseif ( $new_prio === $cur_prio
+                    && (int) ( $a['quantity'] ?? 0 ) > (int) ( $existing['quantity'] ?? 0 ) ) {
+                $seen[ $key ] = $a;
+            }
+        }
+
+        // priority 順に並べてから上限適用
+        $result = array_values( $seen );
+        usort( $result, function ( $a, $b ) use ( $prio_rank ) {
+            $pa = $prio_rank[ $a['priority'] ?? 'medium' ] ?? 1;
+            $pb = $prio_rank[ $b['priority'] ?? 'medium' ] ?? 1;
+            return $pa <=> $pb;
+        } );
+
+        return array_slice( $result, 0, $max );
     }
 
     private function get_fallback_actions(): array {
