@@ -1,7 +1,7 @@
 <?php
 /**
- * Template Name: 今のおすすめ改善
- * Description: 現時点での分析に基づく、今やるべき改善アクションを提示する。
+ * Template Name: 今月のおすすめ改善施策
+ * Description: 現時点での分析にもとづき、今月取り組むべき改善施策を提示する。
  */
 
 if ( ! is_user_logged_in() ) {
@@ -12,9 +12,9 @@ if ( ! is_user_logged_in() ) {
 $current_user = wp_get_current_user();
 $user_id      = $current_user->ID;
 
-set_query_var( 'gcrev_page_title', '今のおすすめ改善' );
-set_query_var( 'gcrev_page_subtitle', '現時点での分析にもとづく、いまやるべき改善アクション。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '今のおすすめ改善' ) );
+set_query_var( 'gcrev_page_title', '今月のおすすめ改善施策' );
+set_query_var( 'gcrev_page_subtitle', '現時点での分析にもとづく、今月取り組むべき改善施策。' );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '今月のおすすめ改善施策' ) );
 
 get_header();
 ?>
