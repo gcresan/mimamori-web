@@ -742,6 +742,16 @@ class Gcrev_Writing_Service {
             $title = $outline['title_options'][0];
         }
 
+        // 品質スコア（score_article が保存する _gcrev_article_score_json）を一覧でも表示する
+        $score_total = null;
+        $score_raw = get_post_meta( $post->ID, '_gcrev_article_score_json', true );
+        if ( $score_raw ) {
+            $score_data = json_decode( $score_raw, true );
+            if ( is_array( $score_data ) && ( $score_data['status'] ?? '' ) === 'success' && isset( $score_data['total_score'] ) ) {
+                $score_total = (int) $score_data['total_score'];
+            }
+        }
+
         return [
             'id'           => $post->ID,
             'title'        => $title,
@@ -753,6 +763,7 @@ class Gcrev_Writing_Service {
             'has_draft'    => (bool) get_post_meta( $post->ID, '_gcrev_article_draft_content', true ),
             'wp_draft_id'  => (int) get_post_meta( $post->ID, '_gcrev_article_wp_draft_id', true ),
             'similarity_risk' => $this->get_similarity_risk_level( $post->ID ),
+            'score_total'  => $score_total,
             'created_at'   => get_post_meta( $post->ID, '_gcrev_article_created_at', true ) ?: '',
             'updated_at'   => get_post_meta( $post->ID, '_gcrev_article_updated_at', true ) ?: '',
         ];

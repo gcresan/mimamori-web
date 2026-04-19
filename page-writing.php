@@ -967,9 +967,16 @@ get_header();
                     autoBadge += ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:#E67E2220;color:#E67E22;">要インタビュー</span>';
                 }
             }
+            // 品質チェック詳細のスコア（詳細画面のグレード配色に合わせる）
+            var scoreBadge = '';
+            if (a.score_total !== null && a.score_total !== undefined) {
+                var _st = a.score_total;
+                var gc = _st >= 85 ? '#3D7559' : _st >= 70 ? '#476C6F' : _st >= 60 ? '#8A7028' : '#9C4940';
+                scoreBadge = ' <span style="display:inline-block;padding:1px 6px;font-size:10px;border-radius:4px;background:' + gc + '20;color:' + gc + ';">' + _st + '点</span>';
+            }
             return '<tr class="wrt-table__row" data-id="' + a.id + '">'
                 + '<td class="wrt-table__td-check"><input type="checkbox" class="wrt-article-check" data-id="' + a.id + '"></td>'
-                + '<td class="wrt-table__td-title">' + esc(a.title) + riskBadge + autoBadge + '</td>'
+                + '<td class="wrt-table__td-title">' + esc(a.title) + scoreBadge + riskBadge + autoBadge + '</td>'
                 + '<td class="wrt-table__td-keyword">' + esc(a.keyword) + '</td>'
                 + '<td class="wrt-table__td-date">' + esc(dateStr) + '</td>'
                 + '</tr>';
