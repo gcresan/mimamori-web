@@ -1292,13 +1292,18 @@ get_header();
         if (a.outline && a.draft_content) {
             html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtShowOutlineBtn">構成案を見る</button>';
         }
-        // 品質スコアバッジ + 詳細ボタン
-        if (a.score && a.score.status === 'success') {
-            var _s = a.score.total_score || 0;
-            var _sc = _s >= 85 ? 'high' : _s >= 70 ? 'mid' : _s >= 60 ? 'low' : 'poor';
-            html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtShowScoreBtn" style="display:inline-flex;align-items:center;gap:6px;">'
-                + '<span class="wrt-score__grade wrt-score__grade--' + _sc + '" style="font-size:12px;padding:1px 8px;">' + _s + '点</span>'
-                + '品質チェック詳細</button>';
+        // 品質スコアバッジ + 詳細ボタン（本文生成済みなら常に表示。
+        // スコア未計測の記事でもクリックで採点を走らせられるようにする）
+        if (a.draft_content) {
+            if (a.score && a.score.status === 'success') {
+                var _s = a.score.total_score || 0;
+                var _sc = _s >= 85 ? 'high' : _s >= 70 ? 'mid' : _s >= 60 ? 'low' : 'poor';
+                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtShowScoreBtn" style="display:inline-flex;align-items:center;gap:6px;">'
+                    + '<span class="wrt-score__grade wrt-score__grade--' + _sc + '" style="font-size:12px;padding:1px 8px;">' + _s + '点</span>'
+                    + '品質チェック詳細</button>';
+            } else {
+                html += '<button class="wrt-btn wrt-btn--secondary wrt-btn--sm" id="wrtShowScoreBtn">品質チェック詳細</button>';
+            }
         }
         // WordPress外部投稿ボタン
         if (a.draft_content) {
@@ -1656,12 +1661,27 @@ get_header();
                 document.getElementById('wrtOutlineModal').classList.add('active');
             });
         }
-        // 品質チェック詳細ボタン
+        // 品質チェック詳細ボタン。スコア未計測ならクリックで採点を走らせて結果を開く
         var scoreBtn = document.getElementById('wrtShowScoreBtn');
-        if (scoreBtn && a.score) {
+        if (scoreBtn) {
             scoreBtn.addEventListener('click', function() {
-                document.getElementById('wrtScoreModalBody').innerHTML = renderScoreSection(a.score);
-                document.getElementById('wrtScoreModal').classList.add('active');
+                if (a.score && a.score.status === 'success') {
+                    document.getElementById('wrtScoreModalBody').innerHTML = renderScoreSection(a.score);
+                    document.getElementById('wrtScoreModal').classList.add('active');
+                    return;
+                }
+                showProgress('品質チェック中…（30秒〜1分）');
+                apiFetch('/articles/' + a.id + '/score', { method: 'POST' }).then(function(res) {
+                    hideProgress();
+                    if (!res.success || !res.score) {
+                        showToast(res.error || '品質チェックに失敗しました', true);
+                        return;
+                    }
+                    currentArticle.score = res.score;
+                    document.getElementById('wrtScoreModalBody').innerHTML = renderScoreSection(res.score);
+                    document.getElementById('wrtScoreModal').classList.add('active');
+                    renderArticleDetail();
+                }).catch(function() { hideProgress(); showToast('通信エラー', true); });
             });
         }
         var inlineOutlineEl = document.getElementById('wrtOutlineInline');
