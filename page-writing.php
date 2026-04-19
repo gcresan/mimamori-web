@@ -5,7 +5,7 @@
  */
 
 if ( ! is_user_logged_in() ) {
-    wp_safe_redirect( home_url( '/' ) );
+    wp_safe_redirect( home_url( '/login/' ) );
     exit;
 }
 
@@ -1243,16 +1243,15 @@ get_header();
 
         // --- 左カラム: 本文エディター ---
         html += '<div class="wrt-detail__main">';
-        // タイトル表示（H1から抽出されたタイトル）
-        var displayTitle = a.title && a.title !== a.keyword ? a.title : '';
-        if (displayTitle) {
-            html += '<div style="margin-bottom:12px;"><span style="font-size:11px;color:var(--mw-text-tertiary);display:block;margin-bottom:4px;">記事タイトル</span>';
-            html += '<span style="font-size:18px;font-weight:700;color:var(--mw-text-heading);line-height:1.4;">' + esc(displayTitle) + '</span></div>';
-        }
         html += '<div class="wrt-detail__keyword-section">';
         html += '<span class="wrt-detail__keyword-label">対策キーワード</span>';
         html += '<span class="wrt-detail__keyword-value">' + esc(a.keyword) + '</span>';
         html += '</div>';
+        // タイトル表示（H1から抽出されたタイトル — キーワード下に大きく表示）
+        var displayTitle = a.title && a.title !== a.keyword ? a.title : '';
+        if (displayTitle) {
+            html += '<div style="margin-bottom:16px;"><span style="font-size:22px;font-weight:700;color:var(--mw-text-heading);line-height:1.4;display:block;">' + esc(displayTitle) + '</span></div>';
+        }
 
         // 類似記事の警告
         if (a.similarity_result && a.similarity_result.risk_level && a.similarity_result.risk_level !== 'none' && a.similarity_result.risk_level !== 'low') {
@@ -1613,13 +1612,8 @@ get_header();
                 runCompetitorResearch(this.id === 'wrtRerunCompetitorBtn');
             });
         }
-        // 競合調査が一度も実行されていない場合のみ自動実行
-        if (!a.competitor_research) {
-            if (!_competitorAutoRanFor[a.id]) {
-                _competitorAutoRanFor[a.id] = true;
-                setTimeout(function() { runCompetitorResearch(false); }, 500);
-            }
-        }
+        // 競合調査は詳細ページを開いても自動実行しない。
+        // 必要なときだけ「競合調査を実行」ボタンから手動で走らせる。
 
         // インタビュー生成
         document.getElementById('wrtGenerateInterviewBtn').addEventListener('click', function() {
