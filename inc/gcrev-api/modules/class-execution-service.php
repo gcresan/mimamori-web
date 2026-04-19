@@ -412,15 +412,21 @@ class Gcrev_Execution_Service {
             ), ARRAY_A );
             $context['recent_articles'] = $articles;
 
-            // クライアント情報（user_meta のみ）
-            $client_info = get_user_meta( $user_id, 'gcrev_client_info', true );
-            if ( is_array( $client_info ) ) {
-                $context['business'] = [
-                    'industry' => $client_info['industry'] ?? '',
-                    'area'     => $client_info['area'] ?? '',
-                    'site_url' => $client_info['site_url'] ?? '',
-                ];
-            }
+            // クライアント設定（business / 月次レポート方針）
+            $context['business']       = $this->collect_client_settings( $user_id );
+            $context['report_policy']  = $this->collect_report_policy( $user_id );
+
+            // ペルソナ
+            $context['persona']        = $this->collect_persona( $user_id );
+
+            // ページ診断 + Clarity 指標
+            $context['page_analysis']  = $this->collect_page_analysis( $user_id );
+
+            // 競合サイト内容（最新のキーワード調査結果から）
+            $context['competitors']    = $this->collect_competitor_data( $user_id );
+
+            // MEO（GBP）ダッシュボードデータ
+            $context['meo']            = $this->collect_meo_data( $user_id );
 
         } catch ( \Throwable $e ) {
             $this->log( "collect_context_for_ai ERROR: " . $e->getMessage() );
@@ -429,11 +435,298 @@ class Gcrev_Execution_Service {
         return $context;
     }
 
+    /**
+     * クライアント設定（業種・地域・事業タイプ・主要CV など）を集約
+     */
+    private function collect_client_settings( int $user_id ): array {
+        $client_info = get_user_meta( $user_id, 'gcrev_client_info', true );
+        $client_info = is_array( $client_info ) ? $client_info : [];
+
+        $get = fn( string $key ) => (string) ( get_user_meta( $user_id, $key, true ) ?: ( $client_info[ $key ] ?? '' ) );
+
+        $area_type   = $get( 'gcrev_client_area_type' );
+        $area_pref   = $get( 'gcrev_client_area_pref' );
+        $area_city   = $get( 'gcrev_client_area_city' );
+        $area_custom = $get( 'gcrev_client_area_custom' );
+        $area_parts  = array_filter( [ $area_pref, $area_city, $area_custom ] );
+        $area_label  = $area_parts ? implode( ' ', $area_parts ) : ( $client_info['area'] ?? '' );
+
+        $main_conversions = $get( 'gcrev_client_main_conversions' );
+        if ( $main_conversions === '' ) { $main_conversions = (string) ( $client_info['main_conversions'] ?? '' ); }
+
+        return [
+            'industry'           => $get( 'gcrev_client_industry_category' ) ?: ( $client_info['industry'] ?? '' ),
+            'industry_detail'    => $get( 'gcrev_client_industry_detail' ),
+            'industry_sub'       => $get( 'gcrev_client_industry_subcategory' ),
+            'area_type'          => $area_type,
+            'area'               => $area_label,
+            'business_type'      => $get( 'gcrev_client_business_type' ),
+            'stage'              => $get( 'gcrev_client_stage' ),
+            'main_conversions'   => $main_conversions,
+            'site_url'           => $get( 'gcrev_client_site_url' ) ?: ( $client_info['site_url'] ?? '' ),
+        ];
+    }
+
+    /**
+     * 月次レポート方針（課題・目標・重視する数値 など）
+     */
+    private function collect_report_policy( int $user_id ): array {
+        $keys = [
+            'report_issue', 'report_goal_monthly', 'report_focus_numbers',
+            'report_current_state', 'report_goal_main', 'report_additional_notes',
+            'report_output_mode',
+        ];
+        $out = [];
+        foreach ( $keys as $k ) {
+            $v = get_user_meta( $user_id, $k, true );
+            if ( is_array( $v ) ) {
+                $v = implode( ', ', array_map( 'strval', $v ) );
+            }
+            $out[ $k ] = (string) ( $v ?? '' );
+        }
+        return $out;
+    }
+
+    /**
+     * ペルソナ設定
+     */
+    private function collect_persona( int $user_id ): array {
+        $flatten = function ( $v ): string {
+            if ( is_array( $v ) ) { return implode( ', ', array_map( 'strval', $v ) ); }
+            return (string) ( $v ?? '' );
+        };
+        return [
+            'one_liner'        => $flatten( get_user_meta( $user_id, 'gcrev_client_persona_one_liner', true ) ),
+            'detail_text'      => $flatten( get_user_meta( $user_id, 'gcrev_client_persona_detail_text', true ) ),
+            'age_ranges'       => $flatten( get_user_meta( $user_id, 'gcrev_client_persona_age_ranges', true ) ),
+            'genders'          => $flatten( get_user_meta( $user_id, 'gcrev_client_persona_genders', true ) ),
+            'attributes'       => $flatten( get_user_meta( $user_id, 'gcrev_client_persona_attributes', true ) ),
+            'decision_factors' => $flatten( get_user_meta( $user_id, 'gcrev_client_persona_decision_factors', true ) ),
+        ];
+    }
+
+    /**
+     * ページ診断結果 + Clarity 指標（直近30日集計）
+     *
+     * 各ページ最大15件まで、AI に重要ページのみ渡す。
+     */
+    private function collect_page_analysis( int $user_id, int $limit = 15 ): array {
+        global $wpdb;
+        $pa_table      = $wpdb->prefix . 'gcrev_page_analysis';
+        $clarity_table = $wpdb->prefix . 'gcrev_clarity_daily';
+
+        $exists = $wpdb->get_var( "SHOW TABLES LIKE '{$pa_table}'" );
+        if ( ! $exists ) { return []; }
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, page_url, page_title, page_type, page_purpose, page_cta,
+                    ai_summary, ai_insights, ai_analysis_date, clarity_sync_date
+             FROM {$pa_table}
+             WHERE user_id = %d AND status = 'active'
+             ORDER BY sort_order ASC, updated_at DESC
+             LIMIT %d",
+            $user_id, $limit
+        ), ARRAY_A );
+        if ( empty( $rows ) ) { return []; }
+
+        $clarity_exists = $wpdb->get_var( "SHOW TABLES LIKE '{$clarity_table}'" );
+
+        $out = [];
+        foreach ( $rows as $r ) {
+            $clarity = null;
+            if ( $clarity_exists ) {
+                $clarity = $wpdb->get_row( $wpdb->prepare(
+                    "SELECT
+                        SUM(sessions) AS sessions,
+                        SUM(page_views) AS page_views,
+                        AVG(scroll_depth) AS scroll_depth,
+                        AVG(engagement_time) AS engagement_time,
+                        SUM(dead_click) AS dead_click,
+                        SUM(rage_click) AS rage_click,
+                        SUM(error_click) AS error_click
+                     FROM {$clarity_table}
+                     WHERE user_id = %d AND page_analysis_id = %d AND device_type = 'all'
+                     AND target_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)",
+                    $user_id, (int) $r['id']
+                ), ARRAY_A );
+            }
+
+            // ai_insights は JSON の場合があるので文字列化
+            $insights = $r['ai_insights'];
+            if ( $insights && ( $decoded = json_decode( $insights, true ) ) !== null ) {
+                $insights = is_array( $decoded ) ? wp_json_encode( $decoded, JSON_UNESCAPED_UNICODE ) : $insights;
+            }
+
+            $out[] = [
+                'url'         => $r['page_url'],
+                'title'       => $r['page_title'],
+                'type'        => $r['page_type'],
+                'purpose'     => $r['page_purpose'],
+                'cta'         => $r['page_cta'],
+                'ai_summary'  => $r['ai_summary'] ? mb_substr( (string) $r['ai_summary'], 0, 300 ) : '',
+                'ai_insights' => $insights ? mb_substr( (string) $insights, 0, 400 ) : '',
+                'clarity'     => $clarity ? [
+                    'sessions'        => (int) ( $clarity['sessions'] ?? 0 ),
+                    'page_views'      => (int) ( $clarity['page_views'] ?? 0 ),
+                    'scroll_depth'    => $clarity['scroll_depth'] !== null ? round( (float) $clarity['scroll_depth'], 1 ) : null,
+                    'engagement_time' => $clarity['engagement_time'] !== null ? (int) $clarity['engagement_time'] : null,
+                    'dead_click'      => (int) ( $clarity['dead_click'] ?? 0 ),
+                    'rage_click'      => (int) ( $clarity['rage_click'] ?? 0 ),
+                    'error_click'     => (int) ( $clarity['error_click'] ?? 0 ),
+                ] : null,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * MEO（GBP）ダッシュボードデータ
+     *
+     * 既存の MEO REST エンドポイントが作成する Transient キャッシュを読む。
+     * キャッシュが無ければ空配列を返す（外部API呼び出しはしない）。
+     */
+    private function collect_meo_data( int $user_id ): array {
+        $location_id = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( empty( $location_id ) || strpos( (string) $location_id, 'pending_' ) === 0 ) {
+            return [];
+        }
+
+        try {
+            $dates_helper = new Gcrev_Date_Helper();
+            $periods = [ 'prev-month', 'last30' ];
+
+            foreach ( $periods as $period ) {
+                $dates  = $dates_helper->calculate_period_dates( $period );
+                $hash   = md5( "{$dates['start']}_{$dates['end']}" );
+                $cache  = get_transient( "gcrev_meo_{$user_id}_{$period}_{$hash}" );
+                if ( ! is_array( $cache ) || empty( $cache['metrics'] ) ) { continue; }
+
+                $curr = $cache['metrics']          ?? [];
+                $prev = $cache['metrics_previous'] ?? [];
+                $kw_series = $cache['search_keywords'] ?? [];
+
+                // 検索キーワード: 最新月のトップをいくつか抽出
+                $top_keywords = [];
+                if ( is_array( $kw_series ) && ! empty( $kw_series ) ) {
+                    $latest = end( $kw_series );
+                    if ( is_array( $latest ) && ! empty( $latest['keywords'] ) ) {
+                        foreach ( array_slice( $latest['keywords'], 0, 10 ) as $k ) {
+                            $top_keywords[] = [
+                                'keyword' => (string) ( $k['keyword'] ?? $k['query'] ?? '' ),
+                                'count'   => (int) ( $k['count'] ?? $k['impressions'] ?? 0 ),
+                            ];
+                        }
+                    }
+                }
+
+                return [
+                    'period_label' => $cache['current_range_label'] ?? '',
+                    'metrics'      => [
+                        'total_impressions'   => (int) ( $curr['total_impressions']   ?? 0 ),
+                        'mobile_impressions'  => (int) ( $curr['mobile_impressions']  ?? 0 ),
+                        'desktop_impressions' => (int) ( $curr['desktop_impressions'] ?? 0 ),
+                        'call_clicks'         => (int) ( $curr['call_clicks']         ?? 0 ),
+                        'direction_clicks'    => (int) ( $curr['direction_clicks']    ?? 0 ),
+                        'website_clicks'      => (int) ( $curr['website_clicks']      ?? 0 ),
+                    ],
+                    'previous'     => [
+                        'total_impressions' => (int) ( $prev['total_impressions'] ?? 0 ),
+                        'call_clicks'       => (int) ( $prev['call_clicks']       ?? 0 ),
+                        'direction_clicks'  => (int) ( $prev['direction_clicks']  ?? 0 ),
+                        'website_clicks'    => (int) ( $prev['website_clicks']    ?? 0 ),
+                    ],
+                    'top_keywords' => $top_keywords,
+                ];
+            }
+        } catch ( \Throwable $e ) {
+            $this->log( "collect_meo_data ERROR: " . $e->getMessage() );
+        }
+        return [];
+    }
+
+    /**
+     * 競合サイト内容（ユーザーが指定した参照URLのHTML解析結果）
+     *
+     * 最新のキーワード調査 CPT の post_meta `_gcrev_kwr_competitor_data` を参照。
+     */
+    private function collect_competitor_data( int $user_id ): array {
+        $posts = get_posts( [
+            'post_type'      => 'gcrev_kw_research',
+            'posts_per_page' => 1,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'meta_key'       => '_gcrev_kwr_user_id',
+            'meta_value'     => (string) $user_id,
+            'fields'         => 'ids',
+            'post_status'    => 'any',
+            'no_found_rows'  => true,
+        ] );
+        if ( empty( $posts ) ) { return []; }
+
+        $post_id = (int) $posts[0];
+        $raw = get_post_meta( $post_id, '_gcrev_kwr_competitor_data', true );
+        $data = json_decode( (string) $raw, true );
+        if ( ! is_array( $data ) ) { return []; }
+
+        $out = [];
+        foreach ( array_slice( $data, 0, 5 ) as $c ) {
+            if ( ! is_array( $c ) || ( $c['status'] ?? '' ) !== 'ok' ) { continue; }
+            $h = $c['headings'] ?? [ 'h1' => [], 'h2' => [], 'h3' => [] ];
+            $out[] = [
+                'url'              => (string) ( $c['url'] ?? '' ),
+                'note'             => (string) ( $c['note'] ?? '' ),
+                'title'            => mb_substr( (string) ( $c['title'] ?? '' ), 0, 120 ),
+                'meta_description' => mb_substr( (string) ( $c['meta_description'] ?? '' ), 0, 200 ),
+                'h1'               => array_slice( array_map( fn( $v ) => mb_substr( (string) $v, 0, 80 ), (array) ( $h['h1'] ?? [] ) ), 0, 3 ),
+                'h2'               => array_slice( array_map( fn( $v ) => mb_substr( (string) $v, 0, 80 ), (array) ( $h['h2'] ?? [] ) ), 0, 10 ),
+                'h3'               => array_slice( array_map( fn( $v ) => mb_substr( (string) $v, 0, 80 ), (array) ( $h['h3'] ?? [] ) ), 0, 10 ),
+                'body_excerpt'     => mb_substr( (string) ( $c['body_excerpt'] ?? '' ), 0, 500 ),
+            ];
+        }
+        return $out;
+    }
+
     private function call_ai_for_actions( array $context, int $user_id ): array {
-        $business  = $context['business'] ?? [];
-        $industry  = $business['industry'] ?? '（不明）';
-        $area      = $business['area'] ?? '';
-        $site_url  = $business['site_url'] ?? '';
+        $business = $context['business'] ?? [];
+        $industry = trim( ( $business['industry'] ?? '' ) . ' ' . ( $business['industry_detail'] ?? '' ) . ' ' . ( $business['industry_sub'] ?? '' ) );
+        if ( $industry === '' ) { $industry = '（未設定）'; }
+        $area            = $business['area'] ?? '';
+        $site_url        = $business['site_url'] ?? '';
+        $business_type   = $business['business_type'] ?? '';
+        $stage           = $business['stage'] ?? '';
+        $main_conversions = $business['main_conversions'] ?? '';
+
+        // 月次レポート方針
+        $policy = $context['report_policy'] ?? [];
+        $policy_lines = '';
+        $policy_map = [
+            'report_issue'            => '課題',
+            'report_goal_main'        => '主目標',
+            'report_goal_monthly'     => '月次目標',
+            'report_focus_numbers'    => '重視する数値',
+            'report_current_state'    => '現状',
+            'report_additional_notes' => '追加事項',
+        ];
+        foreach ( $policy_map as $k => $label ) {
+            $v = trim( (string) ( $policy[ $k ] ?? '' ) );
+            if ( $v !== '' ) { $policy_lines .= "- {$label}: {$v}\n"; }
+        }
+        if ( $policy_lines === '' ) { $policy_lines = "（未設定）\n"; }
+
+        // ペルソナ
+        $persona = $context['persona'] ?? [];
+        $persona_lines = '';
+        if ( trim( (string) ( $persona['one_liner'] ?? '' ) ) !== '' ) {
+            $persona_lines .= "- 一行要約: {$persona['one_liner']}\n";
+        }
+        if ( trim( (string) ( $persona['detail_text'] ?? '' ) ) !== '' ) {
+            $persona_lines .= "- 詳細: " . mb_substr( (string) $persona['detail_text'], 0, 400 ) . "\n";
+        }
+        foreach ( [ 'age_ranges' => '年齢層', 'genders' => '性別', 'attributes' => '属性', 'decision_factors' => '決定要因' ] as $k => $label ) {
+            $v = trim( (string) ( $persona[ $k ] ?? '' ) );
+            if ( $v !== '' ) { $persona_lines .= "- {$label}: {$v}\n"; }
+        }
+        if ( $persona_lines === '' ) { $persona_lines = "（未設定）\n"; }
 
         // 順位変動を簡潔にまとめる
         $rank_summary = '';
@@ -443,6 +736,7 @@ class Gcrev_Execution_Service {
                 $alert['keyword'], $alert['prev_rank_label'], $alert['curr_rank_label'], $alert['severity']
             );
         }
+        if ( $rank_summary === '' ) { $rank_summary = "（データなし）\n"; }
 
         // GA4
         $ga4 = $context['ga4'] ?? [];
@@ -462,59 +756,143 @@ class Gcrev_Execution_Service {
                 round( (float)( $kw['_position'] ?? $kw['position'] ?? 0 ), 1 )
             );
         }
+        if ( $gsc_lines === '' ) { $gsc_lines = "（データなし）\n"; }
+
+        // ページ診断 + Clarity
+        $page_lines = '';
+        foreach ( array_slice( $context['page_analysis'] ?? [], 0, 10 ) as $p ) {
+            $page_lines .= "- URL: {$p['url']}\n";
+            if ( ! empty( $p['title'] ) )   { $page_lines .= "  タイトル: {$p['title']}\n"; }
+            if ( ! empty( $p['type'] ) )    { $page_lines .= "  種類: {$p['type']}"; }
+            if ( ! empty( $p['purpose'] ) ) { $page_lines .= " / 目的: {$p['purpose']}"; }
+            if ( ! empty( $p['cta'] ) )     { $page_lines .= " / CTA: {$p['cta']}"; }
+            $page_lines .= "\n";
+            if ( ! empty( $p['ai_summary'] ) )  { $page_lines .= "  AI要約: {$p['ai_summary']}\n"; }
+            if ( ! empty( $p['ai_insights'] ) ) { $page_lines .= "  AI所見: {$p['ai_insights']}\n"; }
+            if ( ! empty( $p['clarity'] ) ) {
+                $c = $p['clarity'];
+                $page_lines .= sprintf(
+                    "  Clarity(30日): セッション%d, PV%d, スクロール%s%%, 滞在%s秒, デッドクリック%d, レージクリック%d, エラー%d\n",
+                    $c['sessions'], $c['page_views'],
+                    $c['scroll_depth'] !== null ? (string) $c['scroll_depth'] : '—',
+                    $c['engagement_time'] !== null ? (string) $c['engagement_time'] : '—',
+                    $c['dead_click'], $c['rage_click'], $c['error_click']
+                );
+            }
+        }
+        if ( $page_lines === '' ) { $page_lines = "（ページ診断未実施）\n"; }
+
+        // MEO（GBP）ダッシュボード
+        $meo_lines = '';
+        $meo = $context['meo'] ?? [];
+        if ( ! empty( $meo['metrics'] ) ) {
+            $m = $meo['metrics'];
+            $p = $meo['previous'] ?? [];
+            $meo_lines .= "- 期間: {$meo['period_label']}\n";
+            $meo_lines .= sprintf(
+                "- 表示回数合計: %d (モバイル%d / デスクトップ%d)\n",
+                $m['total_impressions'], $m['mobile_impressions'], $m['desktop_impressions']
+            );
+            $meo_lines .= sprintf(
+                "- 電話タップ: %d (前期間 %d) / ルート検索: %d (前期間 %d) / サイト訪問: %d (前期間 %d)\n",
+                $m['call_clicks'], $p['call_clicks'] ?? 0,
+                $m['direction_clicks'], $p['direction_clicks'] ?? 0,
+                $m['website_clicks'], $p['website_clicks'] ?? 0
+            );
+            if ( ! empty( $meo['top_keywords'] ) ) {
+                $meo_lines .= "- 検索語句トップ:\n";
+                foreach ( $meo['top_keywords'] as $k ) {
+                    $meo_lines .= "  ・{$k['keyword']} ({$k['count']}回)\n";
+                }
+            }
+        }
+        if ( $meo_lines === '' ) { $meo_lines = "（MEO未連携またはデータ無し）\n"; }
+
+        // 競合サイト内容
+        $comp_lines = '';
+        foreach ( $context['competitors'] ?? [] as $c ) {
+            $comp_lines .= "- URL: {$c['url']}\n";
+            if ( ! empty( $c['note'] ) )             { $comp_lines .= "  メモ: {$c['note']}\n"; }
+            if ( ! empty( $c['title'] ) )            { $comp_lines .= "  タイトル: {$c['title']}\n"; }
+            if ( ! empty( $c['meta_description'] ) ) { $comp_lines .= "  メタ: {$c['meta_description']}\n"; }
+            if ( ! empty( $c['h1'] ) )               { $comp_lines .= "  H1: " . implode( ' / ', $c['h1'] ) . "\n"; }
+            if ( ! empty( $c['h2'] ) )               { $comp_lines .= "  H2: " . implode( ' / ', $c['h2'] ) . "\n"; }
+            if ( ! empty( $c['h3'] ) )               { $comp_lines .= "  H3: " . implode( ' / ', $c['h3'] ) . "\n"; }
+            if ( ! empty( $c['body_excerpt'] ) )     { $comp_lines .= "  本文抜粋: {$c['body_excerpt']}\n"; }
+        }
+        if ( $comp_lines === '' ) { $comp_lines = "（競合参考URL未登録）\n"; }
 
         // 記事数
         $article_count = count( $context['recent_articles'] ?? [] );
 
         $prompt = <<<PROMPT
 あなたは中小企業のWeb集客コンサルタントです。
-以下に示す「実データ」のみを根拠に、このサイトの順位改善に必要な「具体的な作業指示」を5件以内でJSON配列として出力してください。
+以下に示す **このクライアント固有の実データ** のみを根拠に、具体的で実行可能な改善アクションを5件以内でJSON配列として出力してください。
 
 【最重要ルール — 事実の捏造禁止】
-- あなたはサイトの実際のコンテンツ（ページ文字数、顧客の声の掲載数、実績数、メタディスクリプションの内容、表示速度の実スコア、競合サイトの情報など）を一切知りません。
-- 以下のデータで **与えられていない数値・比較は絶対に書いてはいけません**:
-  - ❌「あなたのサイトは0件で…」「競合は平均5件で…」
-  - ❌「競合の料金ページは2,000文字で、あなたは500文字で…」
-  - ❌「競合は月4本公開しており…」
-  - ❌「モバイルスコアが40点で…」（PageSpeedデータは与えていない）
-- reason は、**このプロンプトで渡された実データ（順位変動／GA4／GSC／記事公開本数）を根拠にした事実** か、**一般的なSEOベストプラクティスの説明** のみ許可。
-  - ✅「『松山 ホームページ制作』の順位が19位→34位に下落しています」（順位データ由来）
-  - ✅「直近60日の記事公開は{$article_count}本で、継続的な情報発信が検索面への露出を後押しします」（記事本数由来）
-  - ✅「地域＋サービスの掛け合わせキーワードでの情報発信は、ローカルSEOの基本施策です」（一般論）
-  - ❌「あなたのサイトは◯◯が不足」「競合は◯◯」（データがない断定）
+- 下記の各セクションで **明示的に与えられている情報のみ** を根拠にすること。
+- 数値の比較・断定は、渡されたデータに裏付けがある場合のみ許可。例えば:
+  - ✅ GSCキーワード欄に「松山 ホームページ制作 (表示:500, 順位:8.3)」がある → 「順位が8位前後で伸び悩んでいる」と書いてよい
+  - ✅ ページ診断欄に「Clarity: レージクリック12」がある → 「〇〇ページでレージクリックが12件発生しておりUX問題の可能性があります」と書いてよい
+  - ✅ 競合サイト欄に該当URLのH2見出しが列挙されている → 「競合は〇〇〇という見出しで情報を提供している」と書いてよい
+  - ❌ データ欄にないのに「あなたのサイトは◯◯件」「競合は平均◯本」等の数値を創作するのは禁止
+- ページ診断・Clarity・競合 のいずれかが「未実施/未登録」と書かれている場合、そのセクションに基づく断定はしないこと。
+
+【アクションのgrounding（具体性）の優先度】
+- 以下の順でより具体的なアクションを優先:
+  1. 順位変動で下落キーワードがあれば、該当キーワードのリライト/記事追加/内部リンク補強
+  2. Clarityでレージクリック・デッドクリック・離脱の兆候があるページの改善
+  3. 競合サイトの見出し構成と比較して不足している情報カテゴリの補充
+  4. ペルソナ・主要CV・月次レポート方針に沿った CV 導線強化
+  5. 一般的 SEO ベストプラクティス（最後の手段）
 
 【出力件数・重複ルール】
 - 出力は5件以内、6件以上は禁止
 - (action_type, target_keyword) の組合せは配列内でユニーク
 - target_keyword が空の汎用アクション（internal_link / meta_fix / page_speed など）は配列内で高々1件
-- target_keyword を指定する場合は、下記「順位変動」または「GSCキーワード」に含まれるものだけ。該当なしなら空文字
+- target_keyword を指定する場合は、下記「順位変動」「GSCキーワード」に含まれるものだけ。該当なしなら空文字
 
-【その他の形式ルール】
-- title は「〜してください」の命令形、数量を含める（例「コラム記事を2本追加してください」）
-- expected_effect は1文。楽観的な断言は避け「〜が期待できます」「〜につながります」程度
-- comparison フィールドは出力しない（捏造を避けるため）
+【形式ルール】
+- title は「〜してください」の命令形、数量・対象を含める（例「松山ホームページ制作のサービスページを1,500文字以上リライトしてください」）
+- reason は1文、上記のデータ根拠を明記
+- expected_effect は1文。楽観的断言は避け「〜が期待できます」「〜につながります」程度
+- comparison フィールドは出力しない
 
-【サイト情報】
-業種:{$industry} / 地域:{$area} / URL:{$site_url}
+=== 入力データ ===
 
-【順位変動（直近）】
+【クライアント基本情報】
+業種: {$industry}
+地域: {$area}
+事業タイプ: {$business_type} / ステージ: {$stage}
+主要CV: {$main_conversions}
+サイトURL: {$site_url}
+
+【月次レポート方針（クライアントが重視していること）】
+{$policy_lines}
+【ペルソナ】
+{$persona_lines}
+【順位変動（直近2回の比較）】
 {$rank_summary}
-
-【アクセスデータ（30日間）】
+【アクセスデータ（GA4 直近30日）】
 {$ga4_summary}
 
 【GSCキーワード（直近）】
 {$gsc_lines}
-
 【記事公開状況】
 直近60日で{$article_count}本公開
 
-【出力形式】
-action_type: article_create / rewrite / internal_link / meo_post / meta_fix / page_speed
+【ページ診断＋Clarity行動データ】
+{$page_lines}
+【MEO（Googleビジネスプロフィール）実績】
+{$meo_lines}
+【競合サイト内容（ユーザー登録の参考URL解析）】
+{$comp_lines}
+=== 出力形式 ===
+action_type: article_create / rewrite / internal_link / meo_post / meta_fix / page_speed / ux_fix / cv_improvement
 priority: high(最大2個) / medium / low
 JSON配列のみ出力。コードブロック記法禁止。最大5件。
 
-[{"action_type":"article_create","priority":"high","title":"コラム記事を2本追加してください","reason":"直近60日の記事公開が少なく、検索面での新規露出を増やす施策として有効です","target_keyword":"愛媛 Web制作","target_url":"","quantity":2,"unit":"本","expected_effect":"関連キーワードでの検索表示の増加が期待できます"}]
+[{"action_type":"rewrite","priority":"high","title":"松山ホームページ制作のサービスページを2,000文字以上にリライトしてください","reason":"当該キーワードの順位が19位→34位に下落しており、競合サイトのH2が10項目以上でコンテンツ量に差が出ています","target_keyword":"松山 ホームページ制作","target_url":"","quantity":1,"unit":"ページ","expected_effect":"対象キーワードの順位改善と検索表示回数の増加が期待できます"}]
 PROMPT;
 
         try {
