@@ -999,6 +999,212 @@ class Mimamori_QA_CLI {
     }
 
     // =========================================================
+    // qa:registry-export — registry を JSON ファイルに書き出す
+    // =========================================================
+
+    /**
+     * Prompt Registry の現状を JSON にエクスポートする（Dev → Prod 同期用）。
+     *
+     * エクスポート対象は active_version と intents のみ。history は含めない
+     * （Prod 側が自身の history を保持できるようにするため）。
+     *
+     * ## OPTIONS
+     *
+     * --to=<path>
+     * : 出力先ファイルパス（絶対 or 相対）
+     *
+     * [--pretty]
+     * : JSON を整形出力する
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:registry-export --to=/tmp/mimamori-registry-export.json --pretty
+     *
+     * @subcommand qa:registry-export
+     */
+    public function qa_registry_export( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $path   = (string) ( $assoc_args['to'] ?? '' );
+        $pretty = isset( $assoc_args['pretty'] );
+
+        if ( $path === '' ) {
+            WP_CLI::error( '--to=<path> is required.' );
+        }
+
+        $this->load_qa_classes();
+
+        $reg = Mimamori_QA_Prompt_Registry::get_registry();
+
+        $payload = [
+            'schema_version'     => 1,
+            'exported_at'        => wp_date( 'Y-m-d H:i:s' ),
+            'exported_from_env'  => defined( 'MIMAMORI_ENV' ) ? MIMAMORI_ENV : 'unknown',
+            'exported_from_host' => (string) gethostname(),
+            'exported_by_user'   => (int) get_current_user_id(),
+            'registry'           => [
+                'active_version' => $reg['active_version'] ?? '',
+                'intents'        => $reg['intents'] ?? [],
+            ],
+        ];
+
+        $flags = JSON_UNESCAPED_UNICODE | ( $pretty ? JSON_PRETTY_PRINT : 0 );
+        $json  = wp_json_encode( $payload, $flags );
+
+        // 書き出し
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        $written = @file_put_contents( $path, $json );
+        if ( $written === false ) {
+            WP_CLI::error( "Failed to write: {$path}" );
+        }
+
+        $intent_count = count( (array) $payload['registry']['intents'] );
+        WP_CLI::success( sprintf(
+            'Exported registry (active=%s, %d intents, %d bytes) → %s',
+            $payload['registry']['active_version'] ?: '(none)',
+            $intent_count,
+            strlen( $json ),
+            $path
+        ) );
+    }
+
+    // =========================================================
+    // qa:registry-import — JSON ファイルから registry を取り込む
+    // =========================================================
+
+    /**
+     * JSON ファイルから Prompt Registry を取り込む（本番側で実行）。
+     *
+     * 取り込み前に現 Prod registry を history に退避するため、
+     * 問題があれば `wp mimamori qa:registry-show` で version を確認し、
+     * 既存の rollback 機構で戻せる。
+     *
+     * ## OPTIONS
+     *
+     * --from=<path>
+     * : 入力 JSON ファイルパス
+     *
+     * [--dry-run]
+     * : 実際には DB を書き換えず、取り込み内容だけ表示する
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:registry-import --from=/tmp/mimamori-registry-export.json
+     *     wp mimamori qa:registry-import --from=/tmp/mimamori-registry-export.json --dry-run
+     *
+     * @subcommand qa:registry-import
+     */
+    public function qa_registry_import( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $path    = (string) ( $assoc_args['from'] ?? '' );
+        $dry_run = isset( $assoc_args['dry-run'] );
+
+        if ( $path === '' ) {
+            WP_CLI::error( '--from=<path> is required.' );
+        }
+        if ( ! file_exists( $path ) ) {
+            WP_CLI::error( "File not found: {$path}" );
+        }
+
+        $this->load_qa_classes();
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        $raw = @file_get_contents( $path );
+        if ( $raw === false || $raw === '' ) {
+            WP_CLI::error( "Cannot read: {$path}" );
+        }
+
+        $payload = json_decode( $raw, true );
+        if ( ! is_array( $payload ) ) {
+            WP_CLI::error( 'Invalid JSON.' );
+        }
+
+        $schema = (int) ( $payload['schema_version'] ?? 0 );
+        if ( $schema !== 1 ) {
+            WP_CLI::error( sprintf( 'Unsupported schema_version: %d (expected 1)', $schema ) );
+        }
+
+        $incoming = is_array( $payload['registry'] ?? null ) ? $payload['registry'] : [];
+        $incoming_version = (string) ( $incoming['active_version'] ?? '' );
+        $incoming_intents = is_array( $incoming['intents'] ?? null ) ? $incoming['intents'] : [];
+
+        $cur_reg     = Mimamori_QA_Prompt_Registry::get_registry();
+        $cur_version = (string) ( $cur_reg['active_version'] ?? '' );
+        $cur_intents = (array) ( $cur_reg['intents'] ?? [] );
+
+        WP_CLI::log( '=== Registry Import ===' );
+        WP_CLI::log( sprintf( 'Source:       %s', $path ) );
+        WP_CLI::log( sprintf( 'Exported at:  %s (from %s)',
+            $payload['exported_at'] ?? '?', $payload['exported_from_env'] ?? '?' ) );
+        WP_CLI::log( sprintf( 'Current ver:  %s (%d intents)', $cur_version ?: '(none)', count( $cur_intents ) ) );
+        WP_CLI::log( sprintf( 'Incoming ver: %s (%d intents)', $incoming_version ?: '(none)', count( $incoming_intents ) ) );
+
+        if ( $cur_version === $incoming_version && $cur_version !== '' ) {
+            WP_CLI::log( 'No-op: version already matches.' );
+            WP_CLI::success( 'Nothing to import.' );
+            return;
+        }
+
+        if ( $dry_run ) {
+            WP_CLI::log( '' );
+            WP_CLI::log( 'Intents to be written:' );
+            foreach ( $incoming_intents as $intent => $data ) {
+                $len = mb_strlen( (string) ( $data['addendum'] ?? '' ) );
+                WP_CLI::log( sprintf( '  [%s] version=%s addendum_len=%d',
+                    $intent, $data['version'] ?? '-', $len ) );
+            }
+            WP_CLI::success( 'Dry-run: no changes written.' );
+            return;
+        }
+
+        // 現 registry を history に退避してから intents + active_version を差し替え
+        $reg = $cur_reg;
+        if ( ! empty( $reg['intents'] ) ) {
+            $hist_entry = [
+                'version'       => $cur_version,
+                'snapshot'      => [ 'intents' => $cur_intents ],
+                'retired_at'    => wp_date( 'Y-m-d H:i:s' ),
+                'retire_reason' => 'import_from_dev',
+            ];
+            $history = is_array( $reg['history'] ?? null ) ? $reg['history'] : [];
+            array_unshift( $history, $hist_entry );
+            // HISTORY_LIMIT を超えたら切る
+            if ( count( $history ) > Mimamori_QA_Prompt_Registry::HISTORY_LIMIT ) {
+                $history = array_slice( $history, 0, Mimamori_QA_Prompt_Registry::HISTORY_LIMIT );
+            }
+            $reg['history'] = $history;
+        }
+
+        $reg['intents']        = $incoming_intents;
+        $reg['active_version'] = $incoming_version;
+        $reg['updated_at']     = wp_date( 'Y-m-d H:i:s' );
+
+        $ok = Mimamori_QA_Prompt_Registry::save_registry( $reg );
+        if ( ! $ok ) {
+            WP_CLI::error( 'Failed to save registry.' );
+        }
+
+        // /tmp/gcrev_qa_registry_debug.log に記録（Registry クラスは log を private にしているので、ここで直接書く）
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        @file_put_contents(
+            '/tmp/gcrev_qa_registry_debug.log',
+            sprintf(
+                "%s event=import from=%s to=%s intents=%d source=%s\n",
+                date( 'Y-m-d H:i:s' ),
+                $cur_version,
+                $incoming_version,
+                count( $incoming_intents ),
+                $payload['exported_from_env'] ?? '?'
+            ),
+            FILE_APPEND
+        );
+
+        WP_CLI::success( sprintf(
+            'Imported: %s → %s (%d intents). Previous snapshot retained in history.',
+            $cur_version ?: '(none)',
+            $incoming_version ?: '(none)',
+            count( $incoming_intents )
+        ) );
+    }
+
+    // =========================================================
     // qa:registry-show — registry デバッグ表示
     // =========================================================
 

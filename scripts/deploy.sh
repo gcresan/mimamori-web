@@ -17,8 +17,12 @@ set -euo pipefail
 # --- 固定パス（ハードコード: 環境に合わせて変更不可） ---
 DEV_THEME="/home/kusanagi/mimamori-dev/DocumentRoot/wp-content/themes/mimamori"
 PROD_THEME="/home/kusanagi/mimamori/DocumentRoot/wp-content/themes/mimamori"
+DEV_DOCROOT="/home/kusanagi/mimamori-dev/DocumentRoot"
+PROD_DOCROOT="/home/kusanagi/mimamori/DocumentRoot"
 SNAPSHOT_DIR="/home/kusanagi/mimamori-dev/snapshots/theme"
 LOG_FILE="/home/kusanagi/mimamori-dev/snapshots/deploy.log"
+REGISTRY_EXPORT_PATH="/tmp/mimamori-registry-export.json"
+WP_CLI_BIN="/opt/kusanagi/php-8.3/bin/php /opt/kusanagi/bin/wp"
 MAX_SNAPSHOTS=10
 
 TIMESTAMP=$(date +"%Y-%m-%d_%H%M%S")
@@ -73,8 +77,31 @@ kusanagi fcache --clear mimamori 2>/dev/null || true
 kusanagi bcache --clear mimamori 2>/dev/null || true
 
 # WordPress transient クリア（WP-CLI）
-/opt/kusanagi/php-8.3/bin/php /opt/kusanagi/bin/wp transient delete --all \
-    --path=/home/kusanagi/mimamori/DocumentRoot 2>/dev/null || true
+${WP_CLI_BIN} transient delete --all \
+    --path="${PROD_DOCROOT}" 2>/dev/null || true
+
+# --- 4.5. Prompt Registry 同期（Dev → Prod） ---
+# QA 自動改善ループで Dev に蓄積された registry を Prod にコピーする。
+# 失敗してもデプロイ全体を止めたくないので || true でソフト化。
+echo "[$TIMESTAMP] Exporting Dev registry..." | tee -a "$LOG_FILE"
+if ${WP_CLI_BIN} mimamori qa registry-export \
+    --to="${REGISTRY_EXPORT_PATH}" \
+    --path="${DEV_DOCROOT}" >> "$LOG_FILE" 2>&1; then
+
+    if [ -s "${REGISTRY_EXPORT_PATH}" ]; then
+        echo "[$TIMESTAMP] Importing registry into Prod..." | tee -a "$LOG_FILE"
+        ${WP_CLI_BIN} mimamori qa registry-import \
+            --from="${REGISTRY_EXPORT_PATH}" \
+            --path="${PROD_DOCROOT}" >> "$LOG_FILE" 2>&1 \
+            || echo "[$TIMESTAMP] WARN: registry-import failed (continuing)" | tee -a "$LOG_FILE"
+    else
+        echo "[$TIMESTAMP] Skipping registry import (export empty)" | tee -a "$LOG_FILE"
+    fi
+    # 一時ファイル削除
+    rm -f "${REGISTRY_EXPORT_PATH}" 2>/dev/null || true
+else
+    echo "[$TIMESTAMP] WARN: registry-export failed (continuing)" | tee -a "$LOG_FILE"
+fi
 
 # --- 5. 古いスナップショット削除（MAX_SNAPSHOTS 超過分） ---
 cd "$SNAPSHOT_DIR"

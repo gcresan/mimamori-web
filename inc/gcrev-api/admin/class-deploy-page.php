@@ -489,9 +489,92 @@ class Gcrev_Deploy_Page {
                         <?php endif; ?>
                     </td>
                 </tr>
+                <?php if ( class_exists( 'Mimamori_QA_Prompt_Registry' ) ):
+                    $reg = Mimamori_QA_Prompt_Registry::get_registry();
+                    $intents_count = count( (array) ( $reg['intents'] ?? [] ) );
+                    $updated_at    = $reg['updated_at'] ?? '';
+                    $prod_version  = $this->fetch_prod_registry_version();
+                    $dev_version   = (string) ( $reg['active_version'] ?? '' );
+                    $will_sync     = $dev_version !== '' && $dev_version !== $prod_version;
+                ?>
+                <tr>
+                    <th>QA Prompt Registry<br><span style="font-weight:400; font-size:11px; color:#64748b;">(AIチャット改善ループ)</span></th>
+                    <td>
+                        <div style="display:flex; gap:24px; flex-wrap:wrap;">
+                            <div>
+                                <span style="color:#3b82f6; font-weight:600;">Dev:</span>
+                                <?php if ( $dev_version !== '' ): ?>
+                                    <code style="font-size:12px;"><?php echo esc_html( $dev_version ); ?></code>
+                                    <span style="color:#64748b; font-size:12px;">(<?php echo esc_html( (string) $intents_count ); ?> intents)</span>
+                                <?php else: ?>
+                                    <span style="color:#999;">未設定</span>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <span style="color:#ef4444; font-weight:600;">Prod:</span>
+                                <?php if ( $prod_version !== '' && $prod_version !== '(unknown)' ): ?>
+                                    <code style="font-size:12px;"><?php echo esc_html( $prod_version ); ?></code>
+                                <?php elseif ( $prod_version === '(unknown)' ): ?>
+                                    <span style="color:#999;">取得不可</span>
+                                <?php else: ?>
+                                    <span style="color:#999;">未設定</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if ( $will_sync ): ?>
+                            <p style="margin:8px 0 0; color:#059669; font-size:12px;">
+                                🔄 次のデプロイで Prod に同期されます（現 Prod registry は history に退避されます）
+                            </p>
+                        <?php elseif ( $dev_version !== '' && $dev_version === $prod_version ): ?>
+                            <p style="margin:8px 0 0; color:#64748b; font-size:12px;">
+                                ✅ Dev と Prod は同じバージョンです
+                            </p>
+                        <?php endif; ?>
+                        <?php if ( $updated_at !== '' ): ?>
+                            <p style="margin:4px 0 0; color:#94a3b8; font-size:11px;">
+                                Dev 最終更新: <?php echo esc_html( $updated_at ); ?>
+                            </p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endif; ?>
             </tbody>
         </table>
         <?php
+    }
+
+    /**
+     * Prod 側 registry の active_version を取得する。
+     *
+     * Dev と Prod は同一サーバー上なので wp-cli を --path 切り替えで呼ぶ。
+     * shell_exec が無効化されている環境ではフォールバックで空を返す。
+     */
+    private function fetch_prod_registry_version(): string {
+        $prod_docroot = defined( 'MIMAMORI_PROD_THEME_PATH' )
+            ? dirname( dirname( dirname( MIMAMORI_PROD_THEME_PATH ) ) ) // wp-content/themes/mimamori → DocumentRoot
+            : '';
+        if ( $prod_docroot === '' || ! is_dir( $prod_docroot ) ) {
+            return '';
+        }
+
+        // 軽量に option だけ読む（wp option get）。失敗は許容。
+        $cmd = sprintf(
+            'sudo -u kusanagi /opt/kusanagi/php/bin/php /opt/kusanagi/bin/wp option get mimamori_qa_prompt_registry --format=json --path=%s 2>/dev/null',
+            escapeshellarg( $prod_docroot )
+        );
+
+        if ( ! function_exists( 'shell_exec' ) ) {
+            return '(unknown)';
+        }
+        $out = @shell_exec( $cmd );
+        if ( $out === null || $out === '' ) {
+            return '';
+        }
+        $decoded = json_decode( (string) $out, true );
+        if ( ! is_array( $decoded ) ) {
+            return '(unknown)';
+        }
+        return (string) ( $decoded['active_version'] ?? '' );
     }
 
     // =========================================================
@@ -521,6 +604,9 @@ class Gcrev_Deploy_Page {
                     <h3 style="margin:0 0 8px; font-size:15px; color:#dc2626;">🚀 Dev → 本番デプロイ</h3>
                     <p style="margin:0 0 4px; color:#64748b; font-size:13px;">
                         現在の Dev テーマを本番にデプロイします。実行前にテーマ ZIP スナップショットが自動作成されます。
+                    </p>
+                    <p style="margin:0 0 4px; color:#64748b; font-size:13px;">
+                        デプロイ後に QA Prompt Registry（AI チャット改善データ）も自動的に本番へ同期されます。
                     </p>
                     <p style="margin:0 0 12px; color:#ef4444; font-size:13px; font-weight:600;">
                         ※ 本番サイトに即時反映されます。事前に SSH でフルバックアップの作成を推奨します。

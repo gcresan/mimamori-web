@@ -8350,9 +8350,17 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
         require_once $qa_gen_path;
         require_once $qa_cli_path;
         $qa_cli = new Mimamori_QA_CLI();
-        WP_CLI::add_command( 'mimamori qa run',  [ $qa_cli, 'qa_run' ] );
-        WP_CLI::add_command( 'mimamori qa list', [ $qa_cli, 'qa_list' ] );
-        WP_CLI::add_command( 'mimamori qa show', [ $qa_cli, 'qa_show' ] );
+        WP_CLI::add_command( 'mimamori qa run',             [ $qa_cli, 'qa_run' ] );
+        WP_CLI::add_command( 'mimamori qa list',            [ $qa_cli, 'qa_list' ] );
+        WP_CLI::add_command( 'mimamori qa show',            [ $qa_cli, 'qa_show' ] );
+        WP_CLI::add_command( 'mimamori qa improve',         [ $qa_cli, 'qa_improve' ] );
+        // QA → 本番改善ループ
+        WP_CLI::add_command( 'mimamori qa auto-promote',    [ $qa_cli, 'qa_auto_promote' ] );
+        WP_CLI::add_command( 'mimamori qa compare',         [ $qa_cli, 'qa_compare' ] );
+        WP_CLI::add_command( 'mimamori qa auto-rollback',   [ $qa_cli, 'qa_auto_rollback' ] );
+        WP_CLI::add_command( 'mimamori qa registry-show',   [ $qa_cli, 'qa_registry_show' ] );
+        WP_CLI::add_command( 'mimamori qa registry-export', [ $qa_cli, 'qa_registry_export' ] );
+        WP_CLI::add_command( 'mimamori qa registry-import', [ $qa_cli, 'qa_registry_import' ] );
     }
 }
 
