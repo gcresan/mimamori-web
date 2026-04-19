@@ -137,6 +137,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_QA_Report_Page())->register();
             }
 
+            $qa_registry_path = __DIR__ . '/admin/class-qa-registry-page.php';
+            if ( file_exists( $qa_registry_path ) ) {
+                require_once $qa_registry_path;
+                (new Mimamori_QA_Registry_Page())->register();
+            }
+
             $rank_tracker_path = __DIR__ . '/admin/class-rank-tracker-settings-page.php';
             if ( file_exists( $rank_tracker_path ) ) {
                 require_once $rank_tracker_path;

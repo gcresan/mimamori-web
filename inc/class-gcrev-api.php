@@ -1430,6 +1430,50 @@ class Gcrev_Insight_API {
                 'permission_callback' => [ $this->config, 'check_permission' ],
             ],
         ]);
+
+        // =========================================================
+        // QA Prompt Registry 管理ダッシュボード用（Phase 3）
+        // 全て manage_options 権限必須
+        // =========================================================
+        $qa_admin_permission = static function () {
+            return current_user_can( 'manage_options' );
+        };
+
+        register_rest_route( 'gcrev/v1', '/qa-registry', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_qa_registry_get' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
+        register_rest_route( 'gcrev/v1', '/qa-registry/history', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_qa_registry_history' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
+        register_rest_route( 'gcrev/v1', '/qa-registry/promote', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_qa_registry_promote' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
+        register_rest_route( 'gcrev/v1', '/qa-registry/rollback', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_qa_registry_rollback' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
+        register_rest_route( 'gcrev/v1', '/qa-registry/reject', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_qa_registry_reject' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
+        register_rest_route( 'gcrev/v1', '/qa-registry/runs', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_qa_registry_runs' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
+        register_rest_route( 'gcrev/v1', '/qa-registry/compare', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_qa_registry_compare' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
     }
 
     // =========================================================
@@ -21758,6 +21802,306 @@ PROMPT;
         } catch ( \Exception $e ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
         }
+    }
+
+    // =========================================================
+    // QA Prompt Registry REST コールバック（Phase 3）
+    //
+    // 前提:
+    //   - Mimamori_QA_Prompt_Registry / Mimamori_QA_Intent_Resolver は
+    //     functions.php 経由で既にロード済み
+    //   - Mimamori_QA_Run_Comparator はここで lazy-load する
+    // =========================================================
+
+    /**
+     * Comparator など QA 系クラスを必要時に読み込む。
+     */
+    private function qa_registry_ensure_classes(): void {
+        if ( ! class_exists( 'Mimamori_QA_Run_Comparator' ) ) {
+            $path = get_template_directory() . '/inc/gcrev-api/utils/class-qa-run-comparator.php';
+            if ( file_exists( $path ) ) {
+                require_once $path;
+            }
+        }
+    }
+
+    /**
+     * run_id / case_id の形式を検証。
+     */
+    private function qa_registry_validate_run_id( string $run_id ): bool {
+        return (bool) preg_match( '/^[0-9]{8}_[0-9]{6}$/', $run_id );
+    }
+
+    private function qa_registry_validate_case_id( string $case_id ): bool {
+        return (bool) preg_match( '/^[a-z0-9_]+$/i', $case_id );
+    }
+
+    private function qa_registry_error( string $code, string $message, int $status ): \WP_Error {
+        return new \WP_Error( $code, $message, [ 'status' => $status ] );
+    }
+
+    /**
+     * GET /qa-registry
+     */
+    public function rest_qa_registry_get( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+        $reg = \Mimamori_QA_Prompt_Registry::get_registry();
+        return new \WP_REST_Response( [
+            'success'  => true,
+            'registry' => $reg,
+        ], 200 );
+    }
+
+    /**
+     * GET /qa-registry/history?limit=10
+     */
+    public function rest_qa_registry_history( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+        $limit = max( 1, min( 50, absint( $req->get_param( 'limit' ) ?: 10 ) ) );
+        return new \WP_REST_Response( [
+            'success' => true,
+            'history' => \Mimamori_QA_Prompt_Registry::get_history( $limit ),
+        ], 200 );
+    }
+
+    /**
+     * POST /qa-registry/promote
+     * { run_id, case_id, revision_no, intent, edited_addendum? }
+     *
+     * improvements/<case_id>.json を読み、指定 revision_no を active に昇格する。
+     */
+    public function rest_qa_registry_promote( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+
+        $params = $req->get_json_params();
+        if ( ! is_array( $params ) ) {
+            $params = $req->get_params();
+        }
+
+        $run_id      = sanitize_text_field( (string) ( $params['run_id'] ?? '' ) );
+        $case_id     = sanitize_text_field( (string) ( $params['case_id'] ?? '' ) );
+        $revision_no = absint( $params['revision_no'] ?? 0 );
+        $intent_raw  = sanitize_text_field( (string) ( $params['intent'] ?? '' ) );
+        $edited      = isset( $params['edited_addendum'] )
+            ? sanitize_textarea_field( (string) $params['edited_addendum'] )
+            : null;
+
+        if ( ! $this->qa_registry_validate_run_id( $run_id ) ) {
+            return $this->qa_registry_error( 'invalid_run_id', 'invalid run_id', 400 );
+        }
+        if ( ! $this->qa_registry_validate_case_id( $case_id ) ) {
+            return $this->qa_registry_error( 'invalid_case_id', 'invalid case_id', 400 );
+        }
+        if ( $intent_raw === '' || $intent_raw === \Mimamori_QA_Prompt_Registry::GLOBAL_KEY ) {
+            return $this->qa_registry_error( 'invalid_intent', '_global cannot be manually promoted', 400 );
+        }
+
+        $intent = class_exists( 'Mimamori_QA_Intent_Resolver' )
+            ? \Mimamori_QA_Intent_Resolver::coerce( $intent_raw )
+            : $intent_raw;
+
+        // improvements/<case_id>.json を読む
+        $upload      = wp_upload_dir();
+        $improve_dir = trailingslashit( $upload['basedir'] ) . 'mimamori/qa_runs/' . $run_id . '/improvements';
+        $json_path   = $improve_dir . '/' . sanitize_file_name( $case_id ) . '.json';
+
+        if ( ! file_exists( $json_path ) ) {
+            return $this->qa_registry_error( 'revision_not_found', 'revision JSON not found', 404 );
+        }
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        $raw = @file_get_contents( $json_path );
+        $data = $raw === false ? null : json_decode( $raw, true );
+        if ( ! is_array( $data ) || ! is_array( $data['revisions'] ?? null ) ) {
+            return $this->qa_registry_error( 'revision_parse_error', 'cannot parse revision json', 500 );
+        }
+
+        // revision_no に対応する revision を抽出
+        $target = null;
+        foreach ( $data['revisions'] as $rev ) {
+            if ( (int) ( $rev['revision_no'] ?? -1 ) === $revision_no ) {
+                $target = $rev;
+                break;
+            }
+        }
+        if ( ! is_array( $target ) ) {
+            return $this->qa_registry_error( 'revision_index_miss', 'revision_no not found in file', 404 );
+        }
+
+        // score_before/after を差し込む（registry::promote が score_impact に使う）
+        $target['score_before'] = (int) ( $data['initial_score'] ?? ( $data['revisions'][0]['score_total'] ?? 0 ) );
+        $target['score_after']  = (int) ( $target['score_total'] ?? 0 );
+
+        try {
+            $new_version = \Mimamori_QA_Prompt_Registry::promote(
+                $intent,
+                $target,
+                [
+                    'run_id'      => $run_id,
+                    'case_id'     => $case_id,
+                    'revision_no' => $revision_no,
+                ],
+                (int) get_current_user_id(),
+                $edited
+            );
+        } catch ( \Throwable $e ) {
+            return $this->qa_registry_error( 'promote_error', $e->getMessage(), 400 );
+        }
+
+        return new \WP_REST_Response( [
+            'success'        => true,
+            'new_version'    => $new_version,
+            'intent'         => $intent,
+        ], 200 );
+    }
+
+    /**
+     * POST /qa-registry/rollback
+     * { version }
+     */
+    public function rest_qa_registry_rollback( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+        $params = $req->get_json_params();
+        if ( ! is_array( $params ) ) {
+            $params = $req->get_params();
+        }
+        $version = sanitize_text_field( (string) ( $params['version'] ?? '' ) );
+        if ( ! preg_match( '/^v\d{8}-[a-z]/', $version ) ) {
+            return $this->qa_registry_error( 'invalid_version', 'invalid version format', 400 );
+        }
+        $ok = \Mimamori_QA_Prompt_Registry::rollback_to( $version, (int) get_current_user_id() );
+        if ( ! $ok ) {
+            return $this->qa_registry_error( 'rollback_failed', 'version not found in history', 404 );
+        }
+        return new \WP_REST_Response( [ 'success' => true, 'active_version' => $version ], 200 );
+    }
+
+    /**
+     * POST /qa-registry/reject
+     * { run_id, case_id, revision_no, reason }
+     */
+    public function rest_qa_registry_reject( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+        $params = $req->get_json_params();
+        if ( ! is_array( $params ) ) {
+            $params = $req->get_params();
+        }
+        $run_id      = sanitize_text_field( (string) ( $params['run_id'] ?? '' ) );
+        $case_id     = sanitize_text_field( (string) ( $params['case_id'] ?? '' ) );
+        $revision_no = absint( $params['revision_no'] ?? 0 );
+        $reason      = sanitize_text_field( (string) ( $params['reason'] ?? '' ) );
+
+        if ( ! $this->qa_registry_validate_run_id( $run_id ) ) {
+            return $this->qa_registry_error( 'invalid_run_id', 'invalid run_id', 400 );
+        }
+        if ( ! $this->qa_registry_validate_case_id( $case_id ) ) {
+            return $this->qa_registry_error( 'invalid_case_id', 'invalid case_id', 400 );
+        }
+        \Mimamori_QA_Prompt_Registry::reject( $run_id, $case_id, $revision_no, (int) get_current_user_id(), $reason );
+        return new \WP_REST_Response( [ 'success' => true ], 200 );
+    }
+
+    /**
+     * GET /qa-registry/runs?limit=14
+     *
+     * 直近 N 回の run の meta.json を新しい順で返す。
+     */
+    public function rest_qa_registry_runs( \WP_REST_Request $req ) {
+        $limit  = max( 1, min( 60, absint( $req->get_param( 'limit' ) ?: 14 ) ) );
+        $upload = wp_upload_dir();
+        $base   = trailingslashit( $upload['basedir'] ) . 'mimamori/qa_runs';
+        if ( ! is_dir( $base ) ) {
+            return new \WP_REST_Response( [ 'success' => true, 'runs' => [] ], 200 );
+        }
+        $dirs = glob( $base . '/*', GLOB_ONLYDIR );
+        if ( ! is_array( $dirs ) ) {
+            return new \WP_REST_Response( [ 'success' => true, 'runs' => [] ], 200 );
+        }
+        $ids = [];
+        foreach ( $dirs as $d ) {
+            $id = basename( $d );
+            if ( preg_match( '/^\d{8}_\d{6}$/', $id ) ) {
+                $ids[] = $id;
+            }
+        }
+        rsort( $ids );
+        $ids = array_slice( $ids, 0, $limit );
+
+        $runs = [];
+        foreach ( $ids as $id ) {
+            $meta_path = $base . '/' . $id . '/meta.json';
+            if ( ! file_exists( $meta_path ) ) {
+                continue;
+            }
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+            $raw  = @file_get_contents( $meta_path );
+            $meta = $raw === false ? null : json_decode( $raw, true );
+            if ( ! is_array( $meta ) ) {
+                continue;
+            }
+            $runs[] = [
+                'run_id'          => $id,
+                'user_id'         => (int) ( $meta['user_id'] ?? 0 ),
+                'n'               => (int) ( $meta['n'] ?? 0 ),
+                'mode'            => (string) ( $meta['mode'] ?? '' ),
+                'avg_score'       => (float) ( $meta['avg_score'] ?? 0 ),
+                'success_count'   => (int) ( $meta['success_count'] ?? 0 ),
+                'fail_count'      => (int) ( $meta['fail_count'] ?? 0 ),
+                'started_at'      => (string) ( $meta['started_at'] ?? '' ),
+                'ended_at'        => (string) ( $meta['ended_at'] ?? '' ),
+                'prompt_version'  => (string) ( $meta['prompt_version'] ?? '' ),
+                'intent_versions' => is_array( $meta['intent_versions'] ?? null ) ? $meta['intent_versions'] : [],
+            ];
+        }
+        return new \WP_REST_Response( [ 'success' => true, 'runs' => $runs ], 200 );
+    }
+
+    /**
+     * GET /qa-registry/compare?current=&previous=
+     */
+    public function rest_qa_registry_compare( \WP_REST_Request $req ) {
+        $this->qa_registry_ensure_classes();
+        if ( ! class_exists( 'Mimamori_QA_Run_Comparator' ) ) {
+            return $this->qa_registry_error( 'comparator_missing', 'Comparator class not loaded', 500 );
+        }
+        $current  = sanitize_text_field( (string) ( $req->get_param( 'current' ) ?? '' ) );
+        $previous = sanitize_text_field( (string) ( $req->get_param( 'previous' ) ?? '' ) );
+        if ( ! $this->qa_registry_validate_run_id( $current ) ) {
+            return $this->qa_registry_error( 'invalid_run_id', 'invalid current run_id', 400 );
+        }
+
+        $comparator = new \Mimamori_QA_Run_Comparator();
+
+        if ( $previous === '' ) {
+            $prev_detected = $comparator->find_previous_run( $current );
+            $previous      = $prev_detected ?: '';
+        }
+        if ( ! $this->qa_registry_validate_run_id( $previous ) ) {
+            return new \WP_REST_Response( [
+                'success'  => true,
+                'message'  => 'no previous run available',
+                'current'  => $current,
+                'previous' => null,
+                'diff'     => null,
+            ], 200 );
+        }
+
+        $diff = $comparator->compare( $current, $previous );
+        return new \WP_REST_Response( [
+            'success'  => true,
+            'current'  => $current,
+            'previous' => $previous,
+            'diff'     => $diff,
+        ], 200 );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

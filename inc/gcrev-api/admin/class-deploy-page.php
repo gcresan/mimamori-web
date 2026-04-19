@@ -535,6 +535,11 @@ class Gcrev_Deploy_Page {
                                 Dev 最終更新: <?php echo esc_html( $updated_at ); ?>
                             </p>
                         <?php endif; ?>
+                        <p style="margin:6px 0 0; font-size:12px;">
+                            <a href="<?php echo esc_url( admin_url( 'admin.php?page=gcrev-qa-registry' ) ); ?>">
+                                📚 詳細を見る（QA Prompt Registry ダッシュボード） →
+                            </a>
+                        </p>
                     </td>
                 </tr>
                 <?php endif; ?>
