@@ -18,6 +18,9 @@ class Gcrev_Keyword_Research_Service {
     private ?object          $google_ads;
     private ?object          $brightdata;
 
+    /** research() の開始時刻（ms）— BD_SERP 全体経過判定用 */
+    private int $research_start_ms = 0;
+
     private const DEBUG_LOG = '/tmp/gcrev_seo_debug.log';
     private const VOLUME_CACHE_TTL = 86400; // 24h
     private const PLANNER_BATCH_SIZE = 20;  // generateKeywordIdeas の1回あたり上限
@@ -26,12 +29,14 @@ class Gcrev_Keyword_Research_Service {
     private const MAX_OWN_PAGES     = 15;    // 要約入力のページ上限
     private const IMAGE_MAX_BYTES   = 4 * 1024 * 1024; // 4MB
 
-    // Bright Data SERP
-    private const BD_SERP_MAX_KEYWORDS = 15;       // 1調査あたりの上限（安全ネット）
-    private const BD_SERP_INTERVAL_SEC = 2;        // KW 間の待機（3s → 2s に短縮）
+    // Bright Data SERP（nginx/FPMタイムアウト回避のため最小限に抑制）
+    private const BD_SERP_MAX_KEYWORDS = 5;        // 1調査あたり最大5件（旧15から削減）
+    private const BD_SERP_INTERVAL_SEC = 2;        // KW 間の待機
     private const BD_SERP_CACHE_TTL    = 604800;   // 7日
-    private const BD_SERP_BUDGET_MS    = 90000;    // 90秒の時間予算（PHP 実行時間制限に収めるため）
-    private const BD_SERP_PER_KW_RESERVE_MS = 35000; // 1KW あたりに必要な残り時間（最悪ケース）
+    private const BD_SERP_BUDGET_MS    = 40000;    // 40秒予算（旧90s）
+    private const BD_SERP_PER_KW_RESERVE_MS = 20000; // 残り20秒未満なら打ち切り
+    /** research() 全体の経過が以下を超えていたら BD_SERP を丸ごとスキップ */
+    private const BD_SERP_TOTAL_ELAPSED_LIMIT_MS = 60000; // 60秒
 
     /** SERP 難易度算出で「大手ドメイン」と判定するホスト */
     private const MAJOR_DOMAINS_JP = [
@@ -78,6 +83,7 @@ class Gcrev_Keyword_Research_Service {
      * キーワード調査を実行
      */
     public function research( int $user_id, array $seed_keywords = [], bool $enable_competitor = false ): array {
+        $this->research_start_ms = (int) round( microtime( true ) * 1000 );
         $this->log( "research start: user_id={$user_id}, seeds=" . count( $seed_keywords ) . ", competitor={$enable_competitor}" );
 
         $data_sources = [ 'AI' ];
@@ -322,6 +328,21 @@ class Gcrev_Keyword_Research_Service {
             $post_id = $this->save_result( $user_id, $result );
             $result['meta']['research_id'] = $post_id;
             $this->log( "Result saved: post_id={$post_id}" );
+
+            // 9. Bright Data SERP 補強を非同期スケジュール（504 回避のため別プロセス実行）
+            if ( $this->brightdata !== null && Gcrev_Brightdata_Serp_Client::is_configured() ) {
+                $scheduled = wp_schedule_single_event(
+                    time() + 3,
+                    'gcrev_kwr_bd_serp_async',
+                    [ $post_id ]
+                );
+                if ( false !== $scheduled ) {
+                    $result['meta']['bd_async_scheduled'] = true;
+                    $this->log( "bd_serp: scheduled async event for post={$post_id}" );
+                } else {
+                    $this->log( "bd_serp: wp_schedule_single_event FAILED for post={$post_id}" );
+                }
+            }
         } catch ( \Throwable $e ) {
             $this->log( "Save error: " . $e->getMessage() );
         }
@@ -968,21 +989,19 @@ class Gcrev_Keyword_Research_Service {
             ) );
         }
 
-        // Step 4: Bright Data SERP で欠損KW（および高難度検証対象）を独自算出
-        $bd_stats = [ 'processed' => 0, 'computed' => 0, 'cache_hit' => 0, 'failed' => 0, 'skipped_no_data' => 0 ];
+        // Step 4: Bright Data SERP は同期フローでは呼ばない
+        //   504 タイムアウト回避のため、research() 内で CPT 保存後に
+        //   wp_schedule_single_event() 経由で非同期バックグラウンド実行する。
+        //   キャッシュヒット分のみ同期取得して即反映（API 呼び出しゼロ）。
+        $bd_stats = [ 'processed' => 0, 'computed' => 0, 'cache_hit' => 0, 'failed' => 0, 'skipped_no_data' => 0, 'aborted_budget' => 0, 'cache_only' => true ];
         if ( $this->brightdata !== null && Gcrev_Brightdata_Serp_Client::is_configured() ) {
-            $bd_stats = $this->enrich_with_brightdata_serp( $keywords, $merged );
-            $this->log( sprintf(
-                'enrich_keywords: brightdata serp — processed=%d computed=%d cache_hit=%d failed=%d skipped=%d aborted_budget=%d',
-                $bd_stats['processed'], $bd_stats['computed'],
-                $bd_stats['cache_hit'], $bd_stats['failed'],
-                $bd_stats['skipped_no_data'],
-                $bd_stats['aborted_budget'] ?? 0
-            ) );
+            $bd_stats = array_merge( $bd_stats, $this->enrich_with_brightdata_serp_cache_only( $keywords, $merged ) );
             if ( $bd_stats['computed'] > 0 ) {
-                $volume_source = ( $volume_source === 'none' )
-                    ? 'brightdata_serp'
-                    : $volume_source . '+bd';
+                $this->log( sprintf(
+                    'enrich_keywords: brightdata serp (cache-only) — hit=%d computed=%d',
+                    $bd_stats['cache_hit'], $bd_stats['computed']
+                ) );
+                $volume_source = ( $volume_source === 'none' ) ? 'brightdata_serp' : $volume_source . '+bd';
             }
         }
 
@@ -2234,6 +2253,141 @@ CRITERIA;
         }
 
         return $stats;
+    }
+
+    /**
+     * キャッシュのみを使って SERP メトリクスを反映（API 呼び出しゼロ・同期フロー用）
+     *
+     * @return array 統計
+     */
+    private function enrich_with_brightdata_serp_cache_only( array $keywords, array &$merged ): array {
+        $stats = [ 'processed' => 0, 'computed' => 0, 'cache_hit' => 0, 'failed' => 0, 'skipped_no_data' => 0 ];
+        foreach ( $keywords as $kw ) {
+            $cache_key = 'gcrev_bd_serp_' . substr( md5( $kw ), 0, 16 );
+            $cached = get_transient( $cache_key );
+            if ( ! is_array( $cached ) ) { continue; }
+            $stats['cache_hit']++;
+            $stats['processed']++;
+
+            $metrics = $this->compute_serp_metrics( $cached, $kw );
+            if ( $metrics === null ) {
+                $stats['skipped_no_data']++;
+                continue;
+            }
+            $kl = mb_strtolower( $kw );
+            if ( ! isset( $merged[ $kl ] ) ) {
+                $merged[ $kl ] = [
+                    'volume' => null, 'competition' => null, 'competition_index' => null,
+                    'cpc' => null, 'monthly_volumes' => [], 'difficulty' => null,
+                ];
+            }
+            if ( $merged[ $kl ]['difficulty'] === null ) {
+                $merged[ $kl ]['difficulty'] = $metrics['difficulty'];
+                $merged[ $kl ]['difficulty_source'] = 'brightdata_serp';
+            }
+            if ( $merged[ $kl ]['competition_index'] === null ) {
+                $merged[ $kl ]['competition_index'] = $metrics['competition_index'];
+                if ( $merged[ $kl ]['competition'] === null ) {
+                    $merged[ $kl ]['competition'] = round( $metrics['competition_index'] / 100, 2 );
+                }
+            }
+            $stats['computed']++;
+        }
+        return $stats;
+    }
+
+    /**
+     * 保存済みの調査結果に対して、非同期で Bright Data SERP 補強を実行
+     *
+     * wp_schedule_single_event() から呼ばれる。独立したリクエストなので
+     * 同期レスポンスのタイムアウトに影響されない。
+     *
+     * @param int $post_id 調査結果 CPT の post_id
+     */
+    public function enrich_saved_with_brightdata_async( int $post_id ): void {
+        $this->research_start_ms = (int) round( microtime( true ) * 1000 );
+        if ( $this->brightdata === null || ! Gcrev_Brightdata_Serp_Client::is_configured() ) {
+            $this->log( sprintf( 'bd_async post=%d: brightdata unavailable, skipping', $post_id ) );
+            return;
+        }
+
+        $post = get_post( $post_id );
+        if ( ! $post || $post->post_type !== 'gcrev_kw_research' ) {
+            $this->log( sprintf( 'bd_async post=%d: invalid post', $post_id ) );
+            return;
+        }
+        $user_id = (int) get_post_meta( $post_id, '_gcrev_kwr_user_id', true );
+        $groups_json = get_post_meta( $post_id, '_gcrev_kwr_groups', true );
+        $groups = is_string( $groups_json ) ? json_decode( $groups_json, true ) : [];
+        if ( ! is_array( $groups ) || empty( $groups ) ) {
+            $this->log( sprintf( 'bd_async post=%d: no groups to enrich', $post_id ) );
+            return;
+        }
+
+        // 全採択KWを抽出（excluded 除外）
+        $all_keywords = [];
+        $merged = [];
+        foreach ( $groups as $gk => $items ) {
+            if ( $gk === 'excluded' || ! is_array( $items ) ) { continue; }
+            foreach ( $items as $it ) {
+                $kw = $it['keyword'] ?? '';
+                if ( $kw === '' ) { continue; }
+                $all_keywords[] = $kw;
+                $kl = mb_strtolower( $kw );
+                $merged[ $kl ] = [
+                    'volume'            => $it['volume'] ?? null,
+                    'competition'       => $it['competition'] ?? null,
+                    'competition_index' => $it['competition_index'] ?? null,
+                    'cpc'               => $it['cpc'] ?? null,
+                    'monthly_volumes'   => $it['monthly_volumes'] ?? [],
+                    'difficulty'        => $it['difficulty'] ?? null,
+                    'difficulty_source' => $it['difficulty_source'] ?? '',
+                ];
+            }
+        }
+        $all_keywords = array_values( array_unique( $all_keywords ) );
+
+        $this->log( sprintf(
+            'bd_async post=%d: start user=%d, keywords=%d',
+            $post_id, $user_id, count( $all_keywords )
+        ) );
+
+        // SERP 補強（本体の時間予算付きロジック）
+        $bd_stats = $this->enrich_with_brightdata_serp( $all_keywords, $merged );
+        $this->log( sprintf(
+            'bd_async post=%d: processed=%d computed=%d cache_hit=%d failed=%d aborted=%d',
+            $post_id,
+            $bd_stats['processed'], $bd_stats['computed'],
+            $bd_stats['cache_hit'], $bd_stats['failed'],
+            $bd_stats['aborted_budget'] ?? 0
+        ) );
+
+        if ( ( $bd_stats['computed'] ?? 0 ) === 0 ) {
+            $this->log( sprintf( 'bd_async post=%d: nothing computed, skipping update', $post_id ) );
+            return;
+        }
+
+        // merged の結果を groups に再マージし、戦略判定層を再実行
+        $this->merge_volume_into_groups( $groups, $merged );
+        $this->apply_strategy_layer( $groups );
+        $strategy = $this->aggregate_strategy_metrics( $groups );
+
+        // CPT を更新
+        update_post_meta( $post_id, '_gcrev_kwr_groups', wp_json_encode( $groups, JSON_UNESCAPED_UNICODE ) );
+        $meta_json = get_post_meta( $post_id, '_gcrev_kwr_meta', true );
+        $meta_arr = is_string( $meta_json ) ? json_decode( $meta_json, true ) : [];
+        if ( ! is_array( $meta_arr ) ) { $meta_arr = []; }
+        $meta_arr['avg_roi_score']        = $strategy['avg_roi_score'];
+        $meta_arr['avg_win_probability']  = $strategy['avg_win_probability'];
+        $meta_arr['ng_counts']            = $strategy['ng_counts'];
+        $meta_arr['bd_async_finished_at'] = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
+        $meta_arr['bd_async_stats']       = $bd_stats;
+        update_post_meta( $post_id, '_gcrev_kwr_meta', wp_json_encode( $meta_arr, JSON_UNESCAPED_UNICODE ) );
+
+        $this->log( sprintf(
+            'bd_async post=%d: updated CPT, avg_roi=%s avg_win=%s',
+            $post_id, $strategy['avg_roi_score'] ?? '-', $strategy['avg_win_probability'] ?? '-'
+        ) );
     }
 
     /**

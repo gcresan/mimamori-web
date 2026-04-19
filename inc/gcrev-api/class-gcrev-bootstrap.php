@@ -57,6 +57,9 @@ class Gcrev_Bootstrap {
         // AIO ページ分析（バックグラウンド）
         add_action('gcrev_aio_page_analysis_event', [__CLASS__, 'on_aio_page_analysis_event']);
 
+        // キーワード調査: Bright Data SERP 補強（非同期、CPT保存後に即スケジュール）
+        add_action('gcrev_kwr_bd_serp_async', [__CLASS__, 'on_kwr_bd_serp_async'], 10, 1);
+
         // 自動記事生成（日次）
         add_action('gcrev_auto_article_daily_event', [__CLASS__, 'on_auto_article_daily_event']);
         add_action('gcrev_auto_article_chunk_event', [__CLASS__, 'on_auto_article_chunk_event'], 10, 1);
@@ -1050,6 +1053,55 @@ class Gcrev_Bootstrap {
             update_user_meta( $user_id, 'gcrev_aio_fetch_status', 'failed' );
             file_put_contents( '/tmp/gcrev_aio_serp_debug.log',
                 date('Y-m-d H:i:s') . " BG fetch error user_id={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
+        }
+    }
+
+    /**
+     * キーワード調査: Bright Data SERP 補強を非同期で実行
+     *
+     * research() が CPT 保存後に wp_schedule_single_event() で呼ぶ。
+     * 同期レスポンスとは別リクエストで走るため 504 を回避する。
+     */
+    public static function on_kwr_bd_serp_async( $post_id ): void {
+        $post_id = (int) $post_id;
+        if ( $post_id <= 0 ) { return; }
+
+        @ignore_user_abort( true );
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 300 );  // 5分
+        }
+
+        file_put_contents( '/tmp/gcrev_seo_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [KWR-Async] start post_id={$post_id}\n",
+            FILE_APPEND
+        );
+
+        try {
+            $config = new Gcrev_Config();
+            $ai     = new Gcrev_AI_Client( $config );
+
+            $dataforseo = null;
+            if ( class_exists( 'Gcrev_DataForSEO_Client' ) && Gcrev_DataForSEO_Client::is_configured() ) {
+                $dataforseo = new Gcrev_DataForSEO_Client( $config );
+            }
+            $google_ads = class_exists( 'Gcrev_Google_Ads_Client' ) ? new Gcrev_Google_Ads_Client() : null;
+            $brightdata = null;
+            if ( class_exists( 'Gcrev_Brightdata_Serp_Client' ) && Gcrev_Brightdata_Serp_Client::is_configured() ) {
+                $brightdata = new Gcrev_Brightdata_Serp_Client();
+            }
+
+            $service = new Gcrev_Keyword_Research_Service( $ai, $config, $dataforseo, $google_ads, $brightdata );
+            $service->enrich_saved_with_brightdata_async( $post_id );
+
+            file_put_contents( '/tmp/gcrev_seo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [KWR-Async] complete post_id={$post_id}\n",
+                FILE_APPEND
+            );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_seo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [KWR-Async] ERROR post_id={$post_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
         }
     }
 

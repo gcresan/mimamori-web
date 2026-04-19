@@ -834,7 +834,7 @@ get_header();
         var enableComp = compEl ? compEl.checked : false;
 
         btn.disabled = true;
-        showProgress(enableComp ? '競合サイトの分析中です…（2〜3分程度）' : 'AIと外部データで分析中です…（1〜2分程度）');
+        showProgress(enableComp ? '競合サイトの分析中です…（1〜2分程度）' : 'AIがキーワード候補を分析中です…（30秒〜1分程度）');
         document.getElementById('kwrEmpty').style.display = 'none';
         document.getElementById('kwrSummary').style.display = 'none';
         document.getElementById('kwrCompSummary').style.display = 'none';
@@ -962,7 +962,7 @@ get_header();
                 html += '<br><span style="color:#c0392b;">⚠ Google Ads Keyword Planner が未設定のため検索ボリュームが欠損する可能性があります</span>';
             }
             if (d.brightdata_available && (d.bd_processed || 0) > 0) {
-                html += '<br>SERP分析: ' + (d.bd_processed || 0) + '件処理 / '
+                html += '<br>SERP分析（同期キャッシュ）: ' + (d.bd_processed || 0) + '件処理 / '
                      + (d.bd_computed || 0) + '件で難易度算出 / '
                      + (d.bd_cache_hit || 0) + '件キャッシュ利用'
                      + ((d.bd_failed || 0) > 0 ? ' / 失敗 ' + d.bd_failed + '件' : '');
@@ -971,6 +971,19 @@ get_header();
                 html += '<br><span style="color:#a16207;">⚠ Bright Data が未設定のため SERP 補強は無効</span>';
             }
             html += '</div>';
+        }
+
+        // 非同期 SERP 補強ステータス
+        if (meta.bd_async_finished_at) {
+            html += '<div style="margin-top:6px;font-size:11px;color:#15803d;">'
+                 + '✓ SERP分析バックグラウンド完了（' + esc(meta.bd_async_finished_at) + '）'
+                 + (meta.bd_async_stats ? ' — 新規算出 ' + (meta.bd_async_stats.computed || 0) + '件' : '')
+                 + '</div>';
+        } else if (meta.bd_async_scheduled) {
+            html += '<div style="margin-top:6px;font-size:11px;color:#a16207;">'
+                 + '⏳ SERP分析をバックグラウンドで実行中です（約1〜2分）。'
+                 + '<a href="javascript:location.reload()" style="margin-left:6px;">更新</a>'
+                 + '</div>';
         }
 
         // 戦略指標（平均 ROI / 勝ちやすさ + NG 集計）
