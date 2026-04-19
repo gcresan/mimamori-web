@@ -468,25 +468,31 @@ class Gcrev_Execution_Service {
 
         $prompt = <<<PROMPT
 あなたは中小企業のWeb集客コンサルタントです。
-以下のデータに基づき、このサイトの順位改善に必要な「具体的な作業指示」を **ちょうど5個** 、JSON配列で出力してください。
+以下に示す「実データ」のみを根拠に、このサイトの順位改善に必要な「具体的な作業指示」を5件以内でJSON配列として出力してください。
 
-【重要ルール】
-- **出力は必ず5件以内**。6件以上は禁止
-- **重複禁止**: action_type と target_keyword の組合せは配列内で必ずユニーク
-  - 例: 「コラム記事を3本追加」と「コラム記事を2本追加」の2件は重複なのでNG。1件にまとめる
-  - 例: 同じ target_keyword で action_type が rewrite の項目を複数出すのもNG
-  - target_keyword が空の article_create / internal_link / meta_fix / page_speed などは **配列内で高々1件**
-- titleは「〜してください」の命令形。必ず数量を含める
-  ✅「コラム記事を2本追加してください」
-  ✅「料金ページを1,500文字リライトしてください」
-  ❌「コンテンツを充実させましょう」（抽象的すぎてNG）
-  ❌「内部リンク最適化」（何をすればいいか分からないのでNG）
-- reasonは1文で、競合との比較データを含める
-  ✅「競合は月4本公開、あなたは月1本で差が広がっています」
-  ❌「SEO改善のため」（抽象的すぎてNG）
-- expected_effectは1文で数値を含める
-  ✅「2〜4週間で順位5〜10位改善が見込めます」
-- comparison.self と comparison.competitor_avg は具体的な数値
+【最重要ルール — 事実の捏造禁止】
+- あなたはサイトの実際のコンテンツ（ページ文字数、顧客の声の掲載数、実績数、メタディスクリプションの内容、表示速度の実スコア、競合サイトの情報など）を一切知りません。
+- 以下のデータで **与えられていない数値・比較は絶対に書いてはいけません**:
+  - ❌「あなたのサイトは0件で…」「競合は平均5件で…」
+  - ❌「競合の料金ページは2,000文字で、あなたは500文字で…」
+  - ❌「競合は月4本公開しており…」
+  - ❌「モバイルスコアが40点で…」（PageSpeedデータは与えていない）
+- reason は、**このプロンプトで渡された実データ（順位変動／GA4／GSC／記事公開本数）を根拠にした事実** か、**一般的なSEOベストプラクティスの説明** のみ許可。
+  - ✅「『松山 ホームページ制作』の順位が19位→34位に下落しています」（順位データ由来）
+  - ✅「直近60日の記事公開は{$article_count}本で、継続的な情報発信が検索面への露出を後押しします」（記事本数由来）
+  - ✅「地域＋サービスの掛け合わせキーワードでの情報発信は、ローカルSEOの基本施策です」（一般論）
+  - ❌「あなたのサイトは◯◯が不足」「競合は◯◯」（データがない断定）
+
+【出力件数・重複ルール】
+- 出力は5件以内、6件以上は禁止
+- (action_type, target_keyword) の組合せは配列内でユニーク
+- target_keyword が空の汎用アクション（internal_link / meta_fix / page_speed など）は配列内で高々1件
+- target_keyword を指定する場合は、下記「順位変動」または「GSCキーワード」に含まれるものだけ。該当なしなら空文字
+
+【その他の形式ルール】
+- title は「〜してください」の命令形、数量を含める（例「コラム記事を2本追加してください」）
+- expected_effect は1文。楽観的な断言は避け「〜が期待できます」「〜につながります」程度
+- comparison フィールドは出力しない（捏造を避けるため）
 
 【サイト情報】
 業種:{$industry} / 地域:{$area} / URL:{$site_url}
@@ -497,15 +503,18 @@ class Gcrev_Execution_Service {
 【アクセスデータ（30日間）】
 {$ga4_summary}
 
+【GSCキーワード（直近）】
+{$gsc_lines}
+
 【記事公開状況】
 直近60日で{$article_count}本公開
 
 【出力形式】
-action_type: article_create/rewrite/internal_link/meo_post/meta_fix/page_speed
-priority: high(最大2個)/medium/low
+action_type: article_create / rewrite / internal_link / meo_post / meta_fix / page_speed
+priority: high(最大2個) / medium / low
 JSON配列のみ出力。コードブロック記法禁止。最大5件。
 
-[{"action_type":"article_create","priority":"high","title":"コラム記事を2本追加してください","reason":"競合は月平均4本公開、あなたは月1本で差が広がっています","target_keyword":"愛媛 Web制作","target_url":"","quantity":2,"unit":"本","expected_effect":"2〜4週間で関連キーワードの検索表示が増加します","comparison":{"self":"月1本","competitor_avg":"月4本"}}]
+[{"action_type":"article_create","priority":"high","title":"コラム記事を2本追加してください","reason":"直近60日の記事公開が少なく、検索面での新規露出を増やす施策として有効です","target_keyword":"愛媛 Web制作","target_url":"","quantity":2,"unit":"本","expected_effect":"関連キーワードでの検索表示の増加が期待できます"}]
 PROMPT;
 
         try {
