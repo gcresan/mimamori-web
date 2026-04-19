@@ -171,9 +171,17 @@ class Mimamori_QA_Report_Writer {
     private function write_cases_jsonl( string $path, array $results ): void {
         $lines = [];
         foreach ( $results as $r ) {
+            // intent を最終 jsonl にも保存（Auto Promoter / Comparator が参照）
+            $intent_name = '';
+            $trace_intent = $r['trace']['intent'] ?? null;
+            if ( is_array( $trace_intent ) && isset( $trace_intent['intent'] ) ) {
+                $intent_name = (string) $trace_intent['intent'];
+            }
+
             $lines[] = wp_json_encode( [
                 'id'          => $r['question']['id'] ?? '',
                 'category'    => $r['question']['category'] ?? '',
+                'intent'      => $intent_name,
                 'message'     => $r['question']['message'] ?? '',
                 'page_type'   => $r['question']['page_type'] ?? '',
                 'success'     => $r['success'],

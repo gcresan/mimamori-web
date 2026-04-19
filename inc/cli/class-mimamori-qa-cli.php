@@ -188,6 +188,12 @@ class Mimamori_QA_CLI {
             'model'      => $results[0]['trace']['model'] ?? 'unknown',
         ];
 
+        // Prompt Registry の world state を meta に焼き込む（Comparator / Rollback が参照）
+        if ( class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            $meta['prompt_version']  = Mimamori_QA_Prompt_Registry::get_active_version();
+            $meta['intent_versions'] = Mimamori_QA_Prompt_Registry::get_intent_versions();
+        }
+
         $writer->write( $out_dir, $meta, $results );
 
         // ロックファイル削除
@@ -713,6 +719,12 @@ class Mimamori_QA_CLI {
             $base . '/utils/class-qa-prompt-tuner.php',
             $base . '/utils/class-qa-revision-store.php',
             $base . '/modules/class-qa-improver.php',
+            // QA → 本番改善ループ
+            $base . '/utils/class-qa-prompt-registry.php',
+            $base . '/utils/class-qa-intent-resolver.php',
+            $base . '/utils/class-qa-run-comparator.php',
+            $base . '/modules/class-qa-auto-promoter.php',
+            $base . '/modules/class-qa-auto-rollback.php',
         ];
 
         foreach ( $files as $file ) {
@@ -785,6 +797,252 @@ class Mimamori_QA_CLI {
             foreach ( $triage_counts as $cat => $cnt ) {
                 WP_CLI::log( sprintf( '  %-20s %3d (%4.1f%%)', $cat, $cnt, ( $cnt / $total ) * 100 ) );
             }
+        }
+    }
+
+    // =========================================================
+    // qa:auto-promote — 改訂案を Prompt Registry に自動昇格
+    // =========================================================
+
+    /**
+     * qa:improve で生成された改訂案のうち、安全条件を満たすものだけを
+     * Prompt Registry に自動昇格する。
+     *
+     * ## OPTIONS
+     *
+     * --run=<run_id>
+     * : 対象QA実行ID（YYYYMMDD_HHMMSS 形式、必須）
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:auto-promote --run=20260419_030000
+     *
+     * @subcommand qa:auto-promote
+     */
+    public function qa_auto_promote( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $run_id = (string) ( $assoc_args['run'] ?? '' );
+        if ( ! preg_match( '/^\d{8}_\d{6}$/', $run_id ) ) {
+            WP_CLI::error( '--run=<YYYYMMDD_HHMMSS> is required.' );
+        }
+
+        $this->load_qa_classes();
+
+        $promoter = new Mimamori_QA_Auto_Promoter();
+        $result   = $promoter->promote_from_run( $run_id );
+
+        WP_CLI::log( '=== QA Auto-Promote ===' );
+        WP_CLI::log( sprintf(
+            'Promoted: %d | Rejected: %d | Skipped: %d',
+            count( $result['promoted'] ),
+            count( $result['rejected'] ),
+            count( $result['skipped'] )
+        ) );
+
+        if ( ! empty( $result['promoted'] ) ) {
+            WP_CLI::log( '' );
+            WP_CLI::log( 'Promoted intents:' );
+            foreach ( $result['promoted'] as $p ) {
+                WP_CLI::log( sprintf(
+                    '  %-24s  %d → %d (+%d)  version=%s',
+                    $p['intent'], $p['initial'], $p['final'], $p['delta'], $p['new_version']
+                ) );
+            }
+        }
+
+        if ( ! empty( $result['rejected'] ) ) {
+            WP_CLI::log( '' );
+            WP_CLI::log( 'Rejected:' );
+            foreach ( $result['rejected'] as $r ) {
+                WP_CLI::log( sprintf(
+                    '  [%s] intent=%s reason=%s',
+                    $r['case_id'], $r['intent'], $r['reason']
+                ) );
+            }
+        }
+
+        WP_CLI::success( 'Auto-promote complete.' );
+    }
+
+    // =========================================================
+    // qa:compare — 2 run の差分比較
+    // =========================================================
+
+    /**
+     * 2 つの QA run のスコアを比較し、comparison_<prev>.json を保存する。
+     *
+     * ## OPTIONS
+     *
+     * --current=<run_id>
+     * : 今回 run ID
+     *
+     * [--previous=<run_id>]
+     * : 前回 run ID。省略時は current の直前に自動検出。
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:compare --current=20260419_030000
+     *     wp mimamori qa:compare --current=20260419_030000 --previous=20260418_030000
+     *
+     * @subcommand qa:compare
+     */
+    public function qa_compare( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $current  = (string) ( $assoc_args['current'] ?? '' );
+        $previous = (string) ( $assoc_args['previous'] ?? '' );
+
+        if ( ! preg_match( '/^\d{8}_\d{6}$/', $current ) ) {
+            WP_CLI::error( '--current=<YYYYMMDD_HHMMSS> is required.' );
+        }
+
+        $this->load_qa_classes();
+
+        $comparator = new Mimamori_QA_Run_Comparator();
+
+        if ( $previous === '' ) {
+            $previous = (string) $comparator->find_previous_run( $current );
+            if ( $previous === '' ) {
+                WP_CLI::warning( 'No previous run found. Nothing to compare.' );
+                return;
+            }
+        }
+
+        $diff = $comparator->compare( $current, $previous );
+        $path = $comparator->save_comparison( $current, $previous, $diff );
+
+        WP_CLI::log( '=== QA Run Compare ===' );
+        WP_CLI::log( sprintf(
+            'Current:  %s (avg %.1f, %d cases)',
+            $current, $diff['avg_current'], $diff['meta']['cases_current']
+        ) );
+        WP_CLI::log( sprintf(
+            'Previous: %s (avg %.1f, %d cases)',
+            $previous, $diff['avg_previous'], $diff['meta']['cases_previous']
+        ) );
+        WP_CLI::log( sprintf(
+            'Δ avg score: %+.1f pts | Δ fail: %+d | Δ hallucination: %+d',
+            $diff['avg_score_delta'],
+            $diff['fail_count_delta'],
+            $diff['hallucination_delta']
+        ) );
+
+        if ( $path !== null ) {
+            WP_CLI::log( 'Saved: ' . $path );
+        }
+
+        WP_CLI::success( 'Compare complete.' );
+    }
+
+    // =========================================================
+    // qa:auto-rollback — 悪化時の自動 rollback
+    // =========================================================
+
+    /**
+     * 2 run の比較が悪化条件を満たせば Prompt Registry を 1 世代前に戻す。
+     *
+     * ## OPTIONS
+     *
+     * --current=<run_id>
+     * : 今回 run ID
+     *
+     * [--previous=<run_id>]
+     * : 前回 run ID。省略時は直前の run を自動検出。
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:auto-rollback --current=20260419_030000
+     *
+     * @subcommand qa:auto-rollback
+     */
+    public function qa_auto_rollback( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $current  = (string) ( $assoc_args['current'] ?? '' );
+        $previous = (string) ( $assoc_args['previous'] ?? '' );
+
+        if ( ! preg_match( '/^\d{8}_\d{6}$/', $current ) ) {
+            WP_CLI::error( '--current=<YYYYMMDD_HHMMSS> is required.' );
+        }
+
+        $this->load_qa_classes();
+
+        if ( $previous === '' ) {
+            $comparator = new Mimamori_QA_Run_Comparator();
+            $previous   = (string) $comparator->find_previous_run( $current );
+            if ( $previous === '' ) {
+                WP_CLI::warning( 'No previous run found. Skipping rollback evaluation.' );
+                return;
+            }
+        }
+
+        $rollback = new Mimamori_QA_Auto_Rollback();
+        $res      = $rollback->rollback_if_needed( $current, $previous );
+
+        WP_CLI::log( '=== QA Auto Rollback ===' );
+        WP_CLI::log( sprintf(
+            'Δ avg: %.2f | Δ fail: %d | Δ hallucination: %d',
+            $res['diff_summary']['avg_score_delta'] ?? 0.0,
+            $res['diff_summary']['fail_count_delta'] ?? 0,
+            $res['diff_summary']['hallucination_delta'] ?? 0
+        ) );
+
+        if ( $res['rolled_back'] ) {
+            WP_CLI::warning( sprintf(
+                'ROLLED BACK to version %s | reasons: %s',
+                $res['rolled_to_version'],
+                implode( ', ', $res['reasons'] )
+            ) );
+        } elseif ( ! empty( $res['reasons'] ) ) {
+            WP_CLI::warning( sprintf(
+                'Regression detected (%s) but rollback could not be performed (no history).',
+                implode( ', ', $res['reasons'] )
+            ) );
+        } else {
+            WP_CLI::success( 'No regression detected. Registry unchanged.' );
+        }
+    }
+
+    // =========================================================
+    // qa:registry-show — registry デバッグ表示
+    // =========================================================
+
+    /**
+     * 現在の Prompt Registry を表示する（管理者確認用）。
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:registry-show
+     *
+     * @subcommand qa:registry-show
+     */
+    public function qa_registry_show( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $this->load_qa_classes();
+
+        $reg = Mimamori_QA_Prompt_Registry::get_registry();
+
+        WP_CLI::log( sprintf( 'active_version: %s', $reg['active_version'] ?? '(none)' ) );
+        WP_CLI::log( sprintf( 'updated_at:     %s', $reg['updated_at'] ?? '(never)' ) );
+        WP_CLI::log( '' );
+        WP_CLI::log( 'Intents:' );
+        foreach ( (array) ( $reg['intents'] ?? [] ) as $intent => $data ) {
+            WP_CLI::log( sprintf( '  [%s] version=%s len=%d', $intent,
+                $data['version'] ?? '', mb_strlen( (string) ( $data['addendum'] ?? '' ) ) ) );
+            if ( ! empty( $data['overrides'] ) ) {
+                $kv = [];
+                foreach ( $data['overrides'] as $k => $v ) {
+                    $kv[] = $k . '=' . ( is_bool( $v ) ? ( $v ? 'true' : 'false' ) : $v );
+                }
+                WP_CLI::log( '      overrides: ' . implode( ', ', $kv ) );
+            }
+            $src = $data['source'] ?? [];
+            if ( ! empty( $src['run_id'] ) ) {
+                WP_CLI::log( sprintf( '      source:    run=%s case=%s rev=%d',
+                    $src['run_id'], $src['case_id'] ?? '', (int) ( $src['revision_no'] ?? 0 ) ) );
+            }
+        }
+
+        $hist = $reg['history'] ?? [];
+        WP_CLI::log( '' );
+        WP_CLI::log( sprintf( 'History (%d entries):', count( $hist ) ) );
+        foreach ( array_slice( $hist, 0, 5 ) as $h ) {
+            WP_CLI::log( sprintf( '  %s  retired=%s  reason=%s',
+                $h['version'] ?? '', $h['retired_at'] ?? '', $h['retire_reason'] ?? '' ) );
         }
     }
 }

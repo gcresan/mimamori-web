@@ -230,6 +230,11 @@ class Mimamori_QA_Improver {
     private function build_revision( int $rev_no, array $case, array $changes, array $overrides ): array {
         $score = $case['score'] ?? [];
 
+        // prompt_addendum と overrides 全体を保存（Auto Promoter が読むため）
+        $prompt_addendum = (string) ( $overrides['prompt_addendum'] ?? '' );
+        $overrides_sans_addendum = $overrides;
+        unset( $overrides_sans_addendum['prompt_addendum'] );
+
         return [
             'revision_no'     => $rev_no,
             'score_total'     => $score['total'] ?? 0,
@@ -241,6 +246,8 @@ class Mimamori_QA_Improver {
             'triage'          => $case['triage'] ?? [],
             'changes'         => $changes,
             'overrides_summary' => $this->tuner->summarize( $overrides ),
+            'prompt_addendum' => $prompt_addendum,
+            'overrides'       => $overrides_sans_addendum,
             'answer_excerpt'  => mb_strimwidth( $case['raw_text'] ?? '', 0, 200, '…' ),
             'executed_at'     => wp_date( 'Y-m-d H:i:s' ),
         ];
@@ -260,6 +267,10 @@ class Mimamori_QA_Improver {
      * エラー用リビジョン
      */
     private function build_error_revision( int $rev_no, string $error, array $actions, array $changes, array $overrides ): array {
+        $prompt_addendum = (string) ( $overrides['prompt_addendum'] ?? '' );
+        $overrides_sans_addendum = $overrides;
+        unset( $overrides_sans_addendum['prompt_addendum'] );
+
         return [
             'revision_no'       => $rev_no,
             'score_total'       => 0,
@@ -271,6 +282,8 @@ class Mimamori_QA_Improver {
             'triage'            => [],
             'changes'           => $changes,
             'overrides_summary' => $this->tuner->summarize( $overrides ),
+            'prompt_addendum'   => $prompt_addendum,
+            'overrides'         => $overrides_sans_addendum,
             'answer_excerpt'    => '',
             'executed_at'       => wp_date( 'Y-m-d H:i:s' ),
             'error'             => $error,

@@ -834,6 +834,16 @@ if ( file_exists( $gcrev_utils_report_queue ) ) {
 }
 // class-city-coordinates.php は DataForSEO MEO座標機能廃止に伴い削除済み
 
+// QA → 本番改善ループ: Prompt Registry と Intent Resolver
+$gcrev_utils_qa_registry = $gcrev_utils_path . 'class-qa-prompt-registry.php';
+if ( file_exists( $gcrev_utils_qa_registry ) ) {
+    require_once $gcrev_utils_qa_registry;
+}
+$gcrev_utils_qa_intent = $gcrev_utils_path . 'class-qa-intent-resolver.php';
+if ( file_exists( $gcrev_utils_qa_intent ) ) {
+    require_once $gcrev_utils_qa_intent;
+}
+
 // ========================================
 // Step2: modules を読み込む（入口クラスより先）
 // ========================================
@@ -5264,8 +5274,56 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
     $intent_type = $intent['intent'] ?? 'general';
     $sources     = mimamori_resolve_data_sources( $intent, false, false );
 
+    // === QA → 本番改善ループ: intent は Mimamori_QA_Intent_Resolver を SSOT とする ===
+    // QA runner / 本番チャットで同じ intent 名を使うことで registry の適用を保証する。
+    $registry_intent_name = class_exists( 'Mimamori_QA_Intent_Resolver' )
+        ? Mimamori_QA_Intent_Resolver::resolve( [
+            'intent'    => $intent,
+            'message'   => $intent_text,
+            'page_type' => $page_type,
+        ] )
+        : '';
+
+    // registry から active addendum / overrides を取得
+    $registry_active         = [];
+    $registry_addendum_text  = '';
+    $registry_overrides_safe = [];
+    if ( class_exists( 'Mimamori_QA_Prompt_Registry' ) && $registry_intent_name !== '' ) {
+        $registry_active = Mimamori_QA_Prompt_Registry::get_active_intent( $registry_intent_name );
+
+        // _global → intent の順で addendum を連結（累積ではなく都度生成）
+        $parts = [];
+        if ( ! empty( $registry_active['global']['addendum'] ) ) {
+            $parts[] = (string) $registry_active['global']['addendum'];
+        }
+        if ( ! empty( $registry_active['intent']['addendum'] ) ) {
+            $parts[] = (string) $registry_active['intent']['addendum'];
+        }
+        $registry_addendum_text = implode( "\n\n", $parts );
+
+        // overrides は QA runner 由来 > registry > default の順で優先する
+        $registry_overrides_merged = array_merge(
+            is_array( $registry_active['global']['overrides'] ?? null ) ? $registry_active['global']['overrides'] : [],
+            is_array( $registry_active['intent']['overrides'] ?? null ) ? $registry_active['intent']['overrides'] : []
+        );
+        $registry_overrides_safe = Mimamori_QA_Prompt_Registry::filter_allowed_overrides( $registry_overrides_merged );
+
+        // QA runner から来た $overrides で上書きされる前提 — 欠けているキーのみ registry から補う
+        foreach ( $registry_overrides_safe as $k => $v ) {
+            if ( ! array_key_exists( $k, $overrides ) ) {
+                $overrides[ $k ] = $v;
+            }
+        }
+    }
+
     $trace['intent']  = $intent;
     $trace['sources'] = $sources;
+    $trace['registry'] = [
+        'intent'          => $registry_intent_name,
+        'global_version'  => $registry_active['global']['version'] ?? '',
+        'intent_version'  => $registry_active['intent']['version'] ?? '',
+        'addendum_length' => mb_strlen( $registry_addendum_text ),
+    ];
 
     // === ParamResolver: 確認質問ゲート ===
     $is_quick_prompt = ! empty( $data['isQuickPrompt'] );
@@ -5310,6 +5368,27 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
         $instructions .= $context_blocks;
     }
     $trace['context_blocks'] = $context_blocks;
+
+    // === QA Prompt Registry: 承認済み補遺（_global → intent）を本番プロンプトに合流 ===
+    // context_blocks の直後、flex / enrichment / QA override addendum よりも前に挿入する。
+    if ( $registry_addendum_text !== '' ) {
+        $instructions .= "\n\n" . $registry_addendum_text;
+    }
+
+    // Debug log (KUSANAGI 環境では error_log が効かない。§7.1 準拠)
+    @file_put_contents(
+        '/tmp/gcrev_chat_debug.log',
+        sprintf(
+            "%s registry intent=%s gv=%s iv=%s addendum_len=%d overrides=[%s]\n",
+            date( 'Y-m-d H:i:s' ),
+            $registry_intent_name ?: '(unknown)',
+            $registry_active['global']['version'] ?? '-',
+            $registry_active['intent']['version'] ?? '-',
+            mb_strlen( $registry_addendum_text ),
+            implode( ',', array_keys( $registry_overrides_safe ) )
+        ),
+        FILE_APPEND
+    );
 
     // === 確定的プランナー: 国/都市/source等の特定クエリを自動実行 ===
     $deterministic_text = $effective_message ?? $message;
