@@ -8,7 +8,6 @@
     var API   = (typeof gcrevExecVars !== 'undefined' && gcrevExecVars.apiBase) || '/wp-json/gcrev/v1/execution';
     var NONCE = (typeof gcrevExecVars !== 'undefined' && gcrevExecVars.nonce) || '';
     var currentData   = null;
-    var guideActionId = null;
 
     /* ================================================================
        API
@@ -89,28 +88,13 @@
             return;
         }
 
-        var isAuto = top.is_auto_executable;
-        var btnLabel = isAuto
-            ? (top.action_type === 'article_create' ? '▶ 記事をつくる' : top.action_type === 'meo_post' ? '▶ 投稿をつくる' : '▶ 実行する')
-            : '📖 ガイドを見る';
-        var btnType = isAuto ? 'execute' : (top.guide_text ? 'guide' : 'complete');
-
+        // ヒーローは「今すぐやること」を案内するだけで、実操作はリスト側で行う
         section.innerHTML =
             '<div class="exec-hero">' +
                 '<div class="exec-hero__label">⚡ 今すぐやること</div>' +
                 '<div class="exec-hero__title">' + esc(top.title) + '</div>' +
                 '<div class="exec-hero__reason">' + esc(top.reason) + '</div>' +
-                '<button class="exec-hero__btn" data-exec-action="' + top.id + '" data-exec-type="' + btnType + '">' + btnLabel + '</button>' +
             '</div>';
-
-        section.querySelector('[data-exec-action]').addEventListener('click', function() {
-            var btn = this;
-            var actionId = parseInt(btn.dataset.execAction, 10);
-            var type = btn.dataset.execType;
-            if (type === 'execute') handleExecute(actionId, btn);
-            else if (type === 'guide') handleGuide(actionId);
-            else handleComplete(actionId, btn);
-        });
     }
 
     /* ================================================================
@@ -118,39 +102,25 @@
        ================================================================ */
     function renderQuota(progress) {
         var container = document.getElementById('exec-quota');
-        var bulkRow   = document.getElementById('exec-bulk-row');
         if (!container) return;
 
         var byType = progress.by_type || [];
         if (!byType.length) {
             container.innerHTML = '<div class="exec-empty">「再分析する」でアクションを生成してください。</div>';
-            if (bulkRow) bulkRow.innerHTML = '';
             return;
         }
 
         var html = '';
-        var hasPending = false;
         byType.forEach(function(t) {
             var pct = t.total > 0 ? Math.round((t.completed / t.total) * 100) : 0;
             var done = pct >= 100;
             html += '<div class="exec-quota__item">';
             html += '<div class="exec-quota__label">' + esc(t.label) + '</div>';
-            html += '<div class="exec-quota__value">' + t.completed + '<span> / ' + t.total + (t.total === 1 ? '' : '') + '</span></div>';
+            html += '<div class="exec-quota__value">' + t.completed + '<span> / ' + t.total + '</span></div>';
             html += '<div class="exec-quota__bar"><div class="exec-quota__fill' + (done ? ' exec-quota__fill--done' : '') + '" style="width:' + pct + '%"></div></div>';
             html += '</div>';
-            if (t.completed < t.total) hasPending = true;
         });
         container.innerHTML = html;
-
-        // まとめて実行ボタン
-        if (bulkRow) {
-            if (hasPending) {
-                bulkRow.innerHTML = '<button class="exec-btn exec-btn--bulk" id="exec-bulk-btn">おすすめ改善をまとめて実行</button>';
-                document.getElementById('exec-bulk-btn').addEventListener('click', handleBulkExecute);
-            } else {
-                bulkRow.innerHTML = '';
-            }
-        }
     }
 
     /* ================================================================
@@ -165,15 +135,15 @@
             return;
         }
 
-        // pending を先、completed/skipped を後に
-        var pending = [], done = [];
+        // 未完了（pending / in_progress）を上、完了済み（completed / skipped）を下に
+        var active = [], done = [];
         actions.forEach(function(a) {
-            if (a.status === 'pending' || a.status === 'in_progress') pending.push(a);
-            else done.push(a);
+            if (a.status === 'completed' || a.status === 'skipped') done.push(a);
+            else active.push(a);
         });
 
         var html = '';
-        pending.forEach(function(a) { html += renderActionCard(a); });
+        active.forEach(function(a) { html += renderActionCard(a); });
         if (done.length) {
             html += '<div style="margin:16px 0 8px;font-size:12px;color:var(--mw-text-tertiary)">完了・スキップ済み</div>';
             done.forEach(function(a) { html += renderActionCard(a); });
@@ -184,9 +154,15 @@
     }
 
     function renderActionCard(a) {
-        var isDone = a.status === 'completed' || a.status === 'skipped';
-        var cls = isDone ? (a.status === 'completed' ? ' exec-action-card--completed' : ' exec-action-card--skipped') : '';
-        var isAuto = a.is_auto_executable;
+        var status = a.status;
+        var isCompleted  = status === 'completed';
+        var isSkipped    = status === 'skipped';
+        var isInProgress = status === 'in_progress';
+        var isDone       = isCompleted || isSkipped;
+
+        var cls = isCompleted ? ' exec-action-card--completed'
+                : isSkipped   ? ' exec-action-card--skipped'
+                : '';
 
         var priorityLabel = { high: '高', medium: '中', low: '低' };
         var priorityCls   = { high: 'high', medium: 'medium', low: 'low' };
@@ -195,11 +171,15 @@
 
         // ヘッダー（バッジ）
         html += '<div class="exec-action-card__header">';
-        if (!isDone) {
-            html += '<span class="exec-badge exec-badge--' + (priorityCls[a.priority] || 'medium') + '">' + (priorityLabel[a.priority] || '中') + '</span>';
-            html += '<span class="exec-badge exec-badge--' + (isAuto ? 'auto' : 'manual') + '">' + (isAuto ? '🟢 自動' : '🟡 手動') + '</span>';
+        if (isCompleted) {
+            html += '<span class="exec-badge exec-badge--done">✅ 完了</span>';
+        } else if (isSkipped) {
+            html += '<span class="exec-badge exec-badge--done">スキップ</span>';
         } else {
-            html += '<span class="exec-badge exec-badge--done">' + (a.status === 'completed' ? '✅ 完了' : 'スキップ') + '</span>';
+            html += '<span class="exec-badge exec-badge--' + (priorityCls[a.priority] || 'medium') + '">' + (priorityLabel[a.priority] || '中') + '</span>';
+            if (isInProgress) {
+                html += '<span class="exec-badge exec-badge--done">⏳ 作業中</span>';
+            }
         }
         html += '</div>';
 
@@ -211,22 +191,11 @@
 
         // ボタン
         html += '<div class="exec-action-card__buttons">';
-        if (!isDone) {
-            if (isAuto) {
-                var execLabel = a.action_type === 'article_create' ? '▶ 記事をつくる' :
-                                a.action_type === 'meo_post' ? '▶ 投稿をつくる' : '▶ 実行する';
-                html += '<button class="exec-btn exec-btn--primary" data-exec-action="' + a.id + '" data-exec-type="execute"' +
-                        (a.status === 'in_progress' ? ' disabled' : '') + '>' +
-                        (a.status === 'in_progress' ? '実行中...' : execLabel) + '</button>';
-            }
-            if (a.guide_text) {
-                html += '<button class="exec-btn exec-btn--secondary" data-exec-action="' + a.id + '" data-exec-type="guide">📖 ガイドを見る</button>';
-            } else if (!isAuto) {
-                html += '<button class="exec-btn exec-btn--primary" data-exec-action="' + a.id + '" data-exec-type="complete">完了にする</button>';
-            }
-            html += '<button class="exec-btn exec-btn--ghost" data-exec-action="' + a.id + '" data-exec-type="skip">スキップ</button>';
-        } else {
+        if (isDone || isInProgress) {
             html += '<button class="exec-btn exec-btn--ghost" data-exec-action="' + a.id + '" data-exec-type="revert">元に戻す</button>';
+        } else {
+            html += '<button class="exec-btn exec-btn--primary" data-exec-action="' + a.id + '" data-exec-type="complete">完了にする</button>';
+            html += '<button class="exec-btn exec-btn--ghost" data-exec-action="' + a.id + '" data-exec-type="skip">スキップ</button>';
         }
         html += '</div></div>';
         return html;
@@ -237,11 +206,9 @@
             btn.addEventListener('click', function() {
                 var id   = parseInt(btn.dataset.execAction, 10);
                 var type = btn.dataset.execType;
-                if (type === 'execute')  handleExecute(id, btn);
                 if (type === 'complete') handleComplete(id, btn);
                 if (type === 'skip')     handleSkip(id, btn);
                 if (type === 'revert')   handleRevert(id, btn);
-                if (type === 'guide')    handleGuide(id);
             });
         });
     }
@@ -293,12 +260,6 @@
     /* ================================================================
        Action Handlers
        ================================================================ */
-    function handleExecute(id, btn) {
-        btn.disabled = true; btn.textContent = '実行中...';
-        apiFetch('/action/' + id + '/execute', 'POST')
-            .then(function() { loadDashboard(); })
-            .catch(function(e) { alert('エラー: ' + e.message); btn.disabled = false; });
-    }
     function handleComplete(id, btn) {
         btn.disabled = true;
         apiFetch('/action/' + id + '/complete', 'POST')
@@ -317,40 +278,6 @@
             .then(function() { loadDashboard(); })
             .catch(function(e) { alert('エラー: ' + e.message); btn.disabled = false; btn.textContent = '元に戻す'; });
     }
-    function handleGuide(id) {
-        var actions = currentData && currentData.actions ? currentData.actions : [];
-        var a = null;
-        for (var i = 0; i < actions.length; i++) { if (actions[i].id === id) { a = actions[i]; break; } }
-        if (!a) return;
-        guideActionId = id;
-        document.getElementById('exec-modal-title').textContent = a.title || '';
-        document.getElementById('exec-modal-subtitle').textContent = a.reason || '';
-        document.getElementById('exec-modal-guide').innerHTML = a.guide_text || '<p>具体的な手順は準備中です。</p>';
-        document.getElementById('exec-guide-modal').classList.add('is-open');
-    }
-    function handleBulkExecute() {
-        var btn = document.getElementById('exec-bulk-btn');
-        if (!btn) return;
-        btn.disabled = true; btn.textContent = '実行中...';
-        var actions = currentData && currentData.actions ? currentData.actions : [];
-        var autoIds = [];
-        actions.forEach(function(a) {
-            if (a.status === 'pending' && a.is_auto_executable) autoIds.push(a.id);
-        });
-        if (!autoIds.length) {
-            alert('自動実行できるアクションがありません。');
-            btn.disabled = false; btn.textContent = 'おすすめ改善をまとめて実行';
-            return;
-        }
-        // 1つずつ順に実行
-        var chain = Promise.resolve();
-        autoIds.forEach(function(id) {
-            chain = chain.then(function() { return apiFetch('/action/' + id + '/execute', 'POST'); });
-        });
-        chain.then(function() { loadDashboard(); })
-             .catch(function(e) { alert('エラー: ' + e.message); loadDashboard(); });
-    }
-
     /* ================================================================
        再分析ボタン
        ================================================================ */
@@ -362,27 +289,6 @@
             .then(function(d) { currentData = d; renderAll(d); })
             .catch(function(err) { alert('エラー: ' + err.message); })
             .finally(function() { btn.disabled = false; btn.textContent = '再分析する'; });
-    });
-
-    /* ================================================================
-       モーダル
-       ================================================================ */
-    document.getElementById('exec-modal-close').addEventListener('click', function() {
-        document.getElementById('exec-guide-modal').classList.remove('is-open'); guideActionId = null;
-    });
-    document.getElementById('exec-modal-complete').addEventListener('click', function() {
-        if (!guideActionId) return;
-        var btn = this; btn.disabled = true;
-        apiFetch('/action/' + guideActionId + '/complete', 'POST')
-            .then(function() {
-                document.getElementById('exec-guide-modal').classList.remove('is-open');
-                guideActionId = null; loadDashboard();
-            })
-            .catch(function(e) { alert('エラー: ' + e.message); })
-            .finally(function() { btn.disabled = false; });
-    });
-    document.getElementById('exec-guide-modal').addEventListener('click', function(e) {
-        if (e.target === this) { this.classList.remove('is-open'); guideActionId = null; }
     });
 
     /* ================================================================

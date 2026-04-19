@@ -481,7 +481,6 @@ class Gcrev_Execution_Service {
   ❌「SEO改善のため」（抽象的すぎてNG）
 - expected_effectは1文で数値を含める
   ✅「2〜4週間で順位5〜10位改善が見込めます」
-- guide_textは空文字（不要）
 - comparison.self と comparison.competitor_avg は具体的な数値
 
 【サイト情報】
@@ -501,7 +500,7 @@ action_type: article_create/rewrite/internal_link/meo_post/meta_fix/page_speed
 priority: high(最大2個)/medium/low
 JSON配列のみ出力。コードブロック記法禁止。
 
-[{"action_type":"article_create","priority":"high","title":"コラム記事を2本追加してください","reason":"競合は月平均4本公開、あなたは月1本で差が広がっています","target_keyword":"愛媛 Web制作","target_url":"","quantity":2,"unit":"本","expected_effect":"2〜4週間で関連キーワードの検索表示が増加します","guide_text":"","comparison":{"self":"月1本","competitor_avg":"月4本"}}]
+[{"action_type":"article_create","priority":"high","title":"コラム記事を2本追加してください","reason":"競合は月平均4本公開、あなたは月1本で差が広がっています","target_keyword":"愛媛 Web制作","target_url":"","quantity":2,"unit":"本","expected_effect":"2〜4週間で関連キーワードの検索表示が増加します","comparison":{"self":"月1本","competitor_avg":"月4本"}}]
 PROMPT;
 
         try {

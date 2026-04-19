@@ -45,10 +45,7 @@ get_header();
 .exec-hero::before { content: '⚡'; position: absolute; top: -10px; right: -10px; font-size: 80px; opacity: 0.08; }
 .exec-hero__label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; margin-bottom: 10px; }
 .exec-hero__title { font-size: 20px; font-weight: 700; line-height: 1.5; margin-bottom: 8px; }
-.exec-hero__reason { font-size: 13px; opacity: 0.85; line-height: 1.6; margin-bottom: 18px; }
-.exec-hero__btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 24px; background: #fff; color: #568184; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-.exec-hero__btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
-.exec-hero__btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+.exec-hero__reason { font-size: 13px; opacity: 0.85; line-height: 1.6; }
 
 /* ===== ② 今月のノルマ ===== */
 .exec-quota { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
@@ -59,7 +56,6 @@ get_header();
 .exec-quota__bar { height: 4px; background: var(--mw-bg-secondary); border-radius: 2px; margin-top: 8px; overflow: hidden; }
 .exec-quota__fill { height: 100%; background: var(--mw-primary-blue, #568184); border-radius: 2px; transition: width 0.5s; }
 .exec-quota__fill--done { background: #568184; }
-.exec-bulk-row { text-align: right; }
 
 /* ===== ③ アクションカード ===== */
 .exec-actions__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -72,8 +68,6 @@ get_header();
 .exec-badge--high { background: rgba(201,90,79,0.1); color: #C95A4F; }
 .exec-badge--medium { background: rgba(212,168,67,0.1); color: #B8922E; }
 .exec-badge--low { background: rgba(86,129,132,0.1); color: #568184; }
-.exec-badge--auto { background: rgba(86,129,132,0.1); color: #568184; }
-.exec-badge--manual { background: rgba(212,168,67,0.1); color: #B8922E; }
 .exec-badge--done { background: rgba(86,129,132,0.12); color: #568184; }
 .exec-action-card__title { font-size: 15px; font-weight: 600; color: var(--mw-text-heading); line-height: 1.5; }
 .exec-action-card__reason { font-size: 13px; color: var(--mw-text-secondary); margin-top: 4px; line-height: 1.5; }
@@ -88,8 +82,6 @@ get_header();
 .exec-btn--sm { padding: 6px 12px; font-size: 12px; }
 .exec-btn--ghost { background: transparent; color: var(--mw-text-secondary); padding: 6px 12px; font-size: 12px; }
 .exec-btn--ghost:hover { color: var(--mw-text-heading); background: var(--mw-bg-secondary); }
-.exec-btn--bulk { background: var(--mw-primary-blue, #568184); color: #fff; padding: 10px 22px; font-size: 14px; }
-.exec-btn--bulk:hover:not(:disabled) { background: var(--mw-btn-primary-hover, #476C6F); }
 .exec-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
 /* ===== ⑤ 順位変動・原因 ===== */
@@ -108,17 +100,6 @@ get_header();
 .exec-cause-num { font-size: 14px; font-weight: 700; color: var(--mw-primary-blue, #568184); min-width: 20px; }
 .exec-cause-text { font-size: 14px; color: var(--mw-text-heading); line-height: 1.6; }
 
-/* ガイドモーダル */
-.exec-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 9999; align-items: center; justify-content: center; }
-.exec-modal-overlay.is-open { display: flex; }
-.exec-modal { background: var(--mw-bg-primary); border-radius: var(--mw-radius-md, 12px); padding: 32px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
-.exec-modal__title { font-size: 18px; font-weight: 700; color: var(--mw-text-heading); margin-bottom: 8px; }
-.exec-modal__subtitle { font-size: 13px; color: var(--mw-text-secondary); margin-bottom: 20px; }
-.exec-modal__guide { font-size: 14px; color: var(--mw-text-primary); line-height: 1.8; }
-.exec-modal__guide ol { padding-left: 20px; margin: 12px 0; }
-.exec-modal__guide li { margin-bottom: 8px; }
-.exec-modal__footer { display: flex; gap: 8px; margin-top: 24px; justify-content: flex-end; }
-
 /* エラー・空 */
 .exec-error { text-align: center; padding: 60px 0; color: #C95A4F; }
 .exec-empty { text-align: center; padding: 40px 0; color: var(--mw-text-secondary); font-size: 14px; }
@@ -131,7 +112,6 @@ get_header();
     .exec-quota { grid-template-columns: repeat(2, 1fr); }
     .exec-rank-table { font-size: 13px; }
     .exec-rank-table th, .exec-rank-table td { padding: 8px 10px; }
-    .exec-modal { padding: 24px; }
 }
 </style>
 
@@ -156,7 +136,6 @@ get_header();
         <section class="exec-section">
             <h2 class="exec-section__title"><span class="exec-section__title-icon">📊</span> 今月のノルマ</h2>
             <div class="exec-quota" id="exec-quota"></div>
-            <div class="exec-bulk-row" id="exec-bulk-row"></div>
         </section>
 
         <!-- ③ やることリスト -->
@@ -182,19 +161,6 @@ get_header();
             </div>
         </section>
 
-    </div>
-</div>
-
-<!-- ガイドモーダル -->
-<div class="exec-modal-overlay" id="exec-guide-modal">
-    <div class="exec-modal">
-        <h3 class="exec-modal__title" id="exec-modal-title"></h3>
-        <p class="exec-modal__subtitle" id="exec-modal-subtitle"></p>
-        <div class="exec-modal__guide" id="exec-modal-guide"></div>
-        <div class="exec-modal__footer">
-            <button class="exec-btn exec-btn--secondary" id="exec-modal-close">閉じる</button>
-            <button class="exec-btn exec-btn--primary" id="exec-modal-complete">完了にする</button>
-        </div>
     </div>
 </div>
 
