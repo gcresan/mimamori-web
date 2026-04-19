@@ -1205,6 +1205,141 @@ class Mimamori_QA_CLI {
     }
 
     // =========================================================
+    // qa:registry-stage — intent をステージングに切り替え（Phase 4）
+    // =========================================================
+
+    /**
+     * 指定 intent を特定ユーザーだけに適用（staged）する。
+     *
+     * ## OPTIONS
+     *
+     * --intent=<name>
+     * : intent 名（_global 不可）
+     *
+     * --users=<csv>
+     * : カンマ区切りの user_id（例: 1,5,42）
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:registry-stage --intent=site_improvement --users=1,5
+     *
+     * @subcommand qa:registry-stage
+     */
+    public function qa_registry_stage( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $intent = (string) ( $assoc_args['intent'] ?? '' );
+        $users_csv = (string) ( $assoc_args['users'] ?? '' );
+        if ( $intent === '' ) {
+            WP_CLI::error( '--intent=<name> is required.' );
+        }
+        if ( $users_csv === '' ) {
+            WP_CLI::error( '--users=<csv> is required.' );
+        }
+        $user_ids = array_map( 'trim', explode( ',', $users_csv ) );
+
+        $this->load_qa_classes();
+
+        try {
+            Mimamori_QA_Prompt_Registry::stage( $intent, $user_ids, (int) get_current_user_id() );
+        } catch ( \Throwable $e ) {
+            WP_CLI::error( 'stage failed: ' . $e->getMessage() );
+        }
+
+        WP_CLI::success( sprintf( 'Intent "%s" staged for users: %s',
+            $intent, implode( ',', Mimamori_QA_Prompt_Registry::sanitize_user_id_list( $user_ids ) ) ) );
+    }
+
+    // =========================================================
+    // qa:registry-unstage — ステージング解除して全員適用
+    // =========================================================
+
+    /**
+     * 指定 intent のステージングを解除し、全員に適用する。
+     *
+     * ## OPTIONS
+     *
+     * --intent=<name>
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:registry-unstage --intent=site_improvement
+     *
+     * @subcommand qa:registry-unstage
+     */
+    public function qa_registry_unstage( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $intent = (string) ( $assoc_args['intent'] ?? '' );
+        if ( $intent === '' ) {
+            WP_CLI::error( '--intent=<name> is required.' );
+        }
+
+        $this->load_qa_classes();
+
+        try {
+            Mimamori_QA_Prompt_Registry::unstage( $intent, (int) get_current_user_id() );
+        } catch ( \Throwable $e ) {
+            WP_CLI::error( 'unstage failed: ' . $e->getMessage() );
+        }
+
+        WP_CLI::success( sprintf( 'Intent "%s" is now full rollout.', $intent ) );
+    }
+
+    // =========================================================
+    // qa:canary-show — 現在の canary ユーザー一覧を表示
+    // =========================================================
+
+    /**
+     * Auto Promoter のデフォルト canary ユーザーを表示する。
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:canary-show
+     *
+     * @subcommand qa:canary-show
+     */
+    public function qa_canary_show( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $this->load_qa_classes();
+        $ids = Mimamori_QA_Prompt_Registry::get_canary_users();
+        if ( empty( $ids ) ) {
+            WP_CLI::log( 'Canary users: (none) — Auto Promoter は全ユーザーに即時反映します。' );
+        } else {
+            WP_CLI::log( 'Canary users: ' . implode( ',', $ids ) );
+            WP_CLI::log( 'Auto Promoter はこれらのユーザーだけに先行適用します。' );
+        }
+    }
+
+    // =========================================================
+    // qa:canary-set — canary ユーザー一覧を設定（空で解除）
+    // =========================================================
+
+    /**
+     * Auto Promoter のデフォルト canary ユーザーを設定する。
+     *
+     * ## OPTIONS
+     *
+     * [--users=<csv>]
+     * : カンマ区切りの user_id（例: 1,5,42）。省略時は空配列（canary 解除）。
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori qa:canary-set --users=1
+     *     wp mimamori qa:canary-set           # canary 解除 → Auto Promoter は full
+     *
+     * @subcommand qa:canary-set
+     */
+    public function qa_canary_set( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        $users_csv = (string) ( $assoc_args['users'] ?? '' );
+        $users     = $users_csv === '' ? [] : array_map( 'trim', explode( ',', $users_csv ) );
+
+        $this->load_qa_classes();
+        Mimamori_QA_Prompt_Registry::set_canary_users( $users );
+        $clean = Mimamori_QA_Prompt_Registry::get_canary_users();
+        if ( empty( $clean ) ) {
+            WP_CLI::success( 'Canary cleared. Auto Promoter will roll out to all users.' );
+        } else {
+            WP_CLI::success( 'Canary users updated: ' . implode( ',', $clean ) );
+        }
+    }
+
+    // =========================================================
     // qa:registry-show — registry デバッグ表示
     // =========================================================
 
@@ -1227,8 +1362,13 @@ class Mimamori_QA_CLI {
         WP_CLI::log( '' );
         WP_CLI::log( 'Intents:' );
         foreach ( (array) ( $reg['intents'] ?? [] ) as $intent => $data ) {
-            WP_CLI::log( sprintf( '  [%s] version=%s len=%d', $intent,
-                $data['version'] ?? '', mb_strlen( (string) ( $data['addendum'] ?? '' ) ) ) );
+            $stage      = is_array( $data['stage'] ?? null ) ? $data['stage'] : [];
+            $stage_mode = (string) ( $stage['mode'] ?? 'full' );
+            $stage_tag  = $stage_mode === 'staged'
+                ? ' staged=[' . implode( ',', (array) ( $stage['user_ids'] ?? [] ) ) . ']'
+                : '';
+            WP_CLI::log( sprintf( '  [%s] version=%s len=%d%s', $intent,
+                $data['version'] ?? '', mb_strlen( (string) ( $data['addendum'] ?? '' ) ), $stage_tag ) );
             if ( ! empty( $data['overrides'] ) ) {
                 $kv = [];
                 foreach ( $data['overrides'] as $k => $v ) {
@@ -1241,6 +1381,12 @@ class Mimamori_QA_CLI {
                 WP_CLI::log( sprintf( '      source:    run=%s case=%s rev=%d',
                     $src['run_id'], $src['case_id'] ?? '', (int) ( $src['revision_no'] ?? 0 ) ) );
             }
+        }
+
+        $canary = Mimamori_QA_Prompt_Registry::get_canary_users();
+        if ( ! empty( $canary ) ) {
+            WP_CLI::log( '' );
+            WP_CLI::log( 'Canary users: ' . implode( ',', $canary ) . ' (Auto Promoter default stage)' );
         }
 
         $hist = $reg['history'] ?? [];

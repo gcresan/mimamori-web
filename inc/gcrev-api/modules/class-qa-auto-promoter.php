@@ -137,6 +137,9 @@ class Mimamori_QA_Auto_Promoter {
         usort( $candidates, static fn( $a, $b ) => $b['rank'] <=> $a['rank'] );
         $candidates = array_slice( $candidates, 0, self::MAX_PROMOTIONS_PER_RUN );
 
+        // Canary 設定がある場合は自動昇格時のデフォルト stage とする
+        $canary_user_ids = Mimamori_QA_Prompt_Registry::get_canary_users();
+
         foreach ( $candidates as $cand ) {
             try {
                 $payload = Mimamori_QA_Prompt_Registry::sanitize_revision_payload(
@@ -166,7 +169,8 @@ class Mimamori_QA_Auto_Promoter {
                         'revision_no' => $cand['revision_no'],
                     ],
                     0, // auto promote → user_id=0
-                    null
+                    null,
+                    $canary_user_ids // 空配列なら full、要素があれば staged
                 );
 
                 $result['promoted'][] = [
@@ -177,6 +181,8 @@ class Mimamori_QA_Auto_Promoter {
                     'final'       => $cand['final'],
                     'delta'       => $cand['delta'],
                     'new_version' => $new_version,
+                    'stage_mode'  => empty( $canary_user_ids ) ? 'full' : 'staged',
+                    'stage_users' => $canary_user_ids,
                 ];
                 $this->log( 'promote', end( $result['promoted'] ) );
             } catch ( \Throwable $e ) {

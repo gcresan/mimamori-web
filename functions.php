@@ -5285,11 +5285,12 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
         : '';
 
     // registry から active addendum / overrides を取得
+    // Phase 4: staged intent の場合は現ユーザーが対象外なら intent 本体はスキップされる
     $registry_active         = [];
     $registry_addendum_text  = '';
     $registry_overrides_safe = [];
     if ( class_exists( 'Mimamori_QA_Prompt_Registry' ) && $registry_intent_name !== '' ) {
-        $registry_active = Mimamori_QA_Prompt_Registry::get_active_intent( $registry_intent_name );
+        $registry_active = Mimamori_QA_Prompt_Registry::get_active_intent( $registry_intent_name, (int) $user_id );
 
         // _global → intent の順で addendum を連結（累積ではなく都度生成）
         $parts = [];
@@ -5322,6 +5323,7 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
         'intent'          => $registry_intent_name,
         'global_version'  => $registry_active['global']['version'] ?? '',
         'intent_version'  => $registry_active['intent']['version'] ?? '',
+        'intent_stage'    => $registry_active['intent_stage'] ?? 'full',
         'addendum_length' => mb_strlen( $registry_addendum_text ),
     ];
 
@@ -5379,11 +5381,13 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
     @file_put_contents(
         '/tmp/gcrev_chat_debug.log',
         sprintf(
-            "%s registry intent=%s gv=%s iv=%s addendum_len=%d overrides=[%s]\n",
+            "%s registry user=%d intent=%s gv=%s iv=%s stage=%s addendum_len=%d overrides=[%s]\n",
             date( 'Y-m-d H:i:s' ),
+            (int) $user_id,
             $registry_intent_name ?: '(unknown)',
             $registry_active['global']['version'] ?? '-',
             $registry_active['intent']['version'] ?? '-',
+            $registry_active['intent_stage'] ?? 'full',
             mb_strlen( $registry_addendum_text ),
             implode( ',', array_keys( $registry_overrides_safe ) )
         ),
@@ -8361,6 +8365,11 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
         WP_CLI::add_command( 'mimamori qa registry-show',   [ $qa_cli, 'qa_registry_show' ] );
         WP_CLI::add_command( 'mimamori qa registry-export', [ $qa_cli, 'qa_registry_export' ] );
         WP_CLI::add_command( 'mimamori qa registry-import', [ $qa_cli, 'qa_registry_import' ] );
+        // Phase 4: Staged Rollout
+        WP_CLI::add_command( 'mimamori qa registry-stage',   [ $qa_cli, 'qa_registry_stage' ] );
+        WP_CLI::add_command( 'mimamori qa registry-unstage', [ $qa_cli, 'qa_registry_unstage' ] );
+        WP_CLI::add_command( 'mimamori qa canary-show',      [ $qa_cli, 'qa_canary_show' ] );
+        WP_CLI::add_command( 'mimamori qa canary-set',       [ $qa_cli, 'qa_canary_set' ] );
     }
 }
 

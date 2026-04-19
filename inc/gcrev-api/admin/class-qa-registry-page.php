@@ -78,6 +78,7 @@ class Mimamori_QA_Registry_Page {
         $active_intents = (array) ( $registry['intents'] ?? [] );
         $active_version = (string) ( $registry['active_version'] ?? '' );
         $runs           = $this->load_recent_runs( 14 );
+        $canary_users   = Mimamori_QA_Prompt_Registry::get_canary_users();
 
         $rest_base = rest_url( 'gcrev/v1/qa-registry' );
         $nonce     = wp_create_nonce( 'wp_rest' );
@@ -98,6 +99,7 @@ class Mimamori_QA_Registry_Page {
             <?php $this->render_section_c( $runs ); ?>
             <?php $this->render_section_d( $runs ); ?>
             <?php $this->render_section_e( $runs ); ?>
+            <?php $this->render_section_f( $canary_users ); ?>
         </div>
 
         <script>
@@ -138,14 +140,32 @@ class Mimamori_QA_Registry_Page {
                 $overrides = is_array( $data['overrides'] ?? null ) ? $data['overrides'] : [];
                 $source    = is_array( $data['source'] ?? null ) ? $data['source'] : [];
                 $is_global = ( $intent_name === Mimamori_QA_Prompt_Registry::GLOBAL_KEY );
+                $stage     = is_array( $data['stage'] ?? null ) ? $data['stage'] : [];
+                $stage_mode = (string) ( $stage['mode'] ?? 'full' );
+                $stage_users = array_map( 'intval', (array) ( $stage['user_ids'] ?? [] ) );
                 ?>
-                <div class="qa-registry-card <?php echo $is_global ? 'is-global' : ''; ?>">
+                <div class="qa-registry-card <?php echo $is_global ? 'is-global' : ''; ?>" data-intent="<?php echo esc_attr( $intent_name ); ?>">
                     <header>
                         <h3>
                             <?php if ( $is_global ): ?><span class="tag tag-global">_global</span><?php else: ?><code><?php echo esc_html( $intent_name ); ?></code><?php endif; ?>
                             <span class="qa-registry-version-chip-small">v: <?php echo esc_html( (string) ( $data['version'] ?? '-' ) ); ?></span>
+                            <?php if ( ! $is_global ): ?>
+                                <?php if ( $stage_mode === 'staged' ): ?>
+                                    <span class="qa-stage-badge qa-stage-staged" title="ステージング中">🧪 staged (<?php echo count( $stage_users ); ?>名)</span>
+                                <?php else: ?>
+                                    <span class="qa-stage-badge qa-stage-full" title="全員に適用中">🌐 全員</span>
+                                <?php endif; ?>
+                            <?php endif; ?>
                         </h3>
                         <div class="qa-registry-card-actions">
+                            <?php if ( ! $is_global ): ?>
+                                <?php if ( $stage_mode === 'staged' ): ?>
+                                    <button type="button" class="button" data-action="edit-stage" data-users="<?php echo esc_attr( implode( ',', $stage_users ) ); ?>">ステージング編集</button>
+                                    <button type="button" class="button button-primary" data-action="unstage">全員に展開</button>
+                                <?php else: ?>
+                                    <button type="button" class="button" data-action="edit-stage" data-users="">ステージングに切替</button>
+                                <?php endif; ?>
+                            <?php endif; ?>
                             <?php if ( ! empty( $history ) ): ?>
                                 <button type="button" class="button" data-action="open-rollback-modal">この intent を rollback</button>
                             <?php endif; ?>
@@ -399,6 +419,39 @@ class Mimamori_QA_Registry_Page {
     }
 
     // =========================================================
+    // F. Canary Users 設定
+    // =========================================================
+
+    private function render_section_f( array $canary_users ): void {
+        ?>
+        <h2>Canary Users（Auto Promoter のデフォルト stage）</h2>
+        <p class="qa-registry-help">
+            ここに user_id を設定すると、<code>wp mimamori qa auto-promote</code> が自動昇格した intent を
+            自動的に staged モード（これらのユーザーにだけ適用）として登録します。
+            空欄の場合は現状どおり「全員に即時反映」です。リスクを抑えたい場合は管理者ユーザーだけを登録しておき、
+            翌朝 QA ダッシュボードで挙動確認 → 問題なければ「全員に展開」ボタンで本番化、
+            という canary 運用が可能です。
+        </p>
+        <form class="qa-registry-canary-form" id="qa-canary-form" onsubmit="return false;">
+            <table class="form-table">
+                <tr>
+                    <th><label for="qa-canary-users">user_ids</label></th>
+                    <td>
+                        <input type="text" id="qa-canary-users" class="regular-text"
+                               value="<?php echo esc_attr( implode( ',', $canary_users ) ); ?>"
+                               placeholder="例: 1,5 （空欄で解除）" />
+                        <p class="description">カンマ区切り。空で保存すると canary 解除（full rollout）。</p>
+                    </td>
+                </tr>
+            </table>
+            <p>
+                <button type="button" class="button button-primary" id="qa-canary-submit">保存</button>
+            </p>
+        </form>
+        <?php
+    }
+
+    // =========================================================
     // Helpers
     // =========================================================
 
@@ -507,6 +560,12 @@ class Mimamori_QA_Registry_Page {
         .qa-delta-zero { color: #64748b; }
         .qa-registry-help { color: #64748b; font-size: 13px; max-width: 780px; }
         .qa-registry-promote-form .form-table th { width: 160px; }
+        .qa-registry-canary-form .form-table th { width: 160px; }
+
+        .qa-stage-badge { margin-left: 8px; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .qa-stage-full   { background: #e0e7ff; color: #3730a3; }
+        .qa-stage-staged { background: #fef3c7; color: #92400e; }
+        .qa-registry-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
         </style>
         <?php
     }
@@ -630,6 +689,95 @@ class Mimamori_QA_Registry_Page {
 
             function escapeHtml(s) {
                 return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
+            }
+
+            // ---- Stage / Unstage ----
+            document.querySelectorAll('[data-action="edit-stage"]').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    var card = btn.closest('.qa-registry-card');
+                    var intent = card ? card.getAttribute('data-intent') : '';
+                    if (!intent) return;
+                    var current = btn.getAttribute('data-users') || '';
+                    var input = prompt(
+                        'intent "' + intent + '" に適用する user_id をカンマ区切りで入力してください。\n' +
+                        '空で OK するとキャンセル（何も変更しません）。\n' +
+                        '全員展開に戻す場合は "全員に展開" ボタンを使ってください。',
+                        current
+                    );
+                    if (input === null) return;
+                    var trimmed = input.trim();
+                    if (trimmed === '') {
+                        showBanner('error', 'user_ids が空のためキャンセルしました。');
+                        return;
+                    }
+                    var userIds = trimmed.split(',').map(function(s){ return parseInt(s.trim(), 10); }).filter(function(n){ return !isNaN(n) && n > 0; });
+                    if (userIds.length === 0) {
+                        showBanner('error', '有効な user_id がありません。');
+                        return;
+                    }
+                    btn.disabled = true;
+                    callApi('POST', '/stage', { intent: intent, user_ids: userIds }).then(function(res){
+                        if (res.status === 200 && res.body.success) {
+                            showBanner('success', intent + ' を staged に変更しました (users: ' + userIds.join(',') + '). 再読み込みします...');
+                            setTimeout(function(){ window.location.reload(); }, 1200);
+                        } else {
+                            showBanner('error', 'Stage failed: ' + (res.body.message || 'unknown'));
+                            btn.disabled = false;
+                        }
+                    }).catch(function(e){
+                        showBanner('error', 'Stage error: ' + e.message);
+                        btn.disabled = false;
+                    });
+                });
+            });
+
+            document.querySelectorAll('[data-action="unstage"]').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    var card = btn.closest('.qa-registry-card');
+                    var intent = card ? card.getAttribute('data-intent') : '';
+                    if (!intent) return;
+                    if (!confirm('intent "' + intent + '" を全ユーザーに展開します。よろしいですか？')) {
+                        return;
+                    }
+                    btn.disabled = true;
+                    callApi('POST', '/unstage', { intent: intent }).then(function(res){
+                        if (res.status === 200 && res.body.success) {
+                            showBanner('success', intent + ' を全員に展開しました。再読み込みします...');
+                            setTimeout(function(){ window.location.reload(); }, 1200);
+                        } else {
+                            showBanner('error', 'Unstage failed: ' + (res.body.message || 'unknown'));
+                            btn.disabled = false;
+                        }
+                    }).catch(function(e){
+                        showBanner('error', 'Unstage error: ' + e.message);
+                        btn.disabled = false;
+                    });
+                });
+            });
+
+            // ---- Canary form ----
+            var canaryBtn = document.getElementById('qa-canary-submit');
+            var canaryInput = document.getElementById('qa-canary-users');
+            if (canaryBtn && canaryInput) {
+                canaryBtn.addEventListener('click', function(){
+                    var raw = canaryInput.value || '';
+                    var ids = raw.split(',').map(function(s){ return parseInt(s.trim(), 10); }).filter(function(n){ return !isNaN(n) && n > 0; });
+                    canaryBtn.disabled = true;
+                    callApi('POST', '/canary', { user_ids: ids }).then(function(res){
+                        if (res.status === 200 && res.body.success) {
+                            var msg = res.body.user_ids && res.body.user_ids.length
+                                ? 'Canary ユーザーを ' + res.body.user_ids.join(',') + ' に設定しました。'
+                                : 'Canary 解除しました（Auto Promoter は全員に即時反映）。';
+                            showBanner('success', msg);
+                        } else {
+                            showBanner('error', 'Canary save failed: ' + (res.body.message || 'unknown'));
+                        }
+                        canaryBtn.disabled = false;
+                    }).catch(function(e){
+                        showBanner('error', 'Canary error: ' + e.message);
+                        canaryBtn.disabled = false;
+                    });
+                });
             }
 
             // ---- Promote ----

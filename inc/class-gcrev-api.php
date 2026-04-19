@@ -1474,6 +1474,30 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_qa_registry_compare' ],
             'permission_callback' => $qa_admin_permission,
         ] );
+
+        // Phase 4: Staged Rollout
+        register_rest_route( 'gcrev/v1', '/qa-registry/stage', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_qa_registry_stage' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
+        register_rest_route( 'gcrev/v1', '/qa-registry/unstage', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_qa_registry_unstage' ],
+            'permission_callback' => $qa_admin_permission,
+        ] );
+        register_rest_route( 'gcrev/v1', '/qa-registry/canary', [
+            [
+                'methods'             => 'GET',
+                'callback'            => [ $this, 'rest_qa_registry_canary_get' ],
+                'permission_callback' => $qa_admin_permission,
+            ],
+            [
+                'methods'             => 'POST',
+                'callback'            => [ $this, 'rest_qa_registry_canary_set' ],
+                'permission_callback' => $qa_admin_permission,
+            ],
+        ] );
     }
 
     // =========================================================
@@ -22101,6 +22125,109 @@ PROMPT;
             'current'  => $current,
             'previous' => $previous,
             'diff'     => $diff,
+        ], 200 );
+    }
+
+    // =========================================================
+    // QA Prompt Registry Staged Rollout REST コールバック（Phase 4）
+    // =========================================================
+
+    /**
+     * POST /qa-registry/stage
+     * { intent, user_ids: [int...] }
+     */
+    public function rest_qa_registry_stage( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+        $params = $req->get_json_params();
+        if ( ! is_array( $params ) ) { $params = $req->get_params(); }
+
+        $intent    = sanitize_text_field( (string) ( $params['intent'] ?? '' ) );
+        $user_ids  = is_array( $params['user_ids'] ?? null ) ? $params['user_ids'] : [];
+
+        if ( $intent === '' || $intent === \Mimamori_QA_Prompt_Registry::GLOBAL_KEY ) {
+            return $this->qa_registry_error( 'invalid_intent', 'invalid intent', 400 );
+        }
+        if ( empty( $user_ids ) ) {
+            return $this->qa_registry_error( 'empty_users', 'user_ids must not be empty', 400 );
+        }
+
+        try {
+            \Mimamori_QA_Prompt_Registry::stage( $intent, $user_ids, (int) get_current_user_id() );
+        } catch ( \Throwable $e ) {
+            return $this->qa_registry_error( 'stage_error', $e->getMessage(), 400 );
+        }
+
+        $active = \Mimamori_QA_Prompt_Registry::get_active_intent( $intent, 0 );
+        return new \WP_REST_Response( [
+            'success' => true,
+            'intent'  => $intent,
+            'stage'   => $active['intent']['stage'] ?? null,
+        ], 200 );
+    }
+
+    /**
+     * POST /qa-registry/unstage
+     * { intent }
+     */
+    public function rest_qa_registry_unstage( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+        $params = $req->get_json_params();
+        if ( ! is_array( $params ) ) { $params = $req->get_params(); }
+
+        $intent = sanitize_text_field( (string) ( $params['intent'] ?? '' ) );
+        if ( $intent === '' || $intent === \Mimamori_QA_Prompt_Registry::GLOBAL_KEY ) {
+            return $this->qa_registry_error( 'invalid_intent', 'invalid intent', 400 );
+        }
+
+        try {
+            \Mimamori_QA_Prompt_Registry::unstage( $intent, (int) get_current_user_id() );
+        } catch ( \Throwable $e ) {
+            return $this->qa_registry_error( 'unstage_error', $e->getMessage(), 400 );
+        }
+
+        return new \WP_REST_Response( [
+            'success' => true,
+            'intent'  => $intent,
+            'stage'   => [ 'mode' => 'full', 'user_ids' => [] ],
+        ], 200 );
+    }
+
+    /**
+     * GET /qa-registry/canary
+     */
+    public function rest_qa_registry_canary_get( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+        return new \WP_REST_Response( [
+            'success'  => true,
+            'user_ids' => \Mimamori_QA_Prompt_Registry::get_canary_users(),
+        ], 200 );
+    }
+
+    /**
+     * POST /qa-registry/canary
+     * { user_ids: [int...] }
+     *
+     * 空配列なら canary 解除。
+     */
+    public function rest_qa_registry_canary_set( \WP_REST_Request $req ) {
+        if ( ! class_exists( 'Mimamori_QA_Prompt_Registry' ) ) {
+            return $this->qa_registry_error( 'qa_registry_missing', 'QA registry class not loaded', 500 );
+        }
+        $params = $req->get_json_params();
+        if ( ! is_array( $params ) ) { $params = $req->get_params(); }
+
+        $user_ids = is_array( $params['user_ids'] ?? null ) ? $params['user_ids'] : [];
+        \Mimamori_QA_Prompt_Registry::set_canary_users( $user_ids );
+
+        return new \WP_REST_Response( [
+            'success'  => true,
+            'user_ids' => \Mimamori_QA_Prompt_Registry::get_canary_users(),
         ], 200 );
     }
 

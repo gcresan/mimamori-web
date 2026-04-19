@@ -23,6 +23,9 @@ class Mimamori_QA_Prompt_Registry {
     /** WP options key */
     public const OPTION_KEY = 'mimamori_qa_prompt_registry';
 
+    /** Canary ユーザー一覧の WP option key（Auto Promoter が参照） */
+    public const CANARY_OPTION_KEY = 'mimamori_qa_canary_users';
+
     /** addendum 最大長 */
     public const ADDENDUM_MAX_LEN = 4000;
 
@@ -31,6 +34,10 @@ class Mimamori_QA_Prompt_Registry {
 
     /** overrides 許可キー */
     public const ALLOWED_OVERRIDE_KEYS = [ 'temperature', 'context_boost', 'max_output_tokens' ];
+
+    /** stage.mode の取りうる値 */
+    public const STAGE_FULL   = 'full';
+    public const STAGE_STAGED = 'staged';
 
     /** addendum に含まれてはいけないワード（プロンプトインジェクション／システム改ざん防止） */
     public const FORBIDDEN_ADDENDUM_WORDS = [
@@ -89,16 +96,22 @@ class Mimamori_QA_Prompt_Registry {
     /**
      * 指定 intent に有効な addendum / overrides を返す。
      *
+     * staged mode の場合、$user_id が対象外なら intent は null を返す
+     * （ユーザーごとに段階的展開を実現する）。
+     * $user_id = 0 は管理系 / CLI / 閲覧用途として常に full view を返す。
+     *
      * 返り値:
      *   [
      *     'global'       => [ 'version' => ..., 'addendum' => ..., 'overrides' => [...] ] | null,
      *     'intent'       => [ 'version' => ..., 'addendum' => ..., 'overrides' => [...] ] | null,
      *     'intent_name'  => 'site_improvement' | '_global' | 'general' | ...
+     *     'intent_stage' => 'full' | 'staged' | 'staged_excluded'
      *   ]
      *
      * @param string $intent intent 名（mimamori_rewrite_intent の返り値）
+     * @param int    $user_id 現在のユーザー ID（0 = ステージング無視）
      */
-    public static function get_active_intent( string $intent ): array {
+    public static function get_active_intent( string $intent, int $user_id = 0 ): array {
         $reg = self::get_registry();
 
         $global = $reg['intents'][ self::GLOBAL_KEY ] ?? null;
@@ -106,18 +119,35 @@ class Mimamori_QA_Prompt_Registry {
         // intent 不明または空 → _global のみ
         if ( $intent === '' || $intent === self::GLOBAL_KEY ) {
             return [
-                'global'      => $global,
-                'intent'      => null,
-                'intent_name' => self::GLOBAL_KEY,
+                'global'       => $global,
+                'intent'       => null,
+                'intent_name'  => self::GLOBAL_KEY,
+                'intent_stage' => 'full',
             ];
         }
 
         $intent_entry = $reg['intents'][ $intent ] ?? null;
+        $stage        = is_array( $intent_entry['stage'] ?? null ) ? $intent_entry['stage'] : [];
+        $mode         = (string) ( $stage['mode'] ?? self::STAGE_FULL );
+        $user_ids     = array_map( 'intval', (array) ( $stage['user_ids'] ?? [] ) );
+
+        $intent_stage_label = 'full';
+        if ( $intent_entry !== null && $mode === self::STAGE_STAGED ) {
+            // user_id = 0 は CLI / 管理系。ステージングを無視して intent を返す
+            if ( $user_id > 0 && ! in_array( $user_id, $user_ids, true ) ) {
+                // 対象外ユーザー → intent は非適用
+                $intent_entry       = null;
+                $intent_stage_label = 'staged_excluded';
+            } else {
+                $intent_stage_label = 'staged';
+            }
+        }
 
         return [
-            'global'      => $global,
-            'intent'      => $intent_entry,
-            'intent_name' => $intent,
+            'global'       => $global,
+            'intent'       => $intent_entry,
+            'intent_name'  => $intent,
+            'intent_stage' => $intent_stage_label,
         ];
     }
 
@@ -180,7 +210,8 @@ class Mimamori_QA_Prompt_Registry {
         array $revision,
         array $source_info,
         int $user_id = 0,
-        ?string $edited_addendum = null
+        ?string $edited_addendum = null,
+        array $stage_user_ids = []
     ): string {
         if ( $intent === '' ) {
             throw new \InvalidArgumentException( 'intent must not be empty' );
@@ -218,6 +249,20 @@ class Mimamori_QA_Prompt_Registry {
         $new_version = self::generate_next_version( $reg );
         $now         = wp_date( 'Y-m-d H:i:s' );
 
+        // stage 設定: user_ids 指定があれば staged、なければ full
+        $stage_user_ids_clean = self::sanitize_user_id_list( $stage_user_ids );
+        $stage = ! empty( $stage_user_ids_clean )
+            ? [
+                'mode'     => self::STAGE_STAGED,
+                'user_ids' => $stage_user_ids_clean,
+                'since'    => $now,
+            ]
+            : [
+                'mode'     => self::STAGE_FULL,
+                'user_ids' => [],
+                'since'    => $now,
+            ];
+
         $reg['intents'][ $intent ] = [
             'version'          => $new_version,
             'addendum'         => $addendum,
@@ -233,6 +278,7 @@ class Mimamori_QA_Prompt_Registry {
                 'before' => (int) ( $payload['score_before'] ?? 0 ),
                 'after'  => (int) ( $payload['score_after'] ?? 0 ),
             ],
+            'stage'            => $stage,
         ];
 
         $reg['active_version'] = $new_version;
@@ -246,9 +292,129 @@ class Mimamori_QA_Prompt_Registry {
             'case_id'      => $source_info['case_id'] ?? '',
             'revision_no'  => $source_info['revision_no'] ?? 0,
             'approved_by'  => $user_id,
+            'stage_mode'   => $stage['mode'],
+            'stage_users'  => $stage['user_ids'],
         ] );
 
         return $new_version;
+    }
+
+    // =========================================================
+    // Staged Rollout (Phase 4)
+    // =========================================================
+
+    /**
+     * 指定 intent を「ステージング」モードに切り替える。
+     *
+     * @param string $intent    intent 名（_global 不可）
+     * @param array  $user_ids  適用するユーザー ID 配列
+     * @param int    $actor_id  操作ユーザー（ログ用）
+     *
+     * @throws \InvalidArgumentException
+     */
+    public static function stage( string $intent, array $user_ids, int $actor_id = 0 ): void {
+        if ( $intent === '' || $intent === self::GLOBAL_KEY ) {
+            throw new \InvalidArgumentException( 'invalid intent for staging' );
+        }
+        $user_ids_clean = self::sanitize_user_id_list( $user_ids );
+        if ( empty( $user_ids_clean ) ) {
+            throw new \InvalidArgumentException( 'user_ids must not be empty for staging' );
+        }
+
+        $reg = self::get_registry();
+        if ( ! isset( $reg['intents'][ $intent ] ) || ! is_array( $reg['intents'][ $intent ] ) ) {
+            throw new \InvalidArgumentException( 'intent not found in registry' );
+        }
+
+        $reg['intents'][ $intent ]['stage'] = [
+            'mode'     => self::STAGE_STAGED,
+            'user_ids' => $user_ids_clean,
+            'since'    => wp_date( 'Y-m-d H:i:s' ),
+        ];
+        $reg['updated_at'] = wp_date( 'Y-m-d H:i:s' );
+        self::save_registry( $reg );
+
+        self::log( 'stage', [
+            'intent'   => $intent,
+            'user_ids' => $user_ids_clean,
+            'actor'    => $actor_id,
+        ] );
+    }
+
+    /**
+     * 指定 intent のステージングを解除し、全ユーザー適用にする。
+     *
+     * @throws \InvalidArgumentException
+     */
+    public static function unstage( string $intent, int $actor_id = 0 ): void {
+        if ( $intent === '' || $intent === self::GLOBAL_KEY ) {
+            throw new \InvalidArgumentException( 'invalid intent for unstaging' );
+        }
+        $reg = self::get_registry();
+        if ( ! isset( $reg['intents'][ $intent ] ) || ! is_array( $reg['intents'][ $intent ] ) ) {
+            throw new \InvalidArgumentException( 'intent not found in registry' );
+        }
+
+        $reg['intents'][ $intent ]['stage'] = [
+            'mode'     => self::STAGE_FULL,
+            'user_ids' => [],
+            'since'    => wp_date( 'Y-m-d H:i:s' ),
+        ];
+        $reg['updated_at'] = wp_date( 'Y-m-d H:i:s' );
+        self::save_registry( $reg );
+
+        self::log( 'unstage', [
+            'intent' => $intent,
+            'actor'  => $actor_id,
+        ] );
+    }
+
+    /**
+     * 指定 intent がステージング中か。
+     */
+    public static function is_staged( string $intent ): bool {
+        $reg  = self::get_registry();
+        $e    = $reg['intents'][ $intent ] ?? null;
+        $mode = is_array( $e ) ? (string) ( $e['stage']['mode'] ?? self::STAGE_FULL ) : self::STAGE_FULL;
+        return $mode === self::STAGE_STAGED;
+    }
+
+    /**
+     * Canary ユーザー一覧を取得。
+     *
+     * Auto Promoter がこれを読み、設定されていれば auto-promote 時の
+     * デフォルト stage.user_ids として使う。
+     */
+    public static function get_canary_users(): array {
+        $raw = get_option( self::CANARY_OPTION_KEY, [] );
+        if ( ! is_array( $raw ) ) {
+            return [];
+        }
+        return self::sanitize_user_id_list( $raw );
+    }
+
+    /**
+     * Canary ユーザー一覧を保存する。
+     */
+    public static function set_canary_users( array $user_ids ): bool {
+        $clean = self::sanitize_user_id_list( $user_ids );
+        $ok    = update_option( self::CANARY_OPTION_KEY, $clean, false );
+        self::log( 'canary_set', [ 'user_ids' => $clean ] );
+        return (bool) $ok;
+    }
+
+    /**
+     * user_id 配列を正規化（int / 重複除去 / 0 除去）。
+     */
+    public static function sanitize_user_id_list( array $user_ids ): array {
+        $out = [];
+        foreach ( $user_ids as $u ) {
+            $i = (int) $u;
+            if ( $i > 0 ) {
+                $out[] = $i;
+            }
+        }
+        return array_values( array_unique( $out ) );
     }
 
     /**
@@ -432,6 +598,7 @@ class Mimamori_QA_Prompt_Registry {
                     'auto_promoted_at' => '',
                     'approved_by'      => 0,
                     'score_impact'     => [ 'before' => 0, 'after' => 0 ],
+                    'stage'            => [ 'mode' => self::STAGE_FULL, 'user_ids' => [], 'since' => '' ],
                 ],
                 $v
             );
@@ -439,6 +606,17 @@ class Mimamori_QA_Prompt_Registry {
             $reg['intents'][ $k ]['overrides'] = self::filter_allowed_overrides(
                 is_array( $reg['intents'][ $k ]['overrides'] ) ? $reg['intents'][ $k ]['overrides'] : []
             );
+            // stage は必ず正規化
+            $stage_raw = is_array( $reg['intents'][ $k ]['stage'] ) ? $reg['intents'][ $k ]['stage'] : [];
+            $stage_mode = (string) ( $stage_raw['mode'] ?? self::STAGE_FULL );
+            if ( $stage_mode !== self::STAGE_STAGED ) {
+                $stage_mode = self::STAGE_FULL;
+            }
+            $reg['intents'][ $k ]['stage'] = [
+                'mode'     => $stage_mode,
+                'user_ids' => self::sanitize_user_id_list( (array) ( $stage_raw['user_ids'] ?? [] ) ),
+                'since'    => (string) ( $stage_raw['since'] ?? '' ),
+            ];
         }
 
         // history 長すぎたら切る
