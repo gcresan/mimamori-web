@@ -331,6 +331,13 @@ class Gcrev_Keyword_Research_Service {
 
             // 9. Bright Data SERP 補強を非同期スケジュール（504 回避のため別プロセス実行）
             if ( $this->brightdata !== null && Gcrev_Brightdata_Serp_Client::is_configured() ) {
+                // 同一 post_id の重複イベントを先に解除（再調査時の安全策）
+                $existing = wp_next_scheduled( 'gcrev_kwr_bd_serp_async', [ $post_id ] );
+                if ( $existing ) {
+                    wp_unschedule_event( $existing, 'gcrev_kwr_bd_serp_async', [ $post_id ] );
+                    $this->log( "bd_async: unscheduled previous event for post={$post_id}" );
+                }
+
                 $scheduled = wp_schedule_single_event(
                     time() + 3,
                     'gcrev_kwr_bd_serp_async',
@@ -338,9 +345,23 @@ class Gcrev_Keyword_Research_Service {
                 );
                 if ( false !== $scheduled ) {
                     $result['meta']['bd_async_scheduled'] = true;
-                    $this->log( "bd_serp: scheduled async event for post={$post_id}" );
+                    $this->log( "bd_async: scheduled event for post={$post_id}, result=" . var_export( $scheduled, true ) );
+
+                    // WP-Cron を即座にスポーンして別プロセスで走らせる
+                    if ( function_exists( 'spawn_cron' ) ) {
+                        @spawn_cron();
+                        $this->log( "bd_async: spawn_cron() called for immediate trigger" );
+                    }
+                    // 追加の保険: wp-cron.php を非ブロッキングで呼ぶ
+                    $cron_url = site_url( '/wp-cron.php?doing_wp_cron=' . microtime( true ) );
+                    wp_remote_get( $cron_url, [
+                        'timeout'   => 0.01,
+                        'blocking'  => false,
+                        'sslverify' => false,
+                    ] );
+                    $this->log( "bd_async: wp-cron.php triggered via non-blocking HTTP" );
                 } else {
-                    $this->log( "bd_serp: wp_schedule_single_event FAILED for post={$post_id}" );
+                    $this->log( "bd_async: wp_schedule_single_event FAILED for post={$post_id}" );
                 }
             }
         } catch ( \Throwable $e ) {
