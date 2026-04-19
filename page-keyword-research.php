@@ -325,6 +325,16 @@ get_header();
 .kwr-diff-ads    { background: rgba(66,133,244,0.1); color: #4285F4; font-size: 10px; }
 .kwr-diff-na     { color: var(--mw-text-tertiary); font-size: 10px; }
 
+/* CSV 出力ボタン */
+.kwr-csv-export-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #2D7A8F; color: #fff; border: none;
+    padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: background 0.15s;
+}
+.kwr-csv-export-btn:hover { background: #225e6e; }
+.kwr-csv-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* 戦略バッジ（ROI / 勝ちやすさ） */
 .kwr-roi-high { background: rgba(39,174,96,0.15); color: #15803d; font-weight: 600; }
 .kwr-roi-mid  { background: rgba(201,168,76,0.15); color: #a16207; font-weight: 600; }
@@ -578,7 +588,13 @@ get_header();
 
     <!-- ===== グループ別キーワード一覧 ===== -->
     <div id="kwrResults" style="display:none;">
-        <h2 class="kwr-results-title">キーワード候補一覧</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
+            <h2 class="kwr-results-title" style="margin:0;">キーワード候補一覧</h2>
+            <button type="button" id="kwrCsvExportBtn" class="kwr-csv-export-btn" title="調査結果を CSV 形式で書き出します">
+                <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"><path d="M3 17a1 1 0 001 1h12a1 1 0 001-1v-4a1 1 0 10-2 0v3H5v-3a1 1 0 10-2 0v4z"/><path d="M9 12.586V3a1 1 0 112 0v9.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586z"/></svg>
+                CSV で書き出す
+            </button>
+        </div>
         <div id="kwrGroups"></div>
     </div>
 
@@ -893,8 +909,157 @@ get_header();
     })
     .catch(function() { /* 前回結果なし — 空状態のまま */ });
 
+    /* ===== CSV 出力（全グループ・全KW・全フィールド） ===== */
+    var lastRenderedData = null;
+
+    function csvEscape(v) {
+        if (v === null || v === undefined) return '';
+        var s = String(v);
+        // ダブルクォート・カンマ・改行を含む場合は "" で囲み、内部の " は "" にエスケープ
+        if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) {
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+    }
+
+    function fmtMonthlyForCsv(mv) {
+        if (!Array.isArray(mv) || mv.length === 0) return '';
+        // 最新3ヶ月 / 以前3ヶ月 の平均変化率だけを簡易表現
+        var recent = mv.slice(-3);
+        var prev = mv.slice(-6, -3);
+        if (prev.length === 0) prev = mv.slice(0, 3);
+        var avg = function(arr) {
+            if (!arr.length) return 0;
+            return arr.reduce(function(s, m) { return s + (m.searches || 0); }, 0) / arr.length;
+        };
+        var r = avg(recent), p = avg(prev);
+        if (p === 0 && r === 0) return '安定';
+        var change = p > 0 ? ((r - p) / p * 100) : (r > 0 ? 100 : 0);
+        var sign = change >= 0 ? '+' : '';
+        if (change > 10) return '上昇(' + sign + Math.round(change) + '%)';
+        if (change < -10) return '下降(' + sign + Math.round(change) + '%)';
+        return '安定(' + sign + Math.round(change) + '%)';
+    }
+
+    function buildCsvFromData(data) {
+        // ヘッダー（日本語、Excel 互換）
+        var headers = [
+            'グループ', 'キーワード', 'タイプ', '優先度',
+            '推奨ページ', 'アクション',
+            '検索ボリューム', 'トレンド', '競合度(0-100)', '競合度(文字)',
+            '難易度', '難易度ソース', '難易度バンド', 'ボリュームバンド',
+            '関連度(0-100)', 'ビジネス適合(0-100)', '検索意図', 'CV距離',
+            '勝ちやすさ', 'ROIスコア',
+            'NG判定', 'NG深刻度',
+            'CPC', '現在順位',
+            '提案理由', '除外理由'
+        ];
+
+        var groupMetaLabels = {
+            immediate:           '今すぐ狙うべき',
+            local_seo:           '地域SEO向け',
+            comparison:          '比較・検討流入',
+            column:              'コラム記事向き',
+            service_page:        'サービスページ向き',
+            traffic_expansion:   '集客拡張（潜在層）',
+            competitor_core:     '競合も狙う本命',
+            competitor_longterm: '競合強・中長期狙い',
+            competitor_gap:      '競合弱・狙い目',
+            competitor_compare:  '比較検討で流入',
+            excluded:            '除外'
+        };
+
+        var lines = [ headers.map(csvEscape).join(',') ];
+        var groups = (data && data.groups) || {};
+
+        // 表示順: excluded を最後に、それ以外は groupOrder 順
+        var order = groupOrder.slice();
+        Object.keys(groups).forEach(function(k) { if (order.indexOf(k) < 0) order.push(k); });
+
+        order.forEach(function(gk) {
+            var items = groups[gk] || [];
+            if (!Array.isArray(items) || items.length === 0) return;
+            var gLabel = groupMetaLabels[gk] || gk;
+            items.forEach(function(it) {
+                var row = [
+                    gLabel,
+                    it.keyword || '',
+                    it.type || '',
+                    it.priority || '',
+                    it.page_type || '',
+                    it.action || '',
+                    (it.volume === null || it.volume === undefined) ? '' : it.volume,
+                    fmtMonthlyForCsv(it.monthly_volumes),
+                    (it.competition_index === null || it.competition_index === undefined) ? '' : it.competition_index,
+                    (it.competition === null || it.competition === undefined) ? '' : it.competition,
+                    (it.difficulty === null || it.difficulty === undefined) ? '' : it.difficulty,
+                    it.difficulty_source || '',
+                    it.difficulty_band || '',
+                    it.volume_band || '',
+                    (it.relevance_score === null || it.relevance_score === undefined) ? '' : it.relevance_score,
+                    (it.business_fit === null || it.business_fit === undefined) ? '' : it.business_fit,
+                    it.intent || '',
+                    it.cv_distance || '',
+                    (it.win_probability === null || it.win_probability === undefined) ? '' : it.win_probability,
+                    (it.roi_score === null || it.roi_score === undefined) ? '' : it.roi_score,
+                    it.ng_type || '',
+                    it.ng_severity || '',
+                    (it.cpc === null || it.cpc === undefined) ? '' : it.cpc,
+                    (it.current_rank === null || it.current_rank === undefined) ? '' : it.current_rank,
+                    it.reason || '',
+                    it.why_not_target || ''
+                ];
+                lines.push(row.map(csvEscape).join(','));
+            });
+        });
+
+        // CRLF で結合（Excel 推奨）
+        return lines.join('\r\n');
+    }
+
+    function downloadCsv(csvStr, filename) {
+        // UTF-8 BOM を先頭に付けて Excel で文字化けしないようにする
+        var BOM = '\uFEFF';
+        var blob = new Blob([BOM + csvStr], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    }
+
+    function onCsvExportClick() {
+        if (!lastRenderedData || !lastRenderedData.groups) {
+            showToast('出力するデータがありません。先に調査を実行してください', true);
+            return;
+        }
+        try {
+            var csvStr = buildCsvFromData(lastRenderedData);
+            var now = new Date();
+            var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+            var dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate())
+                + '_' + pad(now.getHours()) + pad(now.getMinutes());
+            var filename = 'keyword-research_' + dateStr + '.csv';
+            downloadCsv(csvStr, filename);
+            showToast('CSVを書き出しました: ' + filename);
+        } catch (e) {
+            console.error('CSV export failed', e);
+            showToast('CSV出力に失敗しました: ' + (e.message || ''), true);
+        }
+    }
+
+    var csvBtn = document.getElementById('kwrCsvExportBtn');
+    if (csvBtn) csvBtn.addEventListener('click', onCsvExportClick);
+
     /* ===== 統合レンダリング ===== */
     function renderAll(data) {
+        lastRenderedData = data;
         document.getElementById('kwrEmpty').style.display = 'none';
         renderAccuracy(data.meta || {});
         renderSummary(data.summary || {});
