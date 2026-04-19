@@ -27,9 +27,11 @@ class Gcrev_Keyword_Research_Service {
     private const IMAGE_MAX_BYTES   = 4 * 1024 * 1024; // 4MB
 
     // Bright Data SERP
-    private const BD_SERP_MAX_KEYWORDS = 30;
-    private const BD_SERP_INTERVAL_SEC = 3;
-    private const BD_SERP_CACHE_TTL    = 604800; // 7日
+    private const BD_SERP_MAX_KEYWORDS = 15;       // 1調査あたりの上限（安全ネット）
+    private const BD_SERP_INTERVAL_SEC = 2;        // KW 間の待機（3s → 2s に短縮）
+    private const BD_SERP_CACHE_TTL    = 604800;   // 7日
+    private const BD_SERP_BUDGET_MS    = 90000;    // 90秒の時間予算（PHP 実行時間制限に収めるため）
+    private const BD_SERP_PER_KW_RESERVE_MS = 35000; // 1KW あたりに必要な残り時間（最悪ケース）
 
     /** SERP 難易度算出で「大手ドメイン」と判定するホスト */
     private const MAJOR_DOMAINS_JP = [
@@ -794,8 +796,8 @@ class Gcrev_Keyword_Research_Service {
             return [ 'data' => [], 'source' => 'none' ];
         }
 
-        // キャッシュ確認（v5: Bright Data SERP 補強 + 戦略判定層追加で旧キャッシュ無効化）
-        $cache_key = 'gcrev_kwenrich_v5_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
+        // キャッシュ確認（v6: BD_SERP 時間予算制導入で旧キャッシュ無効化）
+        $cache_key = 'gcrev_kwenrich_v6_' . $user_id . '_' . substr( md5( implode( '|', $keywords ) ), 0, 12 );
         $cached = get_transient( $cache_key );
         if ( $cached !== false ) {
             $this->log( "enrich_keywords: cache hit ({$cache_key})" );
@@ -971,10 +973,11 @@ class Gcrev_Keyword_Research_Service {
         if ( $this->brightdata !== null && Gcrev_Brightdata_Serp_Client::is_configured() ) {
             $bd_stats = $this->enrich_with_brightdata_serp( $keywords, $merged );
             $this->log( sprintf(
-                'enrich_keywords: brightdata serp — processed=%d computed=%d cache_hit=%d failed=%d skipped=%d',
+                'enrich_keywords: brightdata serp — processed=%d computed=%d cache_hit=%d failed=%d skipped=%d aborted_budget=%d',
                 $bd_stats['processed'], $bd_stats['computed'],
                 $bd_stats['cache_hit'], $bd_stats['failed'],
-                $bd_stats['skipped_no_data']
+                $bd_stats['skipped_no_data'],
+                $bd_stats['aborted_budget'] ?? 0
             ) );
             if ( $bd_stats['computed'] > 0 ) {
                 $volume_source = ( $volume_source === 'none' )
@@ -2132,12 +2135,27 @@ CRITERIA;
         $target_kws = array_slice( $target_kws, 0, self::BD_SERP_MAX_KEYWORDS );
 
         $this->log( sprintf(
-            'bd_serp: missing_null=%d, verify=%d, target=%d',
-            count( $priority_missing ), count( $verify_kws ), count( $target_kws )
+            'bd_serp: missing_null=%d, verify=%d, target=%d (budget=%dms)',
+            count( $priority_missing ), count( $verify_kws ), count( $target_kws ),
+            self::BD_SERP_BUDGET_MS
         ) );
 
+        $loop_start_ms = (int) round( microtime( true ) * 1000 );
         $first_request = true;
+        $stats['aborted_budget'] = 0;
         foreach ( $target_kws as $i => $kw ) {
+            // 時間予算チェック（ここで残り予算が足りない場合は打ち切る）
+            $elapsed_total = (int) round( microtime( true ) * 1000 ) - $loop_start_ms;
+            $remaining_ms  = self::BD_SERP_BUDGET_MS - $elapsed_total;
+            if ( $remaining_ms < self::BD_SERP_PER_KW_RESERVE_MS ) {
+                $this->log( sprintf(
+                    'bd_serp: BUDGET EXCEEDED at kw[%d] — elapsed=%dms remaining=%dms, aborting (processed %d/%d)',
+                    $i + 1, $elapsed_total, $remaining_ms, $i, count( $target_kws )
+                ) );
+                $stats['aborted_budget'] = count( $target_kws ) - $i;
+                break;
+            }
+
             $cache_key = 'gcrev_bd_serp_' . substr( md5( $kw ), 0, 16 );
             $cached = get_transient( $cache_key );
             $serp_data = null;
@@ -2145,8 +2163,9 @@ CRITERIA;
             if ( is_array( $cached ) ) {
                 $serp_data = $cached;
                 $stats['cache_hit']++;
+                $this->log( sprintf( 'bd_serp kw[%d]: "%s" — cache=hit', $i + 1, mb_substr( $kw, 0, 40 ) ) );
             } else {
-                // 初回以外は 3 秒間隔
+                // 初回以外は間隔を空ける
                 if ( ! $first_request ) {
                     sleep( self::BD_SERP_INTERVAL_SEC );
                 }
