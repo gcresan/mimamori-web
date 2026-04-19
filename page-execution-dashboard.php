@@ -1,7 +1,7 @@
 <?php
 /**
- * Template Name: 実行ダッシュボード
- * Description: 「考えなくても、やることが分かり、そのまま実行できる」作業指示UI。
+ * Template Name: 今のおすすめ改善
+ * Description: 現時点での分析に基づく、今やるべき改善アクションを提示する。
  */
 
 if ( ! is_user_logged_in() ) {
@@ -9,17 +9,12 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-if ( ! mimamori_can_access_seo() ) {
-    wp_safe_redirect( home_url( '/dashboard/' ) );
-    exit;
-}
-
 $current_user = wp_get_current_user();
 $user_id      = $current_user->ID;
 
-set_query_var( 'gcrev_page_title', '実行ダッシュボード' );
-set_query_var( 'gcrev_page_subtitle', 'やることが分かる。そのまま実行できる。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '実行ダッシュボード', 'SEO' ) );
+set_query_var( 'gcrev_page_title', '今のおすすめ改善' );
+set_query_var( 'gcrev_page_subtitle', '現時点での分析にもとづく、いまやるべき改善アクション。' );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '今のおすすめ改善' ) );
 
 get_header();
 ?>

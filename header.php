@@ -111,7 +111,7 @@
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
-      $seo_pages       = array('keyword-research', 'writing', 'execution-dashboard');
+      $seo_pages       = array('keyword-research', 'writing');
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
@@ -155,6 +155,14 @@
                   <a href="<?php echo esc_url( home_url('/dashboard/') ); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3C6 3 2.7 5.9 1.5 10c1.2 4.1 4.5 7 8.5 7s7.3-2.9 8.5-7C17.3 5.9 14 3 10 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
                   <span>全体ダッシュボード</span>
+                  </a>
+               </li>
+
+               <!-- ========== 今のおすすめ改善（単独） ========== -->
+               <li class="nav-item">
+                  <a href="<?php echo esc_url( home_url('/execution-dashboard/') ); ?>" class="nav-link <?php echo is_page('execution-dashboard') ? 'active' : ''; ?>">
+                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 4.09 12.97a.5.5 0 0 0 .39.81H11l-1 8 8.91-10.97a.5.5 0 0 0-.39-.81H13l0-8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span>今のおすすめ改善</span>
                   </a>
                </li>
 
@@ -361,11 +369,6 @@
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuSeo">
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/execution-dashboard/') ); ?>" class="nav-link <?php echo is_page('execution-dashboard') ? 'active' : ''; ?>">
-                        <span>実行ダッシュボード</span>
-                        </a>
-                     </li>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/keyword-research/') ); ?>" class="nav-link <?php echo is_page('keyword-research') ? 'active' : ''; ?>">
                         <span>キーワード調査</span>
