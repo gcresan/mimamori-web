@@ -2194,13 +2194,23 @@ STRUCTURE_FORMAT;
         if ( ! $article ) {
             return [ 'success' => false, 'error' => '記事が見つかりません。' ];
         }
-        // 構成案を常に（再）生成
-        $this->log( "generate_draft: generating outline for article_id={$article_id}" );
-        $outline_result = $this->generate_outline( $user_id, $article_id );
-        if ( ! $outline_result['success'] ) {
-            return [ 'success' => false, 'error' => '記事構成の準備に失敗しました: ' . ( $outline_result['error'] ?? '' ) ];
+
+        // 構成案が未生成 or 壊れている場合のみ生成する。
+        // 既存の outline をそのまま使うことで、1クリック内で DataForSEO SERP + Gemini 競合分析 + Gemini outline
+        // + Gemini draft の計4〜5連続外部呼び出しが発生して 504/タイムアウトに至る事故を防ぐ。
+        // outline を刷新したい場合は「構成案を再生成」ボタン（regenerate-all / generate-outline）を使う。
+        $outline = $article['outline'] ?? null;
+        $has_outline = is_array( $outline ) && ! empty( $outline['headings'] ?? [] );
+        if ( ! $has_outline ) {
+            $this->log( "generate_draft: outline missing, generating for article_id={$article_id}" );
+            $outline_result = $this->generate_outline( $user_id, $article_id );
+            if ( ! $outline_result['success'] ) {
+                return [ 'success' => false, 'error' => '記事構成の準備に失敗しました: ' . ( $outline_result['error'] ?? '' ) ];
+            }
+            $article = $this->get_article( $user_id, $article_id );
+        } else {
+            $this->log( "generate_draft: reusing existing outline for article_id={$article_id}" );
         }
-        $article = $this->get_article( $user_id, $article_id );
 
         $this->log( "generate_draft: article_id={$article_id}" );
 
