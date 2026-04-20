@@ -154,12 +154,99 @@ get_header();
     color: #0369a1;
 }
 
+/* --- 4機能の使い方フロー --- */
+.tut-flow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+}
+.tut-flow-step {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 18px 16px;
+    text-align: center;
+    border-top: 4px solid var(--tut-step-color, #568184);
+    position: relative;
+}
+.tut-flow-cycle-note {
+    text-align: center;
+    font-size: 13px;
+    color: #64748b;
+    margin: 0 0 28px;
+    padding: 10px 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    line-height: 1.6;
+}
+.tut-flow-cycle-note strong {
+    color: #568184;
+}
+.tut-flow-step__num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--tut-step-color, #568184);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+.tut-flow-step__name {
+    font-size: 15px;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0 0 6px;
+    line-height: 1.4;
+}
+.tut-flow-step__when {
+    display: inline-block;
+    font-size: 11px;
+    color: #fff;
+    background: var(--tut-step-color, #568184);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    font-weight: 700;
+}
+.tut-flow-step__desc {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.5;
+    margin: 0;
+}
+.tut-flow-step--dashboard { --tut-step-color: #4A6FA5; }
+.tut-flow-step--diagnosis { --tut-step-color: #C97A91; }
+.tut-flow-step--actions   { --tut-step-color: #5E9F73; }
+.tut-flow-step--report    { --tut-step-color: #B8922E; }
+
 /* --- main cards (dashboard, report) --- */
 .tut-main-cards {
     display: flex;
     flex-direction: column;
     gap: 24px;
 }
+.tut-main-card--dashboard { border-left: 5px solid #4A6FA5; }
+.tut-main-card--diagnosis { border-left: 5px solid #C97A91; }
+.tut-main-card--actions   { border-left: 5px solid #5E9F73; }
+.tut-main-card--report    { border-left: 5px solid #B8922E; }
+.tut-main-card-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 10px;
+    color: #fff;
+    margin-bottom: 8px;
+}
+.tut-main-card-tag--dashboard { background: #4A6FA5; }
+.tut-main-card-tag--diagnosis { background: #C97A91; }
+.tut-main-card-tag--actions   { background: #5E9F73; }
+.tut-main-card-tag--report    { background: #B8922E; }
 .tut-main-card {
     display: flex;
     gap: 28px;
@@ -431,6 +518,9 @@ get_header();
     .tut-grid--3col {
         grid-template-columns: 1fr;
     }
+    .tut-flow {
+        grid-template-columns: repeat(2, 1fr);
+    }
     .tut-chat-box {
         flex-direction: column;
         padding: 20px;
@@ -451,71 +541,161 @@ get_header();
     <div class="tut-hero">
         <h2 class="tut-hero-title">はじめての方へ｜使い方ガイド</h2>
         <p class="tut-hero-lead">
-            みまもりウェブは、<strong>ホームページの状態をかんたんに確認できるツール</strong>です。<br>
-            「何を見ればいいかわからない…」という方も大丈夫。<br>
-            <strong>まずは下の2つだけ見ればOKです。</strong>
+            みまもりウェブは、<strong>ホームページの状態をAIといっしょに見て、直して、ふり返るツール</strong>です。<br>
+            難しい数字を読む必要はありません。<br>
+            <strong>下の4つの画面を、書かれたリズムで開くだけでOK。</strong>
         </p>
         <div class="tut-hero-buttons">
             <a href="<?php echo esc_url( home_url( '/dashboard/' ) ); ?>" class="tut-hero-btn tut-hero-btn--primary">
-                ダッシュボードを見る
+                まずはダッシュボードを開く
             </a>
-            <a href="<?php echo esc_url( home_url( '/report/report-latest/' ) ); ?>" class="tut-hero-btn tut-hero-btn--secondary">
-                月次レポートを見る
+            <a href="#tut-flow-section" class="tut-hero-btn tut-hero-btn--secondary">
+                使い方の流れを見る
             </a>
         </div>
     </div>
 
-    <!-- ② まずはここだけ見ればOK -->
-    <div class="tut-section">
+    <!-- ② 使い方の流れ（4ステップフロー） -->
+    <div class="tut-section" id="tut-flow-section">
         <h3 class="tut-section-title">
             <span class="tut-section-num">1</span>
-            まずはここだけ見ればOK
+            使い方の流れ
             <span class="tut-badge tut-badge--important">最重要</span>
         </h3>
-        <p class="tut-section-sub">この2つを確認するだけで、ホームページの状態がわかります。</p>
+        <p class="tut-section-sub">4つの画面を、次のリズムで開くだけ。サイト運営が自然にまわります。</p>
+
+        <div class="tut-flow">
+            <div class="tut-flow-step tut-flow-step--dashboard">
+                <div class="tut-flow-step__num">1</div>
+                <div class="tut-flow-step__name">全体ダッシュボード</div>
+                <div class="tut-flow-step__when">毎日・週1</div>
+                <p class="tut-flow-step__desc">今のサイトの調子を見る</p>
+            </div>
+            <div class="tut-flow-step tut-flow-step--diagnosis">
+                <div class="tut-flow-step__num">2</div>
+                <div class="tut-flow-step__name">現状のページ診断</div>
+                <div class="tut-flow-step__when">気になったら</div>
+                <p class="tut-flow-step__desc">どこに問題があるか見つける</p>
+            </div>
+            <div class="tut-flow-step tut-flow-step--actions">
+                <div class="tut-flow-step__num">3</div>
+                <div class="tut-flow-step__name">改善施策提案</div>
+                <div class="tut-flow-step__when">日々すこしずつ</div>
+                <p class="tut-flow-step__desc">今月やる施策を実行する</p>
+            </div>
+            <div class="tut-flow-step tut-flow-step--report">
+                <div class="tut-flow-step__num">4</div>
+                <div class="tut-flow-step__name">月次レポート</div>
+                <div class="tut-flow-step__when">月に1回</div>
+                <p class="tut-flow-step__desc">先月の結果をふり返る</p>
+            </div>
+        </div>
+
+        <p class="tut-flow-cycle-note">
+            <strong>見る → 見つける → やる → ふり返る</strong>　この4ステップを毎月くり返すだけで、ホームページがじわじわ育っていきます。
+        </p>
+    </div>
+
+    <hr class="tut-divider">
+
+    <!-- ③ 4つの画面の詳細 -->
+    <div class="tut-section">
+        <h3 class="tut-section-title">
+            <span class="tut-section-num">2</span>
+            それぞれの画面でできること
+        </h3>
+        <p class="tut-section-sub">4つの画面の役割と、開いたときに何を見ればいいかを解説します。</p>
 
         <div class="tut-main-cards">
 
-            <!-- ダッシュボード -->
-            <div class="tut-main-card">
+            <!-- 1. 全体ダッシュボード -->
+            <div class="tut-main-card tut-main-card--dashboard">
                 <div class="tut-main-card-img">
-                    <?php tut_screenshot( 'dashboard.png', 'ダッシュボード画面', $tut_img_dir, $tut_img_uri ); ?>
+                    <?php tut_screenshot( 'dashboard.png', '全体ダッシュボード画面', $tut_img_dir, $tut_img_uri ); ?>
                 </div>
                 <div class="tut-main-card-body">
-                    <span class="tut-main-card-label">毎日チェック</span>
-                    <h4 class="tut-main-card-name">ダッシュボード</h4>
-                    <p class="tut-main-card-desc">ホームページの今の状態が一目でわかる画面です。</p>
+                    <span class="tut-main-card-tag tut-main-card-tag--dashboard">STEP 1 ／ 毎日・週1で見る</span>
+                    <h4 class="tut-main-card-name">全体ダッシュボード</h4>
+                    <p class="tut-main-card-desc">ホームページ全体の「今の健康状態」がひと目でわかる画面です。まずはここを開く習慣から始めましょう。</p>
                     <ul class="tut-points">
-                        <li>人が増えているか減っているかがわかる</li>
-                        <li>お問い合わせが来ているか確認できる</li>
-                        <li>AIが今月の状況をまとめてくれる</li>
+                        <li>訪問者やお問い合わせが増えているか減っているかがわかる</li>
+                        <li>今月の状況をAIがひとことでまとめてくれる</li>
+                        <li>気になった数字はクリックで詳しい分析へ移動できる</li>
                     </ul>
                     <div class="tut-tip">
-                        <strong>ポイント：</strong>数字の意味は覚えなくて大丈夫。矢印が上か下かだけ見ればOKです。
+                        <strong>ポイント：</strong>数字の意味を覚える必要はありません。矢印が上向きか下向きかだけ見ればOKです。
                     </div>
                     <a href="<?php echo esc_url( home_url( '/dashboard/' ) ); ?>" class="tut-link-btn">
-                        ダッシュボードを開く
+                        全体ダッシュボードを開く
                         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
                     </a>
                 </div>
             </div>
 
-            <!-- 月次レポート -->
-            <div class="tut-main-card">
+            <!-- 2. 現状のページ診断 -->
+            <div class="tut-main-card tut-main-card--diagnosis">
+                <div class="tut-main-card-img">
+                    <?php tut_screenshot( 'page-analysis.png', '現状のページ診断画面', $tut_img_dir, $tut_img_uri ); ?>
+                </div>
+                <div class="tut-main-card-body">
+                    <span class="tut-main-card-tag tut-main-card-tag--diagnosis">STEP 2 ／ 気になったら見る</span>
+                    <h4 class="tut-main-card-name">現状のページ診断</h4>
+                    <p class="tut-main-card-desc">主要なページを1つずつAIが診断して、弱点と改善案を教えてくれる画面です。「どこを直せばいいか」がはっきりします。</p>
+                    <ul class="tut-points">
+                        <li>ページごとに何が問題かがわかる</li>
+                        <li>AIが具体的な改善案を提案してくれる</li>
+                        <li>トップページやサービス紹介など、重要ページから確認できる</li>
+                    </ul>
+                    <div class="tut-tip">
+                        <strong>ポイント：</strong>「このページ反応が薄いな…」と感じたときに開いてみてください。原因と直し方の両方が見えます。
+                    </div>
+                    <a href="<?php echo esc_url( home_url( '/page-analysis/' ) ); ?>" class="tut-link-btn">
+                        現状のページ診断を開く
+                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 3. 改善施策提案 -->
+            <div class="tut-main-card tut-main-card--actions">
+                <div class="tut-main-card-img">
+                    <?php tut_screenshot( 'execution-dashboard.png', '改善施策提案画面', $tut_img_dir, $tut_img_uri ); ?>
+                </div>
+                <div class="tut-main-card-body">
+                    <span class="tut-main-card-tag tut-main-card-tag--actions">STEP 3 ／ 日々すこしずつ進める</span>
+                    <h4 class="tut-main-card-name">改善施策提案</h4>
+                    <p class="tut-main-card-desc">今のサイトの状態から、今月取り組むべき具体的な改善施策をAIが提案する画面です。「やることリスト」として使えます。</p>
+                    <ul class="tut-points">
+                        <li>優先度の高い順に「今月のやること」が並ぶ</li>
+                        <li>SEO・お問い合わせ改善・コンテンツなど、タイプ別に絞り込める</li>
+                        <li>各施策のねらいと具体的な手順がわかる</li>
+                    </ul>
+                    <div class="tut-tip">
+                        <strong>ポイント：</strong>全部やろうとしなくて大丈夫。上から1〜2個だけ取り組めば十分です。
+                    </div>
+                    <a href="<?php echo esc_url( home_url( '/execution-dashboard/' ) ); ?>" class="tut-link-btn">
+                        改善施策提案を開く
+                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 4. 月次レポート -->
+            <div class="tut-main-card tut-main-card--report">
                 <div class="tut-main-card-img">
                     <?php tut_screenshot( 'report.png', '月次レポート画面', $tut_img_dir, $tut_img_uri ); ?>
                 </div>
                 <div class="tut-main-card-body">
-                    <span class="tut-main-card-label">月に1回チェック</span>
+                    <span class="tut-main-card-tag tut-main-card-tag--report">STEP 4 ／ 月に1回ふり返る</span>
                     <h4 class="tut-main-card-name">月次レポート</h4>
-                    <p class="tut-main-card-desc">毎月自動で作られる「通信簿」です。</p>
+                    <p class="tut-main-card-desc">毎月自動で作られる「通信簿」。先月の良かった点と改善点、来月やるべきことをAIがまとめてくれます。</p>
                     <ul class="tut-points">
                         <li>先月と比べてどうだったかがわかる</li>
-                        <li>良かった点・改善点をAIが説明してくれる</li>
                         <li>「かんたんモード」で難しい言葉なしで読める</li>
+                        <li>来月すべきことも自動で提案される</li>
                     </ul>
                     <div class="tut-tip">
-                        <strong>ポイント：</strong>基本は「見るだけ」でOK。何か対応が必要なときはAIが教えてくれます。
+                        <strong>ポイント：</strong>月初めに1回開いて読むだけでOK。印刷して社内共有の資料としても使えます。
                     </div>
                     <a href="<?php echo esc_url( home_url( '/report/report-latest/' ) ); ?>" class="tut-link-btn">
                         月次レポートを開く
@@ -529,13 +709,13 @@ get_header();
 
     <hr class="tut-divider">
 
-    <!-- ③ もう少し知りたい方へ -->
+    <!-- ④ もう少し知りたい方へ -->
     <div class="tut-section">
         <h3 class="tut-section-title">
-            <span class="tut-section-num">2</span>
-            もう少し知りたい方へ
+            <span class="tut-section-num">3</span>
+            もう少し深く知りたい方へ
         </h3>
-        <p class="tut-section-sub">興味が出てきたら、こちらも見てみてください。全部見る必要はありません。</p>
+        <p class="tut-section-sub">全体ダッシュボードで気になった数字を、ジャンル別にもっと深掘りできる画面です。全部見る必要はありません。</p>
 
         <div class="tut-grid">
 
@@ -597,10 +777,10 @@ get_header();
 
     <hr class="tut-divider">
 
-    <!-- ④ Googleマップ（MEO）を使っている方へ -->
+    <!-- ⑤ Googleマップ（MEO）を使っている方へ -->
     <div class="tut-section">
         <h3 class="tut-section-title">
-            <span class="tut-section-num">3</span>
+            <span class="tut-section-num">4</span>
             Googleマップを使っている方へ
         </h3>
         <p class="tut-section-sub">Googleビジネスプロフィールを連携している方向けの機能です。</p>
@@ -652,10 +832,10 @@ get_header();
     <?php if ( $can_seo ) : ?>
     <hr class="tut-divider">
 
-    <!-- ⑤ コンテンツを作りたい方へ -->
+    <!-- ⑥ コンテンツを作りたい方へ -->
     <div class="tut-section">
         <h3 class="tut-section-title">
-            <span class="tut-section-num">4</span>
+            <span class="tut-section-num">5</span>
             コンテンツを作りたい方へ
             <span class="tut-badge tut-badge--intermediate">中級者向け</span>
         </h3>
@@ -709,13 +889,13 @@ get_header();
     <?php if ( $can_chat ) : ?>
     <hr class="tut-divider">
 
-    <!-- ⑥ AIチャットの案内 -->
+    <!-- ⑦ AIチャットの案内 -->
     <div class="tut-section">
         <h3 class="tut-section-title">
-            <span class="tut-section-num"><?php echo $can_seo ? '5' : '4'; ?></span>
+            <span class="tut-section-num"><?php echo $can_seo ? '6' : '5'; ?></span>
             わからないことはAIに聞いてみよう
         </h3>
-        <p class="tut-section-sub">画面右下のチャットに話しかけるだけで、AIがすぐに答えてくれます。</p>
+        <p class="tut-section-sub">画面右下のチャットに話しかけるだけで、AIがすぐに答えてくれます。どの画面からでも呼び出せます。</p>
 
         <div class="tut-chat-box">
             <div class="tut-chat-img">
