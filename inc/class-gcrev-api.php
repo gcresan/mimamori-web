@@ -4592,7 +4592,8 @@ PROMPT;
                 continue;
             }
 
-            $exclude_foreign_auto = false;
+            $exclude_foreign_auto    = false;
+            $path_filters_set_auto   = false;
 
             try {
                 // 前月・前々月データ取得
@@ -4602,6 +4603,20 @@ PROMPT;
                 $exclude_foreign_auto = ( $client_info['exclude_foreign'] ?? false );
                 if ( $exclude_foreign_auto ) {
                     $this->ga4->set_country_filter( 'Japan' );
+                }
+
+                // 解析対象/除外URL条件を GA4 + GSC に適用してから取得する。
+                // これにより /media/ 等の除外配下が Cron 月次レポートにも混入しない。
+                $inc_auto = get_user_meta( $user_id, '_gcrev_include_paths', true );
+                $exc_auto = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+                $inc_auto = is_array( $inc_auto ) ? $inc_auto : [];
+                $exc_auto = is_array( $exc_auto ) ? $exc_auto : [];
+                if ( ! empty( $inc_auto ) || ! empty( $exc_auto ) ) {
+                    $this->ga4->set_include_paths_filter( $inc_auto );
+                    $this->ga4->set_exclude_paths_filter( $exc_auto );
+                    $this->gsc->set_include_paths_filter( $inc_auto );
+                    $this->gsc->set_exclude_paths_filter( $exc_auto );
+                    $path_filters_set_auto = true;
                 }
 
                 $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
@@ -4692,6 +4707,12 @@ PROMPT;
                 // 海外アクセス除外フィルタ解除（次ユーザーへの影響を防止）
                 if ( $exclude_foreign_auto ) {
                     $this->ga4->set_country_filter( null );
+                }
+                // 解析対象/除外URL条件フィルタ解除（次ユーザーへの影響を防止）
+                if ( $path_filters_set_auto ) {
+                    $this->ga4->clear_include_paths_filter();
+                    $this->ga4->set_page_path_filter( null );
+                    $this->gsc->clear_path_filters();
                 }
             }
         }
