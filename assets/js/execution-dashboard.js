@@ -8,6 +8,7 @@
     var API   = (typeof gcrevExecVars !== 'undefined' && gcrevExecVars.apiBase) || '/wp-json/gcrev/v1/execution';
     var NONCE = (typeof gcrevExecVars !== 'undefined' && gcrevExecVars.nonce) || '';
     var currentData   = null;
+    var activeTypeFilter = null; // ノルマカードクリックで設定。null=全件表示
 
     /* ================================================================
        API
@@ -59,7 +60,9 @@
     }
 
     function renderAll(data) {
-        renderQuota(data.progress || {});
+        var progress = data.progress || {};
+        renderQuota(progress);
+        renderFilterStatus(progress.by_type || []);
         renderActions(data.actions || []);
         renderRootCause(data.root_cause);
         renderRankAlerts(data.rank_alerts || []);
@@ -83,19 +86,76 @@
             return;
         }
 
+        // フィルタ適用中なら親コンテナにマーカークラスを付与（未選択カードを薄表示）
+        if (activeTypeFilter) {
+            container.classList.add('exec-quota--filtered');
+        } else {
+            container.classList.remove('exec-quota--filtered');
+        }
+
         var html = '';
         byType.forEach(function(t) {
             var pct = t.total > 0 ? Math.round((t.completed / t.total) * 100) : 0;
             var done = pct >= 100;
             // タイプ別カラー（exec-type-<type>）を付与し、施策カードのバッジと色を一致させる
             var typeCls = t.type ? ' exec-type-' + esc(t.type) : '';
-            html += '<div class="exec-quota__item' + typeCls + '">';
+            var isActive = activeTypeFilter && activeTypeFilter === t.type;
+            var activeCls = isActive ? ' exec-quota__item--active' : '';
+            var pressed = isActive ? 'true' : 'false';
+
+            html += '<div class="exec-quota__item' + typeCls + activeCls + '" '
+                  + 'role="button" tabindex="0" '
+                  + 'data-exec-quota-type="' + esc(t.type || '') + '" '
+                  + 'data-exec-quota-label="' + esc(t.label || '') + '" '
+                  + 'aria-pressed="' + pressed + '" '
+                  + 'title="クリックで「' + esc(t.label || '') + '」のやることだけ表示">';
             html += '<div class="exec-quota__label">' + esc(t.label) + '</div>';
             html += '<div class="exec-quota__value">' + t.completed + '<span> / ' + t.total + '</span></div>';
             html += '<div class="exec-quota__bar"><div class="exec-quota__fill' + (done ? ' exec-quota__fill--done' : '') + '" style="width:' + pct + '%"></div></div>';
             html += '</div>';
         });
         container.innerHTML = html;
+        bindQuotaClicks(container);
+    }
+
+    /* ノルマカードのクリック → タイプフィルタ切り替え */
+    function bindQuotaClicks(container) {
+        container.querySelectorAll('[data-exec-quota-type]').forEach(function(card) {
+            var toggle = function() {
+                var type = card.dataset.execQuotaType;
+                if (!type) return;
+                if (activeTypeFilter === type) {
+                    activeTypeFilter = null; // 同じカード再クリックで解除
+                } else {
+                    activeTypeFilter = type;
+                }
+                if (currentData) renderAll(currentData);
+            };
+            card.addEventListener('click', toggle);
+            card.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle();
+                }
+            });
+        });
+    }
+
+    /* フィルタ状態バー */
+    function renderFilterStatus(byType) {
+        var bar   = document.getElementById('exec-filter-status');
+        var label = document.getElementById('exec-filter-status-label');
+        if (!bar || !label) return;
+
+        if (!activeTypeFilter) {
+            bar.classList.remove('exec-quota-filter-status--active');
+            return;
+        }
+
+        var matched = (byType || []).find(function(t) { return t.type === activeTypeFilter; });
+        var name = matched ? matched.label : activeTypeFilter;
+        label.innerHTML = '🔍 「<strong>' + esc(name) + '</strong>」だけ表示中';
+        bar.classList.add('exec-quota-filter-status--active');
     }
 
     /* ================================================================
@@ -110,9 +170,25 @@
             return;
         }
 
+        // タイプフィルタ適用
+        var filtered = activeTypeFilter
+            ? actions.filter(function(a) { return a.action_type === activeTypeFilter; })
+            : actions;
+
+        if (!filtered.length) {
+            container.innerHTML = '<div class="exec-actions-empty-filter">'
+                + 'このカテゴリのやることはありません。'
+                + '<br><button type="button" class="exec-quota-filter-status__clear" '
+                + 'style="margin-top:10px" id="exec-filter-clear-empty">フィルタを解除する</button>'
+                + '</div>';
+            var clearBtn = document.getElementById('exec-filter-clear-empty');
+            if (clearBtn) clearBtn.addEventListener('click', clearTypeFilter);
+            return;
+        }
+
         // 未完了（pending / in_progress）を上、完了済み（completed / skipped）を下に
         var active = [], done = [];
-        actions.forEach(function(a) {
+        filtered.forEach(function(a) {
             if (a.status === 'completed' || a.status === 'skipped') done.push(a);
             else active.push(a);
         });
@@ -126,6 +202,11 @@
 
         container.innerHTML = html;
         bindActionButtons(container);
+    }
+
+    function clearTypeFilter() {
+        activeTypeFilter = null;
+        if (currentData) renderAll(currentData);
     }
 
     function renderActionCard(a) {
@@ -353,5 +434,10 @@
     window.GCREV._renderAll = renderAll;
     window.GCREV._currentData = currentData;
 
-    document.addEventListener('DOMContentLoaded', loadDashboard);
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDashboard();
+        // フィルタ解除ボタン（やることリストのヘッダ下）
+        var clearBtn = document.getElementById('exec-filter-clear');
+        if (clearBtn) clearBtn.addEventListener('click', clearTypeFilter);
+    });
 })();

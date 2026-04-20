@@ -44,6 +44,68 @@ get_header();
     padding: 16px;
     text-align: center;
     border-top: 4px solid var(--exec-type-color, #568184);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    position: relative;
+}
+.exec-quota__item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+.exec-quota__item:focus-visible {
+    outline: 2px solid var(--exec-type-color, var(--mw-primary-blue, #568184));
+    outline-offset: 2px;
+}
+/* 選択中（フィルタ適用中） */
+.exec-quota__item--active {
+    box-shadow: 0 0 0 2px var(--exec-type-color, var(--mw-primary-blue, #568184)) inset;
+    background: rgba(86,129,132,0.04);
+}
+.exec-quota__item--active::after {
+    content: 'フィルタ中';
+    position: absolute;
+    top: -8px;
+    right: 8px;
+    background: var(--exec-type-color, var(--mw-primary-blue, #568184));
+    color: #fff;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+/* フィルタ適用中、未選択カードは控えめに */
+.exec-quota--filtered .exec-quota__item:not(.exec-quota__item--active) {
+    opacity: 0.55;
+}
+/* フィルタ解除リンク */
+.exec-quota-filter-status {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--mw-text-secondary);
+    display: none;
+    align-items: center;
+    gap: 8px;
+}
+.exec-quota-filter-status--active { display: inline-flex; }
+.exec-quota-filter-status__clear {
+    background: transparent;
+    border: 1px solid var(--mw-border-light);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--mw-text-secondary);
+}
+.exec-quota-filter-status__clear:hover { color: var(--mw-text-heading); background: var(--mw-bg-secondary); }
+/* 該当アクションカードがない場合の空表示 */
+.exec-actions-empty-filter {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--mw-text-secondary);
+    font-size: 13px;
+    background: var(--mw-bg-secondary, #F6FAFB);
+    border-radius: 8px;
 }
 .exec-quota__label { font-size: 12px; color: var(--mw-text-secondary); margin-bottom: 6px; }
 .exec-quota__value { font-size: 22px; font-weight: 700; color: var(--mw-text-heading); }
@@ -213,6 +275,10 @@ get_header();
             <div class="exec-actions__header">
                 <h2 class="exec-section__title"><span class="exec-section__title-icon">📋</span> やることリスト</h2>
                 <button class="exec-btn exec-btn--secondary exec-btn--sm" id="exec-refresh-btn">再分析する</button>
+            </div>
+            <div class="exec-quota-filter-status" id="exec-filter-status">
+                <span id="exec-filter-status-label"></span>
+                <button type="button" class="exec-quota-filter-status__clear" id="exec-filter-clear">フィルタ解除</button>
             </div>
             <div id="exec-actions-list"></div>
         </section>
