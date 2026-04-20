@@ -73,7 +73,7 @@ $faq_categories = [
         ],
     ],
 
-    [
+    ( function_exists( 'mimamori_can_access_meo' ) && mimamori_can_access_meo() ) ? [
         'title' => 'Googleマップ（MEO）について',
         'items' => [
             [
@@ -89,7 +89,7 @@ $faq_categories = [
                 'a' => 'Googleビジネスプロフィールとの連携設定がまだの場合、MEO関連の機能は表示されません。連携設定がお済みかどうか、担当者にご確認ください。',
             ],
         ],
-    ],
+    ] : null,
 
     [
         'title' => 'AIチャットについて',
@@ -124,6 +124,9 @@ $faq_categories = [
     ],
 
 ];
+
+// 条件付きで除外された null 要素を取り除き、インデックスを振り直す
+$faq_categories = array_values( array_filter( $faq_categories ) );
 
 get_header();
 ?>

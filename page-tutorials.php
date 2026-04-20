@@ -28,6 +28,7 @@ function tut_screenshot( $filename, $alt, $dir, $uri ) {
 }
 
 /* ---------- capability checks ---------- */
+$can_meo  = function_exists( 'mimamori_can_access_meo' ) ? mimamori_can_access_meo() : false;
 $can_seo  = function_exists( 'mimamori_can_access_seo' ) ? mimamori_can_access_seo() : false;
 $can_chat = function_exists( 'mimamori_can' ) ? mimamori_can( 'ai_chat' ) : false;
 
@@ -781,6 +782,7 @@ get_header();
         </div>
     </div>
 
+    <?php if ( $can_meo ) : ?>
     <hr class="tut-divider">
 
     <!-- ⑤ Googleマップ（MEO）を使っている方へ -->
@@ -834,6 +836,7 @@ get_header();
 
         </div>
     </div>
+    <?php endif; ?>
 
     <?php if ( $can_seo ) : ?>
     <hr class="tut-divider">

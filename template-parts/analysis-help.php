@@ -5,6 +5,11 @@
 
 $help_key = get_query_var('analysis_help_key', 'default');
 
+$gcrev_help_can_meo = function_exists( 'mimamori_can_access_meo' ) ? mimamori_can_access_meo() : false;
+$gcrev_help_region_tactics = $gcrev_help_can_meo
+    ? '対策（MEO/広告地域設定/地域名の入れ方）'
+    : '対策（広告地域設定/地域名の入れ方）';
+
 // 文章はここだけ直せば全ページに反映されます
 $help_texts = [
   'source' => '💡 <strong>このページでは「お客様がどこからホームページに来たか」</strong>を確認できます。<br>
@@ -17,7 +22,7 @@ $help_texts = [
   反応が良い年代に合わせて、言葉づかい・写真・訴求（安心/実績/価格など）を調整すると成果が出やすくなります。',
 
   'region' => '💡 <strong>このページでは「どの地域から見られているか」</strong>を確認できます。<br>
-  商圏がはっきりしている場合は、<strong>狙いたい地域からの流入が増えているか</strong>をチェック。地域が偏るなら、対策（MEO/広告地域設定/地域名の入れ方）のヒントになります。',
+  商圏がはっきりしている場合は、<strong>狙いたい地域からの流入が増えているか</strong>をチェック。地域が偏るなら、' . $gcrev_help_region_tactics . 'のヒントになります。',
 
   'page' => '💡 <strong>このページでは「どのページがよく見られているか」</strong>を確認できます。<br>
   よく見られるページは“看板”なので、<strong>問い合わせ導線（ボタン/電話/LINE）</strong>を強めるのが基本。見られていない重要ページは、導線や見出しの改善対象です。',
