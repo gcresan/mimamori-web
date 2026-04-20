@@ -236,12 +236,13 @@ get_header();
 .tut-main-card--report    { border-left: 5px solid #B8922E; }
 .tut-main-card-tag {
     display: inline-block;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 10px;
+    font-size: 22px;
+    font-weight: 800;
+    padding: 6px 16px;
+    border-radius: 14px;
     color: #fff;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
+    letter-spacing: 0.02em;
 }
 .tut-main-card-tag--dashboard { background: #4A6FA5; }
 .tut-main-card-tag--diagnosis { background: #C97A91; }
@@ -520,6 +521,11 @@ get_header();
     }
     .tut-flow {
         grid-template-columns: repeat(2, 1fr);
+    }
+    .tut-main-card-tag {
+        font-size: 17px;
+        padding: 5px 12px;
+        border-radius: 12px;
     }
     .tut-chat-box {
         flex-direction: column;
