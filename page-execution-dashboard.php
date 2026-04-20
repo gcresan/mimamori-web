@@ -72,10 +72,20 @@ get_header();
 
 /* ===== アクションカード ===== */
 .exec-actions__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.exec-action-card { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); padding: 18px 22px; margin-bottom: 10px; transition: box-shadow 0.2s; }
+.exec-action-card {
+    background: var(--mw-bg-primary);
+    border: 1px solid var(--mw-border-light);
+    /* タイプ別カラーの左ボーダー（ノルマカードと色で紐づける） */
+    border-left: 5px solid var(--exec-type-color, var(--mw-border-light));
+    border-radius: var(--mw-radius-md, 12px);
+    padding: 18px 22px;
+    margin-bottom: 10px;
+    transition: box-shadow 0.2s;
+}
 .exec-action-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
-.exec-action-card--completed { opacity: 0.55; border-left: 3px solid #568184; }
-.exec-action-card--skipped { opacity: 0.4; border-left: 3px solid var(--mw-border-light); }
+/* 完了・スキップでも左ボーダーのタイプカラーは保持（半透明にして識別性は維持） */
+.exec-action-card--completed { opacity: 0.55; }
+.exec-action-card--skipped   { opacity: 0.4; border-left-color: var(--mw-border-light); }
 .exec-action-card__header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .exec-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 1; }
 .exec-badge--high { background: rgba(201,90,79,0.1); color: #C95A4F; }

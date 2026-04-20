@@ -139,10 +139,13 @@
                 : isSkipped   ? ' exec-action-card--skipped'
                 : '';
 
+        // タイプ別カラー（左ボーダー＋バッジ）でノルマカードと色を紐づける
+        var typeCardCls = a.action_type ? ' exec-type-' + esc(a.action_type) : '';
+
         var priorityLabel = { high: '高', medium: '中', low: '低' };
         var priorityCls   = { high: 'high', medium: 'medium', low: 'low' };
 
-        var html = '<div class="exec-action-card' + cls + '" data-action-id="' + a.id + '">';
+        var html = '<div class="exec-action-card' + cls + typeCardCls + '" data-action-id="' + a.id + '">';
 
         // ヘッダー（バッジ）
         html += '<div class="exec-action-card__header">';
