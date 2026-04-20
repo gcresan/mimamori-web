@@ -71,6 +71,12 @@ class Gcrev_Bootstrap {
         // 手動: 単一ユーザー全期間取得（管理画面「全取得」ボタン）
         add_action('gcrev_manual_fetch_all_event', [__CLASS__, 'on_manual_fetch_all_event']);
 
+        // 単一ユーザーのダッシュボード初回表示用キャッシュ温め
+        // - wp_login 直後の非同期 warm
+        // - ダッシュボード初回表示時のキャッシュミスからの背景 warm
+        add_action('gcrev_user_dashboard_warm_event', [__CLASS__, 'on_user_dashboard_warm_event'], 10, 1);
+        add_action('wp_login', [__CLASS__, 'schedule_user_dashboard_warm_on_login'], 10, 2);
+
         // スロット別プリフェッチ
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
             $slot_count = Gcrev_Prefetch_Scheduler::get_slot_count();
@@ -553,6 +559,70 @@ class Gcrev_Bootstrap {
         error_log("[GCREV] gcrev_monthly_prefetch_chunk_event triggered: offset={$offset}, limit={$limit}");
         $api = new Gcrev_Insight_API(false);
         $api->monthly_data_prefetch_chunk( (int) $offset, (int) $limit );
+    }
+
+    /**
+     * 単一ユーザーのダッシュボード初回表示用キャッシュを温める。
+     * wp_login 直後 + ダッシュボードキャッシュミス時 から呼ばれる。
+     */
+    public static function on_user_dashboard_warm_event( $user_id ): void {
+        $user_id = (int) $user_id;
+        if ( $user_id <= 0 ) { return; }
+
+        // 多重実行防止（同時に複数走るとAPI叩きすぎる）
+        $lock_key = "gcrev_lock_dash_warm_{$user_id}";
+        if ( get_transient( $lock_key ) ) {
+            return;
+        }
+        set_transient( $lock_key, 1, 10 * MINUTE_IN_SECONDS );
+
+        @ignore_user_abort( true );
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 120 );
+        }
+
+        try {
+            $api = new Gcrev_Insight_API( false );
+            $api->prefetch_user_dashboard( $user_id );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_dash_warm_debug.log',
+                date( 'Y-m-d H:i:s' ) . " warm event ERROR user_id={$user_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+        }
+
+        delete_transient( $lock_key );
+    }
+
+    /**
+     * wp_login フック: ログイン直後にダッシュボード warm をスケジュール。
+     *
+     * 30 分以内に warm 済みならスキップ（短時間に複数回ログインしても API を叩きすぎない）。
+     * その後 wp-cron.php に非同期 POST して即時実行を促す（数秒待ちを回避）。
+     */
+    public static function schedule_user_dashboard_warm_on_login( $user_login, $user ): void {
+        if ( ! $user instanceof \WP_User ) { return; }
+        $user_id = (int) $user->ID;
+        if ( $user_id <= 0 ) { return; }
+
+        // スロットル: 30 分以内に warm 済みならスキップ
+        $throttle_key = "gcrev_throttle_dash_warm_{$user_id}";
+        if ( get_transient( $throttle_key ) ) { return; }
+        set_transient( $throttle_key, 1, 30 * MINUTE_IN_SECONDS );
+
+        // 単発イベントをスケジュール（既に同 args でスケジュール済みなら WP が無視する）
+        if ( ! wp_next_scheduled( 'gcrev_user_dashboard_warm_event', [ $user_id ] ) ) {
+            wp_schedule_single_event( time(), 'gcrev_user_dashboard_warm_event', [ $user_id ] );
+        }
+
+        // wp-cron.php を非同期トリガー（ユーザーは待たされない）
+        // wp_remote_post の blocking=false で fire-and-forget
+        $cron_url = site_url( '/wp-cron.php?doing_wp_cron=' . microtime( true ) );
+        wp_remote_post( $cron_url, [
+            'blocking'  => false,
+            'timeout'   => 0.5,
+            'sslverify' => false,
+        ] );
     }
 
     /**

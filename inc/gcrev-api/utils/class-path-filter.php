@@ -139,6 +139,10 @@ class Gcrev_Path_Filter {
             'gcrev_report_'        . $user_id . '_%',
         ];
 
+        // ダッシュボード warm の throttle を解除（次のログイン/表示で即 re-warm されるように）
+        delete_transient( "gcrev_throttle_dash_warm_{$user_id}" );
+        delete_transient( "gcrev_lock_dash_warm_{$user_id}" );
+
         $deleted = 0;
         foreach ( $patterns as $pat ) {
             $like_value   = $wpdb->esc_like( '_transient_'         . $pat ) . '%';

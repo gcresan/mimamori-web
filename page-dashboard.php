@@ -469,6 +469,24 @@ if ($infographic && is_array($infographic)) {
         // （キャッシュなし時はJS非同期で取得→スコアも非同期更新）
         $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id, 1);
 
+        // キャッシュミス時：次回のために背景 warm を仕込む（throttle 30分）
+        if ( empty( $kpi_curr ) ) {
+            $miss_throttle = "gcrev_throttle_dash_warm_{$user_id}";
+            if ( ! get_transient( $miss_throttle ) ) {
+                set_transient( $miss_throttle, 1, 30 * MINUTE_IN_SECONDS );
+                if ( ! wp_next_scheduled( 'gcrev_user_dashboard_warm_event', [ $user_id ] ) ) {
+                    wp_schedule_single_event( time(), 'gcrev_user_dashboard_warm_event', [ $user_id ] );
+                }
+                // wp-cron.php を非同期トリガー（ページ表示は遅延させない）
+                $cron_url = site_url( '/wp-cron.php?doing_wp_cron=' . microtime( true ) );
+                wp_remote_post( $cron_url, [
+                    'blocking'  => false,
+                    'timeout'   => 0.5,
+                    'sslverify' => false,
+                ] );
+            }
+        }
+
         // 比較期間のKPI（currが取得できた場合のみ）
         // キャッシュのみ確認。キャッシュミス時はJS非同期に委任（同期API呼び出しを排除してページ表示を高速化）
         $kpi_prev = [];

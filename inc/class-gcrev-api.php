@@ -2030,6 +2030,113 @@ class Gcrev_Insight_API {
     }
 
     // =========================================================
+    // 単一ユーザーのダッシュボード初回表示用キャッシュ温め
+    //
+    // 用途: ログイン直後 / ダッシュボードキャッシュミス時の背景プリフェッチ。
+    // page-dashboard.php の同期読み出しに必要な最小キャッシュだけを温める：
+    //   - gcrev_dash_{user_id}_last30{_jp?_ex?}    （主要KPI）
+    //   - gcrev_dash_bydate_v2_{user_id}_..._{...} （比較期間）
+    //   - gcrev_meo_perf_{user_id}_..._...          （MEO 当期 + 前期）
+    //   - 上記 KPI に _cached_score をマージ
+    // =========================================================
+    public function prefetch_user_dashboard( int $user_id ): void {
+        $log = '/tmp/gcrev_dash_warm_debug.log';
+        $start_ts = microtime( true );
+
+        try {
+            $config = $this->config->get_user_config( $user_id );
+        } catch ( \Throwable $e ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " warm SKIP user_id={$user_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return;
+        }
+
+        // 海外除外 + 解析対象/除外URL条件 を GA4 + GSC へ反映
+        $filter_set      = $this->maybe_set_country_filter( $user_id );
+        $exclude_foreign = $this->is_exclude_foreign( $user_id );
+
+        try {
+            $last30      = $this->dates->get_date_range( 'last30' );
+            $last30_comp = $this->dates->get_comparison_range( $last30['start'], $last30['end'] );
+
+            // (1) last30 ダッシュボード KPI
+            if ( ! $this->dashboard_cache_get( $user_id, 'last30' ) ) {
+                $data = $this->fetch_dashboard_data_internal( $config, 'last30' );
+                $this->dashboard_cache_set( $user_id, 'last30', $data );
+            }
+
+            // (2) 比較期間 (gcrev_dash_bydate_v2_*)
+            $filter_suffix_pf = $exclude_foreign ? '_filtered' : '';
+            if ( class_exists( 'Gcrev_Path_Filter' ) ) {
+                $filter_suffix_pf .= Gcrev_Path_Filter::cache_suffix( $user_id );
+            }
+            $comp_cache_key = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
+            $comp_data      = get_transient( $comp_cache_key );
+            if ( ! $comp_data ) {
+                $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id );
+            }
+
+            // (3) MEO 当期 + 前期
+            try {
+                $this->fetch_meo_metrics_safe( $user_id, $last30['start'], $last30['end'] );
+                $this->fetch_meo_metrics_safe( $user_id, $last30_comp['start'], $last30_comp['end'] );
+            } catch ( \Throwable $e ) {
+                // MEO 失敗は致命ではない（未連携ユーザー等）
+            }
+
+            // (4) スコア事前計算 → KPI キャッシュへマージ
+            $kpi_filter_suffix = $exclude_foreign ? '_jp' : '';
+            if ( $this->path_filters_set ) { $kpi_filter_suffix .= '_ex'; }
+            $kpi_cache_key = "gcrev_dash_{$user_id}_last30{$kpi_filter_suffix}";
+            $kpi_cached    = get_transient( $kpi_cache_key );
+
+            if ( $kpi_cached && is_array( $kpi_cached ) && ! isset( $kpi_cached['_cached_score'] )
+                 && is_array( $comp_data ) && ! empty( $comp_data ) ) {
+
+                $sess_c = (int) str_replace( ',', '', (string) ( $kpi_cached['sessions']    ?? '0' ) );
+                $sess_p = (int) str_replace( ',', '', (string) ( $comp_data['sessions']    ?? '0' ) );
+                $cv_c   = (int) str_replace( ',', '', (string) ( $kpi_cached['conversions'] ?? '0' ) );
+                $cv_p   = (int) str_replace( ',', '', (string) ( $comp_data['conversions'] ?? '0' ) );
+                $gsc_c  = (int) str_replace( ',', '', (string) ( $kpi_cached['gsc']['total']['clicks'] ?? $kpi_cached['gsc']['total']['impressions'] ?? '0' ) );
+                $gsc_p  = (int) str_replace( ',', '', (string) ( $comp_data['gsc']['total']['clicks']  ?? $comp_data['gsc']['total']['impressions']  ?? '0' ) );
+
+                $meo_c_cache = get_transient( "gcrev_meo_perf_{$user_id}_{$last30['start']}_{$last30['end']}" );
+                $meo_p_cache = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}" );
+                $meo_c = ( is_array( $meo_c_cache ) ) ? (int) ( $meo_c_cache['total_impressions'] ?? 0 ) : 0;
+                $meo_p = ( is_array( $meo_p_cache ) ) ? (int) ( $meo_p_cache['total_impressions'] ?? 0 ) : 0;
+
+                $score_curr = [ 'traffic' => $sess_c, 'cv' => $cv_c, 'gsc' => $gsc_c, 'meo' => $meo_c ];
+                $score_prev = [ 'traffic' => $sess_p, 'cv' => $cv_p, 'gsc' => $gsc_p, 'meo' => $meo_p ];
+                $health     = $this->calc_monthly_health_score( $score_curr, $score_prev, [], $user_id );
+
+                $kpi_cached['_cached_score'] = [
+                    'score'      => $health['score'],
+                    'status'     => $health['status'],
+                    'breakdown'  => $health['breakdown'],
+                    'components' => $health['components'],
+                ];
+                set_transient( $kpi_cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
+            }
+
+            $elapsed = round( microtime( true ) - $start_ts, 1 );
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " warm OK user_id={$user_id} elapsed={$elapsed}s\n",
+                FILE_APPEND
+            );
+
+        } catch ( \Throwable $e ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " warm ERROR user_id={$user_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
+    // =========================================================
     // Prefetch処理（Cronから呼ばれる）
     // =========================================================
     public function prefetch_chunk(int $offset, int $limit): void {
