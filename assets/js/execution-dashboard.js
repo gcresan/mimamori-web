@@ -88,13 +88,22 @@
             return;
         }
 
-        // ヒーローは「今すぐやること」を案内するだけで、実操作はリスト側で行う
+        // ヒーローは「今すぐやること」を案内する。詳しく見るで実行ガイドを展開できる。
+        var heroDetailId = 'exec-hero-detail-' + top.id;
         section.innerHTML =
             '<div class="exec-hero">' +
                 '<div class="exec-hero__label">⚡ 今すぐやること</div>' +
                 '<div class="exec-hero__title">' + esc(top.title) + '</div>' +
                 '<div class="exec-hero__reason">' + esc(top.reason) + '</div>' +
+                '<button type="button" class="exec-hero__detail-toggle" ' +
+                    'data-exec-detail-toggle="' + top.id + '" ' +
+                    'aria-expanded="false" aria-controls="' + heroDetailId + '">詳しく見る</button>' +
+                '<div class="exec-action-card__detail exec-hero__detail" id="' + heroDetailId + '" ' +
+                    'data-exec-detail-panel="' + top.id + '" hidden></div>' +
             '</div>';
+
+        // ヒーロー内のトグルも有効化
+        bindActionButtons(section);
     }
 
     /* ================================================================

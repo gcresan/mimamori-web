@@ -42,6 +42,30 @@ get_header();
 .exec-hero__title { font-size: 20px; font-weight: 700; line-height: 1.5; margin-bottom: 8px; }
 .exec-hero__reason { font-size: 13px; opacity: 0.85; line-height: 1.6; }
 
+/* ===== ヒーロー内の詳しく見る ===== */
+.exec-hero__detail-toggle {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 14px; padding: 8px 14px;
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 6px; color: #fff;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: background 0.15s;
+}
+.exec-hero__detail-toggle:hover { background: rgba(255,255,255,0.25); }
+.exec-hero__detail-toggle::after {
+    content: '▾'; display: inline-block; transition: transform 0.2s; font-size: 11px;
+}
+.exec-hero__detail-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+
+/* ヒーロー内の詳細パネルは白背景に戻して可読性を確保 */
+.exec-hero__detail {
+    margin-top: 16px;
+    background: #fff;
+    color: var(--mw-text-primary);
+    border: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
 /* ===== ② 今月のノルマ ===== */
 .exec-quota { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .exec-quota__item { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); padding: 16px; text-align: center; }
