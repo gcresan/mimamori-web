@@ -20643,6 +20643,13 @@ PROMPT;
 
         // --- GA4データ取得（既存 GA4 Fetcher を活用） ---
         $ga4_data = null;
+        // 解析対象/除外URL条件（サイト全体の集計に適用）
+        $inc_paths_pa = get_user_meta( $user_id, '_gcrev_include_paths', true );
+        $exc_paths_pa = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+        $inc_paths_pa = is_array( $inc_paths_pa ) ? $inc_paths_pa : [];
+        $exc_paths_pa = is_array( $exc_paths_pa ) ? $exc_paths_pa : [];
+        $has_user_path_filter = ! empty( $inc_paths_pa ) || ! empty( $exc_paths_pa );
+
         try {
             $property_id = trim( (string) get_user_meta( $user_id, 'ga4_property_id', true ) );
             if ( $property_id ) {
@@ -20655,10 +20662,19 @@ PROMPT;
                 // ページURLのパスを抽出
                 $page_path = wp_parse_url( $row['page_url'], PHP_URL_PATH ) ?: '/';
 
-                // ページパスで絞り込んでGA4データ取得
+                // ページパスで絞り込んでGA4データ取得（このページ単体のメトリクス）
                 $this->ga4->set_page_path_filter( $page_path );
                 $pages = $this->ga4->fetch_page_details( $property_id, $period['start'], $period['end'] );
                 $this->ga4->set_page_path_filter( null ); // フィルタクリア
+
+                // ここから先のサイト全体集計（流入チャネル・地域・デバイス）には
+                // クライアント設定の解析対象/除外URL条件を適用する。
+                // /media/ などを除外していれば、それらの配下ページのアクセスは
+                // AI 診断のサイト全体コンテキストに含めない。
+                if ( $has_user_path_filter ) {
+                    $this->ga4->set_include_paths_filter( $inc_paths_pa );
+                    $this->ga4->set_exclude_paths_filter( $exc_paths_pa );
+                }
 
                 // 対象ページを特定
                 $target = null;
@@ -20738,12 +20754,23 @@ PROMPT;
                     file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " GA4 device ERROR: " . $e->getMessage() . "\n", FILE_APPEND );
                 }
 
+                // 解析対象/除外URL条件フィルタを解除（次の呼び出しに影響させない）
+                if ( $has_user_path_filter ) {
+                    $this->ga4->clear_include_paths_filter();
+                    $this->ga4->set_page_path_filter( null );
+                }
+
                 // 国フィルタクリア
                 if ( $exclude_foreign ) {
                     $this->ga4->set_country_filter( null );
                 }
             }
         } catch ( \Exception $e ) {
+            // 例外時もフィルタを必ず解除
+            if ( $has_user_path_filter ) {
+                $this->ga4->clear_include_paths_filter();
+                $this->ga4->set_page_path_filter( null );
+            }
             file_put_contents( $log,
                 date( 'Y-m-d H:i:s' ) . " GA4 for analysis ERROR: " . $e->getMessage() . "\n",
                 FILE_APPEND
