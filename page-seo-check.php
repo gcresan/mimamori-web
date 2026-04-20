@@ -441,44 +441,6 @@ get_header();
 }
 .seo-kw-empty a:hover { text-decoration: underline; }
 
-/* 将来拡張枠 */
-.seo-future-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 16px;
-}
-.seo-future-card {
-    padding: 24px;
-    border: 2px dashed var(--mw-border-light);
-    border-radius: 12px;
-    background: var(--mw-bg-secondary);
-    text-align: center;
-}
-.seo-future-card__icon {
-    font-size: 24px;
-    margin-bottom: 8px;
-}
-.seo-future-card__title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mw-text-primary);
-    margin-bottom: 4px;
-}
-.seo-future-card__desc {
-    font-size: 12px;
-    color: var(--mw-text-tertiary);
-}
-.seo-coming-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    background: var(--mw-bg-tertiary);
-    color: var(--mw-text-tertiary);
-    font-size: 11px;
-    font-weight: 600;
-    margin-top: 8px;
-}
-
 /* プログレス */
 .seo-progress {
     position: fixed;
@@ -585,7 +547,6 @@ get_header();
     .seo-issues-table .seo-url-cell { min-width: 140px; max-width: 220px; }
     .seo-url-cell__path { max-width: 180px; }
     .seo-section { padding: 20px 16px; }
-    .seo-future-grid { grid-template-columns: 1fr; }
     .seo-kw-card__header { flex-direction: column; align-items: flex-start; }
     .seo-section__header { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
@@ -665,17 +626,6 @@ get_header();
         <div id="seoActionsContent"></div>
     </div>
 
-    <!-- ===== Section 6: 将来拡張枠 ===== -->
-    <div class="seo-section" id="seoFutureSection" style="display:none;">
-        <div class="seo-section__header">
-            <div>
-                <h2 class="seo-section__title">📊 今後の拡張予定</h2>
-                <div class="seo-section__note">今後対応予定の機能です</div>
-            </div>
-        </div>
-        <div id="seoFutureContent"></div>
-    </div>
-
     <!-- ===== 未診断時の表示 ===== -->
     <div class="seo-section" id="seoEmptyState" style="display:none;">
         <div style="text-align:center;padding:60px 20px;">
@@ -697,7 +647,7 @@ get_header();
     var wpNonce = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
 
     // セクション要素ID
-    var SECTION_IDS = ['seoSummary','seoComparisonBar','seoDiagnosisSection','seoKeywordSection','seoAssessmentSection','seoIssuesSection','seoActionsSection','seoFutureSection'];
+    var SECTION_IDS = ['seoSummary','seoComparisonBar','seoDiagnosisSection','seoKeywordSection','seoAssessmentSection','seoIssuesSection','seoActionsSection'];
 
     /* =================================================================
        ユーティリティ
@@ -797,7 +747,6 @@ get_header();
         renderKeywords(kwData);
         renderIssues(data.issuePages);
         renderActions(data.recommendations);
-        renderFuture();
     }
 
     /* =================================================================
@@ -1200,27 +1149,6 @@ get_header();
 
         html += '</div>'; // .seo-kw-grid
         content.innerHTML = html;
-    }
-
-    /* =================================================================
-       Section 6: 将来拡張枠
-       ================================================================= */
-    function renderFuture() {
-        var items = [
-            { icon: '🗺️', title: '地域別SEO傾向', desc: '対象エリアでの検索順位や競合状況を確認' },
-            { icon: '🏢', title: '競合サイト比較', desc: '競合他社のSEO状態との比較分析' }
-        ];
-        var html = '<div class="seo-future-grid">';
-        items.forEach(function(item) {
-            html += '<div class="seo-future-card">';
-            html += '<div class="seo-future-card__icon">' + item.icon + '</div>';
-            html += '<div class="seo-future-card__title">' + esc(item.title) + '</div>';
-            html += '<div class="seo-future-card__desc">' + esc(item.desc) + '</div>';
-            html += '<span class="seo-coming-badge">準備中</span>';
-            html += '</div>';
-        });
-        html += '</div>';
-        document.getElementById('seoFutureContent').innerHTML = html;
     }
 
     /* =================================================================
