@@ -157,8 +157,14 @@ class Gcrev_Execution_Service {
             $cv_curr   = (int)( $ga4_curr['conversions'] ?? 0 );
             $cv_prev   = (int)( $ga4_prev['conversions'] ?? 0 );
 
-            $gsc_curr = $this->gsc->fetch_gsc_data( $gsc_url, $last30['start'], $last30['end'] );
-            $gsc_prev = $this->gsc->fetch_gsc_data( $gsc_url, $last30_comp['start'], $last30_comp['end'] );
+            // クライアント設定の解析対象/除外URL条件を Search Console 集計にも反映
+            $this->gsc->apply_user_path_filters( $user_id );
+            try {
+                $gsc_curr = $this->gsc->fetch_gsc_data( $gsc_url, $last30['start'], $last30['end'] );
+                $gsc_prev = $this->gsc->fetch_gsc_data( $gsc_url, $last30_comp['start'], $last30_comp['end'] );
+            } finally {
+                $this->gsc->clear_path_filters();
+            }
             $gsc_c = (int)( $gsc_curr['total']['impressions'] ?? 0 );
             $gsc_p = (int)( $gsc_prev['total']['impressions'] ?? 0 );
 
@@ -388,8 +394,14 @@ class Gcrev_Execution_Service {
                         'avg_duration'=> $ga4_raw['avgDuration'] ?? 0,
                     ];
 
-                    $gsc_raw = $this->gsc->fetch_gsc_data( $user_config['gsc_url'], $last30['start'], $last30['end'] );
-                    $gsc_data = $gsc_raw['keywords'] ?? [];
+                    // クライアント設定の解析対象/除外URL条件を Search Console 集計にも反映
+                    $this->gsc->apply_user_path_filters( $user_id );
+                    try {
+                        $gsc_raw = $this->gsc->fetch_gsc_data( $user_config['gsc_url'], $last30['start'], $last30['end'] );
+                        $gsc_data = $gsc_raw['keywords'] ?? [];
+                    } finally {
+                        $this->gsc->clear_path_filters();
+                    }
                 } catch ( \Throwable $e ) {
                     $this->log( "collect_context GA4/GSC API error: " . $e->getMessage() );
                     $ga4_data = [ 'sessions' => 0, 'users' => 0, 'pageviews' => 0, 'conversions' => 0, 'avg_duration' => 0 ];

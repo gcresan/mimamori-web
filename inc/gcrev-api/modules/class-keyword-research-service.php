@@ -114,6 +114,8 @@ class Gcrev_Keyword_Research_Service {
         $gsc_keywords = [];
         try {
             $gsc = new Gcrev_GSC_Fetcher( $this->config );
+            // クライアント設定の解析対象/除外URL条件を Search Console 集計にも反映
+            $gsc->apply_user_path_filters( $user_id );
             $tz  = wp_timezone();
             $end   = new \DateTimeImmutable( 'now', $tz );
             $start = $end->modify( '-90 days' );

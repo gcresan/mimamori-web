@@ -726,6 +726,8 @@ PROMPT;
         try {
             if ( class_exists( 'Gcrev_GSC_Fetcher' ) ) {
                 $gsc = new Gcrev_GSC_Fetcher( $this->config );
+                // 解析対象/除外URL条件を反映（除外パスのページが「自社ページ」として返らないように）
+                $gsc->apply_user_path_filters( $user_id );
                 $tz  = wp_timezone();
                 $end   = new \DateTimeImmutable( 'now', $tz );
                 $start = $end->modify( '-90 days' );
@@ -733,9 +735,7 @@ PROMPT;
                 $gsc_data = $gsc->fetch_gsc_data(
                     $site_url,
                     $start->format( 'Y-m-d' ),
-                    $end->format( 'Y-m-d' ),
-                    'page',
-                    $keyword
+                    $end->format( 'Y-m-d' )
                 );
 
                 // pages キーから最もインプレッションの多いURLを取得

@@ -1531,18 +1531,24 @@ class Gcrev_Insight_API {
             $was_set = true;
         }
 
-        // 解析対象URL条件 + 解析除外URL条件を適用
+        // 解析対象URL条件 + 解析除外URL条件を適用（GA4 + GSC 両方に伝播）
         if ( ! $this->path_filters_set ) {
             $include_paths = get_user_meta( $user_id, '_gcrev_include_paths', true );
+            $exclude_paths = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+
             if ( is_array( $include_paths ) && ! empty( $include_paths ) ) {
                 $this->ga4->set_include_paths_filter( $include_paths );
                 $this->path_filters_set = true;
             }
-
-            $exclude_paths = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
             if ( is_array( $exclude_paths ) && ! empty( $exclude_paths ) ) {
                 $this->ga4->set_exclude_paths_filter( $exclude_paths );
                 $this->path_filters_set = true;
+            }
+
+            // GSC 側にも同じフィルタを伝播（page+query で取得した行を path で絞り込み再集計）
+            if ( $this->path_filters_set ) {
+                $this->gsc->set_include_paths_filter( is_array( $include_paths ) ? $include_paths : [] );
+                $this->gsc->set_exclude_paths_filter( is_array( $exclude_paths ) ? $exclude_paths : [] );
             }
         }
 
@@ -1559,6 +1565,7 @@ class Gcrev_Insight_API {
         if ( $this->path_filters_set ) {
             $this->ga4->clear_include_paths_filter();
             $this->ga4->set_page_path_filter( null );
+            $this->gsc->clear_path_filters();
             $this->path_filters_set = false;
         }
     }
@@ -2183,6 +2190,9 @@ class Gcrev_Insight_API {
                 $last30_dates = $this->dates->get_date_range('last30');
                 $last30_comp  = $this->dates->get_comparison_range($last30_dates['start'], $last30_dates['end']);
                 $filter_suffix_pf = $exclude_foreign ? '_filtered' : '';
+                if ( class_exists( 'Gcrev_Path_Filter' ) ) {
+                    $filter_suffix_pf .= Gcrev_Path_Filter::cache_suffix( $user_id );
+                }
                 $comp_cache_key   = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
                 $comp_cached      = get_transient( $comp_cache_key );
 
@@ -2434,6 +2444,9 @@ class Gcrev_Insight_API {
                 $last30_dates = $this->dates->get_date_range('last30');
                 $last30_comp  = $this->dates->get_comparison_range($last30_dates['start'], $last30_dates['end']);
                 $filter_suffix_pf = $exclude_foreign ? '_filtered' : '';
+                if ( class_exists( 'Gcrev_Path_Filter' ) ) {
+                    $filter_suffix_pf .= Gcrev_Path_Filter::cache_suffix( $user_id );
+                }
                 $comp_cache_key   = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
                 $comp_cached      = get_transient( $comp_cache_key );
 
@@ -2602,7 +2615,7 @@ class Gcrev_Insight_API {
         }
 
         // ----- キーワード -----
-        $key_kw = "gcrev_keywords_{$user_id}_{$period}_{$date_hash}";
+        $key_kw = "gcrev_keywords_{$user_id}_{$period}_{$date_hash}{$filter_sfx}";
         if (get_transient($key_kw) === false) {
             try {
                 $current_gsc = $this->gsc->fetch_gsc_data($gsc_url, $dates['start'], $dates['end']);
@@ -3304,7 +3317,6 @@ class Gcrev_Insight_API {
                 }
             }
         }
-        update_user_meta( $user_id, '_gcrev_include_paths', $include_paths );
 
         // 解析除外URL条件（1行1パス、配列で保存）
         $exclude_paths_raw = $params['exclude_paths'] ?? '';
@@ -3322,7 +3334,22 @@ class Gcrev_Insight_API {
                 }
             }
         }
+
+        // 旧設定との差分を確認 → 変化があれば GSC 由来の集計キャッシュを一括削除
+        $prev_include = get_user_meta( $user_id, '_gcrev_include_paths', true );
+        $prev_exclude = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+        $prev_include = is_array( $prev_include ) ? $prev_include : [];
+        $prev_exclude = is_array( $prev_exclude ) ? $prev_exclude : [];
+
+        $paths_changed = ( $prev_include !== $include_paths ) || ( $prev_exclude !== $exclude_paths );
+
+        update_user_meta( $user_id, '_gcrev_include_paths', $include_paths );
         update_user_meta( $user_id, '_gcrev_exclude_paths', $exclude_paths );
+
+        if ( $paths_changed && class_exists( 'Gcrev_Path_Filter' ) ) {
+            $deleted = Gcrev_Path_Filter::purge_user_caches( $user_id );
+            error_log( "[GCREV] Path filter changed for user_id={$user_id} — purged {$deleted} stale GSC/dashboard cache rows" );
+        }
 
         // 海外アクセス除外
         if ( isset( $params['exclude_foreign'] ) ) {
@@ -3964,15 +3991,38 @@ PROMPT;
         $client_info = $this->build_client_info_for_report($user_id);
 
         // 海外アクセス除外：KPI・CV双方にフィルタ適用（finally で解除）
+        // 解析対象/除外URL条件も同時に GA4 + GSC へ伝播させる
         $report_filter_set = ! empty( $client_info['exclude_foreign'] );
+        $report_path_filters_applied = false;
         if ( $report_filter_set ) {
             try {
                 $config = $this->config->get_user_config( $user_id );
                 $this->ga4->set_country_filter( 'Japan' );
+
+                // path フィルタも適用（クライアント設定の include/exclude）
+                $inc = get_user_meta( $user_id, '_gcrev_include_paths', true );
+                $exc = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+                $inc = is_array( $inc ) ? $inc : [];
+                $exc = is_array( $exc ) ? $exc : [];
+                if ( ! empty( $inc ) || ! empty( $exc ) ) {
+                    $this->ga4->set_include_paths_filter( $inc );
+                    $this->ga4->set_exclude_paths_filter( $exc );
+                    $this->gsc->set_include_paths_filter( $inc );
+                    $this->gsc->set_exclude_paths_filter( $exc );
+                    $this->path_filters_set = true; // restore_country_filter() で解除されるよう状態同期
+                    $report_path_filters_applied = true;
+                }
+
                 $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
                 $two_data  = $this->fetch_dashboard_data_internal( $config, 'twoMonthsAgo' );
             } catch ( \Throwable $e ) {
                 $this->ga4->set_country_filter( null );
+                if ( $report_path_filters_applied ) {
+                    $this->ga4->clear_include_paths_filter();
+                    $this->ga4->set_page_path_filter( null );
+                    $this->gsc->clear_path_filters();
+                    $report_path_filters_applied = false;
+                }
                 error_log( '[GCREV] generate_report: country filter refetch failed: ' . $e->getMessage() );
                 $report_filter_set = false;
             }
@@ -4873,6 +4923,10 @@ PROMPT;
         // --- Transient キャッシュ（12+ API呼び出しを回避）---
         $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
         $filter_suffix   = $exclude_foreign ? '_filtered' : '';
+        // 解析対象/除外URL条件があればキャッシュキーを差別化（条件内容のハッシュ）
+        if ( class_exists( 'Gcrev_Path_Filter' ) ) {
+            $filter_suffix .= Gcrev_Path_Filter::cache_suffix( $user_id );
+        }
         // v2: ga4_phone_tap フィールド追加に伴いキャッシュキーを更新
         $cache_key       = "gcrev_dash_bydate_v2_{$user_id}_{$start_date}_{$end_date}{$filter_suffix}";
         $cached          = get_transient( $cache_key );
@@ -5433,6 +5487,10 @@ PROMPT;
         } else {
             $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
             $filter_suffix   = $exclude_foreign ? '_filtered' : '';
+            // 解析対象/除外URL条件があればキャッシュキーを差別化
+            if ( class_exists( 'Gcrev_Path_Filter' ) ) {
+                $filter_suffix .= Gcrev_Path_Filter::cache_suffix( $user_id );
+            }
             $transient_key   = "gcrev_annual_{$user_id}_{$year}{$filter_suffix}";
             $cached          = get_transient( $transient_key );
             $cached_version  = is_array( $cached ) ? ( $cached['ai_summary_version'] ?? 0 ) : 0;
@@ -5559,6 +5617,9 @@ PROMPT;
                 // 今年: Transient 24h
                 $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
                 $filter_suffix   = $exclude_foreign ? '_filtered' : '';
+                if ( class_exists( 'Gcrev_Path_Filter' ) ) {
+                    $filter_suffix .= Gcrev_Path_Filter::cache_suffix( $user_id );
+                }
                 $transient_key   = "gcrev_annual_{$user_id}_{$year}{$filter_suffix}";
                 set_transient( $transient_key, $result, 24 * HOUR_IN_SECONDS );
             }
@@ -6111,12 +6172,15 @@ PROMPT;
      * データソース: Google Search Console（既存の fetch_gsc_data を利用）
      */
     public function rest_get_keyword_analysis(\WP_REST_Request $request): \WP_REST_Response {
-        try {
-            $user_id = get_current_user_id();
-            if (!$user_id) {
-                return new \WP_REST_Response(['error' => 'ログインが必要です'], 401);
-            }
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            return new \WP_REST_Response(['error' => 'ログインが必要です'], 401);
+        }
 
+        // 海外アクセス除外フィルタ + 解析対象/除外URL条件を GA4 と GSC に伝播
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
             $period = $request->get_param('period') ?? 'prev-month';
 
             // ユーザー設定取得
@@ -6127,15 +6191,17 @@ PROMPT;
             $dates = $this->dates->calculate_period_dates($period);
             $comparison = $this->dates->calculate_comparison_dates($period);
 
-            // キャッシュ
-            $cache_key = "gcrev_keywords_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}");
+            // キャッシュ（フィルタの有無でキー差別化）
+            $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
+            $cache_key = "gcrev_keywords_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
                 error_log("[GCREV] Keyword analysis cache HIT: {$cache_key}");
                 return new \WP_REST_Response($cached, 200);
             }
 
-            // 現在期間のキーワードデータ（既存の fetch_gsc_data を利用）
+            // 現在期間のキーワードデータ（page+query で取得 → path フィルタ → query 集計）
             $current_gsc = $this->gsc->fetch_gsc_data($gsc_url, $dates['start'], $dates['end']);
             // 比較期間のキーワードデータ（順位変動計算用）
             $prev_gsc = $this->gsc->fetch_gsc_data($gsc_url, $comparison['start'], $comparison['end']);
@@ -6175,6 +6241,8 @@ PROMPT;
                 'success' => false,
                 'message' => $e->getMessage(),
             ], 500);
+        } finally {
+            $this->restore_country_filter( $filter_set );
         }
     }
     /**
@@ -20639,7 +20707,13 @@ PROMPT;
             $user_config = $this->config->get_user_config( $user_id );
             $gsc_url = $user_config['gsc_url'] ?? '';
             if ( $gsc_url ) {
-                $gsc_raw = $this->gsc->fetch_gsc_data( $gsc_url, $period['start'], $period['end'] );
+                // 解析対象/除外URL条件を反映
+                $this->gsc->apply_user_path_filters( $user_id );
+                try {
+                    $gsc_raw = $this->gsc->fetch_gsc_data( $gsc_url, $period['start'], $period['end'] );
+                } finally {
+                    $this->gsc->clear_path_filters();
+                }
                 if ( ! empty( $gsc_raw['keywords'] ) ) {
                     $gsc_data = [
                         'total_impressions' => $gsc_raw['total']['impressions'] ?? 0,

@@ -295,6 +295,53 @@ class Gcrev_CLI {
     }
 
     // =========================================================
+    // resync-gsc: 解析対象/除外URL条件を反映するために GSC 由来キャッシュを掃除する
+    // =========================================================
+
+    /**
+     * 解析対象URL条件 / 解析除外URL条件 を変更した後に GSC 由来の集計キャッシュを掃除する。
+     *
+     * Search Console の取得構造を変更した場合や、/media/ などを除外設定に追加した場合、
+     * 既存の Transient（キーワード分析・ダッシュボード・年次レポート等）に古い集計値が
+     * 残るため、本コマンドで一括削除する。次回アクセス時に新ロジックで再取得される。
+     *
+     * ## OPTIONS
+     *
+     * --user_id=<id>
+     * : 対象ユーザーID。省略時は全ユーザーを対象に掃除する。
+     *
+     * ## EXAMPLES
+     *
+     *     wp gcrev resync-gsc --user_id=5
+     *     wp gcrev resync-gsc        # 全ユーザー
+     *
+     * @param array $args
+     * @param array $assoc_args
+     */
+    public function resync_gsc( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        if ( ! class_exists( 'Gcrev_Path_Filter' ) ) {
+            WP_CLI::error( 'Gcrev_Path_Filter class not found. Theme may not be fully loaded.' );
+        }
+
+        if ( ! empty( $assoc_args['user_id'] ) ) {
+            $user_id = $this->require_user_id( $assoc_args );
+            $deleted = Gcrev_Path_Filter::purge_user_caches( $user_id );
+            WP_CLI::success( "Purged {$deleted} GSC/dashboard cache rows for user_id={$user_id}." );
+            return;
+        }
+
+        $users = get_users( [ 'fields' => [ 'ID' ] ] );
+        $total = 0;
+        $count = 0;
+        foreach ( $users as $u ) {
+            $deleted = Gcrev_Path_Filter::purge_user_caches( (int) $u->ID );
+            $total += $deleted;
+            $count++;
+        }
+        WP_CLI::success( "Purged {$total} cache rows across {$count} users." );
+    }
+
+    // =========================================================
     // Private: バリデーション
     // =========================================================
 

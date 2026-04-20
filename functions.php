@@ -784,6 +784,7 @@ $gcrev_utils_dates         = $gcrev_utils_path . 'class-date-helper.php';
 $gcrev_utils_area_detector = $gcrev_utils_path . 'class-area-detector.php';
 $gcrev_utils_html_extractor= $gcrev_utils_path . 'class-html-extractor.php';
 $gcrev_utils_ai_json_parser= $gcrev_utils_path . 'class-ai-json-parser.php';
+$gcrev_utils_path_filter   = $gcrev_utils_path . 'class-path-filter.php';
 
 if ( file_exists( $gcrev_utils_config ) ) {
     require_once $gcrev_utils_config;
@@ -799,6 +800,9 @@ if ( file_exists( $gcrev_utils_html_extractor ) ) {
 }
 if ( file_exists( $gcrev_utils_ai_json_parser ) ) {
     require_once $gcrev_utils_ai_json_parser;
+}
+if ( file_exists( $gcrev_utils_path_filter ) ) {
+    require_once $gcrev_utils_path_filter;
 }
 $gcrev_utils_crypto = $gcrev_utils_path . 'class-crypto.php';
 if ( file_exists( $gcrev_utils_crypto ) ) {
@@ -2418,6 +2422,8 @@ function mimamori_get_analytics_digest( int $user_id ): string {
         // --- GSC キーワード ---
         if ( $gsc_url !== '' && class_exists( 'Gcrev_GSC_Fetcher' ) ) {
             $gsc      = new Gcrev_GSC_Fetcher( $config );
+            // 解析対象/除外URL条件を反映
+            $gsc->apply_user_path_filters( $user_id );
             $gsc_data = $gsc->fetch_gsc_data( $gsc_url, $start_str, $end_str );
 
             if ( is_array( $gsc_data ) && ! is_wp_error( $gsc_data ) && ! empty( $gsc_data ) ) {
@@ -3708,7 +3714,7 @@ function mimamori_call_planner_pass( string $message, string $digest, string $in
  * @param mixed  $config   Gcrev_Config インスタンス
  * @return array|null  取得データ（空/エラー時は null）
  */
-function mimamori_fetch_single_query( string $type, string $start, string $end, $ga4, string $ga4_id, string $gsc_url, $config ) {
+function mimamori_fetch_single_query( string $type, string $start, string $end, $ga4, string $ga4_id, string $gsc_url, $config, int $user_id = 0 ) {
     if ( ! $ga4 && $type !== 'gsc_keywords' ) {
         return null;
     }
@@ -3743,6 +3749,9 @@ function mimamori_fetch_single_query( string $type, string $start, string $end, 
         case 'gsc_keywords':
             if ( $gsc_url !== '' && class_exists( 'Gcrev_GSC_Fetcher' ) ) {
                 $gsc  = new Gcrev_GSC_Fetcher( $config );
+                if ( $user_id > 0 ) {
+                    $gsc->apply_user_path_filters( $user_id );
+                }
                 $data = $gsc->fetch_gsc_data( $gsc_url, $start, $end );
             }
             break;
@@ -3801,7 +3810,7 @@ function mimamori_fetch_enrichment_data( array $queries, int $user_id ): array {
             $data = $cached;
         } else {
             try {
-                $data = mimamori_fetch_single_query( $type, $start, $end, $ga4, $ga4_id, $gsc_url, $config );
+                $data = mimamori_fetch_single_query( $type, $start, $end, $ga4, $ga4_id, $gsc_url, $config, $user_id );
                 if ( $data !== null ) {
                     set_transient( $cache_key, $data, 2 * HOUR_IN_SECONDS );
                 }
@@ -3842,7 +3851,7 @@ function mimamori_fetch_enrichment_data( array $queries, int $user_id ): array {
                 if ( $prev_cached !== false ) {
                     $prev_data = $prev_cached;
                 } else {
-                    $prev_data = mimamori_fetch_single_query( $type, $prev_start, $prev_end, $ga4, $ga4_id, $gsc_url, $config );
+                    $prev_data = mimamori_fetch_single_query( $type, $prev_start, $prev_end, $ga4, $ga4_id, $gsc_url, $config, $user_id );
                     if ( $prev_data !== null ) {
                         set_transient( $prev_cache_key, $prev_data, 2 * HOUR_IN_SECONDS );
                     }
