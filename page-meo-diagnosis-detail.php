@@ -316,6 +316,7 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
             </div>
         </div>
 
+        <?php if ( mimamori_aio_enabled() ) : ?>
         <!-- AIO Scores -->
         <div class="meo-diag-section" id="diagAioSection" style="display:none;">
             <div class="meo-diag-section__header">&#x1F916; AI検索スコア</div>
@@ -331,6 +332,7 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
                 <a href="<?php echo esc_url( home_url( '/ai-report/' ) ); ?>" class="meo-diag-nav-link">&#x2192; AI検索レポートへ</a>
             </div>
         </div>
+        <?php endif; ?>
 
     </div><!-- /#meo-report-content -->
 
@@ -481,7 +483,9 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
         }
 
         // AIO
-        if (d.aio_scores && d.aio_scores.length) {
+        var aioBody = document.getElementById('diagAioBody');
+        var aioSection = document.getElementById('diagAioSection');
+        if (aioBody && aioSection && d.aio_scores && d.aio_scores.length) {
             var aioHtml = '';
             d.aio_scores.forEach(function(a) {
                 aioHtml += '<tr><td><strong>' + esc(a.keyword) + '</strong></td>'
@@ -489,8 +493,8 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
                     + '<td>' + aioCell(a.gemini) + '</td>'
                     + '<td>' + aioCell(a.google_ai) + '</td></tr>';
             });
-            document.getElementById('diagAioBody').innerHTML = aioHtml;
-            document.getElementById('diagAioSection').style.display = '';
+            aioBody.innerHTML = aioHtml;
+            aioSection.style.display = '';
         }
     }
 

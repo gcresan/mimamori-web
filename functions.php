@@ -7058,6 +7058,15 @@ function mimamori_guard_meo_access(): void {
 }
 
 /**
+ * AIO診断関連UIの表示可否。
+ * 現在は非表示（2026-04-20 以降、機能調整中のため UI から一時的に除外）。
+ * 再度表示する場合はこの関数の戻り値を true に戻す。
+ */
+function mimamori_aio_enabled(): bool {
+    return false;
+}
+
+/**
  * サンクスページURL（固定ページ: 親=signup / 子=thanks → /signup/thanks/）
  */
 if ( ! defined( 'GCREV_SIGNUP_THANKS_URL' ) ) {
@@ -9321,6 +9330,9 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
 
     // --- 総合コメント生成 ---
     $card_keys  = [ 'organic_rank', 'map_rank', 'seo_diagnosis', 'aio_score', 'meo_diagnosis' ];
+    if ( ! mimamori_aio_enabled() ) {
+        $card_keys = array_values( array_diff( $card_keys, [ 'aio_score' ] ) );
+    }
     $card_names = [
         'organic_rank'  => '自然検索順位',
         'map_rank'      => 'マップ順位',

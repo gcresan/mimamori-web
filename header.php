@@ -231,11 +231,13 @@
                         <span>SEO診断</span>
                         </a>
                      </li>
+                     <?php if ( mimamori_aio_enabled() ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/ai-report/') ); ?>" class="nav-link <?php echo is_page('ai-report') ? 'active' : ''; ?>">
                         <span>AIO診断</span>
                         </a>
                      </li>
+                     <?php endif; ?>
                      <?php if ( mimamori_can_access_meo() ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/meo-diagnosis/') ); ?>" class="nav-link <?php echo is_page('meo-diagnosis') ? 'active' : ''; ?>">

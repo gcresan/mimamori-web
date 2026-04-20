@@ -853,7 +853,9 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         $sd_cards['map_rank'] = [ 'icon' => '📍', 'title' => 'マップ順位' ];
       }
       $sd_cards['seo_diagnosis'] = [ 'icon' => '🛡️', 'title' => 'SEO診断' ];
-      $sd_cards['aio_score']     = [ 'icon' => '🤖', 'title' => 'AIO診断' ];
+      if ( mimamori_aio_enabled() ) {
+        $sd_cards['aio_score']   = [ 'icon' => '🤖', 'title' => 'AIO診断' ];
+      }
       if ( $can_meo ) {
         $sd_cards['meo_diagnosis'] = [ 'icon' => '📋', 'title' => 'MEO診断' ];
       }

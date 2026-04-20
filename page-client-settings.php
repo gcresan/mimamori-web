@@ -685,7 +685,7 @@ get_header();
         <!-- 計測キーワード -->
         <div class="cs-section">
             <h2 class="cs-section-title"><span class="icon">🔑</span> 計測キーワード</h2>
-            <p style="font-size:13px;color:#64748b;margin:0 0 14px;">順位チェック・AIO診断で計測するキーワードを設定します（最大5件）</p>
+            <p style="font-size:13px;color:#64748b;margin:0 0 14px;"><?php echo mimamori_aio_enabled() ? '順位チェック・AIO診断で計測するキーワードを設定します（最大5件）' : '順位チェックで計測するキーワードを設定します（最大5件）'; ?></p>
 
             <div id="csKwTableWrap" style="display:none;">
                 <table class="cs-kw-table">
@@ -693,7 +693,9 @@ get_header();
                         <tr>
                             <th>キーワード</th>
                             <th style="text-align:center;">ランキング計測</th>
+                            <?php if ( mimamori_aio_enabled() ) : ?>
                             <th style="text-align:center;">AIO診断</th>
+                            <?php endif; ?>
                             <th style="text-align:right;">操作</th>
                         </tr>
                     </thead>
@@ -2101,12 +2103,14 @@ get_header();
             html += '</td>';
 
             // AIO診断トグル
+            <?php if ( mimamori_aio_enabled() ) : ?>
             html += '<td style="text-align:center;">';
             html += '<label class="cs-kw-toggle">';
             html += '<input type="checkbox"' + (kw.aio_enabled ? ' checked' : '') + ' onchange="csToggleAio(' + kw.id + ', this.checked)">';
             html += '<span class="cs-kw-toggle__slider"></span>';
             html += '</label>';
             html += '</td>';
+            <?php endif; ?>
 
             html += '<td style="text-align:right;">';
             html += '<div class="cs-kw-actions">';
