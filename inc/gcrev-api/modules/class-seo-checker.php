@@ -89,6 +89,11 @@ class Gcrev_SEO_Checker {
         // トップページを必ず先頭に
         $site_url_normalized = trailingslashit( $site_url );
         $urls = array_unique( array_merge( [ $site_url_normalized ], $urls ) );
+
+        // クライアント設定の解析対象URL条件 / 解析除外URL条件 を反映
+        // /media/ などの除外配下を SEO 診断のクロール対象から外す。
+        $urls = $this->apply_user_path_filters( $urls, $user_id, $site_url_normalized );
+
         $urls = array_slice( $urls, 0, self::MAX_PAGES );
 
         // 2. クロール & 解析
@@ -351,6 +356,39 @@ class Gcrev_SEO_Checker {
             'worsenedCount'   => $worsened,
             'perCheck'        => $per_check,
         ];
+    }
+
+    /* =========================================================
+     * 解析対象URL条件 / 解析除外URL条件
+     * ========================================================= */
+
+    /**
+     * クライアント設定の include/exclude path 条件で URL リストを絞り込む。
+     * トップページ（site_url_normalized）は SEO 診断の基準ページとして必ず残す。
+     */
+    private function apply_user_path_filters( array $urls, int $user_id, string $site_url_normalized ): array {
+        if ( ! class_exists( 'Gcrev_Path_Filter' ) ) {
+            return $urls;
+        }
+        $f = Gcrev_Path_Filter::get_user_filters( $user_id );
+        if ( empty( $f['include'] ) && empty( $f['exclude'] ) ) {
+            return $urls;
+        }
+
+        $top = trailingslashit( $site_url_normalized );
+
+        $filtered = [];
+        foreach ( $urls as $u ) {
+            // トップページは常に残す（include 条件に一致しなくても診断基準として必要）
+            if ( $u === $top || $u === rtrim( $top, '/' ) ) {
+                $filtered[] = $u;
+                continue;
+            }
+            if ( Gcrev_Path_Filter::matches( $u, $f['include'], $f['exclude'] ) ) {
+                $filtered[] = $u;
+            }
+        }
+        return $filtered;
     }
 
     /* =========================================================

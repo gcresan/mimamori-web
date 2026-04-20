@@ -3995,21 +3995,27 @@ PROMPT;
         // クライアント設定 + 月次設定をサーバー側で統合構築
         $client_info = $this->build_client_info_for_report($user_id);
 
-        // 海外アクセス除外：KPI・CV双方にフィルタ適用（finally で解除）
-        // 解析対象/除外URL条件も同時に GA4 + GSC へ伝播させる
-        $report_filter_set = ! empty( $client_info['exclude_foreign'] );
+        // 海外アクセス除外 + 解析対象/除外URL条件 を GA4 + GSC に適用してから
+        // 月次レポートのデータを取り直す。どちらか片方だけでも有効なら再取得する。
+        $exclude_foreign = ! empty( $client_info['exclude_foreign'] );
+        $inc = get_user_meta( $user_id, '_gcrev_include_paths', true );
+        $exc = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+        $inc = is_array( $inc ) ? $inc : [];
+        $exc = is_array( $exc ) ? $exc : [];
+        $has_path_filter = ! empty( $inc ) || ! empty( $exc );
+
+        $report_filter_set = $exclude_foreign;        // restore_country_filter に渡すフラグ
         $report_path_filters_applied = false;
-        if ( $report_filter_set ) {
+
+        if ( $exclude_foreign || $has_path_filter ) {
             try {
                 $config = $this->config->get_user_config( $user_id );
-                $this->ga4->set_country_filter( 'Japan' );
 
-                // path フィルタも適用（クライアント設定の include/exclude）
-                $inc = get_user_meta( $user_id, '_gcrev_include_paths', true );
-                $exc = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
-                $inc = is_array( $inc ) ? $inc : [];
-                $exc = is_array( $exc ) ? $exc : [];
-                if ( ! empty( $inc ) || ! empty( $exc ) ) {
+                if ( $exclude_foreign ) {
+                    $this->ga4->set_country_filter( 'Japan' );
+                }
+
+                if ( $has_path_filter ) {
                     $this->ga4->set_include_paths_filter( $inc );
                     $this->ga4->set_exclude_paths_filter( $exc );
                     $this->gsc->set_include_paths_filter( $inc );
@@ -4021,14 +4027,17 @@ PROMPT;
                 $prev_data = $this->fetch_dashboard_data_internal( $config, 'previousMonth' );
                 $two_data  = $this->fetch_dashboard_data_internal( $config, 'twoMonthsAgo' );
             } catch ( \Throwable $e ) {
-                $this->ga4->set_country_filter( null );
+                if ( $exclude_foreign ) {
+                    $this->ga4->set_country_filter( null );
+                }
                 if ( $report_path_filters_applied ) {
                     $this->ga4->clear_include_paths_filter();
                     $this->ga4->set_page_path_filter( null );
                     $this->gsc->clear_path_filters();
+                    $this->path_filters_set = false;
                     $report_path_filters_applied = false;
                 }
-                error_log( '[GCREV] generate_report: country filter refetch failed: ' . $e->getMessage() );
+                error_log( '[GCREV] generate_report: filter refetch failed: ' . $e->getMessage() );
                 $report_filter_set = false;
             }
         }
@@ -5244,14 +5253,30 @@ PROMPT;
             ];
         }
 
+        // 海外アクセス除外 + 解析対象/除外URL条件を GA4 + GSC の両方に適用してから
+        // 月次レポートのデータを取得する。これにより /media/ 等の除外配下が
+        // レポートの KPI / キーワード / ページ集計に混入しないようにする。
+        $exclude_foreign_manual = !empty($client_info['exclude_foreign']);
+        $inc_manual = get_user_meta( $user_id, '_gcrev_include_paths', true );
+        $exc_manual = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+        $inc_manual = is_array( $inc_manual ) ? $inc_manual : [];
+        $exc_manual = is_array( $exc_manual ) ? $exc_manual : [];
+        $has_path_filter_manual = ! empty( $inc_manual ) || ! empty( $exc_manual );
+        $path_filters_set_manual = false;
+
         try {
             // 既存のgenerate_reportロジックを呼び出し
             $config = $this->config->get_user_config($user_id);
 
-            // 海外アクセス除外フィルタ（CV取得まで維持、finally で解除）
-            $exclude_foreign_manual = !empty($client_info['exclude_foreign']);
             if ($exclude_foreign_manual) {
                 $this->ga4->set_country_filter('Japan');
+            }
+            if ( $has_path_filter_manual ) {
+                $this->ga4->set_include_paths_filter( $inc_manual );
+                $this->ga4->set_exclude_paths_filter( $exc_manual );
+                $this->gsc->set_include_paths_filter( $inc_manual );
+                $this->gsc->set_exclude_paths_filter( $exc_manual );
+                $path_filters_set_manual = true;
             }
 
             // 前月・前々月データ取得
@@ -5376,6 +5401,12 @@ PROMPT;
             // 海外アクセス除外フィルタ解除
             if ( $exclude_foreign_manual ) {
                 $this->ga4->set_country_filter( null );
+            }
+            // 解析対象/除外URL条件フィルタ解除
+            if ( $path_filters_set_manual ) {
+                $this->ga4->clear_include_paths_filter();
+                $this->ga4->set_page_path_filter( null );
+                $this->gsc->clear_path_filters();
             }
         }
     }
