@@ -440,11 +440,116 @@ class Gcrev_Execution_Service {
             // MEO（GBP）ダッシュボードデータ
             $context['meo']            = $this->collect_meo_data( $user_id );
 
+            // SEO診断結果（既存の保存済み診断があれば参照、なければ空配列）
+            $context['seo_diagnosis']  = $this->collect_seo_diagnosis( $user_id );
+
         } catch ( \Throwable $e ) {
             $this->log( "collect_context_for_ai ERROR: " . $e->getMessage() );
         }
 
         return $context;
+    }
+
+    /**
+     * SEO診断の保存済み結果から、AI 改善施策生成用の要約を抽出する。
+     *
+     * 外部API呼び出しは行わない（既存履歴の参照のみ）。診断未実施なら空配列。
+     */
+    private function collect_seo_diagnosis( int $user_id ): array {
+        if ( ! class_exists( 'Gcrev_SEO_Checker' ) ) {
+            return [];
+        }
+
+        try {
+            $checker = new \Gcrev_SEO_Checker();
+            $diag    = $checker->get_diagnosis( $user_id );
+        } catch ( \Throwable $e ) {
+            $this->log( "collect_seo_diagnosis ERROR: " . $e->getMessage() );
+            return [];
+        }
+
+        if ( ! is_array( $diag ) || empty( $diag['siteSummary'] ) ) {
+            return [];
+        }
+
+        // サイト全体サマリー
+        $summary = [
+            'total_score'    => (int) ( $diag['siteSummary']['totalScore'] ?? 0 ),
+            'rank'           => (string) ( $diag['siteSummary']['rank'] ?? '' ),
+            'critical_count' => (int) ( $diag['siteSummary']['criticalCount'] ?? 0 ),
+            'warning_count'  => (int) ( $diag['siteSummary']['warningCount'] ?? 0 ),
+            'page_count'     => (int) ( $diag['siteSummary']['pageCount'] ?? 0 ),
+            'checked_at'     => (string) ( $diag['siteSummary']['lastCheckedAt'] ?? '' ),
+        ];
+
+        // 8次元スコア（critical / caution のみ抽出。AI に「悪い項目」だけ渡す）
+        $weak_dimensions = [];
+        foreach ( $diag['seoChecks'] ?? [] as $check ) {
+            if ( ! is_array( $check ) ) continue;
+            if ( ! empty( $check['excluded'] ) ) continue;
+            $status = (string) ( $check['status'] ?? '' );
+            if ( $status !== 'critical' && $status !== 'caution' ) continue;
+            $weak_dimensions[] = [
+                'name'   => (string) ( $check['name'] ?? $check['label'] ?? '' ),
+                'score'  => (int) ( $check['score'] ?? 0 ),
+                'status' => $status,
+            ];
+        }
+
+        // 問題ページ（high / medium 優先）— 上位 10 件まで
+        $issues = [];
+        foreach ( (array) ( $diag['issuePages'] ?? [] ) as $issue ) {
+            if ( ! is_array( $issue ) ) continue;
+            $issues[] = [
+                'priority'   => (string) ( $issue['priority'] ?? 'medium' ),
+                'url'        => (string) ( $issue['url'] ?? '' ),
+                'page_title' => (string) ( $issue['pageTitle'] ?? '' ),
+                'category'   => (string) ( $issue['category'] ?? $issue['type'] ?? '' ),
+                'message'    => (string) ( $issue['message'] ?? $issue['description'] ?? '' ),
+            ];
+            if ( count( $issues ) >= 10 ) break;
+        }
+
+        // 改善提案（high / medium 優先）— 上位 10 件まで
+        $recommendations = [];
+        foreach ( (array) ( $diag['recommendations'] ?? [] ) as $rec ) {
+            if ( ! is_array( $rec ) ) continue;
+            $recommendations[] = [
+                'priority' => (string) ( $rec['priority'] ?? 'medium' ),
+                'title'    => (string) ( $rec['title'] ?? '' ),
+                'detail'   => (string) ( $rec['description'] ?? $rec['detail'] ?? '' ),
+            ];
+            if ( count( $recommendations ) >= 10 ) break;
+        }
+
+        // キーワード被覆（カバー不足のもの優先）— 上位 10 件まで
+        $keyword_gaps = [];
+        $kw_list = $diag['keywordAnalysis']['keywords'] ?? [];
+        if ( is_array( $kw_list ) ) {
+            foreach ( $kw_list as $kw ) {
+                if ( ! is_array( $kw ) ) continue;
+                $covered = $kw['covered'] ?? null;
+                // 未被覆 or 被覆ページが0のものを優先
+                if ( $covered === false || ( isset( $kw['coveredPages'] ) && (int) $kw['coveredPages'] === 0 ) ) {
+                    $keyword_gaps[] = [
+                        'keyword'       => (string) ( $kw['keyword'] ?? $kw['query'] ?? '' ),
+                        'covered_pages' => (int) ( $kw['coveredPages'] ?? 0 ),
+                    ];
+                    if ( count( $keyword_gaps ) >= 10 ) break;
+                }
+            }
+        }
+
+        return [
+            'summary'         => $summary,
+            'weak_dimensions' => $weak_dimensions,
+            'issues'          => $issues,
+            'recommendations' => $recommendations,
+            'keyword_gaps'    => $keyword_gaps,
+            'overall_assessment' => is_string( $diag['overallAssessment'] ?? null )
+                ? mb_substr( $diag['overallAssessment'], 0, 400 )
+                : '',
+        ];
     }
 
     /**
@@ -820,6 +925,51 @@ class Gcrev_Execution_Service {
         }
         if ( $meo_lines === '' ) { $meo_lines = "（MEO未連携またはデータ無し）\n"; }
 
+        // SEO診断（既存の保存済み診断結果からサマリーを抽出）
+        $seo_lines = '';
+        $seo = $context['seo_diagnosis'] ?? [];
+        if ( ! empty( $seo['summary'] ) ) {
+            $s = $seo['summary'];
+            $seo_lines .= sprintf(
+                "- 総合スコア: %d点 / ランク: %s / 重大課題: %d件 / 警告: %d件 / 診断済ページ: %d / 最終診断: %s\n",
+                $s['total_score'], $s['rank'], $s['critical_count'], $s['warning_count'], $s['page_count'], $s['checked_at']
+            );
+            if ( ! empty( $seo['overall_assessment'] ) ) {
+                $seo_lines .= "- 全体評価: " . $seo['overall_assessment'] . "\n";
+            }
+            if ( ! empty( $seo['weak_dimensions'] ) ) {
+                $seo_lines .= "- 弱点項目（critical/caution）:\n";
+                foreach ( array_slice( $seo['weak_dimensions'], 0, 8 ) as $d ) {
+                    $seo_lines .= "  ・{$d['name']} ({$d['status']}, {$d['score']}点)\n";
+                }
+            }
+            if ( ! empty( $seo['issues'] ) ) {
+                $seo_lines .= "- 問題ページ（優先度順）:\n";
+                foreach ( array_slice( $seo['issues'], 0, 8 ) as $iss ) {
+                    $title  = $iss['page_title'] !== '' ? $iss['page_title'] : $iss['url'];
+                    $msg    = $iss['message'] !== '' ? $iss['message'] : $iss['category'];
+                    $seo_lines .= "  ・[{$iss['priority']}] {$title} — {$msg}\n";
+                }
+            }
+            if ( ! empty( $seo['recommendations'] ) ) {
+                $seo_lines .= "- 診断由来の改善提案:\n";
+                foreach ( array_slice( $seo['recommendations'], 0, 8 ) as $r ) {
+                    $line = "  ・[{$r['priority']}] {$r['title']}";
+                    if ( $r['detail'] !== '' ) {
+                        $line .= " — " . mb_substr( $r['detail'], 0, 120 );
+                    }
+                    $seo_lines .= $line . "\n";
+                }
+            }
+            if ( ! empty( $seo['keyword_gaps'] ) ) {
+                $seo_lines .= "- 未被覆/カバー不足キーワード:\n";
+                foreach ( array_slice( $seo['keyword_gaps'], 0, 8 ) as $g ) {
+                    $seo_lines .= "  ・{$g['keyword']} (該当ページ: {$g['covered_pages']})\n";
+                }
+            }
+        }
+        if ( $seo_lines === '' ) { $seo_lines = "（SEO診断未実施）\n"; }
+
         // 競合サイト内容
         $comp_lines = '';
         foreach ( $context['competitors'] ?? [] as $c ) {
@@ -847,16 +997,22 @@ class Gcrev_Execution_Service {
   - ✅ GSCキーワード欄に「松山 ホームページ制作 (表示:500, 順位:8.3)」がある → 「順位が8位前後で伸び悩んでいる」と書いてよい
   - ✅ ページ診断欄に「Clarity: レージクリック12」がある → 「〇〇ページでレージクリックが12件発生しておりUX問題の可能性があります」と書いてよい
   - ✅ 競合サイト欄に該当URLのH2見出しが列挙されている → 「競合は〇〇〇という見出しで情報を提供している」と書いてよい
+  - ✅ SEO診断欄に「タイトルタグ未設定（critical）」と該当URLがある → 「〇〇ページのタイトルタグが未設定で重大課題と診断されています」と書いてよい
   - ❌ データ欄にないのに「あなたのサイトは◯◯件」「競合は平均◯本」等の数値を創作するのは禁止
-- ページ診断・Clarity・競合 のいずれかが「未実施/未登録」と書かれている場合、そのセクションに基づく断定はしないこと。
+- ページ診断・Clarity・競合・SEO診断 のいずれかが「未実施/未登録」と書かれている場合、そのセクションに基づく断定はしないこと。
 
 【アクションのgrounding（具体性）の優先度】
 - 以下の順でより具体的なアクションを優先:
   1. 順位変動で下落キーワードがあれば、該当キーワードのリライト/記事追加/内部リンク補強
-  2. Clarityでレージクリック・デッドクリック・離脱の兆候があるページの改善
-  3. 競合サイトの見出し構成と比較して不足している情報カテゴリの補充
-  4. ペルソナ・主要CV・月次レポート方針に沿った CV 導線強化
-  5. 一般的 SEO ベストプラクティス（最後の手段）
+  2. SEO診断の「重大課題（critical）」「警告（caution）」項目の解消（弱点項目・問題ページ・診断由来の改善提案を直接参照）
+  3. Clarityでレージクリック・デッドクリック・離脱の兆候があるページの改善
+  4. 競合サイトの見出し構成と比較して不足している情報カテゴリの補充
+  5. SEO診断の未被覆/カバー不足キーワードに対する記事作成
+  6. ペルソナ・主要CV・月次レポート方針に沿った CV 導線強化
+  7. 一般的 SEO ベストプラクティス（最後の手段）
+
+- SEO診断セクションに具体的なページURL・項目名・診断由来の改善提案がある場合、それを優先的に reason に引用すること
+  （例: 「SEO診断で〇〇ページの descriptionタグが未設定（critical）と検出されています」）
 
 【出力件数・重複ルール】
 - 出力は5件以内、6件以上は禁止
@@ -895,6 +1051,8 @@ class Gcrev_Execution_Service {
 
 【ページ診断＋Clarity行動データ】
 {$page_lines}
+【SEO診断（サイト全体の技術・内部最適化スコア）】
+{$seo_lines}
 【MEO（Googleビジネスプロフィール）実績】
 {$meo_lines}
 【競合サイト内容（ユーザー登録の参考URL解析）】
