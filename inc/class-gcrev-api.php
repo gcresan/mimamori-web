@@ -1316,6 +1316,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_revert_action' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/execution/action/(?P<id>\d+)/guide', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_action_guide' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/execution/refresh', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_refresh_execution' ],
@@ -16328,6 +16333,19 @@ PROMPT;
     public function rest_revert_action( \WP_REST_Request $request ): \WP_REST_Response {
         $exec = $this->get_execution_service();
         $result = $exec->revert_action( get_current_user_id(), (int) $request->get_param( 'id' ) );
+        $code = ! empty( $result['success'] ) ? 200 : 404;
+        return new \WP_REST_Response( $result, $code );
+    }
+
+    /**
+     * GET /execution/action/{id}/guide — 「詳しく見る」用の実行ガイドを取得（無ければAI生成→保存）
+     */
+    public function rest_get_action_guide( \WP_REST_Request $request ): \WP_REST_Response {
+        $exec   = $this->get_execution_service();
+        $result = $exec->get_or_generate_action_guide(
+            get_current_user_id(),
+            (int) $request->get_param( 'id' )
+        );
         $code = ! empty( $result['success'] ) ? 200 : 404;
         return new \WP_REST_Response( $result, $code );
     }

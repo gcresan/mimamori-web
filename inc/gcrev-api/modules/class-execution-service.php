@@ -1125,6 +1125,16 @@ class Gcrev_Execution_Service {
 - expected_effect は1文。楽観的断言は避け「〜が期待できます」「〜につながります」程度
 - comparison フィールドは出力しない
 
+【初心者向けの言葉づかい（必須）】
+- title / reason / expected_effect は、Webやマーケティングに詳しくない中小企業オーナーが読んで
+  「自分が何をすべきか」が一目で分かる平易な日本語で書くこと
+- 専門用語をそのまま使わない。使う場合は短くカッコ書きで補足する
+  - ✗「内部リンクを最適化」→ ○「ページ同士をつなぐリンク（内部リンク）を増やしましょう」
+  - ✗「CTAをFV直下に配置」→ ○「ページ上部にお問い合わせボタンを目立つ形で置く」
+  - ✗「メタディスクリプションを修正」→ ○「検索結果に出る説明文（メタディスクリプション）を見直す」
+  - ✗「UX改善」「CV改善」「FV」→ ○「使いやすさを直す」「お問い合わせ導線を強くする」「ページ上部」
+- 英単語そのまま（UX / CV / FV / CTA / KPI など）の使用は禁止。日本語で言い換える
+
 === 入力データ ===
 
 【クライアント基本情報】
@@ -1304,11 +1314,14 @@ PROMPT;
     }
 
     private function format_actions( array $rows ): array {
+        $labels    = self::action_type_label_map();
         $formatted = [];
         foreach ( $rows as $row ) {
+            $type = $row['action_type'];
             $formatted[] = [
                 'id'                     => (int) $row['id'],
-                'action_type'            => $row['action_type'],
+                'action_type'            => $type,
+                'action_type_label'      => $labels[ $type ] ?? $type,
                 'priority'               => $row['priority'],
                 'title'                  => $row['title'],
                 'reason'                 => $row['reason'],
@@ -1445,15 +1458,8 @@ PROMPT;
             }
         }
 
-        // タイプラベル
-        $type_labels = [
-            'article_create' => '記事作成',
-            'rewrite'        => 'リライト',
-            'internal_link'  => '内部リンク',
-            'meo_post'       => 'MEO投稿',
-            'meta_fix'       => 'メタ情報修正',
-            'page_speed'     => '表示速度改善',
-        ];
+        // タイプラベル（初心者でも分かる日本語に統一。type 名は英字のまま、表示名だけ平易に）
+        $type_labels = self::action_type_label_map();
 
         $by_type_formatted = [];
         foreach ( $by_type as $type => $counts ) {
@@ -1565,6 +1571,247 @@ PROMPT;
             $action_id, $user_id
         ), ARRAY_A );
         return $row ?: null;
+    }
+
+    /**
+     * 「詳しく見る」用のステップバイステップ実行ガイドを取得する。
+     * 既に guide_text に保存されていればそれを返し、無ければ AI で生成して保存する。
+     *
+     * @return array{success:bool, guide_html?:string, error?:string}
+     */
+    public function get_or_generate_action_guide( int $user_id, int $action_id ): array {
+        $action = $this->get_action( $user_id, $action_id );
+        if ( ! $action ) {
+            return [ 'success' => false, 'error' => 'アクションが見つかりません。' ];
+        }
+
+        $existing = trim( (string) ( $action['guide_text'] ?? '' ) );
+        if ( $existing !== '' ) {
+            return [
+                'success'    => true,
+                'guide_html' => $this->guide_text_to_html( $existing ),
+                'cached'     => true,
+            ];
+        }
+
+        try {
+            $guide_md = $this->generate_action_guide_with_ai( $user_id, $action );
+        } catch ( \Throwable $e ) {
+            $this->log( 'get_or_generate_action_guide ERROR: ' . $e->getMessage() );
+            return [ 'success' => false, 'error' => 'ガイドの生成に失敗しました。少し時間を置いて再度お試しください。' ];
+        }
+
+        if ( $guide_md === '' ) {
+            return [ 'success' => false, 'error' => 'ガイドの生成に失敗しました。' ];
+        }
+
+        // DB へキャッシュ保存（1ページの再表示でAIを再呼び出しさせない）
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_execution_actions';
+        $wpdb->update(
+            $table,
+            [ 'guide_text' => $guide_md, 'updated_at' => current_time( 'mysql' ) ],
+            [ 'id' => $action_id ],
+            [ '%s', '%s' ],
+            [ '%d' ]
+        );
+
+        return [
+            'success'    => true,
+            'guide_html' => $this->guide_text_to_html( $guide_md ),
+            'cached'     => false,
+        ];
+    }
+
+    /**
+     * action_type → 初心者でも一目で意味が伝わる日本語表示名のマップ。
+     * 「今月のノルマ」カードと、ガイド生成プロンプトの両方で使う唯一の出典。
+     */
+    private static function action_type_label_map(): array {
+        return [
+            'article_create' => '新しい記事を書く',
+            'rewrite'        => '既存ページを書き直す',
+            'internal_link'  => 'ページ同士をリンクでつなぐ',
+            'meo_post'       => 'Googleマップに投稿する',
+            'meta_fix'       => 'タイトル・説明文を直す',
+            'page_speed'     => 'ページの表示を速くする',
+            'ux_fix'         => '使いやすさを改善する',
+            'cv_improvement' => 'お問い合わせ導線を強くする',
+        ];
+    }
+
+    /**
+     * Gemini を呼んで「リテラシー低めの中小企業オーナー向けの実行手順」を Markdown で生成する。
+     */
+    private function generate_action_guide_with_ai( int $user_id, array $action ): string {
+        $business = $this->collect_client_settings( $user_id );
+        $industry = trim( ( $business['industry'] ?? '' ) . ' ' . ( $business['industry_detail'] ?? '' ) );
+        if ( $industry === '' ) { $industry = '（未設定）'; }
+        $area     = $business['area']     ?? '';
+        $site_url = $business['site_url'] ?? '';
+
+        $title           = (string) ( $action['title']           ?? '' );
+        $reason          = (string) ( $action['reason']          ?? '' );
+        $action_type     = (string) ( $action['action_type']     ?? '' );
+        $target_keyword  = (string) ( $action['target_keyword']  ?? '' );
+        $target_url      = (string) ( $action['target_url']      ?? '' );
+        $quantity        = (int)    ( $action['quantity']        ?? 0 );
+        $unit            = (string) ( $action['unit']            ?? '' );
+        $expected_effect = (string) ( $action['expected_effect'] ?? '' );
+
+        $type_label = self::action_type_label_map()[ $action_type ] ?? $action_type;
+
+        $context_lines = '';
+        if ( $industry  !== '（未設定）' && $industry !== '' ) { $context_lines .= "- 業種: {$industry}\n"; }
+        if ( $area      !== '' ) { $context_lines .= "- 地域: {$area}\n"; }
+        if ( $site_url  !== '' ) { $context_lines .= "- サイト: {$site_url}\n"; }
+        if ( $target_keyword !== '' ) { $context_lines .= "- 対象キーワード: {$target_keyword}\n"; }
+        if ( $target_url !== '' ) { $context_lines .= "- 対象ページ: {$target_url}\n"; }
+        if ( $quantity > 0 && $unit !== '' ) { $context_lines .= "- 数量: {$quantity}{$unit}\n"; }
+        if ( $expected_effect !== '' ) { $context_lines .= "- 期待される効果: {$expected_effect}\n"; }
+
+        $prompt = <<<PROMPT
+あなたは中小企業オーナー（パソコンやWebマーケティングが得意ではない人）に
+「今月やるべき改善施策」を、その人が一人で実行できるよう手取り足取り解説する
+親切なWebコンサルタントです。
+
+下記の改善施策について、「読んだだけで何をどうやればいいか分かる」レベルの
+実行ガイドを Markdown で書いてください。
+
+【施策】
+- タイトル: {$title}
+- 種類: {$type_label}
+- 必要な理由: {$reason}
+
+【このクライアントの背景】
+{$context_lines}
+
+【書き方ルール】
+- 専門用語は最小限。使う場合は必ず一文で噛み砕いた説明を添える
+  （例: 「内部リンク（自分のサイト内の別ページへのリンク）」）
+- 命令形ではなく「〜しましょう」「〜してください」など丁寧で安心感のある語り口
+- 全体は 600〜900 文字程度
+- Markdown 構造は以下のテンプレートに必ず従う：
+
+## なぜこれが必要か（2〜3文）
+（このクライアントのデータや状況に即して、優しく説明）
+
+## やる手順（番号付きリスト 4〜6 ステップ）
+1. 何を、どこで、どう操作するかを具体的に
+2. ボタン名・画面名は実際の名称で（例: 「WordPress管理画面 → 投稿 → 新規追加」）
+3. ステップごとに、つまずきそうなポイントを一文で補足
+4. ...
+
+## つまずきやすいポイント（箇条書き 2〜4個）
+- ありがちな失敗とその回避方法
+- 専門用語の言い換え
+
+## できあがりの目安（1〜2文）
+- 「これができれば成功」という具体的な完了状態を提示
+
+## 所要時間の目安
+- 〇〇分〜〇〇時間程度
+
+【絶対ルール】
+- 出力は Markdown のみ。前後の説明文は不要
+- 架空のツール・プラグイン・URLを作らない
+- 数値や順位の捏造禁止。施策の reason に書かれている範囲で語る
+PROMPT;
+
+        $response = $this->ai->call_gemini_api( $prompt, [
+            'temperature'     => 0.4,
+            'maxOutputTokens' => 2048,
+        ] );
+
+        return is_string( $response ) ? trim( $response ) : '';
+    }
+
+    /**
+     * Markdown のごく一部（見出し / 番号付き / 箇条書き / 段落 / 強調）だけを HTML に変換する。
+     * 既存テーマと同じ控えめなマークアップに合わせる。外部ライブラリ依存なし。
+     */
+    private function guide_text_to_html( string $md ): string {
+        $md = trim( $md );
+        if ( $md === '' ) return '';
+
+        // コードブロック記法が混ざっていたら除去
+        $md = preg_replace( '/```[a-z]*\n?|```/i', '', $md );
+
+        $lines = preg_split( "/\r\n|\r|\n/", $md );
+        $html  = '';
+        $list_type = null; // 'ol' | 'ul' | null
+        $para_buf  = [];
+
+        $flush_para = function() use ( &$html, &$para_buf ) {
+            if ( $para_buf ) {
+                $text = implode( ' ', $para_buf );
+                $html .= '<p>' . $this->inline_md_to_html( $text ) . '</p>';
+                $para_buf = [];
+            }
+        };
+        $close_list = function() use ( &$html, &$list_type ) {
+            if ( $list_type ) {
+                $html .= "</{$list_type}>";
+                $list_type = null;
+            }
+        };
+
+        foreach ( $lines as $raw ) {
+            $line = rtrim( $raw );
+            if ( $line === '' ) {
+                $flush_para();
+                $close_list();
+                continue;
+            }
+
+            if ( preg_match( '/^### +(.+)$/u', $line, $m ) ) {
+                $flush_para(); $close_list();
+                $html .= '<h4 class="exec-guide__h4">' . esc_html( $m[1] ) . '</h4>';
+                continue;
+            }
+            if ( preg_match( '/^## +(.+)$/u', $line, $m ) ) {
+                $flush_para(); $close_list();
+                $html .= '<h3 class="exec-guide__h3">' . esc_html( $m[1] ) . '</h3>';
+                continue;
+            }
+            if ( preg_match( '/^# +(.+)$/u', $line, $m ) ) {
+                $flush_para(); $close_list();
+                $html .= '<h3 class="exec-guide__h3">' . esc_html( $m[1] ) . '</h3>';
+                continue;
+            }
+            if ( preg_match( '/^\d+\.\s+(.+)$/u', $line, $m ) ) {
+                $flush_para();
+                if ( $list_type !== 'ol' ) { $close_list(); $html .= '<ol class="exec-guide__ol">'; $list_type = 'ol'; }
+                $html .= '<li>' . $this->inline_md_to_html( $m[1] ) . '</li>';
+                continue;
+            }
+            if ( preg_match( '/^[-*・]\s+(.+)$/u', $line, $m ) ) {
+                $flush_para();
+                if ( $list_type !== 'ul' ) { $close_list(); $html .= '<ul class="exec-guide__ul">'; $list_type = 'ul'; }
+                $html .= '<li>' . $this->inline_md_to_html( $m[1] ) . '</li>';
+                continue;
+            }
+
+            // 通常段落（連続行は1段落にまとめる）
+            $close_list();
+            $para_buf[] = $line;
+        }
+
+        $flush_para();
+        $close_list();
+
+        return $html;
+    }
+
+    /**
+     * インライン Markdown のごく一部（**強調** / `code`）を HTML 化する。
+     * その他の HTML はエスケープして安全に保つ。
+     */
+    private function inline_md_to_html( string $text ): string {
+        $text = esc_html( $text );
+        $text = preg_replace( '/\*\*(.+?)\*\*/u', '<strong>$1</strong>', $text );
+        $text = preg_replace( '/`([^`]+)`/u', '<code>$1</code>', $text );
+        return $text;
     }
 
     public function update_action_status( int $action_id, string $status ): bool {

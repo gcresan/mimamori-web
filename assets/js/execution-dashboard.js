@@ -12,11 +12,11 @@
     /* ================================================================
        API
        ================================================================ */
-    function apiFetch(path, method, body) {
+    function apiFetch(path, method, body, timeoutMs) {
         var opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
         if (NONCE) opts.headers['X-WP-Nonce'] = NONCE;
         if (body)  opts.body = JSON.stringify(body);
-        var ms = (method === 'POST') ? 120000 : 30000;
+        var ms = timeoutMs || ((method === 'POST') ? 120000 : 30000);
         var ctrl = new AbortController(); opts.signal = ctrl.signal;
         var t = setTimeout(function(){ ctrl.abort(); }, ms);
         return fetch(API + path, opts)
@@ -181,6 +181,9 @@
                 html += '<span class="exec-badge exec-badge--done">⏳ 作業中</span>';
             }
         }
+        if (a.action_type_label) {
+            html += '<span class="exec-badge exec-badge--type">' + esc(a.action_type_label) + '</span>';
+        }
         html += '</div>';
 
         // タイトル
@@ -197,7 +200,23 @@
             html += '<button class="exec-btn exec-btn--primary" data-exec-action="' + a.id + '" data-exec-type="complete">完了にする</button>';
             html += '<button class="exec-btn exec-btn--ghost" data-exec-action="' + a.id + '" data-exec-type="skip">スキップ</button>';
         }
-        html += '</div></div>';
+
+        // 詳しく見るトグル（リテラシー低めの方向けの実行手順ガイド）
+        var detailId = 'exec-detail-' + a.id;
+        html += '<button type="button" class="exec-action-card__detail-toggle" '
+              + 'data-exec-detail-toggle="' + a.id + '" '
+              + 'aria-expanded="false" aria-controls="' + detailId + '">詳しく見る</button>';
+        html += '</div>';
+
+        // 詳細パネル（初回展開時に AI ガイドを fetch）
+        // guide_text が既に DB にある場合はサーバ側がHTML化済みのものを返してくれるが、
+        // ここではプレースホルダだけ用意して、トグル時に loadActionGuide() で埋める。
+        html += '<div class="exec-action-card__detail" id="' + detailId
+              + '" data-exec-detail-panel="' + a.id + '" '
+              + (a.guide_text ? 'data-exec-detail-cached="1"' : '')
+              + ' hidden></div>';
+
+        html += '</div>';
         return html;
     }
 
@@ -211,6 +230,57 @@
                 if (type === 'revert')   handleRevert(id, btn);
             });
         });
+
+        // 詳しく見るトグル
+        container.querySelectorAll('[data-exec-detail-toggle]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var id    = parseInt(btn.dataset.execDetailToggle, 10);
+                var panel = container.querySelector('[data-exec-detail-panel="' + id + '"]');
+                if (!panel) return;
+
+                var isOpen = btn.getAttribute('aria-expanded') === 'true';
+                if (isOpen) {
+                    panel.hidden = true;
+                    btn.setAttribute('aria-expanded', 'false');
+                    btn.textContent = '詳しく見る';
+                    return;
+                }
+
+                btn.setAttribute('aria-expanded', 'true');
+                btn.textContent = '閉じる';
+                panel.hidden = false;
+
+                // 初回展開時のみ取得（HTMLが空ならロード）
+                if (!panel.innerHTML.trim()) {
+                    loadActionGuide(id, panel);
+                }
+            });
+        });
+    }
+
+    function loadActionGuide(id, panel) {
+        panel.innerHTML = '<div class="exec-action-card__detail--loading">'
+            + '<div class="exec-loading__spinner" style="margin-bottom:10px"></div>'
+            + '<div>分かりやすい手順を作成中です…（最大30秒ほど）</div></div>';
+
+        apiFetch('/action/' + id + '/guide')
+            .then(function(d) {
+                if (d && d.guide_html) {
+                    panel.innerHTML = d.guide_html;
+                } else {
+                    panel.innerHTML = '<div class="exec-action-card__detail--error">'
+                        + 'ガイドを取得できませんでした。</div>';
+                }
+            })
+            .catch(function(e) {
+                panel.innerHTML = '<div class="exec-action-card__detail--error">'
+                    + 'エラー: ' + esc(e.message) + ' '
+                    + '<button type="button" class="exec-btn exec-btn--secondary exec-btn--sm" '
+                    + 'style="margin-left:8px" data-exec-detail-retry="' + id + '">再試行</button>'
+                    + '</div>';
+                var retry = panel.querySelector('[data-exec-detail-retry]');
+                if (retry) retry.addEventListener('click', function() { loadActionGuide(id, panel); });
+            });
     }
 
     /* ================================================================

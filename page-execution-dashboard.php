@@ -1,7 +1,7 @@
 <?php
 /**
- * Template Name: 今月のおすすめ改善施策
- * Description: 現時点での分析にもとづき、今月取り組むべき改善施策を提示する。
+ * Template Name: 改善施策提案
+ * Description: 現時点での分析にもとづき、今月取り組むべき改善施策を提案する。
  */
 
 if ( ! is_user_logged_in() ) {
@@ -12,9 +12,9 @@ if ( ! is_user_logged_in() ) {
 $current_user = wp_get_current_user();
 $user_id      = $current_user->ID;
 
-set_query_var( 'gcrev_page_title', '今月のおすすめ改善施策' );
-set_query_var( 'gcrev_page_subtitle', '現時点での分析にもとづく、今月取り組むべき改善施策。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '今月のおすすめ改善施策' ) );
+set_query_var( 'gcrev_page_title', '改善施策提案' );
+set_query_var( 'gcrev_page_subtitle', '現時点での分析にもとづく、今月取り組むべき改善施策の提案です。' );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '改善施策提案' ) );
 
 get_header();
 ?>
@@ -64,6 +64,7 @@ get_header();
 .exec-badge--medium { background: rgba(212,168,67,0.1); color: #B8922E; }
 .exec-badge--low { background: rgba(86,129,132,0.1); color: #568184; }
 .exec-badge--done { background: rgba(86,129,132,0.12); color: #568184; }
+.exec-badge--type { background: var(--mw-bg-secondary, #F0F4F5); color: var(--mw-text-secondary); border: 1px solid var(--mw-border-light); }
 .exec-action-card__title { font-size: 15px; font-weight: 600; color: var(--mw-text-heading); line-height: 1.5; }
 .exec-action-card__reason { font-size: 13px; color: var(--mw-text-secondary); margin-top: 4px; line-height: 1.5; }
 .exec-action-card__buttons { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
@@ -78,6 +79,55 @@ get_header();
 .exec-btn--ghost { background: transparent; color: var(--mw-text-secondary); padding: 6px 12px; font-size: 12px; }
 .exec-btn--ghost:hover { color: var(--mw-text-heading); background: var(--mw-bg-secondary); }
 .exec-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+/* ===== 詳しく見るトグル ===== */
+.exec-action-card__detail-toggle {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: transparent; border: none; padding: 6px 0;
+    font-size: 13px; font-weight: 500; color: var(--mw-primary-blue, #568184);
+    cursor: pointer; transition: color 0.15s;
+}
+.exec-action-card__detail-toggle:hover { color: var(--mw-btn-primary-hover, #476C6F); }
+.exec-action-card__detail-toggle::after {
+    content: '▾'; display: inline-block; transition: transform 0.2s; font-size: 11px;
+}
+.exec-action-card__detail-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+
+.exec-action-card__detail {
+    margin-top: 14px; padding: 18px 20px;
+    background: var(--mw-bg-secondary, #F6FAFB);
+    border: 1px solid var(--mw-border-light);
+    border-radius: 8px;
+    font-size: 14px; line-height: 1.75; color: var(--mw-text-primary);
+}
+.exec-action-card__detail[hidden] { display: none; }
+
+.exec-action-card__detail--loading,
+.exec-action-card__detail--error {
+    text-align: center; padding: 24px 16px;
+}
+.exec-action-card__detail--error { color: #C95A4F; }
+
+.exec-guide__h3 {
+    font-size: 15px; font-weight: 700; color: var(--mw-text-heading);
+    margin: 18px 0 8px; padding-bottom: 6px;
+    border-bottom: 2px solid var(--mw-primary-blue, #568184);
+    display: inline-block;
+}
+.exec-guide__h3:first-child { margin-top: 0; }
+.exec-guide__h4 {
+    font-size: 14px; font-weight: 700; color: var(--mw-text-heading);
+    margin: 14px 0 6px;
+}
+.exec-action-card__detail p { margin: 8px 0; }
+.exec-guide__ol, .exec-guide__ul { margin: 8px 0 12px; padding-left: 24px; }
+.exec-guide__ol li, .exec-guide__ul li { margin-bottom: 6px; }
+.exec-action-card__detail code {
+    background: rgba(86,129,132,0.08); padding: 1px 6px;
+    border-radius: 4px; font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.exec-action-card__detail strong { color: var(--mw-text-heading); }
 
 /* ===== ⑤ 順位変動・原因 ===== */
 .exec-rank-table { width: 100%; border-collapse: collapse; }
