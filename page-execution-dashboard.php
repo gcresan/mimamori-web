@@ -35,48 +35,42 @@ get_header();
 .exec-section__title-icon { font-size: 16px; }
 .exec-card { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); padding: 20px 24px; }
 
-/* ===== ① 今すぐやること（ヒーロー） ===== */
-.exec-hero { background: linear-gradient(135deg, #568184 0%, #476C6F 100%); border-radius: var(--mw-radius-md, 12px); padding: 28px 32px; color: #fff; position: relative; overflow: hidden; }
-.exec-hero::before { content: '⚡'; position: absolute; top: -10px; right: -10px; font-size: 80px; opacity: 0.08; }
-.exec-hero__label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; margin-bottom: 10px; }
-.exec-hero__title { font-size: 20px; font-weight: 700; line-height: 1.5; margin-bottom: 8px; }
-.exec-hero__reason { font-size: 13px; opacity: 0.85; line-height: 1.6; }
-
-/* ===== ヒーロー内の詳しく見る ===== */
-.exec-hero__detail-toggle {
-    display: inline-flex; align-items: center; gap: 4px;
-    margin-top: 14px; padding: 8px 14px;
-    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
-    border-radius: 6px; color: #fff;
-    font-size: 13px; font-weight: 600; cursor: pointer;
-    transition: background 0.15s;
-}
-.exec-hero__detail-toggle:hover { background: rgba(255,255,255,0.25); }
-.exec-hero__detail-toggle::after {
-    content: '▾'; display: inline-block; transition: transform 0.2s; font-size: 11px;
-}
-.exec-hero__detail-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
-
-/* ヒーロー内の詳細パネルは白背景に戻して可読性を確保 */
-.exec-hero__detail {
-    margin-top: 16px;
-    background: #fff;
-    color: var(--mw-text-primary);
-    border: none;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-}
-
-/* ===== ② 今月のノルマ ===== */
+/* ===== 今月のノルマ ===== */
 .exec-quota { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
-.exec-quota__item { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); padding: 16px; text-align: center; }
+.exec-quota__item {
+    background: var(--mw-bg-primary);
+    border: 1px solid var(--mw-border-light);
+    border-radius: var(--mw-radius-md, 12px);
+    padding: 16px;
+    text-align: center;
+    border-top: 4px solid var(--exec-type-color, #568184);
+}
 .exec-quota__label { font-size: 12px; color: var(--mw-text-secondary); margin-bottom: 6px; }
 .exec-quota__value { font-size: 22px; font-weight: 700; color: var(--mw-text-heading); }
 .exec-quota__value span { font-size: 13px; font-weight: 400; color: var(--mw-text-tertiary); }
 .exec-quota__bar { height: 4px; background: var(--mw-bg-secondary); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-.exec-quota__fill { height: 100%; background: var(--mw-primary-blue, #568184); border-radius: 2px; transition: width 0.5s; }
-.exec-quota__fill--done { background: #568184; }
+.exec-quota__fill { height: 100%; background: var(--exec-type-color, var(--mw-primary-blue, #568184)); border-radius: 2px; transition: width 0.5s; }
+.exec-quota__fill--done { background: var(--exec-type-color, #568184); }
 
-/* ===== ③ アクションカード ===== */
+/* ===== タイプ別カラー（ノルマカード + やることリストバッジで共通） =====
+   各 action_type に一意の色を割り当て、ノルマと施策カードを視覚的に紐づける。 */
+.exec-type-article_create { --exec-type-color: #4A6FA5; }
+.exec-type-rewrite        { --exec-type-color: #7B6FAC; }
+.exec-type-internal_link  { --exec-type-color: #568184; }
+.exec-type-meo_post       { --exec-type-color: #D88752; }
+.exec-type-meta_fix       { --exec-type-color: #B8922E; }
+.exec-type-page_speed     { --exec-type-color: #4A9DAB; }
+.exec-type-ux_fix         { --exec-type-color: #C97A91; }
+.exec-type-cv_improvement { --exec-type-color: #5E9F73; }
+
+/* やることリストカードのタイプバッジ（背景色＝カラー、文字色＝白） */
+.exec-badge--type {
+    background: var(--exec-type-color, var(--mw-bg-secondary, #F0F4F5));
+    color: #fff;
+    border: none;
+}
+
+/* ===== アクションカード ===== */
 .exec-actions__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .exec-action-card { background: var(--mw-bg-primary); border: 1px solid var(--mw-border-light); border-radius: var(--mw-radius-md, 12px); padding: 18px 22px; margin-bottom: 10px; transition: box-shadow 0.2s; }
 .exec-action-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
@@ -153,7 +147,7 @@ get_header();
 }
 .exec-action-card__detail strong { color: var(--mw-text-heading); }
 
-/* ===== ⑤ 順位変動・原因 ===== */
+/* ===== 順位変動・原因 ===== */
 .exec-rank-table { width: 100%; border-collapse: collapse; }
 .exec-rank-table th { padding: 10px 16px; font-size: 13px; font-weight: 600; color: var(--mw-text-secondary); text-align: left; background: var(--mw-bg-secondary); border-bottom: 1px solid var(--mw-border-light); }
 .exec-rank-table td { padding: 10px 16px; font-size: 14px; color: var(--mw-text-primary); border-bottom: 1px solid var(--mw-border-light); }
@@ -198,10 +192,7 @@ get_header();
     <!-- メインコンテンツ（JS で表示） -->
     <div id="exec-content" style="display:none;">
 
-        <!-- ① 今すぐやること（ヒーロー） -->
-        <section class="exec-section" id="exec-hero-section"></section>
-
-        <!-- ② 今月のノルマ -->
+        <!-- ① 今月のノルマ -->
         <section class="exec-section">
             <h2 class="exec-section__title"><span class="exec-section__title-icon">📊</span> 今月のノルマ</h2>
             <div class="exec-quota" id="exec-quota"></div>

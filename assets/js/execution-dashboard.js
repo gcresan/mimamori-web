@@ -59,7 +59,6 @@
     }
 
     function renderAll(data) {
-        renderHero(data.actions || []);
         renderQuota(data.progress || {});
         renderActions(data.actions || []);
         renderRootCause(data.root_cause);
@@ -67,47 +66,12 @@
     }
 
     /* ================================================================
-       ① 今すぐやること（ヒーロー）
+       （旧: 今すぐやることヒーロー — 廃止）
+       やることリスト側で優先度順に表示されるため不要になった。
        ================================================================ */
-    function renderHero(actions) {
-        var section = document.getElementById('exec-hero-section');
-        if (!section) return;
-
-        // 最も優先度が高い pending アクションを1つ選ぶ
-        var top = null;
-        var order = { high: 0, medium: 1, low: 2 };
-        for (var i = 0; i < actions.length; i++) {
-            if (actions[i].status !== 'pending') continue;
-            if (!top || (order[actions[i].priority] || 9) < (order[top.priority] || 9)) {
-                top = actions[i];
-            }
-        }
-
-        if (!top) {
-            section.innerHTML = '<div class="exec-hero" style="background:#568184"><div class="exec-hero__label">✅ 今月のタスク</div><div class="exec-hero__title">すべて完了しました！</div><div class="exec-hero__reason">引き続き順位の変化を確認しましょう。</div></div>';
-            return;
-        }
-
-        // ヒーローは「今すぐやること」を案内する。詳しく見るで実行ガイドを展開できる。
-        var heroDetailId = 'exec-hero-detail-' + top.id;
-        section.innerHTML =
-            '<div class="exec-hero">' +
-                '<div class="exec-hero__label">⚡ 今すぐやること</div>' +
-                '<div class="exec-hero__title">' + esc(top.title) + '</div>' +
-                '<div class="exec-hero__reason">' + esc(top.reason) + '</div>' +
-                '<button type="button" class="exec-hero__detail-toggle" ' +
-                    'data-exec-detail-toggle="' + top.id + '" ' +
-                    'aria-expanded="false" aria-controls="' + heroDetailId + '">詳しく見る</button>' +
-                '<div class="exec-action-card__detail exec-hero__detail" id="' + heroDetailId + '" ' +
-                    'data-exec-detail-panel="' + top.id + '" hidden></div>' +
-            '</div>';
-
-        // ヒーロー内のトグルも有効化
-        bindActionButtons(section);
-    }
 
     /* ================================================================
-       ② 今月のノルマ
+       今月のノルマ
        ================================================================ */
     function renderQuota(progress) {
         var container = document.getElementById('exec-quota');
@@ -123,7 +87,9 @@
         byType.forEach(function(t) {
             var pct = t.total > 0 ? Math.round((t.completed / t.total) * 100) : 0;
             var done = pct >= 100;
-            html += '<div class="exec-quota__item">';
+            // タイプ別カラー（exec-type-<type>）を付与し、施策カードのバッジと色を一致させる
+            var typeCls = t.type ? ' exec-type-' + esc(t.type) : '';
+            html += '<div class="exec-quota__item' + typeCls + '">';
             html += '<div class="exec-quota__label">' + esc(t.label) + '</div>';
             html += '<div class="exec-quota__value">' + t.completed + '<span> / ' + t.total + '</span></div>';
             html += '<div class="exec-quota__bar"><div class="exec-quota__fill' + (done ? ' exec-quota__fill--done' : '') + '" style="width:' + pct + '%"></div></div>';
@@ -191,7 +157,9 @@
             }
         }
         if (a.action_type_label) {
-            html += '<span class="exec-badge exec-badge--type">' + esc(a.action_type_label) + '</span>';
+            // タイプ別カラー（exec-type-<type>）でノルマカードと同じ色を当てる
+            var typeBadgeCls = a.action_type ? ' exec-type-' + esc(a.action_type) : '';
+            html += '<span class="exec-badge exec-badge--type' + typeBadgeCls + '">' + esc(a.action_type_label) + '</span>';
         }
         html += '</div>';
 
