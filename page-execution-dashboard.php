@@ -155,8 +155,19 @@ get_header();
 .exec-badge--low { background: rgba(86,129,132,0.1); color: #568184; }
 .exec-badge--done { background: rgba(86,129,132,0.12); color: #568184; }
 .exec-badge--type { background: var(--mw-bg-secondary, #F0F4F5); color: var(--mw-text-secondary); border: 1px solid var(--mw-border-light); }
-.exec-action-card__title { font-size: 15px; font-weight: 600; color: var(--mw-text-heading); line-height: 1.5; }
-.exec-action-card__reason { font-size: 13px; color: var(--mw-text-secondary); margin-top: 4px; line-height: 1.5; }
+.exec-action-card__title {
+    font-size: 23px;            /* 旧 15px → 23px (1.5倍超) */
+    font-weight: 700;
+    color: var(--mw-text-heading);
+    line-height: 1.45;
+    margin-top: 4px;
+    letter-spacing: 0.01em;
+}
+.exec-action-card__reason { font-size: 14px; color: var(--mw-text-secondary); margin-top: 8px; line-height: 1.6; }
+
+@media (max-width: 768px) {
+    .exec-action-card__title { font-size: 19px; }
+}
 .exec-action-card__buttons { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
 
 /* ボタン */
