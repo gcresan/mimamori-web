@@ -668,21 +668,30 @@ class Gcrev_Execution_Service {
                 ), ARRAY_A );
             }
 
-            // ai_insights は JSON の場合があるので文字列化
-            $insights = $r['ai_insights'];
-            if ( $insights && ( $decoded = json_decode( $insights, true ) ) !== null ) {
-                $insights = is_array( $decoded ) ? wp_json_encode( $decoded, JSON_UNESCAPED_UNICODE ) : $insights;
+            // ai_insights は JSON の場合があるので「人間とAIが読める」形に整形する
+            $insights_text = '';
+            $raw_insights  = $r['ai_insights'] ?? '';
+            if ( $raw_insights ) {
+                $decoded = json_decode( (string) $raw_insights, true );
+                if ( is_array( $decoded ) ) {
+                    // よくあるキー（problems / improvements / observations 等）を見出し付き箇条書きに
+                    $insights_text = self::flatten_ai_insights( $decoded );
+                } else {
+                    $insights_text = (string) $raw_insights;
+                }
             }
 
             $out[] = [
-                'url'         => $r['page_url'],
-                'title'       => $r['page_title'],
-                'type'        => $r['page_type'],
-                'purpose'     => $r['page_purpose'],
-                'cta'         => $r['page_cta'],
-                'ai_summary'  => $r['ai_summary'] ? mb_substr( (string) $r['ai_summary'], 0, 300 ) : '',
-                'ai_insights' => $insights ? mb_substr( (string) $insights, 0, 400 ) : '',
-                'clarity'     => $clarity ? [
+                'url'              => $r['page_url'],
+                'title'            => $r['page_title'],
+                'type'             => $r['page_type'],
+                'purpose'          => $r['page_purpose'],
+                'cta'              => $r['page_cta'],
+                // AI 診断の本文は十分な情報量を渡す（旧: 300文字 → 1500文字）
+                'ai_summary'       => $r['ai_summary'] ? mb_substr( (string) $r['ai_summary'], 0, 1500 ) : '',
+                'ai_insights'      => $insights_text !== '' ? mb_substr( $insights_text, 0, 1000 ) : '',
+                'ai_analysis_date' => (string) ( $r['ai_analysis_date'] ?? '' ),
+                'clarity'          => $clarity ? [
                     'sessions'        => (int) ( $clarity['sessions'] ?? 0 ),
                     'page_views'      => (int) ( $clarity['page_views'] ?? 0 ),
                     'scroll_depth'    => $clarity['scroll_depth'] !== null ? round( (float) $clarity['scroll_depth'], 1 ) : null,
@@ -694,6 +703,68 @@ class Gcrev_Execution_Service {
             ];
         }
         return $out;
+    }
+
+    /**
+     * ai_insights JSON を AI/人間が読みやすい平文に整形する。
+     * よくあるキー（problems / improvements / observations / strengths / cv_blockers 等）
+     * を見出し付き箇条書きに変換する。
+     */
+    private static function flatten_ai_insights( array $data ): string {
+        $label_map = [
+            'problems'        => '問題点',
+            'issues'          => '問題点',
+            'weaknesses'      => '弱み',
+            'improvements'    => '改善案',
+            'recommendations' => '改善案',
+            'suggestions'     => '改善案',
+            'strengths'       => '強み',
+            'observations'    => '観察事項',
+            'cv_blockers'     => 'CV阻害要因',
+            'ux_issues'       => 'UX課題',
+            'seo_issues'      => 'SEO課題',
+            'content_issues'  => 'コンテンツ課題',
+            'summary'         => '要約',
+            'overall'         => '総評',
+            'priority'        => '優先度',
+        ];
+
+        $lines = [];
+        foreach ( $data as $key => $value ) {
+            $label = $label_map[ $key ] ?? (string) $key;
+
+            if ( is_string( $value ) ) {
+                $value = trim( $value );
+                if ( $value !== '' ) {
+                    $lines[] = "{$label}: {$value}";
+                }
+            } elseif ( is_array( $value ) ) {
+                // 文字列要素の配列なら箇条書き、それ以外は再帰
+                $items = [];
+                foreach ( $value as $v ) {
+                    if ( is_string( $v ) && trim( $v ) !== '' ) {
+                        $items[] = '・' . trim( $v );
+                    } elseif ( is_array( $v ) ) {
+                        // ネストされた構造（例: [{title, detail, priority}, ...]）
+                        $parts = [];
+                        foreach ( [ 'title', 'name', 'message', 'detail', 'description', 'priority' ] as $sub ) {
+                            if ( ! empty( $v[ $sub ] ) && is_string( $v[ $sub ] ) ) {
+                                $parts[] = $v[ $sub ];
+                            }
+                        }
+                        if ( $parts ) {
+                            $items[] = '・' . implode( ' / ', $parts );
+                        }
+                    }
+                }
+                if ( $items ) {
+                    $lines[] = "{$label}:\n" . implode( "\n", $items );
+                }
+            } elseif ( is_scalar( $value ) ) {
+                $lines[] = "{$label}: " . (string) $value;
+            }
+        }
+        return implode( "\n", $lines );
     }
 
     /**
@@ -875,17 +946,39 @@ class Gcrev_Execution_Service {
         }
         if ( $gsc_lines === '' ) { $gsc_lines = "（データなし）\n"; }
 
-        // ページ診断 + Clarity
+        // ページ診断 + AI分析 + Clarity
         $page_lines = '';
-        foreach ( array_slice( $context['page_analysis'] ?? [], 0, 10 ) as $p ) {
+        foreach ( array_slice( $context['page_analysis'] ?? [], 0, 12 ) as $p ) {
             $page_lines .= "- URL: {$p['url']}\n";
             if ( ! empty( $p['title'] ) )   { $page_lines .= "  タイトル: {$p['title']}\n"; }
-            if ( ! empty( $p['type'] ) )    { $page_lines .= "  種類: {$p['type']}"; }
-            if ( ! empty( $p['purpose'] ) ) { $page_lines .= " / 目的: {$p['purpose']}"; }
-            if ( ! empty( $p['cta'] ) )     { $page_lines .= " / CTA: {$p['cta']}"; }
-            $page_lines .= "\n";
-            if ( ! empty( $p['ai_summary'] ) )  { $page_lines .= "  AI要約: {$p['ai_summary']}\n"; }
-            if ( ! empty( $p['ai_insights'] ) ) { $page_lines .= "  AI所見: {$p['ai_insights']}\n"; }
+
+            $meta_parts = [];
+            if ( ! empty( $p['type'] ) )    { $meta_parts[] = "種類: {$p['type']}"; }
+            if ( ! empty( $p['purpose'] ) ) { $meta_parts[] = "目的: {$p['purpose']}"; }
+            if ( ! empty( $p['cta'] ) )     { $meta_parts[] = "CTA: {$p['cta']}"; }
+            if ( $meta_parts ) {
+                $page_lines .= '  ' . implode( ' / ', $meta_parts ) . "\n";
+            }
+
+            // AI 診断本文（OpenAI GPT-5 で生成された各ページの個別改善案）
+            // 行頭にインデントを入れ、複数行でも視認性を確保
+            if ( ! empty( $p['ai_summary'] ) ) {
+                $page_lines .= "  AI診断本文:\n";
+                $body = trim( (string) $p['ai_summary'] );
+                foreach ( preg_split( "/\r\n|\r|\n/", $body ) as $bl ) {
+                    $page_lines .= "    " . $bl . "\n";
+                }
+            }
+            if ( ! empty( $p['ai_insights'] ) ) {
+                $page_lines .= "  AI所見（構造化）:\n";
+                foreach ( preg_split( "/\r\n|\r|\n/", trim( (string) $p['ai_insights'] ) ) as $il ) {
+                    $page_lines .= "    " . $il . "\n";
+                }
+            }
+            if ( ! empty( $p['ai_analysis_date'] ) ) {
+                $page_lines .= "  最終AI診断日時: {$p['ai_analysis_date']}\n";
+            }
+
             if ( ! empty( $p['clarity'] ) ) {
                 $c = $p['clarity'];
                 $page_lines .= sprintf(
@@ -896,6 +989,7 @@ class Gcrev_Execution_Service {
                     $c['dead_click'], $c['rage_click'], $c['error_click']
                 );
             }
+            $page_lines .= "\n";
         }
         if ( $page_lines === '' ) { $page_lines = "（ページ診断未実施）\n"; }
 
@@ -996,21 +1090,26 @@ class Gcrev_Execution_Service {
 - 数値の比較・断定は、渡されたデータに裏付けがある場合のみ許可。例えば:
   - ✅ GSCキーワード欄に「松山 ホームページ制作 (表示:500, 順位:8.3)」がある → 「順位が8位前後で伸び悩んでいる」と書いてよい
   - ✅ ページ診断欄に「Clarity: レージクリック12」がある → 「〇〇ページでレージクリックが12件発生しておりUX問題の可能性があります」と書いてよい
+  - ✅ ページ診断欄の「AI診断本文」に「ファーストビューにCTAがなく離脱の可能性」と書かれている → 「〇〇ページのAI診断でファーストビューにCTAがないと指摘されています」と書いてよい
   - ✅ 競合サイト欄に該当URLのH2見出しが列挙されている → 「競合は〇〇〇という見出しで情報を提供している」と書いてよい
   - ✅ SEO診断欄に「タイトルタグ未設定（critical）」と該当URLがある → 「〇〇ページのタイトルタグが未設定で重大課題と診断されています」と書いてよい
   - ❌ データ欄にないのに「あなたのサイトは◯◯件」「競合は平均◯本」等の数値を創作するのは禁止
 - ページ診断・Clarity・競合・SEO診断 のいずれかが「未実施/未登録」と書かれている場合、そのセクションに基づく断定はしないこと。
+- ページ診断の「AI診断本文」「AI所見」は OpenAI GPT がそのページのスクリーンショット・コンテンツ・ペルソナを総合して書いた一次診断結果であり、施策の根拠として最優先で参照すること。
 
 【アクションのgrounding（具体性）の優先度】
 - 以下の順でより具体的なアクションを優先:
-  1. 順位変動で下落キーワードがあれば、該当キーワードのリライト/記事追加/内部リンク補強
-  2. SEO診断の「重大課題（critical）」「警告（caution）」項目の解消（弱点項目・問題ページ・診断由来の改善提案を直接参照）
-  3. Clarityでレージクリック・デッドクリック・離脱の兆候があるページの改善
-  4. 競合サイトの見出し構成と比較して不足している情報カテゴリの補充
-  5. SEO診断の未被覆/カバー不足キーワードに対する記事作成
-  6. ペルソナ・主要CV・月次レポート方針に沿った CV 導線強化
-  7. 一般的 SEO ベストプラクティス（最後の手段）
+  1. ページ診断の「AI診断本文」「AI所見」で具体的に指摘されている改善点（CTA配置・コンテンツ不足・UX問題等）の直接対応
+  2. 順位変動で下落キーワードがあれば、該当キーワードのリライト/記事追加/内部リンク補強
+  3. SEO診断の「重大課題（critical）」「警告（caution）」項目の解消（弱点項目・問題ページ・診断由来の改善提案を直接参照）
+  4. Clarityでレージクリック・デッドクリック・離脱の兆候があるページの改善
+  5. 競合サイトの見出し構成と比較して不足している情報カテゴリの補充
+  6. SEO診断の未被覆/カバー不足キーワードに対する記事作成
+  7. ペルソナ・主要CV・月次レポート方針に沿った CV 導線強化
+  8. 一般的 SEO ベストプラクティス（最後の手段）
 
+- ページ診断の「AI診断本文」がそのページごとに存在する場合、その指摘内容を reason に直接引用すること
+  （例: 「〇〇ページのAI診断でファーストビューにCTAがないと指摘されています」）
 - SEO診断セクションに具体的なページURL・項目名・診断由来の改善提案がある場合、それを優先的に reason に引用すること
   （例: 「SEO診断で〇〇ページの descriptionタグが未設定（critical）と検出されています」）
 
