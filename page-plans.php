@@ -440,10 +440,12 @@ get_header();
             'coming_soon'  => true,
             'cumulative'   => 'MEO・口コミ対策に加え',
             'features'     => [
-                [ 'text' => 'コンテンツSEO機能',          'on' => true ],
-                [ 'text' => 'キーワード調査・競合分析',   'on' => true ],
-                [ 'text' => 'コラム記事作成機能',         'on' => true ],
-                [ 'text' => '一次情報ストック機能',       'on' => true ],
+                [ 'text' => '戦略に基づくキーワード設計',                                 'on' => true ],
+                [ 'text' => '検索意図を踏まえた記事構成設計',                             'on' => true ],
+                [ 'text' => 'AI活用＋人の編集による記事制作（週1本／4,000〜7,000文字）', 'on' => true ],
+                [ 'text' => '音声インタビューによる一次情報の収集・コンテンツ反映',        'on' => true ],
+                [ 'text' => '品質チェックおよび改善対応',                                 'on' => true ],
+                [ 'text' => 'SEO内部最適化',                                             'on' => true ],
             ],
         ],
         [
