@@ -1012,9 +1012,12 @@ get_header();
             document.getElementById('seoActionsContent').innerHTML = '<div class="seo-empty">提案はありません</div>';
             return;
         }
+        // 注意: priorityOrder['high'] === 0 のため (val || 9) は 0 を 9 に化けさせて
+        // high が末尾に来てしまう。値が undefined のときだけ 9 にフォールバックする。
         var priorityOrder = { high: 0, medium: 1, low: 2 };
+        var rank = function(p) { var v = priorityOrder[p]; return v === undefined ? 9 : v; };
         var sorted = recs.slice().sort(function(a, b) {
-            return (priorityOrder[a.priority] || 9) - (priorityOrder[b.priority] || 9);
+            return rank(a.priority) - rank(b.priority);
         });
         var html = '<div class="seo-actions-list">';
         sorted.forEach(function(r) {
