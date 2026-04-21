@@ -186,6 +186,13 @@ $flow_summary_steps = [
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-M5HWSJN3');</script>
+    <!-- End Google Tag Manager -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo esc_html($survey_title ?: 'アンケート'); ?></title>
@@ -1164,6 +1171,10 @@ $flow_summary_steps = [
     </style>
 </head>
 <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-M5HWSJN3"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <div class="review-container" style="--sv-header-bg:<?php echo esc_attr($survey_colors['header_bg']); ?>;--sv-heading-text:<?php echo esc_attr($survey_colors['heading_text']); ?>;--sv-button-bg:<?php echo esc_attr($survey_colors['button_bg']); ?>;--sv-button-text:<?php echo esc_attr($survey_colors['button_text']); ?>;--sv-accent:<?php echo esc_attr($survey_colors['accent']); ?>;--sv-accent-text:<?php echo esc_attr($survey_colors['accent_text']); ?>;">
 
         <!-- ヘッダー（クライアント名帯） -->
