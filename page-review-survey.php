@@ -354,7 +354,7 @@ get_header();
             </div>
             <div class="sv-form-group">
                 <label class="sv-form-label">説明文</label>
-                <textarea class="sv-form-textarea" id="sv-description" placeholder="アンケートの説明（回答者には表示されません）"></textarea>
+                <textarea class="sv-form-textarea" id="sv-description" placeholder="アンケートの説明"></textarea>
             </div>
             <div class="sv-form-row">
                 <div class="sv-form-group">
