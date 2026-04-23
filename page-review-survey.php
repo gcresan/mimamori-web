@@ -550,15 +550,18 @@ get_header();
         <!-- 入力ステップ -->
         <div id="sv-ep-step-input">
             <p style="color:#555; font-size:13px; margin:0 0 12px;">
-                実際に集まった口コミをいくつか貼り付けてください。<br>
+                実際に集まった口コミを1件ずつ登録してください。<br>
                 AIが「書き方のクセ・長さ・雰囲気」を分析し、既存プロンプトに追加する形式のルールを生成します。<br>
-                <strong>同業他社の口コミでも構いません。複数件あるほど精度が上がります。</strong>
+                <strong>同業他社の口コミでも構いません。複数件（3件以上推奨）あるほど精度が上がります。最大10件まで登録できます。</strong>
             </p>
             <div class="sv-form-group">
-                <label class="sv-form-label">参考口コミ（改行で区切って複数件貼り付け可） <span style="color:#dc2626;">*</span></label>
-                <textarea class="sv-form-textarea" id="sv-ep-reviews" rows="10"
-                    placeholder="例:&#10;初めて利用しました。説明がわかりやすく、不安だった部分もきちんと確認してもらえたので安心できました。仕上がりも納得で、また機会があればお願いしたいです。&#10;&#10;地元で長くお世話になっています。急な依頼でも親身に対応してくれて、価格も妥当だと感じます。&#10;&#10;近くで探してこちらを選びました。事前の説明が丁寧で、当日も無理のないペースで進めてもらえました。"></textarea>
-                <p style="font-size:11px;color:#9ca3af;margin-top:4px;">目安: 3〜10件 / 合計 300〜3000字程度</p>
+                <label class="sv-form-label">参考口コミサンプル <span style="color:#dc2626;">*</span></label>
+                <div id="sv-ep-slots"><!-- JS で動的に slot を追加 --></div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-top:8px;">
+                    <button type="button" class="sv-btn-secondary" id="sv-ep-btn-add-slot">＋ 口コミを追加</button>
+                    <span id="sv-ep-slots-count" style="font-size:12px; color:#6b7280;">0 / 10 件</span>
+                </div>
+                <p style="font-size:11px;color:#9ca3af;margin-top:6px;">目安: 1件あたり 50〜300字。登録は最大10件まで。</p>
             </div>
         </div>
 
@@ -1629,11 +1632,16 @@ get_header();
         var btn = document.getElementById('sv-btn-extra-prompt-gen');
         if (!btn) return;
 
+        var MAX_SLOTS = 10;
+        var INITIAL_SLOTS = 3;
+
         var modal       = document.getElementById('sv-extra-prompt-modal');
         var stepInput   = document.getElementById('sv-ep-step-input');
         var stepLoading = document.getElementById('sv-ep-step-loading');
         var stepPreview = document.getElementById('sv-ep-step-preview');
-        var reviewsInput = document.getElementById('sv-ep-reviews');
+        var slotsContainer = document.getElementById('sv-ep-slots');
+        var slotsCountEl   = document.getElementById('sv-ep-slots-count');
+        var btnAddSlot  = document.getElementById('sv-ep-btn-add-slot');
         var summaryBox  = document.getElementById('sv-ep-summary');
         var analysisBox = document.getElementById('sv-ep-analysis');
         var outputBox   = document.getElementById('sv-ep-output');
@@ -1642,6 +1650,71 @@ get_header();
         var btnAppend   = document.getElementById('sv-ep-btn-append');
         var btnReplace  = document.getElementById('sv-ep-btn-replace');
         var extraPromptField = document.getElementById('sv-ai-extra-prompt');
+
+        function slotCount() {
+            return slotsContainer.querySelectorAll('.sv-ep-slot').length;
+        }
+
+        function renumberSlots() {
+            var slots = slotsContainer.querySelectorAll('.sv-ep-slot');
+            slots.forEach(function(slot, i) {
+                var label = slot.querySelector('.sv-ep-slot-label');
+                if (label) label.textContent = '口コミ ' + (i + 1);
+            });
+            slotsCountEl.textContent = slots.length + ' / ' + MAX_SLOTS + ' 件';
+            btnAddSlot.disabled = (slots.length >= MAX_SLOTS);
+            // 最後の1件は削除不可（最低1件は残す）
+            slots.forEach(function(slot) {
+                var rm = slot.querySelector('.sv-ep-slot-remove');
+                if (rm) rm.disabled = (slots.length <= 1);
+            });
+        }
+
+        function createSlot(value) {
+            if (slotCount() >= MAX_SLOTS) return null;
+            var wrap = document.createElement('div');
+            wrap.className = 'sv-ep-slot';
+            wrap.style.cssText = 'border:1px solid #e5e7eb; border-radius:6px; padding:10px; margin-bottom:8px; background:#fff;';
+            wrap.innerHTML =
+                '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
+                '  <strong class="sv-ep-slot-label" style="font-size:13px; color:#374151;">口コミ</strong>' +
+                '  <button type="button" class="sv-ep-slot-remove" style="background:none; border:none; color:#dc2626; font-size:13px; cursor:pointer;">× 削除</button>' +
+                '</div>' +
+                '<textarea class="sv-form-textarea sv-ep-slot-input" rows="4" maxlength="600" placeholder="例：初めて利用しました。説明がわかりやすく、不安だった部分もきちんと確認してもらえたので安心できました。仕上がりも納得で、また機会があればお願いしたいです。" style="min-height:90px;"></textarea>';
+            if (typeof value === 'string') {
+                wrap.querySelector('.sv-ep-slot-input').value = value;
+            }
+            wrap.querySelector('.sv-ep-slot-remove').addEventListener('click', function() {
+                if (slotCount() <= 1) { return; }
+                wrap.remove();
+                renumberSlots();
+            });
+            slotsContainer.appendChild(wrap);
+            renumberSlots();
+            return wrap;
+        }
+
+        function resetSlots() {
+            slotsContainer.innerHTML = '';
+            for (var i = 0; i < INITIAL_SLOTS; i++) { createSlot(''); }
+        }
+
+        function collectReviews() {
+            var out = [];
+            slotsContainer.querySelectorAll('.sv-ep-slot-input').forEach(function(ta) {
+                var v = ta.value.trim();
+                if (v !== '') out.push(v);
+            });
+            return out;
+        }
+
+        btnAddSlot.addEventListener('click', function() {
+            var slot = createSlot('');
+            if (slot) {
+                var input = slot.querySelector('.sv-ep-slot-input');
+                if (input) input.focus();
+            }
+        });
 
         function setStep(step) {
             stepInput.style.display   = (step === 'input')   ? 'block' : 'none';
@@ -1660,6 +1733,7 @@ get_header();
         }
 
         btn.addEventListener('click', function() {
+            resetSlots();
             setStep('input');
             modal.classList.add('show');
         });
@@ -1670,15 +1744,20 @@ get_header();
         });
 
         btnGen.addEventListener('click', function() {
-            var reviews = reviewsInput.value.trim();
-            if (reviews.length < 40) {
-                toast('参考口コミが短すぎます。数文、できれば複数件を入力してください。', 'error');
+            var reviews = collectReviews();
+            if (reviews.length === 0) {
+                toast('参考口コミを1件以上入力してください。', 'error');
+                return;
+            }
+            var combined = reviews.join('\n\n');
+            if (combined.length < 40) {
+                toast('参考口コミが短すぎます。もう少し詳しく、または件数を増やしてください。', 'error');
                 return;
             }
 
             setStep('loading');
 
-            apiPost('generate-extra-prompt', { reviews: reviews }).then(function(res) {
+            apiPost('generate-extra-prompt', { reviews: combined }).then(function(res) {
                 if (res.success && res.extra_prompt) {
                     summaryBox.textContent = res.summary || '';
                     analysisBox.textContent = res.analysis || '（分析データなし）';
