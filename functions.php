@@ -6670,6 +6670,7 @@ function gcrev_survey_create_tables(): void {
         status VARCHAR(20) NOT NULL DEFAULT 'draft',
         ai_keywords TEXT,
         ai_extra_prompt TEXT,
+        ai_reference_reviews TEXT,
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY  (id),

@@ -394,6 +394,15 @@ get_header();
                     <textarea class="sv-form-textarea" id="sv-ai-extra-prompt" placeholder="例：文末は「ありがとうございました」で締めてください" style="min-height:80px;"></textarea>
                     <p style="font-size:11px;color:#9ca3af;margin-top:4px;">口コミ生成AIへの追加指示を自由に記述できます。実際の口コミをいくつかお持ちなら「参考口コミから生成」で AI が書き方のクセを抽出してくれます。</p>
                 </div>
+                <div class="sv-form-group">
+                    <label class="sv-form-label">参考口コミサンプル（AI生成時のテイスト参考用 / 最大5件）</label>
+                    <div id="sv-ref-reviews-slots"><!-- JS で動的追加 --></div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
+                        <button type="button" class="sv-btn-secondary" id="sv-btn-add-ref-review" style="font-size:12px;">＋ 口コミを追加</button>
+                        <span id="sv-ref-reviews-count" style="font-size:12px; color:#6b7280;">0 / 5 件</span>
+                    </div>
+                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">登録した口コミは生成AIに「文体の参考」として渡されます（固有名詞や具体的な数値は引用禁止の指示付き）。上の「参考口コミから生成」で入力した口コミは自動でここに反映されます。</p>
+                </div>
             </div>
             <button type="button" class="sv-btn-save" id="sv-btn-save-info">保存する</button>
         </div>
@@ -909,6 +918,7 @@ get_header();
         document.getElementById('sv-questions-container').innerHTML = '';
         document.getElementById('sv-ai-extra-prompt').value = '';
         if (typeof loadKeywords === 'function') loadKeywords('');
+        if (typeof setReferenceReviews === 'function') setReferenceReviews([]);
         resetQForm();
     }
 
@@ -924,6 +934,7 @@ get_header();
             document.getElementById('sv-status').value = s.status || 'draft';
             document.getElementById('sv-ai-extra-prompt').value = s.ai_extra_prompt || '';
             loadKeywords(s.ai_keywords || '');
+            setReferenceReviews(Array.isArray(s.ai_reference_reviews) ? s.ai_reference_reviews : []);
 
             // Public URL
             if (data.public_url) {
@@ -969,6 +980,7 @@ get_header();
             status: document.getElementById('sv-status').value,
             ai_keywords: getKeywordsString(),
             ai_extra_prompt: document.getElementById('sv-ai-extra-prompt').value.trim(),
+            ai_reference_reviews: getReferenceReviews(),
         };
 
         apiPost('save', payload).then(function(res) {
@@ -1344,6 +1356,92 @@ get_header();
     keywordInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') { e.preventDefault(); addKeyword(); }
     });
+
+    // =====================================================
+    // 参考口コミサンプル（生成時の few-shot 用、最大5件）
+    // =====================================================
+    var REF_MAX = 5;
+    var refSlotsContainer = document.getElementById('sv-ref-reviews-slots');
+    var refCountEl = document.getElementById('sv-ref-reviews-count');
+    var btnAddRef = document.getElementById('sv-btn-add-ref-review');
+
+    function refSlotCount() {
+        return refSlotsContainer ? refSlotsContainer.querySelectorAll('.sv-ref-slot').length : 0;
+    }
+
+    function renumberRefSlots() {
+        if (!refSlotsContainer) return;
+        var slots = refSlotsContainer.querySelectorAll('.sv-ref-slot');
+        slots.forEach(function(slot, i) {
+            var label = slot.querySelector('.sv-ref-slot-label');
+            if (label) label.textContent = 'サンプル ' + (i + 1);
+        });
+        if (refCountEl) refCountEl.textContent = slots.length + ' / ' + REF_MAX + ' 件';
+        if (btnAddRef) btnAddRef.disabled = (slots.length >= REF_MAX);
+    }
+
+    function createRefSlot(value) {
+        if (!refSlotsContainer) return null;
+        if (refSlotCount() >= REF_MAX) return null;
+        var wrap = document.createElement('div');
+        wrap.className = 'sv-ref-slot';
+        wrap.style.cssText = 'border:1px solid #e5e7eb; border-radius:6px; padding:8px 10px; margin-bottom:6px; background:#fff;';
+        wrap.innerHTML =
+            '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
+            '  <strong class="sv-ref-slot-label" style="font-size:12px; color:#374151;">サンプル</strong>' +
+            '  <button type="button" class="sv-ref-slot-remove" style="background:none; border:none; color:#dc2626; font-size:12px; cursor:pointer;">× 削除</button>' +
+            '</div>' +
+            '<textarea class="sv-form-textarea sv-ref-slot-input" rows="3" maxlength="600" placeholder="例：初めて利用しました。説明がわかりやすく、不安だった部分もきちんと確認してもらえたので安心できました。仕上がりも納得で、また機会があればお願いしたいです。" style="min-height:70px;"></textarea>';
+        if (typeof value === 'string') {
+            wrap.querySelector('.sv-ref-slot-input').value = value;
+        }
+        wrap.querySelector('.sv-ref-slot-remove').addEventListener('click', function() {
+            wrap.remove();
+            renumberRefSlots();
+        });
+        refSlotsContainer.appendChild(wrap);
+        renumberRefSlots();
+        return wrap;
+    }
+
+    // Expose to resetEditForm / loadSurveyDetail (global within IIFE scope)
+    function setReferenceReviews(arr) {
+        if (!refSlotsContainer) return;
+        refSlotsContainer.innerHTML = '';
+        if (Array.isArray(arr)) {
+            arr.slice(0, REF_MAX).forEach(function(r) {
+                if (typeof r === 'string' && r.trim() !== '') {
+                    createRefSlot(r);
+                }
+            });
+        }
+        renumberRefSlots();
+    }
+
+    function getReferenceReviews() {
+        if (!refSlotsContainer) return [];
+        var out = [];
+        refSlotsContainer.querySelectorAll('.sv-ref-slot-input').forEach(function(ta) {
+            var v = ta.value.trim();
+            if (v !== '') out.push(v);
+        });
+        return out.slice(0, REF_MAX);
+    }
+
+    // IIFE 外からも呼べるようクロージャ内に関数を配置。loadSurveyDetail/resetEditForm が
+    // typeof チェックで呼び出しているため問題なく動作する。
+    window.__svSetReferenceReviews = setReferenceReviews;
+    window.__svGetReferenceReviews = getReferenceReviews;
+
+    if (btnAddRef) {
+        btnAddRef.addEventListener('click', function() {
+            var slot = createRefSlot('');
+            if (slot) {
+                var input = slot.querySelector('.sv-ref-slot-input');
+                if (input) input.focus();
+            }
+        });
+    }
 
     // =====================================================
     // Delete survey
@@ -1799,12 +1897,34 @@ get_header();
             });
         });
 
+        function syncReferenceReviewsFromModal(mode) {
+            // mode: 'replace' = スロットを入力内容で丸ごと置換 / 'append' = 既存スロットに追加（計5件上限）
+            if (typeof getReferenceReviews !== 'function' || typeof setReferenceReviews !== 'function') return;
+            var modalReviews = collectReviews().slice(0, 5);
+            if (modalReviews.length === 0) return;
+
+            if (mode === 'replace') {
+                setReferenceReviews(modalReviews);
+                return;
+            }
+
+            // append: 既存 + モーダル入力、重複排除、5件上限
+            var current = getReferenceReviews();
+            var merged = current.slice();
+            modalReviews.forEach(function(r) {
+                if (merged.length >= 5) return;
+                if (merged.indexOf(r) === -1) { merged.push(r); }
+            });
+            setReferenceReviews(merged);
+        }
+
         btnReplace.addEventListener('click', function() {
             if (!extraPromptField) return;
             if (extraPromptField.value.trim() !== '' &&
-                !confirm('既存の追加プロンプトを上書きします。よろしいですか？')) return;
+                !confirm('既存の追加プロンプトと参考口コミサンプルを上書きします。よろしいですか？')) return;
             extraPromptField.value = outputBox.value;
-            toast('追加プロンプトに反映しました。「保存する」ボタンで確定してください。');
+            syncReferenceReviewsFromModal('replace');
+            toast('追加プロンプト＋参考口コミサンプルに反映しました。「保存する」ボタンで確定してください。');
             closeModal();
         });
 
@@ -1814,7 +1934,8 @@ get_header();
             extraPromptField.value = current === ''
                 ? outputBox.value
                 : current + '\n\n' + outputBox.value;
-            toast('追加プロンプトに追記しました。「保存する」ボタンで確定してください。');
+            syncReferenceReviewsFromModal('append');
+            toast('追加プロンプトに追記＋参考口コミサンプルを追加しました。「保存する」ボタンで確定してください。');
             closeModal();
         });
     })();
