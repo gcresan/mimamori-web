@@ -5342,13 +5342,15 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
     $param_gate      = mimamori_resolve_params( $message, $intent_type, $section_context, $history_arr, $is_quick_prompt );
     if ( $param_gate !== null ) {
         $trace['param_gate'] = $param_gate['missing'];
-        return [
+        $param_result = [
             'success'    => true,
             'raw_text'   => wp_json_encode( $param_gate['response'], JSON_UNESCAPED_UNICODE ),
             'structured' => $param_gate['response'],
             'error'      => null,
             'trace'      => $trace,
         ];
+        gcrev_save_chat_log( $user_id, $message, $param_result, $data );
+        return $param_result;
     }
 
     // 分析系意図ではアナリティクスを強制有効化
@@ -5492,25 +5494,29 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
     $result = mimamori_call_openai_responses_api( $payload );
 
     if ( is_wp_error( $result ) ) {
-        return [
+        $error_result = [
             'success'    => false,
             'raw_text'   => '',
             'structured' => [],
             'error'      => $result->get_error_message(),
             'trace'      => $trace,
         ];
+        gcrev_save_chat_log( $user_id, $message, $error_result, $data );
+        return $error_result;
     }
 
     $raw_text   = $result['text'];
     $structured = mimamori_parse_ai_response( $raw_text );
 
-    return [
+    $final_result = [
         'success'    => true,
         'raw_text'   => $raw_text,
         'structured' => $structured,
         'error'      => null,
         'trace'      => $trace,
     ];
+    gcrev_save_chat_log( $user_id, $message, $final_result, $data );
+    return $final_result;
 }
 
 
@@ -5523,6 +5529,7 @@ add_action('after_setup_theme', function () {
     gcrev_actual_cv_create_table();
     gcrev_cv_routes_create_table();
     gcrev_cv_review_create_table();
+    gcrev_chat_logs_create_table();
     gcrev_rank_keywords_create_table();
     gcrev_rank_results_create_table();
     gcrev_meo_results_create_table(); // MEO週次順位テーブル（マップ順位ページで使用）
@@ -5557,6 +5564,140 @@ add_action('after_setup_theme', function () {
 function gcrev_actual_cv_table_name(): string {
     global $wpdb;
     return $wpdb->prefix . 'gcrev_actual_cvs';
+}
+
+function gcrev_chat_logs_table_name(): string {
+    global $wpdb;
+    return $wpdb->prefix . 'gcrev_chat_logs';
+}
+
+function gcrev_chat_logs_create_table(): void {
+    global $wpdb;
+
+    $table = gcrev_chat_logs_table_name();
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        session_id VARCHAR(64) NOT NULL DEFAULT '',
+        role VARCHAR(16) NOT NULL DEFAULT 'user',
+        message LONGTEXT NOT NULL,
+        response LONGTEXT NULL,
+        intent VARCHAR(64) NOT NULL DEFAULT '',
+        page_type VARCHAR(64) NOT NULL DEFAULT '',
+        page_url VARCHAR(500) NOT NULL DEFAULT '',
+        is_followup TINYINT(1) NOT NULL DEFAULT 0,
+        is_quick_prompt TINYINT(1) NOT NULL DEFAULT 0,
+        param_gate VARCHAR(255) NOT NULL DEFAULT '',
+        model VARCHAR(64) NOT NULL DEFAULT '',
+        error_message VARCHAR(500) NOT NULL DEFAULT '',
+        trace_json LONGTEXT NULL,
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY  (id),
+        KEY user_created (user_id, created_at),
+        KEY intent (intent),
+        KEY created_at (created_at)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta($sql);
+}
+
+/**
+ * 古いチャットログを削除（デフォルト90日）。
+ * Cron `gcrev_cron_log_cleanup_event` から呼ばれる。
+ */
+function gcrev_chat_logs_cleanup_old( int $days = 90 ): int {
+    global $wpdb;
+    $table = gcrev_chat_logs_table_name();
+    $cutoff = ( new DateTimeImmutable( "now", wp_timezone() ) )
+        ->modify( "-{$days} days" )
+        ->format( 'Y-m-d H:i:s' );
+    $deleted = $wpdb->query( $wpdb->prepare(
+        "DELETE FROM {$table} WHERE created_at < %s",
+        $cutoff
+    ) );
+    return (int) $deleted;
+}
+
+/**
+ * チャット1往復分を DB に保存する。
+ *
+ * mimamori_process_chat_with_trace() の成功/失敗両パスから呼ばれる。
+ * 例外を呼び出し元に伝播させない（ログ保存の失敗でチャット応答を壊さない）。
+ */
+function gcrev_save_chat_log(
+    int $user_id,
+    string $message,
+    array $result,
+    array $data
+): void {
+    if ( $user_id <= 0 || $message === '' ) {
+        return;
+    }
+
+    try {
+        global $wpdb;
+        $table = gcrev_chat_logs_table_name();
+
+        $trace       = is_array( $result['trace'] ?? null ) ? $result['trace'] : [];
+        $current_page = is_array( $data['currentPage'] ?? null ) ? $data['currentPage'] : [];
+        $page_url     = isset( $current_page['url'] ) ? (string) $current_page['url'] : '';
+
+        $intent_arr = is_array( $trace['intent'] ?? null ) ? $trace['intent'] : [];
+        $intent     = isset( $intent_arr['intent'] ) ? (string) $intent_arr['intent'] : '';
+
+        $param_gate = '';
+        if ( isset( $trace['param_gate'] ) ) {
+            $param_gate = is_array( $trace['param_gate'] )
+                ? implode( ',', $trace['param_gate'] )
+                : (string) $trace['param_gate'];
+        }
+
+        $response_text = (string) ( $result['raw_text'] ?? '' );
+        $error_message = (string) ( $result['error'] ?? '' );
+
+        // トレースは flex_results 等の巨大データを除外して保存
+        $trace_slim = [
+            'page_type'             => $trace['page_type']             ?? '',
+            'sources'               => $trace['sources']               ?? [],
+            'deterministic_queries' => $trace['deterministic_queries'] ?? [],
+            'planner_queries'       => $trace['planner_queries']       ?? [],
+            'anomaly_results'       => $trace['anomaly_results']       ?? [],
+            'followup_resolved'     => $trace['followup_resolved']     ?? null,
+            'registry'              => $trace['registry']              ?? [],
+            'instructions_length'   => $trace['instructions_length']   ?? 0,
+        ];
+
+        $wpdb->insert(
+            $table,
+            [
+                'user_id'         => $user_id,
+                'session_id'      => isset( $data['sessionId'] ) ? substr( (string) $data['sessionId'], 0, 64 ) : '',
+                'role'            => 'user',
+                'message'         => $message,
+                'response'        => $response_text !== '' ? $response_text : null,
+                'intent'          => substr( $intent, 0, 64 ),
+                'page_type'       => substr( (string) ( $trace['page_type'] ?? '' ), 0, 64 ),
+                'page_url'        => substr( $page_url, 0, 500 ),
+                'is_followup'     => ! empty( $trace['followup_resolved'] ) ? 1 : 0,
+                'is_quick_prompt' => ! empty( $data['isQuickPrompt'] ) ? 1 : 0,
+                'param_gate'      => substr( $param_gate, 0, 255 ),
+                'model'           => substr( (string) ( $trace['model'] ?? '' ), 0, 64 ),
+                'error_message'   => substr( $error_message, 0, 500 ),
+                'trace_json'      => wp_json_encode( $trace_slim, JSON_UNESCAPED_UNICODE ),
+                'created_at'      => current_time( 'mysql' ),
+            ],
+            [ '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s' ]
+        );
+    } catch ( \Throwable $e ) {
+        file_put_contents(
+            '/tmp/gcrev_chat_debug.log',
+            date( 'Y-m-d H:i:s' ) . ' chat log save ERROR: ' . $e->getMessage() . "\n",
+            FILE_APPEND
+        );
+    }
 }
 
 function gcrev_cv_routes_create_table(): void {

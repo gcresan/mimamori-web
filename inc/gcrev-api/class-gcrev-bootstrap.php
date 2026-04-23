@@ -453,6 +453,10 @@ class Gcrev_Bootstrap {
             $deleted_q = Gcrev_Report_Queue::cleanup_old( 90 );
             error_log( "[GCREV] Report queue cleanup: {$deleted_q} old entries removed" );
         }
+        if ( function_exists( 'gcrev_chat_logs_cleanup_old' ) ) {
+            $deleted_chat = gcrev_chat_logs_cleanup_old( 90 );
+            error_log( "[GCREV] Chat logs cleanup: {$deleted_chat} old entries removed" );
+        }
     }
 
     /**
