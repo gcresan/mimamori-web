@@ -536,11 +536,20 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         if ( ! empty( $q['is_fixed'] ) ) { $add_question( $q ); }
     }
 
-    // 2. 必須 textarea（自由回答）
+    // 2. 必須 textarea（自由回答・メイン）
     foreach ( $all_questions as $q ) {
         if ( count( $picked ) >= $limit ) break;
         if ( ( $q['type'] ?? '' ) === 'textarea' && ! empty( $q['required'] ) ) {
             $add_question( $q );
+        }
+    }
+
+    // 2b. 任意 textarea（自由回答・ひとこと系）を1問だけ確保
+    foreach ( $all_questions as $q ) {
+        if ( count( $picked ) >= $limit ) break;
+        if ( ( $q['type'] ?? '' ) === 'textarea' && empty( $q['required'] ) ) {
+            $add_question( $q );
+            break; // 任意 textarea は1問だけに抑える（他は選択式のみに）
         }
     }
 
@@ -601,14 +610,19 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         }
     }
 
-    // 5. 並び順: textarea（自由記述）を末尾に固定し、それ以外は元の sort_order を尊重
+    // 5. 並び順: 選択式 → 必須 textarea → 任意 textarea の順で末尾を整える
+    //    同種内では元の sort_order を尊重。
     $original_order = array_map( static function ( $q ) { return $q['id'] ?? 0; }, $all_questions );
-    usort( $picked, static function ( $a, $b ) use ( $original_order ) {
-        $a_textarea = ( ( $a['type'] ?? '' ) === 'textarea' );
-        $b_textarea = ( ( $b['type'] ?? '' ) === 'textarea' );
-        if ( $a_textarea !== $b_textarea ) {
-            return $a_textarea ? 1 : -1;
-        }
+    $group_rank = static function ( $q ) {
+        $is_textarea = ( ( $q['type'] ?? '' ) === 'textarea' );
+        if ( ! $is_textarea )       { return 0; } // 選択式
+        if ( ! empty( $q['required'] ) ) { return 1; } // 必須自由記述
+        return 2; // 任意自由記述
+    };
+    usort( $picked, static function ( $a, $b ) use ( $original_order, $group_rank ) {
+        $ga = $group_rank( $a );
+        $gb = $group_rank( $b );
+        if ( $ga !== $gb ) { return $ga - $gb; }
         $ia = array_search( $a['id'] ?? 0, $original_order, true );
         $ib = array_search( $b['id'] ?? 0, $original_order, true );
         if ( $ia === false ) $ia = PHP_INT_MAX;
