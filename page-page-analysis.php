@@ -1055,23 +1055,24 @@ get_header();
     function openDetail() {
         els.detailPanel.classList.add('is-open');
         els.detailBackdrop.classList.add('is-open');
-        // モーダル操作を妨げないようAI相談FABを非表示
-        var chatFab = document.querySelector('.mw-chat-fab');
-        if (chatFab) chatFab.style.display = 'none';
+        // AI相談FABは詳細表示中も表示し続ける（チャット時に対象ページのキャプチャを参照させるため）
     }
     function closeDetail() {
         els.detailPanel.classList.remove('is-open');
         els.detailBackdrop.classList.remove('is-open');
         currentDetailId = null;
-        // AI相談FABを復元
-        var chatFab = document.querySelector('.mw-chat-fab');
-        if (chatFab) chatFab.style.display = '';
+        // AIチャットへ渡すコンテキストもクリア
+        window._paCurrentDetailId = null;
+        window._paCurrentDetailUrl = null;
+        window._paCurrentDetailTitle = null;
     }
     els.detailClose.addEventListener('click', closeDetail);
     els.detailBackdrop.addEventListener('click', closeDetail);
 
     window._paShowDetail = function(id) {
         currentDetailId = id;
+        // AIチャットから参照できるようにグローバルに設定
+        window._paCurrentDetailId = id;
         els.detailTitle.textContent = '読み込み中...';
         els.detailLeft.innerHTML = '';
         els.detailRight.innerHTML = '';
@@ -1081,6 +1082,9 @@ get_header();
         apiFetch(API_BASE + '/' + id + '/detail').then(function(res) {
             if (!res.success) { closeDetail(); return; }
             renderDetail(res.data);
+            // チャット側で対象ページを識別できるよう URL / タイトルも保持
+            window._paCurrentDetailUrl = res.data.page_url || null;
+            window._paCurrentDetailTitle = res.data.page_title || null;
         });
     };
 

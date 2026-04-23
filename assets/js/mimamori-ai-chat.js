@@ -507,6 +507,16 @@
       body.sectionContext = opts.sectionContext;
     }
 
+    // ページ診断コンテキスト（現状のページ診断ページで詳細表示中のページIDを伝える）
+    // バックエンドはこのIDを使い、対象ページのスクリーンショットを Vision モデルに添付する
+    if (window._paCurrentDetailId) {
+      body.pageAnalysisContext = {
+        currentDetailId: window._paCurrentDetailId,
+        currentDetailUrl: window._paCurrentDetailUrl || null,
+        currentDetailTitle: window._paCurrentDetailTitle || null
+      };
+    }
+
     // API call
     fetch(config.apiUrl, {
       method: 'POST',

@@ -1701,6 +1701,9 @@ function mimamori_message_wants_site_wide( string $message ): bool {
 
 /**
  * 現状のページ診断ページを開いているかを URL から判定
+ *
+ * `/page-analysis/` 完全一致（末尾スラッシュ正規化後）。
+ * `/analysis-region/` などの分析詳細ページとは区別する。
  */
 function mimamori_is_on_page_analysis_screen( array $current_page ): bool {
     $url = isset( $current_page['url'] ) ? (string) $current_page['url'] : '';
@@ -1711,7 +1714,8 @@ function mimamori_is_on_page_analysis_screen( array $current_page ): bool {
     if ( ! $path ) {
         return false;
     }
-    return ( strpos( $path, '/page-analysis' ) !== false );
+    $path = '/' . trim( $path, '/' ) . '/';
+    return ( $path === '/page-analysis/' );
 }
 
 /**
