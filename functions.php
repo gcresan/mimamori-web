@@ -1966,9 +1966,10 @@ function mimamori_collect_page_analysis_screenshots(
     if ( $user_id <= 0 ) {
         return $empty;
     }
-    if ( ! mimamori_is_on_page_analysis_screen( $current_page ) ) {
-        return $empty;
-    }
+    // URL ゲートは撤廃: どのページからでも「デザイン系キーワード + ページ呼称」が
+    // 揃えば添付する（誤発火を避けるためキーワード判定は維持）。
+    // $current_page は将来の拡張用に引数として受け取るが、トリガー判定では使わない。
+    unset( $current_page );
     if ( ! mimamori_message_wants_page_screenshot( $message ) ) {
         return $empty;
     }
