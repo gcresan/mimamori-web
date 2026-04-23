@@ -1307,7 +1307,8 @@ $flow_summary_steps = [
                 </button>
             </div>
 
-            <div class="result-card" id="result-short">
+            <!-- 短めカード（旧仕様との後方互換のため残すが非表示） -->
+            <div class="result-card" id="result-short" style="display:none;">
                 <div class="result-card-header">
                     <span class="badge badge-short">短め</span> 口コミ案A
                 </div>
@@ -1319,9 +1320,9 @@ $flow_summary_steps = [
 
             <div class="result-card" id="result-normal">
                 <div class="result-card-header">
-                    <span class="badge badge-normal">標準</span> 口コミ案B
+                    口コミ案
                 </div>
-                <div class="result-text" id="result-normal-text"></div>
+                <div class="result-text" id="result-normal-text" style="white-space:pre-wrap;"></div>
                 <button type="button" class="btn-copy" data-target="result-normal-text">
                     この文章をコピー
                 </button>
@@ -1329,8 +1330,7 @@ $flow_summary_steps = [
 
             <div class="result-actions">
                 <div class="copy-hint" id="copy-hint">
-                    口コミを書く前に、どちらかの文章をコピーしてください。<br>
-                    上の「この文章をコピー」ボタンからコピーできます。
+                    口コミを書く前に、上の「この文章をコピー」ボタンから文章をコピーしてください。
                 </div>
                 <button type="button" class="btn-google-review" id="btn-google-review">
                     Google口コミを書く
@@ -1728,15 +1728,17 @@ $flow_summary_steps = [
             })
             .then(function(res) { return res.json(); })
             .then(function(data) {
-                if (data.success && data.short_review && data.normal_review) {
-                    document.getElementById('result-short-text').textContent = data.short_review;
-                    document.getElementById('result-normal-text').textContent = data.normal_review;
+                var reviewText = data && (data.review || data.normal_review || '');
+                if (data && data.success && reviewText) {
+                    // 短めカードは非表示にしているが、互換のため中身があれば入れておく
+                    document.getElementById('result-short-text').textContent = data.short_review || '';
+                    document.getElementById('result-normal-text').textContent = reviewText;
                     currentResponseId = data.response_id || null;
                     currentVersion = data.version || 1;
                     updateVersionDisplay();
                     showSection(resultSection);
                 } else {
-                    var msg = data.message || '口コミ案の作成に失敗しました。\n少し時間をおいてもう一度お試しください。';
+                    var msg = (data && data.message) || '口コミ案の作成に失敗しました。\n少し時間をおいてもう一度お試しください。';
                     document.getElementById('error-message').innerHTML = escapeHtml(msg).replace(/\n/g, '<br>');
                     showSection(errorSection);
                 }
@@ -1782,22 +1784,21 @@ $flow_summary_steps = [
             })
             .then(function(res) { return res.json(); })
             .then(function(data) {
-                if (data.success && data.short_review && data.normal_review) {
+                var reviewText = data && (data.review || data.normal_review || '');
+                if (data && data.success && reviewText) {
                     var shortEl = document.getElementById('result-short-text');
                     var normalEl = document.getElementById('result-normal-text');
-                    shortEl.style.opacity = '0';
                     normalEl.style.opacity = '0';
                     setTimeout(function() {
-                        shortEl.textContent = data.short_review;
-                        normalEl.textContent = data.normal_review;
-                        shortEl.style.opacity = '1';
+                        shortEl.textContent = data.short_review || '';
+                        normalEl.textContent = reviewText;
                         normalEl.style.opacity = '1';
                     }, 200);
                     currentVersion = data.version || (currentVersion + 1);
                     currentResponseId = data.response_id || currentResponseId;
                     updateVersionDisplay();
                 } else {
-                    alert(data.message || '再生成に失敗しました。もう一度お試しください。');
+                    alert((data && data.message) || '再生成に失敗しました。もう一度お試しください。');
                 }
             })
             .catch(function() {

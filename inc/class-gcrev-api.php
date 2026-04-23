@@ -16958,8 +16958,8 @@ PROMPT;
                 FILE_APPEND
             );
             $raw_response = $this->ai->call_gemini_api($prompt, [
-                'temperature'     => 0.9,
-                'topP'            => 0.95,
+                'temperature'     => 0.75,
+                'topP'            => 0.9,
                 'maxOutputTokens' => 4096,
             ]);
 
@@ -16997,8 +16997,10 @@ PROMPT;
 
             return new \WP_REST_Response([
                 'success'       => true,
-                'short_review'  => $parsed['short_review'],
+                // 後方互換のため short_review も空文字で返す（フロント側が参照している可能性）
+                'short_review'  => '',
                 'normal_review' => $parsed['normal_review'],
+                'review'        => $parsed['normal_review'],
                 'response_id'   => $response_id,
                 'version'       => $version,
             ], 200);
@@ -17030,8 +17032,8 @@ PROMPT;
             'survey_id'       => $survey_id,
             'user_id'         => $user_id,
             'respondent_name' => sanitize_text_field($extra['respondent_name'] ?? ''),
-            'short_review'    => $parsed['short_review'],
-            'normal_review'   => $parsed['normal_review'],
+            'short_review'    => '',
+            'normal_review'   => (string) ($parsed['normal_review'] ?? ''),
             'status'          => 'new',
             'consent_ai'      => ! empty($extra['consent_ai']) ? 1 : 0,
             'consent_review'  => ! empty($extra['consent_review']) ? 1 : 0,
@@ -17056,19 +17058,7 @@ PROMPT;
             ], ['%d', '%d', '%s']);
         }
 
-        // AI生成文を ai_generations テーブルにも保存
-        if ( ! empty($parsed['short_review']) ) {
-            $wpdb->insert($t_ai_gen, [
-                'response_id'    => $response_id,
-                'survey_id'      => $survey_id,
-                'user_id'        => $user_id,
-                'generated_text' => $parsed['short_review'],
-                'review_type'    => 'short',
-                'version'        => 1,
-                'status'         => 'generated',
-                'created_at'     => $now,
-            ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s']);
-        }
+        // AI生成文を ai_generations テーブルにも保存（2026年4月以降は 'normal' 1本のみ）
         if ( ! empty($parsed['normal_review']) ) {
             $wpdb->insert($t_ai_gen, [
                 'response_id'    => $response_id,
@@ -17086,37 +17076,38 @@ PROMPT;
     }
 
     /**
-     * 再生成時のAI生成文を保存（既存 response_id に新バージョンを追加）
+     * 再生成時のAI生成文を保存（既存 response_id に新バージョンを追加）。
+     * 2026年4月以降は口コミを1本のみ生成する方針のため、review_type='normal' に統一。
      */
     private function save_regenerated_review(\wpdb $wpdb, int $response_id, int $survey_id, int $user_id, array $parsed): int {
         $t_ai_gen = $wpdb->prefix . 'gcrev_survey_ai_generations';
         $now      = current_time('mysql');
-        $version  = 1;
 
-        foreach (['short' => 'short_review', 'normal' => 'normal_review'] as $type => $key) {
-            if (empty($parsed[$key])) continue;
-            $max_ver = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COALESCE(MAX(version), 0) FROM {$t_ai_gen} WHERE response_id = %d AND review_type = %s",
-                $response_id, $type
-            ));
-            $version = max($version, $max_ver + 1);
-            $wpdb->insert($t_ai_gen, [
-                'response_id'    => $response_id,
-                'survey_id'      => $survey_id,
-                'user_id'        => $user_id,
-                'generated_text' => $parsed[$key],
-                'review_type'    => $type,
-                'version'        => $max_ver + 1,
-                'status'         => 'generated',
-                'created_at'     => $now,
-            ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s']);
-        }
+        $text = (string) ($parsed['normal_review'] ?? '');
+        if ($text === '') { return 1; }
 
-        // responses テーブルの short_review / normal_review も最新版で更新
+        $max_ver = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COALESCE(MAX(version), 0) FROM {$t_ai_gen} WHERE response_id = %d AND review_type = %s",
+            $response_id, 'normal'
+        ));
+        $version = $max_ver + 1;
+
+        $wpdb->insert($t_ai_gen, [
+            'response_id'    => $response_id,
+            'survey_id'      => $survey_id,
+            'user_id'        => $user_id,
+            'generated_text' => $text,
+            'review_type'    => 'normal',
+            'version'        => $version,
+            'status'         => 'generated',
+            'created_at'     => $now,
+        ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s']);
+
+        // responses テーブル: normal_review のみ更新、short_review は空にする
         $t_resp = $wpdb->prefix . 'gcrev_survey_responses';
         $wpdb->update(
             $t_resp,
-            ['short_review' => $parsed['short_review'], 'normal_review' => $parsed['normal_review']],
+            ['short_review' => '', 'normal_review' => $text],
             ['id' => $response_id],
             ['%s', '%s'],
             ['%d']
@@ -17198,25 +17189,44 @@ PROMPT;
                 if ($idx >= 10) break;
             }
             if (!empty($lines)) {
-                $ref_part = "\n### 参考口コミサンプル（文体・雰囲気の参考用）\n"
-                    . "下記は過去に集まった口コミの例です。**文体・語感・文の区切り方・温度感のテイスト参考**としてのみ使ってください。\n"
-                    . "固有名詞（人名・店名・地名等）・具体的な数値・個別のエピソードを引用してはいけません。今回のアンケート回答内容のみに基づき、テイストだけ参考にした新しい文章を書いてください。\n\n"
-                    . implode("\n\n", $lines) . "\n";
+                $ref_part = "\n## 【最重要】参考口コミサンプル（文体を合わせる対象）\n"
+                    . "下記は実際のユーザーが書いた口コミです。**あなたが生成する文章は、これらの口コミ群と同じ人物が書いた別の1件と誤認されるレベルで文体を寄せてください。**\n\n"
+                    . "具体的には以下に合わせる:\n"
+                    . "- 文の長さ・リズム・句読点の使い方\n"
+                    . "- 語尾のバリエーション（「でした」「です」「と思います」「〜かな」など、実例に含まれる語尾の配合を真似る）\n"
+                    . "- 段落の切り方・改行の有無・空行の入れ方\n"
+                    . "- 温度感・感情の強さ・距離感\n"
+                    . "- 「語られる順序」「どこを詳しく書くか」の傾向\n\n"
+                    . "**引用してはいけないもの**: 固有名詞（人名・店名・地名等）／実例内の具体的な数値／実例の個別エピソード（行った日・具体的な出来事）。これらは今回のアンケート回答からのみ拾ってください。\n\n"
+                    . "--- 実例ここから ---\n"
+                    . implode("\n\n", $lines) . "\n"
+                    . "--- 実例ここまで ---\n";
             }
         }
 
         return <<<PROMPT
 あなたは、実際にサービスを利用した顧客の立場で、Google口コミの下書きを作成するライターです。
-顧客本人が軽く修正すればそのまま使えるような、自然で現実的な文章を作成してください。
-
+顧客本人が軽く修正すればそのまま使えるような、自然で現実的な1本の口コミを作成してください。
+{$ref_part}
 {$business_part}
-## アンケート回答内容
+## アンケート回答内容（事実のソース）
 
 {$answer_text}
 
 ---
 
 ## 作成ルール
+
+### ■優先順位（衝突した場合）
+
+1. **参考口コミサンプルの文体・リズム**（最優先 — 存在する場合）
+2. アンケート回答に含まれる事実
+3. 下記の各種ルール
+4. 下記の禁止事項
+
+ただし下記の **【絶対禁止】** だけは参考口コミより優先します。
+
+---
 
 ### ■目的
 
@@ -17227,20 +17237,20 @@ PROMPT;
 ### ■構成
 
 * 回答をそのまま並べるのではなく、体験の流れとしてまとめる
-* 以下の流れを基本として含める
-  「利用・相談のきっかけや状況 → 対応ややり取りの印象 → 利用後の結果や評価」
-* ただし毎回同じ順序や書き方に固定しない
+* 基本の流れ: 利用・相談のきっかけや状況 → 対応ややり取りの印象 → 利用後の結果や評価
+* ただし毎回同じ順序や書き方に固定しない。参考口コミがあればその構成パターンを優先する
 
 ---
 
-### ■文体
+### ■文体・長さ・レイアウト
 
-* 会話調に寄せず、一般的な読みやすい文章にする
-* 「です・ます」調を基本とする
-* 言い回しはシンプルにし、過剰に整えすぎない
-* 1文は長くしすぎない（40〜60文字目安）
-* 同じ語尾が連続しないようにする
-* 会社名やサービス名の繰り返しは避ける
+* 「です・ます」調を基本（参考口コミの語尾配合に合わせて多少混ざってよい）
+* 過剰に整えすぎない。多少の不揃いさ・口語寄りのゆらぎが自然
+* 長さに厳密なルールは設けない。参考口コミの平均的な長さに寄せる。目安としては 80〜400字程度のレンジで、短すぎず詰め込みすぎないのが理想
+* 改行・空行の扱い:
+  - 短い文章なら1ブロックで OK
+  - **150〜200字を超える場合や内容が2つ以上のトピックにまたがる場合は、読みやすさのために改行や空行で段落を分けてよい**
+  - 毎回必ず入れる必要はない。参考口コミに改行がある割合に合わせる
 
 ---
 
@@ -17256,59 +17266,54 @@ PROMPT;
 
 ### ■内容ルール（必須）
 
-* 以下の要素を必ず含める
-  ・依頼前または利用前の状況
-  ・対応ややり取りの印象
-  ・利用後の結果や評価
-
-* 具体的な内容を1つ以上含める
-  （例：対応の速さ、説明の分かりやすさ、雰囲気、仕上がり、利便性など）
-
-* 体験に基づく感想を簡潔に含める
-  （例：安心できた、納得できた、助かった 等）
-
+* 以下の要素を含める: 依頼前または利用前の状況 / 対応ややり取りの印象 / 利用後の結果や評価
+* 具体的な内容を1つ以上含める（例：対応の速さ、説明の分かりやすさ、雰囲気、仕上がり、利便性など）
+* 体験に基づく感想を簡潔に含める（例：安心できた、納得できた、助かった 等）
 * アンケートに基づいた事実のみを使用し、誇張しない
 
 ---
 
-### ■禁止事項
+### ■【絶対禁止】（参考口コミにあってもダメ）
 
-* アンケートにない内容の創作
-* テンプレ的な導入表現（例：「最初は不安でしたが」など）
-* 過剰な評価表現（例：「最高」「完璧」「絶対おすすめ」など）
-* ネガティブから始まる構成
-* AI特有の定型表現（例：「丁寧に対応していただき」「柔軟に対応していただき」など）
-* 宣伝・広告のような表現
-* 星評価（★）の使用
-* 定型的な締め（例：「本当に頼んでよかったです」など）
+* アンケート回答にない事実・数字・エピソードの創作
+* 星評価（★）
+* 宣伝・広告色の強い断定表現
 
 ---
 
-### ■文章構造
+### ■できるだけ避けたい AI 頻用フレーズ
 
-* short_review：1〜2文で簡潔にまとめる（80〜120文字）
-* normal_review：2〜4文で簡潔にまとめる（120〜200文字）
-* 情報を詰め込みすぎず、読みやすさを優先する
-* 改行はせず、自然な1ブロックの文章にする
+（ただし参考口コミの中で同じ表現が**自然に使われている**場合は使って構わない。避けるべきは、AIが無意識に繰り出す典型句）
+
+* 「一人ひとりに寄り添う」「寄り添う姿勢」
+* 「心から感謝」「感謝の気持ちでいっぱい」「感謝しかありません」
+* 「期待以上」「想像以上」
+* 「大きな強み」「大きな安心感」
+* 「親身に接してくださり」「親身になって」
+* 「自信を持っておすすめ」「自信を持ってお勧め」
+* 「丁寧に対応していただき」「柔軟に対応していただき」「迅速に対応していただき」
+* 「本当に頼んでよかった」「本当によかった」
+* テンプレ的な導入「最初は不安でしたが」「初めてで不安でしたが」
+
+これらが出そうな時は、参考口コミ内の別の言い回しを真似るか、より具体的な描写に置き換える。
 
 ---
-{$keywords_part}{$extra_part}{$ref_part}
+{$keywords_part}{$extra_part}
 ## 出力形式
 
 以下のJSON形式のみを出力してください。説明文・マークダウン・コードフェンスは不要です。
-JSON の値（文字列）内には改行や制御文字を入れず、1行の自然な日本語で記述してください。
+生成するのは口コミ1本のみ。改行は \\n でエスケープして値内に含めて構いません。
 
-```json
 {
-  "short_review": "短めの口コミ文",
-  "normal_review": "標準の口コミ文"
+  "review": "ここに口コミ本文"
 }
-```
 PROMPT;
     }
 
     /**
-     * AI応答からJSON（short_review / normal_review）をパース
+     * AI応答からJSONをパース。
+     * 新スキーマ { review } が主、旧スキーマ { short_review, normal_review } も後方互換で受理する。
+     * 戻り値は常に { normal_review } 1件のみ（DB 保存の統一のため）。
      */
     private function parse_review_response(string $raw): ?array {
         // マークダウンのコードブロックを除去
@@ -17318,19 +17323,34 @@ PROMPT;
 
         $parsed = json_decode($cleaned, true);
         if (!is_array($parsed)) {
-            // フォールバック: JSONブロックを正規表現で抽出
-            if (preg_match('/\{[^{}]*"short_review"\s*:\s*"[^"]*"[^{}]*"normal_review"\s*:\s*"[^"]*"[^{}]*\}/s', $raw, $m)) {
+            // フォールバック: JSON ブロックっぽい部分を抜き出す
+            if (preg_match('/\{[\s\S]*\}/', $raw, $m)) {
                 $parsed = json_decode($m[0], true);
             }
         }
 
-        if (!is_array($parsed) || empty($parsed['short_review']) || empty($parsed['normal_review'])) {
+        if (!is_array($parsed)) {
             return null;
         }
 
+        // 新スキーマ優先
+        $text = '';
+        if (!empty($parsed['review']) && is_string($parsed['review'])) {
+            $text = $parsed['review'];
+        } elseif (!empty($parsed['normal_review']) && is_string($parsed['normal_review'])) {
+            $text = $parsed['normal_review'];
+        } elseif (!empty($parsed['short_review']) && is_string($parsed['short_review'])) {
+            $text = $parsed['short_review'];
+        }
+
+        $text = trim($text);
+        if ($text === '') {
+            return null;
+        }
+
+        // sanitize_textarea_field は改行を保持する (\n / \r\n) ので OK
         return [
-            'short_review'  => sanitize_textarea_field($parsed['short_review']),
-            'normal_review' => sanitize_textarea_field($parsed['normal_review']),
+            'normal_review' => sanitize_textarea_field($text),
         ];
     }
 
@@ -18411,8 +18431,8 @@ PROMPT;
 
         try {
             $raw_response = $this->ai->call_gemini_api($prompt, [
-                'temperature'     => 0.9,
-                'topP'            => 0.95,
+                'temperature'     => 0.75,
+                'topP'            => 0.9,
                 'maxOutputTokens' => 4096,
             ]);
             $parsed = $this->parse_review_response($raw_response);
@@ -18432,28 +18452,29 @@ PROMPT;
                 'model'    => $this->config->get_gemini_model(),
             ], JSON_UNESCAPED_UNICODE);
 
+            // 2026年4月以降は 'normal' 1本のみ生成する方針
             $results = [];
-            foreach (['short' => 'short_review', 'normal' => 'normal_review'] as $type => $key) {
-                if (empty($parsed[$key])) continue;
+            $text = (string) ($parsed['normal_review'] ?? '');
+            if ($text !== '') {
                 $max_ver = (int) $wpdb->get_var($wpdb->prepare(
                     "SELECT COALESCE(MAX(version), 0) FROM {$t_ai_gen} WHERE response_id = %d AND review_type = %s",
-                    $response_id, $type
+                    $response_id, 'normal'
                 ));
                 $wpdb->insert($t_ai_gen, [
-                    'response_id'      => $response_id,
-                    'survey_id'        => (int) $resp->survey_id,
-                    'user_id'          => (int) $resp->user_id,
-                    'generated_text'   => $parsed[$key],
-                    'review_type'      => $type,
-                    'version'          => $max_ver + 1,
-                    'status'           => 'generated',
+                    'response_id'       => $response_id,
+                    'survey_id'         => (int) $resp->survey_id,
+                    'user_id'           => (int) $resp->user_id,
+                    'generated_text'    => $text,
+                    'review_type'       => 'normal',
+                    'version'           => $max_ver + 1,
+                    'status'            => 'generated',
                     'generation_params' => $gen_params,
-                    'created_at'       => $now,
+                    'created_at'        => $now,
                 ], ['%d', '%d', '%d', '%s', '%s', '%d', '%s', '%s', '%s']);
                 $results[] = [
                     'id'             => (int) $wpdb->insert_id,
-                    'review_type'    => $type,
-                    'generated_text' => $parsed[$key],
+                    'review_type'    => 'normal',
+                    'generated_text' => $text,
                     'version'        => $max_ver + 1,
                 ];
             }
