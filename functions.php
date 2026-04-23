@@ -601,9 +601,14 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         }
     }
 
-    // 5. 元の並び順（sort_order）を尊重した順序で返す
+    // 5. 並び順: textarea（自由記述）を末尾に固定し、それ以外は元の sort_order を尊重
     $original_order = array_map( static function ( $q ) { return $q['id'] ?? 0; }, $all_questions );
     usort( $picked, static function ( $a, $b ) use ( $original_order ) {
+        $a_textarea = ( ( $a['type'] ?? '' ) === 'textarea' );
+        $b_textarea = ( ( $b['type'] ?? '' ) === 'textarea' );
+        if ( $a_textarea !== $b_textarea ) {
+            return $a_textarea ? 1 : -1;
+        }
         $ia = array_search( $a['id'] ?? 0, $original_order, true );
         $ib = array_search( $b['id'] ?? 0, $original_order, true );
         if ( $ia === false ) $ia = PHP_INT_MAX;
