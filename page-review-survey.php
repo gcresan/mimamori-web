@@ -289,14 +289,17 @@ get_header();
 
 /* Toast */
 .sv-toast {
-    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
-    padding: 12px 20px; border-radius: 8px;
-    font-size: 14px; font-weight: 600; color: #fff;
-    opacity: 0; transform: translateY(10px);
-    transition: opacity 0.3s, transform 0.3s;
+    position: fixed; top: 24px; left: 50%; z-index: 100000;
+    padding: 14px 28px; border-radius: 10px;
+    font-size: 15px; font-weight: 700; color: #fff;
+    min-width: 240px; max-width: 90vw; text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    opacity: 0; transform: translate(-50%, -16px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
     pointer-events: none;
+    white-space: pre;
 }
-.sv-toast.show { opacity: 1; transform: translateY(0); }
+.sv-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .sv-toast-success { background: #059669; }
 .sv-toast-error { background: #dc2626; }
 
@@ -766,9 +769,12 @@ get_header();
     }
 
     function toast(msg, type) {
-        toastEl.textContent = msg;
-        toastEl.className = 'sv-toast sv-toast-' + (type || 'success') + ' show';
-        setTimeout(function() { toastEl.classList.remove('show'); }, 3000);
+        var t = (type === 'error') ? 'error' : 'success';
+        var icon = (t === 'error') ? '⚠ ' : '✓ ';
+        toastEl.textContent = icon + msg;
+        toastEl.className = 'sv-toast sv-toast-' + t + ' show';
+        if (window._svToastTimer) { clearTimeout(window._svToastTimer); }
+        window._svToastTimer = setTimeout(function() { toastEl.classList.remove('show'); }, 4000);
     }
 
     function esc(str) {
