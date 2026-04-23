@@ -567,7 +567,8 @@ get_header();
             <p style="color:#555; font-size:13px; margin:0 0 12px;">
                 実際に集まった口コミを1件ずつ登録してください。<br>
                 AIが「書き方のクセ・長さ・雰囲気」を分析し、既存プロンプトに追加する形式のルールを生成します。<br>
-                <strong>同業他社の口コミでも構いません。複数件（3件以上推奨）あるほど精度が上がります。最大10件まで登録できます。</strong>
+                <strong>同業他社の口コミでも構いません。複数件（3件以上推奨）あるほど精度が上がります。最大10件まで登録できます。</strong><br>
+                <span style="color:#2271b1;">※ すでに保存されている参考口コミサンプルが自動で入力欄に読み込まれます。編集・追加・削除してから「生成する」を押してください。</span>
             </p>
             <div class="sv-form-group">
                 <label class="sv-form-label">参考口コミサンプル <span style="color:#dc2626;">*</span></label>
@@ -1853,7 +1854,17 @@ get_header();
 
         function resetSlots() {
             slotsContainer.innerHTML = '';
-            for (var i = 0; i < INITIAL_SLOTS; i++) { createSlot(''); }
+            // 保存済みの参考口コミサンプルを初期値として引き継ぐ
+            var saved = (typeof getReferenceReviews === 'function') ? getReferenceReviews() : [];
+            if (saved && saved.length > 0) {
+                saved.forEach(function(item) {
+                    var text = item && typeof item.text === 'string' ? item.text : (typeof item === 'string' ? item : '');
+                    if (text) { createSlot(text); }
+                });
+            } else {
+                // 何も保存されていない場合は3件の空スロットから始める
+                for (var i = 0; i < INITIAL_SLOTS; i++) { createSlot(''); }
+            }
         }
 
         function collectReviews() {
