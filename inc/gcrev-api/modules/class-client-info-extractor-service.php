@@ -319,9 +319,9 @@ og:description: {$content['og_description']}
   "area_pref":            "都道府県名（例: 東京都）、不明なら空",
   "area_city":            "市区町村名、不明なら空",
   "area_custom":          "自由テキスト（area_type=custom時のみ）",
-  "service_description":  "サービス内容を1〜3文で要約、500字以内",
-  "strengths":            "強み・特徴を改行区切りで箇条書き、3〜6項目",
-  "review_emphasis":      "このサイトで口コミを集めるとしたら引き出したい要素、100字以内",
+  "service_description":  "サービス内容を1〜3文で要約した文字列、500字以内",
+  "strengths":            "強み・特徴を改行(\\n)区切りで3〜6項目含めた **文字列**（配列ではない）。例: \"痛みの少ない治療\\n丁寧なカウンセリング\\n駅から徒歩2分\"",
+  "review_emphasis":      "このサイトで口コミを集めるとしたら引き出したい要素、100字以内の文字列",
   "persona_age_ranges":       ["推定年齢層キー配列"],
   "persona_genders":          ["推定性別キー配列"],
   "persona_attributes":       ["推定属性キー配列、0〜4個"],
@@ -438,9 +438,9 @@ PROMPT;
         $out['area_city']   = $this->clip_text( $parsed['area_city'] ?? '', 80 );
         $out['area_custom'] = $this->clip_text( $parsed['area_custom'] ?? '', 200 );
 
-        $out['service_description'] = $this->clip_text( $parsed['service_description'] ?? '', 1000, true );
-        $out['strengths']           = $this->clip_text( $parsed['strengths'] ?? '', 1000, true );
-        $out['review_emphasis']     = $this->clip_text( $parsed['review_emphasis'] ?? '', 500, true );
+        $out['service_description'] = $this->clip_text( $this->to_multiline_string( $parsed['service_description'] ?? '' ), 1000, true );
+        $out['strengths']           = $this->clip_text( $this->to_multiline_string( $parsed['strengths'] ?? '' ), 1000, true );
+        $out['review_emphasis']     = $this->clip_text( $this->to_multiline_string( $parsed['review_emphasis'] ?? '' ), 500, true );
 
         foreach ( $valid_persona as $key => $valid_list ) {
             $raw = is_array( $parsed[ $key ] ?? null ) ? $parsed[ $key ] : [];
@@ -476,5 +476,31 @@ PROMPT;
             $text = mb_substr( $text, 0, $max_len );
         }
         return $text;
+    }
+
+    /**
+     * AI 応答が文字列でも配列でも受け取れるようにする。
+     * 配列の場合は空要素を除いて改行結合する。
+     */
+    private function to_multiline_string( $value ): string {
+        if ( is_string( $value ) ) { return $value; }
+        if ( is_array( $value ) ) {
+            $lines = [];
+            foreach ( $value as $item ) {
+                if ( is_string( $item ) ) {
+                    $s = trim( $item );
+                    if ( $s !== '' ) { $lines[] = $s; }
+                } elseif ( is_array( $item ) ) {
+                    // [{ "title": "...", "description": "..." }] 形式にも最低限対応
+                    $bits = [];
+                    foreach ( $item as $v ) {
+                        if ( is_string( $v ) && trim( $v ) !== '' ) { $bits[] = trim( $v ); }
+                    }
+                    if ( ! empty( $bits ) ) { $lines[] = implode( ' — ', $bits ); }
+                }
+            }
+            return implode( "\n", $lines );
+        }
+        return '';
     }
 }
