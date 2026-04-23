@@ -493,6 +493,10 @@ if ($infographic && is_array($infographic)) {
         if (!empty($kpi_curr)) {
             $exclude_foreign_prev = get_user_meta( $user_id, 'report_exclude_foreign', true );
             $filter_suffix_prev   = $exclude_foreign_prev ? '_filtered' : '';
+            // 解析対象/除外URL条件があればキャッシュキーを差別化（get_dashboard_kpi_by_dates と揃える）
+            if ( class_exists( 'Gcrev_Path_Filter' ) ) {
+                $filter_suffix_prev .= Gcrev_Path_Filter::cache_suffix( $user_id );
+            }
             $prev_cache_key = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_prev}";
             $prev_cached    = get_transient( $prev_cache_key );
             if ( $prev_cached !== false && is_array( $prev_cached ) ) {
@@ -608,6 +612,10 @@ if ($infographic && is_array($infographic)) {
                 ];
                 $exclude_foreign_sc = get_user_meta( $user_id, 'report_exclude_foreign', true );
                 $filter_suffix_sc   = $exclude_foreign_sc ? '_jp' : '';
+                // 解析対象/除外URL条件が設定されていれば _ex を付ける（cache_key_dashboard と揃える）
+                if ( class_exists( 'Gcrev_Path_Filter' ) && Gcrev_Path_Filter::has_filters( $user_id ) ) {
+                    $filter_suffix_sc .= '_ex';
+                }
                 set_transient(
                     "gcrev_dash_{$user_id}_last30{$filter_suffix_sc}",
                     $kpi_curr,
