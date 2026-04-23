@@ -499,6 +499,121 @@ function gcrev_get_business_name( $user_id ) {
     return $user->display_name;
 }
 
+/**
+ * アンケート質問配列から $limit 問をピックアップする。
+ *
+ * 優先順:
+ *   1. is_fixed=1 の質問は必ず含める
+ *   2. 必須 textarea（自由回答）を必ず含める
+ *   3. 残り枠はカテゴリが重複しないように優先しつつランダム
+ *   4. それでも枠が余れば残りからランダム補充
+ *
+ * 質問総数が $limit 以下ならそのまま全問を返す（ソート順は維持）。
+ *
+ * 呼び出しごとに出題がバラけるように mt_rand ベースのシャッフルを使う。
+ *
+ * @param array $all_questions 全アクティブ質問（各要素に id,type,category,is_fixed,required を含む）
+ * @param int   $limit         表示したい問数
+ * @return array ピックアップされた質問（元の並び順を尊重しつつ選抜）
+ */
+function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): array {
+    if ( empty( $all_questions ) ) { return []; }
+    if ( count( $all_questions ) <= $limit ) { return $all_questions; }
+
+    $picked_ids = [];
+    $picked     = [];
+
+    $add_question = function ( $q ) use ( &$picked_ids, &$picked ) {
+        $id = $q['id'] ?? null;
+        if ( $id === null || in_array( $id, $picked_ids, true ) ) { return; }
+        $picked_ids[] = $id;
+        $picked[]     = $q;
+    };
+
+    // 1. 固定質問
+    foreach ( $all_questions as $q ) {
+        if ( count( $picked ) >= $limit ) break;
+        if ( ! empty( $q['is_fixed'] ) ) { $add_question( $q ); }
+    }
+
+    // 2. 必須 textarea（自由回答）
+    foreach ( $all_questions as $q ) {
+        if ( count( $picked ) >= $limit ) break;
+        if ( ( $q['type'] ?? '' ) === 'textarea' && ! empty( $q['required'] ) ) {
+            $add_question( $q );
+        }
+    }
+
+    // 3. 残りをカテゴリ分散でランダム補充
+    $remaining = array_values( array_filter( $all_questions, static function ( $q ) use ( $picked_ids ) {
+        return ! in_array( $q['id'] ?? null, $picked_ids, true );
+    } ) );
+
+    // 既に使われたカテゴリ
+    $used_categories = array_values( array_filter( array_map( static function ( $q ) {
+        return (string) ( $q['category'] ?? '' );
+    }, $picked ) ) );
+
+    // カテゴリごとにバケット化してシャッフル、未使用カテゴリを優先
+    $by_category = [];
+    foreach ( $remaining as $q ) {
+        $cat = (string) ( $q['category'] ?? '' );
+        if ( ! isset( $by_category[ $cat ] ) ) { $by_category[ $cat ] = []; }
+        $by_category[ $cat ][] = $q;
+    }
+    foreach ( $by_category as &$bucket ) { shuffle( $bucket ); }
+    unset( $bucket );
+
+    // カテゴリキーを「未使用カテゴリを先頭に」並び替えてからシャッフル
+    $cat_keys = array_keys( $by_category );
+    shuffle( $cat_keys );
+    $cat_keys_sorted = [];
+    foreach ( $cat_keys as $c ) {
+        if ( ! in_array( $c, $used_categories, true ) ) { $cat_keys_sorted[] = $c; }
+    }
+    foreach ( $cat_keys as $c ) {
+        if ( in_array( $c, $used_categories, true ) ) { $cat_keys_sorted[] = $c; }
+    }
+
+    // ラウンドロビンで各カテゴリから1問ずつ取り出し
+    while ( count( $picked ) < $limit && ! empty( $cat_keys_sorted ) ) {
+        foreach ( $cat_keys_sorted as $k_idx => $c ) {
+            if ( count( $picked ) >= $limit ) break 2;
+            if ( empty( $by_category[ $c ] ) ) {
+                unset( $cat_keys_sorted[ $k_idx ] );
+                continue;
+            }
+            $q = array_shift( $by_category[ $c ] );
+            $add_question( $q );
+        }
+        $cat_keys_sorted = array_values( $cat_keys_sorted );
+    }
+
+    // 4. 足りなければ残り全体からさらに補充
+    if ( count( $picked ) < $limit ) {
+        $leftovers = array_values( array_filter( $all_questions, static function ( $q ) use ( $picked_ids ) {
+            return ! in_array( $q['id'] ?? null, $picked_ids, true );
+        } ) );
+        shuffle( $leftovers );
+        foreach ( $leftovers as $q ) {
+            if ( count( $picked ) >= $limit ) break;
+            $add_question( $q );
+        }
+    }
+
+    // 5. 元の並び順（sort_order）を尊重した順序で返す
+    $original_order = array_map( static function ( $q ) { return $q['id'] ?? 0; }, $all_questions );
+    usort( $picked, static function ( $a, $b ) use ( $original_order ) {
+        $ia = array_search( $a['id'] ?? 0, $original_order, true );
+        $ib = array_search( $b['id'] ?? 0, $original_order, true );
+        if ( $ia === false ) $ia = PHP_INT_MAX;
+        if ( $ib === false ) $ib = PHP_INT_MAX;
+        return $ia - $ib;
+    } );
+
+    return $picked;
+}
+
 // プロフィール画面に「事業者名」項目を追加（登録画面・編集画面共通）
 add_action( 'show_user_profile', 'gcrev_render_business_name_field' );
 add_action( 'edit_user_profile', 'gcrev_render_business_name_field' );
@@ -1785,17 +1900,52 @@ function mimamori_attachment_to_vision_payload( int $attachment_id ): ?array {
 }
 
 /**
+ * メッセージ中のページ呼称（「トップページ」等）から対象 page_type を推定する
+ *
+ * ヒットしなければ '' を返す。複数ヒットした場合は最初に出現したものを優先する。
+ */
+function mimamori_guess_page_type_from_message( string $message ): string {
+    if ( $message === '' ) {
+        return '';
+    }
+    // 表記ゆれを含むキーワードと page_type の対応
+    $map = [
+        'top'     => [ 'トップページ', 'トップ画面', 'ホーム画面', 'ホームページのトップ', 'TOPページ', 'topページ' ],
+        'service' => [ 'サービスページ', 'サービス紹介', 'サービス案内' ],
+        'lp'      => [ 'ランディング', 'ランディングページ', 'LPページ', 'LP' ],
+        'contact' => [ 'お問い合わせ', '問い合わせ', 'コンタクト', 'お問合わせ' ],
+        'blog'    => [ 'ブログ', '記事ページ', 'お知らせ', 'コラム' ],
+        'company' => [ '会社概要', '企業情報', '会社案内' ],
+        'access'  => [ 'アクセス', '地図', 'マップページ' ],
+        'staff'   => [ 'スタッフ', 'スタッフ紹介', '社員紹介' ],
+        'price'   => [ '料金', '価格', 'プラン', '料金表' ],
+    ];
+    $lower = mb_strtolower( $message );
+    foreach ( $map as $type => $kws ) {
+        foreach ( $kws as $kw ) {
+            if ( mb_stripos( $lower, mb_strtolower( $kw ) ) !== false ) {
+                return $type;
+            }
+        }
+    }
+    return '';
+}
+
+/**
  * 「現状のページ診断」用に、AIへ添付するスクリーンショット群を構築する
  *
  * ロジック:
  *   1. ページ診断画面を見ていない → 何も返さない
- *   2. 質問がデザイン系キーワードに当たらない → 何も返さない（テキスト一覧だけは別途付与可能）
+ *   2. 質問がデザイン系キーワードに当たらない → 何も返さない
  *   3. 詳細パネル開いている (currentDetailId 指定)
  *      → そのページの PC + Mobile を添付
- *   4. 「サイト全体を評価」系キーワード
+ *   4. メッセージ中に「トップページ」等のページ呼称あり
+ *      → 該当 page_type のページを探して PC + Mobile を添付
+ *   5. 「サイト全体を評価」系キーワード
  *      → 上位 4 ページを PC のみ添付
- *   5. それ以外
- *      → 添付しない（対象ページが特定できないため）
+ *   6. それ以外
+ *      → 登録ページが1件しかない → そのページの PC + Mobile を添付
+ *      → 複数あるが特定できない → 添付しない
  *
  * @return array {
  *   images: array<int, array{mime:string,data_url:string,bytes:int,label:string}>,
@@ -1834,6 +1984,30 @@ function mimamori_collect_page_analysis_screenshots(
     $target_pages = [];
     $mode         = 'none';
 
+    // ヘルパー: 1ページ分の PC + Mobile を $images / $target_pages に追加する
+    $append_single_page = function( $row ) use ( &$images, &$target_pages ) {
+        if ( ! is_array( $row ) || empty( $row['id'] ) ) {
+            return;
+        }
+        $target_pages[] = [
+            'id'    => (int) $row['id'],
+            'url'   => (string) ( $row['page_url'] ?? '' ),
+            'title' => (string) ( $row['page_title'] ?? '' ),
+        ];
+        foreach ( [ 'screenshot_pc' => 'PC', 'screenshot_mobile' => 'Mobile' ] as $col => $label ) {
+            $att_id = (int) ( $row[ $col ] ?? 0 );
+            if ( $att_id <= 0 ) {
+                continue;
+            }
+            $payload = mimamori_attachment_to_vision_payload( $att_id );
+            if ( $payload === null ) {
+                continue;
+            }
+            $payload['label'] = $label . '版: ' . ( $row['page_title'] ?? '' );
+            $images[] = $payload;
+        }
+    };
+
     // 1) 詳細パネルが開いている → そのページの PC + Mobile
     if ( $detail_id > 0 ) {
         $row = $wpdb->get_row( $wpdb->prepare(
@@ -1844,28 +2018,32 @@ function mimamori_collect_page_analysis_screenshots(
         ), ARRAY_A );
 
         if ( $row ) {
-            $mode           = 'single';
-            $target_pages[] = [
-                'id'    => (int) $row['id'],
-                'url'   => (string) $row['page_url'],
-                'title' => (string) $row['page_title'],
-            ];
-            foreach ( [ 'screenshot_pc' => 'PC', 'screenshot_mobile' => 'Mobile' ] as $col => $label ) {
-                $att_id = (int) ( $row[ $col ] ?? 0 );
-                if ( $att_id <= 0 ) {
-                    continue;
-                }
-                $payload = mimamori_attachment_to_vision_payload( $att_id );
-                if ( $payload === null ) {
-                    continue;
-                }
-                $payload['label'] = $label . '版: ' . $row['page_title'];
-                $images[] = $payload;
+            $mode = 'single_detail';
+            $append_single_page( $row );
+        }
+    }
+
+    // 2) メッセージにページ呼称あり → 該当 page_type を検索
+    if ( empty( $images ) ) {
+        $guessed_type = mimamori_guess_page_type_from_message( $message );
+        if ( $guessed_type !== '' ) {
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT id, page_url, page_title, screenshot_pc, screenshot_mobile
+                 FROM {$table}
+                 WHERE user_id = %d AND status = 'active' AND page_type = %s
+                 ORDER BY sort_order ASC, id ASC
+                 LIMIT 1",
+                $user_id, $guessed_type
+            ), ARRAY_A );
+            if ( $row ) {
+                $mode = 'single_named';
+                $append_single_page( $row );
             }
         }
     }
-    // 2) サイト全体を評価系 → 上位 4 ページの PC のみ
-    elseif ( mimamori_message_wants_site_wide( $message ) ) {
+
+    // 3) サイト全体を評価系 → 上位 4 ページの PC のみ
+    if ( empty( $images ) && mimamori_message_wants_site_wide( $message ) ) {
         $rows = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, page_url, page_title, screenshot_pc
              FROM {$table}
@@ -5838,6 +6016,44 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
     );
     if ( ! empty( $screenshot_pack['images'] ) ) {
         $input = mimamori_attach_images_to_input( $input, $screenshot_pack['images'], $screenshot_pack['meta'] );
+
+        // ===========================================================
+        // Vision モード時の振る舞い上書き（最重要）
+        // 通常のシステムプロンプトは「デザイン・レイアウト改善は support_notice で
+        // 専門スタッフに丸投げ」と指示しているため、そのままだと画像があっても
+        // 「専門スタッフにお任せください」一行で終わってしまう。
+        // 実際にスクリーンショットが手元にあるときは、AI自身が画像を見て
+        // 具体的な評価コメントを述べることが価値の中核なので、その挙動を
+        // 上書きする addendum を instructions に追加する。
+        // ===========================================================
+        $instructions .= "\n\n" . <<<'VISION_ADDENDUM'
+## 【Vision モード: 画像添付あり】最優先で適用すること
+
+ユーザーのページのスクリーンショット（PC版またはスマホ版）が添付されています。
+この画像をしっかり見て、以下のとおり回答してください。
+
+### 必ずやること
+1. 画像から見て取れるデザイン・レイアウト・ファーストビュー・導線・CTA・読みやすさ・配色・余白などを
+   **具体的に**評価する（「上部のヘッダーが…」「ファーストビューのキャッチコピーが…」など、
+   画像の中の要素を指し示しながら述べる）。
+2. 良い点と改善点を分けて述べる。改善点は「どこを」「なぜ」「どう変えるか」をセットで具体的に。
+3. 「お客様自身では更新できない範囲なので…」のような曖昧な丸投げ回答は **絶対に禁止**。
+   画像から読み取れる事実をもとに、実際の評価を述べてください。
+4. 推測で語らない。画像に写っていない要素について断定しない。
+   見えていない部分（ページ下部・他ページ・モバイル版など）について聞かれた場合のみ、
+   「画像に含まれていないため評価できません」と明示する。
+
+### support_notice の扱い（重要）
+- 画像評価そのものは support_notice の対象外。AI が自分で評価すること。
+- ただし、改善案の **実装** は弊社スタッフが行うため、回答の最後に
+  `support_notice: true` を付けて「具体的な修正は弊社の専門スタッフが対応します」と案内する。
+- 「評価は AI、実装はスタッフ」という役割分担を守ってください。
+
+### 出力形式
+- 改善ポイントが複数ある場合は `advice` 形式（summary + sections）で構造化する。
+- 短く感想だけ求められたら `talk` 形式でもよいが、その場合も画像の具体的な要素に必ず触れる。
+
+VISION_ADDENDUM;
     }
     $trace['page_analysis_vision'] = [
         'mode'       => $screenshot_pack['meta']['mode'] ?? 'none',
