@@ -16957,11 +16957,7 @@ PROMPT;
                 date('Y-m-d H:i:s') . " calling gemini API, prompt_len=" . strlen($prompt) . ", is_regenerate=" . ($is_regenerate ? 'yes' : 'no') . "\n",
                 FILE_APPEND
             );
-            $raw_response = $this->ai->call_gemini_api($prompt, [
-                'temperature'     => 0.75,
-                'topP'            => 0.9,
-                'maxOutputTokens' => 4096,
-            ]);
+            $raw_response = $this->call_review_generation_api( $prompt );
 
             // JSONパース
             $parsed = $this->parse_review_response($raw_response);
@@ -17144,6 +17140,59 @@ PROMPT;
     /**
      * 口コミ生成用AIプロンプトを構築
      */
+    /**
+     * 口コミ生成を OpenAI 優先・Gemini フォールバックで実行する共通ヘルパー。
+     *
+     * OpenAI API キーが設定されていれば OpenAI (gpt-4.1 + JSON mode) を優先し、
+     * キー未設定・API エラー・レートリミット等で失敗した場合は Gemini にフォールバック。
+     *
+     * @param string $prompt build_review_prompt() の戻り値
+     * @return string 生の応答テキスト（JSON 文字列）
+     * @throws \Exception 両プロバイダとも失敗した場合
+     */
+    private function call_review_generation_api( string $prompt ): string {
+        $openai_key = $this->config->get_openai_api_key();
+
+        // OpenAI を優先
+        if ( $openai_key !== '' && class_exists( 'Gcrev_OpenAI_Client' ) ) {
+            try {
+                $client = new \Gcrev_OpenAI_Client( $this->config );
+                $system = 'あなたは実際にサービスを利用した顧客の立場で、Google口コミの下書きを作成するプロのライターです。'
+                    . '与えられた指示・参考口コミ・禁止事項を厳密に守り、自然で現実的な1本の口コミを JSON 形式で返してください。';
+                $result = $client->call_chat_api( $system, $prompt, [
+                    'model'       => 'gpt-4.1',
+                    'temperature' => 0.75,
+                    'max_tokens'  => 2048,
+                ] );
+                if ( ! empty( $result['text'] ) && is_string( $result['text'] ) ) {
+                    file_put_contents( '/tmp/gcrev_review_debug.log',
+                        date( 'Y-m-d H:i:s' ) . ' [review-gen] OpenAI gpt-4.1 success tokens=' . (int) ( $result['prompt_tokens'] ?? 0 ) . '/' . (int) ( $result['completion_tokens'] ?? 0 ) . "\n",
+                        FILE_APPEND
+                    );
+                    return (string) $result['text'];
+                }
+            } catch ( \Throwable $e ) {
+                file_put_contents( '/tmp/gcrev_review_debug.log',
+                    date( 'Y-m-d H:i:s' ) . ' [review-gen] OpenAI failed, fallback to Gemini: ' . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
+                // Fall through to Gemini
+            }
+        }
+
+        // Gemini フォールバック
+        $raw = $this->ai->call_gemini_api( $prompt, [
+            'temperature'     => 0.75,
+            'topP'            => 0.9,
+            'maxOutputTokens' => 4096,
+        ] );
+        file_put_contents( '/tmp/gcrev_review_debug.log',
+            date( 'Y-m-d H:i:s' ) . ' [review-gen] Gemini used (len=' . strlen( (string) $raw ) . ")\n",
+            FILE_APPEND
+        );
+        return (string) $raw;
+    }
+
     private function build_review_prompt(string $answer_text, string $business_name = '', string $ai_keywords = '', string $ai_extra_prompt = '', array $ai_reference_reviews = []): string {
         $business_part = $business_name
             ? "対象のサービス・店舗名: {$business_name}\n"
@@ -18430,11 +18479,7 @@ PROMPT;
         }
 
         try {
-            $raw_response = $this->ai->call_gemini_api($prompt, [
-                'temperature'     => 0.75,
-                'topP'            => 0.9,
-                'maxOutputTokens' => 4096,
-            ]);
+            $raw_response = $this->call_review_generation_api( $prompt );
             $parsed = $this->parse_review_response($raw_response);
 
             if ($parsed === null) {
