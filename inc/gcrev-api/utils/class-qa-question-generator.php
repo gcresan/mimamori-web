@@ -155,40 +155,19 @@ class Mimamori_QA_Question_Generator {
     /**
      * N問の質問を生成する。
      *
-     * @param  int         $n          質問数
-     * @param  string|null $category   特定カテゴリのみ（null = ウェイト付きミックス）
-     * @param  float       $pool_ratio 実ユーザー質問プールから混ぜる比率 (0.0〜1.0, デフォルト0=合成のみ)
+     * @param  int         $n        質問数
+     * @param  string|null $category 特定カテゴリのみ（null = ウェイト付きミックス）
      * @return array 質問配列
      */
-    public function generate( int $n, ?string $category = null, float $pool_ratio = 0.0 ): array {
+    public function generate( int $n, ?string $category = null ): array {
         mt_srand( $this->seed );
 
-        // 実ユーザー質問プールの抽出
-        $pool_questions = [];
-        $pool_ratio     = max( 0.0, min( 1.0, $pool_ratio ) );
-        $pool_target    = (int) floor( $n * $pool_ratio );
-
-        if ( $pool_target > 0 && class_exists( 'Mimamori_QA_User_Question_Pool' ) ) {
-            $pool_raw = Mimamori_QA_User_Question_Pool::get_approved_questions( $pool_target * 3 );
-            if ( $category !== null ) {
-                $pool_raw = array_values( array_filter( $pool_raw, static function ( $q ) use ( $category ) {
-                    return isset( $q['category'] ) && $q['category'] === $category;
-                } ) );
-            }
-            if ( ! empty( $pool_raw ) ) {
-                shuffle( $pool_raw );
-                $pool_questions = array_slice( $pool_raw, 0, $pool_target );
-            }
-        }
-
-        // 合成枠 = n - 実プール採用数
-        $synth_n = $n - count( $pool_questions );
-
         $categories = ( $category !== null )
-            ? array_fill( 0, $synth_n, $category )
-            : $this->pick_categories( $synth_n );
+            ? array_fill( 0, $n, $category )
+            : $this->pick_categories( $n );
 
         $questions = [];
+        // カテゴリごとの使用済みインデックス管理
         $used = [];
 
         foreach ( $categories as $i => $cat ) {
@@ -198,10 +177,13 @@ class Mimamori_QA_Question_Generator {
             if ( ! isset( $used[ $cat ] ) ) {
                 $used[ $cat ] = [];
             }
+
+            // 全テンプレ使い切ったらリセット
             if ( count( $used[ $cat ] ) >= $count ) {
                 $used[ $cat ] = [];
             }
 
+            // 未使用テンプレからランダム選択
             $available = array_diff( range( 0, $count - 1 ), $used[ $cat ] );
             $pick      = array_values( $available )[ mt_rand( 0, count( $available ) - 1 ) ];
             $used[ $cat ][] = $pick;
@@ -217,31 +199,7 @@ class Mimamori_QA_Question_Generator {
                 'current_page'    => self::PAGE_URLS[ $page_type ] ?? self::PAGE_URLS['unknown'],
                 'history'         => [],
                 'section_context' => null,
-                '_source'         => 'synth',
             ];
-        }
-
-        // プール質問を末尾のIDで連番付与してから混ぜる
-        $offset = count( $questions );
-        foreach ( $pool_questions as $j => $pq ) {
-            $pq['id'] = sprintf( 'qa_%03d', $offset + $j + 1 );
-            // PAGE_URLS の適用（プール側に既に入っているが念のため上書き）
-            $pt = $pq['page_type'] ?? 'unknown';
-            $pq['current_page'] = self::PAGE_URLS[ $pt ] ?? self::PAGE_URLS['unknown'];
-            $questions[] = $pq;
-        }
-
-        // 合成と実プールが混ざるようにシャッフル（QAレポートでの並び視認性向上）
-        if ( ! empty( $pool_questions ) ) {
-            for ( $i = count( $questions ) - 1; $i > 0; $i-- ) {
-                $j = mt_rand( 0, $i );
-                [ $questions[ $i ], $questions[ $j ] ] = [ $questions[ $j ], $questions[ $i ] ];
-            }
-            // シャッフル後に ID 振り直し
-            foreach ( $questions as $k => &$q ) {
-                $q['id'] = sprintf( 'qa_%03d', $k + 1 );
-            }
-            unset( $q );
         }
 
         return $questions;

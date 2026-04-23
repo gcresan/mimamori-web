@@ -29,8 +29,6 @@ class Gcrev_Chat_Analysis_Page {
         add_action( 'admin_post_gcrev_chat_generate_report', [ $this, 'handle_generate_report' ] );
         add_action( 'admin_post_gcrev_chat_delete_report',   [ $this, 'handle_delete_report' ] );
         add_action( 'admin_post_gcrev_chat_export_csv',      [ $this, 'handle_export_csv' ] );
-        add_action( 'admin_post_gcrev_qa_pool_ingest',       [ $this, 'handle_pool_ingest' ] );
-        add_action( 'admin_post_gcrev_qa_pool_action',       [ $this, 'handle_pool_action' ] );
     }
 
     public function add_menu_page(): void {
@@ -67,7 +65,7 @@ class Gcrev_Chat_Analysis_Page {
 
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         $tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'logs';
-        if ( ! in_array( $tab, [ 'logs', 'reports', 'report_detail', 'pool' ], true ) ) {
+        if ( ! in_array( $tab, [ 'logs', 'reports', 'report_detail' ], true ) ) {
             $tab = 'logs';
         }
 
@@ -85,9 +83,6 @@ class Gcrev_Chat_Analysis_Page {
             case 'report_detail':
                 $this->render_report_detail_tab();
                 break;
-            case 'pool':
-                $this->render_pool_tab();
-                break;
             case 'logs':
             default:
                 $this->render_logs_tab();
@@ -101,7 +96,6 @@ class Gcrev_Chat_Analysis_Page {
         $tabs = [
             'logs'    => 'ログ一覧',
             'reports' => '分析レポート',
-            'pool'    => 'QA質問プール',
         ];
         echo '<h2 class="nav-tab-wrapper" style="margin-bottom:20px;">';
         foreach ( $tabs as $key => $label ) {
@@ -519,152 +513,6 @@ class Gcrev_Chat_Analysis_Page {
     }
 
     // =========================================================
-    // Tab: QA質問プール
-    // =========================================================
-
-    private function render_pool_tab(): void {
-        if ( ! class_exists( 'Mimamori_QA_User_Question_Pool' ) ) {
-            require_once dirname( __DIR__ ) . '/utils/class-qa-user-question-pool.php';
-        }
-        if ( ! class_exists( 'Mimamori_QA_User_Question_Pool' ) ) {
-            echo '<p>QA質問プールクラスが読み込めません。</p>';
-            return;
-        }
-
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-        $status = isset( $_GET['pool_status'] ) ? sanitize_text_field( wp_unslash( $_GET['pool_status'] ) ) : 'pending';
-        if ( ! in_array( $status, [ 'pending', 'approved', 'rejected', 'all' ], true ) ) {
-            $status = 'pending';
-        }
-
-        $counts = Mimamori_QA_User_Question_Pool::count_by_status();
-        $items  = Mimamori_QA_User_Question_Pool::list_by_status( $status, 300 );
-        ?>
-        <div class="gcrev-card">
-            <h2>実ユーザーのチャットログを QA 質問プールに取り込む</h2>
-            <p style="color:#555;">
-                直近のチャットログから、未解決シグナル（エラー・確認質問で終了・追加説明要求）が強い質問、または頻出質問を抽出します。<br>
-                取り込まれた質問は「pending」状態で登録され、承認した質問が翌日以降の QA 夜間バッチに混入されます。
-            </p>
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-                <?php wp_nonce_field( self::NONCE_KEY ); ?>
-                <input type="hidden" name="action" value="gcrev_qa_pool_ingest">
-                <label>対象期間：
-                    <select name="days">
-                        <option value="3">直近 3日</option>
-                        <option value="7" selected>直近 7日</option>
-                        <option value="14">直近 14日</option>
-                        <option value="30">直近 30日</option>
-                    </select>
-                </label>
-                &nbsp;
-                <label>最大取込数：
-                    <select name="max">
-                        <option value="20">20</option>
-                        <option value="50" selected>50</option>
-                        <option value="100">100</option>
-                    </select>
-                </label>
-                &nbsp;
-                <button type="submit" class="button button-primary">ログから取込</button>
-            </form>
-        </div>
-
-        <h2 style="margin-top:30px;">プール一覧</h2>
-        <p>
-            <a href="<?php echo esc_url( $this->pool_tab_url( 'pending' ) ); ?>" class="button <?php echo $status === 'pending' ? 'button-primary' : ''; ?>">未審査 (<?php echo (int) $counts['pending']; ?>)</a>
-            <a href="<?php echo esc_url( $this->pool_tab_url( 'approved' ) ); ?>" class="button <?php echo $status === 'approved' ? 'button-primary' : ''; ?>">承認済み (<?php echo (int) $counts['approved']; ?>)</a>
-            <a href="<?php echo esc_url( $this->pool_tab_url( 'rejected' ) ); ?>" class="button <?php echo $status === 'rejected' ? 'button-primary' : ''; ?>">却下 (<?php echo (int) $counts['rejected']; ?>)</a>
-            <a href="<?php echo esc_url( $this->pool_tab_url( 'all' ) ); ?>" class="button <?php echo $status === 'all' ? 'button-primary' : ''; ?>">全て</a>
-        </p>
-
-        <?php if ( empty( $items ) ) : ?>
-            <p>該当する質問がありません。</p>
-        <?php else : ?>
-            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-                <?php wp_nonce_field( self::NONCE_KEY ); ?>
-                <input type="hidden" name="action" value="gcrev_qa_pool_action">
-                <input type="hidden" name="pool_status_ctx" value="<?php echo esc_attr( $status ); ?>">
-
-                <div style="margin:10px 0;">
-                    <select name="bulk_action">
-                        <option value="">一括操作 …</option>
-                        <option value="approve">承認する</option>
-                        <option value="reject">却下する</option>
-                        <option value="pending">保留に戻す</option>
-                        <option value="delete">削除する</option>
-                    </select>
-                    <button type="submit" class="button">適用</button>
-                </div>
-
-                <table class="widefat striped">
-                    <thead>
-                        <tr>
-                            <th style="width:28px;"><input type="checkbox" id="gcrev-pool-check-all"></th>
-                            <th style="width:60px;">ID</th>
-                            <th style="width:90px;">出現数</th>
-                            <th style="width:90px;">ステータス</th>
-                            <th style="width:100px;">シグナル</th>
-                            <th style="width:80px;">カテゴリ</th>
-                            <th style="width:100px;">Page</th>
-                            <th>メッセージ</th>
-                            <th style="width:160px;">作成日時</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ( $items as $item ) :
-                            $status_label = [
-                                'pending'  => '未審査',
-                                'approved' => '承認済',
-                                'rejected' => '却下',
-                            ][ $item->status ] ?? $item->status;
-                            $reason_label = [
-                                'error'      => 'エラー',
-                                'param_gate' => '確認質問止まり',
-                                'followup'   => '追加説明',
-                                'frequent'   => '頻出',
-                                'normal'     => '通常',
-                            ][ $item->source_reason ] ?? $item->source_reason;
-                            ?>
-                            <tr>
-                                <td><input type="checkbox" name="ids[]" value="<?php echo (int) $item->id; ?>" class="gcrev-pool-check"></td>
-                                <td><?php echo (int) $item->id; ?></td>
-                                <td><?php echo (int) $item->occurrence_count; ?></td>
-                                <td><?php echo esc_html( $status_label ); ?></td>
-                                <td><?php echo esc_html( $reason_label ); ?></td>
-                                <td><?php echo esc_html( $item->category ); ?></td>
-                                <td><?php echo esc_html( $item->page_type ); ?></td>
-                                <td><?php echo esc_html( $this->truncate( (string) $item->message, 120 ) ); ?></td>
-                                <td><?php echo esc_html( $item->created_at ); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </form>
-
-            <script>
-            (function(){
-              var master = document.getElementById('gcrev-pool-check-all');
-              if (!master) return;
-              master.addEventListener('change', function(){
-                document.querySelectorAll('.gcrev-pool-check').forEach(function(cb){
-                  cb.checked = master.checked;
-                });
-              });
-            })();
-            </script>
-        <?php endif;
-    }
-
-    private function pool_tab_url( string $status ): string {
-        return add_query_arg( [
-            'page'        => self::MENU_SLUG,
-            'tab'         => 'pool',
-            'pool_status' => $status,
-        ], admin_url( 'admin.php' ) );
-    }
-
-    // =========================================================
     // Action handlers
     // =========================================================
 
@@ -715,96 +563,6 @@ class Gcrev_Chat_Analysis_Page {
         }
 
         $this->redirect_with_message( [ 'tab' => 'reports' ], 'レポートを削除しました。', 'success' );
-    }
-
-    public function handle_pool_ingest(): void {
-        if ( ! current_user_can( 'manage_options' ) ) { wp_die( '権限がありません。' ); }
-        check_admin_referer( self::NONCE_KEY );
-
-        $days = isset( $_POST['days'] ) ? (int) $_POST['days'] : 7;
-        $max  = isset( $_POST['max'] ) ? (int) $_POST['max'] : 50;
-
-        if ( ! class_exists( 'Mimamori_QA_User_Question_Pool' ) ) {
-            require_once dirname( __DIR__ ) . '/utils/class-qa-user-question-pool.php';
-        }
-
-        $result = Mimamori_QA_User_Question_Pool::ingest_from_chat_logs( $days, $max );
-
-        $message = sprintf(
-            '取込完了: スキャン %d件 / 新規追加 %d件 / 出現数更新 %d件',
-            $result['total_scanned'], $result['inserted'], $result['updated']
-        );
-
-        $this->redirect_with_message(
-            [ 'tab' => 'pool', 'pool_status' => 'pending' ],
-            $message,
-            'success'
-        );
-    }
-
-    public function handle_pool_action(): void {
-        if ( ! current_user_can( 'manage_options' ) ) { wp_die( '権限がありません。' ); }
-        check_admin_referer( self::NONCE_KEY );
-
-        $bulk   = isset( $_POST['bulk_action'] ) ? sanitize_text_field( wp_unslash( $_POST['bulk_action'] ) ) : '';
-        $ids    = isset( $_POST['ids'] ) && is_array( $_POST['ids'] ) ? array_map( 'intval', $_POST['ids'] ) : [];
-        $status_ctx = isset( $_POST['pool_status_ctx'] ) ? sanitize_text_field( wp_unslash( $_POST['pool_status_ctx'] ) ) : 'pending';
-
-        if ( empty( $ids ) || $bulk === '' ) {
-            $this->redirect_with_message(
-                [ 'tab' => 'pool', 'pool_status' => $status_ctx ],
-                '対象と操作を選択してください。',
-                'error'
-            );
-            return;
-        }
-
-        if ( ! class_exists( 'Mimamori_QA_User_Question_Pool' ) ) {
-            require_once dirname( __DIR__ ) . '/utils/class-qa-user-question-pool.php';
-        }
-
-        $reviewer = get_current_user_id();
-
-        if ( $bulk === 'delete' ) {
-            $deleted = 0;
-            foreach ( $ids as $id ) {
-                if ( Mimamori_QA_User_Question_Pool::delete( (int) $id ) ) { $deleted++; }
-            }
-            $this->redirect_with_message(
-                [ 'tab' => 'pool', 'pool_status' => $status_ctx ],
-                sprintf( '%d件を削除しました。', $deleted ),
-                'success'
-            );
-            return;
-        }
-
-        $status_map = [
-            'approve' => Mimamori_QA_User_Question_Pool::STATUS_APPROVED,
-            'reject'  => Mimamori_QA_User_Question_Pool::STATUS_REJECTED,
-            'pending' => Mimamori_QA_User_Question_Pool::STATUS_PENDING,
-        ];
-        if ( ! isset( $status_map[ $bulk ] ) ) {
-            $this->redirect_with_message(
-                [ 'tab' => 'pool', 'pool_status' => $status_ctx ],
-                '不正な操作です。',
-                'error'
-            );
-            return;
-        }
-
-        $updated = Mimamori_QA_User_Question_Pool::bulk_update_status( $ids, $status_map[ $bulk ], $reviewer );
-
-        $label = [
-            'approve' => '承認',
-            'reject'  => '却下',
-            'pending' => '保留',
-        ][ $bulk ];
-
-        $this->redirect_with_message(
-            [ 'tab' => 'pool', 'pool_status' => $status_ctx ],
-            sprintf( '%d件を%sに更新しました。', $updated, $label ),
-            'success'
-        );
     }
 
     public function handle_export_csv(): void {

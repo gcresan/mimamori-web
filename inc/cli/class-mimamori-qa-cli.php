@@ -52,16 +52,12 @@ class Mimamori_QA_CLI {
      * [--sleep=<ms>]
      * : リクエスト間スリープ(ms)。デフォルト: 2000
      *
-     * [--pool-ratio=<ratio>]
-     * : 実ユーザー質問プール（承認済み）から混ぜる比率 (0.0〜1.0)。デフォルト 0.0 = 合成のみ
-     *
      * ## EXAMPLES
      *
      *     wp mimamori qa:run --user_id=5 --n=20
      *     wp mimamori qa:run --user_id=5 --mode=quick --dry-run
      *     wp mimamori qa:run --user_id=5 --mode=nightly --seed=20260302
      *     wp mimamori qa:run --user_id=5 --category=kpi --n=10
-     *     wp mimamori qa:run --user_id=5 --mode=nightly --pool-ratio=0.3
      *
      * @subcommand qa:run
      * @param array $args       Positional arguments.
@@ -70,12 +66,11 @@ class Mimamori_QA_CLI {
     public function qa_run( array $args, array $assoc_args ): void {
 
         // --- パラメータ解析 ---
-        $user_id    = $this->require_user_id( $assoc_args );
-        $mode       = $assoc_args['mode'] ?? 'custom';
-        $dry_run    = isset( $assoc_args['dry-run'] );
-        $sleep_ms   = (int) ( $assoc_args['sleep'] ?? 2000 );
-        $category   = $assoc_args['category'] ?? null;
-        $pool_ratio = (float) ( $assoc_args['pool-ratio'] ?? 0.0 );
+        $user_id  = $this->require_user_id( $assoc_args );
+        $mode     = $assoc_args['mode'] ?? 'custom';
+        $dry_run  = isset( $assoc_args['dry-run'] );
+        $sleep_ms = (int) ( $assoc_args['sleep'] ?? 2000 );
+        $category = $assoc_args['category'] ?? null;
 
         $n = match ( $mode ) {
             'quick'   => 5,
@@ -101,21 +96,15 @@ class Mimamori_QA_CLI {
         }
 
         WP_CLI::log( '=== Mimamori QA Batch ===' );
-        WP_CLI::log( sprintf( 'User: %d | Questions: %d | Seed: %d | Mode: %s | Category: %s | Pool ratio: %.2f',
-            $user_id, $n, $seed, $mode, $category ?? 'mixed', $pool_ratio
+        WP_CLI::log( sprintf( 'User: %d | Questions: %d | Seed: %d | Mode: %s | Category: %s',
+            $user_id, $n, $seed, $mode, $category ?? 'mixed'
         ) );
 
-        // --- 質問生成（合成 + 実ユーザープール混合）---
+        // --- 質問生成 ---
         $generator = new Mimamori_QA_Question_Generator( $seed );
-        $questions = $generator->generate( $n, $category, $pool_ratio );
+        $questions = $generator->generate( $n, $category );
 
-        $pool_count = 0;
-        foreach ( $questions as $q ) {
-            if ( ( $q['_source'] ?? '' ) === 'user_pool' ) { $pool_count++; }
-        }
-        WP_CLI::log( sprintf( 'Generated %d questions (synth: %d, user_pool: %d).',
-            count( $questions ), count( $questions ) - $pool_count, $pool_count
-        ) );
+        WP_CLI::log( sprintf( 'Generated %d questions.', count( $questions ) ) );
 
         if ( $dry_run ) {
             WP_CLI::log( '' );
@@ -659,63 +648,6 @@ class Mimamori_QA_CLI {
                 WP_CLI::log( $failures );
             }
         }
-    }
-
-    // =========================================================
-    // qa:pool-ingest — 実ユーザーのチャットログを質問プールに取り込む
-    // =========================================================
-
-    /**
-     * `gcrev_chat_logs` から質問候補を抽出し、QA 質問プールに pending で登録する。
-     *
-     * 未解決シグナル（エラー / param_gate / followup）の強いものを優先。
-     *
-     * ## OPTIONS
-     *
-     * [--days=<days>]
-     * : 対象期間（デフォルト 7）
-     *
-     * [--max=<n>]
-     * : 新規取り込みの上限（デフォルト 50）
-     *
-     * ## EXAMPLES
-     *
-     *     wp mimamori qa:pool-ingest
-     *     wp mimamori qa:pool-ingest --days=14 --max=30
-     *
-     * @subcommand qa:pool-ingest
-     * @param array $args       Positional arguments.
-     * @param array $assoc_args Named arguments.
-     */
-    public function qa_pool_ingest( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
-        $days = (int) ( $assoc_args['days'] ?? 7 );
-        $max  = (int) ( $assoc_args['max'] ?? 50 );
-
-        $pool_file = get_template_directory() . '/inc/gcrev-api/utils/class-qa-user-question-pool.php';
-        if ( ! file_exists( $pool_file ) ) {
-            WP_CLI::error( "Pool class not found: {$pool_file}" );
-        }
-        require_once $pool_file;
-
-        WP_CLI::log( sprintf( '=== Pool Ingest === days=%d max=%d', $days, $max ) );
-
-        $result = Mimamori_QA_User_Question_Pool::ingest_from_chat_logs( $days, $max );
-
-        WP_CLI::log( sprintf(
-            'Scanned: %d | Inserted: %d | Updated: %d | Skipped: %d',
-            $result['total_scanned'],
-            $result['inserted'],
-            $result['updated'],
-            $result['skipped']
-        ) );
-
-        $counts = Mimamori_QA_User_Question_Pool::count_by_status();
-        WP_CLI::log( sprintf(
-            'Pool status → pending: %d / approved: %d / rejected: %d',
-            $counts['pending'], $counts['approved'], $counts['rejected']
-        ) );
-
-        WP_CLI::success( 'Pool ingest complete.' );
     }
 
     // =========================================================
