@@ -1634,6 +1634,341 @@ function mimamori_build_chat_context( array $data ): array {
 }
 
 /**
+ * 「現状のページ診断」のスクリーンショット添付を判定するキーワード群
+ *
+ * デザイン・UI改善関連の質問でのみ Vision に画像を渡す。
+ * 通常の数値質問・雑談では画像を送らないことでトークンコストを抑える。
+ */
+function mimamori_page_analysis_image_keywords(): array {
+    return [
+        // デザイン・見た目
+        'デザイン', '見た目', '見栄え', '印象', '雰囲気', 'ビジュアル', '色合い', '配色', 'カラー',
+        'レイアウト', '配置', '構成', 'バランス', '余白', 'スペース',
+        // ファーストビュー
+        'ファーストビュー', 'first view', 'firstview', '一番上', '最初の画面',
+        // 導線・CTA
+        '導線', '動線', 'CTA', 'ボタン', 'コンバージョン導線', '誘導',
+        // 読みやすさ
+        '読みやすさ', '読みやす', '視認性', '見やすさ', '見やす', '可読',
+        // 構造
+        '見出し', '段落', '文字', 'フォント', 'ヘッダー', 'フッター',
+        // 直接的言及
+        'このページ', 'こちらのページ', '対象ページ', 'キャプチャ', 'スクショ', 'スクリーンショット',
+        '画像を見', '見て', 'チェックして', 'レビュー', '評価して',
+        // 改善・診断
+        '改善', '診断', '問題点', '良くない', '直した方がいい',
+    ];
+}
+
+/**
+ * 「サイト全体を俯瞰評価して」のような複数ページ送信モードを判定するキーワード
+ */
+function mimamori_page_analysis_site_wide_keywords(): array {
+    return [
+        'サイト全体', 'サイト全部', '全ページ', '全部のページ', '全体を', '全体的',
+        '俯瞰', 'まとめて評価', 'まとめてレビュー', '一通り', '横断', '比較',
+    ];
+}
+
+/**
+ * メッセージから「ページ診断系の質問か」を判定する
+ */
+function mimamori_message_wants_page_screenshot( string $message ): bool {
+    if ( $message === '' ) {
+        return false;
+    }
+    $lower = mb_strtolower( $message );
+    foreach ( mimamori_page_analysis_image_keywords() as $kw ) {
+        if ( mb_stripos( $lower, mb_strtolower( $kw ) ) !== false ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function mimamori_message_wants_site_wide( string $message ): bool {
+    if ( $message === '' ) {
+        return false;
+    }
+    $lower = mb_strtolower( $message );
+    foreach ( mimamori_page_analysis_site_wide_keywords() as $kw ) {
+        if ( mb_stripos( $lower, mb_strtolower( $kw ) ) !== false ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * 現状のページ診断ページを開いているかを URL から判定
+ */
+function mimamori_is_on_page_analysis_screen( array $current_page ): bool {
+    $url = isset( $current_page['url'] ) ? (string) $current_page['url'] : '';
+    if ( $url === '' ) {
+        return false;
+    }
+    $path = wp_parse_url( $url, PHP_URL_PATH );
+    if ( ! $path ) {
+        return false;
+    }
+    return ( strpos( $path, '/page-analysis' ) !== false );
+}
+
+/**
+ * attachment ID を Vision 用の base64 データURL に変換する
+ *
+ * 巨大画像はメモリ・コスト負荷が高いため WP image_editor で長辺 1280px に縮小する。
+ * 失敗時は null を返し、呼び出し元はその画像をスキップする。
+ *
+ * @return array|null ['mime'=>string, 'data_url'=>string, 'bytes'=>int] | null
+ */
+function mimamori_attachment_to_vision_payload( int $attachment_id ): ?array {
+    if ( $attachment_id <= 0 ) {
+        return null;
+    }
+    $path = get_attached_file( $attachment_id );
+    if ( ! $path || ! file_exists( $path ) ) {
+        return null;
+    }
+
+    $mime = get_post_mime_type( $attachment_id ) ?: 'image/png';
+    if ( ! in_array( $mime, [ 'image/png', 'image/jpeg', 'image/webp', 'image/gif' ], true ) ) {
+        return null;
+    }
+
+    // 縮小（長辺1280px）— 元画像が小さい場合は image_editor が自動で何もしない
+    $editor = wp_get_image_editor( $path );
+    $bin    = null;
+
+    if ( ! is_wp_error( $editor ) ) {
+        $size = $editor->get_size();
+        $w    = (int) ( $size['width']  ?? 0 );
+        $h    = (int) ( $size['height'] ?? 0 );
+        $max  = 1280;
+        if ( $w > $max || $h > $max ) {
+            $editor->resize( $max, $max, false );
+        }
+        // 一時ファイルに保存して読み出し
+        $ext      = ( $mime === 'image/jpeg' ) ? 'jpg' : ( $mime === 'image/webp' ? 'webp' : 'png' );
+        $tmp      = wp_tempnam( 'gcrev_vision_' . $attachment_id . '.' . $ext );
+        $saved    = $editor->save( $tmp, $mime );
+        if ( ! is_wp_error( $saved ) && ! empty( $saved['path'] ) && file_exists( $saved['path'] ) ) {
+            $bin = @file_get_contents( $saved['path'] );
+            @unlink( $saved['path'] );
+        }
+        if ( file_exists( $tmp ) ) {
+            @unlink( $tmp );
+        }
+    }
+
+    if ( $bin === null || $bin === false ) {
+        // フォールバック: 元ファイルをそのまま使う（最大2MB制限）
+        $bin = @file_get_contents( $path );
+        if ( $bin === false ) {
+            return null;
+        }
+        if ( strlen( $bin ) > 2 * 1024 * 1024 ) {
+            return null;
+        }
+    }
+
+    $b64 = base64_encode( $bin );
+    return [
+        'mime'     => $mime,
+        'data_url' => 'data:' . $mime . ';base64,' . $b64,
+        'bytes'    => strlen( $bin ),
+    ];
+}
+
+/**
+ * 「現状のページ診断」用に、AIへ添付するスクリーンショット群を構築する
+ *
+ * ロジック:
+ *   1. ページ診断画面を見ていない → 何も返さない
+ *   2. 質問がデザイン系キーワードに当たらない → 何も返さない（テキスト一覧だけは別途付与可能）
+ *   3. 詳細パネル開いている (currentDetailId 指定)
+ *      → そのページの PC + Mobile を添付
+ *   4. 「サイト全体を評価」系キーワード
+ *      → 上位 4 ページを PC のみ添付
+ *   5. それ以外
+ *      → 添付しない（対象ページが特定できないため）
+ *
+ * @return array {
+ *   images: array<int, array{mime:string,data_url:string,bytes:int,label:string}>,
+ *   meta:   array{ mode:string, page_count:int, target_pages:array<int,array{id:int,url:string,title:string}> },
+ * }
+ */
+function mimamori_collect_page_analysis_screenshots(
+    int $user_id,
+    array $current_page,
+    string $message,
+    array $page_analysis_context
+): array {
+    $empty = [
+        'images' => [],
+        'meta'   => [ 'mode' => 'none', 'page_count' => 0, 'target_pages' => [] ],
+    ];
+
+    if ( $user_id <= 0 ) {
+        return $empty;
+    }
+    if ( ! mimamori_is_on_page_analysis_screen( $current_page ) ) {
+        return $empty;
+    }
+    if ( ! mimamori_message_wants_page_screenshot( $message ) ) {
+        return $empty;
+    }
+
+    global $wpdb;
+    $table = $wpdb->prefix . 'gcrev_page_analysis';
+
+    $detail_id = isset( $page_analysis_context['currentDetailId'] )
+        ? (int) $page_analysis_context['currentDetailId']
+        : 0;
+
+    $images       = [];
+    $target_pages = [];
+    $mode         = 'none';
+
+    // 1) 詳細パネルが開いている → そのページの PC + Mobile
+    if ( $detail_id > 0 ) {
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, page_url, page_title, screenshot_pc, screenshot_mobile
+             FROM {$table}
+             WHERE id = %d AND user_id = %d AND status = 'active'",
+            $detail_id, $user_id
+        ), ARRAY_A );
+
+        if ( $row ) {
+            $mode           = 'single';
+            $target_pages[] = [
+                'id'    => (int) $row['id'],
+                'url'   => (string) $row['page_url'],
+                'title' => (string) $row['page_title'],
+            ];
+            foreach ( [ 'screenshot_pc' => 'PC', 'screenshot_mobile' => 'Mobile' ] as $col => $label ) {
+                $att_id = (int) ( $row[ $col ] ?? 0 );
+                if ( $att_id <= 0 ) {
+                    continue;
+                }
+                $payload = mimamori_attachment_to_vision_payload( $att_id );
+                if ( $payload === null ) {
+                    continue;
+                }
+                $payload['label'] = $label . '版: ' . $row['page_title'];
+                $images[] = $payload;
+            }
+        }
+    }
+    // 2) サイト全体を評価系 → 上位 4 ページの PC のみ
+    elseif ( mimamori_message_wants_site_wide( $message ) ) {
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, page_url, page_title, screenshot_pc
+             FROM {$table}
+             WHERE user_id = %d AND status = 'active' AND screenshot_pc IS NOT NULL
+             ORDER BY sort_order ASC, id ASC
+             LIMIT 4",
+            $user_id
+        ), ARRAY_A );
+
+        if ( ! empty( $rows ) ) {
+            $mode = 'site_wide';
+            foreach ( $rows as $r ) {
+                $target_pages[] = [
+                    'id'    => (int) $r['id'],
+                    'url'   => (string) $r['page_url'],
+                    'title' => (string) $r['page_title'],
+                ];
+                $payload = mimamori_attachment_to_vision_payload( (int) $r['screenshot_pc'] );
+                if ( $payload === null ) {
+                    continue;
+                }
+                $payload['label'] = 'PC版: ' . $r['page_title'];
+                $images[] = $payload;
+            }
+        }
+    }
+
+    return [
+        'images' => $images,
+        'meta'   => [
+            'mode'         => $mode,
+            'page_count'   => count( $target_pages ),
+            'target_pages' => $target_pages,
+        ],
+    ];
+}
+
+/**
+ * Responses API の input 配列にスクリーンショットを差し込む
+ *
+ * 直近の user メッセージの content を multimodal の配列形式に変換し、
+ * 末尾に input_image パートを追加する。Responses API は content が
+ * 文字列でも配列でも受理する。
+ *
+ * @param array $input    mimamori_build_chat_context() の返り値
+ * @param array $images   mimamori_collect_page_analysis_screenshots()['images']
+ * @param array $meta     mimamori_collect_page_analysis_screenshots()['meta']
+ * @return array
+ */
+function mimamori_attach_images_to_input( array $input, array $images, array $meta ): array {
+    if ( empty( $images ) ) {
+        return $input;
+    }
+
+    // 直近の user メッセージのインデックスを探す（普通は末尾）
+    $target_idx = -1;
+    for ( $i = count( $input ) - 1; $i >= 0; $i-- ) {
+        if ( ( $input[ $i ]['role'] ?? '' ) === 'user' ) {
+            $target_idx = $i;
+            break;
+        }
+    }
+    if ( $target_idx < 0 ) {
+        return $input;
+    }
+
+    $original = $input[ $target_idx ]['content'] ?? '';
+    if ( is_string( $original ) ) {
+        $original = [
+            [ 'type' => 'input_text', 'text' => $original ],
+        ];
+    } elseif ( ! is_array( $original ) ) {
+        $original = [ [ 'type' => 'input_text', 'text' => '' ] ];
+    }
+
+    // 画像の前段にラベル（どのページの何版か）を入れる
+    $label_lines = [];
+    if ( ! empty( $meta['target_pages'] ) ) {
+        $label_lines[] = '【添付画像の対象ページ】';
+        foreach ( $meta['target_pages'] as $p ) {
+            $label_lines[] = '- ' . ( $p['title'] !== '' ? $p['title'] : '(無題)' ) . ' / ' . $p['url'];
+        }
+        $label_lines[] = '';
+        $label_lines[] = '上記ページの実際の見た目（スクリーンショット）を添付しています。'
+            . 'デザイン・レイアウト・ファーストビュー・導線・CTA・読みやすさを画像から直接確認し、'
+            . '具体的に「どこを」「どう改善するか」を述べてください。'
+            . '画像から読み取れない事柄を推測で答えないでください。';
+    }
+    if ( ! empty( $label_lines ) ) {
+        $original[] = [ 'type' => 'input_text', 'text' => implode( "\n", $label_lines ) ];
+    }
+
+    foreach ( $images as $img ) {
+        if ( empty( $img['data_url'] ) ) {
+            continue;
+        }
+        $original[] = [
+            'type'      => 'input_image',
+            'image_url' => $img['data_url'],
+        ];
+    }
+
+    $input[ $target_idx ]['content'] = $original;
+    return $input;
+}
+
+/**
  * OpenAI Responses API 呼び出し
  *
  * @param array $payload  ['model'=>..., 'instructions'=>..., 'input'=>[...]]
@@ -5485,6 +5820,42 @@ function mimamori_process_chat_with_trace( array $data, int $user_id, array $ove
         $instructions .= "\n\n" . $overrides['prompt_addendum'];
     }
 
+    // === 「現状のページ診断」スクリーンショット添付 ===
+    // ページ診断画面 + デザイン系キーワードのときだけ Vision に画像を渡す。
+    // 通常の数値質問・雑談では空配列が返り、入力に変化なし（コスト抑制）。
+    $page_analysis_context = ( isset( $data['pageAnalysisContext'] ) && is_array( $data['pageAnalysisContext'] ) )
+        ? $data['pageAnalysisContext']
+        : [];
+    $screenshot_pack = mimamori_collect_page_analysis_screenshots(
+        (int) $user_id,
+        $current_page,
+        $effective_message ?? $message,
+        $page_analysis_context
+    );
+    if ( ! empty( $screenshot_pack['images'] ) ) {
+        $input = mimamori_attach_images_to_input( $input, $screenshot_pack['images'], $screenshot_pack['meta'] );
+    }
+    $trace['page_analysis_vision'] = [
+        'mode'       => $screenshot_pack['meta']['mode'] ?? 'none',
+        'page_count' => $screenshot_pack['meta']['page_count'] ?? 0,
+        'image_count' => count( $screenshot_pack['images'] ),
+    ];
+
+    // Debug log: Vision 添付の有無を記録（§7.1 準拠）
+    @file_put_contents(
+        '/tmp/gcrev_chat_debug.log',
+        sprintf(
+            "%s vision user=%d mode=%s pages=%d images=%d msg=%s\n",
+            date( 'Y-m-d H:i:s' ),
+            (int) $user_id,
+            $screenshot_pack['meta']['mode'] ?? 'none',
+            (int) ( $screenshot_pack['meta']['page_count'] ?? 0 ),
+            count( $screenshot_pack['images'] ),
+            mb_substr( $effective_message ?? $message, 0, 80 )
+        ),
+        FILE_APPEND
+    );
+
     // OpenAI 回答呼び出し
     $model = $overrides['model'] ?? ( defined( 'MIMAMORI_OPENAI_MODEL' ) ? MIMAMORI_OPENAI_MODEL : 'gpt-4.1-mini' );
     $trace['model']              = $model;
@@ -6039,6 +6410,8 @@ function gcrev_survey_create_tables(): void {
         required TINYINT(1) NOT NULL DEFAULT 1,
         sort_order INT NOT NULL DEFAULT 0,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
+        category VARCHAR(32) NOT NULL DEFAULT '',
+        is_fixed TINYINT(1) NOT NULL DEFAULT 0,
         PRIMARY KEY  (id),
         KEY survey_id (survey_id),
         KEY sort_order (sort_order)
@@ -9063,6 +9436,10 @@ function gcrev_get_client_settings( int $user_id = 0 ): array {
         // 成長ステージ・ゴール種別
         'stage'                 => get_user_meta( $user_id, 'gcrev_client_stage', true ) ?: '',
         'main_conversions'      => get_user_meta( $user_id, 'gcrev_client_main_conversions', true ) ?: '',
+        // 口コミアンケート AI生成用
+        'service_description'   => get_user_meta( $user_id, 'gcrev_client_service_description', true ) ?: '',
+        'strengths'             => get_user_meta( $user_id, 'gcrev_client_strengths', true ) ?: '',
+        'review_emphasis'       => get_user_meta( $user_id, 'gcrev_client_review_emphasis', true ) ?: '',
         // ペルソナ
         'persona_age_ranges'       => $persona_arrays['gcrev_client_persona_age_ranges'],
         'persona_genders'          => $persona_arrays['gcrev_client_persona_genders'],

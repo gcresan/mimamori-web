@@ -939,6 +939,31 @@ get_header();
                 <input type="text" id="cs-main-conversions" class="cs-input" value="<?php echo esc_attr( $settings['main_conversions'] ?? '' ); ?>" placeholder="例: お問い合わせフォーム, 電話タップ, 来店予約">
                 <p class="field-hint">サイトの主なゴール（コンバージョン）を入力してください。AIが改善提案の優先度付けに活用します。</p>
             </div>
+
+            <hr style="margin:24px 0; border:none; border-top:1px solid #e5e5e5;">
+            <p class="field-hint" style="margin-top:0; font-weight:600; color:#2271b1;">口コミアンケート生成用の追加情報（任意）</p>
+            <p class="field-hint" style="margin-bottom:16px;">AIによる口コミアンケート30問の自動生成に使われます。設定しておくと、アンケート作成時に自動で反映されます。</p>
+
+            <!-- サービス内容 -->
+            <div class="form-group">
+                <label for="cs-service-description">サービス内容</label>
+                <textarea id="cs-service-description" class="cs-input" rows="3" maxlength="1000"
+                    placeholder="例: 駅前で25年続く地域密着の歯科医院。一般歯科から予防歯科、ホワイトニングまで対応。土曜も診療。"><?php echo esc_textarea( $settings['service_description'] ?? '' ); ?></textarea>
+            </div>
+
+            <!-- 強み -->
+            <div class="form-group">
+                <label for="cs-strengths">強み・特徴（1行に1つ）</label>
+                <textarea id="cs-strengths" class="cs-input" rows="4" maxlength="1000"
+                    placeholder="例:&#10;痛みの少ない治療&#10;丁寧なカウンセリング&#10;平日夜19時まで診療&#10;駅から徒歩2分"><?php echo esc_textarea( $settings['strengths'] ?? '' ); ?></textarea>
+            </div>
+
+            <!-- 口コミで引き出したい内容 -->
+            <div class="form-group">
+                <label for="cs-review-emphasis">口コミで特に引き出したい内容</label>
+                <textarea id="cs-review-emphasis" class="cs-input" rows="2" maxlength="500"
+                    placeholder="例: スタッフの丁寧さ、治療前後の変化、通いやすさ"><?php echo esc_textarea( $settings['review_emphasis'] ?? '' ); ?></textarea>
+            </div>
         </div>
 
         <!-- ===== (A) 簡易ペルソナ ===== -->
@@ -1829,6 +1854,9 @@ get_header();
 
         var stageVal = document.getElementById('cs-stage') ? document.getElementById('cs-stage').value : '';
         var mainConversions = document.getElementById('cs-main-conversions') ? document.getElementById('cs-main-conversions').value.trim() : '';
+        var serviceDescription = document.getElementById('cs-service-description') ? document.getElementById('cs-service-description').value.trim() : '';
+        var strengths = document.getElementById('cs-strengths') ? document.getElementById('cs-strengths').value.trim() : '';
+        var reviewEmphasis = document.getElementById('cs-review-emphasis') ? document.getElementById('cs-review-emphasis').value.trim() : '';
 
         // ペルソナフィールド
         var personaAgeRanges      = collectChecked('persona-age');
@@ -1866,6 +1894,9 @@ get_header();
                     business_type:          businessTypes,
                     stage:                  stageVal,
                     main_conversions:       mainConversions,
+                    service_description:    serviceDescription,
+                    strengths:              strengths,
+                    review_emphasis:        reviewEmphasis,
                     persona_age_ranges:       personaAgeRanges,
                     persona_genders:          personaGenders,
                     persona_attributes:       personaAttributes,

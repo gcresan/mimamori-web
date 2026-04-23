@@ -1374,6 +1374,16 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_survey_question_reorder' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/survey/ai-generate-questions', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_ai_generate_questions' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/survey/questions/bulk-save', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_questions_bulk_save' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         // =========================================================
         // アンケート回答管理・AI生成・集計・分析
@@ -3541,6 +3551,19 @@ class Gcrev_Insight_API {
         $main_conversions = sanitize_text_field( $params['main_conversions'] ?? '' );
         if ( mb_strlen( $main_conversions ) > 300 ) { $main_conversions = mb_substr( $main_conversions, 0, 300 ); }
         update_user_meta( $user_id, 'gcrev_client_main_conversions', $main_conversions );
+
+        // --- 口コミアンケート AI生成用フィールド ---
+        $service_description = sanitize_textarea_field( $params['service_description'] ?? '' );
+        if ( mb_strlen( $service_description ) > 1000 ) { $service_description = mb_substr( $service_description, 0, 1000 ); }
+        update_user_meta( $user_id, 'gcrev_client_service_description', $service_description );
+
+        $strengths = sanitize_textarea_field( $params['strengths'] ?? '' );
+        if ( mb_strlen( $strengths ) > 1000 ) { $strengths = mb_substr( $strengths, 0, 1000 ); }
+        update_user_meta( $user_id, 'gcrev_client_strengths', $strengths );
+
+        $review_emphasis = sanitize_textarea_field( $params['review_emphasis'] ?? '' );
+        if ( mb_strlen( $review_emphasis ) > 500 ) { $review_emphasis = mb_substr( $review_emphasis, 0, 500 ); }
+        update_user_meta( $user_id, 'gcrev_client_review_emphasis', $review_emphasis );
 
         // --- ペルソナ: 配列フィールド（年齢層 / 性別 / 属性 / 意思決定） ---
         $persona_array_fields = [
@@ -17438,6 +17461,10 @@ PROMPT;
         $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
         $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
 
+        $category = sanitize_text_field($params['category'] ?? '');
+        if (mb_strlen($category) > 32) { $category = mb_substr($category, 0, 32); }
+        $is_fixed = !empty($params['is_fixed']) ? 1 : 0;
+
         $data = [
             'survey_id'   => $survey_id,
             'type'        => $type,
@@ -17448,8 +17475,10 @@ PROMPT;
             'required'    => $required,
             'sort_order'  => $sort_order,
             'is_active'   => $is_active,
+            'category'    => $category,
+            'is_fixed'    => $is_fixed,
         ];
-        $format = ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d'];
+        $format = ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%d'];
 
         if ($q_id > 0) {
             $wpdb->update($t_questions, $data, ['id' => $q_id, 'survey_id' => $survey_id], $format, ['%d', '%d']);
@@ -17465,6 +17494,245 @@ PROMPT;
             'success'     => true,
             'question_id' => $q_id,
         ], 200);
+    }
+
+    /**
+     * POST survey/ai-generate-questions — クライアント情報をもとに AI で 30 問のアンケートを生成する。
+     * 生成のみで DB には保存しない（プレビュー→一括保存は bulk-save で行う）。
+     */
+    public function rest_survey_ai_generate_questions(\WP_REST_Request $request): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( $user_id <= 0 ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です。'], 401);
+        }
+
+        // 連打防止（30秒）
+        $throttle_key = 'gcrev_survey_gen_' . $user_id;
+        if ( get_transient( $throttle_key ) ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => '連続生成はできません。30秒後に再度お試しください。',
+            ], 429);
+        }
+        set_transient( $throttle_key, 1, 30 );
+
+        $params = $request->get_json_params();
+
+        // クライアント情報を読み込んでデフォルト値として使用
+        $client = function_exists( 'gcrev_get_client_settings' ) ? gcrev_get_client_settings( $user_id ) : [];
+
+        // 業種: 上書き > クライアント情報の industry（ラベル整形済み）
+        $industry = sanitize_text_field( $params['industry'] ?? '' );
+        if ( $industry === '' ) {
+            $industry = (string) ( $client['industry'] ?? '' );
+        }
+        if ( $industry === '' && ! empty( $client['industry_detail'] ) ) {
+            $industry = (string) $client['industry_detail'];
+        }
+
+        // 他のフィールド: 上書き > クライアント情報
+        $service_description = sanitize_textarea_field( $params['service_description'] ?? '' );
+        if ( $service_description === '' ) {
+            $service_description = (string) ( $client['service_description'] ?? '' );
+        }
+
+        $strengths = sanitize_textarea_field( $params['strengths'] ?? '' );
+        if ( $strengths === '' ) {
+            $strengths = (string) ( $client['strengths'] ?? '' );
+        }
+
+        $review_emphasis = sanitize_textarea_field( $params['review_emphasis'] ?? '' );
+        if ( $review_emphasis === '' ) {
+            $review_emphasis = (string) ( $client['review_emphasis'] ?? '' );
+        }
+
+        // ターゲット: 上書き > ペルソナから組み立て
+        $target = sanitize_textarea_field( $params['target'] ?? '' );
+        if ( $target === '' ) {
+            $target = $this->build_target_from_persona( $client );
+        }
+
+        // サービス生成
+        $service_file = get_template_directory() . '/inc/gcrev-api/modules/class-survey-question-generator-service.php';
+        if ( ! file_exists( $service_file ) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => '生成サービスが見つかりません。'], 500);
+        }
+        require_once $service_file;
+
+        if ( ! class_exists( 'Gcrev_Survey_Question_Generator_Service' ) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => '生成サービスクラスが読み込めません。'], 500);
+        }
+
+        @set_time_limit( 180 );
+        $service = new \Gcrev_Survey_Question_Generator_Service();
+        $result = $service->generate([
+            'industry'            => $industry,
+            'service_description' => $service_description,
+            'target'              => $target,
+            'strengths'           => $strengths,
+            'review_emphasis'     => $review_emphasis,
+        ]);
+
+        if ( ! $result['success'] ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => $result['message'] ?? '生成に失敗しました。',
+            ], 500);
+        }
+
+        return new \WP_REST_Response([
+            'success'        => true,
+            'questions'      => $result['questions'],
+            'industry_label' => $result['industry_label'],
+            'design_intent'  => $result['design_intent'],
+            'echo'           => [
+                'industry'            => $industry,
+                'service_description' => $service_description,
+                'target'              => $target,
+                'strengths'           => $strengths,
+                'review_emphasis'     => $review_emphasis,
+            ],
+        ], 200);
+    }
+
+    /**
+     * POST survey/questions/bulk-save — 生成済みの複数質問を指定 survey_id に一括挿入する。
+     * 既存質問には触れず、末尾に追加する。
+     */
+    public function rest_survey_questions_bulk_save(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params    = $request->get_json_params();
+        $survey_id = absint( $params['survey_id'] ?? 0 );
+        $user_id   = get_current_user_id();
+
+        if ( ! $this->can_access_survey( $survey_id, $user_id ) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $questions = $params['questions'] ?? [];
+        if ( ! is_array( $questions ) || empty( $questions ) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => '保存する質問がありません。'], 400);
+        }
+
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+
+        // 既存の最大 sort_order を取得
+        $max_sort = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COALESCE(MAX(sort_order), 0) FROM {$t_questions} WHERE survey_id = %d",
+            $survey_id
+        ) );
+
+        $valid_types = [ 'textarea', 'radio', 'checkbox', 'text', 'select' ];
+        $inserted = 0;
+        $skipped  = 0;
+
+        foreach ( $questions as $q ) {
+            if ( ! is_array( $q ) ) { $skipped++; continue; }
+            $label = sanitize_text_field( $q['label'] ?? '' );
+            if ( $label === '' ) { $skipped++; continue; }
+
+            $type = sanitize_text_field( $q['type'] ?? 'textarea' );
+            if ( ! in_array( $type, $valid_types, true ) ) { $type = 'textarea'; }
+
+            $description = sanitize_text_field( $q['description'] ?? '' );
+            $placeholder = sanitize_text_field( $q['placeholder'] ?? '' );
+            $required    = ! empty( $q['required'] ) ? 1 : 0;
+            $is_fixed    = ! empty( $q['is_fixed'] ) ? 1 : 0;
+
+            $category = sanitize_text_field( $q['category'] ?? '' );
+            if ( mb_strlen( $category ) > 32 ) { $category = mb_substr( $category, 0, 32 ); }
+
+            $options_raw = $q['options'] ?? [];
+            if ( ! is_array( $options_raw ) ) { $options_raw = []; }
+            $options_clean = [];
+            foreach ( $options_raw as $opt ) {
+                $opt = sanitize_text_field( $opt );
+                if ( $opt !== '' ) { $options_clean[] = $opt; }
+            }
+            $options_json = ! empty( $options_clean ) ? wp_json_encode( $options_clean, JSON_UNESCAPED_UNICODE ) : '';
+
+            $max_sort++;
+            $wpdb->insert(
+                $t_questions,
+                [
+                    'survey_id'   => $survey_id,
+                    'type'        => $type,
+                    'label'       => $label,
+                    'description' => $description,
+                    'placeholder' => $placeholder,
+                    'options'     => $options_json,
+                    'required'    => $required,
+                    'sort_order'  => $max_sort,
+                    'is_active'   => 1,
+                    'category'    => $category,
+                    'is_fixed'    => $is_fixed,
+                ],
+                [ '%d', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%d' ]
+            );
+            $inserted++;
+        }
+
+        // survey の updated_at を更新
+        $wpdb->update( $t_surveys, [ 'updated_at' => current_time( 'mysql' ) ], [ 'id' => $survey_id ], [ '%s' ], [ '%d' ] );
+
+        return new \WP_REST_Response([
+            'success'  => true,
+            'inserted' => $inserted,
+            'skipped'  => $skipped,
+            'message'  => sprintf( '%d問を追加しました。', $inserted ),
+        ], 200);
+    }
+
+    /**
+     * クライアント情報のペルソナ関連フィールドから、AI プロンプト用のターゲット記述を組み立てる。
+     */
+    private function build_target_from_persona( array $client ): string {
+        $parts = [];
+
+        $one_liner = trim( (string) ( $client['persona_one_liner'] ?? '' ) );
+        if ( $one_liner !== '' ) {
+            $parts[] = $one_liner;
+        }
+
+        $ages = is_array( $client['persona_age_ranges'] ?? null ) ? $client['persona_age_ranges'] : [];
+        $genders = is_array( $client['persona_genders'] ?? null ) ? $client['persona_genders'] : [];
+        $attrs = is_array( $client['persona_attributes'] ?? null ) ? $client['persona_attributes'] : [];
+
+        $age_map = [
+            'teens' => '10代', '20s' => '20代', '30s' => '30代',
+            '40s' => '40代', '50s' => '50代', '60plus' => '60代以上',
+        ];
+        $gender_map = [ 'male' => '男性', 'female' => '女性', 'any' => '指定なし' ];
+        $attr_map = [
+            'family' => 'ファミリー層', 'single' => '単身者', 'dinks' => 'DINKS',
+            'senior' => 'シニア', 'student' => '学生', 'business' => 'ビジネスパーソン',
+            'owner' => '経営者・個人事業主', 'highincome' => '富裕層',
+            'local' => '地元住民', 'tourist' => '観光客・旅行者',
+        ];
+
+        $age_labels = array_values( array_filter( array_map( static function ( $v ) use ( $age_map ) {
+            return $age_map[ $v ] ?? $v;
+        }, $ages ) ) );
+        $gender_labels = array_values( array_filter( array_map( static function ( $v ) use ( $gender_map ) {
+            return $gender_map[ $v ] ?? $v;
+        }, $genders ) ) );
+        $attr_labels = array_values( array_filter( array_map( static function ( $v ) use ( $attr_map ) {
+            return $attr_map[ $v ] ?? $v;
+        }, $attrs ) ) );
+
+        if ( ! empty( $age_labels ) || ! empty( $gender_labels ) ) {
+            $parts[] = sprintf(
+                '年齢層: %s / 性別: %s',
+                ! empty( $age_labels ) ? implode( '・', $age_labels ) : '指定なし',
+                ! empty( $gender_labels ) ? implode( '・', $gender_labels ) : '指定なし'
+            );
+        }
+        if ( ! empty( $attr_labels ) ) {
+            $parts[] = '属性: ' . implode( '・', $attr_labels );
+        }
+
+        return implode( ' / ', $parts );
     }
 
     /**

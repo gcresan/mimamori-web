@@ -460,7 +460,12 @@ get_header();
 
         <!-- 質問管理 -->
         <div class="sv-form-card" id="sv-questions-card" style="display:none;">
-            <div class="sv-form-title">質問一覧</div>
+            <div class="sv-form-title" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <span>質問一覧</span>
+                <button type="button" class="sv-btn-ai-gen" id="sv-btn-ai-generate" title="クライアント情報をもとに口コミアンケート30問を自動生成します">
+                    🤖 AIで30問生成
+                </button>
+            </div>
             <div id="sv-questions-container"></div>
 
             <!-- 質問追加フォーム -->
@@ -534,12 +539,125 @@ get_header();
     </div>
 </div>
 
+<!-- AI 生成モーダル -->
+<div class="sv-modal-overlay" id="sv-ai-modal">
+    <div class="sv-modal sv-modal-wide">
+        <div class="sv-modal-title">🤖 AIで口コミアンケート30問を生成</div>
+
+        <!-- 入力ステップ -->
+        <div id="sv-ai-step-input">
+            <p style="color:#555; font-size:13px; margin:0 0 16px;">
+                クライアント設定の「クライアント情報」に保存された内容が自動で入ります。<br>
+                このアンケート1回だけ変更したい場合は下で上書きできます（保存内容は変わりません）。
+            </p>
+            <div class="sv-form-group">
+                <label class="sv-form-label">業種 <span style="color:#dc2626;">*</span></label>
+                <input type="text" class="sv-form-input" id="sv-ai-industry" placeholder="例: 医療・ヘルスケア / 歯科医院">
+            </div>
+            <div class="sv-form-group">
+                <label class="sv-form-label">サービス内容</label>
+                <textarea class="sv-form-textarea" id="sv-ai-service" rows="2" placeholder="例: 駅前で25年続く地域密着の歯科医院。一般歯科から予防歯科まで対応。"></textarea>
+            </div>
+            <div class="sv-form-group">
+                <label class="sv-form-label">ターゲット</label>
+                <textarea class="sv-form-textarea" id="sv-ai-target" rows="2" placeholder="例: 共働きで忙しく、週末にまとめて情報収集する30〜40代夫婦"></textarea>
+            </div>
+            <div class="sv-form-group">
+                <label class="sv-form-label">強み・特徴（1行に1つ）</label>
+                <textarea class="sv-form-textarea" id="sv-ai-strengths" rows="3" placeholder="例:&#10;痛みの少ない治療&#10;丁寧なカウンセリング&#10;駅から徒歩2分"></textarea>
+            </div>
+            <div class="sv-form-group">
+                <label class="sv-form-label">口コミで特に引き出したい内容</label>
+                <textarea class="sv-form-textarea" id="sv-ai-emphasis" rows="2" placeholder="例: スタッフの丁寧さ、治療前後の変化、通いやすさ"></textarea>
+            </div>
+        </div>
+
+        <!-- 生成中 -->
+        <div id="sv-ai-step-loading" style="display:none; text-align:center; padding:40px 0;">
+            <div class="sv-ai-spinner"></div>
+            <p style="margin:16px 0 0; color:#555;">AIが30問のアンケートを作成しています…（30秒〜1分）</p>
+        </div>
+
+        <!-- プレビュー -->
+        <div id="sv-ai-step-preview" style="display:none;">
+            <div id="sv-ai-design-intent" class="sv-ai-intent-box"></div>
+            <p style="color:#555; font-size:13px; margin:8px 0;">
+                チェックされている質問が一括追加されます（既存質問の後ろに追加されます）。不要な質問はチェックを外してください。
+                <label style="display:inline-block; margin-left:12px; cursor:pointer;">
+                    <input type="checkbox" id="sv-ai-select-all" checked> 全選択
+                </label>
+            </p>
+            <div id="sv-ai-preview-list" class="sv-ai-preview-list"></div>
+        </div>
+
+        <div class="sv-modal-actions">
+            <button type="button" class="sv-btn-secondary" id="sv-ai-btn-close">閉じる</button>
+            <button type="button" class="sv-btn-save" id="sv-ai-btn-generate">生成する</button>
+            <button type="button" class="sv-btn-save" id="sv-ai-btn-save" style="display:none;">選択した質問を一括追加</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.sv-btn-ai-gen {
+    background: linear-gradient(135deg, #7c3aed 0%, #2271b1 100%);
+    color: #fff; border: none; padding: 8px 16px;
+    border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: opacity 0.2s;
+}
+.sv-btn-ai-gen:hover { opacity: 0.9; }
+.sv-btn-ai-gen:disabled { opacity: 0.5; cursor: not-allowed; }
+.sv-modal-wide { max-width: 780px; }
+.sv-ai-spinner {
+    display: inline-block; width: 40px; height: 40px;
+    border: 4px solid #e5e5e5; border-top-color: #2271b1;
+    border-radius: 50%; animation: sv-spin 1s linear infinite;
+}
+@keyframes sv-spin { to { transform: rotate(360deg); } }
+.sv-ai-intent-box {
+    background: #f0f9ff; border-left: 3px solid #2271b1;
+    padding: 10px 14px; border-radius: 4px; margin-bottom: 14px;
+    font-size: 13px; color: #333; line-height: 1.6;
+}
+.sv-ai-preview-list {
+    max-height: 420px; overflow-y: auto; border: 1px solid #ddd;
+    border-radius: 6px; padding: 8px;
+}
+.sv-ai-cat-header {
+    background: #f6f7f7; padding: 6px 10px; margin: 8px 0 4px;
+    font-size: 12px; font-weight: 600; color: #555; border-radius: 4px;
+}
+.sv-ai-cat-header:first-child { margin-top: 0; }
+.sv-ai-q-row {
+    display: flex; align-items: flex-start; gap: 8px; padding: 6px 4px;
+    border-bottom: 1px dashed #e5e5e5;
+}
+.sv-ai-q-row:last-child { border-bottom: none; }
+.sv-ai-q-body { flex: 1; font-size: 13px; line-height: 1.5; }
+.sv-ai-q-body .sv-ai-label { font-weight: 500; }
+.sv-ai-q-body .sv-ai-type { font-size: 11px; color: #777; margin-right: 8px; }
+.sv-ai-q-body .sv-ai-fixed { font-size: 10px; color: #fff; background: #dc2626; padding: 1px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
+.sv-ai-q-body .sv-ai-opts { font-size: 11px; color: #666; margin-top: 2px; }
+</style>
+
 <script>
 (function() {
     'use strict';
 
     var API_BASE = <?php echo wp_json_encode(rest_url('gcrev/v1/survey/')); ?>;
     var WP_NONCE = <?php echo wp_json_encode(wp_create_nonce('wp_rest')); ?>;
+    // クライアント情報（AI生成モーダルの初期値）
+    <?php
+    $_sv_client = function_exists( 'gcrev_get_client_settings' ) ? gcrev_get_client_settings() : [];
+    $_sv_ai_defaults = [
+        'industry'            => (string) ( $_sv_client['industry'] ?? ( $_sv_client['industry_detail'] ?? '' ) ),
+        'service_description' => (string) ( $_sv_client['service_description'] ?? '' ),
+        'strengths'           => (string) ( $_sv_client['strengths'] ?? '' ),
+        'review_emphasis'     => (string) ( $_sv_client['review_emphasis'] ?? '' ),
+        'target'              => (string) ( $_sv_client['persona_one_liner'] ?? '' ),
+    ];
+    ?>
+    var AI_DEFAULTS = <?php echo wp_json_encode( $_sv_ai_defaults, JSON_UNESCAPED_UNICODE ); ?>;
 
     // =====================================================
     // DOM
@@ -1262,6 +1380,193 @@ get_header();
     // =====================================================
     btnNew.addEventListener('click', function() { if (!btnNew.disabled) showEdit(0); });
     backLink.addEventListener('click', function() { showList(); });
+
+    // =====================================================
+    // AI 30問生成モーダル
+    // =====================================================
+    var aiModal       = document.getElementById('sv-ai-modal');
+    var aiStepInput   = document.getElementById('sv-ai-step-input');
+    var aiStepLoading = document.getElementById('sv-ai-step-loading');
+    var aiStepPreview = document.getElementById('sv-ai-step-preview');
+    var aiBtnGenerate = document.getElementById('sv-ai-btn-generate');
+    var aiBtnSave     = document.getElementById('sv-ai-btn-save');
+    var aiBtnClose    = document.getElementById('sv-ai-btn-close');
+    var aiPreviewList = document.getElementById('sv-ai-preview-list');
+    var aiDesignIntent = document.getElementById('sv-ai-design-intent');
+    var aiSelectAll   = document.getElementById('sv-ai-select-all');
+
+    var aiGeneratedQuestions = [];
+
+    function setAiStep(step) {
+        aiStepInput.style.display   = (step === 'input')   ? 'block' : 'none';
+        aiStepLoading.style.display = (step === 'loading') ? 'block' : 'none';
+        aiStepPreview.style.display = (step === 'preview') ? 'block' : 'none';
+
+        aiBtnGenerate.style.display = (step === 'input')   ? 'inline-block' : 'none';
+        aiBtnSave.style.display     = (step === 'preview') ? 'inline-block' : 'none';
+        aiBtnClose.textContent      = (step === 'preview') ? '閉じる' : 'キャンセル';
+    }
+
+    function prefillAiInputs() {
+        // PHP 側で注入したクライアント情報を初期値として反映（既に入力がある場合は上書きしない）
+        var inputs = {
+            'sv-ai-industry':  AI_DEFAULTS.industry,
+            'sv-ai-service':   AI_DEFAULTS.service_description,
+            'sv-ai-target':    AI_DEFAULTS.target,
+            'sv-ai-strengths': AI_DEFAULTS.strengths,
+            'sv-ai-emphasis':  AI_DEFAULTS.review_emphasis
+        };
+        Object.keys(inputs).forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el && !el.value) { el.value = inputs[id] || ''; }
+        });
+    }
+
+    function openAiModal() {
+        setAiStep('input');
+        prefillAiInputs();
+        aiModal.classList.add('show');
+    }
+
+    function closeAiModal() {
+        aiModal.classList.remove('show');
+        // プレビューは都度作り直す
+        aiGeneratedQuestions = [];
+        aiPreviewList.innerHTML = '';
+        aiDesignIntent.textContent = '';
+        setAiStep('input');
+    }
+
+    document.getElementById('sv-btn-ai-generate').addEventListener('click', function() {
+        if (!currentSurveyId) {
+            toast('先にアンケートを保存してください', 'error');
+            return;
+        }
+        openAiModal();
+    });
+
+    aiBtnClose.addEventListener('click', closeAiModal);
+    aiModal.addEventListener('click', function(e) {
+        if (e.target === aiModal) closeAiModal();
+    });
+
+    aiBtnGenerate.addEventListener('click', function() {
+        var industry = document.getElementById('sv-ai-industry').value.trim();
+        if (!industry) {
+            toast('業種を入力してください', 'error');
+            return;
+        }
+
+        var body = {
+            industry:            industry,
+            service_description: document.getElementById('sv-ai-service').value.trim(),
+            target:              document.getElementById('sv-ai-target').value.trim(),
+            strengths:           document.getElementById('sv-ai-strengths').value.trim(),
+            review_emphasis:     document.getElementById('sv-ai-emphasis').value.trim(),
+        };
+
+        setAiStep('loading');
+
+        apiPost('ai-generate-questions', body).then(function(res) {
+            if (res.success && Array.isArray(res.questions) && res.questions.length > 0) {
+                aiGeneratedQuestions = res.questions;
+                aiDesignIntent.textContent = res.design_intent || '';
+                renderAiPreview(res.questions);
+                setAiStep('preview');
+            } else {
+                toast(res.message || '生成に失敗しました', 'error');
+                setAiStep('input');
+            }
+        }).catch(function(e) {
+            toast('通信エラー: ' + e.message, 'error');
+            setAiStep('input');
+        });
+    });
+
+    function renderAiPreview(questions) {
+        aiPreviewList.innerHTML = '';
+        var currentCat = null;
+        questions.forEach(function(q, i) {
+            if (q.category !== currentCat) {
+                currentCat = q.category;
+                var header = document.createElement('div');
+                header.className = 'sv-ai-cat-header';
+                header.textContent = currentCat || 'その他';
+                aiPreviewList.appendChild(header);
+            }
+
+            var row = document.createElement('label');
+            row.className = 'sv-ai-q-row';
+
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = true;
+            cb.dataset.idx = i;
+            cb.className = 'sv-ai-q-check';
+
+            var body = document.createElement('div');
+            body.className = 'sv-ai-q-body';
+            var typeLabel = { textarea: '自由記述', radio: '単一選択', checkbox: '複数選択', text: '短文' }[q.type] || q.type;
+
+            var html = '<span class="sv-ai-type">[' + esc(typeLabel) + ']</span>';
+            html += '<span class="sv-ai-label">' + esc(q.label) + '</span>';
+            if (q.is_fixed) {
+                html += '<span class="sv-ai-fixed">固定</span>';
+            }
+            if (q.options && q.options.length > 0) {
+                html += '<div class="sv-ai-opts">選択肢: ' + q.options.map(esc).join(' / ') + '</div>';
+            }
+            body.innerHTML = html;
+
+            row.appendChild(cb);
+            row.appendChild(body);
+            aiPreviewList.appendChild(row);
+        });
+    }
+
+    aiSelectAll.addEventListener('change', function() {
+        var checked = aiSelectAll.checked;
+        aiPreviewList.querySelectorAll('.sv-ai-q-check').forEach(function(cb) {
+            cb.checked = checked;
+        });
+    });
+
+    aiBtnSave.addEventListener('click', function() {
+        var checked = aiPreviewList.querySelectorAll('.sv-ai-q-check:checked');
+        if (checked.length === 0) {
+            toast('保存する質問が選択されていません', 'error');
+            return;
+        }
+        var selected = [];
+        checked.forEach(function(cb) {
+            var idx = parseInt(cb.dataset.idx);
+            if (aiGeneratedQuestions[idx]) {
+                selected.push(aiGeneratedQuestions[idx]);
+            }
+        });
+
+        aiBtnSave.disabled = true;
+        aiBtnSave.textContent = '追加中...';
+
+        apiPost('questions/bulk-save', {
+            survey_id: currentSurveyId,
+            questions: selected
+        }).then(function(res) {
+            aiBtnSave.disabled = false;
+            aiBtnSave.textContent = '選択した質問を一括追加';
+            if (res.success) {
+                toast(res.message || (selected.length + '問を追加しました'));
+                closeAiModal();
+                loadSurveyDetail(currentSurveyId);
+            } else {
+                toast(res.message || '追加に失敗しました', 'error');
+            }
+        }).catch(function(e) {
+            aiBtnSave.disabled = false;
+            aiBtnSave.textContent = '選択した質問を一括追加';
+            toast('通信エラー: ' + e.message, 'error');
+        });
+    });
 
     // =====================================================
     // Init
