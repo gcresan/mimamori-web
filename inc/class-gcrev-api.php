@@ -17173,18 +17173,29 @@ PROMPT;
             $extra_part = "\n### 追加指示\n{$ai_extra_prompt}\n";
         }
 
-        // 参考口コミ（few-shot サンプル）
+        // 参考口コミ（few-shot サンプル）: [{text, active}] の active=true のみを使う
+        // 旧形式 (string[]) も後方互換で受理
         $ref_part = '';
         if (!empty($ai_reference_reviews) && is_array($ai_reference_reviews)) {
             $lines = [];
             $idx = 0;
-            foreach ($ai_reference_reviews as $r) {
-                if (!is_string($r)) continue;
-                $r = trim($r);
-                if ($r === '') continue;
+            foreach ($ai_reference_reviews as $item) {
+                $text = '';
+                $active = true;
+                if (is_string($item)) {
+                    $text = $item;
+                } elseif (is_array($item)) {
+                    $text   = isset($item['text']) ? (string) $item['text'] : '';
+                    $active = ! empty($item['active']);
+                } else {
+                    continue;
+                }
+                if (! $active) continue;
+                $text = trim($text);
+                if ($text === '') continue;
                 $idx++;
-                $lines[] = sprintf('【例%d】%s', $idx, $r);
-                if ($idx >= 5) break;
+                $lines[] = sprintf('【例%d】%s', $idx, $text);
+                if ($idx >= 10) break;
             }
             if (!empty($lines)) {
                 $ref_part = "\n### 参考口コミサンプル（文体・雰囲気の参考用）\n"
@@ -17439,15 +17450,24 @@ PROMPT;
             ];
         }
 
-        // 参考口コミサンプル（JSON 配列として保存）
+        // 参考口コミサンプル: [{ text, active }] の配列として返す
+        // 旧形式 (string[]) は active=true 扱いで受理（後方互換）
         $ref_reviews = [];
         if (!empty($survey->ai_reference_reviews ?? '')) {
             $decoded = json_decode((string) $survey->ai_reference_reviews, true);
             if (is_array($decoded)) {
-                foreach ($decoded as $r) {
-                    if (is_string($r) && trim($r) !== '') {
-                        $ref_reviews[] = $r;
+                foreach ($decoded as $item) {
+                    if (is_string($item)) {
+                        $text = trim($item);
+                        if ($text === '') continue;
+                        $ref_reviews[] = [ 'text' => $text, 'active' => true ];
+                    } elseif (is_array($item)) {
+                        $text = isset($item['text']) ? trim((string) $item['text']) : '';
+                        if ($text === '') continue;
+                        $active = ! empty($item['active']);
+                        $ref_reviews[] = [ 'text' => $text, 'active' => $active ];
                     }
+                    if (count($ref_reviews) >= 10) break;
                 }
             }
         }
@@ -17488,22 +17508,32 @@ PROMPT;
         $ai_keywords       = isset($params['ai_keywords']) ? sanitize_textarea_field($params['ai_keywords']) : null;
         $ai_extra_prompt   = isset($params['ai_extra_prompt']) ? sanitize_textarea_field($params['ai_extra_prompt']) : null;
 
-        // 参考口コミサンプル: 最大5件、各600字まで
+        // 参考口コミサンプル: 最大10件、各600字まで
+        // 形式: [{ text: string, active: bool }]（旧形式 string[] は active=true で受理）
         $ai_reference_reviews_json = null;
         if (array_key_exists('ai_reference_reviews', $params)) {
             $raw = $params['ai_reference_reviews'];
             $clean = [];
             if (is_array($raw)) {
                 foreach ($raw as $item) {
-                    if (!is_string($item)) continue;
-                    $item = sanitize_textarea_field($item);
-                    $item = trim($item);
-                    if ($item === '') continue;
-                    if (mb_strlen($item) > 600) {
-                        $item = mb_substr($item, 0, 600);
+                    $text   = '';
+                    $active = true;
+                    if (is_string($item)) {
+                        $text = $item;
+                    } elseif (is_array($item)) {
+                        $text   = isset($item['text']) ? (string) $item['text'] : '';
+                        $active = ! empty($item['active']);
+                    } else {
+                        continue;
                     }
-                    $clean[] = $item;
-                    if (count($clean) >= 5) break;
+                    $text = sanitize_textarea_field($text);
+                    $text = trim($text);
+                    if ($text === '') continue;
+                    if (mb_strlen($text) > 600) {
+                        $text = mb_substr($text, 0, 600);
+                    }
+                    $clean[] = [ 'text' => $text, 'active' => (bool) $active ];
+                    if (count($clean) >= 10) break;
                 }
             }
             $ai_reference_reviews_json = wp_json_encode($clean, JSON_UNESCAPED_UNICODE);

@@ -395,13 +395,13 @@ get_header();
                     <p style="font-size:11px;color:#9ca3af;margin-top:4px;">口コミ生成AIへの追加指示を自由に記述できます。実際の口コミをいくつかお持ちなら「参考口コミから生成」で AI が書き方のクセを抽出してくれます。</p>
                 </div>
                 <div class="sv-form-group">
-                    <label class="sv-form-label">参考口コミサンプル（AI生成時のテイスト参考用 / 最大5件）</label>
+                    <label class="sv-form-label">参考口コミサンプル（最大10件登録 / 生成時に使うものを選択）</label>
                     <div id="sv-ref-reviews-slots"><!-- JS で動的追加 --></div>
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px; gap:10px; flex-wrap:wrap;">
                         <button type="button" class="sv-btn-secondary" id="sv-btn-add-ref-review" style="font-size:12px;">＋ 口コミを追加</button>
-                        <span id="sv-ref-reviews-count" style="font-size:12px; color:#6b7280;">0 / 5 件</span>
+                        <span id="sv-ref-reviews-count" style="font-size:12px; color:#6b7280;">登録 0 / 10 件　使用 0 件</span>
                     </div>
-                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">登録した口コミは生成AIに「文体の参考」として渡されます（固有名詞や具体的な数値は引用禁止の指示付き）。上の「参考口コミから生成」で入力した口コミは自動でここに反映されます。</p>
+                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">登録した口コミのうち「生成時に使用」にチェックしたものだけが、口コミ生成時の文体参考として AI に渡されます（固有名詞や具体的な数値は引用禁止の指示付き）。「参考口コミから生成」で入力した口コミは自動でここに反映されます。</p>
                 </div>
             </div>
             <button type="button" class="sv-btn-save" id="sv-btn-save-info">保存する</button>
@@ -1358,15 +1358,26 @@ get_header();
     });
 
     // =====================================================
-    // 参考口コミサンプル（生成時の few-shot 用、最大5件）
+    // 参考口コミサンプル（最大10件登録 / 生成時に使うものを選択）
     // =====================================================
-    var REF_MAX = 5;
+    var REF_MAX = 10;
     var refSlotsContainer = document.getElementById('sv-ref-reviews-slots');
     var refCountEl = document.getElementById('sv-ref-reviews-count');
     var btnAddRef = document.getElementById('sv-btn-add-ref-review');
 
     function refSlotCount() {
         return refSlotsContainer ? refSlotsContainer.querySelectorAll('.sv-ref-slot').length : 0;
+    }
+
+    function refActiveCount() {
+        if (!refSlotsContainer) return 0;
+        var n = 0;
+        refSlotsContainer.querySelectorAll('.sv-ref-slot').forEach(function(slot) {
+            var ta = slot.querySelector('.sv-ref-slot-input');
+            var cb = slot.querySelector('.sv-ref-slot-active');
+            if (ta && ta.value.trim() !== '' && cb && cb.checked) n++;
+        });
+        return n;
     }
 
     function renumberRefSlots() {
@@ -1376,20 +1387,28 @@ get_header();
             var label = slot.querySelector('.sv-ref-slot-label');
             if (label) label.textContent = 'サンプル ' + (i + 1);
         });
-        if (refCountEl) refCountEl.textContent = slots.length + ' / ' + REF_MAX + ' 件';
+        if (refCountEl) {
+            refCountEl.textContent = '登録 ' + slots.length + ' / ' + REF_MAX + ' 件　使用 ' + refActiveCount() + ' 件';
+        }
         if (btnAddRef) btnAddRef.disabled = (slots.length >= REF_MAX);
     }
 
-    function createRefSlot(value) {
+    function createRefSlot(value, active) {
         if (!refSlotsContainer) return null;
         if (refSlotCount() >= REF_MAX) return null;
+        var isActive = (active === undefined) ? true : !!active;
         var wrap = document.createElement('div');
         wrap.className = 'sv-ref-slot';
         wrap.style.cssText = 'border:1px solid #e5e7eb; border-radius:6px; padding:8px 10px; margin-bottom:6px; background:#fff;';
         wrap.innerHTML =
-            '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
+            '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; gap:10px; flex-wrap:wrap;">' +
             '  <strong class="sv-ref-slot-label" style="font-size:12px; color:#374151;">サンプル</strong>' +
-            '  <button type="button" class="sv-ref-slot-remove" style="background:none; border:none; color:#dc2626; font-size:12px; cursor:pointer;">× 削除</button>' +
+            '  <div style="display:flex; align-items:center; gap:12px;">' +
+            '    <label style="font-size:12px; color:#374151; cursor:pointer; user-select:none; display:inline-flex; align-items:center; gap:4px;">' +
+            '      <input type="checkbox" class="sv-ref-slot-active"' + (isActive ? ' checked' : '') + '> 生成時に使用' +
+            '    </label>' +
+            '    <button type="button" class="sv-ref-slot-remove" style="background:none; border:none; color:#dc2626; font-size:12px; cursor:pointer;">× 削除</button>' +
+            '  </div>' +
             '</div>' +
             '<textarea class="sv-form-textarea sv-ref-slot-input" rows="3" maxlength="600" placeholder="例：初めて利用しました。説明がわかりやすく、不安だった部分もきちんと確認してもらえたので安心できました。仕上がりも納得で、また機会があればお願いしたいです。" style="min-height:70px;"></textarea>';
         if (typeof value === 'string') {
@@ -1399,43 +1418,57 @@ get_header();
             wrap.remove();
             renumberRefSlots();
         });
+        wrap.querySelector('.sv-ref-slot-active').addEventListener('change', renumberRefSlots);
+        wrap.querySelector('.sv-ref-slot-input').addEventListener('input', renumberRefSlots);
         refSlotsContainer.appendChild(wrap);
         renumberRefSlots();
         return wrap;
     }
 
-    // Expose to resetEditForm / loadSurveyDetail (global within IIFE scope)
+    /**
+     * 保存データのロード。
+     * @param {Array<string|{text:string,active:boolean}>} arr
+     */
     function setReferenceReviews(arr) {
         if (!refSlotsContainer) return;
         refSlotsContainer.innerHTML = '';
         if (Array.isArray(arr)) {
-            arr.slice(0, REF_MAX).forEach(function(r) {
-                if (typeof r === 'string' && r.trim() !== '') {
-                    createRefSlot(r);
+            arr.slice(0, REF_MAX).forEach(function(item) {
+                if (typeof item === 'string') {
+                    if (item.trim() !== '') createRefSlot(item, true);
+                } else if (item && typeof item.text === 'string' && item.text.trim() !== '') {
+                    createRefSlot(item.text, item.active !== false);
                 }
             });
         }
         renumberRefSlots();
     }
 
+    /**
+     * 保存用データの収集。
+     * @returns {Array<{text:string, active:boolean}>}
+     */
     function getReferenceReviews() {
         if (!refSlotsContainer) return [];
         var out = [];
-        refSlotsContainer.querySelectorAll('.sv-ref-slot-input').forEach(function(ta) {
+        refSlotsContainer.querySelectorAll('.sv-ref-slot').forEach(function(slot) {
+            var ta = slot.querySelector('.sv-ref-slot-input');
+            var cb = slot.querySelector('.sv-ref-slot-active');
+            if (!ta) return;
             var v = ta.value.trim();
-            if (v !== '') out.push(v);
+            if (v === '') return;
+            out.push({ text: v, active: cb ? cb.checked : true });
         });
         return out.slice(0, REF_MAX);
     }
 
-    // IIFE 外からも呼べるようクロージャ内に関数を配置。loadSurveyDetail/resetEditForm が
-    // typeof チェックで呼び出しているため問題なく動作する。
+    // クロージャ外からも参照できるよう保持（モーダルからは同一 IIFE 内でそのまま参照可能）
     window.__svSetReferenceReviews = setReferenceReviews;
     window.__svGetReferenceReviews = getReferenceReviews;
 
     if (btnAddRef) {
         btnAddRef.addEventListener('click', function() {
-            var slot = createRefSlot('');
+            var slot = createRefSlot('', true);
             if (slot) {
                 var input = slot.querySelector('.sv-ref-slot-input');
                 if (input) input.focus();
@@ -1898,22 +1931,29 @@ get_header();
         });
 
         function syncReferenceReviewsFromModal(mode) {
-            // mode: 'replace' = スロットを入力内容で丸ごと置換 / 'append' = 既存スロットに追加（計5件上限）
+            // mode: 'replace' = スロットを入力内容で丸ごと置換 / 'append' = 既存スロットに追加（計10件上限）
             if (typeof getReferenceReviews !== 'function' || typeof setReferenceReviews !== 'function') return;
-            var modalReviews = collectReviews().slice(0, 5);
-            if (modalReviews.length === 0) return;
+            var modalTexts = collectReviews().slice(0, 10);
+            if (modalTexts.length === 0) return;
+
+            // モーダル入力は「生成時に使用=ON」で反映
+            var modalObjs = modalTexts.map(function(t) { return { text: t, active: true }; });
 
             if (mode === 'replace') {
-                setReferenceReviews(modalReviews);
+                setReferenceReviews(modalObjs);
                 return;
             }
 
-            // append: 既存 + モーダル入力、重複排除、5件上限
+            // append: 既存 + モーダル入力、テキスト重複排除、10件上限
             var current = getReferenceReviews();
+            var existingTexts = current.map(function(o) { return o.text; });
             var merged = current.slice();
-            modalReviews.forEach(function(r) {
-                if (merged.length >= 5) return;
-                if (merged.indexOf(r) === -1) { merged.push(r); }
+            modalObjs.forEach(function(obj) {
+                if (merged.length >= 10) return;
+                if (existingTexts.indexOf(obj.text) === -1) {
+                    merged.push(obj);
+                    existingTexts.push(obj.text);
+                }
             });
             setReferenceReviews(merged);
         }
