@@ -69,16 +69,37 @@ class Gcrev_Survey_Question_Generator_Service {
         try {
             $prompt = $this->build_prompt( $industry, $service_description, $target, $strengths, $review_emphasis );
             $response = $this->call_ai( $prompt );
-            $parsed   = $this->extract_json( (string) $response );
+
+            // 応答の切断検知（JSON の末尾 `}` が欠けている場合）
+            $trimmed_tail = rtrim( $response, "` \n\r\t" );
+            $looks_truncated = ( strrpos( $trimmed_tail, '}' ) === false )
+                || ( strrpos( $trimmed_tail, '}' ) < strlen( $trimmed_tail ) - 500 );
+
+            $parsed = $this->extract_json( (string) $response );
 
             if ( ! is_array( $parsed ) || empty( $parsed['questions'] ) || ! is_array( $parsed['questions'] ) ) {
-                return [
-                    'success' => false,
-                    'message' => 'AI 応答から質問リストを抽出できませんでした。再度お試しください。',
-                ];
+                // 生応答の冒頭だけログに残す（デバッグ用、機密情報はないプロンプト出力）
+                file_put_contents(
+                    '/tmp/gcrev_survey_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " parse FAIL (truncated=" . ( $looks_truncated ? '1' : '0' ) . ") len=" . strlen( $response )
+                        . " head=" . substr( $response, 0, 200 )
+                        . " tail=" . substr( $response, -300 ) . "\n",
+                    FILE_APPEND
+                );
+                $msg = $looks_truncated
+                    ? 'AI 応答が途中で切れました（出力トークン上限到達）。もう一度お試しください。'
+                    : 'AI 応答から質問リストを抽出できませんでした。再度お試しください。';
+                return [ 'success' => false, 'message' => $msg ];
             }
 
             $questions = $this->normalize_questions( $parsed['questions'], $parsed['fixed_ids'] ?? [] );
+
+            if ( empty( $questions ) ) {
+                return [
+                    'success' => false,
+                    'message' => 'AI が有効な質問を1つも返しませんでした。内容を確認してもう一度お試しください。',
+                ];
+            }
 
             return [
                 'success'        => true,
@@ -219,9 +240,10 @@ PROMPT;
         }
         $config = new Gcrev_Config();
         $client = new Gcrev_AI_Client( $config );
+        // 30問 + 選択肢込みの JSON は 15000〜20000 tokens 規模になるため十分な枠を確保
         return (string) $client->call_gemini_api( $prompt, [
-            'temperature'       => 0.7,
-            'max_output_tokens' => 8192,
+            'temperature'     => 0.7,
+            'maxOutputTokens' => 32768,
         ] );
     }
 
