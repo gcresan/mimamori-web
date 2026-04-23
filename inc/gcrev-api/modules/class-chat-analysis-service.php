@@ -75,7 +75,195 @@ class Gcrev_Chat_Analysis_Service {
             'post_id'   => $post_id,
             'message'   => sprintf( '%d件のログから分析レポートを生成しました。', count( $logs ) ),
             'log_count' => count( $logs ),
+            'analysis'  => $analysis,
         ];
+    }
+
+    /**
+     * 生成レポートの完了メールを管理者に送信する。
+     *
+     * 送信先:
+     *   - `gcrev_notify_recipient` オプションが設定されていればそちら
+     *   - なければ admin_email
+     *
+     * @param int   $post_id  mimamori_chat_report の投稿ID
+     * @param array $analysis generate_report が返した analysis 配列
+     * @param array $context  [ 'days' => int, 'user_id' => int, 'log_count' => int, 'trigger' => 'manual|cron' ]
+     * @return bool 送信成功
+     */
+    public function send_completion_email( int $post_id, array $analysis, array $context = [] ): bool {
+        $post = get_post( $post_id );
+        if ( ! $post || $post->post_type !== 'mimamori_chat_report' ) {
+            return false;
+        }
+
+        $recipient = get_option( 'gcrev_notify_recipient', '' );
+        if ( $recipient === '' || ! is_email( $recipient ) ) {
+            $recipient = get_option( 'admin_email', '' );
+        }
+        if ( ! is_email( $recipient ) ) {
+            return false;
+        }
+
+        $site    = get_bloginfo( 'name' );
+        $days    = (int) ( $context['days'] ?? get_post_meta( $post_id, '_chat_report_days', true ) );
+        $user_id = (int) ( $context['user_id'] ?? get_post_meta( $post_id, '_chat_report_user_id', true ) );
+        $count   = (int) ( $context['log_count'] ?? get_post_meta( $post_id, '_chat_report_log_count', true ) );
+        $trigger = (string) ( $context['trigger'] ?? 'manual' );
+
+        $detail_url = admin_url( 'admin.php?page=gcrev-chat-analysis&tab=report_detail&report=' . $post_id );
+
+        $subject = sprintf(
+            '[%s] AIチャット分析レポート（%s・直近%d日・%d件）',
+            $site,
+            $user_id > 0 ? 'user=' . $user_id : '全ユーザー',
+            $days,
+            $count
+        );
+
+        $html = $this->build_email_html( $analysis, $detail_url, [
+            'days'      => $days,
+            'user_id'   => $user_id,
+            'log_count' => $count,
+            'trigger'   => $trigger,
+            'title'     => $post->post_title,
+        ] );
+
+        $headers = [
+            'Content-Type: text/html; charset=UTF-8',
+        ];
+
+        $sent = wp_mail( $recipient, $subject, $html, $headers );
+        if ( $sent ) {
+            error_log( "[GCREV][ChatAnalysis] Sent completion email to {$recipient} (post_id={$post_id})" );
+        } else {
+            error_log( "[GCREV][ChatAnalysis] FAILED to send completion email to {$recipient} (post_id={$post_id})" );
+        }
+        return (bool) $sent;
+    }
+
+    /**
+     * 完了メール HTML を組み立てる。
+     */
+    private function build_email_html( array $analysis, string $detail_url, array $meta ): string {
+        $summary      = (string) ( $analysis['summary'] ?? '' );
+        $top_needs    = is_array( $analysis['top_needs'] ?? null ) ? array_slice( $analysis['top_needs'], 0, 5 ) : [];
+        $unresolved   = is_array( $analysis['unresolved_issues'] ?? null ) ? array_slice( $analysis['unresolved_issues'], 0, 5 ) : [];
+        $improvements = is_array( $analysis['improvement_suggestions'] ?? null ) ? array_slice( $analysis['improvement_suggestions'], 0, 5 ) : [];
+
+        $scope_label = $meta['user_id'] > 0 ? 'ユーザーID ' . $meta['user_id'] : '全ユーザー';
+        $trigger_label = $meta['trigger'] === 'cron' ? '月次自動生成' : '手動生成';
+
+        ob_start();
+        ?>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif; background:#f4f6f8; margin:0; padding:20px; color:#1d2327; }
+.wrap { max-width:680px; margin:0 auto; background:#fff; border-radius:8px; overflow:hidden; border:1px solid #e0e0e0; }
+.header { background:#2271b1; color:#fff; padding:22px 28px; }
+.header h1 { margin:0 0 4px; font-size:20px; }
+.header .meta { font-size:12px; opacity:0.85; }
+.body { padding:24px 28px; }
+.body h2 { font-size:15px; border-left:3px solid #2271b1; padding-left:10px; margin:20px 0 10px; }
+.body p { line-height:1.7; margin:8px 0; }
+.summary-box { background:#f6f7f7; padding:14px 16px; border-radius:6px; font-size:14px; }
+table.list { width:100%; border-collapse:collapse; font-size:13px; margin:8px 0; }
+table.list th { text-align:left; font-weight:600; padding:8px; background:#f0f0f1; border-bottom:1px solid #ddd; }
+table.list td { padding:8px; border-bottom:1px solid #eee; vertical-align:top; }
+.cta { text-align:center; margin:28px 0 4px; }
+.cta a { background:#2271b1; color:#fff; text-decoration:none; padding:12px 28px; border-radius:4px; display:inline-block; font-weight:600; font-size:14px; }
+.footer { padding:16px 28px; font-size:11px; color:#666; background:#fafafa; border-top:1px solid #eee; }
+.pri-high { color:#d63638; font-weight:600; }
+.pri-medium { color:#dba617; font-weight:600; }
+.pri-low { color:#2271b1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="header">
+  <h1><?php echo esc_html( (string) $meta['title'] ); ?></h1>
+  <div class="meta">
+    <?php echo esc_html( $trigger_label ); ?> / 対象: <?php echo esc_html( $scope_label ); ?> / 直近 <?php echo (int) $meta['days']; ?> 日 / ログ <?php echo (int) $meta['log_count']; ?> 件
+  </div>
+</div>
+
+<div class="body">
+
+<?php if ( $summary !== '' ) : ?>
+<h2>総括</h2>
+<div class="summary-box"><?php echo nl2br( esc_html( $summary ) ); ?></div>
+<?php endif; ?>
+
+<?php if ( ! empty( $top_needs ) ) : ?>
+<h2>ユーザーが知りたがっていること（TOP5）</h2>
+<table class="list">
+<thead><tr><th style="width:30%;">テーマ</th><th style="width:12%;">件数</th><th>説明</th></tr></thead>
+<tbody>
+<?php foreach ( $top_needs as $need ) : if ( ! is_array( $need ) ) continue; ?>
+<tr>
+  <td><?php echo esc_html( (string) ( $need['theme'] ?? '' ) ); ?></td>
+  <td><?php echo (int) ( $need['count'] ?? 0 ); ?></td>
+  <td><?php echo esc_html( (string) ( $need['description'] ?? '' ) ); ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+</table>
+<?php endif; ?>
+
+<?php if ( ! empty( $unresolved ) ) : ?>
+<h2>未解決・困りごと（TOP5）</h2>
+<table class="list">
+<thead><tr><th style="width:30%;">課題</th><th style="width:12%;">件数</th><th>説明</th></tr></thead>
+<tbody>
+<?php foreach ( $unresolved as $issue ) : if ( ! is_array( $issue ) ) continue; ?>
+<tr>
+  <td><?php echo esc_html( (string) ( $issue['issue'] ?? '' ) ); ?></td>
+  <td><?php echo (int) ( $issue['count'] ?? 0 ); ?></td>
+  <td><?php echo esc_html( (string) ( $issue['description'] ?? '' ) ); ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+</table>
+<?php endif; ?>
+
+<?php if ( ! empty( $improvements ) ) : ?>
+<h2>改善提案（TOP5）</h2>
+<table class="list">
+<thead><tr><th style="width:14%;">優先度</th><th style="width:20%;">対象</th><th>提案</th></tr></thead>
+<tbody>
+<?php foreach ( $improvements as $imp ) : if ( ! is_array( $imp ) ) continue;
+    $priority = strtolower( (string) ( $imp['priority'] ?? 'low' ) );
+    $pri_class = in_array( $priority, [ 'high', 'medium', 'low' ], true ) ? 'pri-' . $priority : 'pri-low';
+?>
+<tr>
+  <td class="<?php echo esc_attr( $pri_class ); ?>"><?php echo esc_html( $priority !== '' ? $priority : 'low' ); ?></td>
+  <td><?php echo esc_html( (string) ( $imp['target'] ?? '' ) ); ?></td>
+  <td><?php echo esc_html( (string) ( $imp['suggestion'] ?? '' ) ); ?></td>
+</tr>
+<?php endforeach; ?>
+</tbody>
+</table>
+<?php endif; ?>
+
+<div class="cta">
+  <a href="<?php echo esc_url( $detail_url ); ?>">管理画面で全文を見る</a>
+</div>
+
+</div>
+
+<div class="footer">
+このメールは「みまもりウェブ」AIチャット分析レポートが生成された際に自動送信されています。<br>
+通知先を変更するには: <a href="<?php echo esc_url( admin_url( 'admin.php?page=gcrev-notification-settings' ) ); ?>">通知設定</a>
+</div>
+
+</div>
+</body>
+</html>
+        <?php
+        return (string) ob_get_clean();
     }
 
     /**

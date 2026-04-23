@@ -343,8 +343,15 @@ class Gcrev_Chat_Analysis_Page {
                     <input type="number" name="user_id" value="0" style="width:90px;"> (0=全員)
                 </label>
                 &nbsp;
+                <label>
+                    <input type="checkbox" name="send_email" value="1" checked> 生成後に管理者へメール通知
+                </label>
+                &nbsp;
                 <button type="submit" class="button button-primary"><?php echo esc_html( "\xF0\x9F\xA4\x96" ); ?> レポート生成</button>
             </form>
+            <p style="margin-top:10px; color:#666; font-size:12px;">
+                自動生成: 毎月1日 08:00 に前月 30 日分のレポートを全ユーザー対象で作成し、<a href="<?php echo esc_url( admin_url( 'admin.php?page=gcrev-notification-settings' ) ); ?>">通知設定</a>の宛先へメール送信します（本番環境のみ）。
+            </p>
         </div>
 
         <h2 style="margin-top:30px;">生成済みレポート</h2>
@@ -513,8 +520,9 @@ class Gcrev_Chat_Analysis_Page {
         if ( ! current_user_can( 'manage_options' ) ) { wp_die( '権限がありません。' ); }
         check_admin_referer( self::NONCE_KEY );
 
-        $days    = isset( $_POST['days'] ) ? (int) $_POST['days'] : 30;
-        $user_id = isset( $_POST['user_id'] ) ? (int) $_POST['user_id'] : 0;
+        $days       = isset( $_POST['days'] ) ? (int) $_POST['days'] : 30;
+        $user_id    = isset( $_POST['user_id'] ) ? (int) $_POST['user_id'] : 0;
+        $send_email = ! empty( $_POST['send_email'] );
 
         if ( ! class_exists( 'Gcrev_Chat_Analysis_Service' ) ) {
             require_once dirname( __DIR__ ) . '/modules/class-chat-analysis-service.php';
@@ -524,9 +532,20 @@ class Gcrev_Chat_Analysis_Page {
         $service = new Gcrev_Chat_Analysis_Service();
         $result  = $service->generate_report( $days, $user_id );
 
+        $message = $result['message'];
+        if ( $result['success'] && $send_email && ! empty( $result['analysis'] ) && $result['post_id'] > 0 ) {
+            $sent = $service->send_completion_email( (int) $result['post_id'], (array) $result['analysis'], [
+                'days'      => $days,
+                'user_id'   => $user_id,
+                'log_count' => (int) $result['log_count'],
+                'trigger'   => 'manual',
+            ] );
+            $message .= $sent ? '（メール送信済み）' : '（メール送信に失敗しました）';
+        }
+
         $this->redirect_with_message(
             [ 'tab' => 'reports' ],
-            $result['message'],
+            $message,
             $result['success'] ? 'success' : 'error'
         );
     }

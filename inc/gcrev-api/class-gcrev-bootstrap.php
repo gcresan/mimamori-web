@@ -64,6 +64,9 @@ class Gcrev_Bootstrap {
         add_action('gcrev_auto_article_daily_event', [__CLASS__, 'on_auto_article_daily_event']);
         add_action('gcrev_auto_article_chunk_event', [__CLASS__, 'on_auto_article_chunk_event'], 10, 1);
 
+        // AIチャット分析レポート（月次・毎月1日 08:00）
+        add_action('gcrev_chat_analysis_monthly_event', [__CLASS__, 'on_chat_analysis_monthly_event']);
+
         // 月次データプリフェッチ（月固定期間: prev-month, prev-prev-month, last180, last365）
         add_action('gcrev_monthly_data_prefetch_event', [__CLASS__, 'on_monthly_data_prefetch_event']);
         add_action('gcrev_monthly_prefetch_chunk_event', [__CLASS__, 'on_monthly_prefetch_chunk_event'], 10, 2);
@@ -890,6 +893,9 @@ class Gcrev_Bootstrap {
         // 自動記事生成: 毎日 07:00（他の日次Cronの後）
         self::schedule_daily_if_missing('gcrev_auto_article_daily_event', 'tomorrow 07:00:00');
 
+        // AIチャット分析レポート: 毎月1日 08:00（前月分を全ユーザー対象で生成＋メール通知）
+        self::schedule_monthly_if_missing('gcrev_chat_analysis_monthly_event', 'first day of next month 08:00:00');
+
         // AIO SERP 週次取得: 毎週月曜 05:30（Bright Data）
         if ( ! wp_next_scheduled( 'gcrev_aio_serp_weekly_event' ) ) {
             // 次の月曜 05:30 を計算
@@ -1065,6 +1071,7 @@ class Gcrev_Bootstrap {
             'gcrev_gbp_posts_publish_event',
             'gcrev_meo_dashboard_prefetch_event',
             'gcrev_auto_article_daily_event',
+            'gcrev_chat_analysis_monthly_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',
@@ -1318,6 +1325,57 @@ class Gcrev_Bootstrap {
         $kw_service = new Gcrev_Keyword_Research_Service( $ai, $config, null, null );
         $service    = new Gcrev_Auto_Article_Service( $writing, $ai, $config, $kw_service );
         $service->build_daily_queue();
+    }
+
+    /**
+     * 月次 AIチャット分析レポート自動生成（毎月1日 08:00）
+     * 前月 30 日分のログを Gemini で分析し、完了メールを管理者へ送信する。
+     */
+    public static function on_chat_analysis_monthly_event(): void {
+        $log = '/tmp/gcrev_chat_debug.log';
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " chat_analysis_monthly_event triggered\n", FILE_APPEND );
+
+        $service_path = __DIR__ . '/modules/class-chat-analysis-service.php';
+        if ( ! file_exists( $service_path ) ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " chat_analysis_monthly: service not found\n", FILE_APPEND );
+            return;
+        }
+        require_once $service_path;
+
+        if ( ! class_exists( 'Gcrev_Chat_Analysis_Service' ) ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " chat_analysis_monthly: class not loaded\n", FILE_APPEND );
+            return;
+        }
+
+        @ignore_user_abort( true );
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 300 );
+        }
+
+        try {
+            $service = new Gcrev_Chat_Analysis_Service();
+            $result  = $service->generate_report( 30, 0 );
+
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " chat_analysis_monthly result: success=" . ( $result['success'] ? '1' : '0' )
+                . " post_id={$result['post_id']} log_count={$result['log_count']} msg={$result['message']}\n",
+                FILE_APPEND
+            );
+
+            if ( $result['success'] && ! empty( $result['analysis'] ) && $result['post_id'] > 0 ) {
+                $service->send_completion_email( (int) $result['post_id'], (array) $result['analysis'], [
+                    'days'      => 30,
+                    'user_id'   => 0,
+                    'log_count' => (int) $result['log_count'],
+                    'trigger'   => 'cron',
+                ] );
+            }
+        } catch ( \Throwable $e ) {
+            file_put_contents( $log,
+                date( 'Y-m-d H:i:s' ) . " chat_analysis_monthly ERROR: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+        }
     }
 
     public static function on_auto_article_chunk_event( $job_id ): void {
