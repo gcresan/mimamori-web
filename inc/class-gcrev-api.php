@@ -16957,13 +16957,11 @@ PROMPT;
                 date('Y-m-d H:i:s') . " calling gemini API, prompt_len=" . strlen($prompt) . ", is_regenerate=" . ($is_regenerate ? 'yes' : 'no') . "\n",
                 FILE_APPEND
             );
-            $raw_response = $this->call_review_generation_api( $prompt );
-
-            // JSONパース
-            $parsed = $this->parse_review_response($raw_response);
+            // 生成＋禁止フレーズ検出＋自動再生成（最大2回試行）
+            $parsed = $this->generate_review_with_retry( $prompt );
             if ($parsed === null) {
                 file_put_contents('/tmp/gcrev_review_debug.log',
-                    date('Y-m-d H:i:s') . " JSON parse failed. raw=" . substr($raw_response, 0, 500) . "\n",
+                    date('Y-m-d H:i:s') . " JSON parse failed (after retry)\n",
                     FILE_APPEND
                 );
                 return new \WP_REST_Response([
@@ -17140,6 +17138,105 @@ PROMPT;
     /**
      * 口コミ生成用AIプロンプトを構築
      */
+    /**
+     * AI 典型句（禁止フレーズ）のブラックリスト。
+     * これが含まれる口コミが生成された場合は自動で1回だけ再生成する。
+     * リストは正規表現ではなく部分一致（mb_strpos）で判定する。
+     */
+    private const REVIEW_FORBIDDEN_PATTERNS = [
+        '自信を持っておすすめ',
+        '自信を持ってお勧め',
+        '感謝の気持ちでいっぱい',
+        '感謝しかありません',
+        '感謝しかない',
+        '一人ひとりに寄り添',
+        '寄り添う姿勢',
+        '心から感謝',
+        '期待以上',
+        '想像以上',
+        '大きな強み',
+        '大きな安心感',
+        '親身に接して',
+        '親身になって',
+        '丁寧に対応していただき',
+        '柔軟に対応していただき',
+        '迅速に対応していただき',
+        '本当に頼んでよかった',
+        '本当によかったです',
+        '最初は不安でしたが',
+        '初めてで不安でしたが',
+    ];
+
+    /**
+     * テキスト中に含まれる禁止フレーズを列挙する。
+     *
+     * @return array<int,string>
+     */
+    private function detect_forbidden_phrases( string $text ): array {
+        $found = [];
+        foreach ( self::REVIEW_FORBIDDEN_PATTERNS as $p ) {
+            if ( mb_strpos( $text, $p ) !== false ) {
+                $found[] = $p;
+            }
+        }
+        return $found;
+    }
+
+    /**
+     * 口コミ生成を禁止フレーズ検出付きで実行する。
+     * 検出された場合は1回だけ再生成（合計2回試行）する。
+     * 2回目でも禁止フレーズが残っていればログに警告を出して最後の結果を返す。
+     *
+     * @return array|null parse_review_response の戻り値（失敗時 null）
+     */
+    private function generate_review_with_retry( string $prompt ): ?array {
+        // 1回目
+        $raw = $this->call_review_generation_api( $prompt );
+        $parsed = $this->parse_review_response( $raw );
+        if ( $parsed === null ) {
+            return null;
+        }
+
+        $text = (string) ( $parsed['normal_review'] ?? '' );
+        $found = $this->detect_forbidden_phrases( $text );
+        if ( empty( $found ) ) {
+            return $parsed;
+        }
+
+        // 禁止フレーズ検出 → 再生成
+        file_put_contents(
+            '/tmp/gcrev_review_debug.log',
+            date( 'Y-m-d H:i:s' ) . ' [review-gen] forbidden detected: ' . implode( ', ', $found ) . ' — retrying' . "\n",
+            FILE_APPEND
+        );
+
+        $retry_prompt = $prompt
+            . "\n\n---\n\n# 【重要・再生成指示】\n"
+            . "直前の出力には以下の**絶対使用禁止フレーズ**が含まれていました:\n"
+            . "- " . implode( "\n- ", $found ) . "\n\n"
+            . "**これらのフレーズ及び類似の言い換え（例: 「感謝しかありません」「自信を持って紹介したい」など）は一切使わずに、別の自然な表現で書き直してください。**\n"
+            . "参考口コミサンプルに含まれる自然な言い回しを優先して真似してください。";
+
+        $raw2 = $this->call_review_generation_api( $retry_prompt );
+        $parsed2 = $this->parse_review_response( $raw2 );
+        if ( $parsed2 === null ) {
+            // 再生成失敗 → 最初の結果を返す
+            return $parsed;
+        }
+
+        $text2 = (string) ( $parsed2['normal_review'] ?? '' );
+        $found2 = $this->detect_forbidden_phrases( $text2 );
+        file_put_contents(
+            '/tmp/gcrev_review_debug.log',
+            date( 'Y-m-d H:i:s' ) . ( empty( $found2 )
+                ? ' [review-gen] retry clean ✓'
+                : ' [review-gen] retry still has: ' . implode( ', ', $found2 ) )
+            . "\n",
+            FILE_APPEND
+        );
+        return $parsed2;
+    }
+
     /**
      * 口コミ生成を OpenAI 優先・Gemini フォールバックで実行する共通ヘルパー。
      *
@@ -18479,12 +18576,11 @@ PROMPT;
         }
 
         try {
-            $raw_response = $this->call_review_generation_api( $prompt );
-            $parsed = $this->parse_review_response($raw_response);
-
+            // 生成＋禁止フレーズ検出＋自動再生成
+            $parsed = $this->generate_review_with_retry( $prompt );
             if ($parsed === null) {
                 file_put_contents('/tmp/gcrev_review_debug.log',
-                    date('Y-m-d H:i:s') . " AI re-generate parse failed. raw=" . substr($raw_response, 0, 500) . "\n",
+                    date('Y-m-d H:i:s') . " AI re-generate parse failed (after retry)\n",
                     FILE_APPEND
                 );
                 return new \WP_REST_Response(['success' => false, 'message' => '口コミ案の生成に失敗しました。'], 500);
