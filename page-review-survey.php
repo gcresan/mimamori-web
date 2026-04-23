@@ -24,27 +24,33 @@ get_header();
 /* ===== page-review-survey — Page-specific styles ===== */
 
 .sv-usage-bar {
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
     background: var(--mw-bg-primary, #fff);
     border-radius: var(--mw-radius-sm, 12px);
     padding: 16px 20px; margin-bottom: 20px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
-.sv-usage-meter {
-    flex: 1; max-width: 200px; height: 8px;
-    background: #e5e7eb; border-radius: 4px; overflow: hidden;
+.sv-usage-main { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 2px; }
+.sv-usage-remaining {
+    font-size: 16px; font-weight: 700;
+    color: var(--mw-text-primary, #263335);
 }
-.sv-usage-meter-fill {
-    height: 100%; border-radius: 4px;
+.sv-usage-bar.full .sv-usage-remaining { color: #dc2626; }
+.sv-usage-sub {
+    font-size: 12px; color: #6b7280;
+}
+.sv-usage-slots { display: flex; gap: 6px; }
+.sv-slot {
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 2px solid #e5e7eb; background: #f9fafb;
+    transition: background 0.2s, border-color 0.2s;
+}
+.sv-slot.filled {
     background: var(--mw-primary-blue, #568184);
-    transition: width 0.3s;
+    border-color: var(--mw-primary-blue, #568184);
 }
-.sv-usage-meter-fill.full { background: #dc2626; }
-.sv-usage-text {
-    font-size: 14px; color: var(--mw-text-primary, #263335); font-weight: 600;
-}
-.sv-usage-limit-msg {
-    font-size: 13px; color: #dc2626; margin-left: auto;
+.sv-usage-bar.full .sv-slot.filled {
+    background: #dc2626; border-color: #dc2626;
 }
 
 .sv-header-row {
@@ -797,14 +803,34 @@ get_header();
     }
 
     function renderUsageBar(data) {
-        var pct = Math.round((data.count / data.limit) * 100);
-        var full = data.count >= data.limit;
+        var used  = Math.max(0, parseInt(data.count, 10) || 0);
+        var limit = Math.max(1, parseInt(data.limit, 10) || 1);
+        if (used > limit) used = limit;
+        var remaining = limit - used;
+        var full = (remaining <= 0);
+
+        var slotsHtml = '';
+        for (var i = 0; i < limit; i++) {
+            slotsHtml += '<span class="sv-slot ' + (i < used ? 'filled' : 'empty') + '"></span>';
+        }
+
+        var mainText = full
+            ? '上限に達しています'
+            : 'あと ' + remaining + ' 件作成できます';
+        var subText = full
+            ? '作成済み ' + used + ' / 最大 ' + limit + ' 件（新規作成するには既存のアンケートを削除してください）'
+            : '作成済み ' + used + ' / 最大 ' + limit + ' 件';
+
+        usageBar.className = 'sv-usage-bar' + (full ? ' full' : '');
         usageBar.innerHTML =
-            '<span class="sv-usage-text">' + data.count + ' / ' + data.limit + ' アンケート</span>' +
-            '<div class="sv-usage-meter"><div class="sv-usage-meter-fill' + (full ? ' full' : '') + '" style="width:' + pct + '%;"></div></div>' +
-            (full ? '<span class="sv-usage-limit-msg">上限に達しています</span>' : '');
+            '<div class="sv-usage-main">' +
+              '<strong class="sv-usage-remaining">' + mainText + '</strong>' +
+              '<span class="sv-usage-sub">' + subText + '</span>' +
+            '</div>' +
+            '<div class="sv-usage-slots">' + slotsHtml + '</div>';
+
         btnNew.disabled = full;
-        btnNew.title = full ? 'アンケートは最大' + data.limit + '件まで作成できます' : '';
+        btnNew.title = full ? 'アンケートは最大' + limit + '件まで作成できます' : '';
     }
 
     function renderSurveyList(data) {
