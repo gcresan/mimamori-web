@@ -833,6 +833,17 @@ get_header();
             $saved_detail      = $settings['industry_detail'] ?? '';
             ?>
 
+            <!-- HP URL から全体推定 -->
+            <div class="ai-suggest-box" id="hpAnalyzeBox" style="background:linear-gradient(135deg,#f5f3ff 0%,#eff6ff 100%); border:1px solid #c4b5fd;">
+                <label style="color:#6d28d9;">🌐 ホームページURLから全項目をAIで自動入力</label>
+                <div class="ai-suggest-input-row" style="align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span style="font-size:12px; color:#555;">対象サイト URL（上のフォームから取得）を分析して、業種・業態・商圏・強み・ターゲットなどを一括推定します。</span>
+                    <button type="button" id="btn-hp-analyze" class="btn-ai-suggest"
+                        style="background:linear-gradient(135deg,#7c3aed 0%,#2271b1 100%); color:#fff;">分析して取得</button>
+                </div>
+                <p class="field-hint">分析には30秒〜1分程度かかります。結果は下のフォームに自動入力され、編集してから保存してください（既存の値は上書きされます）。</p>
+            </div>
+
             <!-- AI業種提案 -->
             <div class="ai-suggest-box" id="aiSuggestBox">
                 <label>キーワードから業種をAIで自動入力</label>
@@ -1419,6 +1430,196 @@ get_header();
         document.getElementById('btn-dismiss-suggest').addEventListener('click', function() {
             suggestResult.style.display = 'none';
         });
+    })();
+
+    // === HP URL から全体推定 ===
+    (function() {
+        var btnHp = document.getElementById('btn-hp-analyze');
+        if (!btnHp) return;
+
+        btnHp.addEventListener('click', async function() {
+            var siteUrl = document.getElementById('cs-site-url').value.trim();
+            if (!siteUrl || !/^https?:\/\/.+/.test(siteUrl)) {
+                alert('対象サイトURL を入力してから実行してください（https:// から始まる URL）。');
+                return;
+            }
+
+            // 既存入力の上書き警告（クリティカルな項目のどれかに値があれば確認）
+            var overwriteRisk = [
+                'cs-industry-category', 'cs-industry-detail', 'cs-main-conversions',
+                'cs-service-description', 'cs-strengths', 'cs-review-emphasis',
+                'cs-persona-oneliner',
+            ].some(function(id) {
+                var el = document.getElementById(id);
+                if (!el) return false;
+                if (el.tagName === 'SELECT') return el.value !== '';
+                return (el.value || '').trim() !== '';
+            });
+            if (overwriteRisk) {
+                if (!confirm('既存の入力内容が上書きされる可能性があります。続けますか？')) return;
+            }
+
+            btnHp.disabled = true;
+            var origText = btnHp.textContent;
+            btnHp.textContent = '分析中…（30秒〜1分）';
+
+            try {
+                var res = await fetch(restBase + 'analyze-website', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': wpNonce },
+                    body: JSON.stringify({ url: siteUrl })
+                });
+                var json = await res.json();
+                if (res.ok && json.success && json.suggestions) {
+                    applyHpSuggestions(json.suggestions);
+                    var confBits = [];
+                    if (json.suggestions.confidence) {
+                        var cfMap = { high: '高', medium: '中', low: '低' };
+                        Object.keys(json.suggestions.confidence).forEach(function(k) {
+                            confBits.push(k + ':' + (cfMap[json.suggestions.confidence[k]] || json.suggestions.confidence[k]));
+                        });
+                    }
+                    var msg = 'HP分析結果を反映しました。';
+                    if (confBits.length) { msg += '（確信度 ' + confBits.join(' / ') + '）'; }
+                    showToast(msg);
+                } else {
+                    alert(json.message || '分析に失敗しました。');
+                }
+            } catch (e) {
+                alert('通信エラー: ' + e.message);
+            } finally {
+                btnHp.disabled = false;
+                btnHp.textContent = origText;
+            }
+        });
+
+        function applyHpSuggestions(s) {
+            // 1. 業種カテゴリ + 業態
+            if (s.industry_category) {
+                var catSel = document.getElementById('cs-industry-category');
+                if (catSel) {
+                    catSel.value = s.industry_category;
+                    var subs = Array.isArray(s.industry_subcategory) ? s.industry_subcategory : [];
+                    if (typeof renderSubcategories === 'function') {
+                        renderSubcategories(s.industry_category, subs);
+                    }
+                }
+            }
+
+            // 2. 業種詳細
+            if (typeof s.industry_detail === 'string') {
+                var det = document.getElementById('cs-industry-detail');
+                if (det && s.industry_detail !== '') det.value = s.industry_detail;
+            }
+
+            // 3. ビジネス形態
+            if (Array.isArray(s.business_type)) {
+                var btKeys = s.business_type;
+                document.querySelectorAll('#btypeOptions .btype-option').forEach(function(opt) {
+                    var cb = opt.querySelector('input[type="checkbox"]');
+                    if (!cb) return;
+                    var shouldCheck = btKeys.indexOf(cb.value) !== -1;
+                    cb.checked = shouldCheck;
+                    opt.classList.toggle('selected', shouldCheck);
+                });
+            }
+
+            // 4. 成長ステージ
+            if (typeof s.stage === 'string' && s.stage !== '') {
+                var stageEl = document.getElementById('cs-stage');
+                if (stageEl) stageEl.value = s.stage;
+            }
+
+            // 5. ゴール種別
+            if (typeof s.main_conversions === 'string' && s.main_conversions !== '') {
+                var mc = document.getElementById('cs-main-conversions');
+                if (mc) mc.value = s.main_conversions;
+            }
+
+            // 6. 商圏
+            if (typeof s.area_type === 'string' && s.area_type !== '') {
+                var radio = document.querySelector('input[name="area_type"][value="' + s.area_type + '"]');
+                if (radio) {
+                    radio.checked = true;
+                    if (typeof updateAreaType === 'function') {
+                        updateAreaType(s.area_type);
+                    }
+                }
+            }
+            if (s.area_pref) {
+                // prefecture select
+                var prefSel = document.getElementById('cs-pref-select');
+                if (prefSel) {
+                    Array.prototype.forEach.call(prefSel.options, function(o) {
+                        if (o.value === s.area_pref || o.text === s.area_pref) prefSel.value = o.value;
+                    });
+                }
+                var cityPref = document.getElementById('cs-city-pref');
+                if (cityPref) {
+                    Array.prototype.forEach.call(cityPref.options, function(o) {
+                        if (o.value === s.area_pref || o.text === s.area_pref) cityPref.value = o.value;
+                    });
+                }
+            }
+            if (typeof s.area_city === 'string' && s.area_city !== '') {
+                var cityInput = document.getElementById('cs-city-input');
+                if (cityInput) cityInput.value = s.area_city;
+            }
+            if (typeof s.area_custom === 'string' && s.area_custom !== '') {
+                var customInput = document.getElementById('cs-area-custom');
+                if (customInput) customInput.value = s.area_custom;
+            }
+
+            // 7. 口コミアンケート生成用3フィールド
+            if (typeof s.service_description === 'string' && s.service_description !== '') {
+                var sd = document.getElementById('cs-service-description');
+                if (sd) sd.value = s.service_description;
+            }
+            if (typeof s.strengths === 'string' && s.strengths !== '') {
+                var sr = document.getElementById('cs-strengths');
+                if (sr) sr.value = s.strengths;
+            }
+            if (typeof s.review_emphasis === 'string' && s.review_emphasis !== '') {
+                var re = document.getElementById('cs-review-emphasis');
+                if (re) re.value = s.review_emphasis;
+            }
+
+            // 8. ペルソナ（チェックボックス群）
+            applyPersonaGroup('persona-age',     s.persona_age_ranges);
+            applyPersonaGroup('persona-gender',  s.persona_genders);
+            applyPersonaGroup('persona-attr',    s.persona_attributes);
+            applyPersonaGroup('persona-decision', s.persona_decision_factors);
+
+            // 9. ペルソナひとこと
+            if (typeof s.persona_one_liner === 'string' && s.persona_one_liner !== '') {
+                var ol = document.getElementById('cs-persona-oneliner');
+                if (ol) ol.value = s.persona_one_liner;
+            }
+
+            // スクロール: クライアント情報セクションの先頭に戻して確認しやすくする
+            var section = document.querySelector('.cs-section h2 .icon');
+            // 🏢 のある セクションタイトルにスクロール
+            var sections = document.querySelectorAll('.cs-section');
+            for (var i = 0; i < sections.length; i++) {
+                if (sections[i].querySelector('h2') && sections[i].querySelector('h2').textContent.indexOf('クライアント情報') !== -1) {
+                    sections[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    break;
+                }
+            }
+        }
+
+        function applyPersonaGroup(groupName, values) {
+            if (!Array.isArray(values)) return;
+            var grid = document.querySelector('[data-persona-group="' + groupName + '"]');
+            if (!grid) return;
+            grid.querySelectorAll('.subcategory-item').forEach(function(lbl) {
+                var cb = lbl.querySelector('input[type="checkbox"]');
+                if (!cb) return;
+                var shouldCheck = values.indexOf(cb.value) !== -1;
+                cb.checked = shouldCheck;
+                lbl.classList.toggle('checked', shouldCheck);
+            });
+        }
     })();
 
     // === 商圏タイプ切替 ===

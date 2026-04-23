@@ -238,6 +238,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'suggest_industry' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev_insights/v1', '/analyze-website', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_analyze_website' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         // 生成回数取得エンドポイント
         register_rest_route('gcrev_insights/v1', '/report/generation-count', [
             'methods'             => 'GET',
@@ -3977,6 +3982,77 @@ PROMPT;
             return new WP_REST_Response( [
                 'success' => false,
                 'message' => '業種の提案に失敗しました。もう一度お試しください。',
+            ], 500 );
+        }
+    }
+
+    /**
+     * POST /gcrev_insights/v1/analyze-website
+     *
+     * ホームページ URL を取得し、Gemini に分析させてクライアント情報一式を推定する。
+     * 推定結果は保存せず、フロントに返すのみ。ユーザーが確認・編集後に通常の save-client-settings で保存する。
+     */
+    public function rest_analyze_website( WP_REST_Request $request ): WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( $user_id <= 0 ) {
+            return new WP_REST_Response( [ 'success' => false, 'message' => 'ログインが必要です。' ], 401 );
+        }
+
+        // 30秒スロットル
+        $throttle_key = 'gcrev_analyze_site_' . $user_id;
+        if ( get_transient( $throttle_key ) ) {
+            return new WP_REST_Response( [
+                'success' => false,
+                'message' => '連続実行はできません。30秒後に再度お試しください。',
+            ], 429 );
+        }
+        set_transient( $throttle_key, 1, 30 );
+
+        $params = $request->get_json_params();
+        $url    = esc_url_raw( $params['url'] ?? '' );
+        if ( $url === '' ) {
+            $client = function_exists( 'gcrev_get_client_settings' ) ? gcrev_get_client_settings( $user_id ) : [];
+            $url = (string) ( $client['site_url'] ?? '' );
+        }
+        if ( $url === '' ) {
+            delete_transient( $throttle_key );
+            return new WP_REST_Response( [
+                'success' => false,
+                'message' => 'URL が指定されておらず、クライアント情報にも site_url が未登録です。',
+            ], 400 );
+        }
+
+        $service_file = get_template_directory() . '/inc/gcrev-api/modules/class-client-info-extractor-service.php';
+        if ( ! file_exists( $service_file ) ) {
+            delete_transient( $throttle_key );
+            return new WP_REST_Response( [ 'success' => false, 'message' => '抽出サービスが見つかりません。' ], 500 );
+        }
+        require_once $service_file;
+
+        if ( ! class_exists( 'Gcrev_Client_Info_Extractor_Service' ) ) {
+            delete_transient( $throttle_key );
+            return new WP_REST_Response( [ 'success' => false, 'message' => '抽出サービスクラスが読み込めません。' ], 500 );
+        }
+
+        @set_time_limit( 180 );
+        try {
+            $service = new \Gcrev_Client_Info_Extractor_Service();
+            $result  = $service->extract( $url );
+
+            if ( ! $result['success'] ) {
+                return new WP_REST_Response( $result, 502 );
+            }
+
+            return new WP_REST_Response( $result, 200 );
+        } catch ( \Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_client_extract_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' analyze_website ERROR: ' . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new WP_REST_Response( [
+                'success' => false,
+                'message' => 'サーバーエラー: ' . $e->getMessage(),
             ], 500 );
         }
     }
