@@ -304,7 +304,7 @@ class Gcrev_Config {
      *
      * 優先順位:
      *   1. wp-config.php 定数 GCREV_REPORT_AI_PROVIDER ('openai' | 'gemini')
-     *   2. OPENAI_API_KEY が定義されていれば 'openai'
+     *   2. OpenAI API キー（MIMAMORI_OPENAI_API_KEY / OPENAI_API_KEY のいずれか）が定義されていれば 'openai'
      *   3. デフォルト 'gemini'
      *
      * @return string 'openai' | 'gemini'
@@ -316,29 +316,42 @@ class Gcrev_Config {
                 return $provider;
             }
         }
-        // OPENAI_API_KEY が定義済みならデフォルトで openai
-        return defined( 'OPENAI_API_KEY' ) && OPENAI_API_KEY !== '' ? 'openai' : 'gemini';
+        return $this->get_openai_api_key() !== '' ? 'openai' : 'gemini';
     }
 
     /**
      * OpenAI API キーを返す
      *
+     * 優先順位:
+     *   1. MIMAMORI_OPENAI_API_KEY（本プロジェクトで採用している命名）
+     *   2. OPENAI_API_KEY（旧定数、後方互換）
+     *
      * @return string APIキー（未設定時は空文字）
      */
     public function get_openai_api_key(): string {
-        return defined( 'OPENAI_API_KEY' ) ? (string) OPENAI_API_KEY : '';
+        if ( defined( 'MIMAMORI_OPENAI_API_KEY' ) && MIMAMORI_OPENAI_API_KEY !== '' ) {
+            return (string) MIMAMORI_OPENAI_API_KEY;
+        }
+        if ( defined( 'OPENAI_API_KEY' ) && OPENAI_API_KEY !== '' ) {
+            return (string) OPENAI_API_KEY;
+        }
+        return '';
     }
 
     /**
      * OpenAI モデル名を返す
      *
      * 優先順位:
-     *   1. wp-config.php 定数 OPENAI_MODEL
-     *   2. デフォルト 'gpt-4o'
+     *   1. wp-config.php 定数 MIMAMORI_OPENAI_MODEL
+     *   2. wp-config.php 定数 OPENAI_MODEL（旧定数、後方互換）
+     *   3. デフォルト 'gpt-4o'
      *
      * @return string
      */
     public function get_openai_model(): string {
+        if ( defined( 'MIMAMORI_OPENAI_MODEL' ) && MIMAMORI_OPENAI_MODEL !== '' ) {
+            return (string) MIMAMORI_OPENAI_MODEL;
+        }
         if ( defined( 'OPENAI_MODEL' ) && OPENAI_MODEL !== '' ) {
             return (string) OPENAI_MODEL;
         }
@@ -354,7 +367,7 @@ class Gcrev_Config {
      *
      * 優先順位:
      *   1. wp-config.php 定数 GCREV_WRITING_AI_PROVIDER
-     *   2. OPENAI_API_KEY が定義済みなら 'openai'
+     *   2. OpenAI API キーが定義済みなら 'openai'
      *   3. デフォルト 'gemini'
      */
     public function get_writing_ai_provider(): string {
@@ -364,7 +377,7 @@ class Gcrev_Config {
                 return $provider;
             }
         }
-        return defined( 'OPENAI_API_KEY' ) && OPENAI_API_KEY !== '' ? 'openai' : 'gemini';
+        return $this->get_openai_api_key() !== '' ? 'openai' : 'gemini';
     }
 
     /**
