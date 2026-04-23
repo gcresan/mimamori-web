@@ -5540,6 +5540,13 @@ add_action('after_setup_theme', function () {
     gcrev_cv_routes_create_table();
     gcrev_cv_review_create_table();
     gcrev_chat_logs_create_table();
+    $qa_pool_path = get_template_directory() . '/inc/gcrev-api/utils/class-qa-user-question-pool.php';
+    if ( file_exists( $qa_pool_path ) ) {
+        require_once $qa_pool_path;
+        if ( class_exists( 'Mimamori_QA_User_Question_Pool' ) ) {
+            Mimamori_QA_User_Question_Pool::create_table();
+        }
+    }
     gcrev_rank_keywords_create_table();
     gcrev_rank_results_create_table();
     gcrev_meo_results_create_table(); // MEO週次順位テーブル（マップ順位ページで使用）
