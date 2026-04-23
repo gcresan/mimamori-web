@@ -381,9 +381,12 @@ get_header();
                     <p style="font-size:11px;color:#9ca3af;margin-top:4px;">口コミ文にできるだけ含めたい語句を登録してください（例：丁寧、安心、駅近）</p>
                 </div>
                 <div class="sv-form-group">
-                    <label class="sv-form-label">追加プロンプト（口コミ生成時用）</label>
-                    <textarea class="sv-form-textarea" id="sv-ai-extra-prompt" placeholder="例：文末は「ありがとうございました」で締めてください" style="min-height:60px;"></textarea>
-                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">口コミ生成AIへの追加指示を自由に記述できます</p>
+                    <label class="sv-form-label" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <span>追加プロンプト（口コミ生成時用）</span>
+                        <button type="button" class="sv-btn-ai-gen" id="sv-btn-extra-prompt-gen" style="font-size:12px; padding:6px 12px;">🤖 参考口コミから生成</button>
+                    </label>
+                    <textarea class="sv-form-textarea" id="sv-ai-extra-prompt" placeholder="例：文末は「ありがとうございました」で締めてください" style="min-height:80px;"></textarea>
+                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">口コミ生成AIへの追加指示を自由に記述できます。実際の口コミをいくつかお持ちなら「参考口コミから生成」で AI が書き方のクセを抽出してくれます。</p>
                 </div>
             </div>
             <button type="button" class="sv-btn-save" id="sv-btn-save-info">保存する</button>
@@ -535,6 +538,57 @@ get_header();
         <div class="sv-modal-actions">
             <button type="button" class="sv-btn-secondary" id="sv-q-modal-cancel">キャンセル</button>
             <button type="button" class="sv-btn-save" id="sv-q-modal-save">更新する</button>
+        </div>
+    </div>
+</div>
+
+<!-- 追加プロンプト AI生成モーダル -->
+<div class="sv-modal-overlay" id="sv-extra-prompt-modal">
+    <div class="sv-modal sv-modal-wide">
+        <div class="sv-modal-title">🤖 参考口コミから追加プロンプトを生成</div>
+
+        <!-- 入力ステップ -->
+        <div id="sv-ep-step-input">
+            <p style="color:#555; font-size:13px; margin:0 0 12px;">
+                実際に集まった口コミをいくつか貼り付けてください。<br>
+                AIが「書き方のクセ・長さ・雰囲気」を分析し、既存プロンプトに追加する形式のルールを生成します。<br>
+                <strong>同業他社の口コミでも構いません。複数件あるほど精度が上がります。</strong>
+            </p>
+            <div class="sv-form-group">
+                <label class="sv-form-label">参考口コミ（改行で区切って複数件貼り付け可） <span style="color:#dc2626;">*</span></label>
+                <textarea class="sv-form-textarea" id="sv-ep-reviews" rows="10"
+                    placeholder="例:&#10;初めて利用しました。説明がわかりやすく、不安だった部分もきちんと確認してもらえたので安心できました。仕上がりも納得で、また機会があればお願いしたいです。&#10;&#10;地元で長くお世話になっています。急な依頼でも親身に対応してくれて、価格も妥当だと感じます。&#10;&#10;近くで探してこちらを選びました。事前の説明が丁寧で、当日も無理のないペースで進めてもらえました。"></textarea>
+                <p style="font-size:11px;color:#9ca3af;margin-top:4px;">目安: 3〜10件 / 合計 300〜3000字程度</p>
+            </div>
+        </div>
+
+        <!-- 生成中 -->
+        <div id="sv-ep-step-loading" style="display:none; text-align:center; padding:30px 0;">
+            <div class="sv-ai-spinner"></div>
+            <p style="margin:14px 0 0; color:#555;">AIが口コミの傾向を分析しています…（30秒〜1分）</p>
+        </div>
+
+        <!-- プレビュー -->
+        <div id="sv-ep-step-preview" style="display:none;">
+            <div class="sv-ai-intent-box" id="sv-ep-summary"></div>
+
+            <details style="margin:10px 0;">
+                <summary style="cursor:pointer; color:#555; font-size:13px;">▼ 特徴分析（参考情報）</summary>
+                <pre id="sv-ep-analysis" style="background:#f6f7f7; padding:10px; border-radius:4px; font-size:12px; white-space:pre-wrap; max-height:220px; overflow:auto;"></pre>
+            </details>
+
+            <div style="margin:14px 0 8px;">
+                <strong style="font-size:13px;">生成された追加プロンプト（このまま反映できます）:</strong>
+            </div>
+            <textarea id="sv-ep-output" readonly rows="12"
+                style="width:100%; font-family:inherit; font-size:13px; line-height:1.6; padding:10px; border:1px solid #ddd; border-radius:6px; background:#fafafa;"></textarea>
+        </div>
+
+        <div class="sv-modal-actions">
+            <button type="button" class="sv-btn-secondary" id="sv-ep-btn-close">閉じる</button>
+            <button type="button" class="sv-btn-save" id="sv-ep-btn-generate">生成する</button>
+            <button type="button" class="sv-btn-secondary" id="sv-ep-btn-append" style="display:none;">追記</button>
+            <button type="button" class="sv-btn-save" id="sv-ep-btn-replace" style="display:none;">上書きで反映</button>
         </div>
     </div>
 </div>
@@ -1567,6 +1621,98 @@ get_header();
             toast('通信エラー: ' + e.message, 'error');
         });
     });
+
+    // =====================================================
+    // 追加プロンプトを参考口コミから生成するモーダル
+    // =====================================================
+    (function() {
+        var btn = document.getElementById('sv-btn-extra-prompt-gen');
+        if (!btn) return;
+
+        var modal       = document.getElementById('sv-extra-prompt-modal');
+        var stepInput   = document.getElementById('sv-ep-step-input');
+        var stepLoading = document.getElementById('sv-ep-step-loading');
+        var stepPreview = document.getElementById('sv-ep-step-preview');
+        var reviewsInput = document.getElementById('sv-ep-reviews');
+        var summaryBox  = document.getElementById('sv-ep-summary');
+        var analysisBox = document.getElementById('sv-ep-analysis');
+        var outputBox   = document.getElementById('sv-ep-output');
+        var btnGen      = document.getElementById('sv-ep-btn-generate');
+        var btnClose    = document.getElementById('sv-ep-btn-close');
+        var btnAppend   = document.getElementById('sv-ep-btn-append');
+        var btnReplace  = document.getElementById('sv-ep-btn-replace');
+        var extraPromptField = document.getElementById('sv-ai-extra-prompt');
+
+        function setStep(step) {
+            stepInput.style.display   = (step === 'input')   ? 'block' : 'none';
+            stepLoading.style.display = (step === 'loading') ? 'block' : 'none';
+            stepPreview.style.display = (step === 'preview') ? 'block' : 'none';
+
+            btnGen.style.display     = (step === 'input')   ? 'inline-block' : 'none';
+            btnAppend.style.display  = (step === 'preview') ? 'inline-block' : 'none';
+            btnReplace.style.display = (step === 'preview') ? 'inline-block' : 'none';
+            btnClose.textContent = (step === 'preview') ? '閉じる' : 'キャンセル';
+        }
+
+        function closeModal() {
+            modal.classList.remove('show');
+            setStep('input');
+        }
+
+        btn.addEventListener('click', function() {
+            setStep('input');
+            modal.classList.add('show');
+        });
+
+        btnClose.addEventListener('click', closeModal);
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) closeModal();
+        });
+
+        btnGen.addEventListener('click', function() {
+            var reviews = reviewsInput.value.trim();
+            if (reviews.length < 40) {
+                toast('参考口コミが短すぎます。数文、できれば複数件を入力してください。', 'error');
+                return;
+            }
+
+            setStep('loading');
+
+            apiPost('generate-extra-prompt', { reviews: reviews }).then(function(res) {
+                if (res.success && res.extra_prompt) {
+                    summaryBox.textContent = res.summary || '';
+                    analysisBox.textContent = res.analysis || '（分析データなし）';
+                    outputBox.value = res.extra_prompt;
+                    setStep('preview');
+                } else {
+                    toast(res.message || '生成に失敗しました', 'error');
+                    setStep('input');
+                }
+            }).catch(function(e) {
+                toast('通信エラー: ' + e.message, 'error');
+                setStep('input');
+            });
+        });
+
+        btnReplace.addEventListener('click', function() {
+            if (!extraPromptField) return;
+            if (extraPromptField.value.trim() !== '' &&
+                !confirm('既存の追加プロンプトを上書きします。よろしいですか？')) return;
+            extraPromptField.value = outputBox.value;
+            toast('追加プロンプトに反映しました。「保存する」ボタンで確定してください。');
+            closeModal();
+        });
+
+        btnAppend.addEventListener('click', function() {
+            if (!extraPromptField) return;
+            var current = extraPromptField.value.trim();
+            extraPromptField.value = current === ''
+                ? outputBox.value
+                : current + '\n\n' + outputBox.value;
+            toast('追加プロンプトに追記しました。「保存する」ボタンで確定してください。');
+            closeModal();
+        });
+    })();
 
     // =====================================================
     // Init

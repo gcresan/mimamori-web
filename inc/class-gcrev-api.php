@@ -1384,6 +1384,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_survey_ai_generate_questions' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/survey/generate-extra-prompt', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_generate_extra_prompt' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/survey/questions/bulk-save', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_survey_questions_bulk_save' ],
@@ -17796,6 +17801,74 @@ PROMPT;
             'skipped'  => $skipped,
             'message'  => sprintf( '%d問を追加しました。', $inserted ),
         ], 200);
+    }
+
+    /**
+     * POST /gcrev/v1/survey/generate-extra-prompt
+     *
+     * 参考口コミテキストを受け取り、Gemini で分析して
+     * 追加プロンプトブロック（■参考口コミの傾向 + ■追加ルール）を生成する。
+     * 生成結果は DB には保存せず、フロントに返すのみ。
+     */
+    public function rest_survey_generate_extra_prompt( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( $user_id <= 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'ログインが必要です。' ], 401 );
+        }
+
+        // 連打防止（30秒）
+        $throttle_key = 'gcrev_extra_prompt_gen_' . $user_id;
+        if ( get_transient( $throttle_key ) ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => '連続実行はできません。30秒後に再度お試しください。',
+            ], 429 );
+        }
+        set_transient( $throttle_key, 1, 30 );
+
+        $params = $request->get_json_params();
+        $reviews_text = isset( $params['reviews'] ) ? sanitize_textarea_field( $params['reviews'] ) : '';
+
+        if ( trim( $reviews_text ) === '' ) {
+            delete_transient( $throttle_key );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => '参考口コミを入力してください。',
+            ], 400 );
+        }
+
+        $service_file = get_template_directory() . '/inc/gcrev-api/modules/class-extra-prompt-generator-service.php';
+        if ( ! file_exists( $service_file ) ) {
+            delete_transient( $throttle_key );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '生成サービスが見つかりません。' ], 500 );
+        }
+        require_once $service_file;
+
+        if ( ! class_exists( 'Gcrev_Extra_Prompt_Generator_Service' ) ) {
+            delete_transient( $throttle_key );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '生成サービスクラスが読み込めません。' ], 500 );
+        }
+
+        @set_time_limit( 120 );
+        try {
+            $service = new \Gcrev_Extra_Prompt_Generator_Service();
+            $result  = $service->generate( $reviews_text );
+
+            if ( ! $result['success'] ) {
+                return new \WP_REST_Response( $result, 502 );
+            }
+            return new \WP_REST_Response( $result, 200 );
+        } catch ( \Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_extra_prompt_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' rest error: ' . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => 'サーバーエラー: ' . $e->getMessage(),
+            ], 500 );
+        }
     }
 
     /**
