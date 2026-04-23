@@ -139,22 +139,41 @@ class Gcrev_Survey_Question_Generator_Service {
 # 設計ルール（厳守）
 - 同じ意味の質問を重複させない
 - 抽象的すぎる質問は禁止（具体的に答えられる内容にする）
-- 「はい/いいえ」で終わらない聞き方にする
 - 感情が出る質問、変化（ビフォー→アフター）が出る質問、比較理由が出る質問、具体エピソードが出やすい質問を必ず含める
 - 専門用語は控えめに、一般ユーザーでも答えやすく
 - やわらかく自然な日本語、威圧感や誘導感のない聞き方
 - その業種に特化した具体性のある質問にする（汎用質問は避ける）
 
-# 質問タイプ（type）の使い分け
-- textarea: 自由記述（感想・具体エピソード・変化・理由）が中心
-- radio:    単一選択（総合評価・感情・印象・おすすめ度など）
-- checkbox: 複数選択（不安・決め手・比較した他社の項目など）
-- text:     短文1行
-radio/checkbox の場合は options 配列に 3〜6 個の選択肢を入れること。
-options は回答者が選びやすい具体的な言葉で書く。末尾に「その他」を1つ加えてよい。
+# 質問タイプ（type）の使い分け — **選択式を最優先、textarea は最小限**
+回答者の入力負担を減らすため、可能な限り radio / checkbox で答えられるように設計する。
+- **radio**（単一選択）: 総合評価・満足度・感情・印象・おすすめ度・推奨度・初回 or リピート など
+- **checkbox**（複数選択）: 不安・決め手・良かった点・変化・他社との違い・印象に残った提案 など「複数当てはまる」質問
+- **textarea**（自由記述）: 原則として「自由回答」カテゴリの1問のみ。それ以外のカテゴリでは使わない
+- text: 使わない
+
+radio/checkbox の options は 4〜7 個の具体的・業種特化した選択肢を入れる（回答者が「あるある」と共感できる言葉選び）。
+末尾には必要に応じて「その他」または「特になし」を1つ加えてよい。
+
+# required の付与ルール（厳守）
+- **textarea で required=true は1問のみ**（自由回答カテゴリの1問）
+- その他の textarea（原則ゼロ想定）がある場合は必ず required=false
+- radio / checkbox は required=true にしてよい（負担が軽いため）
+
+# カテゴリ別のタイプ指針（目安）
+- 不安・課題: checkbox 中心
+- 比較・検討: checkbox / radio（比較した数など）
+- 決め手: checkbox
+- 対応・コミュニケーション: radio / checkbox 混在（対応の印象は radio 5段階、良かった点は checkbox）
+- 提案・特徴: checkbox
+- 結果・体験: checkbox（感じた変化を多選択）+ radio（満足度変化）
+- 他社との違い: checkbox
+- おすすめ: radio（おすすめしたい度 5段階 / NPS）
+- 総合評価: radio（満足度 5段階）
+- 感情・印象: radio（ひとことで表すと…）
+- 自由回答: textarea 1問のみ（required=true）
 
 # 固定質問の選定
-- 30問のうち 3〜4 問を「口コミ生成に必須の固定質問」として選ぶ（不安・決め手・体験・おすすめのいずれかを含める）
+- 30問のうち 3〜4 問を「口コミ生成に必須の固定質問」として選ぶ（決め手・総合評価・自由回答・おすすめのいずれかを含める）
 - 固定質問は fixed_ids に 1 始まりの質問番号で列挙する
 
 # 出力要件
@@ -278,6 +297,48 @@ PROMPT;
             ];
         }
 
+        $out = $this->enforce_single_required_textarea( $out );
+
         return $out;
+    }
+
+    /**
+     * 「required=true の textarea は1問だけ」ルールを強制する安全策。
+     *
+     * 自由回答カテゴリに該当する textarea を優先的に残し、
+     * 他の textarea の required は false に落とす。
+     * 自由回答カテゴリがない場合は最初に見つかった textarea を残す。
+     */
+    private function enforce_single_required_textarea( array $questions ): array {
+        $textarea_indexes = [];
+        foreach ( $questions as $i => $q ) {
+            if ( ( $q['type'] ?? '' ) === 'textarea' ) {
+                $textarea_indexes[] = $i;
+            }
+        }
+        if ( count( $textarea_indexes ) <= 1 ) {
+            // 1問以下なら required を強制的に true にして終了（自由回答は必須確保）
+            foreach ( $textarea_indexes as $i ) {
+                $questions[ $i ]['required'] = true;
+            }
+            return $questions;
+        }
+
+        // 残す1問を決定: 「自由回答」カテゴリを優先
+        $keep_idx = null;
+        foreach ( $textarea_indexes as $i ) {
+            if ( ( $questions[ $i ]['category'] ?? '' ) === '自由回答' ) {
+                $keep_idx = $i;
+                break;
+            }
+        }
+        if ( $keep_idx === null ) {
+            $keep_idx = $textarea_indexes[0];
+        }
+
+        foreach ( $textarea_indexes as $i ) {
+            $questions[ $i ]['required'] = ( $i === $keep_idx );
+        }
+        return $questions;
     }
 }

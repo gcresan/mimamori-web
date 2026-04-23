@@ -40,12 +40,13 @@ if (!empty($survey_token)) {
         // クライアント名を取得
         $client_name = gcrev_get_business_name($target_user_id);
 
-        // 質問取得
+        // 質問取得（アクティブな全質問）
         $db_questions = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$t_questions} WHERE survey_id = %d AND is_active = 1 ORDER BY sort_order ASC, id ASC",
             (int) $survey->id
         ));
 
+        $all_questions = [];
         foreach ($db_questions as $q) {
             $options = [];
             if (!empty($q->options)) {
@@ -54,7 +55,7 @@ if (!empty($survey_token)) {
                     $options = $decoded;
                 }
             }
-            $review_questions[] = [
+            $all_questions[] = [
                 'id'          => (int) $q->id,
                 'type'        => $q->type,
                 'label'       => $q->label,
@@ -62,8 +63,13 @@ if (!empty($survey_token)) {
                 'description' => $q->description,
                 'placeholder' => $q->placeholder,
                 'options'     => $options,
+                'category'    => $q->category ?? '',
+                'is_fixed'    => !empty($q->is_fixed),
             ];
         }
+
+        // 8問にピックアップ（固定質問 + 必須 textarea + カテゴリ分散ランダム）
+        $review_questions = gcrev_pickup_survey_questions($all_questions, 8);
 
         if (empty($review_questions)) {
             $survey_error = 'このアンケートには質問が設定されていません。';
