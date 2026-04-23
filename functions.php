@@ -107,6 +107,16 @@ add_action('init', function () {
         'rewrite'     => false,
         'supports'    => ['title'],
     ]);
+
+    // AIチャット会話分析レポート（管理画面からの手動/定期生成結果）
+    register_post_type('mimamori_chat_report', [
+        'label'       => 'チャット分析レポート',
+        'public'      => false,
+        'show_ui'     => false,
+        'has_archive' => false,
+        'rewrite'     => false,
+        'supports'    => ['title', 'editor', 'custom-fields'],
+    ]);
 });
 
 // ----------------------------------------

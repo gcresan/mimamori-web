@@ -149,6 +149,12 @@ class Gcrev_Bootstrap {
                 (new Mimamori_QA_Registry_Page())->register();
             }
 
+            $chat_analysis_path = __DIR__ . '/admin/class-chat-analysis-page.php';
+            if ( file_exists( $chat_analysis_path ) ) {
+                require_once $chat_analysis_path;
+                (new Gcrev_Chat_Analysis_Page())->register();
+            }
+
             $rank_tracker_path = __DIR__ . '/admin/class-rank-tracker-settings-page.php';
             if ( file_exists( $rank_tracker_path ) ) {
                 require_once $rank_tracker_path;
