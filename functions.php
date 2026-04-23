@@ -536,11 +536,27 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         if ( ! empty( $q['is_fixed'] ) ) { $add_question( $q ); }
     }
 
-    // 2. 必須 textarea（自由回答・メイン）
-    foreach ( $all_questions as $q ) {
-        if ( count( $picked ) >= $limit ) break;
+    // 2. 必須 textarea（自由回答・メイン）を1問だけ確保
+    //    古いデータで複数の required textarea が保存されていても、表示時は1問に絞る
+    //    優先: カテゴリが「自由回答」> それ以外。自由回答が複数あれば sort_order 最小
+    $required_textarea_indexes = [];
+    foreach ( $all_questions as $idx => $q ) {
         if ( ( $q['type'] ?? '' ) === 'textarea' && ! empty( $q['required'] ) ) {
-            $add_question( $q );
+            $required_textarea_indexes[] = $idx;
+        }
+    }
+    if ( ! empty( $required_textarea_indexes ) ) {
+        // 自由回答カテゴリを優先
+        $chosen = null;
+        foreach ( $required_textarea_indexes as $idx ) {
+            if ( ( $all_questions[ $idx ]['category'] ?? '' ) === '自由回答' ) {
+                $chosen = $idx;
+                break;
+            }
+        }
+        if ( $chosen === null ) { $chosen = $required_textarea_indexes[0]; }
+        if ( count( $picked ) < $limit ) {
+            $add_question( $all_questions[ $chosen ] );
         }
     }
 
@@ -549,13 +565,25 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         if ( count( $picked ) >= $limit ) break;
         if ( ( $q['type'] ?? '' ) === 'textarea' && empty( $q['required'] ) ) {
             $add_question( $q );
-            break; // 任意 textarea は1問だけに抑える（他は選択式のみに）
+            break;
         }
     }
 
-    // 3. 残りをカテゴリ分散でランダム補充
+    // 2c. それ以外の textarea（古いデータで余分に required=true だったものなど）は
+    //     今回の表示では除外する。以降の補充対象から明示的に外す。
+    //     ※ DBの値は変更せず、あくまで「今回の表示では使わない」ようにブロックする。
+    $textarea_ids_in_dataset = [];
+    foreach ( $all_questions as $q ) {
+        if ( ( $q['type'] ?? '' ) === 'textarea' ) {
+            $textarea_ids_in_dataset[] = $q['id'] ?? null;
+        }
+    }
+
+    // 3. 残りをカテゴリ分散でランダム補充（textarea は除外: 必須1・任意1 で足りているため）
     $remaining = array_values( array_filter( $all_questions, static function ( $q ) use ( $picked_ids ) {
-        return ! in_array( $q['id'] ?? null, $picked_ids, true );
+        if ( in_array( $q['id'] ?? null, $picked_ids, true ) ) { return false; }
+        if ( ( $q['type'] ?? '' ) === 'textarea' ) { return false; }
+        return true;
     } ) );
 
     // 既に使われたカテゴリ
@@ -598,10 +626,12 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         $cat_keys_sorted = array_values( $cat_keys_sorted );
     }
 
-    // 4. 足りなければ残り全体からさらに補充
+    // 4. 足りなければ残り全体からさらに補充（textarea は除外）
     if ( count( $picked ) < $limit ) {
         $leftovers = array_values( array_filter( $all_questions, static function ( $q ) use ( $picked_ids ) {
-            return ! in_array( $q['id'] ?? null, $picked_ids, true );
+            if ( in_array( $q['id'] ?? null, $picked_ids, true ) ) { return false; }
+            if ( ( $q['type'] ?? '' ) === 'textarea' ) { return false; }
+            return true;
         } ) );
         shuffle( $leftovers );
         foreach ( $leftovers as $q ) {
@@ -629,6 +659,17 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         if ( $ib === false ) $ib = PHP_INT_MAX;
         return $ia - $ib;
     } );
+
+    // 6. textarea の placeholder（例文）を補完する
+    //    既存データで placeholder が空の質問でも、回答者には必ず例文を提示したい。
+    foreach ( $picked as &$q ) {
+        if ( ( $q['type'] ?? '' ) !== 'textarea' ) { continue; }
+        if ( isset( $q['placeholder'] ) && trim( (string) $q['placeholder'] ) !== '' ) { continue; }
+        $q['placeholder'] = ! empty( $q['required'] )
+            ? '例：今回感じた良かった点や、印象に残ったことを自由にお書きください。（箇条書きでも大丈夫です）'
+            : '例：これから検討される方へのメッセージや、ご要望があればご記入ください。';
+    }
+    unset( $q );
 
     return $picked;
 }
