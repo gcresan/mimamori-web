@@ -399,9 +399,9 @@ get_header();
                     <div id="sv-ref-reviews-slots"><!-- JS で動的追加 --></div>
                     <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px; gap:10px; flex-wrap:wrap;">
                         <button type="button" class="sv-btn-secondary" id="sv-btn-add-ref-review" style="font-size:12px;">＋ 口コミを追加</button>
-                        <span id="sv-ref-reviews-count" style="font-size:12px; color:#6b7280;">登録 0 / 10 件　使用 0 件</span>
+                        <span id="sv-ref-reviews-count" style="font-size:12px; color:#6b7280;">登録 0 / 10 件　参考 0 件</span>
                     </div>
-                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">登録した口コミのうち「生成時に使用」にチェックしたものだけが、口コミ生成時の文体参考として AI に渡されます（固有名詞や具体的な数値は引用禁止の指示付き）。「参考口コミから生成」で入力した口コミは自動でここに反映されます。</p>
+                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">登録した口コミのうち「生成時に参考にする」にチェックしたものだけが、口コミ生成時の文体参考として AI に渡されます（固有名詞や具体的な数値は引用禁止の指示付き）。「参考口コミから生成」で入力した口コミは自動でここに反映されます。</p>
                 </div>
             </div>
             <button type="button" class="sv-btn-save" id="sv-btn-save-info">保存する</button>
@@ -1389,7 +1389,7 @@ get_header();
             if (label) label.textContent = 'サンプル ' + (i + 1);
         });
         if (refCountEl) {
-            refCountEl.textContent = '登録 ' + slots.length + ' / ' + REF_MAX + ' 件　使用 ' + refActiveCount() + ' 件';
+            refCountEl.textContent = '登録 ' + slots.length + ' / ' + REF_MAX + ' 件　参考 ' + refActiveCount() + ' 件';
         }
         if (btnAddRef) btnAddRef.disabled = (slots.length >= REF_MAX);
     }
@@ -1406,7 +1406,7 @@ get_header();
             '  <strong class="sv-ref-slot-label" style="font-size:12px; color:#374151;">サンプル</strong>' +
             '  <div style="display:flex; align-items:center; gap:12px;">' +
             '    <label style="font-size:12px; color:#374151; cursor:pointer; user-select:none; display:inline-flex; align-items:center; gap:4px;">' +
-            '      <input type="checkbox" class="sv-ref-slot-active"' + (isActive ? ' checked' : '') + '> 生成時に使用' +
+            '      <input type="checkbox" class="sv-ref-slot-active"' + (isActive ? ' checked' : '') + '> 生成時に参考にする' +
             '    </label>' +
             '    <button type="button" class="sv-ref-slot-remove" style="background:none; border:none; color:#dc2626; font-size:12px; cursor:pointer;">× 削除</button>' +
             '  </div>' +
@@ -1947,7 +1947,7 @@ get_header();
             var modalTexts = collectReviews().slice(0, 10);
             if (modalTexts.length === 0) return;
 
-            // モーダル入力は「生成時に使用=ON」で反映
+            // モーダル入力は「生成時に参考にする=ON」で反映
             var modalObjs = modalTexts.map(function(t) { return { text: t, active: true }; });
 
             if (mode === 'replace') {
