@@ -129,13 +129,17 @@ class Gcrev_Path_Filter {
         $patterns = [
             'gcrev_keywords_'      . $user_id . '_%',
             'gcrev_dash_'          . $user_id . '_%',
-            'gcrev_dash_bydate_v2_'. $user_id . '_%',
+            'gcrev_dash_bydate_'   . $user_id . '_%',  // 新形式（period ベース安定キー）
+            'gcrev_dash_bydate_v2_'. $user_id . '_%',  // 旧形式（任意日付用・page-report-latest から使われる）
             'gcrev_kpi_'           . $user_id . '_%',
             'gcrev_trend_'         . $user_id . '_%',
             'gcrev_trend_daily_'   . $user_id . '_%',
             'gcrev_page_'          . $user_id . '_%',
             'gcrev_source_'        . $user_id . '_%',
             'gcrev_region_'        . $user_id . '_%',
+            'gcrev_cv_analysis_'   . $user_id . '_%',
+            'gcrev_meo_'           . $user_id . '_%',
+            'gcrev_meo_perf_'      . $user_id . '_%',
             'gcrev_report_'        . $user_id . '_%',
         ];
 

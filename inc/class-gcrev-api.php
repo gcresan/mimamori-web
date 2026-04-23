@@ -93,7 +93,9 @@ class Gcrev_Insight_API {
     private string $service_account_path = '';
 
     // ===== キャッシュ設定 =====
-    private const DASHBOARD_CACHE_TTL  = 86400;   // 24h
+    // 分析・ダッシュボード系キャッシュの共通TTL。cron が毎日更新する前提で、
+    // 1〜2日 cron が失敗しても表示が維持されるよう 7 日を採用。
+    private const DASHBOARD_CACHE_TTL  = 604800;  // 7 days
     private const PREFETCH_SLEEP_US    = 100000;  // 0.1s
     public  const PREFETCH_CHUNK_LIMIT = 5;
     private const MEO_FETCH_CHUNK_LIMIT = 5;
@@ -1813,7 +1815,7 @@ class Gcrev_Insight_API {
 
             // MEOパフォーマンスキャッシュ（ダッシュボードKPI用）
             $meo_dates = $this->dates->calculate_period_dates( $period );
-            $this->fetch_meo_metrics_safe( $user_id, $meo_dates['start'], $meo_dates['end'] );
+            $this->fetch_meo_metrics_safe( $user_id, $meo_dates['start'], $meo_dates['end'], $period );
 
         } catch ( \Exception $e ) {
             $had_error = true;
@@ -2054,9 +2056,9 @@ class Gcrev_Insight_API {
     //
     // 用途: ログイン直後 / ダッシュボードキャッシュミス時の背景プリフェッチ。
     // page-dashboard.php の同期読み出しに必要な最小キャッシュだけを温める：
-    //   - gcrev_dash_{user_id}_last30{_jp?_ex?}    （主要KPI）
-    //   - gcrev_dash_bydate_v2_{user_id}_..._{...} （比較期間）
-    //   - gcrev_meo_perf_{user_id}_..._...          （MEO 当期 + 前期）
+    //   - gcrev_dash_{user_id}_last30{_jp?_ex?}             （主要KPI）
+    //   - gcrev_dash_bydate_{user_id}_last30_comp{_filtered?_pf?} （比較期間、period ベース安定キー）
+    //   - gcrev_meo_perf_{user_id}_last30 / _last30_comp    （MEO 当期 + 前期、period ベース安定キー）
     //   - 上記 KPI に _cached_score をマージ
     // =========================================================
     public function prefetch_user_dashboard( int $user_id ): void {
@@ -2087,21 +2089,22 @@ class Gcrev_Insight_API {
                 $this->dashboard_cache_set( $user_id, 'last30', $data );
             }
 
-            // (2) 比較期間 (gcrev_dash_bydate_v2_*)
+            // (2) 比較期間 (gcrev_dash_bydate_{uid}_last30_comp{filter})
+            // cache_scope='last30_comp' 指定で、日付スライドしてもキーは固定
             $filter_suffix_pf = $exclude_foreign ? '_filtered' : '';
             if ( class_exists( 'Gcrev_Path_Filter' ) ) {
                 $filter_suffix_pf .= Gcrev_Path_Filter::cache_suffix( $user_id );
             }
-            $comp_cache_key = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
+            $comp_cache_key = "gcrev_dash_bydate_{$user_id}_last30_comp{$filter_suffix_pf}";
             $comp_data      = get_transient( $comp_cache_key );
             if ( ! $comp_data ) {
-                $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id );
+                $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id, 'last30_comp' );
             }
 
-            // (3) MEO 当期 + 前期
+            // (3) MEO 当期 + 前期（period ベース安定キー）
             try {
-                $this->fetch_meo_metrics_safe( $user_id, $last30['start'], $last30['end'] );
-                $this->fetch_meo_metrics_safe( $user_id, $last30_comp['start'], $last30_comp['end'] );
+                $this->fetch_meo_metrics_safe( $user_id, $last30['start'], $last30['end'], 'last30' );
+                $this->fetch_meo_metrics_safe( $user_id, $last30_comp['start'], $last30_comp['end'], 'last30_comp' );
             } catch ( \Throwable $e ) {
                 // MEO 失敗は致命ではない（未連携ユーザー等）
             }
@@ -2122,8 +2125,8 @@ class Gcrev_Insight_API {
                 $gsc_c  = (int) str_replace( ',', '', (string) ( $kpi_cached['gsc']['total']['clicks'] ?? $kpi_cached['gsc']['total']['impressions'] ?? '0' ) );
                 $gsc_p  = (int) str_replace( ',', '', (string) ( $comp_data['gsc']['total']['clicks']  ?? $comp_data['gsc']['total']['impressions']  ?? '0' ) );
 
-                $meo_c_cache = get_transient( "gcrev_meo_perf_{$user_id}_{$last30['start']}_{$last30['end']}" );
-                $meo_p_cache = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}" );
+                $meo_c_cache = get_transient( "gcrev_meo_perf_{$user_id}_last30" );
+                $meo_p_cache = get_transient( "gcrev_meo_perf_{$user_id}_last30_comp" );
                 $meo_c = ( is_array( $meo_c_cache ) ) ? (int) ( $meo_c_cache['total_impressions'] ?? 0 ) : 0;
                 $meo_p = ( is_array( $meo_p_cache ) ) ? (int) ( $meo_p_cache['total_impressions'] ?? 0 ) : 0;
 
@@ -2137,7 +2140,7 @@ class Gcrev_Insight_API {
                     'breakdown'  => $health['breakdown'],
                     'components' => $health['components'],
                 ];
-                set_transient( $kpi_cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
+                set_transient( $kpi_cache_key, $kpi_cached, self::DASHBOARD_CACHE_TTL );
             }
 
             $elapsed = round( microtime( true ) - $start_ts, 1 );
@@ -2302,13 +2305,13 @@ class Gcrev_Insight_API {
             }
 
             // --- (3c) MEOパフォーマンス（ダッシュボードKPI用）---
-            // last30 の current / comparison 期間の MEO perf を事前取得
+            // last30 の current / comparison 期間の MEO perf を事前取得（period ベース安定キー）
             try {
                 $meo_last30      = $this->dates->get_date_range('last30');
                 $meo_last30_comp = $this->dates->get_comparison_range($meo_last30['start'], $meo_last30['end']);
-                $this->fetch_meo_metrics_safe($user_id, $meo_last30['start'], $meo_last30['end']);
+                $this->fetch_meo_metrics_safe($user_id, $meo_last30['start'], $meo_last30['end'], 'last30');
                 usleep(self::PREFETCH_SLEEP_US);
-                $this->fetch_meo_metrics_safe($user_id, $meo_last30_comp['start'], $meo_last30_comp['end']);
+                $this->fetch_meo_metrics_safe($user_id, $meo_last30_comp['start'], $meo_last30_comp['end'], 'last30_comp');
                 $this->prefetch_log("[PREFETCH] MEO perf OK user_id={$user_id}");
             } catch (\Exception $e) {
                 $this->prefetch_log("[PREFETCH] MEO perf FAIL user_id={$user_id}: " . $e->getMessage());
@@ -2325,11 +2328,12 @@ class Gcrev_Insight_API {
                 if ( class_exists( 'Gcrev_Path_Filter' ) ) {
                     $filter_suffix_pf .= Gcrev_Path_Filter::cache_suffix( $user_id );
                 }
-                $comp_cache_key   = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
+                // 比較期間は period ベースの安定キー
+                $comp_cache_key   = "gcrev_dash_bydate_{$user_id}_last30_comp{$filter_suffix_pf}";
                 $comp_cached      = get_transient( $comp_cache_key );
 
                 if ( ! $comp_cached ) {
-                    $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id );
+                    $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id, 'last30_comp' );
                     $this->prefetch_log("[PREFETCH] comparison SUCCESS user_id={$user_id}");
                 } else {
                     $comp_data = $comp_cached;
@@ -2348,9 +2352,9 @@ class Gcrev_Insight_API {
                     $gsc_c   = (int) str_replace( ',', '', (string)( $kpi_cached['gsc']['total']['clicks'] ?? $kpi_cached['gsc']['total']['impressions'] ?? '0' ) );
                     $gsc_p   = (int) str_replace( ',', '', (string)( $comp_data['gsc']['total']['clicks'] ?? $comp_data['gsc']['total']['impressions'] ?? '0' ) );
 
-                    // MEO（transient から取得）
-                    $meo_cache_c = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_dates['start']}_{$last30_dates['end']}" );
-                    $meo_cache_p = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}" );
+                    // MEO（period ベース安定キー）
+                    $meo_cache_c = get_transient( "gcrev_meo_perf_{$user_id}_last30" );
+                    $meo_cache_p = get_transient( "gcrev_meo_perf_{$user_id}_last30_comp" );
                     $meo_c = ( $meo_cache_c !== false && is_array( $meo_cache_c ) ) ? (int)( $meo_cache_c['total_impressions'] ?? 0 ) : 0;
                     $meo_p = ( $meo_cache_p !== false && is_array( $meo_cache_p ) ) ? (int)( $meo_cache_p['total_impressions'] ?? 0 ) : 0;
 
@@ -2364,7 +2368,7 @@ class Gcrev_Insight_API {
                         'breakdown'  => $health['breakdown'],
                         'components' => $health['components'],
                     ];
-                    set_transient( $kpi_cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
+                    set_transient( $kpi_cache_key, $kpi_cached, self::DASHBOARD_CACHE_TTL );
                     $this->prefetch_log("[PREFETCH] score SUCCESS user_id={$user_id}, score={$health['score']}");
                 }
             } catch ( \Exception $e ) {
@@ -2579,11 +2583,11 @@ class Gcrev_Insight_API {
                 if ( class_exists( 'Gcrev_Path_Filter' ) ) {
                     $filter_suffix_pf .= Gcrev_Path_Filter::cache_suffix( $user_id );
                 }
-                $comp_cache_key   = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_pf}";
+                $comp_cache_key   = "gcrev_dash_bydate_{$user_id}_last30_comp{$filter_suffix_pf}";
                 $comp_cached      = get_transient( $comp_cache_key );
 
                 if ( ! $comp_cached ) {
-                    $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id );
+                    $comp_data = $this->get_dashboard_kpi_by_dates( $last30_comp['start'], $last30_comp['end'], $user_id, 'last30_comp' );
                     $this->prefetch_log_file( $log_file, "slot_{$slot} comparison OK user_id={$user_id}" );
                 } else {
                     $comp_data = $comp_cached;
@@ -2601,8 +2605,8 @@ class Gcrev_Insight_API {
                     $gsc_c   = (int) str_replace( ',', '', (string)( $kpi_cached['gsc']['total']['clicks'] ?? $kpi_cached['gsc']['total']['impressions'] ?? '0' ) );
                     $gsc_p   = (int) str_replace( ',', '', (string)( $comp_data['gsc']['total']['clicks'] ?? $comp_data['gsc']['total']['impressions'] ?? '0' ) );
 
-                    $meo_cache_c = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_dates['start']}_{$last30_dates['end']}" );
-                    $meo_cache_p = get_transient( "gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}" );
+                    $meo_cache_c = get_transient( "gcrev_meo_perf_{$user_id}_last30" );
+                    $meo_cache_p = get_transient( "gcrev_meo_perf_{$user_id}_last30_comp" );
                     $meo_c = ( $meo_cache_c !== false && is_array( $meo_cache_c ) ) ? (int)( $meo_cache_c['total_impressions'] ?? 0 ) : 0;
                     $meo_p = ( $meo_cache_p !== false && is_array( $meo_cache_p ) ) ? (int)( $meo_cache_p['total_impressions'] ?? 0 ) : 0;
 
@@ -2616,7 +2620,7 @@ class Gcrev_Insight_API {
                         'breakdown'  => $health['breakdown'],
                         'components' => $health['components'],
                     ];
-                    set_transient( $kpi_cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
+                    set_transient( $kpi_cache_key, $kpi_cached, self::DASHBOARD_CACHE_TTL );
                     $this->prefetch_log_file( $log_file, "slot_{$slot} score OK user_id={$user_id} score={$health['score']}" );
                 }
             } catch ( \Exception $e ) {
@@ -2673,10 +2677,9 @@ class Gcrev_Insight_API {
 
         $dates      = $this->dates->calculate_period_dates($period);
         $comparison  = $this->dates->calculate_comparison_dates($period);
-        $date_hash   = md5("{$dates['start']}_{$dates['end']}");
 
-        // 月固定期間は35日、日次期間は24h
-        $cache_ttl = Gcrev_Date_Helper::is_monthly_fixed_period( $period ) ? 3024000 : 86400;
+        // 月固定期間は35日、日次期間は 7 日（cron が毎日更新する前提の余裕枠）
+        $cache_ttl = Gcrev_Date_Helper::is_monthly_fixed_period( $period ) ? 3024000 : self::DASHBOARD_CACHE_TTL;
 
         // フィルタサフィックス（REST エンドポイントと同じキー形式にする）
         $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
@@ -2688,9 +2691,8 @@ class Gcrev_Insight_API {
         elseif ($period === 'prev-prev-month') $source_period = 'twoMonthsAgo';
 
         // ----- 流入元 -----
-        $source_dates = $this->dates->get_date_range($source_period);
-        $source_hash  = md5("{$source_dates['start']}_{$source_dates['end']}");
-        $key_source   = "gcrev_source_{$user_id}_{$source_period}_{$source_hash}{$filter_sfx}";
+        // period だけでキー一意化（last30 のように日付がスライドする期間でも 0 時跨ぎで無効化されない）
+        $key_source   = "gcrev_source_{$user_id}_{$source_period}{$filter_sfx}";
         if (get_transient($key_source) === false) {
             try {
                 // get_source_analysis は内部でキャッシュ保存するので呼ぶだけでOK
@@ -2703,7 +2705,7 @@ class Gcrev_Insight_API {
         }
 
         // ----- 地域 -----
-        $key_region = "gcrev_region_{$user_id}_{$period}_{$date_hash}{$filter_sfx}";
+        $key_region = "gcrev_region_{$user_id}_{$period}{$filter_sfx}";
         if (get_transient($key_region) === false) {
             try {
                 $regions       = $this->ga4->fetch_region_details($ga4_id, $dates['start'], $dates['end']);
@@ -2723,7 +2725,7 @@ class Gcrev_Insight_API {
         }
 
         // ----- ページ分析 -----
-        $key_page = "gcrev_page_{$user_id}_{$period}_{$date_hash}{$filter_sfx}";
+        $key_page = "gcrev_page_{$user_id}_{$period}{$filter_sfx}";
         if (get_transient($key_page) === false) {
             try {
                 $pages      = $this->ga4->fetch_page_details($ga4_id, $dates['start'], $dates['end'], $gsc_url);
@@ -2747,7 +2749,7 @@ class Gcrev_Insight_API {
         }
 
         // ----- キーワード -----
-        $key_kw = "gcrev_keywords_{$user_id}_{$period}_{$date_hash}{$filter_sfx}";
+        $key_kw = "gcrev_keywords_{$user_id}_{$period}{$filter_sfx}";
         if (get_transient($key_kw) === false) {
             try {
                 $current_gsc = $this->gsc->fetch_gsc_data($gsc_url, $dates['start'], $dates['end']);
@@ -5165,7 +5167,7 @@ PROMPT;
      * @param int    $user_id    ユーザーID
      * @return array KPIデータ
      */
-    public function get_dashboard_kpi_by_dates( string $start_date, string $end_date, int $user_id ): array {
+    public function get_dashboard_kpi_by_dates( string $start_date, string $end_date, int $user_id, ?string $cache_scope = null ): array {
         // --- Transient キャッシュ（12+ API呼び出しを回避）---
         $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
         $filter_suffix   = $exclude_foreign ? '_filtered' : '';
@@ -5173,9 +5175,16 @@ PROMPT;
         if ( class_exists( 'Gcrev_Path_Filter' ) ) {
             $filter_suffix .= Gcrev_Path_Filter::cache_suffix( $user_id );
         }
-        // v2: ga4_phone_tap フィールド追加に伴いキャッシュキーを更新
-        $cache_key       = "gcrev_dash_bydate_v2_{$user_id}_{$start_date}_{$end_date}{$filter_suffix}";
-        $cached          = get_transient( $cache_key );
+        if ( $cache_scope !== null && $cache_scope !== '' ) {
+            // period ベースの安定キー。日付が毎日スライドしても同じキーを使う
+            // → cron が書いたキャッシュを翌日 cron までヒットできる
+            $cache_key = "gcrev_dash_bydate_{$user_id}_{$cache_scope}{$filter_suffix}";
+        } else {
+            // 任意日付（レポート過去閲覧など）— 日付ベースキーで区別
+            // v2: ga4_phone_tap フィールド追加に伴いキャッシュキーを更新
+            $cache_key = "gcrev_dash_bydate_v2_{$user_id}_{$start_date}_{$end_date}{$filter_suffix}";
+        }
+        $cached = get_transient( $cache_key );
         if ( $cached !== false && is_array( $cached ) ) {
             return $cached;
         }
@@ -5293,8 +5302,8 @@ PROMPT;
             $result['trends']['conversions'] = $cv_trend;
         }
 
-        // キャッシュ保存（24時間）
-        set_transient( $cache_key, $result, 24 * HOUR_IN_SECONDS );
+        // キャッシュ保存（7日。cron が毎日更新する前提の余裕枠）
+        set_transient( $cache_key, $result, self::DASHBOARD_CACHE_TTL );
 
         return $result;
 
@@ -6088,6 +6097,9 @@ PROMPT;
         // KPI transient にスコアを保存（次回リロード時にPHP側で即復元）
         $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
         $filter_suffix   = $exclude_foreign ? '_jp' : '';
+        if ( class_exists( 'Gcrev_Path_Filter' ) && Gcrev_Path_Filter::has_filters( $user_id ) ) {
+            $filter_suffix .= '_ex';
+        }
         $cache_key       = "gcrev_dash_{$user_id}_last30{$filter_suffix}";
         $kpi_cached      = get_transient( $cache_key );
         if ( $kpi_cached !== false && is_array( $kpi_cached ) ) {
@@ -6097,7 +6109,7 @@ PROMPT;
                 'breakdown'  => $health['breakdown'],
                 'components' => $health['components'],
             ];
-            set_transient( $cache_key, $kpi_cached, 24 * HOUR_IN_SECONDS );
+            set_transient( $cache_key, $kpi_cached, self::DASHBOARD_CACHE_TTL );
         }
 
         return new WP_REST_Response([
@@ -6247,10 +6259,10 @@ PROMPT;
             $dates = $this->dates->calculate_period_dates($period);
             $comparison = $this->dates->calculate_comparison_dates($period);
 
-            // キャッシュ
+            // キャッシュ（period だけでキー一意化。日付がスライドしてもキーは変わらない）
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
             if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
-            $cache_key = "gcrev_region_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
+            $cache_key = "gcrev_region_{$user_id}_{$period}{$filter_sfx}";
 
             file_put_contents('/tmp/gcrev_dash_debug.log',
                 date('Y-m-d H:i:s') . " [REGION] period={$period}, dates={$dates['start']}~{$dates['end']}, comp={$comparison['start']}~{$comparison['end']}, key={$cache_key}\n",
@@ -6280,11 +6292,11 @@ PROMPT;
                 'regions_detail'  => $regions_with_change,
             ];
 
-            // キャッシュ保存（24時間）
-            set_transient($cache_key, $result, 86400);
+            // キャッシュ保存（7日。cron が毎日更新する前提の余裕枠）
+            set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
 
             return new \WP_REST_Response($result, 200);
-            
+
         } catch (\Exception $e) {
             error_log('地域別分析エラー: ' . $e->getMessage());
             return new \WP_REST_Response([
@@ -6343,8 +6355,8 @@ PROMPT;
                 'values'  => $trend['values'],
             ];
 
-            // キャッシュ保存（24時間）
-            set_transient($cache_key, $result, 86400);
+            // キャッシュ保存（7日。cron が毎日更新する前提の余裕枠）
+            set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
 
             return new \WP_REST_Response($result, 200);
 
@@ -6384,10 +6396,10 @@ PROMPT;
             $dates = $this->dates->calculate_period_dates($period);
             $comparison = $this->dates->calculate_comparison_dates($period);
 
-            // キャッシュ
+            // キャッシュ（period だけでキー一意化。日付がスライドしてもキーは変わらない）
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
             if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
-            $cache_key = "gcrev_page_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
+            $cache_key = "gcrev_page_{$user_id}_{$period}{$filter_sfx}";
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
                 error_log("[GCREV] Page analysis cache HIT: {$cache_key}");
@@ -6419,8 +6431,8 @@ PROMPT;
                 ],
             ];
 
-            // キャッシュ保存（24時間）
-            set_transient($cache_key, $result, 86400);
+            // キャッシュ保存（7日。cron が毎日更新する前提の余裕枠）
+            set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
 
             return new \WP_REST_Response($result, 200);
 
@@ -6459,10 +6471,10 @@ PROMPT;
             $dates = $this->dates->calculate_period_dates($period);
             $comparison = $this->dates->calculate_comparison_dates($period);
 
-            // キャッシュ（フィルタの有無でキー差別化）
+            // キャッシュ（period だけでキー一意化。日付がスライドしてもキーは変わらない）
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
             if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
-            $cache_key = "gcrev_keywords_{$user_id}_{$period}_" . md5("{$dates['start']}_{$dates['end']}") . $filter_sfx;
+            $cache_key = "gcrev_keywords_{$user_id}_{$period}{$filter_sfx}";
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
                 error_log("[GCREV] Keyword analysis cache HIT: {$cache_key}");
@@ -6498,8 +6510,8 @@ PROMPT;
                 ],
             ];
 
-            // キャッシュ保存（24時間）
-            set_transient($cache_key, $result, 86400);
+            // キャッシュ保存（7日。cron が毎日更新する前提の余裕枠）
+            set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
 
             return new \WP_REST_Response($result, 200);
 
@@ -7066,9 +7078,8 @@ PROMPT;
             $dates      = $this->dates->calculate_period_dates($period);
             $comparison = $this->dates->calculate_comparison_dates($period);
 
-            // キャッシュ（既存パターンと同一）
-            $date_hash = md5("{$dates['start']}_{$dates['end']}");
-            $cache_key = "gcrev_meo_{$user_id}_{$period}_{$date_hash}";
+            // キャッシュ（period だけでキー一意化。日付がスライドしてもキーは変わらない）
+            $cache_key = "gcrev_meo_{$user_id}_{$period}";
             $cached    = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
                 return new \WP_REST_Response($cached, 200);
@@ -7103,7 +7114,7 @@ PROMPT;
                 'comparison_period'   => ['start' => $comparison['start'], 'end' => $comparison['end']],
             ];
 
-            set_transient($cache_key, $result, 86400);
+            set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
             error_log("[GCREV][MEO] Data fetched: user_id={$user_id}, period={$period}");
             return new \WP_REST_Response($result, 200);
 
@@ -7159,8 +7170,8 @@ PROMPT;
                 try {
                     $dates      = $this->dates->calculate_period_dates( $period );
                     $comparison = $this->dates->calculate_comparison_dates( $period );
-                    $date_hash  = md5( "{$dates['start']}_{$dates['end']}" );
-                    $cache_key  = "gcrev_meo_{$uid}_{$period}_{$date_hash}";
+                    // period だけでキー一意化（REST endpoint と揃える）
+                    $cache_key  = "gcrev_meo_{$uid}_{$period}";
 
                     // 既にキャッシュが残っていればスキップ（まだ有効期限内）
                     $existing = get_transient( $cache_key );
@@ -7186,7 +7197,7 @@ PROMPT;
                         'comparison_period'   => [ 'start' => $comparison['start'], 'end' => $comparison['end'] ],
                     ];
 
-                    set_transient( $cache_key, $result, 86400 );
+                    set_transient( $cache_key, $result, self::DASHBOARD_CACHE_TTL );
                     $fetched++;
 
                 } catch ( \Throwable $e ) {
@@ -8522,10 +8533,10 @@ PROMPT;
         
         error_log("[GCREV] get_source_analysis: period={$period}, range={$start_date} to {$end_date}");
         
-        // キャッシュキー
+        // キャッシュキー（period だけでキー一意化。日付がスライドしてもキーは変わらない）
         $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
         if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
-        $cache_key = "gcrev_source_{$user_id}_{$period}_" . md5("{$start_date}_{$end_date}") . $filter_sfx;
+        $cache_key = "gcrev_source_{$user_id}_{$period}{$filter_sfx}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             error_log("[GCREV] Cache HIT: {$cache_key}");
@@ -8569,12 +8580,12 @@ PROMPT;
             // ラベル形式: YYYY/MM/DD 〜 YYYY/MM/DD
             $result['current_range_label'] = str_replace('-', '/', $start_date) . ' 〜 ' . str_replace('-', '/', $end_date);
             $result['compare_range_label'] = str_replace('-', '/', $prev_start_date) . ' 〜 ' . str_replace('-', '/', $prev_end_date);
-            
-            // キャッシュ保存（24時間）
-            set_transient($cache_key, $result, 86400);
-            
+
+            // キャッシュ保存（7日。cron が毎日更新する前提の余裕枠）
+            set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
+
             return $result;
-            
+
         } catch (\Exception $e) {
             error_log("[GCREV] get_source_analysis ERROR: " . $e->getMessage());
             throw $e;
@@ -9976,14 +9987,21 @@ PROMPT;
     /**
      * MEOメトリクスを安全に取得（GBP接続済みユーザーのみ）
      *
-     * @param int    $user_id
-     * @param string $start_date YYYY-MM-DD
-     * @param string $end_date   YYYY-MM-DD
+     * @param int         $user_id
+     * @param string      $start_date   YYYY-MM-DD
+     * @param string      $end_date     YYYY-MM-DD
+     * @param string|null $cache_scope  キャッシュスコープ名（例: 'last30', 'last30_comp'）。
+     *                                  指定時は period ベースの安定キーを使う。日付スライド
+     *                                  してもキー不変となり、cron が書いたキャッシュを翌日
+     *                                  cron までヒットできる。null の場合は日付ベースキー。
      * @return array gbp_empty_metrics() 互換
      */
-    private function fetch_meo_metrics_safe(int $user_id, string $start_date, string $end_date): array {
-        // Transientキャッシュ（6時間）
-        $cache_key = "gcrev_meo_perf_{$user_id}_{$start_date}_{$end_date}";
+    private function fetch_meo_metrics_safe(int $user_id, string $start_date, string $end_date, ?string $cache_scope = null): array {
+        if ( $cache_scope !== null && $cache_scope !== '' ) {
+            $cache_key = "gcrev_meo_perf_{$user_id}_{$cache_scope}";
+        } else {
+            $cache_key = "gcrev_meo_perf_{$user_id}_{$start_date}_{$end_date}";
+        }
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             return $cached;
@@ -9999,7 +10017,7 @@ PROMPT;
                 return $this->gbp_empty_metrics();
             }
             $metrics = $this->gbp_fetch_performance_metrics($access_token, $location_id, $start_date, $end_date);
-            set_transient($cache_key, $metrics, 36 * HOUR_IN_SECONDS);
+            set_transient($cache_key, $metrics, self::DASHBOARD_CACHE_TTL);
             return $metrics;
         } catch (\Exception $e) {
             error_log("[GCREV] fetch_meo_metrics_safe: Error user_id={$user_id}: " . $e->getMessage());
@@ -12437,10 +12455,10 @@ PROMPT;
             $comp_start = $comparison['start'];
             $comp_end   = $comparison['end'];
 
-            // キャッシュ
+            // キャッシュ（period だけでキー一意化。日付がスライドしてもキーは変わらない）
             $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
             if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
-            $cache_key = "gcrev_cv_analysis_{$user_id}_{$period}_" . md5("{$start}_{$end}") . $filter_sfx;
+            $cache_key = "gcrev_cv_analysis_{$user_id}_{$period}{$filter_sfx}";
             $cached = get_transient($cache_key);
             if ($cached !== false && is_array($cached)) {
                 // キャッシュでもeffective CVだけ再計算（入力変更即時反映のため）
@@ -12566,8 +12584,8 @@ PROMPT;
                 ],
             ];
 
-            // キャッシュ保存（12時間 - effective CVは動的再計算するため短めに）
-            set_transient($cache_key, $result, 43200);
+            // キャッシュ保存（7日。読み出し時に effective_cv は動的再計算するので、GA4 由来の重い部分だけキャッシュ）
+            set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
 
             return new WP_REST_Response($result, 200);
 
@@ -13232,8 +13250,8 @@ PROMPT;
             'values'  => $values,
         ];
 
-        // TTL: 24時間（cronが毎日更新）
-        set_transient($cache_key, $result, DAY_IN_SECONDS);
+        // TTL: 7日（cron が毎日更新する前提の余裕枠）
+        set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
 
         return $result;
     }
@@ -13248,11 +13266,11 @@ PROMPT;
      */
     public function get_daily_metric_trend(int $user_id, string $metric, int $days = 30): array {
 
-        $today_str = date('Y-m-d');
         $filter_sfx = (isset($this->ga4) && $this->ga4->has_country_filter()) ? '_jp' : '';
         if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
-        // v2: CV を effective CV（gcrev_cv_routes / レビュー結果を反映）+ MEO電話タップに変更
-        $cache_key = "gcrev_trend_daily_v2_{$user_id}_{$metric}_{$today_str}{$filter_sfx}";
+        // v2: CV を effective CV + MEO電話タップに変更
+        // キーに日付を含めない（cron が毎日更新するため、日付スライドでキーが変わる必要はない）
+        $cache_key = "gcrev_trend_daily_v2_{$user_id}_{$metric}{$filter_sfx}";
         $cached = get_transient($cache_key);
         if ($cached !== false && is_array($cached)) {
             return $cached;
@@ -13375,8 +13393,8 @@ PROMPT;
             'view'    => 'daily',
         ];
 
-        // TTL: 36時間（日次Cronが03:10に更新するため、次回Cronまで持つ長さ）
-        set_transient($cache_key, $result, 36 * HOUR_IN_SECONDS);
+        // TTL: 7日（cron が毎日更新する前提の余裕枠）
+        set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
 
         return $result;
     }
@@ -16929,7 +16947,12 @@ PROMPT;
             // AIプロンプト構築 → Gemini API 呼び出し（口コミ用に高 temperature）
             $ai_keywords     = (isset($survey) && property_exists($survey, 'ai_keywords') && !empty($survey->ai_keywords)) ? (string) $survey->ai_keywords : '';
             $ai_extra_prompt = (isset($survey) && property_exists($survey, 'ai_extra_prompt') && !empty($survey->ai_extra_prompt)) ? (string) $survey->ai_extra_prompt : '';
-            $prompt       = $this->build_review_prompt($answer_text, $business_name, $ai_keywords, $ai_extra_prompt);
+            $ai_reference_reviews = [];
+            if (isset($survey) && property_exists($survey, 'ai_reference_reviews') && !empty($survey->ai_reference_reviews)) {
+                $decoded_refs = json_decode((string) $survey->ai_reference_reviews, true);
+                if (is_array($decoded_refs)) { $ai_reference_reviews = $decoded_refs; }
+            }
+            $prompt       = $this->build_review_prompt($answer_text, $business_name, $ai_keywords, $ai_extra_prompt, $ai_reference_reviews);
             file_put_contents('/tmp/gcrev_review_debug.log',
                 date('Y-m-d H:i:s') . " calling gemini API, prompt_len=" . strlen($prompt) . ", is_regenerate=" . ($is_regenerate ? 'yes' : 'no') . "\n",
                 FILE_APPEND
@@ -17130,7 +17153,7 @@ PROMPT;
     /**
      * 口コミ生成用AIプロンプトを構築
      */
-    private function build_review_prompt(string $answer_text, string $business_name = '', string $ai_keywords = '', string $ai_extra_prompt = ''): string {
+    private function build_review_prompt(string $answer_text, string $business_name = '', string $ai_keywords = '', string $ai_extra_prompt = '', array $ai_reference_reviews = []): string {
         $business_part = $business_name
             ? "対象のサービス・店舗名: {$business_name}\n"
             : '';
@@ -17148,6 +17171,27 @@ PROMPT;
         $extra_part = '';
         if (!empty($ai_extra_prompt)) {
             $extra_part = "\n### 追加指示\n{$ai_extra_prompt}\n";
+        }
+
+        // 参考口コミ（few-shot サンプル）
+        $ref_part = '';
+        if (!empty($ai_reference_reviews) && is_array($ai_reference_reviews)) {
+            $lines = [];
+            $idx = 0;
+            foreach ($ai_reference_reviews as $r) {
+                if (!is_string($r)) continue;
+                $r = trim($r);
+                if ($r === '') continue;
+                $idx++;
+                $lines[] = sprintf('【例%d】%s', $idx, $r);
+                if ($idx >= 5) break;
+            }
+            if (!empty($lines)) {
+                $ref_part = "\n### 参考口コミサンプル（文体・雰囲気の参考用）\n"
+                    . "下記は過去に集まった口コミの例です。**文体・語感・文の区切り方・温度感のテイスト参考**としてのみ使ってください。\n"
+                    . "固有名詞（人名・店名・地名等）・具体的な数値・個別のエピソードを引用してはいけません。今回のアンケート回答内容のみに基づき、テイストだけ参考にした新しい文章を書いてください。\n\n"
+                    . implode("\n\n", $lines) . "\n";
+            }
         }
 
         return <<<PROMPT
@@ -17237,7 +17281,7 @@ PROMPT;
 * 改行はせず、自然な1ブロックの文章にする
 
 ---
-{$keywords_part}{$extra_part}
+{$keywords_part}{$extra_part}{$ref_part}
 ## 出力形式
 
 以下のJSON形式のみを出力してください。説明文・マークダウン・コードフェンスは不要です。
@@ -17395,19 +17439,33 @@ PROMPT;
             ];
         }
 
+        // 参考口コミサンプル（JSON 配列として保存）
+        $ref_reviews = [];
+        if (!empty($survey->ai_reference_reviews ?? '')) {
+            $decoded = json_decode((string) $survey->ai_reference_reviews, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $r) {
+                    if (is_string($r) && trim($r) !== '') {
+                        $ref_reviews[] = $r;
+                    }
+                }
+            }
+        }
+
         $form_url = home_url('/review-form/');
         return new \WP_REST_Response([
             'survey' => [
-                'id'                => (int) $survey->id,
-                'title'             => $survey->title,
-                'description'       => $survey->description,
-                'google_review_url' => $survey->google_review_url,
-                'status'            => $survey->status,
-                'token'             => $survey->token,
-                'ai_keywords'       => $survey->ai_keywords ?? '',
-                'ai_extra_prompt'   => $survey->ai_extra_prompt ?? '',
-                'created_at'        => $survey->created_at,
-                'updated_at'        => $survey->updated_at,
+                'id'                    => (int) $survey->id,
+                'title'                 => $survey->title,
+                'description'           => $survey->description,
+                'google_review_url'     => $survey->google_review_url,
+                'status'                => $survey->status,
+                'token'                 => $survey->token,
+                'ai_keywords'           => $survey->ai_keywords ?? '',
+                'ai_extra_prompt'       => $survey->ai_extra_prompt ?? '',
+                'ai_reference_reviews'  => $ref_reviews,
+                'created_at'            => $survey->created_at,
+                'updated_at'            => $survey->updated_at,
             ],
             'questions'  => $q_items,
             'public_url' => $survey->status === 'published' ? $form_url . '?t=' . $survey->token : '',
@@ -17429,6 +17487,27 @@ PROMPT;
         $status            = sanitize_text_field($params['status'] ?? 'draft');
         $ai_keywords       = isset($params['ai_keywords']) ? sanitize_textarea_field($params['ai_keywords']) : null;
         $ai_extra_prompt   = isset($params['ai_extra_prompt']) ? sanitize_textarea_field($params['ai_extra_prompt']) : null;
+
+        // 参考口コミサンプル: 最大5件、各600字まで
+        $ai_reference_reviews_json = null;
+        if (array_key_exists('ai_reference_reviews', $params)) {
+            $raw = $params['ai_reference_reviews'];
+            $clean = [];
+            if (is_array($raw)) {
+                foreach ($raw as $item) {
+                    if (!is_string($item)) continue;
+                    $item = sanitize_textarea_field($item);
+                    $item = trim($item);
+                    if ($item === '') continue;
+                    if (mb_strlen($item) > 600) {
+                        $item = mb_substr($item, 0, 600);
+                    }
+                    $clean[] = $item;
+                    if (count($clean) >= 5) break;
+                }
+            }
+            $ai_reference_reviews_json = wp_json_encode($clean, JSON_UNESCAPED_UNICODE);
+        }
 
         if (empty($title)) {
             return new \WP_REST_Response(['success' => false, 'message' => 'タイトルは必須です。'], 400);
@@ -17461,6 +17540,10 @@ PROMPT;
                 $update_data['ai_extra_prompt'] = $ai_extra_prompt;
                 $update_fmt[] = '%s';
             }
+            if ($ai_reference_reviews_json !== null) {
+                $update_data['ai_reference_reviews'] = $ai_reference_reviews_json;
+                $update_fmt[] = '%s';
+            }
             $wpdb->update($t_surveys, $update_data, ['id' => $id], $update_fmt, ['%d']);
         } else {
             // 新規作成 — 上限チェック
@@ -17478,17 +17561,18 @@ PROMPT;
 
             $token = wp_generate_password(32, false);
             $wpdb->insert($t_surveys, [
-                'user_id'           => $user_id,
-                'title'             => $title,
-                'description'       => $description,
-                'google_review_url' => $google_review_url,
-                'token'             => $token,
-                'status'            => $status,
-                'ai_keywords'       => $ai_keywords ?? '',
-                'ai_extra_prompt'   => $ai_extra_prompt ?? '',
-                'created_at'        => $now,
-                'updated_at'        => $now,
-            ], ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']);
+                'user_id'              => $user_id,
+                'title'                => $title,
+                'description'          => $description,
+                'google_review_url'    => $google_review_url,
+                'token'                => $token,
+                'status'               => $status,
+                'ai_keywords'          => $ai_keywords ?? '',
+                'ai_extra_prompt'      => $ai_extra_prompt ?? '',
+                'ai_reference_reviews' => $ai_reference_reviews_json ?? '',
+                'created_at'           => $now,
+                'updated_at'           => $now,
+            ], ['%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']);
             $id = (int) $wpdb->insert_id;
         }
 
@@ -18271,7 +18355,21 @@ PROMPT;
             ? gcrev_get_business_name((int) $resp->user_id)
             : (get_user_meta((int) $resp->user_id, 'gcrev_business_name', true) ?: '');
 
-        $prompt = $this->build_review_prompt($answer_text, $business_name);
+        // アンケートに紐づく AI 設定（キーワード・追加プロンプト・参考口コミサンプル）も反映
+        $t_surveys_for_ai = $wpdb->prefix . 'gcrev_surveys';
+        $survey_ai = $wpdb->get_row($wpdb->prepare(
+            "SELECT ai_keywords, ai_extra_prompt, ai_reference_reviews FROM {$t_surveys_for_ai} WHERE id = %d",
+            (int) $resp->survey_id
+        ));
+        $ai_keywords          = $survey_ai && !empty($survey_ai->ai_keywords)     ? (string) $survey_ai->ai_keywords     : '';
+        $ai_extra_prompt      = $survey_ai && !empty($survey_ai->ai_extra_prompt) ? (string) $survey_ai->ai_extra_prompt : '';
+        $ai_reference_reviews = [];
+        if ($survey_ai && !empty($survey_ai->ai_reference_reviews)) {
+            $decoded_refs = json_decode((string) $survey_ai->ai_reference_reviews, true);
+            if (is_array($decoded_refs)) { $ai_reference_reviews = $decoded_refs; }
+        }
+
+        $prompt = $this->build_review_prompt($answer_text, $business_name, $ai_keywords, $ai_extra_prompt, $ai_reference_reviews);
 
         // トーン・強調指定がある場合、プロンプトに追加
         if ($tone || $emphasis) {

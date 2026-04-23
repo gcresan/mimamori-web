@@ -497,7 +497,8 @@ if ($infographic && is_array($infographic)) {
             if ( class_exists( 'Gcrev_Path_Filter' ) ) {
                 $filter_suffix_prev .= Gcrev_Path_Filter::cache_suffix( $user_id );
             }
-            $prev_cache_key = "gcrev_dash_bydate_v2_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}{$filter_suffix_prev}";
+            // period ベース安定キー（get_dashboard_kpi_by_dates の cache_scope='last30_comp' と揃える）
+            $prev_cache_key = "gcrev_dash_bydate_{$user_id}_last30_comp{$filter_suffix_prev}";
             $prev_cached    = get_transient( $prev_cache_key );
             if ( $prev_cached !== false && is_array( $prev_cached ) ) {
                 $kpi_prev = $prev_cached;
@@ -506,9 +507,9 @@ if ($infographic && is_array($infographic)) {
         }
 
         // --- MEO直近30日 ---
-        // キャッシュのみ確認。キャッシュミス時はJS非同期に委任（同期GBP API呼び出しを排除してページ表示を高速化）
-        $meo_cache_curr = get_transient("gcrev_meo_perf_{$user_id}_{$last30['start']}_{$last30['end']}");
-        $meo_cache_prev = get_transient("gcrev_meo_perf_{$user_id}_{$last30_comp['start']}_{$last30_comp['end']}");
+        // キャッシュのみ確認（period ベース安定キー。fetch_meo_metrics_safe の cache_scope と揃える）
+        $meo_cache_curr = get_transient("gcrev_meo_perf_{$user_id}_last30");
+        $meo_cache_prev = get_transient("gcrev_meo_perf_{$user_id}_last30_comp");
 
         $meo_curr = (is_array($meo_cache_curr) && $meo_cache_curr !== false)
             ? (int)($meo_cache_curr['total_impressions'] ?? 0) : null;
@@ -619,7 +620,7 @@ if ($infographic && is_array($infographic)) {
                 set_transient(
                     "gcrev_dash_{$user_id}_last30{$filter_suffix_sc}",
                     $kpi_curr,
-                    24 * HOUR_IN_SECONDS
+                    7 * DAY_IN_SECONDS
                 );
             }
         }
