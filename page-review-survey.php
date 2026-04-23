@@ -984,26 +984,44 @@ get_header();
             ai_reference_reviews: getReferenceReviews(),
         };
 
-        apiPost('save', payload).then(function(res) {
+        // デバッグ: 送信する payload のサイズを記録
+        try {
+            var payloadStr = JSON.stringify(payload);
+            console.log('[survey-save] payload size=' + payloadStr.length + ' bytes, refs=' + (payload.ai_reference_reviews || []).length);
+        } catch (e) { /* ignore */ }
+
+        var resetBtn = function() {
             btn.disabled = false;
             btn.textContent = '保存する';
-            if (res.success) {
+        };
+
+        // タイムアウト（60秒）: サーバーが応答しない場合もトーストを出す
+        var timeoutId = setTimeout(function() {
+            console.warn('[survey-save] timeout after 60s');
+            resetBtn();
+            toast('保存に時間がかかりすぎています。ネットワークまたはサーバーを確認してください。', 'error');
+        }, 60000);
+
+        apiPost('save', payload).then(function(res) {
+            clearTimeout(timeoutId);
+            resetBtn();
+            console.log('[survey-save] response', res);
+            if (res && res.success) {
                 toast('保存しました');
                 var newId = res.survey_id;
                 document.getElementById('sv-edit-id').value = newId;
                 currentSurveyId = newId;
-                // Show questions card if newly created
                 document.getElementById('sv-questions-card').style.display = 'block';
                 document.getElementById('sv-danger-card').style.display = 'block';
-                // Reload to get token/url
                 loadSurveyDetail(newId);
             } else {
-                toast(res.message || '保存に失敗しました', 'error');
+                toast((res && res.message) ? res.message : '保存に失敗しました', 'error');
             }
-        }).catch(function() {
-            btn.disabled = false;
-            btn.textContent = '保存する';
-            toast('保存に失敗しました', 'error');
+        }).catch(function(e) {
+            clearTimeout(timeoutId);
+            resetBtn();
+            console.error('[survey-save] error', e);
+            toast('保存に失敗しました: ' + (e && e.message ? e.message : '通信エラー'), 'error');
         });
     });
 
@@ -1391,7 +1409,11 @@ get_header();
         if (refCountEl) {
             refCountEl.textContent = '登録 ' + slots.length + ' / ' + REF_MAX + ' 件　参考 ' + refActiveCount() + ' 件';
         }
-        if (btnAddRef) btnAddRef.disabled = (slots.length >= REF_MAX);
+        if (btnAddRef) {
+            var isMax = (slots.length >= REF_MAX);
+            btnAddRef.disabled = isMax;
+            btnAddRef.style.display = isMax ? 'none' : '';
+        }
     }
 
     function createRefSlot(value, active) {
