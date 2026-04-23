@@ -17309,15 +17309,16 @@ PROMPT;
         $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
         $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
 
-        $where = $is_admin ? '1=1' : $wpdb->prepare('s.user_id = %d', $user_id);
-
-        $surveys = $wpdb->get_results(
+        // アンケート一覧は「自分が作成したもののみ」を表示する。
+        // 管理者権限を持っていても他ユーザーが作成したアンケートは本画面に混ざらないようにする。
+        $surveys = $wpdb->get_results( $wpdb->prepare(
             "SELECT s.*,
                     (SELECT COUNT(*) FROM {$t_questions} q WHERE q.survey_id = s.id AND q.is_active = 1) AS question_count
              FROM {$t_surveys} s
-             WHERE {$where}
-             ORDER BY s.updated_at DESC"
-        );
+             WHERE s.user_id = %d
+             ORDER BY s.updated_at DESC",
+            $user_id
+        ) );
 
         $form_url = home_url('/review-form/');
         $items = [];
@@ -17334,11 +17335,10 @@ PROMPT;
             ];
         }
 
-        $count = $is_admin
-            ? count($items)
-            : (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$t_surveys} WHERE user_id = %d", $user_id
-              ));
+        $count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$t_surveys} WHERE user_id = %d",
+            $user_id
+        ) );
 
         return new \WP_REST_Response([
             'surveys'  => $items,
