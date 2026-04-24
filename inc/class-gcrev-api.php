@@ -16962,10 +16962,12 @@ PROMPT;
                 $decoded_refs = json_decode((string) $survey->ai_reference_reviews, true);
                 if (is_array($decoded_refs)) { $ai_reference_reviews = $decoded_refs; }
             }
-            // クライアント情報（業種・サービス内容・ターゲット・強み）を取得
-            $client_info = function_exists( 'gcrev_get_client_settings' )
-                ? gcrev_get_client_settings( (int) $survey_user_id )
-                : [];
+            // 業種・サービス内容・ターゲット・強み・口コミ重点を解決
+            // アンケートに保存された ai_generation_context（モーダルで入力した値）を優先、
+            // 空欄フィールドのみクライアント設定でフォールバック補完する
+            $_resolve_survey_id = (int) ( $survey_id ?? 0 );
+            $_resolve_user_id   = (int) ( $survey_user_id ?? $user_id ?? 0 );
+            $client_info = $this->resolve_review_generation_context( $_resolve_survey_id, $_resolve_user_id );
             $prompt       = $this->build_review_prompt($answer_text, $business_name, $ai_keywords, $ai_extra_prompt, $ai_reference_reviews, $client_info);
             file_put_contents('/tmp/gcrev_review_debug.log',
                 date('Y-m-d H:i:s') . " calling gemini API, prompt_len=" . strlen($prompt) . ", is_regenerate=" . ($is_regenerate ? 'yes' : 'no') . "\n",
@@ -17394,6 +17396,82 @@ PROMPT;
     ];
 
     /**
+     * 口コミ生成に使う「業種 / サービス内容 / ターゲット / 強み / 口コミで引き出したい内容」を解決する。
+     *
+     * 優先順位:
+     *   1. アンケートに保存された ai_generation_context（モーダルで入力した値）
+     *      → 一度でも生成したアンケートは、以降クライアント設定変更の影響を受けず固定される
+     *   2. クライアント設定（gcrev_get_client_settings）
+     *
+     * 戻り値キーは build_review_prompt() が期待する $client_info と互換の形で返す:
+     *   - industry
+     *   - service_description
+     *   - strengths
+     *   - persona_one_liner (= target)
+     *   - review_emphasis
+     *
+     * @param int $survey_id
+     * @param int $user_id  アンケート所有者の user_id（client_info のフォールバック取得に使用）
+     * @return array
+     */
+    private function resolve_review_generation_context( int $survey_id, int $user_id ): array {
+        global $wpdb;
+
+        // 1) アンケートに保存された ai_generation_context を読む
+        $saved = [
+            'industry'            => '',
+            'service_description' => '',
+            'target'              => '',
+            'strengths'           => '',
+            'review_emphasis'     => '',
+        ];
+        if ( $survey_id > 0 ) {
+            $t_surveys = $wpdb->prefix . 'gcrev_surveys';
+            $row = $wpdb->get_var( $wpdb->prepare(
+                "SELECT ai_generation_context FROM {$t_surveys} WHERE id = %d",
+                $survey_id
+            ) );
+            if ( ! empty( $row ) ) {
+                $decoded = json_decode( (string) $row, true );
+                if ( is_array( $decoded ) ) {
+                    foreach ( array_keys( $saved ) as $k ) {
+                        if ( isset( $decoded[ $k ] ) && is_string( $decoded[ $k ] ) ) {
+                            $saved[ $k ] = trim( $decoded[ $k ] );
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2) クライアント設定を取得（フォールバックおよび不足分の補完用）
+        $client = ( $user_id > 0 && function_exists( 'gcrev_get_client_settings' ) )
+            ? gcrev_get_client_settings( $user_id )
+            : [];
+
+        $client_industry = trim( (string) ( $client['industry'] ?? ( $client['industry_detail'] ?? '' ) ) );
+        $client_service  = trim( (string) ( $client['service_description'] ?? '' ) );
+        $client_strong   = trim( (string) ( $client['strengths'] ?? '' ) );
+        $client_target   = trim( (string) ( $client['persona_one_liner'] ?? '' ) );
+        $client_emph     = trim( (string) ( $client['review_emphasis'] ?? '' ) );
+
+        // 3) 保存値を優先、空のフィールドのみクライアント設定で補完
+        $industry        = $saved['industry']            !== '' ? $saved['industry']            : $client_industry;
+        $service         = $saved['service_description'] !== '' ? $saved['service_description'] : $client_service;
+        $target          = $saved['target']              !== '' ? $saved['target']              : $client_target;
+        $strengths       = $saved['strengths']           !== '' ? $saved['strengths']           : $client_strong;
+        $review_emphasis = $saved['review_emphasis']     !== '' ? $saved['review_emphasis']     : $client_emph;
+
+        // build_review_prompt() の $client_info と互換な形状で返す
+        return [
+            'industry'            => $industry,
+            'service_description' => $service,
+            'strengths'           => $strengths,
+            'persona_one_liner'   => $target,
+            'review_emphasis'     => $review_emphasis,
+        ];
+    }
+
+    /**
      * 参考口コミ文中の「他店舗の固有名詞」をマスクする。
      *
      * 参考口コミには過去に他のクライアント向けに書かれたサンプルが混在することがあり、
@@ -17440,11 +17518,14 @@ PROMPT;
         array $ai_reference_reviews = [],
         array $client_info = []
     ): string {
-        // 前提情報ブロック（業種・サービス内容・ターゲット・強み）
+        // 前提情報ブロック（業種・サービス内容・ターゲット・強み・口コミで引き出したい内容）
+        // ※ 呼び出し側で resolve_review_generation_context() を通すと、
+        //    アンケートに保存された ai_generation_context が優先される（クライアント設定の変更に引きずられない）
         $industry            = trim( (string) ( $client_info['industry'] ?? ( $client_info['industry_detail'] ?? '' ) ) );
         $service_description = trim( (string) ( $client_info['service_description'] ?? '' ) );
         $strengths           = trim( (string) ( $client_info['strengths']           ?? '' ) );
         $target              = trim( (string) ( $client_info['persona_one_liner']   ?? '' ) );
+        $review_emphasis     = trim( (string) ( $client_info['review_emphasis']     ?? '' ) );
 
         $premise_lines = [];
         if ( $business_name !== '' )      { $premise_lines[] = '* 店舗・サービス名：' . $business_name; }
@@ -17453,6 +17534,17 @@ PROMPT;
         if ( $target !== '' )             { $premise_lines[] = '* ターゲット：' . $target; }
         if ( $strengths !== '' )          { $premise_lines[] = '* 特徴・強み：' . str_replace("\n", ' / ', $strengths); }
         $premise_part = empty( $premise_lines ) ? '' : ( implode( "\n", $premise_lines ) . "\n" );
+
+        // 「口コミで引き出したい内容」は前提情報ブロックではなく、ヒントとして別セクションに出す
+        $emphasis_part = '';
+        if ( $review_emphasis !== '' ) {
+            $emphasis_normalized = str_replace("\n", ' / ', $review_emphasis);
+            $emphasis_part = "\n## 【口コミで特に触れてほしい観点（ヒント）】\n"
+                . "以下はクライアントが「口コミで引き出したい」と考えている観点です。\n"
+                . "アンケート回答の中に関連する記述があれば、その部分を優先的に本文に織り込んでください。\n"
+                . "**ただし、回答に書いていないことを創作してまで触れる必要はありません**（必須ではなくヒント）。\n"
+                . "- " . $emphasis_normalized . "\n";
+        }
 
         // === 毎回ランダム化する要素（書き出し・ペルソナ・長さ・締め方） ===
         // 乱数シードは指定せず、生成ごとに真の乱数にする
@@ -17661,7 +17753,7 @@ PROMPT;
 下記「今回だけの生成指定」の **文章量** に従うこと。指定範囲内に収め、短い指定なら思い切って削る、長い指定なら情景や感情をしっかり展開する。
 
 ---
-{$keywords_part}{$extra_part}
+{$emphasis_part}{$keywords_part}{$extra_part}
 {$randomized_block}
 ---
 
@@ -19164,10 +19256,10 @@ PROMPT;
             if (is_array($decoded_refs)) { $ai_reference_reviews = $decoded_refs; }
         }
 
-        // クライアント情報（業種・サービス・ターゲット・強み）を取得
-        $client_info = function_exists( 'gcrev_get_client_settings' )
-            ? gcrev_get_client_settings( (int) $resp->user_id )
-            : [];
+        // 業種・サービス内容・ターゲット・強み・口コミ重点を解決
+        // アンケートに保存された ai_generation_context（モーダルで入力した値）を優先、
+        // 空欄フィールドのみクライアント設定でフォールバック補完する
+        $client_info = $this->resolve_review_generation_context( (int) $resp->survey_id, (int) $resp->user_id );
 
         $prompt = $this->build_review_prompt($answer_text, $business_name, $ai_keywords, $ai_extra_prompt, $ai_reference_reviews, $client_info);
 
