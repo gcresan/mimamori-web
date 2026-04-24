@@ -16974,7 +16974,8 @@ PROMPT;
                 FILE_APPEND
             );
             // 生成＋禁止フレーズ検出＋自動再生成（最大2回試行）
-            $parsed = $this->generate_review_with_retry( $prompt );
+            // 店舗名が本文に混入した場合も禁止扱いで再生成される
+            $parsed = $this->generate_review_with_retry( $prompt, (string) $business_name );
             if ($parsed === null) {
                 file_put_contents('/tmp/gcrev_review_debug.log',
                     date('Y-m-d H:i:s') . " JSON parse failed (after retry)\n",
@@ -17233,7 +17234,33 @@ PROMPT;
      *
      * @return array|null parse_review_response の戻り値（失敗時 null）
      */
-    private function generate_review_with_retry( string $prompt ): ?array {
+    /**
+     * 動的な禁止フレーズ検出（静的パターン + 店舗名）。
+     *
+     * @param string $text
+     * @param string $business_name 店舗・サービス名（空でなければ本文中に含まれていないかチェック）
+     * @return array<int,string>
+     */
+    private function detect_forbidden_phrases_dynamic( string $text, string $business_name = '' ): array {
+        $found = $this->detect_forbidden_phrases( $text );
+
+        // 店舗名の直接記載を検知
+        $bn = trim( $business_name );
+        if ( $bn !== '' ) {
+            // 末尾の「様/さん」等を除去したコア名も検知対象
+            $bn_core = preg_replace( '/(様|さん|御中|殿)$/u', '', $bn );
+            $candidates = array_unique( array_filter( [ $bn, $bn_core ] ) );
+            foreach ( $candidates as $cand ) {
+                if ( mb_strlen( $cand ) >= 2 && mb_strpos( $text, $cand ) !== false ) {
+                    $found[] = '店舗名「' . $cand . '」';
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    private function generate_review_with_retry( string $prompt, string $business_name = '' ): ?array {
         // 1回目
         $raw = $this->call_review_generation_api( $prompt );
         $parsed = $this->parse_review_response( $raw );
@@ -17242,7 +17269,7 @@ PROMPT;
         }
 
         $text = (string) ( $parsed['normal_review'] ?? '' );
-        $found = $this->detect_forbidden_phrases( $text );
+        $found = $this->detect_forbidden_phrases_dynamic( $text, $business_name );
         if ( empty( $found ) ) {
             return $parsed;
         }
@@ -17259,6 +17286,7 @@ PROMPT;
             . "直前の出力には以下の**絶対使用禁止フレーズ**が含まれていました:\n"
             . "- " . implode( "\n- ", $found ) . "\n\n"
             . "**これらのフレーズ及び類似の言い換え（例: 「感謝しかありません」「自信を持って紹介したい」など）は一切使わずに、別の自然な表現で書き直してください。**\n"
+            . "店舗名・会社名が検知された場合は、それを「こちら」「このお店」「この医院」等の代名詞に置き換えて再生成してください。\n"
             . "参考口コミサンプルに含まれる自然な言い回しを優先して真似してください。";
 
         $raw2 = $this->call_review_generation_api( $retry_prompt );
@@ -17269,7 +17297,7 @@ PROMPT;
         }
 
         $text2 = (string) ( $parsed2['normal_review'] ?? '' );
-        $found2 = $this->detect_forbidden_phrases( $text2 );
+        $found2 = $this->detect_forbidden_phrases_dynamic( $text2, $business_name );
         file_put_contents(
             '/tmp/gcrev_review_debug.log',
             date( 'Y-m-d H:i:s' ) . ( empty( $found2 )
@@ -17461,6 +17489,26 @@ PROMPT;
         $strengths       = $saved['strengths']           !== '' ? $saved['strengths']           : $client_strong;
         $review_emphasis = $saved['review_emphasis']     !== '' ? $saved['review_emphasis']     : $client_emph;
 
+        // どのソースが使われたかログに残す（業種ズレ等のトラブル調査用）
+        $sources = [
+            'industry'            => $saved['industry']            !== '' ? 'survey' : ( $client_industry !== '' ? 'client' : 'none' ),
+            'service_description' => $saved['service_description'] !== '' ? 'survey' : ( $client_service  !== '' ? 'client' : 'none' ),
+            'target'              => $saved['target']              !== '' ? 'survey' : ( $client_target   !== '' ? 'client' : 'none' ),
+            'strengths'           => $saved['strengths']           !== '' ? 'survey' : ( $client_strong   !== '' ? 'client' : 'none' ),
+            'review_emphasis'     => $saved['review_emphasis']     !== '' ? 'survey' : ( $client_emph     !== '' ? 'client' : 'none' ),
+        ];
+        file_put_contents( '/tmp/gcrev_review_debug.log',
+            date( 'Y-m-d H:i:s' )
+                . ' [review-gen] context resolved: survey_id=' . $survey_id
+                . ' industry="' . mb_substr( $industry, 0, 40 ) . '" (src=' . $sources['industry'] . ')'
+                . ' / service="' . mb_substr( $service, 0, 40 ) . '" (src=' . $sources['service_description'] . ')'
+                . ' / target_src=' . $sources['target']
+                . ' / strengths_src=' . $sources['strengths']
+                . ' / emphasis_src=' . $sources['review_emphasis']
+                . "\n",
+            FILE_APPEND
+        );
+
         // build_review_prompt() の $client_info と互換な形状で返す
         return [
             'industry'            => $industry,
@@ -17527,8 +17575,9 @@ PROMPT;
         $target              = trim( (string) ( $client_info['persona_one_liner']   ?? '' ) );
         $review_emphasis     = trim( (string) ( $client_info['review_emphasis']     ?? '' ) );
 
+        // 店舗・サービス名は前提としては渡さない（AI が本文に書き込んでしまう事例が多発したため）
+        // 業種・サービス内容等の文脈情報のみを前提として渡し、固有名詞は「このお店」「こちら」で受けさせる
         $premise_lines = [];
-        if ( $business_name !== '' )      { $premise_lines[] = '* 店舗・サービス名：' . $business_name; }
         if ( $industry !== '' )           { $premise_lines[] = '* 業種：' . $industry; }
         if ( $service_description !== '' ){ $premise_lines[] = '* サービス内容：' . $service_description; }
         if ( $target !== '' )             { $premise_lines[] = '* ターゲット：' . $target; }
@@ -17544,6 +17593,19 @@ PROMPT;
                 . "アンケート回答の中に関連する記述があれば、その部分を優先的に本文に織り込んでください。\n"
                 . "**ただし、回答に書いていないことを創作してまで触れる必要はありません**（必須ではなくヒント）。\n"
                 . "- " . $emphasis_normalized . "\n";
+        }
+
+        // 業種の強制アンカリング - 業種と矛盾する業界語彙の混入を防ぐ
+        $industry_anchor_part = '';
+        if ( $industry !== '' ) {
+            $industry_anchor_part = "\n## 【業種アンカリング（厳守）】\n"
+                . "このアンケートの業種は **「{$industry}」** です。\n"
+                . "生成する口コミは必ずこの業種の文脈・語彙・体験に沿うこと。\n"
+                . "- 「{$industry}」と明らかに矛盾する業界の用語（例: 産婦人科なのに「経営相談」「コンサルティング」「Webサイト制作」など）は**絶対に使わない**\n"
+                . "- アンケート回答内に業種と関係の薄い言及があっても、**業種の文脈に解釈し直して自然に書く**こと（無理なら触れない）\n"
+                . "- 業種が医療・福祉系であれば、患者・診察・治療・スタッフ・医師・助産師など医療文脈の語彙のみを使う\n"
+                . "- 業種が飲食なら、料理・味・接客・来店体験など飲食文脈の語彙のみを使う\n"
+                . "- サービス内容「{$service_description}」とも整合的に書くこと\n";
         }
 
         // === 毎回ランダム化する要素（書き出し・ペルソナ・長さ・締め方） ===
@@ -17719,6 +17781,29 @@ PROMPT;
   - 参考口コミ内の `[他店名]` をそのまま出力に残すこと
   - 参考口コミに出てくる他店舗の会社名・屋号を今回の口コミに混ぜること
   - アンケートに書かれていない会社名・人物名・ブランド名を創作すること
+  - **店舗名・会社名・屋号を口コミ本文内に直接書くこと**
+    （例: 「◯◯クリニックさんに行きました」「株式会社◯◯さんで〜」等は全て禁止）
+    Google の口コミではほとんどのユーザーは店名を本文に書かない。
+    店舗を指す場合は「こちら」「このお店」「この医院」等の代名詞で受けること。
+* **プロンプト内の例文のコピー禁止（非常に重要）**:
+  - 本プロンプト中で「例: 〜〜」として示されている文（書き出しパターン／ペルソナ／締め方パターン等）は、
+    あくまで**方向性のイメージを伝えるサンプル**である。
+  - 例文の文言をそのまま／ほぼそのまま使用してはならない（語順・語尾を少しいじるだけも不可）。
+  - 同じ雰囲気で**別の表現・別の言い回しに必ず言い換える**こと。
+  - 具体的には次のフレーズを出力に含めることを禁じる（例文からの丸写し検知用）:
+    - 「妊娠が分かって、バタバタしていた時期でした」
+    - 「なんとなく、いい時間だったな、と」
+    - 「気張らず行けるのがいいところだと思います」
+    - 「ありがたく存じます」
+    - 「よろしければ、ゆっくりで構いません」
+    - 「こういう場所って、どこも似たような感じかなと思っていたんです」
+    - 「結論から言うと、行ってよかった」
+    - 「ちゃんと聞いてもらえたな」
+    - 「知人が何気なく勧めてくれたのがきっかけでした」
+    - 「何件か候補があったのですが、最終的にここに決めました」
+    - 「担当してくださった方が、最初からずっと落ち着いた感じでした」
+    - 「受付で最初にかけていただいた声が、妙に印象に残っています」
+    - 「最初は予約が取りづらくて、正直どうかなと思っていました」
 
 ---
 
@@ -17753,7 +17838,7 @@ PROMPT;
 下記「今回だけの生成指定」の **文章量** に従うこと。指定範囲内に収め、短い指定なら思い切って削る、長い指定なら情景や感情をしっかり展開する。
 
 ---
-{$emphasis_part}{$keywords_part}{$extra_part}
+{$industry_anchor_part}{$emphasis_part}{$keywords_part}{$extra_part}
 {$randomized_block}
 ---
 
@@ -19273,7 +19358,8 @@ PROMPT;
 
         try {
             // 生成＋禁止フレーズ検出＋自動再生成
-            $parsed = $this->generate_review_with_retry( $prompt );
+            // 店舗名が本文に混入した場合も禁止扱いで再生成される
+            $parsed = $this->generate_review_with_retry( $prompt, (string) $business_name );
             if ($parsed === null) {
                 file_put_contents('/tmp/gcrev_review_debug.log',
                     date('Y-m-d H:i:s') . " AI re-generate parse failed (after retry)\n",
