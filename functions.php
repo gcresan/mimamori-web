@@ -553,10 +553,22 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         $picked[]     = $q;
     };
 
-    // 1. 固定質問
+    // 1. 固定質問（シャッフル + 上限 3スロット）
+    //    is_fixed=1 が多いと全スロットを占めてランダム性が消えるので、
+    //    最大 3 件（または limit/3 の大きい方）に制限し、中身もシャッフル。
+    $max_fixed_slots = max( 2, (int) floor( $limit / 3 ) ); // limit=8 → 2, limit=12 → 4
+    $max_fixed_slots = min( 3, $max_fixed_slots ); // 上限は 3 にキャップ
+    $fixed_candidates = [];
     foreach ( $all_questions as $q ) {
-        if ( count( $picked ) >= $limit ) break;
-        if ( ! empty( $q['is_fixed'] ) ) { $add_question( $q ); }
+        if ( ! empty( $q['is_fixed'] ) ) { $fixed_candidates[] = $q; }
+    }
+    if ( ! empty( $fixed_candidates ) ) {
+        shuffle( $fixed_candidates );
+        $take_fixed = min( $max_fixed_slots, count( $fixed_candidates ) );
+        for ( $i = 0; $i < $take_fixed; $i++ ) {
+            if ( count( $picked ) >= $limit ) break;
+            $add_question( $fixed_candidates[ $i ] );
+        }
     }
 
     // 2. 必須 textarea（自由回答・メイン）を1問だけ確保
@@ -583,13 +595,19 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         }
     }
 
-    // 2b. 任意 textarea（自由回答・ひとこと系）を1問だけ確保
+    // 2b. 任意 textarea（自由回答・ひとこと系）を1問だけ確保（シャッフル）
+    $optional_textareas = [];
     foreach ( $all_questions as $q ) {
-        if ( count( $picked ) >= $limit ) break;
         if ( ( $q['type'] ?? '' ) === 'textarea' && empty( $q['required'] ) ) {
-            $add_question( $q );
-            break;
+            // 既に picked に入っているものは除外
+            if ( ! in_array( $q['id'] ?? null, $picked_ids, true ) ) {
+                $optional_textareas[] = $q;
+            }
         }
+    }
+    if ( ! empty( $optional_textareas ) && count( $picked ) < $limit ) {
+        shuffle( $optional_textareas );
+        $add_question( $optional_textareas[0] );
     }
 
     // 2c. それ以外の textarea（古いデータで余分に required=true だったものなど）は
