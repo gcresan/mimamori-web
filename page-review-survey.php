@@ -2070,28 +2070,39 @@ get_header();
     }
 
     function prefillAiInputs() {
-        // モーダルを開くたびに、常にクライアント設定（AI_DEFAULTS）の現在値を参考として初期表示する。
-        // これにより、クライアント設定を更新した場合も最新の内容が反映される。
-        // なお、ボタン押下時点の入力値はアンケートに保存され、以降の「口コミ本文生成」時の
-        // 前提情報（業種・サービス内容・ターゲット・強み・口コミ重点）として使われる。
+        // 優先順位:
+        //   1. このアンケートに最後に保存された内容（currentAiGenContext）があれば、それを表示
+        //      → クライアント設定を後から変更しても、このアンケート用の入力値は上書きされない
+        //   2. まだ何も保存していないアンケートの場合は、クライアント設定（AI_DEFAULTS）を
+        //      参考として初期表示する
+        var ctx = currentAiGenContext || {};
+        var hasSaved = !!(ctx && (
+            (ctx.industry            && ctx.industry.length            > 0) ||
+            (ctx.service_description && ctx.service_description.length > 0) ||
+            (ctx.target              && ctx.target.length              > 0) ||
+            (ctx.strengths           && ctx.strengths.length           > 0) ||
+            (ctx.review_emphasis     && ctx.review_emphasis.length     > 0)
+        ));
+
+        var source = hasSaved ? ctx : AI_DEFAULTS;
         var values = {
-            'sv-ai-industry':  AI_DEFAULTS.industry            || '',
-            'sv-ai-service':   AI_DEFAULTS.service_description || '',
-            'sv-ai-target':    AI_DEFAULTS.target              || '',
-            'sv-ai-strengths': AI_DEFAULTS.strengths           || '',
-            'sv-ai-emphasis':  AI_DEFAULTS.review_emphasis     || ''
+            'sv-ai-industry':  source.industry            || '',
+            'sv-ai-service':   source.service_description || '',
+            'sv-ai-target':    source.target              || '',
+            'sv-ai-strengths': source.strengths           || '',
+            'sv-ai-emphasis':  source.review_emphasis     || ''
         };
         Object.keys(values).forEach(function(id) {
             var el = document.getElementById(id);
             if (el) { el.value = values[id]; }
         });
 
-        // 説明文
+        // モーダル上部の説明文を、保存済み/未保存で出し分ける
         var noteEl = document.getElementById('sv-ai-source-note');
         if (noteEl) {
-            noteEl.textContent =
-                'クライアント設定の「クライアント情報」に保存された内容を参考に初期表示しています。' +
-                '必要に応じてこのモーダル内で編集してから「生成する」を押してください（ここで入力した内容は、後の口コミ本文生成の前提情報としても利用されます）。';
+            noteEl.textContent = hasSaved
+                ? 'このアンケートで最後に保存された入力内容を表示しています（クライアント設定を変更してもここは自動で書き換わりません）。必要に応じて編集してから「生成する」を押してください。'
+                : 'クライアント設定の「クライアント情報」に保存された内容を参考に初期表示しています。このアンケートで一度「生成する」を押すと、次回以降はここに入力した内容が保存・固定されます。';
         }
     }
 
