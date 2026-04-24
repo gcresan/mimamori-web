@@ -516,6 +516,32 @@ function gcrev_get_business_name( $user_id ) {
  * @param int   $limit         表示したい問数
  * @return array ピックアップされた質問（元の並び順を尊重しつつ選抜）
  */
+/**
+ * 質問配列に「必須 textarea は1問のみ」「任意 textarea は1問のみ」の制限を適用して返す。
+ * 質問数が limit 以下のときも呼ばれる（全件返しでも重複は避けたい）。
+ *
+ * @param array<int,array> $questions
+ * @return array<int,array>
+ */
+function gcrev_enforce_textarea_caps( array $questions ): array {
+    $out = [];
+    $has_required_ta = false;
+    $has_optional_ta = false;
+    foreach ( $questions as $q ) {
+        if ( ( $q['type'] ?? '' ) === 'textarea' ) {
+            if ( ! empty( $q['required'] ) ) {
+                if ( $has_required_ta ) { continue; }
+                $has_required_ta = true;
+            } else {
+                if ( $has_optional_ta ) { continue; }
+                $has_optional_ta = true;
+            }
+        }
+        $out[] = $q;
+    }
+    return $out;
+}
+
 function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): array {
     $total = count( $all_questions );
 
@@ -541,14 +567,30 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
     }
 
     if ( empty( $all_questions ) ) { return []; }
-    if ( $total <= $limit ) { return $all_questions; }
+    if ( $total <= $limit ) {
+        // 全件返す場合も textarea は必須1・任意1 に制限する
+        return gcrev_enforce_textarea_caps( $all_questions );
+    }
 
     $picked_ids = [];
     $picked     = [];
+    // textarea の重複を防ぐためのフラグ
+    $has_required_textarea = false;
+    $has_optional_textarea = false;
 
-    $add_question = function ( $q ) use ( &$picked_ids, &$picked ) {
+    $add_question = function ( $q ) use ( &$picked_ids, &$picked, &$has_required_textarea, &$has_optional_textarea ) {
         $id = $q['id'] ?? null;
         if ( $id === null || in_array( $id, $picked_ids, true ) ) { return; }
+        // textarea の上限を強制: 必須1・任意1 のみ許可
+        if ( ( $q['type'] ?? '' ) === 'textarea' ) {
+            if ( ! empty( $q['required'] ) ) {
+                if ( $has_required_textarea ) { return; } // 既に必須textarea入っているので無視
+                $has_required_textarea = true;
+            } else {
+                if ( $has_optional_textarea ) { return; } // 既に任意textarea入っているので無視
+                $has_optional_textarea = true;
+            }
+        }
         $picked_ids[] = $id;
         $picked[]     = $q;
     };
