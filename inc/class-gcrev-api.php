@@ -1376,6 +1376,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_survey_question_delete' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/survey/questions/bulk-delete', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_questions_bulk_delete' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/survey/question/reorder', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_survey_question_reorder' ],
@@ -18372,6 +18377,58 @@ PROMPT;
         $wpdb->update($t_surveys, ['updated_at' => current_time('mysql')], ['id' => $survey_id], ['%s'], ['%d']);
 
         return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    /**
+     * POST survey/questions/bulk-delete — 質問一括削除
+     * ペイロード:
+     *   - { survey_id, question_ids: [1,2,3] } → 指定IDを削除
+     *   - { survey_id, all: true } → 当該アンケートの全質問を削除
+     */
+    public function rest_survey_questions_bulk_delete(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params    = $request->get_json_params();
+        $survey_id = absint($params['survey_id'] ?? 0);
+        $all_flag  = ! empty($params['all']);
+        $ids_raw   = $params['question_ids'] ?? [];
+        $user_id   = get_current_user_id();
+
+        if (!$this->can_access_survey($survey_id, $user_id)) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+        $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+
+        if ($all_flag) {
+            // 全削除
+            $deleted = (int) $wpdb->delete($t_questions, ['survey_id' => $survey_id], ['%d']);
+        } else {
+            // ID 配列による一括削除
+            if (!is_array($ids_raw) || empty($ids_raw)) {
+                return new \WP_REST_Response(['success' => false, 'message' => '削除対象の質問が指定されていません。'], 400);
+            }
+            $ids = array_values(array_unique(array_filter(array_map('absint', $ids_raw), static function($v){ return $v > 0; })));
+            if (empty($ids)) {
+                return new \WP_REST_Response(['success' => false, 'message' => '削除対象の ID が不正です。'], 400);
+            }
+
+            // 安全な prepared statement（IN 句）を組み立て
+            $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+            $sql = "DELETE FROM {$t_questions} WHERE survey_id = %d AND id IN ({$placeholders})";
+            $args = array_merge([$survey_id], $ids);
+            $deleted = (int) $wpdb->query($wpdb->prepare($sql, ...$args));
+        }
+
+        $wpdb->update($t_surveys, ['updated_at' => current_time('mysql')], ['id' => $survey_id], ['%s'], ['%d']);
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'deleted' => $deleted,
+            'message' => $all_flag
+                ? sprintf('%d件の質問をすべて削除しました。', $deleted)
+                : sprintf('%d件の質問を削除しました。', $deleted),
+        ], 200);
     }
 
     /**

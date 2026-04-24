@@ -487,6 +487,16 @@ get_header();
                     🤖 AIで30問生成
                 </button>
             </div>
+            <!-- 一括操作ツールバー -->
+            <div id="sv-q-toolbar" style="display:none; margin:8px 0 10px; padding:8px 10px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; align-items:center; gap:10px; flex-wrap:wrap;">
+                <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                    <input type="checkbox" id="sv-q-check-all">
+                    <span>すべて選択</span>
+                </label>
+                <span id="sv-q-selected-count" style="font-size:12px; color:#6b7280;">0件選択中</span>
+                <button type="button" class="sv-btn-danger" id="sv-btn-q-delete-selected" style="margin-left:auto; font-size:13px; padding:6px 14px;" disabled>選択した質問を削除</button>
+                <button type="button" class="sv-btn-danger" id="sv-btn-q-delete-all" style="font-size:13px; padding:6px 14px; background:#991b1b; color:#fff; border-color:#991b1b;">すべて削除</button>
+            </div>
             <div id="sv-questions-container"></div>
 
             <!-- 質問追加フォーム -->
@@ -1036,19 +1046,25 @@ get_header();
     // =====================================================
     function renderQuestionTable(questions) {
         var container = document.getElementById('sv-questions-container');
+        var toolbar = document.getElementById('sv-q-toolbar');
         if (!questions || questions.length === 0) {
             container.innerHTML = '<div class="sv-q-empty">まだ質問がありません。下のフォームから追加してください。</div>';
+            if (toolbar) toolbar.style.display = 'none';
             return;
         }
+
+        // ツールバー表示（質問がある時のみ）
+        if (toolbar) toolbar.style.display = 'flex';
 
         var typeLabels = { checkbox: 'チェック', radio: 'ラジオ', textarea: 'テキスト', text: 'テキスト(1行)', select: 'セレクト' };
         var html = '<p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">💡 行をドラッグして並び順を変更できます<span class="sv-q-sort-status" id="sv-sort-status"></span></p>';
         html += '<table class="sv-q-table"><thead><tr>';
-        html += '<th style="width:36px;"></th><th style="width:36px;">No.</th><th>質問文</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
+        html += '<th style="width:30px;"></th><th style="width:28px;"></th><th style="width:36px;">No.</th><th>質問文</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
         html += '</tr></thead><tbody id="sv-q-sortable">';
 
         questions.forEach(function(q, idx) {
             html += '<tr draggable="true" data-qid="' + q.id + '">';
+            html += '<td><input type="checkbox" class="sv-q-row-check" data-qid="' + q.id + '"></td>';
             html += '<td><span class="sv-q-drag-handle" title="ドラッグで並び替え">☰</span></td>';
             html += '<td style="font-weight:600;color:#6b7280;">' + (idx + 1) + '</td>';
             html += '<td>' + esc(q.label) + '</td>';
@@ -1069,7 +1085,7 @@ get_header();
         // Store for edit modal
         container._questions = questions;
 
-        // Events
+        // Events - 編集
         container.querySelectorAll('.sv-q-btn-edit').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var qid = parseInt(btn.dataset.qid);
@@ -1077,6 +1093,8 @@ get_header();
                 if (q) openQuestionEditModal(q);
             });
         });
+
+        // Events - 単体削除
         container.querySelectorAll('.sv-q-btn-del').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 if (!confirm('この質問を削除しますか？')) return;
@@ -1089,6 +1107,40 @@ get_header();
                 });
             });
         });
+
+        // Events - 行チェック連動
+        container.querySelectorAll('.sv-q-row-check').forEach(function(cb) {
+            cb.addEventListener('change', updateQuestionSelectionUI);
+        });
+
+        // 初期状態
+        updateQuestionSelectionUI();
+    }
+
+    function getSelectedQuestionIds() {
+        var ids = [];
+        document.querySelectorAll('.sv-q-row-check:checked').forEach(function(cb) {
+            var id = parseInt(cb.dataset.qid);
+            if (id > 0) ids.push(id);
+        });
+        return ids;
+    }
+
+    function updateQuestionSelectionUI() {
+        var ids = getSelectedQuestionIds();
+        var count = ids.length;
+        var countEl = document.getElementById('sv-q-selected-count');
+        if (countEl) countEl.textContent = count + '件選択中';
+        var delBtn = document.getElementById('sv-btn-q-delete-selected');
+        if (delBtn) delBtn.disabled = (count === 0);
+
+        // 全選択チェックボックスの状態も同期
+        var all = document.querySelectorAll('.sv-q-row-check');
+        var master = document.getElementById('sv-q-check-all');
+        if (master) {
+            master.checked = (all.length > 0 && count === all.length);
+            master.indeterminate = (count > 0 && count < all.length);
+        }
     }
 
     // =====================================================
@@ -1219,6 +1271,83 @@ get_header();
         document.getElementById('sv-q-btn-cancel').style.display = 'none';
         toggleOptionsField();
     }
+
+    // =====================================================
+    // 一括操作: すべて選択 / 選択削除 / すべて削除
+    // =====================================================
+    (function() {
+        var masterCheck = document.getElementById('sv-q-check-all');
+        var btnDelSelected = document.getElementById('sv-btn-q-delete-selected');
+        var btnDelAll = document.getElementById('sv-btn-q-delete-all');
+
+        if (masterCheck) {
+            masterCheck.addEventListener('change', function() {
+                var checked = masterCheck.checked;
+                document.querySelectorAll('.sv-q-row-check').forEach(function(cb) { cb.checked = checked; });
+                updateQuestionSelectionUI();
+            });
+        }
+
+        if (btnDelSelected) {
+            btnDelSelected.addEventListener('click', function() {
+                var ids = getSelectedQuestionIds();
+                if (ids.length === 0) { return; }
+                if (!confirm('選択した ' + ids.length + ' 件の質問を削除しますか？\nこの操作は取り消せません。')) return;
+
+                btnDelSelected.disabled = true;
+                btnDelSelected.textContent = '削除中...';
+
+                apiPost('questions/bulk-delete', {
+                    survey_id: currentSurveyId,
+                    question_ids: ids
+                }).then(function(res) {
+                    btnDelSelected.disabled = false;
+                    btnDelSelected.textContent = '選択した質問を削除';
+                    if (res.success) {
+                        toast(res.message || (ids.length + '件を削除しました'));
+                        loadSurveyDetail(currentSurveyId);
+                    } else {
+                        toast(res.message || '削除に失敗しました', 'error');
+                    }
+                }).catch(function() {
+                    btnDelSelected.disabled = false;
+                    btnDelSelected.textContent = '選択した質問を削除';
+                    toast('削除に失敗しました', 'error');
+                });
+            });
+        }
+
+        if (btnDelAll) {
+            btnDelAll.addEventListener('click', function() {
+                var all = document.querySelectorAll('.sv-q-row-check');
+                if (all.length === 0) { toast('削除する質問がありません', 'error'); return; }
+                if (!confirm('このアンケートの質問を **すべて** 削除します（' + all.length + ' 件）。\n本当によろしいですか？ この操作は取り消せません。')) return;
+                // 安全のため二重確認
+                if (!confirm('最終確認: 本当にすべての質問を削除しますか？')) return;
+
+                btnDelAll.disabled = true;
+                btnDelAll.textContent = '削除中...';
+
+                apiPost('questions/bulk-delete', {
+                    survey_id: currentSurveyId,
+                    all: true
+                }).then(function(res) {
+                    btnDelAll.disabled = false;
+                    btnDelAll.textContent = 'すべて削除';
+                    if (res.success) {
+                        toast(res.message || 'すべての質問を削除しました');
+                        loadSurveyDetail(currentSurveyId);
+                    } else {
+                        toast(res.message || '削除に失敗しました', 'error');
+                    }
+                }).catch(function() {
+                    btnDelAll.disabled = false;
+                    btnDelAll.textContent = 'すべて削除';
+                    toast('削除に失敗しました', 'error');
+                });
+            });
+        }
+    })();
 
     document.getElementById('sv-q-btn-save').addEventListener('click', function() {
         var label = document.getElementById('sv-q-label').value.trim();

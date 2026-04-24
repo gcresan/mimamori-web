@@ -517,8 +517,31 @@ function gcrev_get_business_name( $user_id ) {
  * @return array ピックアップされた質問（元の並び順を尊重しつつ選抜）
  */
 function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): array {
+    $total = count( $all_questions );
+
+    // 診断ログ: 入力件数と制限値を記録（30件以上でランダム化されない問題の追跡用）
+    if ( $total > 0 ) {
+        $fixed_count    = 0;
+        $textarea_count = 0;
+        $required_textarea_count = 0;
+        foreach ( $all_questions as $q ) {
+            if ( ! empty( $q['is_fixed'] ) ) { $fixed_count++; }
+            if ( ( $q['type'] ?? '' ) === 'textarea' ) {
+                $textarea_count++;
+                if ( ! empty( $q['required'] ) ) { $required_textarea_count++; }
+            }
+        }
+        @file_put_contents( '/tmp/gcrev_pickup_debug.log',
+            date( 'Y-m-d H:i:s' ) . sprintf(
+                ' pickup: total=%d limit=%d fixed=%d textarea=%d required_textarea=%d',
+                $total, $limit, $fixed_count, $textarea_count, $required_textarea_count
+            ) . "\n",
+            FILE_APPEND
+        );
+    }
+
     if ( empty( $all_questions ) ) { return []; }
-    if ( count( $all_questions ) <= $limit ) { return $all_questions; }
+    if ( $total <= $limit ) { return $all_questions; }
 
     $picked_ids = [];
     $picked     = [];
@@ -670,6 +693,17 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
             : '例：これから検討される方へのメッセージや、ご要望があればご記入ください。';
     }
     unset( $q );
+
+    // 診断ログ: 最終的にピックアップされた件数とID列を記録
+    $picked_id_list = array_map( static function ( $q ) { return $q['id'] ?? '?'; }, $picked );
+    @file_put_contents( '/tmp/gcrev_pickup_debug.log',
+        date( 'Y-m-d H:i:s' ) . sprintf(
+            ' picked: count=%d ids=[%s]',
+            count( $picked ),
+            implode( ',', $picked_id_list )
+        ) . "\n",
+        FILE_APPEND
+    );
 
     return $picked;
 }
