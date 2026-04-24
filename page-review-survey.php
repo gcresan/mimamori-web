@@ -398,13 +398,19 @@ get_header();
                     <p style="font-size:11px;color:#9ca3af;margin-top:4px;">口コミ生成AIへの追加指示を自由に記述できます。実際の口コミをいくつかお持ちなら「参考口コミから生成」で AI が書き方のクセを抽出してくれます。</p>
                 </div>
                 <div class="sv-form-group">
-                    <label class="sv-form-label">参考口コミサンプル（最大10件登録 / 生成時に使うものを選択）</label>
-                    <div id="sv-ref-reviews-slots"><!-- JS で動的追加 --></div>
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px; gap:10px; flex-wrap:wrap;">
-                        <button type="button" class="sv-btn-secondary" id="sv-btn-add-ref-review" style="font-size:12px;">＋ 口コミを追加</button>
-                        <span id="sv-ref-reviews-count" style="font-size:12px; color:#6b7280;">登録 0 / 10 件　参考 0 件</span>
-                    </div>
-                    <p style="font-size:11px;color:#9ca3af;margin-top:4px;">登録した口コミのうち「生成時に参考にする」にチェックしたものだけが、口コミ生成時の文体参考として AI に渡されます（固有名詞や具体的な数値は引用禁止の指示付き）。「参考口コミから生成」で入力した口コミは自動でここに反映されます。</p>
+                    <details class="sv-ref-details" id="sv-ref-details" style="border:1px solid #e5e7eb; border-radius:8px; padding:10px 14px; background:#fafafa;">
+                        <summary style="cursor:pointer; font-weight:600; font-size:14px; color:#374151; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                            <span>📝 参考口コミサンプル</span>
+                            <span id="sv-ref-reviews-count" style="font-size:12px; color:#6b7280; font-weight:500;">登録 0 / 10 件　参考 0 件</span>
+                        </summary>
+                        <div style="margin-top:12px;">
+                            <p style="font-size:12px; color:#6b7280; margin:0 0 10px;">最大10件まで登録できます。「生成時に参考にする」にチェックした口コミが、AI生成時の文体参考として渡されます（固有名詞や具体的な数値は引用禁止の指示付き）。</p>
+                            <div id="sv-ref-reviews-slots"><!-- JS で動的追加 --></div>
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px; gap:10px; flex-wrap:wrap;">
+                                <button type="button" class="sv-btn-secondary" id="sv-btn-add-ref-review" style="font-size:12px;">＋ 口コミを追加</button>
+                            </div>
+                        </div>
+                    </details>
                 </div>
             </div>
             <button type="button" class="sv-btn-save" id="sv-btn-save-info">保存する</button>
@@ -628,13 +634,14 @@ get_header();
 <!-- AI 生成モーダル -->
 <div class="sv-modal-overlay" id="sv-ai-modal">
     <div class="sv-modal sv-modal-wide">
-        <div class="sv-modal-title">🤖 AIで口コミアンケート30問を生成</div>
+        <div class="sv-modal-title" id="sv-ai-modal-title">🤖 AIで口コミアンケート30問を生成</div>
 
         <!-- 入力ステップ -->
         <div id="sv-ai-step-input">
             <p style="color:#555; font-size:13px; margin:0 0 16px;">
                 クライアント設定の「クライアント情報」に保存された内容が自動で入ります。<br>
                 このアンケート1回だけ変更したい場合は下で上書きできます（保存内容は変わりません）。
+                <br><span id="sv-ai-gen-count-note" style="color:#2271b1; font-size:12px;"></span>
             </p>
             <div class="sv-form-group">
                 <label class="sv-form-label">業種 <span style="color:#dc2626;">*</span></label>
@@ -1054,17 +1061,26 @@ get_header();
             badge.style.color = over ? '#dc2626' : '#6b7280';
         }
 
-        // AI30問生成ボタン: 残りスロット < 30 なら無効化
+        // AI生成ボタン: 残りスロットに応じて生成数を動的表示
         var aiBtn = document.getElementById('sv-btn-ai-generate');
         if (aiBtn) {
             var available = QUESTION_LIMIT - count;
-            if (available < 30) {
+            var willGenerate = Math.min(30, Math.max(0, available));
+            if (available <= 0) {
                 aiBtn.disabled = true;
-                aiBtn.title = 'AI生成（30問）を追加するとの上限（' + QUESTION_LIMIT + '件）を超えます。不要な質問を削除してください。現在 ' + count + ' 件';
+                aiBtn.textContent = '🤖 AIで生成（上限到達）';
+                aiBtn.title = '質問の上限（' + QUESTION_LIMIT + '件）に達しているため追加できません。不要な質問を削除してください。';
                 aiBtn.style.opacity = '0.5';
                 aiBtn.style.cursor = 'not-allowed';
+            } else if (willGenerate < 30) {
+                aiBtn.disabled = false;
+                aiBtn.textContent = '🤖 AIで' + willGenerate + '問生成（残り枠分）';
+                aiBtn.title = '現在 ' + count + ' 件 / 上限 ' + QUESTION_LIMIT + ' 件。残り ' + available + ' 枠に合わせて ' + willGenerate + ' 問を生成します。';
+                aiBtn.style.opacity = '';
+                aiBtn.style.cursor = '';
             } else {
                 aiBtn.disabled = false;
+                aiBtn.textContent = '🤖 AIで30問生成';
                 aiBtn.title = 'クライアント情報をもとに口コミアンケート30問を自動生成します';
                 aiBtn.style.opacity = '';
                 aiBtn.style.cursor = '';
@@ -1839,6 +1855,24 @@ get_header();
     function openAiModal() {
         setAiStep('input');
         prefillAiInputs();
+
+        // モーダルタイトルと補足文を残り枠に応じて動的化
+        var currentCount = document.querySelectorAll('.sv-q-row-check').length;
+        var available = QUESTION_LIMIT - currentCount;
+        var willGenerate = Math.min(30, Math.max(0, available));
+        var title = document.getElementById('sv-ai-modal-title');
+        var note = document.getElementById('sv-ai-gen-count-note');
+        if (title) {
+            title.textContent = willGenerate === 30
+                ? '🤖 AIで口コミアンケート30問を生成'
+                : '🤖 AIで口コミアンケート ' + willGenerate + ' 問を生成';
+        }
+        if (note) {
+            note.textContent = (willGenerate < 30)
+                ? '※ 現在 ' + currentCount + ' 件 / 上限 ' + QUESTION_LIMIT + ' 件のため、残り枠に合わせて ' + willGenerate + ' 問だけ生成します。'
+                : '';
+        }
+
         aiModal.classList.add('show');
     }
 
@@ -1856,11 +1890,11 @@ get_header();
             toast('先にアンケートを保存してください', 'error');
             return;
         }
-        // 上限事前チェック: 残り < 30 なら拒否
+        // 上限到達のみ拒否（残り < 30 は生成数を絞って許可）
         var currentCount = document.querySelectorAll('.sv-q-row-check').length;
         var available = QUESTION_LIMIT - currentCount;
-        if (available < 30) {
-            toast('AI生成の30問を追加すると上限（' + QUESTION_LIMIT + '件）を超えます。現在 ' + currentCount + ' 件、残り ' + available + ' 件まで追加可能です。', 'error');
+        if (available <= 0) {
+            toast('質問の上限（' + QUESTION_LIMIT + '件）に達しています。不要な質問を削除してから再度お試しください。', 'error');
             return;
         }
         openAiModal();

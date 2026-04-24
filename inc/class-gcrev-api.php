@@ -18092,8 +18092,10 @@ PROMPT;
 
         $params = $request->get_json_params();
 
-        // 上限事前チェック: survey_id が指定されていて、既存 + 30 > 60 なら拒否
+        // 上限事前チェック: survey_id が指定されていて既存件数を取得
+        // target_count = min(30, 残りスロット) で生成する
         $survey_id_for_check = absint( $params['survey_id'] ?? 0 );
+        $target_count = 30;
         if ( $survey_id_for_check > 0 ) {
             $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
             $existing_count = (int) $wpdb->get_var( $wpdb->prepare(
@@ -18101,18 +18103,22 @@ PROMPT;
                 $survey_id_for_check
             ) );
             $available_slots = self::SURVEY_QUESTION_LIMIT - $existing_count;
-            if ( $available_slots < 30 ) {
+            if ( $available_slots <= 0 ) {
                 delete_transient( $throttle_key );
                 return new \WP_REST_Response([
                     'success' => false,
                     'message' => sprintf(
-                        'AI生成の30問を追加すると上限（%d件）を超えます。現在 %d 件あり、残り %d 件まで追加可能です。不要な質問を削除してから再度お試しください。',
-                        self::SURVEY_QUESTION_LIMIT, $existing_count, $available_slots
+                        '質問の上限（%d件）に達しています。不要な質問を削除してから再度お試しください。',
+                        self::SURVEY_QUESTION_LIMIT
                     ),
                     'limit'           => self::SURVEY_QUESTION_LIMIT,
                     'count'           => $existing_count,
-                    'available_slots' => $available_slots,
+                    'available_slots' => 0,
                 ], 400);
+            }
+            // 残り枠に合わせて生成数を決定（ただし最低 2 問は確保したい: required + optional textarea）
+            if ( $available_slots < 30 ) {
+                $target_count = max( 2, $available_slots );
             }
         }
 
@@ -18169,7 +18175,7 @@ PROMPT;
             'target'              => $target,
             'strengths'           => $strengths,
             'review_emphasis'     => $review_emphasis,
-        ]);
+        ], $target_count);
 
         if ( ! $result['success'] ) {
             return new \WP_REST_Response([
@@ -18181,6 +18187,7 @@ PROMPT;
         return new \WP_REST_Response([
             'success'        => true,
             'questions'      => $result['questions'],
+            'target_count'   => $target_count,
             'industry_label' => $result['industry_label'],
             'design_intent'  => $result['design_intent'],
             'echo'           => [
