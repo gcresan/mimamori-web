@@ -1381,6 +1381,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_survey_questions_bulk_delete' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/survey/questions/classify', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_survey_questions_classify' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
         register_rest_route('gcrev/v1', '/survey/question/reorder', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'rest_survey_question_reorder' ],
@@ -17768,6 +17773,8 @@ PROMPT;
                 'required'    => (bool) $q->required,
                 'sort_order'  => (int) $q->sort_order,
                 'is_active'   => (bool) $q->is_active,
+                'category'    => $q->category ?? '',
+                'is_fixed'    => !empty($q->is_fixed),
             ];
         }
 
@@ -18511,6 +18518,194 @@ PROMPT;
             'message' => $all_flag
                 ? sprintf('%d件の質問をすべて削除しました。', $deleted)
                 : sprintf('%d件の質問を削除しました。', $deleted),
+        ], 200);
+    }
+
+    /**
+     * POST survey/questions/classify — 質問を AI で 11 カテゴリに一括振り分け
+     *
+     * ペイロード:
+     *   - { survey_id, only_uncategorized?: true } (デフォルト: true = 未分類のみ対象)
+     *   - only_uncategorized=false の場合は全質問を再分類
+     */
+    public function rest_survey_questions_classify(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
+        $params    = $request->get_json_params();
+        $survey_id = absint( $params['survey_id'] ?? 0 );
+        $only_uncategorized = isset( $params['only_uncategorized'] ) ? (bool) $params['only_uncategorized'] : true;
+        $user_id   = get_current_user_id();
+
+        if ( ! $this->can_access_survey( $survey_id, $user_id ) ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'アクセス権がありません。'], 403);
+        }
+
+        // 連打防止（30秒）
+        $throttle_key = 'gcrev_classify_' . $user_id;
+        if ( get_transient( $throttle_key ) ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => '連続実行はできません。30秒後に再度お試しください。',
+            ], 429);
+        }
+        set_transient( $throttle_key, 1, 30 );
+
+        $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+        $all_rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, label, category, type FROM {$t_questions} WHERE survey_id = %d ORDER BY sort_order ASC, id ASC",
+            $survey_id
+        ) );
+
+        $valid_categories = [
+            '不安・課題', '比較・検討', '決め手', '対応・コミュニケーション',
+            '提案・特徴', '結果・体験', '他社との違い', 'おすすめ',
+            '総合評価', '感情・印象', '自由回答',
+        ];
+
+        // 分類対象を絞り込み
+        $targets = [];
+        foreach ( $all_rows as $row ) {
+            $cat = (string) ( $row->category ?? '' );
+            if ( $only_uncategorized && in_array( $cat, $valid_categories, true ) ) {
+                continue; // 既に正しいカテゴリなのでスキップ
+            }
+            $targets[] = [
+                'id'    => (int) $row->id,
+                'label' => (string) $row->label,
+                'type'  => (string) $row->type,
+            ];
+        }
+
+        if ( empty( $targets ) ) {
+            delete_transient( $throttle_key );
+            return new \WP_REST_Response([
+                'success'    => true,
+                'classified' => 0,
+                'skipped'    => 0,
+                'message'    => '分類対象の質問がありませんでした（すべて分類済み）。',
+            ], 200);
+        }
+
+        // プロンプト構築: 質問リスト + カテゴリ一覧
+        $question_lines = [];
+        foreach ( $targets as $t ) {
+            $question_lines[] = sprintf( '%d: [%s] %s', $t['id'], $t['type'], $t['label'] );
+        }
+        $cat_list = implode( ' / ', $valid_categories );
+        $question_block = implode( "\n", $question_lines );
+
+        $prompt = <<<PROMPT
+以下の口コミアンケートの質問を、11 カテゴリのいずれかに分類してください。
+
+# カテゴリ一覧
+{$cat_list}
+
+# カテゴリの説明
+- 不安・課題: 利用前の悩み・不安・困っていたこと
+- 比較・検討: 他社との比較、複数候補からの選定
+- 決め手: 選んだ理由・決定打
+- 対応・コミュニケーション: スタッフ・担当者の対応、連絡、説明の印象
+- 提案・特徴: 受けた提案内容、サービスの特徴
+- 結果・体験: 利用後の変化、感じた効果、体験エピソード
+- 他社との違い: 他と比べて感じた違い
+- おすすめ: 他者に勧めたいか、推奨度
+- 総合評価: 全体満足度、星評価的な問い
+- 感情・印象: 一言で言うと、感情表現、印象
+- 自由回答: 自由記述、ひとこと、メッセージ、その他
+
+# 分類対象の質問（ID: [質問タイプ] 質問文）
+{$question_block}
+
+# 出力要件
+以下の JSON 形式のみを出力してください。説明文やコードフェンスは不要です。
+各質問ID に対して、最も適切なカテゴリ（上記11種類のうち1つ）を割り当ててください。
+
+{
+  "assignments": [
+    { "id": 123, "category": "不安・課題" },
+    { "id": 124, "category": "決め手" }
+  ]
+}
+
+# 厳守
+- category は必ず上記11種類のいずれかの文字列
+- 自由記述の textarea タイプの質問は基本的に「自由回答」を割り当てる
+- どうしても判断できないものは「自由回答」にする
+PROMPT;
+
+        // AI 呼び出し（OpenAI 優先・Gemini フォールバック）
+        try {
+            $raw = $this->call_review_generation_api( $prompt );
+        } catch ( \Throwable $e ) {
+            delete_transient( $throttle_key );
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'AI 呼び出しに失敗しました: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        // JSON パース
+        $cleaned = preg_replace( '/```(?:json)?\s*/i', '', $raw );
+        $cleaned = preg_replace( '/```\s*/', '', $cleaned );
+        $cleaned = trim( $cleaned );
+        $parsed = json_decode( $cleaned, true );
+        if ( ! is_array( $parsed ) ) {
+            // フォールバックで JSON ブロック抽出
+            if ( preg_match( '/\{[\s\S]*\}/', $raw, $m ) ) {
+                $parsed = json_decode( $m[0], true );
+            }
+        }
+        $assignments = ( is_array( $parsed ) && isset( $parsed['assignments'] ) && is_array( $parsed['assignments'] ) )
+            ? $parsed['assignments'] : [];
+
+        if ( empty( $assignments ) ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'AI 応答から分類結果を抽出できませんでした。もう一度お試しください。',
+            ], 500);
+        }
+
+        // マップ化 + 正規化
+        $id_to_category = [];
+        foreach ( $assignments as $a ) {
+            if ( ! is_array( $a ) ) { continue; }
+            $qid = absint( $a['id'] ?? 0 );
+            $cat = (string) ( $a['category'] ?? '' );
+            if ( $qid <= 0 ) { continue; }
+            if ( ! in_array( $cat, $valid_categories, true ) ) { continue; }
+            $id_to_category[ $qid ] = $cat;
+        }
+
+        // DB 更新
+        $target_ids = array_column( $targets, 'id' );
+        $classified = 0;
+        $skipped    = 0;
+        foreach ( $target_ids as $qid ) {
+            if ( isset( $id_to_category[ $qid ] ) ) {
+                $wpdb->update(
+                    $t_questions,
+                    [ 'category' => $id_to_category[ $qid ] ],
+                    [ 'id' => $qid, 'survey_id' => $survey_id ],
+                    [ '%s' ], [ '%d', '%d' ]
+                );
+                $classified++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        // survey の updated_at を更新
+        $t_surveys = $wpdb->prefix . 'gcrev_surveys';
+        $wpdb->update( $t_surveys, [ 'updated_at' => current_time( 'mysql' ) ], [ 'id' => $survey_id ], [ '%s' ], [ '%d' ] );
+
+        return new \WP_REST_Response([
+            'success'    => true,
+            'classified' => $classified,
+            'skipped'    => $skipped,
+            'target'     => count( $targets ),
+            'message'    => sprintf( '%d件の質問をカテゴリに振り分けました。%s',
+                $classified,
+                $skipped > 0 ? "（{$skipped}件は判定不可でスキップ）" : ''
+            ),
         ], 200);
     }
 

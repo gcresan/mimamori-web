@@ -493,6 +493,14 @@ get_header();
                     🤖 AIで30問生成
                 </button>
             </div>
+            <!-- カテゴリバランスサマリー -->
+            <div id="sv-q-balance" style="display:none; margin:0 0 12px; padding:10px 12px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+                    <strong style="font-size:13px; color:#374151;">📊 カテゴリ別件数</strong>
+                    <button type="button" class="sv-btn-ai-gen" id="sv-btn-classify-uncategorized" style="font-size:12px; padding:6px 12px;">🤖 未分類をAIで振り分け</button>
+                </div>
+                <div id="sv-q-balance-grid" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+            </div>
             <!-- 一括操作ツールバー -->
             <div id="sv-q-toolbar" style="display:none; margin:8px 0 10px; padding:8px 10px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; align-items:center; gap:10px; flex-wrap:wrap;">
                 <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
@@ -1100,11 +1108,97 @@ get_header();
         }
     }
 
+    // カテゴリ一覧（順序 = 表示順）
+    var CATEGORY_LIST = [
+        '不安・課題', '比較・検討', '決め手', '対応・コミュニケーション',
+        '提案・特徴', '結果・体験', '他社との違い', 'おすすめ',
+        '総合評価', '感情・印象', '自由回答'
+    ];
+    // カテゴリ別の配色
+    var CATEGORY_COLORS = {
+        '不安・課題':              { bg:'#fee2e2', fg:'#991b1b' },
+        '比較・検討':              { bg:'#ffedd5', fg:'#9a3412' },
+        '決め手':                   { bg:'#ede9fe', fg:'#5b21b6' },
+        '対応・コミュニケーション': { bg:'#dbeafe', fg:'#1e40af' },
+        '提案・特徴':              { bg:'#dcfce7', fg:'#166534' },
+        '結果・体験':              { bg:'#fef3c7', fg:'#92400e' },
+        '他社との違い':            { bg:'#fce7f3', fg:'#9f1239' },
+        'おすすめ':                { bg:'#ccfbf1', fg:'#115e59' },
+        '総合評価':                { bg:'#e0e7ff', fg:'#3730a3' },
+        '感情・印象':              { bg:'#fae8ff', fg:'#86198f' },
+        '自由回答':                { bg:'#e5e7eb', fg:'#374151' },
+        '未分類':                  { bg:'#f3f4f6', fg:'#9ca3af' }
+    };
+
+    function categoryBadgeHtml(category) {
+        var cat = category || '未分類';
+        var col = CATEGORY_COLORS[cat] || CATEGORY_COLORS['未分類'];
+        return '<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; line-height:1.4; font-weight:600; background:' + col.bg + '; color:' + col.fg + '; white-space:nowrap;">' + esc(cat) + '</span>';
+    }
+
+    function renderCategoryBalance(questions) {
+        var balance = document.getElementById('sv-q-balance');
+        var grid = document.getElementById('sv-q-balance-grid');
+        if (!balance || !grid) return;
+        if (!questions || questions.length === 0) {
+            balance.style.display = 'none';
+            return;
+        }
+        balance.style.display = 'block';
+
+        // カテゴリごとの件数集計
+        var counts = {};
+        CATEGORY_LIST.forEach(function(c) { counts[c] = 0; });
+        counts['未分類'] = 0;
+        questions.forEach(function(q) {
+            var cat = q.category;
+            if (cat && CATEGORY_LIST.indexOf(cat) !== -1) {
+                counts[cat]++;
+            } else {
+                counts['未分類']++;
+            }
+        });
+
+        // バッジ生成
+        var html = '';
+        CATEGORY_LIST.forEach(function(cat) {
+            var n = counts[cat] || 0;
+            var col = CATEGORY_COLORS[cat] || CATEGORY_COLORS['未分類'];
+            var warn = (n === 0) ? ' opacity:0.4;' : '';
+            var marker = (n === 0) ? '⚪' : (n <= 1 ? '🟡' : '');
+            html += '<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:14px; font-size:12px; font-weight:600; background:' + col.bg + '; color:' + col.fg + ';' + warn + '" title="' + esc(cat) + ' ' + n + '件">' +
+                        esc(cat) + ' <strong>' + n + '</strong>' + (marker ? ' ' + marker : '') +
+                    '</span>';
+        });
+        // 未分類は赤で強調
+        if (counts['未分類'] > 0) {
+            html += '<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:14px; font-size:12px; font-weight:600; background:#fee2e2; color:#991b1b; border:1px dashed #fca5a5;" title="未分類 ' + counts['未分類'] + '件">' +
+                        '未分類 <strong>' + counts['未分類'] + '</strong> ❗' +
+                    '</span>';
+        }
+        grid.innerHTML = html;
+
+        // 未分類振り分けボタンの有効/無効
+        var classifyBtn = document.getElementById('sv-btn-classify-uncategorized');
+        if (classifyBtn) {
+            if (counts['未分類'] > 0) {
+                classifyBtn.disabled = false;
+                classifyBtn.textContent = '🤖 未分類 ' + counts['未分類'] + ' 件をAIで振り分け';
+                classifyBtn.style.opacity = '';
+            } else {
+                classifyBtn.disabled = true;
+                classifyBtn.textContent = '🤖 すべて分類済み';
+                classifyBtn.style.opacity = '0.5';
+            }
+        }
+    }
+
     function renderQuestionTable(questions) {
         var container = document.getElementById('sv-questions-container');
         var toolbar = document.getElementById('sv-q-toolbar');
         var count = questions ? questions.length : 0;
         updateQuestionCountDisplay(count);
+        renderCategoryBalance(questions || []);
         if (!questions || questions.length === 0) {
             container.innerHTML = '<div class="sv-q-empty">まだ質問がありません。下のフォームから追加してください。</div>';
             if (toolbar) toolbar.style.display = 'none';
@@ -1117,7 +1211,7 @@ get_header();
         var typeLabels = { checkbox: 'チェック', radio: 'ラジオ', textarea: 'テキスト', text: 'テキスト(1行)', select: 'セレクト' };
         var html = '<p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">💡 行をドラッグして並び順を変更できます<span class="sv-q-sort-status" id="sv-sort-status"></span></p>';
         html += '<table class="sv-q-table"><thead><tr>';
-        html += '<th style="width:30px;"></th><th style="width:28px;"></th><th style="width:36px;">No.</th><th>質問文</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
+        html += '<th style="width:30px;"></th><th style="width:28px;"></th><th style="width:36px;">No.</th><th>質問文</th><th style="width:130px;">カテゴリ</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
         html += '</tr></thead><tbody id="sv-q-sortable">';
 
         questions.forEach(function(q, idx) {
@@ -1126,6 +1220,7 @@ get_header();
             html += '<td><span class="sv-q-drag-handle" title="ドラッグで並び替え">☰</span></td>';
             html += '<td style="font-weight:600;color:#6b7280;">' + (idx + 1) + '</td>';
             html += '<td>' + esc(q.label) + '</td>';
+            html += '<td>' + categoryBadgeHtml(q.category) + '</td>';
             html += '<td><span class="sv-q-type-badge">' + (typeLabels[q.type] || q.type) + '</span></td>';
             html += '<td>' + (q.required ? '<span class="sv-q-required">必須</span>' : '<span class="sv-q-optional">任意</span>') + '</td>';
             html += '<td class="sv-q-actions">';
@@ -1329,6 +1424,41 @@ get_header();
         document.getElementById('sv-q-btn-cancel').style.display = 'none';
         toggleOptionsField();
     }
+
+    // =====================================================
+    // 未分類をAIで振り分けボタン
+    // =====================================================
+    (function() {
+        var btn = document.getElementById('sv-btn-classify-uncategorized');
+        if (!btn) return;
+
+        btn.addEventListener('click', function() {
+            if (!currentSurveyId) { toast('先にアンケートを保存してください', 'error'); return; }
+            if (btn.disabled) return;
+
+            var origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '🤖 振り分け中…（30秒〜1分）';
+
+            apiPost('questions/classify', {
+                survey_id: currentSurveyId,
+                only_uncategorized: true
+            }).then(function(res) {
+                btn.disabled = false;
+                btn.textContent = origText;
+                if (res.success) {
+                    toast(res.message || (res.classified + '件を振り分けました'));
+                    loadSurveyDetail(currentSurveyId);
+                } else {
+                    toast(res.message || '振り分けに失敗しました', 'error');
+                }
+            }).catch(function() {
+                btn.disabled = false;
+                btn.textContent = origText;
+                toast('振り分けに失敗しました', 'error');
+            });
+        });
+    })();
 
     // =====================================================
     // 一括操作: すべて選択 / 選択削除 / すべて削除
