@@ -17874,20 +17874,37 @@ PROMPT;
             }
         }
 
+        // AI 30問生成の前回入力（業種・サービス内容・ターゲット・強み・口コミ重点）
+        // 一度入力した内容はこのアンケートに紐づいて固定され、クライアント設定の変更に引きずられない
+        $ai_gen_ctx = [];
+        if ( ! empty( $survey->ai_generation_context ?? '' ) ) {
+            $decoded = json_decode( (string) $survey->ai_generation_context, true );
+            if ( is_array( $decoded ) ) {
+                $ai_gen_ctx = [
+                    'industry'            => (string) ( $decoded['industry']            ?? '' ),
+                    'service_description' => (string) ( $decoded['service_description'] ?? '' ),
+                    'target'              => (string) ( $decoded['target']              ?? '' ),
+                    'strengths'           => (string) ( $decoded['strengths']           ?? '' ),
+                    'review_emphasis'     => (string) ( $decoded['review_emphasis']     ?? '' ),
+                ];
+            }
+        }
+
         $form_url = home_url('/review-form/');
         return new \WP_REST_Response([
             'survey' => [
-                'id'                    => (int) $survey->id,
-                'title'                 => $survey->title,
-                'description'           => $survey->description,
-                'google_review_url'     => $survey->google_review_url,
-                'status'                => $survey->status,
-                'token'                 => $survey->token,
-                'ai_keywords'           => $survey->ai_keywords ?? '',
-                'ai_extra_prompt'       => $survey->ai_extra_prompt ?? '',
-                'ai_reference_reviews'  => $ref_reviews,
-                'created_at'            => $survey->created_at,
-                'updated_at'            => $survey->updated_at,
+                'id'                     => (int) $survey->id,
+                'title'                  => $survey->title,
+                'description'            => $survey->description,
+                'google_review_url'      => $survey->google_review_url,
+                'status'                 => $survey->status,
+                'token'                  => $survey->token,
+                'ai_keywords'            => $survey->ai_keywords ?? '',
+                'ai_extra_prompt'        => $survey->ai_extra_prompt ?? '',
+                'ai_reference_reviews'   => $ref_reviews,
+                'ai_generation_context'  => $ai_gen_ctx,
+                'created_at'             => $survey->created_at,
+                'updated_at'             => $survey->updated_at,
             ],
             'questions'  => $q_items,
             'public_url' => $survey->status === 'published' ? $form_url . '?t=' . $survey->token : '',
@@ -18235,6 +18252,30 @@ PROMPT;
         $target = sanitize_textarea_field( $params['target'] ?? '' );
         if ( $target === '' ) {
             $target = $this->build_target_from_persona( $client );
+        }
+
+        // 【今回入力された内容】をアンケートに紐付けて保存（以降クライアント設定の変更で上書きされないよう固定）
+        // 生成が失敗しても次回開いた時に同じ内容が保持されるよう、ここで先に保存する
+        if ( $survey_id_for_check > 0 ) {
+            $ctx_to_save = [
+                'industry'            => $industry,
+                'service_description' => $service_description,
+                'target'              => $target,
+                'strengths'           => $strengths,
+                'review_emphasis'     => $review_emphasis,
+                'updated_at'          => current_time( 'mysql' ),
+            ];
+            $t_surveys_upd = $wpdb->prefix . 'gcrev_surveys';
+            $wpdb->update(
+                $t_surveys_upd,
+                [
+                    'ai_generation_context' => wp_json_encode( $ctx_to_save, JSON_UNESCAPED_UNICODE ),
+                    'updated_at'            => current_time( 'mysql' ),
+                ],
+                [ 'id' => $survey_id_for_check, 'user_id' => $user_id ],
+                [ '%s', '%s' ],
+                [ '%d', '%d' ]
+            );
         }
 
         // サービス生成

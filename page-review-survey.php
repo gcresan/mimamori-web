@@ -647,8 +647,7 @@ get_header();
         <!-- 入力ステップ -->
         <div id="sv-ai-step-input">
             <p style="color:#555; font-size:13px; margin:0 0 16px;">
-                クライアント設定の「クライアント情報」に保存された内容が自動で入ります。<br>
-                このアンケート1回だけ変更したい場合は下で上書きできます（保存内容は変わりません）。
+                <span id="sv-ai-source-note"></span>
                 <br><span id="sv-ai-gen-count-note" style="color:#2271b1; font-size:12px;"></span>
             </p>
             <div class="sv-form-group">
@@ -773,6 +772,10 @@ get_header();
 
     var surveyData = { surveys: [], count: 0, limit: 3 };
     var currentSurveyId = 0;
+    // 現在開いているアンケートの「AI 30問生成の前回入力」。
+    // クライアント設定の AI_DEFAULTS より優先して使い、クライアント設定が変わっても書き換えない。
+    // 空キーの場合のみ AI_DEFAULTS にフォールバック。
+    var currentAiGenContext = null;
 
     // =====================================================
     // API helpers
@@ -951,6 +954,8 @@ get_header();
         document.getElementById('sv-ai-extra-prompt').value = '';
         if (typeof loadKeywords === 'function') loadKeywords('');
         if (typeof setReferenceReviews === 'function') setReferenceReviews([]);
+        // AI 30問生成の前回入力もリセット（新しいアンケート用）
+        currentAiGenContext = null;
         resetQForm();
     }
 
@@ -967,6 +972,10 @@ get_header();
             document.getElementById('sv-ai-extra-prompt').value = s.ai_extra_prompt || '';
             loadKeywords(s.ai_keywords || '');
             setReferenceReviews(Array.isArray(s.ai_reference_reviews) ? s.ai_reference_reviews : []);
+            // AI 30問生成の前回入力（このアンケートに紐付け保存された値）
+            currentAiGenContext = (s.ai_generation_context && typeof s.ai_generation_context === 'object')
+                ? s.ai_generation_context
+                : null;
 
             // Public URL
             if (data.public_url) {
@@ -2061,18 +2070,40 @@ get_header();
     }
 
     function prefillAiInputs() {
-        // PHP 側で注入したクライアント情報を初期値として反映（既に入力がある場合は上書きしない）
-        var inputs = {
-            'sv-ai-industry':  AI_DEFAULTS.industry,
-            'sv-ai-service':   AI_DEFAULTS.service_description,
-            'sv-ai-target':    AI_DEFAULTS.target,
-            'sv-ai-strengths': AI_DEFAULTS.strengths,
-            'sv-ai-emphasis':  AI_DEFAULTS.review_emphasis
+        // モーダル開く度にフォームをリセットしてから値を入れ直す。
+        // 優先順位:
+        //   1. このアンケートに保存された前回の入力（currentAiGenContext）
+        //      → 以降、クライアント設定を変えてもこの値は上書きされない（固定）
+        //   2. クライアント設定（AI_DEFAULTS） — まだ一度も生成したことがないアンケートの場合のみ
+        var ctx = currentAiGenContext || {};
+        var hasSaved = !!(ctx && (
+            (ctx.industry            && ctx.industry.length            > 0) ||
+            (ctx.service_description && ctx.service_description.length > 0) ||
+            (ctx.target              && ctx.target.length              > 0) ||
+            (ctx.strengths           && ctx.strengths.length           > 0) ||
+            (ctx.review_emphasis     && ctx.review_emphasis.length     > 0)
+        ));
+
+        var source = hasSaved ? ctx : AI_DEFAULTS;
+        var values = {
+            'sv-ai-industry':  source.industry            || '',
+            'sv-ai-service':   source.service_description || '',
+            'sv-ai-target':    source.target              || '',
+            'sv-ai-strengths': source.strengths           || '',
+            'sv-ai-emphasis':  source.review_emphasis     || ''
         };
-        Object.keys(inputs).forEach(function(id) {
+        Object.keys(values).forEach(function(id) {
             var el = document.getElementById(id);
-            if (el && !el.value) { el.value = inputs[id] || ''; }
+            if (el) { el.value = values[id]; }
         });
+
+        // モーダル上部の説明文を、固定値の場合/初回の場合で出し分ける
+        var noteEl = document.getElementById('sv-ai-source-note');
+        if (noteEl) {
+            noteEl.textContent = hasSaved
+                ? '前回このアンケートで生成した際の入力内容を表示しています（クライアント設定を変更してもここは自動で書き換わりません）。必要に応じて編集してください。'
+                : 'クライアント設定の「クライアント情報」に保存された内容を初期値として表示しています。このアンケートで一度生成すると、次回以降はここに入力した内容が保存・固定されます。';
+        }
     }
 
     function openAiModal() {
@@ -2144,12 +2175,32 @@ get_header();
             review_emphasis:     document.getElementById('sv-ai-emphasis').value.trim(),
         };
 
+        // サーバー側で送信時点で survey に保存されるため、JS 側のキャッシュも同時に更新
+        // （以降、同じ画面のままモーダルを開き直しても保存値が復元される）
+        currentAiGenContext = {
+            industry:            body.industry,
+            service_description: body.service_description,
+            target:              body.target,
+            strengths:           body.strengths,
+            review_emphasis:     body.review_emphasis
+        };
+
         setAiStep('loading');
 
         apiPost('ai-generate-questions', body).then(function(res) {
             if (res.success && Array.isArray(res.questions) && res.questions.length > 0) {
                 aiGeneratedQuestions = res.questions;
                 aiDesignIntent.textContent = res.design_intent || '';
+                // サーバーが echo で返した値で上書き（サニタイズ後の正規化値に揃える）
+                if (res.echo && typeof res.echo === 'object') {
+                    currentAiGenContext = {
+                        industry:            (res.echo.industry            || ''),
+                        service_description: (res.echo.service_description || ''),
+                        target:              (res.echo.target              || ''),
+                        strengths:           (res.echo.strengths           || ''),
+                        review_emphasis:     (res.echo.review_emphasis     || '')
+                    };
+                }
                 renderAiPreview(res.questions);
                 setAiStep('preview');
             } else {

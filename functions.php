@@ -6765,6 +6765,7 @@ function gcrev_survey_create_tables(): void {
         ai_keywords TEXT,
         ai_extra_prompt TEXT,
         ai_reference_reviews TEXT,
+        ai_generation_context TEXT,
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
