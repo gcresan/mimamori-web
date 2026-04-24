@@ -17659,6 +17659,7 @@ PROMPT;
     // =========================================================
 
     private const SURVEY_LIMIT = 3;
+    private const SURVEY_QUESTION_LIMIT = 60; // 1アンケートあたりの質問件数上限
 
     /**
      * アンケートへのアクセス権チェック
@@ -18014,6 +18015,25 @@ PROMPT;
         $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
         $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
 
+        // 新規追加の場合のみ上限チェック（既存質問の編集時はチェック不要）
+        if ($q_id <= 0) {
+            $existing_count = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$t_questions} WHERE survey_id = %d",
+                $survey_id
+            ));
+            if ($existing_count >= self::SURVEY_QUESTION_LIMIT) {
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => sprintf(
+                        '質問は1アンケートあたり最大%d件までです（現在 %d 件）。不要な質問を削除してから追加してください。',
+                        self::SURVEY_QUESTION_LIMIT, $existing_count
+                    ),
+                    'limit' => self::SURVEY_QUESTION_LIMIT,
+                    'count' => $existing_count,
+                ], 400);
+            }
+        }
+
         $category = sanitize_text_field($params['category'] ?? '');
         if (mb_strlen($category) > 32) { $category = mb_substr($category, 0, 32); }
         $is_fixed = !empty($params['is_fixed']) ? 1 : 0;
@@ -18054,6 +18074,7 @@ PROMPT;
      * 生成のみで DB には保存しない（プレビュー→一括保存は bulk-save で行う）。
      */
     public function rest_survey_ai_generate_questions(\WP_REST_Request $request): \WP_REST_Response {
+        global $wpdb;
         $user_id = get_current_user_id();
         if ( $user_id <= 0 ) {
             return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です。'], 401);
@@ -18070,6 +18091,30 @@ PROMPT;
         set_transient( $throttle_key, 1, 30 );
 
         $params = $request->get_json_params();
+
+        // 上限事前チェック: survey_id が指定されていて、既存 + 30 > 60 なら拒否
+        $survey_id_for_check = absint( $params['survey_id'] ?? 0 );
+        if ( $survey_id_for_check > 0 ) {
+            $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
+            $existing_count = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$t_questions} WHERE survey_id = %d",
+                $survey_id_for_check
+            ) );
+            $available_slots = self::SURVEY_QUESTION_LIMIT - $existing_count;
+            if ( $available_slots < 30 ) {
+                delete_transient( $throttle_key );
+                return new \WP_REST_Response([
+                    'success' => false,
+                    'message' => sprintf(
+                        'AI生成の30問を追加すると上限（%d件）を超えます。現在 %d 件あり、残り %d 件まで追加可能です。不要な質問を削除してから再度お試しください。',
+                        self::SURVEY_QUESTION_LIMIT, $existing_count, $available_slots
+                    ),
+                    'limit'           => self::SURVEY_QUESTION_LIMIT,
+                    'count'           => $existing_count,
+                    'available_slots' => $available_slots,
+                ], 400);
+            }
+        }
 
         // クライアント情報を読み込んでデフォルト値として使用
         $client = function_exists( 'gcrev_get_client_settings' ) ? gcrev_get_client_settings( $user_id ) : [];
@@ -18169,6 +18214,37 @@ PROMPT;
 
         $t_questions = $wpdb->prefix . 'gcrev_survey_questions';
         $t_surveys   = $wpdb->prefix . 'gcrev_surveys';
+
+        // 上限チェック: 既存 + 今回追加 > 60 なら拒否
+        $existing_count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$t_questions} WHERE survey_id = %d",
+            $survey_id
+        ) );
+        $available_slots = self::SURVEY_QUESTION_LIMIT - $existing_count;
+        if ( $available_slots <= 0 ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => sprintf(
+                    '質問は1アンケートあたり最大%d件までです。現在すでに %d 件あるため追加できません。不要な質問を削除してから再度お試しください。',
+                    self::SURVEY_QUESTION_LIMIT, $existing_count
+                ),
+                'limit' => self::SURVEY_QUESTION_LIMIT,
+                'count' => $existing_count,
+            ], 400);
+        }
+        if ( count( $questions ) > $available_slots ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => sprintf(
+                    '質問の上限（%d件）を超えます。現在 %d 件あり、残り %d 件まで追加可能です（今回の送信数: %d 件）。',
+                    self::SURVEY_QUESTION_LIMIT, $existing_count, $available_slots, count( $questions )
+                ),
+                'limit'           => self::SURVEY_QUESTION_LIMIT,
+                'count'           => $existing_count,
+                'available_slots' => $available_slots,
+                'incoming_count'  => count( $questions ),
+            ], 400);
+        }
 
         // 既存の最大 sort_order を取得
         $max_sort = (int) $wpdb->get_var( $wpdb->prepare(

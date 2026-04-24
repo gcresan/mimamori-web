@@ -482,7 +482,7 @@ get_header();
         <!-- 質問管理 -->
         <div class="sv-form-card" id="sv-questions-card" style="display:none;">
             <div class="sv-form-title" style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-                <span>質問一覧</span>
+                <span>質問一覧 <span id="sv-q-count-badge" style="font-size:13px; color:#6b7280; font-weight:500; margin-left:6px;">0 / 60 件</span></span>
                 <button type="button" class="sv-btn-ai-gen" id="sv-btn-ai-generate" title="クライアント情報をもとに口コミアンケート30問を自動生成します">
                     🤖 AIで30問生成
                 </button>
@@ -1044,9 +1044,51 @@ get_header();
     // =====================================================
     // Question table
     // =====================================================
+    var QUESTION_LIMIT = 60;
+
+    function updateQuestionCountDisplay(count) {
+        var badge = document.getElementById('sv-q-count-badge');
+        if (badge) {
+            var over = (count >= QUESTION_LIMIT);
+            badge.textContent = count + ' / ' + QUESTION_LIMIT + ' 件' + (over ? '（上限到達）' : '');
+            badge.style.color = over ? '#dc2626' : '#6b7280';
+        }
+
+        // AI30問生成ボタン: 残りスロット < 30 なら無効化
+        var aiBtn = document.getElementById('sv-btn-ai-generate');
+        if (aiBtn) {
+            var available = QUESTION_LIMIT - count;
+            if (available < 30) {
+                aiBtn.disabled = true;
+                aiBtn.title = 'AI生成（30問）を追加するとの上限（' + QUESTION_LIMIT + '件）を超えます。不要な質問を削除してください。現在 ' + count + ' 件';
+                aiBtn.style.opacity = '0.5';
+                aiBtn.style.cursor = 'not-allowed';
+            } else {
+                aiBtn.disabled = false;
+                aiBtn.title = 'クライアント情報をもとに口コミアンケート30問を自動生成します';
+                aiBtn.style.opacity = '';
+                aiBtn.style.cursor = '';
+            }
+        }
+
+        // 単体追加ボタンも上限到達で無効化
+        var addBtn = document.getElementById('sv-q-btn-save');
+        if (addBtn && document.getElementById('sv-q-edit-id') && parseInt(document.getElementById('sv-q-edit-id').value) === 0) {
+            if (count >= QUESTION_LIMIT) {
+                addBtn.disabled = true;
+                addBtn.title = '上限（' + QUESTION_LIMIT + '件）に到達しているため追加できません';
+            } else {
+                addBtn.disabled = false;
+                addBtn.title = '';
+            }
+        }
+    }
+
     function renderQuestionTable(questions) {
         var container = document.getElementById('sv-questions-container');
         var toolbar = document.getElementById('sv-q-toolbar');
+        var count = questions ? questions.length : 0;
+        updateQuestionCountDisplay(count);
         if (!questions || questions.length === 0) {
             container.innerHTML = '<div class="sv-q-empty">まだ質問がありません。下のフォームから追加してください。</div>';
             if (toolbar) toolbar.style.display = 'none';
@@ -1814,6 +1856,13 @@ get_header();
             toast('先にアンケートを保存してください', 'error');
             return;
         }
+        // 上限事前チェック: 残り < 30 なら拒否
+        var currentCount = document.querySelectorAll('.sv-q-row-check').length;
+        var available = QUESTION_LIMIT - currentCount;
+        if (available < 30) {
+            toast('AI生成の30問を追加すると上限（' + QUESTION_LIMIT + '件）を超えます。現在 ' + currentCount + ' 件、残り ' + available + ' 件まで追加可能です。', 'error');
+            return;
+        }
         openAiModal();
     });
 
@@ -1830,6 +1879,7 @@ get_header();
         }
 
         var body = {
+            survey_id:           currentSurveyId, // サーバー側で上限事前チェックに使用
             industry:            industry,
             service_description: document.getElementById('sv-ai-service').value.trim(),
             target:              document.getElementById('sv-ai-target').value.trim(),
