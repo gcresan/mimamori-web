@@ -1136,6 +1136,9 @@ get_header();
         return '<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; line-height:1.4; font-weight:600; background:' + col.bg + '; color:' + col.fg + '; white-space:nowrap;">' + esc(cat) + '</span>';
     }
 
+    // フィルタ状態（null = 全件表示、カテゴリ文字列 or '未分類' でフィルタ）
+    var currentCategoryFilter = null;
+
     function renderCategoryBalance(questions) {
         var balance = document.getElementById('sv-q-balance');
         var grid = document.getElementById('sv-q-balance-grid');
@@ -1159,24 +1162,49 @@ get_header();
             }
         });
 
-        // バッジ生成
+        // ピル生成（クリック可能）
+        var totalQ = questions.length;
+        var allActive = (currentCategoryFilter === null);
         var html = '';
+
+        // 「すべて」ピル（フィルタ解除用）
+        html += '<span class="sv-cat-pill" data-cat="__all__" style="' + pillStyle(null, totalQ, allActive, true) + '">すべて <strong>' + totalQ + '</strong></span>';
+
         CATEGORY_LIST.forEach(function(cat) {
             var n = counts[cat] || 0;
-            var col = CATEGORY_COLORS[cat] || CATEGORY_COLORS['未分類'];
-            var warn = (n === 0) ? ' opacity:0.4;' : '';
-            var marker = (n === 0) ? '⚪' : (n <= 1 ? '🟡' : '');
-            html += '<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:14px; font-size:12px; font-weight:600; background:' + col.bg + '; color:' + col.fg + ';' + warn + '" title="' + esc(cat) + ' ' + n + '件">' +
-                        esc(cat) + ' <strong>' + n + '</strong>' + (marker ? ' ' + marker : '') +
+            var active = (currentCategoryFilter === cat);
+            var clickable = (n > 0); // 0件はクリックしても意味ないので disable
+            var marker = (n === 0) ? ' ⚪' : (n <= 1 ? ' 🟡' : '');
+            html += '<span class="sv-cat-pill" data-cat="' + esc(cat) + '" style="' + pillStyle(cat, n, active, clickable) + '" title="クリックで「' + esc(cat) + '」のみ表示">' +
+                        esc(cat) + ' <strong>' + n + '</strong>' + marker +
                     '</span>';
         });
-        // 未分類は赤で強調
+
         if (counts['未分類'] > 0) {
-            html += '<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:14px; font-size:12px; font-weight:600; background:#fee2e2; color:#991b1b; border:1px dashed #fca5a5;" title="未分類 ' + counts['未分類'] + '件">' +
+            var active = (currentCategoryFilter === '未分類');
+            html += '<span class="sv-cat-pill" data-cat="未分類" style="' + pillStyleUncat(active) + '" title="クリックで「未分類」のみ表示">' +
                         '未分類 <strong>' + counts['未分類'] + '</strong> ❗' +
                     '</span>';
         }
+
         grid.innerHTML = html;
+
+        // クリックイベントを設定
+        grid.querySelectorAll('.sv-cat-pill').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var cat = el.dataset.cat;
+                if (cat === '__all__') {
+                    currentCategoryFilter = null;
+                } else if (counts[cat] === 0) {
+                    return; // 0件は無視
+                } else if (currentCategoryFilter === cat) {
+                    currentCategoryFilter = null; // 同じカテゴリをもう一度クリック→解除
+                } else {
+                    currentCategoryFilter = cat;
+                }
+                renderQuestionTable(questions);
+            });
+        });
 
         // 未分類振り分けボタンの有効/無効
         var classifyBtn = document.getElementById('sv-btn-classify-uncategorized');
@@ -1193,6 +1221,27 @@ get_header();
         }
     }
 
+    function pillStyle(cat, n, active, clickable) {
+        var col = CATEGORY_COLORS[cat] || { bg:'#e5e7eb', fg:'#374151' };
+        var base = 'display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:14px; font-size:12px; font-weight:600;';
+        base += ' background:' + col.bg + '; color:' + col.fg + ';';
+        base += clickable ? ' cursor:pointer;' : ' cursor:default; opacity:0.4;';
+        if (active) {
+            base += ' box-shadow: 0 0 0 2px ' + col.fg + ', 0 0 0 4px #fff;';
+        }
+        base += ' transition: transform 0.1s;';
+        return base;
+    }
+
+    function pillStyleUncat(active) {
+        var base = 'display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:14px; font-size:12px; font-weight:600;';
+        base += ' background:#fee2e2; color:#991b1b; border:1px dashed #fca5a5; cursor:pointer;';
+        if (active) {
+            base += ' box-shadow: 0 0 0 2px #991b1b, 0 0 0 4px #fff;';
+        }
+        return base;
+    }
+
     function renderQuestionTable(questions) {
         var container = document.getElementById('sv-questions-container');
         var toolbar = document.getElementById('sv-q-toolbar');
@@ -1205,19 +1254,56 @@ get_header();
             return;
         }
 
+        // フィルタ適用（カテゴリが選択されている場合）
+        var filtered = questions;
+        if (currentCategoryFilter !== null) {
+            filtered = questions.filter(function(q) {
+                var cat = q.category || '';
+                if (currentCategoryFilter === '未分類') {
+                    return !cat || CATEGORY_LIST.indexOf(cat) === -1;
+                }
+                return cat === currentCategoryFilter;
+            });
+        }
+
         // ツールバー表示（質問がある時のみ）
         if (toolbar) toolbar.style.display = 'flex';
 
         var typeLabels = { checkbox: 'チェック', radio: 'ラジオ', textarea: 'テキスト', text: 'テキスト(1行)', select: 'セレクト' };
-        var html = '<p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">💡 行をドラッグして並び順を変更できます<span class="sv-q-sort-status" id="sv-sort-status"></span></p>';
+        var html = '';
+
+        // フィルタ中のヘッダ表示
+        if (currentCategoryFilter !== null) {
+            html += '<p style="font-size:13px; margin:0 0 8px; color:#374151; padding:8px 12px; background:#fffbeb; border-left:3px solid #f59e0b; border-radius:4px;">';
+            html += '🔍 「<strong>' + esc(currentCategoryFilter) + '</strong>」で絞り込み中（' + filtered.length + ' / ' + questions.length + ' 件）';
+            html += ' <button type="button" id="sv-q-filter-clear" style="margin-left:8px; background:none; border:none; color:#2271b1; cursor:pointer; text-decoration:underline; font-size:12px;">すべて表示に戻す</button>';
+            html += '</p>';
+        } else {
+            html += '<p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">💡 行をドラッグして並び順を変更できます。カテゴリピルをクリックで絞り込み。<span class="sv-q-sort-status" id="sv-sort-status"></span></p>';
+        }
+
+        if (filtered.length === 0) {
+            html += '<div class="sv-q-empty">このカテゴリに該当する質問はありません。</div>';
+            container.innerHTML = html;
+            // フィルタ解除ボタンだけ結線
+            var clearBtn = document.getElementById('sv-q-filter-clear');
+            if (clearBtn) clearBtn.addEventListener('click', function() {
+                currentCategoryFilter = null;
+                renderQuestionTable(questions);
+            });
+            container._questions = questions;
+            return;
+        }
+
         html += '<table class="sv-q-table"><thead><tr>';
         html += '<th style="width:30px;"></th><th style="width:28px;"></th><th style="width:36px;">No.</th><th>質問文</th><th style="width:130px;">カテゴリ</th><th style="width:80px;">タイプ</th><th style="width:50px;">必須</th><th style="width:110px;"></th>';
         html += '</tr></thead><tbody id="sv-q-sortable">';
 
-        questions.forEach(function(q, idx) {
-            html += '<tr draggable="true" data-qid="' + q.id + '">';
+        // 表示用の通し番号は元のインデックス順（フィルタされても元番号を維持したい場合もあるが、可読性優先で1〜順番）
+        filtered.forEach(function(q, idx) {
+            html += '<tr ' + (currentCategoryFilter === null ? 'draggable="true" ' : '') + 'data-qid="' + q.id + '">';
             html += '<td><input type="checkbox" class="sv-q-row-check" data-qid="' + q.id + '"></td>';
-            html += '<td><span class="sv-q-drag-handle" title="ドラッグで並び替え">☰</span></td>';
+            html += '<td><span class="sv-q-drag-handle" title="' + (currentCategoryFilter === null ? 'ドラッグで並び替え' : 'ドラッグはフィルタ解除中のみ有効') + '" style="' + (currentCategoryFilter !== null ? 'opacity:0.2;cursor:not-allowed;' : '') + '">☰</span></td>';
             html += '<td style="font-weight:600;color:#6b7280;">' + (idx + 1) + '</td>';
             html += '<td>' + esc(q.label) + '</td>';
             html += '<td>' + categoryBadgeHtml(q.category) + '</td>';
@@ -1231,6 +1317,13 @@ get_header();
         });
         html += '</tbody></table>';
         container.innerHTML = html;
+
+        // フィルタ解除ボタンの結線
+        var clearBtn2 = document.getElementById('sv-q-filter-clear');
+        if (clearBtn2) clearBtn2.addEventListener('click', function() {
+            currentCategoryFilter = null;
+            renderQuestionTable(questions);
+        });
 
         // Init drag & drop
         initQuestionDragSort();
