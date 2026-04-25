@@ -9872,9 +9872,69 @@ PROMPT;
     }
 
     /**
-     * 月次ヘルススコアを計算（v2: 4コンポーネント制）
+     * 検索・診断スコアコンポーネント
      *
-     * Achievement(50) + Growth(30) + Stability(10) + ActionBonus(10) = 100点
+     * ダッシュボード「検索・診断の総合状況」セクションの各カード
+     * （自然検索順位／マップ順位／SEO診断／AIO診断／MEO診断）の
+     * スコア（0〜100）の単純平均を、コンポーネント枠（最大15点）にスケールして算出する。
+     *
+     *   points = round( (有効カードの平均スコア) × 15 / 100 )
+     *
+     * 「未取得（status=none）」のカードは集計対象外として平均から除外する。
+     * 1件もデータが無い場合は 0pt（ダッシュボード側の has_any_data 判定で 0 点になることもある）。
+     *
+     * @param int $user_id
+     * @return array ['points'=>int, 'max'=>int, 'label'=>string, 'cards'=>array]
+     */
+    private function calc_search_diag_component(int $user_id): array {
+        $max   = 15;
+        $cards = [];
+
+        if ($user_id <= 0 || ! function_exists('mimamori_get_search_diagnostic_summary')) {
+            return ['points' => 0, 'max' => $max, 'label' => '検索・診断', 'cards' => $cards];
+        }
+
+        $summary = mimamori_get_search_diagnostic_summary($user_id);
+        $card_keys = ['organic_rank', 'map_rank', 'seo_diagnosis', 'aio_score', 'meo_diagnosis'];
+        $card_labels = [
+            'organic_rank'  => '自然検索順位',
+            'map_rank'      => 'マップ順位',
+            'seo_diagnosis' => 'SEO診断',
+            'aio_score'     => 'AIO診断',
+            'meo_diagnosis' => 'MEO診断',
+        ];
+
+        $sum   = 0.0;
+        $count = 0;
+        foreach ($card_keys as $key) {
+            $card = $summary[$key] ?? null;
+            if (!is_array($card)) { continue; }
+            $status = (string)($card['status'] ?? '');
+            if ($status === '' || $status === 'none') {
+                $cards[] = ['label' => $card_labels[$key], 'score' => null, 'ok' => false];
+                continue;
+            }
+            $score = (float)($card['score'] ?? 0);
+            $sum += $score;
+            $count++;
+            $cards[] = ['label' => $card_labels[$key], 'score' => (int)round($score), 'ok' => true];
+        }
+
+        $points = ($count > 0) ? (int)round( ($sum / $count) * $max / 100 ) : 0;
+
+        return [
+            'points' => $points,
+            'max'    => $max,
+            'label'  => '検索・診断',
+            'cards'  => $cards,
+        ];
+    }
+
+    /**
+     * 月次ヘルススコアを計算（v3: 5コンポーネント制）
+     *
+     * Achievement(50) + Growth(30) + Stability(10) + ActionBonus(10) + SearchDiag(15) = 最大115pt
+     *   → 最終スコアは min(100, ...) で 100点に丸める（フロア35）
      * フロア: 最低35点（全指標0の場合は0点）
      *
      * @param array $curr    当月の指標（キー: traffic, cv, gsc, meo）
@@ -9925,8 +9985,15 @@ PROMPT;
         $action      = ($user_id > 0)
             ? $this->calc_action_bonus_component($user_id)
             : ['points' => 0, 'max' => 10, 'label' => '行動ボーナス', 'checks' => []];
+        $search_diag = ($user_id > 0)
+            ? $this->calc_search_diag_component($user_id)
+            : ['points' => 0, 'max' => 15, 'label' => '検索・診断', 'cards' => []];
 
-        $raw_total = $achievement['points'] + $growth['points'] + $stability['points'] + $action['points'];
+        $raw_total = $achievement['points']
+                   + $growth['points']
+                   + $stability['points']
+                   + $action['points']
+                   + $search_diag['points'];
 
         // --- 3) フロア適用（最低35点）。全観点0なら0点 ---
         $has_any_data = false;
@@ -9943,6 +10010,7 @@ PROMPT;
             'growth'      => $growth,
             'stability'   => $stability,
             'action'      => $action,
+            'search_diag' => $search_diag,
         ];
 
         return [

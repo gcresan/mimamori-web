@@ -990,6 +990,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     'growth'      => '📈',
     'stability'   => "\u{1F6E1}\u{FE0F}",
     'action'      => '⭐',
+    'search_diag' => '🔍',
   ];
   ?>
 
@@ -1140,6 +1141,20 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
                     <span class="score-comp-check-item <?php echo $check['ok'] ? 'is-ok' : 'is-ng'; ?>">
                       <?php echo $check['ok'] ? '✓' : '✗'; ?>
                       <?php echo esc_html($check['label']); ?>
+                    </span>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+
+              <?php if ($comp_key === 'search_diag' && !empty($comp['cards'])): ?>
+                <div class="score-comp-checklist">
+                  <?php foreach ($comp['cards'] as $card): ?>
+                    <span class="score-comp-check-item <?php echo $card['ok'] ? 'is-ok' : 'is-ng'; ?>">
+                      <?php if ($card['ok']): ?>
+                        <?php echo esc_html($card['label'] . ' ' . $card['score'] . '点'); ?>
+                      <?php else: ?>
+                        <?php echo esc_html($card['label'] . ' 未取得'); ?>
+                      <?php endif; ?>
                     </span>
                   <?php endforeach; ?>
                 </div>
@@ -1414,12 +1429,12 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             }
         }
 
-        var compIcons = { achievement: '📊', growth: '📈', stability: '\u{1F6E1}\uFE0F', action: '⭐' };
-        var compLabels = { achievement: '実績（中央値比較）', growth: '成長（前月比）', stability: '安定性', action: '行動ボーナス' };
+        var compIcons = { achievement: '📊', growth: '📈', stability: '\u{1F6E1}\uFE0F', action: '⭐', search_diag: '🔍' };
+        var compLabels = { achievement: '実績（中央値比較）', growth: '成長（前月比）', stability: '安定性', action: '行動ボーナス', search_diag: '検索・診断' };
         var dimLabels = { traffic: 'サイトに来た人の数', cv: 'ゴール（問い合わせ・申込みなど）', gsc: '検索結果からクリックされた数', meo: '地図検索からの表示数' };
 
         var html = '';
-        var compOrder = ['achievement', 'growth', 'stability', 'action'];
+        var compOrder = ['achievement', 'growth', 'stability', 'action', 'search_diag'];
         compOrder.forEach(function(key) {
             var comp = components[key];
             if (!comp) return;
@@ -1470,6 +1485,19 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
                     var cls = chk.ok ? 'is-ok' : 'is-ng';
                     var mark = chk.ok ? '✓' : '✗';
                     html += '<span class="score-comp-check-item ' + cls + '">' + mark + ' ' + chk.label + '</span>';
+                });
+                html += '</div>';
+            }
+
+            // 検索・診断（カード別スコア一覧）
+            if (key === 'search_diag' && comp.cards) {
+                html += '<div class="score-comp-checklist">';
+                comp.cards.forEach(function(card) {
+                    var cls = card.ok ? 'is-ok' : 'is-ng';
+                    var label = card.ok
+                        ? (card.label + ' ' + card.score + '点')
+                        : (card.label + ' 未取得');
+                    html += '<span class="score-comp-check-item ' + cls + '">' + label + '</span>';
                 });
                 html += '</div>';
             }
