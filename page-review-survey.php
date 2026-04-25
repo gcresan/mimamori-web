@@ -172,6 +172,45 @@ get_header();
 .sv-btn-save:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
 .sv-btn-save:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
+/* Sticky save bar（編集モード中は画面下部に常時表示） */
+.sv-sticky-actions {
+    position: sticky; bottom: 0; z-index: 50;
+    margin: 32px -16px -16px;
+    padding: 14px 20px;
+    background: rgba(255,255,255,0.97);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid #e5e7eb;
+    box-shadow: 0 -6px 20px rgba(0,0,0,0.08);
+}
+.sv-sticky-actions-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+}
+.sv-sticky-status {
+    font-size: 13px; color: #6b7280; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 8px;
+}
+.sv-sticky-status.dirty { color: #dc2626; font-weight: 700; }
+.sv-sticky-status .sv-sticky-dot {
+    display: none; width: 9px; height: 9px; border-radius: 50%;
+    background: #dc2626;
+    animation: sv-sticky-pulse 1.6s ease-in-out infinite;
+}
+.sv-sticky-status.dirty .sv-sticky-dot { display: inline-block; }
+@keyframes sv-sticky-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(1.18); }
+}
+.sv-sticky-btn-save { padding: 12px 32px; font-size: 15px; }
+
+@media (max-width: 768px) {
+    .sv-sticky-actions { padding: 12px 14px; }
+    .sv-sticky-actions-inner { flex-direction: column-reverse; align-items: stretch; }
+    .sv-sticky-btn-save { width: 100%; justify-content: center; }
+    .sv-sticky-status { justify-content: center; }
+}
+
 /* Public URL */
 .sv-public-url {
     display: flex; align-items: center; gap: 8px;
@@ -563,6 +602,17 @@ get_header();
         <div class="sv-form-card" id="sv-danger-card" style="display:none;">
             <div class="sv-danger-zone" style="border-top:none; padding-top:0; margin-top:0;">
                 <button type="button" class="sv-btn-danger" id="sv-btn-delete-survey">このアンケートを削除する</button>
+            </div>
+        </div>
+
+        <!-- 固定保存バー（編集モード中は画面下に常時表示） -->
+        <div class="sv-sticky-actions">
+            <div class="sv-sticky-actions-inner">
+                <span class="sv-sticky-status" id="sv-sticky-status">
+                    <span class="sv-sticky-dot"></span>
+                    <span id="sv-sticky-status-text">アンケート情報の編集</span>
+                </span>
+                <button type="button" class="sv-btn-save sv-sticky-btn-save" id="sv-sticky-btn-save">💾 アンケート情報を保存</button>
             </div>
         </div>
     </div>
@@ -957,6 +1007,8 @@ get_header();
         // AI 30問生成の前回入力もリセット（新しいアンケート用）
         currentAiGenContext = null;
         resetQForm();
+        // 固定保存バーの未保存表示をクリア（プログラム起因の値変更は dirty 扱いしない）
+        if (typeof setFormDirty === 'function') setFormDirty(false);
     }
 
     function loadSurveyDetail(id) {
@@ -1048,6 +1100,7 @@ get_header();
             console.log('[survey-save] response', res);
             if (res && res.success) {
                 toast('保存しました');
+                setFormDirty(false);
                 var newId = res.survey_id;
                 document.getElementById('sv-edit-id').value = newId;
                 currentSurveyId = newId;
@@ -1063,6 +1116,42 @@ get_header();
             console.error('[survey-save] error', e);
             toast('保存に失敗しました: ' + (e && e.message ? e.message : '通信エラー'), 'error');
         });
+    });
+
+    // =====================================================
+    // 固定保存バー（編集モード中、画面下に常時表示）
+    // - 保存ボタン: 既存の sv-btn-save-info を click() して同じ処理を呼ぶ
+    // - 未保存変更があるときは赤いインジケーター + テキストで通知
+    // =====================================================
+    var stickyStatus     = document.getElementById('sv-sticky-status');
+    var stickyStatusText = document.getElementById('sv-sticky-status-text');
+    var stickyBtnSave    = document.getElementById('sv-sticky-btn-save');
+    var formIsDirty      = false;
+
+    function setFormDirty(dirty) {
+        formIsDirty = !!dirty;
+        if (formIsDirty) {
+            stickyStatus.classList.add('dirty');
+            stickyStatusText.textContent = '未保存の変更があります';
+        } else {
+            stickyStatus.classList.remove('dirty');
+            stickyStatusText.textContent = 'アンケート情報の編集';
+        }
+    }
+    // 他関数（キーワード追加・参考口コミ更新など）からも呼べるようグローバル公開
+    window.__svMarkDirty = function() { setFormDirty(true); };
+
+    // 監視対象フィールド
+    ['sv-title', 'sv-description', 'sv-google-url', 'sv-status', 'sv-ai-extra-prompt'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input',  function() { setFormDirty(true); });
+        el.addEventListener('change', function() { setFormDirty(true); });
+    });
+
+    // 固定バーの保存ボタン → 既存の保存ハンドラに委譲
+    stickyBtnSave.addEventListener('click', function() {
+        document.getElementById('sv-btn-save-info').click();
     });
 
     // =====================================================
@@ -1773,6 +1862,7 @@ get_header();
             btn.addEventListener('click', function() {
                 currentKeywords.splice(parseInt(this.dataset.idx), 1);
                 renderKeywords();
+                if (typeof setFormDirty === 'function') setFormDirty(true);
             });
         });
     }
@@ -1783,6 +1873,7 @@ get_header();
         if (currentKeywords.indexOf(v) === -1) {
             currentKeywords.push(v);
             renderKeywords();
+            if (typeof setFormDirty === 'function') setFormDirty(true);
         }
         keywordInput.value = '';
     }
@@ -1865,9 +1956,16 @@ get_header();
         wrap.querySelector('.sv-ref-slot-remove').addEventListener('click', function() {
             wrap.remove();
             renumberRefSlots();
+            if (typeof setFormDirty === 'function') setFormDirty(true);
         });
-        wrap.querySelector('.sv-ref-slot-active').addEventListener('change', renumberRefSlots);
-        wrap.querySelector('.sv-ref-slot-input').addEventListener('input', renumberRefSlots);
+        wrap.querySelector('.sv-ref-slot-active').addEventListener('change', function() {
+            renumberRefSlots();
+            if (typeof setFormDirty === 'function') setFormDirty(true);
+        });
+        wrap.querySelector('.sv-ref-slot-input').addEventListener('input', function() {
+            renumberRefSlots();
+            if (typeof setFormDirty === 'function') setFormDirty(true);
+        });
         refSlotsContainer.appendChild(wrap);
         renumberRefSlots();
         return wrap;
@@ -1920,6 +2018,7 @@ get_header();
             if (slot) {
                 var input = slot.querySelector('.sv-ref-slot-input');
                 if (input) input.focus();
+                if (typeof setFormDirty === 'function') setFormDirty(true);
             }
         });
     }
@@ -2490,6 +2589,7 @@ get_header();
                 !confirm('既存の追加プロンプトと参考口コミサンプルを上書きします。よろしいですか？')) return;
             extraPromptField.value = outputBox.value;
             syncReferenceReviewsFromModal('replace');
+            if (typeof window.__svMarkDirty === 'function') window.__svMarkDirty();
             toast('追加プロンプト＋参考口コミサンプルに反映しました。「保存する」ボタンで確定してください。');
             closeModal();
         });
@@ -2501,6 +2601,7 @@ get_header();
                 ? outputBox.value
                 : current + '\n\n' + outputBox.value;
             syncReferenceReviewsFromModal('append');
+            if (typeof window.__svMarkDirty === 'function') window.__svMarkDirty();
             toast('追加プロンプトに追記＋参考口コミサンプルを追加しました。「保存する」ボタンで確定してください。');
             closeModal();
         });
