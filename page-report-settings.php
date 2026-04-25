@@ -104,21 +104,22 @@ get_header();
     <div class="settings-card">
         <h2>
             <span>📋</span>
-            <span>今月の戦略情報</span>
+            <span>先月の戦略情報</span>
         </h2>
         <p>
-            AIレポート生成のために、今月の課題・目標・取り組み等を入力してください。<br>
+            月次レポートは「先月」と「前々月」のデータを比較して生成されます。<br>
+            AIレポートの精度を高めるため、先月の課題・目標・取り組み等を入力してください。<br>
             サイトURLや商圏などの基本情報は<a href="<?php echo esc_url( home_url( '/account/client-settings/' ) ); ?>" style="color:#4E8A6B;font-weight:600;">クライアント設定</a>で設定できます。
         </p>
 
         <div class="form-group">
-            <label for="input-issue">課題</label>
+            <label for="input-issue">先月の課題</label>
             <textarea id="input-issue" placeholder="例：ゴール達成数の増加、ゴール達成率の向上"><?php echo esc_textarea($saved_issue); ?></textarea>
         </div>
 
         <div class="form-row">
             <div class="form-group">
-                <label for="input-goal-monthly">今月の目標</label>
+                <label for="input-goal-monthly">先月の目標</label>
                 <input type="text" id="input-goal-monthly" placeholder="例：ゴール数を前月比110%に" value="<?php echo esc_attr($saved_goal_monthly); ?>">
             </div>
             <div class="form-group">
@@ -128,7 +129,7 @@ get_header();
         </div>
 
         <div class="form-group">
-            <label for="input-current-state">現状の取り組み</label>
+            <label for="input-current-state">先月の取り組み</label>
             <textarea id="input-current-state" placeholder="例：ブログ更新を週2回実施、SNS広告を月5万円で運用中"><?php echo esc_textarea($saved_current_state); ?></textarea>
         </div>
 

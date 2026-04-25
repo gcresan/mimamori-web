@@ -268,12 +268,12 @@ ROLE;
             $lines[] = "- 主要コンバージョン: " . $client_info['main_conversions'];
         }
 
-        // 月次設定
+        // 月次設定（月次レポートは「先月」と「前々月」の比較のため、戦略情報は「先月」基準）
         $monthly_fields = [
-            'issue'            => '現在の課題',
-            'goal_monthly'     => '今月の目標',
+            'issue'            => '先月の課題',
+            'goal_monthly'     => '先月の目標',
             'focus_numbers'    => '注目指標',
-            'current_state'    => '現在の取り組み',
+            'current_state'    => '先月の取り組み',
             'goal_main'        => '主要目標',
             'additional_notes' => 'その他留意事項',
         ];

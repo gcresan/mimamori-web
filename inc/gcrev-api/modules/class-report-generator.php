@@ -49,7 +49,7 @@ class Gcrev_Report_Generator {
         [
             'id'    => 'good',
             'class' => 'good-points',
-            'label' => '今月の良かった点',
+            'label' => '先月の良かった点',
         ],
         [
             'id'    => 'bad',
@@ -540,10 +540,10 @@ DOMAIN;
         - 業種・業態: {$client['industry']}
         - ビジネス形態: {$business_type_label}
         - ターゲットエリア（都道府県）: {$area_label}
-        - 課題: {$client['issue']}
-        - 今月の目標: {$client['goal_monthly']}
+        - 先月の課題: {$client['issue']}
+        - 先月の目標: {$client['goal_monthly']}
         - 注目指標: {$client['focus_numbers']}
-        - 現状: {$client['current_state']}
+        - 先月の取り組み: {$client['current_state']}
         - 主要目標: {$client['goal_main']}
         - その他留意事項: {$client['additional_notes']}
         {$foreign_note}
@@ -667,9 +667,9 @@ DOMAIN;
         6. HTML構造例（初心者モード — この形を厳守）：
 
            - 結論サマリー（summary）:
-             `<div class="summary"><p>（直近の状態を友人に話すように2〜3文で。「今月は」で始めない。見出し・テーブルは入れない）</p></div>`
+             `<div class="summary"><p>（直近の状態を友人に話すように2〜3文で。「先月は」「今月は」で始めない。見出し・テーブルは入れない）</p></div>`
 
-           - 今月の良かった点（good-points）:
+           - 先月の良かった点（good-points）:
              `<div class="good-points"><h3>⭕ 良かったこと</h3><ul class="point-list"><li><strong>見出し</strong>説明文...</li></ul></div>`
              各liの中は「<strong>小見出し</strong>＋説明」の形。最低2つ、最大4つ。
 
@@ -738,7 +738,7 @@ DOMAIN;
            - 結論サマリー（summary）:
              `<div class="summary"><p>...</p></div>`
 
-           - 今月の良かった点（good-points）:
+           - 先月の良かった点（good-points）:
              `<div class="good-points"><ul class="point-list"><li>...</li></ul></div>`
              **【重要】最低3つの項目を必ず記載すること。ただし、不必要に項目を増やさないこと(最大5つ程度)**
              **【禁止】「つまり何をすればいいか」「具体的なアクション」などの余計な小見出しは絶対に出力しないこと**
@@ -1525,7 +1525,7 @@ DOMAIN;
                 $easy_rows[] = ['地元（' . esc_html($target_area) . '）の人', $area_prev_val, $area_two_val];
             }
 
-            $html .= '<div class="section"><h2>ひと目でわかる！今月のまとめ</h2>';
+            $html .= '<div class="section"><h2>ひと目でわかる！先月のまとめ</h2>';
             $html .= '<table class="easy-summary-table"><thead><tr><th>項目</th><th>状況</th><th>どういうこと？</th></tr></thead><tbody>';
             foreach ($easy_rows as $er) {
                 $er_pct = $this->pct_change($er[1], $er[2]);
@@ -1544,7 +1544,7 @@ DOMAIN;
             $html .= $by_id['summary'];
         }
 
-        $html .= '<div class="section"><h2>' . ($is_easy ? '⭕ 良かったこと' : '👍 今月の良かった点') . '</h2>';
+        $html .= '<div class="section"><h2>' . ($is_easy ? '⭕ 良かったこと' : '👍 先月の良かった点') . '</h2>';
         $good_html = !empty($by_id['good']) ? $by_id['good'] : '<div class="good-points"><ul class="point-list"><li>（AI生成に失敗しました）</li></ul></div>';
         // 良かった点の文末補正: 名詞句＋「：」で終わるli要素を修正
         $good_html = preg_replace_callback(

@@ -4062,12 +4062,14 @@ function mimamori_build_context_blocks(
         $ref_list[] = 'ターゲット顧客像（ペルソナ・参考サイト）';
     }
 
-    // --- Block 2.8: 月次レポート設定（当月分が存在する場合のみ） ---
+    // --- Block 2.8: 月次レポート設定（先月分の戦略情報が存在する場合のみ） ---
+    // 月次レポートは「先月」と「前々月」を比較する仕様のため、
+    // ここで参照する戦略情報はすべて「先月の」ものとして扱う。
     $monthly_fields = [
-        'report_issue'            => '課題',
-        'report_goal_monthly'     => '今月の目標',
+        'report_issue'            => '先月の課題',
+        'report_goal_monthly'     => '先月の目標',
         'report_focus_numbers'    => '注目している指標',
-        'report_current_state'    => '現状の取り組み',
+        'report_current_state'    => '先月の取り組み',
         'report_goal_main'        => '主要目標',
         'report_additional_notes' => 'その他留意事項',
     ];
@@ -4079,10 +4081,10 @@ function mimamori_build_context_blocks(
         }
     }
     if ( ! empty( $monthly_parts ) ) {
-        $monthly_block  = "【今月の戦略情報（月次レポート設定より）】\n";
+        $monthly_block  = "【先月の戦略情報（月次レポート設定より）】\n";
         $monthly_block .= implode( "\n", $monthly_parts );
         $blocks[]   = $monthly_block;
-        $ref_list[] = '今月の月次レポート設定（課題・目標等）';
+        $ref_list[] = '先月の月次レポート設定（課題・目標等）';
     }
 
     // --- Block 2.9: 診断結果コンテキスト（関連質問時のみ） ---

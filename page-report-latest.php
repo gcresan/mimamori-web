@@ -762,10 +762,10 @@ get_header();
 
         <!-- 📋 総評 -->
         <div class="report-section" data-ai-section="report_summary">
-            <h2 class="section-title">📋 <?php echo esc_html($year . '年' . $month . '月'); ?>の総評
+            <h2 class="section-title">📋 <?php echo esc_html($year . '年' . $month . '月'); ?>の総合評価
               <?php if ($can_ai): ?>
               <button type="button" class="ask-ai-btn" data-ai-ask
-                data-ai-instruction="今月の総評を見て、最も重要な気づきと次にやることを教えて">
+                data-ai-instruction="先月の総合評価を見て、最も重要な気づきと次にやることを教えて">
                 <span class="ask-ai-btn__icon" aria-hidden="true">✨</span>AIに聞く
               </button>
               <?php endif; ?>
@@ -773,11 +773,11 @@ get_header();
             <div class="section-content">
                 <?php if (!empty($monthly_report['summary'])): ?>
                 <div class="highlight-box">
-                    <h4>🎯 今月の総合評価</h4>
+                    <h4>🎯 総合評価</h4>
                     <p><?php echo enhance_report_text($monthly_report['summary']); ?></p>
                 </div>
                 <?php else: ?>
-                <p>今月のレポートサマリーを生成中です...</p>
+                <p>先月のレポートサマリーを生成中です...</p>
                 <?php endif; ?>
             </div>
         </div>

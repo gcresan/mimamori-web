@@ -1260,7 +1260,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
       <?php else: ?>
         <div class="info-monthly-summary">
-          <p class="info-monthly-wait">今月のレポートサマリーを生成中です...</p>
+          <p class="info-monthly-wait">先月のレポートサマリーを生成中です...</p>
         </div>
       <?php endif; ?>
 

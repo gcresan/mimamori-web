@@ -9851,8 +9851,8 @@ PROMPT;
             ['key' => 'site_url',            'label' => 'サイトURL',   'value' => $client['site_url'] ?? ''],
             ['key' => 'area_type',           'label' => '商圏',       'value' => $client['area_type'] ?? ''],
             ['key' => 'industry_category',   'label' => '業種',       'value' => $client['industry_category'] ?? ''],
-            ['key' => 'report_issue',        'label' => '今月の課題',  'value' => get_user_meta($user_id, 'report_issue', true)],
-            ['key' => 'report_goal_monthly', 'label' => '今月の目標',  'value' => get_user_meta($user_id, 'report_goal_monthly', true)],
+            ['key' => 'report_issue',        'label' => '先月の課題',  'value' => get_user_meta($user_id, 'report_issue', true)],
+            ['key' => 'report_goal_monthly', 'label' => '先月の目標',  'value' => get_user_meta($user_id, 'report_goal_monthly', true)],
         ];
 
         foreach ($items as $item) {
