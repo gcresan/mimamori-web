@@ -288,6 +288,12 @@ class Gcrev_AI_Client {
         if ( isset( $options['topK'] ) ) {
             $config['topK'] = (int) $options['topK'];
         }
+        // Gemini 2.5 系の thinking を制御（0 で無効化、>0 で予算指定）
+        // 構造化JSONを返すタスクでは thinking が出力枠を食いつぶし
+        // finishReason=MAX_TOKENS で本文が空になる事故が起きるため、呼び出し側で明示できるようにする
+        if ( isset( $options['thinkingBudget'] ) ) {
+            $config['thinkingConfig'] = [ 'thinkingBudget' => (int) $options['thinkingBudget'] ];
+        }
         return $config;
     }
 

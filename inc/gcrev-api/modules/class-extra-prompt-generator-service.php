@@ -180,9 +180,13 @@ PROMPT;
         }
         $config = new Gcrev_Config();
         $client = new Gcrev_AI_Client( $config );
+        // Gemini 2.5 Flash の thinking を無効化（thinkingBudget=0）。
+        // 有効のままだと内部思考だけで maxOutputTokens を使い切り、
+        // finishReason=MAX_TOKENS で本文が空になる（実例: 4096 では空応答）
         return (string) $client->call_gemini_api( $prompt, [
             'temperature'     => 0.5,
-            'maxOutputTokens' => 4096,
+            'maxOutputTokens' => 8192,
+            'thinkingBudget'  => 0,
         ] );
     }
 
