@@ -110,10 +110,30 @@ get_header();
 }
 .sv-btn-copy-url:hover { background: #eff6ff; }
 .sv-btn-copy-url.copied { background: #d1fae5; color: #059669; border-color: #059669; }
+.sv-btn-qr {
+    background: #fff; color: #7c3aed; border-color: #c4b5fd;
+}
+.sv-btn-qr:hover { background: #f5f3ff; }
 .sv-btn-delete {
     background: #fff; color: #dc2626; border-color: #fca5a5;
 }
 .sv-btn-delete:hover { background: #fef2f2; }
+
+/* QR コード モーダル */
+.sv-qr-canvas-wrap {
+    display: inline-block; padding: 14px; background: #fff;
+    border: 1px solid #e5e7eb; border-radius: 8px;
+}
+.sv-qr-canvas-wrap canvas {
+    display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+    width: 240px; height: 240px;
+}
+.sv-public-url-qr {
+    padding: 4px 12px; font-size: 12px; font-weight: 600;
+    background: #fff; color: #7c3aed; border: 1px solid #7c3aed; border-radius: 6px;
+    cursor: pointer; white-space: nowrap;
+}
+.sv-public-url-qr:hover { background: #f5f3ff; }
 
 .sv-empty {
     text-align: center; padding: 48px 20px; color: #888;
@@ -622,6 +642,23 @@ get_header();
 <!-- Toast -->
 <div class="sv-toast" id="sv-toast"></div>
 
+<!-- QRコードモーダル -->
+<div class="sv-modal-overlay" id="sv-qr-modal">
+    <div class="sv-modal" style="max-width:420px; text-align:center;">
+        <div class="sv-modal-title">QRコード</div>
+        <p style="font-size:12px; color:#6b7280; margin:0 0 12px;">スマートフォンのカメラで読み取るとアンケート回答画面が開きます。</p>
+        <div id="sv-qr-canvas-area" style="margin: 8px 0 14px; display:flex; justify-content:center;"></div>
+        <div id="sv-qr-url" style="font-size:12px; color:#6b7280; word-break:break-all; margin-bottom:14px; padding:8px 10px; background:#f9fafb; border-radius:6px; border:1px solid #e5e7eb;"></div>
+        <div class="sv-modal-actions" style="justify-content:center;">
+            <button type="button" class="sv-btn-secondary" id="sv-qr-modal-close">閉じる</button>
+            <button type="button" class="sv-btn-save" id="sv-qr-download">PNG をダウンロード</button>
+        </div>
+    </div>
+</div>
+
+<!-- QRコード生成ライブラリ（Kazuhiko Arase, MIT） -->
+<script src="<?php echo esc_url( get_template_directory_uri() . '/assets/js/qrcode.min.js' ); ?>"></script>
+
 <!-- Question edit modal -->
 <div class="sv-modal-overlay" id="sv-q-modal">
     <div class="sv-modal">
@@ -953,6 +990,7 @@ get_header();
             html += '<button class="sv-btn-sm sv-btn-edit" data-id="' + s.id + '">編集</button>';
             if (isPub && s.public_url) {
                 html += '<button class="sv-btn-sm sv-btn-copy-url" data-url="' + esc(s.public_url) + '">回答URLコピー</button>';
+                html += '<button class="sv-btn-sm sv-btn-qr" data-url="' + esc(s.public_url) + '" data-title="' + esc(s.title) + '">📱 QRコード</button>';
             }
             html += '<button class="sv-btn-sm sv-btn-delete" data-id="' + s.id + '" data-title="' + esc(s.title) + '">削除</button>';
             html += '</div>';
@@ -966,6 +1004,9 @@ get_header();
         });
         listContainer.querySelectorAll('.sv-btn-copy-url').forEach(function(btn) {
             btn.addEventListener('click', function() { copyToClipboard(btn, btn.dataset.url); });
+        });
+        listContainer.querySelectorAll('.sv-btn-qr').forEach(function(btn) {
+            btn.addEventListener('click', function() { openQrModal(btn.dataset.url, btn.dataset.title); });
         });
         listContainer.querySelectorAll('.sv-btn-delete').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -1037,9 +1078,13 @@ get_header();
                     '<div class="sv-public-url">' +
                     '<input type="text" value="' + esc(data.public_url) + '" readonly>' +
                     '<button type="button" class="sv-public-url-copy" id="sv-copy-pub-url">コピー</button>' +
+                    '<button type="button" class="sv-public-url-qr" id="sv-qr-pub-url">📱 QRコード</button>' +
                     '</div>';
                 document.getElementById('sv-copy-pub-url').addEventListener('click', function() {
                     copyToClipboard(this, data.public_url);
+                });
+                document.getElementById('sv-qr-pub-url').addEventListener('click', function() {
+                    openQrModal(data.public_url, document.getElementById('sv-title').value || 'survey');
                 });
             }
 
@@ -2606,6 +2651,100 @@ get_header();
             closeModal();
         });
     })();
+
+    // =====================================================
+    // QRコード（生成 + PNG ダウンロード）
+    // ライブラリ: assets/js/qrcode.min.js (Kazuhiko Arase, MIT)
+    // =====================================================
+    var qrModal       = document.getElementById('sv-qr-modal');
+    var qrCanvasArea  = document.getElementById('sv-qr-canvas-area');
+    var qrUrlText     = document.getElementById('sv-qr-url');
+    var qrCurrentUrl  = '';
+    var qrCurrentName = '';
+
+    /**
+     * QR コードを canvas に描画して返す。
+     * @param {string} text       QR にエンコードする文字列（URL）
+     * @param {number} cellSize   1セルあたりの px サイズ
+     * @param {number} margin     周囲の余白（セル数）
+     * @return {HTMLCanvasElement}
+     */
+    function drawQrToCanvas(text, cellSize, margin) {
+        if (typeof qrcode === 'undefined') return null;
+        // typeNumber=0: 自動判定 / errorCorrectionLevel='H': 印刷想定で最も誤り訂正能力が高い
+        var qr = qrcode(0, 'H');
+        qr.addData(text);
+        qr.make();
+        var n    = qr.getModuleCount();
+        var size = (n + margin * 2) * cellSize;
+        var canvas = document.createElement('canvas');
+        canvas.width  = size;
+        canvas.height = size;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = '#000';
+        for (var r = 0; r < n; r++) {
+            for (var c = 0; c < n; c++) {
+                if (qr.isDark(r, c)) {
+                    ctx.fillRect((c + margin) * cellSize, (r + margin) * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+        return canvas;
+    }
+
+    function openQrModal(url, title) {
+        if (!url) { toast('公開URLが未設定です', 'error'); return; }
+        if (typeof qrcode === 'undefined') {
+            toast('QRコードライブラリが読み込まれていません', 'error');
+            return;
+        }
+        qrCurrentUrl  = url;
+        qrCurrentName = title || 'survey';
+        qrUrlText.textContent = url;
+
+        var canvas = drawQrToCanvas(url, 8, 4);
+        if (!canvas) { toast('QRコードの生成に失敗しました', 'error'); return; }
+        qrCanvasArea.innerHTML = '';
+        var wrap = document.createElement('div');
+        wrap.className = 'sv-qr-canvas-wrap';
+        wrap.appendChild(canvas);
+        qrCanvasArea.appendChild(wrap);
+
+        qrModal.classList.add('show');
+    }
+
+    document.getElementById('sv-qr-modal-close').addEventListener('click', function() {
+        qrModal.classList.remove('show');
+    });
+    qrModal.addEventListener('click', function(e) {
+        if (e.target === qrModal) qrModal.classList.remove('show');
+    });
+
+    document.getElementById('sv-qr-download').addEventListener('click', function() {
+        if (!qrCurrentUrl) return;
+        // ダウンロード用に高解像度（cellSize=20、~700px）で再描画
+        var canvas = drawQrToCanvas(qrCurrentUrl, 20, 4);
+        if (!canvas) { toast('QRコードの生成に失敗しました', 'error'); return; }
+        try {
+            var dataUrl = canvas.toDataURL('image/png');
+            var safeName = (qrCurrentName || 'survey')
+                .replace(/[\\\/:*?"<>|]/g, '_')
+                .replace(/\s+/g, '_')
+                .slice(0, 40);
+            var a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = 'survey-qr-' + safeName + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            toast('QRコード（PNG）をダウンロードしました');
+        } catch (err) {
+            console.error('[qr-download]', err);
+            toast('ダウンロードに失敗しました', 'error');
+        }
+    });
 
     // =====================================================
     // Init
