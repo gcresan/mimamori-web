@@ -204,31 +204,29 @@ get_header();
     box-shadow: 0 -6px 20px rgba(0,0,0,0.08);
 }
 .sv-sticky-actions-inner {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: center; justify-content: center;
     gap: 12px; flex-wrap: wrap;
 }
-.sv-sticky-status {
-    font-size: 13px; color: #6b7280; font-weight: 500;
-    display: inline-flex; align-items: center; gap: 8px;
-}
-.sv-sticky-status.dirty { color: #dc2626; font-weight: 700; }
-.sv-sticky-status .sv-sticky-dot {
-    display: none; width: 9px; height: 9px; border-radius: 50%;
-    background: #dc2626;
+.sv-sticky-btn-save { position: relative; padding: 12px 32px; font-size: 15px; }
+/* 未保存変更があるとき: 保存ボタン右上に赤い点滅ドットを表示 */
+.sv-sticky-btn-save.dirty::after {
+    content: ''; position: absolute; top: -5px; right: -5px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #dc2626; border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(220,38,38,0.35);
     animation: sv-sticky-pulse 1.6s ease-in-out infinite;
 }
-.sv-sticky-status.dirty .sv-sticky-dot { display: inline-block; }
+.sv-sticky-btn-delete { padding: 12px 20px; font-size: 14px; }
 @keyframes sv-sticky-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50%      { opacity: 0.5; transform: scale(1.18); }
+    50%      { opacity: 0.55; transform: scale(1.2); }
 }
-.sv-sticky-btn-save { padding: 12px 32px; font-size: 15px; }
 
 @media (max-width: 768px) {
     .sv-sticky-actions { padding: 12px 14px; }
     .sv-sticky-actions-inner { flex-direction: column-reverse; align-items: stretch; }
-    .sv-sticky-btn-save { width: 100%; justify-content: center; }
-    .sv-sticky-status { justify-content: center; }
+    .sv-sticky-btn-save,
+    .sv-sticky-btn-delete { width: 100%; justify-content: center; }
 }
 
 /* Public URL */
@@ -472,7 +470,6 @@ get_header();
                     </details>
                 </div>
             </div>
-            <button type="button" class="sv-btn-save" id="sv-btn-save-info">保存する</button>
         </div>
 
         <!-- デザイン設定（カラーカスタマイズ） -->
@@ -618,20 +615,10 @@ get_header();
             </div>
         </div>
 
-        <!-- 削除ゾーン -->
-        <div class="sv-form-card" id="sv-danger-card" style="display:none;">
-            <div class="sv-danger-zone" style="border-top:none; padding-top:0; margin-top:0;">
-                <button type="button" class="sv-btn-danger" id="sv-btn-delete-survey">このアンケートを削除する</button>
-            </div>
-        </div>
-
-        <!-- 固定保存バー（編集モード中は画面下に常時表示） -->
+        <!-- 固定アクションバー（編集モード中は画面下に常時表示） -->
         <div class="sv-sticky-actions">
             <div class="sv-sticky-actions-inner">
-                <span class="sv-sticky-status" id="sv-sticky-status">
-                    <span class="sv-sticky-dot"></span>
-                    <span id="sv-sticky-status-text">アンケート情報の編集</span>
-                </span>
+                <button type="button" class="sv-btn-danger sv-sticky-btn-delete" id="sv-sticky-btn-delete" style="display:none;">このアンケートを削除する</button>
                 <button type="button" class="sv-btn-save sv-sticky-btn-save" id="sv-sticky-btn-save">💾 アンケート情報を保存</button>
             </div>
         </div>
@@ -1039,8 +1026,10 @@ get_header();
         document.getElementById('sv-status').value = 'draft';
         document.getElementById('sv-public-url-area').style.display = 'none';
         document.getElementById('sv-questions-card').style.display = 'none';
-        document.getElementById('sv-danger-card').style.display = 'none';
         document.getElementById('sv-color-card').style.display = 'none';
+        // 固定アクションバーの削除ボタンを隠す（新規作成・空状態では非表示）
+        var __delBtn = document.getElementById('sv-sticky-btn-delete');
+        if (__delBtn) __delBtn.style.display = 'none';
         document.getElementById('sv-questions-container').innerHTML = '';
         document.getElementById('sv-ai-extra-prompt').value = '';
         if (typeof loadKeywords === 'function') loadKeywords('');
@@ -1090,7 +1079,9 @@ get_header();
 
             // Questions
             document.getElementById('sv-questions-card').style.display = 'block';
-            document.getElementById('sv-danger-card').style.display = 'block';
+            // 固定アクションバーの削除ボタンを表示（既存アンケート編集時のみ）
+            var __delBtn2 = document.getElementById('sv-sticky-btn-delete');
+            if (__delBtn2) __delBtn2.style.display = '';
             renderQuestionTable(data.questions || []);
 
             // カラー設定
@@ -1100,10 +1091,40 @@ get_header();
     }
 
     // =====================================================
-    // Save survey info
+    // 固定アクションバー（編集モード中は画面下に常時表示）
+    // - 保存・削除はすべてここに集約（in-card 保存/削除ボタンは廃止）
+    // - 未保存変更がある間は保存ボタン右上に赤い点滅ドットで通知
     // =====================================================
-    document.getElementById('sv-btn-save-info').addEventListener('click', function() {
-        var btn = this;
+    var stickyBtnSave   = document.getElementById('sv-sticky-btn-save');
+    var stickyBtnDelete = document.getElementById('sv-sticky-btn-delete');
+    var SAVE_LABEL_DEFAULT = '💾 アンケート情報を保存';
+    var formIsDirty     = false;
+
+    function setFormDirty(dirty) {
+        formIsDirty = !!dirty;
+        if (formIsDirty) stickyBtnSave.classList.add('dirty');
+        else             stickyBtnSave.classList.remove('dirty');
+    }
+    // 他関数（キーワード追加・参考口コミ更新など）からも呼べるようグローバル公開
+    window.__svMarkDirty = function() { setFormDirty(true); };
+
+    // フォーム値変更を監視して dirty を立てる
+    ['sv-title', 'sv-description', 'sv-google-url', 'sv-status', 'sv-ai-extra-prompt'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input',  function() { setFormDirty(true); });
+        el.addEventListener('change', function() { setFormDirty(true); });
+    });
+
+    // 削除ボタンの表示制御（既存アンケート編集中だけ表示）
+    function setStickyDeleteVisible(visible) {
+        if (!stickyBtnDelete) return;
+        stickyBtnDelete.style.display = visible ? '' : 'none';
+    }
+
+    // 保存処理本体
+    stickyBtnSave.addEventListener('click', function() {
+        var btn = stickyBtnSave;
         var title = document.getElementById('sv-title').value.trim();
         if (!title) { toast('タイトルを入力してください', 'error'); return; }
 
@@ -1121,7 +1142,6 @@ get_header();
             ai_reference_reviews: getReferenceReviews(),
         };
 
-        // デバッグ: 送信する payload のサイズを記録
         try {
             var payloadStr = JSON.stringify(payload);
             console.log('[survey-save] payload size=' + payloadStr.length + ' bytes, refs=' + (payload.ai_reference_reviews || []).length);
@@ -1129,7 +1149,7 @@ get_header();
 
         var resetBtn = function() {
             btn.disabled = false;
-            btn.textContent = '保存する';
+            btn.textContent = SAVE_LABEL_DEFAULT;
         };
 
         // タイムアウト（60秒）: サーバーが応答しない場合もトーストを出す
@@ -1150,7 +1170,7 @@ get_header();
                 document.getElementById('sv-edit-id').value = newId;
                 currentSurveyId = newId;
                 document.getElementById('sv-questions-card').style.display = 'block';
-                document.getElementById('sv-danger-card').style.display = 'block';
+                setStickyDeleteVisible(true);
                 loadSurveyDetail(newId);
             } else {
                 toast((res && res.message) ? res.message : '保存に失敗しました', 'error');
@@ -1161,42 +1181,6 @@ get_header();
             console.error('[survey-save] error', e);
             toast('保存に失敗しました: ' + (e && e.message ? e.message : '通信エラー'), 'error');
         });
-    });
-
-    // =====================================================
-    // 固定保存バー（編集モード中、画面下に常時表示）
-    // - 保存ボタン: 既存の sv-btn-save-info を click() して同じ処理を呼ぶ
-    // - 未保存変更があるときは赤いインジケーター + テキストで通知
-    // =====================================================
-    var stickyStatus     = document.getElementById('sv-sticky-status');
-    var stickyStatusText = document.getElementById('sv-sticky-status-text');
-    var stickyBtnSave    = document.getElementById('sv-sticky-btn-save');
-    var formIsDirty      = false;
-
-    function setFormDirty(dirty) {
-        formIsDirty = !!dirty;
-        if (formIsDirty) {
-            stickyStatus.classList.add('dirty');
-            stickyStatusText.textContent = '未保存の変更があります';
-        } else {
-            stickyStatus.classList.remove('dirty');
-            stickyStatusText.textContent = 'アンケート情報の編集';
-        }
-    }
-    // 他関数（キーワード追加・参考口コミ更新など）からも呼べるようグローバル公開
-    window.__svMarkDirty = function() { setFormDirty(true); };
-
-    // 監視対象フィールド
-    ['sv-title', 'sv-description', 'sv-google-url', 'sv-status', 'sv-ai-extra-prompt'].forEach(function(id) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('input',  function() { setFormDirty(true); });
-        el.addEventListener('change', function() { setFormDirty(true); });
-    });
-
-    // 固定バーの保存ボタン → 既存の保存ハンドラに委譲
-    stickyBtnSave.addEventListener('click', function() {
-        document.getElementById('sv-btn-save-info').click();
     });
 
     // =====================================================
@@ -2071,7 +2055,7 @@ get_header();
     // =====================================================
     // Delete survey
     // =====================================================
-    document.getElementById('sv-btn-delete-survey').addEventListener('click', function() {
+    document.getElementById('sv-sticky-btn-delete').addEventListener('click', function() {
         var title = document.getElementById('sv-title').value.trim() || 'このアンケート';
         if (!confirm('「' + title + '」を削除しますか？\nこの操作は取り消せません。')) return;
 
