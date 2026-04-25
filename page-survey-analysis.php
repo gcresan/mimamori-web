@@ -33,6 +33,25 @@ get_header();
     outline: none; border-color: var(--mw-primary-blue, #568184); background: #fff;
 }
 
+/* Buttons — match other survey pages */
+.sv-btn-save {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; background: var(--mw-primary-blue, #568184);
+    color: #fff; font-size: 14px; font-weight: 600; border: none; border-radius: 8px;
+    cursor: pointer; transition: all 0.25s ease;
+}
+.sv-btn-save:hover { background: #476C6F; box-shadow: 0 4px 12px rgba(86,129,132,0.25); transform: translateY(-1px); }
+.sv-btn-save:active { transform: translateY(0); box-shadow: 0 1px 3px rgba(86,129,132,0.15); }
+.sv-btn-save:focus-visible { outline: 2px solid var(--mw-primary-blue, #568184); outline-offset: 2px; }
+.sv-btn-save:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+.sv-btn-secondary {
+    padding: 8px 16px; font-size: 13px; font-weight: 600;
+    background: #fff; color: #374151; border: 1.5px solid #d1d5db; border-radius: 6px;
+    cursor: pointer;
+}
+.sv-btn-secondary:hover { background: #f9fafb; }
+
 /* Analysis cards */
 .sv-analysis-card {
     background: var(--mw-bg-primary, #fff);
@@ -87,27 +106,6 @@ get_header();
     background: #e0e7ff; border-radius: 20px;
 }
 
-/* Blockquote / review candidates */
-.sv-analysis-quote {
-    background: #f9fafb; border-left: 4px solid var(--mw-primary-blue, #568184);
-    border-radius: 0 8px 8px 0; padding: 16px 20px; margin-bottom: 12px;
-    position: relative;
-}
-.sv-analysis-quote:last-child { margin-bottom: 0; }
-.sv-analysis-quote-text {
-    font-size: 14px; line-height: 1.8; color: #374151;
-    margin: 0; white-space: pre-wrap;
-}
-.sv-copy-btn-sm {
-    position: absolute; top: 12px; right: 12px;
-    padding: 4px 12px; font-size: 11px; font-weight: 600;
-    background: #fff; color: var(--mw-primary-blue, #568184);
-    border: 1px solid var(--mw-primary-blue, #568184); border-radius: 6px;
-    cursor: pointer; transition: background 0.15s;
-}
-.sv-copy-btn-sm:hover { background: #f0f7f7; }
-.sv-copy-btn-sm.copied { background: #d1fae5; color: #059669; border-color: #059669; }
-
 /* Overall comment */
 .sv-analysis-comment {
     background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
@@ -123,8 +121,6 @@ get_header();
 @media (max-width: 768px) {
     .sv-filter-bar { flex-direction: column; align-items: stretch; }
     .sv-filter-bar select { max-width: 100%; }
-    .sv-copy-btn-sm { position: static; margin-top: 10px; display: inline-block; }
-    .sv-analysis-quote { padding-right: 16px; }
 }
 </style>
 
@@ -330,19 +326,7 @@ get_header();
             html += buildCardClose();
         }
 
-        // 5. 口コミ候補文
-        if (analysis.review_candidates && analysis.review_candidates.length) {
-            html += buildCardOpen('✍️', '口コミ候補文', '#568184');
-            analysis.review_candidates.forEach(function(text, idx) {
-                html += '<div class="sv-analysis-quote">';
-                html += '<p class="sv-analysis-quote-text">' + esc(text) + '</p>';
-                html += '<button type="button" class="sv-copy-btn-sm" data-idx="' + idx + '">コピー</button>';
-                html += '</div>';
-            });
-            html += buildCardClose();
-        }
-
-        // 6. 総合コメント
+        // 5. 総合コメント
         if (analysis.overall_comment) {
             html += buildCardOpen('📝', '総合コメント', '#059669');
             html += '<div class="sv-analysis-comment">' + esc(analysis.overall_comment) + '</div>';
@@ -350,24 +334,6 @@ get_header();
         }
 
         resultsEl.innerHTML = html;
-
-        // Bind copy buttons
-        resultsEl.querySelectorAll('.sv-copy-btn-sm').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var idx = parseInt(btn.dataset.idx);
-                var text = (analysis.review_candidates && analysis.review_candidates[idx]) || '';
-                navigator.clipboard.writeText(text).then(function() {
-                    btn.classList.add('copied');
-                    btn.textContent = 'コピーしました';
-                    setTimeout(function() {
-                        btn.classList.remove('copied');
-                        btn.textContent = 'コピー';
-                    }, 2000);
-                }).catch(function() {
-                    toast('コピーに失敗しました', 'error');
-                });
-            });
-        });
     }
 
     function buildCardOpen(icon, title, accentColor) {
