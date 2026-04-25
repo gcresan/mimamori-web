@@ -83,6 +83,28 @@ get_header();
 .sv-q-chart-count {
     font-size: 13px; color: #6b7280; margin-top: 4px;
 }
+.sv-q-low-sample {
+    display: inline-block; margin-left: 8px; padding: 2px 8px;
+    font-size: 11px; font-weight: 600; color: #92400e;
+    background: #fef3c7; border-radius: 4px;
+}
+
+/* Random pool notice (links to AI analysis page) */
+.sv-random-pool-notice {
+    margin-top: 16px; padding: 16px 20px;
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+    font-size: 13px; line-height: 1.7; color: #4b5563;
+}
+.sv-random-pool-notice strong { color: #1f2937; }
+.sv-random-pool-notice a {
+    color: var(--mw-primary-blue, #568184); font-weight: 600;
+    text-decoration: none;
+}
+.sv-random-pool-notice a:hover { text-decoration: underline; }
+.sv-section-note {
+    margin-top: -8px; margin-bottom: 12px;
+    font-size: 12px; color: #6b7280;
+}
 
 /* Reuse sv-form-card, sv-form-title, sv-empty from page-review-survey */
 .sv-form-card {
@@ -155,10 +177,17 @@ get_header();
             </div>
         </div>
 
-        <!-- Question distributions -->
+        <!-- Fixed question distributions (定点観測項目) -->
         <div class="sv-form-card" style="margin-top:16px;">
-            <div class="sv-form-title">質問別回答分布</div>
+            <div class="sv-form-title">定点観測項目（必須質問）</div>
+            <div class="sv-section-note">必須質問は全回答者に出題されるため、母数が安定し経時比較に向いています。</div>
             <div id="sv-question-charts"></div>
+            <div class="sv-random-pool-notice">
+                <strong>ランダム出題項目について</strong><br>
+                必須以外の質問はランダムに出題されるため、質問ごとの回答数が偏ります。傾向の把握には
+                <a href="<?php echo esc_url( home_url( '/survey-analysis/' ) ); ?>">アンケート分析ページ</a>
+                のAI横断分析をご利用ください。
+            </div>
         </div>
 
         <!-- Response trend -->
@@ -334,27 +363,39 @@ get_header();
     function renderQuestionCharts(questions) {
         questionCharts.innerHTML = '';
 
-        if (!questions || questions.length === 0) {
-            questionCharts.innerHTML = '<div style="text-align:center;padding:20px;color:#9ca3af;font-size:14px;">質問データがありません。</div>';
+        // 定点観測項目（必須質問 = is_fixed）のみ集計対象とする
+        var fixedQuestions = (questions || []).filter(function(q) { return q.is_fixed; });
+
+        if (fixedQuestions.length === 0) {
+            var msg = (questions && questions.length > 0)
+                ? '定点観測項目（必須質問）が設定されていません。アンケート編集画面で必須にしたい質問の「必須」フラグを有効にしてください。'
+                : '質問データがありません。';
+            questionCharts.innerHTML = '<div style="text-align:center;padding:20px;color:#9ca3af;font-size:14px;">' + esc(msg) + '</div>';
             return;
         }
 
         var typeLabels = { checkbox: 'チェック', radio: 'ラジオ', text: 'テキスト', textarea: 'テキストエリア' };
+        var LOW_SAMPLE_THRESHOLD = 5; // サンプル数がこの値未満なら警告バッジ
 
-        questions.forEach(function(q, idx) {
+        fixedQuestions.forEach(function(q, idx) {
             var item = document.createElement('div');
             item.className = 'sv-q-chart-item';
+
+            var sampleN = q.total_answers || 0;
+            var lowSampleHtml = sampleN > 0 && sampleN < LOW_SAMPLE_THRESHOLD
+                ? '<span class="sv-q-low-sample">サンプル数 ' + sampleN + ' — 参考値</span>'
+                : '';
 
             var titleHtml = '<div class="sv-q-chart-title">'
                 + 'Q' + (idx + 1) + '. ' + esc(q.label)
                 + '<span class="sv-q-chart-type">' + (typeLabels[q.type] || q.type) + '</span>'
-                + '</div>';
+                + lowSampleHtml
+                + '</div>'
+                + '<div class="sv-q-chart-count">回答数: ' + formatNumber(sampleN) + '件</div>';
 
             if (q.type === 'text' || q.type === 'textarea') {
                 // Text types: show response count only
-                var count = q.response_count || 0;
-                item.innerHTML = titleHtml
-                    + '<div class="sv-q-chart-count">回答数: ' + formatNumber(count) + '件</div>';
+                item.innerHTML = titleHtml;
             } else {
                 // Checkbox/Radio: horizontal bar chart
                 var canvasId = 'sv-q-chart-' + idx;

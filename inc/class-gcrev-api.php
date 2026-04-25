@@ -19632,6 +19632,8 @@ PROMPT;
                 'question_id'   => (int) $q->id,
                 'label'         => $q->label,
                 'type'          => $q->type,
+                'is_fixed'      => ! empty( $q->is_fixed ),
+                'category'      => $q->category ?? '',
                 'total_answers' => $total_ans,
                 'distribution'  => $dist,
             ];
