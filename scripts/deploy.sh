@@ -76,8 +76,13 @@ fi
 kusanagi fcache --clear mimamori 2>/dev/null || true
 kusanagi bcache --clear mimamori 2>/dev/null || true
 
-# WordPress transient クリア（WP-CLI）
-${WP_CLI_BIN} transient delete --all \
+# WordPress transient クリア（gcrev_* は除外）
+# 理由: gcrev_dash_* / gcrev_meo_* / gcrev_source_* 等は GA4/GSC/GBP の prefetch データで、
+#       1ユーザー20-30秒かけて Cron が毎朝生成している。デプロイのたびに消すと
+#       直後にログインしたユーザーが「読み込み中…」を長時間見ることになる。
+# API レスポンス構造を変えた場合は手動で `wp transient delete --all` を実行すること。
+PROD_DB_PREFIX=$(${WP_CLI_BIN} db prefix --path="${PROD_DOCROOT}" 2>/dev/null)
+${WP_CLI_BIN} db query "DELETE FROM \`${PROD_DB_PREFIX}options\` WHERE (option_name LIKE '\\_transient\\_%' OR option_name LIKE '\\_transient\\_timeout\\_%' OR option_name LIKE '\\_site\\_transient\\_%' OR option_name LIKE '\\_site\\_transient\\_timeout\\_%') AND option_name NOT LIKE '\\_transient\\_gcrev\\_%' AND option_name NOT LIKE '\\_transient\\_timeout\\_gcrev\\_%' AND option_name NOT LIKE '\\_site\\_transient\\_gcrev\\_%' AND option_name NOT LIKE '\\_site\\_transient\\_timeout\\_gcrev\\_%'" \
     --path="${PROD_DOCROOT}" 2>/dev/null || true
 
 # --- 4.5. Prompt Registry 同期（Dev → Prod） ---

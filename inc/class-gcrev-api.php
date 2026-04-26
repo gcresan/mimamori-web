@@ -1654,6 +1654,33 @@ class Gcrev_Insight_API {
         return is_array( $data ) ? $data : null;
     }
 
+    /**
+     * 任意の transient を「fresh → stale」の順で取得する。
+     *
+     * - 通常の get_transient() がヒットすればそれを返す
+     * - TTL 切れだが option_value が wp_options に残っていれば maybe_unserialize して返す
+     * - option ごと削除されている場合は false を返す
+     *
+     * page-dashboard.php の `gcrev_dash_bydate_*` / `gcrev_meo_perf_*` 等、
+     * dashboard_cache_get の対象外キーで stale-while-revalidate するために使用する。
+     */
+    public function get_transient_with_stale( string $key ) {
+        $fresh = get_transient( $key );
+        if ( $fresh !== false ) {
+            return $fresh;
+        }
+
+        global $wpdb;
+        $value = $wpdb->get_var( $wpdb->prepare(
+            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s LIMIT 1",
+            '_transient_' . $key
+        ) );
+        if ( $value === null ) {
+            return false;
+        }
+        return maybe_unserialize( $value );
+    }
+
     private function dashboard_cache_set(int $user_id, string $range, array $data): void {
         $key = $this->cache_key_dashboard($user_id, $range);
         // 月固定期間（prev-month / prev-prev-month / last180 / last365）: 35日
@@ -5130,12 +5157,23 @@ PROMPT;
             );
         }
 
-        // cache_first 明示指定でキャッシュが空 → 空配列を返してJS非同期に委任
+        // cache_first 明示指定でキャッシュが空 → stale (TTL切れだが option_value が残っている) を試す
+        // それでも空なら空配列を返してJS非同期に委任
         // （以前は last30/prev-month を同期取得していたが、15-18本のAPI呼び出しで
         //   ページ表示が8-15秒ブロックされるため、全期間をJS非同期に統一）
         if ( $cache_first ) {
+            $stale = $this->get_stale_dashboard_cache( $user_id, $range );
+            if ( $stale !== null ) {
+                file_put_contents('/tmp/gcrev_dash_debug.log',
+                    date('Y-m-d H:i:s') . " [KPI] STALE HIT period={$period}, range={$range}, user={$user_id}\n",
+                    FILE_APPEND
+                );
+                $stale['_stale'] = true;
+                $stale = $this->inject_effective_cv_into_kpi( $stale, $period, $user_id );
+                return $stale;
+            }
             file_put_contents('/tmp/gcrev_dash_debug.log',
-                date('Y-m-d H:i:s') . " [cache_first] Cache miss for user={$user_id}, period={$period} — delegating to JS async\n",
+                date('Y-m-d H:i:s') . " [cache_first] Cache miss (no stale) for user={$user_id}, period={$period} — delegating to JS async\n",
                 FILE_APPEND
             );
             return [];

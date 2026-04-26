@@ -498,18 +498,20 @@ if ($infographic && is_array($infographic)) {
                 $filter_suffix_prev .= Gcrev_Path_Filter::cache_suffix( $user_id );
             }
             // period ベース安定キー（get_dashboard_kpi_by_dates の cache_scope='last30_comp' と揃える）
+            // get_transient_with_stale: TTL切れだが option_value は残っているケース（自然失効）に備える
             $prev_cache_key = "gcrev_dash_bydate_{$user_id}_last30_comp{$filter_suffix_prev}";
-            $prev_cached    = get_transient( $prev_cache_key );
+            $prev_cached    = $gcrev_api->get_transient_with_stale( $prev_cache_key );
             if ( $prev_cached !== false && is_array( $prev_cached ) ) {
                 $kpi_prev = $prev_cached;
             }
-            // キャッシュミス時は $kpi_prev = [] のまま → JS非同期で取得＆表示更新
+            // キャッシュ（fresh も stale も）ミス時は $kpi_prev = [] のまま → JS非同期で取得＆表示更新
         }
 
         // --- MEO直近30日 ---
         // キャッシュのみ確認（period ベース安定キー。fetch_meo_metrics_safe の cache_scope と揃える）
-        $meo_cache_curr = get_transient("gcrev_meo_perf_{$user_id}_last30");
-        $meo_cache_prev = get_transient("gcrev_meo_perf_{$user_id}_last30_comp");
+        // stale も含めて取得（TTL切れでも前回値を表示しつつ JS で更新）
+        $meo_cache_curr = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_last30");
+        $meo_cache_prev = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_last30_comp");
 
         $meo_curr = (is_array($meo_cache_curr) && $meo_cache_curr !== false)
             ? (int)($meo_cache_curr['total_impressions'] ?? 0) : null;
