@@ -1643,6 +1643,8 @@ get_header();
                     var msg = completed + '件の順位データを取得しました。';
                     if (errors > 0) msg += '（' + errors + '件のエラー）';
                     showToast(msg, errors > 0 ? 'error' : '');
+                    // 古いキャッシュを破棄してから再取得（force=1 で DB 更新済みなので必須）
+                    if (window.gcrevCache) window.gcrevCache.clear('map_rank');
                     fetchMeoData(); // Reload table
                 }, 1200);
                 return;
