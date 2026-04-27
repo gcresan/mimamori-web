@@ -1065,12 +1065,13 @@ get_template_part('template-parts/period-selector');
         var labels = sparkData.labels || [];
         var values = sparkData.values || [];
 
-        // ラベルを短くする (2026-03-01 → 1日)
+        // ラベルを短くする (2026-03-01 / 20260301 → 1日)
         var shortLabels = labels.map(function(l) {
             if (l === null || l === undefined) return '';
             var s = String(l);
             var parts = s.split('-');
-            if (parts.length === 3) return parseInt(parts[2]) + '日';
+            if (parts.length === 3) return parseInt(parts[2], 10) + '日';
+            if (/^\d{8}$/.test(s)) return parseInt(s.substr(6, 2), 10) + '日';
             return s;
         });
 
@@ -1112,8 +1113,10 @@ get_template_part('template-parts/period-selector');
                             title: function(ctx) {
                                 var raw = labels[ctx[0].dataIndex];
                                 if (raw) {
-                                    var p = String(raw).split('-');
-                                    if (p.length === 3) return parseInt(p[1]) + '月' + parseInt(p[2]) + '日';
+                                    var rs = String(raw);
+                                    var p = rs.split('-');
+                                    if (p.length === 3) return parseInt(p[1], 10) + '月' + parseInt(p[2], 10) + '日';
+                                    if (/^\d{8}$/.test(rs)) return parseInt(rs.substr(4, 2), 10) + '月' + parseInt(rs.substr(6, 2), 10) + '日';
                                 }
                                 return raw;
                             },
@@ -1123,7 +1126,16 @@ get_template_part('template-parts/period-selector');
                         }
                     }
                 },
-                scales: { y: yConfig }
+                scales: {
+                    x: {
+                        ticks: {
+                            maxRotation: 0,
+                            autoSkip: true,
+                            autoSkipPadding: 8
+                        }
+                    },
+                    y: yConfig
+                }
             }
         });
     }
