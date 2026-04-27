@@ -23,6 +23,28 @@ set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('マップ順位', '検索順
 // Maps用ドメイン
 $maps_domain = get_user_meta( $user_id, '_gcrev_maps_domain', true ) ?: '';
 
+// 基準地点プリセット用データ
+$mw_business_address = (string) get_user_meta( $user_id, '_gcrev_gbp_location_address', true );
+if ( $mw_business_address === '' ) {
+    $mw_business_address = (string) get_user_meta( $user_id, '_gcrev_meo_address', true );
+}
+$mw_area_pref = (string) get_user_meta( $user_id, 'gcrev_client_area_pref', true );
+$mw_area_city = (string) get_user_meta( $user_id, 'gcrev_client_area_city', true );
+$mw_city_query = trim( $mw_area_pref . $mw_area_city );
+$mw_city_label = $mw_area_city !== '' ? ( $mw_area_city . '中心部' ) : '市区町村の中心';
+
+$mw_base_presets = wp_json_encode([
+    'business' => [
+        'available' => $mw_business_address !== '',
+        'address'   => $mw_business_address,
+    ],
+    'city'     => [
+        'available' => $mw_city_query !== '',
+        'query'     => $mw_city_query,
+        'label'     => $mw_city_label,
+    ],
+], JSON_UNESCAPED_UNICODE);
+
 get_header();
 ?>
 
@@ -668,6 +690,87 @@ get_header();
 .meo-base-modal__input:focus { border-color: #568184; outline: none; box-shadow: 0 0 0 2px rgba(86,129,132,0.15); }
 .meo-base-modal__actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 
+/* --- 計測モードプリセット --- */
+.meo-base-mode-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 14px 0 10px;
+}
+.meo-base-mode {
+    display: flex;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    background: #fff;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    align-items: flex-start;
+}
+.meo-base-mode:hover { border-color: #b8c9c9; background: #fafbfb; }
+.meo-base-mode input[type="radio"] {
+    margin-top: 4px;
+    accent-color: #568184;
+    cursor: pointer;
+}
+.meo-base-mode input[type="radio"]:disabled { cursor: not-allowed; }
+.meo-base-mode--disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.meo-base-mode--disabled:hover { border-color: #e5e7eb; background: #fff; }
+.meo-base-mode:has(input:checked) {
+    border-color: #568184;
+    background: rgba(86,129,132,0.06);
+    box-shadow: 0 0 0 3px rgba(86,129,132,0.1);
+}
+.meo-base-mode__body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.meo-base-mode__title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+    line-height: 1.4;
+}
+.meo-base-mode__desc {
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.55;
+}
+.meo-base-mode__badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 4px;
+    vertical-align: middle;
+    letter-spacing: 0.04em;
+}
+.meo-base-mode__badge--reco { background: #4E8A6B; color: #fff; }
+.meo-base-mode-note {
+    display: none;
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    background: rgba(86,129,132,0.08);
+    border: 1px solid rgba(86,129,132,0.2);
+    border-radius: 8px;
+    font-size: 12px;
+    color: #1f4143;
+    line-height: 1.6;
+}
+.meo-base-mode-note.is-visible { display: block; }
+.meo-base-mode-note--warn {
+    background: rgba(201,168,76,0.10);
+    border-color: rgba(201,168,76,0.35);
+    color: #75590f;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .rt-header { flex-direction: column; align-items: flex-start; }
@@ -833,10 +936,33 @@ get_header();
         </div>
         <div class="rt-modal__body">
             <div class="meo-base-modal__desc">
-                基準地点は、Googleマップ上での表示順位を計測する起点となる場所です。<br>
-                <strong>自社の住所ではなく、ターゲットエリアの中心地（駅前・市役所周辺など）</strong>を設定すると、
-                実際のユーザーの検索環境に近い順位を計測できます。
+                基準地点は、Googleマップ上での表示順位を計測する起点となる場所です。
+                どこを基準にするかで結果の意味が変わります。
             </div>
+            <div class="meo-base-mode-group" role="radiogroup" aria-label="計測モード">
+                <label class="meo-base-mode" data-mode="city">
+                    <input type="radio" name="meoBaseMode" value="city">
+                    <span class="meo-base-mode__body">
+                        <span class="meo-base-mode__title">🏛 市区町村の中心 <span class="meo-base-mode__badge meo-base-mode__badge--reco">推奨</span></span>
+                        <span class="meo-base-mode__desc">市役所・駅前など商圏の中心点を基準にします。<strong>競合と公平に比較できる客観的な指標</strong>です。</span>
+                    </span>
+                </label>
+                <label class="meo-base-mode" data-mode="business">
+                    <input type="radio" name="meoBaseMode" value="business">
+                    <span class="meo-base-mode__body">
+                        <span class="meo-base-mode__title">🏠 自社の住所</span>
+                        <span class="meo-base-mode__desc">店舗のすぐ近くにいる人にどう見えているかを確認します。距離スコアの影響で実力以上の順位が出やすい点に注意。</span>
+                    </span>
+                </label>
+                <label class="meo-base-mode" data-mode="custom">
+                    <input type="radio" name="meoBaseMode" value="custom" checked>
+                    <span class="meo-base-mode__body">
+                        <span class="meo-base-mode__title">📍 任意の場所</span>
+                        <span class="meo-base-mode__desc">特定エリア（出店候補地・ターゲット商圏など）を手動で指定します。</span>
+                    </span>
+                </label>
+            </div>
+            <div class="meo-base-mode-note" id="meoBaseModeNote"></div>
             <div class="meo-base-modal__field">
                 <label class="meo-base-modal__label" for="meoBaseLabel">表示名（任意）</label>
                 <input class="meo-base-modal__input" type="text" id="meoBaseLabel" placeholder="例: 松山市中心部">
@@ -899,6 +1025,7 @@ get_header();
 
     var restBase = '<?php echo esc_url( rest_url( 'gcrev/v1/' ) ); ?>';
     var nonce    = '<?php echo esc_attr( wp_create_nonce( 'wp_rest' ) ); ?>';
+    var basePresets = <?php echo $mw_base_presets; ?>;
 
     // State
     var currentDevice = 'mobile';
@@ -972,9 +1099,94 @@ get_header();
                 if (lngInput && meoData.location.lng) lngInput.value = meoData.location.lng;
                 if (radiusInput && meoData.location.radius) radiusInput.value = String(meoData.location.radius);
             }
+            initBaseModeRadios();
             baseModal.classList.add('active');
             updateVerifyLink();
         }
+
+        // =========================================================
+        // 計測モードラジオ（市の中心 / 自社住所 / 任意）
+        // =========================================================
+        function initBaseModeRadios() {
+            var modeGroup = document.querySelector('.meo-base-mode-group');
+            if (!modeGroup) return;
+            var radios = modeGroup.querySelectorAll('input[name="meoBaseMode"]');
+            // 利用可否で disable/enable
+            radios.forEach(function(r) {
+                var mode = r.value;
+                var label = r.closest('.meo-base-mode');
+                if (mode === 'business' && (!basePresets.business || !basePresets.business.available)) {
+                    r.disabled = true;
+                    label && label.classList.add('meo-base-mode--disabled');
+                    label && (label.title = '自社住所がまだ登録されていません。');
+                }
+                if (mode === 'city' && (!basePresets.city || !basePresets.city.available)) {
+                    r.disabled = true;
+                    label && label.classList.add('meo-base-mode--disabled');
+                    label && (label.title = '対象エリア（市区町村）がまだ登録されていません。');
+                }
+            });
+            // 初期選択: 既存値から推測（無ければ custom）
+            var addrVal = (document.getElementById('meoBaseAddress').value || '').trim();
+            var biz = basePresets.business && basePresets.business.address ? basePresets.business.address : '';
+            var city = basePresets.city && basePresets.city.query ? basePresets.city.query : '';
+            var initial = 'custom';
+            if (biz && addrVal === biz) initial = 'business';
+            else if (city && addrVal.indexOf(city) === 0) initial = 'city';
+            modeGroup.querySelectorAll('input[name="meoBaseMode"]').forEach(function(r) {
+                r.checked = (r.value === initial && !r.disabled);
+            });
+            // どれもチェック入らなければ custom 強制
+            if (!modeGroup.querySelector('input[name="meoBaseMode"]:checked')) {
+                var fallback = modeGroup.querySelector('input[value="custom"]');
+                if (fallback) fallback.checked = true;
+            }
+            updateBaseModeNote();
+        }
+
+        function applyBaseMode(mode) {
+            var addr = document.getElementById('meoBaseAddress');
+            var lat  = document.getElementById('meoBaseLat');
+            var lng  = document.getElementById('meoBaseLng');
+            var lbl  = document.getElementById('meoBaseLabel');
+            if (mode === 'business' && basePresets.business && basePresets.business.address) {
+                addr.value = basePresets.business.address;
+                lat.value = ''; lng.value = '';
+                lbl.value = lbl.value || '自社住所';
+                // ジオコーディングをトリガー
+                addr.dispatchEvent(new Event('blur'));
+            } else if (mode === 'city' && basePresets.city && basePresets.city.query) {
+                addr.value = basePresets.city.query;
+                lat.value = ''; lng.value = '';
+                lbl.value = lbl.value || (basePresets.city.label || '');
+                addr.dispatchEvent(new Event('blur'));
+            }
+            updateBaseModeNote();
+            updateVerifyLink();
+        }
+
+        function updateBaseModeNote() {
+            var note = document.getElementById('meoBaseModeNote');
+            if (!note) return;
+            var checked = document.querySelector('input[name="meoBaseMode"]:checked');
+            var mode = checked ? checked.value : '';
+            if (mode === 'business') {
+                note.className = 'meo-base-mode-note meo-base-mode-note--warn is-visible';
+                note.innerHTML = '⚠️ <strong>自社住所基準</strong>では、Googleマップが「店舗のすぐ近くの人」に向けて表示する結果を計測します。距離スコアの影響で実態より高い順位が出やすく、競合との比較指標としては不正確になる場合があります。';
+            } else if (mode === 'city') {
+                note.className = 'meo-base-mode-note is-visible';
+                note.innerHTML = '✅ <strong>市区町村中心基準</strong>は、商圏全体のユーザー視点に近い計測ができます。競合との真の力関係や、SEO 施策の効果測定に向いています。';
+            } else {
+                note.className = 'meo-base-mode-note';
+                note.innerHTML = '';
+            }
+        }
+
+        document.querySelectorAll('input[name="meoBaseMode"]').forEach(function(r) {
+            r.addEventListener('change', function() {
+                if (this.checked) applyBaseMode(this.value);
+            });
+        });
         function closeBaseModal() {
             if (baseModal) baseModal.classList.remove('active');
         }
