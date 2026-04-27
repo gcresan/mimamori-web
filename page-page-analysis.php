@@ -336,9 +336,17 @@ get_header();
 }
 .pa-info-value {
     flex: 1;
+    min-width: 0;
     color: #333;
+    overflow-wrap: anywhere;
+    word-break: break-all;
 }
-.pa-info-value a { color: #2d9cdb; text-decoration: none; }
+.pa-info-value a {
+    color: #2d9cdb;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+}
 .pa-info-value a:hover { text-decoration: underline; }
 
 /* キャプチャセクション */
@@ -462,6 +470,20 @@ get_header();
 .pa-table .data-table th { white-space: nowrap; }
 .pa-table .data-table tr[data-page-id] { cursor: pointer; transition: background 0.15s; }
 .pa-table .data-table tr[data-page-id]:hover { background: #f0f8ff; }
+
+/* ページ名/URLセルの折り返し（長い半角URLでもレイアウトが崩れないように） */
+.pa-table .data-table td.pa-cell-page {
+    max-width: 420px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+.pa-cell-url {
+    font-size: 12px;
+    color: #999;
+    margin-top: 2px;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+}
 
 /* ===== 行動データビュー ===== */
 /* Clarity リンクボタン */
@@ -978,8 +1000,8 @@ get_header();
             }
 
             html += '<tr data-page-id="' + p.id + '">'
-                + '<td><div style="font-weight:500;">' + escHtml(p.page_title || '（タイトル未取得）') + '</div>'
-                + '<div style="font-size:12px;color:#999;margin-top:2px;">' + escHtml(p.page_url) + '</div></td>'
+                + '<td class="pa-cell-page"><div style="font-weight:500;overflow-wrap:anywhere;word-break:break-word;">' + escHtml(p.page_title || '（タイトル未取得）') + '</div>'
+                + '<div class="pa-cell-url">' + escHtml(p.page_url) + '</div></td>'
                 + '<td><span class="pa-badge pa-badge--type">' + escHtml(typeName) + '</span></td>'
                 + '<td>' + pcThumb + '</td>'
                 + '<td>' + spThumb + '</td>'
