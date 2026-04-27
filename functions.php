@@ -5141,7 +5141,47 @@ function mimamori_build_deterministic_queries( string $message, string $intent_t
         ];
     }
 
+    // --- 明示的に過去の期間を指定された場合のフォールバック ---
+    // 直近28日 digest の範囲外を聞かれているのに上のキーワードマッチで何も生成されないと、
+    // GA4直接フェッチが起動せず「取得できません」と返してしまうため、基本サマリーを必ず取得する。
+    // 例: 「先々月の2月のセッション数は?」「2025年9月のPV」「3/15のアクセス数」
+    if ( empty( $queries ) && mimamori_message_has_explicit_period( $message ) ) {
+        $queries[] = [
+            'label'      => 'period_summary',
+            'dimensions' => [ 'date' ],
+            'metrics'    => [ 'sessions', 'totalUsers', 'screenPageViews', 'engagementRate', 'bounceRate' ],
+            'start'      => $date_range['start'],
+            'end'        => $date_range['end'],
+            'limit'      => 100,
+        ];
+    }
+
     return $queries;
+}
+
+/**
+ * メッセージに明示的な日付/期間指定が含まれるか判定する
+ *
+ * 「先月」「2月」「2025年9月」「3/15」「昨日」など。
+ * extract_date_range の各パターンと整合させる。
+ *
+ * @param string $message
+ * @return bool
+ */
+function mimamori_message_has_explicit_period( string $message ): bool {
+    // YYYY年M月D日 / YYYY/M/D / YYYY-M-D
+    if ( preg_match( '/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*[月\/\-]\s*(\d{1,2})/', $message ) ) return true;
+    // M月D日
+    if ( preg_match( '/(\d{1,2})\s*月\s*(\d{1,2})\s*日/', $message ) ) return true;
+    // M/D
+    if ( preg_match( '/(\d{1,2})\/(\d{1,2})/', $message ) ) return true;
+    // YYYY年M月
+    if ( preg_match( '/(\d{4})\s*[年\/\-]\s*(\d{1,2})\s*月?/', $message ) ) return true;
+    // M月
+    if ( preg_match( '/(\d{1,2})\s*月/', $message ) ) return true;
+    // 相対指定
+    if ( preg_match( '/先々月|先月|前月|前々月|今月|昨日|一昨日|おととい/', $message ) ) return true;
+    return false;
 }
 
 /**
@@ -5219,6 +5259,13 @@ function mimamori_extract_date_range( string $message ): array {
             $end = $end_dt->format( 'Y-m-d' );
         }
         return [ 'start' => $start, 'end' => $end ];
+    }
+
+    // パターン6a: 「先々月」「前々月」（先月の処理より先に判定する必要あり）
+    if ( preg_match( '/先々月|前々月/', $message ) ) {
+        $first = ( clone $today )->modify( 'first day of -2 months' );
+        $last  = ( clone $today )->modify( 'last day of -2 months' );
+        return [ 'start' => $first->format( 'Y-m-d' ), 'end' => $last->format( 'Y-m-d' ) ];
     }
 
     // パターン6: 「先月」「前月」
