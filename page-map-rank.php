@@ -720,7 +720,23 @@ get_header();
     font-size: 14px; color: #1a1a1a; box-sizing: border-box;
 }
 .meo-base-modal__input:focus { border-color: #568184; outline: none; box-shadow: 0 0 0 2px rgba(86,129,132,0.15); }
-.meo-base-modal__actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+.meo-base-modal__actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; flex-wrap: wrap; }
+
+/* リセットボタン */
+.meo-base-reset-btn {
+    color: #6b7280;
+    border-color: #d1d5db;
+    background: #fff;
+}
+.meo-base-reset-btn:hover:not(:disabled) {
+    color: #4E8A6B;
+    border-color: #4E8A6B;
+    background: rgba(78,138,107,0.06);
+}
+.meo-base-reset-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
 
 /* --- 計測モードプリセット --- */
 .meo-base-mode-group {
@@ -1036,6 +1052,8 @@ get_header();
                 <div style="font-size:11px; color:#9ca3af; margin-top:4px;">基準地点を中心に、この半径内での順位を計測します</div>
             </div>
             <div class="meo-base-modal__actions">
+                <button class="rt-btn meo-base-reset-btn" id="meoBaseResetBtn" type="button" title="市区町村の中心の情報に戻します">&#x21BB; 市の中心に戻す</button>
+                <span style="flex:1;"></span>
                 <button class="rt-btn" id="meoBaseCancelBtn" type="button">キャンセル</button>
                 <button class="rt-btn rt-btn--primary" id="meoBaseSaveBtn" type="button">&#x1F4BE; 保存する</button>
             </div>
@@ -1142,6 +1160,11 @@ get_header();
             // （サーバ側に base_mode が保存されていない古いデータでも復元できるように）
             if (currentBaseMode) {
                 modeFormCache[currentBaseMode] = readBaseForm();
+            }
+            // リセットボタンの利用可否（city プリセットが無いと無効化）
+            var resetBtn = document.getElementById('meoBaseResetBtn');
+            if (resetBtn) {
+                resetBtn.disabled = !(basePresets.city && basePresets.city.available);
             }
             baseModal.classList.add('active');
             updateVerifyLink();
@@ -1353,6 +1376,26 @@ get_header();
         if (baseChangeBtn) baseChangeBtn.addEventListener('click', openBaseModal);
         if (baseModalClose) baseModalClose.addEventListener('click', closeBaseModal);
         if (baseCancelBtn) baseCancelBtn.addEventListener('click', closeBaseModal);
+
+        // リセットボタン: 市区町村の中心モードに強制リセット（フォーム入力を初期化）
+        var baseResetBtn = document.getElementById('meoBaseResetBtn');
+        if (baseResetBtn) {
+            baseResetBtn.addEventListener('click', function() {
+                if (!basePresets.city || !basePresets.city.available) {
+                    showToast('市区町村が登録されていないため初期化できません。', 'error');
+                    return;
+                }
+                // city モードに切替＆フォーム初期化（modeFormCache.city も破棄して常にプリセット適用）
+                delete modeFormCache.city;
+                var cityRadio = document.querySelector('input[name="meoBaseMode"][value="city"]');
+                if (cityRadio && !cityRadio.disabled) {
+                    cityRadio.checked = true;
+                }
+                applyBaseMode('city');
+                currentBaseMode = 'city';
+                showToast('市区町村の中心に戻しました。「保存する」を押すと反映されます。');
+            });
+        }
         if (baseModal) {
             baseModal.addEventListener('click', function(e) {
                 if (e.target === baseModal) closeBaseModal();
