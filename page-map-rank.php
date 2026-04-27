@@ -1321,9 +1321,21 @@ get_header();
                     if (json.success) {
                         closeBaseModal();
                         showToast(json.message || '基準地点を保存しました。');
-                        // キャッシュを破棄してから再取得（古いデータで表示されるのを防ぐ）
+                        // 共通キャッシュは破棄（古いデータで誤表示しないため）
                         if (window.gcrevCache) window.gcrevCache.clear('map_rank');
-                        fetchMeoData(); // Reload to reflect changes
+
+                        // 新しい地点に対する取得済みスナップショットがあればそれを表示し、サーバ取得しない
+                        var savedLat = (json.data && json.data.lat) ? json.data.lat : (lat || '');
+                        var savedLng = (json.data && json.data.lng) ? json.data.lng : (lng || '');
+                        var savedRadius = (json.data && json.data.radius) ? json.data.radius : payload.radius;
+                        var newHash = locationHashFromInputs(selectedMode, savedLat, savedLng, savedRadius);
+                        var snap = getLocationSnapshot(newHash);
+                        if (snap) {
+                            renderFromSnapshot(snap);
+                            showToast('この地点で取得済みのデータを表示しています。最新を見るには「最新の情報を見る」を押してください。');
+                        } else {
+                            fetchMeoData(); // 初回はサーバから取得
+                        }
                     } else {
                         showToast(json.message || '保存に失敗しました。', 'error');
                     }
@@ -1339,6 +1351,55 @@ get_header();
         // Initial load
         fetchMeoData();
     });
+
+    // =========================================================
+    // 地点別キャッシュ（地点を切り替えたとき、その地点で前回取得した
+    // データをそのまま再表示できるようにするためのスナップショット保存）
+    // =========================================================
+    function locationHash(loc) {
+        if (!loc) return '';
+        var mode = loc.base_mode || (loc.lat && loc.lng ? 'coord' : 'code');
+        var lat  = loc.lat ? parseFloat(loc.lat).toFixed(5) : '';
+        var lng  = loc.lng ? parseFloat(loc.lng).toFixed(5) : '';
+        var rad  = loc.radius || 0;
+        return mode + '|' + lat + '|' + lng + '|' + rad;
+    }
+    function locationHashFromInputs(mode, lat, lng, radius) {
+        return locationHash({
+            base_mode: mode,
+            lat: lat,
+            lng: lng,
+            radius: parseInt(radius, 10) || 0,
+        });
+    }
+    function saveLocationSnapshot(data) {
+        if (!data || !data.location) return;
+        var hash = locationHash(data.location);
+        if (!hash || hash.indexOf('||') !== -1) return; // lat/lng 未設定はスキップ
+        if (window.gcrevCache) window.gcrevCache.set('map_rank_loc:' + hash, data);
+    }
+    function getLocationSnapshot(hash) {
+        if (!hash || !window.gcrevCache) return null;
+        return window.gcrevCache.get('map_rank_loc:' + hash);
+    }
+    function renderFromSnapshot(snap) {
+        meoData      = snap;
+        keywordsList = snap.keywords || [];
+        dayLabels    = snap.day_labels || [];
+        dayKeys      = snap.days || [];
+        summaryData  = snap.summary || {};
+        renderLocation(snap.location);
+        renderStoreInfoCard(snap.latest);
+        if (keywordsList.length === 0) {
+            showState('empty');
+        } else {
+            showState('table');
+            renderSummary();
+            renderTable();
+        }
+        // 共通キャッシュも上書きしておく（次回開いた時にも即時表示できるように）
+        if (window.gcrevCache) window.gcrevCache.set('map_rank', snap);
+    }
 
     // =========================================================
     // Fetch data (single API call)
@@ -1392,6 +1453,8 @@ get_header();
 
                 // キャッシュ更新
                 if (window.gcrevCache) window.gcrevCache.set(cacheKey, json.data);
+                // 地点別スナップショットも保存
+                saveLocationSnapshot(json.data);
 
                 // Location info
                 renderLocation(json.data.location);
@@ -1884,6 +1947,11 @@ get_header();
                     showToast(msg, errors > 0 ? 'error' : '');
                     // 古いキャッシュを破棄してから再取得（force=1 で DB 更新済みなので必須）
                     if (window.gcrevCache) window.gcrevCache.clear('map_rank');
+                    // 現在の地点に対するスナップショットも一旦無効化（fetchMeoData が新データで上書き保存する）
+                    if (window.gcrevCache && meoData && meoData.location) {
+                        var curHash = locationHash(meoData.location);
+                        if (curHash) window.gcrevCache.clear('map_rank_loc:' + curHash);
+                    }
                     fetchMeoData(); // Reload table
                 }, 1200);
                 return;
