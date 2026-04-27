@@ -1925,13 +1925,21 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     var hintEl = document.getElementById('kpiTrendHint');
 
     // (1) 先読み — sessionsのみ即時fetch、残りは遅延
+    // 全期間ゼロのレスポンス（=ロケーション未設定/トークン期限切れ等の擬似成功）は
+    // キャッシュせず、クリック時に再取得させる
     function prefetchMetric(m) {
         return fetch(restBase + 'dashboard/trends?metric=' + encodeURIComponent(m) + '&view=daily', {
             headers: { 'X-WP-Nonce': nonce },
             credentials: 'same-origin'
         })
         .then(function(res){ return res.json(); })
-        .then(function(json){ _trendCache.daily[m] = json; return json; });
+        .then(function(json){
+            var hasNonZero = json && json.values && json.values.some(function(v){ return (v|0) > 0; });
+            if (json && json.success && hasNonZero) {
+                _trendCache.daily[m] = json;
+            }
+            return json;
+        });
     }
 
     // sessionsを即時fetchして初期チャート描画
@@ -1950,14 +1958,11 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     }, 2000);
 
     // (2) KPIカードクリックでチャート切替
-    var _kpiCards = document.querySelectorAll('.info-kpi-item[data-metric]');
-    console.log('[GCREV trend] cards found:', _kpiCards.length, Array.from(_kpiCards).map(function(c){return c.dataset.metric;}));
-    _kpiCards.forEach(function(card){
-        card.addEventListener('click', function(ev){
+    document.querySelectorAll('.info-kpi-item[data-metric]').forEach(function(card){
+        card.addEventListener('click', function(){
             var metric = card.dataset.metric;
             var label  = card.querySelector('.info-kpi-label').textContent.trim();
             var icon   = card.dataset.kpiIcon || '📊';
-            console.log('[GCREV trend] card clicked', { metric: metric, label: label, target: ev.target.className, _activeMetric: _activeMetric, cacheKeys: Object.keys(_trendCache[_activeView] || {}) });
             showTrend(metric, label, icon);
         });
     });
@@ -1996,8 +2001,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
     // (4) チャート表示メイン関数
     function showTrend(metric, label, icon) {
-        console.log('[GCREV trend] showTrend called', { metric: metric, _activeMetric: _activeMetric, _activeView: _activeView, hasCache: !!(_trendCache[_activeView] && _trendCache[_activeView][metric]) });
-        if (_activeMetric === metric) { console.log('[GCREV trend] early return: same metric'); return; }
+        if (_activeMetric === metric) return;
         _activeMetric = metric;
         _activeLabel  = label;
         _activeIcon   = icon;
@@ -2083,11 +2087,9 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
     // (6) Chart.js レンダリング
     function renderTrendChart(json, label) {
-        console.log('[GCREV trend] renderTrendChart', { metric: _activeMetric, label: label, success: json && json.success, valuesLen: (json && json.values && json.values.length), sample: json && json.values && json.values.slice(0, 5) });
         if (kpiTrendChart) { kpiTrendChart.destroy(); kpiTrendChart = null; }
 
         if (!json.success || !json.values) {
-            console.warn('[GCREV trend] render bailout: success/values missing');
             chartWrap.style.display = 'none';
             errorEl.style.display = 'block';
             return;
