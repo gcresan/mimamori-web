@@ -170,17 +170,33 @@ if ( $report_post_id > 0 ) {
 }
 
 // === Effective CV（CVチャート + CV数表示用） ===
+// ゴール関連設定（gcrev_actual_cvs / gcrev_cv_routes）はレポート確定後にも更新され得るので、
+// スナップショットを使わず常にライブで再計算する。
 $effective_cv_json = '{}';
-if ( $has_full_snapshot && ! empty( $snapshot_data['effective_cv'] ) ) {
-    // スナップショットから取得（API呼び出しなし）
-    $eff = $snapshot_data['effective_cv'];
-    $effective_cv_json = wp_json_encode([
-        'source'     => $eff['source'] ?? 'ga4',
-        'total'      => $eff['total'] ?? 0,
-        'daily'      => $eff['daily'] ?? [],
-        'has_actual' => ( ( $eff['source'] ?? 'ga4' ) !== 'ga4' ),
-        'components' => $eff['components'] ?? [],
-    ], JSON_UNESCAPED_UNICODE);
+try {
+    $year_month_str = sprintf( '%04d-%02d', $year, $month );
+    $eff_live = $gcrev_api->get_effective_cv_monthly( $year_month_str, $user_id );
+    if ( is_array( $eff_live ) ) {
+        $effective_cv_json = wp_json_encode([
+            'source'     => $eff_live['source'] ?? 'ga4',
+            'total'      => $eff_live['total'] ?? 0,
+            'daily'      => $eff_live['daily'] ?? [],
+            'has_actual' => ( ( $eff_live['source'] ?? 'ga4' ) !== 'ga4' ),
+            'components' => $eff_live['components'] ?? [],
+        ], JSON_UNESCAPED_UNICODE);
+    }
+} catch ( \Throwable $e ) {
+    // フォールバック: スナップショットから読む
+    if ( $has_full_snapshot && ! empty( $snapshot_data['effective_cv'] ) ) {
+        $eff = $snapshot_data['effective_cv'];
+        $effective_cv_json = wp_json_encode([
+            'source'     => $eff['source'] ?? 'ga4',
+            'total'      => $eff['total'] ?? 0,
+            'daily'      => $eff['daily'] ?? [],
+            'has_actual' => ( ( $eff['source'] ?? 'ga4' ) !== 'ga4' ),
+            'components' => $eff['components'] ?? [],
+        ], JSON_UNESCAPED_UNICODE);
+    }
 }
 
 // ========================================
@@ -1196,8 +1212,16 @@ function updateKPIDisplay(data) {
     document.getElementById('kpi-returning').textContent = formatNumber(data.returningUsers);
     document.getElementById('kpi-duration').textContent = data.avgDuration + '秒';
 
-    // CV数（APIに存在する場合のみ更新）
-    if (data.conversions !== undefined) {
+    // CV数: ライブの effectiveCvData が手動設定を含むので最優先。
+    // 無ければスナップショットの conversions（GA4）にフォールバック。
+    const hasLiveEffective = effectiveCvData
+        && typeof effectiveCvData.total === 'number'
+        && (effectiveCvData.has_actual || effectiveCvData.total > 0 || (effectiveCvData.source && effectiveCvData.source !== 'ga4'));
+    const effectiveSource = hasLiveEffective ? (effectiveCvData.source || 'ga4') : (data.cv_source || 'ga4');
+
+    if (hasLiveEffective) {
+        document.getElementById('kpi-conversions').textContent = formatNumber(effectiveCvData.total);
+    } else if (data.conversions !== undefined) {
         document.getElementById('kpi-conversions').textContent = formatNumber(data.conversions);
     } else {
         document.getElementById('kpi-conversions').textContent = '—';
@@ -1206,15 +1230,15 @@ function updateKPIDisplay(data) {
     // CV数ソースラベル表示
     const cvSourceLabel = document.getElementById('kpi-cv-source-label');
     if (cvSourceLabel) {
-        if (data.cv_source === 'hybrid') {
+        if (effectiveSource === 'hybrid') {
             cvSourceLabel.textContent = '（GA4+手動）';
             cvSourceLabel.style.display = 'inline';
             cvSourceLabel.style.color = '#4E8A6B';
-        } else if (data.cv_source === 'actual_plus_phone') {
+        } else if (effectiveSource === 'actual_plus_phone') {
             cvSourceLabel.textContent = '（実質+電話タップ）';
             cvSourceLabel.style.display = 'inline';
             cvSourceLabel.style.color = '#4E8A6B';
-        } else if (data.cv_source === 'actual') {
+        } else if (effectiveSource === 'actual') {
             cvSourceLabel.textContent = '（実質）';
             cvSourceLabel.style.display = 'inline';
             cvSourceLabel.style.color = '#4E8A6B';
