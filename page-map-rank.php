@@ -1102,14 +1102,15 @@ get_header();
             // モード別キャッシュを初期化（モーダル開くたびにリセット）
             modeFormCache = {};
             currentBaseMode = null;
-            // 現在保存されているモードのキャッシュには、保存値をそのまま入れておく
-            if (meoData && meoData.location && meoData.location.base_mode) {
-                modeFormCache[meoData.location.base_mode] = readBaseForm();
-            }
             initBaseModeRadios();
             // initBaseModeRadios で初期選択されたモードを currentBaseMode として記録
             var initialChecked = document.querySelector('input[name="meoBaseMode"]:checked');
             currentBaseMode = initialChecked ? initialChecked.value : null;
+            // 初期モードのキャッシュには、現在フォームに表示されている保存値を必ず格納する
+            // （サーバ側に base_mode が保存されていない古いデータでも復元できるように）
+            if (currentBaseMode) {
+                modeFormCache[currentBaseMode] = readBaseForm();
+            }
             baseModal.classList.add('active');
             updateVerifyLink();
         }
