@@ -1099,7 +1099,17 @@ get_header();
                 if (lngInput && meoData.location.lng) lngInput.value = meoData.location.lng;
                 if (radiusInput && meoData.location.radius) radiusInput.value = String(meoData.location.radius);
             }
+            // モード別キャッシュを初期化（モーダル開くたびにリセット）
+            modeFormCache = {};
+            currentBaseMode = null;
+            // 現在保存されているモードのキャッシュには、保存値をそのまま入れておく
+            if (meoData && meoData.location && meoData.location.base_mode) {
+                modeFormCache[meoData.location.base_mode] = readBaseForm();
+            }
             initBaseModeRadios();
+            // initBaseModeRadios で初期選択されたモードを currentBaseMode として記録
+            var initialChecked = document.querySelector('input[name="meoBaseMode"]:checked');
+            currentBaseMode = initialChecked ? initialChecked.value : null;
             baseModal.classList.add('active');
             updateVerifyLink();
         }
@@ -1107,6 +1117,29 @@ get_header();
         // =========================================================
         // 計測モードラジオ（市の中心 / 自社住所 / 任意）
         // =========================================================
+        // モーダルが開いている間、モード切替時にフォーム入力を失わないよう
+        // モード別にフィールド値をキャッシュする。
+        var modeFormCache = {};
+        var currentBaseMode = null;
+
+        function readBaseForm() {
+            return {
+                address: (document.getElementById('meoBaseAddress').value || ''),
+                label:   (document.getElementById('meoBaseLabel').value || ''),
+                lat:     (document.getElementById('meoBaseLat').value || ''),
+                lng:     (document.getElementById('meoBaseLng').value || ''),
+                radius:  (document.getElementById('meoBaseRadius').value || ''),
+            };
+        }
+        function writeBaseForm(v) {
+            if (!v) return;
+            document.getElementById('meoBaseAddress').value = v.address || '';
+            document.getElementById('meoBaseLabel').value   = v.label || '';
+            document.getElementById('meoBaseLat').value     = v.lat || '';
+            document.getElementById('meoBaseLng').value     = v.lng || '';
+            if (v.radius) document.getElementById('meoBaseRadius').value = v.radius;
+        }
+
         function initBaseModeRadios() {
             var modeGroup = document.querySelector('.meo-base-mode-group');
             if (!modeGroup) return;
@@ -1197,7 +1230,21 @@ get_header();
 
         document.querySelectorAll('input[name="meoBaseMode"]').forEach(function(r) {
             r.addEventListener('change', function() {
-                if (this.checked) applyBaseMode(this.value);
+                if (!this.checked) return;
+                var newMode = this.value;
+                // 切り替え前のモードの入力値を退避
+                if (currentBaseMode && currentBaseMode !== newMode) {
+                    modeFormCache[currentBaseMode] = readBaseForm();
+                }
+                // 新モードの入力値が既に退避されていれば復元、なければプリセット適用
+                if (modeFormCache[newMode]) {
+                    writeBaseForm(modeFormCache[newMode]);
+                    updateBaseModeNote();
+                    updateVerifyLink();
+                } else {
+                    applyBaseMode(newMode);
+                }
+                currentBaseMode = newMode;
             });
         });
         function closeBaseModal() {
