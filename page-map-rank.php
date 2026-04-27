@@ -87,6 +87,66 @@ get_header();
     line-height: 1.6;
 }
 
+/* --- カラム見出しツールチップ --- */
+.rt-th-help {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: help;
+    position: relative;
+}
+.rt-th-help__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid #9ca3af;
+    color: #6b7280;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    background: #fff;
+}
+.rt-th-help__tip {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.55;
+    padding: 10px 12px;
+    border-radius: 8px;
+    width: 260px;
+    text-align: left;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    z-index: 20;
+    transition: opacity 0.15s, visibility 0.15s;
+    pointer-events: none;
+    white-space: normal;
+}
+.rt-th-help__tip::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-bottom-color: #1a1a1a;
+    border-top: 0;
+}
+.rt-th-help:hover .rt-th-help__tip,
+.rt-th-help:focus-within .rt-th-help__tip {
+    visibility: visible;
+    opacity: 1;
+}
+
 /* --- Summary cards --- */
 .rt-summary-cards {
     display: grid;
@@ -639,7 +699,11 @@ get_header();
     <!-- Help -->
     <div class="rt-help">
         Googleマップやローカル検索で、あなたのお店が<strong>何番目に表示されるか</strong>、
-        口コミの状況、近くの競合との比較をまとめています。
+        口コミの状況、近くの競合との比較をまとめています。<br>
+        <span style="display:inline-block;margin-top:6px;">
+            <strong style="color:#1a1a1a;">マップ順位</strong>＝Googleマップ単体での順位。
+            <strong style="color:#1a1a1a;">地域順位</strong>＝通常のGoogle検索結果に出る地図枠（ローカルファインダー／3パック）での順位です。
+        </span>
     </div>
 
     <!-- 計測条件エリア -->
@@ -1233,10 +1297,12 @@ get_header();
         }
 
         // Build header
+        var mapsRankTip = 'Googleマップ単体（マップアプリ／PCの「マップ」タブ）で検索したときの表示順位です。<br>地図そのものから探すユーザーにどう見えているかを表します。';
+        var finderRankTip = '通常のGoogle検索結果の途中に表示される「地図付きローカル枠（ローカルファインダー／3パック）」での順位です。<br>普通にGoogleで検索したとき、地図枠でどう見えているかを表します。';
         var hHtml = '<tr>';
         hHtml += '<th>キーワード</th>';
-        hHtml += '<th>マップ順位</th>';
-        hHtml += '<th>地域順位</th>';
+        hHtml += '<th><span class="rt-th-help" tabindex="0">マップ順位<span class="rt-th-help__icon" aria-hidden="true">?</span><span class="rt-th-help__tip" role="tooltip">' + mapsRankTip + '</span></span></th>';
+        hHtml += '<th><span class="rt-th-help" tabindex="0">地域順位<span class="rt-th-help__icon" aria-hidden="true">?</span><span class="rt-th-help__tip" role="tooltip">' + finderRankTip + '</span></span></th>';
         for (var d = 0; d < dayLabels.length; d++) {
             hHtml += '<th style="text-align:center;">' + dayLabels[d] + '</th>';
         }
