@@ -10049,6 +10049,10 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
     $rr_table  = $wpdb->prefix . 'gcrev_rank_results';
     $meo_table = $wpdb->prefix . 'gcrev_meo_results';
 
+    // 詳細ページと同じ「直近 N 日」の窓を使う（古いデータが「最新」として残るのを防ぐ）
+    $tz_now    = new \DateTimeImmutable( 'now', wp_timezone() );
+    $rank_since = $tz_now->modify( '-14 days' )->format( 'Y-m-d 00:00:00' );
+
     // --- 1. 自然検索順位 ---
     try {
         $kw_ids = $wpdb->get_col( $wpdb->prepare(
@@ -10057,18 +10061,18 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
         ) );
         if ( ! empty( $kw_ids ) ) {
             $ph = implode( ',', array_fill( 0, count( $kw_ids ), '%d' ) );
-            // 各キーワードの最新 mobile 順位を取得
+            // 各キーワードの最新 mobile 順位を取得（直近14日以内に限定）
             $ranks = $wpdb->get_results( $wpdb->prepare(
                 "SELECT r.keyword_id, r.rank_group, r.is_ranked
                  FROM {$rr_table} r
                  INNER JOIN (
                      SELECT keyword_id, MAX(fetched_at) AS max_fa
                      FROM {$rr_table}
-                     WHERE keyword_id IN ({$ph}) AND device = 'mobile'
+                     WHERE keyword_id IN ({$ph}) AND device = 'mobile' AND fetched_at >= %s
                      GROUP BY keyword_id
                  ) latest ON r.keyword_id = latest.keyword_id AND r.fetched_at = latest.max_fa
                  WHERE r.device = 'mobile'",
-                $kw_ids
+                array_merge( $kw_ids, [ $rank_since ] )
             ) );
             if ( ! empty( $ranks ) ) {
                 $total = count( $ranks );
@@ -10102,18 +10106,54 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
     try {
         if ( ! empty( $kw_ids ) ) {
             $ph = implode( ',', array_fill( 0, count( $kw_ids ), '%d' ) );
+            // 直近14日以内のみを「最新」として扱う
             $meo_ranks = $wpdb->get_results( $wpdb->prepare(
                 "SELECT m.keyword_id, m.maps_rank
                  FROM {$meo_table} m
                  INNER JOIN (
                      SELECT keyword_id, MAX(fetched_at) AS max_fa
                      FROM {$meo_table}
-                     WHERE user_id = %d AND keyword_id IN ({$ph}) AND device = 'mobile'
+                     WHERE user_id = %d AND keyword_id IN ({$ph}) AND device = 'mobile' AND fetched_at >= %s
                      GROUP BY keyword_id
                  ) latest ON m.keyword_id = latest.keyword_id AND m.fetched_at = latest.max_fa
                  WHERE m.user_id = %d AND m.device = 'mobile'",
-                array_merge( [ $user_id ], $kw_ids, [ $user_id ] )
+                array_merge( [ $user_id ], $kw_ids, [ $rank_since, $user_id ] )
             ) );
+
+            // DB に無いキーワードは Transient キャッシュ（meo/rankings の結果）からフォールバック
+            // ※ map-rank ページは Transient → DB UPSERT する仕組みなので、Transient だけにある状態が起こり得る
+            $found_kw = [];
+            foreach ( $meo_ranks as $r ) { $found_kw[ (int) $r->keyword_id ] = true; }
+
+            $missing = array_diff( array_map( 'intval', $kw_ids ), array_keys( $found_kw ) );
+            if ( ! empty( $missing ) ) {
+                // zoom suffix 推定（rest_get_meo_history と同じロジック）
+                $t_meo_lat = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
+                $t_meo_lng = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
+                $t_radius  = (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000;
+                if ( $t_meo_lat === '' || $t_meo_lng === '' ) {
+                    if ( class_exists( 'Gcrev_City_Coordinates' ) ) {
+                        $cc = Gcrev_City_Coordinates::get_for_user( $user_id );
+                        if ( $cc ) { $t_meo_lat = (string) $cc['lat']; $t_meo_lng = (string) $cc['lng']; $t_radius = Gcrev_City_Coordinates::DEFAULT_RADIUS; }
+                    }
+                }
+                $t_zoom   = ( $t_meo_lat !== '' && $t_meo_lng !== '' && class_exists( 'Gcrev_DataForSEO_Client' ) )
+                    ? Gcrev_DataForSEO_Client::radius_to_zoom( $t_radius )
+                    : 0;
+                $t_suffix = $t_zoom ? "_{$t_zoom}" : '';
+
+                foreach ( $missing as $mid ) {
+                    $t_key = "gcrev_meo_rank_{$user_id}_{$mid}_mobile{$t_suffix}";
+                    $t_cached = get_transient( $t_key );
+                    if ( $t_cached && is_array( $t_cached ) && isset( $t_cached['maps']['rank'] ) ) {
+                        $meo_ranks[] = (object) [
+                            'keyword_id' => $mid,
+                            'maps_rank'  => $t_cached['maps']['rank'] !== null ? (int) $t_cached['maps']['rank'] : 0,
+                        ];
+                    }
+                }
+            }
+
             if ( ! empty( $meo_ranks ) ) {
                 $total = count( $meo_ranks );
                 $bands = [ '1_3' => 0, '4_10' => 0, '11_20' => 0, 'out' => 0 ];
