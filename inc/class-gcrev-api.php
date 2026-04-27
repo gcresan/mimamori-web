@@ -6841,6 +6841,10 @@ PROMPT;
         $label   = sanitize_text_field( $params['label'] ?? '' );
         $lat     = isset( $params['lat'] ) ? sanitize_text_field( $params['lat'] ) : '';
         $lng     = isset( $params['lng'] ) ? sanitize_text_field( $params['lng'] ) : '';
+        $mode    = sanitize_text_field( $params['mode'] ?? '' );
+        if ( ! in_array( $mode, [ 'city', 'business', 'custom' ], true ) ) {
+            $mode = 'custom';
+        }
 
         if ( empty( $address ) && empty( $lat ) ) {
             return new \WP_REST_Response([ 'success' => false, 'message' => '住所または緯度経度を入力してください' ], 400);
@@ -6900,6 +6904,7 @@ PROMPT;
         // 基準地点を保存
         update_user_meta( $user_id, '_gcrev_meo_address', $address );
         update_user_meta( $user_id, '_gcrev_meo_base_label', $label );
+        update_user_meta( $user_id, '_gcrev_meo_base_mode', $mode );
         update_user_meta( $user_id, '_gcrev_meo_base_updated', current_time( 'mysql' ) );
 
         // 緯度経度の保存
@@ -6938,6 +6943,7 @@ PROMPT;
                 'lng'          => $lng,
                 'radius'       => $radius ?: (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000,
                 'base_label'   => $label,
+                'base_mode'    => $mode,
                 'base_updated' => current_time( 'mysql' ),
             ],
         ]);
@@ -8435,6 +8441,7 @@ PROMPT;
             'radius'       => $meo_radius,
             'source'       => $use_coordinate ? $location_source : 'location_code',
             'base_label'   => get_user_meta( $user_id, '_gcrev_meo_base_label', true ) ?: '',
+            'base_mode'    => get_user_meta( $user_id, '_gcrev_meo_base_mode', true ) ?: '',
             'base_updated' => get_user_meta( $user_id, '_gcrev_meo_base_updated', true ) ?: '',
         ];
 

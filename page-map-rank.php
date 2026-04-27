@@ -1126,41 +1126,54 @@ get_header();
                     label && (label.title = '対象エリア（市区町村）がまだ登録されていません。');
                 }
             });
-            // 初期選択: 既存値から推測（無ければ custom）
-            var addrVal = (document.getElementById('meoBaseAddress').value || '').trim();
-            var biz = basePresets.business && basePresets.business.address ? basePresets.business.address : '';
-            var city = basePresets.city && basePresets.city.query ? basePresets.city.query : '';
-            var initial = 'custom';
-            if (biz && addrVal === biz) initial = 'business';
-            else if (city && addrVal.indexOf(city) === 0) initial = 'city';
+            // 初期選択: ① 保存済み base_mode ② 既存値からの推測 ③ custom
+            var savedMode = (meoData && meoData.location && meoData.location.base_mode) ? meoData.location.base_mode : '';
+            var initial = '';
+            if (savedMode === 'business' || savedMode === 'city' || savedMode === 'custom') {
+                initial = savedMode;
+            } else {
+                var addrVal = (document.getElementById('meoBaseAddress').value || '').trim();
+                var biz = basePresets.business && basePresets.business.address ? basePresets.business.address : '';
+                var city = basePresets.city && basePresets.city.query ? basePresets.city.query : '';
+                if (biz && addrVal === biz) initial = 'business';
+                else if (city && addrVal.indexOf(city) === 0) initial = 'city';
+                else initial = 'custom';
+            }
             modeGroup.querySelectorAll('input[name="meoBaseMode"]').forEach(function(r) {
                 r.checked = (r.value === initial && !r.disabled);
             });
-            // どれもチェック入らなければ custom 強制
+            // 保存済みモードが利用不可なら custom にフォールバック
             if (!modeGroup.querySelector('input[name="meoBaseMode"]:checked')) {
                 var fallback = modeGroup.querySelector('input[value="custom"]');
                 if (fallback) fallback.checked = true;
             }
             updateBaseModeNote();
+            // 注: ここでは applyBaseMode を呼ばない（保存済みの住所・座標を上書きしてしまうため）
         }
 
+        // ユーザーが明示的にラジオをクリックした時のみ実行
         function applyBaseMode(mode) {
             var addr = document.getElementById('meoBaseAddress');
             var lat  = document.getElementById('meoBaseLat');
             var lng  = document.getElementById('meoBaseLng');
             var lbl  = document.getElementById('meoBaseLabel');
             if (mode === 'business' && basePresets.business && basePresets.business.address) {
-                addr.value = basePresets.business.address;
-                lat.value = ''; lng.value = '';
-                lbl.value = lbl.value || '自社住所';
-                // ジオコーディングをトリガー
-                addr.dispatchEvent(new Event('blur'));
+                // 既に同じ住所なら触らない（座標も維持）
+                if ((addr.value || '').trim() !== basePresets.business.address) {
+                    addr.value = basePresets.business.address;
+                    lat.value = ''; lng.value = '';
+                    addr.dispatchEvent(new Event('blur'));
+                }
+                if (!lbl.value) lbl.value = '自社住所';
             } else if (mode === 'city' && basePresets.city && basePresets.city.query) {
-                addr.value = basePresets.city.query;
-                lat.value = ''; lng.value = '';
-                lbl.value = lbl.value || (basePresets.city.label || '');
-                addr.dispatchEvent(new Event('blur'));
+                if ((addr.value || '').trim().indexOf(basePresets.city.query) !== 0) {
+                    addr.value = basePresets.city.query;
+                    lat.value = ''; lng.value = '';
+                    addr.dispatchEvent(new Event('blur'));
+                }
+                if (!lbl.value) lbl.value = basePresets.city.label || '';
             }
+            // mode === 'custom' は何もしない（自由入力に任せる）
             updateBaseModeNote();
             updateVerifyLink();
         }
@@ -1287,7 +1300,9 @@ get_header();
                 baseSaveBtn.textContent = '保存中...';
 
                 var radius = document.getElementById('meoBaseRadius').value || '1000';
-                var payload = { address: address, label: label, radius: parseInt(radius, 10) };
+                var modeRadio = document.querySelector('input[name="meoBaseMode"]:checked');
+                var selectedMode = modeRadio ? modeRadio.value : 'custom';
+                var payload = { address: address, label: label, radius: parseInt(radius, 10), mode: selectedMode };
                 if (lat && lng) {
                     payload.lat = lat;
                     payload.lng = lng;
