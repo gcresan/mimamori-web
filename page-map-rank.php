@@ -24,19 +24,51 @@ set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('マップ順位', '検索順
 $maps_domain = get_user_meta( $user_id, '_gcrev_maps_domain', true ) ?: '';
 
 // 基準地点プリセット用データ
-$mw_business_address = (string) get_user_meta( $user_id, '_gcrev_gbp_location_address', true );
-if ( $mw_business_address === '' ) {
-    $mw_business_address = (string) get_user_meta( $user_id, '_gcrev_meo_address', true );
+$mw_saved_meo_address = (string) get_user_meta( $user_id, '_gcrev_meo_address', true );
+$mw_saved_meo_lat     = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
+$mw_saved_meo_lng     = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
+$mw_saved_meo_mode    = (string) get_user_meta( $user_id, '_gcrev_meo_base_mode', true );
+$mw_gbp_address       = (string) get_user_meta( $user_id, '_gcrev_gbp_location_address', true );
+
+// 自社住所プリセット
+// 1. base_mode が business で保存済み → 保存値（住所・lat/lng）をそのまま使う
+// 2. それ以外 → 保存済みの meo_address（前回業務住所として使ったもの）を流用
+// 3. 上記もなければ GBP 住所の整形版
+$mw_biz_address = '';
+$mw_biz_lat = '';
+$mw_biz_lng = '';
+if ( $mw_saved_meo_mode === 'business' && $mw_saved_meo_address !== '' ) {
+    $mw_biz_address = $mw_saved_meo_address;
+    $mw_biz_lat     = $mw_saved_meo_lat;
+    $mw_biz_lng     = $mw_saved_meo_lng;
+} elseif ( $mw_saved_meo_address !== '' ) {
+    $mw_biz_address = $mw_saved_meo_address;
+} elseif ( $mw_gbp_address !== '' ) {
+    // GBP 住所はフォーマットが Google API の生データ（"Ehime甲 3-1平井町松山市" など）
+    // で正しくジオコーディングできないため、ベストエフォートで成形。
+    $mw_biz_address = trim( preg_replace( '/\s+/u', '', $mw_gbp_address ) );
 }
+
 $mw_area_pref = (string) get_user_meta( $user_id, 'gcrev_client_area_pref', true );
 $mw_area_city = (string) get_user_meta( $user_id, 'gcrev_client_area_city', true );
-$mw_city_query = trim( $mw_area_pref . $mw_area_city );
+// 市区町村の中心 — 「○○市役所」のように具体的な地名を追加した方が
+// Nominatim のジオコーディングが安定する
+$mw_city_query = '';
+if ( $mw_area_city !== '' ) {
+    if ( preg_match( '/[市区町村]$/u', $mw_area_city ) ) {
+        $mw_city_query = trim( $mw_area_pref . $mw_area_city . '役所' );
+    } else {
+        $mw_city_query = trim( $mw_area_pref . $mw_area_city );
+    }
+}
 $mw_city_label = $mw_area_city !== '' ? ( $mw_area_city . '中心部' ) : '市区町村の中心';
 
 $mw_base_presets = wp_json_encode([
     'business' => [
-        'available' => $mw_business_address !== '',
-        'address'   => $mw_business_address,
+        'available' => $mw_biz_address !== '',
+        'address'   => $mw_biz_address,
+        'lat'       => $mw_biz_lat,
+        'lng'       => $mw_biz_lng,
     ],
     'city'     => [
         'available' => $mw_city_query !== '',
@@ -1192,20 +1224,26 @@ get_header();
             var lng  = document.getElementById('meoBaseLng');
             var lbl  = document.getElementById('meoBaseLabel');
             if (mode === 'business' && basePresets.business && basePresets.business.address) {
-                // 既に同じ住所なら触らない（座標も維持）
-                if ((addr.value || '').trim() !== basePresets.business.address) {
-                    addr.value = basePresets.business.address;
+                addr.value = basePresets.business.address;
+                lbl.value  = '自社住所';
+                // プリセットに lat/lng があればそのまま使う（ジオコーディング不要）
+                if (basePresets.business.lat && basePresets.business.lng) {
+                    lat.value = basePresets.business.lat;
+                    lng.value = basePresets.business.lng;
+                } else {
                     lat.value = ''; lng.value = '';
-                    addr.dispatchEvent(new Event('blur'));
+                    addr.dispatchEvent(new Event('blur')); // Nominatim へフォールバック
                 }
-                if (!lbl.value) lbl.value = '自社住所';
             } else if (mode === 'city' && basePresets.city && basePresets.city.query) {
-                if ((addr.value || '').trim().indexOf(basePresets.city.query) !== 0) {
-                    addr.value = basePresets.city.query;
+                addr.value = basePresets.city.query;
+                lbl.value  = basePresets.city.label || '';
+                if (basePresets.city.lat && basePresets.city.lng) {
+                    lat.value = basePresets.city.lat;
+                    lng.value = basePresets.city.lng;
+                } else {
                     lat.value = ''; lng.value = '';
                     addr.dispatchEvent(new Event('blur'));
                 }
-                if (!lbl.value) lbl.value = basePresets.city.label || '';
             }
             // mode === 'custom' は何もしない（自由入力に任せる）
             updateBaseModeNote();
