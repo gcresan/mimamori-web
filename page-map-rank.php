@@ -933,8 +933,8 @@ get_header();
         <div class="meo-loading" id="meoLoading">データを取得中...</div>
         <div class="meo-empty" id="meoEmpty" style="display:none;">
             <div class="meo-empty__icon">&#x1F4CD;</div>
-            <div class="meo-empty__text">MEOデータがまだありません</div>
-            <div style="color:#9ca3af; font-size:12px; margin-top:6px;">
+            <div class="meo-empty__text" id="meoEmptyText">MEOデータがまだありません</div>
+            <div id="meoEmptyDesc" style="color:#9ca3af; font-size:12px; margin-top:6px;">
                 <a href="<?php echo esc_url( home_url( '/rank-tracker/' ) ); ?>" style="color:#568184;">自然検索順位</a>ページでキーワードを登録すると、Googleマップでの順位も確認できます。
             </div>
         </div>
@@ -1485,7 +1485,11 @@ get_header();
                             renderFromSnapshot(snap);
                             showToast('この地点で取得済みのデータを表示しています。最新を見るには「最新の情報を見る」を押してください。');
                         } else {
-                            fetchMeoData(); // 初回はサーバから取得
+                            // この地点用のキャッシュがない場合、DB は別地点の最新データを返してしまうので
+                            // 表示せず「未取得」状態にして「最新の情報を見る」を促す。
+                            showUntrackedLocationState(json.data || {
+                                address: address, lat: savedLat, lng: savedLng, radius: savedRadius, base_label: label, base_mode: selectedMode
+                            });
                         }
                     } else {
                         showToast(json.message || '保存に失敗しました。', 'error');
@@ -1533,6 +1537,43 @@ get_header();
         if (!hash || !window.gcrevCache) return null;
         return window.gcrevCache.get('map_rank_loc:' + hash);
     }
+    // 空状態メッセージを既定に戻す（キーワード未登録時用）
+    function resetEmptyMessage() {
+        var emptyTextEl = document.getElementById('meoEmptyText');
+        var emptyDescEl = document.getElementById('meoEmptyDesc');
+        if (emptyTextEl) emptyTextEl.textContent = 'MEOデータがまだありません';
+        if (emptyDescEl) emptyDescEl.innerHTML = '<a href="<?php echo esc_url( home_url( '/rank-tracker/' ) ); ?>" style="color:#568184;">自然検索順位</a>ページでキーワードを登録すると、Googleマップでの順位も確認できます。';
+    }
+
+    // 地点切替後にスナップショットが無い時の「未取得」状態
+    function showUntrackedLocationState(savedLoc) {
+        // 上部の基準地点ラベル等は新地点で更新する
+        var loc = {
+            mode: (savedLoc.lat && savedLoc.lng) ? 'coordinate' : 'location_code',
+            address: savedLoc.address || '',
+            lat: savedLoc.lat || '',
+            lng: savedLoc.lng || '',
+            radius: savedLoc.radius || 1000,
+            source: 'manual',
+            base_label: savedLoc.base_label || '',
+            base_mode: savedLoc.base_mode || ''
+        };
+        // 共通キャッシュは破棄（DB の古い別地点データを再描画しないため）
+        if (window.gcrevCache) window.gcrevCache.clear('map_rank');
+        // 既存テーブルをクリアして「未取得」状態に切替
+        meoData      = { location: loc, keywords: [], summary: {}, days: [], day_labels: [] };
+        keywordsList = [];
+        dayLabels    = [];
+        dayKeys      = [];
+        summaryData  = {};
+        renderLocation(loc);
+        var emptyTextEl = document.getElementById('meoEmptyText');
+        var emptyDescEl = document.getElementById('meoEmptyDesc');
+        if (emptyTextEl) emptyTextEl.textContent = 'この地点ではまだ計測データがありません';
+        if (emptyDescEl) emptyDescEl.innerHTML = '画面右上の <strong>「最新の情報を見る」</strong> ボタンを押すと、新しい基準地点でマップ順位を取得できます。';
+        showState('empty');
+    }
+
     function renderFromSnapshot(snap) {
         meoData      = snap;
         keywordsList = snap.keywords || [];
@@ -1572,6 +1613,7 @@ get_header();
             renderLocation(cached.location);
             renderStoreInfoCard(cached.latest);
             if (keywordsList.length === 0) {
+                resetEmptyMessage();
                 showState('empty');
             } else {
                 showState('table');
@@ -1614,6 +1656,7 @@ get_header();
                 renderStoreInfoCard(json.data.latest);
 
                 if (keywordsList.length === 0) {
+                    resetEmptyMessage();
                     showState('empty');
                     return;
                 }
@@ -1623,13 +1666,17 @@ get_header();
                 renderTable();
             } else if (!hadCache) {
                 // キャッシュ無しでサーバも空 → empty。キャッシュがあれば既に表示済みなので維持
+                resetEmptyMessage();
                 showState('empty');
             }
         })
         .catch(function(err) {
             console.error('[GCREV][MEO]', err);
             // キャッシュがあれば既に表示中なので維持。無ければ empty。
-            if (!hadCache) showState('empty');
+            if (!hadCache) {
+                resetEmptyMessage();
+                showState('empty');
+            }
         });
     }
 
