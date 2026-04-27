@@ -15481,11 +15481,13 @@ PROMPT;
         $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
         $res_table = $wpdb->prefix . 'gcrev_rank_results';
         $is_admin  = current_user_can( 'manage_options' );
+        $is_internal_test = function_exists( 'gcrev_is_internal_test_account' )
+            && gcrev_is_internal_test_account( $user_id );
         $tz        = wp_timezone();
         $today     = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d' );
 
-        // レート制限: 一括取得は1日1回（管理者は無制限）
-        if ( ! $is_admin ) {
+        // レート制限: 一括取得は1日1回（管理者・社内テストアカウントは無制限）
+        if ( ! $is_admin && ! $is_internal_test ) {
             $bulk_key = 'gcrev_bulk_fetch_' . $user_id . '_' . $today;
             if ( get_transient( $bulk_key ) ) {
                 return new \WP_REST_Response( [
@@ -15567,8 +15569,8 @@ PROMPT;
             ];
         }
 
-        // 一括取得済みフラグ
-        if ( ! $is_admin ) {
+        // 一括取得済みフラグ（管理者・社内テストアカウントには付けない）
+        if ( ! $is_admin && ! $is_internal_test ) {
             set_transient( 'gcrev_bulk_fetch_' . $user_id . '_' . $today, 1, DAY_IN_SECONDS );
         }
 

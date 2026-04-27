@@ -8852,6 +8852,20 @@ function gcrev_trial_default_days(): int {
 }
 
 // --------------------------------------------------
+// 社内テストアカウント — 共通判定関数
+// 「お試し利用（gcrev_test_operation）」とは別概念。
+// このフラグが立っているユーザーは、外部APIを叩く操作の
+// レート制限（マップ順位の一括取得など）をバイパスする。
+// 内部meta key: gcrev_internal_test_account
+// --------------------------------------------------
+
+/** 社内テストアカウント（外部API叩き放題）か */
+function gcrev_is_internal_test_account( int $user_id ): bool {
+    if ( $user_id <= 0 ) return false;
+    return get_user_meta( $user_id, 'gcrev_internal_test_account', true ) === '1';
+}
+
+// --------------------------------------------------
 // WP管理画面 — お試し利用セクションを表示（登録画面・編集画面共通）
 // --------------------------------------------------
 add_action( 'edit_user_profile', 'gcrev_render_test_operation_field' );
@@ -8874,6 +8888,7 @@ function gcrev_render_test_operation_field( $user ) {
     $trial_start = $is_new ? ''    : get_user_meta( $user->ID, 'gcrev_trial_start', true );
     $trial_end   = $is_new ? ''    : get_user_meta( $user->ID, 'gcrev_trial_end', true );
     $is_expired  = ! $is_new && $is_test && gcrev_is_trial_expired( $user->ID );
+    $is_internal = $is_new ? false : ( get_user_meta( $user->ID, 'gcrev_internal_test_account', true ) === '1' );
 
     // 残り日数計算
     $remaining = '';
@@ -8944,6 +8959,25 @@ function gcrev_render_test_operation_field( $user ) {
                     </span>
                 <?php endif; ?>
                 <p class="description">デフォルトは開始日時から<?php echo gcrev_trial_default_days(); ?>日後です。手動変更可能です。</p>
+            </td>
+        </tr>
+        <tr>
+            <th><label for="gcrev_internal_test_account">社内テストアカウント</label></th>
+            <td>
+                <label>
+                    <input type="checkbox"
+                           id="gcrev_internal_test_account"
+                           name="gcrev_internal_test_account"
+                           value="1"
+                           <?php checked( $is_internal ); ?>>
+                    社内テスト用として扱う（外部API叩き放題）
+                </label>
+                <p class="description">
+                    チェックを入れると、社内動作確認用アカウントとして扱われ、
+                    マップ順位の一括取得など 1日1回 のレート制限がバイパスされます。
+                    <strong style="color:#c0392b;">本番クライアントには絶対に付けないでください</strong>
+                    （DataForSEO 等の外部 API コストに直結します）。
+                </p>
             </td>
         </tr>
     </table>
@@ -9113,6 +9147,13 @@ function gcrev_save_test_operation_field( int $user_id ) {
     } else {
         delete_user_meta( $user_id, 'gcrev_test_operation' );
         // 開始日・終了日は残す（再度ONにした際に復元できるようにする）
+    }
+
+    // 社内テストアカウント（外部APIレート制限バイパス用）
+    if ( ! empty( $_POST['gcrev_internal_test_account'] ) ) {
+        update_user_meta( $user_id, 'gcrev_internal_test_account', '1' );
+    } else {
+        delete_user_meta( $user_id, 'gcrev_internal_test_account' );
     }
 }
 
