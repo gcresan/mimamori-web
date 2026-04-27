@@ -6364,6 +6364,14 @@ add_action('after_setup_theme', function () {
     if ( class_exists( 'Gcrev_Auto_Article_Queue' ) ) {
         Gcrev_Auto_Article_Queue::create_table();
     }
+
+    // 戦略連動レポート機能（戦略マスター + 戦略レポート）
+    require_once get_template_directory() . '/inc/gcrev-api/utils/class-strategy-tables.php';
+    require_once get_template_directory() . '/inc/gcrev-api/utils/class-strategy-schema-validator.php';
+    require_once get_template_directory() . '/inc/gcrev-api/modules/class-strategy-repository.php';
+    if ( class_exists( 'Gcrev_Strategy_Tables' ) ) {
+        Gcrev_Strategy_Tables::create_tables();
+    }
 });
 
 function gcrev_actual_cv_table_name(): string {
