@@ -1278,12 +1278,28 @@ get_header();
             if (!note) return;
             var checked = document.querySelector('input[name="meoBaseMode"]:checked');
             var mode = checked ? checked.value : '';
+            // フォームに入っている lat/lng を取得（プリセット適用後でも反映できる）
+            var latVal = (document.getElementById('meoBaseLat').value || '').trim();
+            var lngVal = (document.getElementById('meoBaseLng').value || '').trim();
+            var mapLinkHtml = '';
+            if (latVal && lngVal && !isNaN(parseFloat(latVal)) && !isNaN(parseFloat(lngVal))) {
+                var mapUrl = 'https://www.google.com/maps?q=' + encodeURIComponent(latVal + ',' + lngVal);
+                mapLinkHtml = '<div style="margin-top:8px;"><a href="' + mapUrl + '" target="_blank" rel="noopener" style="color:#568184;text-decoration:underline;font-weight:600;">📍 この地点をGoogleマップで確認する →</a></div>';
+            }
             if (mode === 'business') {
                 note.className = 'meo-base-mode-note meo-base-mode-note--warn is-visible';
-                note.innerHTML = '⚠️ <strong>自社住所基準</strong>では、Googleマップが「店舗のすぐ近くの人」に向けて表示する結果を計測します。距離スコアの影響で実態より高い順位が出やすく、競合との比較指標としては不正確になる場合があります。';
+                note.innerHTML = '⚠️ <strong>自社住所基準</strong>では、Googleマップが「店舗のすぐ近くの人」に向けて表示する結果を計測します。距離スコアの影響で実態より高い順位が出やすく、競合との比較指標としては不正確になる場合があります。' + mapLinkHtml;
             } else if (mode === 'city') {
                 note.className = 'meo-base-mode-note is-visible';
-                note.innerHTML = '✅ <strong>市区町村中心基準</strong>は、商圏全体のユーザー視点に近い計測ができます。競合との真の力関係や、SEO 施策の効果測定に向いています。';
+                note.innerHTML = '✅ <strong>市区町村中心基準</strong>は、商圏全体のユーザー視点に近い計測ができます。競合との真の力関係や、SEO 施策の効果測定に向いています。' + mapLinkHtml;
+            } else if (mode === 'custom') {
+                if (mapLinkHtml) {
+                    note.className = 'meo-base-mode-note is-visible';
+                    note.innerHTML = mapLinkHtml.replace('margin-top:8px;', '');
+                } else {
+                    note.className = 'meo-base-mode-note';
+                    note.innerHTML = '';
+                }
             } else {
                 note.className = 'meo-base-mode-note';
                 note.innerHTML = '';
@@ -1328,8 +1344,14 @@ get_header();
         }
         var baseLatField = document.getElementById('meoBaseLat');
         var baseLngField = document.getElementById('meoBaseLng');
-        if (baseLatField) baseLatField.addEventListener('input', updateVerifyLink);
-        if (baseLngField) baseLngField.addEventListener('input', updateVerifyLink);
+        if (baseLatField) {
+            baseLatField.addEventListener('input', updateVerifyLink);
+            baseLatField.addEventListener('input', updateBaseModeNote);
+        }
+        if (baseLngField) {
+            baseLngField.addEventListener('input', updateVerifyLink);
+            baseLngField.addEventListener('input', updateBaseModeNote);
+        }
 
         // 住所入力 → Nominatim で緯度経度を自動取得
         var geocodeTimer = null;
