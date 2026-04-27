@@ -1117,10 +1117,14 @@ get_header();
     // Fetch data (single API call)
     // =========================================================
     function fetchMeoData() {
-        // キャッシュチェック（ローディングなしで即表示）
+        // Stale-While-Revalidate:
+        // 1) キャッシュがあれば即時表示（速度のため）
+        // 2) その後、必ずサーバへ最新を取りに行き、内容に差があれば更新する
         var cacheKey = 'map_rank';
         var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        var hadCache = false;
         if (cached) {
+            hadCache = true;
             meoData      = cached;
             keywordsList = cached.keywords || [];
             dayLabels    = cached.day_labels || [];
@@ -1130,15 +1134,14 @@ get_header();
             renderStoreInfoCard(cached.latest);
             if (keywordsList.length === 0) {
                 showState('empty');
-                return;
+            } else {
+                showState('table');
+                renderSummary();
+                renderTable();
             }
-            showState('table');
-            renderSummary();
-            renderTable();
-            return;
+        } else {
+            showState('loading');
         }
-
-        showState('loading');
 
         fetch(restBase + 'meo/history', {
             credentials: 'same-origin',
@@ -1147,13 +1150,20 @@ get_header();
         .then(function(resp) { return resp.json(); })
         .then(function(json) {
             if (json.success && json.data) {
+                // 既に同一内容を表示済みならスキップ（無駄な再描画を防ぐ）
+                var cachedJson = hadCache ? JSON.stringify(cached) : null;
+                var serverJson = JSON.stringify(json.data);
+                if (hadCache && cachedJson === serverJson) {
+                    return;
+                }
+
                 meoData      = json.data;
                 keywordsList = json.data.keywords || [];
                 dayLabels    = json.data.day_labels || [];
                 dayKeys      = json.data.days || [];
                 summaryData  = json.data.summary || {};
 
-                // キャッシュに保存
+                // キャッシュ更新
                 if (window.gcrevCache) window.gcrevCache.set(cacheKey, json.data);
 
                 // Location info
@@ -1170,13 +1180,15 @@ get_header();
                 showState('table');
                 renderSummary();
                 renderTable();
-            } else {
+            } else if (!hadCache) {
+                // キャッシュ無しでサーバも空 → empty。キャッシュがあれば既に表示済みなので維持
                 showState('empty');
             }
         })
         .catch(function(err) {
             console.error('[GCREV][MEO]', err);
-            showState('empty');
+            // キャッシュがあれば既に表示中なので維持。無ければ empty。
+            if (!hadCache) showState('empty');
         });
     }
 
