@@ -44,6 +44,31 @@ get_header();
     box-shadow: var(--mw-shadow-float);
     transform: translateY(-1px);
 }
+.seo-summary-card--clickable {
+    cursor: pointer;
+    position: relative;
+}
+.seo-summary-card--clickable::after {
+    content: '詳細を見る ›';
+    display: block;
+    font-size: 11px;
+    color: var(--mw-primary-blue);
+    margin-top: 8px;
+    font-weight: 600;
+    opacity: 0.85;
+}
+.seo-summary-card--clickable:hover {
+    border-color: var(--mw-primary-blue);
+}
+.seo-summary-card--clickable:focus-visible {
+    outline: 2px solid var(--mw-primary-blue);
+    outline-offset: 2px;
+}
+.seo-summary-card--disabled {
+    cursor: default;
+    opacity: 0.85;
+}
+.seo-summary-card--disabled::after { display: none; }
 .seo-summary-card__label {
     font-size: 13px;
     color: var(--mw-text-tertiary);
@@ -174,6 +199,49 @@ get_header();
     transition: box-shadow 0.15s;
 }
 .seo-diagnosis-item:hover { box-shadow: var(--mw-shadow-soft); }
+.seo-diagnosis-item--highlight {
+    box-shadow: 0 0 0 2px var(--mw-primary-blue), var(--mw-shadow-float);
+    transition: box-shadow 0.4s;
+}
+.seo-diagnosis-grid--filter-critical .seo-diagnosis-item:not([data-status="critical"]) { display: none; }
+.seo-diagnosis-grid--filter-caution  .seo-diagnosis-item:not([data-status="caution"])  { display: none; }
+.seo-diagnosis-filter-bar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    background: rgba(86,129,132,0.08);
+    border: 1px solid rgba(86,129,132,0.2);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--mw-text-primary);
+}
+.seo-diagnosis-filter-bar.is-active { display: flex; }
+.seo-diagnosis-filter-bar__label { font-weight: 600; }
+.seo-diagnosis-filter-bar__clear {
+    margin-left: auto;
+    background: var(--mw-bg-primary);
+    border: 1px solid var(--mw-border-light);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--mw-text-secondary);
+}
+.seo-diagnosis-filter-bar__clear:hover {
+    border-color: var(--mw-primary-blue);
+    color: var(--mw-primary-blue);
+}
+.seo-diagnosis-empty-msg {
+    padding: 32px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--mw-text-tertiary);
+    background: var(--mw-bg-secondary);
+    border-radius: 10px;
+    grid-column: 1 / -1;
+}
 .seo-diagnosis-item__icon {
     flex-shrink: 0;
     width: 32px;
@@ -579,6 +647,10 @@ get_header();
                 <div class="seo-section__note">タイトル・description・見出し・画像alt・内部リンク・技術設定などを確認します</div>
             </div>
         </div>
+        <div class="seo-diagnosis-filter-bar" id="seoDiagnosisFilterBar">
+            <span class="seo-diagnosis-filter-bar__label" id="seoDiagnosisFilterLabel"></span>
+            <button type="button" class="seo-diagnosis-filter-bar__clear" id="seoDiagnosisFilterClear">すべて表示</button>
+        </div>
         <div class="seo-diagnosis-grid" id="seoDiagnosisGrid"></div>
     </div>
 
@@ -712,6 +784,8 @@ get_header();
        初期化 — APIからデータ取得
        ================================================================= */
     document.addEventListener('DOMContentLoaded', function() {
+        var clearBtn = document.getElementById('seoDiagnosisFilterClear');
+        if (clearBtn) clearBtn.addEventListener('click', clearDiagnosisFilter);
         fetchReport();
     });
 
@@ -774,8 +848,17 @@ get_header();
         var circumference = 2 * Math.PI * 36;
         var offset = circumference - (s.totalScore / 100) * circumference;
 
+        function clickAttrs(action, enabled) {
+            if (!enabled) return ' class="seo-summary-card seo-summary-card--disabled"';
+            return ' class="seo-summary-card seo-summary-card--clickable" tabindex="0" role="button" data-card-action="' + action + '"';
+        }
+
+        var hasCritical = (s.criticalCount || 0) > 0;
+        var hasWarning  = (s.warningCount  || 0) > 0;
+        var hasKeywords = !!(kwData && kwData.keywords && kwData.keywords.length > 0);
+
         var html = '';
-        html += '<div class="seo-summary-card">';
+        html += '<div' + clickAttrs('assessment', true) + '>';
         html += '  <div class="seo-summary-card__label">SEO総合スコア</div>';
         html += '  <div class="seo-score-ring">';
         html += '    <svg width="80" height="80" viewBox="0 0 80 80">';
@@ -791,33 +874,33 @@ get_header();
         }
         html += '</div>';
 
-        html += '<div class="seo-summary-card">';
+        html += '<div' + clickAttrs('critical', hasCritical) + '>';
         html += '  <div class="seo-summary-card__label">致命的な問題</div>';
         html += '  <div class="seo-summary-card__value seo-summary-card__value--critical">' + esc(s.criticalCount) + '<span style="font-size:16px;font-weight:400;">件</span></div>';
-        html += '  <div class="seo-summary-card__sub">早急に対応が必要</div>';
+        html += '  <div class="seo-summary-card__sub">' + (hasCritical ? '該当の診断項目を表示' : '早急に対応が必要な項目はありません') + '</div>';
         html += '</div>';
 
-        html += '<div class="seo-summary-card">';
+        html += '<div' + clickAttrs('caution', hasWarning) + '>';
         html += '  <div class="seo-summary-card__label">要改善項目</div>';
         html += '  <div class="seo-summary-card__value seo-summary-card__value--warning">' + esc(s.warningCount) + '<span style="font-size:16px;font-weight:400;">件</span></div>';
-        html += '  <div class="seo-summary-card__sub">改善でスコアアップが期待</div>';
+        html += '  <div class="seo-summary-card__sub">' + (hasWarning ? '該当の診断項目を表示' : '改善が必要な項目はありません') + '</div>';
         html += '</div>';
 
-        html += '<div class="seo-summary-card">';
+        html += '<div' + clickAttrs('issues', true) + '>';
         html += '  <div class="seo-summary-card__label">診断対象ページ</div>';
         html += '  <div class="seo-summary-card__value">' + esc(s.pageCount) + '<span style="font-size:16px;font-weight:400;">ページ</span></div>';
-        html += '  <div class="seo-summary-card__sub">クロール済みページ数</div>';
+        html += '  <div class="seo-summary-card__sub">ページ別の問題一覧へ</div>';
         html += '</div>';
 
-        if (kwData && kwData.keywords && kwData.keywords.length > 0) {
-            html += '<div class="seo-summary-card">';
+        if (hasKeywords) {
+            html += '<div' + clickAttrs('keywords', true) + '>';
             html += '  <div class="seo-summary-card__label">ターゲットキーワード</div>';
             html += '  <div class="seo-summary-card__value seo-summary-card__value--accent">' + esc(kwData.keywords.length) + '<span style="font-size:16px;font-weight:400;">件</span></div>';
-            html += '  <div class="seo-summary-card__sub">キーワード最適化を分析</div>';
+            html += '  <div class="seo-summary-card__sub">キーワード最適化を確認</div>';
             html += '</div>';
         }
 
-        html += '<div class="seo-summary-card">';
+        html += '<div class="seo-summary-card seo-summary-card--disabled">';
         html += '  <div class="seo-summary-card__label">最終診断日時</div>';
         html += '  <div class="seo-summary-card__value" style="font-size:18px;">' + esc(s.lastCheckedAt) + '</div>';
         html += '  <div class="seo-summary-card__sub">';
@@ -825,7 +908,75 @@ get_header();
         html += '  </div>';
         html += '</div>';
 
-        document.getElementById('seoSummary').innerHTML = html;
+        var summaryEl = document.getElementById('seoSummary');
+        summaryEl.innerHTML = html;
+        bindSummaryCardClicks(summaryEl);
+    }
+
+    /* =================================================================
+       サマリーカードのクリック → 該当セクションへスクロール / フィルタ
+       ================================================================= */
+    function bindSummaryCardClicks(root) {
+        var cards = root.querySelectorAll('.seo-summary-card--clickable');
+        for (var i = 0; i < cards.length; i++) {
+            var card = cards[i];
+            card.addEventListener('click', handleSummaryCardAction);
+            card.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSummaryCardAction.call(this, e);
+                }
+            });
+        }
+    }
+
+    function handleSummaryCardAction(e) {
+        var action = this.getAttribute('data-card-action');
+        switch (action) {
+            case 'critical': applyDiagnosisFilter('critical'); break;
+            case 'caution':  applyDiagnosisFilter('caution');  break;
+            case 'issues':     scrollToSection('seoIssuesSection');     break;
+            case 'keywords':   scrollToSection('seoKeywordSection');    break;
+            case 'assessment': scrollToSection('seoAssessmentSection'); break;
+        }
+    }
+
+    function scrollToSection(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function applyDiagnosisFilter(status) {
+        var grid = document.getElementById('seoDiagnosisGrid');
+        var bar  = document.getElementById('seoDiagnosisFilterBar');
+        var lbl  = document.getElementById('seoDiagnosisFilterLabel');
+        var section = document.getElementById('seoDiagnosisSection');
+        if (!grid || !bar || !lbl) return;
+
+        grid.classList.remove('seo-diagnosis-grid--filter-critical', 'seo-diagnosis-grid--filter-caution');
+        grid.classList.add('seo-diagnosis-grid--filter-' + status);
+
+        lbl.textContent = (status === 'critical' ? '🚨 致命的な問題のみ表示中' : '⚠️ 要改善項目のみ表示中');
+        bar.classList.add('is-active');
+
+        if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // 該当アイテムを軽くハイライト
+        var items = grid.querySelectorAll('.seo-diagnosis-item[data-status="' + status + '"]');
+        for (var i = 0; i < items.length; i++) {
+            (function(it) {
+                it.classList.add('seo-diagnosis-item--highlight');
+                setTimeout(function() { it.classList.remove('seo-diagnosis-item--highlight'); }, 1400);
+            })(items[i]);
+        }
+    }
+
+    function clearDiagnosisFilter() {
+        var grid = document.getElementById('seoDiagnosisGrid');
+        var bar  = document.getElementById('seoDiagnosisFilterBar');
+        if (grid) grid.classList.remove('seo-diagnosis-grid--filter-critical', 'seo-diagnosis-grid--filter-caution');
+        if (bar)  bar.classList.remove('is-active');
     }
 
     /* =================================================================
@@ -842,7 +993,7 @@ get_header();
             // per-check delta
             var checkDelta = perCheck[c.key] ? perCheck[c.key].delta : null;
 
-            html += '<div class="seo-diagnosis-item">';
+            html += '<div class="seo-diagnosis-item" data-status="' + esc(c.status) + '">';
             html += '  <div class="seo-diagnosis-item__icon ' + iconClass + '">' + esc(icon) + '</div>';
             html += '  <div class="seo-diagnosis-item__body">';
             html += '    <div class="seo-diagnosis-item__label">' + esc(c.label) + '</div>';
@@ -868,6 +1019,7 @@ get_header();
             html += '  </div></div>';
         });
         document.getElementById('seoDiagnosisGrid').innerHTML = html;
+        clearDiagnosisFilter();
     }
 
     /* =================================================================
