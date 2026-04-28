@@ -99,8 +99,11 @@ class Gcrev_Strategy_Pdf_Extractor {
             $log( 'gemini_call_start' );
             $raw = $this->ai->call_gemini_api( $prompt, [
                 'temperature'      => 0.2,
-                'maxOutputTokens'  => 4096,
+                'maxOutputTokens'  => 8192,
                 'responseMimeType' => 'application/json',
+                // Gemini 2.5 系で thinking が出力トークンを食いつぶし、本文が途中で
+                // 切れる事故を防ぐため明示的に thinking を無効化
+                'thinkingBudget'   => 0,
             ] );
             $dur_ms = (int) round( ( microtime( true ) - $start_us ) * 1000 );
             $log( "gemini_call_ok dur_ms={$dur_ms} raw_len=" . strlen( $raw ) );
