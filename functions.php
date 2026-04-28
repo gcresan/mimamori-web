@@ -1327,6 +1327,50 @@ foreach ( $gcrev_strategy_files as $gcrev_strategy_file ) {
 }
 unset( $gcrev_strategy_files, $gcrev_strategy_file );
 
+/**
+ * 戦略連動レポート機能で必要な固定ページを自動作成する。
+ * 既に同 slug のページがあれば何もしない（冪等）。テンプレ未割当の既存ページが
+ * あれば、テンプレだけ割り当てる（破壊的変更はしない）。
+ */
+add_action( 'after_setup_theme', function () {
+    $required_pages = [
+        'strategy-settings' => [
+            'title'    => '戦略設定',
+            'template' => 'page-strategy-settings.php',
+        ],
+        'strategy-report' => [
+            'title'    => '戦略レポート',
+            'template' => 'page-strategy-report.php',
+        ],
+    ];
+
+    foreach ( $required_pages as $slug => $meta ) {
+        $page = get_page_by_path( $slug, OBJECT, 'page' );
+
+        if ( ! $page ) {
+            $new_id = wp_insert_post( [
+                'post_title'   => $meta['title'],
+                'post_name'    => $slug,
+                'post_status'  => 'publish',
+                'post_type'    => 'page',
+                'post_content' => '',
+                'comment_status' => 'closed',
+                'ping_status'    => 'closed',
+            ], true );
+            if ( ! is_wp_error( $new_id ) && $new_id ) {
+                update_post_meta( $new_id, '_wp_page_template', $meta['template'] );
+            }
+            continue;
+        }
+
+        // ページは存在するがテンプレ未割当 → テンプレだけ割り当て
+        $current_template = (string) get_post_meta( $page->ID, '_wp_page_template', true );
+        if ( $current_template === '' || $current_template === 'default' ) {
+            update_post_meta( $page->ID, '_wp_page_template', $meta['template'] );
+        }
+    }
+}, 20 );
+
 // 戦略レポート 単発実行用 Cron アクション（手動「やり直し生成」のバックグラウンド実行）
 add_action( 'gcrev_strategy_report_run_event', function ( $user_id, $year_month, $source ) {
     $user_id    = (int) $user_id;
