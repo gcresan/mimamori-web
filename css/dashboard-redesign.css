@@ -494,6 +494,40 @@ h3 { font-size: 20px; font-weight: 700; }
   box-shadow: var(--mw-shadow-float);
 }
 
+/* ========== Corner CTA group (横並び) — 月次 + 戦略レポート ========== */
+.info-monthly-link__group {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  z-index: 2;
+}
+.info-monthly-link__group .info-monthly-link {
+  padding: 12px 18px;
+  border-radius: var(--mw-radius-sm);
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--mw-shadow-card);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.info-monthly-link__group .info-monthly-link:hover {
+  background: #333;
+  box-shadow: var(--mw-shadow-float);
+}
+.info-monthly-link__group .info-monthly-link--strategy {
+  background: #1e40af;
+}
+.info-monthly-link__group .info-monthly-link--strategy:hover {
+  background: #1d4ed8;
+}
+
 /* ========== Score + KPI 横並びレイアウト ========== */
 .info-top-row {
   display: flex;
@@ -1633,6 +1667,19 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
     display: block;
     text-align: center;
     margin-bottom: 16px;
+  }
+
+  .info-monthly-link__group {
+    position: relative;
+    top: auto;
+    right: auto;
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: 16px;
+  }
+  .info-monthly-link__group .info-monthly-link {
+    text-align: center;
+    white-space: normal;
   }
 
   /* ========== 各種セクション ========== */

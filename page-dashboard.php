@@ -670,17 +670,17 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 <?php if ($infographic): ?>
 <section class="dashboard-infographic">
 
-  <!-- 外枠右上：最新月次レポートを見る（※月次レポートがある時だけ表示） -->
-  <?php if (!empty($monthly_report)): ?>
-    <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="info-monthly-link info-monthly-link--corner">
-      <span aria-hidden="true">📊</span> 前月の月次レポートを見る
+  <!-- 外枠右上：レポート系リンク群 -->
+  <div class="info-monthly-link__group">
+    <?php if (!empty($monthly_report)): ?>
+      <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="info-monthly-link">
+        <span aria-hidden="true">📊</span> 前月の月次レポートを見る
+      </a>
+    <?php endif; ?>
+    <a href="<?php echo esc_url(home_url('/strategy-report/')); ?>" class="info-monthly-link info-monthly-link--strategy">
+      <span aria-hidden="true">🧠</span> 戦略レポートを見る
     </a>
-  <?php endif; ?>
-
-  <!-- 戦略レポート 導線（戦略連動型 月次レポート PR5） -->
-  <a href="<?php echo esc_url(home_url('/strategy-report/')); ?>" class="info-strategy-link info-monthly-link--corner" style="top: 56px;">
-    <span aria-hidden="true">🧠</span> 戦略レポートを見る
-  </a>
+  </div>
 
   <!-- 見出し -->
   <h2 class="dashboard-infographic-title">
