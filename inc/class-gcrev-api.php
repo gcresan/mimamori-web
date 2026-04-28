@@ -24775,12 +24775,18 @@ PROMPT;
         }
 
         // レート制限: 同月3回まで（24h カウンタ）
+        // 開発環境（MIMAMORI_ENV='development'）では検証のため制限スキップ
         $rate_key = 'gcrev_rl_strategy_report_' . $uid . '_' . $year_month;
-        $count = (int) get_transient( $rate_key );
-        if ( $count >= 3 ) {
-            return $this->strategy_json_response( [
-                'error' => '同月の手動生成は3回までです（24時間でリセット）',
-            ], 429 );
+        $is_dev = ( defined( 'MIMAMORI_ENV' ) && MIMAMORI_ENV === 'development' );
+        if ( ! $is_dev ) {
+            $count = (int) get_transient( $rate_key );
+            if ( $count >= 3 ) {
+                return $this->strategy_json_response( [
+                    'error' => '同月の手動生成は3回までです（24時間でリセット）',
+                ], 429 );
+            }
+        } else {
+            $count = 0;
         }
 
         // 既に running なら 409
@@ -24800,12 +24806,14 @@ PROMPT;
             'manual_user'
         );
 
-        // レート制限カウンタ +1
-        set_transient( $rate_key, $count + 1, DAY_IN_SECONDS );
+        // レート制限カウンタ +1（dev では加算しない）
+        if ( ! $is_dev ) {
+            set_transient( $rate_key, $count + 1, DAY_IN_SECONDS );
+        }
 
         file_put_contents(
             '/tmp/gcrev_strategy_debug.log',
-            date( 'Y-m-d H:i:s' ) . " rest_generate user={$uid} ym={$year_month} report_id={$report_id} sending_response_then_bg\n",
+            date( 'Y-m-d H:i:s' ) . " rest_generate user={$uid} ym={$year_month} report_id={$report_id} sending_response_then_bg" . ( $is_dev ? ' (DEV: rate_limit_skipped)' : '' ) . "\n",
             FILE_APPEND
         );
 
