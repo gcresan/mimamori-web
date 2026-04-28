@@ -24498,10 +24498,22 @@ PROMPT;
             return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
         }
 
+        $log_pfx = "extract_pdf user={$uid}";
+        file_put_contents(
+            '/tmp/gcrev_strategy_debug.log',
+            date( 'Y-m-d H:i:s' ) . " {$log_pfx}: REST_start\n",
+            FILE_APPEND
+        );
+
         // 同時アップロード防止ロック（5分）
         $lock_key = 'gcrev_lock_strategy_pdf_' . $uid;
         if ( get_transient( $lock_key ) ) {
-            return $this->strategy_json_response( [ 'error' => 'another extraction is in progress' ], 429 );
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " {$log_pfx}: REJECTED (lock present — 前回処理が残っている可能性)\n",
+                FILE_APPEND
+            );
+            return $this->strategy_json_response( [ 'error' => 'another extraction is in progress (5分以内に再試行があった場合はお待ちください)' ], 429 );
         }
         set_transient( $lock_key, 1, 5 * MINUTE_IN_SECONDS );
 
@@ -24576,6 +24588,11 @@ PROMPT;
                 (int) $attachment_id
             );
 
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " {$log_pfx}: REST_ok draft_id={$draft_id}\n",
+                FILE_APPEND
+            );
             return $this->strategy_json_response( [
                 'success'        => true,
                 'strategy_id'    => $draft_id,
@@ -24586,12 +24603,17 @@ PROMPT;
         } catch ( \Throwable $e ) {
             file_put_contents(
                 '/tmp/gcrev_strategy_debug.log',
-                date( 'Y-m-d H:i:s' ) . " extract_pdf failed user={$uid}: " . $e->getMessage() . "\n",
+                date( 'Y-m-d H:i:s' ) . " {$log_pfx}: REST_FAILED " . $e->getMessage() . "\n",
                 FILE_APPEND
             );
             return $this->strategy_json_response( [ 'error' => $e->getMessage() ], 500 );
         } finally {
             delete_transient( $lock_key );
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " {$log_pfx}: REST_end (lock cleared)\n",
+                FILE_APPEND
+            );
         }
     }
 

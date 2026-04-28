@@ -51,24 +51,41 @@ class Gcrev_Strategy_Pdf_Extractor {
      * @throws \Exception ファイル読み込み・AI呼び出しに失敗した場合
      */
     public function extract_from_attachment( int $attachment_id ): array {
+        $log = function ( string $msg ) use ( $attachment_id ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " pdf_extract att={$attachment_id}: {$msg}\n",
+                FILE_APPEND
+            );
+        };
+
+        $log( 'start' );
+
         $path = get_attached_file( $attachment_id );
         if ( ! $path || ! file_exists( $path ) ) {
+            $log( 'FAILED file_not_found path=' . (string) $path );
             throw new \Exception( 'PDFファイルが見つかりません (attachment_id=' . $attachment_id . ')' );
         }
         $size = (int) filesize( $path );
+        $log( "file_loaded size_bytes={$size}" );
         if ( $size <= 0 || $size > self::MAX_FILE_SIZE ) {
+            $log( "FAILED invalid_size={$size}" );
             throw new \Exception( 'PDFファイルのサイズが不正です: ' . $size . ' bytes' );
         }
 
         $bytes = file_get_contents( $path );
         if ( $bytes === false || $bytes === '' ) {
+            $log( 'FAILED file_get_contents_returned_empty' );
             throw new \Exception( 'PDFファイルの読み込みに失敗しました' );
         }
 
         $base64 = base64_encode( $bytes );
+        $log( 'base64_encoded len=' . strlen( $base64 ) );
         $prompt = $this->build_extraction_prompt();
 
+        $start_us = microtime( true );
         try {
+            $log( 'gemini_call_start' );
             $raw = $this->ai->call_gemini_multimodal(
                 $prompt,
                 [
@@ -82,27 +99,23 @@ class Gcrev_Strategy_Pdf_Extractor {
                     'maxOutputTokens' => 4096,
                 ]
             );
+            $dur_ms = (int) round( ( microtime( true ) - $start_us ) * 1000 );
+            $log( "gemini_call_ok dur_ms={$dur_ms} raw_len=" . strlen( $raw ) );
         } catch ( \Throwable $e ) {
-            file_put_contents(
-                '/tmp/gcrev_strategy_debug.log',
-                date( 'Y-m-d H:i:s' ) . " pdf_extract gemini_failed attachment={$attachment_id}: " . $e->getMessage() . "\n",
-                FILE_APPEND
-            );
+            $dur_ms = (int) round( ( microtime( true ) - $start_us ) * 1000 );
+            $log( "FAILED gemini_call dur_ms={$dur_ms} msg=" . $e->getMessage() );
             throw new \Exception( 'AI抽出に失敗しました: ' . $e->getMessage() );
         }
 
-        // JSON パース（コードフェンスや前後の説明文を頑張って剥がす）
         $parsed = $this->parse_json_lenient( $raw );
         if ( ! is_array( $parsed ) ) {
-            file_put_contents(
-                '/tmp/gcrev_strategy_debug.log',
-                date( 'Y-m-d H:i:s' ) . " pdf_extract parse_failed attachment={$attachment_id} raw_head=" . substr( $raw, 0, 500 ) . "\n",
-                FILE_APPEND
-            );
+            $log( 'FAILED json_parse raw_head=' . substr( $raw, 0, 300 ) );
             throw new \Exception( 'AI応答をJSONとして解釈できませんでした' );
         }
+        $log( 'json_parsed_ok' );
 
         $validation = Gcrev_Strategy_Schema_Validator::validate( $parsed );
+        $log( 'validated valid=' . ( $validation['valid'] ? '1' : '0' ) . ' errors=' . count( $validation['errors'] ) );
         return [
             'valid'       => $validation['valid'],
             'errors'      => $validation['errors'],

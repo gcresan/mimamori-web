@@ -352,24 +352,46 @@
         var fd = new FormData();
         fd.append('file', pdfState.file);
 
+        // 経過時間カウンタ
+        var elapsedStart = Date.now();
+        var elapsedTimer = setInterval(function () {
+            var sec = Math.round((Date.now() - elapsedStart) / 1000);
+            var subEl = document.querySelector('.ss-pdf-progress__sub');
+            if (subEl) subEl.textContent = '経過 ' + sec + ' 秒（最大 3 分でタイムアウト）';
+        }, 1000);
+
+        // クライアント側タイムアウト 3 分
+        var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timeoutId = setTimeout(function () {
+            if (ctrl) ctrl.abort();
+        }, 3 * 60 * 1000);
+
         fetch(REST + '/strategy/extract-pdf', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'X-WP-Nonce': NONCE },
-            body: fd
+            body: fd,
+            signal: ctrl ? ctrl.signal : undefined
         }).then(function (res) {
-            return res.json().then(function (data) {
-                if (!res.ok) {
-                    var err = new Error(data && data.error ? data.error : 'extract failed');
+            // レスポンスが JSON でない可能性（504 nginx html など）に備える
+            return res.text().then(function (txt) {
+                var data;
+                try { data = JSON.parse(txt); } catch ( _e ) {
+                    var err = new Error('サーバーから不正な応答（HTTP ' + res.status + '）。タイムアウトの可能性があります。');
                     err.status = res.status;
-                    err.payload = data;
+                    err.raw = txt.substring(0, 200);
                     throw err;
+                }
+                if (!res.ok) {
+                    var err2 = new Error(data && data.error ? data.error : 'extract failed (HTTP ' + res.status + ')');
+                    err2.status = res.status;
+                    err2.payload = data;
+                    throw err2;
                 }
                 return data;
             });
         }).then(function (data) {
             pdfState.result = data;
-            // プレビュー: normalized JSON を整形表示
             $('#ssPdfPreview').textContent = JSON.stringify(data.normalized, null, 2);
 
             var warnings = (data.warnings || []);
@@ -382,10 +404,19 @@
             }
             showPdfStep('preview');
         }).catch(function (err) {
-            console.error(err);
-            showToast('抽出に失敗しました: ' + (err.message || ''), 'error');
+            console.error('[strategy-settings] extract-pdf failed:', err);
+            var msg;
+            if (err && err.name === 'AbortError') {
+                msg = '3分以内に応答がありませんでした。PDFが大きすぎるか、サーバーがタイムアウトした可能性があります。';
+            } else {
+                msg = '抽出に失敗しました: ' + (err.message || '不明なエラー');
+            }
+            showToast(msg, 'error');
             showPdfStep('upload');
             $('#ssPdfSubmit').disabled = false;
+        }).then(function () {
+            clearInterval(elapsedTimer);
+            clearTimeout(timeoutId);
         });
     }
 
