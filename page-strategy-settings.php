@@ -190,4 +190,50 @@ get_header();
 
 </div>
 
+<script>
+/* ============================================================
+ * 緊急停止用 inline スクリプト（メイン JS が壊れていても動く）
+ * - PDFモーダル内のキャンセル / × / 背景クリックで強制的にモーダルを閉じる
+ * - Escape キーでも同じく閉じる
+ * - 進行中の fetch を中断するために location.reload() で確実にリセット
+ * ============================================================ */
+(function () {
+    function hardCloseAndReload() {
+        try {
+            var modal = document.getElementById('ssPdfModal');
+            if (modal) modal.hidden = true;
+        } catch (_) {}
+        // 進行中の fetch を確実に止めるためページごとリロード
+        window.location.reload();
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        var modal = document.getElementById('ssPdfModal');
+        if (!modal) return;
+        // キャンセル / × / 背景に capture フェーズで bind（メイン JS より早く実行）
+        modal.querySelectorAll('[data-ss-modal-close]').forEach(function (el) {
+            el.addEventListener('click', function (e) {
+                // 抽出中の状態なら強制リロード、それ以外は静かに閉じる
+                var extractingStep = modal.querySelector('[data-ss-pdf-step="extracting"]');
+                if (extractingStep && !extractingStep.hidden) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    hardCloseAndReload();
+                }
+            }, true);
+        });
+        // Escape キー
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.hidden) {
+                var extractingStep = modal.querySelector('[data-ss-pdf-step="extracting"]');
+                if (extractingStep && !extractingStep.hidden) {
+                    hardCloseAndReload();
+                } else {
+                    modal.hidden = true;
+                }
+            }
+        });
+    });
+})();
+</script>
+
 <?php get_footer(); ?>

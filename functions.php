@@ -1697,6 +1697,9 @@ add_action( 'wp_enqueue_scripts', function () {
 /**
  * 戦略設定ページ (page-strategy-settings.php) 用 JS / CSS
  * Template Name: 戦略設定 が割り当てられた固定ページでのみ読み込む。
+ *
+ * バージョンは filemtime() を使ってファイル更新ごとに自動キャッシュバストする。
+ * これにより、デプロイ直後にユーザーが Cmd+Shift+R しなくても新版が読まれる。
  */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_user_logged_in() ) {
@@ -1706,18 +1709,23 @@ add_action( 'wp_enqueue_scripts', function () {
         return;
     }
 
+    $css_path = get_template_directory() . '/assets/css/strategy-settings.css';
+    $js_path  = get_template_directory() . '/assets/js/strategy-settings.js';
+    $css_ver  = file_exists( $css_path ) ? (string) filemtime( $css_path ) : '1.0.0';
+    $js_ver   = file_exists( $js_path )  ? (string) filemtime( $js_path )  : '1.0.0';
+
     wp_enqueue_style(
         'gcrev-strategy-settings',
         get_template_directory_uri() . '/assets/css/strategy-settings.css',
         [],
-        '1.0.0'
+        $css_ver
     );
 
     wp_enqueue_script(
         'gcrev-strategy-settings',
         get_template_directory_uri() . '/assets/js/strategy-settings.js',
         [],
-        '1.0.0',
+        $js_ver,
         true
     );
 
@@ -1738,26 +1746,33 @@ add_action( 'wp_enqueue_scripts', function () {
         return;
     }
 
+    $settings_css_path = get_template_directory() . '/assets/css/strategy-settings.css';
+    $report_css_path   = get_template_directory() . '/assets/css/strategy-report.css';
+    $report_js_path    = get_template_directory() . '/assets/js/strategy-report.js';
+    $settings_css_ver  = file_exists( $settings_css_path ) ? (string) filemtime( $settings_css_path ) : '1.0.0';
+    $report_css_ver    = file_exists( $report_css_path )   ? (string) filemtime( $report_css_path )   : '1.0.0';
+    $report_js_ver     = file_exists( $report_js_path )    ? (string) filemtime( $report_js_path )    : '1.0.0';
+
     // 共通: settings 側のCSS（ss-btn / spinner / toast を流用）
     wp_enqueue_style(
         'gcrev-strategy-settings',
         get_template_directory_uri() . '/assets/css/strategy-settings.css',
         [],
-        '1.0.0'
+        $settings_css_ver
     );
     // ページ専用: srpage / sr- 名前空間
     wp_enqueue_style(
         'gcrev-strategy-report',
         get_template_directory_uri() . '/assets/css/strategy-report.css',
         [ 'gcrev-strategy-settings' ],
-        '1.0.0'
+        $report_css_ver
     );
 
     wp_enqueue_script(
         'gcrev-strategy-report',
         get_template_directory_uri() . '/assets/js/strategy-report.js',
         [],
-        '1.0.0',
+        $report_js_ver,
         true
     );
 
