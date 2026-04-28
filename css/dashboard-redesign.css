@@ -508,7 +508,7 @@ h3 { font-size: 20px; font-weight: 700; }
 .info-monthly-link__group .info-monthly-link {
   padding: 12px 18px;
   border-radius: var(--mw-radius-sm);
-  background: #1a1a1a;
+  background: var(--mw-accent-positive); /* 月次レポート: テーマグリーン */
   color: #fff;
   font-size: 14px;
   font-weight: 600;
@@ -518,14 +518,14 @@ h3 { font-size: 20px; font-weight: 700; }
   transition: background 0.15s, box-shadow 0.15s;
 }
 .info-monthly-link__group .info-monthly-link:hover {
-  background: #333;
+  background: #3F7359; /* slightly darker green */
   box-shadow: var(--mw-shadow-float);
 }
 .info-monthly-link__group .info-monthly-link--strategy {
-  background: #1e40af;
+  background: #1a1a1a; /* 戦略レポート: ブラック */
 }
 .info-monthly-link__group .info-monthly-link--strategy:hover {
-  background: #1d4ed8;
+  background: #333;
 }
 
 /* ========== Score + KPI 横並びレイアウト ========== */
