@@ -42,12 +42,11 @@ class Gcrev_Strategy_Report_Repository {
         ) );
 
         if ( $existing_id > 0 ) {
-            $wpdb->update(
+            $r = $wpdb->update(
                 $this->table(),
                 [
                     'strategy_id'        => $strategy_id,
                     'status'             => 'running',
-                    'attempts'           => 'attempts + 1', // ※ プレースホルダ無効。下で raw SQL で更新
                     'generation_source'  => $generation_source,
                     'started_at'         => $now,
                     'finished_at'        => null,
@@ -55,10 +54,15 @@ class Gcrev_Strategy_Report_Repository {
                     'updated_at'         => $now,
                 ],
                 [ 'id' => $existing_id ],
-                [ '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s' ],
+                [ '%d', '%s', '%s', '%s', '%s', '%s', '%s' ],
                 [ '%d' ]
             );
-            // attempts のインクリメントだけは別に raw SQL
+            if ( $r === false ) {
+                file_put_contents( '/tmp/gcrev_strategy_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " start_generation UPDATE FAILED user={$user_id} ym={$year_month} err={$wpdb->last_error}\n",
+                    FILE_APPEND );
+            }
+            // attempts のインクリメント
             $wpdb->query( $wpdb->prepare(
                 "UPDATE {$this->table()} SET attempts = attempts + 1 WHERE id = %d",
                 $existing_id
@@ -66,7 +70,7 @@ class Gcrev_Strategy_Report_Repository {
             return $existing_id;
         }
 
-        $wpdb->insert(
+        $r = $wpdb->insert(
             $this->table(),
             [
                 'user_id'           => $user_id,
@@ -81,7 +85,17 @@ class Gcrev_Strategy_Report_Repository {
             ],
             [ '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%s' ]
         );
-        return (int) $wpdb->insert_id;
+        if ( $r === false ) {
+            file_put_contents( '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " start_generation INSERT FAILED user={$user_id} ym={$year_month} strategy_id={$strategy_id} err={$wpdb->last_error}\n",
+                FILE_APPEND );
+            return 0;
+        }
+        $new_id = (int) $wpdb->insert_id;
+        file_put_contents( '/tmp/gcrev_strategy_debug.log',
+            date( 'Y-m-d H:i:s' ) . " start_generation INSERT_OK user={$user_id} ym={$year_month} new_id={$new_id}\n",
+            FILE_APPEND );
+        return $new_id;
     }
 
     /**

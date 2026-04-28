@@ -24840,6 +24840,12 @@ PROMPT;
         @ignore_user_abort( true );
         @set_time_limit( 300 );
 
+        file_put_contents(
+            '/tmp/gcrev_strategy_debug.log',
+            date( 'Y-m-d H:i:s' ) . " bg_generate START user={$uid} ym={$year_month}\n",
+            FILE_APPEND
+        );
+
         try {
             if ( ! class_exists( 'Gcrev_Strategy_Report_Service' ) ) {
                 require_once __DIR__ . '/gcrev-api/modules/class-strategy-report-service.php';
@@ -24847,11 +24853,16 @@ PROMPT;
             $service = new Gcrev_Strategy_Report_Service(
                 $this->config, $this->ai, $this->ga4, $this->gsc
             );
-            $service->generate( $uid, $year_month, 'manual_user' );
+            $result = $service->generate( $uid, $year_month, 'manual_user' );
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " bg_generate END user={$uid} ym={$year_month} result_status=" . ( $result['status'] ?? 'unknown' ) . "\n",
+                FILE_APPEND
+            );
         } catch ( \Throwable $e ) {
             file_put_contents(
                 '/tmp/gcrev_strategy_debug.log',
-                date( 'Y-m-d H:i:s' ) . " bg_generate FAILED user={$uid} ym={$year_month}: " . $e->getMessage() . "\n",
+                date( 'Y-m-d H:i:s' ) . " bg_generate FAILED user={$uid} ym={$year_month}: " . $e->getMessage() . "\n  trace_head=" . substr( $e->getTraceAsString(), 0, 500 ) . "\n",
                 FILE_APPEND
             );
         }
