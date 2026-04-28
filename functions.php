@@ -1312,7 +1312,13 @@ if ( file_exists( $gcrev_clarity_client ) ) {
 $gcrev_strategy_files = [
     $gcrev_inc_path . 'gcrev-api/utils/class-strategy-tables.php',
     $gcrev_inc_path . 'gcrev-api/utils/class-strategy-schema-validator.php',
+    $gcrev_inc_path . 'gcrev-api/utils/class-strategy-report-schema-validator.php',
     $gcrev_inc_path . 'gcrev-api/modules/class-strategy-repository.php',
+    $gcrev_inc_path . 'gcrev-api/modules/class-strategy-report-repository.php',
+    $gcrev_inc_path . 'gcrev-api/modules/class-strategy-data-aggregator.php',
+    $gcrev_inc_path . 'gcrev-api/modules/class-strategy-prompt-builder.php',
+    $gcrev_inc_path . 'gcrev-api/modules/class-strategy-report-renderer.php',
+    $gcrev_inc_path . 'gcrev-api/modules/class-strategy-report-service.php',
 ];
 foreach ( $gcrev_strategy_files as $gcrev_strategy_file ) {
     if ( file_exists( $gcrev_strategy_file ) ) {
@@ -9436,6 +9442,15 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
         WP_CLI::add_command( 'mimamori qa registry-unstage', [ $qa_cli, 'qa_registry_unstage' ] );
         WP_CLI::add_command( 'mimamori qa canary-show',      [ $qa_cli, 'qa_canary_show' ] );
         WP_CLI::add_command( 'mimamori qa canary-set',       [ $qa_cli, 'qa_canary_set' ] );
+    }
+
+    // 戦略連動レポート CLI
+    $strategy_cli_path = get_template_directory() . '/inc/cli/class-mimamori-strategy-cli.php';
+    if ( file_exists( $strategy_cli_path ) ) {
+        require_once $strategy_cli_path;
+        $strategy_cli = new Mimamori_Strategy_CLI();
+        WP_CLI::add_command( 'mimamori strategy-report generate', [ $strategy_cli, 'generate' ] );
+        WP_CLI::add_command( 'mimamori strategy-report show',     [ $strategy_cli, 'show' ] );
     }
 }
 

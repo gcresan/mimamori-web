@@ -294,6 +294,10 @@ class Gcrev_AI_Client {
         if ( isset( $options['thinkingBudget'] ) ) {
             $config['thinkingConfig'] = [ 'thinkingBudget' => (int) $options['thinkingBudget'] ];
         }
+        // 構造化出力（JSON モード）
+        if ( isset( $options['responseMimeType'] ) ) {
+            $config['responseMimeType'] = (string) $options['responseMimeType'];
+        }
         return $config;
     }
 
