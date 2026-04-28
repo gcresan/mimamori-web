@@ -50,6 +50,7 @@
 }
 
 /* --- State cards --- */
+/* HTML の hidden 属性が display で上書きされないよう [hidden] を必ず併記 */
 .srpage-state {
     background: #fff;
     border: 1px solid #e3e7ee;
@@ -59,6 +60,8 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     text-align: center;
 }
+.srpage-state[hidden] { display: none; }
+.srpage-meta[hidden] { display: none; }
 .srpage-state h3 { margin: 0 0 10px; font-size: 18px; }
 .srpage-state p  { margin: 6px 0; font-size: 14px; line-height: 1.7; color: #374151; }
 .srpage-state--empty   { background: #fafbfc; }

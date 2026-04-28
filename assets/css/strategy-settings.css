@@ -330,7 +330,9 @@
 }
 
 /* --- PDF upload area --- */
+/* 重要: HTML の hidden 属性が display 指定で上書きされないよう必ず [hidden] を併記する */
 .ss-pdf-step { display: block; }
+.ss-pdf-step[hidden] { display: none; }
 .ss-pdf-lead {
     margin: 0 0 14px;
     font-size: 13px;
@@ -379,6 +381,8 @@
     border-radius: 8px;
     font-size: 13px;
 }
+.ss-pdf-selected[hidden] { display: none; }
+.ss-pdf-warnings[hidden] { display: none; }
 .ss-pdf-selected__icon { font-size: 18px; }
 .ss-pdf-selected__name { flex: 1 1 auto; word-break: break-all; }
 
