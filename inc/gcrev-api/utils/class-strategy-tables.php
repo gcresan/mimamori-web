@@ -60,11 +60,13 @@ class Gcrev_Strategy_Tables {
 		) {$charset};";
 		dbDelta( $sql_strategy );
 
+		// 注意: `year_month` は MariaDB の INTERVAL 用の非予約語と衝突するため
+		// 必ずバッククォートで囲む（CREATE / KEY 両方）。
 		$reports_table = self::strategy_reports_table();
 		$sql_reports = "CREATE TABLE {$reports_table} (
 			id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
 			user_id BIGINT(20) UNSIGNED NOT NULL,
-			year_month VARCHAR(7) NOT NULL,
+			`year_month` VARCHAR(7) NOT NULL,
 			strategy_id BIGINT(20) UNSIGNED NOT NULL,
 			status VARCHAR(16) NOT NULL DEFAULT 'pending',
 			alignment_score TINYINT UNSIGNED NULL,
@@ -81,7 +83,7 @@ class Gcrev_Strategy_Tables {
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
 			PRIMARY KEY  (id),
-			UNIQUE KEY uniq_user_month (user_id, year_month),
+			UNIQUE KEY uniq_user_month (user_id, `year_month`),
 			KEY idx_status (status),
 			KEY idx_strategy (strategy_id)
 		) {$charset};";
