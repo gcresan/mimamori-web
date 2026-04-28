@@ -1327,6 +1327,35 @@ foreach ( $gcrev_strategy_files as $gcrev_strategy_file ) {
 }
 unset( $gcrev_strategy_files, $gcrev_strategy_file );
 
+// 戦略レポート 単発実行用 Cron アクション（手動「やり直し生成」のバックグラウンド実行）
+add_action( 'gcrev_strategy_report_run_event', function ( $user_id, $year_month, $source ) {
+    $user_id    = (int) $user_id;
+    $year_month = (string) $year_month;
+    $source     = (string) $source;
+
+    if ( $user_id <= 0 || ! preg_match( '/^\d{4}-\d{2}$/', $year_month ) ) {
+        return;
+    }
+    if ( ! class_exists( 'Gcrev_Strategy_Report_Service' ) ) {
+        return;
+    }
+
+    try {
+        $config = new Gcrev_Config();
+        $ai     = new Gcrev_AI_Client( $config );
+        $ga4    = new Gcrev_GA4_Fetcher( $config );
+        $gsc    = new Gcrev_GSC_Fetcher( $config );
+        $service = new Gcrev_Strategy_Report_Service( $config, $ai, $ga4, $gsc );
+        $service->generate( $user_id, $year_month, $source );
+    } catch ( \Throwable $e ) {
+        file_put_contents(
+            '/tmp/gcrev_strategy_debug.log',
+            date( 'Y-m-d H:i:s' ) . " run_event ERROR user={$user_id} ym={$year_month}: " . $e->getMessage() . "\n",
+            FILE_APPEND
+        );
+    }
+}, 10, 3 );
+
 // ========================================
 // 既存のAPIクラス（入口）は最後に読み込む
 // ========================================
@@ -1651,6 +1680,49 @@ add_action( 'wp_enqueue_scripts', function () {
     wp_localize_script( 'gcrev-strategy-settings', 'gcrevStrategyConfig', [
         'restRoot' => esc_url_raw( rest_url() ),
         'nonce'    => wp_create_nonce( 'wp_rest' ),
+    ] );
+} );
+
+/**
+ * 戦略レポート閲覧ページ (page-strategy-report.php) 用 JS / CSS
+ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_user_logged_in() ) {
+        return;
+    }
+    if ( ! is_page_template( 'page-strategy-report.php' ) ) {
+        return;
+    }
+
+    // 共通: settings 側のCSS（ss-btn / spinner / toast を流用）
+    wp_enqueue_style(
+        'gcrev-strategy-settings',
+        get_template_directory_uri() . '/assets/css/strategy-settings.css',
+        [],
+        '1.0.0'
+    );
+    // ページ専用: srpage / sr- 名前空間
+    wp_enqueue_style(
+        'gcrev-strategy-report',
+        get_template_directory_uri() . '/assets/css/strategy-report.css',
+        [ 'gcrev-strategy-settings' ],
+        '1.0.0'
+    );
+
+    wp_enqueue_script(
+        'gcrev-strategy-report',
+        get_template_directory_uri() . '/assets/js/strategy-report.js',
+        [],
+        '1.0.0',
+        true
+    );
+
+    $default_ym = ( new \DateTimeImmutable( 'first day of last month', wp_timezone() ) )->format( 'Y-m' );
+
+    wp_localize_script( 'gcrev-strategy-report', 'gcrevStrategyReportConfig', [
+        'restRoot'         => esc_url_raw( rest_url() ),
+        'nonce'            => wp_create_nonce( 'wp_rest' ),
+        'defaultYearMonth' => $default_ym,
     ] );
 } );
 

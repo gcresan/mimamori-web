@@ -677,6 +677,11 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     </a>
   <?php endif; ?>
 
+  <!-- 戦略レポート 導線（戦略連動型 月次レポート PR5） -->
+  <a href="<?php echo esc_url(home_url('/strategy-report/')); ?>" class="info-strategy-link info-monthly-link--corner" style="top: 56px;">
+    <span aria-hidden="true">🧠</span> 戦略レポートを見る
+  </a>
+
   <!-- 見出し -->
   <h2 class="dashboard-infographic-title">
     <span class="icon" aria-hidden="true">📊</span>直近30日の状態

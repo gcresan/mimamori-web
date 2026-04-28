@@ -338,6 +338,39 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== 戦略レポート（Strategy Report）API — PR5 =====
+        register_rest_route('gcrev_insights/v1', '/strategy-report/current', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_strategy_report_current' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy-report/status', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_strategy_report_status' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+            'args'                => [
+                'year_month' => [
+                    'required' => true,
+                    'validate_callback' => static function ( $v ) { return is_string( $v ) && (bool) preg_match( '/^\d{4}-\d{2}$/', $v ); },
+                ],
+            ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy-report/history', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_strategy_report_history' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy-report/(?P<id>\d+)', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_strategy_report_get_by_id' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy-report/generate', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_strategy_report_generate' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== v2ダッシュボード用KPI取得 =====
         register_rest_route('gcrev/v1', '/dashboard/kpi', [
             'methods'             => 'GET',
@@ -24560,6 +24593,172 @@ PROMPT;
         } finally {
             delete_transient( $lock_key );
         }
+    }
+
+    // =========================================================
+    // 戦略レポート（Strategy Report）API コールバック — PR5
+    // =========================================================
+
+    private ?Gcrev_Strategy_Report_Repository $strategy_report_repo = null;
+
+    private function strategy_report_repo(): Gcrev_Strategy_Report_Repository {
+        if ( $this->strategy_report_repo === null ) {
+            $this->strategy_report_repo = new Gcrev_Strategy_Report_Repository();
+        }
+        return $this->strategy_report_repo;
+    }
+
+    /** 公開向けに行を整形（HTMLは含めず軽量にする） */
+    private function strategy_report_serialize( ?array $row, bool $include_html = false ): ?array {
+        if ( ! $row ) return null;
+        $out = [
+            'id'                => (int) $row['id'],
+            'user_id'           => (int) $row['user_id'],
+            'year_month'        => (string) $row['year_month'],
+            'strategy_id'       => (int) $row['strategy_id'],
+            'status'            => (string) $row['status'],
+            'alignment_score'   => $row['alignment_score'] ?? null,
+            'ai_model'          => $row['ai_model'] ?? null,
+            'generation_source' => (string) ( $row['generation_source'] ?? '' ),
+            'attempts'          => (int) ( $row['attempts'] ?? 0 ),
+            'started_at'        => $row['started_at']  ?? null,
+            'finished_at'       => $row['finished_at'] ?? null,
+            'created_at'        => $row['created_at']  ?? null,
+            'error_message'     => $row['error_message'] ?? null,
+            'sections'          => is_array( $row['report_json'] ?? null ) ? ( $row['report_json']['sections'] ?? null ) : null,
+        ];
+        if ( $include_html ) {
+            $out['rendered_html'] = (string) ( $row['rendered_html'] ?? '' );
+        }
+        return $out;
+    }
+
+    /** GET /strategy-report/current — 自分の最新 completed レポート */
+    public function rest_strategy_report_current( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $row = $this->strategy_report_repo()->get_latest_completed( $uid );
+        return $this->strategy_json_response( [
+            'success' => true,
+            'report'  => $this->strategy_report_serialize( $row, true ),
+        ] );
+    }
+
+    /** GET /strategy-report/status?year_month=YYYY-MM — 進捗確認用 */
+    public function rest_strategy_report_status( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $year_month = (string) $req->get_param( 'year_month' );
+        $row = $this->strategy_report_repo()->get_by_user_month( $uid, $year_month );
+        return $this->strategy_json_response( [
+            'success' => true,
+            'report'  => $this->strategy_report_serialize( $row, true ),
+        ] );
+    }
+
+    /** GET /strategy-report/history — バージョン履歴（軽量） */
+    public function rest_strategy_report_history( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $limit = max( 1, min( 60, (int) ( $req->get_param( 'limit' ) ?: 24 ) ) );
+        $rows = $this->strategy_report_repo()->get_history( $uid, $limit );
+        return $this->strategy_json_response( [
+            'success' => true,
+            'reports' => $rows,
+        ] );
+    }
+
+    /** GET /strategy-report/{id} — 本人のレポートのみ */
+    public function rest_strategy_report_get_by_id( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $id = (int) $req->get_param( 'id' );
+        if ( $id <= 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'invalid id' ], 400 );
+        }
+        $row = $this->strategy_report_repo()->get_by_id( $id );
+        if ( ! $row || (int) $row['user_id'] !== $uid ) {
+            return $this->strategy_json_response( [ 'error' => 'not found' ], 404 );
+        }
+        return $this->strategy_json_response( [
+            'success' => true,
+            'report'  => $this->strategy_report_serialize( $row, true ),
+        ] );
+    }
+
+    /**
+     * POST /strategy-report/generate — 手動キュー投入
+     * Body: { year_month?: 'YYYY-MM' }  省略時は前月
+     * 同期処理ではなく wp_schedule_single_event でバックグラウンド実行
+     */
+    public function rest_strategy_report_generate( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+
+        $body = $req->get_json_params();
+        $year_month = is_array( $body ) ? (string) ( $body['year_month'] ?? '' ) : '';
+        if ( $year_month === '' ) {
+            // デフォルト: 前月
+            $year_month = ( new \DateTimeImmutable( 'first day of last month', wp_timezone() ) )->format( 'Y-m' );
+        }
+        if ( ! preg_match( '/^\d{4}-\d{2}$/', $year_month ) ) {
+            return $this->strategy_json_response( [ 'error' => 'invalid year_month' ], 400 );
+        }
+
+        // レート制限: 同月3回まで（24h カウンタ）
+        $rate_key = 'gcrev_rl_strategy_report_' . $uid . '_' . $year_month;
+        $count = (int) get_transient( $rate_key );
+        if ( $count >= 3 ) {
+            return $this->strategy_json_response( [
+                'error' => '同月の手動生成は3回までです（24時間でリセット）',
+            ], 429 );
+        }
+
+        // 既に running なら 409
+        $existing = $this->strategy_report_repo()->get_by_user_month( $uid, $year_month );
+        if ( $existing && $existing['status'] === 'running' ) {
+            return $this->strategy_json_response( [
+                'error'  => 'すでに生成中です',
+                'report' => $this->strategy_report_serialize( $existing ),
+            ], 409 );
+        }
+
+        // 行を pending として upsert（UI が status?year_month で polling できるように）
+        $report_id = $this->strategy_report_repo()->start_generation(
+            $uid,
+            $year_month,
+            // 戦略未設定でもキュー投入は許す。実際の skip 判定は service 側で
+            ( $existing && (int) $existing['strategy_id'] > 0 ) ? (int) $existing['strategy_id'] : 0,
+            'manual_user'
+        );
+
+        // バックグラウンド実行をスケジュール
+        wp_schedule_single_event(
+            time() + 5,
+            'gcrev_strategy_report_run_event',
+            [ $uid, $year_month, 'manual_user' ]
+        );
+
+        // レート制限カウンタ +1
+        set_transient( $rate_key, $count + 1, DAY_IN_SECONDS );
+
+        return $this->strategy_json_response( [
+            'success'    => true,
+            'report_id'  => $report_id,
+            'year_month' => $year_month,
+            'status'     => 'pending',
+            'message'    => '生成をキューに投入しました。30秒〜2分ほどでレポート画面が更新されます。',
+        ], 202 );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

@@ -1,0 +1,316 @@
+/* ============================================================
+ * page-strategy-report.php — 戦略レポート閲覧ページ
+ *
+ * - srpage-* … ページ全体の枠 / 状態カード
+ * - sr-*     … レポート本体（class-strategy-report-renderer.php と対応）
+ * ============================================================ */
+
+.srpage {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 16px 60px;
+    color: #222;
+}
+
+/* --- Header --- */
+.srpage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 24px 0 16px;
+}
+.srpage-header__title {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    color: #111;
+}
+.srpage-header__desc {
+    margin: 0;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.6;
+}
+.srpage-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.srpage-select {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    background: #fff;
+    color: #111;
+    min-width: 220px;
+}
+
+/* --- State cards --- */
+.srpage-state {
+    background: #fff;
+    border: 1px solid #e3e7ee;
+    border-radius: 12px;
+    padding: 32px 28px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    text-align: center;
+}
+.srpage-state h3 { margin: 0 0 10px; font-size: 18px; }
+.srpage-state p  { margin: 6px 0; font-size: 14px; line-height: 1.7; color: #374151; }
+.srpage-state--empty   { background: #fafbfc; }
+.srpage-state--ready   { background: #f0f9ff; border-color: #bae6fd; }
+.srpage-state--running { background: #fefce8; border-color: #fde68a; }
+.srpage-state--failed  { background: #fef2f2; border-color: #fecaca; }
+.srpage-state--running .ss-pdf-progress__spinner { margin: 0 auto 14px; }
+.srpage-running__sub   { font-size: 12px; color: #6b7280; }
+.srpage-failed__msg    { color: #b42318; font-weight: 500; white-space: pre-line; }
+
+/* --- Meta footer --- */
+.srpage-meta {
+    margin-top: 18px;
+    padding: 10px 14px;
+    background: #f7f9fc;
+    border: 1px solid #eef0f3;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* ============================================================
+ * レポート本体（Renderer の sr-* と対応）
+ * ============================================================ */
+.sr-report { display: block; }
+.sr-report__head { margin-bottom: 14px; }
+.sr-report__title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    color: #111;
+}
+.sr-report__strategy {
+    margin: 0;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.sr-card {
+    background: #fff;
+    border: 1px solid #e3e7ee;
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.sr-card__title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 12px;
+    color: #111;
+    letter-spacing: 0.02em;
+}
+
+/* スコアバー */
+.sr-score {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 14px;
+    align-items: center;
+    background: linear-gradient(180deg, #fff, #f8fafc);
+}
+.sr-score__label { font-size: 12px; color: #6b7280; font-weight: 600; }
+.sr-score__bar {
+    background: #e5e7eb;
+    height: 12px;
+    border-radius: 999px;
+    overflow: hidden;
+}
+.sr-score__fill {
+    background: linear-gradient(90deg, #10b981, #1976d2);
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.4s ease;
+}
+.sr-score__num {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111;
+}
+.sr-score__num span { font-size: 12px; color: #6b7280; font-weight: 500; }
+
+/* 結論 */
+.sr-conclusion__text {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.85;
+    color: #111;
+}
+
+/* alignment */
+.sr-alignment__list { list-style: none; padding: 0; margin: 0; }
+.sr-alignment__item {
+    padding: 12px 14px;
+    border: 1px solid #eef0f3;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: #fafbfc;
+}
+.sr-alignment__topic {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 6px;
+    color: #1f2937;
+}
+.sr-alignment__row {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-top: 2px;
+}
+.sr-alignment__row--gap { color: #b42318; font-weight: 500; }
+.sr-alignment__lbl {
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 600;
+    align-self: center;
+}
+
+/* issues */
+.sr-issues__list { list-style: none; counter-reset: issues; padding: 0; margin: 0; }
+.sr-issues__item {
+    counter-increment: issues;
+    padding: 14px 16px 14px 46px;
+    border: 1px solid #eef0f3;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    background: #fff;
+    position: relative;
+}
+.sr-issues__item::before {
+    content: counter(issues);
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #1976d2;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sr-issues__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+.sr-issues__title { font-size: 14px; color: #111; }
+.sr-issues__evidence { margin: 4px 0 8px; font-size: 13px; color: #374151; line-height: 1.7; }
+.sr-issues__cause {
+    background: #f9fafb;
+    border-left: 3px solid #f59e0b;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #374151;
+    line-height: 1.7;
+}
+.sr-issues__cause-lbl { font-weight: 700; color: #92400e; margin-right: 4px; }
+.sr-issues__cause ul { margin: 4px 0 0 18px; padding: 0; }
+
+.sr-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+}
+.sr-badge--high { background: #fef2f2; color: #b42318; }
+.sr-badge--mid  { background: #fef3c7; color: #92400e; }
+.sr-badge--low  { background: #ecfdf5; color: #166534; }
+
+/* actions */
+.sr-actions__list { list-style: none; padding: 0; margin: 0; }
+.sr-actions__item {
+    padding: 12px 14px;
+    border: 1px solid #eef0f3;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: #fff;
+}
+.sr-actions__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+.sr-actions__title { font-size: 14px; color: #111; }
+.sr-actions__meta {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: #6b7280;
+    flex-wrap: wrap;
+}
+
+.sr-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+}
+.sr-tag--this_month { background: #dcfce7; color: #166534; }
+.sr-tag--next_month { background: #dbeafe; color: #1e3a8a; }
+.sr-tag--quarter    { background: #f3e8ff; color: #581c87; }
+
+/* todos */
+.sr-todos__list { list-style: none; padding: 0; margin: 0; }
+.sr-todos__item {
+    display: grid;
+    grid-template-columns: 24px 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px dashed #e5e7eb;
+    font-size: 13px;
+}
+.sr-todos__item:last-child { border-bottom: 0; }
+.sr-todos__check { color: #9ca3af; font-size: 18px; }
+.sr-todos__title { color: #111; }
+.sr-todos__due {
+    font-size: 11px;
+    color: #b42318;
+    background: #fef2f2;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+.sr-todos__kpi {
+    font-size: 11px;
+    color: #166534;
+    background: #ecfdf5;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+/* --- Responsive --- */
+@media (max-width: 640px) {
+    .sr-card { padding: 14px 16px; }
+    .sr-score { grid-template-columns: 1fr; gap: 8px; }
+    .sr-alignment__row { grid-template-columns: 1fr; gap: 2px; }
+    .sr-todos__item { grid-template-columns: 24px 1fr; }
+    .sr-todos__due, .sr-todos__kpi { grid-column: 2; justify-self: start; }
+    .srpage-header { flex-direction: column; align-items: stretch; }
+    .srpage-select { min-width: 0; width: 100%; }
+}
