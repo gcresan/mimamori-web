@@ -285,6 +285,54 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== 戦略（Strategy）API — 戦略連動型 月次レポート PR2 =====
+        register_rest_route('gcrev_insights/v1', '/strategy', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_strategy_get_active' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy/active-for-month', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_strategy_get_active_for_month' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+            'args'                => [
+                'year_month' => [
+                    'required' => true,
+                    'validate_callback' => static function ( $v ) { return is_string( $v ) && (bool) preg_match( '/^\d{4}-\d{2}$/', $v ); },
+                ],
+            ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy/versions', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_strategy_get_versions' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy/draft/latest', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_strategy_get_latest_draft' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy/draft', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_strategy_create_draft' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy/draft/(?P<id>\d+)', [
+            'methods'             => 'PUT',
+            'callback'            => [ $this, 'rest_strategy_update_draft' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy/draft/(?P<id>\d+)', [
+            'methods'             => 'DELETE',
+            'callback'            => [ $this, 'rest_strategy_delete_draft' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev_insights/v1', '/strategy/draft/(?P<id>\d+)/activate', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_strategy_activate_draft' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== v2ダッシュボード用KPI取得 =====
         register_rest_route('gcrev/v1', '/dashboard/kpi', [
             'methods'             => 'GET',
@@ -24168,6 +24216,238 @@ PROMPT;
             'success'  => true,
             'user_ids' => \Mimamori_QA_Prompt_Registry::get_canary_users(),
         ], 200 );
+    }
+
+    // =========================================================
+    // 戦略（Strategy）API コールバック — 戦略連動型 月次レポート PR2
+    // =========================================================
+
+    /** Strategy_Repository の遅延インスタンス化（毎回 new ではなく一度だけ） */
+    private ?Gcrev_Strategy_Repository $strategy_repo = null;
+
+    private function strategy_repo(): Gcrev_Strategy_Repository {
+        if ( $this->strategy_repo === null ) {
+            $this->strategy_repo = new Gcrev_Strategy_Repository();
+        }
+        return $this->strategy_repo;
+    }
+
+    /**
+     * REST ハンドラ用: ログイン中ユーザーIDを取得（無ければ 401）
+     */
+    private function strategy_current_user_id(): int {
+        $uid = get_current_user_id();
+        if ( $uid <= 0 ) {
+            return 0;
+        }
+        return (int) $uid;
+    }
+
+    private function strategy_json_response( $data, int $status = 200 ): WP_REST_Response {
+        $resp = new WP_REST_Response( $data, $status );
+        return $resp;
+    }
+
+    /** GET /strategy — 自分の現在 active な戦略 */
+    public function rest_strategy_get_active( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $row = $this->strategy_repo()->get_active( $uid );
+        return $this->strategy_json_response( [
+            'success'  => true,
+            'strategy' => $row,  // null 可（未設定状態）
+        ] );
+    }
+
+    /** GET /strategy/active-for-month?year_month=YYYY-MM */
+    public function rest_strategy_get_active_for_month( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $year_month = (string) $req->get_param( 'year_month' );
+        if ( ! preg_match( '/^\d{4}-\d{2}$/', $year_month ) ) {
+            return $this->strategy_json_response( [ 'error' => 'invalid year_month' ], 400 );
+        }
+        $row = $this->strategy_repo()->get_active_for_month( $uid, $year_month );
+        return $this->strategy_json_response( [
+            'success'  => true,
+            'strategy' => $row,
+        ] );
+    }
+
+    /** GET /strategy/versions — バージョン履歴 */
+    public function rest_strategy_get_versions( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $rows = $this->strategy_repo()->get_versions( $uid, 50 );
+        return $this->strategy_json_response( [
+            'success'  => true,
+            'versions' => $rows,
+        ] );
+    }
+
+    /** GET /strategy/draft/latest — 編集中の draft 復元 */
+    public function rest_strategy_get_latest_draft( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $row = $this->strategy_repo()->get_latest_draft( $uid );
+        return $this->strategy_json_response( [
+            'success' => true,
+            'draft'   => $row,
+        ] );
+    }
+
+    /**
+     * POST /strategy/draft — 新規 draft 作成
+     * Body: { strategy: { ... 戦略JSON ... } }
+     */
+    public function rest_strategy_create_draft( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $body = $req->get_json_params();
+        if ( ! is_array( $body ) || ! is_array( $body['strategy'] ?? null ) ) {
+            return $this->strategy_json_response( [ 'error' => 'strategy object is required' ], 400 );
+        }
+
+        $validation = Gcrev_Strategy_Schema_Validator::validate( $body['strategy'] );
+        // draft の場合は必須エラーがあっても保存を許可（編集中状態を保持）
+        $normalized = $validation['normalized'];
+
+        try {
+            $id = $this->strategy_repo()->create_version(
+                $uid,
+                $normalized,
+                'draft',
+                'manual',
+                $uid,
+                null
+            );
+        } catch ( \Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " create_draft failed user={$uid}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return $this->strategy_json_response( [ 'error' => 'failed to save draft' ], 500 );
+        }
+
+        return $this->strategy_json_response( [
+            'success'     => true,
+            'strategy_id' => $id,
+            'warnings'    => $validation['errors'], // 必須未充足は警告として返す
+            'normalized'  => $normalized,
+        ], 201 );
+    }
+
+    /**
+     * PUT /strategy/draft/{id} — draft を上書き保存
+     */
+    public function rest_strategy_update_draft( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $id = (int) $req->get_param( 'id' );
+        if ( $id <= 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'invalid id' ], 400 );
+        }
+
+        $row = $this->strategy_repo()->get_by_id( $id );
+        if ( ! $row || (int) $row['user_id'] !== $uid ) {
+            return $this->strategy_json_response( [ 'error' => 'not found' ], 404 );
+        }
+        if ( $row['status'] !== 'draft' ) {
+            return $this->strategy_json_response( [ 'error' => 'only draft can be updated' ], 409 );
+        }
+
+        $body = $req->get_json_params();
+        if ( ! is_array( $body ) || ! is_array( $body['strategy'] ?? null ) ) {
+            return $this->strategy_json_response( [ 'error' => 'strategy object is required' ], 400 );
+        }
+        $validation = Gcrev_Strategy_Schema_Validator::validate( $body['strategy'] );
+        $ok = $this->strategy_repo()->update_draft( $id, $validation['normalized'] );
+
+        if ( ! $ok ) {
+            return $this->strategy_json_response( [ 'error' => 'update failed' ], 500 );
+        }
+        return $this->strategy_json_response( [
+            'success'    => true,
+            'warnings'   => $validation['errors'],
+            'normalized' => $validation['normalized'],
+        ] );
+    }
+
+    /**
+     * DELETE /strategy/draft/{id} — draft 削除
+     */
+    public function rest_strategy_delete_draft( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $id = (int) $req->get_param( 'id' );
+        if ( $id <= 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'invalid id' ], 400 );
+        }
+        $row = $this->strategy_repo()->get_by_id( $id );
+        if ( ! $row || (int) $row['user_id'] !== $uid ) {
+            return $this->strategy_json_response( [ 'error' => 'not found' ], 404 );
+        }
+        if ( $row['status'] !== 'draft' ) {
+            return $this->strategy_json_response( [ 'error' => 'only draft can be deleted' ], 409 );
+        }
+        $ok = $this->strategy_repo()->delete_draft( $id );
+        return $this->strategy_json_response( [ 'success' => (bool) $ok ] );
+    }
+
+    /**
+     * POST /strategy/draft/{id}/activate — draft を active に昇格
+     * 必須項目が揃っていない場合は 422 で errors を返す
+     */
+    public function rest_strategy_activate_draft( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+        $id = (int) $req->get_param( 'id' );
+        if ( $id <= 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'invalid id' ], 400 );
+        }
+        $row = $this->strategy_repo()->get_by_id( $id );
+        if ( ! $row || (int) $row['user_id'] !== $uid ) {
+            return $this->strategy_json_response( [ 'error' => 'not found' ], 404 );
+        }
+        if ( $row['status'] !== 'draft' ) {
+            return $this->strategy_json_response( [ 'error' => 'only draft can be activated' ], 409 );
+        }
+
+        // active 化前に必須項目を厳格チェック
+        $validation = Gcrev_Strategy_Schema_Validator::validate( $row['strategy_json'] );
+        if ( ! $validation['valid'] ) {
+            return $this->strategy_json_response( [
+                'error'   => 'validation failed',
+                'errors'  => $validation['errors'],
+            ], 422 );
+        }
+
+        $ok = $this->strategy_repo()->activate_draft( $id );
+        if ( ! $ok ) {
+            return $this->strategy_json_response( [ 'error' => 'activate failed' ], 500 );
+        }
+        $active = $this->strategy_repo()->get_active( $uid );
+        return $this->strategy_json_response( [
+            'success'  => true,
+            'strategy' => $active,
+        ] );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

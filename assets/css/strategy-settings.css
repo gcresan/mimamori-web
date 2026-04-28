@@ -1,0 +1,320 @@
+/* ============================================================
+ * page-strategy-settings.php — 戦略設定ページ専用CSS
+ *
+ * 命名: ss-* (Strategy Settings)
+ * 既存トーン（rt-*, mw-*）に揃える: 角丸 12px / 余白 16-24 / 主色 #1976d2 系
+ * ============================================================ */
+
+.ss-wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 16px 60px;
+    color: #222;
+}
+
+/* --- Header --- */
+.ss-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 24px 0 16px;
+}
+.ss-header__title {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    color: #111;
+}
+.ss-header__desc {
+    margin: 0;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.6;
+}
+
+/* --- Status bar --- */
+.ss-status-bar {
+    background: #f5f7fa;
+    border: 1px solid #e3e7ee;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+}
+.ss-status-bar__inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.ss-status-bar__label {
+    font-size: 12px;
+    color: #6b7280;
+}
+.ss-status-bar__value {
+    font-size: 14px;
+    color: #111;
+    font-weight: 600;
+}
+
+/* --- Form sections --- */
+.ss-form { display: block; }
+
+.ss-section {
+    background: #fff;
+    border: 1px solid #e3e7ee;
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.ss-section__head { margin-bottom: 14px; }
+.ss-section__title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    color: #111;
+}
+.ss-section__hint {
+    font-size: 12px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.ss-field { margin-bottom: 18px; }
+.ss-field:last-child { margin-bottom: 0; }
+.ss-field__label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #333;
+}
+.ss-field__hint {
+    font-size: 12px;
+    color: #6b7280;
+    margin: 6px 0 0;
+}
+
+.ss-required {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #b42318;
+    background: #fef2f2;
+    border-radius: 4px;
+    vertical-align: 2px;
+}
+
+/* --- Inputs --- */
+.ss-input,
+.ss-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    background: #fff;
+    color: #111;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ss-input:focus,
+.ss-textarea:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.12);
+}
+.ss-textarea { resize: vertical; min-height: 72px; }
+
+/* --- Dynamic list rows --- */
+.ss-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.ss-list__row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+.ss-list__row .ss-input { flex: 1 1 auto; }
+
+/* --- Buttons --- */
+.ss-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #fff;
+    color: #1f2937;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+    line-height: 1.2;
+}
+.ss-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ss-btn--primary {
+    background: #1976d2;
+    color: #fff;
+    border-color: #1976d2;
+}
+.ss-btn--primary:hover:not(:disabled) { background: #1668bd; border-color: #1668bd; }
+
+.ss-btn--ghost {
+    background: #fff;
+    color: #1976d2;
+    border-color: #cfd8e3;
+}
+.ss-btn--ghost:hover:not(:disabled) { background: #f5f8fb; border-color: #1976d2; }
+
+.ss-btn--small { padding: 6px 12px; font-size: 12px; }
+
+.ss-btn--icon {
+    width: 36px;
+    padding: 0;
+    flex: 0 0 auto;
+    color: #6b7280;
+    border-color: #e3e7ee;
+}
+.ss-btn--icon:hover:not(:disabled) { color: #b42318; border-color: #fecaca; }
+
+/* --- Action bar --- */
+.ss-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+}
+.ss-help-note {
+    margin-top: 16px;
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.7;
+    background: #fafbfc;
+    border: 1px solid #eef0f3;
+    border-radius: 8px;
+    padding: 12px 14px;
+}
+
+/* --- Modal --- */
+.ss-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.ss-modal[hidden] { display: none; }
+.ss-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+}
+.ss-modal__panel {
+    position: relative;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    width: min(640px, 92vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+.ss-modal__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid #eef0f3;
+}
+.ss-modal__title { margin: 0; font-size: 16px; font-weight: 700; }
+.ss-modal__close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: #6b7280;
+    cursor: pointer;
+    line-height: 1;
+}
+.ss-modal__body {
+    padding: 14px 18px;
+    overflow-y: auto;
+}
+
+.ss-empty {
+    text-align: center;
+    color: #6b7280;
+    padding: 24px 0;
+    font-size: 13px;
+}
+
+.ss-versions {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.ss-versions th,
+.ss-versions td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eef0f3;
+    text-align: left;
+}
+.ss-versions th {
+    background: #f7f9fc;
+    color: #374151;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.ss-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+}
+.ss-badge--draft    { background: #fef3c7; color: #92400e; }
+.ss-badge--active   { background: #dcfce7; color: #166534; }
+.ss-badge--archived { background: #e5e7eb; color: #4b5563; }
+
+/* --- Toast --- */
+.ss-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    background: #1f2937;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    font-size: 13px;
+    line-height: 1.5;
+    z-index: 10000;
+    white-space: pre-line;
+    max-width: 80vw;
+}
+.ss-toast[hidden] { display: none; }
+.ss-toast--success { background: #166534; }
+.ss-toast--error   { background: #b42318; }
+
+/* --- Responsive --- */
+@media (max-width: 640px) {
+    .ss-section { padding: 16px; }
+    .ss-actions { justify-content: stretch; }
+    .ss-actions .ss-btn { flex: 1 1 auto; }
+    .ss-versions th:nth-child(3),
+    .ss-versions td:nth-child(3) { display: none; } /* 取込元列を省略 */
+}

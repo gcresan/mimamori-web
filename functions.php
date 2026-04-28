@@ -1306,6 +1306,22 @@ if ( file_exists( $gcrev_clarity_client ) ) {
 }
 
 // ========================================
+// 戦略連動レポート: Repository / Validator / Tables を API クラス読込前に確実にロード
+// （class-gcrev-api.php 内の REST コールバックから直接参照されるため）
+// ========================================
+$gcrev_strategy_files = [
+    $gcrev_inc_path . 'gcrev-api/utils/class-strategy-tables.php',
+    $gcrev_inc_path . 'gcrev-api/utils/class-strategy-schema-validator.php',
+    $gcrev_inc_path . 'gcrev-api/modules/class-strategy-repository.php',
+];
+foreach ( $gcrev_strategy_files as $gcrev_strategy_file ) {
+    if ( file_exists( $gcrev_strategy_file ) ) {
+        require_once $gcrev_strategy_file;
+    }
+}
+unset( $gcrev_strategy_files, $gcrev_strategy_file );
+
+// ========================================
 // 既存のAPIクラス（入口）は最後に読み込む
 // ========================================
 $gcrev_entry = $gcrev_inc_path . 'class-gcrev-api.php';
@@ -1597,6 +1613,39 @@ add_action( 'wp_enqueue_scripts', function () {
         '1.0.0',
         true
     );
+} );
+
+/**
+ * 戦略設定ページ (page-strategy-settings.php) 用 JS / CSS
+ * Template Name: 戦略設定 が割り当てられた固定ページでのみ読み込む。
+ */
+add_action( 'wp_enqueue_scripts', function () {
+    if ( ! is_user_logged_in() ) {
+        return;
+    }
+    if ( ! is_page_template( 'page-strategy-settings.php' ) ) {
+        return;
+    }
+
+    wp_enqueue_style(
+        'gcrev-strategy-settings',
+        get_template_directory_uri() . '/assets/css/strategy-settings.css',
+        [],
+        '1.0.0'
+    );
+
+    wp_enqueue_script(
+        'gcrev-strategy-settings',
+        get_template_directory_uri() . '/assets/js/strategy-settings.js',
+        [],
+        '1.0.0',
+        true
+    );
+
+    wp_localize_script( 'gcrev-strategy-settings', 'gcrevStrategyConfig', [
+        'restRoot' => esc_url_raw( rest_url() ),
+        'nonce'    => wp_create_nonce( 'wp_rest' ),
+    ] );
 } );
 
 // ============================================================
