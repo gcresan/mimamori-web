@@ -232,10 +232,10 @@
                 return;
             }
             // running / pending / null → 続ける
-            // 5分（150 ticks）超えたら諦める
+            // 5分超えたら諦める
             if (elapsed > 5 * 60) {
                 stopPolling();
-                $('#srFailedMsg').textContent = 'タイムアウトしました。WP-Cronが動作していない可能性があります。';
+                $('#srFailedMsg').textContent = '5分待っても完了しませんでした。サーバーログをご確認ください（/tmp/gcrev_strategy_debug.log）。';
                 $('#srGenerateBtn').hidden = false;
                 showState('failed');
                 return;
