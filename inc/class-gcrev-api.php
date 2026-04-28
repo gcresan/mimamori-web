@@ -24597,8 +24597,21 @@ PROMPT;
             }
             wp_update_attachment_metadata( $attachment_id, wp_generate_attachment_metadata( $attachment_id, $uploaded['file'] ) );
 
-            // PDF 抽出
-            require_once __DIR__ . '/gcrev-api/modules/class-strategy-pdf-extractor.php';
+            // PDF 抽出（functions.php で早期ロード済みのはずだが、念のため再 require）
+            if ( ! class_exists( 'Gcrev_Strategy_Pdf_Extractor' ) ) {
+                $pdf_class_path = __DIR__ . '/gcrev-api/modules/class-strategy-pdf-extractor.php';
+                file_put_contents(
+                    '/tmp/gcrev_strategy_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " {$log_pfx}: loading PdfExtractor from {$pdf_class_path} (exists=" . ( file_exists( $pdf_class_path ) ? '1' : '0' ) . ")\n",
+                    FILE_APPEND
+                );
+                if ( file_exists( $pdf_class_path ) ) {
+                    require_once $pdf_class_path;
+                }
+            }
+            if ( ! class_exists( 'Gcrev_Strategy_Pdf_Extractor' ) ) {
+                throw new \Exception( 'Gcrev_Strategy_Pdf_Extractor クラスがロードできません。デプロイが正しく反映されているか確認してください。' );
+            }
             $extractor = new Gcrev_Strategy_Pdf_Extractor( $this->ai );
             $result    = $extractor->extract_from_attachment( (int) $attachment_id );
 

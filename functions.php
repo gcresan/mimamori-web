@@ -1315,6 +1315,7 @@ $gcrev_strategy_files = [
     $gcrev_inc_path . 'gcrev-api/utils/class-strategy-report-schema-validator.php',
     $gcrev_inc_path . 'gcrev-api/modules/class-strategy-repository.php',
     $gcrev_inc_path . 'gcrev-api/modules/class-strategy-report-repository.php',
+    $gcrev_inc_path . 'gcrev-api/modules/class-strategy-pdf-extractor.php',
     $gcrev_inc_path . 'gcrev-api/modules/class-strategy-data-aggregator.php',
     $gcrev_inc_path . 'gcrev-api/modules/class-strategy-prompt-builder.php',
     $gcrev_inc_path . 'gcrev-api/modules/class-strategy-report-renderer.php',
