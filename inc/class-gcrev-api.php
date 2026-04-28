@@ -24800,51 +24800,56 @@ PROMPT;
             'manual_user'
         );
 
-        // レート制限カウンタ +1（このリクエストはここまでで成功扱い）
+        // レート制限カウンタ +1
         set_transient( $rate_key, $count + 1, DAY_IN_SECONDS );
 
-        // バックグラウンド実行を WordPress shutdown フック後に予約。
-        // shutdown 内で fastcgi_finish_request() を呼ぶことでクライアントへの
-        // レスポンスはすでに送信完了している状態にし、PHP プロセスは引き続き
-        // Service::generate() を実行して DB を更新する。
-        // クライアント側は 202 を受け取って polling で結果を待つ。
-        // この方式なら DISABLE_WP_CRON=1 / 系統 cron 不在環境でも動く。
-        $config_ref = $this->config;
-        $ai_ref     = $this->ai;
-        $ga4_ref    = $this->ga4;
-        $gsc_ref    = $this->gsc;
+        file_put_contents(
+            '/tmp/gcrev_strategy_debug.log',
+            date( 'Y-m-d H:i:s' ) . " rest_generate user={$uid} ym={$year_month} report_id={$report_id} sending_response_then_bg\n",
+            FILE_APPEND
+        );
 
-        add_action( 'shutdown', function () use ( $uid, $year_month, $config_ref, $ai_ref, $ga4_ref, $gsc_ref ) {
-            // クライアントへのレスポンス送信を完了させる
-            if ( function_exists( 'fastcgi_finish_request' ) ) {
-                @fastcgi_finish_request();
-            }
-            // バックグラウンド処理用に時間制限を解除し、ユーザー切断でも継続
-            @ignore_user_abort( true );
-            @set_time_limit( 300 );
-
-            try {
-                if ( ! class_exists( 'Gcrev_Strategy_Report_Service' ) ) {
-                    require_once __DIR__ . '/gcrev-api/modules/class-strategy-report-service.php';
-                }
-                $service = new Gcrev_Strategy_Report_Service( $config_ref, $ai_ref, $ga4_ref, $gsc_ref );
-                $service->generate( $uid, $year_month, 'manual_user' );
-            } catch ( \Throwable $e ) {
-                file_put_contents(
-                    '/tmp/gcrev_strategy_debug.log',
-                    date( 'Y-m-d H:i:s' ) . " bg_generate FAILED user={$uid} ym={$year_month}: " . $e->getMessage() . "\n",
-                    FILE_APPEND
-                );
-            }
-        }, 999 );
-
-        return $this->strategy_json_response( [
+        // 1) クライアントに 202 を直接送信
+        nocache_headers();
+        status_header( 202 );
+        header( 'Content-Type: application/json; charset=utf-8' );
+        echo wp_json_encode( [
             'success'    => true,
             'report_id'  => $report_id,
             'year_month' => $year_month,
             'status'     => 'pending',
             'message'    => 'バックグラウンドで生成を開始しました（30秒〜2分）。',
-        ], 202 );
+        ], JSON_UNESCAPED_UNICODE );
+
+        // 2) FastCGI 接続を切る（PHP-FPM のみ。なければ flush）
+        if ( function_exists( 'fastcgi_finish_request' ) ) {
+            @fastcgi_finish_request();
+        } else {
+            @flush();
+        }
+
+        // 3) ここから先はクライアントから切り離されたバックグラウンド処理
+        @ignore_user_abort( true );
+        @set_time_limit( 300 );
+
+        try {
+            if ( ! class_exists( 'Gcrev_Strategy_Report_Service' ) ) {
+                require_once __DIR__ . '/gcrev-api/modules/class-strategy-report-service.php';
+            }
+            $service = new Gcrev_Strategy_Report_Service(
+                $this->config, $this->ai, $this->ga4, $this->gsc
+            );
+            $service->generate( $uid, $year_month, 'manual_user' );
+        } catch ( \Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " bg_generate FAILED user={$uid} ym={$year_month}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+        }
+
+        // WP REST に追加で何も処理させない
+        exit;
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

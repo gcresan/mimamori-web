@@ -63,11 +63,17 @@ class Gcrev_Strategy_Report_Service {
             throw new \InvalidArgumentException( 'invalid year_month: ' . $year_month );
         }
 
+        // ロック: 5 分（クライアント polling と一致。30分だと前回失敗時の残骸で詰まる）
         $lock_key = 'gcrev_lock_strategy_report_' . $user_id . '_' . $year_month;
         if ( get_transient( $lock_key ) ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " service::generate LOCK_PRESENT user={$user_id} ym={$year_month} (前回処理が残存)\n",
+                FILE_APPEND
+            );
             return [ 'status' => 'busy', 'message' => 'already running' ];
         }
-        set_transient( $lock_key, 1, 30 * MINUTE_IN_SECONDS );
+        set_transient( $lock_key, 1, 5 * MINUTE_IN_SECONDS );
 
         $report_id = 0;
         try {
