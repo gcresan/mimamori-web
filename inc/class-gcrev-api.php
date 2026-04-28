@@ -332,6 +332,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_strategy_activate_draft' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev_insights/v1', '/strategy/extract-pdf', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_strategy_extract_pdf' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         // ===== v2ダッシュボード用KPI取得 =====
         register_rest_route('gcrev/v1', '/dashboard/kpi', [
@@ -24448,6 +24453,113 @@ PROMPT;
             'success'  => true,
             'strategy' => $active,
         ] );
+    }
+
+    /**
+     * POST /strategy/extract-pdf — PDF アップロード → AI 抽出 → draft 作成
+     * Form: multipart/form-data with field "file" (PDF)
+     */
+    public function rest_strategy_extract_pdf( WP_REST_Request $req ): WP_REST_Response {
+        $uid = $this->strategy_current_user_id();
+        if ( $uid === 0 ) {
+            return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
+        }
+
+        // 同時アップロード防止ロック（5分）
+        $lock_key = 'gcrev_lock_strategy_pdf_' . $uid;
+        if ( get_transient( $lock_key ) ) {
+            return $this->strategy_json_response( [ 'error' => 'another extraction is in progress' ], 429 );
+        }
+        set_transient( $lock_key, 1, 5 * MINUTE_IN_SECONDS );
+
+        try {
+            $files = $req->get_file_params();
+            if ( empty( $files['file'] ) || ! is_array( $files['file'] ) ) {
+                return $this->strategy_json_response( [ 'error' => 'file is required' ], 400 );
+            }
+            $file = $files['file'];
+
+            // MIME とサイズ検証
+            $allowed_mime = [ 'application/pdf' ];
+            $type = $file['type'] ?? '';
+            if ( ! in_array( $type, $allowed_mime, true ) ) {
+                // ブラウザによっては type 空のことあり。拡張子でも判定
+                $name = (string) ( $file['name'] ?? '' );
+                if ( strtolower( pathinfo( $name, PATHINFO_EXTENSION ) ) !== 'pdf' ) {
+                    return $this->strategy_json_response( [ 'error' => 'PDFファイルのみアップロード可能です' ], 400 );
+                }
+            }
+            if ( (int) ( $file['size'] ?? 0 ) > Gcrev_Strategy_Pdf_Extractor::MAX_FILE_SIZE ) {
+                return $this->strategy_json_response( [ 'error' => 'ファイルサイズが上限を超えています（最大20MB）' ], 413 );
+            }
+            if ( (int) ( $file['error'] ?? UPLOAD_ERR_NO_FILE ) !== UPLOAD_ERR_OK ) {
+                return $this->strategy_json_response( [ 'error' => 'アップロードに失敗しました（' . (int) $file['error'] . '）' ], 400 );
+            }
+
+            // wp_handle_upload を使うために必要なファイル群を読み込む
+            if ( ! function_exists( 'wp_handle_upload' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/file.php';
+            }
+            if ( ! function_exists( 'wp_insert_attachment' ) ) {
+                require_once ABSPATH . 'wp-admin/includes/image.php';
+                require_once ABSPATH . 'wp-admin/includes/media.php';
+            }
+
+            $overrides = [
+                'test_form' => false,
+                'mimes'     => [ 'pdf' => 'application/pdf' ],
+            ];
+            $uploaded = wp_handle_upload( $file, $overrides );
+            if ( isset( $uploaded['error'] ) ) {
+                return $this->strategy_json_response( [ 'error' => 'アップロード失敗: ' . $uploaded['error'] ], 400 );
+            }
+
+            // attachment 作成（プライベート: post_status=private）
+            $attachment_id = wp_insert_attachment( [
+                'post_mime_type' => $uploaded['type'],
+                'post_title'     => sanitize_file_name( $file['name'] ?? 'strategy.pdf' ),
+                'post_content'   => '',
+                'post_status'    => 'private',
+                'post_author'    => $uid,
+            ], $uploaded['file'] );
+
+            if ( is_wp_error( $attachment_id ) || ! $attachment_id ) {
+                return $this->strategy_json_response( [ 'error' => 'attachment 作成に失敗しました' ], 500 );
+            }
+            wp_update_attachment_metadata( $attachment_id, wp_generate_attachment_metadata( $attachment_id, $uploaded['file'] ) );
+
+            // PDF 抽出
+            require_once __DIR__ . '/gcrev-api/modules/class-strategy-pdf-extractor.php';
+            $extractor = new Gcrev_Strategy_Pdf_Extractor( $this->ai );
+            $result    = $extractor->extract_from_attachment( (int) $attachment_id );
+
+            // draft として保存（必須項目が揃っていなくても draft なので保存OK）
+            $draft_id = $this->strategy_repo()->create_version(
+                $uid,
+                $result['normalized'],
+                'draft',
+                'pdf',
+                $uid,
+                (int) $attachment_id
+            );
+
+            return $this->strategy_json_response( [
+                'success'        => true,
+                'strategy_id'    => $draft_id,
+                'attachment_id'  => (int) $attachment_id,
+                'warnings'       => $result['errors'],
+                'normalized'     => $result['normalized'],
+            ], 201 );
+        } catch ( \Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " extract_pdf failed user={$uid}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return $this->strategy_json_response( [ 'error' => $e->getMessage() ], 500 );
+        } finally {
+            delete_transient( $lock_key );
+        }
     }
 
     } // class Gcrev_Insight_API の閉じ括弧

@@ -26,7 +26,8 @@ get_header();
             <p class="ss-header__desc">この設定が「戦略連動型 月次レポート」のベースになります。AIは戦略と実際のデータを突き合わせ、ズレと改善アクションを提示します。</p>
         </div>
         <div class="ss-header__actions">
-            <button type="button" class="ss-btn ss-btn--ghost" id="ssVersionsBtn">📋 バージョン履歴</button>
+            <button type="button" class="ss-btn ss-btn--accent" id="ssPdfImportBtn">📄 PDFから取込</button>
+            <button type="button" class="ss-btn ss-btn--ghost"  id="ssVersionsBtn">📋 バージョン履歴</button>
         </div>
     </div>
 
@@ -115,6 +116,60 @@ get_header();
         </p>
 
     </form>
+
+    <!-- PDF取込モーダル -->
+    <div class="ss-modal" id="ssPdfModal" hidden>
+        <div class="ss-modal__backdrop" data-ss-modal-close></div>
+        <div class="ss-modal__panel" role="dialog" aria-labelledby="ssPdfTitle">
+            <div class="ss-modal__head">
+                <h3 id="ssPdfTitle" class="ss-modal__title">📄 企画書PDFから戦略を取込</h3>
+                <button type="button" class="ss-modal__close" data-ss-modal-close aria-label="閉じる">×</button>
+            </div>
+            <div class="ss-modal__body" id="ssPdfBody">
+
+                <!-- ステップ1: アップロード -->
+                <div class="ss-pdf-step" data-ss-pdf-step="upload">
+                    <p class="ss-pdf-lead">
+                        企画書・提案書PDFをアップロードすると、AIがターゲット・課題・戦略・差別化要素・コンバージョン導線を抽出します。<br>
+                        <strong>抽出結果は必ず内容を確認してください。</strong>AIは間違えることがあります。
+                    </p>
+                    <div class="ss-pdf-drop" id="ssPdfDrop">
+                        <input type="file" id="ssPdfFile" accept="application/pdf,.pdf" hidden />
+                        <div class="ss-pdf-drop__inner">
+                            <div class="ss-pdf-drop__icon">📎</div>
+                            <p class="ss-pdf-drop__text">クリックして PDF を選択<br><span class="ss-pdf-drop__sub">または ここにドラッグ&amp;ドロップ（最大 20MB）</span></p>
+                        </div>
+                    </div>
+                    <div class="ss-pdf-selected" id="ssPdfSelected" hidden>
+                        <span class="ss-pdf-selected__icon">📄</span>
+                        <span class="ss-pdf-selected__name" id="ssPdfFilename">—</span>
+                        <button type="button" class="ss-btn ss-btn--icon" id="ssPdfClear" aria-label="ファイルを削除">×</button>
+                    </div>
+                </div>
+
+                <!-- ステップ2: 抽出中 -->
+                <div class="ss-pdf-step" data-ss-pdf-step="extracting" hidden>
+                    <div class="ss-pdf-progress">
+                        <div class="ss-pdf-progress__spinner"></div>
+                        <p class="ss-pdf-progress__text">AIが企画書を解析中です…<br><span class="ss-pdf-progress__sub">通常 30秒〜2分ほどかかります</span></p>
+                    </div>
+                </div>
+
+                <!-- ステップ3: プレビュー -->
+                <div class="ss-pdf-step" data-ss-pdf-step="preview" hidden>
+                    <p class="ss-pdf-lead">AIによる抽出結果です。問題なければ「下書きとして取り込む」を押してください。後でフォーム上で編集できます。</p>
+                    <div class="ss-pdf-warnings" id="ssPdfWarnings" hidden></div>
+                    <pre class="ss-pdf-preview" id="ssPdfPreview"></pre>
+                </div>
+
+            </div>
+            <div class="ss-modal__foot" id="ssPdfFoot">
+                <button type="button" class="ss-btn ss-btn--ghost"  id="ssPdfCancel" data-ss-modal-close>キャンセル</button>
+                <button type="button" class="ss-btn ss-btn--primary" id="ssPdfSubmit" disabled>🚀 アップロードして抽出</button>
+                <button type="button" class="ss-btn ss-btn--primary" id="ssPdfApply"  hidden>✅ この内容を下書きに取り込む</button>
+            </div>
+        </div>
+    </div>
 
     <!-- バージョン履歴モーダル -->
     <div class="ss-modal" id="ssVersionsModal" hidden>

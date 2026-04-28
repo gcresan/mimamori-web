@@ -286,6 +286,157 @@
     }
 
     // =========================================================
+    // PDF アップロード → AI 抽出 → プレビュー → draft 取込
+    // =========================================================
+    var pdfState = {
+        file: null,
+        result: null   // { strategy_id, normalized, warnings }
+    };
+
+    function showPdfStep(name) {
+        $$('.ss-pdf-step').forEach(function (el) {
+            el.hidden = (el.getAttribute('data-ss-pdf-step') !== name);
+        });
+        // ボタンの切替
+        var submit = $('#ssPdfSubmit');
+        var apply  = $('#ssPdfApply');
+        if (name === 'upload') {
+            submit.hidden = false; apply.hidden = true;
+        } else if (name === 'extracting') {
+            submit.hidden = false; apply.hidden = true;
+            submit.disabled = true;
+        } else if (name === 'preview') {
+            submit.hidden = true; apply.hidden = false;
+        }
+    }
+
+    function openPdfModal() {
+        pdfState.file = null;
+        pdfState.result = null;
+        $('#ssPdfFile').value = '';
+        $('#ssPdfSelected').hidden = true;
+        $('#ssPdfFilename').textContent = '—';
+        $('#ssPdfSubmit').disabled = true;
+        $('#ssPdfPreview').textContent = '';
+        $('#ssPdfWarnings').hidden = true;
+        $('#ssPdfWarnings').innerHTML = '';
+        showPdfStep('upload');
+        $('#ssPdfModal').hidden = false;
+    }
+
+    function closePdfModal() {
+        $('#ssPdfModal').hidden = true;
+    }
+
+    function selectPdfFile(file) {
+        if (!file) return;
+        if (file.size > 20 * 1024 * 1024) {
+            showToast('ファイルサイズが大きすぎます（最大 20MB）', 'error');
+            return;
+        }
+        var name = (file.name || '').toLowerCase();
+        if (file.type !== 'application/pdf' && !name.endsWith('.pdf')) {
+            showToast('PDFファイルを選択してください', 'error');
+            return;
+        }
+        pdfState.file = file;
+        $('#ssPdfFilename').textContent = file.name;
+        $('#ssPdfSelected').hidden = false;
+        $('#ssPdfSubmit').disabled = false;
+    }
+
+    function uploadAndExtract() {
+        if (!pdfState.file) return;
+        showPdfStep('extracting');
+
+        var fd = new FormData();
+        fd.append('file', pdfState.file);
+
+        fetch(REST + '/strategy/extract-pdf', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': NONCE },
+            body: fd
+        }).then(function (res) {
+            return res.json().then(function (data) {
+                if (!res.ok) {
+                    var err = new Error(data && data.error ? data.error : 'extract failed');
+                    err.status = res.status;
+                    err.payload = data;
+                    throw err;
+                }
+                return data;
+            });
+        }).then(function (data) {
+            pdfState.result = data;
+            // プレビュー: normalized JSON を整形表示
+            $('#ssPdfPreview').textContent = JSON.stringify(data.normalized, null, 2);
+
+            var warnings = (data.warnings || []);
+            if (warnings.length) {
+                var w = $('#ssPdfWarnings');
+                w.hidden = false;
+                w.innerHTML = '<strong>⚠️ 必須項目に不足があります:</strong><ul>' +
+                    warnings.map(function (s) { return '<li>' + s + '</li>'; }).join('') +
+                    '</ul><p>取り込んだ後、フォーム上で補ってください。</p>';
+            }
+            showPdfStep('preview');
+        }).catch(function (err) {
+            console.error(err);
+            showToast('抽出に失敗しました: ' + (err.message || ''), 'error');
+            showPdfStep('upload');
+            $('#ssPdfSubmit').disabled = false;
+        });
+    }
+
+    function applyExtractedDraft() {
+        if (!pdfState.result || !pdfState.result.normalized) return;
+        // フォームに流し込み
+        writeForm(pdfState.result.normalized);
+        // 既存の編集中 draft より、新規作成された PDF draft を採用
+        currentDraftId = pdfState.result.strategy_id || currentDraftId;
+        showToast('PDFから抽出した内容を下書きに取り込みました', 'success');
+        closePdfModal();
+        // active バー更新は触らない（active は変わっていない）
+    }
+
+    function wirePdfUpload() {
+        var btn = $('#ssPdfImportBtn');
+        if (!btn) return;
+        btn.addEventListener('click', openPdfModal);
+
+        var drop = $('#ssPdfDrop');
+        var fileInput = $('#ssPdfFile');
+        if (drop && fileInput) {
+            drop.addEventListener('click', function () { fileInput.click(); });
+            drop.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                drop.classList.add('is-drag');
+            });
+            drop.addEventListener('dragleave', function () { drop.classList.remove('is-drag'); });
+            drop.addEventListener('drop', function (e) {
+                e.preventDefault();
+                drop.classList.remove('is-drag');
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    selectPdfFile(e.dataTransfer.files[0]);
+                }
+            });
+            fileInput.addEventListener('change', function () {
+                if (fileInput.files && fileInput.files[0]) selectPdfFile(fileInput.files[0]);
+            });
+        }
+        var clearBtn = $('#ssPdfClear');
+        if (clearBtn) clearBtn.addEventListener('click', function () {
+            pdfState.file = null;
+            $('#ssPdfFile').value = '';
+            $('#ssPdfSelected').hidden = true;
+            $('#ssPdfSubmit').disabled = true;
+        });
+        $('#ssPdfSubmit').addEventListener('click', uploadAndExtract);
+        $('#ssPdfApply').addEventListener('click', applyExtractedDraft);
+    }
+
+    // =========================================================
     // Wire up
     // =========================================================
     document.addEventListener('DOMContentLoaded', function () {
@@ -296,9 +447,13 @@
         $('#ssVersionsBtn').addEventListener('click', openVersions);
 
         $$('[data-ss-modal-close]').forEach(function (el) {
-            el.addEventListener('click', closeVersions);
+            el.addEventListener('click', function () {
+                // 開いているモーダル全部を閉じる
+                $$('.ss-modal').forEach(function (m) { m.hidden = true; });
+            });
         });
 
+        wirePdfUpload();
         bootstrap();
     });
 
