@@ -24505,17 +24505,29 @@ PROMPT;
             FILE_APPEND
         );
 
-        // 同時アップロード防止ロック（5分）
+        // 同時アップロード防止ロック（3分）。force=1 で強制解除（前回ハング後の復旧用）
         $lock_key = 'gcrev_lock_strategy_pdf_' . $uid;
+        $force = (string) ( $req->get_param( 'force' ) ?? '' ) === '1';
+        if ( $force ) {
+            delete_transient( $lock_key );
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " {$log_pfx}: lock force-cleared by client\n",
+                FILE_APPEND
+            );
+        }
         if ( get_transient( $lock_key ) ) {
             file_put_contents(
                 '/tmp/gcrev_strategy_debug.log',
                 date( 'Y-m-d H:i:s' ) . " {$log_pfx}: REJECTED (lock present — 前回処理が残っている可能性)\n",
                 FILE_APPEND
             );
-            return $this->strategy_json_response( [ 'error' => 'another extraction is in progress (5分以内に再試行があった場合はお待ちください)' ], 429 );
+            return $this->strategy_json_response( [
+                'error' => 'another extraction is in progress（前回処理が残っています。3分以内なら待つか、force=1 で強制解除してください）',
+                'lock'  => true,
+            ], 429 );
         }
-        set_transient( $lock_key, 1, 5 * MINUTE_IN_SECONDS );
+        set_transient( $lock_key, 1, 3 * MINUTE_IN_SECONDS );
 
         try {
             $files = $req->get_file_params();

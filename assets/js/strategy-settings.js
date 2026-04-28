@@ -290,8 +290,21 @@
     // =========================================================
     var pdfState = {
         file: null,
-        result: null   // { strategy_id, normalized, warnings }
+        result: null,        // { strategy_id, normalized, warnings }
+        ctrl: null,          // 進行中の fetch を中断するための AbortController
+        timeoutId: null,     // クライアント側タイムアウトのタイマー
+        elapsedTimerId: null // 経過秒数表示のインターバル
     };
+
+    function cancelExtractionIfRunning() {
+        // 進行中の fetch を中断
+        if (pdfState.ctrl && typeof pdfState.ctrl.abort === 'function') {
+            try { pdfState.ctrl.abort(); } catch (_) { /* noop */ }
+        }
+        if (pdfState.timeoutId)        { clearTimeout(pdfState.timeoutId);   pdfState.timeoutId = null; }
+        if (pdfState.elapsedTimerId)   { clearInterval(pdfState.elapsedTimerId); pdfState.elapsedTimerId = null; }
+        pdfState.ctrl = null;
+    }
 
     function showPdfStep(name) {
         $$('.ss-pdf-step').forEach(function (el) {
@@ -311,6 +324,7 @@
     }
 
     function openPdfModal() {
+        cancelExtractionIfRunning();
         pdfState.file = null;
         pdfState.result = null;
         $('#ssPdfFile').value = '';
@@ -325,7 +339,11 @@
     }
 
     function closePdfModal() {
+        cancelExtractionIfRunning();
         $('#ssPdfModal').hidden = true;
+        // 状態を upload に戻して次回開いたとき正常状態にする
+        showPdfStep('upload');
+        $('#ssPdfSubmit').disabled = pdfState.file ? false : true;
     }
 
     function selectPdfFile(file) {
@@ -345,25 +363,28 @@
         $('#ssPdfSubmit').disabled = false;
     }
 
-    function uploadAndExtract() {
+    function uploadAndExtract(force) {
         if (!pdfState.file) return;
+        // 念のため前回分のタイマー/AbortController をクリア
+        cancelExtractionIfRunning();
         showPdfStep('extracting');
 
         var fd = new FormData();
         fd.append('file', pdfState.file);
+        if (force) fd.append('force', '1');
 
         // 経過時間カウンタ
         var elapsedStart = Date.now();
-        var elapsedTimer = setInterval(function () {
+        pdfState.elapsedTimerId = setInterval(function () {
             var sec = Math.round((Date.now() - elapsedStart) / 1000);
             var subEl = document.querySelector('.ss-pdf-progress__sub');
-            if (subEl) subEl.textContent = '経過 ' + sec + ' 秒（最大 3 分でタイムアウト）';
+            if (subEl) subEl.textContent = '経過 ' + sec + ' 秒（最大 3 分でタイムアウト / キャンセル可能）';
         }, 1000);
 
         // クライアント側タイムアウト 3 分
-        var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-        var timeoutId = setTimeout(function () {
-            if (ctrl) ctrl.abort();
+        pdfState.ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        pdfState.timeoutId = setTimeout(function () {
+            if (pdfState.ctrl) pdfState.ctrl.abort();
         }, 3 * 60 * 1000);
 
         fetch(REST + '/strategy/extract-pdf', {
@@ -371,7 +392,7 @@
             credentials: 'same-origin',
             headers: { 'X-WP-Nonce': NONCE },
             body: fd,
-            signal: ctrl ? ctrl.signal : undefined
+            signal: pdfState.ctrl ? pdfState.ctrl.signal : undefined
         }).then(function (res) {
             // レスポンスが JSON でない可能性（504 nginx html など）に備える
             return res.text().then(function (txt) {
@@ -405,18 +426,29 @@
             showPdfStep('preview');
         }).catch(function (err) {
             console.error('[strategy-settings] extract-pdf failed:', err);
-            var msg;
+            // ユーザーがキャンセルした場合はトーストを出さず静かに戻す
             if (err && err.name === 'AbortError') {
-                msg = '3分以内に応答がありませんでした。PDFが大きすぎるか、サーバーがタイムアウトした可能性があります。';
+                if (pdfState.ctrl === null) {
+                    showToast('抽出をキャンセルしました', 'success');
+                } else {
+                    showToast('3分以内に応答がありませんでした。PDFが大きいか、サーバーがタイムアウトした可能性があります。', 'error');
+                }
+            } else if (err && err.status === 429 && err.payload && err.payload.lock) {
+                // 前回のロックが残っている → 強制解除して再試行するか確認
+                if (confirm('前回の処理が残っているようです。強制的にロックを解除して再試行しますか？')) {
+                    setTimeout(function () { uploadAndExtract(true); }, 50);
+                    return;
+                }
+                showToast('処理は中断されました。少し待ってから再試行してください。', 'error');
             } else {
-                msg = '抽出に失敗しました: ' + (err.message || '不明なエラー');
+                showToast('抽出に失敗しました: ' + (err.message || '不明なエラー'), 'error');
             }
-            showToast(msg, 'error');
             showPdfStep('upload');
-            $('#ssPdfSubmit').disabled = false;
+            $('#ssPdfSubmit').disabled = pdfState.file ? false : true;
         }).then(function () {
-            clearInterval(elapsedTimer);
-            clearTimeout(timeoutId);
+            if (pdfState.elapsedTimerId) { clearInterval(pdfState.elapsedTimerId); pdfState.elapsedTimerId = null; }
+            if (pdfState.timeoutId)      { clearTimeout(pdfState.timeoutId);   pdfState.timeoutId = null; }
+            pdfState.ctrl = null;
         });
     }
 
@@ -465,6 +497,19 @@
         });
         $('#ssPdfSubmit').addEventListener('click', uploadAndExtract);
         $('#ssPdfApply').addEventListener('click', applyExtractedDraft);
+
+        // PDF モーダル内のキャンセル / × / 背景クリックは fetch を中断する独自ハンドラに置き換え
+        // （他モーダルへの汎用 data-ss-modal-close は別途バインド済み）
+        var pdfModal = $('#ssPdfModal');
+        if (pdfModal) {
+            $$('[data-ss-modal-close]', pdfModal).forEach(function (el) {
+                el.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    closePdfModal();
+                }, true); // capture フェーズで早めに止める
+            });
+        }
     }
 
     // =========================================================
