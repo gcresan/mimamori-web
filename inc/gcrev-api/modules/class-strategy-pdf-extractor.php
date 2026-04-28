@@ -73,32 +73,35 @@ class Gcrev_Strategy_Pdf_Extractor {
             throw new \Exception( 'PDFファイルのサイズが不正です: ' . $size . ' bytes' );
         }
 
-        $bytes = file_get_contents( $path );
-        if ( $bytes === false || $bytes === '' ) {
-            $log( 'FAILED file_get_contents_returned_empty' );
-            throw new \Exception( 'PDFファイルの読み込みに失敗しました' );
+        // PDF をサーバー側で pdftotext でテキスト化してから Gemini に渡す
+        // （Gemini multimodal で PDF inline を渡すと、リージョン・モデル組合せ次第で
+        //  HTTP 417 になるため、ロバストなテキスト経路を採用）
+        $text = $this->extract_text_with_pdftotext( $path );
+        $text_len = mb_strlen( $text );
+        $log( "pdftotext_extracted chars={$text_len}" );
+        if ( $text_len < 30 ) {
+            // ベクトルテキストが取れない（スキャン PDF など）
+            $log( 'FAILED pdf_text_too_short_or_empty' );
+            throw new \Exception( 'PDFからテキストを抽出できませんでした。スキャン画像のみのPDFは未対応です。テキスト主体のPDFをご用意ください。' );
         }
 
-        $base64 = base64_encode( $bytes );
-        $log( 'base64_encoded len=' . strlen( $base64 ) );
-        $prompt = $this->build_extraction_prompt();
+        // Gemini に渡すプロンプトサイズ上限ガード（テキスト 100k 文字以内に抑える）
+        $max_chars = 100000;
+        if ( $text_len > $max_chars ) {
+            $text = mb_substr( $text, 0, $max_chars );
+            $log( "pdftotext_truncated_to {$max_chars}" );
+        }
+
+        $prompt = $this->build_extraction_prompt() . "\n\n# PDF テキスト\n" . $text;
 
         $start_us = microtime( true );
         try {
             $log( 'gemini_call_start' );
-            $raw = $this->ai->call_gemini_multimodal(
-                $prompt,
-                [
-                    [
-                        'mime_type' => 'application/pdf',
-                        'data'      => $base64,
-                    ],
-                ],
-                [
-                    'temperature'     => 0.2,
-                    'maxOutputTokens' => 4096,
-                ]
-            );
+            $raw = $this->ai->call_gemini_api( $prompt, [
+                'temperature'      => 0.2,
+                'maxOutputTokens'  => 4096,
+                'responseMimeType' => 'application/json',
+            ] );
             $dur_ms = (int) round( ( microtime( true ) - $start_us ) * 1000 );
             $log( "gemini_call_ok dur_ms={$dur_ms} raw_len=" . strlen( $raw ) );
         } catch ( \Throwable $e ) {
@@ -122,6 +125,34 @@ class Gcrev_Strategy_Pdf_Extractor {
             'normalized'  => $validation['normalized'],
             'raw_ai_text' => $raw,
         ];
+    }
+
+    /**
+     * PDF からテキストを抽出する（poppler-utils の pdftotext を利用）。
+     * 失敗時は空文字を返す。-layout でレイアウト保持、UTF-8 出力。
+     */
+    private function extract_text_with_pdftotext( string $path ): string {
+        // pdftotext のパスを安全に解決
+        $bin = '/usr/bin/pdftotext';
+        if ( ! is_executable( $bin ) ) {
+            $bin = trim( (string) shell_exec( 'command -v pdftotext 2>/dev/null' ) );
+            if ( $bin === '' || ! is_executable( $bin ) ) {
+                return '';
+            }
+        }
+        $cmd = sprintf(
+            '%s -layout -nopgbrk -enc UTF-8 %s -',
+            escapeshellcmd( $bin ),
+            escapeshellarg( $path )
+        );
+        $output = shell_exec( $cmd . ' 2>/dev/null' );
+        if ( ! is_string( $output ) ) return '';
+
+        // 連続する空白・改行を整形
+        $output = preg_replace( "/\r\n?/", "\n", $output );
+        $output = preg_replace( "/[ \t]+/", ' ', (string) $output );
+        $output = preg_replace( "/\n{3,}/", "\n\n", (string) $output );
+        return trim( (string) $output );
     }
 
     /**
