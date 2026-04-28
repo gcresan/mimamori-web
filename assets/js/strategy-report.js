@@ -251,13 +251,49 @@
         var ym = $('#srHistorySelect').value || DEFAULT_YM || '';
         var body = ym ? { year_month: ym } : {};
 
+        // 同期生成は最大 3 分かかるので、UI は running 表示にする
+        showState('running');
+        $('#srGenerateBtn').hidden = true;
+        var elapsedStart = Date.now();
+        var elapsedTimer = setInterval(function () {
+            var sec = Math.round((Date.now() - elapsedStart) / 1000);
+            $('#srRunningElapsed').textContent = '経過: ' + sec + ' 秒';
+        }, 1000);
+
         api('/strategy-report/generate', { method: 'POST', body: body }).then(function (data) {
-            showToast('生成をキューに投入しました', 'success');
+            clearInterval(elapsedTimer);
+            loadHistory();
+
+            if (data.status === 'completed' && data.report) {
+                renderReport(data.report);
+                showToast('レポートを生成しました', 'success');
+                return;
+            }
+            if (data.status === 'failed') {
+                $('#srFailedMsg').textContent = (data.report && data.report.error_message) || '不明なエラー';
+                $('#srGenerateBtn').hidden = false;
+                showState('failed');
+                showToast('生成に失敗しました', 'error');
+                return;
+            }
+            if (data.status === 'skipped') {
+                $('#srFailedMsg').textContent = (data.report && data.report.error_message === 'no_active_strategy')
+                    ? 'この月の有効戦略が設定されていません。'
+                    : ('スキップ: ' + ((data.report && data.report.error_message) || '理由不明'));
+                $('#srGenerateBtn').hidden = false;
+                showState('failed');
+                return;
+            }
+            // pending / running → polling フォールバック
+            showToast('バックグラウンドで生成中です…', 'success');
             startPolling(data.year_month || ym);
-            loadHistory(); // 履歴に pending 行が追加される
         }).catch(function (err) {
+            clearInterval(elapsedTimer);
             console.error(err);
+            $('#srGenerateBtn').hidden = false;
             if (err && err.status === 429) {
+                showState('failed');
+                $('#srFailedMsg').textContent = err.message || '同月の手動生成は3回までです';
                 showToast(err.message || '同月の手動生成は3回までです', 'error');
             } else if (err && err.status === 409) {
                 showToast('すでに生成中です。完了をお待ちください。', 'error');
@@ -265,6 +301,8 @@
                     startPolling(err.payload.report.year_month);
                 }
             } else {
+                showState('failed');
+                $('#srFailedMsg').textContent = err.message || '不明なエラー';
                 showToast('生成に失敗しました: ' + (err.message || ''), 'error');
             }
         });

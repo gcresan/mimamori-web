@@ -24792,32 +24792,55 @@ PROMPT;
             ], 409 );
         }
 
-        // 行を pending として upsert（UI が status?year_month で polling できるように）
+        // 行を pending として upsert
         $report_id = $this->strategy_report_repo()->start_generation(
             $uid,
             $year_month,
-            // 戦略未設定でもキュー投入は許す。実際の skip 判定は service 側で
             ( $existing && (int) $existing['strategy_id'] > 0 ) ? (int) $existing['strategy_id'] : 0,
             'manual_user'
         );
 
-        // バックグラウンド実行をスケジュール
+        // 念のため WP-Cron にも予約（cron が動いている環境のフォールバック）
         wp_schedule_single_event(
             time() + 5,
             'gcrev_strategy_report_run_event',
             [ $uid, $year_month, 'manual_user' ]
         );
 
+        // 同期実行を試みる
+        // 理由: KUSANAGI 環境では DISABLE_WP_CRON=1 のため wp_schedule_single_event だけ
+        //       では実際に実行されない。確実性のため REST callback 内で直接実行する
+        try {
+            if ( ! class_exists( 'Gcrev_Strategy_Report_Service' ) ) {
+                require_once __DIR__ . '/gcrev-api/modules/class-strategy-report-service.php';
+            }
+            $service = new Gcrev_Strategy_Report_Service(
+                $this->config, $this->ai, $this->ga4, $this->gsc
+            );
+            $service->generate( $uid, $year_month, 'manual_user' );
+        } catch ( \Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " rest_generate sync_failed user={$uid} ym={$year_month}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            // 同期失敗 → DB に failed が記録されている（Service::fail() 経由）
+            // クライアントには現在のレポート状態を返す（fail or skipped）
+        }
+
         // レート制限カウンタ +1
         set_transient( $rate_key, $count + 1, DAY_IN_SECONDS );
+
+        // 最新状態を返す（同期で生成完了済みなら completed、失敗なら failed）
+        $report = $this->strategy_report_repo()->get_by_id( $report_id );
 
         return $this->strategy_json_response( [
             'success'    => true,
             'report_id'  => $report_id,
             'year_month' => $year_month,
-            'status'     => 'pending',
-            'message'    => '生成をキューに投入しました。30秒〜2分ほどでレポート画面が更新されます。',
-        ], 202 );
+            'status'     => $report['status'] ?? 'pending',
+            'report'     => $report ? $this->strategy_report_serialize( $report, true ) : null,
+        ], 200 );
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
