@@ -24493,8 +24493,20 @@ PROMPT;
      * Form: multipart/form-data with field "file" (PDF)
      */
     public function rest_strategy_extract_pdf( WP_REST_Request $req ): WP_REST_Response {
+        // 入口ログ（認可チェックより前に記録 — リクエストが PHP に到達した事実を残す）
+        file_put_contents(
+            '/tmp/gcrev_strategy_debug.log',
+            date( 'Y-m-d H:i:s' ) . " extract_pdf: ENTERED rest_strategy_extract_pdf (raw user_id=" . get_current_user_id() . ")\n",
+            FILE_APPEND
+        );
+
         $uid = $this->strategy_current_user_id();
         if ( $uid === 0 ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_debug.log',
+                date( 'Y-m-d H:i:s' ) . " extract_pdf: REJECTED unauthorized (user_id=0)\n",
+                FILE_APPEND
+            );
             return $this->strategy_json_response( [ 'error' => 'unauthorized' ], 401 );
         }
 
