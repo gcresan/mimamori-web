@@ -7480,6 +7480,11 @@ PROMPT;
                 return new \WP_REST_Response( [ 'success' => false, 'message' => 'DataForSEO API が未設定です' ], 400 );
             }
 
+            // 防御的マイグレーション: base_mode 列が無ければ追加（per-mode 機能が動くようにする）
+            if ( function_exists( 'gcrev_meo_results_create_table' ) ) {
+                gcrev_meo_results_create_table();
+            }
+
             $device       = sanitize_text_field( $request->get_param( 'device' ) ?: 'mobile' );
             $keyword_id   = absint( $request->get_param( 'keyword_id' ) );
             $force        = absint( $request->get_param( 'force' ) );
@@ -7595,9 +7600,10 @@ PROMPT;
                 $location_source = 'location_code';
             }
 
-            // Transient キャッシュ
+            // Transient キャッシュ — モード別にキーを分けて衝突を避ける
             $cache_suffix = $use_coordinate ? "_{$zoom}" : '';
-            $cache_key    = "gcrev_meo_rank_{$user_id}_{$kw_id}_{$device}{$cache_suffix}";
+            $mode_suffix  = $active_mode !== '' ? "_{$active_mode}" : '';
+            $cache_key    = "gcrev_meo_rank_{$user_id}_{$kw_id}_{$device}{$cache_suffix}{$mode_suffix}";
             if ( ! $force ) {
                 $cached = get_transient( $cache_key );
                 if ( $cached !== false && is_array( $cached ) ) {
@@ -8375,6 +8381,11 @@ PROMPT;
         $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
         $meo_table = $wpdb->prefix . 'gcrev_meo_results';
 
+        // 防御的マイグレーション: base_mode 列が無ければ追加（per-mode 機能が動くようにする）
+        if ( function_exists( 'gcrev_meo_results_create_table' ) ) {
+            gcrev_meo_results_create_table();
+        }
+
         $tz  = wp_timezone();
         $now = new \DateTimeImmutable( 'now', $tz );
 
@@ -8465,6 +8476,17 @@ PROMPT;
                 [ $history_active_mode ]
             )
         ), ARRAY_A );
+
+        // 診断ログ: モード切替時にデータが返らない問題のトラブルシューティング用
+        file_put_contents( '/tmp/gcrev_meo_debug.log',
+            date( 'Y-m-d H:i:s' )
+            . " [HISTORY] user={$user_id} active_mode='{$history_active_mode}'"
+            . ' filter=' . wp_json_encode( $mode_filter_values )
+            . ' rows=' . ( is_array( $rows ) ? count( $rows ) : 'NULL' )
+            . ' last_err=' . ( $wpdb->last_error ?: 'none' )
+            . "\n",
+            FILE_APPEND
+        );
 
         $grouped = [];
         foreach ( $rows as $r ) {

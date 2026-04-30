@@ -6905,50 +6905,80 @@ function gcrev_meo_results_create_table(): void {
     $table = $wpdb->prefix . 'gcrev_meo_results';
     $charset_collate = $wpdb->get_charset_collate();
 
-    $sql = "CREATE TABLE {$table} (
-        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        user_id BIGINT(20) UNSIGNED NOT NULL,
-        keyword_id BIGINT(20) UNSIGNED NOT NULL,
-        device VARCHAR(10) NOT NULL,
-        base_mode VARCHAR(20) NOT NULL DEFAULT '',
-        maps_rank SMALLINT UNSIGNED NULL,
-        finder_rank SMALLINT UNSIGNED NULL,
-        rating DECIMAL(2,1) NULL,
-        reviews_count INT UNSIGNED NULL,
-        store_data TEXT NULL,
-        competitors_data TEXT NULL,
-        iso_year_week CHAR(8) NOT NULL,
-        fetch_date DATE NOT NULL,
-        fetched_at DATETIME NOT NULL,
-        created_at DATETIME NOT NULL,
-        PRIMARY KEY  (id),
-        UNIQUE KEY user_kw_device_mode_date (user_id, keyword_id, device, base_mode, fetch_date),
-        KEY user_fetched (user_id, fetched_at)
-    ) {$charset_collate};";
+    // テーブル存在チェック
+    $table_exists = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM information_schema.tables
+         WHERE table_schema = DATABASE() AND table_name = %s",
+        $table
+    ) ) > 0;
 
-    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-    dbDelta( $sql );
+    if ( ! $table_exists ) {
+        // 新規作成 — 最新スキーマで一発作成
+        $sql = "CREATE TABLE {$table} (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id BIGINT(20) UNSIGNED NOT NULL,
+            keyword_id BIGINT(20) UNSIGNED NOT NULL,
+            device VARCHAR(10) NOT NULL,
+            base_mode VARCHAR(20) NOT NULL DEFAULT '',
+            maps_rank SMALLINT UNSIGNED NULL,
+            finder_rank SMALLINT UNSIGNED NULL,
+            rating DECIMAL(2,1) NULL,
+            reviews_count INT UNSIGNED NULL,
+            store_data TEXT NULL,
+            competitors_data TEXT NULL,
+            iso_year_week CHAR(8) NOT NULL,
+            fetch_date DATE NOT NULL,
+            fetched_at DATETIME NOT NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY user_kw_device_mode_date (user_id, keyword_id, device, base_mode, fetch_date),
+            KEY user_fetched (user_id, fetched_at)
+        ) {$charset_collate};";
 
-    // 旧ユニークキー(週次)を削除（日次に移行）
-    $old_key_exists = $wpdb->get_var(
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta( $sql );
+        return;
+    }
+
+    // 既存テーブルへの段階的マイグレーション
+    // 1) base_mode カラムを追加（無ければ）
+    $base_mode_exists = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS
+         WHERE table_schema = DATABASE() AND table_name = %s AND column_name = %s",
+        $table, 'base_mode'
+    ) ) > 0;
+    if ( ! $base_mode_exists ) {
+        $wpdb->query( "ALTER TABLE {$table} ADD COLUMN base_mode VARCHAR(20) NOT NULL DEFAULT '' AFTER device" );
+    }
+
+    // 2) 旧ユニークキー(週次)を削除
+    $old_week_key = (int) $wpdb->get_var( $wpdb->prepare(
         "SELECT COUNT(*) FROM information_schema.STATISTICS
-         WHERE table_schema = DATABASE()
-           AND table_name = '{$table}'
-           AND index_name = 'user_kw_device_week'"
-    );
-    if ( (int) $old_key_exists > 0 ) {
+         WHERE table_schema = DATABASE() AND table_name = %s AND index_name = %s",
+        $table, 'user_kw_device_week'
+    ) );
+    if ( $old_week_key > 0 ) {
         $wpdb->query( "ALTER TABLE {$table} DROP INDEX user_kw_device_week" );
     }
 
-    // 旧ユニークキー(base_mode 無し)を削除（base_mode 込みに移行）
-    $legacy_unique_exists = $wpdb->get_var(
+    // 3) 旧ユニークキー(base_mode 無し)を削除 — 新キー追加前に行うことで衝突を防ぐ
+    $old_date_key = (int) $wpdb->get_var( $wpdb->prepare(
         "SELECT COUNT(*) FROM information_schema.STATISTICS
-         WHERE table_schema = DATABASE()
-           AND table_name = '{$table}'
-           AND index_name = 'user_kw_device_date'"
-    );
-    if ( (int) $legacy_unique_exists > 0 ) {
+         WHERE table_schema = DATABASE() AND table_name = %s AND index_name = %s",
+        $table, 'user_kw_device_date'
+    ) );
+    if ( $old_date_key > 0 ) {
         $wpdb->query( "ALTER TABLE {$table} DROP INDEX user_kw_device_date" );
+    }
+
+    // 4) 新ユニークキー(base_mode 込み)を追加
+    $new_key = (int) $wpdb->get_var( $wpdb->prepare(
+        "SELECT COUNT(*) FROM information_schema.STATISTICS
+         WHERE table_schema = DATABASE() AND table_name = %s AND index_name = %s",
+        $table, 'user_kw_device_mode_date'
+    ) );
+    if ( $new_key === 0 ) {
+        $wpdb->query( "ALTER TABLE {$table} ADD UNIQUE KEY user_kw_device_mode_date (user_id, keyword_id, device, base_mode, fetch_date)" );
     }
 }
 
