@@ -131,7 +131,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
-      $seo_pages       = array('keyword-research', 'writing');
+      $seo_pages       = array('keyword-research'); // 'writing' は一旦非表示
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
@@ -186,13 +186,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   </a>
                </li>
 
-               <!-- ========== 改善施策提案（単独） ========== -->
+               <!-- ========== 改善施策提案（単独）: 一旦非表示 ==========
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/execution-dashboard/') ); ?>" class="nav-link <?php echo is_page('execution-dashboard') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 4.09 12.97a.5.5 0 0 0 .39.81H11l-1 8 8.91-10.97a.5.5 0 0 0-.39-.81H13l0-8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                   <span>改善施策提案</span>
                   </a>
                </li>
+               -->
 
                <!-- ========== レポート ========== -->
                <li class="nav-item nav-item-collapsible<?php echo $report_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'report' ? ' collapsed' : ''; ?>" data-menu-key="report">
@@ -396,11 +397,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>キーワード調査</span>
                         </a>
                      </li>
+                     <!-- ライティング: 一旦非表示
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/writing/') ); ?>" class="nav-link <?php echo is_page('writing') ? 'active' : ''; ?>">
                         <span>ライティング</span>
                         </a>
                      </li>
+                     -->
                   </ul>
                </li>
                <?php endif; ?>
@@ -441,13 +444,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   </ul>
                </li>
 
-               <!-- ========== プラン紹介（単独） ========== -->
+               <!-- ========== プラン紹介（単独）: 一旦非表示 ==========
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/plans/') ); ?>" class="nav-link <?php echo is_page('plans') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4h14M3 4v12a1 1 0 001 1h12a1 1 0 001-1V4M7 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 9h2M7 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
                   <span>プラン紹介</span>
                   </a>
                </li>
+               -->
 
                <!-- ========== サポート・問い合わせ ========== -->
                <li class="nav-item nav-item-collapsible<?php echo $support_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'support' ? ' collapsed' : ''; ?>" data-menu-key="support">
