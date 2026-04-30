@@ -1880,7 +1880,6 @@ get_header();
         if (!keywordsList || keywordsList.length === 0) return;
 
         var bom = "\uFEFF";
-        var deviceLabel = (currentDevice === 'desktop') ? 'PC' : 'スマホ';
         var loc = (meoData && meoData.location) ? meoData.location : {};
         var baseModeMap = { business: '店舗住所', address: '指定住所', coord: '指定座標', custom: 'カスタム' };
         var baseModeLabel = baseModeMap[loc.base_mode] || loc.base_mode || '';
@@ -1911,49 +1910,57 @@ get_header();
         lines.push('"基準地点（緯度・経度）","' + escapeCsv(coordLabel) + '"');
         lines.push('"基準地点モード","' + escapeCsv(baseModeLabel) + '"');
         lines.push('"基準地点からの検索半径","' + escapeCsv(radiusLabel) + '"');
-        lines.push('"対象デバイス","' + escapeCsv(deviceLabel) + '"');
         lines.push('"出力日時","' + escapeCsv(nowStr) + '"');
         lines.push('');
 
-        // ===== キーワード順位データ =====
+        // ===== キーワード順位データ（スマホ・PC 両方） =====
         lines.push('"# キーワード順位"');
         lines.push(headerCols.map(function(c) { return '"' + escapeCsv(c) + '"'; }).join(','));
 
+        var devices = [
+            { key: 'mobile',  label: 'スマホ' },
+            { key: 'desktop', label: 'PC' }
+        ];
+
         for (var i = 0; i < keywordsList.length; i++) {
             var kw = keywordsList[i];
-            var cur = kw.current ? kw.current[currentDevice] : null;
-            var daily = kw.daily ? kw.daily[currentDevice] : {};
 
-            var mapsRank = (cur && cur.is_ranked) ? rankCellForCsv(cur.maps_rank) : (cur ? '圏外' : '未取得');
-            var finderRank = (cur && cur.finder_rank != null) ? cur.finder_rank : (cur ? '圏外' : '未取得');
-            var change = (cur && cur.change != null) ? cur.change : '';
-            var fetchedAt = (cur && cur.fetched_at) ? cur.fetched_at : (kw.fetched_at || '');
+            for (var di = 0; di < devices.length; di++) {
+                var dev = devices[di];
+                var cur = kw.current ? kw.current[dev.key] : null;
+                var daily = kw.daily ? kw.daily[dev.key] : {};
 
-            var row = [];
-            row.push('"' + escapeCsv(kw.keyword) + '"');
-            row.push('"' + escapeCsv(deviceLabel) + '"');
-            row.push(mapsRank);
-            row.push(finderRank);
-            row.push(change);
-            for (var dd = 0; dd < dayKeys.length; dd++) {
-                var dayData = daily ? daily[dayKeys[dd]] : null;
-                if (!dayData) {
-                    row.push('');
-                } else if (dayData.maps_rank == null) {
-                    row.push('圏外');
-                } else {
-                    row.push(dayData.maps_rank);
+                var mapsRank = (cur && cur.is_ranked) ? rankCellForCsv(cur.maps_rank) : (cur ? '圏外' : '未取得');
+                var finderRank = (cur && cur.finder_rank != null) ? cur.finder_rank : (cur ? '圏外' : '未取得');
+                var change = (cur && cur.change != null) ? cur.change : '';
+                var fetchedAt = (cur && cur.fetched_at) ? cur.fetched_at : (kw.fetched_at || '');
+
+                var row = [];
+                row.push('"' + escapeCsv(kw.keyword) + '"');
+                row.push('"' + escapeCsv(dev.label) + '"');
+                row.push(mapsRank);
+                row.push(finderRank);
+                row.push(change);
+                for (var dd = 0; dd < dayKeys.length; dd++) {
+                    var dayData = daily ? daily[dayKeys[dd]] : null;
+                    if (!dayData) {
+                        row.push('');
+                    } else if (dayData.maps_rank == null) {
+                        row.push('圏外');
+                    } else {
+                        row.push(dayData.maps_rank);
+                    }
                 }
-            }
-            row.push('"' + escapeCsv(fetchedAt) + '"');
+                row.push('"' + escapeCsv(fetchedAt) + '"');
 
-            lines.push(row.join(','));
+                lines.push(row.join(','));
+            }
         }
 
         var blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
         var link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'map-rank-' + currentDevice + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+        link.download = 'map-rank-' + new Date().toISOString().slice(0, 10) + '.csv';
         link.click();
     };
 

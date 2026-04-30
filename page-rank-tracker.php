@@ -1179,26 +1179,65 @@ get_header();
         if (!rankData || rankData.length === 0) return;
 
         var bom = '\uFEFF';
-        var headerCols = ['キーワード', '検索ボリューム', 'SEO難易度', 'スマホ順位', 'PC順位', '最終取得日'];
-        var header = headerCols.join(',') + '\n';
-        var rows = '';
+        // 1キーワードにつき スマホ行 + PC行 の2行を出す
+        var headerCols = [
+            'キーワード', 'デバイス',
+            '検索ボリューム', 'SEO難易度',
+            '現在順位', '前回比'
+        ];
+        if (dayLabels && dayLabels.length) {
+            for (var d = 0; d < dayLabels.length; d++) {
+                headerCols.push(dayLabels[d]);
+            }
+        }
+        headerCols.push('最終取得日');
+
+        var lines = [headerCols.map(function(c) { return '"' + escapeCsv(c) + '"'; }).join(',')];
+
+        function rankCell(dev) {
+            if (!dev) return '未取得';
+            return dev.is_ranked ? dev.rank_group : '圏外';
+        }
+        function dailyCell(dayData) {
+            if (!dayData) return '';
+            if (dayData.rank_group == null) return '圏外';
+            return dayData.rank_group;
+        }
+
+        var devices = [
+            { key: 'mobile',  label: 'スマホ' },
+            { key: 'desktop', label: 'PC' }
+        ];
 
         for (var i = 0; i < rankData.length; i++) {
             var kw = rankData[i];
-            var mRank = kw.mobile ? (kw.mobile.is_ranked ? kw.mobile.rank_group : '圏外') : '未取得';
-            var dRank = kw.desktop ? (kw.desktop.is_ranked ? kw.desktop.rank_group : '圏外') : '未取得';
             var vol = kw.search_volume != null ? kw.search_volume : '';
             var diff = kw.keyword_difficulty != null ? kw.keyword_difficulty : '';
 
-            rows += '"' + escapeCsv(kw.keyword) + '",';
-            rows += vol + ',';
-            rows += diff + ',';
-            rows += mRank + ',';
-            rows += dRank + ',';
-            rows += (kw.fetched_at || '') + '\n';
+            for (var di = 0; di < devices.length; di++) {
+                var dev = devices[di];
+                var devData = kw[dev.key];
+                var daily = (kw.daily && kw.daily[dev.key]) ? kw.daily[dev.key] : {};
+                var change = (devData && devData.change != null) ? devData.change : '';
+
+                var row = [];
+                row.push('"' + escapeCsv(kw.keyword) + '"');
+                row.push('"' + escapeCsv(dev.label) + '"');
+                row.push(vol);
+                row.push(diff);
+                row.push(rankCell(devData));
+                row.push(change);
+                if (dayKeys && dayKeys.length) {
+                    for (var dk = 0; dk < dayKeys.length; dk++) {
+                        row.push(dailyCell(daily[dayKeys[dk]]));
+                    }
+                }
+                row.push('"' + escapeCsv(kw.fetched_at || '') + '"');
+                lines.push(row.join(','));
+            }
         }
 
-        var blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8;' });
+        var blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
         var link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = 'rank-tracker-' + new Date().toISOString().slice(0, 10) + '.csv';
