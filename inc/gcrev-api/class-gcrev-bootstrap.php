@@ -102,6 +102,13 @@ class Gcrev_Bootstrap {
         // 任意：テーマ切替時に掃除（挙動を変えたくなければ削ってOK）
         add_action('switch_theme', [__CLASS__, 'unschedule_events']);
 
+        // 戦略レポート（手動）クラスはフロントの page-strategy-report.php からも
+        // serve_for_current_user() を呼ぶため、is_admin ガードの外で require する
+        $manual_strategy_path = __DIR__ . '/admin/class-manual-strategy-report-page.php';
+        if ( file_exists( $manual_strategy_path ) ) {
+            require_once $manual_strategy_path;
+        }
+
         // 管理画面専用 設定ページ
         if ( is_admin() ) {
             $gbp_settings_path = __DIR__ . '/admin/class-gbp-settings-page.php';
@@ -190,12 +197,9 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Report_Queue_Page())->register();
             }
 
-            // 戦略レポート（手動アップロード）
-            $manual_strategy_path = __DIR__ . '/admin/class-manual-strategy-report-page.php';
-            if ( file_exists( $manual_strategy_path ) ) {
-                require_once $manual_strategy_path;
-                (new Gcrev_Manual_Strategy_Report_Page())->register();
-            }
+            // 戦略レポート（手動アップロード）— 管理画面 UI のみ
+            // クラスファイル自体はフロントでも require するため、ここでは register() のみ
+            (new Gcrev_Manual_Strategy_Report_Page())->register();
 
             // アンケート管理は表側ダッシュボード (page-review-survey.php + REST API) に移行済み
             // $survey_page_path = __DIR__ . '/admin/class-survey-page.php';
