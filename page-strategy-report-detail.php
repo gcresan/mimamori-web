@@ -86,9 +86,6 @@ get_header();
             <?php endif; ?>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a class="ss-btn" target="_blank" rel="noopener"
-               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;"
-               href="<?php echo esc_url( $embed_url ); ?>">↗ 別タブで開く</a>
             <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' . ( $req_ver !== '' ? '?ver=' . rawurlencode( $req_ver ) : '' ) ) ); ?>"
                style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">📋 概要版に戻る</a>
         </div>

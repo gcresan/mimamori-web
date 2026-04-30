@@ -92,12 +92,12 @@ get_header();
 
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <?php if ( $simple_id ) : ?>
-                            <a class="ss-btn" target="_blank" rel="noopener"
+                            <a class="ss-btn"
                                style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;"
                                href="<?php echo esc_url( home_url( '/strategy-report/' . $ver_param ) ); ?>">📋 概要版を見る</a>
                         <?php endif; ?>
                         <?php if ( $detail_id ) : ?>
-                            <a class="ss-btn" target="_blank" rel="noopener"
+                            <a class="ss-btn"
                                style="background:#1a1a1a;color:#fff;border:1px solid #1a1a1a;text-decoration:none;"
                                href="<?php echo esc_url( home_url( '/strategy-report-detail/' . $ver_param ) ); ?>">📊 詳細版を見る</a>
                         <?php endif; ?>

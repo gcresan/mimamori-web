@@ -666,6 +666,14 @@ class Gcrev_Manual_Strategy_Report_Page {
             } else {
                 $log( '[serve] preg_replace_callback returned non-string (PCRE error code: ' . preg_last_error() . '), keep original html' );
             }
+
+            // 元 HTML 内の target="_blank" を target="_top" に置換し、iframe 親ウィンドウで遷移させる
+            // （別タブではなく同一ウィンドウで概要版↔詳細版を行き来できるように）
+            $html = str_replace(
+                [ 'target="_blank"', "target='_blank'" ],
+                [ 'target="_top"',   "target='_top'"   ],
+                $html
+            );
         }
 
         // iframe 埋込時は親ページに高さを伝えるためのスクリプトを注入

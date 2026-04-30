@@ -68,7 +68,9 @@ get_header();
     if ( ! empty( $latest_version['period'] ) && preg_match( '/^(\d{4})-(\d{2})$/', $latest_version['period'], $m ) ) {
         $period_label = $m[1] . '年' . (int) $m[2] . '月版';
     }
-    $label = (string) ( $latest_version['label'] ?? '' );
+    $label        = (string) ( $latest_version['label'] ?? '' );
+    $has_detail_v = (int) ( $latest_version['detail_id'] ?? 0 ) > 0;
+    $detail_link  = home_url( '/strategy-report-detail/' . ( $req_ver !== '' ? '?ver=' . rawurlencode( $req_ver ) : '' ) );
 ?>
 
 <div class="content-area" style="padding:24px 24px 48px;">
@@ -86,9 +88,11 @@ get_header();
             <?php endif; ?>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a class="ss-btn" target="_blank" rel="noopener"
-               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;"
-               href="<?php echo esc_url( $embed_url ); ?>">↗ 別タブで開く</a>
+            <?php if ( $has_detail_v ) : ?>
+                <a class="ss-btn"
+                   style="background:#1a1a1a;color:#fff;border:1px solid #1a1a1a;text-decoration:none;"
+                   href="<?php echo esc_url( $detail_link ); ?>">📊 詳細版を開く</a>
+            <?php endif; ?>
             <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report-history/' ) ); ?>"
                style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;">📚 過去のレポート</a>
         </div>
