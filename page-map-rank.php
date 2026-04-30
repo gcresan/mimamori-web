@@ -888,9 +888,18 @@ get_header();
             <span class="meo-condition-label">半径</span>
             <span class="meo-condition-value" id="meoRadiusDisplay">-</span>
         </div>
+        <!-- モード切替トグル（保存済みのモード間を切り替える） -->
+        <div class="meo-condition-group" id="meoBaseModeSwitchGroup" style="display:none; margin-top:6px;">
+            <span class="meo-condition-label">基準地点を切替</span>
+            <div class="meo-device-toggle" id="meoBaseModeSwitch">
+                <button class="meo-device-btn" data-mode="business" type="button" style="display:none;">&#x1F3E0; 自社</button>
+                <button class="meo-device-btn" data-mode="city"     type="button" style="display:none;">&#x1F3DB;&#xFE0F; 市の中心</button>
+                <button class="meo-device-btn" data-mode="custom"   type="button" style="display:none;">&#x1F4CD; 任意</button>
+            </div>
+        </div>
         <!-- 地点変更ボタン -->
         <div class="meo-condition-group" id="meoBaseChangeBtnGroup" style="display:none; margin-top:6px;">
-            <button class="meo-base-change-btn" id="meoBaseChangeBtn" type="button">&#x1F4CD; 地点変更</button>
+            <button class="meo-base-change-btn" id="meoBaseChangeBtn" type="button">&#x1F4CD; 設定を変更</button>
         </div>
 <?php if ( $maps_domain !== '' ) : ?>
         <!-- 対象ドメイン（GBPドメイン） -->
@@ -996,7 +1005,9 @@ get_header();
         <div class="rt-modal__body">
             <div class="meo-base-modal__desc">
                 基準地点は、Googleマップ上での表示順位を計測する起点となる場所です。
-                どこを基準にするかで結果の意味が変わります。
+                どこを基準にするかで結果の意味が変わります。<br>
+                <strong>各モード（自社の住所／市区町村の中心／任意の場所）はそれぞれ別々に保存されます。</strong>
+                一度保存しておけば、後からモードを切り替えるだけで、その地点での順位を確認できます。
             </div>
             <div class="meo-base-mode-group" role="radiogroup" aria-label="計測モード">
                 <label class="meo-base-mode" data-mode="city">
@@ -1123,6 +1134,55 @@ get_header();
             });
         }
 
+        // 基準地点モード切替トグル: クリックでアクティブモードを切替（保存済み値を呼び戻す）
+        var baseModeSwitch = document.getElementById('meoBaseModeSwitch');
+        if (baseModeSwitch) {
+            baseModeSwitch.addEventListener('click', function(e) {
+                var btn = e.target.closest('button[data-mode]');
+                if (!btn || btn.classList.contains('active') || btn.disabled) return;
+                var newMode = btn.getAttribute('data-mode');
+                btn.disabled = true;
+                fetch(restBase + 'meo/switch-base-mode', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: newMode })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(json) {
+                    btn.disabled = false;
+                    if (!json.success) {
+                        showToast(json.message || '切替に失敗しました', 'error');
+                        return;
+                    }
+                    // 共通キャッシュは破棄
+                    if (window.gcrevCache) window.gcrevCache.clear('map_rank');
+
+                    var newLoc = json.data || {};
+                    // 保存済み per-mode を維持（API レスポンスに含まれない場合は現状維持）
+                    if (!newLoc.saved_by_mode && meoData && meoData.location) {
+                        newLoc.saved_by_mode = meoData.location.saved_by_mode;
+                    }
+
+                    var newHash = locationHashFromInputs(newMode, newLoc.lat || '', newLoc.lng || '', newLoc.radius || 1000);
+                    var snap = getLocationSnapshot(newHash);
+                    if (snap) {
+                        // saved_by_mode を引き継ぐ
+                        if (snap.location) snap.location.saved_by_mode = newLoc.saved_by_mode;
+                        renderFromSnapshot(snap);
+                        showToast('基準地点を切り替えました（取得済みデータを表示中）');
+                    } else {
+                        showUntrackedLocationState(newLoc);
+                        showToast('基準地点を切り替えました。「最新の情報を見る」を押してこの地点で計測してください。');
+                    }
+                })
+                .catch(function() {
+                    btn.disabled = false;
+                    showToast('通信エラーが発生しました', 'error');
+                });
+            });
+        }
+
         // Fetch all button
         var fetchAllBtn = document.getElementById('meoFetchAllBtn');
         if (fetchAllBtn) {
@@ -1148,34 +1208,39 @@ get_header();
 
         function openBaseModal() {
             if (!baseModal) return;
-            var addrInput = document.getElementById('meoBaseAddress');
-            var labelInput = document.getElementById('meoBaseLabel');
-            var latInput = document.getElementById('meoBaseLat');
-            var lngInput = document.getElementById('meoBaseLng');
-            var radiusInput = document.getElementById('meoBaseRadius');
-            if (meoData && meoData.location) {
-                if (addrInput && meoData.location.address) addrInput.value = meoData.location.address;
-                if (labelInput && meoData.location.base_label) labelInput.value = meoData.location.base_label;
-                if (latInput && meoData.location.lat) latInput.value = meoData.location.lat;
-                if (lngInput && meoData.location.lng) lngInput.value = meoData.location.lng;
-                if (radiusInput && meoData.location.radius) radiusInput.value = String(meoData.location.radius);
-            }
-            // モード別キャッシュを初期化（モーダル開くたびにリセット）
+            // モード別キャッシュをサーバから受け取った per-mode 保存値で初期化
             modeFormCache = {};
+            var savedByMode = (meoData && meoData.location && meoData.location.saved_by_mode) || {};
+            ['business', 'city', 'custom'].forEach(function(m) {
+                var s = savedByMode[m];
+                if (s && (s.address || s.lat)) {
+                    modeFormCache[m] = {
+                        address: s.address || '',
+                        label:   s.label || '',
+                        lat:     s.lat || '',
+                        lng:     s.lng || '',
+                        radius:  s.radius ? String(s.radius) : ''
+                    };
+                }
+            });
             currentBaseMode = null;
             initBaseModeRadios();
             // initBaseModeRadios で初期選択されたモードを currentBaseMode として記録
             var initialChecked = document.querySelector('input[name="meoBaseMode"]:checked');
             currentBaseMode = initialChecked ? initialChecked.value : null;
-            // 初期モードのキャッシュには、現在フォームに表示されている保存値を必ず格納する
-            // （サーバ側に base_mode が保存されていない古いデータでも復元できるように）
+            // 初期モードのフォーム値: 保存値があればそれを、なければプリセットを適用
             if (currentBaseMode) {
-                modeFormCache[currentBaseMode] = readBaseForm();
+                if (modeFormCache[currentBaseMode]) {
+                    writeBaseForm(modeFormCache[currentBaseMode]);
+                } else {
+                    applyBaseMode(currentBaseMode);
+                }
             }
             // リセットボタンの表示・ラベル更新
             if (typeof refreshResetBtnState === 'function') {
                 refreshResetBtnState();
             }
+            updateBaseModeNote();
             baseModal.classList.add('active');
             updateVerifyLink();
         }
@@ -1520,17 +1585,22 @@ get_header();
                         var savedLat = (json.data && json.data.lat) ? json.data.lat : (lat || '');
                         var savedLng = (json.data && json.data.lng) ? json.data.lng : (lng || '');
                         var savedRadius = (json.data && json.data.radius) ? json.data.radius : payload.radius;
+                        var savedByMode = (json.data && json.data.saved_by_mode) || null;
                         var newHash = locationHashFromInputs(selectedMode, savedLat, savedLng, savedRadius);
                         var snap = getLocationSnapshot(newHash);
                         if (snap) {
                             renderFromSnapshot(snap);
+                            // 最新の per-mode 保存状態を反映
+                            if (savedByMode && snap.location) snap.location.saved_by_mode = savedByMode;
                             showToast('この地点で取得済みのデータを表示しています。最新を見るには「最新の情報を見る」を押してください。');
                         } else {
                             // この地点用のキャッシュがない場合、DB は別地点の最新データを返してしまうので
                             // 表示せず「未取得」状態にして「最新の情報を見る」を促す。
-                            showUntrackedLocationState(json.data || {
+                            var locForState = json.data || {
                                 address: address, lat: savedLat, lng: savedLng, radius: savedRadius, base_label: label, base_mode: selectedMode
-                            });
+                            };
+                            if (savedByMode) locForState.saved_by_mode = savedByMode;
+                            showUntrackedLocationState(locForState);
                         }
                     } else {
                         showToast(json.message || '保存に失敗しました。', 'error');
@@ -1597,7 +1667,8 @@ get_header();
             radius: savedLoc.radius || 1000,
             source: 'manual',
             base_label: savedLoc.base_label || '',
-            base_mode: savedLoc.base_mode || ''
+            base_mode: savedLoc.base_mode || '',
+            saved_by_mode: savedLoc.saved_by_mode || (meoData && meoData.location && meoData.location.saved_by_mode) || {}
         };
         // 共通キャッシュは破棄（DB の古い別地点データを再描画しないため）
         if (window.gcrevCache) window.gcrevCache.clear('map_rank');
@@ -1757,6 +1828,38 @@ get_header();
             if (changeBtnGroup) changeBtnGroup.style.display = 'none';
             if (baseUnset) baseUnset.classList.add('show');
         }
+
+        // モード切替トグルの表示更新
+        updateBaseModeSwitchUI(loc);
+    }
+
+    // 基準地点モード切替トグル: 保存済みのモードボタンだけ表示する
+    function updateBaseModeSwitchUI(loc) {
+        var group = document.getElementById('meoBaseModeSwitchGroup');
+        var toggle = document.getElementById('meoBaseModeSwitch');
+        if (!group || !toggle) return;
+        var savedByMode = (loc && loc.saved_by_mode) || {};
+        var activeMode = (loc && loc.base_mode) || '';
+        var savedModes = ['business', 'city', 'custom'].filter(function(m) {
+            var s = savedByMode[m];
+            return s && (s.address || s.lat);
+        });
+        // 保存済みが2つ以上ある時だけ切替UIを表示
+        if (savedModes.length < 2) {
+            group.style.display = 'none';
+            return;
+        }
+        group.style.display = '';
+        toggle.querySelectorAll('button[data-mode]').forEach(function(btn) {
+            var m = btn.getAttribute('data-mode');
+            if (savedModes.indexOf(m) >= 0) {
+                btn.style.display = '';
+                btn.classList.toggle('active', m === activeMode);
+            } else {
+                btn.style.display = 'none';
+                btn.classList.remove('active');
+            }
+        });
     }
 
     function formatRadius(meters) {

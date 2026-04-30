@@ -578,6 +578,13 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== MEO基準地点モードの切替（保存済みのモード値に切り替えるだけ） =====
+        register_rest_route('gcrev/v1', '/meo/switch-base-mode', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_switch_meo_base_mode' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== MEO順位データ取得（DataForSEO Maps/Local Finder SERP） =====
         register_rest_route('gcrev/v1', '/meo/rankings', [
             'methods'             => 'GET',
@@ -6987,13 +6994,24 @@ PROMPT;
             $geocoded = true;
         }
 
-        // 基準地点を保存
+        // モード別の保存値（mode を切り替えても各モードの設定が残るようにする）
+        $mode_prefix = "_gcrev_meo_{$mode}_";
+        update_user_meta( $user_id, $mode_prefix . 'address', $address );
+        update_user_meta( $user_id, $mode_prefix . 'label', $label );
+        if ( $lat !== '' && $lng !== '' ) {
+            update_user_meta( $user_id, $mode_prefix . 'lat', $lat );
+            update_user_meta( $user_id, $mode_prefix . 'lng', $lng );
+        } else {
+            delete_user_meta( $user_id, $mode_prefix . 'lat' );
+            delete_user_meta( $user_id, $mode_prefix . 'lng' );
+        }
+
+        // アクティブな基準地点を保存（既存コードの互換のため legacy キーも維持）
         update_user_meta( $user_id, '_gcrev_meo_address', $address );
         update_user_meta( $user_id, '_gcrev_meo_base_label', $label );
         update_user_meta( $user_id, '_gcrev_meo_base_mode', $mode );
         update_user_meta( $user_id, '_gcrev_meo_base_updated', current_time( 'mysql' ) );
 
-        // 緯度経度の保存
         if ( $lat !== '' && $lng !== '' ) {
             update_user_meta( $user_id, '_gcrev_meo_lat', $lat );
             update_user_meta( $user_id, '_gcrev_meo_lng', $lng );
@@ -7002,10 +7020,11 @@ PROMPT;
             delete_user_meta( $user_id, '_gcrev_meo_lng' );
         }
 
-        // 半径の保存
+        // 半径の保存（モード別 + アクティブ）
         $radius = isset( $params['radius'] ) ? absint( $params['radius'] ) : 0;
         if ( $radius >= 100 && $radius <= 50000 ) {
             update_user_meta( $user_id, '_gcrev_meo_radius', $radius );
+            update_user_meta( $user_id, $mode_prefix . 'radius', $radius );
         }
 
         // MEOキャッシュ削除
@@ -7019,22 +7038,107 @@ PROMPT;
             ? '住所から座標を自動取得し、基準地点を保存しました'
             : '基準地点を保存しました';
 
+        // 全モードの保存状態を返却（フロント側で切替時に再取得不要にする）
+        $saved_by_mode = [];
+        foreach ( [ 'business', 'city', 'custom' ] as $m ) {
+            $p = "_gcrev_meo_{$m}_";
+            $saved_by_mode[ $m ] = [
+                'address' => (string) get_user_meta( $user_id, $p . 'address', true ),
+                'lat'     => (string) get_user_meta( $user_id, $p . 'lat', true ),
+                'lng'     => (string) get_user_meta( $user_id, $p . 'lng', true ),
+                'label'   => (string) get_user_meta( $user_id, $p . 'label', true ),
+                'radius'  => (int) get_user_meta( $user_id, $p . 'radius', true ),
+            ];
+        }
+
         return new \WP_REST_Response([
             'success'  => true,
             'geocoded' => $geocoded,
             'message'  => $message,
             'data'     => [
+                'address'       => $address,
+                'lat'           => $lat,
+                'lng'           => $lng,
+                'radius'        => $radius ?: (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000,
+                'base_label'    => $label,
+                'base_mode'     => $mode,
+                'base_updated'  => current_time( 'mysql' ),
+                'saved_by_mode' => $saved_by_mode,
+            ],
+        ]);
+    }
+
+
+    /**
+     * POST /gcrev/v1/meo/switch-base-mode
+     * 既に保存済みのモード値（business / city / custom）に切り替えるだけのエンドポイント。
+     * 各モードの住所・座標・半径は保存済みの値をそのまま使用し、入力値は受け取らない。
+     */
+    public function rest_switch_meo_base_mode( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response([ 'success' => false, 'message' => 'ログインが必要です' ], 401);
+        }
+
+        $params = $request->get_json_params();
+        $mode   = sanitize_text_field( $params['mode'] ?? '' );
+        if ( ! in_array( $mode, [ 'city', 'business', 'custom' ], true ) ) {
+            return new \WP_REST_Response([ 'success' => false, 'message' => 'モードが不正です' ], 400);
+        }
+
+        // モード別の保存値を読み込み
+        $mode_prefix = "_gcrev_meo_{$mode}_";
+        $address = (string) get_user_meta( $user_id, $mode_prefix . 'address', true );
+        $label   = (string) get_user_meta( $user_id, $mode_prefix . 'label', true );
+        $lat     = (string) get_user_meta( $user_id, $mode_prefix . 'lat', true );
+        $lng     = (string) get_user_meta( $user_id, $mode_prefix . 'lng', true );
+        $radius  = (int) get_user_meta( $user_id, $mode_prefix . 'radius', true );
+
+        if ( $address === '' && $lat === '' ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'このモードの基準地点はまだ保存されていません。先に「設定」から保存してください。',
+            ], 400);
+        }
+
+        // アクティブ値を上書き
+        update_user_meta( $user_id, '_gcrev_meo_address', $address );
+        update_user_meta( $user_id, '_gcrev_meo_base_label', $label );
+        update_user_meta( $user_id, '_gcrev_meo_base_mode', $mode );
+        update_user_meta( $user_id, '_gcrev_meo_base_updated', current_time( 'mysql' ) );
+
+        if ( $lat !== '' && $lng !== '' ) {
+            update_user_meta( $user_id, '_gcrev_meo_lat', $lat );
+            update_user_meta( $user_id, '_gcrev_meo_lng', $lng );
+        } else {
+            delete_user_meta( $user_id, '_gcrev_meo_lat' );
+            delete_user_meta( $user_id, '_gcrev_meo_lng' );
+        }
+        if ( $radius >= 100 && $radius <= 50000 ) {
+            update_user_meta( $user_id, '_gcrev_meo_radius', $radius );
+        }
+
+        // MEOキャッシュ削除（地点が変わったので）
+        global $wpdb;
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            '%gcrev_meo_' . $user_id . '%'
+        ) );
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'message' => '基準地点を切り替えました',
+            'data'    => [
                 'address'      => $address,
                 'lat'          => $lat,
                 'lng'          => $lng,
-                'radius'       => $radius ?: (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000,
+                'radius'       => $radius ?: 1000,
                 'base_label'   => $label,
                 'base_mode'    => $mode,
                 'base_updated' => current_time( 'mysql' ),
             ],
         ]);
     }
-
 
     // =========================================================
     // MEO診断 REST コールバック
@@ -8519,16 +8623,45 @@ PROMPT;
         }
 
         $use_coordinate = ( $meo_lat !== '' && $meo_lng !== '' );
+        $active_mode = (string) ( get_user_meta( $user_id, '_gcrev_meo_base_mode', true ) ?: '' );
+
+        // モード別保存値を取得（モード切替で前回保存値を呼び戻すため）
+        $saved_by_mode = [];
+        foreach ( [ 'business', 'city', 'custom' ] as $m ) {
+            $prefix = "_gcrev_meo_{$m}_";
+            $addr = (string) get_user_meta( $user_id, $prefix . 'address', true );
+            $lat  = (string) get_user_meta( $user_id, $prefix . 'lat', true );
+            $lng  = (string) get_user_meta( $user_id, $prefix . 'lng', true );
+            $lbl  = (string) get_user_meta( $user_id, $prefix . 'label', true );
+            $rad  = (int) get_user_meta( $user_id, $prefix . 'radius', true );
+
+            // legacy 移行: アクティブモードに per-mode が無く legacy がある場合は埋める
+            if ( $m === $active_mode && $addr === '' && $meo_address !== '' ) {
+                $addr = $meo_address;
+                $lat  = $meo_lat;
+                $lng  = $meo_lng;
+                $rad  = $meo_radius;
+            }
+            $saved_by_mode[ $m ] = [
+                'address' => $addr,
+                'lat'     => $lat,
+                'lng'     => $lng,
+                'label'   => $lbl,
+                'radius'  => $rad,
+            ];
+        }
+
         $location_info = [
-            'mode'         => $use_coordinate ? 'coordinate' : 'location_code',
-            'address'      => $meo_address,
-            'lat'          => $meo_lat,
-            'lng'          => $meo_lng,
-            'radius'       => $meo_radius,
-            'source'       => $use_coordinate ? $location_source : 'location_code',
-            'base_label'   => get_user_meta( $user_id, '_gcrev_meo_base_label', true ) ?: '',
-            'base_mode'    => get_user_meta( $user_id, '_gcrev_meo_base_mode', true ) ?: '',
-            'base_updated' => get_user_meta( $user_id, '_gcrev_meo_base_updated', true ) ?: '',
+            'mode'          => $use_coordinate ? 'coordinate' : 'location_code',
+            'address'       => $meo_address,
+            'lat'           => $meo_lat,
+            'lng'           => $meo_lng,
+            'radius'        => $meo_radius,
+            'source'        => $use_coordinate ? $location_source : 'location_code',
+            'base_label'    => get_user_meta( $user_id, '_gcrev_meo_base_label', true ) ?: '',
+            'base_mode'     => $active_mode,
+            'base_updated'  => get_user_meta( $user_id, '_gcrev_meo_base_updated', true ) ?: '',
+            'saved_by_mode' => $saved_by_mode,
         ];
 
         // GBPドメイン
