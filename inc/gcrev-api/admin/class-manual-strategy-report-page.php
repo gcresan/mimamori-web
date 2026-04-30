@@ -668,14 +668,28 @@ class Gcrev_Manual_Strategy_Report_Page {
             }
         }
 
-        // フローティングナビ（履歴一覧 / ダッシュボードへ戻る）を </body> 直前に注入
-        $nav = self::build_floating_nav( $kind );
-        if ( $nav !== '' && is_string( $html ) ) {
+        // iframe 埋込時は親ページに高さを伝えるためのスクリプトを注入
+        // （テーマ内表示で iframe の高さをコンテンツに合わせるため）
+        $resize_script = '<script>(function(){'
+            . 'function send(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);'
+            . 'try{if(window.parent&&window.parent!==window){window.parent.postMessage({type:"mimamori-report-height",height:h},"*");}}catch(e){}}'
+            . 'window.addEventListener("load",send);window.addEventListener("resize",send);'
+            . 'if(window.ResizeObserver){var ro=new ResizeObserver(send);ro.observe(document.body);}'
+            . 'setInterval(send,1500);'
+            . '})();</script>';
+
+        // フローティングナビ: iframe 埋込時はテーマのサイドバー/ヘッダーで足りるので非表示
+        $is_embed_request = isset( $_GET['embed'] ) && $_GET['embed'] === '1';
+        $nav = $is_embed_request ? '' : self::build_floating_nav( $kind );
+
+        $injection = $resize_script . $nav;
+
+        if ( $injection !== '' && is_string( $html ) ) {
             if ( stripos( $html, '</body>' ) !== false ) {
-                $replaced = preg_replace( '#</body>#i', $nav . '</body>', $html, 1 );
-                $html = is_string( $replaced ) ? $replaced : ( $html . $nav );
+                $replaced = preg_replace( '#</body>#i', $injection . '</body>', $html, 1 );
+                $html = is_string( $replaced ) ? $replaced : ( $html . $injection );
             } else {
-                $html .= $nav;
+                $html .= $injection;
             }
         }
 

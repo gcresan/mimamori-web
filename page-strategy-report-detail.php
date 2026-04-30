@@ -8,8 +8,13 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
-    $req_ver = isset( $_GET['ver'] ) ? sanitize_text_field( wp_unslash( $_GET['ver'] ) ) : '';
+$current_user = wp_get_current_user();
+$user_id      = (int) $current_user->ID;
+$req_ver      = isset( $_GET['ver'] ) ? sanitize_text_field( wp_unslash( $_GET['ver'] ) ) : '';
+$is_embed     = isset( $_GET['embed'] ) && $_GET['embed'] === '1';
+
+// embed=1 で iframe 内にレンダリングする生 HTML を配信する
+if ( $is_embed && class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
     try {
         if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'detail', $req_ver ) ) {
             exit;
@@ -26,14 +31,116 @@ if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
     }
 }
 
-// 詳細版が設定されていない場合のフォールバック表示
+// テーマ内表示用: 詳細版が設定されているか判定
+$has_detail = false;
+$version    = null;
+if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
+    try {
+        $version = $req_ver !== ''
+            ? Gcrev_Manual_Strategy_Report_Page::get_version( $user_id, $req_ver )
+            : Gcrev_Manual_Strategy_Report_Page::get_latest( $user_id );
+        if ( $version && (int) ( $version['detail_id'] ?? 0 ) > 0 ) {
+            $has_detail = true;
+        }
+    } catch ( \Throwable $e ) {
+        // フォールバック表示
+    }
+}
+
+set_query_var( 'gcrev_page_title', '戦略レポート（詳細版）' );
+set_query_var( 'gcrev_page_subtitle', 'レポート本体の詳細データ・分析を閲覧できます。' );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '詳細版', '戦略レポート' ) );
+
 get_header();
 ?>
-<div class="content-area" style="max-width:720px;margin:48px auto;padding:0 24px;">
-    <h1 style="font-size:22px;margin-bottom:12px;">📊 詳細レポートは未設定です</h1>
-    <p style="color:#666;line-height:1.8;">このアカウント向けの詳細レポートはまだアップロードされていません。担当者にご連絡ください。</p>
-    <p style="margin-top:24px;">
-        <a class="ss-btn ss-btn--primary" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>">← 戦略レポートに戻る</a>
-    </p>
+
+<?php if ( $has_detail ) :
+    $embed_url = add_query_arg(
+        array_filter([
+            'embed' => '1',
+            'ver'   => $req_ver !== '' ? $req_ver : null,
+        ]),
+        home_url( '/strategy-report-detail/' )
+    );
+    $period_label = '';
+    if ( ! empty( $version['period'] ) && preg_match( '/^(\d{4})-(\d{2})$/', $version['period'], $m ) ) {
+        $period_label = $m[1] . '年' . (int) $m[2] . '月版';
+    }
+    $label = (string) ( $version['label'] ?? '' );
+?>
+
+<div class="content-area" style="padding:24px 24px 48px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
+        <div>
+            <?php if ( $period_label !== '' || $label !== '' ) : ?>
+                <div style="font-size:13px;color:#666;line-height:1.6;">
+                    <?php if ( $period_label !== '' ) : ?>
+                        <strong style="color:#1a1a1a;font-size:14px;"><?php echo esc_html( $period_label ); ?></strong>
+                    <?php endif; ?>
+                    <?php if ( $label !== '' ) : ?>
+                        <span style="margin-left:8px;"><?php echo esc_html( $label ); ?></span>
+                    <?php endif; ?>
+                    <span style="margin-left:8px;color:#888;">／ 詳細版</span>
+                </div>
+            <?php endif; ?>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a class="ss-btn" target="_blank" rel="noopener"
+               style="background:#fff;color:#333;border:1px solid #ccc;"
+               href="<?php echo esc_url( $embed_url ); ?>">↗ 別タブで開く</a>
+            <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' . ( $req_ver !== '' ? '?ver=' . rawurlencode( $req_ver ) : '' ) ) ); ?>"
+               style="background:#fff;color:#333;border:1px solid #ccc;">📋 簡易版に戻る</a>
+        </div>
+    </div>
+
+    <iframe
+        id="strategyReportDetailIframe"
+        src="<?php echo esc_url( $embed_url ); ?>"
+        title="戦略レポート（詳細版）"
+        style="width:100%;height:1500px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;"
+        loading="lazy">
+    </iframe>
 </div>
+
+<script>
+(function () {
+    var iframe = document.getElementById('strategyReportDetailIframe');
+    if (!iframe) return;
+
+    // 親URLにアンカー（#sec-XX）が付いていれば iframe の src にも引き継ぐ
+    // → iframe 内の対象セクションへ自動スクロール
+    if (window.location.hash) {
+        try {
+            var u = new URL(iframe.getAttribute('src'), window.location.origin);
+            u.hash = window.location.hash;
+            iframe.setAttribute('src', u.toString());
+        } catch (e) { /* noop */ }
+    }
+
+    window.addEventListener('message', function (e) {
+        if (!e.data || e.data.type !== 'mimamori-report-height') return;
+        var h = Math.max(1000, parseInt(e.data.height, 10) || 0);
+        iframe.style.height = (h + 24) + 'px';
+    });
+})();
+</script>
+
+<?php else : ?>
+
+<div class="content-area" style="max-width:720px;margin:48px auto;padding:0 24px;">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:48px 28px;text-align:center;">
+        <div style="font-size:42px;margin-bottom:14px;">📊</div>
+        <h2 style="font-size:20px;margin:0 0 10px;">詳細レポートは未設定です</h2>
+        <p style="color:#666;line-height:1.8;margin:0 0 24px;">
+            このアカウント向けの詳細レポートはまだアップロードされていません。<br>
+            担当者にご連絡ください。
+        </p>
+        <p>
+            <a class="ss-btn ss-btn--primary" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>">← 戦略レポートに戻る</a>
+        </p>
+    </div>
+</div>
+
+<?php endif; ?>
+
 <?php get_footer(); ?>
