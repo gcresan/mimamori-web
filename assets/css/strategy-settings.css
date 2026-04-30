@@ -160,7 +160,9 @@
     color: #1f2937;
     transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
     line-height: 1.2;
+    text-decoration: none;
 }
+.ss-btn:hover, .ss-btn:focus, .ss-btn:visited { text-decoration: none; }
 .ss-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .ss-btn--primary {

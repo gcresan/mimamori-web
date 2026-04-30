@@ -40,7 +40,7 @@ get_header();
         <h2 style="font-size:22px;margin:0 0 6px;">📚 戦略レポート履歴</h2>
         <p style="color:#666;margin:0;line-height:1.7;">
             これまでに発行された戦略レポートの一覧です。新しいバージョンほど上に表示されます。<br>
-            「簡易版を見る」「詳細版を見る」ボタンで、それぞれの版を別タブで開けます。
+            「概要版を見る」「詳細版を見る」ボタンで、それぞれの版を別タブで開けます。
         </p>
     </header>
 
@@ -50,7 +50,8 @@ get_header();
             <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#333;">まだレポートが発行されていません</p>
             <p style="margin:0;font-size:13px;">担当者がレポートをアップロードすると、ここに表示されます。</p>
             <p style="margin-top:24px;">
-                <a class="ss-btn ss-btn--primary" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>">← 戦略レポートに戻る</a>
+                <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>"
+                   style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">← 戦略レポートに戻る</a>
             </p>
         </div>
     <?php else : ?>
@@ -91,12 +92,13 @@ get_header();
 
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <?php if ( $simple_id ) : ?>
-                            <a class="ss-btn ss-btn--primary" target="_blank" rel="noopener"
-                               href="<?php echo esc_url( home_url( '/strategy-report/' . $ver_param ) ); ?>">📋 簡易版を見る</a>
+                            <a class="ss-btn" target="_blank" rel="noopener"
+                               style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;"
+                               href="<?php echo esc_url( home_url( '/strategy-report/' . $ver_param ) ); ?>">📋 概要版を見る</a>
                         <?php endif; ?>
                         <?php if ( $detail_id ) : ?>
                             <a class="ss-btn" target="_blank" rel="noopener"
-                               style="background:#fff;color:#333;border:1px solid #ccc;"
+                               style="background:#1a1a1a;color:#fff;border:1px solid #1a1a1a;text-decoration:none;"
                                href="<?php echo esc_url( home_url( '/strategy-report-detail/' . $ver_param ) ); ?>">📊 詳細版を見る</a>
                         <?php endif; ?>
                     </div>
@@ -105,7 +107,8 @@ get_header();
         </div>
 
         <p style="margin-top:28px;text-align:center;">
-            <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>" style="background:#fff;color:#333;border:1px solid #ccc;">← 最新の戦略レポートに戻る</a>
+            <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>"
+               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;">← 最新の戦略レポートに戻る</a>
         </p>
 
     <?php endif; ?>

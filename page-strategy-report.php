@@ -86,10 +86,10 @@ get_header();
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <a class="ss-btn" target="_blank" rel="noopener"
-               style="background:#fff;color:#333;border:1px solid #ccc;"
+               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;"
                href="<?php echo esc_url( $embed_url ); ?>">↗ 別タブで開く</a>
             <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report-history/' ) ); ?>"
-               style="background:#fff;color:#333;border:1px solid #ccc;">📚 過去のレポート</a>
+               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;">📚 過去のレポート</a>
         </div>
     </div>
 
@@ -137,9 +137,9 @@ get_header();
         </p>
         <p>
             <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report-history/' ) ); ?>"
-               style="background:#fff;color:#333;border:1px solid #ccc;">📚 過去のレポート一覧</a>
-            <a class="ss-btn ss-btn--primary" href="<?php echo esc_url( home_url( '/dashboard/' ) ); ?>"
-               style="margin-left:8px;">🏠 ダッシュボードに戻る</a>
+               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;">📚 過去のレポート一覧</a>
+            <a class="ss-btn" href="<?php echo esc_url( home_url( '/dashboard/' ) ); ?>"
+               style="margin-left:8px;background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">🏠 ダッシュボードに戻る</a>
         </p>
     </div>
 </div>

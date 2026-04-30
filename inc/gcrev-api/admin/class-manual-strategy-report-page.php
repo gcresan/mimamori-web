@@ -10,7 +10,7 @@ if ( class_exists('Gcrev_Manual_Strategy_Report_Page') ) { return; }
  * Gcrev_Manual_Strategy_Report_Page
  *
  * 「みまもりウェブ > 戦略レポート（手動）」管理画面。
- * クライアントごとに「簡易版/詳細版」HTML レポートを複数バージョン保存できる。
+ * クライアントごとに「概要版/詳細版」HTML レポートを複数バージョン保存できる。
  *
  * 保存形式: user_meta `_mimamori_strategy_reports` = JSON 配列
  *   [
@@ -332,7 +332,7 @@ class Gcrev_Manual_Strategy_Report_Page {
         ?>
         <div class="wrap">
             <h1>📄 戦略レポート（手動アップロード）</h1>
-            <p>クライアントごとに「簡易版」「詳細版」HTML を <strong>複数バージョン</strong> 保存できます。アップロードを重ねるたびに履歴として残り、最新版が <code>/strategy-report/</code> に表示されます。</p>
+            <p>クライアントごとに「概要版」「詳細版」HTML を <strong>複数バージョン</strong> 保存できます。アップロードを重ねるたびに履歴として残り、最新版が <code>/strategy-report/</code> に表示されます。</p>
             <ol style="background:#f6f7f7;padding:14px 30px;border-radius:6px;line-height:1.8;">
                 <li>事前にメディアライブラリへ HTML ファイルをアップロード（拡張子 .html 必須）</li>
                 <li>下のクライアント行で「➕ 新規バージョンを追加」を押し、フォームでファイル・対象月・ラベルを指定して保存</li>
@@ -400,7 +400,7 @@ class Gcrev_Manual_Strategy_Report_Page {
                 var $info   = $form.find('.js-' + target + '-info');
 
                 var frame = wp.media({
-                    title: (target === 'simple' ? '簡易版' : '詳細版') + ' のHTMLファイルを選択',
+                    title: (target === 'simple' ? '概要版' : '詳細版') + ' のHTMLファイルを選択',
                     multiple: false,
                     library: { type: ['text/html'] }
                 });
@@ -438,7 +438,7 @@ class Gcrev_Manual_Strategy_Report_Page {
                 <tr>
                     <th style="width:120px;">対象月</th>
                     <th>ラベル</th>
-                    <th>簡易版</th>
+                    <th>概要版</th>
                     <th>詳細版</th>
                     <th style="width:140px;">作成 / 更新</th>
                     <th style="width:200px;">操作</th>
@@ -529,7 +529,7 @@ class Gcrev_Manual_Strategy_Report_Page {
             <label style="font-weight:600;">ラベル</label>
             <input type="text" name="gcrev_label" value="<?php echo esc_attr( $label ); ?>" placeholder="例: 2026年4月リニューアル報告" style="width:100%;">
 
-            <label style="font-weight:600;">📋 簡易版HTML</label>
+            <label style="font-weight:600;">📋 概要版HTML</label>
             <span>
                 <button type="button" class="button js-pick-file" data-target="simple">📁 ファイルを選択</button>
                 <button type="button" class="button js-clear-file" data-target="simple">解除</button>
@@ -566,10 +566,10 @@ class Gcrev_Manual_Strategy_Report_Page {
             'added'          => [ 'success', 'バージョンを追加しました' ],
             'updated'        => [ 'success', 'バージョンを更新しました' ],
             'deleted'        => [ 'success', 'バージョンを削除しました' ],
-            'invalid_simple' => [ 'error',   '簡易版に HTML 以外のファイルが指定されました' ],
+            'invalid_simple' => [ 'error',   '概要版に HTML 以外のファイルが指定されました' ],
             'invalid_detail' => [ 'error',   '詳細版に HTML 以外のファイルが指定されました' ],
             'invalid_period' => [ 'error',   '対象月は YYYY-MM 形式で入力してください' ],
-            'no_files'       => [ 'error',   '簡易版または詳細版のいずれかは指定してください' ],
+            'no_files'       => [ 'error',   '概要版または詳細版のいずれかは指定してください' ],
             'no_user'        => [ 'error',   '対象ユーザーが指定されていません' ],
             'not_found'      => [ 'error',   '対象バージョンが見つかりませんでした' ],
         ];
@@ -637,7 +637,7 @@ class Gcrev_Manual_Strategy_Report_Page {
         }
         $log( "[serve] OK att_id={$att_id} bytes=" . strlen( $html ) );
 
-        // 簡易版の場合: 詳細版HTMLへの相対リンクを /strategy-report-detail/?ver=... に書換
+        // 概要版の場合: 詳細版HTMLへの相対リンクを /strategy-report-detail/?ver=... に書換
         if ( $kind === 'simple' && (int) ( $version['detail_id'] ?? 0 ) > 0 ) {
             $detail_route = home_url( '/strategy-report-detail/' );
             $ver_param    = ! empty( $version['id'] ) ? '?ver=' . rawurlencode( $version['id'] ) : '';
@@ -703,7 +703,7 @@ class Gcrev_Manual_Strategy_Report_Page {
     private static function build_floating_nav( string $kind ): string {
         $history_url   = esc_url( home_url( '/strategy-report-history/' ) );
         $dashboard_url = esc_url( home_url( '/dashboard/' ) );
-        $back_label    = $kind === 'detail' ? '簡易版に戻る' : '過去のレポート';
+        $back_label    = $kind === 'detail' ? '概要版に戻る' : '過去のレポート';
         $back_href     = $kind === 'detail' ? esc_url( home_url( '/strategy-report/' ) ) : $history_url;
 
         $css = '<style>'
