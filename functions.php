@@ -1745,7 +1745,12 @@ add_action( 'wp_enqueue_scripts', function () {
 } );
 
 /**
- * 戦略レポート閲覧ページ (page-strategy-report.php) 用 JS / CSS
+ * 戦略レポート閲覧ページ (page-strategy-report.php) 用 CSS
+ *
+ * AI生成のフロントロジック (strategy-report.js / strategy-report.css)
+ * は手動アップロード版に移行したため読み込み停止。
+ * page-strategy-report.php は手動レポートが未設定の場合のみ
+ * テーマ内表示を行うので、汎用の ss-btn 等のスタイルだけ読み込む。
  */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_user_logged_in() ) {
@@ -1756,42 +1761,15 @@ add_action( 'wp_enqueue_scripts', function () {
     }
 
     $settings_css_path = get_template_directory() . '/assets/css/strategy-settings.css';
-    $report_css_path   = get_template_directory() . '/assets/css/strategy-report.css';
-    $report_js_path    = get_template_directory() . '/assets/js/strategy-report.js';
     $settings_css_ver  = file_exists( $settings_css_path ) ? (string) filemtime( $settings_css_path ) : '1.0.0';
-    $report_css_ver    = file_exists( $report_css_path )   ? (string) filemtime( $report_css_path )   : '1.0.0';
-    $report_js_ver     = file_exists( $report_js_path )    ? (string) filemtime( $report_js_path )    : '1.0.0';
 
-    // 共通: settings 側のCSS（ss-btn / spinner / toast を流用）
+    // ss-btn / トースト等を流用するために settings 側のCSSのみ読み込む
     wp_enqueue_style(
         'gcrev-strategy-settings',
         get_template_directory_uri() . '/assets/css/strategy-settings.css',
         [],
         $settings_css_ver
     );
-    // ページ専用: srpage / sr- 名前空間
-    wp_enqueue_style(
-        'gcrev-strategy-report',
-        get_template_directory_uri() . '/assets/css/strategy-report.css',
-        [ 'gcrev-strategy-settings' ],
-        $report_css_ver
-    );
-
-    wp_enqueue_script(
-        'gcrev-strategy-report',
-        get_template_directory_uri() . '/assets/js/strategy-report.js',
-        [],
-        $report_js_ver,
-        true
-    );
-
-    $default_ym = ( new \DateTimeImmutable( 'first day of last month', wp_timezone() ) )->format( 'Y-m' );
-
-    wp_localize_script( 'gcrev-strategy-report', 'gcrevStrategyReportConfig', [
-        'restRoot'         => esc_url_raw( rest_url() ),
-        'nonce'            => wp_create_nonce( 'wp_rest' ),
-        'defaultYearMonth' => $default_ym,
-    ] );
 } );
 
 // ============================================================
