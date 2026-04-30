@@ -1745,18 +1745,24 @@ add_action( 'wp_enqueue_scripts', function () {
 } );
 
 /**
- * 戦略レポート閲覧ページ (page-strategy-report.php) 用 CSS
+ * 戦略レポート系ページ用 CSS
  *
- * AI生成のフロントロジック (strategy-report.js / strategy-report.css)
- * は手動アップロード版に移行したため読み込み停止。
- * page-strategy-report.php は手動レポートが未設定の場合のみ
- * テーマ内表示を行うので、汎用の ss-btn 等のスタイルだけ読み込む。
+ * 対象テンプレート:
+ *   - page-strategy-report.php          （手動レポート未設定時のフォールバック）
+ *   - page-strategy-report-history.php  （バージョン履歴一覧）
+ *   - page-strategy-report-detail.php   （詳細版が未設定の場合のフォールバック）
+ * いずれも ss-btn / spinner / トーストの汎用スタイルを使うため、
+ * strategy-settings.css のみ読み込む。
  */
 add_action( 'wp_enqueue_scripts', function () {
     if ( ! is_user_logged_in() ) {
         return;
     }
-    if ( ! is_page_template( 'page-strategy-report.php' ) ) {
+    $is_target =
+        is_page_template( 'page-strategy-report.php' )
+        || is_page_template( 'page-strategy-report-history.php' )
+        || is_page_template( 'page-strategy-report-detail.php' );
+    if ( ! $is_target ) {
         return;
     }
 
