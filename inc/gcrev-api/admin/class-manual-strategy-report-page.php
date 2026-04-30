@@ -679,7 +679,7 @@ class Gcrev_Manual_Strategy_Report_Page {
             . '})();</script>';
 
         // フローティングナビ: iframe 埋込時はテーマのサイドバー/ヘッダーで足りるので非表示
-        $is_embed_request = isset( $_GET['embed'] ) && $_GET['embed'] === '1';
+        $is_embed_request = isset( $_GET['raw'] ) && $_GET['raw'] === '1';
         $nav = $is_embed_request ? '' : self::build_floating_nav( $kind );
 
         $injection = $resize_script . $nav;

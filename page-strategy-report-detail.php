@@ -11,10 +11,11 @@ if ( ! is_user_logged_in() ) {
 $current_user = wp_get_current_user();
 $user_id      = (int) $current_user->ID;
 $req_ver      = isset( $_GET['ver'] ) ? sanitize_text_field( wp_unslash( $_GET['ver'] ) ) : '';
-$is_embed     = isset( $_GET['embed'] ) && $_GET['embed'] === '1';
+// 注: WordPress コアが ?embed=1 を予約しているため、独自パラメータは ?raw=1 を使う
+$is_raw       = isset( $_GET['raw'] ) && $_GET['raw'] === '1';
 
-// embed=1 で iframe 内にレンダリングする生 HTML を配信する
-if ( $is_embed && class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
+// raw=1 で iframe 内にレンダリングする生 HTML を配信する
+if ( $is_raw && class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
     try {
         if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'detail', $req_ver ) ) {
             exit;
@@ -57,8 +58,8 @@ get_header();
 <?php if ( $has_detail ) :
     $embed_url = add_query_arg(
         array_filter([
-            'embed' => '1',
-            'ver'   => $req_ver !== '' ? $req_ver : null,
+            'raw' => '1',
+            'ver' => $req_ver !== '' ? $req_ver : null,
         ]),
         home_url( '/strategy-report-detail/' )
     );

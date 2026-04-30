@@ -11,11 +11,12 @@ if ( ! is_user_logged_in() ) {
 $current_user = wp_get_current_user();
 $user_id      = (int) $current_user->ID;
 $req_ver      = isset( $_GET['ver'] ) ? sanitize_text_field( wp_unslash( $_GET['ver'] ) ) : '';
-$is_embed     = isset( $_GET['embed'] ) && $_GET['embed'] === '1';
+// 注: WordPress コアが ?embed=1 を予約しているため、独自パラメータは ?raw=1 を使う
+$is_raw       = isset( $_GET['raw'] ) && $_GET['raw'] === '1';
 
-// embed=1 が指定された時だけ、HTML レポートを生のまま配信する（iframe の中身用）。
+// raw=1 が指定された時だけ、HTML レポートを生のまま配信する（iframe の中身用）。
 // それ以外はテーマのヘッダー/サイドバーを維持してメインに iframe を埋め込む。
-if ( $is_embed && class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
+if ( $is_raw && class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
     try {
         if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'simple', $req_ver ) ) {
             exit;
@@ -58,8 +59,8 @@ get_header();
 <?php if ( $has_manual_report ) :
     $embed_url = add_query_arg(
         array_filter([
-            'embed' => '1',
-            'ver'   => $req_ver !== '' ? $req_ver : null,
+            'raw' => '1',
+            'ver' => $req_ver !== '' ? $req_ver : null,
         ]),
         home_url( '/strategy-report/' )
     );
