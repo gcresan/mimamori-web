@@ -20,6 +20,14 @@ class Gcrev_SEO_Checker {
     /** 履歴保持件数 */
     private const MAX_HISTORY = 10;
 
+    /** get_diagnosis() の結果キャッシュ TTL（24時間） */
+    private const REPORT_CACHE_TTL = DAY_IN_SECONDS;
+
+    /** Transient キー */
+    private static function report_cache_key( int $user_id ): string {
+        return 'gcrev_seo_report_' . $user_id;
+    }
+
     /** クロール上限 */
     private const MAX_PAGES = 20;
 
@@ -194,8 +202,34 @@ class Gcrev_SEO_Checker {
 
     /**
      * 保存済み診断結果を取得（比較データ付き）
+     *
+     * 重い user_meta blob（履歴最大10件）を毎回読まないよう、
+     * 結果を Transient にキャッシュする。診断実行時に無効化される。
      */
     public function get_diagnosis( int $user_id ): ?array {
+        $cache_key = self::report_cache_key( $user_id );
+        $cached    = get_transient( $cache_key );
+        if ( is_array( $cached ) ) {
+            return $cached;
+        }
+        if ( $cached === 'EMPTY' ) {
+            return null;
+        }
+
+        $result = $this->load_diagnosis_uncached( $user_id );
+        if ( is_array( $result ) ) {
+            set_transient( $cache_key, $result, self::REPORT_CACHE_TTL );
+        } else {
+            // 未診断状態を短めにキャッシュ（クロール中の連続アクセス対策）
+            set_transient( $cache_key, 'EMPTY', 5 * MINUTE_IN_SECONDS );
+        }
+        return $result;
+    }
+
+    /**
+     * user_meta から実際にデータを読む処理本体（キャッシュなし）
+     */
+    private function load_diagnosis_uncached( int $user_id ): ?array {
         $raw = get_user_meta( $user_id, self::META_KEY_HISTORY, true );
 
         // 新形式: PHP配列で保存されたデータ
@@ -286,6 +320,9 @@ class Gcrev_SEO_Checker {
         // PHP配列として保存（WordPressが内部でserializeする）
         $result = update_user_meta( $user_id, self::META_KEY_HISTORY, $envelope );
         update_user_meta( $user_id, self::META_KEY, $data );
+
+        // 結果キャッシュを無効化（次回 get_diagnosis() で再構築）
+        delete_transient( self::report_cache_key( $user_id ) );
 
         // 保存失敗時のデバッグログ
         if ( $result === false ) {

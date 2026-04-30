@@ -18,6 +18,8 @@ set_query_var( 'gcrev_page_title', 'SEO診断' );
 set_query_var( 'gcrev_page_subtitle', 'サイトの基本的なSEO状態を診断し、改善ポイントを整理します。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'SEO診断', '各種診断' ) );
 
+$gcrev_seo_user_id = get_current_user_id();
+
 get_header();
 ?>
 <style>
@@ -724,6 +726,8 @@ get_header();
     'use strict';
 
     var wpNonce = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
+    var SEO_CACHE_KEY = 'gcrev_seo_report_cache_<?php echo (int) $gcrev_seo_user_id; ?>';
+    var SEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24時間（古すぎる時のみ破棄）
 
     // セクション要素ID
     var SECTION_IDS = ['seoSummary','seoComparisonBar','seoDiagnosisSection','seoKeywordSection','seoAssessmentSection','seoIssuesSection','seoActionsSection'];
@@ -803,9 +807,50 @@ get_header();
         fetchReport();
     });
 
+    /* =================================================================
+       localStorage キャッシュ
+       ================================================================= */
+    function loadCachedReport() {
+        try {
+            var raw = localStorage.getItem(SEO_CACHE_KEY);
+            if (!raw) return null;
+            var entry = JSON.parse(raw);
+            if (!entry || !entry.data) return null;
+            // 24時間より古い場合は無効化（updated_at が無くても savedAt で保証）
+            if (entry.savedAt && (Date.now() - entry.savedAt) > SEO_CACHE_TTL_MS) {
+                localStorage.removeItem(SEO_CACHE_KEY);
+                return null;
+            }
+            return entry.data;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function saveCachedReport(data) {
+        try {
+            localStorage.setItem(SEO_CACHE_KEY, JSON.stringify({
+                savedAt: Date.now(),
+                data: data
+            }));
+        } catch (e) {
+            // 容量超過などは無視
+        }
+    }
+
+    function clearCachedReport() {
+        try { localStorage.removeItem(SEO_CACHE_KEY); } catch (e) {}
+    }
+
     function fetchReport() {
-        // 初回読み込み時は全セクション非表示のまま（ちらつき防止）
-        // showSections() は API レスポンス後にのみ呼ぶ
+        // 1) キャッシュがあれば即座に表示（白紙時間ゼロ）
+        var cached = loadCachedReport();
+        if (cached) {
+            showSections(true);
+            renderAll(cached);
+        }
+
+        // 2) 並行して最新データを取得し、差分があれば再描画
         fetch('/wp-json/gcrev/v1/seo/report', {
             headers: { 'X-WP-Nonce': wpNonce },
             credentials: 'same-origin'
@@ -813,15 +858,24 @@ get_header();
         .then(function(res) { return res.json(); })
         .then(function(json) {
             if (json.success && json.data) {
-                showSections(true);
-                renderAll(json.data);
-            } else {
+                // キャッシュと最新が同じ updated_at なら再描画スキップ
+                var sameAsCached = cached && cached.updated_at && json.data.updated_at
+                                   && cached.updated_at === json.data.updated_at;
+                if (!sameAsCached) {
+                    showSections(true);
+                    renderAll(json.data);
+                }
+                saveCachedReport(json.data);
+            } else if (!cached) {
+                // 未診断 & キャッシュ無し
                 showSections(false);
             }
+            // キャッシュがあって API 側が空のケースは、表示中のキャッシュを維持
         })
         .catch(function(err) {
             console.error('[SEO]', err);
-            showSections(false);
+            // キャッシュが無いときだけ空状態を表示
+            if (!cached) showSections(false);
         });
     }
 
@@ -1514,6 +1568,7 @@ get_header();
             if (json.success && json.data) {
                 showSections(true);
                 renderAll(json.data);
+                saveCachedReport(json.data);
                 showToast('SEO診断が完了しました');
             } else {
                 showToast(json.message || '診断に失敗しました', true);
