@@ -190,6 +190,13 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Report_Queue_Page())->register();
             }
 
+            // 戦略レポート（手動アップロード）
+            $manual_strategy_path = __DIR__ . '/admin/class-manual-strategy-report-page.php';
+            if ( file_exists( $manual_strategy_path ) ) {
+                require_once $manual_strategy_path;
+                (new Gcrev_Manual_Strategy_Report_Page())->register();
+            }
+
             // アンケート管理は表側ダッシュボード (page-review-survey.php + REST API) に移行済み
             // $survey_page_path = __DIR__ . '/admin/class-survey-page.php';
             // if ( file_exists( $survey_page_path ) ) {

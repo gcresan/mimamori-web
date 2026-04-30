@@ -1343,6 +1343,10 @@ add_action( 'after_setup_theme', function () {
             'title'    => '戦略レポート',
             'template' => 'page-strategy-report.php',
         ],
+        'strategy-report-detail' => [
+            'title'    => '戦略レポート（詳細版）',
+            'template' => 'page-strategy-report-detail.php',
+        ],
     ];
 
     foreach ( $required_pages as $slug => $meta ) {

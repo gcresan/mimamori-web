@@ -11,6 +11,13 @@ if ( ! is_user_logged_in() ) {
 $current_user = wp_get_current_user();
 $user_id      = (int) $current_user->ID;
 
+// 手動アップロード版の戦略レポートが設定されていれば、それを生のHTMLとして配信
+// （AI生成レポートより優先。詳細版へのリンクは /strategy-report-detail/ に自動書換）
+if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' )
+    && Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'simple' ) ) {
+    exit;
+}
+
 set_query_var( 'gcrev_page_title', '戦略レポート' );
 set_query_var( 'gcrev_page_subtitle', '戦略と実データを突き合わせた経営者向けレポート（毎月自動生成）' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '戦略レポート', '戦略連動型 月次レポート' ) );
