@@ -10,8 +10,19 @@ if ( ! is_user_logged_in() ) {
 
 if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
     $req_ver = isset( $_GET['ver'] ) ? sanitize_text_field( wp_unslash( $_GET['ver'] ) ) : '';
-    if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'detail', $req_ver ) ) {
-        exit;
+    try {
+        if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'detail', $req_ver ) ) {
+            exit;
+        }
+    } catch ( \Throwable $e ) {
+        if ( function_exists( 'file_put_contents' ) ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' [serve_detail] ' . $e->getMessage()
+                . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n",
+                FILE_APPEND
+            );
+        }
     }
 }
 

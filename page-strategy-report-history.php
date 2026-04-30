@@ -15,9 +15,22 @@ set_query_var( 'gcrev_page_title', '戦略レポート履歴' );
 set_query_var( 'gcrev_page_subtitle', 'これまでにアップロードされた戦略レポートを一覧で閲覧できます。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '戦略レポート履歴', '戦略レポート' ) );
 
-$versions = class_exists( 'Gcrev_Manual_Strategy_Report_Page' )
-    ? Gcrev_Manual_Strategy_Report_Page::get_versions( $user_id )
-    : [];
+$versions = [];
+if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
+    try {
+        $versions = Gcrev_Manual_Strategy_Report_Page::get_versions( $user_id );
+    } catch ( \Throwable $e ) {
+        if ( function_exists( 'file_put_contents' ) ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' [history] ' . $e->getMessage()
+                . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n",
+                FILE_APPEND
+            );
+        }
+        $versions = [];
+    }
+}
 
 get_header();
 ?>

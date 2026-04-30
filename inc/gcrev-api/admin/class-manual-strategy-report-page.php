@@ -590,27 +590,52 @@ class Gcrev_Manual_Strategy_Report_Page {
      * 戻り値: true = 出力した（呼び出し側は exit すべき）／ false = 設定なし
      */
     public static function serve_for_current_user( string $kind, string $ver_id = '' ): bool {
-        if ( ! in_array( $kind, [ 'simple', 'detail' ], true ) ) return false;
+        $log = function ( string $msg ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' ' . $msg . "\n",
+                FILE_APPEND
+            );
+        };
+
+        if ( ! in_array( $kind, [ 'simple', 'detail' ], true ) ) {
+            $log( "[serve] invalid kind={$kind}" );
+            return false;
+        }
         if ( ! is_user_logged_in() ) {
             wp_safe_redirect( wp_login_url( $_SERVER['REQUEST_URI'] ?? home_url('/') ) );
             exit;
         }
         $user_id = get_current_user_id();
+        $log( "[serve] user_id={$user_id} kind={$kind} ver_id='{$ver_id}'" );
 
         $version = $ver_id !== ''
             ? self::get_version( $user_id, $ver_id )
             : self::get_latest( $user_id );
 
-        if ( ! $version ) return false;
+        if ( ! $version ) {
+            $log( "[serve] no version for user_id={$user_id}" );
+            return false;
+        }
 
         $att_id = (int) ( $kind === 'simple' ? ( $version['simple_id'] ?? 0 ) : ( $version['detail_id'] ?? 0 ) );
-        if ( $att_id <= 0 ) return false;
+        if ( $att_id <= 0 ) {
+            $log( "[serve] att_id=0 for kind={$kind}" );
+            return false;
+        }
 
         $file = get_attached_file( $att_id );
-        if ( ! $file || ! is_readable( $file ) ) return false;
+        if ( ! $file || ! is_readable( $file ) ) {
+            $log( "[serve] file not readable att_id={$att_id} file=" . var_export( $file, true ) );
+            return false;
+        }
 
         $html = file_get_contents( $file );
-        if ( $html === false ) return false;
+        if ( $html === false ) {
+            $log( "[serve] file_get_contents FAILED file={$file}" );
+            return false;
+        }
+        $log( "[serve] OK att_id={$att_id} bytes=" . strlen( $html ) );
 
         // 簡易版の場合: 詳細版HTMLへの相対リンクを /strategy-report-detail/?ver=... に書換
         if ( $kind === 'simple' && (int) ( $version['detail_id'] ?? 0 ) > 0 ) {

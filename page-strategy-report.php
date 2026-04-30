@@ -15,8 +15,20 @@ $user_id      = (int) $current_user->ID;
 // ?ver=ID でバージョン指定、未指定は最新版を生のHTMLとして配信する。
 if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
     $req_ver = isset( $_GET['ver'] ) ? sanitize_text_field( wp_unslash( $_GET['ver'] ) ) : '';
-    if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'simple', $req_ver ) ) {
-        exit;
+    try {
+        if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'simple', $req_ver ) ) {
+            exit;
+        }
+    } catch ( \Throwable $e ) {
+        // 例外が起きてもサイト全体を落とさない。ログに残してフォールバック表示へ進む
+        if ( function_exists( 'file_put_contents' ) ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' [serve_simple] ' . $e->getMessage()
+                . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n",
+                FILE_APPEND
+            );
+        }
     }
 }
 
