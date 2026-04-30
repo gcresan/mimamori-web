@@ -250,6 +250,35 @@ class Gcrev_Manual_Strategy_Report_Page {
         exit;
     }
 
+    /**
+     * ユーザー検索: user_login/email/display_name と report_company_name 両方で OR 検索。
+     * WP_User_Query は search と meta_query の OR を直接サポートしないので、
+     * 2回クエリして結果を ID ベースでマージする。
+     *
+     * @return WP_User[]
+     */
+    private function search_users_inclusive( array $base_args, string $term ): array {
+        // 1) ログイン名/メール/display_name
+        $user_args = $base_args;
+        unset( $user_args['meta_query'] );
+        $by_user = get_users( $user_args );
+
+        // 2) 事業者名 user_meta
+        $meta_args = $base_args;
+        unset( $meta_args['search'], $meta_args['search_columns'] );
+        $by_meta = get_users( $meta_args );
+
+        $merged = [];
+        foreach ( array_merge( $by_user, $by_meta ) as $u ) {
+            $merged[ (int) $u->ID ] = $u;
+        }
+        // display_name で並べ替え
+        usort( $merged, function ( $a, $b ) {
+            return strcmp( (string) $a->display_name, (string) $b->display_name );
+        } );
+        return $merged;
+    }
+
     private function is_valid_html_attachment( int $att_id ): bool {
         if ( $att_id <= 0 ) return false;
         $mime = get_post_mime_type( $att_id );
@@ -276,8 +305,29 @@ class Gcrev_Manual_Strategy_Report_Page {
         if ( $search !== '' ) {
             $args['search']         = '*' . $search . '*';
             $args['search_columns'] = [ 'user_login', 'user_email', 'display_name' ];
+            // 事業者名 (report_company_name) でも検索できるよう、meta_query を併用
+            $args['meta_query'] = [
+                [
+                    'key'     => 'report_company_name',
+                    'value'   => $search,
+                    'compare' => 'LIKE',
+                ],
+            ];
         }
-        $users = get_users( $args );
+        $users = $search !== '' ? $this->search_users_inclusive( $args, $search ) : get_users( $args );
+
+        // 事業者名で並べ替え（取得できない場合は display_name にフォールバック）
+        usort( $users, function ( $a, $b ) {
+            $na = function_exists( 'gcrev_get_business_name' )
+                ? (string) gcrev_get_business_name( $a->ID )
+                : '';
+            $nb = function_exists( 'gcrev_get_business_name' )
+                ? (string) gcrev_get_business_name( $b->ID )
+                : '';
+            if ( $na === '' ) $na = (string) $a->display_name;
+            if ( $nb === '' ) $nb = (string) $b->display_name;
+            return strcmp( $na, $nb );
+        } );
 
         ?>
         <div class="wrap">
@@ -293,7 +343,7 @@ class Gcrev_Manual_Strategy_Report_Page {
 
             <form method="get" style="margin:16px 0;">
                 <input type="hidden" name="page" value="<?php echo esc_attr( self::MENU_SLUG ); ?>">
-                <input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="ユーザー名・メールで検索">
+                <input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="事業者名・ユーザー名・メールで検索">
                 <input type="submit" class="button" value="検索">
                 <?php if ( $search !== '' ) : ?>
                     <a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=' . self::MENU_SLUG ) ); ?>">クリア</a>
@@ -303,17 +353,26 @@ class Gcrev_Manual_Strategy_Report_Page {
             <?php foreach ( $users as $u ) :
                 $versions = self::get_versions( $u->ID );
                 $is_open  = ( $sel_user === $u->ID );
+                $business = function_exists( 'gcrev_get_business_name' )
+                    ? (string) gcrev_get_business_name( $u->ID )
+                    : '';
+                if ( $business === '' ) $business = $u->display_name;
             ?>
                 <details class="card" style="background:#fff;border:1px solid #c3c4c7;border-radius:6px;margin-bottom:14px;" <?php echo $is_open ? 'open' : ''; ?>>
                     <summary style="padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:14px;">
                         <strong style="font-size:14px;">
-                            <?php echo esc_html( $u->display_name ); ?>
+                            <?php echo esc_html( $business ); ?>
                         </strong>
+                        <?php if ( $business !== $u->display_name && $u->display_name !== '' ) : ?>
+                            <span style="color:#888;font-size:12px;">
+                                （<?php echo esc_html( $u->display_name ); ?>）
+                            </span>
+                        <?php endif; ?>
                         <span style="color:#666;font-size:12px;">
                             <?php echo esc_html( $u->user_login ); ?> / <?php echo esc_html( $u->user_email ); ?>
                         </span>
                         <span style="margin-left:auto;font-size:12px;color:#666;">
-                            <?php echo count( $versions ); ?> 件
+                            ID: <?php echo (int) $u->ID; ?> / <?php echo count( $versions ); ?> 件
                         </span>
                     </summary>
                     <div style="padding:6px 16px 18px;">
