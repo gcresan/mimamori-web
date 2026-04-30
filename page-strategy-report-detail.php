@@ -8,9 +8,11 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' )
-    && Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'detail' ) ) {
-    exit;
+if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
+    $req_ver = isset( $_GET['ver'] ) ? sanitize_text_field( wp_unslash( $_GET['ver'] ) ) : '';
+    if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'detail', $req_ver ) ) {
+        exit;
+    }
 }
 
 // 詳細版が設定されていない場合のフォールバック表示

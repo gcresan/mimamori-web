@@ -1347,6 +1347,10 @@ add_action( 'after_setup_theme', function () {
             'title'    => '戦略レポート（詳細版）',
             'template' => 'page-strategy-report-detail.php',
         ],
+        'strategy-report-history' => [
+            'title'    => '戦略レポート履歴',
+            'template' => 'page-strategy-report-history.php',
+        ],
     ];
 
     foreach ( $required_pages as $slug => $meta ) {
