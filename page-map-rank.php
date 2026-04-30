@@ -2003,90 +2003,150 @@ get_header();
     window.exportMeoCsv = function() {
         if (!keywordsList || keywordsList.length === 0) return;
 
+        var btn = document.getElementById('meoExportCsvBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.dataset.origText = btn.dataset.origText || btn.innerHTML;
+            btn.innerHTML = '<span class="rt-btn__icon">&#x22EF;</span> CSV \u4F5C\u6210\u4E2D...';
+        }
+        var restoreBtn = function() {
+            if (btn) {
+                btn.disabled = false;
+                if (btn.dataset.origText) btn.innerHTML = btn.dataset.origText;
+            }
+        };
+
+        var savedByMode = (meoData && meoData.location && meoData.location.saved_by_mode) || {};
+        var modes = ['business', 'city', 'custom'].filter(function(m) {
+            var s = savedByMode[m];
+            return s && (s.address || s.lat);
+        });
+        if (modes.length === 0) {
+            modes = [(meoData && meoData.location && meoData.location.base_mode) || ''];
+        }
+
+        // \u5404\u30E2\u30FC\u30C9\u306E\u30C7\u30FC\u30BF\u3092\u4E26\u5217\u53D6\u5F97
+        var fetches = modes.map(function(m) {
+            var url = restBase + 'meo/history' + (m ? ('?mode=' + encodeURIComponent(m)) : '');
+            return fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': nonce }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(json) {
+                return { mode: m, data: (json && json.success && json.data) ? json.data : null };
+            })
+            .catch(function() { return { mode: m, data: null }; });
+        });
+
+        Promise.all(fetches).then(function(results) {
+            try {
+                buildAndDownloadMeoCsv(results, savedByMode);
+            } catch (e) {
+                console.error('[MEO CSV] build failed', e);
+                showToast('CSV\u51FA\u529B\u306B\u5931\u6557\u3057\u307E\u3057\u305F', 'error');
+            }
+            restoreBtn();
+        });
+    };
+
+    function buildAndDownloadMeoCsv(results, savedByMode) {
         var bom = "\uFEFF";
-        var loc = (meoData && meoData.location) ? meoData.location : {};
-        var baseModeMap = { business: '店舗住所', address: '指定住所', coord: '指定座標', custom: 'カスタム' };
-        var baseModeLabel = baseModeMap[loc.base_mode] || loc.base_mode || '';
-        var radiusLabel = loc.radius
-            ? (loc.radius >= 1000 ? (loc.radius / 1000) + 'km' : loc.radius + 'm')
-            : '';
-        var coordLabel = (loc.lat && loc.lng) ? (loc.lat + ', ' + loc.lng) : '';
+        var modeNameMap = { business: '自社の住所', city: '市の中心', custom: '任意の場所' };
         var nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
 
-        var headerCols = [
-            'キーワード',
-            'デバイス',
-            'マップ順位（現在）',
-            '地域順位（現在）',
-            '前回比'
-        ];
-        for (var d = 0; d < dayLabels.length; d++) {
-            headerCols.push(dayLabels[d] + '（マップ順位）');
-        }
-        headerCols.push('最終取得日');
-
         var lines = [];
-        // ===== 基準地点メタ情報 =====
+
+        // ===== 1) 基準地点情報（全モード） =====
         lines.push('"# 基準地点情報"');
-        lines.push('"項目","値"');
-        lines.push('"基準地点ラベル","' + escapeCsv(loc.base_label || '') + '"');
-        lines.push('"基準地点（住所）","' + escapeCsv(loc.address || '') + '"');
-        lines.push('"基準地点（緯度・経度）","' + escapeCsv(coordLabel) + '"');
-        lines.push('"基準地点モード","' + escapeCsv(baseModeLabel) + '"');
-        lines.push('"基準地点からの検索半径","' + escapeCsv(radiusLabel) + '"');
+        lines.push('"モード","ラベル","住所","緯度・経度","検索半径"');
+        results.forEach(function(r) {
+            var modeLabel = modeNameMap[r.mode] || (r.mode || '不明');
+            var loc = (r.data && r.data.location) || {};
+            var s = (savedByMode && savedByMode[r.mode]) || {};
+            // saved_by_mode を優先（per-mode の正確な値）、無ければ location
+            var addr = s.address || loc.address || '';
+            var lat  = s.lat || loc.lat || '';
+            var lng  = s.lng || loc.lng || '';
+            var rad  = s.radius || loc.radius || 1000;
+            var lbl  = s.label || loc.base_label || '';
+            var coord = (lat && lng) ? (lat + ', ' + lng) : '';
+            var radLabel = rad
+                ? (rad >= 1000 ? (rad / 1000) + 'km' : rad + 'm')
+                : '';
+            lines.push([
+                '"' + escapeCsv(modeLabel) + '"',
+                '"' + escapeCsv(lbl) + '"',
+                '"' + escapeCsv(addr) + '"',
+                '"' + escapeCsv(coord) + '"',
+                '"' + escapeCsv(radLabel) + '"'
+            ].join(','));
+        });
         lines.push('"出力日時","' + escapeCsv(nowStr) + '"');
         lines.push('');
-
-        // ===== キーワード順位データ（スマホ・PC 両方） =====
-        lines.push('"# キーワード順位"');
-        lines.push(headerCols.map(function(c) { return '"' + escapeCsv(c) + '"'; }).join(','));
 
         var devices = [
             { key: 'mobile',  label: 'スマホ' },
             { key: 'desktop', label: 'PC' }
         ];
 
-        for (var i = 0; i < keywordsList.length; i++) {
-            var kw = keywordsList[i];
+        // ===== 2) キーワード順位データ（モード別セクション） =====
+        results.forEach(function(r) {
+            if (!r.data) return;
+            var modeLabel = modeNameMap[r.mode] || (r.mode || '不明');
+            var keywords = r.data.keywords || [];
+            var dLabels  = r.data.day_labels || [];
+            var dKeys    = r.data.days || [];
 
-            for (var di = 0; di < devices.length; di++) {
-                var dev = devices[di];
-                var cur = kw.current ? kw.current[dev.key] : null;
-                var daily = kw.daily ? kw.daily[dev.key] : {};
-
-                var mapsRank = (cur && cur.is_ranked) ? rankCellForCsv(cur.maps_rank) : (cur ? '圏外' : '未取得');
-                var finderRank = (cur && cur.finder_rank != null) ? cur.finder_rank : (cur ? '圏外' : '未取得');
-                var change = (cur && cur.change != null) ? cur.change : '';
-                var fetchedAt = (cur && cur.fetched_at) ? cur.fetched_at : (kw.fetched_at || '');
-
-                var row = [];
-                row.push('"' + escapeCsv(kw.keyword) + '"');
-                row.push('"' + escapeCsv(dev.label) + '"');
-                row.push(mapsRank);
-                row.push(finderRank);
-                row.push(change);
-                for (var dd = 0; dd < dayKeys.length; dd++) {
-                    var dayData = daily ? daily[dayKeys[dd]] : null;
-                    if (!dayData) {
-                        row.push('');
-                    } else if (dayData.maps_rank == null) {
-                        row.push('圏外');
-                    } else {
-                        row.push(dayData.maps_rank);
-                    }
-                }
-                row.push('"' + escapeCsv(fetchedAt) + '"');
-
-                lines.push(row.join(','));
+            lines.push('"# キーワード順位（' + modeLabel + '）"');
+            var headerCols = ['基準モード', 'キーワード', 'デバイス', 'マップ順位（現在）', '地域順位（現在）', '前回比'];
+            for (var d = 0; d < dLabels.length; d++) {
+                headerCols.push(dLabels[d] + '（マップ順位）');
             }
-        }
+            headerCols.push('最終取得日');
+            lines.push(headerCols.map(function(c) { return '"' + escapeCsv(c) + '"'; }).join(','));
+
+            keywords.forEach(function(kw) {
+                devices.forEach(function(dev) {
+                    var cur = kw.current ? kw.current[dev.key] : null;
+                    var daily = kw.daily ? kw.daily[dev.key] : {};
+
+                    var mapsRank = (cur && cur.is_ranked) ? rankCellForCsv(cur.maps_rank) : (cur ? '圏外' : '未取得');
+                    var finderRank = (cur && cur.finder_rank != null) ? cur.finder_rank : (cur ? '圏外' : '未取得');
+                    var change = (cur && cur.change != null) ? cur.change : '';
+                    var fetchedAt = (cur && cur.fetched_at) ? cur.fetched_at : (kw.fetched_at || '');
+
+                    var row = [];
+                    row.push('"' + escapeCsv(modeLabel) + '"');
+                    row.push('"' + escapeCsv(kw.keyword) + '"');
+                    row.push('"' + escapeCsv(dev.label) + '"');
+                    row.push(mapsRank);
+                    row.push(finderRank);
+                    row.push(change);
+                    for (var dd = 0; dd < dKeys.length; dd++) {
+                        var dayData = daily ? daily[dKeys[dd]] : null;
+                        if (!dayData) {
+                            row.push('');
+                        } else if (dayData.maps_rank == null) {
+                            row.push('圏外');
+                        } else {
+                            row.push(dayData.maps_rank);
+                        }
+                    }
+                    row.push('"' + escapeCsv(fetchedAt) + '"');
+                    lines.push(row.join(','));
+                });
+            });
+
+            lines.push('');
+        });
 
         var blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
         var link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = 'map-rank-' + new Date().toISOString().slice(0, 10) + '.csv';
         link.click();
-    };
+    }
 
     // ボタンにイベントを紐付け（DOM が既に構築済みでも対応）
     (function() {

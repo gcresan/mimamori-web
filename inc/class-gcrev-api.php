@@ -8449,9 +8449,16 @@ PROMPT;
             ]);
         }
 
-        // アクティブな base_mode で履歴をフィルタする（モード別に保存しているため）
-        // legacy データ（base_mode=''）は active_mode が空のときだけフォールバックで使う
-        $history_active_mode = (string) ( get_user_meta( $user_id, '_gcrev_meo_base_mode', true ) ?: '' );
+        // base_mode フィルタ:
+        //   - mode パラメータが指定されたらそのモード（CSV 一括書き出し等で使う）
+        //   - 指定がなければ user_meta の active mode を使う
+        $mode_param = sanitize_text_field( $request->get_param( 'mode' ) ?: '' );
+        if ( ! in_array( $mode_param, [ 'business', 'city', 'custom' ], true ) ) {
+            $mode_param = '';
+        }
+        $history_active_mode = $mode_param !== ''
+            ? $mode_param
+            : (string) ( get_user_meta( $user_id, '_gcrev_meo_base_mode', true ) ?: '' );
         $mode_filter_values  = $history_active_mode === ''
             ? [ '' ]
             : [ $history_active_mode, '' ]; // 移行期: base_mode 列が空の旧データもヒット
