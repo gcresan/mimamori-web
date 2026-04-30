@@ -590,7 +590,7 @@ get_header();
     <div id="kwrResults" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
             <h2 class="kwr-results-title" style="margin:0;">キーワード候補一覧</h2>
-            <button type="button" id="kwrCsvExportBtn" class="kwr-csv-export-btn" title="調査結果を CSV 形式で書き出します">
+            <button type="button" id="kwrCsvExportBtn" class="kwr-csv-export-btn" title="攻め方の整理・競合との比較・キーワード候補一覧・競合キーワード比較を1つのCSVに書き出します">
                 <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"><path d="M3 17a1 1 0 001 1h12a1 1 0 001-1v-4a1 1 0 10-2 0v3H5v-3a1 1 0 10-2 0v4z"/><path d="M9 12.586V3a1 1 0 112 0v9.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586z"/></svg>
                 CSV で書き出す
             </button>
@@ -942,7 +942,74 @@ get_header();
     }
 
     function buildCsvFromData(data) {
-        // ヘッダー（日本語、Excel 互換）
+        var lines = [];
+        var pushRow = function(arr) { lines.push(arr.map(csvEscape).join(',')); };
+        var pushSection = function(title) {
+            if (lines.length > 0) lines.push(''); // 空行で区切り
+            pushRow(['# ' + title]);
+        };
+
+        var summary = (data && data.summary) || {};
+        var compData = (data && data.competitor_data) || [];
+        var compPlanner = (data && data.competitor_planner_keywords) || {};
+        var groups = (data && data.groups) || {};
+
+        // ===== 1) 攻め方の整理 =====
+        var strategyItems = [
+            { label: '狙うべき方向性',                 key: 'direction' },
+            { label: '優先して改善するページ',         key: 'priority_pages' },
+            { label: '新規で作るべきページ',           key: 'new_pages' },
+            { label: 'タイトル・見出しに入れるべき語句', key: 'title_tips' },
+            { label: 'ローカルSEO・地域掛け合わせ',    key: 'local_tips' }
+        ];
+        var hasStrategy = strategyItems.some(function(si) { return summary[si.key]; });
+        if (hasStrategy) {
+            pushSection('攻め方の整理');
+            pushRow(['項目', '内容']);
+            strategyItems.forEach(function(si) {
+                var val = summary[si.key];
+                if (val) pushRow([si.label, val]);
+            });
+            // 次にやること
+            var actions = extractActions([summary.priority_pages, summary.new_pages, summary.direction]);
+            if (actions.length > 0) {
+                pushRow(['次にやること', actions.join('\n')]);
+            }
+        }
+
+        // ===== 2) 競合との比較（テキストサマリー） =====
+        var compSumItems = [
+            { label: '競合が押さえている領域',   key: 'competitor_strengths' },
+            { label: '自社が狙えるスキマ',       key: 'competitor_gaps' },
+            { label: '差別化で勝てるポイント',   key: 'competitor_differentiation' }
+        ];
+        var hasCompSum = compSumItems.some(function(si) { return summary[si.key]; });
+        if (hasCompSum) {
+            pushSection('競合との比較');
+            pushRow(['項目', '内容']);
+            compSumItems.forEach(function(si) {
+                var val = summary[si.key];
+                if (val) pushRow([si.label, val]);
+            });
+            var compActions = extractActions([summary.competitor_gaps, summary.competitor_differentiation]);
+            if (compActions.length > 0) {
+                pushRow(['競合に差をつけるには', compActions.join('\n')]);
+            }
+        }
+
+        // ===== 3) 解析済み競合サイト一覧 =====
+        if (Array.isArray(compData) && compData.length > 0) {
+            var okSites = compData.filter(function(c) { return c && c.status === 'ok'; });
+            if (okSites.length > 0) {
+                pushSection('解析済み競合サイト');
+                pushRow(['URL', 'タイトル', 'メモ']);
+                okSites.forEach(function(c) {
+                    pushRow([c.url || '', c.title || '', c.note || '']);
+                });
+            }
+        }
+
+        // ===== 4) キーワード候補一覧 =====
         var headers = [
             'グループ', 'キーワード', 'タイプ', '優先度',
             '推奨ページ', 'アクション',
@@ -969,49 +1036,77 @@ get_header();
             excluded:            '除外'
         };
 
-        var lines = [ headers.map(csvEscape).join(',') ];
-        var groups = (data && data.groups) || {};
-
-        // 表示順: excluded を最後に、それ以外は groupOrder 順
-        var order = groupOrder.slice();
-        Object.keys(groups).forEach(function(k) { if (order.indexOf(k) < 0) order.push(k); });
-
-        order.forEach(function(gk) {
-            var items = groups[gk] || [];
-            if (!Array.isArray(items) || items.length === 0) return;
-            var gLabel = groupMetaLabels[gk] || gk;
-            items.forEach(function(it) {
-                var row = [
-                    gLabel,
-                    it.keyword || '',
-                    it.type || '',
-                    it.priority || '',
-                    it.page_type || '',
-                    it.action || '',
-                    (it.volume === null || it.volume === undefined) ? '' : it.volume,
-                    fmtMonthlyForCsv(it.monthly_volumes),
-                    (it.competition_index === null || it.competition_index === undefined) ? '' : it.competition_index,
-                    (it.competition === null || it.competition === undefined) ? '' : it.competition,
-                    (it.difficulty === null || it.difficulty === undefined) ? '' : it.difficulty,
-                    it.difficulty_source || '',
-                    it.difficulty_band || '',
-                    it.volume_band || '',
-                    (it.relevance_score === null || it.relevance_score === undefined) ? '' : it.relevance_score,
-                    (it.business_fit === null || it.business_fit === undefined) ? '' : it.business_fit,
-                    it.intent || '',
-                    it.cv_distance || '',
-                    (it.win_probability === null || it.win_probability === undefined) ? '' : it.win_probability,
-                    (it.roi_score === null || it.roi_score === undefined) ? '' : it.roi_score,
-                    it.ng_type || '',
-                    it.ng_severity || '',
-                    (it.cpc === null || it.cpc === undefined) ? '' : it.cpc,
-                    (it.current_rank === null || it.current_rank === undefined) ? '' : it.current_rank,
-                    it.reason || '',
-                    it.why_not_target || ''
-                ];
-                lines.push(row.map(csvEscape).join(','));
-            });
+        var hasGroupData = Object.keys(groups).some(function(k) {
+            return Array.isArray(groups[k]) && groups[k].length > 0;
         });
+        if (hasGroupData) {
+            pushSection('キーワード候補一覧');
+            pushRow(headers);
+
+            // 表示順: excluded を最後に、それ以外は groupOrder 順
+            var order = groupOrder.slice();
+            Object.keys(groups).forEach(function(k) { if (order.indexOf(k) < 0) order.push(k); });
+
+            order.forEach(function(gk) {
+                var items = groups[gk] || [];
+                if (!Array.isArray(items) || items.length === 0) return;
+                var gLabel = groupMetaLabels[gk] || gk;
+                items.forEach(function(it) {
+                    pushRow([
+                        gLabel,
+                        it.keyword || '',
+                        it.type || '',
+                        it.priority || '',
+                        it.page_type || '',
+                        it.action || '',
+                        (it.volume === null || it.volume === undefined) ? '' : it.volume,
+                        fmtMonthlyForCsv(it.monthly_volumes),
+                        (it.competition_index === null || it.competition_index === undefined) ? '' : it.competition_index,
+                        (it.competition === null || it.competition === undefined) ? '' : it.competition,
+                        (it.difficulty === null || it.difficulty === undefined) ? '' : it.difficulty,
+                        it.difficulty_source || '',
+                        it.difficulty_band || '',
+                        it.volume_band || '',
+                        (it.relevance_score === null || it.relevance_score === undefined) ? '' : it.relevance_score,
+                        (it.business_fit === null || it.business_fit === undefined) ? '' : it.business_fit,
+                        it.intent || '',
+                        it.cv_distance || '',
+                        (it.win_probability === null || it.win_probability === undefined) ? '' : it.win_probability,
+                        (it.roi_score === null || it.roi_score === undefined) ? '' : it.roi_score,
+                        it.ng_type || '',
+                        it.ng_severity || '',
+                        (it.cpc === null || it.cpc === undefined) ? '' : it.cpc,
+                        (it.current_rank === null || it.current_rank === undefined) ? '' : it.current_rank,
+                        it.reason || '',
+                        it.why_not_target || ''
+                    ]);
+                });
+            });
+        }
+
+        // ===== 5) 競合キーワード比較（Google Keyword Planner） =====
+        var compUrls = Object.keys(compPlanner).filter(function(u) {
+            return Array.isArray(compPlanner[u]) && compPlanner[u].length > 0;
+        });
+        if (compUrls.length > 0) {
+            pushSection('競合キーワード比較（Google Keyword Planner）');
+            pushRow(['競合URL', 'キーワード', '月間検索数', '順位', '推定流入', 'トレンド', '競合度(0-100)', 'CPC']);
+            compUrls.forEach(function(url) {
+                var kws = compPlanner[url];
+                kws.forEach(function(kw) {
+                    pushRow([
+                        url,
+                        kw.text || '',
+                        (kw.volume === null || kw.volume === undefined) ? '' : kw.volume,
+                        (kw.rank === null || kw.rank === undefined) ? '' : kw.rank,
+                        (kw.etv === null || kw.etv === undefined) ? '' : Math.round(kw.etv),
+                        fmtMonthlyForCsv(kw.monthly_volumes),
+                        (kw.competition_index === null || kw.competition_index === undefined) ? '' : kw.competition_index,
+                        (kw.cpc === null || kw.cpc === undefined) ? '' : kw.cpc
+                    ]);
+                });
+            });
+        }
 
         // CRLF で結合（Excel 推奨）
         return lines.join('\r\n');
@@ -1035,12 +1130,16 @@ get_header();
     }
 
     function onCsvExportClick() {
-        if (!lastRenderedData || !lastRenderedData.groups) {
+        if (!lastRenderedData) {
             showToast('出力するデータがありません。先に調査を実行してください', true);
             return;
         }
         try {
             var csvStr = buildCsvFromData(lastRenderedData);
+            if (!csvStr) {
+                showToast('出力するデータがありません。先に調査を実行してください', true);
+                return;
+            }
             var now = new Date();
             var pad = function(n) { return (n < 10 ? '0' : '') + n; };
             var dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate())
