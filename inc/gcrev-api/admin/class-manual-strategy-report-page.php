@@ -641,24 +641,39 @@ class Gcrev_Manual_Strategy_Report_Page {
         if ( $kind === 'simple' && (int) ( $version['detail_id'] ?? 0 ) > 0 ) {
             $detail_route = home_url( '/strategy-report-detail/' );
             $ver_param    = ! empty( $version['id'] ) ? '?ver=' . rawurlencode( $version['id'] ) : '';
-            $html = preg_replace_callback(
-                '#href=(["\'])([^"\']+?\.html?)((?:#[^"\']*)?)\1#i',
+
+            // シンプルな regex で href 値だけ抜き、判定は PHP 側で行う
+            // （複雑な regex は PCRE backtrack/JIT stack limit で失敗することがある）
+            $rewritten = preg_replace_callback(
+                '/href\s*=\s*(["\'])([^"\'\s]+)\1/i',
                 function ( $m ) use ( $detail_route, $ver_param ) {
                     $url = $m[2];
-                    if ( preg_match( '#^https?://#i', $url ) ) return $m[0];
+                    // 絶対URL/protocol-relative はスキップ
+                    if ( strncasecmp( $url, 'http://', 7 ) === 0 ) return $m[0];
+                    if ( strncasecmp( $url, 'https://', 8 ) === 0 ) return $m[0];
                     if ( strpos( $url, '//' ) === 0 ) return $m[0];
-                    $anchor = $m[3];
+                    // .html / .htm（アンカー付き含む）以外はスキップ
+                    $hash_pos = strpos( $url, '#' );
+                    $path     = $hash_pos !== false ? substr( $url, 0, $hash_pos ) : $url;
+                    $anchor   = $hash_pos !== false ? substr( $url, $hash_pos ) : '';
+                    if ( ! preg_match( '/\.html?$/i', $path ) ) return $m[0];
                     return 'href=' . $m[1] . $detail_route . $ver_param . $anchor . $m[1];
                 },
                 $html
             );
+            if ( is_string( $rewritten ) ) {
+                $html = $rewritten;
+            } else {
+                $log( '[serve] preg_replace_callback returned non-string (PCRE error code: ' . preg_last_error() . '), keep original html' );
+            }
         }
 
         // フローティングナビ（履歴一覧 / ダッシュボードへ戻る）を </body> 直前に注入
         $nav = self::build_floating_nav( $kind );
-        if ( $nav !== '' ) {
+        if ( $nav !== '' && is_string( $html ) ) {
             if ( stripos( $html, '</body>' ) !== false ) {
-                $html = preg_replace( '#</body>#i', $nav . '</body>', $html, 1 );
+                $replaced = preg_replace( '#</body>#i', $nav . '</body>', $html, 1 );
+                $html = is_string( $replaced ) ? $replaced : ( $html . $nav );
             } else {
                 $html .= $nav;
             }
