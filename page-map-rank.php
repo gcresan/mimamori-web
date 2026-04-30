@@ -844,6 +844,10 @@ get_header();
                 <span class="rt-btn__icon">&#x21BB;</span>
                 最新の情報を見る
             </button>
+            <button class="rt-btn" id="meoExportCsvBtn" type="button" style="display:none;">
+                <span class="rt-btn__icon">&#x2193;</span>
+                CSV ダウンロード
+            </button>
         </div>
     </div>
 
@@ -1791,10 +1795,13 @@ get_header();
     // Keywords table
     // =========================================================
     function renderTable() {
+        var exportBtn = document.getElementById('meoExportCsvBtn');
         if (!keywordsList || keywordsList.length === 0) {
+            if (exportBtn) exportBtn.style.display = 'none';
             showState('empty');
             return;
         }
+        if (exportBtn) exportBtn.style.display = 'inline-flex';
 
         // Build header
         var mapsRankTip = 'Googleマップ単体（マップアプリ／PCの「マップ」タブ）で検索したときの表示順位です。<br>地図そのものから探すユーザーにどう見えているかを表します。';
@@ -1856,6 +1863,92 @@ get_header();
 
         tbody.innerHTML = html;
     }
+
+    // =========================================================
+    // CSV export
+    // =========================================================
+    function escapeCsv(str) {
+        return String(str == null ? '' : str).replace(/"/g, '""');
+    }
+
+    function rankCellForCsv(rank) {
+        if (rank === null || rank === undefined) return '圏外';
+        return rank;
+    }
+
+    window.exportMeoCsv = function() {
+        if (!keywordsList || keywordsList.length === 0) return;
+
+        var bom = "\uFEFF";
+        var deviceLabel = (currentDevice === 'desktop') ? 'PC' : 'スマホ';
+
+        var headerCols = [
+            'キーワード',
+            'デバイス',
+            'マップ順位（現在）',
+            '地域順位（現在）',
+            '前回比'
+        ];
+        for (var d = 0; d < dayLabels.length; d++) {
+            headerCols.push(dayLabels[d] + '（マップ順位）');
+        }
+        headerCols.push('最終取得日');
+
+        var lines = [headerCols.map(function(c) { return '"' + escapeCsv(c) + '"'; }).join(',')];
+
+        for (var i = 0; i < keywordsList.length; i++) {
+            var kw = keywordsList[i];
+            var cur = kw.current ? kw.current[currentDevice] : null;
+            var daily = kw.daily ? kw.daily[currentDevice] : {};
+
+            var mapsRank = (cur && cur.is_ranked) ? rankCellForCsv(cur.maps_rank) : (cur ? '圏外' : '未取得');
+            var finderRank = (cur && cur.finder_rank != null) ? cur.finder_rank : (cur ? '圏外' : '未取得');
+            var change = (cur && cur.change != null) ? cur.change : '';
+            var fetchedAt = (cur && cur.fetched_at) ? cur.fetched_at : (kw.fetched_at || '');
+
+            var row = [];
+            row.push('"' + escapeCsv(kw.keyword) + '"');
+            row.push('"' + escapeCsv(deviceLabel) + '"');
+            row.push(mapsRank);
+            row.push(finderRank);
+            row.push(change);
+            for (var dd = 0; dd < dayKeys.length; dd++) {
+                var dayData = daily ? daily[dayKeys[dd]] : null;
+                if (!dayData) {
+                    row.push('');
+                } else if (dayData.maps_rank == null) {
+                    row.push('圏外');
+                } else {
+                    row.push(dayData.maps_rank);
+                }
+            }
+            row.push('"' + escapeCsv(fetchedAt) + '"');
+
+            lines.push(row.join(','));
+        }
+
+        var blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'map-rank-' + currentDevice + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+        link.click();
+    };
+
+    // ボタンにイベントを紐付け（DOM が既に構築済みでも対応）
+    (function() {
+        function bindCsvBtn() {
+            var btn = document.getElementById('meoExportCsvBtn');
+            if (btn && !btn.dataset.bound) {
+                btn.addEventListener('click', window.exportMeoCsv);
+                btn.dataset.bound = '1';
+            }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bindCsvBtn);
+        } else {
+            bindCsvBtn();
+        }
+    })();
 
     // =========================================================
     // Format helpers
