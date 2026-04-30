@@ -6910,6 +6910,7 @@ function gcrev_meo_results_create_table(): void {
         user_id BIGINT(20) UNSIGNED NOT NULL,
         keyword_id BIGINT(20) UNSIGNED NOT NULL,
         device VARCHAR(10) NOT NULL,
+        base_mode VARCHAR(20) NOT NULL DEFAULT '',
         maps_rank SMALLINT UNSIGNED NULL,
         finder_rank SMALLINT UNSIGNED NULL,
         rating DECIMAL(2,1) NULL,
@@ -6921,7 +6922,7 @@ function gcrev_meo_results_create_table(): void {
         fetched_at DATETIME NOT NULL,
         created_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
-        UNIQUE KEY user_kw_device_date (user_id, keyword_id, device, fetch_date),
+        UNIQUE KEY user_kw_device_mode_date (user_id, keyword_id, device, base_mode, fetch_date),
         KEY user_fetched (user_id, fetched_at)
     ) {$charset_collate};";
 
@@ -6937,6 +6938,17 @@ function gcrev_meo_results_create_table(): void {
     );
     if ( (int) $old_key_exists > 0 ) {
         $wpdb->query( "ALTER TABLE {$table} DROP INDEX user_kw_device_week" );
+    }
+
+    // 旧ユニークキー(base_mode 無し)を削除（base_mode 込みに移行）
+    $legacy_unique_exists = $wpdb->get_var(
+        "SELECT COUNT(*) FROM information_schema.STATISTICS
+         WHERE table_schema = DATABASE()
+           AND table_name = '{$table}'
+           AND index_name = 'user_kw_device_date'"
+    );
+    if ( (int) $legacy_unique_exists > 0 ) {
+        $wpdb->query( "ALTER TABLE {$table} DROP INDEX user_kw_device_date" );
     }
 }
 

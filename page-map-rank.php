@@ -1155,26 +1155,10 @@ get_header();
                         showToast(json.message || '切替に失敗しました', 'error');
                         return;
                     }
-                    // 共通キャッシュは破棄
+                    // 共通キャッシュは破棄して fetchMeoData で新モードのデータを取得
                     if (window.gcrevCache) window.gcrevCache.clear('map_rank');
-
-                    var newLoc = json.data || {};
-                    // 保存済み per-mode を維持（API レスポンスに含まれない場合は現状維持）
-                    if (!newLoc.saved_by_mode && meoData && meoData.location) {
-                        newLoc.saved_by_mode = meoData.location.saved_by_mode;
-                    }
-
-                    var newHash = locationHashFromInputs(newMode, newLoc.lat || '', newLoc.lng || '', newLoc.radius || 1000);
-                    var snap = getLocationSnapshot(newHash);
-                    if (snap) {
-                        // saved_by_mode を引き継ぐ
-                        if (snap.location) snap.location.saved_by_mode = newLoc.saved_by_mode;
-                        renderFromSnapshot(snap);
-                        showToast('基準地点を切り替えました（取得済みデータを表示中）');
-                    } else {
-                        showUntrackedLocationState(newLoc);
-                        showToast('基準地点を切り替えました。「最新の情報を見る」を押してこの地点で計測してください。');
-                    }
+                    showToast('基準地点を切り替えました');
+                    fetchMeoData();
                 })
                 .catch(function() {
                     btn.disabled = false;
@@ -2380,24 +2364,37 @@ get_header();
 
         var devices = ['mobile', 'desktop'];
         var deviceLabels = { mobile: 'スマホ版', desktop: 'PC版' };
-        var totalSteps = keywordsList.length * devices.length;
+
+        // 保存済みのモードを列挙（保存されていないモードはスキップ）
+        var savedByMode = (meoData && meoData.location && meoData.location.saved_by_mode) || {};
+        var modes = ['business', 'city', 'custom'].filter(function(m) {
+            var s = savedByMode[m];
+            return s && (s.address || s.lat);
+        });
+        // 保存済みモードが無ければ active モードだけ取得
+        if (modes.length === 0) modes = [''];
+
+        var modeLabels = { business: '自社', city: '市の中心', custom: '任意', '': '' };
+
+        var totalSteps = keywordsList.length * devices.length * modes.length;
         showProgress(true, totalSteps);
 
         var completed = 0;
         var errors = 0;
-        var stepIndex = 0;
 
-        // Build sequential task list: [{ kw, device }, ...]
+        // タスク順序: モード × キーワード × デバイス
+        // （同一モードを連続させて active mode 切替回数を最小化）
         var tasks = [];
-        for (var k = 0; k < keywordsList.length; k++) {
-            for (var d = 0; d < devices.length; d++) {
-                tasks.push({ kw: keywordsList[k], device: devices[d] });
+        for (var mi = 0; mi < modes.length; mi++) {
+            for (var k = 0; k < keywordsList.length; k++) {
+                for (var d = 0; d < devices.length; d++) {
+                    tasks.push({ kw: keywordsList[k], device: devices[d], mode: modes[mi] });
+                }
             }
         }
 
         function fetchNext(index) {
             if (index >= tasks.length) {
-                // All done
                 showProgressComplete(completed, errors);
                 setTimeout(function() {
                     showProgress(false);
@@ -2406,14 +2403,18 @@ get_header();
                     var msg = completed + '件の順位データを取得しました。';
                     if (errors > 0) msg += '（' + errors + '件のエラー）';
                     showToast(msg, errors > 0 ? 'error' : '');
-                    // 古いキャッシュを破棄してから再取得（force=1 で DB 更新済みなので必須）
-                    if (window.gcrevCache) window.gcrevCache.clear('map_rank');
-                    // 現在の地点に対するスナップショットも一旦無効化（fetchMeoData が新データで上書き保存する）
-                    if (window.gcrevCache && meoData && meoData.location) {
-                        var curHash = locationHash(meoData.location);
-                        if (curHash) window.gcrevCache.clear('map_rank_loc:' + curHash);
+                    // 全モードのキャッシュを破棄してから再取得
+                    if (window.gcrevCache) {
+                        window.gcrevCache.clear('map_rank');
+                        ['business','city','custom'].forEach(function(m) {
+                            var s = savedByMode[m];
+                            if (s) {
+                                var h = locationHashFromInputs(m, s.lat || '', s.lng || '', s.radius || 1000);
+                                if (h) window.gcrevCache.clear('map_rank_loc:' + h);
+                            }
+                        });
                     }
-                    fetchMeoData(); // Reload table
+                    fetchMeoData(); // Reload table for active mode
                 }, 1200);
                 return;
             }
@@ -2421,11 +2422,13 @@ get_header();
             var task = tasks[index];
             var stepNum = index + 1;
             var deviceLabel = deviceLabels[task.device];
-            updateProgressTextDual(stepNum, totalSteps, task.kw.keyword, deviceLabel);
+            var modeLabel = task.mode ? '【' + (modeLabels[task.mode] || task.mode) + '】' : '';
+            updateProgressTextDual(stepNum, totalSteps, modeLabel + task.kw.keyword, deviceLabel);
 
             var url = restBase + 'meo/rankings?device=' + encodeURIComponent(task.device)
                     + '&keyword_id=' + encodeURIComponent(task.kw.keyword_id)
                     + '&force=1';
+            if (task.mode) url += '&mode=' + encodeURIComponent(task.mode);
 
             fetch(url, {
                 credentials: 'same-origin',

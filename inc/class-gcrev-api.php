@@ -7485,6 +7485,11 @@ PROMPT;
             $force        = absint( $request->get_param( 'force' ) );
             $cache_only   = absint( $request->get_param( 'cache_only' ) );
             $radius_param = absint( $request->get_param( 'radius' ) );
+            // mode 指定があれば、その mode の per-mode 保存値を使う（複数モードの一括取得用）
+            $mode_param   = sanitize_text_field( $request->get_param( 'mode' ) ?: '' );
+            if ( ! in_array( $mode_param, [ 'business', 'city', 'custom' ], true ) ) {
+                $mode_param = '';
+            }
 
             global $wpdb;
             $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
@@ -7537,10 +7542,21 @@ PROMPT;
             }
 
             // 座標モード判定
-            $meo_lat     = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
-            $meo_lng     = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
-            $meo_address = (string) get_user_meta( $user_id, '_gcrev_meo_address', true );
-            $meo_radius  = (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000;
+            // mode 指定があれば per-mode 保存値、なければ legacy アクティブ値を使う
+            if ( $mode_param !== '' ) {
+                $mp = "_gcrev_meo_{$mode_param}_";
+                $meo_lat     = (string) get_user_meta( $user_id, $mp . 'lat', true );
+                $meo_lng     = (string) get_user_meta( $user_id, $mp . 'lng', true );
+                $meo_address = (string) get_user_meta( $user_id, $mp . 'address', true );
+                $meo_radius  = (int) get_user_meta( $user_id, $mp . 'radius', true ) ?: 1000;
+                $active_mode = $mode_param;
+            } else {
+                $meo_lat     = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
+                $meo_lng     = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
+                $meo_address = (string) get_user_meta( $user_id, '_gcrev_meo_address', true );
+                $meo_radius  = (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000;
+                $active_mode = (string) ( get_user_meta( $user_id, '_gcrev_meo_base_mode', true ) ?: '' );
+            }
 
             // 市区町村中心部の自動検出（手動座標が未設定時）
             $location_source = 'manual';
@@ -7593,7 +7609,8 @@ PROMPT;
                         $cached['maps']['rank'] ?? null,
                         $cached['local_finder']['rank'] ?? null,
                         $cached['maps']['store'] ?? null,
-                        $cached['maps']['competitors'] ?? []
+                        $cached['maps']['competitors'] ?? [],
+                        $active_mode
                     );
 
                     return new \WP_REST_Response( $cached, 200 );
@@ -7825,8 +7842,8 @@ PROMPT;
                 date( 'Y-m-d H:i:s' ) . " [MEO-SAVE] kw='{$keyword_text}' device={$device} maps_rank=" . var_export($maps_rank, true) . " finder_rank=" . var_export($finder_rank, true) . " my_biz=" . ($my_biz ? 'found' : 'NULL') . "\n",
                 FILE_APPEND );
 
-            // 日次履歴テーブルにも保存（gcrev_meo_results — UPSERT）
-            $this->meo_save_to_history( $user_id, $kw_id, $device, $maps_rank, $finder_rank, $store_data, $competitors );
+            // 日次履歴テーブルにも保存（gcrev_meo_results — UPSERT、base_mode 別）
+            $this->meo_save_to_history( $user_id, $kw_id, $device, $maps_rank, $finder_rank, $store_data, $competitors, $active_mode );
 
             return new \WP_REST_Response( $result, 200 );
 
@@ -7852,7 +7869,8 @@ PROMPT;
         ?int $maps_rank,
         ?int $finder_rank,
         ?array $store_data,
-        array $competitors
+        array $competitors,
+        string $base_mode = ''
     ): void {
         global $wpdb;
 
@@ -7896,9 +7914,9 @@ PROMPT;
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $sql = $wpdb->prepare(
             "INSERT INTO {$meo_table}
-             (user_id, keyword_id, device, maps_rank, finder_rank, rating, reviews_count,
+             (user_id, keyword_id, device, base_mode, maps_rank, finder_rank, rating, reviews_count,
               store_data, competitors_data, iso_year_week, fetch_date, fetched_at, created_at)
-             VALUES (%d, %d, %s, {$maps_rank_sql}, {$finder_rank_sql}, {$rating_sql}, {$reviews_sql},
+             VALUES (%d, %d, %s, %s, {$maps_rank_sql}, {$finder_rank_sql}, {$rating_sql}, {$reviews_sql},
                      {$store_sql}, {$comp_sql}, %s, %s, %s, %s)
              ON DUPLICATE KEY UPDATE
               maps_rank        = VALUES(maps_rank),
@@ -7908,7 +7926,7 @@ PROMPT;
               store_data       = VALUES(store_data),
               competitors_data = VALUES(competitors_data),
               fetched_at       = VALUES(fetched_at)",
-            $user_id, $keyword_id, $device,
+            $user_id, $keyword_id, $device, $base_mode,
             $iso_year_week, $fetch_date, $fetched_at, $fetched_at
         );
 
@@ -8212,7 +8230,8 @@ PROMPT;
         ?int $reviews_count,
         ?array $store_data,
         ?array $competitors_data,
-        string $iso_week
+        string $iso_week,
+        string $base_mode = ''
     ): bool {
         global $wpdb;
 
@@ -8235,9 +8254,9 @@ PROMPT;
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $sql = $wpdb->prepare(
             "INSERT INTO {$table}
-             (user_id, keyword_id, device, maps_rank, finder_rank, rating, reviews_count,
+             (user_id, keyword_id, device, base_mode, maps_rank, finder_rank, rating, reviews_count,
               store_data, competitors_data, iso_year_week, fetch_date, fetched_at, created_at)
-             VALUES (%d, %d, %s, {$maps_rank_sql}, {$finder_rank_sql}, {$rating_sql}, {$reviews_sql},
+             VALUES (%d, %d, %s, %s, {$maps_rank_sql}, {$finder_rank_sql}, {$rating_sql}, {$reviews_sql},
                      {$store_sql}, {$comp_sql}, %s, %s, %s, %s)
              ON DUPLICATE KEY UPDATE
               maps_rank        = VALUES(maps_rank),
@@ -8250,6 +8269,7 @@ PROMPT;
             $user_id,
             $keyword_id,
             $device,
+            $base_mode,
             $iso_week,
             $date,
             $now,
@@ -8418,17 +8438,32 @@ PROMPT;
             ]);
         }
 
+        // アクティブな base_mode で履歴をフィルタする（モード別に保存しているため）
+        // legacy データ（base_mode=''）は active_mode が空のときだけフォールバックで使う
+        $history_active_mode = (string) ( get_user_meta( $user_id, '_gcrev_meo_base_mode', true ) ?: '' );
+        $mode_filter_values  = $history_active_mode === ''
+            ? [ '' ]
+            : [ $history_active_mode, '' ]; // 移行期: base_mode 列が空の旧データもヒット
+        $mode_placeholders = implode( ',', array_fill( 0, count( $mode_filter_values ), '%s' ) );
+
         $day_placeholders = implode( ',', array_fill( 0, count( $days ), '%s' ) );
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT keyword_id, device, maps_rank, finder_rank, rating, reviews_count,
+            "SELECT keyword_id, device, base_mode, maps_rank, finder_rank, rating, reviews_count,
                     store_data, competitors_data, fetch_date, fetched_at
              FROM {$meo_table}
              WHERE user_id = %d
                AND keyword_id IN ({$placeholders})
                AND fetch_date IN ({$day_placeholders})
-             ORDER BY fetched_at DESC",
-            ...array_merge( [ $user_id ], $keyword_ids, $days )
+               AND base_mode IN ({$mode_placeholders})
+             ORDER BY (base_mode = %s) DESC, fetched_at DESC",
+            ...array_merge(
+                [ $user_id ],
+                $keyword_ids,
+                $days,
+                $mode_filter_values,
+                [ $history_active_mode ]
+            )
         ), ARRAY_A );
 
         $grouped = [];
@@ -8524,13 +8559,14 @@ PROMPT;
                             'reviews'     => $t_cached['maps']['store']['reviews_count'] ?? null,
                         ];
 
-                        // DB にも保存を試行（UPSERT）
+                        // DB にも保存を試行（UPSERT、base_mode 別）
                         $this->meo_save_to_history(
                             $user_id, $kw_id, $device,
                             (int) $t_cached['maps']['rank'],
                             isset( $t_cached['local_finder']['rank'] ) ? (int) $t_cached['local_finder']['rank'] : null,
                             $t_cached['maps']['store'] ?? null,
-                            $t_cached['maps']['competitors'] ?? []
+                            $t_cached['maps']['competitors'] ?? [],
+                            $active_mode
                         );
                     }
                 }
