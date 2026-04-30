@@ -32,8 +32,12 @@ $mw_gbp_address       = (string) get_user_meta( $user_id, '_gcrev_gbp_location_a
 
 // 自社住所プリセット
 // 1. base_mode が business で保存済み → 保存値（住所・lat/lng）をそのまま使う
-// 2. それ以外 → 保存済みの meo_address（前回業務住所として使ったもの）を流用
-// 3. 上記もなければ GBP 住所の整形版
+// 2. GBP 住所が登録されていれば GBP 住所を使う
+// 3. mode 未保存（旧データ）で meo_address だけ残っていれば legacy として流用
+//
+// 注意: city / custom モードで保存された meo_address を business プリセットに
+// 流用しないこと（過去に発生した不具合: 市中心モードで保存後、自社の住所ラジオを
+// 押すと city の住所がプリセットされてしまう）
 $mw_biz_address = '';
 $mw_biz_lat = '';
 $mw_biz_lng = '';
@@ -41,12 +45,15 @@ if ( $mw_saved_meo_mode === 'business' && $mw_saved_meo_address !== '' ) {
     $mw_biz_address = $mw_saved_meo_address;
     $mw_biz_lat     = $mw_saved_meo_lat;
     $mw_biz_lng     = $mw_saved_meo_lng;
-} elseif ( $mw_saved_meo_address !== '' ) {
-    $mw_biz_address = $mw_saved_meo_address;
 } elseif ( $mw_gbp_address !== '' ) {
     // GBP 住所はフォーマットが Google API の生データ（"Ehime甲 3-1平井町松山市" など）
     // で正しくジオコーディングできないため、ベストエフォートで成形。
     $mw_biz_address = trim( preg_replace( '/\s+/u', '', $mw_gbp_address ) );
+} elseif ( $mw_saved_meo_mode === '' && $mw_saved_meo_address !== '' ) {
+    // legacy: モード未保存のデータは business と仮定して流用
+    $mw_biz_address = $mw_saved_meo_address;
+    $mw_biz_lat     = $mw_saved_meo_lat;
+    $mw_biz_lng     = $mw_saved_meo_lng;
 }
 
 $mw_area_pref = (string) get_user_meta( $user_id, 'gcrev_client_area_pref', true );
@@ -1056,7 +1063,7 @@ get_header();
                 <div style="font-size:11px; color:#9ca3af; margin-top:4px;">基準地点を中心に、この半径内での順位を計測します</div>
             </div>
             <div class="meo-base-modal__actions">
-                <button class="rt-btn meo-base-reset-btn" id="meoBaseResetBtn" type="button" title="市区町村の中心の情報に戻します">&#x21BB; 市の中心に戻す</button>
+                <button class="rt-btn meo-base-reset-btn" id="meoBaseResetBtn" type="button" title="選択中のモードのプリセット住所・座標で再設定します">&#x21BB; プリセットに戻す</button>
                 <span style="flex:1;"></span>
                 <button class="rt-btn" id="meoBaseCancelBtn" type="button">キャンセル</button>
                 <button class="rt-btn rt-btn--primary" id="meoBaseSaveBtn" type="button">&#x1F4BE; 保存する</button>
@@ -1165,10 +1172,9 @@ get_header();
             if (currentBaseMode) {
                 modeFormCache[currentBaseMode] = readBaseForm();
             }
-            // リセットボタンの利用可否（city プリセットが無いと無効化）
-            var resetBtn = document.getElementById('meoBaseResetBtn');
-            if (resetBtn) {
-                resetBtn.disabled = !(basePresets.city && basePresets.city.available);
+            // リセットボタンの表示・ラベル更新
+            if (typeof refreshResetBtnState === 'function') {
+                refreshResetBtnState();
             }
             baseModal.classList.add('active');
             updateVerifyLink();
@@ -1403,25 +1409,56 @@ get_header();
         if (baseModalClose) baseModalClose.addEventListener('click', closeBaseModal);
         if (baseCancelBtn) baseCancelBtn.addEventListener('click', closeBaseModal);
 
-        // リセットボタン: 市区町村の中心モードに強制リセット（フォーム入力を初期化）
+        // リセットボタン: 選択中モードのプリセットでフォームを再設定
         var baseResetBtn = document.getElementById('meoBaseResetBtn');
+        function refreshResetBtnState() {
+            if (!baseResetBtn) return;
+            var checked = document.querySelector('input[name="meoBaseMode"]:checked');
+            var mode = checked ? checked.value : '';
+            if (mode === 'city') {
+                baseResetBtn.style.display = '';
+                baseResetBtn.disabled = !(basePresets.city && basePresets.city.available);
+                baseResetBtn.innerHTML = '&#x21BB; 市の中心に戻す';
+                baseResetBtn.title = '市区町村の中心の住所・座標で再設定します';
+            } else if (mode === 'business') {
+                baseResetBtn.style.display = '';
+                baseResetBtn.disabled = !(basePresets.business && basePresets.business.available);
+                baseResetBtn.innerHTML = '&#x21BB; GBP の住所に戻す';
+                baseResetBtn.title = 'Google ビジネスプロフィールに登録された住所で再設定します';
+            } else {
+                // 任意の場所はプリセットがないので非表示
+                baseResetBtn.style.display = 'none';
+            }
+        }
         if (baseResetBtn) {
             baseResetBtn.addEventListener('click', function() {
-                if (!basePresets.city || !basePresets.city.available) {
-                    showToast('市区町村が登録されていないため初期化できません。', 'error');
-                    return;
+                var checked = document.querySelector('input[name="meoBaseMode"]:checked');
+                var mode = checked ? checked.value : '';
+                if (mode === 'city') {
+                    if (!basePresets.city || !basePresets.city.available) {
+                        showToast('市区町村が登録されていないため初期化できません。', 'error');
+                        return;
+                    }
+                    delete modeFormCache.city;
+                    applyBaseMode('city');
+                    currentBaseMode = 'city';
+                    showToast('市区町村の中心に戻しました。「保存する」を押すと反映されます。');
+                } else if (mode === 'business') {
+                    if (!basePresets.business || !basePresets.business.available) {
+                        showToast('GBP の住所が登録されていないため初期化できません。', 'error');
+                        return;
+                    }
+                    delete modeFormCache.business;
+                    applyBaseMode('business');
+                    currentBaseMode = 'business';
+                    showToast('GBP の住所に戻しました。「保存する」を押すと反映されます。');
                 }
-                // city モードに切替＆フォーム初期化（modeFormCache.city も破棄して常にプリセット適用）
-                delete modeFormCache.city;
-                var cityRadio = document.querySelector('input[name="meoBaseMode"][value="city"]');
-                if (cityRadio && !cityRadio.disabled) {
-                    cityRadio.checked = true;
-                }
-                applyBaseMode('city');
-                currentBaseMode = 'city';
-                showToast('市区町村の中心に戻しました。「保存する」を押すと反映されます。');
             });
         }
+        // ラジオ変更時にリセットボタンの表示・ラベルを更新
+        document.querySelectorAll('input[name="meoBaseMode"]').forEach(function(r) {
+            r.addEventListener('change', refreshResetBtnState);
+        });
         if (baseModal) {
             baseModal.addEventListener('click', function(e) {
                 if (e.target === baseModal) closeBaseModal();
