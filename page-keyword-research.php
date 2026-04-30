@@ -335,6 +335,24 @@ get_header();
 .kwr-csv-export-btn:hover { background: #225e6e; }
 .kwr-csv-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* CSV ダウンロードバー（攻め方の整理の上に常駐） */
+.kwr-download-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 16px 20px; margin-bottom: 20px; flex-wrap: wrap;
+    background: linear-gradient(90deg, rgba(45,122,143,0.08) 0%, rgba(45,122,143,0.04) 100%);
+    border: 1px solid rgba(45,122,143,0.25);
+    border-left: 4px solid #2D7A8F;
+    border-radius: var(--mw-radius-md);
+}
+.kwr-download-bar__text { flex: 1; min-width: 240px; }
+.kwr-download-bar__title { font-size: 14px; font-weight: 700; color: var(--mw-text-heading); margin-bottom: 4px; }
+.kwr-download-bar__desc { font-size: 12px; color: var(--mw-text-secondary); line-height: 1.6; }
+.kwr-download-bar .kwr-csv-export-btn { flex-shrink: 0; padding: 10px 18px; font-size: 14px; }
+@media (max-width: 600px) {
+    .kwr-download-bar { padding: 14px 16px; }
+    .kwr-download-bar .kwr-csv-export-btn { width: 100%; justify-content: center; }
+}
+
 /* 戦略バッジ（ROI / 勝ちやすさ） */
 .kwr-roi-high { background: rgba(39,174,96,0.15); color: #15803d; font-weight: 600; }
 .kwr-roi-mid  { background: rgba(201,168,76,0.15); color: #a16207; font-weight: 600; }
@@ -566,6 +584,18 @@ get_header();
     <!-- データ精度表示 -->
     <div class="kwr-accuracy" id="kwrAccuracy"></div>
 
+    <!-- ===== CSV ダウンロードバー（調査結果がある時のみ表示） ===== -->
+    <div id="kwrDownloadBar" class="kwr-download-bar" style="display:none;">
+        <div class="kwr-download-bar__text">
+            <div class="kwr-download-bar__title">📥 調査結果をCSVでダウンロード</div>
+            <div class="kwr-download-bar__desc">攻め方の整理・競合との比較・キーワード候補一覧・競合キーワード比較を1つのファイルにまとめて保存できます。</div>
+        </div>
+        <button type="button" id="kwrCsvExportBtn" class="kwr-csv-export-btn" title="攻め方の整理・競合との比較・キーワード候補一覧・競合キーワード比較を1つのCSVに書き出します">
+            <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"><path d="M3 17a1 1 0 001 1h12a1 1 0 001-1v-4a1 1 0 10-2 0v3H5v-3a1 1 0 10-2 0v4z"/><path d="M9 12.586V3a1 1 0 112 0v9.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586z"/></svg>
+            CSV で書き出す
+        </button>
+    </div>
+
     <!-- ===== AI戦略サマリー ===== -->
     <div class="kwr-summary kwr-summary--strategy" id="kwrSummary" style="display:none;">
         <div class="kwr-summary__header">
@@ -588,13 +618,7 @@ get_header();
 
     <!-- ===== グループ別キーワード一覧 ===== -->
     <div id="kwrResults" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
-            <h2 class="kwr-results-title" style="margin:0;">キーワード候補一覧</h2>
-            <button type="button" id="kwrCsvExportBtn" class="kwr-csv-export-btn" title="攻め方の整理・競合との比較・キーワード候補一覧・競合キーワード比較を1つのCSVに書き出します">
-                <svg viewBox="0 0 20 20" fill="currentColor" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"><path d="M3 17a1 1 0 001 1h12a1 1 0 001-1v-4a1 1 0 10-2 0v3H5v-3a1 1 0 10-2 0v4z"/><path d="M9 12.586V3a1 1 0 112 0v9.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586z"/></svg>
-                CSV で書き出す
-            </button>
-        </div>
+        <h2 class="kwr-results-title" style="margin:0 0 20px;">キーワード候補一覧</h2>
         <div id="kwrGroups"></div>
     </div>
 
@@ -856,6 +880,7 @@ get_header();
         document.getElementById('kwrCompSummary').style.display = 'none';
         document.getElementById('kwrCompKeywords').style.display = 'none';
         document.getElementById('kwrResults').style.display = 'none';
+        document.getElementById('kwrDownloadBar').style.display = 'none';
         document.getElementById('kwrAccuracy').style.display = 'none';
         document.getElementById('kwrMeta').innerHTML = '';
 
@@ -1166,6 +1191,21 @@ get_header();
         renderCompKeywords(data.competitor_planner_keywords || {});
         renderGroups(data.groups || {});
         renderMeta(data.meta || {});
+
+        // CSV ダウンロードバー: いずれかのセクションにデータがあれば表示
+        var summary = data.summary || {};
+        var hasSummary = ['direction','priority_pages','new_pages','title_tips','local_tips',
+            'competitor_strengths','competitor_gaps','competitor_differentiation']
+            .some(function(k) { return summary[k]; });
+        var hasGroups = Object.keys(data.groups || {}).some(function(k) {
+            return Array.isArray(data.groups[k]) && data.groups[k].length > 0;
+        });
+        var hasCompPlanner = Object.keys(data.competitor_planner_keywords || {}).some(function(u) {
+            var v = data.competitor_planner_keywords[u];
+            return Array.isArray(v) && v.length > 0;
+        });
+        document.getElementById('kwrDownloadBar').style.display =
+            (hasSummary || hasGroups || hasCompPlanner) ? '' : 'none';
     }
 
     /* ===== データ精度表示 ===== */
