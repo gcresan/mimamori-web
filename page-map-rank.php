@@ -1881,6 +1881,14 @@ get_header();
 
         var bom = "\uFEFF";
         var deviceLabel = (currentDevice === 'desktop') ? 'PC' : 'スマホ';
+        var loc = (meoData && meoData.location) ? meoData.location : {};
+        var baseModeMap = { business: '店舗住所', address: '指定住所', coord: '指定座標', custom: 'カスタム' };
+        var baseModeLabel = baseModeMap[loc.base_mode] || loc.base_mode || '';
+        var radiusLabel = loc.radius
+            ? (loc.radius >= 1000 ? (loc.radius / 1000) + 'km' : loc.radius + 'm')
+            : '';
+        var coordLabel = (loc.lat && loc.lng) ? (loc.lat + ', ' + loc.lng) : '';
+        var nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
 
         var headerCols = [
             'キーワード',
@@ -1894,7 +1902,22 @@ get_header();
         }
         headerCols.push('最終取得日');
 
-        var lines = [headerCols.map(function(c) { return '"' + escapeCsv(c) + '"'; }).join(',')];
+        var lines = [];
+        // ===== 基準地点メタ情報 =====
+        lines.push('"# 基準地点情報"');
+        lines.push('"項目","値"');
+        lines.push('"基準地点ラベル","' + escapeCsv(loc.base_label || '') + '"');
+        lines.push('"基準地点（住所）","' + escapeCsv(loc.address || '') + '"');
+        lines.push('"基準地点（緯度・経度）","' + escapeCsv(coordLabel) + '"');
+        lines.push('"基準地点モード","' + escapeCsv(baseModeLabel) + '"');
+        lines.push('"基準地点からの検索半径","' + escapeCsv(radiusLabel) + '"');
+        lines.push('"対象デバイス","' + escapeCsv(deviceLabel) + '"');
+        lines.push('"出力日時","' + escapeCsv(nowStr) + '"');
+        lines.push('');
+
+        // ===== キーワード順位データ =====
+        lines.push('"# キーワード順位"');
+        lines.push(headerCols.map(function(c) { return '"' + escapeCsv(c) + '"'; }).join(','));
 
         for (var i = 0; i < keywordsList.length; i++) {
             var kw = keywordsList[i];
