@@ -633,6 +633,13 @@ get_header();
     <!-- トースト -->
     <div class="seo-toast" id="seoToast"></div>
 
+    <!-- ===== ヘッダーアクション（CSVダウンロード等） ===== -->
+    <div id="seoActionBar" style="display:none; justify-content:flex-end; margin-bottom:16px;">
+        <button class="seo-btn" id="seoCsvBtn" type="button" style="display:inline-flex;">
+            &#x2B07;&#xFE0F; CSV ダウンロード
+        </button>
+    </div>
+
     <!-- ===== Section 1: サマリー ===== -->
     <div class="seo-summary-cards" id="seoSummary" style="display:none;"></div>
 
@@ -778,7 +785,12 @@ get_header();
         });
         var empty = document.getElementById('seoEmptyState');
         if (empty) empty.style.display = visible ? 'none' : '';
+        var actionBar = document.getElementById('seoActionBar');
+        if (actionBar) actionBar.style.display = visible ? 'flex' : 'none';
     }
+
+    // 最後に取得した診断データを保持（CSV エクスポート用）
+    var lastReportData = null;
 
     /* =================================================================
        初期化 — APIからデータ取得
@@ -786,6 +798,8 @@ get_header();
     document.addEventListener('DOMContentLoaded', function() {
         var clearBtn = document.getElementById('seoDiagnosisFilterClear');
         if (clearBtn) clearBtn.addEventListener('click', clearDiagnosisFilter);
+        var csvBtn = document.getElementById('seoCsvBtn');
+        if (csvBtn) csvBtn.addEventListener('click', exportSeoCsv);
         fetchReport();
     });
 
@@ -812,6 +826,7 @@ get_header();
     }
 
     function renderAll(data) {
+        lastReportData = data;
         var comp = data.comparison || null;
         var kwData = data.keywordAnalysis || null;
         renderSummary(data.siteSummary, comp, kwData);
@@ -1304,6 +1319,180 @@ get_header();
 
         html += '</div>'; // .seo-kw-grid
         content.innerHTML = html;
+    }
+
+    /* =================================================================
+       CSV エクスポート
+       ================================================================= */
+    var STATUS_LABELS = { ok: '良好', caution: '要改善', critical: '致命的' };
+    var PLACEMENT_LABELS_CSV = {
+        hasTitle: 'title', hasH1: 'h1', hasDesc: 'description',
+        hasH2: 'h2', hasBody: '本文'
+    };
+
+    function csvEscape(v) {
+        if (v === null || v === undefined) return '';
+        var s = String(v);
+        if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) {
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+    }
+
+    function exportSeoCsv() {
+        if (!lastReportData) {
+            showToast('出力するデータがありません。', true);
+            return;
+        }
+        var d = lastReportData;
+        var lines = [];
+        var pushRow = function(arr) { lines.push(arr.map(csvEscape).join(',')); };
+        var pushSection = function(title) {
+            if (lines.length > 0) lines.push('');
+            pushRow(['# ' + title]);
+        };
+
+        // 1) サマリー
+        var s = d.siteSummary || {};
+        pushSection('サマリー');
+        pushRow(['項目', '値']);
+        pushRow(['総合スコア', s.totalScore == null ? '' : s.totalScore]);
+        pushRow(['ランク', s.rank || '']);
+        pushRow(['致命的な問題', s.criticalCount == null ? 0 : s.criticalCount]);
+        pushRow(['要改善項目', s.warningCount == null ? 0 : s.warningCount]);
+        pushRow(['診断対象ページ数', s.pageCount == null ? 0 : s.pageCount]);
+        pushRow(['最終診断日時', s.lastCheckedAt || '']);
+        if (d.comparison) {
+            pushRow(['前回診断日', d.comparison.previousDate || '']);
+            pushRow(['前回比スコア変動', d.comparison.totalScoreDelta == null ? '' : d.comparison.totalScoreDelta]);
+            pushRow(['改善項目数', d.comparison.improvedCount == null ? 0 : d.comparison.improvedCount]);
+            pushRow(['悪化項目数', d.comparison.worsenedCount == null ? 0 : d.comparison.worsenedCount]);
+        }
+
+        // 2) SEO診断チェック
+        if (d.seoChecks && d.seoChecks.length) {
+            pushSection('SEO診断チェック');
+            pushRow(['項目', 'ステータス', 'スコア', '満点', '所見', '対象URL']);
+            d.seoChecks.forEach(function(c) {
+                var findings = (c.findings || []).join(' / ');
+                var urls = (c.affectedUrls || []).map(function(u) {
+                    try { return decodeURI(u); } catch (e) { return u; }
+                }).join(' / ');
+                pushRow([
+                    c.label || '',
+                    STATUS_LABELS[c.status] || c.status || '',
+                    c.score == null ? '' : c.score,
+                    c.maxScore == null ? '' : c.maxScore,
+                    findings,
+                    urls
+                ]);
+            });
+        }
+
+        // 3) 全体評価
+        var a = d.overallAssessment || {};
+        if (a.summary || (a.goodPoints && a.goodPoints.length) || (a.improvementPoints && a.improvementPoints.length)) {
+            pushSection('全体評価');
+            pushRow(['区分', '内容']);
+            if (a.summary) pushRow(['総評', a.summary]);
+            (a.goodPoints || []).forEach(function(p) { pushRow(['良いところ', p]); });
+            (a.improvementPoints || []).forEach(function(p) { pushRow(['改善が必要なところ', p]); });
+        }
+
+        // 4) キーワード最適化
+        var kwData = d.keywordAnalysis || null;
+        if (kwData && kwData.coverage && kwData.coverage.length) {
+            var aiMap = {};
+            (kwData.aiAnalysis || []).forEach(function(ai) {
+                if (ai && ai.keyword) aiMap[ai.keyword] = ai;
+            });
+            pushSection('キーワード最適化');
+            pushRow([
+                'キーワード', '検出箇所数',
+                'title', 'h1', 'description', 'h2', '本文',
+                '検出ページ', 'ランクインURL',
+                'AI関連性', '最適ページ', '検索意図一致', '改善提案'
+            ]);
+            kwData.coverage.forEach(function(kw) {
+                var ai = aiMap[kw.keyword] || {};
+                var pages = (kw.matches || []).map(function(m) {
+                    var locs = [];
+                    if (m.inTitle) locs.push('title');
+                    if (m.inH1) locs.push('h1');
+                    if (m.inDesc) locs.push('description');
+                    if (m.inH2) locs.push('h2');
+                    if (m.inBody) locs.push('本文');
+                    return (m.url || '') + (locs.length ? ' (' + locs.join(',') + ')' : '');
+                }).join(' / ');
+                var suggestions = (ai.suggestions || []).join(' / ');
+                pushRow([
+                    kw.keyword || '',
+                    kw.matchCount == null ? 0 : kw.matchCount,
+                    kw.hasTitle ? '○' : '×',
+                    kw.hasH1 ? '○' : '×',
+                    kw.hasDesc ? '○' : '×',
+                    kw.hasH2 ? '○' : '×',
+                    kw.hasBody ? '○' : '×',
+                    pages,
+                    kw.foundUrl || '',
+                    ai.relevance || '',
+                    ai.best_page || '',
+                    ai.intent_match || '',
+                    suggestions
+                ]);
+            });
+        }
+
+        // 5) ページ別問題一覧
+        if (d.issuePages && d.issuePages.length) {
+            var prioLabels = { high: '高', medium: '中', low: '低' };
+            pushSection('ページ別問題一覧');
+            pushRow(['URL', 'ページタイトル', '問題カテゴリ', '問題内容', '重要度', '改善候補']);
+            d.issuePages.forEach(function(p) {
+                var url = p.url || '';
+                try { url = decodeURI(url); } catch (e) {}
+                pushRow([
+                    url,
+                    p.pageTitle || '',
+                    p.issueType || '',
+                    p.issueDetail || '',
+                    prioLabels[p.priority] || p.priority || '',
+                    p.suggestion || ''
+                ]);
+            });
+        }
+
+        // 6) 改善アクション提案
+        if (d.recommendations && d.recommendations.length) {
+            var prioLabels2 = { high: '高', medium: '中', low: '低' };
+            pushSection('改善アクション提案');
+            pushRow(['優先度', 'タイトル', '説明']);
+            d.recommendations.forEach(function(r) {
+                pushRow([
+                    prioLabels2[r.priority] || r.priority || '',
+                    r.title || '',
+                    r.description || ''
+                ]);
+            });
+        }
+
+        var BOM = '\uFEFF';
+        var blob = new Blob([BOM + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var now = new Date();
+        var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+        var dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'seo-check_' + dateStr + '.csv';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+        showToast('CSVを書き出しました');
     }
 
     /* =================================================================

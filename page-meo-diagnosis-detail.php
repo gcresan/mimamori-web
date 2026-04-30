@@ -233,9 +233,14 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
                     <div class="meo-diag-detail-header__date" id="diagHeaderDate"></div>
                 </div>
             </div>
-            <button class="meo-diag-pdf-btn" id="diagPdfBtn" type="button" onclick="downloadPdf()">
-                &#x1F4E5; PDFダウンロード
-            </button>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <button class="meo-diag-pdf-btn" id="diagCsvBtn" type="button" onclick="downloadCsv()">
+                    &#x2B07;&#xFE0F; CSV ダウンロード
+                </button>
+                <button class="meo-diag-pdf-btn" id="diagPdfBtn" type="button" onclick="downloadPdf()">
+                    &#x1F4E5; PDFダウンロード
+                </button>
+            </div>
         </div>
 
         <!-- Score bar -->
@@ -538,6 +543,135 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
         d.textContent = s;
         return d.innerHTML;
     }
+
+    /* =========================================================
+       CSV ダウンロード
+       ========================================================= */
+    function csvEscape(v) {
+        if (v === null || v === undefined) return '';
+        var s = String(v);
+        if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) {
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+    }
+
+    window.downloadCsv = function() {
+        if (!reportData) {
+            alert('レポートデータがありません。');
+            return;
+        }
+        var d = reportData;
+        var lines = [];
+        var pushRow = function(arr) { lines.push(arr.map(csvEscape).join(',')); };
+        var pushSection = function(title) {
+            if (lines.length > 0) lines.push('');
+            pushRow(['# ' + title]);
+        };
+
+        // 1) サマリー
+        pushSection('サマリー');
+        pushRow(['項目', '値']);
+        pushRow(['診断日', d.diagnostic_date || '']);
+        pushRow(['総合スコア', d.overall_score == null ? '' : d.overall_score]);
+        pushRow(['総合グレード', d.overall_grade || '']);
+        ['basic_info','posts','photos','reviews'].forEach(function(k) {
+            var c = (d.categories || {})[k] || {};
+            pushRow([(catLabels[k] || k) + ' スコア', c.score == null ? '' : c.score]);
+            pushRow([(catLabels[k] || k) + ' グレード', c.grade || '']);
+        });
+
+        // 2) 総評
+        if (d.summary_text || (d.good_points && d.good_points.length) || (d.improvement_points && d.improvement_points.length)) {
+            pushSection('総評');
+            if (d.summary_text) {
+                pushRow(['区分', '内容']);
+                pushRow(['総評', d.summary_text]);
+            }
+            if (d.good_points && d.good_points.length) {
+                d.good_points.forEach(function(p) { pushRow(['良い点', p]); });
+            }
+            if (d.improvement_points && d.improvement_points.length) {
+                d.improvement_points.forEach(function(p) { pushRow(['改善点', p]); });
+            }
+        }
+
+        // 3) 改善推奨アクション
+        if (d.recommendations && d.recommendations.length) {
+            pushSection('改善推奨アクション');
+            pushRow(['優先度', 'タイトル', '説明']);
+            var prioLabels = { high: '高', medium: '中', low: '低' };
+            d.recommendations.forEach(function(r) {
+                pushRow([prioLabels[r.priority] || r.priority || '', r.title || '', r.description || '']);
+            });
+        }
+
+        // 4) カテゴリ別チェック項目
+        ['basic_info','posts','photos','reviews'].forEach(function(k) {
+            var c = (d.categories || {})[k];
+            if (!c || !c.items || !c.items.length) return;
+            pushSection((catLabels[k] || k) + ' チェック項目');
+            pushRow(['チェック項目', 'ステータス', '説明', '詳細']);
+            c.items.forEach(function(it) {
+                pushRow([it.label || '', it.status || '', it.description || '', it.detail || '']);
+            });
+        });
+
+        // 5) レビューサマリー
+        if (d.review_summary) {
+            var rs = d.review_summary;
+            pushSection('レビューサマリー');
+            pushRow(['項目', '値']);
+            pushRow(['平均評価', rs.average_rating == null ? '' : rs.average_rating]);
+            pushRow(['総口コミ数', rs.total == null ? '' : rs.total]);
+            if (rs.distribution) {
+                for (var s = 5; s >= 1; s--) {
+                    pushRow([s + '★ 件数', rs.distribution[String(s)] || 0]);
+                }
+            }
+        }
+
+        // 6) 優先対策キーワード
+        if (d.priority_keywords && d.priority_keywords.length) {
+            pushSection('優先対策キーワード');
+            pushRow(['キーワード', 'マップ順位', '地域順位']);
+            d.priority_keywords.forEach(function(kw) {
+                pushRow([
+                    kw.keyword || '',
+                    kw.maps_rank == null ? '圏外' : kw.maps_rank,
+                    kw.finder_rank == null ? '圏外' : kw.finder_rank
+                ]);
+            });
+        }
+
+        // 7) AI検索スコア
+        if (d.aio_scores && d.aio_scores.length) {
+            pushSection('AI検索スコア');
+            pushRow(['キーワード', 'ChatGPT(%)', 'Gemini(%)', 'Google AI(%)']);
+            d.aio_scores.forEach(function(a) {
+                pushRow([
+                    a.keyword || '',
+                    a.chatgpt == null ? '' : a.chatgpt,
+                    a.gemini == null ? '' : a.gemini,
+                    a.google_ai == null ? '' : a.google_ai
+                ]);
+            });
+        }
+
+        var BOM = '\uFEFF';
+        var blob = new Blob([BOM + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'MEO診断レポート_' + (d.diagnostic_date || 'report') + '.csv';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    };
 
     // PDF download
     window.downloadPdf = function() {
