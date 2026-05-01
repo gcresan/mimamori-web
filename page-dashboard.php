@@ -1887,8 +1887,10 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         })
         .then(function(res){ return res.json(); })
         .then(function(json){
-            var hasNonZero = json && json.values && json.values.some(function(v){ return (v|0) > 0; });
-            if (json && json.success && hasNonZero) {
+            // success かつ values 配列があればキャッシュ。
+            // 「全期間ゼロならキャッシュしない」という旧仕様は、合法的にデータがゼロの場合
+            // showTrend が再取得→再びゼロ→無限ループや空白表示の原因となるため撤廃。
+            if (json && json.success && Array.isArray(json.values)) {
                 _trendCache.daily[m] = json;
             }
             return json;
@@ -1897,8 +1899,16 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
     // sessionsを即時fetchして初期チャート描画
     prefetchMetric('sessions')
-        .then(function(){
-            if (!_activeMetric) showTrend('sessions', '訪問数', '👥');
+        .then(function(json){
+            if (_activeMetric) return;
+            // データ取得失敗 or 不正レスポンスのみエラー表示。
+            // values が空配列・全ゼロでも success ならグラフを描画する（誤検知でグラフが
+            // 一切出ない状態を回避）。
+            if (json && json.success && Array.isArray(json.values)) {
+                showTrend('sessions', '訪問数', '👥');
+            } else {
+                showError('sessions', '訪問数', '👥');
+            }
         })
         .catch(function(){
             if (!_activeMetric) showError('sessions', '訪問数', '👥');

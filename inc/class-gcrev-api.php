@@ -10041,8 +10041,10 @@ PROMPT;
                 $valid_count++;
                 $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => null, 'fallback' => true];
             }
-            // 有効ディメンション数で按分（4ディメンション分の満点 50pt にスケール）
-            $total = ($valid_count > 0) ? ($raw_total * 4.0 / $valid_count) : 0.0;
+            // 分母固定（4ディメンション × 12.5pt = 50pt 満点）。按分しない。
+            // 評価できなかったディメンションは 0pt として合計に含めず、
+            // 「2指標だけ満点 → 50pt 満点扱い」になる水増しを防ぐ。
+            $total = $raw_total;
         } else {
             foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
                 $c = (float)($curr[$key] ?? 0);
@@ -10052,9 +10054,11 @@ PROMPT;
                     continue;
                 }
                 if ($m <= 0) {
-                    // median=0, curr>0 → 満点
-                    $total += $per_dim;
-                    $details[$key] = ['points' => $per_dim, 'max' => $per_dim, 'ratio' => null];
+                    // median=0, curr>0 → 比較対象なし扱い（満点ではなく中立点 50%）
+                    // 過去履歴がない指標を満点扱いすると新規ユーザーが不当に高得点になるため。
+                    $pts = $per_dim * 0.5;
+                    $total += $pts;
+                    $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => null, 'no_baseline' => true];
                     continue;
                 }
                 $ratio = $c / $m;
@@ -10125,8 +10129,11 @@ PROMPT;
             $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'pct' => round($pct, 1), 'zone' => $zone];
         }
 
-        // 有効ディメンション数で按分（4ディメンション分の満点 30pt にスケール）
-        $total = ($valid_count > 0) ? ($raw_total * 4.0 / $valid_count) : 0.0;
+        // 分母固定（4ディメンション × 7.5pt = 30pt 満点）。按分しない。
+        // prev=0 や curr=0 のディメンションは 0pt 扱いとして合計に含めず、
+        // 結果として「実際に評価できた指標分だけ」点数が積み上がる。
+        // これにより「2指標だけ満点 → 100点満点扱い」という水増しが起きない。
+        $total = $raw_total;
 
         return [
             'points'  => (int)round($total),
@@ -10363,7 +10370,9 @@ PROMPT;
                    + $action['points']
                    + $search_diag['points'];
 
-        // --- 3) フロア適用（最低35点）。全観点0なら0点 ---
+        // --- 3) スコア確定（フロアは廃止、上限のみ適用）---
+        // 以前は「全指標0でなければ最低35点」のフロアで実態より高い点が出る原因に
+        // なっていたため撤廃し、純粋な実点数を返す。全指標0の場合は 0 点。
         $has_any_data = false;
         foreach (['traffic', 'cv', 'gsc', 'meo'] as $k) {
             if ((int)($curr[$k] ?? 0) > 0) {
@@ -10371,7 +10380,7 @@ PROMPT;
                 break;
             }
         }
-        $score = $has_any_data ? max(35, min(100, $raw_total)) : 0;
+        $score = $has_any_data ? max(0, min(100, $raw_total)) : 0;
 
         $components = [
             'achievement' => $achievement,
