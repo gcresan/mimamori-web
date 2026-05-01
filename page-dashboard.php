@@ -702,7 +702,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
       </a>
     <?php endif; ?>
     <a href="<?php echo esc_url(home_url('/strategy-report/')); ?>" class="info-monthly-link info-monthly-link--strategy">
-      <span aria-hidden="true">🧠</span> 戦略レポートを見る
+      <span aria-hidden="true">🧠</span> 深掘りレポートを見る
     </a>
   </div>
 

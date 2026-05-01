@@ -126,7 +126,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
       <?php
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ全部閉じ ---
-      $report_pages    = array('report-latest','report-archive','annual-report');
+      $report_pages    = array('report-latest','report-archive','annual-report','strategy-report','strategy-report-detail','strategy-report-history');
       $ranking_pages   = array('rank-tracker','map-rank');
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
@@ -203,6 +203,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuReport">
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/strategy-report/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
+                        <span>深掘りレポート</span>
+                        </a>
+                     </li>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/report/report-latest/') ); ?>" class="nav-link <?php echo ( is_page('report-latest') || is_page('report-archive') ) ? 'active' : ''; ?>">
                         <span>月次レポート</span>

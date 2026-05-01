@@ -55,8 +55,8 @@ class Gcrev_Manual_Strategy_Report_Page {
 
         add_submenu_page(
             'gcrev-insight',
-            '戦略レポート（手動）- みまもりウェブ',
-            "\xF0\x9F\x93\x84 戦略レポート（手動）",
+            '深掘りレポート（手動）- みまもりウェブ',
+            "\xF0\x9F\x93\x84 深掘りレポート（手動）",
             'manage_options',
             self::MENU_SLUG,
             [ $this, 'render_page' ]
@@ -331,7 +331,7 @@ class Gcrev_Manual_Strategy_Report_Page {
 
         ?>
         <div class="wrap">
-            <h1>📄 戦略レポート（手動アップロード）</h1>
+            <h1>📄 深掘りレポート（手動アップロード）</h1>
             <p>クライアントごとに「概要版」「詳細版」HTML を <strong>複数バージョン</strong> 保存できます。アップロードを重ねるたびに履歴として残り、最新版が <code>/strategy-report/</code> に表示されます。</p>
             <ol style="background:#f6f7f7;padding:14px 30px;border-radius:6px;line-height:1.8;">
                 <li>事前にメディアライブラリへ HTML ファイルをアップロード（拡張子 .html 必須）</li>

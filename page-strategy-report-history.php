@@ -11,9 +11,9 @@ if ( ! is_user_logged_in() ) {
 $current_user = wp_get_current_user();
 $user_id      = (int) $current_user->ID;
 
-set_query_var( 'gcrev_page_title', '戦略レポート履歴' );
-set_query_var( 'gcrev_page_subtitle', 'これまでにアップロードされた戦略レポートを一覧で閲覧できます。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '戦略レポート履歴', '戦略レポート' ) );
+set_query_var( 'gcrev_page_title', '深掘りレポート履歴' );
+set_query_var( 'gcrev_page_subtitle', 'これまでにアップロードされた深掘りレポートを一覧で閲覧できます。' );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '深掘りレポート履歴', '深掘りレポート' ) );
 
 $versions = [];
 if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
@@ -37,9 +37,9 @@ get_header();
 <div class="content-area" style="max-width:960px;margin:0 auto;padding:32px 24px 64px;">
 
     <header style="margin-bottom:28px;">
-        <h2 style="font-size:22px;margin:0 0 6px;">📚 戦略レポート履歴</h2>
+        <h2 style="font-size:22px;margin:0 0 6px;">📚 深掘りレポート履歴</h2>
         <p style="color:#666;margin:0;line-height:1.7;">
-            これまでに発行された戦略レポートの一覧です。新しいバージョンほど上に表示されます。<br>
+            これまでに発行された深掘りレポートの一覧です。新しいバージョンほど上に表示されます。<br>
             「概要版を見る」「詳細版を見る」ボタンで、それぞれの版を別タブで開けます。
         </p>
     </header>
@@ -51,7 +51,7 @@ get_header();
             <p style="margin:0;font-size:13px;">担当者がレポートをアップロードすると、ここに表示されます。</p>
             <p style="margin-top:24px;">
                 <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>"
-                   style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">← 戦略レポートに戻る</a>
+                   style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">← 深掘りレポートに戻る</a>
             </p>
         </div>
     <?php else : ?>
@@ -108,7 +108,7 @@ get_header();
 
         <p style="margin-top:28px;text-align:center;">
             <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>"
-               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;">← 最新の戦略レポートに戻る</a>
+               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;">← 最新の深掘りレポートに戻る</a>
         </p>
 
     <?php endif; ?>

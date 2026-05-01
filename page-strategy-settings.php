@@ -12,7 +12,7 @@ $current_user = wp_get_current_user();
 $user_id      = (int) $current_user->ID;
 
 set_query_var( 'gcrev_page_title', '戦略設定' );
-set_query_var( 'gcrev_page_subtitle', '貴社の戦略（ターゲット・課題・差別化要素・コンバージョン導線）を登録します。月次の戦略レポート生成に使用されます。' );
+set_query_var( 'gcrev_page_subtitle', '貴社の戦略（ターゲット・課題・差別化要素・コンバージョン導線）を登録します。月次の深掘りレポート生成に使用されます。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '戦略設定', 'クライアント戦略の登録' ) );
 
 get_header();

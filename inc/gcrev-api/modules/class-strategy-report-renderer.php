@@ -54,7 +54,7 @@ class Gcrev_Strategy_Report_Renderer {
         ?>
         <article class="sr-report">
             <header class="sr-report__head">
-                <h2 class="sr-report__title">🧠 戦略レポート<?php if ( $period_label !== '' ) : ?> — <?php echo esc_html( $period_label ); ?><?php endif; ?></h2>
+                <h2 class="sr-report__title">🧠 深掘りレポート<?php if ( $period_label !== '' ) : ?> — <?php echo esc_html( $period_label ); ?><?php endif; ?></h2>
                 <?php if ( $strategy_label !== '' ) : ?>
                     <p class="sr-report__strategy">対象戦略: <?php echo esc_html( $strategy_label ); ?></p>
                 <?php endif; ?>

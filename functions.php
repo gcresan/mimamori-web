@@ -1340,15 +1340,15 @@ add_action( 'after_setup_theme', function () {
             'template' => 'page-strategy-settings.php',
         ],
         'strategy-report' => [
-            'title'    => '戦略レポート',
+            'title'    => '深掘りレポート',
             'template' => 'page-strategy-report.php',
         ],
         'strategy-report-detail' => [
-            'title'    => '戦略レポート（詳細版）',
+            'title'    => '深掘りレポート（詳細版）',
             'template' => 'page-strategy-report-detail.php',
         ],
         'strategy-report-history' => [
-            'title'    => '戦略レポート履歴',
+            'title'    => '深掘りレポート履歴',
             'template' => 'page-strategy-report-history.php',
         ],
     ];

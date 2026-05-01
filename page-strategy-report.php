@@ -49,9 +49,9 @@ if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
     }
 }
 
-set_query_var( 'gcrev_page_title', '戦略レポート' );
-set_query_var( 'gcrev_page_subtitle', '担当者がアップロードした戦略レポートを閲覧できます。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '戦略レポート', '戦略連動型 月次レポート' ) );
+set_query_var( 'gcrev_page_title', '深掘りレポート' );
+set_query_var( 'gcrev_page_subtitle', '担当者がアップロードした深掘りレポートを閲覧できます。' );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '深掘りレポート', '戦略連動型 月次レポート' ) );
 
 get_header();
 ?>
@@ -101,7 +101,7 @@ get_header();
     <iframe
         id="strategyReportIframe"
         src="<?php echo esc_url( $embed_url ); ?>"
-        title="戦略レポート"
+        title="深掘りレポート"
         style="width:100%;height:1200px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;"
         loading="lazy">
     </iframe>
@@ -135,9 +135,9 @@ get_header();
 <div class="content-area" style="max-width:720px;margin:48px auto;padding:0 24px;">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:48px 28px;text-align:center;">
         <div style="font-size:42px;margin-bottom:14px;">📭</div>
-        <h2 style="font-size:20px;margin:0 0 10px;">戦略レポートはまだ発行されていません</h2>
+        <h2 style="font-size:20px;margin:0 0 10px;">深掘りレポートはまだ発行されていません</h2>
         <p style="color:#666;line-height:1.8;margin:0 0 24px;">
-            このアカウント向けの戦略レポートは、現在準備中です。<br>
+            このアカウント向けの深掘りレポートは、現在準備中です。<br>
             担当者がレポートをアップロードすると、ここに自動で表示されます。
         </p>
         <p>

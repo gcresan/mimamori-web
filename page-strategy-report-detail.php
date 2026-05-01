@@ -48,9 +48,9 @@ if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
     }
 }
 
-set_query_var( 'gcrev_page_title', '戦略レポート（詳細版）' );
+set_query_var( 'gcrev_page_title', '深掘りレポート（詳細版）' );
 set_query_var( 'gcrev_page_subtitle', 'レポート本体の詳細データ・分析を閲覧できます。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '詳細版', '戦略レポート' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '詳細版', '深掘りレポート' ) );
 
 get_header();
 ?>
@@ -94,7 +94,7 @@ get_header();
     <iframe
         id="strategyReportDetailIframe"
         src="<?php echo esc_url( $embed_url ); ?>"
-        title="戦略レポート（詳細版）"
+        title="深掘りレポート（詳細版）"
         style="width:100%;height:1500px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;"
         loading="lazy">
     </iframe>
@@ -135,7 +135,7 @@ get_header();
         </p>
         <p>
             <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>"
-               style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">← 戦略レポートに戻る</a>
+               style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">← 深掘りレポートに戻る</a>
         </p>
     </div>
 </div>
