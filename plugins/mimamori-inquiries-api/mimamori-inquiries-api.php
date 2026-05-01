@@ -450,25 +450,26 @@ class Mimamori_Inquiries_API {
             return [ 'valid' => false, 'reason' => 'spam' ];
         }
 
-        $msg_lower = mb_strtolower( $message );
-        $msg_norm  = mb_convert_kana( $msg_lower, 's' );
+        $msg_lower = function_exists( 'mb_strtolower' ) ? mb_strtolower( $message ) : strtolower( $message );
+        $msg_norm  = function_exists( 'mb_convert_kana' ) ? mb_convert_kana( $msg_lower, 's' ) : $msg_lower;
 
         // 営業 / 売り込み判定（NGワード）
         foreach ( self::NG_WORDS_SALES as $word ) {
-            if ( mb_strpos( $msg_norm, mb_strtolower( $word ) ) !== false ) {
+            if ( ( function_exists( 'mb_strpos' ) ? mb_strpos( $msg_norm, function_exists( 'mb_strtolower' ) ? mb_strtolower( $word ) : strtolower( $word ) ) : strpos( $msg_norm, strtolower( $word ) ) ) !== false ) {
                 return [ 'valid' => false, 'reason' => 'sales' ];
             }
         }
 
         // テスト判定
         foreach ( self::NG_WORDS_TEST as $word ) {
-            if ( mb_strpos( $msg_norm, mb_strtolower( $word ) ) !== false ) {
+            if ( ( function_exists( 'mb_strpos' ) ? mb_strpos( $msg_norm, function_exists( 'mb_strtolower' ) ? mb_strtolower( $word ) : strtolower( $word ) ) : strpos( $msg_norm, strtolower( $word ) ) ) !== false ) {
                 return [ 'valid' => false, 'reason' => 'test' ];
             }
         }
 
         // 文字数下限
-        if ( mb_strlen( trim( $message ) ) < self::MIN_MESSAGE_LENGTH ) {
+        $msg_len = function_exists( 'mb_strlen' ) ? mb_strlen( trim( $message ) ) : strlen( trim( $message ) );
+        if ( $msg_len < self::MIN_MESSAGE_LENGTH ) {
             return [ 'valid' => false, 'reason' => 'spam' ];
         }
 
