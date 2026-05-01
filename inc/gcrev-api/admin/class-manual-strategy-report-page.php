@@ -644,6 +644,15 @@ class Gcrev_Manual_Strategy_Report_Page {
         }
         $log( "[serve] OK att_id={$att_id} bytes=" . strlen( $html ) );
 
+        // 詳細版の場合: <div class="section-tag">SECTION XX …</div> を持つ <section> に
+        // 概要版が参照するアンカー id を自動付与する。
+        // 概要版のリンクは "#sec-00", "#sec-04", "#sec-7-6" 等の形式だが、
+        // 詳細版 HTML 内の <section> には id が付いていないことがあるため、
+        // section-tag のテキストから id を導出して <section> に挿入する。
+        if ( $kind === 'detail' && is_string( $html ) ) {
+            $html = self::inject_section_anchors( $html );
+        }
+
         // 概要版の場合: 詳細版HTMLへの相対リンクを /strategy-report-detail/?ver=... に書換
         if ( $kind === 'simple' && (int) ( $version['detail_id'] ?? 0 ) > 0 ) {
             $detail_route = home_url( '/strategy-report-detail/' );
@@ -695,11 +704,22 @@ class Gcrev_Manual_Strategy_Report_Page {
             . 'if(window.ResizeObserver){var ro=new ResizeObserver(send);ro.observe(document.body);}'
             . 'setInterval(send,1500);'
             // --- 親からのアンカースクロール指示を受信 ---
-            . 'function scrollToAnchor(id){if(!id)return false;'
+            . 'function findAnchorEl(id){if(!id)return null;'
+            // 1. id 完全一致
             . 'var el=document.getElementById(id);'
+            // 2. name 属性
             . 'if(!el){try{el=document.querySelector(\'[name="\'+CSS.escape(id)+\'"]\');}catch(e){}}'
-            . 'if(el&&typeof el.scrollIntoView===\'function\'){el.scrollIntoView({behavior:"auto",block:"start"});return true;}'
-            . 'return false;}'
+            // 3. 数字部分を緩和 (sec-04 ↔ sec-4)
+            . 'if(!el){var alt=id.replace(/-0+(\\d+)/g,"-$1");if(alt!==id)el=document.getElementById(alt);}'
+            . 'if(!el){var pad=id.replace(/-(\\d+)$/,function(_,n){return"-"+(n.length<2?"0"+n:n);});if(pad!==id)el=document.getElementById(pad);}'
+            . 'return el;}'
+            . 'function scrollToAnchor(id){if(!id)return false;'
+            . 'var el=findAnchorEl(id);'
+            . 'if(!el)return false;'
+            // scrollIntoView と window.scrollTo を両方使い、確実に位置調整
+            . 'try{el.scrollIntoView({behavior:"auto",block:"start"});}catch(e){}'
+            . 'try{var rect=el.getBoundingClientRect();var top=rect.top+(window.pageYOffset||document.documentElement.scrollTop||0);window.scrollTo(0,top);}catch(e){}'
+            . 'return true;}'
             . 'window.addEventListener("message",function(ev){'
             . 'if(!ev.data||ev.data.type!=="mimamori-scroll-to-anchor")return;'
             . 'var id=String(ev.data.anchor||"").replace(/^#/,"");'
@@ -739,6 +759,52 @@ class Gcrev_Manual_Strategy_Report_Page {
         header( 'X-Robots-Tag: noindex, nofollow', true );
         echo $html;
         return true;
+    }
+
+    /**
+     * 詳細版 HTML 内の <section> に、概要版から参照されるアンカー id を自動付与する。
+     *
+     * - <section> の中に <div class="section-tag">SECTION XX …</div> がある場合、
+     *   その番号から id を生成して付与する（既に id があるセクションはスキップ）。
+     * - 例: "SECTION 00" → id="sec-00"、"SECTION 7.6" → id="sec-7-6"、
+     *       "SECTION 08" → id="sec-08"
+     */
+    private static function inject_section_anchors( string $html ): string {
+        $pattern = '#<section\b([^>]*)>(.*?)</section>#is';
+        $result = preg_replace_callback( $pattern, function ( $m ) {
+            $attrs = $m[1];
+            $body  = $m[2];
+
+            // 既に id 属性があるセクションはそのまま返す
+            if ( preg_match( '/\sid\s*=\s*["\']/', $attrs ) ) {
+                return $m[0];
+            }
+
+            // セクション内の最初の section-tag を取得
+            if ( ! preg_match( '#<div[^>]*class="[^"]*section-tag[^"]*"[^>]*>(.*?)</div>#is', $body, $tag_m ) ) {
+                return $m[0];
+            }
+            $tag_text = wp_strip_all_tags( $tag_m[1] );
+
+            // "SECTION 04", "SECTION 7.6" などの番号を抽出
+            if ( ! preg_match( '/SECTION\s+([0-9]+(?:\.[0-9]+)?)/u', $tag_text, $num_m ) ) {
+                return $m[0];
+            }
+            $num_raw = $num_m[1];
+
+            // 整数部分は2桁ゼロパディング、小数点はハイフンに置換
+            // "04" → "04", "7.6" → "7-6", "08" → "08"
+            if ( strpos( $num_raw, '.' ) !== false ) {
+                list( $int_part, $dec_part ) = explode( '.', $num_raw, 2 );
+                $id = 'sec-' . $int_part . '-' . $dec_part;
+            } else {
+                $id = 'sec-' . str_pad( $num_raw, 2, '0', STR_PAD_LEFT );
+            }
+
+            return '<section id="' . esc_attr( $id ) . '"' . $attrs . '>' . $body . '</section>';
+        }, $html );
+
+        return is_string( $result ) ? $result : $html;
     }
 
     private static function build_floating_nav( string $kind ): string {
