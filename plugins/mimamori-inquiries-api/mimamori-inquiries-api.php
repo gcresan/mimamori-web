@@ -21,7 +21,29 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// 読み込みマーカー（このログが出ない場合、プラグインファイル自体がロードされていない）
+error_log( '[MIMAMORI_INQUIRIES_API] plugin file loaded at ' . date( 'Y-m-d H:i:s' ) );
+
+// REST ルート登録は二重ロードでも必ず実行されるようファイル先頭で登録
+// （クラス定義前に登録しても、コールバックは REST 初期化時に呼び出されるので OK）
+if ( ! has_action( 'rest_api_init', 'mimamori_inquiries_api_register_routes_bridge' ) ) {
+    add_action( 'rest_api_init', 'mimamori_inquiries_api_register_routes_bridge' );
+    error_log( '[MIMAMORI_INQUIRIES_API] add_action(rest_api_init) registered' );
+}
+
+if ( ! function_exists( 'mimamori_inquiries_api_register_routes_bridge' ) ) {
+    function mimamori_inquiries_api_register_routes_bridge() {
+        error_log( '[MIMAMORI_INQUIRIES_API] bridge: register_routes triggered' );
+        if ( class_exists( 'Mimamori_Inquiries_API' ) ) {
+            Mimamori_Inquiries_API::register_routes();
+        } else {
+            error_log( '[MIMAMORI_INQUIRIES_API] bridge: class not loaded yet!' );
+        }
+    }
+}
+
 if ( class_exists( 'Mimamori_Inquiries_API' ) ) {
+    error_log( '[MIMAMORI_INQUIRIES_API] class already exists, skipping class definition' );
     return;
 }
 
@@ -43,6 +65,7 @@ class Mimamori_Inquiries_API {
      * フック登録（プラグインエントリ）
      */
     public static function bootstrap(): void {
+        error_log( '[MIMAMORI_INQUIRIES_API] bootstrap() called' );
         add_action( 'rest_api_init', [ __CLASS__, 'register_routes' ] );
     }
 
@@ -50,6 +73,7 @@ class Mimamori_Inquiries_API {
      * REST ルート登録
      */
     public static function register_routes(): void {
+        error_log( '[MIMAMORI_INQUIRIES_API] register_routes() called' );
         register_rest_route( self::ROUTE_NAMESPACE, self::ROUTE_PATH, [
             'methods'             => 'GET',
             'callback'            => [ __CLASS__, 'handle_get_inquiries' ],

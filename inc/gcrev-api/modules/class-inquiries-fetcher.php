@@ -376,6 +376,18 @@ class Mimamori_Inquiries_Fetcher {
 
         $stored = self::upsert( $row );
 
+        if ( ! $stored ) {
+            global $wpdb;
+            $db_error = $wpdb->last_error ?: 'unknown DB error (table may not exist)';
+            $table    = self::table_name();
+            self::log( "[FETCH] user={$user_id} period={$year}-{$month} DB_ERROR table={$table} error={$db_error}" );
+            return [
+                'success' => false,
+                'message' => 'DB保存に失敗: ' . $db_error . ' (table: ' . $table . ')',
+                'data'    => $row,
+            ];
+        }
+
         // CV キャッシュ無効化（実質CVに後段で利用される可能性に備えて統一）
         if ( function_exists( 'gcrev_invalidate_user_cv_cache' ) ) {
             gcrev_invalidate_user_cv_cache( $user_id );
@@ -384,7 +396,7 @@ class Mimamori_Inquiries_Fetcher {
         self::log( "[FETCH] user={$user_id} period={$year}-{$month} OK total={$row['total']} valid={$row['valid_count']}" );
 
         return [
-            'success' => $stored,
+            'success' => true,
             'data'    => $row,
         ];
     }
@@ -412,6 +424,18 @@ class Mimamori_Inquiries_Fetcher {
     public static function upsert( array $row ): bool {
         global $wpdb;
         $table = self::table_name();
+
+        // テーブル不在ならその場で作成（init で作られていないケースの保険）
+        $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        if ( $exists !== $table ) {
+            ( new self() )->maybe_install_table();
+            // フラグだけ残っていてテーブル無しの場合に備え、option を一旦削除して再実行
+            $exists2 = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+            if ( $exists2 !== $table ) {
+                delete_option( 'gcrev_inquiries_db_version' );
+                ( new self() )->maybe_install_table();
+            }
+        }
 
         $existing = $wpdb->get_var( $wpdb->prepare(
             "SELECT id FROM {$table} WHERE user_id = %d AND year_month = %s",
