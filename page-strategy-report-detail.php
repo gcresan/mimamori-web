@@ -95,7 +95,7 @@ get_header();
         id="strategyReportDetailIframe"
         src="<?php echo esc_url( $embed_url ); ?>"
         title="深掘りレポート（詳細版）"
-        style="width:100%;height:1500px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;"
+        style="width:100%;height:300px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;"
         loading="lazy">
     </iframe>
 </div>
@@ -161,11 +161,12 @@ get_header();
         fallbackScroll(id);
     });
 
-    // iframe の高さを内容に合わせる
+    // iframe の高さを内容に完全追従（短ければ短く、長ければ長く）
     window.addEventListener('message', function (e) {
         if (!e.data || e.data.type !== 'mimamori-report-height') return;
-        var h = Math.max(1000, parseInt(e.data.height, 10) || 0);
-        iframe.style.height = (h + 24) + 'px';
+        var h = parseInt(e.data.height, 10) || 0;
+        if (h <= 0) return;
+        iframe.style.height = h + 'px';
     });
 })();
 </script>

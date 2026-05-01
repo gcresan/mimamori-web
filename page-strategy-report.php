@@ -102,7 +102,7 @@ get_header();
         id="strategyReportIframe"
         src="<?php echo esc_url( $embed_url ); ?>"
         title="深掘りレポート"
-        style="width:100%;height:1200px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;"
+        style="width:100%;height:300px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;"
         loading="lazy">
     </iframe>
 </div>
@@ -162,9 +162,10 @@ get_header();
 
     window.addEventListener('message', function (e) {
         if (!e.data || e.data.type !== 'mimamori-report-height') return;
-        // iframe 内コンテンツの高さに合わせる（最低 800px）
-        var h = Math.max(800, parseInt(e.data.height, 10) || 0);
-        iframe.style.height = (h + 24) + 'px';
+        // iframe 内コンテンツの実高さに完全追従（短ければ短く、長ければ長く）
+        var h = parseInt(e.data.height, 10) || 0;
+        if (h <= 0) return;
+        iframe.style.height = h + 'px';
     });
 })();
 </script>
