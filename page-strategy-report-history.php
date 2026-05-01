@@ -13,7 +13,7 @@ $user_id      = (int) $current_user->ID;
 
 set_query_var( 'gcrev_page_title', '深掘りレポート履歴' );
 set_query_var( 'gcrev_page_subtitle', 'これまでにアップロードされた深掘りレポートを一覧で閲覧できます。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '深掘りレポート履歴', '深掘りレポート' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '深掘りレポート履歴', 'レポート' ) );
 
 $versions = [];
 if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {

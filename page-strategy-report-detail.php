@@ -50,7 +50,7 @@ if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
 
 set_query_var( 'gcrev_page_title', '深掘りレポート（詳細版）' );
 set_query_var( 'gcrev_page_subtitle', 'レポート本体の詳細データ・分析を閲覧できます。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '詳細版', '深掘りレポート' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '詳細版', 'レポート' ) );
 
 get_header();
 ?>

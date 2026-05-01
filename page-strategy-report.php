@@ -51,7 +51,7 @@ if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
 
 set_query_var( 'gcrev_page_title', '深掘りレポート' );
 set_query_var( 'gcrev_page_subtitle', '担当者がアップロードした深掘りレポートを閲覧できます。' );
-set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '深掘りレポート', '戦略連動型 月次レポート' ) );
+set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '深掘りレポート', 'レポート' ) );
 
 get_header();
 ?>
