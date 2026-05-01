@@ -685,12 +685,38 @@ class Gcrev_Manual_Strategy_Report_Page {
 
         // iframe 埋込時は親ページに高さを伝えるためのスクリプトを注入
         // （テーマ内表示で iframe の高さをコンテンツに合わせるため）
+        // 加えて、親からの「指定アンカーへスクロール」postMessage を受信して
+        // 該当セクションへスクロールする処理も同梱する。
         $resize_script = '<script>(function(){'
+            // --- 高さ通知 ---
             . 'function send(){var h=Math.max(document.documentElement.scrollHeight,document.body.scrollHeight);'
             . 'try{if(window.parent&&window.parent!==window){window.parent.postMessage({type:"mimamori-report-height",height:h},"*");}}catch(e){}}'
             . 'window.addEventListener("load",send);window.addEventListener("resize",send);'
             . 'if(window.ResizeObserver){var ro=new ResizeObserver(send);ro.observe(document.body);}'
             . 'setInterval(send,1500);'
+            // --- 親からのアンカースクロール指示を受信 ---
+            . 'function scrollToAnchor(id){if(!id)return false;'
+            . 'var el=document.getElementById(id);'
+            . 'if(!el){try{el=document.querySelector(\'[name="\'+CSS.escape(id)+\'"]\');}catch(e){}}'
+            . 'if(el&&typeof el.scrollIntoView===\'function\'){el.scrollIntoView({behavior:"auto",block:"start"});return true;}'
+            . 'return false;}'
+            . 'window.addEventListener("message",function(ev){'
+            . 'if(!ev.data||ev.data.type!=="mimamori-scroll-to-anchor")return;'
+            . 'var id=String(ev.data.anchor||"").replace(/^#/,"");'
+            . 'if(!id)return;'
+            // 直後・短時間後・load後の3段階で試す（CSS/フォント適用前後をカバー）
+            . 'scrollToAnchor(id);'
+            . 'setTimeout(function(){scrollToAnchor(id);},150);'
+            . 'setTimeout(function(){scrollToAnchor(id);},600);'
+            . '});'
+            // --- 自分の location.hash を見て初期スクロール（iframe src に hash が付いてロードされたケース）---
+            . 'function initialAnchor(){var h=window.location.hash;if(!h)return;'
+            . 'var id=h.replace(/^#/,"");if(!id)return;'
+            . 'scrollToAnchor(id);'
+            . 'setTimeout(function(){scrollToAnchor(id);},150);'
+            . 'setTimeout(function(){scrollToAnchor(id);},600);}'
+            . 'if(document.readyState==="complete"||document.readyState==="interactive"){initialAnchor();}'
+            . 'window.addEventListener("load",initialAnchor);'
             . '})();</script>';
 
         // フローティングナビ: iframe 埋込時はテーマのサイドバー/ヘッダーで足りるので非表示

@@ -105,49 +105,63 @@ get_header();
     var iframe = document.getElementById('strategyReportDetailIframe');
     if (!iframe) return;
 
-    // 親URLにアンカー（#sec-XX）が付いていれば iframe の src にも引き継ぐ
-    // → iframe 内の対象セクションへ自動スクロール
-    if (window.location.hash) {
+    // 親URLの hash（#sec-XX）を抽出
+    function currentAnchor() {
+        var h = window.location.hash || '';
+        return h.replace(/^#/, '');
+    }
+
+    // iframe に「指定アンカーへスクロール」を指示（iframe 側 JS が受信して scrollIntoView）
+    function postScrollAnchor(id) {
+        if (!id || !iframe.contentWindow) return;
         try {
-            var u = new URL(iframe.getAttribute('src'), window.location.origin);
-            u.hash = window.location.hash;
-            iframe.setAttribute('src', u.toString());
+            iframe.contentWindow.postMessage(
+                { type: 'mimamori-scroll-to-anchor', anchor: id },
+                window.location.origin
+            );
         } catch (e) { /* noop */ }
     }
 
-    // iframe 読み込み完了後、対象セクションへスクロール（同一オリジンのため可能）。
-    // src に hash を渡しただけだとブラウザが既に読まれた直後のレイアウト前にジャンプを
-    // 試みて失敗するケースがあるため、load 後に明示スクロールする保険。
-    iframe.addEventListener('load', function () {
-        if (!window.location.hash) return;
-        var anchorId = window.location.hash.replace(/^#/, '');
-        if (!anchorId) return;
+    // 同一オリジンの保険として iframe.contentDocument を直接スクロール
+    function fallbackScroll(id) {
         try {
             var doc = iframe.contentDocument || iframe.contentWindow.document;
-            if (!doc) return;
-            var target = doc.getElementById(anchorId)
-                       || doc.querySelector('[name="' + CSS.escape(anchorId) + '"]');
-            if (target && typeof target.scrollIntoView === 'function') {
-                // 少し遅延して、iframe 内 CSS / フォント適用後にスクロール
-                setTimeout(function () {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    // 親側もアンカー位置に合わせて調整（iframe の上辺へスクロール）
-                    iframe.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 80);
+            if (!doc) return false;
+            var target = doc.getElementById(id);
+            if (!target) {
+                try { target = doc.querySelector('[name="' + CSS.escape(id) + '"]'); } catch (e) {}
             }
-        } catch (e) { /* cross-origin 等 - noop */ }
+            if (target && typeof target.scrollIntoView === 'function') {
+                target.scrollIntoView({ behavior: 'auto', block: 'start' });
+                return true;
+            }
+        } catch (e) { /* cross-origin */ }
+        return false;
+    }
+
+    // iframe ロード完了時に親 hash を伝達してスクロール
+    iframe.addEventListener('load', function () {
+        var id = currentAnchor();
+        if (!id) return;
+        // 即時 / 200ms / 700ms と段階的に試す（フォント適用・遅延描画対策）
+        postScrollAnchor(id); fallbackScroll(id);
+        setTimeout(function () { postScrollAnchor(id); fallbackScroll(id); }, 200);
+        setTimeout(function () { postScrollAnchor(id); fallbackScroll(id); }, 700);
+        // 親側も iframe を画面上部に位置調整
+        setTimeout(function () {
+            try { iframe.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+        }, 250);
     });
 
-    // ページロード後に hash が後付けで変わった場合（戻る・進む等）にも対応
+    // 戻る・進む等で親 hash が変わった場合にも反応
     window.addEventListener('hashchange', function () {
-        if (!window.location.hash) return;
-        try {
-            var u = new URL(iframe.getAttribute('src'), window.location.origin);
-            u.hash = window.location.hash;
-            iframe.setAttribute('src', u.toString());
-        } catch (e) { /* noop */ }
+        var id = currentAnchor();
+        if (!id) return;
+        postScrollAnchor(id);
+        fallbackScroll(id);
     });
 
+    // iframe の高さを内容に合わせる
     window.addEventListener('message', function (e) {
         if (!e.data || e.data.type !== 'mimamori-report-height') return;
         var h = Math.max(1000, parseInt(e.data.height, 10) || 0);
