@@ -15,7 +15,7 @@ if ( ! mimamori_can_access_seo() ) {
 }
 
 $current_user = wp_get_current_user();
-$user_id      = $current_user->ID;
+$user_id = mimamori_get_view_user_id();
 
 // URL パラメータからキーワードを取得
 $initial_keyword = isset( $_GET['keyword'] ) ? sanitize_text_field( $_GET['keyword'] ) : '';

@@ -15,7 +15,7 @@ if ( ! mimamori_can_access_seo() ) {
 }
 
 $current_user = wp_get_current_user();
-$user_id      = $current_user->ID;
+$user_id = mimamori_get_view_user_id();
 
 // クライアント情報取得
 $client_settings = function_exists( 'gcrev_get_client_settings' )

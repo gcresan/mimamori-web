@@ -11,7 +11,7 @@ if (!is_user_logged_in()) {
 mimamori_guard_meo_access();
 
 $current_user = wp_get_current_user();
-$user_id = $current_user->ID;
+$user_id = mimamori_get_view_user_id();
 
 // ページタイトル設定
 set_query_var('gcrev_page_title', 'マップ順位');

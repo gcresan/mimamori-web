@@ -9,7 +9,7 @@ if ( ! is_user_logged_in() ) {
 }
 
 $current_user = wp_get_current_user();
-$user_id      = (int) $current_user->ID;
+$user_id = mimamori_get_view_user_id();
 
 set_query_var( 'gcrev_page_title', '戦略設定' );
 set_query_var( 'gcrev_page_subtitle', '貴社の戦略（ターゲット・課題・差別化要素・コンバージョン導線）を登録します。月次の深掘りレポート生成に使用されます。' );

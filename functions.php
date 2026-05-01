@@ -10703,3 +10703,293 @@ add_action( 'wp_enqueue_scripts', function () {
     ] );
 } );
 
+/* ============================================================
+ * 事業者ビュー切替（管理者が他クライアント目線でフロントを閲覧）
+ * - View As: 管理者のまま、データ所有者IDだけをクライアントIDに切替
+ * - 権限判定（current_user_can）には影響させない（管理者権限は維持）
+ * ============================================================ */
+
+if ( ! function_exists( 'mimamori_view_as_meta_key' ) ) {
+function mimamori_view_as_meta_key(): string {
+    return '_mimamori_view_as_user_id';
+}
+}
+
+/**
+ * 現在ログイン中の管理者が、他事業者ユーザー目線で閲覧中ならその user_id を返す。
+ * 切替中でなければ 0。
+ */
+if ( ! function_exists( 'mimamori_get_view_as_target' ) ) {
+function mimamori_get_view_as_target(): int {
+    $admin_id = get_current_user_id();
+    if ( $admin_id <= 0 || ! user_can( $admin_id, 'manage_options' ) ) {
+        return 0;
+    }
+    $target_id = (int) get_user_meta( $admin_id, mimamori_view_as_meta_key(), true );
+    if ( $target_id <= 0 || $target_id === $admin_id ) {
+        return 0;
+    }
+    // 対象ユーザーが実在することを確認
+    if ( ! get_userdata( $target_id ) ) {
+        return 0;
+    }
+    return $target_id;
+}
+}
+
+/**
+ * テーマ内でデータ所有者ID（クライアントID）を解決するためのヘルパー。
+ * 管理者がビュー切替中なら対象ユーザーIDを、それ以外は通常のログインユーザーIDを返す。
+ *
+ * 既存コードでは `wp_get_current_user()->ID` / `get_current_user_id()` が散在しているが、
+ * テンプレートのデータ参照部分（$user_id の代入元）をこれに置き換えることで
+ * 表示が他クライアント目線に切り替わる。current_user_can() は触らないため権限は管理者のまま。
+ */
+if ( ! function_exists( 'mimamori_get_view_user_id' ) ) {
+function mimamori_get_view_user_id(): int {
+    $target = mimamori_get_view_as_target();
+    return $target > 0 ? $target : (int) get_current_user_id();
+}
+}
+
+/**
+ * ビュー切替の開始/解除（admin-post.php 経由）
+ */
+add_action( 'admin_post_mimamori_view_as_set', function () {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( '権限がありません。', 403 );
+    }
+    check_admin_referer( 'mimamori_view_as' );
+
+    $target = isset( $_REQUEST['target_user_id'] ) ? (int) $_REQUEST['target_user_id'] : 0;
+    $admin_id = get_current_user_id();
+
+    if ( $target > 0 && $target !== $admin_id && get_userdata( $target ) ) {
+        update_user_meta( $admin_id, mimamori_view_as_meta_key(), $target );
+        $redirect = isset( $_REQUEST['redirect'] ) ? esc_url_raw( wp_unslash( $_REQUEST['redirect'] ) ) : home_url( '/dashboard/' );
+    } else {
+        delete_user_meta( $admin_id, mimamori_view_as_meta_key() );
+        $redirect = isset( $_REQUEST['redirect'] ) ? esc_url_raw( wp_unslash( $_REQUEST['redirect'] ) ) : admin_url( 'admin.php?page=mimamori-view-as' );
+    }
+    wp_safe_redirect( $redirect ?: home_url( '/dashboard/' ) );
+    exit;
+} );
+
+add_action( 'admin_post_mimamori_view_as_clear', function () {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( '権限がありません。', 403 );
+    }
+    check_admin_referer( 'mimamori_view_as' );
+    delete_user_meta( get_current_user_id(), mimamori_view_as_meta_key() );
+    $redirect = isset( $_REQUEST['redirect'] ) ? esc_url_raw( wp_unslash( $_REQUEST['redirect'] ) ) : home_url( '/dashboard/' );
+    wp_safe_redirect( $redirect );
+    exit;
+} );
+
+/**
+ * 管理画面メニュー「みまもりウェブ > 事業者ビュー切替」を追加
+ */
+add_action( 'admin_menu', function () {
+    if ( ! current_user_can( 'manage_options' ) ) return;
+    add_submenu_page(
+        'gcrev-insight',
+        '事業者ビュー切替 - みまもりウェブ',
+        "\xF0\x9F\x91\x80 事業者ビュー切替",
+        'manage_options',
+        'mimamori-view-as',
+        'mimamori_render_view_as_admin_page'
+    );
+}, 60 );
+
+if ( ! function_exists( 'mimamori_render_view_as_admin_page' ) ) {
+function mimamori_render_view_as_admin_page(): void {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( '権限がありません。', 403 );
+    }
+    $admin_id   = get_current_user_id();
+    $current    = mimamori_get_view_as_target();
+    $current_u  = $current > 0 ? get_userdata( $current ) : null;
+    $search     = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+
+    $args = [
+        'number'  => 200,
+        'orderby' => 'display_name',
+        'order'   => 'ASC',
+        'fields'  => [ 'ID', 'user_login', 'user_email', 'display_name' ],
+    ];
+    if ( $search !== '' ) {
+        $args['search']         = '*' . $search . '*';
+        $args['search_columns'] = [ 'user_login', 'user_email', 'user_nicename', 'display_name' ];
+    }
+    $users = get_users( $args );
+    usort( $users, function( $a, $b ) {
+        $na = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $a->ID ) : '';
+        if ( $na === '' ) $na = (string) $a->display_name;
+        $nb = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $b->ID ) : '';
+        if ( $nb === '' ) $nb = (string) $b->display_name;
+        return strcmp( $na, $nb );
+    } );
+
+    $action_url = admin_url( 'admin-post.php' );
+    ?>
+    <div class="wrap" style="max-width:none;">
+        <h1>👀 事業者ビュー切替</h1>
+        <p>
+            指定した事業者の目線で「みまもりウェブ」フロント画面（ダッシュボード・レポート等）を閲覧できます。<br>
+            <strong>管理者権限は維持</strong>されます。閲覧中でも他の管理操作は通常どおり行えますが、<br>
+            設定保存などの<strong>書込み操作</strong>はそのクライアントとして実行されてしまうため、<strong>確認・閲覧専用</strong>でご利用ください。
+        </p>
+
+        <?php if ( $current_u ) :
+            $bn = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $current_u->ID ) : '';
+            if ( $bn === '' ) $bn = (string) $current_u->display_name;
+        ?>
+            <div style="background:#fffbe6;border:1px solid #f0c36d;border-radius:6px;padding:12px 16px;margin:14px 0;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                <div>
+                    <strong style="color:#a96900;">現在 <?php echo esc_html( $bn ); ?> 様として閲覧中</strong>
+                    <span style="color:#666;font-size:12px;">（user_id=<?php echo (int) $current_u->ID; ?> / <?php echo esc_html( $current_u->user_login ); ?>）</span>
+                </div>
+                <form method="post" action="<?php echo esc_url( $action_url ); ?>" style="margin-left:auto;">
+                    <?php wp_nonce_field( 'mimamori_view_as' ); ?>
+                    <input type="hidden" name="action" value="mimamori_view_as_clear">
+                    <input type="hidden" name="redirect" value="<?php echo esc_attr( admin_url( 'admin.php?page=mimamori-view-as' ) ); ?>">
+                    <button type="submit" class="button">🚪 ビュー切替を解除</button>
+                </form>
+            </div>
+        <?php endif; ?>
+
+        <form method="get" style="margin:16px 0;">
+            <input type="hidden" name="page" value="mimamori-view-as">
+            <input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="事業者名・ユーザー名・メールで検索">
+            <input type="submit" class="button" value="検索">
+            <?php if ( $search !== '' ) : ?>
+                <a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mimamori-view-as' ) ); ?>">クリア</a>
+            <?php endif; ?>
+        </form>
+
+        <table class="wp-list-table widefat striped">
+            <thead>
+                <tr>
+                    <th style="width:60px;">ID</th>
+                    <th>事業者名 / 表示名</th>
+                    <th>ログイン名</th>
+                    <th>メール</th>
+                    <th style="width:200px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ( $users as $u ) :
+                if ( (int) $u->ID === $admin_id ) continue;
+                $bn = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $u->ID ) : '';
+                if ( $bn === '' ) $bn = (string) $u->display_name;
+                $is_active = ( (int) $u->ID === $current );
+            ?>
+                <tr<?php echo $is_active ? ' style="background:#fff7da;"' : ''; ?>>
+                    <td><?php echo (int) $u->ID; ?></td>
+                    <td>
+                        <strong><?php echo esc_html( $bn ); ?></strong>
+                        <?php if ( $bn !== $u->display_name && $u->display_name !== '' ) : ?>
+                            <span style="color:#888;font-size:12px;">（<?php echo esc_html( $u->display_name ); ?>）</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?php echo esc_html( $u->user_login ); ?></td>
+                    <td><?php echo esc_html( $u->user_email ); ?></td>
+                    <td>
+                        <form method="post" action="<?php echo esc_url( $action_url ); ?>" style="display:inline;">
+                            <?php wp_nonce_field( 'mimamori_view_as' ); ?>
+                            <input type="hidden" name="action" value="mimamori_view_as_set">
+                            <input type="hidden" name="target_user_id" value="<?php echo (int) $u->ID; ?>">
+                            <input type="hidden" name="redirect" value="<?php echo esc_attr( home_url( '/dashboard/' ) ); ?>">
+                            <button type="submit" class="button button-primary">この事業者として閲覧</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+
+        <?php if ( empty( $users ) ) : ?>
+            <p style="text-align:center;color:#999;padding:24px;">ユーザーが見つかりませんでした</p>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+}
+
+/**
+ * フロント側ヘッダーに「◯◯ 様として閲覧中」バナーを表示
+ */
+add_action( 'wp_body_open', 'mimamori_render_view_as_banner', 1 );
+add_action( 'get_header',   'mimamori_render_view_as_banner_fallback', 1 );
+
+if ( ! function_exists( 'mimamori_render_view_as_banner' ) ) {
+function mimamori_render_view_as_banner(): void {
+    static $rendered = false;
+    if ( $rendered ) return;
+    $target = mimamori_get_view_as_target();
+    if ( $target <= 0 ) return;
+    $rendered = true;
+    $u  = get_userdata( $target );
+    if ( ! $u ) return;
+    $bn = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $target ) : '';
+    if ( $bn === '' ) $bn = (string) $u->display_name;
+    $clear_url = wp_nonce_url(
+        add_query_arg(
+            [
+                'action'   => 'mimamori_view_as_clear',
+                'redirect' => rawurlencode( ( is_ssl() ? 'https://' : 'http://' ) . ( $_SERVER['HTTP_HOST'] ?? '' ) . ( $_SERVER['REQUEST_URI'] ?? '/' ) ),
+            ],
+            admin_url( 'admin-post.php' )
+        ),
+        'mimamori_view_as'
+    );
+    ?>
+    <div id="mimamori-view-as-banner" style="position:sticky;top:0;z-index:9999;background:linear-gradient(90deg,#f0c36d,#e8a93a);color:#2b1d00;padding:8px 16px;font-size:13px;line-height:1.5;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,0.15);">
+        <span aria-hidden="true">👀</span>
+        <strong><?php echo esc_html( $bn ); ?> 様として閲覧中</strong>
+        <span style="color:#5a3d00;font-size:12px;">（管理者権限は維持されています / user_id=<?php echo (int) $target; ?>）</span>
+        <a href="<?php echo esc_url( $clear_url ); ?>"
+           style="margin-left:auto;background:#2b1d00;color:#fff;padding:4px 12px;border-radius:4px;text-decoration:none;font-weight:600;">
+            🚪 ビュー切替を解除
+        </a>
+        <a href="<?php echo esc_url( admin_url( 'admin.php?page=mimamori-view-as' ) ); ?>"
+           style="background:#fff;color:#2b1d00;padding:4px 12px;border-radius:4px;text-decoration:none;border:1px solid #2b1d00;">
+            別の事業者へ
+        </a>
+    </div>
+    <?php
+}
+}
+
+if ( ! function_exists( 'mimamori_render_view_as_banner_fallback' ) ) {
+function mimamori_render_view_as_banner_fallback(): void {
+    // wp_body_open が呼ばれないテーマ向けのフォールバックは現状未使用
+    // 将来必要なら header.php 直書きに変更
+}
+}
+
+/**
+ * 管理者バー（ログインバー）に「ビュー切替」クイックリンクを追加
+ */
+add_action( 'admin_bar_menu', function ( $wp_admin_bar ) {
+    if ( ! current_user_can( 'manage_options' ) ) return;
+    $target = mimamori_get_view_as_target();
+    if ( $target > 0 ) {
+        $u  = get_userdata( $target );
+        $bn = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $target ) : '';
+        if ( $bn === '' && $u ) $bn = (string) $u->display_name;
+        $wp_admin_bar->add_node( [
+            'id'    => 'mimamori-view-as',
+            'title' => '👀 ' . $bn . ' として閲覧中',
+            'href'  => admin_url( 'admin.php?page=mimamori-view-as' ),
+            'meta'  => [ 'class' => 'mimamori-view-as-active' ],
+        ] );
+    } else {
+        $wp_admin_bar->add_node( [
+            'id'    => 'mimamori-view-as',
+            'title' => '👀 事業者ビュー切替',
+            'href'  => admin_url( 'admin.php?page=mimamori-view-as' ),
+        ] );
+    }
+}, 90 );
+
