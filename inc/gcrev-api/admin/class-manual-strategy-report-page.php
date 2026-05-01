@@ -330,7 +330,14 @@ class Gcrev_Manual_Strategy_Report_Page {
         } );
 
         ?>
-        <div class="wrap">
+        <div class="wrap" style="max-width:none;">
+            <style>
+                /* 深掘りレポート管理画面: 画面幅いっぱいに使う */
+                .wp-admin #wpbody-content > .wrap { max-width: none !important; }
+                .wp-admin #wpbody-content .wrap > .card { max-width: none !important; width: 100%; box-sizing: border-box; }
+                .wp-admin #wpbody-content .wrap > details.card { display: block; }
+                .wp-admin #wpbody-content .wrap > details.card > summary { width: 100%; box-sizing: border-box; }
+            </style>
             <h1>📄 深掘りレポート（手動アップロード）</h1>
             <p>クライアントごとに「概要版」「詳細版」HTML を <strong>複数バージョン</strong> 保存できます。アップロードを重ねるたびに履歴として残り、最新版が <code>/strategy-report/</code> に表示されます。</p>
             <ol style="background:#f6f7f7;padding:14px 30px;border-radius:6px;line-height:1.8;">
