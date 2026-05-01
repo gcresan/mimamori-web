@@ -457,6 +457,27 @@ get_header();
 // =========================================================
 $infographic = $gcrev_api->get_monthly_infographic($year, $month, $user_id);
 
+// 前月分が未生成の場合は最大12ヶ月遡って最新の保存済みインフォグラフィックを使用する。
+// 月切替直後で当月の自動生成が未完了 / 当該ユーザーで失敗したケースの救済。
+// 「AIレポートを始めましょう」ゼロ状態案内は過去にレポートがないユーザーに限定する。
+if ( ! $infographic ) {
+    $fallback_dt = $prev_month_start;
+    for ( $i = 1; $i <= 12; $i++ ) {
+        $fallback_dt = $fallback_dt->modify( '-1 month' );
+        $fy = (int) $fallback_dt->format( 'Y' );
+        $fm = (int) $fallback_dt->format( 'n' );
+        $candidate = $gcrev_api->get_monthly_infographic( $fy, $fm, $user_id );
+        if ( $candidate ) {
+            $infographic      = $candidate;
+            $year             = $fy;
+            $month            = $fm;
+            $prev_month_start = $fallback_dt;
+            $prev_month_end   = $fallback_dt->modify( 'last day of this month' );
+            break;
+        }
+    }
+}
+
 // KPIデータ（JSインライン用に外スコープで宣言）
 $kpi_curr = [];
 $kpi_prev = [];
