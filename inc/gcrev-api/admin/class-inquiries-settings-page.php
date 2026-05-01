@@ -125,10 +125,11 @@ class Gcrev_Inquiries_Settings_Page {
         $current = isset( $_GET['user'] ) ? absint( wp_unslash( $_GET['user'] ) ) : get_current_user_id();
         $users   = get_users( [ 'fields' => [ 'ID', 'user_login', 'display_name' ], 'orderby' => 'ID' ] );
 
-        $endpoint = Mimamori_Inquiries_Fetcher::get_endpoint( $current );
-        $token    = Mimamori_Inquiries_Fetcher::get_token( $current );
-        $enabled  = Mimamori_Inquiries_Fetcher::is_enabled( $current );
-        $recent   = Mimamori_Inquiries_Fetcher::get_recent( $current, 12 );
+        $endpoint     = Mimamori_Inquiries_Fetcher::get_endpoint( $current );
+        $token_raw    = (string) get_user_meta( $current, Mimamori_Inquiries_Fetcher::META_TOKEN, true );
+        $token_saved  = ( $token_raw !== '' );
+        $enabled      = Mimamori_Inquiries_Fetcher::is_enabled( $current );
+        $recent       = Mimamori_Inquiries_Fetcher::get_recent( $current, 12 );
 
         $updated = isset( $_GET['updated'] ) ? sanitize_text_field( wp_unslash( $_GET['updated'] ) ) : '';
         $msg     = isset( $_GET['msg'] )     ? sanitize_text_field( wp_unslash( $_GET['msg'] ) )     : '';
@@ -177,8 +178,15 @@ class Gcrev_Inquiries_Settings_Page {
                     <tr>
                         <th><label for="token">トークン</label></th>
                         <td>
-                            <input type="password" id="token" name="token" value="" class="regular-text" autocomplete="new-password" placeholder="<?php echo $token !== '' ? '（保存済み・再入力で上書き）' : ''; ?>" />
-                            <p class="description">契約サイト側 wp-config.php の <code>MIMAMORI_INQUIRIES_API_TOKEN</code> と同じ値。空のまま保存すると現在の値を維持します。</p>
+                            <input type="password" id="token" name="token" value="" class="regular-text" autocomplete="new-password" placeholder="<?php echo $token_saved ? '（保存済み・再入力で上書き）' : '（未設定 — 必ず入力してください）'; ?>" />
+                            <p class="description">
+                                契約サイト側 wp-config.php の <code>MIMAMORI_INQUIRIES_API_TOKEN</code> と同じ値。
+                                <?php if ( $token_saved ) : ?>
+                                    <strong style="color:#1e8e3e;">✓ 保存済み</strong>。空のまま保存すると現在の値を維持します。
+                                <?php else : ?>
+                                    <strong style="color:#b00;">✗ 未保存</strong>。必ず入力してから保存してください。
+                                <?php endif; ?>
+                            </p>
                         </td>
                     </tr>
                     <tr>
