@@ -112,6 +112,8 @@ get_header();
     var iframe = document.getElementById('strategyReportIframe');
     if (!iframe) return;
 
+    var detailPath = '<?php echo esc_js( wp_parse_url( home_url( '/strategy-report-detail/' ), PHP_URL_PATH ) ?: '/strategy-report-detail/' ); ?>';
+
     // 親URLにアンカーがあれば iframe の src に引き継ぐ
     if (window.location.hash) {
         try {
@@ -120,6 +122,43 @@ get_header();
             iframe.setAttribute('src', u.toString());
         } catch (e) { /* noop */ }
     }
+
+    // iframe ロード完了後、概要版内の「詳細版へのリンク」を親フレームで開くようにする。
+    // 概要版 HTML 内に <a href="/strategy-report-detail/#sec-X"> のようなアンカー付きリンクが
+    // ある場合、そのまま iframe 内でクリックすると iframe 内ナビゲーションになってしまい、
+    // 詳細版ページのアンカー引き継ぎ処理（親 URL hash → iframe src）が発動しない。
+    // 同一オリジンなので親から iframe.contentDocument を操作してリンクを書き換える。
+    function rewireDetailLinks() {
+        try {
+            var doc = iframe.contentDocument || iframe.contentWindow.document;
+            if (!doc) return;
+            var anchors = doc.querySelectorAll('a[href]');
+            anchors.forEach(function (a) {
+                var href = a.getAttribute('href') || '';
+                // /strategy-report-detail/ への相対 / 絶対リンクを検出
+                var isDetailLink =
+                    href.indexOf(detailPath) === 0 ||
+                    href.indexOf('/strategy-report-detail') !== -1 ||
+                    /strategy-report-detail/.test(href);
+                if (!isDetailLink) return;
+                // 親フレームで開かせる
+                a.setAttribute('target', '_top');
+                // フォールバック: 何らかの理由で target=_top が効かない場合に備え、
+                // クリック時に明示的に親 window を navigate する。
+                a.addEventListener('click', function (ev) {
+                    try {
+                        // ctrl/cmd/middle click は新規タブ動作を尊重
+                        if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return;
+                        ev.preventDefault();
+                        var resolved = new URL(href, doc.baseURI || window.location.href);
+                        window.top.location.href = resolved.toString();
+                    } catch (err) { /* noop */ }
+                }, { once: false });
+            });
+        } catch (e) { /* cross-origin 等 - noop */ }
+    }
+
+    iframe.addEventListener('load', rewireDetailLinks);
 
     window.addEventListener('message', function (e) {
         if (!e.data || e.data.type !== 'mimamori-report-height') return;

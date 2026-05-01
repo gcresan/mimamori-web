@@ -115,6 +115,39 @@ get_header();
         } catch (e) { /* noop */ }
     }
 
+    // iframe 読み込み完了後、対象セクションへスクロール（同一オリジンのため可能）。
+    // src に hash を渡しただけだとブラウザが既に読まれた直後のレイアウト前にジャンプを
+    // 試みて失敗するケースがあるため、load 後に明示スクロールする保険。
+    iframe.addEventListener('load', function () {
+        if (!window.location.hash) return;
+        var anchorId = window.location.hash.replace(/^#/, '');
+        if (!anchorId) return;
+        try {
+            var doc = iframe.contentDocument || iframe.contentWindow.document;
+            if (!doc) return;
+            var target = doc.getElementById(anchorId)
+                       || doc.querySelector('[name="' + CSS.escape(anchorId) + '"]');
+            if (target && typeof target.scrollIntoView === 'function') {
+                // 少し遅延して、iframe 内 CSS / フォント適用後にスクロール
+                setTimeout(function () {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    // 親側もアンカー位置に合わせて調整（iframe の上辺へスクロール）
+                    iframe.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 80);
+            }
+        } catch (e) { /* cross-origin 等 - noop */ }
+    });
+
+    // ページロード後に hash が後付けで変わった場合（戻る・進む等）にも対応
+    window.addEventListener('hashchange', function () {
+        if (!window.location.hash) return;
+        try {
+            var u = new URL(iframe.getAttribute('src'), window.location.origin);
+            u.hash = window.location.hash;
+            iframe.setAttribute('src', u.toString());
+        } catch (e) { /* noop */ }
+    });
+
     window.addEventListener('message', function (e) {
         if (!e.data || e.data.type !== 'mimamori-report-height') return;
         var h = Math.max(1000, parseInt(e.data.height, 10) || 0);
