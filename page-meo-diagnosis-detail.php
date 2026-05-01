@@ -10,7 +10,7 @@ if ( ! is_user_logged_in() ) {
 
 mimamori_guard_meo_access();
 
-$current_user = wp_get_current_user();
+$current_user = mimamori_get_view_user_object();
 $user_id = mimamori_get_view_user_id();
 
 set_query_var( 'gcrev_page_title', '診断レポート詳細' );

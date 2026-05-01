@@ -63,7 +63,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <p class="logo-subcatch">みまもるから、次が見える。</p>
          </div>
          <?php if ( is_user_logged_in() ) :
-            $u = wp_get_current_user();
+            $u = mimamori_get_view_user_object();
 
             // 表示名優先 → 姓
             $company = gcrev_get_business_name( $u->ID );
@@ -542,7 +542,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
       <div class="topbar-right">
          <?php if ( is_user_logged_in() ) :
-            $u = wp_get_current_user();
+            $u = mimamori_get_view_user_object();
             $company = gcrev_get_business_name( $u->ID );
             ?>
 

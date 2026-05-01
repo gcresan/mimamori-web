@@ -10753,6 +10753,27 @@ function mimamori_get_view_user_id(): int {
 }
 
 /**
+ * ヘッダー・サイドバー・アカウントメニュー等で表示するユーザーオブジェクトを返す。
+ * ビュー切替中は対象クライアントの WP_User、それ以外はログインユーザーの WP_User。
+ * これにより屋号 / URL / トライアル状態 / 表示名 / メール等の表示を
+ * クライアント目線に統一できる。
+ *
+ * @return \WP_User
+ */
+if ( ! function_exists( 'mimamori_get_view_user_object' ) ) {
+function mimamori_get_view_user_object(): \WP_User {
+    $target = mimamori_get_view_as_target();
+    if ( $target > 0 ) {
+        $u = get_userdata( $target );
+        if ( $u instanceof \WP_User ) {
+            return $u;
+        }
+    }
+    return wp_get_current_user();
+}
+}
+
+/**
  * ビュー切替の開始/解除（admin-post.php 経由）
  */
 add_action( 'admin_post_mimamori_view_as_set', function () {

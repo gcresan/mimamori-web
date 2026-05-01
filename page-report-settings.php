@@ -8,7 +8,7 @@ if (!is_user_logged_in()) {
     exit;
 }
 
-$current_user = wp_get_current_user();
+$current_user = mimamori_get_view_user_object();
 $user_id = $current_user->ID;
 $is_admin = current_user_can('manage_options'); // 管理者判定
 
