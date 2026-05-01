@@ -1222,6 +1222,17 @@ if ( file_exists( $mimamori_updates_api ) ) {
 }
 
 // ========================================
+// Inquiries Fetcher（契約サイトの問い合わせ件数を月次取得）
+// ========================================
+$mimamori_inquiries_fetcher = $gcrev_modules_path . 'class-inquiries-fetcher.php';
+if ( file_exists( $mimamori_inquiries_fetcher ) ) {
+    require_once $mimamori_inquiries_fetcher;
+    if ( class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+        ( new Mimamori_Inquiries_Fetcher() )->register();
+    }
+}
+
+// ========================================
 // MEO Diagnostic Service（MEO診断）
 // ========================================
 $gcrev_meo_diag = $gcrev_modules_path . 'class-meo-diagnostic-service.php';

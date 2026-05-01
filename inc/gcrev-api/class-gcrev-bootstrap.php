@@ -197,6 +197,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Report_Queue_Page())->register();
             }
 
+            $inquiries_settings_path = __DIR__ . '/admin/class-inquiries-settings-page.php';
+            if ( file_exists( $inquiries_settings_path ) ) {
+                require_once $inquiries_settings_path;
+                (new Gcrev_Inquiries_Settings_Page())->register();
+            }
+
             // 戦略レポート（手動アップロード）— 管理画面 UI のみ
             // クラスファイル自体はフロントでも require するため、ここでは register() のみ
             (new Gcrev_Manual_Strategy_Report_Page())->register();
@@ -906,6 +912,11 @@ class Gcrev_Bootstrap {
 
         // AIチャット分析レポート: 毎月1日 08:00（前月分を全ユーザー対象で生成＋メール通知）
         self::schedule_monthly_if_missing('gcrev_chat_analysis_monthly_event', 'first day of next month 08:00:00');
+
+        // 問い合わせ件数取得: 毎月1日 09:30（前月分を全ユーザー分まとめて取得）
+        if ( class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+            self::schedule_monthly_if_missing( Mimamori_Inquiries_Fetcher::CRON_HOOK, 'first day of next month 09:30:00' );
+        }
 
         // AIO SERP 週次取得: 毎週月曜 05:30（Bright Data）
         if ( ! wp_next_scheduled( 'gcrev_aio_serp_weekly_event' ) ) {
