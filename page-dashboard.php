@@ -30,17 +30,46 @@ if ( ! isset($gcrev_api_instance) || ! ($gcrev_api_instance instanceof Gcrev_Ins
 }
 $gcrev_api = $gcrev_api_instance;
 
-// 直近30日（ダッシュボード主軸）
+// === 月次主軸（確定データ：前月 vs 前々月） ===
+// 全体ダッシュボードは「月次の確定データを見る場所」として運用する。
+// 直近30日の速報データはサイトダッシュボード（/site-dashboard/）で確認する想定。
 $tz = wp_timezone();
 $date_helper = new Gcrev_Date_Helper();
-$last30      = $date_helper->get_date_range('last30');
-$last30_comp = $date_helper->get_comparison_range($last30['start'], $last30['end']);
 
-// 月次レポート/インフォグラフィック用（従来どおり）
+// 月次レポート/インフォグラフィック用（前月）
 $prev_month_start = new DateTimeImmutable('first day of last month', $tz);
 $prev_month_end   = new DateTimeImmutable('last day of last month', $tz);
 $year  = (int)$prev_month_start->format('Y');
 $month = (int)$prev_month_start->format('n');
+
+// 比較期間（前々月）
+$prev2_month_start = $prev_month_start->modify('-1 month');
+$prev2_month_end   = $prev2_month_start->modify('last day of this month');
+
+// 後方互換: 既存コードが $last30 / $last30_comp を参照している箇所のために、
+// 月次レンジを同じ構造体で持たせる（display 等もここで生成）
+$month_curr = [
+    'start'   => $prev_month_start->format('Y-m-d'),
+    'end'     => $prev_month_end->format('Y-m-d'),
+    'display' => [
+        'start' => $prev_month_start->format('Y/m/d'),
+        'end'   => $prev_month_end->format('Y/m/d'),
+        'label' => $prev_month_start->format('Y年n月'),
+    ],
+];
+$month_comp = [
+    'start'   => $prev2_month_start->format('Y-m-d'),
+    'end'     => $prev2_month_end->format('Y-m-d'),
+    'display' => [
+        'start' => $prev2_month_start->format('Y/m/d'),
+        'end'   => $prev2_month_end->format('Y/m/d'),
+        'label' => $prev2_month_start->format('Y年n月'),
+    ],
+];
+
+// 既存 $last30 / $last30_comp 参照箇所の互換維持（実体は月次レンジ）
+$last30      = $month_curr;
+$last30_comp = $month_comp;
 
 
 /**
@@ -482,57 +511,28 @@ if ( ! $infographic ) {
 $kpi_curr = [];
 $kpi_prev = [];
 
-// === 直近30日ベースのKPI・スコア算出 ===
+// === 月次ベースのKPI・スコア算出（前月 vs 前々月の確定データ） ===
 if ($infographic && is_array($infographic)) {
     try {
-        // --- 直近30日のKPIデータ（GA4+GSC）---
-        // cache_first=1: プリフェッチ済みキャッシュがあれば即返却、なければ空配列
-        // （キャッシュなし時はJS非同期で取得→スコアも非同期更新）
-        $kpi_curr = $gcrev_api->get_dashboard_kpi('last30', $user_id, 1);
+        // --- 前月のKPIデータ（GA4+GSC）---
+        // 全体ダッシュボードは「月次の確定データを見る場所」なので、月次レンジで取得する。
+        // get_dashboard_kpi_by_dates は cache_scope を付ければトランジェントキャッシュも効く。
+        $kpi_curr = $gcrev_api->get_dashboard_kpi_by_dates(
+            $month_curr['start'], $month_curr['end'], $user_id, 'prev_month'
+        );
 
-        // キャッシュミス時：次回のために背景 warm を仕込む（throttle 30分）
-        if ( empty( $kpi_curr ) ) {
-            $miss_throttle = "gcrev_throttle_dash_warm_{$user_id}";
-            if ( ! get_transient( $miss_throttle ) ) {
-                set_transient( $miss_throttle, 1, 30 * MINUTE_IN_SECONDS );
-                if ( ! wp_next_scheduled( 'gcrev_user_dashboard_warm_event', [ $user_id ] ) ) {
-                    wp_schedule_single_event( time(), 'gcrev_user_dashboard_warm_event', [ $user_id ] );
-                }
-                // wp-cron.php を非同期トリガー（ページ表示は遅延させない）
-                $cron_url = site_url( '/wp-cron.php?doing_wp_cron=' . microtime( true ) );
-                wp_remote_post( $cron_url, [
-                    'blocking'  => false,
-                    'timeout'   => 0.5,
-                    'sslverify' => false,
-                ] );
-            }
-        }
-
-        // 比較期間のKPI（currが取得できた場合のみ）
-        // キャッシュのみ確認。キャッシュミス時はJS非同期に委任（同期API呼び出しを排除してページ表示を高速化）
+        // 比較期間のKPI（前々月）
         $kpi_prev = [];
-        if (!empty($kpi_curr)) {
-            $exclude_foreign_prev = get_user_meta( $user_id, 'report_exclude_foreign', true );
-            $filter_suffix_prev   = $exclude_foreign_prev ? '_filtered' : '';
-            // 解析対象/除外URL条件があればキャッシュキーを差別化（get_dashboard_kpi_by_dates と揃える）
-            if ( class_exists( 'Gcrev_Path_Filter' ) ) {
-                $filter_suffix_prev .= Gcrev_Path_Filter::cache_suffix( $user_id );
-            }
-            // period ベース安定キー（get_dashboard_kpi_by_dates の cache_scope='last30_comp' と揃える）
-            // get_transient_with_stale: TTL切れだが option_value は残っているケース（自然失効）に備える
-            $prev_cache_key = "gcrev_dash_bydate_{$user_id}_last30_comp{$filter_suffix_prev}";
-            $prev_cached    = $gcrev_api->get_transient_with_stale( $prev_cache_key );
-            if ( $prev_cached !== false && is_array( $prev_cached ) ) {
-                $kpi_prev = $prev_cached;
-            }
-            // キャッシュ（fresh も stale も）ミス時は $kpi_prev = [] のまま → JS非同期で取得＆表示更新
+        if ( ! empty( $kpi_curr ) ) {
+            $kpi_prev = $gcrev_api->get_dashboard_kpi_by_dates(
+                $month_comp['start'], $month_comp['end'], $user_id, 'prev2_month'
+            );
         }
 
-        // --- MEO直近30日 ---
-        // キャッシュのみ確認（period ベース安定キー。fetch_meo_metrics_safe の cache_scope と揃える）
-        // stale も含めて取得（TTL切れでも前回値を表示しつつ JS で更新）
-        $meo_cache_curr = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_last30");
-        $meo_cache_prev = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_last30_comp");
+        // --- MEO月次（前月 / 前々月） ---
+        // get_transient_with_stale で TTL 切れでもキャッシュ値を再利用
+        $meo_cache_curr = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_prev_month");
+        $meo_cache_prev = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_prev2_month");
 
         $meo_curr = (is_array($meo_cache_curr) && $meo_cache_curr !== false)
             ? (int)($meo_cache_curr['total_impressions'] ?? 0) : null;
@@ -556,6 +556,32 @@ if ($infographic && is_array($infographic)) {
         $gsc_prev_val = (int)str_replace(',', '', (string)(
             $kpi_prev['gsc']['total']['clicks'] ?? $kpi_prev['gsc']['total']['impressions'] ?? '0'
         ));
+
+        // === 月次確定 CV（WordPress 実績CV + GA4 + MEO 電話タップを統合） ===
+        // 全体ダッシュボードは「確定データ」を見る場所なので、リアルタイム値ではなく
+        // get_effective_cv_monthly（月次確定 CV）を優先利用する。
+        // 戻り値: ['total' => N, 'phone_tap' => N, 'breakdown_by_label' => [...], 'source' => 'actual_cv'|'ga4'|'mixed']
+        try {
+            $eff_cv_curr = $gcrev_api->get_effective_cv_monthly( $month_curr['display']['label']
+                ? sprintf( '%04d-%02d', (int) $prev_month_start->format( 'Y' ), (int) $prev_month_start->format( 'n' ) )
+                : '', $user_id );
+            if ( is_array( $eff_cv_curr ) && isset( $eff_cv_curr['total'] ) ) {
+                $cv_curr = (int) $eff_cv_curr['total'];
+                if ( isset( $eff_cv_curr['breakdown_by_label'] ) && is_array( $eff_cv_curr['breakdown_by_label'] ) ) {
+                    // ga4 由来 cv_breakdown_items を実績ベースで上書き
+                    $kpi_curr['cv_breakdown_items'] = $eff_cv_curr['breakdown_by_label'];
+                }
+            }
+            $eff_cv_prev = $gcrev_api->get_effective_cv_monthly(
+                sprintf( '%04d-%02d', (int) $prev2_month_start->format( 'Y' ), (int) $prev2_month_start->format( 'n' ) ),
+                $user_id
+            );
+            if ( is_array( $eff_cv_prev ) && isset( $eff_cv_prev['total'] ) ) {
+                $cv_prev = (int) $eff_cv_prev['total'];
+            }
+        } catch ( \Throwable $cve ) {
+            error_log( '[GCREV] page-dashboard effective_cv error: ' . $cve->getMessage() );
+        }
 
         // infographic KPI 上書き（訪問数・ゴール数・MEO）
         $infographic['kpi']['visits'] = ['value' => $sess_curr, 'diff' => $sess_curr - $sess_prev];
@@ -679,36 +705,50 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 ?>
 
 
-    <!-- 期間表示 -->
+    <!-- 期間表示（月次：前月 vs 前々月） -->
     <div class="period-info">
         <div class="period-item">
             <span class="period-label-v2">&#x1F4C5; 対象期間：</span>
-            <span class="period-value">直近30日（<?php echo esc_html( $last30['display']['start'] ); ?> 〜 <?php echo esc_html( $last30['display']['end'] ); ?>）</span>
+            <span class="period-value"><?php echo esc_html( $month_curr['display']['label'] ); ?></span>
         </div>
         <div class="period-divider"></div>
         <div class="period-item">
             <span class="period-label-v2">&#x1F4CA; 比較期間：</span>
-            <span class="period-value">その前の30日（<?php echo esc_html( $last30_comp['display']['start'] ); ?> 〜 <?php echo esc_html( $last30_comp['display']['end'] ); ?>）</span>
+            <span class="period-value"><?php echo esc_html( $month_comp['display']['label'] ); ?></span>
         </div>
     </div>
 <?php if ($infographic): ?>
 <section class="dashboard-infographic">
 
-  <!-- 外枠右上：レポート系リンク群 -->
-  <div class="info-monthly-link__group">
-    <?php if (!empty($monthly_report)): ?>
-      <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="info-monthly-link">
-        <span aria-hidden="true">📊</span> 前月の月次レポートを見る
-      </a>
-    <?php endif; ?>
-    <a href="<?php echo esc_url(home_url('/strategy-report/')); ?>" class="info-monthly-link info-monthly-link--strategy">
-      <span aria-hidden="true">🧠</span> 深掘りレポートを見る
-    </a>
+  <!-- レポートアクション群（月次確定データ系 + 速報系を明確に分離） -->
+  <div class="report-actions">
+    <div class="monthly-actions">
+      <p class="report-actions__label">前月の確定データ</p>
+      <div class="report-actions__buttons">
+        <?php if (!empty($monthly_report)): ?>
+          <a href="<?php echo esc_url(home_url('/report/report-latest/')); ?>" class="info-monthly-link">
+            <span aria-hidden="true">📊</span> 前月の月次レポートを見る
+          </a>
+        <?php endif; ?>
+        <a href="<?php echo esc_url(home_url('/strategy-report/')); ?>" class="info-monthly-link info-monthly-link--strategy">
+          <span aria-hidden="true">🧠</span> 深掘りレポートを見る
+        </a>
+      </div>
+    </div>
+
+    <div class="recent-actions">
+      <p class="report-actions__label">最新の動き（速報）</p>
+      <div class="report-actions__buttons">
+        <a href="<?php echo esc_url(home_url('/site-dashboard/')); ?>" class="info-monthly-link info-monthly-link--secondary">
+          <span aria-hidden="true">⚡</span> 直近30日の動きを見る
+        </a>
+      </div>
+    </div>
   </div>
 
   <!-- 見出し -->
   <h2 class="dashboard-infographic-title">
-    <span class="icon" aria-hidden="true">📊</span>直近30日の状態
+    <span class="icon" aria-hidden="true">📊</span><?php echo esc_html( $month_curr['display']['label'] ); ?>の状態
   </h2>
 
   <?php
@@ -1521,7 +1561,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             card.classList.add('is-kpi-loading');
             card.setAttribute('aria-busy', 'true');
         }
-        fetch(restBase + 'meo/dashboard?period=last30', {
+        fetch(restBase + 'meo/dashboard?period=prev-month', {
             credentials: 'same-origin',
             headers: { 'X-WP-Nonce': nonce }
         }).then(function(r){ return r.json(); }).then(function(meoData){
@@ -1704,7 +1744,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
         // 直近30日 + 比較期間 + MEO を並列取得
         Promise.all([
-            fetch(restBase + 'dashboard/kpi?period=last30', {
+            fetch(restBase + 'dashboard/kpi?period=prev-month', {
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); }),
@@ -1712,7 +1752,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); }),
-            fetch(restBase + 'meo/dashboard?period=last30', {
+            fetch(restBase + 'meo/dashboard?period=prev-month', {
                 credentials: 'same-origin',
                 headers: { 'X-WP-Nonce': nonce }
             }).then(function(r){ return r.json(); })

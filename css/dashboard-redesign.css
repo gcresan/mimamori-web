@@ -528,6 +528,106 @@ h3 { font-size: 20px; font-weight: 700; }
   background: #333;
 }
 
+/* ========== レポートアクション群（月次確定 / 速報 を分離） ========== */
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 0 0 22px;
+  padding: 14px 18px;
+  background: #FAF9F6;
+  border: 1px solid #E5E3DC;
+  border-radius: var(--mw-radius-md, 10px);
+}
+.report-actions .monthly-actions,
+.report-actions .recent-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 240px;
+}
+.report-actions .recent-actions {
+  border-left: 1px dashed #D6D3CC;
+  padding-left: 28px;
+}
+.report-actions__label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #6B6B66;
+  text-transform: none;
+}
+.report-actions .monthly-actions .report-actions__label::before {
+  content: "📌 ";
+}
+.report-actions .recent-actions .report-actions__label::before {
+  content: "⚡ ";
+}
+.report-actions__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* メインCTA（月次系）：既存の info-monthly-link を強い色のまま流用 */
+.report-actions .info-monthly-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--mw-radius-sm, 8px);
+  background: var(--mw-accent-positive, #4A7D63);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--mw-shadow-card, 0 1px 3px rgba(0,0,0,0.1));
+  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.report-actions .info-monthly-link:hover {
+  background: #3F7359;
+  box-shadow: var(--mw-shadow-float, 0 4px 10px rgba(0,0,0,0.12));
+  transform: translateY(-1px);
+}
+.report-actions .info-monthly-link--strategy {
+  background: #1a1a1a;
+}
+.report-actions .info-monthly-link--strategy:hover {
+  background: #333;
+}
+
+/* サブCTA（速報系）：控えめなアウトライン */
+.report-actions .info-monthly-link--secondary {
+  background: #fff;
+  color: #4A4A48;
+  border: 1px solid #D6D3CC;
+  box-shadow: none;
+}
+.report-actions .info-monthly-link--secondary:hover {
+  background: #F4F2EC;
+  color: #2B2B2B;
+  border-color: #B8B4A9;
+  transform: translateY(-1px);
+}
+
+/* スマホ：縦積み */
+@media (max-width: 768px) {
+  .report-actions {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .report-actions .recent-actions {
+    border-left: none;
+    border-top: 1px dashed #D6D3CC;
+    padding-left: 0;
+    padding-top: 14px;
+  }
+}
+
 /* ========== Score + KPI 横並びレイアウト ========== */
 .info-top-row {
   display: flex;
