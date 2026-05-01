@@ -612,6 +612,10 @@ if ($infographic && is_array($infographic)) {
             $infographic['status']     = $kpi_curr['_cached_score']['status'];
             $infographic['breakdown']  = $kpi_curr['_cached_score']['breakdown'];
             $infographic['components'] = $kpi_curr['_cached_score']['components'];
+        } elseif ( empty($kpi_prev) ) {
+            // 比較期間（その前30日）のキャッシュ未取得時は再計算しない。
+            // prev=0 として計算すると calc_pct_change が +100% を返し全指標満点扱いの水増しスコア（100点）になる。
+            // infographic 側の元スコア（前月時点で算出済み）を保持し、JS 非同期更新で kpi_prev 取得後に再描画させる。
         } else {
             // スコア計算（初回 or キャッシュにスコアが含まれていない場合）
             // MEO: 片方でもキャッシュミスなら両方0にする（非対称比較によるスコア水増し防止）
@@ -626,8 +630,7 @@ if ($infographic && is_array($infographic)) {
             $infographic['components'] = $re_health['components'];
 
             // スコアをKPIキャッシュに保存（次回以降スコア安定化）
-            // ※ kpi_prev が空の場合はスコアをキャッシュしない（prev=0 で水増しスコアが24h持続するのを防止）
-            if ( !empty($kpi_curr) && !empty($kpi_prev) ) {
+            if ( !empty($kpi_curr) ) {
                 $kpi_curr['_cached_score'] = [
                     'score'      => $re_health['score'],
                     'status'     => $re_health['status'],
