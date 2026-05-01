@@ -476,7 +476,7 @@ class Mimamori_Inquiries_Fetcher {
         }
 
         $existing = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$table} WHERE user_id = %d AND year_month = %s",
+            "SELECT `id` FROM `{$table}` WHERE `user_id` = %d AND `year_month` = %s",
             (int) $row['user_id'],
             (string) $row['year_month']
         ) );
@@ -506,7 +506,7 @@ class Mimamori_Inquiries_Fetcher {
         $ym    = sprintf( '%04d-%02d', $year, $month );
 
         $existing = $wpdb->get_var( $wpdb->prepare(
-            "SELECT id FROM {$table} WHERE user_id = %d AND year_month = %s",
+            "SELECT `id` FROM `{$table}` WHERE `user_id` = %d AND `year_month` = %s",
             $user_id,
             $ym
         ) );
@@ -544,7 +544,7 @@ class Mimamori_Inquiries_Fetcher {
         $ym    = sprintf( '%04d-%02d', $year, $month );
 
         $row = $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM {$table} WHERE user_id = %d AND year_month = %s",
+            "SELECT * FROM `{$table}` WHERE `user_id` = %d AND `year_month` = %s",
             $user_id,
             $ym
         ), ARRAY_A );
@@ -562,7 +562,7 @@ class Mimamori_Inquiries_Fetcher {
         $table = self::table_name();
         $months = max( 1, min( 60, $months ) );
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT * FROM {$table} WHERE user_id = %d ORDER BY year_month DESC LIMIT %d",
+            "SELECT * FROM `{$table}` WHERE `user_id` = %d ORDER BY `year_month` DESC LIMIT %d",
             $user_id,
             $months
         ), ARRAY_A );
