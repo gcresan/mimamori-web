@@ -10018,6 +10018,9 @@ PROMPT;
 
         if ($medians === null) {
             // フォールバック: 前月比ベースで柔らかめに配点
+            // prev=0 のディメンションは比較不能 → 配点・満点ともに除外し、有効ディメンションで満点を按分する。
+            $valid_count = 0;
+            $raw_total   = 0.0;
             foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
                 $c = (float)($curr[$key] ?? 0);
                 $p = (float)($prev[$key] ?? 0);
@@ -10025,14 +10028,21 @@ PROMPT;
                     $details[$key] = ['points' => 0, 'max' => $per_dim, 'ratio' => null, 'fallback' => true];
                     continue;
                 }
+                if ((int)$p === 0) {
+                    $details[$key] = ['points' => 0, 'max' => 0, 'ratio' => null, 'fallback' => true, 'no_prev' => true];
+                    continue;
+                }
                 $pct = $this->calc_pct_change($c, $p);
                 if ($pct >= 5.0)       $pts = $per_dim;      // 12.5
                 elseif ($pct >= -5.0)  $pts = $per_dim * 0.86; // ~10.75
                 elseif ($pct >= -15.0) $pts = $per_dim * 0.7;  // ~8.75
                 else                   $pts = $per_dim * 0.5;  // 6.25
-                $total += $pts;
+                $raw_total += $pts;
+                $valid_count++;
                 $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => null, 'fallback' => true];
             }
+            // 有効ディメンション数で按分（4ディメンション分の満点 50pt にスケール）
+            $total = ($valid_count > 0) ? ($raw_total * 4.0 / $valid_count) : 0.0;
         } else {
             foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
                 $c = (float)($curr[$key] ?? 0);
@@ -10076,14 +10086,21 @@ PROMPT;
      */
     private function calc_growth_component(array $curr, array $prev): array {
         $details = [];
-        $total   = 0.0;
-        $per_dim = 7.5;
+        $raw_total   = 0.0;
+        $per_dim     = 7.5;
+        $valid_count = 0;
 
         foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
             $c = (float)($curr[$key] ?? 0);
             $p = (float)($prev[$key] ?? 0);
             if ((int)$c === 0) {
                 $details[$key] = ['points' => 0, 'max' => $per_dim, 'pct' => 0, 'zone' => 'zero'];
+                continue;
+            }
+            // prev=0 で curr>0 のディメンションは比較不能 → 評価対象から除外し、有効ディメンションで満点を按分。
+            // （prev=0 → +100% を満点として扱うと水増しスコアの原因になるため）
+            if ((int)$p === 0) {
+                $details[$key] = ['points' => 0, 'max' => 0, 'pct' => 0, 'zone' => 'no_prev'];
                 continue;
             }
             $pct = $this->calc_pct_change($c, $p);
@@ -10103,9 +10120,13 @@ PROMPT;
                 $pts = $per_dim * 0.13; // ~1.0
                 $zone = 'hard_decline';
             }
-            $total += $pts;
+            $raw_total += $pts;
+            $valid_count++;
             $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'pct' => round($pct, 1), 'zone' => $zone];
         }
+
+        // 有効ディメンション数で按分（4ディメンション分の満点 30pt にスケール）
+        $total = ($valid_count > 0) ? ($raw_total * 4.0 / $valid_count) : 0.0;
 
         return [
             'points'  => (int)round($total),
@@ -10132,6 +10153,11 @@ PROMPT;
             $p = (float)($prev[$key] ?? 0);
             if ((int)$c === 0) {
                 $details[$key] = ['pct' => 0, 'drop' => false, 'zero' => true];
+                continue;
+            }
+            // prev=0 のディメンションは「急落判定不能」として除外（has_any も立てない）。
+            if ((int)$p === 0) {
+                $details[$key] = ['pct' => 0, 'drop' => false, 'zero' => false, 'no_prev' => true];
                 continue;
             }
             $has_any = true;
@@ -10287,6 +10313,19 @@ PROMPT;
         foreach ($dimensions as $key => $dim) {
             $c = (float)($curr[$key] ?? 0);
             $p = (float)($prev[$key] ?? 0);
+            // prev=0 のディメンションは「比較不能」扱い（旧式 breakdown でも水増し回避）
+            if ((int)$p === 0 && (int)$c > 0) {
+                $breakdown[$key] = [
+                    'label'  => $dim['label'],
+                    'curr'   => $c,
+                    'prev'   => $p,
+                    'pct'    => 0,
+                    'points' => 0,
+                    'max'    => 0,
+                    'no_prev' => true,
+                ];
+                continue;
+            }
             $pct    = $this->calc_pct_change($c, $p);
             $points = $this->pct_to_points($pct, $dim['max']);
             if ((int)$c === 0) {
