@@ -1897,22 +1897,53 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         });
     }
 
-    // sessionsを即時fetchして初期チャート描画
-    prefetchMetric('sessions')
-        .then(function(json){
-            if (_activeMetric) return;
-            // データ取得失敗 or 不正レスポンスのみエラー表示。
-            // values が空配列・全ゼロでも success ならグラフを描画する（誤検知でグラフが
-            // 一切出ない状態を回避）。
-            if (json && json.success && Array.isArray(json.values)) {
-                showTrend('sessions', '訪問数', '👥');
-            } else {
-                showError('sessions', '訪問数', '👥');
-            }
+    // 初期 sessions チャートを直接描画（prefetch+showTrend の状態遷移バグを回避）
+    (function initialTrendLoad(){
+        // タイムアウト保険: 15秒経っても返ってこなければエラー表示にフォールバック
+        var aborter   = ('AbortController' in window) ? new AbortController() : null;
+        var aborted   = false;
+        var timeoutId = setTimeout(function(){
+            aborted = true;
+            if (aborter) try { aborter.abort(); } catch (e) {}
+            if (!_activeMetric) showError('sessions', '訪問数', '👥');
+            console.warn('[GCREV] trend fetch timeout (sessions)');
+        }, 15000);
+
+        loading.classList.add('active');
+
+        fetch(restBase + 'dashboard/trends?metric=sessions&view=daily', {
+            headers: { 'X-WP-Nonce': nonce },
+            credentials: 'same-origin',
+            signal: aborter ? aborter.signal : undefined
         })
-        .catch(function(){
+        .then(function(res){ return res.json(); })
+        .then(function(json){
+            clearTimeout(timeoutId);
+            if (aborted) return;
+            if (!json || !json.success || !Array.isArray(json.values)) {
+                console.warn('[GCREV] trend response invalid', json);
+                showError('sessions', '訪問数', '👥');
+                return;
+            }
+            _trendCache.daily['sessions'] = json;
+            _activeMetric = 'sessions';
+            _activeLabel  = '訪問数';
+            _activeIcon   = '👥';
+            setActiveCard('sessions');
+            if (titleText) titleText.textContent = '訪問数 — 直近30日の推移';
+            if (titleIcon) titleIcon.textContent = '👥';
+            if (errorEl)   errorEl.style.display = 'none';
+            loading.classList.remove('active');
+            chartWrap.style.display = 'block';
+            chartWrap.style.opacity = '1';
+            renderTrendChart(json, '訪問数');
+        })
+        .catch(function(err){
+            clearTimeout(timeoutId);
+            console.error('[GCREV] trend fetch error', err);
             if (!_activeMetric) showError('sessions', '訪問数', '👥');
         });
+    })();
 
     // cv, meo は2秒後に遅延先読み（初期表示をブロックしない）
     setTimeout(function(){
