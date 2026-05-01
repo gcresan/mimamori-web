@@ -1058,7 +1058,6 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     'achievement' => '📊',
     'growth'      => '📈',
     'stability'   => "\u{1F6E1}\u{FE0F}",
-    'action'      => '⭐',
     'search_diag' => '🔍',
   ];
   ?>
@@ -1382,12 +1381,12 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             }
         }
 
-        var compIcons = { achievement: '📊', growth: '📈', stability: '\u{1F6E1}\uFE0F', action: '⭐', search_diag: '🔍' };
-        var compLabels = { achievement: '実績（中央値比較）', growth: '成長（前月比）', stability: '安定性', action: '行動ボーナス', search_diag: '検索・診断' };
+        var compIcons = { achievement: '📊', growth: '📈', stability: '\u{1F6E1}\uFE0F', search_diag: '🔍' };
+        var compLabels = { achievement: '実績（中央値比較）', growth: '成長（前月比）', stability: '安定性', search_diag: '検索・診断' };
         var dimLabels = { traffic: 'サイトに来た人の数', cv: 'ゴール（問い合わせ・申込みなど）', gsc: '検索結果からクリックされた数', meo: '地図検索からの表示数' };
 
         var html = '';
-        var compOrder = ['achievement', 'growth', 'stability', 'action', 'search_diag'];
+        var compOrder = ['achievement', 'growth', 'stability', 'search_diag'];
         compOrder.forEach(function(key) {
             var comp = components[key];
             if (!comp) return;

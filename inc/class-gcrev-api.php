@@ -10257,12 +10257,12 @@ PROMPT;
         }
 
         $summary = mimamori_get_search_diagnostic_summary($user_id);
-        $card_keys = ['organic_rank', 'map_rank', 'seo_diagnosis', 'aio_score', 'meo_diagnosis'];
+        // AIO 診断（aio_score）は採点対象から除外
+        $card_keys = ['organic_rank', 'map_rank', 'seo_diagnosis', 'meo_diagnosis'];
         $card_labels = [
             'organic_rank'  => '自然検索順位',
             'map_rank'      => 'マップ順位',
             'seo_diagnosis' => 'SEO診断',
-            'aio_score'     => 'AIO診断',
             'meo_diagnosis' => 'MEO診断',
         ];
 
@@ -10357,17 +10357,14 @@ PROMPT;
         $achievement = $this->calc_achievement_component($curr, $medians, $prev);
         $growth      = $this->calc_growth_component($curr, $prev);
         $stability   = $this->calc_stability_component($curr, $prev);
-        $action      = ($user_id > 0)
-            ? $this->calc_action_bonus_component($user_id)
-            : ['points' => 0, 'max' => 10, 'label' => '行動ボーナス', 'checks' => []];
         $search_diag = ($user_id > 0)
             ? $this->calc_search_diag_component($user_id)
             : ['points' => 0, 'max' => 15, 'label' => '検索・診断', 'cards' => []];
 
+        // 行動ボーナス（action）は採点項目から除外
         $raw_total = $achievement['points']
                    + $growth['points']
                    + $stability['points']
-                   + $action['points']
                    + $search_diag['points'];
 
         // --- 3) スコア確定（フロアは廃止、上限のみ適用）---
@@ -10386,7 +10383,6 @@ PROMPT;
             'achievement' => $achievement,
             'growth'      => $growth,
             'stability'   => $stability,
-            'action'      => $action,
             'search_diag' => $search_diag,
         ];
 
