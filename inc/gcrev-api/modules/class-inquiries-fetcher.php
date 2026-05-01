@@ -53,41 +53,79 @@ class Mimamori_Inquiries_Fetcher {
     }
 
     /**
-     * 必要なら CREATE TABLE。バージョン option で重複実行を抑止
+     * 必要なら CREATE TABLE。バージョン option で重複実行を抑止。
+     * dbDelta が失敗した場合のフォールバックとして直接 CREATE TABLE も試みる。
      */
     public function maybe_install_table(): void {
-        $version_key = 'gcrev_inquiries_db_version';
-        $current     = get_option( $version_key );
-        if ( $current === '1.0' ) {
+        global $wpdb;
+        $table   = self::table_name();
+
+        // 既にテーブルがあるなら何もしない
+        $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        if ( $exists === $table ) {
+            update_option( 'gcrev_inquiries_db_version', '1.0', false );
             return;
         }
 
-        global $wpdb;
-        $table   = self::table_name();
         $charset = $wpdb->get_charset_collate();
 
+        // dbDelta は PRIMARY KEY の前後にスペース2個など独特のフォーマット要件があるので
+        // それに合わせる。各列も改行 + スペース揃えを厳密に。
         $sql = "CREATE TABLE {$table} (
-            id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            user_id       BIGINT UNSIGNED NOT NULL,
-            year_month    CHAR(7) NOT NULL,
-            total         INT UNSIGNED NOT NULL DEFAULT 0,
-            valid_count   INT UNSIGNED NOT NULL DEFAULT 0,
-            excluded      INT UNSIGNED NOT NULL DEFAULT 0,
-            reason_spam   INT UNSIGNED NOT NULL DEFAULT 0,
-            reason_test   INT UNSIGNED NOT NULL DEFAULT 0,
-            reason_sales  INT UNSIGNED NOT NULL DEFAULT 0,
-            sources       VARCHAR(255) NOT NULL DEFAULT '',
-            fetched_at    DATETIME NOT NULL,
-            error_message TEXT NULL,
-            PRIMARY KEY (id),
-            UNIQUE KEY uniq_user_period (user_id, year_month),
-            KEY idx_year_month (year_month)
-        ) {$charset};";
+ id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ user_id bigint(20) unsigned NOT NULL,
+ year_month char(7) NOT NULL,
+ total int(10) unsigned NOT NULL DEFAULT 0,
+ valid_count int(10) unsigned NOT NULL DEFAULT 0,
+ excluded int(10) unsigned NOT NULL DEFAULT 0,
+ reason_spam int(10) unsigned NOT NULL DEFAULT 0,
+ reason_test int(10) unsigned NOT NULL DEFAULT 0,
+ reason_sales int(10) unsigned NOT NULL DEFAULT 0,
+ sources varchar(255) NOT NULL DEFAULT '',
+ fetched_at datetime NOT NULL,
+ error_message text NULL,
+ PRIMARY KEY  (id),
+ UNIQUE KEY uniq_user_period (user_id, year_month),
+ KEY idx_year_month (year_month)
+) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta( $sql );
 
-        update_option( $version_key, '1.0', false );
+        // dbDelta 後にテーブルが出来ているか確認
+        $exists2 = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        if ( $exists2 !== $table ) {
+            // フォールバック: 直接 CREATE TABLE
+            self::log( '[INSTALL] dbDelta did not create table, trying direct CREATE TABLE' );
+            $direct_sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
+                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `user_id` BIGINT UNSIGNED NOT NULL,
+                `year_month` CHAR(7) NOT NULL,
+                `total` INT UNSIGNED NOT NULL DEFAULT 0,
+                `valid_count` INT UNSIGNED NOT NULL DEFAULT 0,
+                `excluded` INT UNSIGNED NOT NULL DEFAULT 0,
+                `reason_spam` INT UNSIGNED NOT NULL DEFAULT 0,
+                `reason_test` INT UNSIGNED NOT NULL DEFAULT 0,
+                `reason_sales` INT UNSIGNED NOT NULL DEFAULT 0,
+                `sources` VARCHAR(255) NOT NULL DEFAULT '',
+                `fetched_at` DATETIME NOT NULL,
+                `error_message` TEXT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uniq_user_period` (`user_id`, `year_month`),
+                KEY `idx_year_month` (`year_month`)
+            ) {$charset}";
+            $wpdb->query( $direct_sql );
+            $exists3 = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+            if ( $exists3 !== $table ) {
+                self::log( '[INSTALL] Direct CREATE TABLE also failed: ' . ( $wpdb->last_error ?: 'unknown' ) );
+                return;
+            }
+            self::log( '[INSTALL] Direct CREATE TABLE succeeded' );
+        } else {
+            self::log( '[INSTALL] dbDelta created table successfully' );
+        }
+
+        update_option( 'gcrev_inquiries_db_version', '1.0', false );
     }
 
     /* ================================================================
