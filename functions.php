@@ -11048,3 +11048,21 @@ add_action( 'admin_head', function () {
     </style>';
 } );
 
+/* ============================================================
+ * 深掘りレポート系ページの「無駄な余白」対策
+ * common.css の .app-container { min-height: 100vh; } により
+ * iframe コンテンツが短くても外側ページが 100vh 以上確保されるため、
+ * 戦略レポート系のテンプレートに限り min-height を解除する。
+ * ============================================================ */
+add_action( 'wp_head', function () {
+    $is_strategy = is_page_template( 'page-strategy-report.php' )
+                || is_page_template( 'page-strategy-report-detail.php' )
+                || is_page_template( 'page-strategy-report-history.php' );
+    if ( ! $is_strategy ) return;
+    echo '<style id="mimamori-strategy-report-fit">'
+        . '.app-container{min-height:0 !important;}'
+        . '.main-content{min-height:0 !important;}'
+        . 'body{min-height:0 !important;}'
+        . '</style>';
+}, 99 );
+
