@@ -95,7 +95,8 @@ get_header();
         id="strategyReportDetailIframe"
         src="<?php echo esc_url( $embed_url ); ?>"
         title="深掘りレポート（詳細版）"
-        style="width:100%;height:300px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;"
+        scrolling="no"
+        style="width:100%;height:300px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;display:block;overflow:hidden;"
         loading="lazy">
     </iframe>
 </div>

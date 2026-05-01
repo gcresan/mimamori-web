@@ -692,6 +692,12 @@ class Gcrev_Manual_Strategy_Report_Page {
             );
         }
 
+        // iframe 埋込時はスクロールバーを抑止（親側で高さを内容に追従させ、外側のみがスクロールするため）
+        $is_embed_request_for_style = isset( $_GET['raw'] ) && $_GET['raw'] === '1';
+        $hide_scroll_style = $is_embed_request_for_style
+            ? '<style id="mimamori-iframe-no-scroll">html,body{overflow:hidden !important;height:auto !important;}</style>'
+            : '';
+
         // iframe 埋込時は親ページに高さを伝えるためのスクリプトを注入
         // （テーマ内表示で iframe の高さをコンテンツに合わせるため）
         // 加えて、親からの「指定アンカーへスクロール」postMessage を受信して
@@ -743,7 +749,7 @@ class Gcrev_Manual_Strategy_Report_Page {
         $is_embed_request = isset( $_GET['raw'] ) && $_GET['raw'] === '1';
         $nav = $is_embed_request ? '' : self::build_floating_nav( $kind );
 
-        $injection = $resize_script . $nav;
+        $injection = $hide_scroll_style . $resize_script . $nav;
 
         if ( $injection !== '' && is_string( $html ) ) {
             if ( stripos( $html, '</body>' ) !== false ) {
