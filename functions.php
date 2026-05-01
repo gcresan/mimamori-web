@@ -10993,3 +10993,37 @@ add_action( 'admin_bar_menu', function ( $wp_admin_bar ) {
     }
 }, 90 );
 
+/* ============================================================
+ * KUSANAGI ダッシュボード広告（KUSANAGI AI アシスト 等）を非表示にする
+ * ============================================================ */
+add_action( 'wp_dashboard_setup', function () {
+    global $wp_meta_boxes;
+    if ( empty( $wp_meta_boxes['dashboard'] ) || ! is_array( $wp_meta_boxes['dashboard'] ) ) {
+        return;
+    }
+    foreach ( [ 'normal', 'side', 'advanced' ] as $context ) {
+        if ( empty( $wp_meta_boxes['dashboard'][ $context ] ) ) continue;
+        foreach ( $wp_meta_boxes['dashboard'][ $context ] as $priority => $boxes ) {
+            if ( ! is_array( $boxes ) ) continue;
+            foreach ( array_keys( $boxes ) as $widget_id ) {
+                if ( stripos( $widget_id, 'kusanagi' ) !== false ) {
+                    remove_meta_box( $widget_id, 'dashboard', $context );
+                }
+            }
+        }
+    }
+}, 999 );
+
+// 念のため CSS でも非表示（ID/クラスが kusanagi を含むダッシュボード要素）
+add_action( 'admin_head', function () {
+    $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+    if ( ! $screen || $screen->id !== 'dashboard' ) return;
+    echo '<style>
+        #dashboard-widgets [id*="kusanagi" i],
+        #dashboard-widgets [class*="kusanagi" i],
+        #dashboard-widgets [id*="ksg" i],
+        .kusanagi-dashboard-promo,
+        .kusanagi-ai-assist { display: none !important; }
+    </style>';
+} );
+
