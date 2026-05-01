@@ -559,18 +559,16 @@ if ($infographic && is_array($infographic)) {
 
         // === 月次確定 CV（WordPress 実績CV + GA4 + MEO 電話タップを統合） ===
         // 全体ダッシュボードは「確定データ」を見る場所なので、リアルタイム値ではなく
-        // get_effective_cv_monthly（月次確定 CV）を優先利用する。
-        // 戻り値: ['total' => N, 'phone_tap' => N, 'breakdown_by_label' => [...], 'source' => 'actual_cv'|'ga4'|'mixed']
+        // get_effective_cv_monthly（月次確定 CV）の合計値だけを使用する。
+        // breakdown は GA4 由来の cv_breakdown_items 配列形式を保つ
+        // （breakdown_by_label は連想配列形式で JS の forEach 互換性がないため）。
         try {
-            $eff_cv_curr = $gcrev_api->get_effective_cv_monthly( $month_curr['display']['label']
-                ? sprintf( '%04d-%02d', (int) $prev_month_start->format( 'Y' ), (int) $prev_month_start->format( 'n' ) )
-                : '', $user_id );
+            $eff_cv_curr = $gcrev_api->get_effective_cv_monthly(
+                sprintf( '%04d-%02d', (int) $prev_month_start->format( 'Y' ), (int) $prev_month_start->format( 'n' ) ),
+                $user_id
+            );
             if ( is_array( $eff_cv_curr ) && isset( $eff_cv_curr['total'] ) ) {
                 $cv_curr = (int) $eff_cv_curr['total'];
-                if ( isset( $eff_cv_curr['breakdown_by_label'] ) && is_array( $eff_cv_curr['breakdown_by_label'] ) ) {
-                    // ga4 由来 cv_breakdown_items を実績ベースで上書き
-                    $kpi_curr['cv_breakdown_items'] = $eff_cv_curr['breakdown_by_label'];
-                }
             }
             $eff_cv_prev = $gcrev_api->get_effective_cv_monthly(
                 sprintf( '%04d-%02d', (int) $prev2_month_start->format( 'Y' ), (int) $prev2_month_start->format( 'n' ) ),
@@ -1496,7 +1494,22 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     // GA4 の cv_breakdown_items に MEO 電話タップを合算して返す（JS 版）
     function mergeCvBreakdown(ga4Items, meoCallClicks){
         var map = {};
-        (ga4Items || []).forEach(function(i){
+        // ga4Items が配列でない（連想オブジェクト等）の場合に備えて正規化
+        var items = [];
+        if (Array.isArray(ga4Items)) {
+            items = ga4Items;
+        } else if (ga4Items && typeof ga4Items === 'object') {
+            // {label: count} 形式の連想配列を [{label, count, source}, ...] に変換
+            Object.keys(ga4Items).forEach(function(k){
+                var v = ga4Items[k];
+                if (typeof v === 'number') {
+                    items.push({ label: k, count: v, source: 'ga4' });
+                } else if (v && typeof v === 'object' && 'count' in v) {
+                    items.push({ label: v.label || k, count: v.count|0, source: v.source || 'ga4' });
+                }
+            });
+        }
+        items.forEach(function(i){
             if (!i || !i.label) return;
             var lbl = String(i.label);
             map[lbl] = { label: lbl, count: (map[lbl] ? map[lbl].count : 0) + (i.count|0), source: i.source || 'ga4' };
