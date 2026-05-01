@@ -70,23 +70,23 @@ class Mimamori_Inquiries_Fetcher {
         $charset = $wpdb->get_charset_collate();
 
         // dbDelta は PRIMARY KEY の前後にスペース2個など独特のフォーマット要件があるので
-        // それに合わせる。各列も改行 + スペース揃えを厳密に。
+        // それに合わせる。各列名はバッククォートで囲み、リザーブドワード問題（year_month 等）を回避。
         $sql = "CREATE TABLE {$table} (
- id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
- user_id bigint(20) unsigned NOT NULL,
- year_month char(7) NOT NULL,
- total int(10) unsigned NOT NULL DEFAULT 0,
- valid_count int(10) unsigned NOT NULL DEFAULT 0,
- excluded int(10) unsigned NOT NULL DEFAULT 0,
- reason_spam int(10) unsigned NOT NULL DEFAULT 0,
- reason_test int(10) unsigned NOT NULL DEFAULT 0,
- reason_sales int(10) unsigned NOT NULL DEFAULT 0,
- sources varchar(255) NOT NULL DEFAULT '',
- fetched_at datetime NOT NULL,
- error_message text NULL,
- PRIMARY KEY  (id),
- UNIQUE KEY uniq_user_period (user_id, year_month),
- KEY idx_year_month (year_month)
+ `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ `user_id` bigint(20) unsigned NOT NULL,
+ `year_month` char(7) NOT NULL,
+ `total` int(10) unsigned NOT NULL DEFAULT 0,
+ `valid_count` int(10) unsigned NOT NULL DEFAULT 0,
+ `excluded` int(10) unsigned NOT NULL DEFAULT 0,
+ `reason_spam` int(10) unsigned NOT NULL DEFAULT 0,
+ `reason_test` int(10) unsigned NOT NULL DEFAULT 0,
+ `reason_sales` int(10) unsigned NOT NULL DEFAULT 0,
+ `sources` varchar(255) NOT NULL DEFAULT '',
+ `fetched_at` datetime NOT NULL,
+ `error_message` text NULL,
+ PRIMARY KEY  (`id`),
+ UNIQUE KEY `uniq_user_period` (`user_id`, `year_month`),
+ KEY `idx_year_month` (`year_month`)
 ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
