@@ -375,11 +375,12 @@ class Gcrev_Inquiries_Settings_Page {
         }
 
         $include_excluded = ! isset( $_GET['valid_only'] );
+        $force            = ! empty( $_GET['refresh'] ) && Mimamori_Inquiries_Fetcher::is_current_month( $year, $month );
 
         $fetcher = new Mimamori_Inquiries_Fetcher();
         // AI 分類込みの一覧取得（Gemini で 種別 / 地域 / 要約 を付与）
         $result  = method_exists( $fetcher, 'fetch_inquiry_list_classified' )
-            ? $fetcher->fetch_inquiry_list_classified( $user_id, $year, $month, $include_excluded )
+            ? $fetcher->fetch_inquiry_list_classified( $user_id, $year, $month, $include_excluded, $force )
             : $fetcher->fetch_inquiry_list( $user_id, $year, $month, $include_excluded );
 
         $user_info = get_userdata( $user_id );
@@ -393,7 +394,9 @@ class Gcrev_Inquiries_Settings_Page {
 
             <p>
                 <a href="<?php echo esc_url( $back_url ); ?>" class="button">← 取得サマリーへ戻る</a>
-                <a href="<?php echo esc_url( $refresh_url ); ?>" class="button">🔄 最新を再取得（キャッシュクリア）</a>
+                <?php if ( Mimamori_Inquiries_Fetcher::is_current_month( $year, $month ) ) : ?>
+                    <a href="<?php echo esc_url( $refresh_url ); ?>" class="button">🔄 当月の最新を再取得</a>
+                <?php endif; ?>
                 <?php
                 $toggle_url = add_query_arg(
                     $include_excluded ? [ 'valid_only' => 1 ] : [ 'valid_only' => null ],

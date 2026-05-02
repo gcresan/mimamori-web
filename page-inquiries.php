@@ -88,10 +88,11 @@ get_header();
             <label for="iq-month">期間:</label>
             <select id="iq-month"><option value="">読み込み中…</option></select>
             <label><input type="checkbox" id="iq-valid-only" checked> 有効のみ表示</label>
-            <button id="iq-refresh">🔄 最新を再取得</button>
+            <button id="iq-refresh" style="display:none;">🔄 当月の最新を再取得</button>
         </div>
     </div>
 
+    <div id="iq-bootstrap" class="iq-loading" style="display:none;"></div>
     <div id="iq-summary" class="iq-summary" style="display:none;"></div>
     <div id="iq-content"><div class="iq-loading">読み込み中…</div></div>
 </div>
@@ -106,6 +107,7 @@ get_header();
     const refreshBtn = document.getElementById('iq-refresh');
     const summary = document.getElementById('iq-summary');
     const content = document.getElementById('iq-content');
+    const bootstrap = document.getElementById('iq-bootstrap');
 
     function api(path, params = {}) {
         const url = new URL( restBase + path );
@@ -179,11 +181,11 @@ get_header();
     function loadMonth(ym, force = false) {
         if (!ym) return;
         const [y, m] = ym.split('-');
-        content.innerHTML = '<div class="iq-loading">📡 取得中…（AI分類のため数秒かかる場合があります）</div>';
+        content.innerHTML = '<div class="iq-loading">📡 取得中…</div>';
         summary.style.display = 'none';
 
         const params = { year: y, month: parseInt(m,10), user_id: userId, include_excluded: 1 };
-        if (force) params._cb = Date.now();
+        if (force) params.force = 1;
         api('inquiries/list', params).then(res => {
             if (!res.success) {
                 content.innerHTML = `<div class="iq-error">取得に失敗: ${escapeHtml(res.message || '')}</div>`;
@@ -206,7 +208,6 @@ get_header();
             summary.innerHTML = summaryHtml;
             summary.style.display = 'flex';
             renderItems(items, !validOnly.checked ? true : false);
-            // includeExcluded はトグルで再描画するためにアイテムを保持
             content.dataset.items = JSON.stringify(items);
         }).catch(err => {
             content.innerHTML = `<div class="iq-error">通信エラー: ${escapeHtml(err.message || err)}</div>`;
@@ -222,23 +223,69 @@ get_header();
         } catch(_) {}
     }
 
-    // 月リストを取得して select に投入
-    api('inquiries/months', { user_id: userId }).then(res => {
-        const months = (res && res.months) || [];
+    // 未キャッシュの月を順次取得（自動初回ブートストラップ）
+    async function bootstrapUncached(months) {
+        const uncached = months.filter(m => !m.is_cached);
+        if (uncached.length === 0) return;
+        bootstrap.style.display = 'block';
+        for (let i = 0; i < uncached.length; i++) {
+            const m = uncached[i];
+            bootstrap.textContent = `🤖 初回データ準備中… ${m.year_month} を AI 分類中（${i+1}/${uncached.length}）`;
+            const [y, mo] = m.year_month.split('-');
+            try {
+                await api('inquiries/list', {
+                    year: y, month: parseInt(mo,10), user_id: userId,
+                    include_excluded: 1
+                });
+            } catch(_) {}
+        }
+        bootstrap.style.display = 'none';
+    }
+
+    function renderMonthOptions(months) {
+        monthSel.innerHTML = months.map(m => {
+            const cur = m.is_current ? '（当月）' : '';
+            const cached = m.is_cached ? '✓' : '⏳';
+            return `<option value="${m.year_month}" data-current="${m.is_current?1:0}" data-cached="${m.is_cached?1:0}">${cached} ${m.year_month}${cur}（合計${m.total} / 有効${m.valid_count}）</option>`;
+        }).join('');
+        // 当月選択中なら再取得ボタンを表示
+        updateRefreshBtn();
+    }
+
+    function updateRefreshBtn() {
+        const opt = monthSel.options[monthSel.selectedIndex];
+        const isCurrent = opt && opt.dataset.current === '1';
+        refreshBtn.style.display = isCurrent ? '' : 'none';
+    }
+
+    // 月リスト取得 → 未キャッシュ月を一括取得 → 月リスト再読込 → 最新月を表示
+    async function init() {
+        let res = await api('inquiries/months', { user_id: userId });
+        let months = (res && res.months) || [];
         if (months.length === 0) {
             monthSel.innerHTML = '<option value="">取得済みデータなし</option>';
-            content.innerHTML = '<div class="iq-empty">先に「問い合わせ取得設定」ページで月次取得を実行してください。</div>';
+            content.innerHTML = '<div class="iq-empty">先に管理画面の「問い合わせ取得設定」で月次取得を実行してください。</div>';
             return;
         }
-        monthSel.innerHTML = months.map(m =>
-            `<option value="${m.year_month}">${m.year_month}（合計${m.total} / 有効${m.valid_count}）</option>`
-        ).join('');
-        loadMonth(monthSel.value);
-    });
+        renderMonthOptions(months);
 
-    monthSel.addEventListener('change', () => loadMonth(monthSel.value));
+        // 未キャッシュ月を自動取得
+        await bootstrapUncached(months);
+
+        // 取得後にもう一度月リストを取り直して is_cached を反映
+        res = await api('inquiries/months', { user_id: userId });
+        months = (res && res.months) || months;
+        renderMonthOptions(months);
+
+        // 最新月（先頭）を表示
+        if (monthSel.value) loadMonth(monthSel.value);
+    }
+
+    monthSel.addEventListener('change', () => { updateRefreshBtn(); loadMonth(monthSel.value); });
     refreshBtn.addEventListener('click', () => loadMonth(monthSel.value, true));
     validOnly.addEventListener('change', rerenderFromCache);
+
+    init();
 })();
 </script>
 

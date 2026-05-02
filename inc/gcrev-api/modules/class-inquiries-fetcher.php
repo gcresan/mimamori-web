@@ -126,6 +126,76 @@ class Mimamori_Inquiries_Fetcher {
         }
 
         update_option( 'gcrev_inquiries_db_version', '1.0', false );
+
+        // items_json カラム（AI分類済みデータの永続キャッシュ）を冪等的に追加
+        self::maybe_add_items_json_column();
+    }
+
+    /**
+     * items_json カラムが無ければ追加（AI 分類済み問い合わせ明細を永続保存するため）
+     */
+    private static function maybe_add_items_json_column(): void {
+        global $wpdb;
+        $table = self::table_name();
+        $col = $wpdb->get_var( $wpdb->prepare(
+            "SHOW COLUMNS FROM `{$table}` LIKE %s",
+            'items_json'
+        ) );
+        if ( ! $col ) {
+            $wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN `items_json` LONGTEXT NULL AFTER `sources`" );
+            self::log( '[INSTALL] Added items_json column to ' . $table );
+        }
+    }
+
+    /**
+     * AI 分類済みの items を JSON で永続保存
+     */
+    public static function save_items_json( int $user_id, string $ym, array $items ): bool {
+        global $wpdb;
+        $table = self::table_name();
+        self::maybe_add_items_json_column();
+        $json  = wp_json_encode( $items, JSON_UNESCAPED_UNICODE );
+        $exists = $wpdb->get_var( $wpdb->prepare(
+            "SELECT `id` FROM `{$table}` WHERE `user_id` = %d AND `year_month` = %s",
+            $user_id, $ym
+        ) );
+        if ( ! $exists ) {
+            return false; // 月次レコードがなければ保存しない（fetch_and_store 経由で先に作られる想定）
+        }
+        $result = $wpdb->update(
+            $table,
+            [ 'items_json' => $json ],
+            [ 'id' => (int) $exists ],
+            [ '%s' ],
+            [ '%d' ]
+        );
+        return $result !== false;
+    }
+
+    /**
+     * 永続化された items_json を取得（無ければ null）
+     */
+    public static function get_items_json( int $user_id, string $ym ): ?array {
+        global $wpdb;
+        $table = self::table_name();
+        $val = $wpdb->get_var( $wpdb->prepare(
+            "SELECT `items_json` FROM `{$table}` WHERE `user_id` = %d AND `year_month` = %s",
+            $user_id, $ym
+        ) );
+        if ( ! is_string( $val ) || $val === '' ) {
+            return null;
+        }
+        $decoded = json_decode( $val, true );
+        return is_array( $decoded ) ? $decoded : null;
+    }
+
+    /**
+     * 指定月が「当月（最新月）」かどうか
+     */
+    public static function is_current_month( int $year, int $month ): bool {
+        $tz  = wp_timezone();
+        $now = new \DateTimeImmutable( 'now', $tz );
+        return ( (int) $now->format( 'Y' ) === $year && (int) $now->format( 'n' ) === $month );
     }
 
     /* ================================================================
@@ -231,6 +301,7 @@ class Mimamori_Inquiries_Fetcher {
                 'month'            => [ 'required' => false, 'sanitize_callback' => 'absint' ],
                 'user_id'          => [ 'required' => false, 'sanitize_callback' => 'absint' ],
                 'include_excluded' => [ 'required' => false, 'sanitize_callback' => 'absint', 'default' => 1 ],
+                'force'            => [ 'required' => false, 'sanitize_callback' => 'absint', 'default' => 0 ],
             ],
         ] );
 
@@ -264,29 +335,49 @@ class Mimamori_Inquiries_Fetcher {
             $month = (int) $prev->format( 'n' );
         }
         $include_excluded = (bool) $request->get_param( 'include_excluded' );
+        $force            = (bool) $request->get_param( 'force' );
+        // force は当月のみ許可（過去月は永続キャッシュ確定）
+        if ( $force && ! self::is_current_month( $year, $month ) ) {
+            $force = false;
+        }
 
-        $result = $this->fetch_inquiry_list_classified( $user_id, $year, $month, $include_excluded );
+        $result = $this->fetch_inquiry_list_classified( $user_id, $year, $month, $include_excluded, $force );
         return new \WP_REST_Response( $result, $result['success'] ? 200 : 500 );
     }
 
     /**
      * REST: 取得済みの年月リスト（公開ページの月セレクター用）
+     * is_cached: AI 分類済みデータが永続化されているか
      */
     public function rest_get_available_months( \WP_REST_Request $request ): \WP_REST_Response {
         $user_id = self::resolve_target_user_id( $request );
         if ( $user_id === 0 ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => 'forbidden' ], 403 );
         }
+        self::maybe_add_items_json_column();
         global $wpdb;
         $table = self::table_name();
         $rows  = $wpdb->get_results( $wpdb->prepare(
-            "SELECT `year_month`, `valid_count`, `total` FROM `{$table}` WHERE `user_id` = %d ORDER BY `year_month` DESC LIMIT 24",
+            "SELECT `year_month`, `valid_count`, `total`, ( `items_json` IS NOT NULL AND CHAR_LENGTH(`items_json`) > 0 ) AS is_cached FROM `{$table}` WHERE `user_id` = %d ORDER BY `year_month` DESC LIMIT 24",
             $user_id
         ), ARRAY_A );
+        $months = [];
+        if ( is_array( $rows ) ) {
+            foreach ( $rows as $r ) {
+                $r['is_cached']   = (bool) (int) ( $r['is_cached'] ?? 0 );
+                $r['is_current']  = self::is_current_month_str( (string) $r['year_month'] );
+                $months[] = $r;
+            }
+        }
         return new \WP_REST_Response( [
             'success' => true,
-            'months'  => is_array( $rows ) ? $rows : [],
+            'months'  => $months,
         ], 200 );
+    }
+
+    public static function is_current_month_str( string $year_month ): bool {
+        if ( ! preg_match( '/^(\d{4})-(\d{2})$/', $year_month, $m ) ) return false;
+        return self::is_current_month( (int) $m[1], (int) $m[2] );
     }
 
     public function rest_get_monthly( \WP_REST_Request $request ): \WP_REST_Response {
@@ -478,29 +569,86 @@ class Mimamori_Inquiries_Fetcher {
      *
      * @return array{success:bool, items?:array, count?:int, message?:string}
      */
-    public function fetch_inquiry_list_classified( int $user_id, int $year, int $month, bool $include_excluded = true ): array {
-        $raw = $this->fetch_inquiry_list( $user_id, $year, $month, $include_excluded );
+    public function fetch_inquiry_list_classified( int $user_id, int $year, int $month, bool $include_excluded = true, bool $force = false ): array {
+        $year_month = sprintf( '%04d-%02d', $year, $month );
+
+        // (1) 永続キャッシュチェック（force=false のとき）
+        if ( ! $force ) {
+            $cached = self::get_items_json( $user_id, $year_month );
+            if ( is_array( $cached ) ) {
+                $items = $cached;
+                if ( ! $include_excluded ) {
+                    $items = array_values( array_filter( $items, static function ( $it ) {
+                        return ! empty( $it['ai_valid'] );
+                    } ) );
+                }
+                return [
+                    'success' => true,
+                    'items'   => $items,
+                    'count'   => count( $items ),
+                    'period'  => $year_month,
+                    'cached'  => true,
+                ];
+            }
+        }
+
+        // 当月以外で force=true は無視（過去月は不変扱い）
+        if ( $force && ! self::is_current_month( $year, $month ) ) {
+            $cached = self::get_items_json( $user_id, $year_month );
+            if ( is_array( $cached ) ) {
+                $items = $include_excluded ? $cached : array_values( array_filter( $cached, static function ( $it ) {
+                    return ! empty( $it['ai_valid'] );
+                } ) );
+                return [
+                    'success' => true,
+                    'items'   => $items,
+                    'count'   => count( $items ),
+                    'period'  => $year_month,
+                    'cached'  => true,
+                    'note'    => 'past month: force ignored',
+                ];
+            }
+        }
+
+        // (2) 契約サイトから生データ取得（force=true ならトランジェントキャッシュも無視）
+        if ( $force ) {
+            // 直前のリスト transient を消す
+            foreach ( [ 0, 1 ] as $inc ) {
+                delete_transient( sprintf( 'gcrev_inquiries_list_%d_%04d-%02d_%d', $user_id, $year, $month, $inc ) );
+            }
+        }
+        // 内部では常に全件取得（フィルタは最後に）
+        $raw = $this->fetch_inquiry_list( $user_id, $year, $month, true );
         if ( empty( $raw['success'] ) ) {
             return $raw;
         }
         if ( ! class_exists( 'Mimamori_Inquiries_AI_Classifier' ) ) {
-            return $raw; // クラス未ロード時はそのまま返す
+            return $raw;
+        }
+
+        // (3) AI 分類
+        if ( $force && class_exists( 'Mimamori_Inquiries_AI_Classifier' ) ) {
+            \Mimamori_Inquiries_AI_Classifier::clear_cache_for( $user_id, $year_month );
         }
         $classifier = new \Mimamori_Inquiries_AI_Classifier();
         $items_raw  = is_array( $raw['items'] ?? null ) ? $raw['items'] : [];
-        $year_month = sprintf( '%04d-%02d', $year, $month );
         $classified = $classifier->classify_items( $items_raw, $user_id, $year_month );
 
-        // AI 分類結果で月次集計を再計算して DB を更新（include_excluded=1 のときのみ）
-        if ( $include_excluded ) {
-            $this->reconcile_monthly_summary_from_ai( $user_id, $year, $month, $classified );
-        }
+        // (4) 月次集計を再計算 + 永続キャッシュ保存
+        $this->reconcile_monthly_summary_from_ai( $user_id, $year, $month, $classified );
+        self::save_items_json( $user_id, $year_month, $classified );
+
+        // (5) フィルタして返す
+        $items = $include_excluded ? $classified : array_values( array_filter( $classified, static function ( $it ) {
+            return ! empty( $it['ai_valid'] );
+        } ) );
 
         return [
             'success' => true,
-            'items'   => $classified,
-            'count'   => count( $classified ),
-            'period'  => (string) ( $raw['period'] ?? $year_month ),
+            'items'   => $items,
+            'count'   => count( $items ),
+            'period'  => $year_month,
+            'cached'  => false,
         ];
     }
 
@@ -645,13 +793,21 @@ class Mimamori_Inquiries_Fetcher {
                 $skip++;
                 continue;
             }
+            // (1) 月次サマリーの取得・保存
             $result = $this->fetch_and_store( $user_id, $year, $month );
-            if ( ! empty( $result['success'] ) ) {
-                $ok++;
-            } else {
+            if ( empty( $result['success'] ) ) {
                 $fail++;
+                usleep( 200 * 1000 );
+                continue;
             }
-            usleep( 200 * 1000 );
+            // (2) 明細を AI 分類して永続キャッシュに保存（失敗してもサマリーは生きるので fail とはみなさない）
+            try {
+                $this->fetch_inquiry_list_classified( $user_id, $year, $month, true, false );
+            } catch ( \Throwable $e ) {
+                self::log( "[CRON] AI classify failed user={$user_id} period={$year}-{$month}: " . $e->getMessage() );
+            }
+            $ok++;
+            usleep( 500 * 1000 );
         }
 
         self::log( "[CRON] monthly fetch DONE total={$total} ok={$ok} skip={$skip} fail={$fail}" );
