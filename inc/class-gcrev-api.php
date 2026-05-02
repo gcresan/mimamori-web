@@ -11607,10 +11607,23 @@ PROMPT;
         $phone_tap_daily = is_array( $result['phone_tap_daily'] ?? null ) ? $result['phone_tap_daily'] : [];
         $phone_tap_total = (int) ( $result['components']['phone_tap_total'] ?? array_sum( $phone_tap_daily ) );
 
+        // 電話タップ判定ヘルパー: ラベルが「電話タップ」、または key/label が
+        // _gcrev_phone_event_name と一致するもの
+        $phone_event_name = (string) get_user_meta( $user_id, '_gcrev_phone_event_name', true );
+        $is_phone_tap = static function ( $key, $item ) use ( $phone_event_name ) {
+            $label = (string) ( $item['label'] ?? '' );
+            if ( $label === '電話タップ' ) return true;
+            if ( $phone_event_name !== '' ) {
+                if ( (string) $key === $phone_event_name ) return true;
+                if ( $label === $phone_event_name ) return true;
+            }
+            return false;
+        };
+
         // 既存 breakdown_by_label のうち電話タップ系のみ残す
         $new_breakdown_by_label = [];
         foreach ( (array) ( $result['breakdown_by_label'] ?? [] ) as $key => $item ) {
-            if ( ( $item['label'] ?? '' ) === '電話タップ' ) {
+            if ( $is_phone_tap( $key, $item ) ) {
                 $new_breakdown_by_label[ $key ] = $item;
             }
         }
@@ -11625,7 +11638,7 @@ PROMPT;
         // daily_by_label も電話タップ系のみ残す
         $new_daily_by_label = [];
         foreach ( (array) ( $result['daily_by_label'] ?? [] ) as $key => $item ) {
-            if ( ( $item['label'] ?? '' ) === '電話タップ' ) {
+            if ( $is_phone_tap( $key, $item ) ) {
                 $new_daily_by_label[ $key ] = $item;
             }
         }
