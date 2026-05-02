@@ -11,6 +11,33 @@ if ( ! is_user_logged_in() ) {
 $current_user = mimamori_get_view_user_object();
 $user_id      = mimamori_get_view_user_id();
 
+// 管理者本人がそのままアクセス（view-as していない）場合は案内のみ表示し、
+// 個別クライアントの問い合わせ内容（個人情報）が誤表示されるのを防ぐ。
+$real_user_id   = get_current_user_id();
+$is_admin       = current_user_can( 'manage_options' );
+$is_viewing_as  = ( $user_id !== $real_user_id );
+
+if ( $is_admin && ! $is_viewing_as ) {
+    set_query_var( 'gcrev_page_title', 'お問い合わせ一覧' );
+    set_query_var( 'gcrev_page_subtitle', 'お客様用ページです。' );
+    set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'お問い合わせ一覧' ) );
+    get_header();
+    ?>
+    <div style="max-width:760px;margin:40px auto;padding:32px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;">
+        <h2 style="margin-top:0;">📋 このページはお客様（契約サイトオーナー）向けです</h2>
+        <p>個別の問い合わせ内容（送信者氏名・メール・本文）は契約サイトごとの機密情報のため、<strong>管理者本人としてのアクセスでは表示しません</strong>。</p>
+        <p>確認方法は以下のいずれかです:</p>
+        <ul style="line-height:2;">
+            <li>① 画面右上の「<strong>事業者ビュー切替</strong>」で対象クライアントを選択 → このページを再読み込み</li>
+            <li>② 管理画面の「<a href="<?php echo esc_url( admin_url( 'admin.php?page=gcrev-inquiries-settings' ) ); ?>"><strong>問い合わせ取得</strong></a>」ページで対象ユーザーを選択し「📝 内容を見る」をクリック</li>
+        </ul>
+        <p style="color:#6b7280;font-size:13px;margin-top:24px;">※ クライアント自身がログインしてアクセスした場合は、そのクライアント自身の問い合わせ一覧が表示されます。</p>
+    </div>
+    <?php
+    get_footer();
+    exit;
+}
+
 set_query_var( 'gcrev_page_title', 'お問い合わせ一覧' );
 set_query_var( 'gcrev_page_subtitle', '契約サイトに届いた問い合わせ・見学会申込みを月別に確認できます（AIで分類済み）。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'お問い合わせ一覧' ) );
