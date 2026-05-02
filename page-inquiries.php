@@ -88,7 +88,7 @@ get_header();
             <label for="iq-month">期間:</label>
             <select id="iq-month"><option value="">読み込み中…</option></select>
             <label><input type="checkbox" id="iq-valid-only" checked> 有効のみ表示</label>
-            <button id="iq-refresh" style="display:none;">🔄 当月の最新を再取得</button>
+            <button id="iq-refresh">🔄 当月の最新を再取得</button>
         </div>
     </div>
 
@@ -139,12 +139,12 @@ get_header();
 
     function renderItems(items, includeExcluded) {
         if (!items || items.length === 0) {
-            content.innerHTML = '<div class="iq-empty">該当する問い合わせはありません。</div>';
+            content.innerHTML = '<div class="iq-empty">📭 問い合わせ情報がまだありません。</div>';
             return;
         }
         const filtered = includeExcluded ? items : items.filter(it => it.ai_valid);
         if (filtered.length === 0) {
-            content.innerHTML = '<div class="iq-empty">有効な問い合わせはありません。</div>';
+            content.innerHTML = '<div class="iq-empty">📭 有効な問い合わせはまだありません。</div>';
             return;
         }
         let html = '<table class="iq-table"><thead><tr>'
@@ -242,20 +242,22 @@ get_header();
         bootstrap.style.display = 'none';
     }
 
+    // 当月の年月（ブラウザ時刻ベース）
+    function getCurrentYM() {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    }
+
     function renderMonthOptions(months) {
+        if (months.length === 0) {
+            monthSel.innerHTML = '<option value="">— データなし —</option>';
+            return;
+        }
         monthSel.innerHTML = months.map(m => {
             const cur = m.is_current ? '（当月）' : '';
             const cached = m.is_cached ? '✓' : '⏳';
             return `<option value="${m.year_month}" data-current="${m.is_current?1:0}" data-cached="${m.is_cached?1:0}">${cached} ${m.year_month}${cur}（合計${m.total} / 有効${m.valid_count}）</option>`;
         }).join('');
-        // 当月選択中なら再取得ボタンを表示
-        updateRefreshBtn();
-    }
-
-    function updateRefreshBtn() {
-        const opt = monthSel.options[monthSel.selectedIndex];
-        const isCurrent = opt && opt.dataset.current === '1';
-        refreshBtn.style.display = isCurrent ? '' : 'none';
     }
 
     // 月リスト取得 → 未キャッシュ月を一括取得 → 月リスト再読込 → 最新月を表示
@@ -263,8 +265,8 @@ get_header();
         let res = await api('inquiries/months', { user_id: userId });
         let months = (res && res.months) || [];
         if (months.length === 0) {
-            monthSel.innerHTML = '<option value="">取得済みデータなし</option>';
-            content.innerHTML = '<div class="iq-empty">先に管理画面の「問い合わせ取得設定」で月次取得を実行してください。</div>';
+            monthSel.innerHTML = '<option value="">— データなし —</option>';
+            content.innerHTML = '<div class="iq-empty">📭 問い合わせ情報がまだありません。<br><br>「🔄 当月の最新を再取得」を押して当月分を取得するか、管理画面の「問い合わせ取得設定」で過去分の取得を実行してください。</div>';
             return;
         }
         renderMonthOptions(months);
@@ -281,8 +283,66 @@ get_header();
         if (monthSel.value) loadMonth(monthSel.value);
     }
 
-    monthSel.addEventListener('change', () => { updateRefreshBtn(); loadMonth(monthSel.value); });
-    refreshBtn.addEventListener('click', () => loadMonth(monthSel.value, true));
+    // 「当月の最新を再取得」: 常時表示。当月レコードがまだ無くても新規作成して表示する
+    async function refreshCurrentMonth() {
+        const currentYM = getCurrentYM();
+        const [y, m] = currentYM.split('-');
+        bootstrap.style.display = 'block';
+        bootstrap.textContent = '🤖 当月の最新を取得中…（数秒かかります）';
+        summary.style.display = 'none';
+        content.innerHTML = '';
+        try {
+            const res = await api('inquiries/list', {
+                year: y, month: parseInt(m, 10), user_id: userId,
+                include_excluded: 1, force: 1
+            });
+            // 月リストを再取得して当月オプションを反映
+            const monthsRes = await api('inquiries/months', { user_id: userId });
+            const months = (monthsRes && monthsRes.months) || [];
+            renderMonthOptions(months);
+            // 当月を選択
+            if (Array.from(monthSel.options).some(o => o.value === currentYM)) {
+                monthSel.value = currentYM;
+            }
+            bootstrap.style.display = 'none';
+
+            if (!res.success) {
+                content.innerHTML = `<div class="iq-error">取得に失敗: ${escapeHtml(res.message || '')}</div>`;
+                return;
+            }
+            // そのまま renderItems / summary を当月の結果で表示
+            const items = res.items || [];
+            content.dataset.items = JSON.stringify(items);
+            if (items.length === 0) {
+                summary.style.display = 'none';
+                content.innerHTML = '<div class="iq-empty">📭 当月の問い合わせ情報がまだありません。</div>';
+                return;
+            }
+            // サマリー再構築
+            const validCount = items.filter(it => it.ai_valid).length;
+            const excludedCount = items.length - validCount;
+            const byCategory = {};
+            items.forEach(it => {
+                const c = it.ai_category || 'その他';
+                byCategory[c] = (byCategory[c] || 0) + 1;
+            });
+            let summaryHtml = `<span class="stat">合計<strong>${items.length}</strong></span>`
+                + `<span class="stat" style="color:#1e8e3e;">有効<strong>${validCount}</strong></span>`
+                + `<span class="stat" style="color:#b00;">除外<strong>${excludedCount}</strong></span>`;
+            Object.entries(byCategory).forEach(([cat, cnt]) => {
+                summaryHtml += `<span class="stat"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span><strong>${cnt}</strong></span>`;
+            });
+            summary.innerHTML = summaryHtml;
+            summary.style.display = 'flex';
+            renderItems(items, !validOnly.checked);
+        } catch (err) {
+            bootstrap.style.display = 'none';
+            content.innerHTML = `<div class="iq-error">通信エラー: ${escapeHtml(err.message || err)}</div>`;
+        }
+    }
+
+    monthSel.addEventListener('change', () => loadMonth(monthSel.value));
+    refreshBtn.addEventListener('click', refreshCurrentMonth);
     validOnly.addEventListener('change', rerenderFromCache);
 
     init();
