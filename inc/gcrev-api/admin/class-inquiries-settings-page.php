@@ -141,6 +141,15 @@ class Gcrev_Inquiries_Settings_Page {
             return;
         }
 
+        // 明細ビュー
+        $view = isset( $_GET['view'] ) ? sanitize_text_field( wp_unslash( $_GET['view'] ) ) : '';
+        if ( $view === 'detail' ) {
+            $detail_user = isset( $_GET['user'] ) ? absint( wp_unslash( $_GET['user'] ) ) : get_current_user_id();
+            $detail_ym   = isset( $_GET['ym'] )   ? sanitize_text_field( wp_unslash( $_GET['ym'] ) ) : '';
+            $this->render_detail_view( $detail_user, $detail_ym );
+            return;
+        }
+
         $current = isset( $_GET['user'] ) ? absint( wp_unslash( $_GET['user'] ) ) : get_current_user_id();
         $users   = get_users( [ 'fields' => [ 'ID', 'user_login', 'display_name' ], 'orderby' => 'ID' ] );
 
@@ -280,10 +289,18 @@ class Gcrev_Inquiries_Settings_Page {
                             <th>営業</th>
                             <th>取得日時</th>
                             <th>エラー</th>
+                            <th>明細</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ( array_reverse( $recent ) as $row ) : ?>
+                        <?php foreach ( array_reverse( $recent ) as $row ) :
+                            $detail_url = add_query_arg( [
+                                'page'  => self::MENU_SLUG,
+                                'view'  => 'detail',
+                                'user'  => $current,
+                                'ym'    => (string) $row['year_month'],
+                            ], admin_url( 'admin.php' ) );
+                            ?>
                             <tr>
                                 <td><?php echo esc_html( (string) $row['year_month'] ); ?></td>
                                 <td><?php echo esc_html( (string) (int) $row['total'] ); ?></td>
@@ -294,10 +311,132 @@ class Gcrev_Inquiries_Settings_Page {
                                 <td><?php echo esc_html( (string) (int) $row['reason_sales'] ); ?></td>
                                 <td><?php echo esc_html( (string) $row['fetched_at'] ); ?></td>
                                 <td><?php echo $row['error_message'] ? '<span style="color:#b00">' . esc_html( (string) $row['error_message'] ) . '</span>' : ''; ?></td>
+                                <td><a href="<?php echo esc_url( $detail_url ); ?>" class="button button-small">📝 内容を見る</a></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * 明細ビュー: 指定月の個別問い合わせ一覧を契約サイトから取得して表示
+     */
+    private function render_detail_view( int $user_id, string $year_month ): void {
+        if ( ! preg_match( '/^(\d{4})-(\d{2})$/', $year_month, $m ) ) {
+            echo '<div class="wrap"><h1>明細</h1><p>不正な期間指定です。</p></div>';
+            return;
+        }
+        $year  = (int) $m[1];
+        $month = (int) $m[2];
+
+        $back_url = add_query_arg( [ 'page' => self::MENU_SLUG, 'user' => $user_id ], admin_url( 'admin.php' ) );
+        $refresh_url = add_query_arg( [
+            'page'    => self::MENU_SLUG,
+            'view'    => 'detail',
+            'user'    => $user_id,
+            'ym'      => $year_month,
+            'refresh' => 1,
+        ], admin_url( 'admin.php' ) );
+
+        // refresh パラメータあり → トランジェントを削除して再取得
+        if ( ! empty( $_GET['refresh'] ) ) {
+            foreach ( [ 0, 1 ] as $inc ) {
+                delete_transient( sprintf( 'gcrev_inquiries_list_%d_%04d-%02d_%d', $user_id, $year, $month, $inc ) );
+            }
+        }
+
+        $include_excluded = ! isset( $_GET['valid_only'] );
+
+        $fetcher = new Mimamori_Inquiries_Fetcher();
+        $result  = $fetcher->fetch_inquiry_list( $user_id, $year, $month, $include_excluded );
+
+        $user_info = get_userdata( $user_id );
+        ?>
+        <div class="wrap">
+            <h1>📝 問い合わせ明細 — <?php echo esc_html( sprintf( '%04d年%02d月', $year, $month ) ); ?>
+                <span style="font-size:14px;font-weight:normal;color:#666;">
+                    （対象: <?php echo esc_html( $user_info ? sprintf( '#%d %s', (int) $user_info->ID, $user_info->display_name ) : '#' . $user_id ); ?>）
+                </span>
+            </h1>
+
+            <p>
+                <a href="<?php echo esc_url( $back_url ); ?>" class="button">← 取得サマリーへ戻る</a>
+                <a href="<?php echo esc_url( $refresh_url ); ?>" class="button">🔄 最新を再取得（キャッシュクリア）</a>
+                <?php
+                $toggle_url = add_query_arg(
+                    $include_excluded ? [ 'valid_only' => 1 ] : [ 'valid_only' => null ],
+                    remove_query_arg( 'refresh' )
+                );
+                ?>
+                <a href="<?php echo esc_url( $toggle_url ); ?>" class="button">
+                    <?php echo $include_excluded ? '✓ 有効のみ表示' : '✗ 全件（除外含む）を表示'; ?>
+                </a>
+            </p>
+
+            <?php if ( empty( $result['success'] ) ) : ?>
+                <div class="notice notice-error"><p>取得に失敗しました。詳細: <?php echo esc_html( (string) ( $result['message'] ?? '' ) ); ?></p></div>
+            <?php else :
+                $items = $result['items'] ?? [];
+                $count = (int) ( $result['count'] ?? 0 );
+                ?>
+                <p><strong><?php echo esc_html( (string) $count ); ?></strong> 件 <?php echo $include_excluded ? '（除外含む全件）' : '（有効のみ）'; ?>。データは契約サイトから取得し、1時間キャッシュします。</p>
+
+                <?php if ( empty( $items ) ) : ?>
+                    <p>該当する問い合わせはありません。</p>
+                <?php else : ?>
+                    <table class="widefat striped" style="max-width:1200px;">
+                        <thead>
+                            <tr>
+                                <th style="width:140px;">日時</th>
+                                <th style="width:60px;">判定</th>
+                                <th style="width:120px;">名前</th>
+                                <th style="width:200px;">メール</th>
+                                <th>本文</th>
+                                <th style="width:100px;">ソース</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ( $items as $it ) :
+                                $is_valid = ! empty( $it['valid'] );
+                                $reason   = (string) ( $it['reason'] ?? '' );
+                                $reason_label = [
+                                    'spam'  => 'SPAM',
+                                    'test'  => 'テスト',
+                                    'sales' => '営業',
+                                ][ $reason ] ?? ( $reason ?: '除外' );
+                                $message = (string) ( $it['message'] ?? '' );
+                                $msg_short = mb_strimwidth( $message, 0, 200, '…' );
+                                ?>
+                                <tr<?php echo $is_valid ? '' : ' style="background:#fff5f5;"'; ?>>
+                                    <td style="font-size:12px;"><?php echo esc_html( (string) ( $it['date'] ?? '' ) ); ?></td>
+                                    <td>
+                                        <?php if ( $is_valid ) : ?>
+                                            <span style="color:#1e8e3e;font-weight:600;">✓ 有効</span>
+                                        <?php else : ?>
+                                            <span style="color:#b00;font-weight:600;">✗ <?php echo esc_html( $reason_label ); ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo esc_html( (string) ( $it['name'] ?? '' ) ); ?></td>
+                                    <td style="font-size:12px;"><?php echo esc_html( (string) ( $it['email'] ?? '' ) ); ?></td>
+                                    <td>
+                                        <?php if ( mb_strlen( $message ) > 200 ) : ?>
+                                            <details>
+                                                <summary><?php echo esc_html( $msg_short ); ?></summary>
+                                                <pre style="white-space:pre-wrap;background:#f6f7f7;padding:8px;margin-top:4px;font-family:inherit;"><?php echo esc_html( $message ); ?></pre>
+                                            </details>
+                                        <?php else : ?>
+                                            <?php echo nl2br( esc_html( $message ) ); ?>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td style="font-size:12px;"><?php echo esc_html( (string) ( $it['source'] ?? '' ) ); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
         <?php

@@ -74,22 +74,45 @@ class Mimamori_Inquiries_API {
      */
     public static function register_routes(): void {
         error_log( '[MIMAMORI_INQUIRIES_API] register_routes() called' );
+
+        $year_arg = [
+            'required'          => true,
+            'validate_callback' => static function ( $v ) {
+                return is_numeric( $v ) && (int) $v >= 2000 && (int) $v <= 2100;
+            },
+            'sanitize_callback' => 'absint',
+        ];
+        $month_arg = [
+            'required'          => true,
+            'validate_callback' => static function ( $v ) {
+                return is_numeric( $v ) && (int) $v >= 1 && (int) $v <= 12;
+            },
+            'sanitize_callback' => 'absint',
+        ];
+
         register_rest_route( self::ROUTE_NAMESPACE, self::ROUTE_PATH, [
             'methods'             => 'GET',
             'callback'            => [ __CLASS__, 'handle_get_inquiries' ],
             'permission_callback' => [ __CLASS__, 'check_token' ],
             'args'                => [
-                'year' => [
-                    'required'          => true,
+                'year'  => $year_arg,
+                'month' => $month_arg,
+            ],
+        ] );
+
+        // 個別問い合わせ一覧（明細）— 内容を含むので閲覧時のみ取得する想定
+        register_rest_route( self::ROUTE_NAMESPACE, '/inquiries/list', [
+            'methods'             => 'GET',
+            'callback'            => [ __CLASS__, 'handle_get_inquiries_list' ],
+            'permission_callback' => [ __CLASS__, 'check_token' ],
+            'args'                => [
+                'year'             => $year_arg,
+                'month'            => $month_arg,
+                'include_excluded' => [
+                    'required'          => false,
+                    'default'           => 1,
                     'validate_callback' => static function ( $v ) {
-                        return is_numeric( $v ) && (int) $v >= 2000 && (int) $v <= 2100;
-                    },
-                    'sanitize_callback' => 'absint',
-                ],
-                'month' => [
-                    'required'          => true,
-                    'validate_callback' => static function ( $v ) {
-                        return is_numeric( $v ) && (int) $v >= 1 && (int) $v <= 12;
+                        return in_array( (int) $v, [ 0, 1 ], true );
                     },
                     'sanitize_callback' => 'absint',
                 ],
@@ -211,6 +234,60 @@ class Mimamori_Inquiries_API {
         ];
 
         return new \WP_REST_Response( $response, 200 );
+    }
+
+    /* ================================================================
+     * ハンドラ: GET /inquiries/list — 個別の問い合わせ一覧
+     * ================================================================ */
+
+    public static function handle_get_inquiries_list( \WP_REST_Request $request ): \WP_REST_Response {
+        $year             = (int) $request->get_param( 'year' );
+        $month            = (int) $request->get_param( 'month' );
+        $include_excluded = (int) $request->get_param( 'include_excluded' );
+
+        $tz = wp_timezone();
+        try {
+            $start_dt = new \DateTimeImmutable( sprintf( '%04d-%02d-01 00:00:00', $year, $month ), $tz );
+        } catch ( \Throwable $e ) {
+            return new \WP_REST_Response( [ 'error' => 'invalid date' ], 400 );
+        }
+        $end_dt = $start_dt->modify( 'last day of this month' )->setTime( 23, 59, 59 );
+
+        $items = array_merge(
+            self::collect_flamingo( $start_dt->format( 'Y-m-d H:i:s' ), $end_dt->format( 'Y-m-d H:i:s' ) ),
+            self::collect_mw_wp_form( $start_dt->format( 'Y-m-d H:i:s' ), $end_dt->format( 'Y-m-d H:i:s' ) )
+        );
+
+        $list = [];
+        foreach ( $items as $item ) {
+            $check    = self::evaluate_inquiry( $item );
+            $is_valid = (bool) $check['valid'];
+            if ( ! $is_valid && ! $include_excluded ) {
+                continue;
+            }
+            $list[] = [
+                'date'    => (string) ( $item['date'] ?? '' ),
+                'name'    => (string) ( $item['name'] ?? '' ),
+                'email'   => (string) ( $item['email'] ?? '' ),
+                'message' => (string) ( $item['message'] ?? '' ),
+                'source'  => (string) ( $item['source'] ?? '' ),
+                'spam'    => ! empty( $item['spam'] ),
+                'valid'   => $is_valid,
+                'reason'  => $is_valid ? '' : (string) ( $check['reason'] ?? '' ),
+            ];
+        }
+
+        // 日付降順
+        usort( $list, static function ( $a, $b ) {
+            return strcmp( (string) ( $b['date'] ?? '' ), (string) ( $a['date'] ?? '' ) );
+        } );
+
+        return new \WP_REST_Response( [
+            'period'       => sprintf( '%04d-%02d', $year, $month ),
+            'count'        => count( $list ),
+            'items'        => $list,
+            'generated_at' => ( new \DateTimeImmutable( 'now', $tz ) )->format( DATE_ATOM ),
+        ], 200 );
     }
 
     /* ================================================================

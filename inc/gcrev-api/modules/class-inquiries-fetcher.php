@@ -303,6 +303,84 @@ class Mimamori_Inquiries_Fetcher {
     }
 
     /* ================================================================
+     * 個別問い合わせ一覧取得（オンデマンド・1時間 transient キャッシュ）
+     * 個人情報を含むため DB には保存せず、表示時のみ取得する。
+     * ================================================================ */
+
+    /**
+     * 指定月の個別問い合わせ一覧を契約サイトから取得
+     *
+     * @return array{success:bool, items?:array, count?:int, message?:string}
+     */
+    public function fetch_inquiry_list( int $user_id, int $year, int $month, bool $include_excluded = true ): array {
+        if ( $year < 2000 || $year > 2100 || $month < 1 || $month > 12 ) {
+            return [ 'success' => false, 'message' => 'invalid year/month' ];
+        }
+        $endpoint = self::get_endpoint( $user_id );
+        $token    = self::get_token( $user_id );
+        if ( $endpoint === '' || $token === '' ) {
+            return [ 'success' => false, 'message' => 'endpoint or token not configured' ];
+        }
+
+        // 短期トランジェントキャッシュ（1時間）
+        $cache_key = sprintf( 'gcrev_inquiries_list_%d_%04d-%02d_%d', $user_id, $year, $month, $include_excluded ? 1 : 0 );
+        $cached    = get_transient( $cache_key );
+        if ( is_array( $cached ) ) {
+            return $cached;
+        }
+
+        $base = self::normalize_endpoint( $endpoint );
+        $list_url = preg_replace( '#/inquiries$#', '/inquiries/list', $base );
+        if ( $list_url === $base ) {
+            // normalize_endpoint が /inquiries で終わらないケースに備え、明示的に補完
+            $list_url = rtrim( $base, '/' ) . '/list';
+        }
+        $url = add_query_arg(
+            [
+                'year'             => $year,
+                'month'            => $month,
+                'include_excluded' => $include_excluded ? 1 : 0,
+            ],
+            $list_url
+        );
+
+        $response = wp_remote_get( $url, [
+            'timeout' => self::REQUEST_TIMEOUT,
+            'headers' => [
+                'Accept'           => 'application/json',
+                'X-Mimamori-Token' => $token,
+            ],
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            $msg = $response->get_error_message();
+            self::log( "[FETCH-LIST] user={$user_id} period={$year}-{$month} ERROR " . $msg );
+            return [ 'success' => false, 'message' => $msg ];
+        }
+        $code = (int) wp_remote_retrieve_response_code( $response );
+        $body = (string) wp_remote_retrieve_body( $response );
+        if ( $code !== 200 ) {
+            $msg = "HTTP {$code}: " . substr( $body, 0, 300 );
+            self::log( "[FETCH-LIST] user={$user_id} period={$year}-{$month} HTTP_ERROR " . $msg );
+            return [ 'success' => false, 'message' => $msg ];
+        }
+
+        $data = json_decode( $body, true );
+        if ( ! is_array( $data ) || ! isset( $data['items'] ) || ! is_array( $data['items'] ) ) {
+            return [ 'success' => false, 'message' => 'invalid response payload' ];
+        }
+
+        $result = [
+            'success' => true,
+            'items'   => $data['items'],
+            'count'   => (int) ( $data['count'] ?? count( $data['items'] ) ),
+            'period'  => (string) ( $data['period'] ?? sprintf( '%04d-%02d', $year, $month ) ),
+        ];
+        set_transient( $cache_key, $result, HOUR_IN_SECONDS );
+        return $result;
+    }
+
+    /* ================================================================
      * バックフィル: 過去N ヶ月を一括取得
      * ================================================================ */
 
