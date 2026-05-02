@@ -5420,6 +5420,25 @@ PROMPT;
         $result['ga4_phone_tap']  = (int) ( $effective['components']['phone_tap_total'] ?? 0 );
         $result['effective_cv']   = $effective;
 
+        // 表示ラベル別内訳（ダッシュボードカードの内訳表示用）
+        $breakdown_items = [];
+        foreach ( $effective['breakdown_by_label'] ?? [] as $key => $item ) {
+            $cnt = (int) ( $item['count'] ?? 0 );
+            if ( $cnt <= 0 ) continue;
+            $label = (string) ( $item['label'] ?? $key );
+            if ( isset( $breakdown_items[ $label ] ) ) {
+                $breakdown_items[ $label ]['count'] += $cnt;
+            } else {
+                $breakdown_items[ $label ] = [
+                    'label'  => $label,
+                    'count'  => $cnt,
+                    'source' => (string) ( $item['source'] ?? 'ga4' ),
+                ];
+            }
+        }
+        usort( $breakdown_items, function ( $a, $b ) { return $b['count'] <=> $a['count']; } );
+        $result['cv_breakdown_items'] = array_values( $breakdown_items );
+
         // CV 増減（完全月の場合のみ前月比を計算）
         if ( $is_full_month ) {
             $comp_ym = $start_dt->modify( 'first day of last month' )->format('Y-m');
@@ -11620,10 +11639,11 @@ PROMPT;
             return false;
         };
 
-        // 既存 breakdown_by_label のうち電話タップ系のみ残す
+        // 既存 breakdown_by_label のうち電話タップ系のみ残す（ラベルは「電話タップ」に統一）
         $new_breakdown_by_label = [];
         foreach ( (array) ( $result['breakdown_by_label'] ?? [] ) as $key => $item ) {
             if ( $is_phone_tap( $key, $item ) ) {
+                $item['label'] = '電話タップ';
                 $new_breakdown_by_label[ $key ] = $item;
             }
         }
@@ -11635,10 +11655,11 @@ PROMPT;
             ];
         }
 
-        // daily_by_label も電話タップ系のみ残す
+        // daily_by_label も電話タップ系のみ残す（ラベル統一）
         $new_daily_by_label = [];
         foreach ( (array) ( $result['daily_by_label'] ?? [] ) as $key => $item ) {
             if ( $is_phone_tap( $key, $item ) ) {
+                $item['label'] = '電話タップ';
                 $new_daily_by_label[ $key ] = $item;
             }
         }
