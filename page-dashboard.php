@@ -621,7 +621,8 @@ if ($infographic && is_array($infographic)) {
             'value'              => $cv_total_curr,
             'diff'               => $cv_total_curr - $cv_total_prev,
             'hp_cv'              => $hp_form_curr,    // 互換（他の箇所で参照されている可能性）
-            'call_clicks'        => $tap_total_curr,  // 互換
+            'call_clicks'        => $tap_total_curr,  // 互換: GA4電話タップ + MEO電話タップ合計
+            'meo_call_clicks'    => (int) ($call_clicks_curr ?? 0), // マップ経由（GBP）電話タップのみ
             'breakdown_items'    => $cv_breakdown_items,
         ];
         // MEOはキャッシュがある場合のみ上書き（なければJS非同期で後から更新）
@@ -895,7 +896,8 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             <?php
             // 「電話タップ」のうち、マップ経由（Google ビジネスプロフィール由来）の件数を補足表示。
             // GA4 由来の電話タップ（サイトの電話リンクタップ）と区別するための内訳。
-            $meo_tap = (int) ($call_clicks_curr ?? 0);
+            // infographic.kpi.cv.meo_call_clicks に保存している値を参照（変数スコープに依存しない）。
+            $meo_tap = (int) ($kpi['meo_call_clicks'] ?? 0);
             if ( $meo_tap > 0 ):
             ?>
             <span class="info-kpi-subbreakdown" style="display:block;font-size:11px;color:#666;margin-top:2px;line-height:1.5;">
