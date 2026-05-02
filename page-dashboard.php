@@ -892,6 +892,16 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
               }
               ?>
             </span>
+            <?php
+            // 「電話タップ」のうち、マップ経由（Google ビジネスプロフィール由来）の件数を補足表示。
+            // GA4 由来の電話タップ（サイトの電話リンクタップ）と区別するための内訳。
+            $meo_tap = (int) ($call_clicks_curr ?? 0);
+            if ( $meo_tap > 0 ):
+            ?>
+            <span class="info-kpi-subbreakdown" style="display:block;font-size:11px;color:#666;margin-top:2px;line-height:1.5;">
+              うちマップ経由の電話タップ <?php echo esc_html( number_format( $meo_tap ) ); ?>
+            </span>
+            <?php endif; ?>
             <?php endif; ?>
             <span class="info-kpi-hint">クリックでグラフ切替</span>
           </button>
