@@ -11052,18 +11052,59 @@ add_action( 'wp_dashboard_setup', function () {
     }
 }, 999 );
 
-// 念のため CSS でも非表示（ID/クラスが kusanagi を含むダッシュボード要素）
+// 全管理画面で KUSANAGI 広告（admin_notices 経由含む）を非表示
 add_action( 'admin_head', function () {
-    $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-    if ( ! $screen || $screen->id !== 'dashboard' ) return;
-    echo '<style>
+    echo '<style id="mimamori-hide-kusanagi-ads">
+        /* ダッシュボードウィジェット */
         #dashboard-widgets [id*="kusanagi" i],
         #dashboard-widgets [class*="kusanagi" i],
         #dashboard-widgets [id*="ksg" i],
+        /* 全管理画面の通知 / バナー類 */
+        .notice[id*="kusanagi" i],
+        .notice[class*="kusanagi" i],
+        [id*="kusanagi-notice" i],
+        [class*="kusanagi-notice" i],
+        [id*="kusanagi-ad" i],
+        [class*="kusanagi-ad" i],
+        [id*="kusanagi-promo" i],
+        [class*="kusanagi-promo" i],
+        [id*="kusanagi-banner" i],
+        [class*="kusanagi-banner" i],
+        [id*="ksg-notice" i],
+        [class*="ksg-notice" i],
         .kusanagi-dashboard-promo,
-        .kusanagi-ai-assist { display: none !important; }
+        .kusanagi-ai-assist,
+        .kusanagi-ai-assist-notice,
+        .kusanagi-promotion { display: none !important; }
     </style>';
 } );
+
+// admin_notices フック / all_admin_notices フックで KUSANAGI 系コールバックを除外
+add_action( 'admin_init', function () {
+    foreach ( [ 'admin_notices', 'all_admin_notices', 'network_admin_notices', 'user_admin_notices' ] as $hook ) {
+        global $wp_filter;
+        if ( empty( $wp_filter[ $hook ] ) ) continue;
+        $callbacks = $wp_filter[ $hook ];
+        foreach ( $callbacks->callbacks as $priority => $cbs ) {
+            foreach ( $cbs as $key => $cb ) {
+                $func = $cb['function'] ?? null;
+                $name = '';
+                if ( is_string( $func ) ) {
+                    $name = $func;
+                } elseif ( is_array( $func ) && isset( $func[1] ) ) {
+                    $obj  = $func[0];
+                    $name = ( is_object( $obj ) ? get_class( $obj ) : (string) $obj ) . '::' . $func[1];
+                } elseif ( $func instanceof \Closure ) {
+                    // 無名関数は識別不可なのでスキップ
+                    continue;
+                }
+                if ( $name !== '' && stripos( $name, 'kusanagi' ) !== false ) {
+                    unset( $wp_filter[ $hook ]->callbacks[ $priority ][ $key ] );
+                }
+            }
+        }
+    }
+}, 999 );
 
 /* ============================================================
  * 深掘りレポート系ページの「無駄な余白」対策
