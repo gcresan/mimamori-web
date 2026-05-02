@@ -11579,13 +11579,15 @@ PROMPT;
 
     /**
      * 「問い合わせAPI 連携」が user_meta で有効、かつ wp_gcrev_inquiries に該当月のレコードが
-     * あれば、フォーム系の CV を valid_count で上書きする。電話タップ系は元のまま残す。
+     * あれば、フォーム系の CV を AI 判定の有効問い合わせで上書きする。電話タップ系は元のまま残す。
      *
      * - source を 'inquiries_api' に
      * - total = 電話タップ合計 + valid_count
-     * - daily: 電話タップ日別 + 月末日に valid_count をまとめて加算
-     *   （API は月単位の集計値なので日別精度は失われるが、月集計は正しくなる）
+     * - daily: 電話タップ日別 + 各問い合わせの実際の日付（items_json から）に分散
+     *   - items_json があれば日別精度で配分（last30 期間や日別グラフが正確）
+     *   - items_json が無ければフォールバックで月末日に集約
      * - breakdown_by_label: 電話タップ系のみ残し、「お問い合わせ（API）」を追加
+     * - daily_by_label にも「お問い合わせ（API）」の日別データを追加
      */
     private function apply_inquiries_api_cv_override( array $result, string $year_month, int $user_id ): array {
         if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
@@ -11620,7 +11622,7 @@ PROMPT;
             ];
         }
 
-        // daily_by_label も電話タップ系のみ残す（API は月集計のみ）
+        // daily_by_label も電話タップ系のみ残す
         $new_daily_by_label = [];
         foreach ( (array) ( $result['daily_by_label'] ?? [] ) as $key => $item ) {
             if ( ( $item['label'] ?? '' ) === '電話タップ' ) {
@@ -11628,21 +11630,47 @@ PROMPT;
             }
         }
 
-        // 新しい daily: 電話タップを残し、月末日に valid_count を加算
+        // 月の日別配列を初期化
         $dt   = new \DateTimeImmutable( $year_month . '-01' );
         $days = (int) $dt->format( 't' );
         $new_daily = [];
         for ( $d = 1; $d <= $days; $d++ ) {
             $new_daily[ $year_month . '-' . str_pad( (string) $d, 2, '0', STR_PAD_LEFT ) ] = 0;
         }
+        // 電話タップを反映
         foreach ( $phone_tap_daily as $d => $v ) {
             if ( isset( $new_daily[ $d ] ) ) {
                 $new_daily[ $d ] += (int) $v;
             }
         }
+
+        // 問い合わせ API の日別配分: items_json 由来の実際の日付を優先
+        $inquiries_daily = \Mimamori_Inquiries_Fetcher::get_daily_valid_counts( $user_id, $year_month );
         if ( $valid > 0 ) {
-            $last_day_key = $year_month . '-' . str_pad( (string) $days, 2, '0', STR_PAD_LEFT );
-            $new_daily[ $last_day_key ] = ( $new_daily[ $last_day_key ] ?? 0 ) + $valid;
+            if ( ! empty( $inquiries_daily ) ) {
+                // items_json で日別精度で反映
+                $daily_for_label = [];
+                foreach ( $inquiries_daily as $date => $count ) {
+                    if ( isset( $new_daily[ $date ] ) ) {
+                        $new_daily[ $date ] += (int) $count;
+                    }
+                    $daily_for_label[ $date ] = (int) $count;
+                }
+                $new_daily_by_label['__inquiries_api'] = [
+                    'label'  => 'お問い合わせ（API）',
+                    'source' => 'inquiries_api',
+                    'daily'  => $daily_for_label,
+                ];
+            } else {
+                // フォールバック: 月末日に valid_count をまとめて集約
+                $last_day_key = $year_month . '-' . str_pad( (string) $days, 2, '0', STR_PAD_LEFT );
+                $new_daily[ $last_day_key ] = ( $new_daily[ $last_day_key ] ?? 0 ) + $valid;
+                $new_daily_by_label['__inquiries_api'] = [
+                    'label'  => 'お問い合わせ（API）',
+                    'source' => 'inquiries_api',
+                    'daily'  => [ $last_day_key => $valid ],
+                ];
+            }
         }
 
         $result['source']             = 'inquiries_api';

@@ -348,6 +348,16 @@ class Gcrev_Inquiries_Settings_Page {
     }
 
     /**
+     * 日時を YYYY-MM-DD HH:MM 形式で返す
+     */
+    public static function format_datetime( string $date ): string {
+        if ( preg_match( '/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/', $date, $m ) ) {
+            return $m[1] . ' ' . $m[2];
+        }
+        return self::format_date_only( $date );
+    }
+
+    /**
      * 明細ビュー: 指定月の個別問い合わせ一覧を契約サイトから取得して表示
      */
     private function render_detail_view( int $user_id, string $year_month ): void {
@@ -439,7 +449,7 @@ class Gcrev_Inquiries_Settings_Page {
                         <thead>
                             <tr>
                                 <th style="width:40px;">#</th>
-                                <th style="width:110px;">日付</th>
+                                <th style="width:140px;">日時</th>
                                 <th style="width:140px;">種別</th>
                                 <th style="width:140px;">お名前</th>
                                 <th style="width:140px;">地域</th>
@@ -448,13 +458,18 @@ class Gcrev_Inquiries_Settings_Page {
                         </thead>
                         <tbody>
                             <?php
+                            // 時系列順（古い→新しい）にソート
+                            usort( $items, static function ( $a, $b ) {
+                                return strcmp( (string) ( $a['date'] ?? '' ), (string) ( $b['date'] ?? '' ) );
+                            } );
                             $no = 0;
                             foreach ( $items as $it ) :
                                 $no++;
                                 $category = (string) ( $it['ai_category'] ?? 'その他' );
                                 $is_valid = ! empty( $it['ai_valid'] );
                                 $cat_class = self::category_to_css_class( $category );
-                                $date_only = self::format_date_only( (string) ( $it['date'] ?? '' ) );
+                                $full_date = (string) ( $it['date'] ?? '' );
+                                $datetime  = self::format_datetime( $full_date );
                                 $name      = (string) ( $it['name'] ?? '' );
                                 $region    = (string) ( $it['ai_region'] ?? '—' );
                                 $summary   = (string) ( $it['ai_summary'] ?? mb_strimwidth( (string) ( $it['message'] ?? '' ), 0, 140, '…' ) );
@@ -463,7 +478,7 @@ class Gcrev_Inquiries_Settings_Page {
                                 ?>
                                 <tr class="<?php echo $is_valid ? '' : 'invalid'; ?>">
                                     <td><?php echo (int) $no; ?></td>
-                                    <td><?php echo esc_html( $date_only ); ?></td>
+                                    <td><?php echo esc_html( $datetime ); ?></td>
                                     <td><span class="gcrev-cat-badge <?php echo esc_attr( $cat_class ); ?>"><?php echo esc_html( $category ); ?></span></td>
                                     <td><?php echo esc_html( $name ); ?></td>
                                     <td><?php echo esc_html( $region ); ?></td>
@@ -476,6 +491,7 @@ class Gcrev_Inquiries_Settings_Page {
                                                 <?php endforeach; ?>
                                             </summary>
                                             <div style="margin-top:8px;padding:8px;background:#f9fafb;border-radius:4px;font-size:12px;color:#6b7280;">
+                                                <strong>受信日時:</strong> <?php echo esc_html( $full_date ); ?><br>
                                                 <strong>メール:</strong> <?php echo esc_html( (string) ( $it['email'] ?? '' ) ); ?><br>
                                                 <strong>送信元:</strong> <?php echo esc_html( (string) ( $it['source'] ?? '' ) ); ?>
                                                 <pre style="white-space:pre-wrap;margin-top:8px;font-family:inherit;"><?php echo esc_html( $message_full ); ?></pre>

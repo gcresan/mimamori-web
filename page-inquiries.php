@@ -147,9 +147,12 @@ get_header();
             content.innerHTML = '<div class="iq-empty">📭 有効な問い合わせはまだありません。</div>';
             return;
         }
+        // 時系列順に並び替え（古い→新しい）
+        filtered.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+
         let html = '<table class="iq-table"><thead><tr>'
             + '<th style="width:40px;">#</th>'
-            + '<th style="width:110px;">日付</th>'
+            + '<th style="width:160px;">日時</th>'
             + '<th style="width:140px;">種別</th>'
             + '<th style="width:140px;">お名前</th>'
             + '<th style="width:140px;">地域</th>'
@@ -158,16 +161,19 @@ get_header();
         filtered.forEach((it, i) => {
             const cat = it.ai_category || 'その他';
             const valid = !!it.ai_valid;
-            const dateOnly = (it.date || '').slice(0,10);
+            const fullDate = String(it.date || '');
+            const dateDisp = fullDate.slice(0,10);
+            const timeDisp = fullDate.slice(11,16); // HH:MM
             const tagsHtml = (it.ai_tags || []).map(t => `<span class="iq-tag">${escapeHtml(t)}</span>`).join('');
             html += `<tr class="${valid ? '' : 'invalid'}">`
                 + `<td data-label="No">${i+1}</td>`
-                + `<td data-label="日付">${escapeHtml(dateOnly)}</td>`
+                + `<td data-label="日時">${escapeHtml(dateDisp)}<br><span style="font-size:11px;color:#6b7280;">${escapeHtml(timeDisp)}</span></td>`
                 + `<td data-label="種別"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span></td>`
                 + `<td data-label="お名前">${escapeHtml(it.name || '')}</td>`
                 + `<td data-label="地域">${escapeHtml(it.ai_region || '—')}</td>`
                 + `<td data-label="内容"><details><summary>${escapeHtml(it.ai_summary || (it.message || '').slice(0,140))} ${tagsHtml}</summary>`
                 + `<div class="iq-detail">`
+                + `<strong>受信日時:</strong> ${escapeHtml(fullDate)}<br>`
                 + `<strong>メール:</strong> ${escapeHtml(it.email || '')}<br>`
                 + `<strong>送信元:</strong> ${escapeHtml(it.source || '')}<br><br>`
                 + escapeHtml(it.message || '')

@@ -173,6 +173,112 @@ class Mimamori_Inquiries_Fetcher {
     }
 
     /**
+     * items_json から日別の「有効問い合わせ数」を集計して返す
+     *
+     * 各問い合わせの date は契約サイト post_date（YYYY-MM-DD HH:MM:SS、ローカルタイム）。
+     * WordPress のタイムゾーン設定で解釈して日付に正規化することで、月またぎの深夜
+     * 問い合わせ（例: 2026-04-30 23:55 / 2026-05-01 00:05）が常に正しい日に集計される。
+     *
+     * @return array<string,int> [ 'YYYY-MM-DD' => count, ... ]（有効件数 0 の日は含まない）
+     */
+    public static function get_daily_valid_counts( int $user_id, string $ym ): array {
+        $items = self::get_items_json( $user_id, $ym );
+        if ( ! is_array( $items ) ) {
+            return [];
+        }
+        $tz = wp_timezone();
+        $daily = [];
+        foreach ( $items as $it ) {
+            if ( empty( $it['ai_valid'] ) ) continue;
+            $date = (string) ( $it['date'] ?? '' );
+            if ( $date === '' ) continue;
+            try {
+                $dt = new \DateTimeImmutable( $date, $tz );
+                $day = $dt->format( 'Y-m-d' );
+                $daily[ $day ] = ( $daily[ $day ] ?? 0 ) + 1;
+            } catch ( \Throwable $e ) {
+                // パース失敗時は YYYY-MM-DD 部分だけで切り出すフォールバック
+                if ( preg_match( '/^(\d{4}-\d{2}-\d{2})/', $date, $m ) ) {
+                    $daily[ $m[1] ] = ( $daily[ $m[1] ] ?? 0 ) + 1;
+                }
+            }
+        }
+        return $daily;
+    }
+
+    /**
+     * items_json から時間別の「有効問い合わせ数」を集計して返す（時間帯分析用）
+     *
+     * @return array<string,int> [ 'YYYY-MM-DD HH' => count, ... ]
+     */
+    public static function get_hourly_valid_counts( int $user_id, string $ym ): array {
+        $items = self::get_items_json( $user_id, $ym );
+        if ( ! is_array( $items ) ) {
+            return [];
+        }
+        $tz = wp_timezone();
+        $hourly = [];
+        foreach ( $items as $it ) {
+            if ( empty( $it['ai_valid'] ) ) continue;
+            $date = (string) ( $it['date'] ?? '' );
+            if ( $date === '' ) continue;
+            try {
+                $dt = new \DateTimeImmutable( $date, $tz );
+                $bucket = $dt->format( 'Y-m-d H' );
+                $hourly[ $bucket ] = ( $hourly[ $bucket ] ?? 0 ) + 1;
+            } catch ( \Throwable $e ) {
+                continue;
+            }
+        }
+        return $hourly;
+    }
+
+    /**
+     * 任意の日時範囲（タイムスタンプ精度）で有効問い合わせ数を集計
+     * 対象月の items_json から、start <= ts <= end の範囲のみ valid を数える
+     *
+     * @param int    $user_id
+     * @param string $start  'YYYY-MM-DD HH:MM:SS'（WP タイムゾーン）
+     * @param string $end    同上
+     * @return int
+     */
+    public static function count_valid_in_range( int $user_id, string $start, string $end ): int {
+        try {
+            $tz = wp_timezone();
+            $start_dt = new \DateTimeImmutable( $start, $tz );
+            $end_dt   = new \DateTimeImmutable( $end, $tz );
+        } catch ( \Throwable $e ) {
+            return 0;
+        }
+        // 範囲がカバーする月をすべて見る
+        $cursor = $start_dt->modify( 'first day of this month' )->setTime( 0, 0, 0 );
+        $stop   = $end_dt->modify( 'first day of this month' )->setTime( 0, 0, 0 );
+
+        $count = 0;
+        while ( $cursor <= $stop ) {
+            $ym = $cursor->format( 'Y-m' );
+            $items = self::get_items_json( $user_id, $ym );
+            if ( is_array( $items ) ) {
+                foreach ( $items as $it ) {
+                    if ( empty( $it['ai_valid'] ) ) continue;
+                    $date = (string) ( $it['date'] ?? '' );
+                    if ( $date === '' ) continue;
+                    try {
+                        $dt = new \DateTimeImmutable( $date, $tz );
+                        if ( $dt >= $start_dt && $dt <= $end_dt ) {
+                            $count++;
+                        }
+                    } catch ( \Throwable $e ) {
+                        continue;
+                    }
+                }
+            }
+            $cursor = $cursor->modify( '+1 month' );
+        }
+        return $count;
+    }
+
+    /**
      * 永続化された items_json を取得（無ければ null）
      */
     public static function get_items_json( int $user_id, string $ym ): ?array {
