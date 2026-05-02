@@ -532,40 +532,48 @@ if ($infographic && is_array($infographic)) {
         // --- MEO月次（前月 / 前々月） ---
         // get_transient_with_stale で TTL 切れでもキャッシュ値を再利用
         // 既存トランジェントから MEO メトリクスを取得（同期 fetch はしない）。
-        // 書き込み元によって構造が異なる:
+        // 書き込み元によって構造もキー名も異なるため、複数候補から最良値を選ぶ。
         //   gcrev_meo_perf_{user_id}_xxx  → ['total_impressions'=>N, 'call_clicks'=>N, ...] 直接
-        //   gcrev_meo_{user_id}_xxx       → ['success'=>true, 'metrics'=>[...], 'metrics_previous'=>[...]]
-        // 取れなければ null のまま（JS 非同期で後から更新される）。
-        $resolve_meo_metrics = function ( $primary_key, $fallback_key ) use ( $gcrev_api ) {
-            $val = $gcrev_api->get_transient_with_stale( $primary_key );
-            if ( is_array( $val ) ) {
-                // フラット構造ならそのまま、metrics サブキーがあればそれを返す
-                if ( isset( $val['total_impressions'] ) || isset( $val['call_clicks'] ) ) {
-                    return $val;
-                }
-                if ( isset( $val['metrics'] ) && is_array( $val['metrics'] ) ) {
-                    return $val['metrics'];
-                }
-            }
-            $val2 = get_transient( $fallback_key );
-            if ( is_array( $val2 ) ) {
-                if ( isset( $val2['total_impressions'] ) || isset( $val2['call_clicks'] ) ) {
-                    return $val2;
-                }
-                if ( isset( $val2['metrics'] ) && is_array( $val2['metrics'] ) ) {
-                    return $val2['metrics'];
-                }
-            }
+        //   gcrev_meo_{user_id}_xxx       → ['success'=>true, 'metrics'=>[...], ...]
+        $extract_meo_metrics = function ( $val ) {
+            if ( ! is_array( $val ) ) return null;
+            if ( isset( $val['total_impressions'] ) || isset( $val['call_clicks'] ) ) return $val;
+            if ( isset( $val['metrics'] ) && is_array( $val['metrics'] ) ) return $val['metrics'];
             return null;
         };
-        $meo_cache_curr = $resolve_meo_metrics(
+        $resolve_meo_metrics = function ( array $candidate_keys ) use ( $gcrev_api, $extract_meo_metrics ) {
+            // 複数候補から取得し、call_clicks > 0 の値があればそれを優先採用。
+            // それでも見つからなければ最初に取れた transient を返す。
+            $first_hit = null;
+            $best      = null;
+            foreach ( $candidate_keys as $k ) {
+                $raw = $gcrev_api->get_transient_with_stale( $k );
+                if ( $raw === false || $raw === null ) {
+                    $raw = get_transient( $k );
+                }
+                $m = $extract_meo_metrics( $raw );
+                if ( $m === null ) continue;
+                if ( $first_hit === null ) $first_hit = $m;
+                if ( (int) ( $m['call_clicks'] ?? 0 ) > 0 ) {
+                    $best = $m;
+                    break;
+                }
+            }
+            return $best ?? $first_hit;
+        };
+        $meo_cache_curr = $resolve_meo_metrics([
             "gcrev_meo_perf_{$user_id}_prev_month",
-            "gcrev_meo_{$user_id}_prev-month"
-        );
-        $meo_cache_prev = $resolve_meo_metrics(
+            "gcrev_meo_{$user_id}_prev-month",
+            // 当月初日に開く場合、前月＝直近30日 にほぼ一致するためフォールバック
+            "gcrev_meo_perf_{$user_id}_last30",
+            "gcrev_meo_{$user_id}_last30",
+        ]);
+        $meo_cache_prev = $resolve_meo_metrics([
             "gcrev_meo_perf_{$user_id}_prev2_month",
-            "gcrev_meo_{$user_id}_prev-prev-month"
-        );
+            "gcrev_meo_{$user_id}_prev-prev-month",
+            "gcrev_meo_perf_{$user_id}_last30_comp",
+            "gcrev_meo_{$user_id}_last30_comp",
+        ]);
 
         $meo_curr = is_array($meo_cache_curr)
             ? (int)($meo_cache_curr['total_impressions'] ?? 0) : null;

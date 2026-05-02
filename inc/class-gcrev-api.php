@@ -10487,7 +10487,15 @@ PROMPT;
                 return $this->gbp_empty_metrics();
             }
             $metrics = $this->gbp_fetch_performance_metrics($access_token, $location_id, $start_date, $end_date);
-            set_transient($cache_key, $metrics, self::DASHBOARD_CACHE_TTL);
+            // 全項目0の空メトリクスはキャッシュしない（API一時失敗で実値を上書きするのを防ぐ）。
+            $is_empty = is_array($metrics)
+                && (int)($metrics['total_impressions'] ?? 0) === 0
+                && (int)($metrics['call_clicks'] ?? 0) === 0
+                && (int)($metrics['direction_clicks'] ?? 0) === 0
+                && (int)($metrics['website_clicks'] ?? 0) === 0;
+            if ( ! $is_empty ) {
+                set_transient($cache_key, $metrics, self::DASHBOARD_CACHE_TTL);
+            }
             return $metrics;
         } catch (\Exception $e) {
             error_log("[GCREV] fetch_meo_metrics_safe: Error user_id={$user_id}: " . $e->getMessage());
