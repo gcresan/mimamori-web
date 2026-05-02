@@ -111,6 +111,25 @@ class Gcrev_Inquiries_Settings_Page {
             ], menu_page_url( self::MENU_SLUG, false ) ) );
             exit;
         }
+
+        if ( $action === 'fetch_bulk' ) {
+            $months = isset( $_POST['months'] ) ? absint( $_POST['months'] ) : 12;
+            // タイムアウト対策（API 呼び出しを最大36回まで連続実行する想定）
+            @set_time_limit( 600 );
+
+            $fetcher = new Mimamori_Inquiries_Fetcher();
+            $result  = $fetcher->fetch_recent_months( $user_id, $months );
+
+            $flag = ! empty( $result['success'] ) ? 'bulk_fetched' : 'bulk_failed';
+            $msg  = sprintf( '成功 %d 件 / 失敗 %d 件 / 全 %d ヶ月',
+                (int) $result['ok'], (int) $result['fail'], (int) $result['total'] );
+            wp_safe_redirect( add_query_arg( [
+                'updated' => $flag,
+                'user'    => $user_id,
+                'msg'     => rawurlencode( $msg ),
+            ], menu_page_url( self::MENU_SLUG, false ) ) );
+            exit;
+        }
     }
 
     public function render_page(): void {
@@ -147,6 +166,10 @@ class Gcrev_Inquiries_Settings_Page {
                 <div class="notice notice-success is-dismissible"><p>取得しました。</p></div>
             <?php elseif ( $updated === 'fetch_failed' ) : ?>
                 <div class="notice notice-error is-dismissible"><p>取得に失敗しました。<?php echo $msg ? esc_html( '詳細: ' . $msg ) : ''; ?></p></div>
+            <?php elseif ( $updated === 'bulk_fetched' ) : ?>
+                <div class="notice notice-success is-dismissible"><p>過去分の一括取得が完了しました。<?php echo $msg ? esc_html( '（' . $msg . '）' ) : ''; ?></p></div>
+            <?php elseif ( $updated === 'bulk_failed' ) : ?>
+                <div class="notice notice-error is-dismissible"><p>一括取得が全件失敗しました。<?php echo $msg ? esc_html( '（' . $msg . '）' ) : ''; ?></p></div>
             <?php endif; ?>
 
             <h2>対象ユーザー</h2>
@@ -200,20 +223,46 @@ class Gcrev_Inquiries_Settings_Page {
             </form>
 
             <h2>手動取得</h2>
-            <form method="post" action="" style="background:#f6f7f7;padding:12px;border:1px solid #ddd;max-width:600px;">
-                <?php wp_nonce_field( 'gcrev_inquiries_action', '_gcrev_inquiries_nonce' ); ?>
-                <input type="hidden" name="gcrev_action" value="fetch_now" />
-                <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( (string) $current ); ?>" />
-                <?php
-                $tz   = wp_timezone();
-                $prev = ( new DateTimeImmutable( 'first day of last month', $tz ) );
-                ?>
-                <label>年: <input type="number" name="year"  value="<?php echo esc_attr( $prev->format( 'Y' ) ); ?>" min="2000" max="2100" /></label>
-                &nbsp;
-                <label>月: <input type="number" name="month" value="<?php echo esc_attr( $prev->format( 'n' ) ); ?>" min="1" max="12" /></label>
-                &nbsp;
-                <button type="submit" class="button">この月を取得</button>
-            </form>
+            <p class="description">単月のみ取得する場合は下の「この月を取得」、過去まとめて取り込む場合は右の「過去◯ヶ月を一括取得」を使ってください。</p>
+
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">
+
+                <form method="post" action="" style="background:#f6f7f7;padding:12px;border:1px solid #ddd;max-width:520px;flex:1 1 360px;">
+                    <?php wp_nonce_field( 'gcrev_inquiries_action', '_gcrev_inquiries_nonce' ); ?>
+                    <input type="hidden" name="gcrev_action" value="fetch_now" />
+                    <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( (string) $current ); ?>" />
+                    <?php
+                    $tz   = wp_timezone();
+                    $prev = ( new DateTimeImmutable( 'first day of last month', $tz ) );
+                    ?>
+                    <strong>単月取得</strong><br><br>
+                    <label>年: <input type="number" name="year"  value="<?php echo esc_attr( $prev->format( 'Y' ) ); ?>" min="2000" max="2100" /></label>
+                    &nbsp;
+                    <label>月: <input type="number" name="month" value="<?php echo esc_attr( $prev->format( 'n' ) ); ?>" min="1" max="12" /></label>
+                    &nbsp;
+                    <button type="submit" class="button">この月を取得</button>
+                </form>
+
+                <form method="post" action="" style="background:#f0f7ff;padding:12px;border:1px solid #b7d9ff;max-width:520px;flex:1 1 360px;" onsubmit="return confirm('過去 ' + this.querySelector('[name=months]').value + ' ヶ月分を一括取得します。完了まで時間がかかる場合があります。続行しますか？');">
+                    <?php wp_nonce_field( 'gcrev_inquiries_action', '_gcrev_inquiries_nonce' ); ?>
+                    <input type="hidden" name="gcrev_action" value="fetch_bulk" />
+                    <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( (string) $current ); ?>" />
+                    <strong>一括取得（過去◯ヶ月）</strong><br><br>
+                    <label>遡る月数:
+                        <select name="months">
+                            <option value="3">3 ヶ月</option>
+                            <option value="6">6 ヶ月</option>
+                            <option value="12" selected>12 ヶ月</option>
+                            <option value="24">24 ヶ月</option>
+                            <option value="36">36 ヶ月</option>
+                        </select>
+                    </label>
+                    &nbsp;
+                    <button type="submit" class="button button-primary">過去をまとめて取得</button>
+                    <p class="description" style="margin-top:8px;">前月から指定月数分を順番に取得します。既存データは上書きされ、データが無い月は total=0 のレコードが残ります。</p>
+                </form>
+
+            </div>
 
             <h2 style="margin-top:2em;">取得済みデータ（直近12ヶ月）</h2>
             <?php if ( empty( $recent ) ) : ?>

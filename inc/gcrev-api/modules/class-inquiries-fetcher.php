@@ -303,6 +303,63 @@ class Mimamori_Inquiries_Fetcher {
     }
 
     /* ================================================================
+     * バックフィル: 過去N ヶ月を一括取得
+     * ================================================================ */
+
+    /**
+     * 指定ユーザーの過去 $months ヶ月分を順番に取得・保存する。
+     *
+     * @param int $user_id
+     * @param int $months  遡る月数（1〜36、デフォルト12）
+     * @return array{success:bool, ok:int, fail:int, total:int, results:array}
+     */
+    public function fetch_recent_months( int $user_id, int $months = 12 ): array {
+        $months = max( 1, min( 36, $months ) );
+        $tz     = wp_timezone();
+        $start  = ( new \DateTimeImmutable( 'first day of last month', $tz ) );
+
+        $ok      = 0;
+        $fail    = 0;
+        $results = [];
+
+        for ( $i = 0; $i < $months; $i++ ) {
+            $dt    = $start->modify( "-{$i} month" );
+            $year  = (int) $dt->format( 'Y' );
+            $month = (int) $dt->format( 'n' );
+
+            $r = $this->fetch_and_store( $user_id, $year, $month );
+            if ( ! empty( $r['success'] ) ) {
+                $ok++;
+                $results[] = [
+                    'period'  => sprintf( '%04d-%02d', $year, $month ),
+                    'status'  => 'ok',
+                    'total'   => (int) ( $r['data']['total'] ?? 0 ),
+                    'valid'   => (int) ( $r['data']['valid_count'] ?? 0 ),
+                ];
+            } else {
+                $fail++;
+                $results[] = [
+                    'period'  => sprintf( '%04d-%02d', $year, $month ),
+                    'status'  => 'fail',
+                    'message' => (string) ( $r['message'] ?? 'unknown error' ),
+                ];
+            }
+            // API への配慮で短く休む
+            usleep( 200 * 1000 );
+        }
+
+        self::log( "[BULK] user={$user_id} months={$months} ok={$ok} fail={$fail}" );
+
+        return [
+            'success' => ( $ok > 0 ),
+            'ok'      => $ok,
+            'fail'    => $fail,
+            'total'   => $months,
+            'results' => $results,
+        ];
+    }
+
+    /* ================================================================
      * Cron: 月次フェッチ
      * ================================================================ */
 
