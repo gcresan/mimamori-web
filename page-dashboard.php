@@ -531,8 +531,33 @@ if ($infographic && is_array($infographic)) {
 
         // --- MEO月次（前月 / 前々月） ---
         // get_transient_with_stale で TTL 切れでもキャッシュ値を再利用
+        // 既存キャッシュ（MEO Dashboard API の transient）からの取得を試みる。
+        // 期間ごとに REST 呼び出し時のキャッシュキーが異なる可能性があるため
+        // prev-month / prev_month / 月次レポート系キーを順に当てる。
         $meo_cache_curr = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_prev_month");
+        if ( ! is_array( $meo_cache_curr ) || $meo_cache_curr === false ) {
+            $meo_cache_curr = get_transient( "gcrev_meo_{$user_id}_prev-month" );
+        }
         $meo_cache_prev = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_prev2_month");
+        if ( ! is_array( $meo_cache_prev ) || $meo_cache_prev === false ) {
+            $meo_cache_prev = get_transient( "gcrev_meo_{$user_id}_prev-prev-month" );
+        }
+
+        // 期間が確定（月次）なら、未取得時は同期で MEO API を1回叩いてキャッシュも生成。
+        // GA4/GSC は重いが、MEO は単一エンドポイントで軽い + transient キャッシュがあるため
+        // 影響は限定的。これにより「マップ経由の電話タップ N」表示が確実に機能する。
+        if ( ( ! is_array( $meo_cache_curr ) || $meo_cache_curr === false )
+             && method_exists( $gcrev_api, 'fetch_meo_metrics_safe_public' ) ) {
+            $meo_cache_curr = $gcrev_api->fetch_meo_metrics_safe_public(
+                $user_id, $month_curr['start'], $month_curr['end'], 'prev_month'
+            );
+        }
+        if ( ( ! is_array( $meo_cache_prev ) || $meo_cache_prev === false )
+             && method_exists( $gcrev_api, 'fetch_meo_metrics_safe_public' ) ) {
+            $meo_cache_prev = $gcrev_api->fetch_meo_metrics_safe_public(
+                $user_id, $month_comp['start'], $month_comp['end'], 'prev2_month'
+            );
+        }
 
         $meo_curr = (is_array($meo_cache_curr) && $meo_cache_curr !== false)
             ? (int)($meo_cache_curr['total_impressions'] ?? 0) : null;

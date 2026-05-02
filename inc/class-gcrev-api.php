@@ -10508,6 +10508,19 @@ PROMPT;
         return (int)($metrics['total_impressions'] ?? 0);
     }
 
+    /**
+     * MEO メトリクス全体を安全に取得（テンプレートから利用可能な公開ラッパー）
+     *
+     * @param int    $user_id
+     * @param string $start_date  YYYY-MM-DD
+     * @param string $end_date    YYYY-MM-DD
+     * @param string|null $cache_scope  キャッシュスコープ（period ベース安定キー）
+     * @return array gbp_empty_metrics() 互換配列（total_impressions / call_clicks 等）
+     */
+    public function fetch_meo_metrics_safe_public(int $user_id, string $start_date, string $end_date, ?string $cache_scope = null): array {
+        return $this->fetch_meo_metrics_safe($user_id, $start_date, $end_date, $cache_scope);
+    }
+
     // =========================================================
     // インフォグラフィックJSON 生成（score=PHP計算、summary/action=AI）
     // =========================================================
