@@ -472,6 +472,9 @@ class Mimamori_Inquiries_Fetcher {
      *
      * 1) /inquiries/list を叩いて生データ取得（1時間 transient）
      * 2) Mimamori_Inquiries_AI_Classifier で各 item に AI 分類結果を付加（7日 transient）
+     * 3) AI 分類結果を元に wp_gcrev_inquiries の月次集計（valid_count / excluded /
+     *    reason_* / sources）を再計算して上書き保存。これにより、UI の
+     *    「2026-04（合計11/有効6）」表示や effective_cv も AI ベースの値に揃う。
      *
      * @return array{success:bool, items?:array, count?:int, message?:string}
      */
@@ -488,12 +491,76 @@ class Mimamori_Inquiries_Fetcher {
         $year_month = sprintf( '%04d-%02d', $year, $month );
         $classified = $classifier->classify_items( $items_raw, $user_id, $year_month );
 
+        // AI 分類結果で月次集計を再計算して DB を更新（include_excluded=1 のときのみ）
+        if ( $include_excluded ) {
+            $this->reconcile_monthly_summary_from_ai( $user_id, $year, $month, $classified );
+        }
+
         return [
             'success' => true,
             'items'   => $classified,
             'count'   => count( $classified ),
             'period'  => (string) ( $raw['period'] ?? $year_month ),
         ];
+    }
+
+    /**
+     * AI 分類済み items から月次集計を再計算し wp_gcrev_inquiries に upsert する。
+     * - valid_count = AI が valid と判定した件数
+     * - excluded    = それ以外
+     * - reason_spam / reason_test / reason_sales へ AI カテゴリをマッピング
+     *   営業 / 配信停止 → sales、SPAM → spam、（テスト系は category に無いため0）
+     */
+    private function reconcile_monthly_summary_from_ai( int $user_id, int $year, int $month, array $classified_items ): void {
+        $total = count( $classified_items );
+        $valid = 0;
+        $reason_spam = 0;
+        $reason_test = 0;
+        $reason_sales = 0;
+        $sources = [];
+
+        foreach ( $classified_items as $it ) {
+            if ( ! empty( $it['source'] ) ) {
+                $sources[ (string) $it['source'] ] = true;
+            }
+            if ( ! empty( $it['ai_valid'] ) ) {
+                $valid++;
+                continue;
+            }
+            $cat = (string) ( $it['ai_category'] ?? '' );
+            if ( $cat === 'SPAM' ) {
+                $reason_spam++;
+            } elseif ( $cat === '営業' || $cat === '配信停止' ) {
+                $reason_sales++;
+            } else {
+                // 未分類 / その他 で valid=false の場合は spam 扱いに寄せる
+                $reason_spam++;
+            }
+        }
+        $excluded = $total - $valid;
+
+        $row = [
+            'user_id'       => $user_id,
+            'year_month'    => sprintf( '%04d-%02d', $year, $month ),
+            'total'         => $total,
+            'valid_count'   => $valid,
+            'excluded'      => $excluded,
+            'reason_spam'   => $reason_spam,
+            'reason_test'   => $reason_test,
+            'reason_sales'  => $reason_sales,
+            'sources'       => substr( implode( ',', array_keys( $sources ) ), 0, 255 ),
+            'fetched_at'    => current_time( 'mysql' ),
+            'error_message' => null,
+        ];
+
+        self::upsert( $row );
+
+        // CV キャッシュ無効化（effective_cv が AI 後の値を使うように）
+        if ( function_exists( 'gcrev_invalidate_user_cv_cache' ) ) {
+            gcrev_invalidate_user_cv_cache( $user_id );
+        }
+
+        self::log( "[AI-RECONCILE] user={$user_id} period={$year}-{$month} total={$total} valid={$valid} sales={$reason_sales} spam={$reason_spam}" );
     }
 
     /* ================================================================
