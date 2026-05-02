@@ -894,7 +894,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
           'cv'     => ['label' => $cv_label,      'sub' => $cv_sub,                     'icon' => '🎯', 'metric' => 'cv'],
         ];
         if ( $can_meo ) {
-          $kpi_items['meo'] = ['label' => 'マップ表示回数', 'sub' => 'Googleマップで見られた回数', 'icon' => '📍', 'metric' => 'meo'];
+          $kpi_items['meo'] = ['label' => 'マップ表示回数', 'sub' => 'Googleマップ＋検索の地図枠での合計表示回数', 'icon' => '📍', 'metric' => 'meo'];
         }
         $first_kpi = true;
         foreach ($kpi_items as $key => $meta):
