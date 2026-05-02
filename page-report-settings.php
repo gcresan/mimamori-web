@@ -225,11 +225,22 @@ get_header();
         </div>
         <?php endif; ?>
 
+        <?php $is_view_as_active = function_exists( 'mimamori_get_view_as_target' ) && mimamori_get_view_as_target() > 0; ?>
+        <?php if ( $is_view_as_active ) : ?>
+        <div class="gcrev-notice-prev2" id="view-as-block-notice" style="background:#FEF3C7;border-left-color:#D97706;">
+          <span class="notice-icon">👀</span>
+          <div class="notice-text">
+            <strong>事業者ビュー切替中はレポート生成できません。</strong><br>
+            生成・保存などの書込み操作はビュー切替を解除してから実行してください。
+          </div>
+        </div>
+        <?php endif; ?>
+
         <div class="form-actions">
-            <button type="button" class="btn btn-secondary" id="btn-save" onclick="saveClientInfo()">
+            <button type="button" class="btn btn-secondary" id="btn-save" onclick="saveClientInfo()" <?php disabled( $is_view_as_active ); ?>>
                 💾 情報を保存
             </button>
-            <button type="button" class="btn btn-generate" id="btn-generate" onclick="generateReport()">
+            <button type="button" class="btn btn-generate" id="btn-generate" onclick="generateReport()" <?php disabled( $is_view_as_active ); ?>>
                 ✨ AIレポートを生成する
             </button>
         </div>
