@@ -531,43 +531,51 @@ if ($infographic && is_array($infographic)) {
 
         // --- MEO月次（前月 / 前々月） ---
         // get_transient_with_stale で TTL 切れでもキャッシュ値を再利用
-        // 既存キャッシュ（MEO Dashboard API の transient）からの取得を試みる。
-        // 期間ごとに REST 呼び出し時のキャッシュキーが異なる可能性があるため
-        // prev-month / prev_month / 月次レポート系キーを順に当てる。
-        $meo_cache_curr = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_prev_month");
-        if ( ! is_array( $meo_cache_curr ) || $meo_cache_curr === false ) {
-            $meo_cache_curr = get_transient( "gcrev_meo_{$user_id}_prev-month" );
-        }
-        $meo_cache_prev = $gcrev_api->get_transient_with_stale("gcrev_meo_perf_{$user_id}_prev2_month");
-        if ( ! is_array( $meo_cache_prev ) || $meo_cache_prev === false ) {
-            $meo_cache_prev = get_transient( "gcrev_meo_{$user_id}_prev-prev-month" );
-        }
+        // 既存トランジェントから MEO メトリクスを取得（同期 fetch はしない）。
+        // 書き込み元によって構造が異なる:
+        //   gcrev_meo_perf_{user_id}_xxx  → ['total_impressions'=>N, 'call_clicks'=>N, ...] 直接
+        //   gcrev_meo_{user_id}_xxx       → ['success'=>true, 'metrics'=>[...], 'metrics_previous'=>[...]]
+        // 取れなければ null のまま（JS 非同期で後から更新される）。
+        $resolve_meo_metrics = function ( $primary_key, $fallback_key ) use ( $gcrev_api ) {
+            $val = $gcrev_api->get_transient_with_stale( $primary_key );
+            if ( is_array( $val ) ) {
+                // フラット構造ならそのまま、metrics サブキーがあればそれを返す
+                if ( isset( $val['total_impressions'] ) || isset( $val['call_clicks'] ) ) {
+                    return $val;
+                }
+                if ( isset( $val['metrics'] ) && is_array( $val['metrics'] ) ) {
+                    return $val['metrics'];
+                }
+            }
+            $val2 = get_transient( $fallback_key );
+            if ( is_array( $val2 ) ) {
+                if ( isset( $val2['total_impressions'] ) || isset( $val2['call_clicks'] ) ) {
+                    return $val2;
+                }
+                if ( isset( $val2['metrics'] ) && is_array( $val2['metrics'] ) ) {
+                    return $val2['metrics'];
+                }
+            }
+            return null;
+        };
+        $meo_cache_curr = $resolve_meo_metrics(
+            "gcrev_meo_perf_{$user_id}_prev_month",
+            "gcrev_meo_{$user_id}_prev-month"
+        );
+        $meo_cache_prev = $resolve_meo_metrics(
+            "gcrev_meo_perf_{$user_id}_prev2_month",
+            "gcrev_meo_{$user_id}_prev-prev-month"
+        );
 
-        // 期間が確定（月次）なら、未取得時は同期で MEO API を1回叩いてキャッシュも生成。
-        // GA4/GSC は重いが、MEO は単一エンドポイントで軽い + transient キャッシュがあるため
-        // 影響は限定的。これにより「マップ経由の電話タップ N」表示が確実に機能する。
-        if ( ( ! is_array( $meo_cache_curr ) || $meo_cache_curr === false )
-             && method_exists( $gcrev_api, 'fetch_meo_metrics_safe_public' ) ) {
-            $meo_cache_curr = $gcrev_api->fetch_meo_metrics_safe_public(
-                $user_id, $month_curr['start'], $month_curr['end'], 'prev_month'
-            );
-        }
-        if ( ( ! is_array( $meo_cache_prev ) || $meo_cache_prev === false )
-             && method_exists( $gcrev_api, 'fetch_meo_metrics_safe_public' ) ) {
-            $meo_cache_prev = $gcrev_api->fetch_meo_metrics_safe_public(
-                $user_id, $month_comp['start'], $month_comp['end'], 'prev2_month'
-            );
-        }
-
-        $meo_curr = (is_array($meo_cache_curr) && $meo_cache_curr !== false)
+        $meo_curr = is_array($meo_cache_curr)
             ? (int)($meo_cache_curr['total_impressions'] ?? 0) : null;
-        $meo_prev = (is_array($meo_cache_prev) && $meo_cache_prev !== false)
+        $meo_prev = is_array($meo_cache_prev)
             ? (int)($meo_cache_prev['total_impressions'] ?? 0) : null;
 
         // MEO電話タップ数（ゴール数合算用）
-        $call_clicks_curr = (is_array($meo_cache_curr) && $meo_cache_curr !== false)
+        $call_clicks_curr = is_array($meo_cache_curr)
             ? (int)($meo_cache_curr['call_clicks'] ?? 0) : null;
-        $call_clicks_prev = (is_array($meo_cache_prev) && $meo_cache_prev !== false)
+        $call_clicks_prev = is_array($meo_cache_prev)
             ? (int)($meo_cache_prev['call_clicks'] ?? 0) : null;
 
         // --- KPI値構築 ---
