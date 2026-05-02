@@ -106,11 +106,6 @@ get_header();
             <?php endforeach; ?>
         </div>
 
-        <p style="margin-top:28px;text-align:center;">
-            <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' ) ); ?>"
-               style="background:#fff;color:#333;border:1px solid #ccc;text-decoration:none;">← 最新の深掘りレポートに戻る</a>
-        </p>
-
     <?php endif; ?>
 </div>
 <?php get_footer(); ?>
