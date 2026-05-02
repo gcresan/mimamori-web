@@ -306,7 +306,7 @@ class Gcrev_CV_Settings_Page {
                     </td>
                 </tr>
                 <tr>
-                    <th scope="row">問い合わせAPI連携</th>
+                    <th scope="row">お問い合わせ連携</th>
                     <td>
                         <label for="use_inquiries_api_cv">
                             <input type="checkbox"
@@ -315,13 +315,13 @@ class Gcrev_CV_Settings_Page {
                                    value="1"
                                    <?php checked($use_inquiries_api, '1'); ?>
                                    <?php disabled( ! $inquiries_endpoint_set ); ?>>
-                            フォーム系CVを「問い合わせAPI」の有効件数で上書きする
+                            フォーム系CVを「お問い合わせ関連」の有効件数で上書きする
                         </label>
                         <p class="description">
                             <?php if ( ! $inquiries_endpoint_set ) : ?>
-                                <span style="color:#b00;">⚠ 先に「問い合わせ取得」ページでエンドポイントとトークンを登録してください。</span><br>
+                                <span style="color:#b00;">⚠ 先に「お問い合わせ取得」ページでエンドポイントとトークンを登録してください。</span><br>
                             <?php endif; ?>
-                            ON にすると、各月の effective_cv のフォーム系（メール/フォーム送信など）を、契約サイトの Flamingo / MW WP Form から取得した「有効問い合わせ数」（SPAM・テスト・営業を除外したもの）に置き換えます。<strong>電話タップ系は引き続き GA4 から取得</strong>します。<br>
+                            ON にすると、各月のCVのフォーム系（メール/フォーム送信など）を、契約サイトのお問い合わせフォームから取得した「有効お問い合わせ件数」（SPAM・テスト・営業を除外したもの）に置き換えます。<strong>電話タップ系は引き続き GA4 から取得</strong>します。<br>
                             該当月のレコードが未取得の場合は GA4 ベースの値にフォールバックします。
                         </p>
 

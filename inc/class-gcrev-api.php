@@ -11586,8 +11586,8 @@ PROMPT;
      * - daily: 電話タップ日別 + 各問い合わせの実際の日付（items_json から）に分散
      *   - items_json があれば日別精度で配分（last30 期間や日別グラフが正確）
      *   - items_json が無ければフォールバックで月末日に集約
-     * - breakdown_by_label: 電話タップ系のみ残し、「お問い合わせ（API）」を追加
-     * - daily_by_label にも「お問い合わせ（API）」の日別データを追加
+     * - breakdown_by_label: 電話タップ系のみ残し、「お問い合わせ関連」を追加
+     * - daily_by_label にも「お問い合わせ関連」の日別データを追加
      */
     private function apply_inquiries_api_cv_override( array $result, string $year_month, int $user_id ): array {
         if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
@@ -11629,7 +11629,7 @@ PROMPT;
         }
         if ( $valid > 0 ) {
             $new_breakdown_by_label['__inquiries_api'] = [
-                'label'  => 'お問い合わせ（API）',
+                'label'  => 'お問い合わせ関連',
                 'count'  => $valid,
                 'source' => 'inquiries_api',
             ];
@@ -11670,7 +11670,7 @@ PROMPT;
                     $daily_for_label[ $date ] = (int) $count;
                 }
                 $new_daily_by_label['__inquiries_api'] = [
-                    'label'  => 'お問い合わせ（API）',
+                    'label'  => 'お問い合わせ関連',
                     'source' => 'inquiries_api',
                     'daily'  => $daily_for_label,
                 ];
@@ -11679,7 +11679,7 @@ PROMPT;
                 $last_day_key = $year_month . '-' . str_pad( (string) $days, 2, '0', STR_PAD_LEFT );
                 $new_daily[ $last_day_key ] = ( $new_daily[ $last_day_key ] ?? 0 ) + $valid;
                 $new_daily_by_label['__inquiries_api'] = [
-                    'label'  => 'お問い合わせ（API）',
+                    'label'  => 'お問い合わせ関連',
                     'source' => 'inquiries_api',
                     'daily'  => [ $last_day_key => $valid ],
                 ];
