@@ -1232,6 +1232,12 @@ if ( file_exists( $mimamori_inquiries_fetcher ) ) {
     }
 }
 
+// 問い合わせ AI 分類器（明細表示用）
+$mimamori_inquiries_ai = $gcrev_modules_path . 'class-inquiries-ai-classifier.php';
+if ( file_exists( $mimamori_inquiries_ai ) ) {
+    require_once $mimamori_inquiries_ai;
+}
+
 // ========================================
 // MEO Diagnostic Service（MEO診断）
 // ========================================

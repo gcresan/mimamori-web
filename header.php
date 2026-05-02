@@ -129,7 +129,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       $report_pages    = array('report-latest','report-archive','annual-report','strategy-report','strategy-report-detail','strategy-report-history');
       $ranking_pages   = array('rank-tracker','map-rank');
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
-      $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv');
+      $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','inquiries');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
       $seo_pages       = array('keyword-research'); // 'writing' は一旦非表示
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
@@ -320,6 +320,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/analysis/analysis-cv/') ); ?>" class="nav-link <?php echo is_page('analysis-cv') ? 'active' : ''; ?>">
                         <span>ゴール分析</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/inquiries/') ); ?>" class="nav-link <?php echo is_page('inquiries') ? 'active' : ''; ?>">
+                        <span>お問い合わせ一覧</span>
                         </a>
                      </li>
                   </ul>

@@ -218,6 +218,75 @@ class Mimamori_Inquiries_Fetcher {
                 return is_user_logged_in();
             },
         ] );
+
+        // GET /mimamori/v1/inquiries/list — AI 分類済み明細を返す（公開ページ用）
+        register_rest_route( 'mimamori/v1', '/inquiries/list', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_list' ],
+            'permission_callback' => static function () {
+                return is_user_logged_in();
+            },
+            'args' => [
+                'year'             => [ 'required' => false, 'sanitize_callback' => 'absint' ],
+                'month'            => [ 'required' => false, 'sanitize_callback' => 'absint' ],
+                'user_id'          => [ 'required' => false, 'sanitize_callback' => 'absint' ],
+                'include_excluded' => [ 'required' => false, 'sanitize_callback' => 'absint', 'default' => 1 ],
+            ],
+        ] );
+
+        // GET /mimamori/v1/inquiries/months — 月選択肢用（取得済みの年月リスト）
+        register_rest_route( 'mimamori/v1', '/inquiries/months', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_available_months' ],
+            'permission_callback' => static function () {
+                return is_user_logged_in();
+            },
+            'args' => [
+                'user_id' => [ 'required' => false, 'sanitize_callback' => 'absint' ],
+            ],
+        ] );
+    }
+
+    /**
+     * REST: AI 分類済みの個別問い合わせ一覧
+     */
+    public function rest_get_list( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = self::resolve_target_user_id( $request );
+        if ( $user_id === 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'forbidden' ], 403 );
+        }
+        $year  = (int) $request->get_param( 'year' );
+        $month = (int) $request->get_param( 'month' );
+        if ( $year === 0 || $month === 0 ) {
+            $tz   = wp_timezone();
+            $prev = ( new \DateTimeImmutable( 'first day of last month', $tz ) );
+            $year  = (int) $prev->format( 'Y' );
+            $month = (int) $prev->format( 'n' );
+        }
+        $include_excluded = (bool) $request->get_param( 'include_excluded' );
+
+        $result = $this->fetch_inquiry_list_classified( $user_id, $year, $month, $include_excluded );
+        return new \WP_REST_Response( $result, $result['success'] ? 200 : 500 );
+    }
+
+    /**
+     * REST: 取得済みの年月リスト（公開ページの月セレクター用）
+     */
+    public function rest_get_available_months( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = self::resolve_target_user_id( $request );
+        if ( $user_id === 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'forbidden' ], 403 );
+        }
+        global $wpdb;
+        $table = self::table_name();
+        $rows  = $wpdb->get_results( $wpdb->prepare(
+            "SELECT `year_month`, `valid_count`, `total` FROM `{$table}` WHERE `user_id` = %d ORDER BY `year_month` DESC LIMIT 24",
+            $user_id
+        ), ARRAY_A );
+        return new \WP_REST_Response( [
+            'success' => true,
+            'months'  => is_array( $rows ) ? $rows : [],
+        ], 200 );
     }
 
     public function rest_get_monthly( \WP_REST_Request $request ): \WP_REST_Response {
@@ -378,6 +447,35 @@ class Mimamori_Inquiries_Fetcher {
         ];
         set_transient( $cache_key, $result, HOUR_IN_SECONDS );
         return $result;
+    }
+
+    /**
+     * 個別問い合わせを取得した上で Gemini で分類して返す（明細表示用）
+     *
+     * 1) /inquiries/list を叩いて生データ取得（1時間 transient）
+     * 2) Mimamori_Inquiries_AI_Classifier で各 item に AI 分類結果を付加（7日 transient）
+     *
+     * @return array{success:bool, items?:array, count?:int, message?:string}
+     */
+    public function fetch_inquiry_list_classified( int $user_id, int $year, int $month, bool $include_excluded = true ): array {
+        $raw = $this->fetch_inquiry_list( $user_id, $year, $month, $include_excluded );
+        if ( empty( $raw['success'] ) ) {
+            return $raw;
+        }
+        if ( ! class_exists( 'Mimamori_Inquiries_AI_Classifier' ) ) {
+            return $raw; // クラス未ロード時はそのまま返す
+        }
+        $classifier = new \Mimamori_Inquiries_AI_Classifier();
+        $items_raw  = is_array( $raw['items'] ?? null ) ? $raw['items'] : [];
+        $year_month = sprintf( '%04d-%02d', $year, $month );
+        $classified = $classifier->classify_items( $items_raw, $user_id, $year_month );
+
+        return [
+            'success' => true,
+            'items'   => $classified,
+            'count'   => count( $classified ),
+            'period'  => (string) ( $raw['period'] ?? $year_month ),
+        ];
     }
 
     /* ================================================================

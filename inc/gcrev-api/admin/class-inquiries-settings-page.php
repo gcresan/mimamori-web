@@ -322,6 +322,32 @@ class Gcrev_Inquiries_Settings_Page {
     }
 
     /**
+     * カテゴリ名を CSS クラスにマッピング
+     */
+    public static function category_to_css_class( string $category ): string {
+        $map = [
+            'お問い合わせ・資料請求' => 'gcrev-cat-inquiry',
+            '見学会・イベント'       => 'gcrev-cat-event',
+            '採用・求人'             => 'gcrev-cat-recruit',
+            '営業'                   => 'gcrev-cat-sales',
+            '配信停止'               => 'gcrev-cat-unsubscribe',
+            'SPAM'                   => 'gcrev-cat-spam',
+            'その他'                 => 'gcrev-cat-other',
+        ];
+        return $map[ $category ] ?? 'gcrev-cat-other';
+    }
+
+    /**
+     * 日付の YYYY-MM-DD 部分だけ抽出
+     */
+    public static function format_date_only( string $date ): string {
+        if ( preg_match( '/^(\d{4}-\d{2}-\d{2})/', $date, $m ) ) {
+            return $m[1];
+        }
+        return $date;
+    }
+
+    /**
      * 明細ビュー: 指定月の個別問い合わせ一覧を契約サイトから取得して表示
      */
     private function render_detail_view( int $user_id, string $year_month ): void {
@@ -351,7 +377,10 @@ class Gcrev_Inquiries_Settings_Page {
         $include_excluded = ! isset( $_GET['valid_only'] );
 
         $fetcher = new Mimamori_Inquiries_Fetcher();
-        $result  = $fetcher->fetch_inquiry_list( $user_id, $year, $month, $include_excluded );
+        // AI 分類込みの一覧取得（Gemini で 種別 / 地域 / 要約 を付与）
+        $result  = method_exists( $fetcher, 'fetch_inquiry_list_classified' )
+            ? $fetcher->fetch_inquiry_list_classified( $user_id, $year, $month, $include_excluded )
+            : $fetcher->fetch_inquiry_list( $user_id, $year, $month, $include_excluded );
 
         $user_info = get_userdata( $user_id );
         ?>
@@ -387,52 +416,69 @@ class Gcrev_Inquiries_Settings_Page {
                 <?php if ( empty( $items ) ) : ?>
                     <p>該当する問い合わせはありません。</p>
                 <?php else : ?>
-                    <table class="widefat striped" style="max-width:1200px;">
+                    <style>
+                        .gcrev-inquiry-list { border-collapse:collapse; width:100%; max-width:1280px; }
+                        .gcrev-inquiry-list th, .gcrev-inquiry-list td { padding:10px 12px; vertical-align:top; border-bottom:1px solid #e5e7eb; text-align:left; }
+                        .gcrev-inquiry-list thead th { background:#fff7ed; font-weight:600; font-size:13px; color:#374151; }
+                        .gcrev-inquiry-list tbody tr.invalid { background:#fafafa; color:#9ca3af; }
+                        .gcrev-cat-badge { display:inline-block; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:600; white-space:nowrap; }
+                        .gcrev-cat-inquiry { background:#fed7aa; color:#7c2d12; }
+                        .gcrev-cat-event { background:#bbf7d0; color:#14532d; }
+                        .gcrev-cat-recruit { background:#bfdbfe; color:#1e3a8a; }
+                        .gcrev-cat-sales { background:#fecaca; color:#7f1d1d; }
+                        .gcrev-cat-unsubscribe { background:#e9d5ff; color:#581c87; }
+                        .gcrev-cat-spam { background:#d1d5db; color:#1f2937; }
+                        .gcrev-cat-other { background:#e5e7eb; color:#374151; }
+                        .gcrev-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; background:#e5f3ff; color:#0c4a6e; margin-left:4px; }
+                        .gcrev-summary { line-height:1.6; }
+                    </style>
+                    <table class="gcrev-inquiry-list">
                         <thead>
                             <tr>
-                                <th style="width:140px;">日時</th>
-                                <th style="width:60px;">判定</th>
-                                <th style="width:120px;">名前</th>
-                                <th style="width:200px;">メール</th>
-                                <th>本文</th>
-                                <th style="width:100px;">ソース</th>
+                                <th style="width:40px;">#</th>
+                                <th style="width:110px;">日付</th>
+                                <th style="width:140px;">種別</th>
+                                <th style="width:140px;">お名前</th>
+                                <th style="width:140px;">地域</th>
+                                <th>内容</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ( $items as $it ) :
-                                $is_valid = ! empty( $it['valid'] );
-                                $reason   = (string) ( $it['reason'] ?? '' );
-                                $reason_label = [
-                                    'spam'        => 'SPAM',
-                                    'test'        => 'テスト',
-                                    'sales'       => '営業',
-                                    'unsubscribe' => '配信停止',
-                                ][ $reason ] ?? ( $reason ?: '除外' );
-                                $message = (string) ( $it['message'] ?? '' );
-                                $msg_short = mb_strimwidth( $message, 0, 200, '…' );
+                            <?php
+                            $no = 0;
+                            foreach ( $items as $it ) :
+                                $no++;
+                                $category = (string) ( $it['ai_category'] ?? 'その他' );
+                                $is_valid = ! empty( $it['ai_valid'] );
+                                $cat_class = self::category_to_css_class( $category );
+                                $date_only = self::format_date_only( (string) ( $it['date'] ?? '' ) );
+                                $name      = (string) ( $it['name'] ?? '' );
+                                $region    = (string) ( $it['ai_region'] ?? '—' );
+                                $summary   = (string) ( $it['ai_summary'] ?? mb_strimwidth( (string) ( $it['message'] ?? '' ), 0, 140, '…' ) );
+                                $tags      = is_array( $it['ai_tags'] ?? null ) ? $it['ai_tags'] : [];
+                                $message_full = (string) ( $it['message'] ?? '' );
                                 ?>
-                                <tr<?php echo $is_valid ? '' : ' style="background:#fff5f5;"'; ?>>
-                                    <td style="font-size:12px;"><?php echo esc_html( (string) ( $it['date'] ?? '' ) ); ?></td>
+                                <tr class="<?php echo $is_valid ? '' : 'invalid'; ?>">
+                                    <td><?php echo (int) $no; ?></td>
+                                    <td><?php echo esc_html( $date_only ); ?></td>
+                                    <td><span class="gcrev-cat-badge <?php echo esc_attr( $cat_class ); ?>"><?php echo esc_html( $category ); ?></span></td>
+                                    <td><?php echo esc_html( $name ); ?></td>
+                                    <td><?php echo esc_html( $region ); ?></td>
                                     <td>
-                                        <?php if ( $is_valid ) : ?>
-                                            <span style="color:#1e8e3e;font-weight:600;">✓ 有効</span>
-                                        <?php else : ?>
-                                            <span style="color:#b00;font-weight:600;">✗ <?php echo esc_html( $reason_label ); ?></span>
-                                        <?php endif; ?>
+                                        <details>
+                                            <summary class="gcrev-summary">
+                                                <?php echo esc_html( $summary ); ?>
+                                                <?php foreach ( $tags as $tag ) : ?>
+                                                    <span class="gcrev-tag"><?php echo esc_html( (string) $tag ); ?></span>
+                                                <?php endforeach; ?>
+                                            </summary>
+                                            <div style="margin-top:8px;padding:8px;background:#f9fafb;border-radius:4px;font-size:12px;color:#6b7280;">
+                                                <strong>メール:</strong> <?php echo esc_html( (string) ( $it['email'] ?? '' ) ); ?><br>
+                                                <strong>送信元:</strong> <?php echo esc_html( (string) ( $it['source'] ?? '' ) ); ?>
+                                                <pre style="white-space:pre-wrap;margin-top:8px;font-family:inherit;"><?php echo esc_html( $message_full ); ?></pre>
+                                            </div>
+                                        </details>
                                     </td>
-                                    <td><?php echo esc_html( (string) ( $it['name'] ?? '' ) ); ?></td>
-                                    <td style="font-size:12px;"><?php echo esc_html( (string) ( $it['email'] ?? '' ) ); ?></td>
-                                    <td>
-                                        <?php if ( mb_strlen( $message ) > 200 ) : ?>
-                                            <details>
-                                                <summary><?php echo esc_html( $msg_short ); ?></summary>
-                                                <pre style="white-space:pre-wrap;background:#f6f7f7;padding:8px;margin-top:4px;font-family:inherit;"><?php echo esc_html( $message ); ?></pre>
-                                            </details>
-                                        <?php else : ?>
-                                            <?php echo nl2br( esc_html( $message ) ); ?>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td style="font-size:12px;"><?php echo esc_html( (string) ( $it['source'] ?? '' ) ); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
