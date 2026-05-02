@@ -575,17 +575,17 @@ if ($infographic && is_array($infographic)) {
             "gcrev_meo_{$user_id}_last30_comp",
         ]);
 
-        // どの候補でも call_clicks > 0 が取れない場合のみ、直近30日レンジで
-        // 同期 MEO fetch を試行する。空メトリクスは fetch_meo_metrics_safe 内で
-        // キャッシュ書き込みされないため、マップ表示への副作用は無い。
+        // どの候補でも call_clicks > 0 が取れない場合のみ、前月1ヶ月レンジで
+        // 同期 MEO fetch を試行する（全体ダッシュボードは月次確定データ表示のため）。
+        // 空メトリクスは fetch_meo_metrics_safe 内でキャッシュ書き込みされないため、
+        // マップ表示への副作用は無い。
         if (
             method_exists( $gcrev_api, 'fetch_meo_metrics_safe_public' )
             && ( ! is_array( $meo_cache_curr ) || (int) ( $meo_cache_curr['call_clicks'] ?? 0 ) === 0 )
         ) {
             try {
-                $last30_dates = $date_helper->get_date_range('last30');
                 $fresh = $gcrev_api->fetch_meo_metrics_safe_public(
-                    $user_id, $last30_dates['start'], $last30_dates['end'], 'last30'
+                    $user_id, $month_curr['start'], $month_curr['end'], 'prev_month'
                 );
                 if ( is_array( $fresh ) && (int) ( $fresh['call_clicks'] ?? 0 ) > 0 ) {
                     $meo_cache_curr = $fresh;
