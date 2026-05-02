@@ -141,6 +141,10 @@ class Gcrev_CV_Settings_Page {
         $phone_event_name = isset($_POST['phone_event_name']) ? sanitize_text_field(wp_unslash($_POST['phone_event_name'])) : '';
         update_user_meta($user_id, '_gcrev_phone_event_name', $phone_event_name);
 
+        // 問い合わせAPI 連携 ON/OFF
+        $use_inquiries_api = ! empty($_POST['use_inquiries_api_cv']) ? '1' : '0';
+        update_user_meta($user_id, '_gcrev_use_inquiries_api_cv', $use_inquiries_api);
+
         // キャッシュ無効化
         if ( function_exists('gcrev_invalidate_user_cv_cache') ) {
             gcrev_invalidate_user_cv_cache($user_id);
@@ -228,6 +232,15 @@ class Gcrev_CV_Settings_Page {
         // ユーザーメタ取得
         $cv_only_configured = get_user_meta($user_id, '_gcrev_cv_only_configured', true);
         $phone_event_name   = get_user_meta($user_id, '_gcrev_phone_event_name', true);
+        $use_inquiries_api  = get_user_meta($user_id, '_gcrev_use_inquiries_api_cv', true);
+
+        // 問い合わせAPI 連携の現状（直近12ヶ月のレコード）
+        $inquiries_recent = [];
+        $inquiries_endpoint_set = false;
+        if ( class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+            $inquiries_recent = \Mimamori_Inquiries_Fetcher::get_recent( $user_id, 12 );
+            $inquiries_endpoint_set = ( \Mimamori_Inquiries_Fetcher::get_endpoint( $user_id ) !== '' );
+        }
 
         // textarea用テキスト生成（route_key を1行ずつ）
         $textarea_value = '';
@@ -290,6 +303,49 @@ class Gcrev_CV_Settings_Page {
                                class="regular-text"
                                placeholder="例: phone_click">
                         <p class="description">電話クリックとして計上するGA4イベント名を指定します。</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">問い合わせAPI連携</th>
+                    <td>
+                        <label for="use_inquiries_api_cv">
+                            <input type="checkbox"
+                                   name="use_inquiries_api_cv"
+                                   id="use_inquiries_api_cv"
+                                   value="1"
+                                   <?php checked($use_inquiries_api, '1'); ?>
+                                   <?php disabled( ! $inquiries_endpoint_set ); ?>>
+                            フォーム系CVを「問い合わせAPI」の有効件数で上書きする
+                        </label>
+                        <p class="description">
+                            <?php if ( ! $inquiries_endpoint_set ) : ?>
+                                <span style="color:#b00;">⚠ 先に「問い合わせ取得」ページでエンドポイントとトークンを登録してください。</span><br>
+                            <?php endif; ?>
+                            ON にすると、各月の effective_cv のフォーム系（メール/フォーム送信など）を、契約サイトの Flamingo / MW WP Form から取得した「有効問い合わせ数」（SPAM・テスト・営業を除外したもの）に置き換えます。<strong>電話タップ系は引き続き GA4 から取得</strong>します。<br>
+                            該当月のレコードが未取得の場合は GA4 ベースの値にフォールバックします。
+                        </p>
+
+                        <?php if ( ! empty( $inquiries_recent ) ) : ?>
+                            <details style="margin-top:8px;">
+                                <summary style="cursor:pointer;">📊 取得済みの月次有効件数（直近12ヶ月）</summary>
+                                <table class="widefat striped" style="max-width:520px; margin-top:8px;">
+                                    <thead>
+                                        <tr><th>期間</th><th>合計</th><th>有効</th><th>除外</th><th>取得日時</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ( array_reverse( $inquiries_recent ) as $row ) : ?>
+                                            <tr>
+                                                <td><?php echo esc_html( (string) $row['year_month'] ); ?></td>
+                                                <td><?php echo esc_html( (string) (int) $row['total'] ); ?></td>
+                                                <td><strong><?php echo esc_html( (string) (int) $row['valid_count'] ); ?></strong></td>
+                                                <td><?php echo esc_html( (string) (int) $row['excluded'] ); ?></td>
+                                                <td style="font-size:12px;color:#666;"><?php echo esc_html( (string) $row['fetched_at'] ); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </details>
+                        <?php endif; ?>
                     </td>
                 </tr>
             </table>

@@ -610,6 +610,31 @@ class Mimamori_Inquiries_Fetcher {
     }
 
     /**
+     * 指定月の valid_count（有効問い合わせ数）だけを返す。
+     * レコード未登録なら null（呼び出し側でフォールバックを判断するため）。
+     *
+     * @param int    $user_id
+     * @param string $year_month YYYY-MM
+     * @return int|null
+     */
+    public static function get_monthly_valid_count( int $user_id, string $year_month ): ?int {
+        if ( ! preg_match( '/^\d{4}-\d{2}$/', $year_month ) ) {
+            return null;
+        }
+        global $wpdb;
+        $table = self::table_name();
+        $val = $wpdb->get_var( $wpdb->prepare(
+            "SELECT `valid_count` FROM `{$table}` WHERE `user_id` = %d AND `year_month` = %s",
+            $user_id,
+            $year_month
+        ) );
+        if ( $val === null ) {
+            return null;
+        }
+        return (int) $val;
+    }
+
+    /**
      * 直近 N ヶ月分の確定値を返す（古い → 新しい順）
      *
      * @return array<int, array<string,mixed>>

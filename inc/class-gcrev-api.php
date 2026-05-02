@@ -11279,6 +11279,9 @@ PROMPT;
                 }
             }
 
+            // 問い合わせAPI連携が有効ならフォーム系CVを上書き
+            $result = $this->apply_inquiries_api_cv_override( $result, $year_month, $user_id );
+
             $this->effective_cv_cache[$cache_key] = $result;
             set_transient($transient_key, $result, 24 * HOUR_IN_SECONDS);
             return $result;
@@ -11566,8 +11569,92 @@ PROMPT;
             }
         }
 
+        // 問い合わせAPI連携が有効ならフォーム系CVを上書き
+        $result = $this->apply_inquiries_api_cv_override( $result, $year_month, $user_id );
+
         $this->effective_cv_cache[$cache_key] = $result;
         set_transient($transient_key, $result, 24 * HOUR_IN_SECONDS);
+        return $result;
+    }
+
+    /**
+     * 「問い合わせAPI 連携」が user_meta で有効、かつ wp_gcrev_inquiries に該当月のレコードが
+     * あれば、フォーム系の CV を valid_count で上書きする。電話タップ系は元のまま残す。
+     *
+     * - source を 'inquiries_api' に
+     * - total = 電話タップ合計 + valid_count
+     * - daily: 電話タップ日別 + 月末日に valid_count をまとめて加算
+     *   （API は月単位の集計値なので日別精度は失われるが、月集計は正しくなる）
+     * - breakdown_by_label: 電話タップ系のみ残し、「お問い合わせ（API）」を追加
+     */
+    private function apply_inquiries_api_cv_override( array $result, string $year_month, int $user_id ): array {
+        if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+            return $result;
+        }
+        $enabled = (bool) get_user_meta( $user_id, '_gcrev_use_inquiries_api_cv', true );
+        if ( ! $enabled ) {
+            return $result;
+        }
+
+        $valid = \Mimamori_Inquiries_Fetcher::get_monthly_valid_count( $user_id, $year_month );
+        if ( $valid === null ) {
+            // 該当月のレコード未登録 → フォールバックして元の result を返す
+            return $result;
+        }
+
+        $phone_tap_daily = is_array( $result['phone_tap_daily'] ?? null ) ? $result['phone_tap_daily'] : [];
+        $phone_tap_total = (int) ( $result['components']['phone_tap_total'] ?? array_sum( $phone_tap_daily ) );
+
+        // 既存 breakdown_by_label のうち電話タップ系のみ残す
+        $new_breakdown_by_label = [];
+        foreach ( (array) ( $result['breakdown_by_label'] ?? [] ) as $key => $item ) {
+            if ( ( $item['label'] ?? '' ) === '電話タップ' ) {
+                $new_breakdown_by_label[ $key ] = $item;
+            }
+        }
+        if ( $valid > 0 ) {
+            $new_breakdown_by_label['__inquiries_api'] = [
+                'label'  => 'お問い合わせ（API）',
+                'count'  => $valid,
+                'source' => 'inquiries_api',
+            ];
+        }
+
+        // daily_by_label も電話タップ系のみ残す（API は月集計のみ）
+        $new_daily_by_label = [];
+        foreach ( (array) ( $result['daily_by_label'] ?? [] ) as $key => $item ) {
+            if ( ( $item['label'] ?? '' ) === '電話タップ' ) {
+                $new_daily_by_label[ $key ] = $item;
+            }
+        }
+
+        // 新しい daily: 電話タップを残し、月末日に valid_count を加算
+        $dt   = new \DateTimeImmutable( $year_month . '-01' );
+        $days = (int) $dt->format( 't' );
+        $new_daily = [];
+        for ( $d = 1; $d <= $days; $d++ ) {
+            $new_daily[ $year_month . '-' . str_pad( (string) $d, 2, '0', STR_PAD_LEFT ) ] = 0;
+        }
+        foreach ( $phone_tap_daily as $d => $v ) {
+            if ( isset( $new_daily[ $d ] ) ) {
+                $new_daily[ $d ] += (int) $v;
+            }
+        }
+        if ( $valid > 0 ) {
+            $last_day_key = $year_month . '-' . str_pad( (string) $days, 2, '0', STR_PAD_LEFT );
+            $new_daily[ $last_day_key ] = ( $new_daily[ $last_day_key ] ?? 0 ) + $valid;
+        }
+
+        $result['source']             = 'inquiries_api';
+        $result['total']              = $phone_tap_total + $valid;
+        $result['daily']              = $new_daily;
+        $result['breakdown_by_label'] = $new_breakdown_by_label;
+        $result['daily_by_label']     = $new_daily_by_label;
+        $result['components']['inquiries_total'] = $valid;
+        $result['components']['ga4_total']       = $phone_tap_total; // 電話タップだけ残す
+        $result['components']['inquiries_api']   = true;
+        $result['has_overrides']      = true;
+
         return $result;
     }
 
