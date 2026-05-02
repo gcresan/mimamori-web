@@ -3751,6 +3751,10 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   background: #e5e7eb;
   color: #4b5563;
 }
+.cv-label-breakdown-src.inquiries_api {
+  background: #d1fae5;
+  color: #065f46;
+}
 .cv-label-breakdown-item-value {
   font-size: 22px;
   font-weight: 700;

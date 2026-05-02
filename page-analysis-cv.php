@@ -478,6 +478,7 @@ function renderLabelBreakdown(eff) {
         const ratio = total > 0 ? (r.count / total * 100) : 0;
         const srcTag = r.source === 'manual' ? '<span class="cv-label-breakdown-src manual">手動入力</span>'
                      : r.source === 'reviewed' ? '<span class="cv-label-breakdown-src reviewed">精査済み</span>'
+                     : r.source === 'inquiries_api' ? '<span class="cv-label-breakdown-src inquiries_api">お問い合わせ連携</span>'
                      : '<span class="cv-label-breakdown-src ga4">GA4計測</span>';
         return `
             <div class="cv-label-breakdown-item">
