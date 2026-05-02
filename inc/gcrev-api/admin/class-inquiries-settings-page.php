@@ -403,9 +403,10 @@ class Gcrev_Inquiries_Settings_Page {
                                 $is_valid = ! empty( $it['valid'] );
                                 $reason   = (string) ( $it['reason'] ?? '' );
                                 $reason_label = [
-                                    'spam'  => 'SPAM',
-                                    'test'  => 'テスト',
-                                    'sales' => '営業',
+                                    'spam'        => 'SPAM',
+                                    'test'        => 'テスト',
+                                    'sales'       => '営業',
+                                    'unsubscribe' => '配信停止',
                                 ][ $reason ] ?? ( $reason ?: '除外' );
                                 $message = (string) ( $it['message'] ?? '' );
                                 $msg_short = mb_strimwidth( $message, 0, 200, '…' );

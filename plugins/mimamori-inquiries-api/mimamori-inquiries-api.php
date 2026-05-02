@@ -52,8 +52,39 @@ class Mimamori_Inquiries_API {
     private const ROUTE_NAMESPACE = 'mimamori/v1';
     private const ROUTE_PATH      = '/inquiries';
 
-    /** 営業判定用 NG ワード */
-    private const NG_WORDS_SALES = [ '営業', '売り込み', '広告', '無料掲載', 'SEO対策' ];
+    /** 営業判定用 NG ワード（B2B 勧誘・サービス紹介・代行業） */
+    private const NG_WORDS_SALES = [
+        '営業', '売り込み', '広告', '無料掲載', 'SEO対策',
+        // マーケ・代行系
+        'マーケティング', 'リスティング', 'meo対策', '集客代行', '集客のご提案',
+        'アクセス向上', '相互リンク', 'アポイント', 'アサイン',
+        'ランキング掲載', '掲載のご案内', '掲載のご提案', '掲載のお願い',
+        'サービスのご紹介', 'サービスをご案内', 'サービスのご案内',
+        'ご提案させて', 'ご紹介させて', 'ご検討いただけ',
+        '貴社のサイト', '貴社のホームページ', '貴社のwebサイト', '貴社のwebページ',
+        '弊社では', '弊社サービス', '弊社の', '当社では',
+        'お打ち合わせ', 'お時間頂戴', 'お時間いただ',
+        // 業界特有
+        'eラーニング', '人材育成', '人材形成', '採用代行',
+        'd-marketing', 'd marketing',
+        'グーグルマップで上位', 'グーグルマップ上位',
+        'mapで上位', 'マップで上位',
+        '口コミの管理', '口コミ管理',
+        '無料相談', '無料診断',
+        'お得な情報', '特別なご案内',
+        'パートナーシップ', 'コラボレーション',
+    ];
+
+    /** 配信停止・購読解除系 NG ワード（reason: unsubscribe → 集計時は sales に統合） */
+    private const NG_WORDS_UNSUBSCRIBE = [
+        '配信停止', '配信を停止', '配信の停止',
+        '購読解除', '購読の解除', '購読を解除',
+        'メルマガ登録解除', 'メルマガ解除', 'メルマガ登録の解除',
+        'メールマガジン解除', 'メールマガジン登録解除', 'メールマガジン登録の解除',
+        '解除を依頼', '解除のお願い',
+        '送信停止', '送信を停止',
+        'unsubscribe', 'opt-out',
+    ];
 
     /** テスト判定用キーワード */
     private const NG_WORDS_TEST = [ 'テスト', 'test', 'てすと' ];
@@ -216,6 +247,10 @@ class Mimamori_Inquiries_API {
             } else {
                 $excluded++;
                 $reason = $check['reason'];
+                // unsubscribe は sales カウンタに統合（DB スキーマ維持）
+                if ( $reason === 'unsubscribe' ) {
+                    $reason = 'sales';
+                }
                 if ( ! isset( $reasons[ $reason ] ) ) {
                     $reasons[ $reason ] = 0;
                 }
@@ -553,17 +588,32 @@ class Mimamori_Inquiries_API {
 
         $msg_lower = function_exists( 'mb_strtolower' ) ? mb_strtolower( $message ) : strtolower( $message );
         $msg_norm  = function_exists( 'mb_convert_kana' ) ? mb_convert_kana( $msg_lower, 's' ) : $msg_lower;
+        // 名前・メールドメインも判定対象に含める（送信元情報からも検知）
+        $name_lower = function_exists( 'mb_strtolower' ) ? mb_strtolower( (string) ( $item['name'] ?? '' ) ) : strtolower( (string) ( $item['name'] ?? '' ) );
+        $haystack   = $msg_norm . "\n" . $name_lower . "\n" . $email;
+
+        $needle_match = static function ( string $needle ) use ( $haystack ) : bool {
+            $n = function_exists( 'mb_strtolower' ) ? mb_strtolower( $needle ) : strtolower( $needle );
+            return ( function_exists( 'mb_strpos' ) ? mb_strpos( $haystack, $n ) : strpos( $haystack, $n ) ) !== false;
+        };
+
+        // 配信停止 / 購読解除（B2B営業の派生として扱うが reason は別管理）
+        foreach ( self::NG_WORDS_UNSUBSCRIBE as $word ) {
+            if ( $needle_match( $word ) ) {
+                return [ 'valid' => false, 'reason' => 'unsubscribe' ];
+            }
+        }
 
         // 営業 / 売り込み判定（NGワード）
         foreach ( self::NG_WORDS_SALES as $word ) {
-            if ( ( function_exists( 'mb_strpos' ) ? mb_strpos( $msg_norm, function_exists( 'mb_strtolower' ) ? mb_strtolower( $word ) : strtolower( $word ) ) : strpos( $msg_norm, strtolower( $word ) ) ) !== false ) {
+            if ( $needle_match( $word ) ) {
                 return [ 'valid' => false, 'reason' => 'sales' ];
             }
         }
 
         // テスト判定
         foreach ( self::NG_WORDS_TEST as $word ) {
-            if ( ( function_exists( 'mb_strpos' ) ? mb_strpos( $msg_norm, function_exists( 'mb_strtolower' ) ? mb_strtolower( $word ) : strtolower( $word ) ) : strpos( $msg_norm, strtolower( $word ) ) ) !== false ) {
+            if ( $needle_match( $word ) ) {
                 return [ 'valid' => false, 'reason' => 'test' ];
             }
         }
