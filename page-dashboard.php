@@ -728,7 +728,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             <span aria-hidden="true">📊</span> 前月の月次レポートを見る
           </a>
         <?php endif; ?>
-        <a href="<?php echo esc_url(home_url('/strategy-report/')); ?>" class="info-monthly-link info-monthly-link--strategy">
+        <a href="<?php echo esc_url(home_url('/strategy-report-history/')); ?>" class="info-monthly-link info-monthly-link--strategy">
           <span aria-hidden="true">🧠</span> 深掘りレポートを見る
         </a>
       </div>

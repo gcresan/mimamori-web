@@ -204,7 +204,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuReport">
                      <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/strategy-report/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
+                        <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
                         <span>深掘りレポート</span>
                         </a>
                      </li>
