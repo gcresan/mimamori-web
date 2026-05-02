@@ -942,7 +942,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             if ( $meo_tap > 0 ):
             ?>
             <span class="info-kpi-subbreakdown" style="display:block;font-size:11px;color:#666;margin-top:2px;line-height:1.5;">
-              うちマップ経由の電話タップ <?php echo esc_html( number_format( $meo_tap ) ); ?>
+              （うちマップ経由の電話タップ <?php echo esc_html( number_format( $meo_tap ) ); ?>）
             </span>
             <?php endif; ?>
             <?php endif; ?>
