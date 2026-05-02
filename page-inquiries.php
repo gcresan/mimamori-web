@@ -11,27 +11,31 @@ if ( ! is_user_logged_in() ) {
 $current_user = mimamori_get_view_user_object();
 $user_id      = mimamori_get_view_user_id();
 
-// 管理者本人がそのままアクセス（view-as していない）場合は案内のみ表示し、
-// 個別クライアントの問い合わせ内容（個人情報）が誤表示されるのを防ぐ。
-$real_user_id   = get_current_user_id();
-$is_admin       = current_user_can( 'manage_options' );
-$is_viewing_as  = ( $user_id !== $real_user_id );
+// 表示するのは「閲覧主体ユーザー（管理者なら自分自身、view-as 中ならその対象クライアント、
+// 一般ログインなら自分）」のメタに保存された設定のみ。他クライアントの個人情報は
+// REST 側 resolve_target_user_id() が user_id 改ざんをブロックするため漏れない。
 
-if ( $is_admin && ! $is_viewing_as ) {
+// 設定が無い場合の案内（管理画面への誘導）
+$inquiries_endpoint_set = false;
+if ( class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+    $inquiries_endpoint_set = ( Mimamori_Inquiries_Fetcher::get_endpoint( $user_id ) !== '' );
+}
+if ( ! $inquiries_endpoint_set ) {
     set_query_var( 'gcrev_page_title', 'お問い合わせ一覧' );
-    set_query_var( 'gcrev_page_subtitle', 'お客様用ページです。' );
+    set_query_var( 'gcrev_page_subtitle', '契約サイトの問い合わせ取得設定が未登録です。' );
     set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'お問い合わせ一覧' ) );
     get_header();
+    $is_admin = current_user_can( 'manage_options' );
     ?>
     <div style="max-width:760px;margin:40px auto;padding:32px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;">
-        <h2 style="margin-top:0;">📋 このページはお客様（契約サイトオーナー）向けです</h2>
-        <p>個別の問い合わせ内容（送信者氏名・メール・本文）は契約サイトごとの機密情報のため、<strong>管理者本人としてのアクセスでは表示しません</strong>。</p>
-        <p>確認方法は以下のいずれかです:</p>
-        <ul style="line-height:2;">
-            <li>① 画面右上の「<strong>事業者ビュー切替</strong>」で対象クライアントを選択 → このページを再読み込み</li>
-            <li>② 管理画面の「<a href="<?php echo esc_url( admin_url( 'admin.php?page=gcrev-inquiries-settings' ) ); ?>"><strong>問い合わせ取得</strong></a>」ページで対象ユーザーを選択し「📝 内容を見る」をクリック</li>
-        </ul>
-        <p style="color:#6b7280;font-size:13px;margin-top:24px;">※ クライアント自身がログインしてアクセスした場合は、そのクライアント自身の問い合わせ一覧が表示されます。</p>
+        <h2 style="margin-top:0;">📋 まずは取得設定を登録してください</h2>
+        <p>この一覧を表示するには、お使いの契約サイト（コーポレートサイト等）に「みまもりウェブ 問い合わせ集計API」プラグインを導入し、URL とトークンを登録する必要があります。</p>
+        <?php if ( $is_admin ) : ?>
+            <p>管理画面の「<a href="<?php echo esc_url( admin_url( 'admin.php?page=gcrev-inquiries-settings' ) ); ?>"><strong>みまもりウェブ → ✉️ 問い合わせ取得</strong></a>」から、対象ユーザーを選んで設定してください。</p>
+            <p style="color:#6b7280;font-size:13px;">他のクライアントの問い合わせを確認したい場合は、画面右上の「事業者ビュー切替」で対象クライアントになりきった状態でこのページにアクセスしてください。</p>
+        <?php else : ?>
+            <p>サポート担当者にご連絡いただくか、<a href="<?php echo esc_url( home_url( '/inquiry/' ) ); ?>">お問い合わせ</a>ページからご相談ください。</p>
+        <?php endif; ?>
     </div>
     <?php
     get_footer();

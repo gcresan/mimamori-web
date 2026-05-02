@@ -354,19 +354,37 @@ class Mimamori_Inquiries_Fetcher {
 
     /**
      * REST 共通: 操作対象ユーザーIDの解決と権限チェック
-     * - 管理者: user_id 指定可
-     * - 一般  : 自身のみ
+     *
+     * 認められるのは以下のいずれかのみ:
+     * - 自分自身の user_id（管理者・一般共通）
+     * - 管理者が view-as 中で、その対象クライアントの user_id
+     *
+     * 「管理者だから何でも見られる」は不可（他クライアントの個人情報保護）。
+     * 管理画面の管理操作（ユーザー切替）は admin handler 内で別途処理されており
+     * REST 経由ではないため、この制限の影響を受けない。
      */
     private static function resolve_target_user_id( \WP_REST_Request $request ): int {
-        $current  = get_current_user_id();
-        $target   = (int) $request->get_param( 'user_id' );
-        $is_admin = current_user_can( 'manage_options' );
+        $current = get_current_user_id();
+        if ( $current === 0 ) {
+            return 0;
+        }
+        $target      = (int) $request->get_param( 'user_id' );
+        $is_admin    = current_user_can( 'manage_options' );
+        $view_target = function_exists( 'mimamori_get_view_as_target' ) ? (int) mimamori_get_view_as_target() : 0;
 
         if ( $target > 0 ) {
-            if ( $is_admin || $target === $current ) {
+            if ( $target === $current ) {
                 return $target;
             }
-            return 0;
+            if ( $is_admin && $view_target > 0 && $target === $view_target ) {
+                return $target;
+            }
+            return 0; // 他ユーザーの user_id 改ざんは拒否
+        }
+
+        // 引数なし: view-as 中の管理者ならその対象、それ以外は自分自身
+        if ( $is_admin && $view_target > 0 ) {
+            return $view_target;
         }
         return $current;
     }
