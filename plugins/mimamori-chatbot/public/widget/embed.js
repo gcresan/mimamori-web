@@ -62,7 +62,10 @@
         'Content-Type': 'application/json',
         'X-Mimamori-Public-Key': PUBKEY
       },
-      credentials: 'omit',
+      // same-origin: 同origin (mimamori-web.jp 内の iframe → mimamori-web.jp API) で
+      // Cookie / Basic認証 を引き継ぐ。Dev環境の Basic Auth 通過に必要。
+      // 本番ではBasic認証なしなので影響なし。クロスoriginでは credentials は送られない。
+      credentials: 'same-origin',
       body: JSON.stringify(body || {})
     }).then(function (res) {
       return res.json().then(function (j) {
