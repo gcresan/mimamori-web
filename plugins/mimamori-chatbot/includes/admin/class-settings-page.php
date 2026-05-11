@@ -18,9 +18,23 @@ class Mimamori_Bot_Settings_Page {
 	const NONCE_ACTION_REGENERATE = 'mimamori_bot_regenerate_keys';
 
 	public static function init_hooks(): void {
+		Mimamori_Bot_Logger::info( 'settings_page: init_hooks() called' );
 		add_action( 'admin_post_mimamori_bot_create_tenant',     [ __CLASS__, 'handle_create' ] );
 		add_action( 'admin_post_mimamori_bot_update_tenant',     [ __CLASS__, 'handle_update' ] );
 		add_action( 'admin_post_mimamori_bot_regenerate_keys',   [ __CLASS__, 'handle_regenerate' ] );
+		// すべての admin_post_* を傍受してログ出力 (診断用)
+		add_action( 'admin_init', static function () {
+			$action = isset( $_REQUEST['action'] ) ? (string) $_REQUEST['action'] : '';
+			$is_post = ( $_SERVER['REQUEST_METHOD'] ?? '' ) === 'POST';
+			$is_admin_post = false !== strpos( (string) ( $_SERVER['SCRIPT_NAME'] ?? '' ), 'admin-post.php' );
+			if ( $is_post && $is_admin_post ) {
+				Mimamori_Bot_Logger::info( 'admin_init on admin-post.php', [
+					'action'   => $action,
+					'post_keys' => array_keys( $_POST ),
+					'user_id'  => function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0,
+				] );
+			}
+		}, 1 );
 	}
 
 	public static function render(): void {
