@@ -17,7 +17,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 162.43.35.237 >> ~/.ssh/known_hosts
 
-      - name: Deploy via rsync
+      - name: Deploy theme via rsync
         run: |
           rsync -avz --delete \
             --exclude='.git' \
@@ -26,7 +26,23 @@ jobs:
             --exclude='.sass-cache' \
             --exclude='.DS_Store' \
             --exclude='config.rb' \
+            --exclude='/plugins' \
             ./ root@162.43.35.237:/home/kusanagi/mimamori-dev/DocumentRoot/wp-content/themes/mimamori/
+
+      - name: Cleanup stale plugin path (one-time)
+        run: |
+          # 過去デプロイの誤配置を削除: themes/mimamori/plugins/ にあった旧コピーを消す
+          ssh root@162.43.35.237 'rm -rf /home/kusanagi/mimamori-dev/DocumentRoot/wp-content/themes/mimamori/plugins'
+
+      - name: Deploy mimamori-chatbot plugin
+        run: |
+          # mimamori-chatbot プラグインを wp-content/plugins/ 直下に配置する。
+          # --delete はターゲットサブディレクトリ内のみ作用するので、他のプラグイン (mw-wp-form等) には影響しない。
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.DS_Store' \
+            --exclude='vendor/.git' \
+            ./plugins/mimamori-chatbot/ root@162.43.35.237:/home/kusanagi/mimamori-dev/DocumentRoot/wp-content/plugins/mimamori-chatbot/
 
       - name: Setup scripts symlinks
         run: |
