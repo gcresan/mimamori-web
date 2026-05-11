@@ -22,10 +22,13 @@ if ( class_exists( 'Mimamori_Bot_Installer' ) ) { return; }
  */
 class Mimamori_Bot_Installer {
 
-	public static function table_tenants():  string { global $wpdb; return $wpdb->prefix . 'chatbot_tenants';  }
-	public static function table_sessions(): string { global $wpdb; return $wpdb->prefix . 'chatbot_sessions'; }
-	public static function table_messages(): string { global $wpdb; return $wpdb->prefix . 'chatbot_messages'; }
-	public static function table_events():   string { global $wpdb; return $wpdb->prefix . 'chatbot_events';   }
+	public static function table_tenants():          string { global $wpdb; return $wpdb->prefix . 'chatbot_tenants';          }
+	public static function table_sessions():         string { global $wpdb; return $wpdb->prefix . 'chatbot_sessions';         }
+	public static function table_messages():         string { global $wpdb; return $wpdb->prefix . 'chatbot_messages';         }
+	public static function table_events():           string { global $wpdb; return $wpdb->prefix . 'chatbot_events';           }
+	public static function table_knowledge():        string { global $wpdb; return $wpdb->prefix . 'chatbot_knowledge';        }
+	public static function table_knowledge_chunks(): string { global $wpdb; return $wpdb->prefix . 'chatbot_knowledge_chunks'; }
+	public static function table_faq():              string { global $wpdb; return $wpdb->prefix . 'chatbot_faq';              }
 
 	public static function install(): void {
 		global $wpdb;
@@ -113,10 +116,68 @@ class Mimamori_Bot_Installer {
 			KEY idx_tenant_type (tenant_id, type, created_at)
 		) $charset_collate;";
 
+		// Phase 2a: ナレッジ原本
+		$sql_knowledge = "CREATE TABLE " . self::table_knowledge() . " (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			tenant_id BIGINT UNSIGNED NOT NULL,
+			title VARCHAR(255) NOT NULL,
+			source_type VARCHAR(20) NOT NULL DEFAULT 'text',
+			mime_type VARCHAR(120) NULL,
+			file_path VARCHAR(500) NULL,
+			raw_text LONGTEXT NULL,
+			metadata TEXT NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'ready',
+			error_message TEXT NULL,
+			chunk_count INT UNSIGNED NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY idx_tenant_status (tenant_id, status, updated_at)
+		) $charset_collate;";
+
+		// Phase 2a: チャンク (embedding カラムは将来用に確保)
+		$sql_chunks = "CREATE TABLE " . self::table_knowledge_chunks() . " (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			tenant_id BIGINT UNSIGNED NOT NULL,
+			knowledge_id BIGINT UNSIGNED NOT NULL,
+			chunk_index INT UNSIGNED NOT NULL,
+			content MEDIUMTEXT NOT NULL,
+			token_count INT UNSIGNED NULL,
+			embedding MEDIUMBLOB NULL,
+			embedding_model VARCHAR(60) NULL,
+			embedding_version INT UNSIGNED NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY idx_tenant (tenant_id),
+			KEY idx_knowledge (knowledge_id, chunk_index)
+		) $charset_collate;";
+
+		// Phase 2a: FAQ
+		$sql_faq = "CREATE TABLE " . self::table_faq() . " (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			tenant_id BIGINT UNSIGNED NOT NULL,
+			question VARCHAR(500) NOT NULL,
+			answer MEDIUMTEXT NOT NULL,
+			category VARCHAR(80) NULL,
+			priority INT NOT NULL DEFAULT 0,
+			embedding MEDIUMBLOB NULL,
+			is_starter TINYINT(1) NOT NULL DEFAULT 0,
+			hit_count INT UNSIGNED NOT NULL DEFAULT 0,
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			PRIMARY KEY  (id),
+			KEY idx_tenant_status (tenant_id, status, priority),
+			KEY idx_tenant_starter (tenant_id, is_starter, priority)
+		) $charset_collate;";
+
 		dbDelta( $sql_tenants );
 		dbDelta( $sql_sessions );
 		dbDelta( $sql_messages );
 		dbDelta( $sql_events );
+		dbDelta( $sql_knowledge );
+		dbDelta( $sql_chunks );
+		dbDelta( $sql_faq );
 
 		update_option( 'mimamori_bot_db_version', MIMAMORI_BOT_VERSION, false );
 
@@ -136,6 +197,9 @@ class Mimamori_Bot_Installer {
 		}
 		global $wpdb;
 		$tables = [
+			self::table_faq(),
+			self::table_knowledge_chunks(),
+			self::table_knowledge(),
 			self::table_events(),
 			self::table_messages(),
 			self::table_sessions(),

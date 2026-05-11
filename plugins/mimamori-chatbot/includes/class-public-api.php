@@ -96,17 +96,23 @@ class Mimamori_Bot_Public_API {
 		$service = new Mimamori_Bot_Chat_Service();
 		$session = $service->create_session( $tenant, $params );
 
+		// starters: FAQ.is_starter=1 を優先、未登録ならフォールバック
+		$starters = Mimamori_Bot_Faq_Repository::list_starters( (int) $tenant['id'], 4 );
+		if ( empty( $starters ) ) {
+			$starters = [
+				'どんなことを相談できますか？',
+				'対応エリアを教えて',
+				'料金の目安は？',
+				'問い合わせしたい',
+			];
+		}
+
 		return self::ok_response( [
 			'session_uuid'      => $session['session_uuid'],
 			'persona'           => $tenant['persona'] ?? null,
 			'cta_url_quote'     => $tenant['cta_url_quote'] ?? null,
 			'cta_url_contact'   => $tenant['cta_url_contact'] ?? null,
-			'starters'          => [
-				'こんな質問ができます',
-				'おすすめのプランは？',
-				'料金を教えて',
-				'問い合わせしたい',
-			],
+			'starters'          => $starters,
 		] );
 	}
 
