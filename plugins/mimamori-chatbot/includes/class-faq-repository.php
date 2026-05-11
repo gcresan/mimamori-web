@@ -19,6 +19,8 @@ class Mimamori_Bot_Faq_Repository {
 		$table = Mimamori_Bot_Installer::table_faq();
 		$wpdb->insert( $table, self::normalize( $tenant_id, $fields ), self::formats() );
 		$id = (int) $wpdb->insert_id;
+		// 埋め込み生成 (question 単体で意味的類似検索する想定)
+		self::regenerate_embedding( $tenant_id, $id, (string) $fields['question'] );
 		Mimamori_Bot_Logger::info( 'faq: created', [ 'tenant_id' => $tenant_id, 'id' => $id ] );
 		return $id;
 	}
@@ -34,7 +36,59 @@ class Mimamori_Bot_Faq_Repository {
 			self::formats( false ),
 			[ '%d', '%d' ]
 		);
+		// 質問が変わった可能性があるので埋め込みも再生成
+		self::regenerate_embedding( $tenant_id, $id, (string) $fields['question'] );
 		return $result !== false;
+	}
+
+	/**
+	 * FAQ の埋め込み (question ベース) を生成・保存する。
+	 */
+	public static function regenerate_embedding( int $tenant_id, int $id, string $question ): void {
+		$embedder = new Mimamori_Bot_Embedder();
+		$blob = $embedder->embed_one( $question );
+		if ( $blob === null ) return;
+		global $wpdb;
+		$table = Mimamori_Bot_Installer::table_faq();
+		$wpdb->update( $table, [ 'embedding' => $blob ],
+			[ 'id' => $id, 'tenant_id' => $tenant_id ],
+			[ '%s' ], [ '%d', '%d' ]
+		);
+	}
+
+	/**
+	 * テナント全体の FAQ 埋め込み再生成 (Phase 2a データの後付け)。
+	 *
+	 * @return array{processed:int, saved:int}
+	 */
+	public static function reindex_tenant( int $tenant_id ): array {
+		global $wpdb;
+		$table = Mimamori_Bot_Installer::table_faq();
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT id, question FROM {$table}
+			  WHERE tenant_id = %d AND embedding IS NULL AND status = 'active'",
+			$tenant_id
+		), ARRAY_A );
+		if ( ! $rows ) return [ 'processed' => 0, 'saved' => 0 ];
+
+		$texts = array_map( static fn( $r ) => (string) $r['question'], $rows );
+		$embedder = new Mimamori_Bot_Embedder();
+		$blobs    = $embedder->embed_batch( $texts );
+
+		$saved = 0;
+		foreach ( $rows as $i => $r ) {
+			$blob = $blobs[ $i ] ?? null;
+			if ( $blob === null ) continue;
+			$wpdb->update( $table, [ 'embedding' => $blob ],
+				[ 'id' => (int) $r['id'], 'tenant_id' => $tenant_id ],
+				[ '%s' ], [ '%d', '%d' ]
+			);
+			$saved++;
+		}
+		Mimamori_Bot_Logger::info( 'faq: reindex done', [
+			'tenant_id' => $tenant_id, 'processed' => count( $rows ), 'saved' => $saved,
+		] );
+		return [ 'processed' => count( $rows ), 'saved' => $saved ];
 	}
 
 	public static function delete( int $tenant_id, int $id ): bool {
