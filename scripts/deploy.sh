@@ -19,6 +19,8 @@ DEV_THEME="/home/kusanagi/mimamori-dev/DocumentRoot/wp-content/themes/mimamori"
 PROD_THEME="/home/kusanagi/mimamori/DocumentRoot/wp-content/themes/mimamori"
 DEV_DOCROOT="/home/kusanagi/mimamori-dev/DocumentRoot"
 PROD_DOCROOT="/home/kusanagi/mimamori/DocumentRoot"
+DEV_CHATBOT_PLUGIN="/home/kusanagi/mimamori-dev/DocumentRoot/wp-content/plugins/mimamori-chatbot"
+PROD_CHATBOT_PLUGIN="/home/kusanagi/mimamori/DocumentRoot/wp-content/plugins/mimamori-chatbot"
 SNAPSHOT_DIR="/home/kusanagi/mimamori-dev/snapshots/theme"
 LOG_FILE="/home/kusanagi/mimamori-dev/snapshots/deploy.log"
 REGISTRY_EXPORT_PATH="/tmp/mimamori-registry-export.json"
@@ -62,6 +64,19 @@ rsync -a --delete --no-group --no-owner \
     --exclude='sftp-config.json' \
     --exclude='scripts' \
     "$DEV_THEME/" "$PROD_THEME/"
+
+# --- 2.5. mimamori-chatbot プラグインを Dev → Prod 同期 ---
+# Dev に配置されていれば本番にも反映する (未配置なら何もしない)。
+# --delete はターゲットサブディレクトリ内のみ作用するため、他プラグインには影響しない。
+if [ -d "$DEV_CHATBOT_PLUGIN" ]; then
+    echo "[$TIMESTAMP] Deploying mimamori-chatbot plugin..." | tee -a "$LOG_FILE"
+    mkdir -p "$PROD_CHATBOT_PLUGIN"
+    rsync -a --delete --no-group --no-owner \
+        --exclude='.git' \
+        --exclude='.DS_Store' \
+        --exclude='vendor/.git' \
+        "$DEV_CHATBOT_PLUGIN/" "$PROD_CHATBOT_PLUGIN/"
+fi
 
 # --- 3. 所有権 ---
 # chown 不要: PHP-FPM が kusanagi ユーザーで動作するため rsync 後の所有権は kusanagi:kusanagi
