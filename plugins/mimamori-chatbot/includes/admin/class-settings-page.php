@@ -165,12 +165,17 @@ class Mimamori_Bot_Settings_Page {
 	}
 
 	public static function handle_create(): void {
+		Mimamori_Bot_Logger::info( 'handle_create: entry', [
+			'user_id' => get_current_user_id(),
+			'post_keys' => array_keys( $_POST ),
+		] );
 		check_admin_referer( self::NONCE_ACTION_CREATE );
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
 
 		$user_id = get_current_user_id();
 		$slug    = isset( $_POST['slug'] ) ? sanitize_title( (string) $_POST['slug'] ) : '';
 		$name    = isset( $_POST['name'] ) ? sanitize_text_field( (string) $_POST['name'] ) : '';
+		Mimamori_Bot_Logger::info( 'handle_create: parsed', [ 'slug' => $slug, 'name' => $name ] );
 
 		if ( ! preg_match( '/^[a-z0-9\-]{3,32}$/', $slug ) || $name === '' ) {
 			self::redirect_with_error( '入力に不備があります。' );
