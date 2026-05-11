@@ -18,6 +18,19 @@ class Mimamori_Bot_Bootstrap {
 
 		// 公開Widget loader (テナント独自JSを直接配信する場合に備え、現状は静的ファイル直リンクのみ)
 		// CORSプリフライト対応は class-public-api.php で per-route 処理
+
+		// 子ファイル末尾の static method 呼び出しが PHP-FPM 環境で実行されない問題への workaround
+		// 確実に動作する Bootstrap::init() から明示的に呼び出す
+		Mimamori_Bot_Logger::info( 'bootstrap::init() registering admin page hooks' );
+		if ( class_exists( 'Mimamori_Bot_Settings_Page' ) ) {
+			Mimamori_Bot_Settings_Page::init_hooks();
+		}
+		if ( class_exists( 'Mimamori_Bot_Knowledge_Page' ) ) {
+			Mimamori_Bot_Knowledge_Page::init_hooks();
+		}
+		if ( class_exists( 'Mimamori_Bot_Faq_Page' ) ) {
+			Mimamori_Bot_Faq_Page::init_hooks();
+		}
 	}
 
 	public static function on_plugins_loaded(): void {
