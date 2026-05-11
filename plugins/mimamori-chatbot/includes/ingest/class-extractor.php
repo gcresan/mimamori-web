@@ -21,8 +21,15 @@ if ( class_exists( 'Mimamori_Bot_Extractor' ) ) { return; }
  */
 class Mimamori_Bot_Extractor {
 
-	public const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2MB
-	public const MAX_TEXT_CHARS = 500_000;          // 抽出後の最大文字数 (テナント保護)
+	public const MAX_FILE_BYTES       = 2 * 1024 * 1024; // 2MB (text/pdf/csv/html)
+	public const MAX_IMAGE_FILE_BYTES = 4 * 1024 * 1024; // 4MB (image)
+	public const MAX_TEXT_CHARS       = 500_000;         // 抽出後の最大文字数 (テナント保護)
+
+	private const ALLOWED_EXT = [
+		'txt', 'md', 'markdown', 'csv', 'html', 'htm',
+		'pdf',
+		'jpg', 'jpeg', 'png', 'webp',
+	];
 
 	/**
 	 * @return array{title:string, raw_text:string, mime:string}
@@ -39,11 +46,17 @@ class Mimamori_Bot_Extractor {
 		if ( $size <= 0 || ! is_uploaded_file( $tmp ) ) {
 			throw new RuntimeException( 'アップロードファイルが不正です' );
 		}
-		if ( $size > self::MAX_FILE_BYTES ) {
-			throw new RuntimeException( 'ファイルサイズが上限(2MB)を超えています' );
+
+		$ext = strtolower( pathinfo( $name, PATHINFO_EXTENSION ) );
+		if ( ! in_array( $ext, self::ALLOWED_EXT, true ) ) {
+			throw new RuntimeException( '未対応の拡張子です: .' . $ext );
+		}
+		$is_image = in_array( $ext, [ 'jpg', 'jpeg', 'png', 'webp' ], true );
+		$max_size = $is_image ? self::MAX_IMAGE_FILE_BYTES : self::MAX_FILE_BYTES;
+		if ( $size > $max_size ) {
+			throw new RuntimeException( 'ファイルサイズが上限(' . round( $max_size / 1024 / 1024 ) . 'MB)を超えています' );
 		}
 
-		$ext  = strtolower( pathinfo( $name, PATHINFO_EXTENSION ) );
 		$body = (string) file_get_contents( $tmp );
 		if ( $body === '' ) {
 			throw new RuntimeException( 'ファイルが空です' );
@@ -65,8 +78,19 @@ class Mimamori_Bot_Extractor {
 				$text = self::extract_html( $body );
 				$mime = 'text/html';
 				break;
+			case 'pdf':
+				$text = self::extract_pdf( $body );
+				$mime = 'application/pdf';
+				break;
+			case 'jpg':
+			case 'jpeg':
+			case 'png':
+			case 'webp':
+				$mime = self::detect_image_mime( $body, $ext );
+				$text = self::extract_image( $body, $mime );
+				break;
 			default:
-				throw new RuntimeException( '未対応の拡張子です: .' . $ext . ' (Phase 2bは txt/md/csv/html のみ)' );
+				throw new RuntimeException( '未対応の拡張子です: .' . $ext );
 		}
 
 		$text = trim( $text );
@@ -161,6 +185,98 @@ class Mimamori_Bot_Extractor {
 		$text = preg_replace( "/\n[ \t]*/u", "\n", $text );
 		$text = preg_replace( "/\n{3,}/u", "\n\n", $text );
 		return trim( (string) $text );
+	}
+
+	/**
+	 * PDF からテキスト抽出。smalot/pdfparser がサーバーに導入されていれば使用する。
+	 * 未導入の場合は明確なエラーで案内。
+	 */
+	private static function extract_pdf( string $body ): string {
+		// smalot/pdfparser を多段ロード:
+		//   (a) すでに autoload 済み
+		//   (b) テーマ vendor (GCREV_VENDOR_PATH)
+		//   (c) プラグイン同梱 vendor (将来用)
+		if ( ! class_exists( 'Smalot\\PdfParser\\Parser' ) ) {
+			if ( defined( 'GCREV_VENDOR_PATH' ) && file_exists( GCREV_VENDOR_PATH . 'autoload.php' ) ) {
+				require_once GCREV_VENDOR_PATH . 'autoload.php';
+			}
+		}
+		if ( ! class_exists( 'Smalot\\PdfParser\\Parser' ) ) {
+			$plugin_vendor = MIMAMORI_BOT_PATH . 'vendor/autoload.php';
+			if ( file_exists( $plugin_vendor ) ) {
+				require_once $plugin_vendor;
+			}
+		}
+		if ( ! class_exists( 'Smalot\\PdfParser\\Parser' ) ) {
+			throw new RuntimeException(
+				'PDF取込にはサーバーへの smalot/pdfparser 導入が必要です。'
+				. 'テーマvendor (' . ( defined( 'GCREV_VENDOR_PATH' ) ? (string) GCREV_VENDOR_PATH : '/vendor' ) . ') で '
+				. '"composer require smalot/pdfparser" を実行してください。'
+			);
+		}
+
+		try {
+			$parser = new \Smalot\PdfParser\Parser();
+			$doc    = $parser->parseContent( $body );
+			$text   = $doc->getText();
+		} catch ( \Throwable $e ) {
+			Mimamori_Bot_Logger::error( 'extractor: pdf parse failed', [ 'msg' => $e->getMessage() ] );
+			throw new RuntimeException( 'PDFの解析に失敗しました: ' . $e->getMessage() );
+		}
+
+		// 連続空白整理
+		$text = preg_replace( "/[ \t\x{00A0}]+/u", ' ', (string) $text );
+		$text = preg_replace( "/\n{3,}/u", "\n\n", $text );
+		$text = trim( (string) $text );
+
+		if ( $text === '' ) {
+			throw new RuntimeException( 'PDFからテキストを抽出できませんでした (画像ベースのPDFかもしれません。OCR対応はjpg/png/webp取込で行えます)' );
+		}
+		return $text;
+	}
+
+	/**
+	 * 画像から OCR 経由でテキスト抽出。OpenAI Vision を使用。
+	 */
+	private static function extract_image( string $body, string $mime ): string {
+		// magic-bytes 検証 (拡張子偽装防止)
+		$detected = self::detect_image_mime( $body, '' );
+		if ( $detected !== $mime ) {
+			// 厳密一致しない場合でも、許可された画像 mime 内ならOKとする
+			if ( ! in_array( $detected, [ 'image/jpeg', 'image/png', 'image/webp' ], true ) ) {
+				throw new RuntimeException( '画像形式を判定できませんでした (拡張子偽装の可能性)' );
+			}
+			$mime = $detected;
+		}
+		$vision = new Mimamori_Bot_Vision_Bridge();
+		$result = $vision->extract_text( $body, $mime );
+		if ( is_wp_error( $result ) ) {
+			throw new RuntimeException( $result->get_error_message() );
+		}
+		return (string) $result['text'];
+	}
+
+	/**
+	 * 画像の MIME を magic-bytes 先頭から判定する。
+	 * fallback: 拡張子から推測。
+	 */
+	private static function detect_image_mime( string $body, string $fallback_ext ): string {
+		if ( strlen( $body ) >= 12 ) {
+			$head = substr( $body, 0, 12 );
+			// JPEG: FF D8 FF
+			if ( substr( $head, 0, 3 ) === "\xFF\xD8\xFF" ) return 'image/jpeg';
+			// PNG: 89 50 4E 47 0D 0A 1A 0A
+			if ( substr( $head, 0, 8 ) === "\x89PNG\r\n\x1A\n" ) return 'image/png';
+			// WebP: RIFF....WEBP
+			if ( substr( $head, 0, 4 ) === 'RIFF' && substr( $head, 8, 4 ) === 'WEBP' ) return 'image/webp';
+		}
+		switch ( strtolower( $fallback_ext ) ) {
+			case 'jpg':
+			case 'jpeg': return 'image/jpeg';
+			case 'png':  return 'image/png';
+			case 'webp': return 'image/webp';
+		}
+		return 'application/octet-stream';
 	}
 
 	private static function ensure_utf8( string $body ): string {

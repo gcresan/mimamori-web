@@ -69,14 +69,16 @@ class Mimamori_Bot_Knowledge_Page {
 
 	private static function render_upload_form(): void {
 		echo '<h2>ファイルから取り込み</h2>';
-		echo '<p>対応拡張子: <code>.txt</code> <code>.md</code> <code>.csv</code> <code>.html</code> （最大2MB）。PDF / DOCX / XLSX は将来対応。</p>';
+		echo '<p>対応: <code>.txt</code> <code>.md</code> <code>.csv</code> <code>.html</code> <code>.pdf</code> (テキスト2MB / 画像4MB)。'
+			. '<code>.jpg</code> <code>.png</code> <code>.webp</code> は OpenAI Vision で日本語OCRします (APIコール発生)。</p>';
+		echo '<p><em>注: PDFはサーバーに <code>smalot/pdfparser</code> が導入されている必要があります。未導入時は明確なエラーが返ります。</em></p>';
 		echo '<form method="post" enctype="multipart/form-data" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 		wp_nonce_field( self::NONCE_UPLOAD );
 		echo '<input type="hidden" name="action" value="mimamori_bot_knowledge_upload">';
 		echo '<table class="form-table"><tbody>';
 		echo '<tr><th><label for="up_title">タイトル (任意)</label></th><td><input type="text" id="up_title" name="title" class="regular-text" maxlength="200" placeholder="空ならファイル名をそのまま使用"></td></tr>';
 		echo '<tr><th><label for="up_category">カテゴリ (任意)</label></th><td><input type="text" id="up_category" name="category" class="regular-text" maxlength="80"></td></tr>';
-		echo '<tr><th><label for="up_file">ファイル</label></th><td><input type="file" id="up_file" name="file" accept=".txt,.md,.markdown,.csv,.html,.htm" required></td></tr>';
+		echo '<tr><th><label for="up_file">ファイル</label></th><td><input type="file" id="up_file" name="file" accept=".txt,.md,.markdown,.csv,.html,.htm,.pdf,.jpg,.jpeg,.png,.webp" required></td></tr>';
 		echo '</tbody></table>';
 		submit_button( '取り込み', 'secondary' );
 		echo '</form>';

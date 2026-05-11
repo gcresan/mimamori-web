@@ -28,7 +28,7 @@ if ( defined( 'MIMAMORI_BOT_VERSION' ) ) {
 	return;
 }
 
-define( 'MIMAMORI_BOT_VERSION',                '0.3.0' );
+define( 'MIMAMORI_BOT_VERSION',                '0.4.0' );
 define( 'MIMAMORI_BOT_FILE',                   __FILE__ );
 define( 'MIMAMORI_BOT_PATH',                   plugin_dir_path( __FILE__ ) );
 define( 'MIMAMORI_BOT_URL',                    plugin_dir_url( __FILE__ ) );
@@ -50,6 +50,7 @@ require_once MIMAMORI_BOT_PATH . 'includes/class-tenant-repository.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-rate-limiter.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-auth.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-openai-bridge.php';
+require_once MIMAMORI_BOT_PATH . 'includes/class-vision-bridge.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-embedder.php';
 require_once MIMAMORI_BOT_PATH . 'includes/ingest/class-extractor.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-knowledge-repository.php';
@@ -62,6 +63,7 @@ require_once MIMAMORI_BOT_PATH . 'includes/admin/class-settings-page.php';
 require_once MIMAMORI_BOT_PATH . 'includes/admin/class-knowledge-page.php';
 require_once MIMAMORI_BOT_PATH . 'includes/admin/class-faq-page.php';
 require_once MIMAMORI_BOT_PATH . 'includes/admin/class-history-page.php';
+require_once MIMAMORI_BOT_PATH . 'includes/admin/class-analytics-page.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-bootstrap.php';
 
 register_activation_hook(   __FILE__, [ 'Mimamori_Bot_Installer', 'install' ]    );
