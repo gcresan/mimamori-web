@@ -237,12 +237,13 @@
     applyFabContent();
     fetchConfig();
 
-    // iframe からの postMessage を受信（resize / close 等）
+    // iframe からの postMessage を受信（resize / close / minimize 等）
+    // minimize は close と同等動作: iframe を畳む。state は localStorage に残るので再オープン時に復元
     window.addEventListener('message', function (ev) {
       try {
         if (!ev.data || typeof ev.data !== 'object') return;
         if (ev.data.source !== 'mimamori-bot') return;
-        if (ev.data.type === 'close') toggle();
+        if (ev.data.type === 'close' || ev.data.type === 'minimize') toggle();
       } catch (e) {}
     });
 

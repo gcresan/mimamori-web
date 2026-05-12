@@ -285,10 +285,13 @@ class Mimamori_Bot_Public_API {
 <style>
 :root{--mb-primary:{$primary};--mb-on-primary:{$on_primary};}
 .mb-header{background:{$primary} !important;color:{$on_primary} !important;}
-.mb-header button{color:{$on_primary} !important;}
+.mb-title,.mb-status,.mb-icon-btn{color:{$on_primary} !important;}
 .mb-msg.user{background:{$primary} !important;color:{$on_primary} !important;}
 .mb-input button{background:{$primary} !important;color:{$on_primary} !important;}
-.mb-starter:hover{border-color:{$primary} !important;color:{$primary} !important;}
+.mb-msg-avatar:not(.mb-user-avatar){background:{$primary} !important;color:{$on_primary} !important;}
+.mb-cat-tab.active{color:{$primary} !important;border-bottom-color:{$primary} !important;}
+.mb-quick-chip:hover{border-color:{$primary} !important;color:{$primary} !important;}
+.mb-typing-bubble span{background:{$primary} !important;}
 </style>
 </head>
 <body>

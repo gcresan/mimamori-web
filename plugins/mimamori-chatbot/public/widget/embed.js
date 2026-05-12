@@ -34,26 +34,56 @@
   // ヘッダーアバターは AVATAR_SVG がある時のみ後で挿入
   app.innerHTML =
     '<header class="mb-header">' +
-      '<h1 id="mb-title-wrap"><span id="mb-header-avatar"></span><span id="mb-title"></span></h1>' +
-      '<button type="button" id="mb-close" aria-label="閉じる">×</button>' +
+      '<div class="mb-header-left">' +
+        '<span class="mb-header-avatar" id="mb-header-avatar" aria-hidden="true"></span>' +
+        '<span class="mb-title" id="mb-title"></span>' +
+      '</div>' +
+      '<div class="mb-header-right">' +
+        '<span class="mb-status" aria-label="ステータス: 相談受付中">' +
+          '<span class="mb-status-dot"></span><span>相談受付中</span>' +
+        '</span>' +
+        '<button type="button" class="mb-icon-btn" id="mb-minimize" aria-label="最小化" title="最小化">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M14 4 L20 4 L20 10 M20 4 L14 10 M10 20 L4 20 L4 14 M4 20 L10 14"/>' +
+          '</svg>' +
+        '</button>' +
+        '<button type="button" class="mb-icon-btn" id="mb-close" aria-label="閉じる" title="閉じる">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M6 6 L18 18 M18 6 L6 18"/>' +
+          '</svg>' +
+        '</button>' +
+      '</div>' +
     '</header>' +
+    '<div class="mb-quick" id="mb-quick">' +
+      '<button type="button" class="mb-quick-toggle" id="mb-quick-toggle" aria-expanded="true">' +
+        '<span class="mb-quick-toggle-label">💡 質問例を見る</span>' +
+        '<span class="mb-quick-arrow" aria-hidden="true">▲</span>' +
+      '</button>' +
+      '<div class="mb-quick-body" id="mb-quick-body">' +
+        '<div class="mb-mode-tabs" id="mb-mode-tabs" role="tablist"></div>' +
+        '<div class="mb-cat-tabs"  id="mb-cat-tabs"  role="tablist"></div>' +
+        '<div class="mb-quick-chips" id="mb-quick-chips"></div>' +
+      '</div>' +
+    '</div>' +
     '<div class="mb-list" id="mb-list" role="log" aria-live="polite"></div>' +
-    '<div class="mb-starters" id="mb-starters"></div>' +
-    '<div class="mb-typing" id="mb-typing" hidden>AI が考えています...</div>' +
     '<form class="mb-input" id="mb-form" autocomplete="off">' +
       '<textarea id="mb-text" rows="1" placeholder="メッセージを入力..." maxlength="2000" autocomplete="off"></textarea>' +
       '<button type="submit" id="mb-send">送信</button>' +
     '</form>';
 
-  var $title       = document.getElementById('mb-title');
+  var $title        = document.getElementById('mb-title');
   var $headerAvatar = document.getElementById('mb-header-avatar');
-  var $list        = document.getElementById('mb-list');
-  var $starters    = document.getElementById('mb-starters');
-  var $typing      = document.getElementById('mb-typing');
-  var $text        = document.getElementById('mb-text');
-  var $send        = document.getElementById('mb-send');
-  var $form        = document.getElementById('mb-form');
-  var $close       = document.getElementById('mb-close');
+  var $list         = document.getElementById('mb-list');
+  var $text         = document.getElementById('mb-text');
+  var $send         = document.getElementById('mb-send');
+  var $form         = document.getElementById('mb-form');
+  var $close        = document.getElementById('mb-close');
+  var $minimize     = document.getElementById('mb-minimize');
+  var $quick        = document.getElementById('mb-quick');
+  var $quickToggle  = document.getElementById('mb-quick-toggle');
+  var $modeTabs     = document.getElementById('mb-mode-tabs');
+  var $catTabs      = document.getElementById('mb-cat-tabs');
+  var $quickChips   = document.getElementById('mb-quick-chips');
 
   if ($title) $title.textContent = TITLE;
   // ヘッダー左にアバターを差し込む (空なら非表示のまま)
@@ -65,6 +95,13 @@
   $close.addEventListener('click', function () {
     parent.postMessage({ source: 'mimamori-bot', type: 'close' }, '*');
   });
+  if ($minimize) {
+    $minimize.addEventListener('click', function () {
+      // 最小化: 親ページから見て iframe を畳む。state は localStorage に保存済みなので
+      // 次回開いた時に履歴が復元される。動作は close と同等。
+      parent.postMessage({ source: 'mimamori-bot', type: 'minimize' }, '*');
+    });
+  }
 
   // ---- API ヘルパ ----
   function apiPost(path, body) {
@@ -88,16 +125,27 @@
   }
 
   // ---- メッセージ描画 ----
-  // 各メッセージは <div class="mb-row {role}"> でラップし、
-  // assistant + AVATAR_SVG ありなら左にアバター円を並べる。
+  // ユーザー用デフォルト人物アイコン (グレー)
+  var USER_AVATAR_SVG =
+    '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+      '<path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z"/>' +
+    '</svg>';
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+  function formatTime(d) { return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+
   function appendMessage(role, text, suggestions) {
+    var wrap = document.createElement('div');
+    wrap.className = 'mb-row-wrap ' + role;
+
     var row = document.createElement('div');
     row.className = 'mb-row ' + role;
 
+    // assistant: 左にアバター
     if (role === 'assistant' && AVATAR_SVG) {
       var av = document.createElement('div');
       av.className = 'mb-msg-avatar';
-      av.innerHTML = AVATAR_SVG; // SVG は plugin 内定数由来 (XSS なし)
+      av.innerHTML = AVATAR_SVG;
       row.appendChild(av);
     }
 
@@ -122,42 +170,209 @@
       div.appendChild(s);
     }
     row.appendChild(div);
-    $list.appendChild(row);
+
+    // user: 右にアバター
+    if (role === 'user') {
+      var uav = document.createElement('div');
+      uav.className = 'mb-msg-avatar mb-user-avatar';
+      uav.innerHTML = USER_AVATAR_SVG;
+      row.appendChild(uav);
+    }
+
+    wrap.appendChild(row);
+
+    // タイムスタンプ (system 以外)
+    if (role !== 'system') {
+      var ts = document.createElement('div');
+      ts.className = 'mb-time';
+      ts.textContent = formatTime(new Date());
+      wrap.appendChild(ts);
+    }
+
+    $list.appendChild(wrap);
     $list.scrollTop = $list.scrollHeight;
   }
 
   function appendSystem(text, isError) {
+    var wrap = document.createElement('div');
+    wrap.className = 'mb-row-wrap system';
     var row = document.createElement('div');
     row.className = 'mb-row system';
     var div = document.createElement('div');
     div.className = 'mb-msg system' + (isError ? ' mb-error' : '');
     div.textContent = text;
     row.appendChild(div);
-    $list.appendChild(row);
+    wrap.appendChild(row);
+    $list.appendChild(wrap);
     $list.scrollTop = $list.scrollHeight;
   }
 
-  function renderStarters(arr) {
-    $starters.innerHTML = '';
-    (arr || []).forEach(function (s) {
+  // タイピング3点アニメ (アシスタント側の吹き出しとして表示)
+  var $typingRow = null;
+  function showTyping() {
+    if ($typingRow) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'mb-row-wrap assistant mb-typing-wrap';
+    var row = document.createElement('div');
+    row.className = 'mb-row assistant';
+    if (AVATAR_SVG) {
+      var av = document.createElement('div');
+      av.className = 'mb-msg-avatar';
+      av.innerHTML = AVATAR_SVG;
+      row.appendChild(av);
+    }
+    var bubble = document.createElement('div');
+    bubble.className = 'mb-msg assistant mb-typing-bubble';
+    bubble.innerHTML = '<span></span><span></span><span></span>';
+    row.appendChild(bubble);
+    wrap.appendChild(row);
+    $list.appendChild(wrap);
+    $typingRow = wrap;
+    $list.scrollTop = $list.scrollHeight;
+  }
+  function hideTyping() {
+    if ($typingRow && $typingRow.parentNode) {
+      $typingRow.parentNode.removeChild($typingRow);
+    }
+    $typingRow = null;
+  }
+
+  // ---- 質問例パネル (2階層タブ + チップ) ----
+  // モード × カテゴリの 2D マトリクス。初期はビルトインのデフォルトを使い、
+  // テナント設定 (starters) が来たら beginner.status を上書きする。
+  var DEFAULT_QUICK = {
+    modes: [
+      { key: 'beginner', label: '初心者向け' },
+      { key: 'normal',   label: '通常' }
+    ],
+    categories: [
+      { key: 'status',  label: '今どうなってる？' },
+      { key: 'next',    label: '次に何する？' },
+      { key: 'problem', label: 'うまくいかない…' }
+    ],
+    questions: {
+      beginner: {
+        status: [
+          '今、いちばん大事なことを1つだけ教えて',
+          '今の状況は良い？悪い？かんたんに教えて',
+          '良いところと気をつけたいところを1つずつ教えて',
+          '前回と比べて、何が変わった？（短く）'
+        ],
+        next: [
+          '次にやるべきことを1つだけ教えて',
+          '初心者でもできる小さな一歩を3つ教えて',
+          '今いちばん優先する作業は？',
+          '今週中にできる改善案は？'
+        ],
+        problem: [
+          'うまくいっていない箇所はどこ？',
+          '原因を、専門用語を使わずに教えて',
+          '小さく試せる対策はある？',
+          '迷っている時にやるべきことを教えて'
+        ]
+      },
+      normal: {
+        status: [
+          'サービスの全体像をまとめて',
+          '主要な指標を3行で教えて',
+          '直近の変化を教えて',
+          '注意点はある？'
+        ],
+        next: [
+          '次の30日でやるべき施策を3つ提案して',
+          '優先度の高いタスクを並べて',
+          '効果が出やすい打ち手は？',
+          'リソースが少ない場合の進め方は？'
+        ],
+        problem: [
+          '直近の不調要因を分析して',
+          'ボトルネックを特定して',
+          '改善案を効果順に並べて',
+          '想定リスクと対処を整理して'
+        ]
+      }
+    }
+  };
+  var quickData   = JSON.parse(JSON.stringify(DEFAULT_QUICK));
+  var currentMode = 'beginner';
+  var currentCat  = 'status';
+  var quickOpen   = true;
+
+  function renderModeTabs() {
+    $modeTabs.innerHTML = '';
+    quickData.modes.forEach(function (m) {
       var b = document.createElement('button');
-      b.className = 'mb-starter';
       b.type = 'button';
-      b.textContent = s;
+      b.className = 'mb-mode-tab' + (m.key === currentMode ? ' active' : '');
+      b.textContent = m.label;
       b.addEventListener('click', function () {
-        $text.value = s;
-        $form.requestSubmit();
+        if (currentMode === m.key) return;
+        currentMode = m.key;
+        renderModeTabs();
+        renderQuickChips();
       });
-      $starters.appendChild(b);
+      $modeTabs.appendChild(b);
     });
   }
+  function renderCatTabs() {
+    $catTabs.innerHTML = '';
+    quickData.categories.forEach(function (c) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mb-cat-tab' + (c.key === currentCat ? ' active' : '');
+      b.textContent = c.label;
+      b.addEventListener('click', function () {
+        if (currentCat === c.key) return;
+        currentCat = c.key;
+        renderCatTabs();
+        renderQuickChips();
+      });
+      $catTabs.appendChild(b);
+    });
+  }
+  function renderQuickChips() {
+    $quickChips.innerHTML = '';
+    var qs = ((quickData.questions[currentMode] || {})[currentCat]) || [];
+    qs.forEach(function (q) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mb-quick-chip';
+      b.textContent = q;
+      b.addEventListener('click', function () {
+        $text.value = q;
+        $form.requestSubmit();
+      });
+      $quickChips.appendChild(b);
+    });
+  }
+  function setQuickOpen(open) {
+    quickOpen = open;
+    $quick.classList.toggle('mb-quick-closed', !open);
+    $quickToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    var arrow = $quickToggle.querySelector('.mb-quick-arrow');
+    if (arrow) arrow.textContent = open ? '▲' : '▼';
+  }
+  $quickToggle.addEventListener('click', function () { setQuickOpen(!quickOpen); });
+
+  function applyStartersToQuick(starters) {
+    // テナント設定の starters があれば beginner.status を差し替え
+    if (starters && starters.length) {
+      quickData.questions.beginner.status = starters.slice(0, 6);
+      if (currentMode === 'beginner' && currentCat === 'status') renderQuickChips();
+    }
+  }
+
+  // 初回描画
+  renderModeTabs();
+  renderCatTabs();
+  renderQuickChips();
 
   // ---- セッション開始 ----
   var FALLBACK_WELCOME = 'こんにちは。お気軽にご質問ください。';
 
   function renderIntro(welcome, starters) {
     appendMessage('assistant', welcome || FALLBACK_WELCOME);
-    renderStarters(starters || []);
+    applyStartersToQuick(starters || []);
   }
 
   // 初期化フロー専用: イントロ (welcome + starters) を描画してセッションを返す。
@@ -281,25 +496,24 @@
     if (!msg) return;
     playSendSound();
     clearInput();
-    $starters.innerHTML = '';
     appendMessage('user', msg);
     $send.disabled = true;
-    $typing.hidden = false;
+    showTyping();
 
     ensureSession()
       .then(function (sess) {
         return apiPost('/message', { session_uuid: sess.uuid, message: msg, page_url: location.href });
       })
       .then(function (r) {
-        $typing.hidden = true;
+        hideTyping();
         $send.disabled = false;
         appendMessage('assistant', r.reply || '...', r.suggested_actions || []);
       })
       .catch(function (err) {
-        $typing.hidden = true;
+        hideTyping();
         $send.disabled = false;
-        var msg = (err && err.message) || 'エラーが発生しました。しばらくしてからお試しください。';
-        appendSystem(msg, true);
+        var emsg = (err && err.message) || 'エラーが発生しました。しばらくしてからお試しください。';
+        appendSystem(emsg, true);
       });
   });
 
