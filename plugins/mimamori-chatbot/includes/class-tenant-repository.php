@@ -135,6 +135,8 @@ class Mimamori_Bot_Tenant_Repository {
 			'fab_icon_url', 'fab_bg_color',
 			'fab_offset_x', 'fab_offset_y',
 			'fab_offset_x_sp', 'fab_offset_y_sp',
+			// 初期メッセージ
+			'welcome_message',
 		];
 		$int_fields = [
 			'rate_limit_rpm', 'monthly_budget_jpy',
@@ -241,6 +243,23 @@ class Mimamori_Bot_Tenant_Repository {
 
 	public static function is_valid_color( string $v ): bool {
 		return (bool) preg_match( '/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $v );
+	}
+
+	/**
+	 * 初期メッセージのデフォルト。
+	 * テナント側で welcome_message を空にした場合のフォールバックとして使用。
+	 */
+	public static function default_welcome_message(): string {
+		return "こんにちは！👋\nサービス内容・料金・対応エリアなど、お気軽にお尋ねください。\n担当者への直接のご相談もご案内できます。";
+	}
+
+	/**
+	 * 表示用に解決された初期メッセージを返す。
+	 * テナントが welcome_message を設定していればそれを、空ならデフォルトを返す。
+	 */
+	public static function resolve_welcome_message( array $tenant ): string {
+		$msg = trim( (string) ( $tenant['welcome_message'] ?? '' ) );
+		return $msg !== '' ? $msg : self::default_welcome_message();
 	}
 
 	public static function default_system_prompt(): string {

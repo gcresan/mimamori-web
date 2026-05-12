@@ -123,6 +123,7 @@ class Mimamori_Bot_Public_API {
 			'cta_url_quote'     => $tenant['cta_url_quote'] ?? null,
 			'cta_url_contact'   => $tenant['cta_url_contact'] ?? null,
 			'starters'          => $starters,
+			'welcome_message'   => Mimamori_Bot_Tenant_Repository::resolve_welcome_message( $tenant ),
 		] );
 	}
 

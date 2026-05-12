@@ -216,6 +216,13 @@ class Mimamori_Bot_Settings_Page {
 			echo '</td></tr>';
 		}
 
+		echo '<tr><th><label for="welcome_message">初期メッセージ</label></th><td>';
+		$welcome_default = "こんにちは！👋\nサービス内容・料金・対応エリアなど、お気軽にお尋ねください。\n担当者への直接のご相談もご案内できます。";
+		$welcome_val     = (string) ( $tenant['welcome_message'] ?? '' );
+		echo '<textarea id="welcome_message" name="welcome_message" rows="4" cols="80" maxlength="500" placeholder="' . esc_attr( $welcome_default ) . '">' . esc_textarea( $welcome_val ) . '</textarea>';
+		echo '<p class="description">チャットを開いた最初に表示する案内文。改行可、200字程度推奨、絵文字1個まで。空欄でデフォルト文 (プレースホルダ参照)。</p>';
+		echo '</td></tr>';
+
 		echo '<tr><th><label for="system_prompt">システム指示 (プロンプト)</label></th><td>';
 		$sp = (string) ( $tenant['system_prompt'] ?? '' );
 		echo '<textarea id="system_prompt" name="system_prompt" rows="8" cols="80" style="font-family:monospace">' . esc_textarea( $sp ) . '</textarea>';
@@ -367,6 +374,15 @@ class Mimamori_Bot_Settings_Page {
 			'system_prompt'      => isset( $_POST['system_prompt'] ) ? (string) wp_unslash( $_POST['system_prompt'] ) : '',
 			'status'             => $status,
 		];
+
+		// 初期メッセージ (改行は保持、500字で切り詰め)
+		if ( isset( $_POST['welcome_message'] ) ) {
+			$welcome = (string) wp_unslash( $_POST['welcome_message'] );
+			$welcome = wp_check_invalid_utf8( $welcome );
+			// HTMLは禁止（タグ除去）
+			$welcome = wp_strip_all_tags( $welcome );
+			$fields['welcome_message'] = mb_substr( trim( $welcome ), 0, 500 );
+		}
 
 		// 見た目カスタマイズ — タイトル / カラー / FAB
 		if ( isset( $_POST['title_text'] ) ) {

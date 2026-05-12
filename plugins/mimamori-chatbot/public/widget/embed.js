@@ -139,7 +139,11 @@
       session = { uuid: r.session_uuid, persona: r.persona, starters: r.starters || [] };
       try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
       renderStarters(session.starters);
-      appendSystem('AIアシスタントです。お気軽にどうぞ。');
+      // 初期メッセージ (テナント側で welcome_message を設定可、空ならサーバー側でデフォルトに解決済み)
+      var welcome = (r && typeof r.welcome_message === 'string' && r.welcome_message.trim() !== '')
+        ? r.welcome_message
+        : 'こんにちは。お気軽にご質問ください。';
+      appendMessage('assistant', welcome);
       return session;
     });
   }

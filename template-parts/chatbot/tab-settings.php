@@ -133,6 +133,19 @@ if ( ! defined( 'ABSPATH' ) ) exit;
             </div>
         </div>
 
+        <h3 style="margin-top:28px;padding-top:18px;border-top:1px solid #e5e7eb">💬 初期メッセージ</h3>
+        <p class="description" style="margin-bottom:16px">チャットを開いた時に最初に表示する案内文です。空欄にするとデフォルト文が表示されます。</p>
+
+        <div class="mb-form-group">
+            <label for="welcome_message">初期メッセージ</label>
+            <?php
+            $welcome_default = "こんにちは！👋\nサービス内容・料金・対応エリアなど、お気軽にお尋ねください。\n担当者への直接のご相談もご案内できます。";
+            $welcome_value   = (string) ( $tenant['welcome_message'] ?? '' );
+            ?>
+            <textarea id="welcome_message" name="welcome_message" rows="4" maxlength="500" placeholder="<?php echo esc_attr( $welcome_default ); ?>"><?php echo esc_textarea( $welcome_value ); ?></textarea>
+            <p class="description">改行可。2〜3行・全体で200字以内が目安です。装飾は絵文字1個まで。空欄ならデフォルト文 (上のプレースホルダ) が使われます。</p>
+        </div>
+
         <div class="mb-form-group">
             <label for="cta_url_quote">見積もりCTA URL</label>
             <input type="url" id="cta_url_quote" name="cta_url_quote" value="<?php echo esc_attr( (string) ( $tenant['cta_url_quote'] ?? '' ) ); ?>" placeholder="https://example.com/quote">
