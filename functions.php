@@ -9511,6 +9511,70 @@ function gcrev_save_payment_completed_field( int $user_id ) {
 }
 
 // --------------------------------------------------
+// WP管理画面 — オプション機能（チャットボット）チェックボックス
+// 決済ステータス直後に表示。ONにするとそのユーザーは
+// みまもりウェブ /chatbot/ にアクセス可能になる。
+// --------------------------------------------------
+add_action( 'edit_user_profile', 'gcrev_render_chatbot_option_field' );
+add_action( 'show_user_profile', 'gcrev_render_chatbot_option_field' );
+add_action( 'user_new_form',     'gcrev_render_chatbot_option_field' );
+
+function gcrev_render_chatbot_option_field( $user ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    $is_new = ! ( $user instanceof WP_User );
+    if ( ! $is_new && user_can( $user->ID, 'manage_options' ) ) {
+        return;
+    }
+
+    $is_enabled = $is_new ? false : ( get_user_meta( $user->ID, 'mimamori_bot_enabled', true ) === '1' );
+    ?>
+    <h3>オプション機能</h3>
+    <table class="form-table" role="presentation">
+        <tr>
+            <th><label for="mimamori_bot_enabled">チャットボット機能</label></th>
+            <td>
+                <label>
+                    <input type="checkbox"
+                           id="mimamori_bot_enabled"
+                           name="mimamori_bot_enabled"
+                           value="1"
+                           <?php checked( $is_enabled ); ?>>
+                    AIチャットボット機能を有効化する
+                </label>
+                <p class="description">
+                    ONにすると、このユーザーのみまもりウェブ管理画面に「チャットボット」メニューが表示され、<br>
+                    クライアントサイトに埋め込めるAIチャットボットの設定・ナレッジ管理・分析が利用可能になります。<br>
+                    ※ 別途、運営者がテナント発行・オーナー割当を行う必要があります。<br>
+                    ※ OFFに戻してもナレッジやFAQのデータは保持されます（再ONで復元可能）。
+                </p>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+
+add_action( 'edit_user_profile_update', 'gcrev_save_chatbot_option_field' );
+add_action( 'personal_options_update',  'gcrev_save_chatbot_option_field' );
+add_action( 'user_register',            'gcrev_save_chatbot_option_field' );
+
+function gcrev_save_chatbot_option_field( int $user_id ) {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    if ( user_can( $user_id, 'manage_options' ) ) {
+        return;
+    }
+
+    if ( ! empty( $_POST['mimamori_bot_enabled'] ) ) {
+        update_user_meta( $user_id, 'mimamori_bot_enabled', '1' );
+    } else {
+        delete_user_meta( $user_id, 'mimamori_bot_enabled' );
+    }
+}
+
+// --------------------------------------------------
 // WP管理画面 — 決済チェックボックスの保存処理（UI非表示: 2026-03-18）
 // --------------------------------------------------
 // add_action( 'edit_user_profile_update', 'gcrev_save_payment_status_fields' );
