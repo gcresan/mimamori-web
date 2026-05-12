@@ -47,15 +47,31 @@
 
   function apiFetch(url, opts) {
     var options = opts || {};
-    var headers = { 'X-WP-Nonce': nonce };
+    var headers = { 'X-WP-Nonce': nonce, 'Accept': 'application/json' };
     if (options.method === 'POST') {
       headers['Content-Type'] = 'application/json';
     }
     return fetch(url, {
-      method:  options.method || 'GET',
-      headers: headers,
-      body:    options.body || undefined
-    }).then(function (r) { return r.json(); });
+      method:      options.method || 'GET',
+      headers:     headers,
+      credentials: 'same-origin',
+      body:        options.body || undefined
+    }).then(function (r) {
+      // 非2xxはまずテキスト取得→詳細を例外メッセージへ
+      if (!r.ok) {
+        return r.text().then(function (txt) {
+          var snippet = (txt || '').slice(0, 200).replace(/\s+/g, ' ');
+          throw new Error('HTTP ' + r.status + ' — ' + snippet);
+        });
+      }
+      return r.text().then(function (txt) {
+        if (!txt) return {};
+        try { return JSON.parse(txt); }
+        catch (e) {
+          throw new Error('JSON parse error — ' + (txt || '').slice(0, 200));
+        }
+      });
+    });
   }
 
   /* ============================
@@ -111,8 +127,12 @@
 
         listEl.innerHTML = html;
       })
-      .catch(function () {
-        listEl.innerHTML = '<div class="updates-empty">\u8aad\u307f\u8fbc\u307f\u306b\u5931\u6557\u3057\u307e\u3057\u305f</div>';
+      .catch(function (err) {
+        if (window.console && console.error) {
+          console.error('[updates-bell] fetchUpdates failed:', err);
+        }
+        var msg = (err && err.message) ? err.message : '\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a8\u30e9\u30fc';
+        listEl.innerHTML = '<div class="updates-empty">\u8aad\u307f\u8fbc\u307f\u306b\u5931\u6557\u3057\u307e\u3057\u305f<br><span style="font-size:11px;color:#9ca3af;display:block;margin-top:4px">' + escapeHtml(msg) + '</span></div>';
       });
   }
 
