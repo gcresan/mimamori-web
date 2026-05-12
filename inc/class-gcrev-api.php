@@ -15072,70 +15072,82 @@ PROMPT;
     /**
      * 日次自動取得のエントリポイント（Cron コールバック）
      */
-    public function auto_fetch_rankings(): void {
-        $lock_key = 'gcrev_lock_rank_fetch';
+    public function auto_fetch_rankings( string $slot = 'morning' ): void {
+        if ( ! in_array( $slot, [ 'morning', 'noon', 'evening' ], true ) ) {
+            $slot = 'morning';
+        }
+        $lock_key = 'gcrev_lock_rank_fetch_' . $slot;
         $lock_ttl = 7200; // 2h
 
-        // ロック取得
+        // ロック取得 (スロット別)
         if ( get_transient( $lock_key ) ) {
-            error_log( '[GCREV][RankTracker] Lock is active, skipping' );
+            error_log( "[GCREV][RankTracker] Lock is active for slot={$slot}, skipping" );
             return;
         }
         set_transient( $lock_key, 1, $lock_ttl );
 
         // Cron ログ開始（log_id をチャンク間で引き継ぐためTransientに保存）
         if ( class_exists( 'Gcrev_Cron_Logger' ) ) {
-            $log_id = Gcrev_Cron_Logger::start( 'rank_fetch' );
-            set_transient( 'gcrev_rank_fetch_log_id', $log_id, 7200 );
+            $log_id = Gcrev_Cron_Logger::start( 'rank_fetch_' . $slot );
+            set_transient( 'gcrev_rank_fetch_log_id_' . $slot, $log_id, 7200 );
         }
 
         global $wpdb;
         $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
 
-        // 事前見積もり
-        $total_keywords = (int) $wpdb->get_var(
-            "SELECT COUNT(*) FROM {$kw_table} WHERE enabled = 1 AND target_domain != ''"
-        );
+        // 事前見積もり (該当スロット対象のみ)
+        $total_keywords = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$kw_table}
+              WHERE enabled = 1 AND target_domain != ''
+                AND FIND_IN_SET(%s, fetch_times) > 0",
+            $slot
+        ) );
         $api_calls = $total_keywords * 2; // desktop + mobile
-        error_log( "[GCREV][RankTracker] Starting daily fetch: {$total_keywords} keywords, estimated {$api_calls} API calls" );
+        error_log( "[GCREV][RankTracker] Starting fetch (slot={$slot}): {$total_keywords} keywords, estimated {$api_calls} API calls" );
 
-        // チャンク処理開始
-        wp_schedule_single_event( time() + 5, 'gcrev_rank_fetch_chunk_event', [ 0, self::RANK_FETCH_CHUNK_LIMIT ] );
+        // チャンク処理開始 (3引数版: offset, limit, slot)
+        wp_schedule_single_event( time() + 5, 'gcrev_rank_fetch_chunk_event', [ 0, self::RANK_FETCH_CHUNK_LIMIT, $slot ] );
     }
 
     /**
      * チャンク処理コールバック（5ユーザーずつ）
      */
-    public function rank_fetch_chunk( int $offset, int $limit ): void {
+    public function rank_fetch_chunk( int $offset, int $limit, string $slot = 'morning' ): void {
+        if ( ! in_array( $slot, [ 'morning', 'noon', 'evening' ], true ) ) {
+            $slot = 'morning';
+        }
         global $wpdb;
 
         $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
         $res_table = $wpdb->prefix . 'gcrev_rank_results';
+        $lock_key  = 'gcrev_lock_rank_fetch_' . $slot;
+        $log_key   = 'gcrev_rank_fetch_log_id_' . $slot;
 
-        // 有効キーワードを持つユーザーを取得（チャンク）
+        // 有効キーワードを持つユーザーを取得（チャンク, slot 対象のみ）
         $user_ids = $wpdb->get_col( $wpdb->prepare(
             "SELECT DISTINCT user_id FROM {$kw_table}
              WHERE enabled = 1 AND target_domain != ''
+               AND FIND_IN_SET(%s, fetch_times) > 0
              ORDER BY user_id ASC
              LIMIT %d OFFSET %d",
-            $limit, $offset
+            $slot, $limit, $offset
         ) );
 
         if ( empty( $user_ids ) ) {
             // 完了
-            delete_transient( 'gcrev_lock_rank_fetch' );
-            $log_id = (int) get_transient( 'gcrev_rank_fetch_log_id' );
+            delete_transient( $lock_key );
+            $log_id = (int) get_transient( $log_key );
             if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
                 Gcrev_Cron_Logger::finish( $log_id );
-                delete_transient( 'gcrev_rank_fetch_log_id' );
+                delete_transient( $log_key );
             }
-            error_log( '[GCREV][RankTracker] Daily fetch completed' );
+            error_log( "[GCREV][RankTracker] Fetch completed (slot={$slot})" );
             return;
         }
 
         if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
-            error_log( '[GCREV][RankTracker] DataForSEO not configured, aborting' );
-            delete_transient( 'gcrev_lock_rank_fetch' );
+            error_log( "[GCREV][RankTracker] DataForSEO not configured, aborting (slot={$slot})" );
+            delete_transient( $lock_key );
             return;
         }
 
@@ -15149,22 +15161,23 @@ PROMPT;
             $keywords = $wpdb->get_results( $wpdb->prepare(
                 "SELECT * FROM {$kw_table}
                  WHERE user_id = %d AND enabled = 1 AND target_domain != ''
+                   AND FIND_IN_SET(%s, fetch_times) > 0
                  ORDER BY sort_order ASC, id ASC",
-                $uid
+                $uid, $slot
             ), ARRAY_A );
 
             foreach ( $keywords as $kw ) {
                 $kw_id = (int) $kw['id'];
 
-                // 日次重複チェック（当日分が既にあればスキップ）
+                // 日次×スロット重複チェック（当日 + 同スロット分が既にあればスキップ）
                 $already = $wpdb->get_var( $wpdb->prepare(
                     "SELECT COUNT(*) FROM {$res_table}
-                     WHERE keyword_id = %d AND fetch_date = %s",
-                    $kw_id, $fetch_date
+                     WHERE keyword_id = %d AND fetch_date = %s AND fetch_slot = %s",
+                    $kw_id, $fetch_date, $slot
                 ) );
 
                 if ( (int) $already > 0 ) {
-                    continue; // 本日分は取得済み
+                    continue; // 本日同スロット分は取得済み
                 }
 
                 // DataForSEO API 呼び出し
@@ -15175,10 +15188,10 @@ PROMPT;
                     $kw['language_code']
                 );
 
-                $this->save_rank_results( $kw, $results );
+                $this->save_rank_results( $kw, $results, $slot );
             }
 
-            $log_id = (int) get_transient( 'gcrev_rank_fetch_log_id' );
+            $log_id = (int) get_transient( $log_key );
             if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
                 Gcrev_Cron_Logger::log_user( $log_id, $uid, 'ok' );
             }
@@ -15186,8 +15199,8 @@ PROMPT;
 
         // 次のチャンクをスケジュール
         $next_offset = $offset + $limit;
-        wp_schedule_single_event( time() + 10, 'gcrev_rank_fetch_chunk_event', [ $next_offset, $limit ] );
-        error_log( "[GCREV][RankTracker] Chunk done (offset={$offset}), next scheduled at offset={$next_offset}" );
+        wp_schedule_single_event( time() + 10, 'gcrev_rank_fetch_chunk_event', [ $next_offset, $limit, $slot ] );
+        error_log( "[GCREV][RankTracker] Chunk done (offset={$offset}, slot={$slot}), next scheduled at offset={$next_offset}" );
     }
 
     // =========================================================
@@ -15202,7 +15215,10 @@ PROMPT;
      * @param string $fetch_mode 'weekly_batch' | 'manual_live'
      * @return array 保存結果
      */
-    private function save_rank_results( array $kw, array $results, string $fetch_mode = 'weekly_batch' ): array {
+    private function save_rank_results( array $kw, array $results, string $fetch_slot = 'morning', string $fetch_mode = 'weekly_batch' ): array {
+        if ( ! in_array( $fetch_slot, [ 'morning', 'noon', 'evening' ], true ) ) {
+            $fetch_slot = 'morning';
+        }
         global $wpdb;
 
         $res_table   = $wpdb->prefix . 'gcrev_rank_results';
@@ -15230,8 +15246,8 @@ PROMPT;
             $sql = $wpdb->prepare(
                 "INSERT INTO {$res_table}
                  (keyword_id, user_id, device, rank_group, rank_absolute, found_url, found_domain,
-                  is_ranked, serp_type, api_source, fetch_mode, iso_year_week, fetch_date, fetched_at, created_at)
-                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s, %s, %s)
+                  is_ranked, serp_type, api_source, fetch_mode, iso_year_week, fetch_date, fetch_slot, fetched_at, created_at)
+                 VALUES (%d, %d, %s, {$rg}, {$ra}, {$url}, {$dom}, %d, %s, %s, %s, %s, %s, %s, %s, %s)
                  ON DUPLICATE KEY UPDATE
                   rank_group    = VALUES(rank_group),
                   rank_absolute = VALUES(rank_absolute),
@@ -15249,6 +15265,7 @@ PROMPT;
                 $fetch_mode,
                 $iso_week,
                 $fetch_date,
+                $fetch_slot,
                 $now,
                 $now
             );

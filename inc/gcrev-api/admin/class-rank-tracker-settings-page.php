@@ -59,6 +59,29 @@ class Gcrev_Rank_Tracker_Settings_Page {
     // POST アクション処理
     // =========================================================
 
+    /**
+     * fetch_times の入力をサニタイズして "morning,noon,evening" 形式の CSV 文字列にする。
+     * 空 or 不正値の場合は "morning" にフォールバック。
+     */
+    private static function sanitize_fetch_times( $input ): string {
+        $allowed = [ 'morning', 'noon', 'evening' ];
+        $picked  = [];
+        if ( is_array( $input ) ) {
+            foreach ( $input as $v ) {
+                $v = is_scalar( $v ) ? sanitize_key( (string) $v ) : '';
+                if ( in_array( $v, $allowed, true ) && ! in_array( $v, $picked, true ) ) {
+                    $picked[] = $v;
+                }
+            }
+        }
+        if ( empty( $picked ) ) {
+            $picked = [ 'morning' ];
+        }
+        // 並び順を固定 (morning, noon, evening の順)
+        $ordered = array_values( array_intersect( $allowed, $picked ) );
+        return implode( ',', $ordered );
+    }
+
     public function handle_actions(): void {
         if ( ! current_user_can('manage_options') ) {
             return;
@@ -95,6 +118,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
                 $target_domain = sanitize_text_field( wp_unslash( $_POST['target_domain'] ?? '' ) );
                 $location_code = absint( $_POST['location_code'] ?? 2392 );
                 $memo          = sanitize_text_field( wp_unslash( $_POST['memo'] ?? '' ) );
+                $fetch_times   = self::sanitize_fetch_times( $_POST['fetch_times'] ?? null );
 
                 if ( $keyword !== '' && $target_domain !== '' && $user_id > 0 ) {
                     $wpdb->insert( $kw_table, [
@@ -106,6 +130,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
                         'enabled'       => 1,
                         'sort_order'    => 0,
                         'memo'          => $memo,
+                        'fetch_times'   => $fetch_times,
                         'created_at'    => $now,
                         'updated_at'    => $now,
                     ] );
@@ -119,6 +144,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
                 $target_domain = sanitize_text_field( wp_unslash( $_POST['target_domain'] ?? '' ) );
                 $location_code = absint( $_POST['location_code'] ?? 2392 );
                 $memo          = sanitize_text_field( wp_unslash( $_POST['memo'] ?? '' ) );
+                $fetch_times   = self::sanitize_fetch_times( $_POST['fetch_times'] ?? null );
 
                 if ( $kw_id > 0 && $keyword !== '' && $target_domain !== '' ) {
                     $wpdb->update( $kw_table, [
@@ -126,6 +152,7 @@ class Gcrev_Rank_Tracker_Settings_Page {
                         'target_domain' => $target_domain,
                         'location_code' => $location_code,
                         'memo'          => $memo,
+                        'fetch_times'   => $fetch_times,
                         'updated_at'    => $now,
                     ], [ 'id' => $kw_id ], null, [ '%d' ] );
                     $redirect_args['msg'] = 'updated';
@@ -524,6 +551,28 @@ class Gcrev_Rank_Tracker_Settings_Page {
                         <tr>
                             <th><label for="memo">メモ</label></th>
                             <td><input type="text" id="memo" name="memo" value="<?php echo esc_attr( $edit_kw['memo'] ?? '' ); ?>" class="regular-text"></td>
+                        </tr>
+                        <tr>
+                            <th>取得時間帯</th>
+                            <td>
+                                <?php
+                                $current_ft = isset( $edit_kw['fetch_times'] ) ? (string) $edit_kw['fetch_times'] : 'morning';
+                                $ft_set = array_filter( array_map( 'trim', explode( ',', $current_ft ) ) );
+                                if ( empty( $ft_set ) ) $ft_set = [ 'morning' ];
+                                $slot_labels = [
+                                    'morning' => '朝 (06:00頃)',
+                                    'noon'    => '昼 (12:00頃)',
+                                    'evening' => '夜 (18:00頃)',
+                                ];
+                                foreach ( $slot_labels as $slot_key => $slot_label ) :
+                                ?>
+                                    <label style="margin-right:18px;">
+                                        <input type="checkbox" name="fetch_times[]" value="<?php echo esc_attr( $slot_key ); ?>" <?php echo in_array( $slot_key, $ft_set, true ) ? 'checked' : ''; ?>>
+                                        <?php echo esc_html( $slot_label ); ?>
+                                    </label>
+                                <?php endforeach; ?>
+                                <p class="description">毎日この時間帯に DataForSEO 経由で順位を取得します。複数選択可。<br>※ 選択数だけ API コストが増加します (例: 全選択で1日3回 × デバイス2種類)。</p>
+                            </td>
                         </tr>
                     </table>
 

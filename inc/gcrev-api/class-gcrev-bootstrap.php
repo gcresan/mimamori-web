@@ -23,6 +23,9 @@ class Gcrev_Bootstrap {
 
         // 順位トラッキング（日次）
         add_action('gcrev_rank_fetch_daily_event', [__CLASS__, 'on_rank_fetch_daily_event']);
+        add_action('gcrev_rank_fetch_slot_morning_event', [__CLASS__, 'on_rank_fetch_slot_morning']);
+        add_action('gcrev_rank_fetch_slot_noon_event',    [__CLASS__, 'on_rank_fetch_slot_noon']);
+        add_action('gcrev_rank_fetch_slot_evening_event', [__CLASS__, 'on_rank_fetch_slot_evening']);
         add_action('gcrev_rank_fetch_weekly_event', [__CLASS__, 'on_rank_fetch_daily_event']); // 後方互換
         add_action('gcrev_rank_fetch_chunk_event', [__CLASS__, 'on_rank_fetch_chunk_event'], 10, 2);
 
@@ -486,21 +489,43 @@ class Gcrev_Bootstrap {
     }
 
     /**
-     * 順位トラッキング — 旧日次フェッチ（後方互換: 週次に転送）
+     * 順位トラッキング — 旧日次フェッチ（後方互換）。
+     * 新 3スロット (morning/noon/evening) cron に移行済みなので、
+     * このハンドラは「morning スロット相当」として動作する。
      */
     public static function on_rank_fetch_daily_event(): void {
-        error_log('[GCREV] gcrev_rank_fetch_daily_event triggered');
+        error_log('[GCREV] gcrev_rank_fetch_daily_event triggered (legacy → morning slot)');
         $api = new Gcrev_Insight_API(false);
-        $api->auto_fetch_rankings();
+        $api->auto_fetch_rankings('morning');
+    }
+
+    public static function on_rank_fetch_slot_morning(): void {
+        error_log('[GCREV] gcrev_rank_fetch_slot_morning_event triggered');
+        $api = new Gcrev_Insight_API(false);
+        $api->auto_fetch_rankings('morning');
+    }
+
+    public static function on_rank_fetch_slot_noon(): void {
+        error_log('[GCREV] gcrev_rank_fetch_slot_noon_event triggered');
+        $api = new Gcrev_Insight_API(false);
+        $api->auto_fetch_rankings('noon');
+    }
+
+    public static function on_rank_fetch_slot_evening(): void {
+        error_log('[GCREV] gcrev_rank_fetch_slot_evening_event triggered');
+        $api = new Gcrev_Insight_API(false);
+        $api->auto_fetch_rankings('evening');
     }
 
     /**
      * 順位トラッキング — チャンクフェッチイベント
+     * 第3引数は時間帯スロット (morning|noon|evening)。後方互換のため省略可。
      */
-    public static function on_rank_fetch_chunk_event( $offset, $limit ): void {
-        error_log("[GCREV] gcrev_rank_fetch_chunk_event triggered: offset={$offset}, limit={$limit}");
+    public static function on_rank_fetch_chunk_event( $offset, $limit, $slot = 'morning' ): void {
+        $slot = is_string( $slot ) ? $slot : 'morning';
+        error_log("[GCREV] gcrev_rank_fetch_chunk_event triggered: offset={$offset}, limit={$limit}, slot={$slot}");
         $api = new Gcrev_Insight_API(false);
-        $api->rank_fetch_chunk( (int) $offset, (int) $limit );
+        $api->rank_fetch_chunk( (int) $offset, (int) $limit, $slot );
     }
 
     /**
@@ -866,6 +891,12 @@ class Gcrev_Bootstrap {
             wp_unschedule_event( $old_weekly_rank, 'gcrev_rank_fetch_weekly_event' );
         }
         self::schedule_daily_if_missing('gcrev_rank_fetch_daily_event', 'tomorrow 03:30:00');
+
+        // 順位トラッキング 時間帯対応: 朝/昼/夜 の3スロット
+        // 各キーワードの fetch_times に応じてそのスロットだけ取得する
+        self::schedule_daily_if_missing('gcrev_rank_fetch_slot_morning_event', 'tomorrow 06:00:00');
+        self::schedule_daily_if_missing('gcrev_rank_fetch_slot_noon_event',    'tomorrow 12:00:00');
+        self::schedule_daily_if_missing('gcrev_rank_fetch_slot_evening_event', 'tomorrow 18:00:00');
 
         // MEO 日次フェッチ（毎日 04:30）
         // 旧週次イベントを解除

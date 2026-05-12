@@ -6814,6 +6814,7 @@ function gcrev_rank_keywords_create_table(): void {
         aio_enabled TINYINT(1) NOT NULL DEFAULT 0,
         sort_order INT NOT NULL DEFAULT 0,
         memo VARCHAR(500) DEFAULT '',
+        fetch_times VARCHAR(80) NOT NULL DEFAULT 'morning',
         search_volume INT UNSIGNED NULL,
         keyword_difficulty SMALLINT UNSIGNED NULL,
         competition VARCHAR(10) NULL,
@@ -6841,6 +6842,13 @@ function gcrev_rank_keywords_create_table(): void {
         );
         update_option( 'gcrev_rank_kw_location_migrated', true );
     }
+
+    // fetch_times 既存行のバックフィル (既存キーワードは morning のみで稼働)
+    $ft_migrated = get_option( 'gcrev_rank_kw_fetch_times_migrated', false );
+    if ( ! $ft_migrated ) {
+        $wpdb->query( "UPDATE {$table} SET fetch_times = 'morning' WHERE fetch_times = '' OR fetch_times IS NULL" );
+        update_option( 'gcrev_rank_kw_fetch_times_migrated', true );
+    }
 }
 
 function gcrev_rank_results_create_table(): void {
@@ -6864,10 +6872,11 @@ function gcrev_rank_results_create_table(): void {
         fetch_mode VARCHAR(20) NOT NULL DEFAULT 'weekly_batch',
         iso_year_week CHAR(8) NOT NULL,
         fetch_date DATE NULL,
+        fetch_slot VARCHAR(16) NOT NULL DEFAULT 'morning',
         fetched_at DATETIME NOT NULL,
         created_at DATETIME NOT NULL,
         PRIMARY KEY  (id),
-        UNIQUE KEY kw_device_date (keyword_id, device, fetch_date),
+        UNIQUE KEY kw_device_date_slot (keyword_id, device, fetch_date, fetch_slot),
         KEY user_fetched (user_id, fetched_at),
         KEY keyword_id (keyword_id)
     ) {$charset_collate};";
@@ -6877,6 +6886,22 @@ function gcrev_rank_results_create_table(): void {
 
     // Migration: 旧 UNIQUE KEY kw_device_week → kw_device_date への移行
     gcrev_rank_results_migrate_to_daily();
+
+    // Migration: 旧 UNIQUE KEY kw_device_date → kw_device_date_slot へ移行
+    $slot_migrated = get_option( 'gcrev_rank_results_slot_migrated', false );
+    if ( ! $slot_migrated ) {
+        // 既存行は morning 扱い (デフォルト DEFAULT 'morning' で埋まる)
+        // 旧 UNIQUE KEY kw_device_date を削除 (dbDelta は KEY 名で識別するため明示削除)
+        $idx_exists = $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM information_schema.STATISTICS
+              WHERE table_schema = %s AND table_name = %s AND index_name = 'kw_device_date'",
+            DB_NAME, $table
+        ) );
+        if ( $idx_exists ) {
+            $wpdb->query( "ALTER TABLE {$table} DROP INDEX kw_device_date" );
+        }
+        update_option( 'gcrev_rank_results_slot_migrated', true );
+    }
 }
 
 /**
