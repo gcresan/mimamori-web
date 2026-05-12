@@ -56,6 +56,39 @@ class Mimamori_Bot_Tenant_Repository {
 	}
 
 	/**
+	 * 指定ユーザーが所有する全テナント (1ユーザー複数所有を将来許容するための内部API)。
+	 * @return array<int,array>
+	 */
+	public static function list_for_user( int $user_id, int $limit = 50 ): array {
+		global $wpdb;
+		$table = Mimamori_Bot_Installer::table_tenants();
+		$rows  = $wpdb->get_results( $wpdb->prepare(
+			"SELECT * FROM {$table} WHERE user_id = %d ORDER BY id ASC LIMIT %d",
+			$user_id, $limit
+		), ARRAY_A );
+		return array_map( [ self::class, 'hydrate' ], $rows ?: [] );
+	}
+
+	/**
+	 * 全テナント一覧。運営者 (manage_options) のみ呼び出すべき。
+	 * @return array<int,array>
+	 */
+	public static function list_all( int $limit = 200 ): array {
+		global $wpdb;
+		$table = Mimamori_Bot_Installer::table_tenants();
+		$rows  = $wpdb->get_results( $wpdb->prepare(
+			"SELECT * FROM {$table} ORDER BY id ASC LIMIT %d", $limit
+		), ARRAY_A );
+		return array_map( [ self::class, 'hydrate' ], $rows ?: [] );
+	}
+
+	public static function count_all(): int {
+		global $wpdb;
+		$table = Mimamori_Bot_Installer::table_tenants();
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table}" );
+	}
+
+	/**
 	 * 新規テナント作成。public_key / secret_key は自動生成。
 	 *
 	 * @return array 作成後のテナントレコード

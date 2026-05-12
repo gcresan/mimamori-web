@@ -16,10 +16,13 @@ class Mimamori_Bot_Faq_Page {
 
 	public static function render(): void {
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
-		$tenant = Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() );
+		$user_id = get_current_user_id();
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( $user_id );
 
 		echo '<div class="wrap">';
 		echo '<h1>FAQ管理</h1>';
+
+		Mimamori_Bot_Tenant_Context::render_switcher( $user_id, Mimamori_Bot_Admin_Menu::PAGE_SLUG_FAQ, $tenant );
 
 		if ( ! $tenant ) {
 			echo '<div class="notice notice-warning"><p>先にチャットボットの<strong>設定ページでテナントを発行</strong>してください。</p></div>';
@@ -118,7 +121,7 @@ class Mimamori_Bot_Faq_Page {
 	public static function handle_save(): void {
 		check_admin_referer( self::NONCE_SAVE );
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
-		$tenant = Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() );
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( get_current_user_id() );
 		if ( ! $tenant ) self::back( 'テナントが見つかりません。' );
 
 		$id     = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
@@ -145,7 +148,7 @@ class Mimamori_Bot_Faq_Page {
 	public static function handle_delete(): void {
 		check_admin_referer( self::NONCE_DELETE );
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
-		$tenant = Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() );
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( get_current_user_id() );
 		if ( ! $tenant ) self::back( 'テナントが見つかりません。' );
 
 		$id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;

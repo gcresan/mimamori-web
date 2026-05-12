@@ -20,10 +20,13 @@ class Mimamori_Bot_Knowledge_Page {
 
 	public static function render(): void {
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
-		$tenant = Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() );
+		$user_id = get_current_user_id();
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( $user_id );
 
 		echo '<div class="wrap">';
 		echo '<h1>ナレッジ管理</h1>';
+
+		Mimamori_Bot_Tenant_Context::render_switcher( $user_id, Mimamori_Bot_Admin_Menu::PAGE_SLUG_KNOWLEDGE, $tenant );
 
 		if ( ! $tenant ) {
 			echo '<div class="notice notice-warning"><p>先にチャットボットの<strong>設定ページでテナントを発行</strong>してください。</p></div>';
@@ -142,7 +145,7 @@ class Mimamori_Bot_Knowledge_Page {
 	public static function handle_add(): void {
 		check_admin_referer( self::NONCE_ADD );
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
-		$tenant = Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() );
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( get_current_user_id() );
 		if ( ! $tenant ) self::back( 'テナントが見つかりません。' );
 
 		$title    = sanitize_text_field( (string) ( $_POST['title'] ?? '' ) );
@@ -165,7 +168,7 @@ class Mimamori_Bot_Knowledge_Page {
 	public static function handle_upload(): void {
 		check_admin_referer( self::NONCE_UPLOAD );
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
-		$tenant = Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() );
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( get_current_user_id() );
 		if ( ! $tenant ) self::back( 'テナントが見つかりません。' );
 
 		if ( empty( $_FILES['file'] ) ) {
@@ -190,7 +193,7 @@ class Mimamori_Bot_Knowledge_Page {
 	public static function handle_reindex(): void {
 		check_admin_referer( self::NONCE_REINDEX );
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
-		$tenant = Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() );
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( get_current_user_id() );
 		if ( ! $tenant ) self::back( 'テナントが見つかりません。' );
 
 		$r1 = Mimamori_Bot_Knowledge_Repository::reindex_tenant( (int) $tenant['id'] );
@@ -207,7 +210,7 @@ class Mimamori_Bot_Knowledge_Page {
 	public static function handle_delete(): void {
 		check_admin_referer( self::NONCE_DELETE );
 		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
-		$tenant = Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() );
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( get_current_user_id() );
 		if ( ! $tenant ) self::back( 'テナントが見つかりません。' );
 
 		$id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
