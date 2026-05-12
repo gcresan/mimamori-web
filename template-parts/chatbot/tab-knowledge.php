@@ -8,6 +8,10 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 $rows = Mimamori_Bot_Knowledge_Repository::list_for_tenant( (int) $tenant['id'] );
 
+// 詳細ビュー対象 (?view=ID)
+$view_id     = isset( $_GET['view'] ) ? absint( $_GET['view'] ) : 0;
+$view_record = $view_id > 0 ? Mimamori_Bot_Knowledge_Repository::find( (int) $tenant['id'], $view_id ) : null;
+
 // 埋め込み未生成カウント
 global $wpdb;
 $ct = Mimamori_Bot_Installer::table_knowledge_chunks();
@@ -88,6 +92,66 @@ $missing_faqs = (int) $wpdb->get_var( $wpdb->prepare(
 </div>
 <?php endif; ?>
 
+<?php if ( $view_record ) :
+    $list_url = home_url( '/chatbot/?tab=knowledge' );
+    $meta     = json_decode( (string) ( $view_record['metadata'] ?? '' ), true );
+    $category = is_array( $meta ) ? (string) ( $meta['category'] ?? '' ) : '';
+    $raw_text = (string) ( $view_record['raw_text'] ?? '' );
+    $char_len = mb_strlen( $raw_text );
+
+    // チャンク一覧
+    $ct_table = Mimamori_Bot_Installer::table_knowledge_chunks();
+    $chunks   = $wpdb->get_results( $wpdb->prepare(
+        "SELECT chunk_index, content, embedding IS NOT NULL AS has_embed
+           FROM {$ct_table}
+          WHERE tenant_id = %d AND knowledge_id = %d
+          ORDER BY chunk_index ASC",
+        (int) $tenant['id'], (int) $view_record['id']
+    ), ARRAY_A );
+?>
+<div class="mb-card" id="mb-knowledge-detail">
+    <h2>📄 ナレッジ詳細 — <?php echo esc_html( (string) $view_record['title'] ); ?></h2>
+    <p style="margin-top:-8px"><a href="<?php echo esc_url( $list_url ); ?>" class="mb-btn-link">← 一覧に戻る</a></p>
+
+    <table class="mb-table" style="margin-bottom:16px">
+        <tbody>
+            <tr><th style="width:160px">ID</th><td><?php echo esc_html( (string) (int) $view_record['id'] ); ?></td></tr>
+            <tr><th>タイプ</th><td><?php echo esc_html( (string) $view_record['source_type'] ); ?><?php if ( ! empty( $view_record['mime_type'] ) ) echo ' <span style="color:#94a3b8">(' . esc_html( (string) $view_record['mime_type'] ) . ')</span>'; ?></td></tr>
+            <?php if ( $category !== '' ) : ?>
+            <tr><th>カテゴリ</th><td><?php echo esc_html( $category ); ?></td></tr>
+            <?php endif; ?>
+            <tr><th>チャンク数</th><td><?php echo esc_html( (string) (int) $view_record['chunk_count'] ); ?></td></tr>
+            <tr><th>本文文字数</th><td><?php echo esc_html( number_format( $char_len ) ); ?> 文字</td></tr>
+            <tr><th>登録日</th><td><?php echo esc_html( (string) ( $view_record['created_at'] ?? '' ) ); ?></td></tr>
+            <tr><th>更新日</th><td><?php echo esc_html( (string) ( $view_record['updated_at'] ?? '' ) ); ?></td></tr>
+        </tbody>
+    </table>
+
+    <h3>本文 (AIが参照する全文)</h3>
+    <?php if ( $raw_text === '' ) : ?>
+        <p style="color:#94a3b8">本文がありません。</p>
+    <?php else : ?>
+        <pre style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;max-height:480px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;line-height:1.7;margin:0;"><?php echo esc_html( $raw_text ); ?></pre>
+    <?php endif; ?>
+
+    <?php if ( ! empty( $chunks ) ) : ?>
+    <h3>チャンク一覧 (検索単位)</h3>
+    <p class="description" style="font-size:12px;color:#64748b;margin-top:-4px">AIは下記チャンク単位で意味検索し、関連したものだけを引用します。</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+        <?php foreach ( $chunks as $ch ) : ?>
+            <details style="border:1px solid #e5e7eb;border-radius:8px;background:#fff">
+                <summary style="cursor:pointer;padding:8px 12px;font-size:13px;color:#334155;display:flex;justify-content:space-between;align-items:center">
+                    <span>#<?php echo esc_html( (string) (int) $ch['chunk_index'] ); ?>　<span style="color:#94a3b8">(<?php echo esc_html( (string) mb_strlen( (string) $ch['content'] ) ); ?>文字)</span></span>
+                    <span style="font-size:11px;color:<?php echo $ch['has_embed'] ? '#16a34a' : '#dc2626'; ?>"><?php echo $ch['has_embed'] ? '✓ ベクトル化済' : '✗ 未ベクトル化'; ?></span>
+                </summary>
+                <pre style="margin:0;padding:10px 14px;border-top:1px solid #f1f5f9;background:#fafafa;white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12px;line-height:1.6"><?php echo esc_html( (string) $ch['content'] ); ?></pre>
+            </details>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
 <div class="mb-card">
     <h2>登録済みナレッジ (<?php echo count( $rows ); ?>件)</h2>
     <?php if ( empty( $rows ) ) : ?>
@@ -98,7 +162,8 @@ $missing_faqs = (int) $wpdb->get_var( $wpdb->prepare(
             <tbody>
             <?php foreach ( $rows as $r ) :
                 $id = (int) $r['id'];
-                $del_url = wp_nonce_url(
+                $view_url = add_query_arg( [ 'tab' => 'knowledge', 'view' => $id ], home_url( '/chatbot/' ) ) . '#mb-knowledge-detail';
+                $del_url  = wp_nonce_url(
                     add_query_arg( [
                         'action' => 'mimamori_bot_knowledge_delete',
                         'id'     => $id,
@@ -106,13 +171,17 @@ $missing_faqs = (int) $wpdb->get_var( $wpdb->prepare(
                     ], admin_url( 'admin-post.php' ) ),
                     'mimamori_bot_knowledge_delete'
                 );
+                $is_active = ( $view_id === $id );
             ?>
-                <tr>
-                    <td><strong><?php echo esc_html( (string) $r['title'] ); ?></strong></td>
+                <tr<?php echo $is_active ? ' style="background:#eff6ff"' : ''; ?>>
+                    <td><a href="<?php echo esc_url( $view_url ); ?>" style="color:#1a73e8;text-decoration:none;font-weight:600"><?php echo esc_html( (string) $r['title'] ); ?></a></td>
                     <td><?php echo esc_html( (string) $r['source_type'] ); ?></td>
                     <td><?php echo esc_html( (string) (int) $r['chunk_count'] ); ?></td>
                     <td style="font-size:12px;color:#64748b"><?php echo esc_html( (string) $r['updated_at'] ); ?></td>
-                    <td><a href="<?php echo esc_url( $del_url ); ?>" onclick="return confirm('削除しますか？関連チャンクも全て消えます。');" class="mb-btn mb-btn-danger" style="padding:4px 10px;font-size:12px">削除</a></td>
+                    <td style="white-space:nowrap">
+                        <a href="<?php echo esc_url( $view_url ); ?>" class="mb-btn mb-btn-secondary" style="padding:4px 10px;font-size:12px">📄 中身</a>
+                        <a href="<?php echo esc_url( $del_url ); ?>" onclick="return confirm('削除しますか？関連チャンクも全て消えます。');" class="mb-btn mb-btn-danger" style="padding:4px 10px;font-size:12px">削除</a>
+                    </td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

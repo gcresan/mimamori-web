@@ -77,6 +77,22 @@ $return_url = home_url( '/chatbot/?tab=' . $active_tab );
 .mb-form-group textarea { resize:vertical; min-height:80px; }
 .mb-form-group textarea.code { font-family:monospace; font-size:13px; }
 
+/* ファイル入力 — 「ファイルを選択」ボタンを mb-btn-secondary 相当に */
+.mb-form-group input[type="file"] {
+    font-size:13px; color:#475569; padding:6px 0;
+}
+.mb-form-group input[type="file"]::file-selector-button,
+.mb-form-group input[type="file"]::-webkit-file-upload-button {
+    display:inline-block; padding:8px 18px; margin-right:12px;
+    background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px;
+    font-weight:500; font-size:14px; font-family:inherit; cursor:pointer;
+    transition:background-color .15s ease, border-color .15s ease;
+}
+.mb-form-group input[type="file"]::file-selector-button:hover,
+.mb-form-group input[type="file"]::-webkit-file-upload-button:hover {
+    background:#f9fafb; border-color:#9ca3af;
+}
+
 .mb-notice { padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px; }
 .mb-notice.success { background:#ecfdf5; border:1px solid #34d399; color:#065f46; }
 .mb-notice.warning { background:#fffbeb; border:1px solid #fcd34d; color:#92400e; }
