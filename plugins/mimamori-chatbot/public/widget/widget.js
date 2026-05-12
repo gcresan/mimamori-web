@@ -246,6 +246,23 @@
       } catch (e) {}
     });
 
+    // 外側 (iframe / FAB 以外) クリックで閉じる
+    // - iframe 内クリックはクロスorigin 境界でブラウザ側がイベントを止めるので影響なし
+    // - SP では iframe が全画面なので外側クリックは発生しない (= 影響なし)
+    // - mousedown 段階で判定すると FAB の click が走る前に閉じてしまうので click 段階
+    document.addEventListener('click', function (ev) {
+      if (!opened) return;
+      var t = ev.target;
+      if (!t) return;
+      if (t === iframe || iframe.contains(t)) return;
+      if (t === fab    || fab.contains(t))    return;
+      toggle();
+    }, false);
+    // Esc でも閉じる
+    document.addEventListener('keydown', function (ev) {
+      if (opened && (ev.key === 'Escape' || ev.keyCode === 27)) toggle();
+    }, false);
+
     // iframe の遅延プリロード — 初回クリック時の待ち時間を消す
     // 1) ホスト側ページが落ち着いたら (idle) ロード開始
     // 2) FAB に hover or touchstart した時点でも (まだなら) ロード
