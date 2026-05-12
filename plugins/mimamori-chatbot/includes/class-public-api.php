@@ -175,10 +175,12 @@ class Mimamori_Bot_Public_API {
 				'on_primary' => $theme['on_primary'],
 			],
 			'fab'   => [
-				'icon_url' => $theme['fab_icon_url'],
-				'bg'       => $theme['fab_bg'],
-				'offset_x' => $theme['fab_x'],
-				'offset_y' => $theme['fab_y'],
+				'icon_url'    => $theme['fab_icon_url'],
+				'bg'          => $theme['fab_bg'],
+				'offset_x'    => $theme['fab_x'],
+				'offset_y'    => $theme['fab_y'],
+				'offset_x_sp' => $theme['fab_x_sp'],
+				'offset_y_sp' => $theme['fab_y_sp'],
 			],
 		], 200 );
 		$res->header( 'Cache-Control', 'public, max-age=60' );

@@ -89,22 +89,47 @@ if ( ! defined( 'ABSPATH' ) ) exit;
             </div>
         </div>
 
-        <div class="mb-form-group" style="display:flex;gap:24px;flex-wrap:wrap;max-width:none">
-            <div style="flex:0 0 220px">
-                <label for="fab_bg_color">アイコン背景色</label>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="color" id="fab_bg_color_picker" value="<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?: ( $tenant['theme_primary'] ?: '#2563eb' ) ) ); ?>" style="width:48px;height:36px;padding:2px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer">
-                    <input type="text" id="fab_bg_color" name="fab_bg_color" value="<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?? '' ) ); ?>" placeholder="メインカラーを使用" pattern="^#[0-9a-fA-F]{3,8}$" style="flex:1;max-width:140px;font-family:monospace">
+        <div class="mb-form-group" style="max-width:none">
+            <label for="fab_bg_color">アイコン背景色</label>
+            <div style="display:flex;gap:8px;align-items:center">
+                <input type="color" id="fab_bg_color_picker" value="<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?: ( $tenant['theme_primary'] ?: '#2563eb' ) ) ); ?>" style="width:48px;height:36px;padding:2px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer">
+                <input type="text" id="fab_bg_color" name="fab_bg_color" value="<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?? '' ) ); ?>" placeholder="メインカラーを使用" pattern="^#[0-9a-fA-F]{3,8}$" style="flex:0 0 200px;max-width:200px;font-family:monospace">
+            </div>
+            <p class="description">空欄でメインカラーと同じ</p>
+        </div>
+
+        <div class="mb-form-group" style="max-width:none">
+            <label style="font-weight:600">アイコン表示位置</label>
+            <p class="description" style="margin-bottom:10px">画面の右下を基準にした距離。PC・スマホで個別に設定できます。スマホの値を空欄にすると PC と同じ値が使われます。</p>
+
+            <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:12px">
+                <div style="flex:0 0 320px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px">
+                    <div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:10px">🖥️ PC (画面幅 601px 以上)</div>
+                    <div style="display:flex;gap:12px">
+                        <div style="flex:1">
+                            <label for="fab_offset_x" style="font-size:12px">右からの距離 (px)</label>
+                            <input type="number" id="fab_offset_x" name="fab_offset_x" min="0" max="200" value="<?php echo esc_attr( (string) ( $tenant['fab_offset_x'] ?? 20 ) ); ?>" style="width:100%">
+                        </div>
+                        <div style="flex:1">
+                            <label for="fab_offset_y" style="font-size:12px">下からの距離 (px)</label>
+                            <input type="number" id="fab_offset_y" name="fab_offset_y" min="0" max="200" value="<?php echo esc_attr( (string) ( $tenant['fab_offset_y'] ?? 20 ) ); ?>" style="width:100%">
+                        </div>
+                    </div>
                 </div>
-                <p class="description">空欄でメインカラーと同じ</p>
-            </div>
-            <div style="flex:0 0 160px">
-                <label for="fab_offset_x">右からの距離 (px)</label>
-                <input type="number" id="fab_offset_x" name="fab_offset_x" min="0" max="200" value="<?php echo esc_attr( (string) ( $tenant['fab_offset_x'] ?? 20 ) ); ?>" style="width:100%">
-            </div>
-            <div style="flex:0 0 160px">
-                <label for="fab_offset_y">下からの距離 (px)</label>
-                <input type="number" id="fab_offset_y" name="fab_offset_y" min="0" max="200" value="<?php echo esc_attr( (string) ( $tenant['fab_offset_y'] ?? 20 ) ); ?>" style="width:100%">
+
+                <div style="flex:0 0 320px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px">
+                    <div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:10px">📱 スマホ (画面幅 600px 以下)</div>
+                    <div style="display:flex;gap:12px">
+                        <div style="flex:1">
+                            <label for="fab_offset_x_sp" style="font-size:12px">右からの距離 (px)</label>
+                            <input type="number" id="fab_offset_x_sp" name="fab_offset_x_sp" min="0" max="200" value="<?php echo esc_attr( $tenant['fab_offset_x_sp'] === null ? '' : (string) $tenant['fab_offset_x_sp'] ); ?>" placeholder="PC値と同じ" style="width:100%">
+                        </div>
+                        <div style="flex:1">
+                            <label for="fab_offset_y_sp" style="font-size:12px">下からの距離 (px)</label>
+                            <input type="number" id="fab_offset_y_sp" name="fab_offset_y_sp" min="0" max="200" value="<?php echo esc_attr( $tenant['fab_offset_y_sp'] === null ? '' : (string) $tenant['fab_offset_y_sp'] ); ?>" placeholder="PC値と同じ" style="width:100%">
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

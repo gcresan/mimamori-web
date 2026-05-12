@@ -58,6 +58,8 @@ class Mimamori_Bot_Installer {
 			fab_bg_color VARCHAR(20) NULL,
 			fab_offset_x SMALLINT NOT NULL DEFAULT 20,
 			fab_offset_y SMALLINT NOT NULL DEFAULT 20,
+			fab_offset_x_sp SMALLINT NULL,
+			fab_offset_y_sp SMALLINT NULL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),

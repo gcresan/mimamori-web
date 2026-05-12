@@ -43,29 +43,39 @@
   var WRAP_ID = 'mimamori-bot-wrap';
 
   // デフォルト見た目 (config 取得前に FAB を即座に出すため)
+  // SP 値が未設定なら PC 値にフォールバック
   var fabConfig = {
     bg: '#2563eb',
     offset_x: 20,
     offset_y: 20,
+    offset_x_sp: 20,
+    offset_y_sp: 20,
     icon_url: ''
   };
 
   function applyFabStyles() {
     var st = document.getElementById('mimamori-bot-style');
     if (!st) return;
+    var x   = fabConfig.offset_x,    y   = fabConfig.offset_y;
+    var xsp = fabConfig.offset_x_sp, ysp = fabConfig.offset_y_sp;
     var css =
-      '#' + FAB_ID + '{position:fixed;right:' + fabConfig.offset_x + 'px;bottom:' + fabConfig.offset_y + 'px;' +
+      // PC (デフォルト)
+      '#' + FAB_ID + '{position:fixed;right:' + x + 'px;bottom:' + y + 'px;' +
       'width:56px;height:56px;border-radius:28px;' +
       'background:' + fabConfig.bg + ';color:#fff;display:flex;align-items:center;justify-content:center;' +
       'box-shadow:0 6px 20px rgba(0,0,0,.18);cursor:pointer;z-index:2147483646;border:none;font:600 24px/1 system-ui;padding:0;overflow:hidden}' +
       '#' + FAB_ID + ':hover{filter:brightness(.92)}' +
       '#' + FAB_ID + ' img{width:100%;height:100%;object-fit:contain;padding:10px;display:block}' +
-      '#' + WRAP_ID + '{position:fixed;right:' + fabConfig.offset_x + 'px;bottom:' + (fabConfig.offset_y + 68) + 'px;' +
+      '#' + WRAP_ID + '{position:fixed;right:' + x + 'px;bottom:' + (y + 68) + 'px;' +
       'width:380px;max-width:calc(100vw - 24px);' +
       'height:600px;max-height:calc(100vh - 120px);border:0;border-radius:14px;overflow:hidden;' +
       'box-shadow:0 12px 40px rgba(0,0,0,.22);z-index:2147483647;background:#fff;display:none}' +
       '#' + WRAP_ID + '.open{display:block}' +
-      '@media (max-width:600px){#' + WRAP_ID + '{right:0;bottom:0;width:100vw;height:100vh;max-height:100vh;border-radius:0}}';
+      // SP 上書き — FAB 位置は SP 用、ウィンドウは従来どおり全画面
+      '@media (max-width:600px){' +
+        '#' + FAB_ID + '{right:' + xsp + 'px;bottom:' + ysp + 'px}' +
+        '#' + WRAP_ID + '{right:0;bottom:0;width:100vw;height:100vh;max-height:100vh;border-radius:0}' +
+      '}';
     st.textContent = css;
   }
 
@@ -111,6 +121,9 @@
           if (j.fab.icon_url) fabConfig.icon_url = j.fab.icon_url;
           if (typeof j.fab.offset_x === 'number') fabConfig.offset_x = j.fab.offset_x;
           if (typeof j.fab.offset_y === 'number') fabConfig.offset_y = j.fab.offset_y;
+          // SP 値: サーバ側で未設定なら PC 値にフォールバック済みだが、念のためここでも担保
+          fabConfig.offset_x_sp = (typeof j.fab.offset_x_sp === 'number') ? j.fab.offset_x_sp : fabConfig.offset_x;
+          fabConfig.offset_y_sp = (typeof j.fab.offset_y_sp === 'number') ? j.fab.offset_y_sp : fabConfig.offset_y;
           applyFabStyles();
           applyFabContent();
         })

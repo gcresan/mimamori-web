@@ -390,6 +390,17 @@ class Mimamori_Bot_Settings_Page {
 		if ( isset( $_POST['fab_offset_y'] ) ) {
 			$fields['fab_offset_y'] = max( 0, min( 200, (int) $_POST['fab_offset_y'] ) );
 		}
+		// スマホ用 X/Y: 値があれば fields に積み、空欄なら後で NULL 直接更新 (wpdb->update は NULL を %d に変換できないため)
+		$sp_nulls = [];
+		foreach ( [ 'fab_offset_x_sp', 'fab_offset_y_sp' ] as $sp_key ) {
+			if ( ! isset( $_POST[ $sp_key ] ) ) continue;
+			$raw = trim( (string) $_POST[ $sp_key ] );
+			if ( $raw === '' ) {
+				$sp_nulls[] = $sp_key;
+			} else {
+				$fields[ $sp_key ] = max( 0, min( 200, (int) $raw ) );
+			}
+		}
 
 		// レート制限・月次バジェットは運営者専用。クライアントからのPOSTは無視する。
 		if ( $is_admin ) {
@@ -403,6 +414,14 @@ class Mimamori_Bot_Settings_Page {
 		}
 
 		Mimamori_Bot_Tenant_Repository::update( (int) $tenant['id'], $fields );
+
+		// SP 用 X/Y を NULL に戻すケース (空欄送信)
+		if ( ! empty( $sp_nulls ) ) {
+			global $wpdb;
+			$table = Mimamori_Bot_Installer::table_tenants();
+			$set   = implode( ', ', array_map( static function ( $c ) { return "{$c} = NULL"; }, $sp_nulls ) );
+			$wpdb->query( $wpdb->prepare( "UPDATE {$table} SET {$set} WHERE id = %d", (int) $tenant['id'] ) );
+		}
 
 		// 運営者のみオーナー変更可
 		if ( $is_admin && isset( $_POST['owner_user_id'] ) ) {

@@ -132,9 +132,15 @@ class Mimamori_Bot_Tenant_Repository {
 			'monthly_budget_jpy', 'status',
 			// 見た目カスタマイズ
 			'title_text', 'theme_primary', 'theme_on_primary',
-			'fab_icon_url', 'fab_bg_color', 'fab_offset_x', 'fab_offset_y',
+			'fab_icon_url', 'fab_bg_color',
+			'fab_offset_x', 'fab_offset_y',
+			'fab_offset_x_sp', 'fab_offset_y_sp',
 		];
-		$int_fields = [ 'rate_limit_rpm', 'monthly_budget_jpy', 'fab_offset_x', 'fab_offset_y' ];
+		$int_fields = [
+			'rate_limit_rpm', 'monthly_budget_jpy',
+			'fab_offset_x', 'fab_offset_y',
+			'fab_offset_x_sp', 'fab_offset_y_sp',
+		];
 		$update  = [];
 		$formats = [];
 		foreach ( $fields as $k => $v ) {
@@ -190,13 +196,19 @@ class Mimamori_Bot_Tenant_Repository {
 		// 見た目カスタマイズ (NULL のときは null のまま — 表示側で default にフォールバック)
 		$row['fab_offset_x'] = isset( $row['fab_offset_x'] ) ? (int) $row['fab_offset_x'] : 20;
 		$row['fab_offset_y'] = isset( $row['fab_offset_y'] ) ? (int) $row['fab_offset_y'] : 20;
+		// SP は NULL を保持 → 未設定なら PC 値にフォールバックさせるため
+		$row['fab_offset_x_sp'] = ( isset( $row['fab_offset_x_sp'] ) && $row['fab_offset_x_sp'] !== null && $row['fab_offset_x_sp'] !== '' )
+			? (int) $row['fab_offset_x_sp'] : null;
+		$row['fab_offset_y_sp'] = ( isset( $row['fab_offset_y_sp'] ) && $row['fab_offset_y_sp'] !== null && $row['fab_offset_y_sp'] !== '' )
+			? (int) $row['fab_offset_y_sp'] : null;
 		return $row;
 	}
 
 	/**
 	 * 表示用デフォルト値を補完したテーマ設定を返す。
+	 * SP 用 X/Y が未設定なら PC 値にフォールバック。
 	 *
-	 * @return array{title:string,primary:string,on_primary:string,fab_icon_url:string,fab_bg:string,fab_x:int,fab_y:int}
+	 * @return array{title:string,primary:string,on_primary:string,fab_icon_url:string,fab_bg:string,fab_x:int,fab_y:int,fab_x_sp:int,fab_y_sp:int}
 	 */
 	public static function resolve_theme( array $tenant ): array {
 		$primary = (string) ( $tenant['theme_primary'] ?? '' );
@@ -208,14 +220,22 @@ class Mimamori_Bot_Tenant_Repository {
 		$title = trim( (string) ( $tenant['title_text'] ?? '' ) );
 		if ( $title === '' ) $title = 'AIアシスタント';
 		$icon = (string) ( $tenant['fab_icon_url'] ?? '' );
+		$fab_x = isset( $tenant['fab_offset_x'] ) ? (int) $tenant['fab_offset_x'] : 20;
+		$fab_y = isset( $tenant['fab_offset_y'] ) ? (int) $tenant['fab_offset_y'] : 20;
+		$fab_x_sp = ( isset( $tenant['fab_offset_x_sp'] ) && $tenant['fab_offset_x_sp'] !== null )
+			? (int) $tenant['fab_offset_x_sp'] : $fab_x;
+		$fab_y_sp = ( isset( $tenant['fab_offset_y_sp'] ) && $tenant['fab_offset_y_sp'] !== null )
+			? (int) $tenant['fab_offset_y_sp'] : $fab_y;
 		return [
 			'title'        => $title,
 			'primary'      => $primary,
 			'on_primary'   => $on_primary,
 			'fab_icon_url' => $icon,
 			'fab_bg'       => $fab_bg,
-			'fab_x'        => isset( $tenant['fab_offset_x'] ) ? (int) $tenant['fab_offset_x'] : 20,
-			'fab_y'        => isset( $tenant['fab_offset_y'] ) ? (int) $tenant['fab_offset_y'] : 20,
+			'fab_x'        => $fab_x,
+			'fab_y'        => $fab_y,
+			'fab_x_sp'     => $fab_x_sp,
+			'fab_y_sp'     => $fab_y_sp,
 		];
 	}
 
