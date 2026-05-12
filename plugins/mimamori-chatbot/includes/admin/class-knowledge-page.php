@@ -37,6 +37,8 @@ class Mimamori_Bot_Knowledge_Page {
 
 		echo '<p>サービス内容・料金プラン・FAQ・会社案内・対応事例などをテキストで登録します。AI はチャット応答時にここから引用します。</p>';
 
+		self::render_storage_meter( (int) $tenant['id'] );
+
 		self::render_add_form();
 		self::render_upload_form();
 		self::render_reindex_form( (int) $tenant['id'] );
@@ -54,6 +56,31 @@ class Mimamori_Bot_Knowledge_Page {
 			echo '<div class="notice notice-success is-dismissible"><p>埋め込みを再生成しました (' . esc_html( (string) $n ) . ' 件)。</p></div>';
 		}
 		if ( isset( $_GET['error'] ) )   echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( (string) $_GET['error'] ) . '</p></div>';
+	}
+
+	private static function render_storage_meter( int $tenant_id ): void {
+		$used  = Mimamori_Bot_Knowledge_Repository::get_tenant_storage_bytes( $tenant_id );
+		$limit = Mimamori_Bot_Knowledge_Repository::MAX_BYTES_PER_TENANT;
+		$pct   = $limit > 0 ? min( 100, ( $used * 100 / $limit ) ) : 0;
+		$fmt = static function ( int $b ): string {
+			if ( $b < 1024 ) return $b . ' B';
+			if ( $b < 1048576 ) return number_format( $b / 1024, 1 ) . ' KB';
+			if ( $b < 1073741824 ) return number_format( $b / 1048576, 1 ) . ' MB';
+			return number_format( $b / 1073741824, 2 ) . ' GB';
+		};
+		if ( $pct >= 95 )      { $color = '#dc2626'; $bg = '#fef2f2'; }
+		elseif ( $pct >= 80 )  { $color = '#f59e0b'; $bg = '#fffbeb'; }
+		else                   { $color = '#1a73e8'; $bg = '#eff6ff'; }
+		echo '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;margin:12px 0 18px;max-width:720px">';
+		echo '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">';
+		echo '<strong style="font-size:13px;color:#334155">📦 ナレッジストレージ使用量</strong>';
+		echo '<span style="font-size:13px;color:#475569"><strong style="color:' . esc_attr( $color ) . '">' . esc_html( $fmt( $used ) ) . '</strong> / ' . esc_html( $fmt( $limit ) ) . ' (' . esc_html( number_format( $pct, 1 ) ) . '%)</span>';
+		echo '</div>';
+		echo '<div style="background:' . esc_attr( $bg ) . ';border-radius:6px;height:10px;overflow:hidden">';
+		echo '<div style="background:' . esc_attr( $color ) . ';width:' . esc_attr( (string) $pct ) . '%;height:100%"></div>';
+		echo '</div>';
+		echo '<p style="font-size:11px;color:#94a3b8;margin:6px 0 0">本文・チャンク・ベクトルデータの合計。1クライアントあたり 1 GB まで。</p>';
+		echo '</div>';
 	}
 
 	private static function render_add_form(): void {

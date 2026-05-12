@@ -4,7 +4,7 @@ Tags: chatbot, ai, openai, multi-tenant
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 8.0
-Stable tag: 0.1.2
+Stable tag: 0.1.3
 License: GPL-2.0-or-later
 
 クライアントサイトに <script> 1行で埋め込める公開AIチャットボット。OpenAI連携・マルチテナント対応・ナレッジ管理。

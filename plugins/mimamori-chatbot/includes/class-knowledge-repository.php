@@ -16,6 +16,57 @@ class Mimamori_Bot_Knowledge_Repository {
 	public const MAX_CHUNK_CHARS = 500;
 
 	/**
+	 * テナント1社あたりのストレージ上限 (バイト)。
+	 * 400GB の VPS を 400 クライアントで分け合う想定で 1GB/client。
+	 * raw_text + chunks.content + chunks.embedding の合計バイト数で評価。
+	 */
+	public const MAX_BYTES_PER_TENANT = 1073741824; // 1 GiB
+
+	/**
+	 * テナントのナレッジ DB 使用量 (バイト)。
+	 * raw_text + chunks.content + chunks.embedding の合計を返す。
+	 */
+	public static function get_tenant_storage_bytes( int $tenant_id ): int {
+		global $wpdb;
+		$kt = Mimamori_Bot_Installer::table_knowledge();
+		$ct = Mimamori_Bot_Installer::table_knowledge_chunks();
+		$raw_bytes = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COALESCE(SUM(OCTET_LENGTH(raw_text)), 0) FROM {$kt} WHERE tenant_id = %d",
+			$tenant_id
+		) );
+		$chunk_bytes = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COALESCE(SUM(OCTET_LENGTH(content) + COALESCE(OCTET_LENGTH(embedding), 0)), 0)
+			   FROM {$ct} WHERE tenant_id = %d",
+			$tenant_id
+		) );
+		return $raw_bytes + $chunk_bytes;
+	}
+
+	/**
+	 * 追加予定バイト数が上限を超えないことを保証する。超える場合は例外を投げる。
+	 *
+	 * @param int $tenant_id
+	 * @param int $incoming_raw_bytes  これから追加する raw_text のバイト数
+	 *                                 (チャンク・埋め込みは raw_text の概ね 5〜13倍と見積もる)
+	 * @throws RuntimeException
+	 */
+	public static function assert_storage_capacity( int $tenant_id, int $incoming_raw_bytes ): void {
+		// raw_text の体積に対して chunks(同サイズ) + embeddings(1536 float32 ≒ 6KB / 500字チャンク) の上乗せを想定。
+		// 安全側に倍率8で見積もる。
+		$projected_added = $incoming_raw_bytes * 8;
+		$current  = self::get_tenant_storage_bytes( $tenant_id );
+		$total    = $current + $projected_added;
+		$limit    = self::MAX_BYTES_PER_TENANT;
+		if ( $total > $limit ) {
+			$mb = static fn( int $b ) => number_format( $b / 1048576, 1 );
+			throw new RuntimeException( sprintf(
+				'ストレージ上限を超えます。現在 %s MB / 上限 %s MB。今回の追加で約 %s MB 増えるため保存できません。古いナレッジを削除してから再度お試しください。',
+				$mb( $current ), $mb( $limit ), $mb( $projected_added )
+			) );
+		}
+	}
+
+	/**
 	 * テキストナレッジを新規登録し、チャンクに分割 + 埋め込み生成して保存する。
 	 *
 	 * @return int  作成された knowledge.id
@@ -29,6 +80,10 @@ class Mimamori_Bot_Knowledge_Repository {
 		if ( $raw_text === '' ) {
 			throw new InvalidArgumentException( 'raw_text is empty' );
 		}
+
+		// テナント別ストレージ上限チェック (1GB/client)
+		self::assert_storage_capacity( $tenant_id, strlen( $raw_text ) );
+
 		$chunks = self::chunk( $raw_text, self::MAX_CHUNK_CHARS );
 
 		$metadata = wp_json_encode(

@@ -12,6 +12,24 @@ $rows = Mimamori_Bot_Knowledge_Repository::list_for_tenant( (int) $tenant['id'] 
 $view_id     = isset( $_GET['view'] ) ? absint( $_GET['view'] ) : 0;
 $view_record = $view_id > 0 ? Mimamori_Bot_Knowledge_Repository::find( (int) $tenant['id'], $view_id ) : null;
 
+// ストレージ使用量
+$storage_used  = Mimamori_Bot_Knowledge_Repository::get_tenant_storage_bytes( (int) $tenant['id'] );
+$storage_limit = Mimamori_Bot_Knowledge_Repository::MAX_BYTES_PER_TENANT;
+$storage_pct   = $storage_limit > 0 ? min( 100, ( $storage_used * 100 / $storage_limit ) ) : 0;
+$fmt_size = static function ( int $bytes ): string {
+    if ( $bytes < 1024 ) return $bytes . ' B';
+    if ( $bytes < 1048576 ) return number_format( $bytes / 1024, 1 ) . ' KB';
+    if ( $bytes < 1073741824 ) return number_format( $bytes / 1048576, 1 ) . ' MB';
+    return number_format( $bytes / 1073741824, 2 ) . ' GB';
+};
+if ( $storage_pct >= 95 ) {
+    $bar_color = '#dc2626'; $bg_color = '#fef2f2';
+} elseif ( $storage_pct >= 80 ) {
+    $bar_color = '#f59e0b'; $bg_color = '#fffbeb';
+} else {
+    $bar_color = '#1a73e8'; $bg_color = '#eff6ff';
+}
+
 // 埋め込み未生成カウント
 global $wpdb;
 $ct = Mimamori_Bot_Installer::table_knowledge_chunks();
@@ -23,6 +41,23 @@ $missing_faqs = (int) $wpdb->get_var( $wpdb->prepare(
     "SELECT COUNT(*) FROM {$ft} WHERE tenant_id = %d AND embedding IS NULL AND status = 'active'", (int) $tenant['id']
 ) );
 ?>
+
+<div class="mb-card" style="padding:16px 20px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <strong style="font-size:13px;color:#334155">📦 ナレッジストレージ使用量</strong>
+        <span style="font-size:13px;color:#475569"><strong style="color:<?php echo esc_attr( $bar_color ); ?>"><?php echo esc_html( $fmt_size( $storage_used ) ); ?></strong> / <?php echo esc_html( $fmt_size( $storage_limit ) ); ?> (<?php echo esc_html( number_format( $storage_pct, 1 ) ); ?>%)</span>
+    </div>
+    <div style="background:<?php echo esc_attr( $bg_color ); ?>;border-radius:6px;height:10px;overflow:hidden">
+        <div style="background:<?php echo esc_attr( $bar_color ); ?>;width:<?php echo esc_attr( (string) $storage_pct ); ?>%;height:100%;transition:width .3s"></div>
+    </div>
+    <?php if ( $storage_pct >= 95 ) : ?>
+        <p style="font-size:12px;color:#991b1b;margin:8px 0 0">⚠️ 上限間近です。これ以上の追加はできません。古いナレッジを削除してください。</p>
+    <?php elseif ( $storage_pct >= 80 ) : ?>
+        <p style="font-size:12px;color:#92400e;margin:8px 0 0">⚠️ 残り容量が少なくなっています。不要なナレッジを整理することをおすすめします。</p>
+    <?php else : ?>
+        <p style="font-size:11px;color:#94a3b8;margin:6px 0 0">本文・チャンク・ベクトルデータの合計サイズ。1クライアントあたり 1 GB まで。</p>
+    <?php endif; ?>
+</div>
 
 <div class="mb-card">
     <h2>新規追加 (テキスト)</h2>
