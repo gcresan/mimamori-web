@@ -10,6 +10,14 @@ $edit_id = isset( $_GET['edit'] ) ? absint( $_GET['edit'] ) : 0;
 $editing = $edit_id ? Mimamori_Bot_Faq_Repository::find( (int) $tenant['id'], $edit_id ) : null;
 $rows    = Mimamori_Bot_Faq_Repository::list_for_tenant( (int) $tenant['id'] );
 
+$id_form     = $editing ? (int) $editing['id'] : 0;
+$question_v  = $editing ? (string) $editing['question'] : '';
+$answer_v    = $editing ? (string) $editing['answer'] : '';
+$category_v  = $editing ? (string) ( $editing['category'] ?? '' ) : '';
+$priority_v  = $editing ? (int) $editing['priority'] : 0;
+$is_starter_v= $editing ? (int) $editing['is_starter'] : 0;
+$status_v    = $editing ? (string) $editing['status'] : 'active';
+
 // AI スターター提案 (キャッシュ済みのみ表示)
 $ai_starter_cache = Mimamori_Bot_Faq_Repository::get_cached_suggestions( (int) $tenant['id'] );
 
@@ -57,15 +65,6 @@ if ( isset( $_GET['starter_adopted'] ) )   echo '<div class="mb-notice success">
         <button type="submit" class="mb-btn mb-btn-secondary">🔄 今すぐ更新する</button>
     </form>
 </div>
-
-$id_form     = $editing ? (int) $editing['id'] : 0;
-$question_v  = $editing ? (string) $editing['question'] : '';
-$answer_v    = $editing ? (string) $editing['answer'] : '';
-$category_v  = $editing ? (string) ( $editing['category'] ?? '' ) : '';
-$priority_v  = $editing ? (int) $editing['priority'] : 0;
-$is_starter_v= $editing ? (int) $editing['is_starter'] : 0;
-$status_v    = $editing ? (string) $editing['status'] : 'active';
-?>
 
 <div class="mb-card">
     <h2><?php echo $editing ? '編集 (#' . esc_html( (string) $id_form ) . ')' : '新規追加'; ?></h2>
