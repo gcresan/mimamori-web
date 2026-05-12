@@ -136,8 +136,9 @@
     renderStarters(starters || []);
   }
 
-  function ensureSession() {
-    // 既存セッションがあれば API は叩かず復元するが、UI には初期メッセージとスターターを必ず再描画
+  // 初期化フロー専用: イントロ (welcome + starters) を描画してセッションを返す。
+  // submit からは呼ばないこと — 毎メッセージごとに welcome が増殖する。
+  function startSessionWithIntro() {
     if (session && session.uuid) {
       renderIntro(session.welcome_message, session.starters);
       return Promise.resolve(session);
@@ -158,6 +159,29 @@
       };
       try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
       renderIntro(welcome, session.starters);
+      return session;
+    });
+  }
+
+  // submit 側で使う: セッション参照を返すだけ (UI は触らない)
+  function ensureSession() {
+    if (session && session.uuid) return Promise.resolve(session);
+    // 念のため: 初期化が未完了の状態で submit された場合のフォールバック (intro 描画はしない)
+    return apiPost('/session', {
+      user_agent: navigator.userAgent,
+      referer: document.referrer,
+      landing_url: location.href
+    }).then(function (r) {
+      var welcome = (r && typeof r.welcome_message === 'string' && r.welcome_message.trim() !== '')
+        ? r.welcome_message
+        : FALLBACK_WELCOME;
+      session = {
+        uuid:            r.session_uuid,
+        persona:         r.persona,
+        starters:        r.starters || [],
+        welcome_message: welcome
+      };
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
       return session;
     });
   }
@@ -223,8 +247,8 @@
       .catch(function () { /* 失敗は致命的ではないので握りつぶす */ });
   }
 
-  // ---- 初期化 ----
-  ensureSession().catch(function (err) {
+  // ---- 初期化 — イントロ (welcome + starters) はここでだけ描画する ----
+  startSessionWithIntro().catch(function (err) {
     appendSystem((err && err.message) || '接続できませんでした。', true);
   });
 })();
