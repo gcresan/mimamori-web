@@ -182,9 +182,42 @@
   function preloadIframe() {
     if (iframe && !iframe.src) iframe.src = embedUrl;
   }
+
+  // ---- 開く時の効果音 (Web Audio API でその場合成 — 外部ファイル不要) ----
+  // C5 → E5 の短い 2音 "ポン" を fade-out 付きで再生。
+  // 初回はユーザー操作 (クリック) 内で resume 必須 — toggle 内で呼ぶので OK。
+  var audioCtx = null;
+  function playOpenSound() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      var now = audioCtx.currentTime;
+      // sine 2音重ね — トータル ~180ms
+      [ { f: 523.25, t: 0.00 },   // C5
+        { f: 659.25, t: 0.07 } ]  // E5
+      .forEach(function (n) {
+        var osc  = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = n.f;
+        var start = now + n.t;
+        // 12ms で立ち上げ → 150ms で減衰
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.18, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + 0.2);
+      });
+    } catch (e) { /* 鳴らなくても致命的ではない */ }
+  }
+
   function toggle() {
     if (!opened) {
       preloadIframe();
+      playOpenSound();
       iframe.classList.add('open');
       opened = true;
       try { localStorage.setItem('mimamori_bot_open', '1'); } catch (e) {}

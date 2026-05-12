@@ -28,7 +28,7 @@ if ( defined( 'MIMAMORI_BOT_VERSION' ) ) {
 	return;
 }
 
-define( 'MIMAMORI_BOT_VERSION',                '0.6.3' );
+define( 'MIMAMORI_BOT_VERSION',                '0.6.4' );
 define( 'MIMAMORI_BOT_FILE',                   __FILE__ );
 define( 'MIMAMORI_BOT_PATH',                   plugin_dir_path( __FILE__ ) );
 define( 'MIMAMORI_BOT_URL',                    plugin_dir_url( __FILE__ ) );
