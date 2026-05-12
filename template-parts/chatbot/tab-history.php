@@ -153,16 +153,16 @@ $rows = $wpdb->get_results( $wpdb->prepare(
         <?php
         $total_pages = (int) ceil( $total / $per );
         if ( $total_pages > 1 ) : ?>
-            <p style="margin-top:16px">
+            <nav class="mb-pagination" aria-label="ページ送り">
             <?php for ( $i = 1; $i <= $total_pages; $i++ ) :
                 $url = add_query_arg( [ 'tab' => 'history', 'p' => $i ], home_url( '/chatbot/' ) );
                 if ( $i === $page ) {
-                    echo '<strong style="margin:0 6px">' . esc_html( (string) $i ) . '</strong>';
+                    echo '<strong>' . esc_html( (string) $i ) . '</strong>';
                 } else {
-                    echo '<a href="' . esc_url( $url ) . '" style="margin:0 6px">' . esc_html( (string) $i ) . '</a>';
+                    echo '<a href="' . esc_url( $url ) . '">' . esc_html( (string) $i ) . '</a>';
                 }
             endfor; ?>
-            </p>
+            </nav>
         <?php endif; ?>
     <?php endif; ?>
 </div>

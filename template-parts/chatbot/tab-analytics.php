@@ -75,16 +75,16 @@ $top_faqs = $wpdb->get_results( $wpdb->prepare(
 <div class="mb-card">
     <h2>分析ダッシュボード</h2>
 
-    <p style="margin:0 0 16px">
+    <div class="mb-period">
     <?php foreach ( [ 7 => '直近7日', 30 => '直近30日', 90 => '直近90日', 365 => '直近1年' ] as $d => $label ) :
         $url = add_query_arg( [ 'tab' => 'analytics', 'days' => $d ], home_url( '/chatbot/' ) );
         if ( $d === $days ) {
-            echo '<strong style="display:inline-block;margin:0 6px;padding:4px 10px;background:#1a73e8;color:#fff;border-radius:6px">' . esc_html( $label ) . '</strong>';
+            echo '<strong>' . esc_html( $label ) . '</strong>';
         } else {
-            echo '<a href="' . esc_url( $url ) . '" style="display:inline-block;margin:0 6px;padding:4px 10px;border:1px solid #d1d5db;border-radius:6px;text-decoration:none">' . esc_html( $label ) . '</a>';
+            echo '<a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a>';
         }
     endforeach; ?>
-    </p>
+    </div>
 
     <div class="mb-kpi-grid">
         <?php foreach ( $cards as $c ) : ?>
