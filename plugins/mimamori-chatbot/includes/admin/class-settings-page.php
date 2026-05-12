@@ -421,6 +421,12 @@ class Mimamori_Bot_Settings_Page {
 			$fields['sound_send_enabled'] = ! empty( $_POST['sound_send_enabled'] ) ? 1 : 0;
 		}
 
+		// FAB エフェクト (角丸 / シャドウ) — 同じく未チェック=0 を確実に反映するため隠しフラグで判定
+		if ( isset( $_POST['_fab_effects_section'] ) ) {
+			$fields['fab_rounded'] = ! empty( $_POST['fab_rounded'] ) ? 1 : 0;
+			$fields['fab_shadow']  = ! empty( $_POST['fab_shadow'] )  ? 1 : 0;
+		}
+
 		// スマホ用 X/Y: 値があれば fields に積み、空欄なら後で NULL 直接更新 (wpdb->update は NULL を %d に変換できないため)
 		$sp_nulls = [];
 		foreach ( [ 'fab_offset_x_sp', 'fab_offset_y_sp' ] as $sp_key ) {
@@ -430,6 +436,23 @@ class Mimamori_Bot_Settings_Page {
 				$sp_nulls[] = $sp_key;
 			} else {
 				$fields[ $sp_key ] = max( 0, min( 200, (int) $raw ) );
+			}
+		}
+
+		// FAB サイズ (32〜120px の範囲にクランプ)
+		if ( isset( $_POST['fab_size'] ) ) {
+			$sz = (int) $_POST['fab_size'];
+			if ( $sz > 0 ) {
+				$fields['fab_size'] = max( 32, min( 120, $sz ) );
+			}
+		}
+		// fab_size_md は空欄なら NULL (= PC 値にフォールバック)
+		if ( isset( $_POST['fab_size_md'] ) ) {
+			$raw_md = trim( (string) $_POST['fab_size_md'] );
+			if ( $raw_md === '' ) {
+				$sp_nulls[] = 'fab_size_md';
+			} else {
+				$fields['fab_size_md'] = max( 32, min( 120, (int) $raw_md ) );
 			}
 		}
 

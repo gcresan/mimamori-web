@@ -77,13 +77,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
         <h3 style="margin-top:24px">💬 吹き出しアイコン (FAB)</h3>
 
         <div class="mb-form-group">
-            <label for="fab_icon_url">アイコン画像URL</label>
+            <label for="fab_icon_url">バナー画像 (吹き出しアイコン)</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <input type="url" id="fab_icon_url" name="fab_icon_url" value="<?php echo esc_attr( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" placeholder="https://example.com/icon.png" style="flex:1;min-width:280px;max-width:480px">
-                <button type="button" class="mb-btn mb-btn-secondary" id="mb-pick-fab-icon">📁 画像を選択</button>
+                <input type="url" id="fab_icon_url" name="fab_icon_url" value="<?php echo esc_attr( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" placeholder="https://example.com/banner.png" style="flex:1;min-width:280px;max-width:480px">
+                <button type="button" class="mb-btn mb-btn-primary" id="mb-pick-fab-icon">📁 画像をアップロード / 選択</button>
                 <button type="button" class="mb-btn mb-btn-link" id="mb-clear-fab-icon">クリア</button>
             </div>
-            <p class="description">未設定時は💬絵文字。推奨: 透過 PNG / SVG、正方形、64〜128px。</p>
+            <p class="description">「画像をアップロード / 選択」ボタンから WordPress メディアライブラリを開いて新規アップロードまたは既存画像を選択できます。推奨: 透過 PNG / SVG、正方形、64〜128px。未設定時は💬白アイコン。</p>
             <div id="mb-fab-icon-preview" style="margin-top:10px<?php echo empty( $tenant['fab_icon_url'] ) ? ';display:none' : ''; ?>">
                 <img src="<?php echo esc_url( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" alt="" style="width:56px;height:56px;border-radius:28px;background:<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?: ( $tenant['theme_primary'] ?: '#2563eb' ) ) ); ?>;object-fit:contain;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,.15)">
             </div>
@@ -96,6 +96,57 @@ if ( ! defined( 'ABSPATH' ) ) exit;
                 <input type="text" id="fab_bg_color" name="fab_bg_color" value="<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?? '' ) ); ?>" placeholder="メインカラーを使用" pattern="^#[0-9a-fA-F]{3,8}$" style="flex:0 0 200px;max-width:200px;font-family:monospace">
             </div>
             <p class="description">空欄でメインカラーと同じ</p>
+        </div>
+
+        <?php
+        $fab_rounded_on = ! isset( $tenant['fab_rounded'] ) || (int) $tenant['fab_rounded'] === 1;
+        $fab_shadow_on  = ! isset( $tenant['fab_shadow'] )  || (int) $tenant['fab_shadow']  === 1;
+        $fab_size_val   = isset( $tenant['fab_size'] ) ? (int) $tenant['fab_size'] : 56;
+        $fab_size_md_val = ( isset( $tenant['fab_size_md'] ) && $tenant['fab_size_md'] !== null ) ? (int) $tenant['fab_size_md'] : '';
+        ?>
+        <input type="hidden" name="_fab_effects_section" value="1">
+        <div class="mb-form-group" style="max-width:none">
+            <label style="font-weight:600">エフェクト</label>
+            <p class="description" style="margin-bottom:10px">アイコンの見た目に効果を追加できます。チェックを外すと無効になります。</p>
+            <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;margin-bottom:8px;max-width:480px;background:#fff">
+                <input type="checkbox" name="fab_rounded" value="1" <?php checked( $fab_rounded_on ); ?> style="width:18px;height:18px;cursor:pointer">
+                <span style="flex:1">
+                    <strong style="font-size:13px;color:#0f172a">角丸を付ける</strong>
+                    <span style="display:block;font-size:12px;color:#64748b;margin-top:2px">ON: 円形 (デフォルト) / OFF: 角ばった四角形</span>
+                </span>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;max-width:480px;background:#fff">
+                <input type="checkbox" name="fab_shadow" value="1" <?php checked( $fab_shadow_on ); ?> style="width:18px;height:18px;cursor:pointer">
+                <span style="flex:1">
+                    <strong style="font-size:13px;color:#0f172a">シャドウを付ける</strong>
+                    <span style="display:block;font-size:12px;color:#64748b;margin-top:2px">FAB に立体感を出すためのドロップシャドウ</span>
+                </span>
+            </label>
+        </div>
+
+        <div class="mb-form-group" style="max-width:none">
+            <label style="font-weight:600">サイズ (バナーの一辺の長さ)</label>
+            <p class="description" style="margin-bottom:10px">ブラウザ幅に応じて 2 段階で切り替えできます。32〜120px の範囲。「中画面以下」を空欄にすると常に「大画面」の値が使われます。</p>
+
+            <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:8px">
+                <div style="flex:0 0 320px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px">
+                    <div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:6px">🖥️ 大画面 (1440px 以上)</div>
+                    <p class="description" style="margin:0 0 8px 0">通常のデスクトップ向けサイズ</p>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <input type="number" id="fab_size" name="fab_size" min="32" max="120" value="<?php echo esc_attr( (string) $fab_size_val ); ?>" style="width:100%">
+                        <span style="font-size:13px;color:#64748b">px</span>
+                    </div>
+                </div>
+
+                <div style="flex:0 0 320px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px">
+                    <div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:6px">💻 中画面以下 (1440px 未満)</div>
+                    <p class="description" style="margin:0 0 8px 0">ノートPC・タブレット・スマホ向け</p>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <input type="number" id="fab_size_md" name="fab_size_md" min="32" max="120" value="<?php echo esc_attr( (string) $fab_size_md_val ); ?>" placeholder="大画面と同じ" style="width:100%">
+                        <span style="font-size:13px;color:#64748b">px</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="mb-form-group" style="max-width:none">

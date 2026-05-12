@@ -191,6 +191,10 @@ class Mimamori_Bot_Public_API {
 				'offset_y'    => $theme['fab_y'],
 				'offset_x_sp' => $theme['fab_x_sp'],
 				'offset_y_sp' => $theme['fab_y_sp'],
+				'rounded'     => (bool) $theme['fab_rounded'],
+				'shadow'      => (bool) $theme['fab_shadow'],
+				'size'        => (int)  $theme['fab_size'],
+				'size_md'     => (int)  $theme['fab_size_md'],
 			],
 			'sound' => [
 				'open' => (bool) $theme['sound_open'],

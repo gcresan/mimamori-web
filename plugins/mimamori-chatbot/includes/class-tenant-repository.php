@@ -141,12 +141,18 @@ class Mimamori_Bot_Tenant_Repository {
 			'assistant_avatar',
 			// 効果音オン/オフ
 			'sound_open_enabled', 'sound_send_enabled',
+			// FAB エフェクト
+			'fab_rounded', 'fab_shadow',
+			// FAB サイズ (≥1440px / <1440px)
+			'fab_size', 'fab_size_md',
 		];
 		$int_fields = [
 			'rate_limit_rpm', 'monthly_budget_jpy',
 			'fab_offset_x', 'fab_offset_y',
 			'fab_offset_x_sp', 'fab_offset_y_sp',
 			'sound_open_enabled', 'sound_send_enabled',
+			'fab_rounded', 'fab_shadow',
+			'fab_size', 'fab_size_md',
 		];
 		$update  = [];
 		$formats = [];
@@ -211,6 +217,13 @@ class Mimamori_Bot_Tenant_Repository {
 		// 効果音オン/オフ — DB に列が無い旧テナントは ON (=1) で初期化
 		$row['sound_open_enabled'] = isset( $row['sound_open_enabled'] ) ? (int) $row['sound_open_enabled'] : 1;
 		$row['sound_send_enabled'] = isset( $row['sound_send_enabled'] ) ? (int) $row['sound_send_enabled'] : 1;
+		// FAB エフェクト — 旧テナントは ON (=現在の見た目と同じ) で初期化
+		$row['fab_rounded'] = isset( $row['fab_rounded'] ) ? (int) $row['fab_rounded'] : 1;
+		$row['fab_shadow']  = isset( $row['fab_shadow'] )  ? (int) $row['fab_shadow']  : 1;
+		// FAB サイズ — fab_size は 56 デフォルト、_md は NULL を保持 (PC 値にフォールバック)
+		$row['fab_size'] = isset( $row['fab_size'] ) ? (int) $row['fab_size'] : 56;
+		$row['fab_size_md'] = ( isset( $row['fab_size_md'] ) && $row['fab_size_md'] !== null && $row['fab_size_md'] !== '' )
+			? (int) $row['fab_size_md'] : null;
 		return $row;
 	}
 
@@ -256,6 +269,12 @@ class Mimamori_Bot_Tenant_Repository {
 			'avatar_svg'   => $avatar_svg,
 			'sound_open'   => ! empty( $tenant['sound_open_enabled'] ),
 			'sound_send'   => ! empty( $tenant['sound_send_enabled'] ),
+			'fab_rounded'  => ! isset( $tenant['fab_rounded'] ) || (int) $tenant['fab_rounded'] === 1,
+			'fab_shadow'   => ! isset( $tenant['fab_shadow'] )  || (int) $tenant['fab_shadow']  === 1,
+			'fab_size'     => isset( $tenant['fab_size'] ) ? max( 32, min( 120, (int) $tenant['fab_size'] ) ) : 56,
+			'fab_size_md'  => ( isset( $tenant['fab_size_md'] ) && $tenant['fab_size_md'] !== null )
+				? max( 32, min( 120, (int) $tenant['fab_size_md'] ) )
+				: ( isset( $tenant['fab_size'] ) ? max( 32, min( 120, (int) $tenant['fab_size'] ) ) : 56 ),
 		];
 	}
 

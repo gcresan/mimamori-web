@@ -50,7 +50,11 @@
     offset_y: 20,
     offset_x_sp: 20,
     offset_y_sp: 20,
-    icon_url: ''
+    icon_url: '',
+    rounded: true,   // 角丸 (= 円形)
+    shadow:  true,   // ドロップシャドウ
+    size:    56,     // 大画面 (>= 1440px) サイズ
+    size_md: 56      // 中画面以下 (< 1440px) サイズ — 未設定時は size と同じ
   };
   // 効果音のオン/オフ (widget-config 取得まではデフォルト ON)
   var soundOpenOn = true;
@@ -62,23 +66,30 @@
     if (!st) return;
     var x   = fabConfig.offset_x,    y   = fabConfig.offset_y;
     var xsp = fabConfig.offset_x_sp, ysp = fabConfig.offset_y_sp;
+    var sz   = Math.max(32, Math.min(120, fabConfig.size    || 56));
+    var szmd = Math.max(32, Math.min(120, fabConfig.size_md || sz));
+    // 角丸: ON = 完全な円 (50%) / OFF = 鋭角 (0)
+    var radius     = fabConfig.rounded ? '50%' : '8px';
+    // シャドウ: ON = 立体感シャドウ / OFF = なし
+    var shadow     = fabConfig.shadow  ? '0 6px 20px rgba(0,0,0,.18)' : 'none';
+    var hoverShadow= fabConfig.shadow  ? '0 8px 24px rgba(0,0,0,.22)' : 'none';
     var opacity = fabReady ? '1' : '0';
     var pointer = fabReady ? 'auto' : 'none';
     // 開閉アニメ用イージング (Material 風 ease-out)
     var EASE = 'cubic-bezier(.22,1,.36,1)';
     var css =
-      // PC (デフォルト)
+      // PC (デフォルト = 大画面 ≥1440px)
       '#' + FAB_ID + '{position:fixed;right:' + x + 'px;bottom:' + y + 'px;' +
-      'width:56px;height:56px;border-radius:28px;' +
+      'width:' + sz + 'px;height:' + sz + 'px;border-radius:' + radius + ';' +
       'background:' + fabConfig.bg + ';color:#fff;display:flex;align-items:center;justify-content:center;' +
-      'box-shadow:0 6px 20px rgba(0,0,0,.18);cursor:pointer;z-index:2147483646;border:none;font:600 24px/1 system-ui;padding:0;overflow:hidden;' +
+      'box-shadow:' + shadow + ';cursor:pointer;z-index:2147483646;border:none;font:600 24px/1 system-ui;padding:0;overflow:hidden;' +
       'opacity:' + opacity + ';pointer-events:' + pointer + ';' +
-      'transition:opacity .18s ease-out, transform .18s ' + EASE + ', filter .15s ease-out, background-color .2s ease-out}' +
-      '#' + FAB_ID + ':hover{filter:brightness(.92);transform:translateY(-2px)}' +
+      'transition:opacity .18s ease-out, transform .18s ' + EASE + ', filter .15s ease-out, background-color .2s ease-out, width .2s ease, height .2s ease, box-shadow .2s ease, border-radius .2s ease}' +
+      '#' + FAB_ID + ':hover{filter:brightness(.92);transform:translateY(-2px);box-shadow:' + hoverShadow + '}' +
       '#' + FAB_ID + ':active{transform:translateY(0) scale(.96)}' +
       '#' + FAB_ID + ' img{width:100%;height:100%;object-fit:contain;padding:10px;display:block}' +
-      // ウィンドウ: display:none ではなく opacity+transform でフェード&浮上アニメ
-      '#' + WRAP_ID + '{position:fixed;right:' + x + 'px;bottom:' + (y + 68) + 'px;' +
+      // ウィンドウ
+      '#' + WRAP_ID + '{position:fixed;right:' + x + 'px;bottom:' + (y + sz + 12) + 'px;' +
       'width:380px;max-width:calc(100vw - 24px);' +
       'height:600px;max-height:calc(100vh - 120px);border:0;border-radius:14px;overflow:hidden;' +
       'box-shadow:0 12px 40px rgba(0,0,0,.22);z-index:2147483647;background:#fff;' +
@@ -91,7 +102,12 @@
       '#' + WRAP_ID + '.maxd{right:0 !important;left:0;top:0;bottom:0;width:100vw;height:100vh;' +
       'max-width:100vw;max-height:100vh;border-radius:0;' +
       'transform:translateY(0) scale(1) !important;transform-origin:center center}' +
-      // SP 上書き — FAB 位置は SP 用、ウィンドウは下から全画面スライド
+      // 中画面以下 (< 1440px): FAB サイズを size_md に変更
+      '@media (max-width:1439px){' +
+        '#' + FAB_ID + '{width:' + szmd + 'px;height:' + szmd + 'px}' +
+        '#' + WRAP_ID + '{bottom:' + (y + szmd + 12) + 'px}' +
+      '}' +
+      // SP (< 600px): FAB 位置を SP オフセットに、ウィンドウは下から全画面スライド
       '@media (max-width:600px){' +
         '#' + FAB_ID + '{right:' + xsp + 'px;bottom:' + ysp + 'px}' +
         '#' + WRAP_ID + '{right:0;bottom:0;width:100vw;height:100vh;max-height:100vh;border-radius:0;' +
@@ -167,6 +183,11 @@
             if (typeof j.fab.offset_y === 'number') fabConfig.offset_y = j.fab.offset_y;
             fabConfig.offset_x_sp = (typeof j.fab.offset_x_sp === 'number') ? j.fab.offset_x_sp : fabConfig.offset_x;
             fabConfig.offset_y_sp = (typeof j.fab.offset_y_sp === 'number') ? j.fab.offset_y_sp : fabConfig.offset_y;
+            if (typeof j.fab.rounded === 'boolean') fabConfig.rounded = j.fab.rounded;
+            if (typeof j.fab.shadow  === 'boolean') fabConfig.shadow  = j.fab.shadow;
+            if (typeof j.fab.size    === 'number' && j.fab.size    > 0) fabConfig.size    = j.fab.size;
+            if (typeof j.fab.size_md === 'number' && j.fab.size_md > 0) fabConfig.size_md = j.fab.size_md;
+            else fabConfig.size_md = fabConfig.size;
           }
           if (j && j.sound && typeof j.sound.open === 'boolean') {
             soundOpenOn = j.sound.open;
