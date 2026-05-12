@@ -54,10 +54,10 @@
         '</button>' +
       '</div>' +
     '</header>' +
-    '<div class="mb-quick" id="mb-quick">' +
-      '<button type="button" class="mb-quick-toggle" id="mb-quick-toggle" aria-expanded="true">' +
+    '<div class="mb-quick mb-quick-closed" id="mb-quick">' +
+      '<button type="button" class="mb-quick-toggle" id="mb-quick-toggle" aria-expanded="false">' +
         '<span class="mb-quick-toggle-label">💡 質問例を見る</span>' +
-        '<span class="mb-quick-arrow" aria-hidden="true">▲</span>' +
+        '<span class="mb-quick-arrow" aria-hidden="true">▼</span>' +
       '</button>' +
       '<div class="mb-quick-body" id="mb-quick-body">' +
         '<div class="mb-quick-chips" id="mb-quick-chips"></div>' +
@@ -244,7 +244,7 @@
     '小さく試せる対策はある？'
   ];
   var quickQuestions = DEFAULT_QUICK_QUESTIONS.slice();
-  var quickOpen      = true;
+  var quickOpen      = false; // 初期は閉じた状態
 
   function renderQuickChips() {
     $quickChips.innerHTML = '';
