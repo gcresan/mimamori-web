@@ -46,6 +46,9 @@ class Mimamori_Bot_Bootstrap {
 
 	public static function register_rest_routes(): void {
 		Mimamori_Bot_Public_API::register_routes();
+		if ( class_exists( 'Mimamori_Bot_Admin_API' ) ) {
+			Mimamori_Bot_Admin_API::register_routes();
+		}
 	}
 
 	public static function register_admin_menu(): void {
