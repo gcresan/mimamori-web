@@ -288,6 +288,36 @@ body {
 /* 互換 — 旧 starters (使われなくなった) */
 .mb-starters, .mb-starter, .mb-typing { display: none !important; }
 
+/* スレッド内スターターチップ (ウェルカム直後の質問例 6個) */
+.mb-inline-starters { width: 100%; }
+.mb-inline-starters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 44px; /* assistant avatar 幅 36px + gap 8px に揃える */
+  padding-right: 8px;
+}
+.mb-inline-starter {
+  align-self: flex-start;
+  max-width: 100%;
+  background: #ffffff;
+  border: 1px solid var(--mb-primary);
+  color: var(--mb-primary);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.5;
+  transition: background-color .15s ease, color .15s ease, transform .12s ease;
+}
+.mb-inline-starter:hover {
+  background: var(--mb-primary);
+  color: #ffffff;
+}
+.mb-inline-starter:active { transform: translateY(1px); }
+
 /* サジェスト (CTA) */
 .mb-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .mb-suggestion {

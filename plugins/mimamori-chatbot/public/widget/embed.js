@@ -316,6 +316,43 @@
     }
   }
 
+  // ---- スレッド内スターター (ウェルカム直後に並ぶ 6 個程度のチップ) ----
+  // テナント starters があれば優先、無ければ 3 カテゴリから抽出した汎用デフォルト。
+  var DEFAULT_INLINE_STARTERS = [
+    '今、いちばん大事なことを1つだけ教えて',
+    '今の状況は良い？悪い？かんたんに教えて',
+    '前回と比べて、何が変わった？',
+    '次にやるべきことを1つだけ教えて',
+    'うまくいっていない箇所はどこ？',
+    '小さく試せる対策はある？'
+  ];
+
+  function appendInlineStarters(items) {
+    if (!items || !items.length) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'mb-row-wrap assistant mb-inline-starters';
+    var list = document.createElement('div');
+    list.className = 'mb-inline-starters-list';
+    items.slice(0, 6).forEach(function (q) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mb-inline-starter';
+      b.textContent = q;
+      b.addEventListener('click', function () {
+        $text.value = q;
+        $form.requestSubmit();
+      });
+      list.appendChild(b);
+    });
+    wrap.appendChild(list);
+    $list.appendChild(wrap);
+    $list.scrollTop = $list.scrollHeight;
+  }
+  function removeInlineStarters() {
+    var els = $list.querySelectorAll('.mb-inline-starters');
+    for (var i = 0; i < els.length; i++) els[i].parentNode.removeChild(els[i]);
+  }
+
   // 初回描画
   renderCatTabs();
   renderQuickChips();
@@ -326,6 +363,9 @@
   function renderIntro(welcome, starters) {
     appendMessage('assistant', welcome || FALLBACK_WELCOME);
     applyStartersToQuick(starters || []);
+    // ウェルカム直後にスレッド内スターターを 6 個並べる
+    var inline = (starters && starters.length) ? starters : DEFAULT_INLINE_STARTERS;
+    appendInlineStarters(inline);
   }
 
   // 初期化フロー専用: イントロ (welcome + starters) を描画してセッションを返す。
@@ -449,6 +489,7 @@
     if (!msg) return;
     playSendSound();
     clearInput();
+    removeInlineStarters(); // 最初のスターターチップは送信したら片付ける
     appendMessage('user', msg);
     $send.disabled = true;
     showTyping();
