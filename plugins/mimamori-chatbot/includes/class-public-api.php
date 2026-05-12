@@ -289,7 +289,6 @@ class Mimamori_Bot_Public_API {
 .mb-msg.user{background:{$primary} !important;color:{$on_primary} !important;}
 .mb-input button{background:{$primary} !important;color:{$on_primary} !important;}
 .mb-msg-avatar:not(.mb-user-avatar){background:{$primary} !important;color:{$on_primary} !important;}
-.mb-cat-tab.active{color:{$primary} !important;border-bottom-color:{$primary} !important;}
 .mb-quick-chip:hover{border-color:{$primary} !important;color:{$primary} !important;}
 .mb-inline-starter{border-color:{$primary} !important;color:{$primary} !important;}
 .mb-inline-starter:hover{background:{$primary} !important;color:{$on_primary} !important;}

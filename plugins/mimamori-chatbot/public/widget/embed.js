@@ -60,7 +60,6 @@
         '<span class="mb-quick-arrow" aria-hidden="true">▲</span>' +
       '</button>' +
       '<div class="mb-quick-body" id="mb-quick-body">' +
-        '<div class="mb-cat-tabs"  id="mb-cat-tabs"  role="tablist"></div>' +
         '<div class="mb-quick-chips" id="mb-quick-chips"></div>' +
       '</div>' +
     '</div>' +
@@ -80,7 +79,6 @@
   var $minimize     = document.getElementById('mb-minimize');
   var $quick        = document.getElementById('mb-quick');
   var $quickToggle  = document.getElementById('mb-quick-toggle');
-  var $catTabs      = document.getElementById('mb-cat-tabs');
   var $quickChips   = document.getElementById('mb-quick-chips');
 
   if ($title) $title.textContent = TITLE;
@@ -235,59 +233,22 @@
     $typingRow = null;
   }
 
-  // ---- 質問例パネル (カテゴリタブ + チップ) ----
-  // 1階層: カテゴリ別の質問群。テナント設定 (starters) が来たら status カテゴリを上書きする。
-  var DEFAULT_QUICK = {
-    categories: [
-      { key: 'status',  label: '今どうなってる？' },
-      { key: 'next',    label: '次に何する？' },
-      { key: 'problem', label: 'うまくいかない…' }
-    ],
-    questions: {
-      status: [
-        '今、いちばん大事なことを1つだけ教えて',
-        '今の状況は良い？悪い？かんたんに教えて',
-        '良いところと気をつけたいところを1つずつ教えて',
-        '前回と比べて、何が変わった？（短く）'
-      ],
-      next: [
-        '次にやるべきことを1つだけ教えて',
-        '小さな一歩を3つ教えて',
-        '今いちばん優先する作業は？',
-        '今週中にできる改善案は？'
-      ],
-      problem: [
-        'うまくいっていない箇所はどこ？',
-        '原因を、専門用語を使わずに教えて',
-        '小さく試せる対策はある？',
-        '迷っている時にやるべきことを教えて'
-      ]
-    }
-  };
-  var quickData  = JSON.parse(JSON.stringify(DEFAULT_QUICK));
-  var currentCat = 'status';
-  var quickOpen  = true;
+  // ---- 質問例パネル (チップのみ。サブカテゴリなし) ----
+  // 単一の質問リスト (最大 6 件)。テナント設定 (starters) が来たら差し替え。
+  var DEFAULT_QUICK_QUESTIONS = [
+    '今、いちばん大事なことを1つだけ教えて',
+    '今の状況は良い？悪い？かんたんに教えて',
+    '前回と比べて、何が変わった？',
+    '次にやるべきことを1つだけ教えて',
+    'うまくいっていない箇所はどこ？',
+    '小さく試せる対策はある？'
+  ];
+  var quickQuestions = DEFAULT_QUICK_QUESTIONS.slice();
+  var quickOpen      = true;
 
-  function renderCatTabs() {
-    $catTabs.innerHTML = '';
-    quickData.categories.forEach(function (c) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'mb-cat-tab' + (c.key === currentCat ? ' active' : '');
-      b.textContent = c.label;
-      b.addEventListener('click', function () {
-        if (currentCat === c.key) return;
-        currentCat = c.key;
-        renderCatTabs();
-        renderQuickChips();
-      });
-      $catTabs.appendChild(b);
-    });
-  }
   function renderQuickChips() {
     $quickChips.innerHTML = '';
-    var qs = quickData.questions[currentCat] || [];
-    qs.forEach(function (q) {
+    quickQuestions.slice(0, 6).forEach(function (q) {
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'mb-quick-chip';
@@ -309,10 +270,9 @@
   $quickToggle.addEventListener('click', function () { setQuickOpen(!quickOpen); });
 
   function applyStartersToQuick(starters) {
-    // テナント設定の starters があれば status カテゴリを差し替え
     if (starters && starters.length) {
-      quickData.questions.status = starters.slice(0, 6);
-      if (currentCat === 'status') renderQuickChips();
+      quickQuestions = starters.slice(0, 6);
+      renderQuickChips();
     }
   }
 
@@ -354,7 +314,6 @@
   }
 
   // 初回描画
-  renderCatTabs();
   renderQuickChips();
 
   // ---- セッション開始 ----

@@ -130,39 +130,11 @@ body {
   pointer-events: none;
 }
 
-/* カテゴリタブ (アンダーライン) */
-.mb-cat-tabs {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  border-bottom: 1px solid #e5e7eb;
-}
-.mb-cat-tab {
-  flex: 1 1 auto;
-  background: transparent;
-  border: 0;
-  padding: 8px 4px 10px;
-  font-size: 13px;
-  color: #94a3b8;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color .15s, border-color .15s;
-  white-space: nowrap;
-}
-.mb-cat-tab:hover { color: var(--mb-primary); }
-.mb-cat-tab.active {
-  color: var(--mb-primary);
-  font-weight: 600;
-  border-bottom-color: var(--mb-primary);
-}
-
 /* チップ群 */
 .mb-quick-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
 }
 .mb-quick-chip {
   background: #ffffff;
