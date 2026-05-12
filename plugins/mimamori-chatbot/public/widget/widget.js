@@ -85,6 +85,10 @@
       'transition:opacity .22s ease-out, transform .26s ' + EASE + ', visibility 0s linear .26s}' +
       '#' + WRAP_ID + '.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;visibility:visible;' +
       'transition:opacity .22s ease-out, transform .26s ' + EASE + ', visibility 0s}' +
+      // 全画面化 (最大化ボタン)
+      '#' + WRAP_ID + '.maxd{right:0 !important;left:0;top:0;bottom:0;width:100vw;height:100vh;' +
+      'max-width:100vw;max-height:100vh;border-radius:0;' +
+      'transform:translateY(0) scale(1) !important;transform-origin:center center}' +
       // SP 上書き — FAB 位置は SP 用、ウィンドウは下から全画面スライド
       '@media (max-width:600px){' +
         '#' + FAB_ID + '{right:' + xsp + 'px;bottom:' + ysp + 'px}' +
@@ -237,13 +241,23 @@
     applyFabContent();
     fetchConfig();
 
-    // iframe からの postMessage を受信（resize / close / minimize 等）
-    // minimize は close と同等動作: iframe を畳む。state は localStorage に残るので再オープン時に復元
+    // iframe からの postMessage を受信
+    //   close    -> 閉じる
+    //   minimize -> 同上 (互換のため受け付ける)
+    //   maximize -> iframe を全画面化 / 復元 (トグル)
+    var maximized = false;
     window.addEventListener('message', function (ev) {
       try {
         if (!ev.data || typeof ev.data !== 'object') return;
         if (ev.data.source !== 'mimamori-bot') return;
-        if (ev.data.type === 'close' || ev.data.type === 'minimize') toggle();
+        if (ev.data.type === 'close' || ev.data.type === 'minimize') {
+          // 全画面状態でも閉じる時はリセット
+          if (maximized) { maximized = false; iframe.classList.remove('maxd'); }
+          toggle();
+        } else if (ev.data.type === 'maximize') {
+          maximized = !maximized;
+          iframe.classList.toggle('maxd', maximized);
+        }
       } catch (e) {}
     });
 

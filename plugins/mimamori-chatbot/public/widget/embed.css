@@ -127,38 +127,11 @@ body {
   pointer-events: none;
 }
 
-/* モードタブ (大きな丸ピル切替) */
-.mb-mode-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0;
-  background: #d4dcdc; /* 薄いセージ */
-  border-radius: 999px;
-  padding: 4px;
-}
-.mb-mode-tab {
-  background: transparent;
-  border: 0;
-  padding: 10px 12px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(31, 41, 55, .6);
-  cursor: pointer;
-  transition: background-color .15s, color .15s, box-shadow .15s;
-}
-.mb-mode-tab.active {
-  background: #ffffff;
-  color: #1f2937;
-  box-shadow: 0 2px 6px rgba(0,0,0,.08);
-}
-
-/* カテゴリ下層タブ (アンダーライン) */
+/* カテゴリタブ (アンダーライン) */
 .mb-cat-tabs {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 12px;
   border-bottom: 1px solid #e5e7eb;
 }
 .mb-cat-tab {

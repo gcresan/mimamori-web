@@ -42,7 +42,7 @@
         '<span class="mb-status" aria-label="ステータス: 相談受付中">' +
           '<span class="mb-status-dot"></span><span>相談受付中</span>' +
         '</span>' +
-        '<button type="button" class="mb-icon-btn" id="mb-minimize" aria-label="最小化" title="最小化">' +
+        '<button type="button" class="mb-icon-btn" id="mb-minimize" aria-label="最大化" title="最大化">' +
           '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
             '<path d="M14 4 L20 4 L20 10 M20 4 L14 10 M10 20 L4 20 L4 14 M4 20 L10 14"/>' +
           '</svg>' +
@@ -60,7 +60,6 @@
         '<span class="mb-quick-arrow" aria-hidden="true">▲</span>' +
       '</button>' +
       '<div class="mb-quick-body" id="mb-quick-body">' +
-        '<div class="mb-mode-tabs" id="mb-mode-tabs" role="tablist"></div>' +
         '<div class="mb-cat-tabs"  id="mb-cat-tabs"  role="tablist"></div>' +
         '<div class="mb-quick-chips" id="mb-quick-chips"></div>' +
       '</div>' +
@@ -81,7 +80,6 @@
   var $minimize     = document.getElementById('mb-minimize');
   var $quick        = document.getElementById('mb-quick');
   var $quickToggle  = document.getElementById('mb-quick-toggle');
-  var $modeTabs     = document.getElementById('mb-mode-tabs');
   var $catTabs      = document.getElementById('mb-cat-tabs');
   var $quickChips   = document.getElementById('mb-quick-chips');
 
@@ -97,9 +95,9 @@
   });
   if ($minimize) {
     $minimize.addEventListener('click', function () {
-      // 最小化: 親ページから見て iframe を畳む。state は localStorage に保存済みなので
-      // 次回開いた時に履歴が復元される。動作は close と同等。
-      parent.postMessage({ source: 'mimamori-bot', type: 'minimize' }, '*');
+      // 最大化: 親ページに通知 → widget.js が iframe を全画面表示
+      // (もう一度押すと通常サイズに戻る — トグル)
+      parent.postMessage({ source: 'mimamori-bot', type: 'maximize' }, '*');
     });
   }
 
@@ -237,83 +235,39 @@
     $typingRow = null;
   }
 
-  // ---- 質問例パネル (2階層タブ + チップ) ----
-  // モード × カテゴリの 2D マトリクス。初期はビルトインのデフォルトを使い、
-  // テナント設定 (starters) が来たら beginner.status を上書きする。
+  // ---- 質問例パネル (カテゴリタブ + チップ) ----
+  // 1階層: カテゴリ別の質問群。テナント設定 (starters) が来たら status カテゴリを上書きする。
   var DEFAULT_QUICK = {
-    modes: [
-      { key: 'beginner', label: '初心者向け' },
-      { key: 'normal',   label: '通常' }
-    ],
     categories: [
       { key: 'status',  label: '今どうなってる？' },
       { key: 'next',    label: '次に何する？' },
       { key: 'problem', label: 'うまくいかない…' }
     ],
     questions: {
-      beginner: {
-        status: [
-          '今、いちばん大事なことを1つだけ教えて',
-          '今の状況は良い？悪い？かんたんに教えて',
-          '良いところと気をつけたいところを1つずつ教えて',
-          '前回と比べて、何が変わった？（短く）'
-        ],
-        next: [
-          '次にやるべきことを1つだけ教えて',
-          '初心者でもできる小さな一歩を3つ教えて',
-          '今いちばん優先する作業は？',
-          '今週中にできる改善案は？'
-        ],
-        problem: [
-          'うまくいっていない箇所はどこ？',
-          '原因を、専門用語を使わずに教えて',
-          '小さく試せる対策はある？',
-          '迷っている時にやるべきことを教えて'
-        ]
-      },
-      normal: {
-        status: [
-          'サービスの全体像をまとめて',
-          '主要な指標を3行で教えて',
-          '直近の変化を教えて',
-          '注意点はある？'
-        ],
-        next: [
-          '次の30日でやるべき施策を3つ提案して',
-          '優先度の高いタスクを並べて',
-          '効果が出やすい打ち手は？',
-          'リソースが少ない場合の進め方は？'
-        ],
-        problem: [
-          '直近の不調要因を分析して',
-          'ボトルネックを特定して',
-          '改善案を効果順に並べて',
-          '想定リスクと対処を整理して'
-        ]
-      }
+      status: [
+        '今、いちばん大事なことを1つだけ教えて',
+        '今の状況は良い？悪い？かんたんに教えて',
+        '良いところと気をつけたいところを1つずつ教えて',
+        '前回と比べて、何が変わった？（短く）'
+      ],
+      next: [
+        '次にやるべきことを1つだけ教えて',
+        '小さな一歩を3つ教えて',
+        '今いちばん優先する作業は？',
+        '今週中にできる改善案は？'
+      ],
+      problem: [
+        'うまくいっていない箇所はどこ？',
+        '原因を、専門用語を使わずに教えて',
+        '小さく試せる対策はある？',
+        '迷っている時にやるべきことを教えて'
+      ]
     }
   };
-  var quickData   = JSON.parse(JSON.stringify(DEFAULT_QUICK));
-  var currentMode = 'beginner';
-  var currentCat  = 'status';
-  var quickOpen   = true;
+  var quickData  = JSON.parse(JSON.stringify(DEFAULT_QUICK));
+  var currentCat = 'status';
+  var quickOpen  = true;
 
-  function renderModeTabs() {
-    $modeTabs.innerHTML = '';
-    quickData.modes.forEach(function (m) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'mb-mode-tab' + (m.key === currentMode ? ' active' : '');
-      b.textContent = m.label;
-      b.addEventListener('click', function () {
-        if (currentMode === m.key) return;
-        currentMode = m.key;
-        renderModeTabs();
-        renderQuickChips();
-      });
-      $modeTabs.appendChild(b);
-    });
-  }
   function renderCatTabs() {
     $catTabs.innerHTML = '';
     quickData.categories.forEach(function (c) {
@@ -332,7 +286,7 @@
   }
   function renderQuickChips() {
     $quickChips.innerHTML = '';
-    var qs = ((quickData.questions[currentMode] || {})[currentCat]) || [];
+    var qs = quickData.questions[currentCat] || [];
     qs.forEach(function (q) {
       var b = document.createElement('button');
       b.type = 'button';
@@ -355,15 +309,14 @@
   $quickToggle.addEventListener('click', function () { setQuickOpen(!quickOpen); });
 
   function applyStartersToQuick(starters) {
-    // テナント設定の starters があれば beginner.status を差し替え
+    // テナント設定の starters があれば status カテゴリを差し替え
     if (starters && starters.length) {
-      quickData.questions.beginner.status = starters.slice(0, 6);
-      if (currentMode === 'beginner' && currentCat === 'status') renderQuickChips();
+      quickData.questions.status = starters.slice(0, 6);
+      if (currentCat === 'status') renderQuickChips();
     }
   }
 
   // 初回描画
-  renderModeTabs();
   renderCatTabs();
   renderQuickChips();
 
