@@ -77,8 +77,11 @@
     var pointer = fabReady ? 'auto' : 'none';
     // 開閉アニメ用イージング (Material 風 ease-out)
     var EASE = 'cubic-bezier(.22,1,.36,1)';
+    // 画像モード時の角丸: rounded ON で控えめに 12px、OFF で角張る
+    var imgRadius = fabConfig.rounded ? '12px' : '0';
     var css =
       // PC (デフォルト = 大画面 ≥1440px)
+      // 画像なしモード — 円形 FAB
       '#' + FAB_ID + '{position:fixed;right:' + x + 'px;bottom:' + y + 'px;' +
       'width:' + sz + 'px;height:' + sz + 'px;border-radius:' + radius + ';' +
       'background:' + fabConfig.bg + ';color:#fff;display:flex;align-items:center;justify-content:center;' +
@@ -88,6 +91,15 @@
       '#' + FAB_ID + ':hover{filter:brightness(.92);transform:translateY(-2px);box-shadow:' + hoverShadow + '}' +
       '#' + FAB_ID + ':active{transform:translateY(0) scale(.96)}' +
       '#' + FAB_ID + ' img{width:100%;height:100%;object-fit:contain;padding:10px;display:block}' +
+      // 画像あり (.has-image) — 円形・背景・パディングを全て撤回し、画像そのままを表示
+      '#' + FAB_ID + '.has-image{' +
+        'background:transparent;padding:0;width:auto;height:' + sz + 'px;max-width:min(380px,calc(100vw - 24px));' +
+        'border-radius:' + imgRadius + ';overflow:visible;' +
+      '}' +
+      '#' + FAB_ID + '.has-image img{' +
+        'width:auto;height:100%;max-width:100%;padding:0;object-fit:contain;display:block;' +
+        'border-radius:inherit;' +
+      '}' +
       // ウィンドウ
       '#' + WRAP_ID + '{position:fixed;right:' + x + 'px;bottom:' + (y + sz + 12) + 'px;' +
       'width:380px;max-width:calc(100vw - 24px);' +
@@ -105,6 +117,7 @@
       // 中画面以下 (< 1440px): FAB サイズを size_md に変更
       '@media (max-width:1439px){' +
         '#' + FAB_ID + '{width:' + szmd + 'px;height:' + szmd + 'px}' +
+        '#' + FAB_ID + '.has-image{width:auto;height:' + szmd + 'px}' +
         '#' + WRAP_ID + '{bottom:' + (y + szmd + 12) + 'px}' +
       '}' +
       // SP (< 600px): FAB 位置を SP オフセットに、ウィンドウは下から全画面スライド
@@ -138,16 +151,22 @@
 
   function applyFabContent() {
     if (!fab) return;
-    // 文字色 = アイコン色 (currentColor で SVG にも適用される)
     fab.style.color = '#ffffff';
     fab.textContent = '';
     if (fabConfig.icon_url) {
+      // 画像モード — 円形コンテナを撤回してバナー画像そのままを見せる (has-image クラス)
+      fab.classList.add('has-image');
       var img = document.createElement('img');
       img.src = fabConfig.icon_url;
       img.alt = '';
-      img.onerror = function () { fab.innerHTML = DEFAULT_ICON_SVG; };
+      img.onerror = function () {
+        fab.classList.remove('has-image');
+        fab.innerHTML = DEFAULT_ICON_SVG;
+      };
       fab.appendChild(img);
     } else {
+      // 画像なし — デフォルトの円形 FAB
+      fab.classList.remove('has-image');
       fab.innerHTML = DEFAULT_ICON_SVG;
     }
   }
