@@ -10,18 +10,20 @@ if ( class_exists( 'Mimamori_Bot_Bootstrap' ) ) { return; }
  */
 class Mimamori_Bot_Bootstrap {
 
+	/** init() が複数回呼ばれないようガード */
+	private static $initialized = false;
+
 	public static function init(): void {
+		if ( self::$initialized ) return;
+		self::$initialized = true;
+
 		add_action( 'plugins_loaded',  [ __CLASS__, 'on_plugins_loaded' ] );
 		add_action( 'rest_api_init',   [ __CLASS__, 'register_rest_routes' ] );
 		add_action( 'admin_menu',      [ __CLASS__, 'register_admin_menu' ] );
 		add_action( 'admin_init',      [ __CLASS__, 'maybe_upgrade_db' ] );
 
-		// 公開Widget loader (テナント独自JSを直接配信する場合に備え、現状は静的ファイル直リンクのみ)
-		// CORSプリフライト対応は class-public-api.php で per-route 処理
-
 		// 子ファイル末尾の static method 呼び出しが PHP-FPM 環境で実行されない問題への workaround
 		// 確実に動作する Bootstrap::init() から明示的に呼び出す
-		Mimamori_Bot_Logger::info( 'bootstrap::init() registering admin page hooks' );
 		if ( class_exists( 'Mimamori_Bot_Settings_Page' ) ) {
 			Mimamori_Bot_Settings_Page::init_hooks();
 		}
@@ -46,15 +48,24 @@ class Mimamori_Bot_Bootstrap {
 	}
 
 	/**
-	 * バージョン差分があれば dbDelta を再走させる + 固定ページ自動作成
+	 * バージョン差分があれば dbDelta を再走 + 固定ページ自動作成。
+	 * バージョン一致時は何もしない (毎リクエストの実行を避ける)。
 	 */
 	public static function maybe_upgrade_db(): void {
 		$installed = get_option( 'mimamori_bot_db_version', '0.0.0' );
+
 		if ( version_compare( $installed, MIMAMORI_BOT_VERSION, '<' ) ) {
 			Mimamori_Bot_Installer::install();
 			update_option( 'mimamori_bot_db_version', MIMAMORI_BOT_VERSION, false );
+			// バージョン上がった時だけ固定ページの再確認
+			self::ensure_chatbot_page();
+			return;
 		}
-		self::ensure_chatbot_page();
+
+		// 固定ページ未作成フラグが立っているときだけチェック (初回 + 削除後の救済)
+		if ( ! get_option( 'mimamori_bot_chatbot_page_id', 0 ) ) {
+			self::ensure_chatbot_page();
+		}
 	}
 
 	/**
