@@ -302,6 +302,12 @@ class Mimamori_Bot_Settings_Page {
 			self::redirect_with_error( '作成に失敗しました: ' . $e->getMessage() );
 		}
 
+		// フロントエンドからの送信ならそちらへ
+		$ret = self::resolve_return_url();
+		if ( $ret !== '' ) {
+			wp_safe_redirect( add_query_arg( [ 'created' => 1 ], $ret ) );
+			exit;
+		}
 		// 運営者は作成したテナントを編集画面で開く
 		$redirect_args = [ 'page' => Mimamori_Bot_Admin_Menu::PAGE_SLUG, 'created' => 1 ];
 		if ( $is_admin && $created ) {
@@ -388,6 +394,12 @@ class Mimamori_Bot_Settings_Page {
 			}
 		}
 
+		// フロントエンドからの送信ならそちらへ
+		$ret = self::resolve_return_url();
+		if ( $ret !== '' ) {
+			wp_safe_redirect( add_query_arg( [ 'updated' => 1 ], $ret ) );
+			exit;
+		}
 		// リダイレクト: 編集画面に戻す (運営者の場合は tenant_id を維持)
 		$redirect_args = [ 'page' => Mimamori_Bot_Admin_Menu::PAGE_SLUG, 'updated' => 1 ];
 		if ( $is_admin ) {
@@ -415,6 +427,11 @@ class Mimamori_Bot_Settings_Page {
 
 		Mimamori_Bot_Tenant_Repository::regenerate_keys( (int) $tenant['id'] );
 
+		$ret = self::resolve_return_url();
+		if ( $ret !== '' ) {
+			wp_safe_redirect( add_query_arg( [ 'regenerated' => 1 ], $ret ) );
+			exit;
+		}
 		$redirect_args = [ 'page' => Mimamori_Bot_Admin_Menu::PAGE_SLUG, 'regenerated' => 1 ];
 		if ( $is_admin ) {
 			$redirect_args['tenant_id'] = (int) $tenant['id'];
@@ -434,7 +451,29 @@ class Mimamori_Bot_Settings_Page {
 		} elseif ( isset( $_GET['tenant_id'] ) ) {
 			$args['tenant_id'] = absint( $_GET['tenant_id'] );
 		}
+		// フロントエンド (_return_url) からのリクエストなら、そちらに戻す
+		$ret = self::resolve_return_url();
+		if ( $ret !== '' ) {
+			wp_safe_redirect( add_query_arg( [ 'error' => rawurlencode( $message ) ], $ret ) );
+			exit;
+		}
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 		exit;
+	}
+
+	/**
+	 * フロントエンド (page-chatbot.php 等) からの送信なら、そのページに戻すための URL を返す。
+	 * 同一ホストの安全な URL のみ受け付ける。
+	 */
+	public static function resolve_return_url(): string {
+		$raw = isset( $_REQUEST['_return_url'] ) ? (string) wp_unslash( $_REQUEST['_return_url'] ) : '';
+		if ( $raw === '' ) return '';
+		$parsed = wp_parse_url( $raw );
+		if ( empty( $parsed['host'] ) ) return '';
+		$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( $home_host && strtolower( $parsed['host'] ) !== strtolower( (string) $home_host ) ) {
+			return '';
+		}
+		return esc_url_raw( $raw );
 	}
 }

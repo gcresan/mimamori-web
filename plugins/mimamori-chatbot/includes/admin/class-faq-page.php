@@ -159,6 +159,11 @@ class Mimamori_Bot_Faq_Page {
 	}
 
 	private static function back_ok( string $flag ): void {
+		$ret = Mimamori_Bot_Settings_Page::resolve_return_url();
+		if ( $ret !== '' ) {
+			wp_safe_redirect( add_query_arg( [ $flag => 1 ], $ret ) );
+			exit;
+		}
 		wp_safe_redirect( add_query_arg( [
 			'page' => Mimamori_Bot_Admin_Menu::PAGE_SLUG_FAQ,
 			$flag  => 1,
@@ -167,6 +172,11 @@ class Mimamori_Bot_Faq_Page {
 	}
 
 	private static function back( string $error ): void {
+		$ret = Mimamori_Bot_Settings_Page::resolve_return_url();
+		if ( $ret !== '' ) {
+			wp_safe_redirect( add_query_arg( [ 'error' => rawurlencode( $error ) ], $ret ) );
+			exit;
+		}
 		wp_safe_redirect( add_query_arg( [
 			'page'  => Mimamori_Bot_Admin_Menu::PAGE_SLUG_FAQ,
 			'error' => rawurlencode( $error ),
