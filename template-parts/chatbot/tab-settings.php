@@ -146,6 +146,86 @@ if ( ! defined( 'ABSPATH' ) ) exit;
             <p class="description">改行可。2〜3行・全体で200字以内が目安です。装飾は絵文字1個まで。空欄ならデフォルト文 (上のプレースホルダ) が使われます。</p>
         </div>
 
+        <h3 style="margin-top:28px;padding-top:18px;border-top:1px solid #e5e7eb">🎭 担当アイコン</h3>
+        <p class="description" style="margin-bottom:16px">チャットのヘッダー左と、アシスタント発言の左に表示されるアイコンを選択できます。アイコンの色はメインカラーに連動します。</p>
+
+        <?php
+        $current_avatar  = (string) ( $tenant['assistant_avatar'] ?? '' );
+        $avatar_presets  = class_exists( 'Mimamori_Bot_Avatars' ) ? Mimamori_Bot_Avatars::presets() : [];
+        $primary_for_av  = (string) ( $tenant['theme_primary'] ?: '#2563eb' );
+        ?>
+        <div class="mb-form-group" style="max-width:none">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));gap:10px;max-width:720px">
+                <label class="mb-avatar-option" data-checked="<?php echo $current_avatar === '' ? '1' : '0'; ?>"
+                       style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;
+                              border:2px solid <?php echo $current_avatar === '' ? '#2563eb' : '#e5e7eb'; ?>;
+                              background:<?php echo $current_avatar === '' ? '#eff6ff' : '#fff'; ?>;
+                              border-radius:10px;transition:border-color .15s,background-color .15s;position:relative">
+                    <input type="radio" name="assistant_avatar" value="" <?php checked( $current_avatar, '' ); ?>
+                           style="position:absolute;opacity:0;pointer-events:none">
+                    <div style="width:48px;height:48px;border-radius:50%;background:#f1f5f9;color:#64748b;
+                                display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">なし</div>
+                    <span style="font-size:12px;color:#475569">表示しない</span>
+                </label>
+
+                <?php foreach ( $avatar_presets as $key => $info ) :
+                    $is_selected = ( $current_avatar === $key );
+                ?>
+                <label class="mb-avatar-option" data-checked="<?php echo $is_selected ? '1' : '0'; ?>"
+                       style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;
+                              border:2px solid <?php echo $is_selected ? '#2563eb' : '#e5e7eb'; ?>;
+                              background:<?php echo $is_selected ? '#eff6ff' : '#fff'; ?>;
+                              border-radius:10px;transition:border-color .15s,background-color .15s;position:relative">
+                    <input type="radio" name="assistant_avatar" value="<?php echo esc_attr( $key ); ?>" <?php checked( $current_avatar, $key ); ?>
+                           style="position:absolute;opacity:0;pointer-events:none">
+                    <div style="width:48px;height:48px;border-radius:50%;
+                                background:<?php echo esc_attr( $primary_for_av ); ?>;color:#fff;
+                                display:flex;align-items:center;justify-content:center;padding:8px;box-sizing:border-box">
+                        <?php echo $info['svg']; // 信頼できる定数由来 (XSS なし) ?>
+                    </div>
+                    <span style="font-size:12px;color:#475569;text-align:center;line-height:1.3"><?php echo esc_html( $info['label'] ); ?></span>
+                </label>
+                <?php endforeach; ?>
+            </div>
+            <p class="description" style="margin-top:10px">クリックで選択。「表示しない」を選ぶとアイコンは出ません。</p>
+        </div>
+
+        <script>
+        (function () {
+            // ラジオ選択でカードのハイライトを切り替え + ピッカー連動でプレビュー色を即時反映
+            var opts = document.querySelectorAll('.mb-avatar-option');
+            function refresh() {
+                opts.forEach(function (o) {
+                    var input = o.querySelector('input[type=radio]');
+                    var on = input && input.checked;
+                    o.style.borderColor = on ? '#2563eb' : '#e5e7eb';
+                    o.style.background  = on ? '#eff6ff' : '#fff';
+                });
+            }
+            opts.forEach(function (o) {
+                o.addEventListener('click', function () {
+                    var input = o.querySelector('input[type=radio]');
+                    if (input) { input.checked = true; refresh(); }
+                });
+            });
+            // メインカラーが変わったらアバター背景もリアルタイム連動
+            var primary = document.getElementById('theme_primary');
+            var picker  = document.getElementById('theme_primary_picker');
+            function syncAvatarBg() {
+                var c = (primary && /^#[0-9a-f]{3,8}$/i.test(primary.value.trim())) ? primary.value.trim() : '#2563eb';
+                opts.forEach(function (o) {
+                    var circle = o.querySelector('div[style*="border-radius:50%"]');
+                    if (!circle) return;
+                    var input = o.querySelector('input[type=radio]');
+                    if (!input || input.value === '') return; // "なし" は薄灰のまま
+                    circle.style.background = c;
+                });
+            }
+            if (primary) primary.addEventListener('input', syncAvatarBg);
+            if (picker)  picker .addEventListener('input', syncAvatarBg);
+        })();
+        </script>
+
         <div class="mb-form-group">
             <label for="cta_url_quote">見積もりCTA URL</label>
             <input type="url" id="cta_url_quote" name="cta_url_quote" value="<?php echo esc_attr( (string) ( $tenant['cta_url_quote'] ?? '' ) ); ?>" placeholder="https://example.com/quote">

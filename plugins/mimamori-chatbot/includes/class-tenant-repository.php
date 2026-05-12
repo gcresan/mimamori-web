@@ -137,6 +137,8 @@ class Mimamori_Bot_Tenant_Repository {
 			'fab_offset_x_sp', 'fab_offset_y_sp',
 			// 初期メッセージ
 			'welcome_message',
+			// 担当アバター (preset key)
+			'assistant_avatar',
 		];
 		$int_fields = [
 			'rate_limit_rpm', 'monthly_budget_jpy',
@@ -228,6 +230,12 @@ class Mimamori_Bot_Tenant_Repository {
 			? (int) $tenant['fab_offset_x_sp'] : $fab_x;
 		$fab_y_sp = ( isset( $tenant['fab_offset_y_sp'] ) && $tenant['fab_offset_y_sp'] !== null )
 			? (int) $tenant['fab_offset_y_sp'] : $fab_y;
+		// 担当アバター — preset key 無効/未設定なら空 (= UI 側で非表示)
+		$avatar_key = (string) ( $tenant['assistant_avatar'] ?? '' );
+		$avatar_svg = '';
+		if ( class_exists( 'Mimamori_Bot_Avatars' ) && Mimamori_Bot_Avatars::is_valid_key( $avatar_key ) ) {
+			$avatar_svg = Mimamori_Bot_Avatars::get_svg( $avatar_key );
+		}
 		return [
 			'title'        => $title,
 			'primary'      => $primary,
@@ -238,6 +246,8 @@ class Mimamori_Bot_Tenant_Repository {
 			'fab_y'        => $fab_y,
 			'fab_x_sp'     => $fab_x_sp,
 			'fab_y_sp'     => $fab_y_sp,
+			'avatar_key'   => $avatar_key,
+			'avatar_svg'   => $avatar_svg,
 		];
 	}
 

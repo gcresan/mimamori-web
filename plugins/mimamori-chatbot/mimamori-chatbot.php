@@ -28,7 +28,7 @@ if ( defined( 'MIMAMORI_BOT_VERSION' ) ) {
 	return;
 }
 
-define( 'MIMAMORI_BOT_VERSION',                '0.6.8' );
+define( 'MIMAMORI_BOT_VERSION',                '0.7.0' );
 define( 'MIMAMORI_BOT_FILE',                   __FILE__ );
 define( 'MIMAMORI_BOT_PATH',                   plugin_dir_path( __FILE__ ) );
 define( 'MIMAMORI_BOT_URL',                    plugin_dir_url( __FILE__ ) );
@@ -47,6 +47,7 @@ require_once MIMAMORI_BOT_PATH . 'includes/class-crypto.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-installer.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-tenant-context.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-tenant-repository.php';
+require_once MIMAMORI_BOT_PATH . 'includes/class-avatars.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-rate-limiter.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-auth.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-openai-bridge.php';

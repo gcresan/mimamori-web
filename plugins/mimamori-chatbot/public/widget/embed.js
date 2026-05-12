@@ -14,10 +14,11 @@
     var m = /key=([^&]+)/.exec(location.hash.slice(1));
     if (m) hashKey = decodeURIComponent(m[1]);
   }
-  var TENANT = app.dataset.tenant;
-  var PUBKEY = hashKey || app.dataset.pubkey;
-  var API    = app.dataset.api;
-  var TITLE  = app.dataset.title || 'AIアシスタント';
+  var TENANT     = app.dataset.tenant;
+  var PUBKEY     = hashKey || app.dataset.pubkey;
+  var API        = app.dataset.api;
+  var TITLE      = app.dataset.title || 'AIアシスタント';
+  var AVATAR_SVG = app.dataset.avatarSvg || ''; // 担当アバター (SVG文字列, 空ならアイコンなし)
 
   if (!TENANT || !PUBKEY || !API) {
     app.textContent = '初期化に失敗しました。';
@@ -30,9 +31,10 @@
   try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) {}
 
   // textContent で安全に入れたいので、innerHTML の段階ではプレースホルダ
+  // ヘッダーアバターは AVATAR_SVG がある時のみ後で挿入
   app.innerHTML =
     '<header class="mb-header">' +
-      '<h1 id="mb-title"></h1>' +
+      '<h1 id="mb-title-wrap"><span id="mb-header-avatar"></span><span id="mb-title"></span></h1>' +
       '<button type="button" id="mb-close" aria-label="閉じる">×</button>' +
     '</header>' +
     '<div class="mb-list" id="mb-list" role="log" aria-live="polite"></div>' +
@@ -43,16 +45,22 @@
       '<button type="submit" id="mb-send">送信</button>' +
     '</form>';
 
-  var $title    = document.getElementById('mb-title');
-  var $list     = document.getElementById('mb-list');
-  var $starters = document.getElementById('mb-starters');
-  var $typing   = document.getElementById('mb-typing');
-  var $text     = document.getElementById('mb-text');
-  var $send     = document.getElementById('mb-send');
-  var $form     = document.getElementById('mb-form');
-  var $close    = document.getElementById('mb-close');
+  var $title       = document.getElementById('mb-title');
+  var $headerAvatar = document.getElementById('mb-header-avatar');
+  var $list        = document.getElementById('mb-list');
+  var $starters    = document.getElementById('mb-starters');
+  var $typing      = document.getElementById('mb-typing');
+  var $text        = document.getElementById('mb-text');
+  var $send        = document.getElementById('mb-send');
+  var $form        = document.getElementById('mb-form');
+  var $close       = document.getElementById('mb-close');
 
   if ($title) $title.textContent = TITLE;
+  // ヘッダー左にアバターを差し込む (空なら非表示のまま)
+  if ($headerAvatar && AVATAR_SVG) {
+    $headerAvatar.className = 'mb-header-avatar';
+    $headerAvatar.innerHTML = AVATAR_SVG;
+  }
 
   $close.addEventListener('click', function () {
     parent.postMessage({ source: 'mimamori-bot', type: 'close' }, '*');
@@ -80,7 +88,19 @@
   }
 
   // ---- メッセージ描画 ----
+  // 各メッセージは <div class="mb-row {role}"> でラップし、
+  // assistant + AVATAR_SVG ありなら左にアバター円を並べる。
   function appendMessage(role, text, suggestions) {
+    var row = document.createElement('div');
+    row.className = 'mb-row ' + role;
+
+    if (role === 'assistant' && AVATAR_SVG) {
+      var av = document.createElement('div');
+      av.className = 'mb-msg-avatar';
+      av.innerHTML = AVATAR_SVG; // SVG は plugin 内定数由来 (XSS なし)
+      row.appendChild(av);
+    }
+
     var div = document.createElement('div');
     div.className = 'mb-msg ' + role;
     div.textContent = text;
@@ -101,15 +121,19 @@
       });
       div.appendChild(s);
     }
-    $list.appendChild(div);
+    row.appendChild(div);
+    $list.appendChild(row);
     $list.scrollTop = $list.scrollHeight;
   }
 
   function appendSystem(text, isError) {
+    var row = document.createElement('div');
+    row.className = 'mb-row system';
     var div = document.createElement('div');
     div.className = 'mb-msg system' + (isError ? ' mb-error' : '');
     div.textContent = text;
-    $list.appendChild(div);
+    row.appendChild(div);
+    $list.appendChild(row);
     $list.scrollTop = $list.scrollHeight;
   }
 
@@ -192,6 +216,52 @@
   $text.addEventListener('compositionstart', function () { composing = true; });
   $text.addEventListener('compositionend',   function () { composing = false; });
 
+  // ---- 送信時の効果音 "シュッ" (Web Audio API でその場合成) ----
+  // sine の高音→低音スイープ + 短いノイズで風切り感を出す。
+  var sendAudioCtx = null;
+  function playSendSound() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!sendAudioCtx) sendAudioCtx = new AC();
+      if (sendAudioCtx.state === 'suspended') sendAudioCtx.resume();
+      var ctx = sendAudioCtx;
+      var now = ctx.currentTime;
+      var dur = 0.16;
+
+      // 1) ピッチ下降 sine (1400Hz → 500Hz) — "シュッ" の主成分
+      var osc = ctx.createOscillator();
+      var oscGain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, now);
+      osc.frequency.exponentialRampToValueAtTime(500, now + dur);
+      oscGain.gain.setValueAtTime(0.0001, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.10, now + 0.008);
+      oscGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(oscGain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + dur + 0.02);
+
+      // 2) 軽いホワイトノイズ → ハイパスで風切り音っぽく
+      var bufferSize = Math.floor(ctx.sampleRate * dur);
+      var noiseBuf = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      var data = noiseBuf.getChannelData(0);
+      for (var i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+      var noise = ctx.createBufferSource();
+      noise.buffer = noiseBuf;
+      var hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2200;
+      var noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.06, now + 0.005);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      noise.connect(hp).connect(noiseGain).connect(ctx.destination);
+      noise.start(now);
+      noise.stop(now + dur + 0.02);
+    } catch (e) { /* 致命的でない */ }
+  }
+
   function clearInput() {
     // IME 確定が遅延して value が復活するケース対策で blur → clear → 次フレームで再フォーカス
     $text.blur();
@@ -209,6 +279,7 @@
     if (composing) return; // IME 変換中は無視
     var msg = ($text.value || '').trim();
     if (!msg) return;
+    playSendSound();
     clearInput();
     $starters.innerHTML = '';
     appendMessage('user', msg);

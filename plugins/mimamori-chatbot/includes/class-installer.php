@@ -61,6 +61,7 @@ class Mimamori_Bot_Installer {
 			fab_offset_x_sp SMALLINT NULL,
 			fab_offset_y_sp SMALLINT NULL,
 			welcome_message TEXT NULL,
+			assistant_avatar VARCHAR(40) NULL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),

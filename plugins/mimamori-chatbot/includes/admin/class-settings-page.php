@@ -406,6 +406,14 @@ class Mimamori_Bot_Settings_Page {
 		if ( isset( $_POST['fab_offset_y'] ) ) {
 			$fields['fab_offset_y'] = max( 0, min( 200, (int) $_POST['fab_offset_y'] ) );
 		}
+		// 担当アバター — preset key のみ受け入れ (空 = なし)
+		if ( isset( $_POST['assistant_avatar'] ) ) {
+			$av = sanitize_key( (string) $_POST['assistant_avatar'] );
+			if ( $av === '' || ( class_exists( 'Mimamori_Bot_Avatars' ) && Mimamori_Bot_Avatars::is_valid_key( $av ) ) ) {
+				$fields['assistant_avatar'] = $av;
+			}
+		}
+
 		// スマホ用 X/Y: 値があれば fields に積み、空欄なら後で NULL 直接更新 (wpdb->update は NULL を %d に変換できないため)
 		$sp_nulls = [];
 		foreach ( [ 'fab_offset_x_sp', 'fab_offset_y_sp' ] as $sp_key ) {

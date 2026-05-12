@@ -26,7 +26,13 @@ body {
   justify-content: space-between;
   gap: 8px;
 }
-.mb-header h1 { font-size: 14px; font-weight: 600; margin: 0; }
+.mb-header h1 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
+.mb-header .mb-header-avatar {
+  flex: 0 0 28px; width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,255,255,.22); color: var(--mb-on-primary);
+  display: inline-flex; align-items: center; justify-content: center; padding: 4px;
+}
+.mb-header .mb-header-avatar svg { width: 100%; height: 100%; display: block; }
 .mb-header button {
   background: transparent; color: var(--mb-on-primary); border: 0;
   width: 28px; height: 28px; border-radius: 14px; cursor: pointer; font-size: 16px;
@@ -41,10 +47,24 @@ body {
   flex-direction: column;
   gap: 12px;
 }
-.mb-msg { max-width: 85%; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
-.mb-msg.user { align-self: flex-end; background: var(--mb-primary); color: var(--mb-on-primary); border-bottom-right-radius: 4px; }
-.mb-msg.assistant { align-self: flex-start; background: #fff; border: 1px solid #e5e7eb; border-bottom-left-radius: 4px; }
-.mb-msg.system { align-self: center; background: transparent; color: #6b7280; font-size: 12px; max-width: 100%; text-align: center; }
+/* 行コンテナ — アシスタント発言ではアバターを左に並べる */
+.mb-row { display: flex; align-items: flex-end; gap: 8px; max-width: 100%; }
+.mb-row.user      { justify-content: flex-end; }
+.mb-row.assistant { justify-content: flex-start; }
+.mb-row.system    { justify-content: center; }
+
+.mb-msg-avatar {
+  flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--mb-primary); color: var(--mb-on-primary);
+  display: inline-flex; align-items: center; justify-content: center; padding: 6px;
+  align-self: flex-end;
+}
+.mb-msg-avatar svg { width: 100%; height: 100%; display: block; }
+
+.mb-msg { max-width: 78%; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+.mb-msg.user { background: var(--mb-primary); color: var(--mb-on-primary); border-bottom-right-radius: 4px; }
+.mb-msg.assistant { background: #fff; border: 1px solid #e5e7eb; border-bottom-left-radius: 4px; }
+.mb-msg.system { background: transparent; color: #6b7280; font-size: 12px; max-width: 100%; text-align: center; }
 
 .mb-starters { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 8px; }
 .mb-starter {

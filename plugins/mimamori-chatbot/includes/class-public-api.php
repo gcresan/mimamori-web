@@ -106,8 +106,17 @@ class Mimamori_Bot_Public_API {
 		$service = new Mimamori_Bot_Chat_Service();
 		$session = $service->create_session( $tenant, $params );
 
-		// starters: FAQ.is_starter=1 を優先、未登録ならフォールバック (汎用)
+		// starters の優先順位:
+		//   1) FAQ.is_starter=1 (運営者が明示指定)
+		//   2) AI 自動生成のキャッシュ済み提案 (ナレッジ+履歴ベース、週次cronで更新)
+		//   3) 汎用フォールバック (新規テナント・ナレッジ未登録向け)
 		$starters = Mimamori_Bot_Faq_Repository::list_starters( (int) $tenant['id'], 4 );
+		if ( empty( $starters ) ) {
+			$ai_cache = Mimamori_Bot_Faq_Repository::get_cached_suggestions( (int) $tenant['id'] );
+			if ( $ai_cache && ! empty( $ai_cache['suggestions'] ) ) {
+				$starters = array_slice( $ai_cache['suggestions'], 0, 4 );
+			}
+		}
 		if ( empty( $starters ) ) {
 			$starters = [
 				'どんなことを相談できますか？',
@@ -256,6 +265,9 @@ class Mimamori_Bot_Public_API {
 		$title_data  = esc_attr( $theme['title'] );
 		$primary     = esc_attr( $theme['primary'] );
 		$on_primary  = esc_attr( $theme['on_primary'] );
+		// 担当アバター: SVG 文字列を data 属性に埋め込む。SVG は plugin 内定数由来 (XSS なし)
+		// esc_attr で属性向けにエスケープしたうえで data-avatar-svg に格納する。
+		$avatar_data = esc_attr( $theme['avatar_svg'] ?? '' );
 
 		// embed.css / embed.js は plugin assets として静的配信。
 		// CSS変数で配色を上書きする (embed.css は var(--mb-*) を参照)。
@@ -280,7 +292,7 @@ class Mimamori_Bot_Public_API {
 </style>
 </head>
 <body>
-<div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}" data-title="{$title_data}"></div>
+<div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}" data-title="{$title_data}" data-avatar-svg="{$avatar_data}"></div>
 <script src="{$asset_base}/embed.js?v={$ver}" defer></script>
 </body>
 </html>
