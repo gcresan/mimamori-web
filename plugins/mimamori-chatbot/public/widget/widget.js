@@ -54,7 +54,8 @@
     rounded: true,   // 角丸 (= 円形)
     shadow:  true,   // ドロップシャドウ
     size:    56,     // 大画面 (>= 1440px) サイズ
-    size_md: 56      // 中画面以下 (< 1440px) サイズ — 未設定時は size と同じ
+    size_md: 56,     // 中画面以下 (< 1440px) サイズ — 未設定時は size と同じ
+    width_pct_sp: 0  // スマホ版バナー最大横幅 (% of vw) — 0 = 自動 (制限なし)
   };
   // 効果音のオン/オフ (widget-config 取得まではデフォルト ON)
   var soundOpenOn = true;
@@ -121,8 +122,12 @@
         '#' + WRAP_ID + '{bottom:' + (y + szmd + 12) + 'px}' +
       '}' +
       // SP (< 600px): FAB 位置を SP オフセットに、ウィンドウは下から全画面スライド
+      // 画像ありの時のみ、width_pct_sp が指定されていればバナー最大横幅を vw% に上書き
       '@media (max-width:600px){' +
         '#' + FAB_ID + '{right:' + xsp + 'px;bottom:' + ysp + 'px}' +
+        ( fabConfig.width_pct_sp > 0
+          ? '#' + FAB_ID + '.has-image{max-width:' + fabConfig.width_pct_sp + 'vw}'
+          : '' ) +
         '#' + WRAP_ID + '{right:0;bottom:0;width:100vw;height:100vh;max-height:100vh;border-radius:0;' +
           'transform:translateY(100%);transform-origin:center bottom}' +
         '#' + WRAP_ID + '.open{transform:translateY(0)}' +
@@ -207,6 +212,9 @@
             if (typeof j.fab.size    === 'number' && j.fab.size    > 0) fabConfig.size    = j.fab.size;
             if (typeof j.fab.size_md === 'number' && j.fab.size_md > 0) fabConfig.size_md = j.fab.size_md;
             else fabConfig.size_md = fabConfig.size;
+            if (typeof j.fab.width_pct_sp === 'number' && j.fab.width_pct_sp > 0) {
+              fabConfig.width_pct_sp = j.fab.width_pct_sp;
+            }
           }
           if (j && j.sound && typeof j.sound.open === 'boolean') {
             soundOpenOn = j.sound.open;

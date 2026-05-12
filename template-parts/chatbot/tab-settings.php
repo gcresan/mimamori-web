@@ -96,17 +96,17 @@ window.MB_UPLOAD = {
             <input type="url" id="fab_icon_url" name="fab_icon_url" value="<?php echo esc_attr( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" placeholder="または画像URLを直接入力" style="width:100%;max-width:560px;margin-top:10px">
             <p class="description">対応形式: PNG / JPG / GIF / WEBP / SVG (最大 2MB)。推奨: 透過 PNG / SVG、正方形、64〜128px。未設定時は💬白アイコン。アップロードしたファイルは <code>uploads/mimamori-chatbot/fab-icons/</code> に保存されます。</p>
             <div id="mb-fab-icon-preview" style="margin-top:10px<?php echo empty( $tenant['fab_icon_url'] ) ? ';display:none' : ''; ?>">
-                <img src="<?php echo esc_url( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" alt="" style="width:56px;height:56px;border-radius:28px;background:<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?: ( $tenant['theme_primary'] ?: '#2563eb' ) ) ); ?>;object-fit:contain;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,.15)">
+                <img id="mb-fab-icon-preview-img" src="<?php echo esc_url( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" alt="" style="height:56px;width:auto;max-width:380px;object-fit:contain;display:block;border-radius:0;background:transparent;padding:0;box-shadow:0 4px 12px rgba(0,0,0,.10)">
             </div>
         </div>
 
-        <div class="mb-form-group" style="max-width:none">
+        <div id="mb-fab-bg-section" class="mb-form-group" style="max-width:none">
             <label for="fab_bg_color">アイコン背景色</label>
             <div style="display:flex;gap:8px;align-items:center">
                 <input type="color" id="fab_bg_color_picker" value="<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?: ( $tenant['theme_primary'] ?: '#2563eb' ) ) ); ?>" style="width:48px;height:36px;padding:2px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer">
                 <input type="text" id="fab_bg_color" name="fab_bg_color" value="<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?? '' ) ); ?>" placeholder="メインカラーを使用" pattern="^#[0-9a-fA-F]{3,8}$" style="flex:0 0 200px;max-width:200px;font-family:monospace">
             </div>
-            <p class="description">空欄でメインカラーと同じ</p>
+            <p class="description">空欄でメインカラーと同じ (※ バナー画像をアップロードした場合は背景色は使われません)</p>
         </div>
 
         <?php
@@ -155,6 +155,19 @@ window.MB_UPLOAD = {
                     <div style="display:flex;align-items:center;gap:8px">
                         <input type="number" id="fab_size_md" name="fab_size_md" min="32" max="120" value="<?php echo esc_attr( (string) $fab_size_md_val ); ?>" placeholder="大画面と同じ" style="width:100%">
                         <span style="font-size:13px;color:#64748b">px</span>
+                    </div>
+                </div>
+
+                <?php
+                $fab_width_pct_sp_val = ( isset( $tenant['fab_width_pct_sp'] ) && $tenant['fab_width_pct_sp'] !== null )
+                    ? (int) $tenant['fab_width_pct_sp'] : '';
+                ?>
+                <div style="flex:0 0 320px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px">
+                    <div style="font-weight:600;font-size:13px;color:#0f172a;margin-bottom:6px">📱 スマホ版バナー最大横幅</div>
+                    <p class="description" style="margin:0 0 8px 0">画面幅 600px 以下で、バナーがビューポート幅の何 % まで広がるか (画像ありのみ有効)</p>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <input type="number" id="fab_width_pct_sp" name="fab_width_pct_sp" min="10" max="100" value="<?php echo esc_attr( (string) $fab_width_pct_sp_val ); ?>" placeholder="自動 (制限なし)" style="width:100%">
+                        <span style="font-size:13px;color:#64748b">%</span>
                     </div>
                 </div>
             </div>
@@ -381,15 +394,25 @@ window.MB_UPLOAD = {
         statusEl.textContent = msg || '';
         statusEl.style.color = kind === 'err' ? '#b91c1c' : (kind === 'ok' ? '#16a34a' : '#64748b');
     }
+    // 画像有り/無しに応じて UI を切替:
+    //   - 画像あり: アイコン背景色セクションを隠す + プレビューは画像そのまま (背景透明)
+    //   - 画像なし: 背景色セクションを表示 + プレビュー要素を隠す
+    var bgSection = document.getElementById('mb-fab-bg-section');
     function updatePreview(url) {
         if (!preview || !previewImg) return;
         if (url) {
             previewImg.src = url;
             preview.style.display = '';
+            // プレビューも円形を撤回 — 画像そのままを表示
+            previewImg.style.background = 'transparent';
+            previewImg.style.padding = '0';
+            previewImg.style.borderRadius = '0';
         } else {
             previewImg.src = '';
             preview.style.display = 'none';
         }
+        // 画像があれば「アイコン背景色」セクションは無関係なので隠す
+        if (bgSection) bgSection.style.display = url ? 'none' : '';
     }
     if (pickBtn && fileInput) {
         pickBtn.addEventListener('click', function (e) {
@@ -443,6 +466,8 @@ window.MB_UPLOAD = {
     }
     if (iconUrl) {
         iconUrl.addEventListener('input', function () { updatePreview(iconUrl.value.trim()); });
+        // 初期表示: 画像URL が入っている場合は背景色セクションを最初から隠す
+        updatePreview(iconUrl.value.trim());
     }
 })();
 </script>

@@ -455,6 +455,15 @@ class Mimamori_Bot_Settings_Page {
 				$fields['fab_size_md'] = max( 32, min( 120, (int) $raw_md ) );
 			}
 		}
+		// スマホ版バナー最大横幅 (%) — 空欄なら NULL (= 自動)
+		if ( isset( $_POST['fab_width_pct_sp'] ) ) {
+			$raw_pct = trim( (string) $_POST['fab_width_pct_sp'] );
+			if ( $raw_pct === '' ) {
+				$sp_nulls[] = 'fab_width_pct_sp';
+			} else {
+				$fields['fab_width_pct_sp'] = max( 10, min( 100, (int) $raw_pct ) );
+			}
+		}
 
 		// レート制限・月次バジェットは運営者専用。クライアントからのPOSTは無視する。
 		if ( $is_admin ) {
