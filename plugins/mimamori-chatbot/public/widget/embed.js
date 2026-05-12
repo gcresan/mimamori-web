@@ -129,21 +129,35 @@
   }
 
   // ---- セッション開始 ----
+  var FALLBACK_WELCOME = 'こんにちは。お気軽にご質問ください。';
+
+  function renderIntro(welcome, starters) {
+    appendMessage('assistant', welcome || FALLBACK_WELCOME);
+    renderStarters(starters || []);
+  }
+
   function ensureSession() {
-    if (session && session.uuid) return Promise.resolve(session);
+    // 既存セッションがあれば API は叩かず復元するが、UI には初期メッセージとスターターを必ず再描画
+    if (session && session.uuid) {
+      renderIntro(session.welcome_message, session.starters);
+      return Promise.resolve(session);
+    }
     return apiPost('/session', {
       user_agent: navigator.userAgent,
       referer: document.referrer,
       landing_url: location.href
     }).then(function (r) {
-      session = { uuid: r.session_uuid, persona: r.persona, starters: r.starters || [] };
-      try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
-      renderStarters(session.starters);
-      // 初期メッセージ (テナント側で welcome_message を設定可、空ならサーバー側でデフォルトに解決済み)
       var welcome = (r && typeof r.welcome_message === 'string' && r.welcome_message.trim() !== '')
         ? r.welcome_message
-        : 'こんにちは。お気軽にご質問ください。';
-      appendMessage('assistant', welcome);
+        : FALLBACK_WELCOME;
+      session = {
+        uuid:            r.session_uuid,
+        persona:         r.persona,
+        starters:        r.starters || [],
+        welcome_message: welcome
+      };
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
+      renderIntro(welcome, session.starters);
       return session;
     });
   }
