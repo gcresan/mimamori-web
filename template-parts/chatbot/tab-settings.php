@@ -42,7 +42,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
         <div class="mb-form-group">
             <label for="persona">ペルソナ</label>
-            <input type="text" id="persona" name="persona" value="<?php echo esc_attr( (string) ( $tenant['persona'] ?? '' ) ); ?>" placeholder="例: ポスティング会社のアシスタント">
+            <input type="text" id="persona" name="persona" value="<?php echo esc_attr( (string) ( $tenant['persona'] ?? '' ) ); ?>" placeholder="例: お問い合わせアシスタント / 商品案内スタッフ">
             <p class="description">AIの役割を一言で。応答のトーンに影響します。</p>
         </div>
 
@@ -64,16 +64,18 @@ if ( ! defined( 'ABSPATH' ) ) exit;
             <p class="description">1行1Origin。Widgetを設置するサイトを記載。プロトコル(https://)必須。許可されていないサイトからの埋め込みはブロックされます。</p>
         </div>
 
+        <?php if ( $is_admin ) : ?>
         <div class="mb-form-group">
-            <label for="rate_limit_rpm">レート制限 (req/分)</label>
+            <label for="rate_limit_rpm">レート制限 (req/分) <span style="font-size:11px;color:#9ca3af">[運営者のみ]</span></label>
             <input type="number" id="rate_limit_rpm" name="rate_limit_rpm" min="10" max="600" value="<?php echo esc_attr( (string) $tenant['rate_limit_rpm'] ); ?>" style="max-width:120px"> req/分
         </div>
 
         <div class="mb-form-group">
-            <label for="monthly_budget_jpy">月次バジェット (円)</label>
+            <label for="monthly_budget_jpy">月次バジェット (円) <span style="font-size:11px;color:#9ca3af">[運営者のみ]</span></label>
             <input type="number" id="monthly_budget_jpy" name="monthly_budget_jpy" min="0" value="<?php echo esc_attr( (string) ( $tenant['monthly_budget_jpy'] ?? '' ) ); ?>" style="max-width:160px"> 円
             <p class="description">0または空欄で無制限。超過すると公開Widgetが一時停止します。</p>
         </div>
+        <?php endif; ?>
 
         <div class="mb-form-group">
             <label for="system_prompt">システム指示 (プロンプト)</label>

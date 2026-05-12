@@ -22,7 +22,7 @@ $missing_faqs = (int) $wpdb->get_var( $wpdb->prepare(
 
 <div class="mb-card">
     <h2>新規追加 (テキスト)</h2>
-    <p>クライアントの料金表・配布実績・エリア情報などをテキストで登録します。AIはチャット応答時にここから引用します。</p>
+    <p>サービス内容・料金プラン・FAQ・会社案内・対応事例などをテキストで登録します。AIはチャット応答時にここから引用するので、お客様によくある質問の回答や提供サービスの詳細をまとめて入れておくと精度が上がります。</p>
     <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
         <?php wp_nonce_field( 'mimamori_bot_knowledge_add' ); ?>
         <input type="hidden" name="action" value="mimamori_bot_knowledge_add">
@@ -30,12 +30,12 @@ $missing_faqs = (int) $wpdb->get_var( $wpdb->prepare(
 
         <div class="mb-form-group">
             <label for="kn_title">タイトル</label>
-            <input type="text" id="kn_title" name="title" required maxlength="200" placeholder="例: 道後エリア配布実績">
+            <input type="text" id="kn_title" name="title" required maxlength="200" placeholder="例: サービス料金表 / よくある質問 / 会社概要">
         </div>
 
         <div class="mb-form-group">
             <label for="kn_category">カテゴリ (任意)</label>
-            <input type="text" id="kn_category" name="category" maxlength="80" placeholder="例: エリア / 価格 / 実績">
+            <input type="text" id="kn_category" name="category" maxlength="80" placeholder="例: 料金 / サービス / FAQ / 会社情報">
         </div>
 
         <div class="mb-form-group">
@@ -78,8 +78,8 @@ $missing_faqs = (int) $wpdb->get_var( $wpdb->prepare(
 <?php if ( $missing_chunks > 0 || $missing_faqs > 0 ) : ?>
 <div class="mb-card">
     <h2>埋め込み再生成</h2>
-    <p>埋め込みベクトル未生成のデータがあります — チャンク <strong><?php echo esc_html( (string) $missing_chunks ); ?></strong>件 / FAQ <strong><?php echo esc_html( (string) $missing_faqs ); ?></strong>件。意味的類似検索を有効にするため再インデックスを実行してください (OpenAI APIコール発生)。</p>
-    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('OpenAI Embeddings APIを呼び出します (コスト発生)。実行しますか？');">
+    <p>AIが意味的に近いナレッジを引けるよう、ベクトル化が必要なデータがあります — チャンク <strong><?php echo esc_html( (string) $missing_chunks ); ?></strong>件 / FAQ <strong><?php echo esc_html( (string) $missing_faqs ); ?></strong>件。下のボタンで AI が引用しやすい形に整えます。</p>
+    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('AI が引用しやすい形にナレッジを整えます。実行しますか？');">
         <?php wp_nonce_field( 'mimamori_bot_knowledge_reindex' ); ?>
         <input type="hidden" name="action" value="mimamori_bot_knowledge_reindex">
         <input type="hidden" name="_return_url" value="<?php echo esc_attr( $return_url ); ?>">

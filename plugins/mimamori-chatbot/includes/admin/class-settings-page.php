@@ -134,9 +134,9 @@ class Mimamori_Bot_Settings_Page {
 		echo '<input type="hidden" name="action" value="mimamori_bot_create_tenant">';
 		echo '<table class="form-table"><tbody>';
 
-		echo '<tr><th><label for="slug">スラッグ</label></th><td><input type="text" id="slug" name="slug" class="regular-text" pattern="[a-z0-9\-]{3,32}" required placeholder="例: ekc-001"><p class="description">英小文字・数字・ハイフン 3〜32字。あとから変更できません。</p></td></tr>';
+		echo '<tr><th><label for="slug">スラッグ</label></th><td><input type="text" id="slug" name="slug" class="regular-text" pattern="[a-z0-9\-]{3,32}" required placeholder="例: client-001"><p class="description">英小文字・数字・ハイフン 3〜32字。あとから変更できません。</p></td></tr>';
 
-		echo '<tr><th><label for="name">表示名</label></th><td><input type="text" id="name" name="name" class="regular-text" required placeholder="例: EKC ポスティング"></td></tr>';
+		echo '<tr><th><label for="name">表示名</label></th><td><input type="text" id="name" name="name" class="regular-text" required placeholder="例: 株式会社サンプル"></td></tr>';
 
 		echo '<tr><th><label for="owner_user_id">オーナーユーザー</label></th><td>';
 		wp_dropdown_users( [
@@ -188,7 +188,7 @@ class Mimamori_Bot_Settings_Page {
 		echo '</td></tr>';
 
 		echo '<tr><th><label for="persona">ペルソナ</label></th><td>';
-		echo '<input type="text" id="persona" name="persona" class="regular-text" value="' . esc_attr( (string) ( $tenant['persona'] ?? '' ) ) . '" placeholder="例: ポスティング会社の見積アシスタント">';
+		echo '<input type="text" id="persona" name="persona" class="regular-text" value="' . esc_attr( (string) ( $tenant['persona'] ?? '' ) ) . '" placeholder="例: お問い合わせアシスタント / 商品案内スタッフ">';
 		echo '</td></tr>';
 
 		echo '<tr><th><label for="cta_url_quote">見積もりCTA URL</label></th><td>';
@@ -205,13 +205,16 @@ class Mimamori_Bot_Settings_Page {
 		echo '<p class="description">1行1Origin。Widgetを設置するサイトを記載。プロトコル(https://)必須。</p>';
 		echo '</td></tr>';
 
-		echo '<tr><th><label for="rate_limit_rpm">レート制限 (req/分)</label></th><td>';
-		echo '<input type="number" id="rate_limit_rpm" name="rate_limit_rpm" min="10" max="600" value="' . esc_attr( (string) $tenant['rate_limit_rpm'] ) . '"> req/分';
-		echo '</td></tr>';
+		// レート制限・月次バジェットは運営者専用（クライアントには非表示）
+		if ( $is_admin ) {
+			echo '<tr><th><label for="rate_limit_rpm">レート制限 (req/分) <span style="font-size:11px;color:#9ca3af">[運営者のみ]</span></label></th><td>';
+			echo '<input type="number" id="rate_limit_rpm" name="rate_limit_rpm" min="10" max="600" value="' . esc_attr( (string) $tenant['rate_limit_rpm'] ) . '"> req/分';
+			echo '</td></tr>';
 
-		echo '<tr><th><label for="monthly_budget_jpy">月次バジェット (円)</label></th><td>';
-		echo '<input type="number" id="monthly_budget_jpy" name="monthly_budget_jpy" min="0" value="' . esc_attr( (string) ( $tenant['monthly_budget_jpy'] ?? '' ) ) . '"> 円<p class="description">0または空欄で無制限。超過すると公開Widgetが一時停止します。</p>';
-		echo '</td></tr>';
+			echo '<tr><th><label for="monthly_budget_jpy">月次バジェット (円) <span style="font-size:11px;color:#9ca3af">[運営者のみ]</span></label></th><td>';
+			echo '<input type="number" id="monthly_budget_jpy" name="monthly_budget_jpy" min="0" value="' . esc_attr( (string) ( $tenant['monthly_budget_jpy'] ?? '' ) ) . '"> 円<p class="description">0または空欄で無制限。超過すると公開Widgetが一時停止します。</p>';
+			echo '</td></tr>';
+		}
 
 		echo '<tr><th><label for="system_prompt">システム指示 (プロンプト)</label></th><td>';
 		$sp = (string) ( $tenant['system_prompt'] ?? '' );
@@ -355,21 +358,25 @@ class Mimamori_Bot_Settings_Page {
 			$status = 'active';
 		}
 
-		$budget_raw = isset( $_POST['monthly_budget_jpy'] ) ? trim( (string) $_POST['monthly_budget_jpy'] ) : '';
-		$budget     = $budget_raw === '' ? null : max( 0, absint( $budget_raw ) );
-
 		$fields = [
 			'name'               => sanitize_text_field( (string) ( $_POST['name'] ?? '' ) ),
 			'persona'            => sanitize_text_field( (string) ( $_POST['persona'] ?? '' ) ),
 			'cta_url_quote'      => esc_url_raw( (string) ( $_POST['cta_url_quote'] ?? '' ) ),
 			'cta_url_contact'    => esc_url_raw( (string) ( $_POST['cta_url_contact'] ?? '' ) ),
 			'allowed_origins'    => wp_json_encode( $origins, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ),
-			'rate_limit_rpm'     => max( 10, min( 600, absint( $_POST['rate_limit_rpm'] ?? 60 ) ) ),
 			'system_prompt'      => isset( $_POST['system_prompt'] ) ? (string) wp_unslash( $_POST['system_prompt'] ) : '',
 			'status'             => $status,
 		];
-		if ( $budget !== null ) {
-			$fields['monthly_budget_jpy'] = $budget;
+
+		// レート制限・月次バジェットは運営者専用。クライアントからのPOSTは無視する。
+		if ( $is_admin ) {
+			if ( isset( $_POST['rate_limit_rpm'] ) ) {
+				$fields['rate_limit_rpm'] = max( 10, min( 600, absint( $_POST['rate_limit_rpm'] ) ) );
+			}
+			$budget_raw = isset( $_POST['monthly_budget_jpy'] ) ? trim( (string) $_POST['monthly_budget_jpy'] ) : null;
+			if ( $budget_raw !== null && $budget_raw !== '' ) {
+				$fields['monthly_budget_jpy'] = max( 0, absint( $budget_raw ) );
+			}
 		}
 
 		Mimamori_Bot_Tenant_Repository::update( (int) $tenant['id'], $fields );

@@ -35,7 +35,7 @@ class Mimamori_Bot_Knowledge_Page {
 		}
 		self::flash_notices();
 
-		echo '<p>クライアントの料金表・配布実績・エリア情報などをテキストで登録します。AI はチャット応答時にここから引用します。</p>';
+		echo '<p>サービス内容・料金プラン・FAQ・会社案内・対応事例などをテキストで登録します。AI はチャット応答時にここから引用します。</p>';
 
 		self::render_add_form();
 		self::render_upload_form();
@@ -62,8 +62,8 @@ class Mimamori_Bot_Knowledge_Page {
 		wp_nonce_field( self::NONCE_ADD );
 		echo '<input type="hidden" name="action" value="mimamori_bot_knowledge_add">';
 		echo '<table class="form-table"><tbody>';
-		echo '<tr><th><label for="kn_title">タイトル</label></th><td><input type="text" id="kn_title" name="title" class="regular-text" required maxlength="200" placeholder="例: 道後エリア配布実績"></td></tr>';
-		echo '<tr><th><label for="kn_category">カテゴリ (任意)</label></th><td><input type="text" id="kn_category" name="category" class="regular-text" maxlength="80" placeholder="例: エリア / 価格 / 実績"></td></tr>';
+		echo '<tr><th><label for="kn_title">タイトル</label></th><td><input type="text" id="kn_title" name="title" class="regular-text" required maxlength="200" placeholder="例: サービス料金表 / よくある質問 / 会社概要"></td></tr>';
+		echo '<tr><th><label for="kn_category">カテゴリ (任意)</label></th><td><input type="text" id="kn_category" name="category" class="regular-text" maxlength="80" placeholder="例: 料金 / サービス / FAQ / 会社情報"></td></tr>';
 		echo '<tr><th><label for="kn_body">本文</label></th><td><textarea id="kn_body" name="raw_text" rows="10" cols="80" required style="font-family:inherit" placeholder="改行を含む長文OK。AI はこの内容を根拠に回答します。"></textarea><p class="description">段落で区切るとチャンクが綺麗になります。1チャンク最大500字目安。</p></td></tr>';
 		echo '</tbody></table>';
 		submit_button( '追加する' );

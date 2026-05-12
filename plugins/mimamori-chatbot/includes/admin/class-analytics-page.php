@@ -48,7 +48,7 @@ class Mimamori_Bot_Analytics_Page {
 		self::render_period_switch( $days );
 
 		$kpi = self::compute_kpi( (int) $tenant['id'], $since );
-		self::render_kpi_cards( $kpi );
+		self::render_kpi_cards( $kpi, current_user_can( 'manage_options' ) );
 
 		echo '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">';
 		self::render_dropoff( (int) $tenant['id'], $since );
@@ -140,16 +140,19 @@ class Mimamori_Bot_Analytics_Page {
 		];
 	}
 
-	private static function render_kpi_cards( array $k ): void {
+	private static function render_kpi_cards( array $k, bool $is_admin = false ): void {
 		$cards = [
 			[ 'label' => 'セッション数',       'value' => number_format( $k['total_sessions'] ),       'sub' => '対話完了 ' . number_format( $k['conv_sessions'] ) . ' 件' ],
 			[ 'label' => 'CV合計率',          'value' => $k['cv_total_rate'] . ' %',                    'sub' => '見積 ' . $k['quote_clicks'] . ' / 問合 ' . $k['contact_clicks'] ],
 			[ 'label' => '平均発話数',         'value' => $k['avg_msgs'],                                'sub' => '対話あたり' ],
 			[ 'label' => '総メッセージ数',     'value' => number_format( $k['msg_total'] ),              'sub' => 'user + assistant' ],
-			[ 'label' => 'トークン消費',       'value' => number_format( $k['tokens_in'] + $k['tokens_out'] ),
-			                                'sub' => 'in ' . number_format( $k['tokens_in'] ) . ' / out ' . number_format( $k['tokens_out'] ) ],
-			[ 'label' => '推定コスト',         'value' => '¥' . number_format( $k['cost_jpy'], 2 ),     'sub' => 'JPY換算 (155円/USD 想定)' ],
 		];
+		// トークン消費・推定コストは運営者のみ表示
+		if ( $is_admin ) {
+			$cards[] = [ 'label' => 'トークン消費 [運営者のみ]', 'value' => number_format( $k['tokens_in'] + $k['tokens_out'] ),
+			             'sub' => 'in ' . number_format( $k['tokens_in'] ) . ' / out ' . number_format( $k['tokens_out'] ) ];
+			$cards[] = [ 'label' => '推定コスト [運営者のみ]',   'value' => '¥' . number_format( $k['cost_jpy'], 2 ), 'sub' => 'JPY換算 (155円/USD 想定)' ];
+		}
 
 		echo '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;margin-top:16px">';
 		foreach ( $cards as $c ) {

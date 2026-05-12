@@ -167,12 +167,12 @@ if ( ! $tenant ) {
                 <input type="hidden" name="_return_url" value="<?php echo esc_attr( $return_url ); ?>">
                 <div class="mb-form-group">
                     <label for="slug">スラッグ</label>
-                    <input type="text" id="slug" name="slug" pattern="[a-z0-9\-]{3,32}" required placeholder="例: ekc-001">
+                    <input type="text" id="slug" name="slug" pattern="[a-z0-9\-]{3,32}" required placeholder="例: client-001">
                     <p class="description">英小文字・数字・ハイフン 3〜32字。あとから変更できません。</p>
                 </div>
                 <div class="mb-form-group">
                     <label for="name">表示名</label>
-                    <input type="text" id="name" name="name" required placeholder="例: EKC ポスティング">
+                    <input type="text" id="name" name="name" required placeholder="例: 株式会社サンプル">
                 </div>
                 <?php if ( $is_admin ) : ?>
                 <div class="mb-form-group">

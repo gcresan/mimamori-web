@@ -33,7 +33,7 @@ class Mimamori_Bot_History_Page {
 
 		$session_uuid = isset( $_GET['session'] ) ? sanitize_text_field( (string) $_GET['session'] ) : '';
 		if ( $session_uuid !== '' ) {
-			self::render_detail( (int) $tenant['id'], $session_uuid );
+			self::render_detail( (int) $tenant['id'], $session_uuid, current_user_can( 'manage_options' ) );
 		} else {
 			self::render_list( (int) $tenant['id'] );
 		}
@@ -105,7 +105,7 @@ class Mimamori_Bot_History_Page {
 		}
 	}
 
-	private static function render_detail( int $tenant_id, string $session_uuid ): void {
+	private static function render_detail( int $tenant_id, string $session_uuid, bool $is_admin = false ): void {
 		global $wpdb;
 		$st = Mimamori_Bot_Installer::table_sessions();
 		$mt = Mimamori_Bot_Installer::table_messages();
@@ -180,19 +180,25 @@ class Mimamori_Bot_History_Page {
 					echo '<div style="font-size:11px;color:#6b7280;margin-top:6px">📎 引用: <code>' . esc_html( (string) $m['knowledge_refs'] ) . '</code></div>';
 				}
 				if ( $role === 'assistant' && ( $m['tokens_in'] || $m['tokens_out'] ) ) {
-					$cost_jpy = (int) ( $m['cost_microjpy'] ?? 0 ) / 1000000;
-					echo '<div style="font-size:11px;color:#6b7280;margin-top:4px">model=' . esc_html( (string) $m['model'] )
-						. ' / in=' . esc_html( (string) $m['tokens_in'] )
-						. ' / out=' . esc_html( (string) $m['tokens_out'] )
-						. ' / ' . esc_html( (string) (int) $m['latency_ms'] ) . 'ms'
-						. ' / ¥' . number_format( $cost_jpy, 4 ) . '</div>';
+					if ( $is_admin ) {
+						$cost_jpy = (int) ( $m['cost_microjpy'] ?? 0 ) / 1000000;
+						echo '<div style="font-size:11px;color:#6b7280;margin-top:4px">model=' . esc_html( (string) $m['model'] )
+							. ' / in=' . esc_html( (string) $m['tokens_in'] )
+							. ' / out=' . esc_html( (string) $m['tokens_out'] )
+							. ' / ' . esc_html( (string) (int) $m['latency_ms'] ) . 'ms'
+							. ' / ¥' . number_format( $cost_jpy, 4 ) . ' <span style="color:#9ca3af">[運営者のみ]</span></div>';
+					} else {
+						echo '<div style="font-size:11px;color:#6b7280;margin-top:4px">' . esc_html( (string) (int) $m['latency_ms'] ) . 'ms</div>';
+					}
 				}
 				echo '</div></div>';
 			}
 			echo '</div>';
-			$total_jpy = $total_cost / 1000000;
-			echo '<p style="margin-top:16px"><strong>合計コスト:</strong> ¥' . esc_html( number_format( $total_jpy, 4 ) )
-				. ' (in=' . esc_html( (string) $total_in ) . ', out=' . esc_html( (string) $total_out ) . ' tokens)</p>';
+			if ( $is_admin ) {
+				$total_jpy = $total_cost / 1000000;
+				echo '<p style="margin-top:16px"><strong>合計コスト:</strong> ¥' . esc_html( number_format( $total_jpy, 4 ) )
+					. ' (in=' . esc_html( (string) $total_in ) . ', out=' . esc_html( (string) $total_out ) . ' tokens) <span style="color:#9ca3af">[運営者のみ]</span></p>';
+			}
 		}
 
 		echo '<h2>イベント</h2>';

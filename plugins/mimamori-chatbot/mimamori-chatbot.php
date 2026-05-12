@@ -3,7 +3,7 @@
  * Plugin Name: みまもりチャットボット
  * Plugin URI:  https://mimamori-web.jp/
  * Description: クライアントサイトに埋め込み可能な公開AIチャットボット。OpenAI連携 + マルチテナント対応。みまもりウェブのオプション機能。
- * Version:     0.1.0
+ * Version:     0.1.1
  * Author:      みまもりウェブ
  * License:     GPL-2.0-or-later
  * Text Domain: mimamori-chatbot
@@ -28,7 +28,7 @@ if ( defined( 'MIMAMORI_BOT_VERSION' ) ) {
 	return;
 }
 
-define( 'MIMAMORI_BOT_VERSION',                '0.5.1' );
+define( 'MIMAMORI_BOT_VERSION',                '0.5.2' );
 define( 'MIMAMORI_BOT_FILE',                   __FILE__ );
 define( 'MIMAMORI_BOT_PATH',                   plugin_dir_path( __FILE__ ) );
 define( 'MIMAMORI_BOT_URL',                    plugin_dir_url( __FILE__ ) );

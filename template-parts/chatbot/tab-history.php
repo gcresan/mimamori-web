@@ -78,17 +78,23 @@ if ( $session_uuid !== '' ) {
                     echo '<div style="font-size:11px;color:#6b7280;margin-top:6px">📎 引用: <code>' . esc_html( mb_substr( (string) $m['knowledge_refs'], 0, 200 ) ) . '</code></div>';
                 }
                 if ( ! $is_user && ( $m['tokens_in'] || $m['tokens_out'] ) ) {
-                    $cost_jpy = (int) ( $m['cost_microjpy'] ?? 0 ) / 1000000;
-                    echo '<div style="font-size:11px;color:#6b7280;margin-top:4px">' . esc_html( (string) $m['model'] )
-                        . ' / in=' . esc_html( (string) $m['tokens_in'] )
-                        . ' / out=' . esc_html( (string) $m['tokens_out'] )
-                        . ' / ' . esc_html( (string) (int) $m['latency_ms'] ) . 'ms'
-                        . ' / ¥' . number_format( $cost_jpy, 4 ) . '</div>';
+                    if ( $is_admin ) {
+                        $cost_jpy = (int) ( $m['cost_microjpy'] ?? 0 ) / 1000000;
+                        echo '<div style="font-size:11px;color:#6b7280;margin-top:4px">' . esc_html( (string) $m['model'] )
+                            . ' / in=' . esc_html( (string) $m['tokens_in'] )
+                            . ' / out=' . esc_html( (string) $m['tokens_out'] )
+                            . ' / ' . esc_html( (string) (int) $m['latency_ms'] ) . 'ms'
+                            . ' / ¥' . number_format( $cost_jpy, 4 ) . ' <span style="color:#9ca3af">[運営者のみ]</span></div>';
+                    } else {
+                        echo '<div style="font-size:11px;color:#6b7280;margin-top:4px">' . esc_html( (string) (int) $m['latency_ms'] ) . 'ms</div>';
+                    }
                 }
                 echo '</div></div>';
             }
-            $total_jpy = $total_cost / 1000000;
-            echo '<p style="margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb"><strong>合計コスト:</strong> ¥' . esc_html( number_format( $total_jpy, 4 ) ) . ' (in=' . esc_html( (string) $total_in ) . ', out=' . esc_html( (string) $total_out ) . ' tokens)</p>';
+            if ( $is_admin ) {
+                $total_jpy = $total_cost / 1000000;
+                echo '<p style="margin-top:16px;padding-top:12px;border-top:1px solid #e5e7eb"><strong>合計コスト:</strong> ¥' . esc_html( number_format( $total_jpy, 4 ) ) . ' (in=' . esc_html( (string) $total_in ) . ', out=' . esc_html( (string) $total_out ) . ' tokens) <span style="color:#9ca3af">[運営者のみ]</span></p>';
+            }
         }
         echo '</div>';
 

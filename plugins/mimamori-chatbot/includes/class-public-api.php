@@ -96,12 +96,12 @@ class Mimamori_Bot_Public_API {
 		$service = new Mimamori_Bot_Chat_Service();
 		$session = $service->create_session( $tenant, $params );
 
-		// starters: FAQ.is_starter=1 を優先、未登録ならフォールバック
+		// starters: FAQ.is_starter=1 を優先、未登録ならフォールバック (汎用)
 		$starters = Mimamori_Bot_Faq_Repository::list_starters( (int) $tenant['id'], 4 );
 		if ( empty( $starters ) ) {
 			$starters = [
 				'どんなことを相談できますか？',
-				'対応エリアを教えて',
+				'サービス内容を教えて',
 				'料金の目安は？',
 				'問い合わせしたい',
 			];

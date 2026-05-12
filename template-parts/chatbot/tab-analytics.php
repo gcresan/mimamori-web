@@ -23,15 +23,10 @@ $quote_clicks   = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$
 $contact_clicks = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$st} WHERE tenant_id = %d AND started_at >= %s AND contact_clicked = 1", (int) $tenant['id'], $since ) );
 $avg_msgs       = (float) $wpdb->get_var( $wpdb->prepare( "SELECT IFNULL(AVG(message_count),0) FROM {$st} WHERE tenant_id = %d AND started_at >= %s", (int) $tenant['id'], $since ) );
 
-$cost_row = $wpdb->get_row( $wpdb->prepare(
-    "SELECT SUM(tokens_in) AS in_sum, SUM(tokens_out) AS out_sum, SUM(cost_microjpy) AS cost_sum, COUNT(*) AS message_total
-     FROM {$mt} WHERE tenant_id = %d AND created_at >= %s",
+$msg_total = (int) $wpdb->get_var( $wpdb->prepare(
+    "SELECT COUNT(*) FROM {$mt} WHERE tenant_id = %d AND created_at >= %s",
     (int) $tenant['id'], $since
-), ARRAY_A );
-$tokens_in  = (int) ( $cost_row['in_sum'] ?? 0 );
-$tokens_out = (int) ( $cost_row['out_sum'] ?? 0 );
-$cost_micro = (int) ( $cost_row['cost_sum'] ?? 0 );
-$msg_total  = (int) ( $cost_row['message_total'] ?? 0 );
+) );
 
 $cv_total_rate = $total_sessions > 0
     ? round( ( $quote_clicks + $contact_clicks ) * 100 / $total_sessions, 1 )
@@ -42,9 +37,22 @@ $cards = [
     [ 'label' => 'CV合計率',     'value' => $cv_total_rate . ' %',           'sub' => '見積 ' . $quote_clicks . ' / 問合 ' . $contact_clicks ],
     [ 'label' => '平均発話数',   'value' => round( $avg_msgs, 1 ),           'sub' => '対話あたり' ],
     [ 'label' => '総メッセージ数','value' => number_format( $msg_total ),    'sub' => 'user + assistant' ],
-    [ 'label' => 'トークン消費', 'value' => number_format( $tokens_in + $tokens_out ), 'sub' => 'in ' . number_format( $tokens_in ) . ' / out ' . number_format( $tokens_out ) ],
-    [ 'label' => '推定コスト',   'value' => '¥' . number_format( $cost_micro / 1000000, 2 ), 'sub' => 'JPY換算' ],
 ];
+
+// 運営者のみ：トークン消費・推定コストを取得して追加カードに反映
+if ( $is_admin ) {
+    $cost_row = $wpdb->get_row( $wpdb->prepare(
+        "SELECT SUM(tokens_in) AS in_sum, SUM(tokens_out) AS out_sum, SUM(cost_microjpy) AS cost_sum
+           FROM {$mt} WHERE tenant_id = %d AND created_at >= %s",
+        (int) $tenant['id'], $since
+    ), ARRAY_A );
+    $tokens_in  = (int) ( $cost_row['in_sum']  ?? 0 );
+    $tokens_out = (int) ( $cost_row['out_sum'] ?? 0 );
+    $cost_micro = (int) ( $cost_row['cost_sum'] ?? 0 );
+
+    $cards[] = [ 'label' => 'トークン消費 [運営者のみ]', 'value' => number_format( $tokens_in + $tokens_out ), 'sub' => 'in ' . number_format( $tokens_in ) . ' / out ' . number_format( $tokens_out ) ];
+    $cards[] = [ 'label' => '推定コスト [運営者のみ]',   'value' => '¥' . number_format( $cost_micro / 1000000, 2 ), 'sub' => 'JPY換算' ];
+}
 
 // 離脱分布
 $drop_rows = $wpdb->get_results( $wpdb->prepare(
