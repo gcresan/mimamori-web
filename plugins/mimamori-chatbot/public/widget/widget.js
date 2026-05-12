@@ -34,27 +34,61 @@
   })();
   var embedUrl = base + '/wp-json/mimamori-bot/v1/embed?tenant=' + encodeURIComponent(tenant)
                        + '#key=' + encodeURIComponent(key);
+  // key を含めることで maybe_handle_cors() が Origin を解決してヘッダ付与する
+  var configUrl = base + '/wp-json/mimamori-bot/v1/widget-config?tenant=' + encodeURIComponent(tenant)
+                       + '&key=' + encodeURIComponent(key);
 
   // ---- DOM 構築 ----
   var FAB_ID  = 'mimamori-bot-fab';
   var WRAP_ID = 'mimamori-bot-wrap';
 
-  function injectStyles() {
-    if (document.getElementById('mimamori-bot-style')) return;
+  // デフォルト見た目 (config 取得前に FAB を即座に出すため)
+  var fabConfig = {
+    bg: '#2563eb',
+    offset_x: 20,
+    offset_y: 20,
+    icon_url: ''
+  };
+
+  function applyFabStyles() {
+    var st = document.getElementById('mimamori-bot-style');
+    if (!st) return;
     var css =
-      '#' + FAB_ID + '{position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:28px;' +
-      'background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;' +
-      'box-shadow:0 6px 20px rgba(0,0,0,.18);cursor:pointer;z-index:2147483646;border:none;font:600 24px/1 system-ui}' +
-      '#' + FAB_ID + ':hover{background:#1d4ed8}' +
-      '#' + WRAP_ID + '{position:fixed;right:20px;bottom:88px;width:380px;max-width:calc(100vw - 24px);' +
+      '#' + FAB_ID + '{position:fixed;right:' + fabConfig.offset_x + 'px;bottom:' + fabConfig.offset_y + 'px;' +
+      'width:56px;height:56px;border-radius:28px;' +
+      'background:' + fabConfig.bg + ';color:#fff;display:flex;align-items:center;justify-content:center;' +
+      'box-shadow:0 6px 20px rgba(0,0,0,.18);cursor:pointer;z-index:2147483646;border:none;font:600 24px/1 system-ui;padding:0;overflow:hidden}' +
+      '#' + FAB_ID + ':hover{filter:brightness(.92)}' +
+      '#' + FAB_ID + ' img{width:100%;height:100%;object-fit:contain;padding:10px;display:block}' +
+      '#' + WRAP_ID + '{position:fixed;right:' + fabConfig.offset_x + 'px;bottom:' + (fabConfig.offset_y + 68) + 'px;' +
+      'width:380px;max-width:calc(100vw - 24px);' +
       'height:600px;max-height:calc(100vh - 120px);border:0;border-radius:14px;overflow:hidden;' +
       'box-shadow:0 12px 40px rgba(0,0,0,.22);z-index:2147483647;background:#fff;display:none}' +
       '#' + WRAP_ID + '.open{display:block}' +
       '@media (max-width:600px){#' + WRAP_ID + '{right:0;bottom:0;width:100vw;height:100vh;max-height:100vh;border-radius:0}}';
+    st.textContent = css;
+  }
+
+  function injectStyles() {
+    if (document.getElementById('mimamori-bot-style')) return;
     var style = document.createElement('style');
     style.id = 'mimamori-bot-style';
-    style.appendChild(document.createTextNode(css));
     document.head.appendChild(style);
+    applyFabStyles();
+  }
+
+  function applyFabContent() {
+    if (!fab) return;
+    fab.textContent = '';
+    if (fabConfig.icon_url) {
+      var img = document.createElement('img');
+      img.src = fabConfig.icon_url;
+      img.alt = '';
+      img.onerror = function () { fab.textContent = '💬'; };
+      fab.appendChild(img);
+    } else {
+      fab.textContent = '💬';
+    }
   }
 
   function createFab() {
@@ -62,9 +96,26 @@
     btn.id = FAB_ID;
     btn.type = 'button';
     btn.setAttribute('aria-label', 'チャットを開く');
-    btn.textContent = '💬';
     btn.addEventListener('click', toggle);
     return btn;
+  }
+
+  // テナント別の見た目設定を取得して反映 (失敗してもデフォルトのまま動く)
+  function fetchConfig() {
+    try {
+      fetch(configUrl, { credentials: 'omit' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j || !j.fab) return;
+          if (j.fab.bg)       fabConfig.bg       = j.fab.bg;
+          if (j.fab.icon_url) fabConfig.icon_url = j.fab.icon_url;
+          if (typeof j.fab.offset_x === 'number') fabConfig.offset_x = j.fab.offset_x;
+          if (typeof j.fab.offset_y === 'number') fabConfig.offset_y = j.fab.offset_y;
+          applyFabStyles();
+          applyFabContent();
+        })
+        .catch(function () { /* fallback to defaults */ });
+    } catch (e) { /* ignore */ }
   }
 
   function createIframeWrap() {
@@ -97,6 +148,8 @@
     iframe = createIframeWrap();
     document.body.appendChild(iframe);
     document.body.appendChild(fab);
+    applyFabContent();
+    fetchConfig();
 
     // iframe からの postMessage を受信（resize / close 等）
     window.addEventListener('message', function (ev) {
