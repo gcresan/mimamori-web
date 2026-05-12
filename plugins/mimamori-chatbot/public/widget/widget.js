@@ -103,17 +103,30 @@
     applyFabStyles();
   }
 
+  // デフォルトアイコン: 白の吹き出し SVG (絵文字 💬 だと OS 依存で青系に着色されるため)
+  var DEFAULT_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false" ' +
+    'style="display:block;margin:auto"' +
+    '>' +
+    '<path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8.83l-4.54 3.78A.6.6 0 0 1 3.3 21.3L3.3 18H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" opacity=".95"/>' +
+    '<circle cx="8.5"  cy="11" r="1.3" fill="' + 'rgba(0,0,0,.25)"/>' +
+    '<circle cx="12"   cy="11" r="1.3" fill="rgba(0,0,0,.25)"/>' +
+    '<circle cx="15.5" cy="11" r="1.3" fill="rgba(0,0,0,.25)"/>' +
+    '</svg>';
+
   function applyFabContent() {
     if (!fab) return;
+    // 文字色 = アイコン色 (currentColor で SVG にも適用される)
+    fab.style.color = '#ffffff';
     fab.textContent = '';
     if (fabConfig.icon_url) {
       var img = document.createElement('img');
       img.src = fabConfig.icon_url;
       img.alt = '';
-      img.onerror = function () { fab.textContent = '💬'; };
+      img.onerror = function () { fab.innerHTML = DEFAULT_ICON_SVG; };
       fab.appendChild(img);
     } else {
-      fab.textContent = '💬';
+      fab.innerHTML = DEFAULT_ICON_SVG;
     }
   }
 
