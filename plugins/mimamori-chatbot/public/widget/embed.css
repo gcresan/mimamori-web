@@ -45,8 +45,11 @@ body {
   padding: 5px;
   font-size: 22px;
   line-height: 1;
+  overflow: hidden;
 }
 .mb-header-avatar svg { width: 100%; height: 100%; display: block; }
+.mb-header-avatar:has(img) { padding: 0; background: rgba(255,255,255,.35); }
+.mb-header-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .mb-title {
   font-size: 18px;
   font-weight: 700;
@@ -216,8 +219,13 @@ body {
   display: inline-flex; align-items: center; justify-content: center;
   padding: 7px;
   align-self: flex-start;
+  overflow: hidden;
 }
 .mb-msg-avatar svg { width: 100%; height: 100%; display: block; }
+/* 画像アバター時はパディング/背景を消して、画像で完全に円を埋める */
+.mb-msg-avatar:has(img) { padding: 0; background: #f1f5f9; }
+.mb-msg-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 .mb-msg-avatar.mb-user-avatar {
   background: #e5e7eb;
   color: #94a3b8;
