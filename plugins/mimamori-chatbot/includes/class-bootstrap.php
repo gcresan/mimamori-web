@@ -22,6 +22,11 @@ class Mimamori_Bot_Bootstrap {
 		add_action( 'admin_menu',      [ __CLASS__, 'register_admin_menu' ] );
 		add_action( 'admin_init',      [ __CLASS__, 'maybe_upgrade_db' ] );
 
+		// 週次cron: スターター提案の自動再生成
+		add_filter( 'cron_schedules',                    [ __CLASS__, 'add_weekly_schedule' ] );
+		add_action( 'init',                              [ __CLASS__, 'schedule_starter_cron' ] );
+		add_action( 'mimamori_bot_refresh_starters',     [ __CLASS__, 'refresh_all_starter_suggestions' ] );
+
 		// 子ファイル末尾の static method 呼び出しが PHP-FPM 環境で実行されない問題への workaround
 		// 確実に動作する Bootstrap::init() から明示的に呼び出す
 		if ( class_exists( 'Mimamori_Bot_Settings_Page' ) ) {
@@ -115,5 +120,52 @@ class Mimamori_Bot_Bootstrap {
 				'error' => is_wp_error( $page_id ) ? $page_id->get_error_message() : 'unknown',
 			] );
 		}
+	}
+
+	/**
+	 * WordPress 標準にない 'weekly' スケジュールを登録。
+	 */
+	public static function add_weekly_schedule( $schedules ) {
+		if ( ! isset( $schedules['mb_weekly'] ) ) {
+			$schedules['mb_weekly'] = [
+				'interval' => WEEK_IN_SECONDS,
+				'display'  => '週1回 (チャットボット用)',
+			];
+		}
+		return $schedules;
+	}
+
+	/**
+	 * 週次cronイベントを登録 (未登録時のみ)。
+	 * 実行時刻は WordPress の wp_schedule_event に任せる (登録時刻を基準に1週間隔)。
+	 */
+	public static function schedule_starter_cron(): void {
+		if ( ! wp_next_scheduled( 'mimamori_bot_refresh_starters' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'mb_weekly', 'mimamori_bot_refresh_starters' );
+			Mimamori_Bot_Logger::info( 'cron: starter refresh scheduled (mb_weekly)' );
+		}
+	}
+
+	/**
+	 * 全 active テナントを巡って AI スターター提案を再生成する。
+	 * 1回の呼び出しでテナント数 × OpenAI API 1コール 発生するため、運営者は規模に応じて間引き判断する。
+	 */
+	public static function refresh_all_starter_suggestions(): void {
+		if ( ! class_exists( 'Mimamori_Bot_Tenant_Repository' ) ) return;
+		$tenants = Mimamori_Bot_Tenant_Repository::list_all( 500 );
+		$ran = 0;
+		foreach ( $tenants as $t ) {
+			if ( ( $t['status'] ?? '' ) !== 'active' ) continue;
+			try {
+				Mimamori_Bot_Faq_Repository::compute_starter_suggestions( (int) $t['id'] );
+				$ran++;
+			} catch ( \Throwable $e ) {
+				Mimamori_Bot_Logger::warn( 'cron: starter regen failed', [
+					'tenant_id' => $t['id'] ?? 0,
+					'err'       => $e->getMessage(),
+				] );
+			}
+		}
+		Mimamori_Bot_Logger::info( 'cron: starter refresh done', [ 'tenants' => $ran ] );
 	}
 }

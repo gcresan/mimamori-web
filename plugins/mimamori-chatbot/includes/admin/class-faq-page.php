@@ -6,12 +6,16 @@ if ( class_exists( 'Mimamori_Bot_Faq_Page' ) ) { return; }
 
 class Mimamori_Bot_Faq_Page {
 
-	const NONCE_SAVE   = 'mimamori_bot_faq_save';
-	const NONCE_DELETE = 'mimamori_bot_faq_delete';
+	const NONCE_SAVE        = 'mimamori_bot_faq_save';
+	const NONCE_DELETE      = 'mimamori_bot_faq_delete';
+	const NONCE_STARTER_GEN = 'mimamori_bot_starter_regenerate';
+	const NONCE_STARTER_ADD = 'mimamori_bot_starter_adopt';
 
 	public static function init_hooks(): void {
-		add_action( 'admin_post_mimamori_bot_faq_save',   [ __CLASS__, 'handle_save' ] );
-		add_action( 'admin_post_mimamori_bot_faq_delete', [ __CLASS__, 'handle_delete' ] );
+		add_action( 'admin_post_mimamori_bot_faq_save',            [ __CLASS__, 'handle_save' ] );
+		add_action( 'admin_post_mimamori_bot_faq_delete',          [ __CLASS__, 'handle_delete' ] );
+		add_action( 'admin_post_mimamori_bot_starter_regenerate',  [ __CLASS__, 'handle_starter_regenerate' ] );
+		add_action( 'admin_post_mimamori_bot_starter_adopt',       [ __CLASS__, 'handle_starter_adopt' ] );
 	}
 
 	public static function render(): void {
@@ -143,6 +147,43 @@ class Mimamori_Bot_Faq_Page {
 			Mimamori_Bot_Faq_Repository::create( (int) $tenant['id'], $fields );
 		}
 		self::back_ok( 'saved' );
+	}
+
+	public static function handle_starter_regenerate(): void {
+		check_admin_referer( self::NONCE_STARTER_GEN );
+		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( get_current_user_id() );
+		if ( ! $tenant ) self::back( 'テナントが見つかりません。' );
+
+		// 古いキャッシュを消してから強制再生成
+		delete_transient( 'mb_starter_suggest_' . (int) $tenant['id'] );
+		$result = Mimamori_Bot_Faq_Repository::compute_starter_suggestions( (int) $tenant['id'] );
+		if ( empty( $result['suggestions'] ) ) {
+			self::back( '提案を生成できませんでした。ナレッジを登録するか、もう少し履歴が溜まってから再度お試しください。' );
+		}
+		self::back_ok( 'starter_generated' );
+	}
+
+	public static function handle_starter_adopt(): void {
+		check_admin_referer( self::NONCE_STARTER_ADD );
+		if ( ! current_user_can( 'read' ) ) wp_die( 'forbidden' );
+		$tenant = Mimamori_Bot_Tenant_Context::resolve_active_for_user( get_current_user_id() );
+		if ( ! $tenant ) self::back( 'テナントが見つかりません。' );
+
+		$question = isset( $_POST['question'] ) ? trim( (string) wp_unslash( $_POST['question'] ) ) : '';
+		$question = sanitize_text_field( $question );
+		if ( $question === '' ) self::back( '採用する質問が空です。' );
+
+		// FAQ として登録 (回答は空欄。後で運営者/クライアントが編集する想定)
+		Mimamori_Bot_Faq_Repository::create( (int) $tenant['id'], [
+			'question'   => mb_substr( $question, 0, 500 ),
+			'answer'     => '※ 回答を編集してください。',
+			'category'   => 'AI提案',
+			'priority'   => 0,
+			'is_starter' => 1,
+			'status'     => 'active',
+		] );
+		self::back_ok( 'starter_adopted' );
 	}
 
 	public static function handle_delete(): void {

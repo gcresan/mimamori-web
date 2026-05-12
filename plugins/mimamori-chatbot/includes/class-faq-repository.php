@@ -143,6 +143,166 @@ class Mimamori_Bot_Faq_Repository {
 		return $rows ?: [];
 	}
 
+	/* =============================================================
+	 *  AI スターター提案 — ナレッジ + 履歴を AI に渡して自動生成
+	 * ============================================================= */
+
+	/** 提案キャッシュの transient キー */
+	private static function suggestion_transient_key( int $tenant_id ): string {
+		return 'mb_starter_suggest_' . $tenant_id;
+	}
+
+	/**
+	 * キャッシュされた提案を返す (なければ null)。
+	 * 形式: ['suggestions'=>['q1','q2','q3','q4'], 'generated_at'=>ts, 'message_count'=>N]
+	 */
+	public static function get_cached_suggestions( int $tenant_id ): ?array {
+		$cached = get_transient( self::suggestion_transient_key( $tenant_id ) );
+		return is_array( $cached ) && ! empty( $cached['suggestions'] ) ? $cached : null;
+	}
+
+	/**
+	 * ナレッジ全文 + 直近のユーザー質問を AI に渡し、最大4つの代表質問を生成する。
+	 * 結果は 7日キャッシュ。AIキー未設定や履歴不足時は空配列を返す。
+	 *
+	 * @return array{suggestions:array<int,string>, generated_at:int, message_count:int, knowledge_count:int}
+	 */
+	public static function compute_starter_suggestions( int $tenant_id ): array {
+		global $wpdb;
+
+		// 1) ナレッジ抽出 (raw_text の先頭6000字分まで・複数記事連結)
+		$kt = Mimamori_Bot_Installer::table_knowledge();
+		$knowledge_rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT title, raw_text FROM {$kt}
+			  WHERE tenant_id = %d AND status = 'ready'
+			  ORDER BY updated_at DESC
+			  LIMIT 30",
+			$tenant_id
+		), ARRAY_A );
+		$knowledge_count = count( $knowledge_rows );
+		$knowledge_text  = '';
+		foreach ( $knowledge_rows as $row ) {
+			$knowledge_text .= "■ " . ( $row['title'] ?? '' ) . "\n";
+			$knowledge_text .= mb_substr( (string) ( $row['raw_text'] ?? '' ), 0, 2000 ) . "\n\n";
+			if ( mb_strlen( $knowledge_text ) > 6000 ) break;
+		}
+		$knowledge_text = trim( mb_substr( $knowledge_text, 0, 6000 ) );
+
+		// 2) 直近90日の user 発話を最大200件まで
+		$mt = Mimamori_Bot_Installer::table_messages();
+		$since = gmdate( 'Y-m-d H:i:s', strtotime( '-90 days' ) );
+		$user_msgs = $wpdb->get_col( $wpdb->prepare(
+			"SELECT content FROM {$mt}
+			  WHERE tenant_id = %d AND role = 'user' AND created_at >= %s
+			  ORDER BY created_at DESC
+			  LIMIT 200",
+			$tenant_id, $since
+		) );
+		$message_count = is_array( $user_msgs ) ? count( $user_msgs ) : 0;
+		$history_text  = '';
+		if ( $message_count > 0 ) {
+			$snippets = array_map( static fn( $m ) => '・' . mb_substr( (string) $m, 0, 60 ), $user_msgs );
+			$history_text = implode( "\n", array_slice( $snippets, 0, 80 ) );
+		}
+
+		// ナレッジも履歴も無い → 何も提案できない
+		if ( $knowledge_text === '' && $history_text === '' ) {
+			Mimamori_Bot_Logger::info( 'starter: skip — no data', [ 'tenant_id' => $tenant_id ] );
+			return [ 'suggestions' => [], 'generated_at' => time(), 'message_count' => 0, 'knowledge_count' => 0 ];
+		}
+
+		// 3) プロンプト組み立て
+		$prompt  = "あなたはチャットボット運用の専門家です。以下の情報を基に、訪問者がもっとも聞きそうな質問を4つ作成してください。\n\n";
+		if ( $knowledge_text !== '' ) {
+			$prompt .= "【サービスナレッジ】\n" . $knowledge_text . "\n\n";
+		}
+		if ( $history_text !== '' ) {
+			$prompt .= "【実際にあった質問 (直近90日)】\n" . $history_text . "\n\n";
+		}
+		$prompt .= "制約:\n";
+		$prompt .= "- 各質問は20字以内、自然な日本語\n";
+		$prompt .= "- 4つすべて異なるトピック (料金/エリア/効果/品質/手続き等)\n";
+		$prompt .= "- 訪問者が思わずクリックしたくなる具体性\n";
+		$prompt .= "- 履歴がある場合はそのパターンを優先的に反映\n\n";
+		$prompt .= "出力形式は次の JSON のみ (前置きや説明は不要):\n";
+		$prompt .= '{"starters":["質問1","質問2","質問3","質問4"]}';
+
+		// 4) OpenAI 呼び出し
+		$bridge = new Mimamori_Bot_OpenAI_Bridge();
+		$resp = $bridge->call( [
+			'model' => 'gpt-4o-mini',
+			'input' => $prompt,
+		] );
+		if ( is_wp_error( $resp ) ) {
+			Mimamori_Bot_Logger::warn( 'starter: openai error', [ 'tenant_id' => $tenant_id, 'err' => $resp->get_error_message() ] );
+			return [ 'suggestions' => [], 'generated_at' => time(), 'message_count' => $message_count, 'knowledge_count' => $knowledge_count ];
+		}
+
+		$text = (string) ( $resp['text'] ?? '' );
+		$suggestions = self::parse_starter_response( $text );
+
+		$result = [
+			'suggestions'     => $suggestions,
+			'generated_at'    => time(),
+			'message_count'   => $message_count,
+			'knowledge_count' => $knowledge_count,
+		];
+		if ( ! empty( $suggestions ) ) {
+			set_transient( self::suggestion_transient_key( $tenant_id ), $result, 7 * DAY_IN_SECONDS );
+			Mimamori_Bot_Logger::info( 'starter: regenerated', [
+				'tenant_id'    => $tenant_id,
+				'count'        => count( $suggestions ),
+				'msg_count'    => $message_count,
+				'kn_count'     => $knowledge_count,
+				'tokens_in'    => $resp['usage']['input_tokens']  ?? 0,
+				'tokens_out'   => $resp['usage']['output_tokens'] ?? 0,
+			] );
+		}
+		return $result;
+	}
+
+	/** OpenAI 応答テキストから starters 配列を抽出 (JSON or 箇条書きフォールバック) */
+	private static function parse_starter_response( string $text ): array {
+		$text = trim( $text );
+		if ( $text === '' ) return [];
+
+		// JSON 抽出 (前後にmarkdown ```json``` が付くケースを処理)
+		if ( preg_match( '/\{[^{}]*"starters"\s*:\s*\[[^\]]+\][^{}]*\}/su', $text, $m ) ) {
+			$json = json_decode( $m[0], true );
+			if ( is_array( $json ) && isset( $json['starters'] ) && is_array( $json['starters'] ) ) {
+				return self::clean_starter_list( $json['starters'] );
+			}
+		}
+
+		// フォールバック: 改行ごとに番号や記号を除去
+		$lines = preg_split( '/\R/u', $text ) ?: [];
+		$out = [];
+		foreach ( $lines as $line ) {
+			$line = trim( $line );
+			$line = preg_replace( '/^[0-9０-９]+[\.\)、）]\s*/u', '', $line );
+			$line = preg_replace( '/^[・\-\*]\s*/u', '', $line );
+			$line = trim( (string) $line, "「」\"' \t" );
+			if ( $line !== '' && mb_strlen( $line ) <= 50 ) {
+				$out[] = $line;
+			}
+			if ( count( $out ) >= 4 ) break;
+		}
+		return self::clean_starter_list( $out );
+	}
+
+	private static function clean_starter_list( array $arr ): array {
+		$out = [];
+		foreach ( $arr as $item ) {
+			$s = trim( (string) $item );
+			$s = preg_replace( '/\s+/u', ' ', $s );
+			if ( $s === '' ) continue;
+			$s = mb_substr( $s, 0, 50 );
+			$out[] = $s;
+			if ( count( $out ) >= 4 ) break;
+		}
+		return $out;
+	}
+
 	public static function bump_hit_count( int $tenant_id, int $id ): void {
 		global $wpdb;
 		$table = Mimamori_Bot_Installer::table_faq();
