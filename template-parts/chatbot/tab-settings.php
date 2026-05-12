@@ -8,6 +8,15 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 ?>
 
+<script>
+// FAB バナー画像アップロード用の REST 認証情報をフロントに渡す
+window.MB_UPLOAD = {
+    tenant_id: <?php echo (int) $tenant['id']; ?>,
+    nonce:     <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>,
+    url:       <?php echo wp_json_encode( rest_url( 'mimamori-bot-admin/v1/upload-fab-icon' ) ); ?>
+};
+</script>
+
 <div class="mb-card">
     <h2>基本設定 — <?php echo esc_html( $tenant['name'] ); ?> <code style="font-size:12px;color:#6b7280;font-weight:normal"><?php echo esc_html( $tenant['slug'] ); ?></code></h2>
 
@@ -79,11 +88,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
         <div class="mb-form-group">
             <label for="fab_icon_url">バナー画像 (吹き出しアイコン)</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <input type="url" id="fab_icon_url" name="fab_icon_url" value="<?php echo esc_attr( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" placeholder="https://example.com/banner.png" style="flex:1;min-width:280px;max-width:480px">
-                <button type="button" class="mb-btn mb-btn-primary" id="mb-pick-fab-icon">📁 画像をアップロード / 選択</button>
+                <button type="button" class="mb-btn mb-btn-primary" id="mb-pick-fab-icon">📁 画像をアップロード</button>
                 <button type="button" class="mb-btn mb-btn-link" id="mb-clear-fab-icon">クリア</button>
+                <input type="file" id="mb-fab-icon-file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" style="display:none">
+                <span id="mb-fab-icon-status" style="font-size:12px;color:#64748b"></span>
             </div>
-            <p class="description">「画像をアップロード / 選択」ボタンから WordPress メディアライブラリを開いて新規アップロードまたは既存画像を選択できます。推奨: 透過 PNG / SVG、正方形、64〜128px。未設定時は💬白アイコン。</p>
+            <input type="url" id="fab_icon_url" name="fab_icon_url" value="<?php echo esc_attr( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" placeholder="または画像URLを直接入力" style="width:100%;max-width:560px;margin-top:10px">
+            <p class="description">対応形式: PNG / JPG / GIF / WEBP / SVG (最大 2MB)。推奨: 透過 PNG / SVG、正方形、64〜128px。未設定時は💬白アイコン。アップロードしたファイルは <code>uploads/mimamori-chatbot/fab-icons/</code> に保存されます。</p>
             <div id="mb-fab-icon-preview" style="margin-top:10px<?php echo empty( $tenant['fab_icon_url'] ) ? ';display:none' : ''; ?>">
                 <img src="<?php echo esc_url( (string) ( $tenant['fab_icon_url'] ?? '' ) ); ?>" alt="" style="width:56px;height:56px;border-radius:28px;background:<?php echo esc_attr( (string) ( $tenant['fab_bg_color'] ?: ( $tenant['theme_primary'] ?: '#2563eb' ) ) ); ?>;object-fit:contain;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,.15)">
             </div>
@@ -356,13 +367,20 @@ if ( ! defined( 'ABSPATH' ) ) exit;
     syncColor('theme_on_primary_picker', 'theme_on_primary');
     syncColor('fab_bg_color_picker',     'fab_bg_color');
 
-    // FAB アイコン: メディアライブラリ
-    var pickBtn  = document.getElementById('mb-pick-fab-icon');
-    var clearBtn = document.getElementById('mb-clear-fab-icon');
-    var iconUrl  = document.getElementById('fab_icon_url');
-    var preview  = document.getElementById('mb-fab-icon-preview');
+    // FAB アイコン: 直接アップロード (mimamori-bot-admin REST)
+    var pickBtn   = document.getElementById('mb-pick-fab-icon');
+    var clearBtn  = document.getElementById('mb-clear-fab-icon');
+    var fileInput = document.getElementById('mb-fab-icon-file');
+    var statusEl  = document.getElementById('mb-fab-icon-status');
+    var iconUrl   = document.getElementById('fab_icon_url');
+    var preview   = document.getElementById('mb-fab-icon-preview');
     var previewImg = preview ? preview.querySelector('img') : null;
 
+    function setStatus(msg, kind) {
+        if (!statusEl) return;
+        statusEl.textContent = msg || '';
+        statusEl.style.color = kind === 'err' ? '#b91c1c' : (kind === 'ok' ? '#16a34a' : '#64748b');
+    }
     function updatePreview(url) {
         if (!preview || !previewImg) return;
         if (url) {
@@ -373,32 +391,54 @@ if ( ! defined( 'ABSPATH' ) ) exit;
             preview.style.display = 'none';
         }
     }
-
-    if (pickBtn && iconUrl && window.wp && wp.media) {
-        var frame;
+    if (pickBtn && fileInput) {
         pickBtn.addEventListener('click', function (e) {
             e.preventDefault();
-            if (frame) { frame.open(); return; }
-            frame = wp.media({
-                title: 'チャットボットの吹き出しアイコン',
-                button: { text: 'この画像を使う' },
-                library: { type: 'image' },
-                multiple: false
-            });
-            frame.on('select', function () {
-                var att = frame.state().get('selection').first().toJSON();
-                iconUrl.value = att.url || '';
-                updatePreview(att.url || '');
-            });
-            frame.open();
+            fileInput.click();
         });
-    } else if (pickBtn) {
-        pickBtn.style.display = 'none';
+    }
+    if (fileInput && window.MB_UPLOAD) {
+        fileInput.addEventListener('change', function () {
+            var f = fileInput.files && fileInput.files[0];
+            if (!f) return;
+            if (f.size > 2 * 1024 * 1024) {
+                setStatus('❌ ファイルが大きすぎます (最大 2MB)', 'err');
+                fileInput.value = '';
+                return;
+            }
+            setStatus('アップロード中…', '');
+            var fd = new FormData();
+            fd.append('file', f);
+            fd.append('tenant_id', String(MB_UPLOAD.tenant_id));
+            fetch(MB_UPLOAD.url, {
+                method: 'POST',
+                headers: { 'X-WP-Nonce': MB_UPLOAD.nonce },
+                credentials: 'same-origin',
+                body: fd
+            })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+            .then(function (res) {
+                fileInput.value = ''; // 同じファイルを再選択できるようにリセット
+                if (res.ok && res.data && res.data.url) {
+                    if (iconUrl) iconUrl.value = res.data.url;
+                    updatePreview(res.data.url);
+                    setStatus('✓ アップロード完了。設定を保存すると反映されます。', 'ok');
+                } else {
+                    var msg = (res.data && (res.data.message || res.data.code)) || 'アップロードに失敗しました';
+                    setStatus('❌ ' + msg, 'err');
+                }
+            })
+            .catch(function (err) {
+                fileInput.value = '';
+                setStatus('❌ ネットワークエラー: ' + (err && err.message ? err.message : ''), 'err');
+            });
+        });
     }
     if (clearBtn && iconUrl) {
         clearBtn.addEventListener('click', function () {
             iconUrl.value = '';
             updatePreview('');
+            setStatus('クリアしました。設定を保存すると反映されます。', '');
         });
     }
     if (iconUrl) {

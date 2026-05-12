@@ -61,10 +61,8 @@ set_query_var( 'gcrev_page_title', 'チャットボット管理' );
 set_query_var( 'gcrev_page_subtitle', 'クライアントサイトに埋め込めるAIチャットボットの設定・ナレッジ・FAQ・分析を管理します。' );
 set_query_var( 'gcrev_breadcrumb', function_exists( 'gcrev_breadcrumb' ) ? gcrev_breadcrumb( 'チャットボット管理' ) : '' );
 
-// 設定タブ: FAB アイコン選択でメディアライブラリを使う
-if ( $active_tab === 'settings' ) {
-    wp_enqueue_media();
-}
+// 設定タブの FAB バナーアップロードは独自 REST (mimamori-bot-admin/v1) で
+// 行うため WordPress メディアライブラリは不要。
 
 get_header();
 
@@ -84,75 +82,279 @@ $return_url = home_url( '/chatbot/?tab=' . $active_tab );
 ?>
 
 <style>
+/* ===== チャットボット管理UI — みまもりウェブ デザイントークンに準拠 =====
+ * 色: 青緑 (--mw-primary-blue #568184)、まる: 16px、影: ふんわり
+ * 他の分析ページ (period-selector, mw-card) との視覚統一を狙う
+ */
 .mb-wrap { max-width: 1280px; margin: 0 auto; padding: 16px; }
-.mb-tabs { display:flex; gap:4px; border-bottom:2px solid #e5e7eb; margin-bottom:24px; flex-wrap:wrap; }
-.mb-tab { padding:12px 20px; background:#f8fafc; border:1px solid #e5e7eb; border-bottom:none; border-radius:8px 8px 0 0; color:#64748b; text-decoration:none; font-weight:500; font-size:14px; cursor:pointer; }
-.mb-tab.active { background:#fff; color:#1a73e8; border-color:#1a73e8 #1a73e8 #fff; border-bottom:2px solid #fff; margin-bottom:-2px; position:relative; z-index:1; }
-.mb-tab:hover:not(.active) { background:#eef2ff; }
 
-.mb-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:24px 28px; margin-bottom:20px; }
-.mb-card h2 { margin:0 0 16px; font-size:18px; font-weight:600; color:#0f172a; padding-bottom:12px; border-bottom:1px solid #e5e7eb; }
-.mb-card h3 { margin:24px 0 12px; font-size:15px; font-weight:600; color:#334155; }
-
-.mb-form-group { margin-bottom:20px; }
-.mb-form-group label { display:block; font-weight:500; color:#334155; margin-bottom:6px; font-size:13px; }
-.mb-form-group .description { font-size:12px; color:#64748b; margin-top:4px; line-height:1.5; }
-.mb-form-group input[type="text"], .mb-form-group input[type="url"], .mb-form-group input[type="number"], .mb-form-group textarea, .mb-form-group select {
-    width:100%; max-width:560px; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; font-family:inherit;
+/* ----- タブ (period-selector と同じピル形式) ----- */
+.mb-tabs {
+    display: inline-flex; flex-wrap: wrap; gap: 6px;
+    background: var(--mw-bg-tertiary, #E6EEF0);
+    padding: 5px;
+    border-radius: var(--mw-radius-sm, 12px);
+    margin-bottom: 24px;
 }
-.mb-form-group textarea { resize:vertical; min-height:80px; }
-.mb-form-group textarea.code { font-family:monospace; font-size:13px; }
+.mb-tab {
+    padding: 9px 18px;
+    background: transparent;
+    color: var(--mw-text-tertiary, #5D6E70);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: var(--mw-radius-sm, 12px);
+    transition: all .25s ease;
+    white-space: nowrap;
+}
+.mb-tab:hover:not(.active) { color: var(--mw-text-primary, #263335); }
+.mb-tab.active {
+    background: var(--mw-bg-primary, #fff);
+    color: var(--mw-primary-blue, #568184);
+    box-shadow: var(--mw-shadow-soft, 0 1px 6px rgba(0,0,0,.03));
+}
 
-/* ファイル入力 — 「ファイルを選択」ボタンを mb-btn-secondary 相当に */
+/* ----- カード ----- */
+.mb-card {
+    background: var(--mw-bg-primary, #fff);
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    border-radius: var(--mw-radius-md, 16px);
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    box-shadow: var(--mw-shadow-soft, 0 1px 6px rgba(0,0,0,.03));
+}
+.mb-card h2 {
+    margin: 0 0 16px;
+    font-size: 17px; font-weight: 700;
+    color: var(--mw-text-heading, #1A2F33);
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--mw-border-light, #C3CED0);
+}
+.mb-card h3 {
+    margin: 24px 0 12px;
+    font-size: 14px; font-weight: 700;
+    color: var(--mw-text-primary, #263335);
+}
+
+/* ----- フォーム ----- */
+.mb-form-group { margin-bottom: 20px; }
+.mb-form-group label {
+    display: block;
+    font-weight: 600; font-size: 13px;
+    color: var(--mw-text-primary, #263335);
+    margin-bottom: 6px;
+}
+.mb-form-group .description {
+    font-size: 12px; line-height: 1.6;
+    color: var(--mw-text-tertiary, #5D6E70);
+    margin-top: 4px;
+}
+.mb-form-group input[type="text"],
+.mb-form-group input[type="url"],
+.mb-form-group input[type="number"],
+.mb-form-group textarea,
+.mb-form-group select {
+    width: 100%; max-width: 560px;
+    padding: 9px 12px;
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    border-radius: var(--mw-radius-sm, 12px);
+    font-size: 14px; font-family: inherit;
+    background: var(--mw-bg-primary, #fff);
+    color: var(--mw-text-primary, #263335);
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.mb-form-group input[type="text"]:focus,
+.mb-form-group input[type="url"]:focus,
+.mb-form-group input[type="number"]:focus,
+.mb-form-group textarea:focus,
+.mb-form-group select:focus {
+    outline: none;
+    border-color: var(--mw-primary-blue, #568184);
+    box-shadow: 0 0 0 3px rgba(86,129,132,.12);
+}
+.mb-form-group textarea { resize: vertical; min-height: 80px; }
+.mb-form-group textarea.code { font-family: monospace; font-size: 13px; }
+
+/* ----- ファイル入力 (mb-btn-secondary 相当のネイティブボタン) ----- */
 .mb-form-group input[type="file"] {
-    font-size:13px; color:#475569; padding:6px 0;
+    font-size: 13px; color: var(--mw-text-secondary, #384D50);
+    padding: 6px 0;
 }
 .mb-form-group input[type="file"]::file-selector-button,
 .mb-form-group input[type="file"]::-webkit-file-upload-button {
-    display:inline-block; padding:8px 18px; margin-right:12px;
-    background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px;
-    font-weight:500; font-size:14px; font-family:inherit; cursor:pointer;
-    transition:background-color .15s ease, border-color .15s ease;
+    display: inline-block;
+    padding: 8px 18px; margin-right: 12px;
+    background: var(--mw-bg-primary, #fff);
+    color: var(--mw-text-primary, #263335);
+    border: 1px solid var(--mw-border-medium, #AEBCBE);
+    border-radius: var(--mw-radius-sm, 12px);
+    font-weight: 600; font-size: 13px; font-family: inherit;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease;
 }
 .mb-form-group input[type="file"]::file-selector-button:hover,
 .mb-form-group input[type="file"]::-webkit-file-upload-button:hover {
-    background:#f9fafb; border-color:#9ca3af;
+    background: var(--mw-bg-tertiary, #E6EEF0);
+    border-color: var(--mw-primary-blue, #568184);
 }
 
-.mb-notice { padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px; }
-.mb-notice.success { background:#ecfdf5; border:1px solid #34d399; color:#065f46; }
-.mb-notice.warning { background:#fffbeb; border:1px solid #fcd34d; color:#92400e; }
-.mb-notice.error { background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; }
+/* ----- 通知 ----- */
+.mb-notice {
+    padding: 12px 16px;
+    border-radius: var(--mw-radius-sm, 12px);
+    margin-bottom: 16px;
+    font-size: 14px;
+    border: 1px solid transparent;
+}
+.mb-notice.success { background: #ECF6EF; border-color: #BFE0CB; color: #2D6A47; }
+.mb-notice.warning { background: #FBF4DE; border-color: #E5D08A; color: #6B5114; }
+.mb-notice.error   { background: #FDECEC; border-color: #F4B8B8; color: #8C2A2A; }
 
-.mb-btn { display:inline-block; padding:8px 18px; border:1px solid transparent; border-radius:6px; font-weight:500; font-size:14px; cursor:pointer; text-decoration:none; }
-.mb-btn-primary { background:#1a73e8; color:#fff; border-color:#1a73e8; }
-.mb-btn-primary:hover { background:#1557b0; }
-.mb-btn-secondary { background:#fff; color:#374151; border-color:#d1d5db; }
-.mb-btn-secondary:hover { background:#f9fafb; }
-.mb-btn-danger { background:#fff; color:#dc2626; border-color:#dc2626; }
-.mb-btn-danger:hover { background:#fef2f2; }
-.mb-btn-link { background:transparent; color:#1a73e8; padding:4px 8px; }
+/* ----- ボタン ----- */
+.mb-btn {
+    display: inline-block;
+    padding: 9px 20px;
+    border: 1px solid transparent;
+    border-radius: var(--mw-radius-sm, 12px);
+    font-weight: 600; font-size: 14px;
+    cursor: pointer; text-decoration: none;
+    transition: all .15s ease;
+}
+.mb-btn-primary {
+    background: var(--mw-primary-blue, #568184);
+    color: #fff; border-color: var(--mw-primary-blue, #568184);
+}
+.mb-btn-primary:hover { background: var(--mw-btn-primary-hover, #476C6F); border-color: var(--mw-btn-primary-hover, #476C6F); }
+.mb-btn-secondary {
+    background: var(--mw-bg-primary, #fff);
+    color: var(--mw-text-primary, #263335);
+    border-color: var(--mw-border-medium, #AEBCBE);
+}
+.mb-btn-secondary:hover { background: var(--mw-bg-tertiary, #E6EEF0); border-color: var(--mw-primary-blue, #568184); }
+.mb-btn-danger {
+    background: var(--mw-bg-primary, #fff);
+    color: #B23A3A; border-color: #DDA5A5;
+}
+.mb-btn-danger:hover { background: #FDECEC; border-color: #B23A3A; }
+.mb-btn-link {
+    background: transparent;
+    color: var(--mw-primary-blue, #568184);
+    padding: 4px 8px;
+}
+.mb-btn-link:hover { text-decoration: underline; }
 
-.mb-table { width:100%; border-collapse:collapse; }
-.mb-table th, .mb-table td { padding:10px 12px; text-align:left; border-bottom:1px solid #e5e7eb; font-size:13px; }
-.mb-table thead th { background:#f8fafc; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:.3px; }
+/* ----- テーブル ----- */
+.mb-table { width: 100%; border-collapse: collapse; }
+.mb-table th, .mb-table td {
+    padding: 12px 14px; text-align: left;
+    border-bottom: 1px solid var(--mw-border-light, #C3CED0);
+    font-size: 13px;
+}
+.mb-table thead th {
+    background: var(--mw-bg-tertiary, #E6EEF0);
+    font-weight: 700; font-size: 12px;
+    color: var(--mw-text-secondary, #384D50);
+    letter-spacing: .3px;
+}
+.mb-table tbody tr:hover { background: var(--mw-bg-secondary, #F5F8F8); }
 
-.mb-switcher { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.mb-switcher strong { color:#1e40af; }
-.mb-switcher select { padding:6px 10px; border:1px solid #93c5fd; border-radius:6px; background:#fff; }
+/* ----- テナント切替バー ----- */
+.mb-switcher {
+    background: var(--mw-bg-tertiary, #E6EEF0);
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    border-radius: var(--mw-radius-sm, 12px);
+    padding: 10px 14px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.mb-switcher strong { color: var(--mw-primary-blue, #568184); }
+.mb-switcher select {
+    padding: 7px 10px;
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    border-radius: var(--mw-radius-sm, 12px);
+    background: var(--mw-bg-primary, #fff);
+    color: var(--mw-text-primary, #263335);
+    font-size: 13px;
+}
 
-.mb-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
-.mb-kpi-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; }
-.mb-kpi-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
-.mb-kpi-value { font-size:24px; font-weight:700; color:#0f172a; margin:6px 0; }
-.mb-kpi-sub { font-size:11px; color:#94a3b8; }
+/* ----- KPIカード ----- */
+.mb-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.mb-kpi-card {
+    background: var(--mw-bg-primary, #fff);
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    border-radius: var(--mw-radius-md, 16px);
+    padding: 16px 18px;
+    box-shadow: var(--mw-shadow-soft, 0 1px 6px rgba(0,0,0,.03));
+}
+.mb-kpi-label {
+    font-size: 11px; letter-spacing: .5px;
+    color: var(--mw-text-tertiary, #5D6E70);
+    text-transform: uppercase;
+}
+.mb-kpi-value {
+    font-size: 26px; font-weight: 700;
+    color: var(--mw-text-heading, #1A2F33);
+    margin: 6px 0;
+}
+.mb-kpi-sub { font-size: 11px; color: var(--mw-soft-gray, #8A9197); }
 
-.mb-snippet-box { font-family:monospace; font-size:12px; background:#f6f7f7; padding:12px; border-radius:8px; border:1px solid #e5e7eb; width:100%; }
+/* ----- 埋め込みスニペット ----- */
+.mb-snippet-box {
+    font-family: monospace; font-size: 12px;
+    background: var(--mw-bg-secondary, #F5F8F8);
+    padding: 14px;
+    border-radius: var(--mw-radius-sm, 12px);
+    border: 1px solid var(--mw-border-light, #C3CED0);
+    width: 100%; color: var(--mw-text-primary, #263335);
+}
 
-.mb-msg { padding:8px 10px; border-radius:8px; margin:6px 0; }
-.mb-msg-user { background:#dbeafe; }
-.mb-msg-assistant { background:#fff; border:1px solid #e5e7eb; }
-.mb-bar { height:14px; border-radius:4px; }
+/* ----- メッセージ吹き出し (履歴詳細) ----- */
+.mb-msg { padding: 8px 10px; border-radius: var(--mw-radius-sm, 12px); margin: 6px 0; }
+.mb-msg-user { background: var(--mw-bg-tertiary, #E6EEF0); }
+.mb-msg-assistant { background: var(--mw-bg-primary, #fff); border: 1px solid var(--mw-border-light, #C3CED0); }
+.mb-bar { height: 14px; border-radius: 4px; }
+
+/* ----- 期間切替 (分析タブ・ナレッジ等の内部スイッチ) ----- */
+.mb-period {
+    display: inline-flex; gap: 6px;
+    background: var(--mw-bg-tertiary, #E6EEF0);
+    padding: 5px;
+    border-radius: var(--mw-radius-sm, 12px);
+    margin: 12px 0 16px;
+}
+.mb-period a, .mb-period strong {
+    padding: 6px 14px;
+    border-radius: var(--mw-radius-sm, 12px);
+    font-size: 13px; font-weight: 600;
+    text-decoration: none;
+    color: var(--mw-text-tertiary, #5D6E70);
+    transition: all .25s ease;
+}
+.mb-period a:hover { color: var(--mw-text-primary, #263335); }
+.mb-period strong {
+    background: var(--mw-bg-primary, #fff);
+    color: var(--mw-primary-blue, #568184);
+    box-shadow: var(--mw-shadow-soft, 0 1px 6px rgba(0,0,0,.03));
+}
+
+/* ----- ページネーション (履歴一覧) ----- */
+.mb-pagination { margin-top: 16px; display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.mb-pagination a, .mb-pagination strong {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: var(--mw-radius-sm, 12px);
+    font-size: 13px; font-weight: 600;
+    text-decoration: none;
+    color: var(--mw-text-tertiary, #5D6E70);
+    transition: all .15s ease;
+}
+.mb-pagination a:hover {
+    background: var(--mw-bg-tertiary, #E6EEF0);
+    color: var(--mw-text-primary, #263335);
+}
+.mb-pagination strong {
+    background: var(--mw-primary-blue, #568184);
+    color: #fff;
+}
 </style>
 
 <div class="content-area"><div class="mb-wrap">

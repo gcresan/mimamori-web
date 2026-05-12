@@ -28,7 +28,7 @@ if ( defined( 'MIMAMORI_BOT_VERSION' ) ) {
 	return;
 }
 
-define( 'MIMAMORI_BOT_VERSION',                '0.8.0' );
+define( 'MIMAMORI_BOT_VERSION',                '0.8.1' );
 define( 'MIMAMORI_BOT_FILE',                   __FILE__ );
 define( 'MIMAMORI_BOT_PATH',                   plugin_dir_path( __FILE__ ) );
 define( 'MIMAMORI_BOT_URL',                    plugin_dir_url( __FILE__ ) );
@@ -59,6 +59,7 @@ require_once MIMAMORI_BOT_PATH . 'includes/class-faq-repository.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-rag-retriever.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-chat-service.php';
 require_once MIMAMORI_BOT_PATH . 'includes/class-public-api.php';
+require_once MIMAMORI_BOT_PATH . 'includes/class-admin-api.php';
 require_once MIMAMORI_BOT_PATH . 'includes/admin/class-admin-menu.php';
 require_once MIMAMORI_BOT_PATH . 'includes/admin/class-settings-page.php';
 require_once MIMAMORI_BOT_PATH . 'includes/admin/class-knowledge-page.php';
