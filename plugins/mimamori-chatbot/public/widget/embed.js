@@ -19,6 +19,8 @@
   var API        = app.dataset.api;
   var TITLE      = app.dataset.title || 'AIアシスタント';
   var AVATAR_SVG = app.dataset.avatarSvg || ''; // 担当アバター (SVG文字列, 空ならアイコンなし)
+  // 送信効果音オン/オフ — "0" 明示時のみ無効、未指定/空/"1" はオン (デフォルト)
+  var SOUND_SEND_ON = (app.dataset.soundSend !== '0');
 
   if (!TENANT || !PUBKEY || !API) {
     app.textContent = '初期化に失敗しました。';
@@ -387,6 +389,7 @@
   // sine の高音→低音スイープ + 短いノイズで風切り感を出す。
   var sendAudioCtx = null;
   function playSendSound() {
+    if (!SOUND_SEND_ON) return;
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;

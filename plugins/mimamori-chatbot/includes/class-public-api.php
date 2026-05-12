@@ -192,6 +192,10 @@ class Mimamori_Bot_Public_API {
 				'offset_x_sp' => $theme['fab_x_sp'],
 				'offset_y_sp' => $theme['fab_y_sp'],
 			],
+			'sound' => [
+				'open' => (bool) $theme['sound_open'],
+				'send' => (bool) $theme['sound_send'],
+			],
 		], 200 );
 		$res->header( 'Cache-Control', 'public, max-age=60' );
 		return $res;
@@ -267,7 +271,9 @@ class Mimamori_Bot_Public_API {
 		$on_primary  = esc_attr( $theme['on_primary'] );
 		// 担当アバター: SVG 文字列を data 属性に埋め込む。SVG は plugin 内定数由来 (XSS なし)
 		// esc_attr で属性向けにエスケープしたうえで data-avatar-svg に格納する。
-		$avatar_data = esc_attr( $theme['avatar_svg'] ?? '' );
+		$avatar_data    = esc_attr( $theme['avatar_svg'] ?? '' );
+		// 送信音オン/オフを iframe に伝達 ("0" = off, "1" = on)
+		$sound_send_data = ! empty( $theme['sound_send'] ) ? '1' : '0';
 
 		// embed.css / embed.js は plugin assets として静的配信。
 		// CSS変数で配色を上書きする (embed.css は var(--mb-*) を参照)。
@@ -296,7 +302,7 @@ class Mimamori_Bot_Public_API {
 </style>
 </head>
 <body>
-<div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}" data-title="{$title_data}" data-avatar-svg="{$avatar_data}"></div>
+<div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}" data-title="{$title_data}" data-avatar-svg="{$avatar_data}" data-sound-send="{$sound_send_data}"></div>
 <script src="{$asset_base}/embed.js?v={$ver}" defer></script>
 </body>
 </html>

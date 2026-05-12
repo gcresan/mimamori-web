@@ -52,6 +52,8 @@
     offset_y_sp: 20,
     icon_url: ''
   };
+  // 効果音のオン/オフ (widget-config 取得まではデフォルト ON)
+  var soundOpenOn = true;
   // 初回は非表示 → config 取得後 (または失敗時) に表示。設定色での "青→緑" フラッシュ抑止。
   var fabReady = false;
 
@@ -166,6 +168,9 @@
             fabConfig.offset_x_sp = (typeof j.fab.offset_x_sp === 'number') ? j.fab.offset_x_sp : fabConfig.offset_x;
             fabConfig.offset_y_sp = (typeof j.fab.offset_y_sp === 'number') ? j.fab.offset_y_sp : fabConfig.offset_y;
           }
+          if (j && j.sound && typeof j.sound.open === 'boolean') {
+            soundOpenOn = j.sound.open;
+          }
         })
         .catch(function () { /* fallback to defaults */ })
         .then(function () { fetched = true; reveal(); });
@@ -192,6 +197,7 @@
   // 初回はユーザー操作 (クリック) 内で resume 必須 — toggle 内で呼ぶので OK。
   var audioCtx = null;
   function playOpenSound() {
+    if (!soundOpenOn) return;
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;

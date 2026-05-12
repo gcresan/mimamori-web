@@ -139,11 +139,14 @@ class Mimamori_Bot_Tenant_Repository {
 			'welcome_message',
 			// 担当アバター (preset key)
 			'assistant_avatar',
+			// 効果音オン/オフ
+			'sound_open_enabled', 'sound_send_enabled',
 		];
 		$int_fields = [
 			'rate_limit_rpm', 'monthly_budget_jpy',
 			'fab_offset_x', 'fab_offset_y',
 			'fab_offset_x_sp', 'fab_offset_y_sp',
+			'sound_open_enabled', 'sound_send_enabled',
 		];
 		$update  = [];
 		$formats = [];
@@ -205,6 +208,9 @@ class Mimamori_Bot_Tenant_Repository {
 			? (int) $row['fab_offset_x_sp'] : null;
 		$row['fab_offset_y_sp'] = ( isset( $row['fab_offset_y_sp'] ) && $row['fab_offset_y_sp'] !== null && $row['fab_offset_y_sp'] !== '' )
 			? (int) $row['fab_offset_y_sp'] : null;
+		// 効果音オン/オフ — DB に列が無い旧テナントは ON (=1) で初期化
+		$row['sound_open_enabled'] = isset( $row['sound_open_enabled'] ) ? (int) $row['sound_open_enabled'] : 1;
+		$row['sound_send_enabled'] = isset( $row['sound_send_enabled'] ) ? (int) $row['sound_send_enabled'] : 1;
 		return $row;
 	}
 
@@ -248,6 +254,8 @@ class Mimamori_Bot_Tenant_Repository {
 			'fab_y_sp'     => $fab_y_sp,
 			'avatar_key'   => $avatar_key,
 			'avatar_svg'   => $avatar_svg,
+			'sound_open'   => ! empty( $tenant['sound_open_enabled'] ),
+			'sound_send'   => ! empty( $tenant['sound_send_enabled'] ),
 		];
 	}
 

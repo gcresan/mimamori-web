@@ -414,6 +414,13 @@ class Mimamori_Bot_Settings_Page {
 			}
 		}
 
+		// 効果音オン/オフ — フォーム送信時は常に上書き (未チェック = 0)
+		// 設定セクションが描画されている前提のフラグ _sound_section で判定
+		if ( isset( $_POST['_sound_section'] ) ) {
+			$fields['sound_open_enabled'] = ! empty( $_POST['sound_open_enabled'] ) ? 1 : 0;
+			$fields['sound_send_enabled'] = ! empty( $_POST['sound_send_enabled'] ) ? 1 : 0;
+		}
+
 		// スマホ用 X/Y: 値があれば fields に積み、空欄なら後で NULL 直接更新 (wpdb->update は NULL を %d に変換できないため)
 		$sp_nulls = [];
 		foreach ( [ 'fab_offset_x_sp', 'fab_offset_y_sp' ] as $sp_key ) {

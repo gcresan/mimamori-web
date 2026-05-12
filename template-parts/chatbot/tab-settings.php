@@ -251,6 +251,31 @@ if ( ! defined( 'ABSPATH' ) ) exit;
             <p class="description">AIに与える役割・口調・禁則事項などを記述。</p>
         </div>
 
+        <h3 style="margin-top:28px;padding-top:18px;border-top:1px solid #e5e7eb">🔔 効果音</h3>
+        <p class="description" style="margin-bottom:16px">チャットの開閉や送信時の効果音をオン/オフできます。チェックを外すと無音になります。</p>
+
+        <?php
+        $sound_open_on = ! isset( $tenant['sound_open_enabled'] ) || (int) $tenant['sound_open_enabled'] === 1;
+        $sound_send_on = ! isset( $tenant['sound_send_enabled'] ) || (int) $tenant['sound_send_enabled'] === 1;
+        ?>
+        <input type="hidden" name="_sound_section" value="1">
+        <div class="mb-form-group" style="max-width:none">
+            <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;margin-bottom:8px;max-width:480px;background:#fff">
+                <input type="checkbox" name="sound_open_enabled" value="1" <?php checked( $sound_open_on ); ?> style="width:18px;height:18px;cursor:pointer">
+                <span style="flex:1">
+                    <strong style="font-size:13px;color:#0f172a">バナークリック時の効果音</strong>
+                    <span style="display:block;font-size:12px;color:#64748b;margin-top:2px">FAB (吹き出しアイコン) を押してチャットを開いた時の "ポン" 音</span>
+                </span>
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;max-width:480px;background:#fff">
+                <input type="checkbox" name="sound_send_enabled" value="1" <?php checked( $sound_send_on ); ?> style="width:18px;height:18px;cursor:pointer">
+                <span style="flex:1">
+                    <strong style="font-size:13px;color:#0f172a">送信時の効果音</strong>
+                    <span style="display:block;font-size:12px;color:#64748b;margin-top:2px">メッセージを送信した時の "シュッ" 音</span>
+                </span>
+            </label>
+        </div>
+
         <div class="mb-form-group">
             <label for="status">ステータス</label>
             <select id="status" name="status" style="max-width:200px">

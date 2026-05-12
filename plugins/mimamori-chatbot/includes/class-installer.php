@@ -62,6 +62,8 @@ class Mimamori_Bot_Installer {
 			fab_offset_y_sp SMALLINT NULL,
 			welcome_message TEXT NULL,
 			assistant_avatar VARCHAR(40) NULL,
+			sound_open_enabled TINYINT(1) NOT NULL DEFAULT 1,
+			sound_send_enabled TINYINT(1) NOT NULL DEFAULT 1,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
