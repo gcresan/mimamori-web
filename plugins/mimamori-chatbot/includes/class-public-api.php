@@ -248,6 +248,7 @@ class Mimamori_Bot_Public_API {
 		$public_key  = esc_attr( $tenant['public_key'] );
 		$api_base    = esc_url( rest_url( MIMAMORI_BOT_REST_NS ) );
 		$asset_base  = esc_url( MIMAMORI_BOT_URL . 'public/widget' );
+		$ver         = esc_attr( MIMAMORI_BOT_VERSION );
 
 		$theme       = Mimamori_Bot_Tenant_Repository::resolve_theme( $tenant );
 		$title_attr  = esc_html( $theme['title'] );
@@ -257,6 +258,8 @@ class Mimamori_Bot_Public_API {
 
 		// embed.css / embed.js は plugin assets として静的配信。
 		// CSS変数で配色を上書きする (embed.css は var(--mb-*) を参照)。
+		// ?v= でブラウザキャッシュをバスト — 旧版が残ると var() が効かず色が変わらない。
+		// インライン <style> で配色変数を確実に最後に適用 (link 順より後ろなので勝つ)。
 		return <<<HTML
 <!doctype html>
 <html lang="ja">
@@ -265,12 +268,19 @@ class Mimamori_Bot_Public_API {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>{$title_attr}</title>
-<link rel="stylesheet" href="{$asset_base}/embed.css">
-<style>:root{--mb-primary:{$primary};--mb-on-primary:{$on_primary};}</style>
+<link rel="stylesheet" href="{$asset_base}/embed.css?v={$ver}">
+<style>
+:root{--mb-primary:{$primary};--mb-on-primary:{$on_primary};}
+.mb-header{background:{$primary} !important;color:{$on_primary} !important;}
+.mb-header button{color:{$on_primary} !important;}
+.mb-msg.user{background:{$primary} !important;color:{$on_primary} !important;}
+.mb-input button{background:{$primary} !important;color:{$on_primary} !important;}
+.mb-starter:hover{border-color:{$primary} !important;color:{$primary} !important;}
+</style>
 </head>
 <body>
 <div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}" data-title="{$title_data}"></div>
-<script src="{$asset_base}/embed.js" defer></script>
+<script src="{$asset_base}/embed.js?v={$ver}" defer></script>
 </body>
 </html>
 HTML;
