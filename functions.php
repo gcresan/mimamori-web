@@ -1501,6 +1501,16 @@ add_action('wp_enqueue_scripts', function() {
         true
     );
 
+    // 保存中オーバーレイ — 全ページの保存系フォームに対し自動でモーダル表示
+    // (送信ボタンが "保存"/"登録"/"更新" を含む form を自動 hook)
+    // 自前で style 注入するため CSS の enqueue は不要。
+    wp_enqueue_script(
+        'gcrev-save-overlay',
+        get_template_directory_uri() . '/assets/js/mimamori-save-overlay.js',
+        [],
+        '1.0.0',
+        true
+    );
 });
 
 /**
