@@ -9600,6 +9600,120 @@ function gcrev_save_chatbot_option_field( int $user_id ) {
 }
 
 // --------------------------------------------------
+// MEOレポート CSV エクスポート
+// /wp-admin/admin-post.php?action=gcrev_meo_report_csv&year=YYYY&month=MM
+// --------------------------------------------------
+add_action( 'admin_post_gcrev_meo_report_csv', 'gcrev_handle_meo_report_csv' );
+
+// /meo-report/ 固定ページ自動作成 (page-meo-report.php テンプレート割当)
+add_action( 'admin_init', 'gcrev_ensure_meo_report_page' );
+function gcrev_ensure_meo_report_page(): void {
+    if ( get_option( 'gcrev_meo_report_page_id', 0 ) ) {
+        return;
+    }
+    $existing = get_page_by_path( 'meo-report' );
+    if ( $existing ) {
+        if ( get_post_meta( $existing->ID, '_wp_page_template', true ) !== 'page-meo-report.php' ) {
+            update_post_meta( $existing->ID, '_wp_page_template', 'page-meo-report.php' );
+        }
+        update_option( 'gcrev_meo_report_page_id', (int) $existing->ID, false );
+        return;
+    }
+    $page_id = wp_insert_post( [
+        'post_type'    => 'page',
+        'post_status'  => 'publish',
+        'post_title'   => 'MEOレポート',
+        'post_name'    => 'meo-report',
+        'post_content' => '',
+        'meta_input'   => [ '_wp_page_template' => 'page-meo-report.php' ],
+    ] );
+    if ( ! is_wp_error( $page_id ) && $page_id > 0 ) {
+        update_option( 'gcrev_meo_report_page_id', (int) $page_id, false );
+    }
+}
+
+function gcrev_handle_meo_report_csv(): void {
+    if ( ! is_user_logged_in() ) {
+        wp_die( 'login required', 'forbidden', [ 'response' => 401 ] );
+    }
+    if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( $_GET['_wpnonce'], 'gcrev_meo_report_csv' ) ) {
+        wp_die( 'invalid nonce', 'forbidden', [ 'response' => 403 ] );
+    }
+    $user_id = function_exists( 'mimamori_get_view_user_id' ) ? mimamori_get_view_user_id() : get_current_user_id();
+    $year    = isset( $_GET['year'] )  ? max( 2024, min( 2099, absint( $_GET['year'] ) ) )  : (int) wp_date( 'Y' );
+    $month   = isset( $_GET['month'] ) ? max( 1, min( 12, absint( $_GET['month'] ) ) ) : (int) wp_date( 'n' );
+
+    if ( ! class_exists( 'Gcrev_Meo_Report_Service' ) ) {
+        require_once get_template_directory() . '/inc/gcrev-api/modules/class-meo-report-service.php';
+    }
+    $report = Gcrev_Meo_Report_Service::build_report( $user_id, $year, $month );
+
+    $m  = $report['metrics'];
+    $mp = $report['metrics_prev'];
+    $rows = [];
+
+    $rows[] = [ 'MEOレポート', $report['period']['label'] ];
+    $rows[] = [ '前月比較対象', $report['previous']['label'] ];
+    $rows[] = [];
+    $rows[] = [ '== 表示回数 ==' ];
+    $rows[] = [ '項目', '今月', '前月', '増減' ];
+    $rows[] = [ 'モバイル表示',   $m['mobile_impressions'],  $mp['mobile_impressions'],  (int) $m['mobile_impressions']  - (int) $mp['mobile_impressions'] ];
+    $rows[] = [ 'デスクトップ表示', $m['desktop_impressions'], $mp['desktop_impressions'], (int) $m['desktop_impressions'] - (int) $mp['desktop_impressions'] ];
+    $rows[] = [ '検索経由表示',     $m['search_impressions'],  $mp['search_impressions'],  (int) $m['search_impressions']  - (int) $mp['search_impressions'] ];
+    $rows[] = [ 'マップ経由表示',   $m['map_impressions'],     $mp['map_impressions'],     (int) $m['map_impressions']     - (int) $mp['map_impressions'] ];
+    $rows[] = [];
+    $rows[] = [ '== 行動数 ==' ];
+    $rows[] = [ '項目', '今月', '前月', '増減' ];
+    $rows[] = [ 'ウェブクリック', $m['website_clicks'],   $mp['website_clicks'],   (int) $m['website_clicks']   - (int) $mp['website_clicks'] ];
+    $rows[] = [ '電話',           $m['call_clicks'],      $mp['call_clicks'],      (int) $m['call_clicks']      - (int) $mp['call_clicks'] ];
+    $rows[] = [ 'ルート',         $m['direction_clicks'], $mp['direction_clicks'], (int) $m['direction_clicks'] - (int) $mp['direction_clicks'] ];
+    $rows[] = [];
+    $rows[] = [ '== クチコミ ==' ];
+    $rows[] = [ '項目', '値' ];
+    $rows[] = [ '総クチコミ数', $report['reviews']['count'] ];
+    $rows[] = [ '平均評価',     $report['reviews']['average_rating'] ];
+    $rows[] = [];
+
+    if ( ! empty( $report['ranks'] ) ) {
+        $rows[] = [ '== 順位チェック ==' ];
+        $rows[] = [ 'キーワード', '今月最新順位', '前月最新順位', '変動', '取得日' ];
+        foreach ( $report['ranks'] as $r ) {
+            $cur  = $r['rank']      ?? '圏外';
+            $prev = $r['rank_prev'] ?? '圏外';
+            $delta = ( is_int( $cur ) && is_int( $prev ) ) ? ( $prev - $cur ) : '';
+            $rows[] = [ $r['keyword'], $cur, $prev, $delta, $r['fetched_date'] ?? '' ];
+        }
+        $rows[] = [];
+    }
+
+    if ( ! empty( $report['keywords'] ) ) {
+        $rows[] = [ '== GBP検索キーワード TOP20 ==' ];
+        $rows[] = [ '順位', 'キーワード', '回数' ];
+        foreach ( $report['keywords'] as $i => $k ) {
+            $rows[] = [ $i + 1, $k['keyword'], $k['value'] ];
+        }
+        $rows[] = [];
+    }
+
+    if ( ! empty( $report['keywords_diff'] ) ) {
+        $rows[] = [ '== 増加キーワード TOP10 ==' ];
+        $rows[] = [ '順位', 'キーワード', '前月', '今月', '増加' ];
+        foreach ( $report['keywords_diff'] as $i => $d ) {
+            $rows[] = [ $i + 1, $d['keyword'], $d['value_prev'], $d['value'], $d['delta'] ];
+        }
+    }
+
+    $csv = Gcrev_Meo_Report_Service::to_csv( $rows );
+    $filename = sprintf( 'meo-report-%04d-%02d.csv', $year, $month );
+
+    nocache_headers();
+    header( 'Content-Type: text/csv; charset=UTF-8' );
+    header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+    echo $csv;
+    exit;
+}
+
+// --------------------------------------------------
 // WP管理画面 — 決済チェックボックスの保存処理（UI非表示: 2026-03-18）
 // --------------------------------------------------
 // add_action( 'edit_user_profile_update', 'gcrev_save_payment_status_fields' );

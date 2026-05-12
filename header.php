@@ -130,7 +130,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       $ranking_pages   = array('rank-tracker','map-rank');
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','inquiries');
-      $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
+      $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts','meo-report');
       $seo_pages       = array('keyword-research'); // 'writing' は一旦非表示
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
@@ -364,6 +364,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/meo/meo-search-terms/') ); ?>" class="nav-link <?php echo is_page('meo-search-terms') ? 'active' : ''; ?>">
                         <span>検索語句分析</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/meo-report/') ); ?>" class="nav-link <?php echo is_page('meo-report') ? 'active' : ''; ?>">
+                        <span>MEOレポート</span>
                         </a>
                      </li>
                      <li class="nav-item nav-subgroup-wrapper">
