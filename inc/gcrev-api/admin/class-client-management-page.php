@@ -207,6 +207,7 @@ class Gcrev_Client_Management_Page {
                     <th>状態</th>
                     <th style="text-align: center;">キャッシュ</th>
                     <th style="text-align: center;">レポート</th>
+                    <th style="text-align: center;">オプション</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -273,6 +274,22 @@ class Gcrev_Client_Management_Page {
                         <?php else : ?>
                             <span style="color: #999;">0</span>
                         <?php endif; ?>
+                    </td>
+                    <td style="text-align: center; white-space: nowrap;">
+                        <?php
+                        $chatbot_enabled = function_exists( 'mimamori_bot_is_enabled_for_user' )
+                            && mimamori_bot_is_enabled_for_user( $uid );
+                        ?>
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline" onsubmit="return confirm('<?php echo esc_js( gcrev_get_business_name( $uid ) ); ?> の<?php echo $chatbot_enabled ? 'チャットボット機能を無効化' : 'チャットボット機能を有効化'; ?>します。よろしいですか？');">
+                            <?php wp_nonce_field( 'gcrev_toggle_chatbot_feature' ); ?>
+                            <input type="hidden" name="action" value="gcrev_toggle_chatbot_feature">
+                            <input type="hidden" name="user_id" value="<?php echo esc_attr( (string) $uid ); ?>">
+                            <?php if ( $chatbot_enabled ) : ?>
+                                <button type="submit" title="クリックで無効化" style="border:1px solid #4E8A6B;background:rgba(78,138,107,0.08);color:#4E8A6B;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">💬 ON</button>
+                            <?php else : ?>
+                                <button type="submit" title="クリックで有効化" style="border:1px solid #d1d5db;background:#fff;color:#9ca3af;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">💬 OFF</button>
+                            <?php endif; ?>
+                        </form>
                     </td>
                     <td style="white-space: nowrap;">
                         <?php if ( $cache_cnt > 0 ) : ?>

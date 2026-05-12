@@ -80,6 +80,16 @@ class Mimamori_Bot_Public_API {
 			],
 		] );
 
+		register_rest_route( $ns, '/widget-config', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'handle_widget_config' ],
+			// 見た目設定のみを返す軽量エンドポイント。tenant slug があれば誰でも取得可。
+			'permission_callback' => '__return_true',
+			'args'                => [
+				'tenant' => [ 'required' => true, 'type' => 'string', 'sanitize_callback' => 'sanitize_title' ],
+			],
+		] );
+
 		add_filter( 'rest_pre_serve_request', [ __CLASS__, 'maybe_handle_cors' ], 10, 4 );
 	}
 
@@ -146,6 +156,36 @@ class Mimamori_Bot_Public_API {
 	}
 
 	/**
+	 * Widget の見た目設定 (タイトル / カラー / FAB) を返す。
+	 * 認証なしで公開する: secret や history は一切含めない。
+	 */
+	public static function handle_widget_config( WP_REST_Request $request ) {
+		$slug   = (string) $request->get_param( 'tenant' );
+		$tenant = Mimamori_Bot_Tenant_Repository::find_by_slug( $slug );
+		if ( ! $tenant || ( $tenant['status'] ?? '' ) !== 'active' ) {
+			return new WP_Error( 'not_found', 'tenant not found', [ 'status' => 404 ] );
+		}
+		$theme = Mimamori_Bot_Tenant_Repository::resolve_theme( $tenant );
+		// Browser cache: 60s (頻繁に変えない想定だが、変更直後に近い反映)
+		$res = new WP_REST_Response( [
+			'ok'    => true,
+			'title' => $theme['title'],
+			'theme' => [
+				'primary'    => $theme['primary'],
+				'on_primary' => $theme['on_primary'],
+			],
+			'fab'   => [
+				'icon_url' => $theme['fab_icon_url'],
+				'bg'       => $theme['fab_bg'],
+				'offset_x' => $theme['fab_x'],
+				'offset_y' => $theme['fab_y'],
+			],
+		], 200 );
+		$res->header( 'Cache-Control', 'public, max-age=60' );
+		return $res;
+	}
+
+	/**
 	 * iframe 用 HTML を CSP frame-ancestors 付きで返す。
 	 * REST 経由だが Content-Type を text/html にしてレスポンスを直接終了させる。
 	 */
@@ -206,9 +246,15 @@ class Mimamori_Bot_Public_API {
 		$public_key  = esc_attr( $tenant['public_key'] );
 		$api_base    = esc_url( rest_url( MIMAMORI_BOT_REST_NS ) );
 		$asset_base  = esc_url( MIMAMORI_BOT_URL . 'public/widget' );
-		$persona     = esc_html( $tenant['name'] );
+
+		$theme       = Mimamori_Bot_Tenant_Repository::resolve_theme( $tenant );
+		$title_attr  = esc_html( $theme['title'] );
+		$title_data  = esc_attr( $theme['title'] );
+		$primary     = esc_attr( $theme['primary'] );
+		$on_primary  = esc_attr( $theme['on_primary'] );
 
 		// embed.css / embed.js は plugin assets として静的配信。
+		// CSS変数で配色を上書きする (embed.css は var(--mb-*) を参照)。
 		return <<<HTML
 <!doctype html>
 <html lang="ja">
@@ -216,11 +262,12 @@ class Mimamori_Bot_Public_API {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>{$persona}</title>
+<title>{$title_attr}</title>
 <link rel="stylesheet" href="{$asset_base}/embed.css">
+<style>:root{--mb-primary:{$primary};--mb-on-primary:{$on_primary};}</style>
 </head>
 <body>
-<div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}"></div>
+<div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}" data-title="{$title_data}"></div>
 <script src="{$asset_base}/embed.js" defer></script>
 </body>
 </html>

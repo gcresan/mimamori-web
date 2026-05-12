@@ -17,6 +17,7 @@
   var TENANT = app.dataset.tenant;
   var PUBKEY = hashKey || app.dataset.pubkey;
   var API    = app.dataset.api;
+  var TITLE  = app.dataset.title || 'AIアシスタント';
 
   if (!TENANT || !PUBKEY || !API) {
     app.textContent = '初期化に失敗しました。';
@@ -28,20 +29,21 @@
   var session = null;
   try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) {}
 
-  // ---- DOM 構築 ----
+  // textContent で安全に入れたいので、innerHTML の段階ではプレースホルダ
   app.innerHTML =
     '<header class="mb-header">' +
-      '<h1>AIアシスタント</h1>' +
+      '<h1 id="mb-title"></h1>' +
       '<button type="button" id="mb-close" aria-label="閉じる">×</button>' +
     '</header>' +
     '<div class="mb-list" id="mb-list" role="log" aria-live="polite"></div>' +
     '<div class="mb-starters" id="mb-starters"></div>' +
     '<div class="mb-typing" id="mb-typing" hidden>AI が考えています...</div>' +
-    '<form class="mb-input" id="mb-form">' +
-      '<textarea id="mb-text" rows="1" placeholder="メッセージを入力..." maxlength="2000"></textarea>' +
+    '<form class="mb-input" id="mb-form" autocomplete="off">' +
+      '<textarea id="mb-text" rows="1" placeholder="メッセージを入力..." maxlength="2000" autocomplete="off"></textarea>' +
       '<button type="submit" id="mb-send">送信</button>' +
     '</form>';
 
+  var $title    = document.getElementById('mb-title');
   var $list     = document.getElementById('mb-list');
   var $starters = document.getElementById('mb-starters');
   var $typing   = document.getElementById('mb-typing');
@@ -49,6 +51,8 @@
   var $send     = document.getElementById('mb-send');
   var $form     = document.getElementById('mb-form');
   var $close    = document.getElementById('mb-close');
+
+  if ($title) $title.textContent = TITLE;
 
   $close.addEventListener('click', function () {
     parent.postMessage({ source: 'mimamori-bot', type: 'close' }, '*');
@@ -141,11 +145,29 @@
   }
 
   // ---- 送信 ----
+  // IME composition 中フラグ (Enter 確定時の二重送信防止)
+  var composing = false;
+  $text.addEventListener('compositionstart', function () { composing = true; });
+  $text.addEventListener('compositionend',   function () { composing = false; });
+
+  function clearInput() {
+    // IME 確定が遅延して value が復活するケース対策で blur → clear → 次フレームで再フォーカス
+    $text.blur();
+    $text.value = '';
+    // 一部ブラウザで value 復元を抑止するため input イベントを明示発火
+    try { $text.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+    requestAnimationFrame(function () {
+      $text.value = '';
+      $text.focus();
+    });
+  }
+
   $form.addEventListener('submit', function (ev) {
     ev.preventDefault();
+    if (composing) return; // IME 変換中は無視
     var msg = ($text.value || '').trim();
     if (!msg) return;
-    $text.value = '';
+    clearInput();
     $starters.innerHTML = '';
     appendMessage('user', msg);
     $send.disabled = true;
@@ -168,9 +190,9 @@
       });
   });
 
-  // Enter で送信、Shift+Enter で改行
+  // Enter で送信、Shift+Enter で改行 (IME 変換確定の Enter は除外)
   $text.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Enter' && !ev.shiftKey) {
+    if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && !composing && ev.keyCode !== 229) {
       ev.preventDefault();
       $form.requestSubmit();
     }

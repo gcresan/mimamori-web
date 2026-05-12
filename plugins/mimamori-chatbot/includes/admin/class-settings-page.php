@@ -368,6 +368,29 @@ class Mimamori_Bot_Settings_Page {
 			'status'             => $status,
 		];
 
+		// 見た目カスタマイズ — タイトル / カラー / FAB
+		if ( isset( $_POST['title_text'] ) ) {
+			$fields['title_text'] = mb_substr( sanitize_text_field( (string) $_POST['title_text'] ), 0, 80 );
+		}
+		foreach ( [ 'theme_primary', 'theme_on_primary', 'fab_bg_color' ] as $ck ) {
+			if ( isset( $_POST[ $ck ] ) ) {
+				$cv = trim( (string) $_POST[ $ck ] );
+				if ( $cv === '' || Mimamori_Bot_Tenant_Repository::is_valid_color( $cv ) ) {
+					$fields[ $ck ] = $cv; // 空文字 = デフォルト復帰
+				}
+			}
+		}
+		if ( isset( $_POST['fab_icon_url'] ) ) {
+			$icon = esc_url_raw( (string) $_POST['fab_icon_url'] );
+			$fields['fab_icon_url'] = mb_substr( $icon, 0, 500 );
+		}
+		if ( isset( $_POST['fab_offset_x'] ) ) {
+			$fields['fab_offset_x'] = max( 0, min( 200, (int) $_POST['fab_offset_x'] ) );
+		}
+		if ( isset( $_POST['fab_offset_y'] ) ) {
+			$fields['fab_offset_y'] = max( 0, min( 200, (int) $_POST['fab_offset_y'] ) );
+		}
+
 		// レート制限・月次バジェットは運営者専用。クライアントからのPOSTは無視する。
 		if ( $is_admin ) {
 			if ( isset( $_POST['rate_limit_rpm'] ) ) {

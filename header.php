@@ -187,10 +187,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                </li>
 
                <?php
-               // チャットボットは対応テナントを持つユーザーまたは管理者にのみ表示
+               // チャットボットは「オプション有効ユーザー」または「運営者(管理者)」にのみ表示
+               // 一般ユーザーは クライアント管理ページから運営者が ON にしないと見えない
                $_mb_show_chatbot = current_user_can( 'manage_options' )
-                   || ( class_exists( 'Mimamori_Bot_Tenant_Repository' )
-                        && Mimamori_Bot_Tenant_Repository::find_for_user( get_current_user_id() ) );
+                   || ( function_exists( 'mimamori_bot_is_enabled_for_user' )
+                        && mimamori_bot_is_enabled_for_user( get_current_user_id() ) );
                if ( $_mb_show_chatbot ) :
                ?>
                <!-- ========== チャットボット（単独） ========== -->

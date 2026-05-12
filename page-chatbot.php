@@ -8,6 +8,27 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
+// オプション機能の利用可否チェック
+// 運営者(管理者)は常時アクセス可。一般ユーザーは クライアント管理で ON にされた人だけ。
+if ( ! current_user_can( 'manage_options' )
+     && function_exists( 'mimamori_bot_is_enabled_for_user' )
+     && ! mimamori_bot_is_enabled_for_user( get_current_user_id() ) ) {
+    set_query_var( 'gcrev_page_title', 'チャットボット管理' );
+    set_query_var( 'gcrev_breadcrumb', function_exists( 'gcrev_breadcrumb' ) ? gcrev_breadcrumb( 'チャットボット管理' ) : '' );
+    get_header();
+    ?>
+    <div class="content-area">
+      <div style="max-width:720px;margin:40px auto;padding:32px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;">
+        <h2 style="margin-top:0;">🔒 このプランではチャットボット機能はご利用いただけません</h2>
+        <p>チャットボット機能はオプション扱いです。ご利用をご希望の場合は、担当者までご連絡ください。</p>
+        <p style="margin-top:20px;"><a href="<?php echo esc_url( home_url( '/dashboard/' ) ); ?>" class="button">← ダッシュボードに戻る</a></p>
+      </div>
+    </div>
+    <?php
+    get_footer();
+    exit;
+}
+
 if ( ! class_exists( 'Mimamori_Bot_Tenant_Repository' ) ) {
     set_query_var( 'gcrev_page_title', 'チャットボット管理' );
     set_query_var( 'gcrev_breadcrumb', function_exists( 'gcrev_breadcrumb' ) ? gcrev_breadcrumb( 'チャットボット管理' ) : '' );
@@ -39,6 +60,11 @@ $tab_labels = [
 set_query_var( 'gcrev_page_title', 'チャットボット管理' );
 set_query_var( 'gcrev_page_subtitle', 'クライアントサイトに埋め込めるAIチャットボットの設定・ナレッジ・FAQ・分析を管理します。' );
 set_query_var( 'gcrev_breadcrumb', function_exists( 'gcrev_breadcrumb' ) ? gcrev_breadcrumb( 'チャットボット管理' ) : '' );
+
+// 設定タブ: FAB アイコン選択でメディアライブラリを使う
+if ( $active_tab === 'settings' ) {
+    wp_enqueue_media();
+}
 
 get_header();
 

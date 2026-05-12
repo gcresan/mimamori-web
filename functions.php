@@ -8263,6 +8263,50 @@ function mimamori_aio_enabled(): bool {
 }
 
 /**
+ * チャットボットオプション機能の利用可否 (ユーザー単位)。
+ *
+ * 運営者がクライアント管理ページから個別に ON/OFF できる。
+ * フラグは user_meta 'mimamori_bot_enabled' = '1' で有効。
+ *
+ * @param int $user_id 対象ユーザーID (0 なら現在のユーザー)
+ * @return bool true = 有効、false = 無効 (デフォルト)
+ */
+function mimamori_bot_is_enabled_for_user( int $user_id = 0 ): bool {
+    if ( $user_id <= 0 ) {
+        $user_id = get_current_user_id();
+    }
+    if ( $user_id <= 0 ) return false;
+    return get_user_meta( $user_id, 'mimamori_bot_enabled', true ) === '1';
+}
+
+/**
+ * 運営者がクライアント管理ページからチャットボット機能を ON/OFF するための
+ * admin-post.php ハンドラ。
+ */
+add_action( 'admin_post_gcrev_toggle_chatbot_feature', function () {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_die( 'forbidden', '権限がありません', [ 'response' => 403 ] );
+    }
+    check_admin_referer( 'gcrev_toggle_chatbot_feature' );
+
+    $uid = isset( $_POST['user_id'] ) ? absint( $_POST['user_id'] ) : 0;
+    if ( $uid <= 0 || ! get_userdata( $uid ) ) {
+        wp_die( '対象ユーザーが見つかりません。', 'エラー', [ 'response' => 400 ] );
+    }
+
+    $current = ( get_user_meta( $uid, 'mimamori_bot_enabled', true ) === '1' );
+    if ( $current ) {
+        delete_user_meta( $uid, 'mimamori_bot_enabled' );
+    } else {
+        update_user_meta( $uid, 'mimamori_bot_enabled', '1' );
+    }
+
+    $return = wp_get_referer();
+    wp_safe_redirect( $return ?: admin_url( 'admin.php?page=gcrev-client-management' ) );
+    exit;
+} );
+
+/**
  * サンクスページURL（固定ページ: 親=signup / 子=thanks → /signup/thanks/）
  */
 if ( ! defined( 'GCREV_SIGNUP_THANKS_URL' ) ) {

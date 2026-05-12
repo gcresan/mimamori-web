@@ -130,7 +130,11 @@ class Mimamori_Bot_Tenant_Repository {
 			'name', 'allowed_origins', 'system_prompt', 'persona',
 			'cta_url_quote', 'cta_url_contact', 'rate_limit_rpm',
 			'monthly_budget_jpy', 'status',
+			// 見た目カスタマイズ
+			'title_text', 'theme_primary', 'theme_on_primary',
+			'fab_icon_url', 'fab_bg_color', 'fab_offset_x', 'fab_offset_y',
 		];
+		$int_fields = [ 'rate_limit_rpm', 'monthly_budget_jpy', 'fab_offset_x', 'fab_offset_y' ];
 		$update  = [];
 		$formats = [];
 		foreach ( $fields as $k => $v ) {
@@ -138,11 +142,7 @@ class Mimamori_Bot_Tenant_Repository {
 				continue;
 			}
 			$update[ $k ] = $v;
-			if ( in_array( $k, [ 'rate_limit_rpm', 'monthly_budget_jpy' ], true ) ) {
-				$formats[] = '%d';
-			} else {
-				$formats[] = '%s';
-			}
+			$formats[] = in_array( $k, $int_fields, true ) ? '%d' : '%s';
 		}
 		if ( empty( $update ) ) {
 			return false;
@@ -186,7 +186,41 @@ class Mimamori_Bot_Tenant_Repository {
 			: null;
 		$origins = json_decode( (string) ( $row['allowed_origins'] ?? '[]' ), true );
 		$row['allowed_origins'] = is_array( $origins ) ? array_values( array_filter( $origins, 'is_string' ) ) : [];
+
+		// 見た目カスタマイズ (NULL のときは null のまま — 表示側で default にフォールバック)
+		$row['fab_offset_x'] = isset( $row['fab_offset_x'] ) ? (int) $row['fab_offset_x'] : 20;
+		$row['fab_offset_y'] = isset( $row['fab_offset_y'] ) ? (int) $row['fab_offset_y'] : 20;
 		return $row;
+	}
+
+	/**
+	 * 表示用デフォルト値を補完したテーマ設定を返す。
+	 *
+	 * @return array{title:string,primary:string,on_primary:string,fab_icon_url:string,fab_bg:string,fab_x:int,fab_y:int}
+	 */
+	public static function resolve_theme( array $tenant ): array {
+		$primary = (string) ( $tenant['theme_primary'] ?? '' );
+		if ( ! self::is_valid_color( $primary ) ) $primary = '#2563eb';
+		$on_primary = (string) ( $tenant['theme_on_primary'] ?? '' );
+		if ( ! self::is_valid_color( $on_primary ) ) $on_primary = '#ffffff';
+		$fab_bg = (string) ( $tenant['fab_bg_color'] ?? '' );
+		if ( ! self::is_valid_color( $fab_bg ) ) $fab_bg = $primary;
+		$title = trim( (string) ( $tenant['title_text'] ?? '' ) );
+		if ( $title === '' ) $title = 'AIアシスタント';
+		$icon = (string) ( $tenant['fab_icon_url'] ?? '' );
+		return [
+			'title'        => $title,
+			'primary'      => $primary,
+			'on_primary'   => $on_primary,
+			'fab_icon_url' => $icon,
+			'fab_bg'       => $fab_bg,
+			'fab_x'        => isset( $tenant['fab_offset_x'] ) ? (int) $tenant['fab_offset_x'] : 20,
+			'fab_y'        => isset( $tenant['fab_offset_y'] ) ? (int) $tenant['fab_offset_y'] : 20,
+		];
+	}
+
+	public static function is_valid_color( string $v ): bool {
+		return (bool) preg_match( '/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $v );
 	}
 
 	public static function default_system_prompt(): string {
