@@ -12,6 +12,11 @@
 
 if ( is_user_logged_in() ) {
     $uid = get_current_user_id();
+    // 本部アカウント → 店舗一覧ページ (最優先)
+    if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $uid ) ) {
+        wp_safe_redirect( home_url( '/hq/' ) );
+        exit;
+    }
     if ( gcrev_is_trial_active( $uid ) || gcrev_is_payment_active( $uid ) ) {
         wp_safe_redirect( home_url( '/dashboard/' ) );
     } else {

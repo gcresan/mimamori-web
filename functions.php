@@ -921,6 +921,10 @@ add_action( 'wpmem_login_failed', function () {
 
 // ログイン後、決済ステータス / お試し期限に応じてリダイレクト先を切替
 add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
+    // 本部アカウント → 店舗一覧ページへ (決済/お試し状態に関わらず最優先)
+    if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( (int) $user_id ) ) {
+        return home_url('/hq/');
+    }
     // お試し中（期限内） → ダッシュボードへ
     if ( gcrev_is_trial_active( $user_id ) ) {
         return home_url('/dashboard/');
@@ -8187,6 +8191,11 @@ function gcrev_get_service_tier_definitions(): array {
             'monthly'     => 110000,
             'description' => 'プロが伴走し改善施策の実行まで全面サポート',
         ],
+        'headquarters' => [
+            'name'        => '本部アカウント',
+            'monthly'     => 0,
+            'description' => '複数店舗を切替えて閲覧する本部用アカウント。自身のデータは持たず、admin が指定した管理対象店舗を切替閲覧。',
+        ],
     ];
 }
 
@@ -8247,7 +8256,7 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         if ( $hq_target > 0 ) $user_id = $hq_target;
     }
 
-    $tier_hierarchy = [ 'basic' => 0, 'ai_support' => 1, 'content_seo' => 2, 'bansou' => 3 ];
+    $tier_hierarchy = [ 'headquarters' => 0, 'basic' => 0, 'ai_support' => 1, 'content_seo' => 2, 'bansou' => 3 ];
 
     $feature_map = [
         // AIチャット相談（全プラン共通）
@@ -9676,6 +9685,32 @@ function gcrev_ensure_keyword_settings_page(): void {
     ] );
     if ( ! is_wp_error( $page_id ) && $page_id > 0 ) {
         update_option( 'gcrev_keyword_settings_page_id', (int) $page_id, false );
+    }
+}
+
+add_action( 'admin_init', 'gcrev_ensure_hq_stores_page' );
+function gcrev_ensure_hq_stores_page(): void {
+    if ( get_option( 'gcrev_hq_stores_page_id', 0 ) ) {
+        return;
+    }
+    $existing = get_page_by_path( 'hq' );
+    if ( $existing ) {
+        if ( get_post_meta( $existing->ID, '_wp_page_template', true ) !== 'page-hq-stores.php' ) {
+            update_post_meta( $existing->ID, '_wp_page_template', 'page-hq-stores.php' );
+        }
+        update_option( 'gcrev_hq_stores_page_id', (int) $existing->ID, false );
+        return;
+    }
+    $page_id = wp_insert_post( [
+        'post_type'    => 'page',
+        'post_status'  => 'publish',
+        'post_title'   => '本部ビュー — 店舗一覧',
+        'post_name'    => 'hq',
+        'post_content' => '',
+        'meta_input'   => [ '_wp_page_template' => 'page-hq-stores.php' ],
+    ] );
+    if ( ! is_wp_error( $page_id ) && $page_id > 0 ) {
+        update_option( 'gcrev_hq_stores_page_id', (int) $page_id, false );
     }
 }
 
@@ -11448,6 +11483,8 @@ function mimamori_render_hq_switcher_banner(): void {
     // 管理者の View As バナーが既に出ている場合は重ねない (View As 優先)
     if ( mimamori_get_view_as_target() > 0 ) return;
     if ( ! mimamori_is_hq_user( $uid ) ) return;
+    // 本部の店舗一覧ページ自体ではバナーを出さない (UI 重複を避ける)
+    if ( function_exists( 'is_page' ) && is_page( 'hq' ) ) return;
 
     $managed = mimamori_get_hq_managed_user_ids( $uid );
     if ( empty( $managed ) ) return;

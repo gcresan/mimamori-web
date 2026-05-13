@@ -169,6 +169,47 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
          <div class="nav-section">
             <ul class="nav-menu">
 
+               <?php
+               // 本部アカウント: サイドバー上部に「店舗一覧へ戻る」+「別の店舗を選択」セレクタを表示
+               $_hq_uid = get_current_user_id();
+               $_is_hq  = function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $_hq_uid );
+               if ( $_is_hq ) :
+                   $_hq_managed   = mimamori_get_hq_managed_user_ids( $_hq_uid );
+                   $_hq_current   = mimamori_get_hq_view_target_for_current_user();
+                   $_hq_redirect  = ( is_ssl() ? 'https://' : 'http://' ) . ( $_SERVER['HTTP_HOST'] ?? '' ) . ( $_SERVER['REQUEST_URI'] ?? '/dashboard/' );
+               ?>
+               <li class="nav-item">
+                  <a href="<?php echo esc_url( home_url('/hq/') ); ?>" class="nav-link <?php echo is_page('hq') ? 'active' : ''; ?>">
+                     <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 9h6M9 13h6M9 17h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                     <span>店舗一覧へ戻る</span>
+                  </a>
+               </li>
+               <?php if ( count( $_hq_managed ) > 1 ) : ?>
+               <li class="nav-item nav-hq-switch" style="padding: 6px 24px 12px;">
+                  <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" style="margin:0;">
+                     <?php wp_nonce_field( 'mimamori_hq_view_set' ); ?>
+                     <input type="hidden" name="action" value="mimamori_hq_view_set">
+                     <input type="hidden" name="redirect" value="<?php echo esc_attr( $_hq_redirect ); ?>">
+                     <label for="nav-hq-target" style="display:block; font-size:11px; color:#888; margin-bottom:4px;">別の店舗を選択</label>
+                     <select id="nav-hq-target" name="target_user_id" onchange="this.form.submit()"
+                             style="width:100%; padding:6px 8px; border:1px solid #c3ced0; border-radius:6px; background:#fff; font-size:13px; cursor:pointer;">
+                        <?php foreach ( $_hq_managed as $mid ) :
+                           $mbn = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $mid ) : '';
+                           if ( $mbn === '' ) {
+                              $mu = get_userdata( $mid );
+                              $mbn = $mu ? $mu->display_name : (string) $mid;
+                           }
+                        ?>
+                           <option value="<?php echo (int) $mid; ?>" <?php selected( $_hq_current, (int) $mid ); ?>>
+                              <?php echo esc_html( $mbn ); ?>
+                           </option>
+                        <?php endforeach; ?>
+                     </select>
+                  </form>
+               </li>
+               <?php endif; ?>
+               <?php endif; ?>
+
                <!-- ========== 全体ダッシュボード（単独） ========== -->
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/dashboard/') ); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
