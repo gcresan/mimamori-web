@@ -130,13 +130,21 @@ $render_pct = static function ( int $cur, int $prev ): string {
             </select>
         </form>
         <div class="mr-actions">
-            <button type="button" class="mr-btn mr-btn-primary" onclick="window.print()">🖨 印刷 / PDF出力</button>
-            <a class="mr-btn" href="<?php echo esc_url( add_query_arg([
-                'action' => 'gcrev_meo_report_csv',
-                'year'   => $year,
-                'month'  => $month,
-                '_wpnonce' => wp_create_nonce( 'gcrev_meo_report_csv' ),
-            ], admin_url( 'admin-post.php' ) ) ); ?>">📥 CSVダウンロード</a>
+            <button type="button" onclick="window.print()"
+                    style="display:inline-flex; align-items:center; gap:6px;
+                           padding:8px 16px; border:1px solid var(--mw-border-light,#C3CED0);
+                           border-radius:8px; background:var(--mw-bg-primary,#fff);
+                           color:var(--mw-text-secondary,#384D50); font-size:13px;
+                           font-weight:600; cursor:pointer; transition:all 0.15s;"
+                    onmouseover="this.style.background='var(--mw-bg-secondary,#F5F8F8)'"
+                    onmouseout="this.style.background='var(--mw-bg-primary,#fff)'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                印刷
+            </button>
         </div>
     </div>
 
@@ -202,29 +210,55 @@ $render_pct = static function ( int $cur, int $prev ): string {
     <!-- 順位 -->
     <div class="mr-section">
         <h2>📈 順位チェック</h2>
+        <p style="font-size:12px; color:#64748b; margin:-6px 0 12px;">
+            マップ順位 = Googleマップ単体の順位 / 地域順位 = 通常検索のローカルファインダー（3パック）順位。スマホ・自社中心の値を表示。
+        </p>
         <?php if ( empty( $report['ranks'] ) ) : ?>
             <p style="color:#94a3b8">登録キーワードがありません。</p>
-        <?php else : ?>
+        <?php else :
+            $rank_cell = static function ( $v ) {
+                return $v !== null
+                    ? '<span>' . esc_html( (string) $v ) . '位</span>'
+                    : '<span style="color:#9ca3af">圏外</span>';
+            };
+            $delta_cell = static function ( $cur, $prev ) {
+                if ( $cur === null || $prev === null ) {
+                    return '<span class="mr-pct mr-pct-zero">—</span>';
+                }
+                $delta = $prev - $cur; // 順位は小さいほど良い
+                if ( $delta > 0 ) return '<span class="mr-pct mr-pct-up">↑ ' . esc_html( (string) $delta ) . '位上昇</span>';
+                if ( $delta < 0 ) return '<span class="mr-pct mr-pct-down">↓ ' . esc_html( (string) abs( $delta ) ) . '位下降</span>';
+                return '<span class="mr-pct mr-pct-zero">→ 変動なし</span>';
+            };
+        ?>
             <table class="mr-table">
-                <thead><tr><th>キーワード</th><th class="num">今月最新順位</th><th class="num">前月最新順位</th><th class="num">変動</th><th>取得日</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="vertical-align:middle;">キーワード</th>
+                        <th colspan="3" style="text-align:center; border-bottom:1px dashed #cbd5e1;">マップ順位</th>
+                        <th colspan="3" style="text-align:center; border-bottom:1px dashed #cbd5e1;">地域順位</th>
+                        <th rowspan="2" style="vertical-align:middle;">取得日</th>
+                    </tr>
+                    <tr>
+                        <th class="num">今月</th><th class="num">前月</th><th class="num">変動</th>
+                        <th class="num">今月</th><th class="num">前月</th><th class="num">変動</th>
+                    </tr>
+                </thead>
                 <tbody>
                 <?php foreach ( $report['ranks'] as $r ) :
-                    $cur  = $r['rank'];
-                    $prev = $r['rank_prev'];
-                    if ( $cur !== null && $prev !== null ) {
-                        $delta = $prev - $cur; // 順位は小さいほど良い
-                        $delta_html = $delta > 0
-                            ? '<span class="mr-pct mr-pct-up">↑ ' . esc_html( (string) $delta ) . '位上昇</span>'
-                            : ( $delta < 0 ? '<span class="mr-pct mr-pct-down">↓ ' . esc_html( (string) abs( $delta ) ) . '位下降</span>' : '<span class="mr-pct mr-pct-zero">→ 変動なし</span>' );
-                    } else {
-                        $delta_html = '<span class="mr-pct mr-pct-zero">—</span>';
-                    }
+                    $m_cur   = $r['maps_rank']        ?? $r['rank']      ?? null;
+                    $m_prev  = $r['maps_rank_prev']   ?? $r['rank_prev'] ?? null;
+                    $f_cur   = $r['finder_rank']      ?? null;
+                    $f_prev  = $r['finder_rank_prev'] ?? null;
                 ?>
                     <tr>
                         <td><?php echo esc_html( $r['keyword'] ); ?></td>
-                        <td class="num"><?php echo $cur  !== null ? esc_html( (string) $cur ) . '位'  : '<span style="color:#9ca3af">圏外</span>'; ?></td>
-                        <td class="num"><?php echo $prev !== null ? esc_html( (string) $prev ) . '位' : '<span style="color:#9ca3af">圏外</span>'; ?></td>
-                        <td class="num"><?php echo $delta_html; ?></td>
+                        <td class="num"><?php echo $rank_cell( $m_cur ); ?></td>
+                        <td class="num"><?php echo $rank_cell( $m_prev ); ?></td>
+                        <td class="num"><?php echo $delta_cell( $m_cur, $m_prev ); ?></td>
+                        <td class="num"><?php echo $rank_cell( $f_cur ); ?></td>
+                        <td class="num"><?php echo $rank_cell( $f_prev ); ?></td>
+                        <td class="num"><?php echo $delta_cell( $f_cur, $f_prev ); ?></td>
                         <td><?php echo esc_html( (string) ( $r['fetched_date'] ?? '—' ) ); ?></td>
                     </tr>
                 <?php endforeach; ?>

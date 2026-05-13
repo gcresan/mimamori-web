@@ -112,11 +112,34 @@ class Gcrev_Meo_Report_Service {
 
     /**
      * クチコミサマリ: 件数 + 平均評価
+     * gcrev_meo_results の最新行から rating / reviews_count を取得する。
      */
     private static function fetch_reviews_summary( int $user_id ): array {
         $default = [ 'count' => 0, 'average_rating' => 0.0 ];
 
         global $wpdb;
+        $meo_table = $wpdb->prefix . 'gcrev_meo_results';
+
+        // 最新の rating / reviews_count を含む行
+        $row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT rating, reviews_count
+               FROM {$meo_table}
+              WHERE user_id = %d
+                AND rating IS NOT NULL
+                AND reviews_count IS NOT NULL
+              ORDER BY fetch_date DESC, id DESC
+              LIMIT 1",
+            $user_id
+        ), ARRAY_A );
+
+        if ( is_array( $row ) ) {
+            return [
+                'count'          => (int) ( $row['reviews_count'] ?? 0 ),
+                'average_rating' => (float) ( $row['rating'] ?? 0 ),
+            ];
+        }
+
+        // フォールバック: user_meta / transient
         $option_value = get_user_meta( $user_id, '_gcrev_gbp_reviews_summary', true );
         if ( is_array( $option_value ) ) {
             return [
@@ -124,8 +147,6 @@ class Gcrev_Meo_Report_Service {
                 'average_rating' => (float) ( $option_value['average_rating'] ?? 0 ),
             ];
         }
-
-        // フォールバック: gbp_get_reviews_summary 相当のキャッシュキーを直接探す
         $cached = get_transient( 'gcrev_gbp_reviews_summary_' . $user_id );
         if ( is_array( $cached ) ) {
             return [
@@ -137,12 +158,16 @@ class Gcrev_Meo_Report_Service {
     }
 
     /**
-     * 順位データを期間内で取得。キーワード × デバイス × スロット の最新値とその前月最新値。
+     * 順位データを期間内で取得。
+     * gcrev_meo_results から「マップ順位 (maps_rank)」「地域順位 (finder_rank)」の
+     * 当月最新と前月最新を取得する。
+     *
+     * 既定: device='mobile', base_mode='business' (自社中心)。
      */
     private static function fetch_ranks( int $user_id, string $start, string $end ): array {
         global $wpdb;
         $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
-        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+        $res_table = $wpdb->prefix . 'gcrev_meo_results';
 
         $keywords = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, keyword, location_code FROM {$kw_table}
@@ -150,39 +175,56 @@ class Gcrev_Meo_Report_Service {
             $user_id
         ), ARRAY_A );
 
+        $start_dt   = new \DateTimeImmutable( $start, wp_timezone() );
+        $prev_start = $start_dt->modify( 'first day of last month' )->format( 'Y-m-d' );
+        $prev_end   = $start_dt->modify( 'last day of last month' )->format( 'Y-m-d' );
+
+        $device    = 'mobile';
+        $base_mode = 'business';
+
         $out = [];
         foreach ( $keywords as $kw ) {
             $kw_id = (int) $kw['id'];
-            // 期間内最新 (desktop)
+
+            // 当月最新
             $latest = $wpdb->get_row( $wpdb->prepare(
-                "SELECT rank_group, is_ranked, fetch_date, fetch_slot
+                "SELECT maps_rank, finder_rank, fetch_date
                    FROM {$res_table}
-                  WHERE keyword_id = %d AND device = 'desktop'
+                  WHERE user_id = %d AND keyword_id = %d
+                    AND device = %s AND base_mode = %s
                     AND fetch_date BETWEEN %s AND %s
-                  ORDER BY fetched_at DESC LIMIT 1",
-                $kw_id, $start, $end
+                  ORDER BY fetch_date DESC, id DESC LIMIT 1",
+                $user_id, $kw_id, $device, $base_mode, $start, $end
             ), ARRAY_A );
 
-            // 前月最新 (前月比較用)
-            $start_dt = new \DateTimeImmutable( $start, wp_timezone() );
-            $prev_start = $start_dt->modify( 'first day of last month' )->format( 'Y-m-d' );
-            $prev_end   = $start_dt->modify( 'last day of last month' )->format( 'Y-m-d' );
+            // 前月最新
             $prev = $wpdb->get_row( $wpdb->prepare(
-                "SELECT rank_group, is_ranked
+                "SELECT maps_rank, finder_rank, fetch_date
                    FROM {$res_table}
-                  WHERE keyword_id = %d AND device = 'desktop'
+                  WHERE user_id = %d AND keyword_id = %d
+                    AND device = %s AND base_mode = %s
                     AND fetch_date BETWEEN %s AND %s
-                  ORDER BY fetched_at DESC LIMIT 1",
-                $kw_id, $prev_start, $prev_end
+                  ORDER BY fetch_date DESC, id DESC LIMIT 1",
+                $user_id, $kw_id, $device, $base_mode, $prev_start, $prev_end
             ), ARRAY_A );
+
+            $maps        = $latest && $latest['maps_rank']   !== null ? (int) $latest['maps_rank']   : null;
+            $maps_prev   = $prev   && $prev['maps_rank']     !== null ? (int) $prev['maps_rank']     : null;
+            $finder      = $latest && $latest['finder_rank'] !== null ? (int) $latest['finder_rank'] : null;
+            $finder_prev = $prev   && $prev['finder_rank']   !== null ? (int) $prev['finder_rank']   : null;
 
             $out[] = [
-                'keyword'        => (string) $kw['keyword'],
-                'location_code'  => (int) $kw['location_code'],
-                'rank'           => $latest && (int) $latest['is_ranked'] === 1 ? (int) $latest['rank_group'] : null,
-                'rank_prev'      => $prev   && (int) $prev['is_ranked']   === 1 ? (int) $prev['rank_group']   : null,
-                'fetched_date'   => $latest['fetch_date'] ?? null,
-                'fetched_slot'   => $latest['fetch_slot'] ?? null,
+                'keyword'          => (string) $kw['keyword'],
+                'location_code'    => (int) $kw['location_code'],
+                // 後方互換: rank = マップ順位
+                'rank'             => $maps,
+                'rank_prev'        => $maps_prev,
+                // 明示化したフィールド
+                'maps_rank'        => $maps,
+                'maps_rank_prev'   => $maps_prev,
+                'finder_rank'      => $finder,
+                'finder_rank_prev' => $finder_prev,
+                'fetched_date'     => $latest['fetch_date'] ?? null,
             ];
         }
         return $out;
