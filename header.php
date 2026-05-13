@@ -127,7 +127,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <?php
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ全部閉じ ---
       $report_pages    = array('report-latest','report-archive','annual-report','strategy-report','strategy-report-detail','strategy-report-history','meo-report');
-      $ranking_pages   = array('rank-tracker','map-rank');
+      $ranking_pages   = array('rank-tracker','map-rank','keyword-settings');
       $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
       $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','inquiries');
       $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
@@ -265,6 +265,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </a>
                      </li>
                      <?php endif; ?>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" class="nav-link <?php echo is_page('keyword-settings') ? 'active' : ''; ?>">
+                        <span>計測キーワード設定</span>
+                        </a>
+                     </li>
                   </ul>
                </li>
 
