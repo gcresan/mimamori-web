@@ -228,8 +228,9 @@
     function reveal() {
       if (fabReady) return; // 二重 reveal 防止
       fabReady = true;
+      // CSS を確定 → FAB を DOM に挿入 (青フラッシュ完全防止)
       applyFabStyles();
-      applyFabContent();
+      createAndAppendFab();
     }
     function updateLive() {
       // すでに表示済みの場合、最新値で再描画 (transition から色変動は除外済みなので一瞬の点滅なし)
@@ -284,8 +285,31 @@
   }
 
   var fab, iframe, opened = false;
+  var preloadOnce = null; // boot() でセットされる (FAB hover preload と共有)
   function preloadIframe() {
     if (iframe && !iframe.src) iframe.src = embedUrl;
+  }
+
+  // FAB を DOM に挿入 — CSS が "正しい色 + opacity 制御" になっている状態で
+  // 初めて DOM に置くことで、デフォルト青色での一瞬の表示を完全に防ぐ。
+  function createAndAppendFab() {
+    if (fab) return; // 二重挿入防止
+    fab = createFab();
+    // 念のため inline opacity:0 で挿入 → 次フレームで CSS の opacity:1 へ
+    // (transition により .18s でなめらかにフェードイン)
+    fab.style.opacity = '0';
+    document.body.appendChild(fab);
+    applyFabContent();
+    if (preloadOnce) {
+      fab.addEventListener('mouseenter', preloadOnce, { passive: true });
+      fab.addEventListener('touchstart', preloadOnce, { passive: true });
+      fab.addEventListener('focus',      preloadOnce);
+    }
+    // フェードイン: 反映の reflow を強制し、次フレームで inline opacity を解除
+    void fab.offsetWidth;
+    requestAnimationFrame(function () {
+      if (fab) fab.style.opacity = '';
+    });
   }
 
   // ---- 開く時の効果音 (Web Audio API でその場合成 — 外部ファイル不要) ----
@@ -336,11 +360,10 @@
 
   function boot() {
     injectStyles();
-    fab = createFab();
     iframe = createIframeWrap();
     document.body.appendChild(iframe);
-    document.body.appendChild(fab);
-    applyFabContent();
+    // FAB はここでは挿入しない — fetchConfig.reveal() のタイミングで
+    // 正しい色の CSS が用意できた状態で初めて DOM に追加する (青フラッシュ防止)。
     fetchConfig();
 
     // iframe からの postMessage を受信
@@ -364,15 +387,12 @@
     });
 
     // 外側 (iframe / FAB 以外) クリックで閉じる
-    // - iframe 内クリックはクロスorigin 境界でブラウザ側がイベントを止めるので影響なし
-    // - SP では iframe が全画面なので外側クリックは発生しない (= 影響なし)
-    // - mousedown 段階で判定すると FAB の click が走る前に閉じてしまうので click 段階
     document.addEventListener('click', function (ev) {
       if (!opened) return;
       var t = ev.target;
       if (!t) return;
       if (t === iframe || iframe.contains(t)) return;
-      if (t === fab    || fab.contains(t))    return;
+      if (fab && (t === fab || fab.contains(t))) return;
       toggle();
     }, false);
     // Esc でも閉じる
@@ -381,18 +401,15 @@
     }, false);
 
     // iframe の遅延プリロード — 初回クリック時の待ち時間を消す
-    // 1) ホスト側ページが落ち着いたら (idle) ロード開始
-    // 2) FAB に hover or touchstart した時点でも (まだなら) ロード
     var preloaded = false;
-    function preloadOnce() { if (!preloaded) { preloaded = true; preloadIframe(); } }
+    preloadOnce = function () { if (!preloaded) { preloaded = true; preloadIframe(); } };
     if ('requestIdleCallback' in window) {
       requestIdleCallback(preloadOnce, { timeout: 2500 });
     } else {
       setTimeout(preloadOnce, 1800);
     }
-    fab.addEventListener('mouseenter',  preloadOnce, { passive: true });
-    fab.addEventListener('touchstart',  preloadOnce, { passive: true });
-    fab.addEventListener('focus',       preloadOnce);
+    // FAB の hover/touchstart/focus でもプリロード — FAB 作成時 (createAndAppendFab)
+    // で preloadOnce を参照してリスナーを取り付ける
 
     // 自動オープン復元（誤起動防止のため明示クリック後のみ復元）
     try {

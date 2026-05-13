@@ -14,9 +14,13 @@ body {
 #app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   background: #ffffff;
 }
+/* iframe 内のみで効く safer fallback: 100% は親 (body=100%) に従う。
+   一部の iOS Safari で 100vh が address bar を含む large viewport を返す
+   問題を踏まないよう 100% を採用。 */
 
 /* ===== ヘッダー ===== */
 .mb-header {
@@ -156,6 +160,7 @@ body {
 /* ===== メッセージ一覧 ===== */
 .mb-list {
   flex: 1 1 auto;
+  min-height: 0; /* flex 子の overflow を有効化 — これがないと内容が膨らんでヘッダー/入力欄がはみ出す */
   overflow-y: auto;
   padding: 16px;
   display: flex;
