@@ -279,6 +279,8 @@ class Gcrev_Client_Management_Page {
                         <?php
                         $chatbot_enabled = function_exists( 'mimamori_bot_is_enabled_for_user' )
                             && mimamori_bot_is_enabled_for_user( $uid );
+                        $page_analysis_enabled = function_exists( 'mimamori_page_analysis_is_enabled_for_user' )
+                            && mimamori_page_analysis_is_enabled_for_user( $uid );
                         ?>
                         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline" onsubmit="return confirm('<?php echo esc_js( gcrev_get_business_name( $uid ) ); ?> の<?php echo $chatbot_enabled ? 'チャットボット機能を無効化' : 'チャットボット機能を有効化'; ?>します。よろしいですか？');">
                             <?php wp_nonce_field( 'gcrev_toggle_chatbot_feature' ); ?>
@@ -288,6 +290,16 @@ class Gcrev_Client_Management_Page {
                                 <button type="submit" title="クリックで無効化" style="border:1px solid #4E8A6B;background:rgba(78,138,107,0.08);color:#4E8A6B;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">💬 ON</button>
                             <?php else : ?>
                                 <button type="submit" title="クリックで有効化" style="border:1px solid #d1d5db;background:#fff;color:#9ca3af;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">💬 OFF</button>
+                            <?php endif; ?>
+                        </form>
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline; margin-left:4px;" onsubmit="return confirm('<?php echo esc_js( gcrev_get_business_name( $uid ) ); ?> の<?php echo $page_analysis_enabled ? '現状のページ診断機能を無効化' : '現状のページ診断機能を有効化'; ?>します。よろしいですか？');">
+                            <?php wp_nonce_field( 'gcrev_toggle_page_analysis_feature' ); ?>
+                            <input type="hidden" name="action" value="gcrev_toggle_page_analysis_feature">
+                            <input type="hidden" name="user_id" value="<?php echo esc_attr( (string) $uid ); ?>">
+                            <?php if ( $page_analysis_enabled ) : ?>
+                                <button type="submit" title="クリックで無効化" style="border:1px solid #4E8A6B;background:rgba(78,138,107,0.08);color:#4E8A6B;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">📄 ON</button>
+                            <?php else : ?>
+                                <button type="submit" title="クリックで有効化" style="border:1px solid #d1d5db;background:#fff;color:#9ca3af;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">📄 OFF</button>
                             <?php endif; ?>
                         </form>
                     </td>

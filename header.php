@@ -219,10 +219,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                </li>
 
                <?php
-               // チャットボット表示判定（HPグループ内で利用）
+               // オプション機能の表示判定 (HPグループ内で利用)
+               // 運営者(admin) は本部以外として閲覧していれば常に見える。本部ログイン中は
+               // mimamori_get_view_user_id() が view 中クライアントの user_id を返すので、その権限で判定する。
+               $_view_uid = function_exists( 'mimamori_get_view_user_id' ) ? mimamori_get_view_user_id() : get_current_user_id();
                $_mb_show_chatbot = current_user_can( 'manage_options' )
                    || ( function_exists( 'mimamori_bot_is_enabled_for_user' )
-                        && mimamori_bot_is_enabled_for_user( get_current_user_id() ) );
+                        && mimamori_bot_is_enabled_for_user( $_view_uid ) );
+               $_mb_show_page_analysis = current_user_can( 'manage_options' )
+                   || ( function_exists( 'mimamori_page_analysis_is_enabled_for_user' )
+                        && mimamori_page_analysis_is_enabled_for_user( $_view_uid ) );
                ?>
 
                <!-- ========== ホームページ（大カテゴリ） ========== -->
@@ -233,12 +239,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuHome">
-                     <!-- 直下: 現状診断 -->
+                     <!-- 直下: 現状診断 (オプション) -->
+                     <?php if ( $_mb_show_page_analysis ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/page-analysis/') ); ?>" class="nav-link <?php echo is_page('page-analysis') ? 'active' : ''; ?>">
                         <span>現状のページ診断</span>
                         </a>
                      </li>
+                     <?php endif; ?>
                      <!-- 直下: チャットボット (オプション) -->
                      <?php if ( $_mb_show_chatbot ) : ?>
                      <li class="nav-item">

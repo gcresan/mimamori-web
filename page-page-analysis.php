@@ -11,6 +11,14 @@ if ( ! is_user_logged_in() ) {
 $current_user = mimamori_get_view_user_object();
 $user_id = mimamori_get_view_user_id();
 
+// オプション機能ガード: 運営者(admin)は素通し、それ以外は view 中ユーザーのフラグで判定
+if ( ! current_user_can( 'manage_options' )
+     && function_exists( 'mimamori_page_analysis_is_enabled_for_user' )
+     && ! mimamori_page_analysis_is_enabled_for_user( $user_id ) ) {
+    wp_safe_redirect( home_url( '/dashboard/' ) );
+    exit;
+}
+
 // ページタイトル設定
 set_query_var( 'gcrev_page_title', '現状のページ診断' );
 set_query_var( 'gcrev_page_subtitle', '主要ページのページ画像・行動データ・AI改善案をまとめて管理できます。' );
