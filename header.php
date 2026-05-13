@@ -132,7 +132,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           // サイト分析
           'site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','inquiries',
           // SEO
-          'seo-check','ai-report','rank-tracker','keyword-settings','keyword-research',
+          'seo-check','ai-report','rank-tracker','keyword-research',
           // サイトレポート
           'report-latest','report-archive','annual-report','strategy-report','strategy-report-detail','strategy-report-history',
       );
@@ -142,7 +142,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           'review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history',
           'review-management','gbp-posts',
       );
-      $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
+      $settings_pages  = array('client-settings','keyword-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
 
@@ -280,11 +280,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                               <span>自然検索順位</span>
                               </a>
                            </li>
-                           <li class="nav-item">
-                              <a href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" class="nav-link <?php echo is_page('keyword-settings') ? 'active' : ''; ?>">
-                              <span>計測キーワード設定</span>
-                              </a>
-                           </li>
                            <?php if ( mimamori_can_access_seo() ) : ?>
                            <li class="nav-item">
                               <a href="<?php echo esc_url( home_url('/keyword-research/') ); ?>" class="nav-link <?php echo is_page('keyword-research') ? 'active' : ''; ?>">
@@ -408,6 +403,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/client-settings/') ); ?>" class="nav-link <?php echo is_page('client-settings') ? 'active' : ''; ?>">
                         <span>クライアント設定</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" class="nav-link <?php echo is_page('keyword-settings') ? 'active' : ''; ?>">
+                        <span>計測キーワード設定</span>
                         </a>
                      </li>
                      <li class="nav-item">

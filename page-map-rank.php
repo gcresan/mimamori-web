@@ -855,6 +855,10 @@ get_header();
                 <span class="rt-btn__icon">&#x2193;</span>
                 CSV ダウンロード
             </button>
+            <a class="rt-btn" href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" style="text-decoration:none;">
+                <span class="rt-btn__icon">&#x2699;</span>
+                キーワード設定を開く
+            </a>
         </div>
     </div>
 
