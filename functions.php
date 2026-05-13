@@ -11106,29 +11106,62 @@ function mimamori_render_hq_user_fields( \WP_User $user ): void {
     ?>
     <h2>みまもりウェブ — 本部ユーザー設定</h2>
     <p class="description">
-        このユーザーを「本部アカウント」にする場合、閲覧を許可するクライアント (店舗担当) を選択してください。
+        このユーザーを「本部アカウント」にする場合、閲覧を許可するクライアント (店舗担当) をチェックしてください。
         本部ユーザーはログイン後、選択したクライアントの中から1つを切り替えて閲覧できます (合算ビューは提供しません)。
         変更を反映するには下部「<?php echo esc_html( $user->ID === get_current_user_id() ? 'プロフィールを更新' : 'ユーザーを更新' ); ?>」を押してください。
     </p>
     <table class="form-table">
         <tr>
-            <th scope="row"><label for="mimamori_hq_managed">管理対象クライアント</label></th>
+            <th scope="row">管理対象クライアント</th>
             <td>
                 <?php wp_nonce_field( 'mimamori_hq_user_save', 'mimamori_hq_user_nonce' ); ?>
-                <select name="mimamori_hq_managed[]" id="mimamori_hq_managed" multiple="multiple" size="14" style="min-width: 380px;">
-                    <?php foreach ( $candidates as $c ) :
-                        $selected = in_array( (int) $c->ID, $managed, true ); ?>
-                        <option value="<?php echo (int) $c->ID; ?>" <?php selected( $selected ); ?>>
-                            <?php echo esc_html( sprintf( '#%d %s (%s)', $c->ID, $c->display_name, $c->user_login ) ); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <p class="description">
-                    Ctrl/Cmd 押しながら複数選択。本部ユーザー化を解除する場合は全選択解除。
-                    <?php if ( ! empty( $managed ) ) : ?>
-                        <br><strong>現在: <?php echo count( $managed ); ?>件のクライアントを管理中</strong>
+                <div id="mimamori-hq-managed-list" style="max-width: 520px; max-height: 340px; overflow-y: auto; border: 1px solid #c3c4c7; border-radius: 4px; padding: 10px 14px; background: #fff;">
+                    <?php if ( empty( $candidates ) ) : ?>
+                        <p style="margin:0;color:#666;">他のユーザーが見つかりません。</p>
+                    <?php else : ?>
+                        <?php foreach ( $candidates as $c ) :
+                            $checked = in_array( (int) $c->ID, $managed, true );
+                            $cid = 'mimamori-hq-cb-' . (int) $c->ID; ?>
+                            <label for="<?php echo esc_attr( $cid ); ?>" style="display:flex; align-items:center; gap:8px; padding:5px 0; cursor:pointer; line-height:1.4;">
+                                <input type="checkbox" id="<?php echo esc_attr( $cid ); ?>"
+                                       class="mimamori-hq-managed-cb"
+                                       name="mimamori_hq_managed[]"
+                                       value="<?php echo (int) $c->ID; ?>"
+                                       <?php checked( $checked ); ?> />
+                                <span><?php echo esc_html( sprintf( '#%d %s (%s)', $c->ID, $c->display_name, $c->user_login ) ); ?></span>
+                            </label>
+                        <?php endforeach; ?>
                     <?php endif; ?>
+                </div>
+                <p style="margin-top: 10px;">
+                    <button type="button" class="button" id="mimamori-hq-deselect-all">全て選択解除</button>
+                    <span id="mimamori-hq-count" style="margin-left: 12px; color: #555;">
+                        <strong>現在 <?php echo (int) count( $managed ); ?> 件</strong>選択中
+                    </span>
                 </p>
+                <p class="description">
+                    本部ユーザー化を解除するには「全て選択解除」を押してからユーザーを更新してください。
+                </p>
+                <script>
+                (function () {
+                    var listEl = document.getElementById('mimamori-hq-managed-list');
+                    var countEl = document.getElementById('mimamori-hq-count');
+                    var deselectBtn = document.getElementById('mimamori-hq-deselect-all');
+                    if (!listEl || !countEl || !deselectBtn) return;
+
+                    function updateCount() {
+                        var checked = listEl.querySelectorAll('.mimamori-hq-managed-cb:checked').length;
+                        countEl.innerHTML = '<strong>現在 ' + checked + ' 件</strong>選択中';
+                    }
+                    listEl.addEventListener('change', function (e) {
+                        if (e.target && e.target.classList.contains('mimamori-hq-managed-cb')) updateCount();
+                    });
+                    deselectBtn.addEventListener('click', function () {
+                        listEl.querySelectorAll('.mimamori-hq-managed-cb:checked').forEach(function (cb) { cb.checked = false; });
+                        updateCount();
+                    });
+                })();
+                </script>
             </td>
         </tr>
     </table>
