@@ -129,14 +129,18 @@
       '}' +
       // SP (< 600px): FAB 位置を SP オフセットに、ウィンドウは下から全画面スライド
       // 画像ありの時のみ、width_pct_sp が指定されていればバナー最大横幅を vw% に上書き
-      // ウィンドウ: top/right/bottom/left の 4 辺で囲って viewport にぴったり = iOS Safari の
-      //   100vh が address bar 含む大きい値になる問題 (ヘッダーが画面外にはみ出す) を回避
+      // ウィンドウ:
+      //   - top/right/bottom/left を全て 0 で固定
+      //   - iframe は置換要素なので height:auto では intrinsic (約150px) に戻る
+      //     → 明示的に width:100%; height:100% を指定 (position:fixed の containing block
+      //       = viewport なので current visible 全面に展開、iOS Safari の 100vh 罠を回避)
+      //   - dvh 対応ブラウザ向けに height:100dvh を上書き (より正確)
       '@media (max-width:600px){' +
         '#' + FAB_ID + '{right:' + xsp + 'px;bottom:' + ysp + 'px}' +
         ( fabConfig.width_pct_sp > 0
           ? '#' + FAB_ID + '.has-image{max-width:' + fabConfig.width_pct_sp + 'vw}'
           : '' ) +
-        '#' + WRAP_ID + '{top:0;right:0;bottom:0;left:0;width:auto;height:auto;' +
+        '#' + WRAP_ID + '{top:0;right:0;bottom:0;left:0;width:100%;height:100%;height:100dvh;' +
           'max-width:none;max-height:none;border-radius:0;' +
           'transform:translateY(100%);transform-origin:center bottom}' +
         '#' + WRAP_ID + '.open{transform:translateY(0)}' +
@@ -400,14 +404,22 @@
       if (opened && (ev.key === 'Escape' || ev.keyCode === 27)) toggle();
     }, false);
 
-    // iframe の遅延プリロード — 初回クリック時の待ち時間を消す
+    // iframe のプリロード — 初回クリック時に白紙待ちが起きないよう、ページ読み込み完了
+    // 直後に開始する。idle 待ちだと数秒遅れることがあり、ユーザーが先に FAB を押すと白紙
+    // が見えてしまう。
     var preloaded = false;
     preloadOnce = function () { if (!preloaded) { preloaded = true; preloadIframe(); } };
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(preloadOnce, { timeout: 2500 });
-    } else {
-      setTimeout(preloadOnce, 1800);
+    function schedulePreload() {
+      // load 後すぐ (200ms) に開始 — 他リソースのロードと干渉しないよう少しだけ遅延
+      setTimeout(preloadOnce, 200);
     }
+    if (document.readyState === 'complete') {
+      schedulePreload();
+    } else {
+      window.addEventListener('load', schedulePreload, { once: true });
+    }
+    // load イベントが極端に遅い (大量画像など) ケースのフォールバック
+    setTimeout(preloadOnce, 2500);
     // FAB の hover/touchstart/focus でもプリロード — FAB 作成時 (createAndAppendFab)
     // で preloadOnce を参照してリスナーを取り付ける
 
