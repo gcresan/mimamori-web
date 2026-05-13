@@ -21,6 +21,8 @@
   var AVATAR_SVG = app.dataset.avatarSvg || ''; // 担当アバター (SVG文字列, 空ならアイコンなし)
   // 送信効果音オン/オフ — "0" 明示時のみ無効、未指定/空/"1" はオン (デフォルト)
   var SOUND_SEND_ON = (app.dataset.soundSend !== '0');
+  // 初期メッセージ — 毎回サーバから埋め込まれる (キャッシュしない)
+  var WELCOME_MSG = app.dataset.welcome || '';
 
   if (!TENANT || !PUBKEY || !API) {
     app.textContent = '初期化に失敗しました。';
@@ -331,9 +333,13 @@
 
   // 初期化フロー専用: イントロ (welcome + starters) を描画してセッションを返す。
   // submit からは呼ばないこと — 毎メッセージごとに welcome が増殖する。
+  // welcome_message は localStorage にキャッシュせず、毎回サーバ埋め込みの
+  // WELCOME_MSG (data-welcome 属性) を優先して使う。テナントが管理画面で
+  // 更新したら次回のチャット起動で即反映される。
   function startSessionWithIntro() {
+    var welcome = WELCOME_MSG || FALLBACK_WELCOME;
     if (session && session.uuid) {
-      renderIntro(session.welcome_message, session.starters);
+      renderIntro(welcome, session.starters);
       return Promise.resolve(session);
     }
     return apiPost('/session', {
@@ -341,14 +347,15 @@
       referer: document.referrer,
       landing_url: location.href
     }).then(function (r) {
-      var welcome = (r && typeof r.welcome_message === 'string' && r.welcome_message.trim() !== '')
-        ? r.welcome_message
-        : FALLBACK_WELCOME;
+      // サーバから welcome_message が返れば優先 (data-welcome と通常一致)
+      if (r && typeof r.welcome_message === 'string' && r.welcome_message.trim() !== '') {
+        welcome = r.welcome_message;
+      }
       session = {
-        uuid:            r.session_uuid,
-        persona:         r.persona,
-        starters:        r.starters || [],
-        welcome_message: welcome
+        uuid:     r.session_uuid,
+        persona:  r.persona,
+        starters: r.starters || []
+        // welcome_message はキャッシュしない (常に最新を data-welcome から取得)
       };
       try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
       renderIntro(welcome, session.starters);
@@ -365,14 +372,11 @@
       referer: document.referrer,
       landing_url: location.href
     }).then(function (r) {
-      var welcome = (r && typeof r.welcome_message === 'string' && r.welcome_message.trim() !== '')
-        ? r.welcome_message
-        : FALLBACK_WELCOME;
       session = {
-        uuid:            r.session_uuid,
-        persona:         r.persona,
-        starters:        r.starters || [],
-        welcome_message: welcome
+        uuid:     r.session_uuid,
+        persona:  r.persona,
+        starters: r.starters || []
+        // welcome_message はキャッシュしない
       };
       try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
       return session;

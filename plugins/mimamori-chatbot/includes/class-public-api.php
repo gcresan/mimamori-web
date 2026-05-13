@@ -279,6 +279,9 @@ class Mimamori_Bot_Public_API {
 		$avatar_data    = esc_attr( $theme['avatar_svg'] ?? '' );
 		// 送信音オン/オフを iframe に伝達 ("0" = off, "1" = on)
 		$sound_send_data = ! empty( $theme['sound_send'] ) ? '1' : '0';
+		// 初期メッセージ — 毎回 iframe HTML に注入 (キャッシュしない)。
+		// テナントが管理画面で更新したら次回の chat オープン時に即反映される。
+		$welcome_data = esc_attr( Mimamori_Bot_Tenant_Repository::resolve_welcome_message( $tenant ) );
 
 		// embed.css / embed.js は plugin assets として静的配信。
 		// CSS変数で配色を上書きする (embed.css は var(--mb-*) を参照)。
@@ -307,7 +310,7 @@ class Mimamori_Bot_Public_API {
 </style>
 </head>
 <body>
-<div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}" data-title="{$title_data}" data-avatar-svg="{$avatar_data}" data-sound-send="{$sound_send_data}"></div>
+<div id="app" data-tenant="{$tenant_slug}" data-pubkey="{$public_key}" data-api="{$api_base}" data-title="{$title_data}" data-avatar-svg="{$avatar_data}" data-sound-send="{$sound_send_data}" data-welcome="{$welcome_data}"></div>
 <script src="{$asset_base}/embed.js?v={$ver}" defer></script>
 </body>
 </html>
