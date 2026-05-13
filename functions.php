@@ -11129,7 +11129,10 @@ add_action( 'edit_user_profile', 'mimamori_render_hq_user_fields' );
 function mimamori_render_hq_user_fields( \WP_User $user ): void {
     if ( ! current_user_can( 'manage_options' ) ) return;
 
-    $managed = mimamori_get_hq_managed_user_ids( $user->ID );
+    $managed     = mimamori_get_hq_managed_user_ids( $user->ID );
+    $current_tier= (string) get_user_meta( $user->ID, 'gcrev_service_tier', true );
+    $is_hq_tier  = ( $current_tier === 'headquarters' );
+
     // 候補: 本人以外の WP ユーザー全員。性能のため subscriber + customer + administrator 全部含むが、表示は名前順
     $candidates = get_users([
         'fields'  => [ 'ID', 'display_name', 'user_login', 'user_email' ],
@@ -11139,9 +11142,10 @@ function mimamori_render_hq_user_fields( \WP_User $user ): void {
         'number'  => 2000, // 上限
     ]);
     ?>
+    <div id="mimamori-hq-section" style="<?php echo $is_hq_tier ? '' : 'display:none;'; ?>">
     <h2>みまもりウェブ — 本部ユーザー設定</h2>
     <p class="description">
-        このユーザーを「本部アカウント」にする場合、閲覧を許可するクライアント (店舗担当) をチェックしてください。
+        閲覧を許可するクライアント (店舗担当) をチェックしてください。
         本部ユーザーはログイン後、選択したクライアントの中から1つを切り替えて閲覧できます (合算ビューは提供しません)。
         変更を反映するには下部「<?php echo esc_html( $user->ID === get_current_user_id() ? 'プロフィールを更新' : 'ユーザーを更新' ); ?>」を押してください。
     </p>
@@ -11200,6 +11204,20 @@ function mimamori_render_hq_user_fields( \WP_User $user ): void {
             </td>
         </tr>
     </table>
+    </div><!-- /#mimamori-hq-section -->
+    <script>
+    // サービスティアが「本部アカウント」(headquarters) のときだけ本部ユーザー設定を表示
+    (function () {
+        var section = document.getElementById('mimamori-hq-section');
+        var tierSel = document.getElementById('gcrev_service_tier');
+        if (!section || !tierSel) return;
+        function refresh() {
+            section.style.display = (tierSel.value === 'headquarters') ? '' : 'none';
+        }
+        tierSel.addEventListener('change', refresh);
+        refresh();
+    })();
+    </script>
     <?php
 }
 
@@ -11211,6 +11229,17 @@ function mimamori_save_hq_user_fields( int $user_id ): void {
          || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['mimamori_hq_user_nonce'] ) ), 'mimamori_hq_user_save' ) ) {
         return;
     }
+    // フォームで送られた tier を見る (DB保存タイミング差を考慮)。
+    // 本部アカウント以外なら、管理対象は無条件にクリア (UIで隠れていてもセキュアな保存)
+    $posted_tier = isset( $_POST['gcrev_service_tier'] )
+        ? sanitize_text_field( wp_unslash( $_POST['gcrev_service_tier'] ) )
+        : (string) get_user_meta( $user_id, 'gcrev_service_tier', true );
+    if ( $posted_tier !== 'headquarters' ) {
+        delete_user_meta( $user_id, mimamori_hq_managed_meta_key() );
+        delete_user_meta( $user_id, mimamori_hq_view_meta_key() );
+        return;
+    }
+
     $raw = isset( $_POST['mimamori_hq_managed'] ) && is_array( $_POST['mimamori_hq_managed'] )
         ? array_map( 'absint', wp_unslash( $_POST['mimamori_hq_managed'] ) )
         : [];
