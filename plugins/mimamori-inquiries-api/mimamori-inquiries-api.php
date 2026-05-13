@@ -3,16 +3,17 @@
  * Plugin Name: みまもりウェブ 問い合わせ集計API
  * Plugin URI:  https://mimamori-web.jp/
  * Description: Flamingo / MW WP Form の問い合わせデータを月単位で集計し、みまもりウェブに対して REST API で返却する。スパム・テスト・営業を除外した「有効問い合わせ数」も算出する。
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      みまもりウェブ
  * License:     GPL-2.0-or-later
  * Text Domain: mimamori-inquiries-api
  *
- * 設定: wp-config.php に以下の定数を追加してください
- *   define( 'MIMAMORI_INQUIRIES_API_TOKEN', '<32文字以上のランダム文字列>' );
+ * 設定: 有効化後 wp-admin → 設定 → みまもり問い合わせAPI でトークンを確認 (自動生成)
  *
- * オプション: 任意の許可IPをカンマ区切りで指定（指定時のみフィルタ適用）
+ * 上級者向け (DBではなく wp-config.php で管理したい場合):
+ *   define( 'MIMAMORI_INQUIRIES_API_TOKEN', '<32文字以上のランダム文字列>' );
  *   define( 'MIMAMORI_INQUIRIES_API_ALLOWED_IPS', '203.0.113.10,203.0.113.11' );
+ *   ※ 定数が定義されていればそちらを優先し、DB の値はマスク表示する。
  */
 
 declare(strict_types=1);
@@ -92,12 +93,74 @@ class Mimamori_Inquiries_API {
     /** 有効と認める最低本文文字数 */
     private const MIN_MESSAGE_LENGTH = 10;
 
+    /** wp_options に保存するキー */
+    private const OPT_TOKEN       = 'mimamori_inquiries_api_token';
+    private const OPT_ALLOWED_IPS = 'mimamori_inquiries_api_allowed_ips';
+
+    /** Settings ページ slug */
+    private const SETTINGS_SLUG = 'mimamori-inquiries-api';
+
     /**
      * フック登録（プラグインエントリ）
      */
     public static function bootstrap(): void {
         error_log( '[MIMAMORI_INQUIRIES_API] bootstrap() called' );
-        add_action( 'rest_api_init', [ __CLASS__, 'register_routes' ] );
+        add_action( 'rest_api_init',  [ __CLASS__, 'register_routes' ] );
+
+        // 管理画面: 設定ページ + 再発行ハンドラ
+        add_action( 'admin_menu',                                              [ __CLASS__, 'add_settings_menu' ] );
+        add_action( 'admin_post_mimamori_inquiries_api_regenerate_token',      [ __CLASS__, 'handle_regenerate_token' ] );
+        add_action( 'admin_post_mimamori_inquiries_api_save_ips',              [ __CLASS__, 'handle_save_allowed_ips' ] );
+    }
+
+    /* ================================================================
+     * トークン解決ヘルパ
+     * ================================================================ */
+
+    /**
+     * 認証に使う実トークンを返す。
+     *   優先順位:
+     *     1) wp-config.php の MIMAMORI_INQUIRIES_API_TOKEN 定数 (上書き)
+     *     2) wp_options に保存した値 (無ければ自動生成)
+     */
+    public static function get_token(): string {
+        if ( defined( 'MIMAMORI_INQUIRIES_API_TOKEN' ) && (string) MIMAMORI_INQUIRIES_API_TOKEN !== '' ) {
+            return (string) MIMAMORI_INQUIRIES_API_TOKEN;
+        }
+        $token = get_option( self::OPT_TOKEN, '' );
+        if ( ! is_string( $token ) || $token === '' ) {
+            $token = self::generate_new_token();
+            // autoload=false: 機密値は要求時のみロード
+            update_option( self::OPT_TOKEN, $token, false );
+        }
+        return (string) $token;
+    }
+
+    /** 64文字 (256bit) の hex トークンを生成 */
+    public static function generate_new_token(): string {
+        try {
+            return bin2hex( random_bytes( 32 ) );
+        } catch ( \Throwable $e ) {
+            // random_bytes が使えない極稀なケース (PHP < 7) の保険
+            return wp_generate_password( 64, false, false );
+        }
+    }
+
+    /** 定数で固定されているか (= プラグイン画面では編集不可) */
+    public static function is_token_locked_by_constant(): bool {
+        return ( defined( 'MIMAMORI_INQUIRIES_API_TOKEN' ) && (string) MIMAMORI_INQUIRIES_API_TOKEN !== '' );
+    }
+
+    /** 許可IPリスト (定数 > option) */
+    public static function get_allowed_ips_list(): array {
+        if ( defined( 'MIMAMORI_INQUIRIES_API_ALLOWED_IPS' ) && (string) MIMAMORI_INQUIRIES_API_ALLOWED_IPS !== '' ) {
+            $raw = (string) MIMAMORI_INQUIRIES_API_ALLOWED_IPS;
+        } else {
+            $raw = (string) get_option( self::OPT_ALLOWED_IPS, '' );
+        }
+        if ( $raw === '' ) return [];
+        $list = array_filter( array_map( 'trim', explode( ',', $raw ) ) );
+        return array_values( $list );
     }
 
     /**
@@ -160,8 +223,9 @@ class Mimamori_Inquiries_API {
      */
     public static function check_token( \WP_REST_Request $request ): bool {
 
-        // (1) 定数 MIMAMORI_INQUIRIES_API_TOKEN が未定義/空ならゲート閉鎖
-        if ( ! defined( 'MIMAMORI_INQUIRIES_API_TOKEN' ) || MIMAMORI_INQUIRIES_API_TOKEN === '' ) {
+        // (1) 認証トークン取得 (定数 > option > 自動生成)
+        $expected = self::get_token();
+        if ( $expected === '' ) {
             return false;
         }
 
@@ -179,14 +243,14 @@ class Mimamori_Inquiries_API {
         if ( $header === '' ) {
             return false;
         }
-        if ( ! hash_equals( (string) MIMAMORI_INQUIRIES_API_TOKEN, $header ) ) {
+        if ( ! hash_equals( $expected, $header ) ) {
             return false;
         }
 
-        // (3) 任意の IP 許可リスト（定義時のみ適用）
-        if ( defined( 'MIMAMORI_INQUIRIES_API_ALLOWED_IPS' ) && MIMAMORI_INQUIRIES_API_ALLOWED_IPS !== '' ) {
-            $allowed = array_filter( array_map( 'trim', explode( ',', (string) MIMAMORI_INQUIRIES_API_ALLOWED_IPS ) ) );
-            $remote  = self::get_remote_ip();
+        // (3) 任意の IP 許可リスト (定数 > option、空なら制限なし)
+        $allowed = self::get_allowed_ips_list();
+        if ( ! empty( $allowed ) ) {
+            $remote = self::get_remote_ip();
             if ( ! in_array( $remote, $allowed, true ) ) {
                 return false;
             }
@@ -652,6 +716,177 @@ class Mimamori_Inquiries_API {
             $sources[] = 'mw_wp_form_db';
         }
         return $sources;
+    }
+
+    /* ================================================================
+     * 管理画面: 設定 → みまもり問い合わせAPI
+     * ================================================================ */
+
+    public static function add_settings_menu(): void {
+        add_options_page(
+            'みまもり問い合わせAPI',
+            'みまもり問い合わせAPI',
+            'manage_options',
+            self::SETTINGS_SLUG,
+            [ __CLASS__, 'render_settings_page' ]
+        );
+    }
+
+    public static function render_settings_page(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( '権限がありません。', 403 );
+        }
+
+        $token             = self::get_token();
+        $is_locked         = self::is_token_locked_by_constant();
+        $endpoint_url      = rest_url( self::ROUTE_NAMESPACE . self::ROUTE_PATH );
+        $endpoint_list_url = rest_url( self::ROUTE_NAMESPACE . self::ROUTE_PATH . '/list' );
+        $allowed_ips       = self::get_allowed_ips_list();
+        $ips_locked        = ( defined( 'MIMAMORI_INQUIRIES_API_ALLOWED_IPS' ) && (string) MIMAMORI_INQUIRIES_API_ALLOWED_IPS !== '' );
+        $sources           = self::detect_sources();
+
+        // 通知
+        $msg = '';
+        if ( isset( $_GET['regenerated'] ) ) {
+            $msg = '✅ トークンを再発行しました。みまもりウェブの管理画面に新しいトークンを再登録してください。';
+        } elseif ( isset( $_GET['ips_saved'] ) ) {
+            $msg = '✅ 許可IPを保存しました。';
+        }
+        ?>
+        <div class="wrap">
+            <h1>みまもり問い合わせAPI 設定</h1>
+
+            <?php if ( $msg ) : ?>
+                <div class="notice notice-success is-dismissible"><p><?php echo esc_html( $msg ); ?></p></div>
+            <?php endif; ?>
+
+            <p>このプラグインは「みまもりウェブ」と連携して、月初に問い合わせ件数を集計・送信するための受け口を提供します。<br>下記の <strong>エンドポイント URL</strong> と <strong>トークン</strong> を、みまもりウェブの管理画面で登録してください。</p>
+
+            <?php if ( empty( $sources ) ) : ?>
+                <div class="notice notice-warning">
+                    <p>⚠️ Flamingo / MW WP Form のいずれもインストールされていません。問い合わせフォームの保存先プラグインを有効化してください。</p>
+                </div>
+            <?php else : ?>
+                <p style="color:#3c3;">✅ 検出された問い合わせソース: <code><?php echo esc_html( implode( ', ', $sources ) ); ?></code></p>
+            <?php endif; ?>
+
+            <h2 style="margin-top:32px">📡 エンドポイント URL</h2>
+            <table class="form-table">
+                <tr>
+                    <th>月次集計（合計）</th>
+                    <td>
+                        <input type="text" readonly value="<?php echo esc_attr( $endpoint_url ); ?>" class="regular-text" style="width:520px;font-family:monospace" onclick="this.select();">
+                        <button type="button" class="button" onclick="navigator.clipboard.writeText('<?php echo esc_js( $endpoint_url ); ?>');this.textContent='✅ コピー済み';setTimeout(()=>this.textContent='コピー',1800);">コピー</button>
+                    </td>
+                </tr>
+                <tr>
+                    <th>個別明細</th>
+                    <td>
+                        <input type="text" readonly value="<?php echo esc_attr( $endpoint_list_url ); ?>" class="regular-text" style="width:520px;font-family:monospace" onclick="this.select();">
+                        <button type="button" class="button" onclick="navigator.clipboard.writeText('<?php echo esc_js( $endpoint_list_url ); ?>');this.textContent='✅ コピー済み';setTimeout(()=>this.textContent='コピー',1800);">コピー</button>
+                    </td>
+                </tr>
+            </table>
+
+            <h2 style="margin-top:32px">🔑 認証トークン</h2>
+            <table class="form-table">
+                <tr>
+                    <th>現在のトークン</th>
+                    <td>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <input type="password" id="mw_inq_token" readonly value="<?php echo esc_attr( $token ); ?>" class="regular-text" style="width:520px;font-family:monospace" onclick="this.select();">
+                            <button type="button" class="button" id="mw_inq_reveal" onclick="(function(){var i=document.getElementById('mw_inq_token');i.type=(i.type==='password'?'text':'password');this.textContent=(i.type==='text'?'🙈 隠す':'👁 表示');}).call(this);">👁 表示</button>
+                            <button type="button" class="button" onclick="navigator.clipboard.writeText('<?php echo esc_js( $token ); ?>');this.textContent='✅ コピー済み';setTimeout(()=>this.textContent='コピー',1800);">コピー</button>
+                        </div>
+                        <?php if ( $is_locked ) : ?>
+                            <p class="description">🔒 このトークンは <code>wp-config.php</code> の <code>MIMAMORI_INQUIRIES_API_TOKEN</code> 定数で固定されています。再発行するには定数を削除してください。</p>
+                        <?php else : ?>
+                            <p class="description">DB に保存されています。プラグインを削除しても <code>wp_options</code> に残ります。</p>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php if ( ! $is_locked ) : ?>
+                <tr>
+                    <th>トークンの再発行</th>
+                    <td>
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('トークンを再発行します。\n古いトークンは即座に無効になり、みまもりウェブ側にも新しいトークンを登録し直す必要があります。\n続行しますか？');">
+                            <?php wp_nonce_field( 'mimamori_inquiries_api_regenerate_token' ); ?>
+                            <input type="hidden" name="action" value="mimamori_inquiries_api_regenerate_token">
+                            <button type="submit" class="button button-secondary">🔁 トークンを再発行する</button>
+                        </form>
+                        <p class="description">漏洩等が疑われる場合のみご利用ください。再発行後は <strong>みまもりウェブ管理画面</strong> でトークンを更新する必要があります。</p>
+                    </td>
+                </tr>
+                <?php endif; ?>
+            </table>
+
+            <h2 style="margin-top:32px">🛡️ 許可IP制限 (任意)</h2>
+            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                <?php wp_nonce_field( 'mimamori_inquiries_api_save_ips' ); ?>
+                <input type="hidden" name="action" value="mimamori_inquiries_api_save_ips">
+                <table class="form-table">
+                    <tr>
+                        <th>許可IP (カンマ区切り)</th>
+                        <td>
+                            <?php if ( $ips_locked ) : ?>
+                                <code><?php echo esc_html( implode( ', ', $allowed_ips ) ); ?></code>
+                                <p class="description">🔒 wp-config.php の <code>MIMAMORI_INQUIRIES_API_ALLOWED_IPS</code> 定数で固定されています。</p>
+                            <?php else : ?>
+                                <input type="text" name="allowed_ips" value="<?php echo esc_attr( implode( ', ', $allowed_ips ) ); ?>" class="regular-text" style="width:520px;font-family:monospace" placeholder="例: 203.0.113.10, 203.0.113.11">
+                                <p class="description">空欄なら制限なし。みまもりウェブ側のサーバーIPを指定すると、それ以外からのアクセスを遮断できます。</p>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                </table>
+                <?php if ( ! $ips_locked ) : ?>
+                    <?php submit_button( '許可IPを保存' ); ?>
+                <?php endif; ?>
+            </form>
+
+            <h2 style="margin-top:32px">🧪 動作確認</h2>
+            <p>ターミナルで以下を実行すると、認証込みで疎通確認できます:</p>
+            <pre style="background:#f6f7f7;padding:12px;border-radius:4px;overflow:auto;font-size:12px;border:1px solid #ddd"><?php
+                $cur_y = (int) wp_date( 'Y' );
+                $cur_m = (int) wp_date( 'n' );
+                echo "curl -H 'X-Mimamori-Token: " . esc_html( $token ) . "' \\\n";
+                echo "  '" . esc_html( $endpoint_url ) . '?year=' . $cur_y . '&month=' . $cur_m . "'";
+            ?></pre>
+        </div>
+        <?php
+    }
+
+    public static function handle_regenerate_token(): void {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( '権限がありません。', 403 );
+        check_admin_referer( 'mimamori_inquiries_api_regenerate_token' );
+        if ( self::is_token_locked_by_constant() ) {
+            wp_die( 'トークンは wp-config.php 定数で固定されているため再発行できません。', 400 );
+        }
+        $new_token = self::generate_new_token();
+        update_option( self::OPT_TOKEN, $new_token, false );
+        wp_safe_redirect( add_query_arg( [
+            'page'        => self::SETTINGS_SLUG,
+            'regenerated' => 1,
+        ], admin_url( 'options-general.php' ) ) );
+        exit;
+    }
+
+    public static function handle_save_allowed_ips(): void {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( '権限がありません。', 403 );
+        check_admin_referer( 'mimamori_inquiries_api_save_ips' );
+        if ( defined( 'MIMAMORI_INQUIRIES_API_ALLOWED_IPS' ) && (string) MIMAMORI_INQUIRIES_API_ALLOWED_IPS !== '' ) {
+            wp_die( '許可IPは wp-config.php 定数で固定されているため変更できません。', 400 );
+        }
+        $raw = isset( $_POST['allowed_ips'] ) ? (string) wp_unslash( $_POST['allowed_ips'] ) : '';
+        $list = array_filter( array_map( 'trim', explode( ',', $raw ) ), static function ( $ip ) {
+            return filter_var( $ip, FILTER_VALIDATE_IP ) !== false;
+        } );
+        $clean = implode( ',', array_values( $list ) );
+        update_option( self::OPT_ALLOWED_IPS, $clean, false );
+        wp_safe_redirect( add_query_arg( [
+            'page'      => self::SETTINGS_SLUG,
+            'ips_saved' => 1,
+        ], admin_url( 'options-general.php' ) ) );
+        exit;
     }
 }
 
