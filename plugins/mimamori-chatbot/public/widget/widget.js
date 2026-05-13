@@ -237,11 +237,16 @@
       createAndAppendFab();
     }
     function updateLive() {
-      // すでに表示済みの場合、最新値で再描画 (transition から色変動は除外済みなので一瞬の点滅なし)
-      if (fabReady) {
+      // すでに表示済みの状態で config が更新されたとき (例: timeout でデフォルト表示後に
+      // fetch が完了したケース) — 一瞬フェードして瑕疵感のない切替を行う
+      if (!fabReady || !fab) return;
+      fab.style.transition = 'opacity .15s ease-out';
+      fab.style.opacity = '0';
+      setTimeout(function () {
         applyFabStyles();
         applyFabContent();
-      }
+        if (fab) fab.style.opacity = '';
+      }, 150);
     }
 
     // 1) キャッシュがあれば先に適用して即表示 (フラッシュなし)
@@ -258,8 +263,10 @@
       }
     } catch (e) { /* ignore */ }
 
-    // 2) 安全弁: キャッシュも無くフェッチも遅い場合、800ms でデフォルト表示
-    setTimeout(function () { if (!fabReady) reveal(); }, hasCache ? 0 : 800);
+    // 2) 安全弁: キャッシュ無しの初回はネット遅延を待ち切るため 3秒。
+    //    これ以下にすると遅い回線で fetch 完了前にデフォルトアイコンで FAB を出してしまい、
+    //    後で本来のバナー画像に置換される時に "一瞬デフォルト → 画像" のフラッシュが起きる。
+    setTimeout(function () { if (!fabReady) reveal(); }, hasCache ? 0 : 3000);
 
     // 3) 常に最新を裏フェッチして反映 + キャッシュ更新
     try {

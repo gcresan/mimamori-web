@@ -476,8 +476,10 @@ window.MB_UPLOAD = {
     <h2>埋め込みコード</h2>
     <p>下記コードをクライアントサイトの <code>&lt;/body&gt;</code> 直前に貼り付けると、チャットが起動します。</p>
     <?php
-    $widget_url = MIMAMORI_BOT_URL . 'public/widget/widget.js';
-    $snippet = "<script>\n  (function(){\n    var s=document.createElement('script');\n    s.src='" . esc_js( $widget_url ) . "';\n    s.async=true;\n    s.dataset.tenant='" . esc_js( $tenant['slug'] ) . "';\n    s.dataset.key='" . esc_js( $tenant['public_key'] ) . "';\n    document.head.appendChild(s);\n  })();\n</script>";
+    $widget_url    = MIMAMORI_BOT_URL . 'public/widget/widget.js';
+    $widget_parts  = wp_parse_url( $widget_url );
+    $widget_origin = ( $widget_parts['scheme'] ?? 'https' ) . '://' . ( $widget_parts['host'] ?? '' );
+    $snippet = "<script>\n  (function(){\n    // 事前接続: モバイルでの初回ロードを高速化\n    var l=document.createElement('link');l.rel='preconnect';l.href='" . esc_js( $widget_origin ) . "';l.crossOrigin='';document.head.appendChild(l);\n    var s=document.createElement('script');\n    s.src='" . esc_js( $widget_url ) . "';\n    s.async=true;\n    s.dataset.tenant='" . esc_js( $tenant['slug'] ) . "';\n    s.dataset.key='" . esc_js( $tenant['public_key'] ) . "';\n    document.head.appendChild(s);\n  })();\n</script>";
     ?>
     <textarea readonly onclick="this.select()" rows="9" class="mb-snippet-box"><?php echo esc_textarea( $snippet ); ?></textarea>
     <p style="margin-top:12px"><strong>公開キー:</strong> <code><?php echo esc_html( $tenant['public_key'] ); ?></code></p>
