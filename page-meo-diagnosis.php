@@ -397,6 +397,9 @@ get_header();
 
     // Run diagnostic
     window.runDiagnostic = function() {
+        // 「初めての診断」かどうかを実行前にスナップ (loadHistory後の判定だと race するため)
+        var wasFirstRun = ( historyData.length === 0 );
+
         var progress = document.getElementById('meoDiagProgress');
         if (progress) progress.classList.add('active');
         if (runBtn) { runBtn.disabled = true; runBtn.textContent = '診断中...'; }
@@ -413,6 +416,12 @@ get_header();
             if (runBtn) { runBtn.disabled = false; runBtn.innerHTML = '&#x1F680; 診断を実行する'; }
 
             if (json.success) {
+                // 初回診断は履歴と比較する材料がないので、結果詳細ページへ直行
+                if ( wasFirstRun && json.data && json.data.id ) {
+                    showToast('診断が完了しました。結果ページへ移動します...');
+                    window.location.href = detailBase + '?id=' + json.data.id;
+                    return;
+                }
                 showToast('診断が完了しました！');
                 loadHistory();
             } else {
