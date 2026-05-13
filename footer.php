@@ -157,6 +157,20 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     })();
+
+    // サブグループ (サイト分析/SEO/サイトレポート/口コミアンケート) のトグル
+    // 初期は開いた状態。クリックで開閉を独立にトグル (互いに干渉しない)
+    (function() {
+        var toggles = document.querySelectorAll('.nav-subgroup-toggle');
+        toggles.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var wrapper = btn.closest('.nav-subgroup-wrapper');
+                if (!wrapper) return;
+                var collapsed = wrapper.classList.toggle('collapsed');
+                btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            });
+        });
+    })();
 // 期間切替ボタン（ダッシュボード専用）
 // ダッシュボードのKPI期間切替だけ有効化（分析ページと干渉させない）
 if (typeof updateKPIData === 'function') {

@@ -307,12 +307,38 @@ h3 { font-size: 20px; font-weight: 700; }
 .sidebar-nav .nav-subgroup-label {
   display: block;
   position: relative;
-  padding: 9px 24px 9px 56px;
+  padding: 9px 40px 9px 56px;
   font-size: 13.5px;
   font-weight: 500;
   color: #555;
   letter-spacing: normal;
-  pointer-events: none;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.sidebar-nav .nav-subgroup-label:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--mw-primary-blue);
+}
+.sidebar-nav .nav-subgroup-toggle-arrow {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: #b0bec5;
+  transition: transform 0.2s;
+  line-height: 1;
+}
+.sidebar-nav .nav-subgroup-wrapper.collapsed .nav-subgroup-toggle-arrow {
+  transform: translateY(-50%) rotate(-90deg);
+}
+.sidebar-nav .nav-subgroup-wrapper.collapsed .nav-subgroup-menu {
+  display: none;
 }
 .sidebar-nav .nav-subgroup-label::before {
   content: "";

@@ -209,7 +209,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                      <!-- サブグループ: サイト分析 -->
                      <li class="nav-item nav-subgroup-wrapper">
-                        <span class="nav-subgroup-label">サイト分析</span>
+                        <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
+                           サイト分析
+                           <span class="nav-subgroup-toggle-arrow" aria-hidden="true">&#9662;</span>
+                        </button>
                         <ul class="nav-subgroup-menu">
                            <li class="nav-item">
                               <a href="<?php echo esc_url( home_url('/site-dashboard/') ); ?>" class="nav-link <?php echo is_page('site-dashboard') ? 'active' : ''; ?>">
@@ -261,7 +264,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                      <!-- サブグループ: SEO -->
                      <li class="nav-item nav-subgroup-wrapper">
-                        <span class="nav-subgroup-label">SEO</span>
+                        <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
+                           SEO
+                           <span class="nav-subgroup-toggle-arrow" aria-hidden="true">&#9662;</span>
+                        </button>
                         <ul class="nav-subgroup-menu">
                            <li class="nav-item">
                               <a href="<?php echo esc_url( home_url('/seo-check/') ); ?>" class="nav-link <?php echo is_page('seo-check') ? 'active' : ''; ?>">
@@ -292,7 +298,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                      <!-- サブグループ: サイトレポート -->
                      <li class="nav-item nav-subgroup-wrapper">
-                        <span class="nav-subgroup-label">サイトレポート</span>
+                        <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
+                           サイトレポート
+                           <span class="nav-subgroup-toggle-arrow" aria-hidden="true">&#9662;</span>
+                        </button>
                         <ul class="nav-subgroup-menu">
                            <li class="nav-item">
                               <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
@@ -349,7 +358,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </a>
                      </li>
                      <li class="nav-item nav-subgroup-wrapper">
-                        <span class="nav-subgroup-label">口コミアンケート</span>
+                        <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
+                           口コミアンケート
+                           <span class="nav-subgroup-toggle-arrow" aria-hidden="true">&#9662;</span>
+                        </button>
                         <ul class="nav-subgroup-menu">
                            <li class="nav-item">
                               <a href="<?php echo esc_url( home_url('/tools/review-survey/') ); ?>" class="nav-link <?php echo is_page('review-survey') ? 'active' : ''; ?>">
