@@ -321,19 +321,19 @@ h3 { font-size: 20px; font-weight: 700; }
 }
 .sidebar-nav .nav-subgroup-menu .nav-link::before {
   left: 58px;
-  width: 8px;
-  height: 1.5px;
-  border-radius: 1px;
-  background: #b0bec5;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ccc;
 }
 .sidebar-nav .nav-subgroup-menu .nav-link:hover::before {
   background: var(--mw-primary-blue);
 }
 .sidebar-nav .nav-subgroup-menu .nav-link.active::before {
   background: var(--mw-primary-blue);
-  width: 10px;
-  height: 1.5px;
-  border-radius: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
 }
 
 /* 折りたたみトグル（集客のようす） */
