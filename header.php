@@ -126,45 +126,44 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
       <?php
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ全部閉じ ---
-      $report_pages    = array('report-latest','report-archive','annual-report','strategy-report','strategy-report-detail','strategy-report-history','meo-report');
-      $ranking_pages   = array('rank-tracker','map-rank','keyword-settings');
-      $diagnosis_pages = array('seo-check','ai-report','meo-diagnosis','meo-diagnosis-detail');
-      $website_pages   = array('site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','inquiries');
-      $meo_pages       = array('meo-dashboard','meo-search-terms','review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history','review-management','gbp-posts');
-      $seo_pages       = array('keyword-research'); // 'writing' は一旦非表示
+      // ホームページグループ: 現状診断・チャットボット・サイト分析・SEO・サイトレポート
+      $home_pages = array(
+          'page-analysis', 'chatbot',
+          // サイト分析
+          'site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','inquiries',
+          // SEO
+          'seo-check','ai-report','rank-tracker','keyword-settings','keyword-research',
+          // サイトレポート
+          'report-latest','report-archive','annual-report','strategy-report','strategy-report-detail','strategy-report-history',
+      );
+      // MEOグループ: MEO関連すべて (マップ順位・MEO診断・MEOレポート含む)
+      $meo_pages = array(
+          'meo-dashboard','map-rank','meo-diagnosis','meo-diagnosis-detail','meo-report','meo-search-terms',
+          'review-survey','survey-responses','survey-analytics','survey-analysis','survey-ai-history',
+          'review-management','gbp-posts',
+      );
       $settings_pages  = array('client-settings','report-settings','cv-review','notifications','account-info');
       $support_pages   = array('faq','tutorials','inquiry');
       $option_pages    = array('service','improvement-request','training','ad-consulting','meeting-reservation');
 
-      $report_child_active = false;
-      foreach ($report_pages as $_p) { if (is_page($_p)) { $report_child_active = true; break; } }
-      $ranking_child_active = false;
-      foreach ($ranking_pages as $_p) { if (is_page($_p)) { $ranking_child_active = true; break; } }
-      $diagnosis_child_active = false;
-      foreach ($diagnosis_pages as $_p) { if (is_page($_p)) { $diagnosis_child_active = true; break; } }
-      $website_child_active = false;
-      foreach ($website_pages as $_p) { if (is_page($_p)) { $website_child_active = true; break; } }
+      $home_child_active = false;
+      foreach ($home_pages as $_p) { if (is_page($_p)) { $home_child_active = true; break; } }
       $meo_child_active = false;
       foreach ($meo_pages as $_p) { if (is_page($_p)) { $meo_child_active = true; break; } }
-      $seo_child_active = false;
-      foreach ($seo_pages as $_p) { if (is_page($_p)) { $seo_child_active = true; break; } }
       $settings_child_active = false;
       foreach ($settings_pages as $_p) { if (is_page($_p)) { $settings_child_active = true; break; } }
       $support_child_active = false;
       foreach ($support_pages as $_p) { if (is_page($_p)) { $support_child_active = true; break; } }
       $option_child_active = false;
       foreach ($option_pages as $_p) { if (is_page($_p)) { $option_child_active = true; break; } }
+
       // 子がアクティブなグループを開く。なければ全部閉じた状態
       $sidebar_active_group = '';
-      if ($report_child_active)    $sidebar_active_group = 'report';
-      if ($ranking_child_active)   $sidebar_active_group = 'ranking';
-      if ($diagnosis_child_active) $sidebar_active_group = 'diagnosis';
-      if ($website_child_active)   $sidebar_active_group = 'website';
-      if ($meo_child_active)       $sidebar_active_group = 'meo';
-      if ($seo_child_active)       $sidebar_active_group = 'seo';
-      if ($settings_child_active)  $sidebar_active_group = 'settings';
-      if ($support_child_active)   $sidebar_active_group = 'support';
-      if ($option_child_active)    $sidebar_active_group = 'option';
+      if ($home_child_active)     $sidebar_active_group = 'home';
+      if ($meo_child_active)      $sidebar_active_group = 'meo';
+      if ($settings_child_active) $sidebar_active_group = 'settings';
+      if ($support_child_active)  $sidebar_active_group = 'support';
+      if ($option_child_active)   $sidebar_active_group = 'option';
       ?>
       <nav class="sidebar-nav">
          <div class="nav-section">
@@ -178,188 +177,149 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   </a>
                </li>
 
-               <!-- ========== 現状のページ診断（単独） ========== -->
-               <li class="nav-item">
-                  <a href="<?php echo esc_url( home_url('/page-analysis/') ); ?>" class="nav-link <?php echo is_page('page-analysis') ? 'active' : ''; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2v6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 15l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                  <span>現状のページ診断</span>
-                  </a>
-               </li>
-
                <?php
-               // チャットボットは「オプション有効ユーザー」または「運営者(管理者)」にのみ表示
-               // 一般ユーザーは クライアント管理ページから運営者が ON にしないと見えない
+               // チャットボット表示判定（HPグループ内で利用）
                $_mb_show_chatbot = current_user_can( 'manage_options' )
                    || ( function_exists( 'mimamori_bot_is_enabled_for_user' )
                         && mimamori_bot_is_enabled_for_user( get_current_user_id() ) );
-               if ( $_mb_show_chatbot ) :
                ?>
-               <!-- ========== チャットボット（単独） ========== -->
-               <li class="nav-item">
-                  <a href="<?php echo esc_url( home_url('/chatbot/') ); ?>" class="nav-link <?php echo is_page('chatbot') ? 'active' : ''; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                  <span>チャットボット</span>
-                  </a>
-               </li>
-               <?php endif; ?>
 
-               <!-- ========== 改善施策提案（単独）: 一旦非表示 ==========
-               <li class="nav-item">
-                  <a href="<?php echo esc_url( home_url('/execution-dashboard/') ); ?>" class="nav-link <?php echo is_page('execution-dashboard') ? 'active' : ''; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2 4.09 12.97a.5.5 0 0 0 .39.81H11l-1 8 8.91-10.97a.5.5 0 0 0-.39-.81H13l0-8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                  <span>改善施策提案</span>
-                  </a>
-               </li>
-               -->
-
-               <!-- ========== レポート ========== -->
-               <li class="nav-item nav-item-collapsible<?php echo $report_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'report' ? ' collapsed' : ''; ?>" data-menu-key="report">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleReport" aria-expanded="<?php echo $sidebar_active_group === 'report' ? 'true' : 'false'; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 2.5V6H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 11h5M7.5 14h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-                  <span>レポート</span>
-                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
-                  </button>
-                  <ul class="nav-submenu" id="navSubmenuReport">
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
-                        <span>深掘りレポート</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/report/report-latest/') ); ?>" class="nav-link <?php echo ( is_page('report-latest') || is_page('report-archive') ) ? 'active' : ''; ?>">
-                        <span>月次レポート</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/annual-report/') ); ?>" class="nav-link <?php echo is_page('annual-report') ? 'active' : ''; ?>">
-                        <span>年次レポート</span>
-                        </a>
-                     </li>
-                     <?php if ( mimamori_can_access_meo() ) : ?>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/meo-report/') ); ?>" class="nav-link <?php echo is_page('meo-report') ? 'active' : ''; ?>">
-                        <span>MEOレポート</span>
-                        </a>
-                     </li>
-                     <?php endif; ?>
-                  </ul>
-               </li>
-
-               <!-- ========== 検索順位チェック ========== -->
-               <li class="nav-item nav-item-collapsible<?php echo $ranking_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'ranking' ? ' collapsed' : ''; ?>" data-menu-key="ranking">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleRanking" aria-expanded="<?php echo $sidebar_active_group === 'ranking' ? 'true' : 'false'; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 3v18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 16l4-5 4 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                  <span>検索順位チェック</span>
-                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
-                  </button>
-                  <ul class="nav-submenu" id="navSubmenuRanking">
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/rank-tracker/') ); ?>" class="nav-link <?php echo is_page('rank-tracker') ? 'active' : ''; ?>">
-                        <span>自然検索順位</span>
-                        </a>
-                     </li>
-                     <?php if ( mimamori_can_access_meo() ) : ?>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/map-rank/') ); ?>" class="nav-link <?php echo is_page('map-rank') ? 'active' : ''; ?>">
-                        <span>マップ順位</span>
-                        </a>
-                     </li>
-                     <?php endif; ?>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" class="nav-link <?php echo is_page('keyword-settings') ? 'active' : ''; ?>">
-                        <span>計測キーワード設定</span>
-                        </a>
-                     </li>
-                  </ul>
-               </li>
-
-               <!-- ========== 各種診断 ========== -->
-               <li class="nav-item nav-item-collapsible<?php echo $diagnosis_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'diagnosis' ? ' collapsed' : ''; ?>" data-menu-key="diagnosis">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleDiagnosis" aria-expanded="<?php echo $sidebar_active_group === 'diagnosis' ? 'true' : 'false'; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                  <span>各種診断</span>
-                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
-                  </button>
-                  <ul class="nav-submenu" id="navSubmenuDiagnosis">
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/seo-check/') ); ?>" class="nav-link <?php echo is_page('seo-check') ? 'active' : ''; ?>">
-                        <span>SEO診断</span>
-                        </a>
-                     </li>
-                     <?php if ( mimamori_aio_enabled() ) : ?>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/ai-report/') ); ?>" class="nav-link <?php echo is_page('ai-report') ? 'active' : ''; ?>">
-                        <span>AIO診断</span>
-                        </a>
-                     </li>
-                     <?php endif; ?>
-                     <?php if ( mimamori_can_access_meo() ) : ?>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/meo-diagnosis/') ); ?>" class="nav-link <?php echo is_page('meo-diagnosis') ? 'active' : ''; ?>">
-                        <span>MEO診断</span>
-                        </a>
-                     </li>
-                     <?php endif; ?>
-                  </ul>
-               </li>
-
-               <!-- ========== ホームページ ========== -->
-               <li class="nav-item nav-item-collapsible<?php echo $website_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'website' ? ' collapsed' : ''; ?>" data-menu-key="website">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleWebsite" aria-expanded="<?php echo $sidebar_active_group === 'website' ? 'true' : 'false'; ?>">
+               <!-- ========== ホームページ（大カテゴリ） ========== -->
+               <li class="nav-item nav-item-collapsible<?php echo $home_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'home' ? ' collapsed' : ''; ?>" data-menu-key="home">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleHome" aria-expanded="<?php echo $sidebar_active_group === 'home' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
                   <span>ホームページ</span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
-                  <ul class="nav-submenu" id="navSubmenuWebsite">
+                  <ul class="nav-submenu" id="navSubmenuHome">
+                     <!-- 直下: 現状診断 -->
                      <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/site-dashboard/') ); ?>" class="nav-link <?php echo is_page('site-dashboard') ? 'active' : ''; ?>">
-                        <span>サイトダッシュボード</span>
+                        <a href="<?php echo esc_url( home_url('/page-analysis/') ); ?>" class="nav-link <?php echo is_page('page-analysis') ? 'active' : ''; ?>">
+                        <span>現状のページ診断</span>
                         </a>
                      </li>
+                     <!-- 直下: チャットボット (オプション) -->
+                     <?php if ( $_mb_show_chatbot ) : ?>
                      <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/analysis/analysis-device/') ); ?>" class="nav-link <?php echo is_page('analysis-device') ? 'active' : ''; ?>">
-                        <span>スマホとパソコンの割合</span>
+                        <a href="<?php echo esc_url( home_url('/chatbot/') ); ?>" class="nav-link <?php echo is_page('chatbot') ? 'active' : ''; ?>">
+                        <span>チャットボット</span>
                         </a>
                      </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/analysis/analysis-age/') ); ?>" class="nav-link <?php echo is_page('analysis-age') ? 'active' : ''; ?>">
-                        <span>見ている人の年代</span>
-                        </a>
+                     <?php endif; ?>
+
+                     <!-- サブグループ: サイト分析 -->
+                     <li class="nav-item nav-subgroup-wrapper">
+                        <span class="nav-subgroup-label">サイト分析</span>
+                        <ul class="nav-subgroup-menu">
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/site-dashboard/') ); ?>" class="nav-link <?php echo is_page('site-dashboard') ? 'active' : ''; ?>">
+                              <span>サイトダッシュボード</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/analysis/analysis-device/') ); ?>" class="nav-link <?php echo is_page('analysis-device') ? 'active' : ''; ?>">
+                              <span>スマホとパソコンの割合</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/analysis/analysis-age/') ); ?>" class="nav-link <?php echo is_page('analysis-age') ? 'active' : ''; ?>">
+                              <span>見ている人の年代</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/analysis/analysis-source/') ); ?>" class="nav-link <?php echo is_page('analysis-source') ? 'active' : ''; ?>">
+                              <span>見つけたきっかけ</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/analysis/analysis-region/') ); ?>" class="nav-link <?php echo is_page('analysis-region') ? 'active' : ''; ?>">
+                              <span>見ている人の場所</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/analysis/analysis-pages/') ); ?>" class="nav-link <?php echo is_page('analysis-pages') ? 'active' : ''; ?>">
+                              <span>よく見られているページ</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/analysis/analysis-keywords/') ); ?>" class="nav-link <?php echo is_page('analysis-keywords') ? 'active' : ''; ?>">
+                              <span>どんな言葉で探された？</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/analysis/analysis-cv/') ); ?>" class="nav-link <?php echo is_page('analysis-cv') ? 'active' : ''; ?>">
+                              <span>ゴール分析</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/inquiries/') ); ?>" class="nav-link <?php echo is_page('inquiries') ? 'active' : ''; ?>">
+                              <span>お問い合わせ一覧</span>
+                              </a>
+                           </li>
+                        </ul>
                      </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/analysis/analysis-source/') ); ?>" class="nav-link <?php echo is_page('analysis-source') ? 'active' : ''; ?>">
-                        <span>見つけたきっかけ</span>
-                        </a>
+
+                     <!-- サブグループ: SEO -->
+                     <li class="nav-item nav-subgroup-wrapper">
+                        <span class="nav-subgroup-label">SEO</span>
+                        <ul class="nav-subgroup-menu">
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/seo-check/') ); ?>" class="nav-link <?php echo is_page('seo-check') ? 'active' : ''; ?>">
+                              <span>SEO診断</span>
+                              </a>
+                           </li>
+                           <?php if ( mimamori_aio_enabled() ) : ?>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/ai-report/') ); ?>" class="nav-link <?php echo is_page('ai-report') ? 'active' : ''; ?>">
+                              <span>AIO診断</span>
+                              </a>
+                           </li>
+                           <?php endif; ?>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/rank-tracker/') ); ?>" class="nav-link <?php echo is_page('rank-tracker') ? 'active' : ''; ?>">
+                              <span>自然検索順位</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" class="nav-link <?php echo is_page('keyword-settings') ? 'active' : ''; ?>">
+                              <span>計測キーワード設定</span>
+                              </a>
+                           </li>
+                           <?php if ( mimamori_can_access_seo() ) : ?>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/keyword-research/') ); ?>" class="nav-link <?php echo is_page('keyword-research') ? 'active' : ''; ?>">
+                              <span>キーワード調査</span>
+                              </a>
+                           </li>
+                           <?php endif; ?>
+                        </ul>
                      </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/analysis/analysis-region/') ); ?>" class="nav-link <?php echo is_page('analysis-region') ? 'active' : ''; ?>">
-                        <span>見ている人の場所</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/analysis/analysis-pages/') ); ?>" class="nav-link <?php echo is_page('analysis-pages') ? 'active' : ''; ?>">
-                        <span>よく見られているページ</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/analysis/analysis-keywords/') ); ?>" class="nav-link <?php echo is_page('analysis-keywords') ? 'active' : ''; ?>">
-                        <span>どんな言葉で探された？</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/analysis/analysis-cv/') ); ?>" class="nav-link <?php echo is_page('analysis-cv') ? 'active' : ''; ?>">
-                        <span>ゴール分析</span>
-                        </a>
-                     </li>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/inquiries/') ); ?>" class="nav-link <?php echo is_page('inquiries') ? 'active' : ''; ?>">
-                        <span>お問い合わせ一覧</span>
-                        </a>
+
+                     <!-- サブグループ: サイトレポート -->
+                     <li class="nav-item nav-subgroup-wrapper">
+                        <span class="nav-subgroup-label">サイトレポート</span>
+                        <ul class="nav-subgroup-menu">
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
+                              <span>深掘りレポート</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/report/report-latest/') ); ?>" class="nav-link <?php echo ( is_page('report-latest') || is_page('report-archive') ) ? 'active' : ''; ?>">
+                              <span>月次レポート</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/annual-report/') ); ?>" class="nav-link <?php echo is_page('annual-report') ? 'active' : ''; ?>">
+                              <span>年次レポート</span>
+                              </a>
+                           </li>
+                        </ul>
                      </li>
                   </ul>
                </li>
 
-               <!-- ========== MEO（MEO・口コミ対策プラン以上 or 管理者のみ表示） ========== -->
+               <!-- ========== MEO（大カテゴリ・MEO・口コミ対策プラン以上 or 管理者のみ表示） ========== -->
                <?php if ( mimamori_can_access_meo() ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $meo_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'meo' ? ' collapsed' : ''; ?>" data-menu-key="meo">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleMeo" aria-expanded="<?php echo $sidebar_active_group === 'meo' ? 'true' : 'false'; ?>">
@@ -374,8 +334,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </a>
                      </li>
                      <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/map-rank/') ); ?>" class="nav-link <?php echo is_page('map-rank') ? 'active' : ''; ?>">
+                        <span>マップ順位</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/meo-diagnosis/') ); ?>" class="nav-link <?php echo is_page('meo-diagnosis') ? 'active' : ''; ?>">
+                        <span>MEO診断</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/meo/meo-search-terms/') ); ?>" class="nav-link <?php echo is_page('meo-search-terms') ? 'active' : ''; ?>">
                         <span>検索語句分析</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/meo-report/') ); ?>" class="nav-link <?php echo is_page('meo-report') ? 'active' : ''; ?>">
+                        <span>MEOレポート</span>
                         </a>
                      </li>
                      <li class="nav-item nav-subgroup-wrapper">
@@ -418,31 +393,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>投稿管理</span>
                         </a>
                      </li>
-                  </ul>
-               </li>
-               <?php endif; ?>
-
-               <!-- ========== SEO（コンテンツSEO強化プラン以上 or 管理者のみ表示） ========== -->
-               <?php if ( mimamori_can_access_seo() ) : ?>
-               <li class="nav-item nav-item-collapsible<?php echo $seo_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'seo' ? ' collapsed' : ''; ?>" data-menu-key="seo">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleSeo" aria-expanded="<?php echo $sidebar_active_group === 'seo' ? 'true' : 'false'; ?>">
-                  <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.5"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 11h6M11 8v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-                  <span>SEO</span>
-                  <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
-                  </button>
-                  <ul class="nav-submenu" id="navSubmenuSeo">
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/keyword-research/') ); ?>" class="nav-link <?php echo is_page('keyword-research') ? 'active' : ''; ?>">
-                        <span>キーワード調査</span>
-                        </a>
-                     </li>
-                     <!-- ライティング: 一旦非表示
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/writing/') ); ?>" class="nav-link <?php echo is_page('writing') ? 'active' : ''; ?>">
-                        <span>ライティング</span>
-                        </a>
-                     </li>
-                     -->
                   </ul>
                </li>
                <?php endif; ?>
