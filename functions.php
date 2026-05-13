@@ -878,8 +878,43 @@ function is_mobile() {
 // WP-Members
 // ----------------------------------------
 
+// ----------------------------------------
+// お試し期限切れユーザーはログイン自体を拒否
+// （wp_authenticate_user でブロック → wpmem_login_failed → /login/?trial_expired=1）
+// 管理者 (manage_options) は対象外。
+// ----------------------------------------
+add_filter( 'authenticate', function ( $user, $username, $password ) {
+    // 既存の認証失敗 / 未完了状態はそのまま流す
+    if ( is_wp_error( $user ) || ! ( $user instanceof WP_User ) ) {
+        return $user;
+    }
+    // 管理者はブロックしない (運営者がテストアカウント等で常時アクセスできるように)
+    if ( user_can( $user, 'manage_options' ) ) {
+        return $user;
+    }
+    if ( function_exists( 'gcrev_is_trial_expired' ) && gcrev_is_trial_expired( (int) $user->ID ) ) {
+        // wpmem_login_failed 側で理由を判定するためにユーザー名キーで短期トランジェントを残す
+        set_transient( 'gcrev_login_block_' . md5( (string) $username ), 'trial_expired', 60 );
+        return new WP_Error(
+            'gcrev_trial_expired',
+            __( 'お試し期間が終了しているため、ログインできません。継続利用をご希望の場合は管理者までお問い合わせください。', 'mimamori' )
+        );
+    }
+    return $user;
+}, 30, 3 );
+
 // ログイン失敗時 → ログインページへリダイレクト（エラー表示付き）
+// 直前の authenticate でトランジェントに残された理由 (trial_expired 等) があれば
+// それに合わせて専用のクエリパラメータ付きで誘導する。
 add_action( 'wpmem_login_failed', function () {
+    $username = isset( $_POST['log'] ) ? (string) wp_unslash( $_POST['log'] ) : '';
+    $key      = 'gcrev_login_block_' . md5( $username );
+    $reason   = get_transient( $key );
+    if ( $reason === 'trial_expired' ) {
+        delete_transient( $key );
+        wp_safe_redirect( home_url( '/login/?trial_expired=1' ) );
+        exit;
+    }
     wp_safe_redirect( home_url( '/login/?login_error=1' ) );
     exit;
 } );
@@ -900,11 +935,6 @@ add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
     }
     return home_url('/payment-status/');
 }, 10, 2);
-
-// ----------------------------------------
-// お試し期限切れ — ログインは許可し、payment-status ページへ誘導
-// （wp_authenticate_user でのブロックは廃止: 2026-03-18）
-// ----------------------------------------
 
 // ----------------------------------------
 // wp-login.php カスタマイズ
