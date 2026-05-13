@@ -93,12 +93,15 @@
       '#' + FAB_ID + ':active{transform:translateY(0) scale(.96)}' +
       '#' + FAB_ID + ' img{width:100%;height:100%;object-fit:contain;padding:10px;display:block}' +
       // 画像あり (.has-image) — 円形・背景・パディングを全て撤回し、画像そのままを表示
+      // height/width は auto + max-* に変更: 画像の比率に合わせて FAB ボックスもピッタリ縮み、
+      // 上下に余白が出ない (object-fit:contain で生まれていた縦の隙間を解消)
       '#' + FAB_ID + '.has-image{' +
-        'background:transparent;padding:0;width:auto;height:' + sz + 'px;max-width:min(380px,calc(100vw - 24px));' +
+        'background:transparent;padding:0;width:auto;height:auto;line-height:0;' +
+        'max-width:min(380px,calc(100vw - 24px));max-height:' + sz + 'px;' +
         'border-radius:' + imgRadius + ';overflow:visible;' +
       '}' +
       '#' + FAB_ID + '.has-image img{' +
-        'width:auto;height:100%;max-width:100%;padding:0;object-fit:contain;display:block;' +
+        'display:block;width:auto;height:auto;max-width:100%;max-height:' + sz + 'px;padding:0;margin:0;' +
         'border-radius:inherit;' +
       '}' +
       // ウィンドウ
@@ -118,7 +121,8 @@
       // 中画面以下 (< 1440px): FAB サイズを size_md に変更
       '@media (max-width:1439px){' +
         '#' + FAB_ID + '{width:' + szmd + 'px;height:' + szmd + 'px}' +
-        '#' + FAB_ID + '.has-image{width:auto;height:' + szmd + 'px}' +
+        '#' + FAB_ID + '.has-image{width:auto;height:auto;max-height:' + szmd + 'px}' +
+        '#' + FAB_ID + '.has-image img{max-height:' + szmd + 'px}' +
         '#' + WRAP_ID + '{bottom:' + (y + szmd + 12) + 'px}' +
       '}' +
       // SP (< 600px): FAB 位置を SP オフセットに、ウィンドウは下から全画面スライド
