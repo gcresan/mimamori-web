@@ -9616,6 +9616,32 @@ function gcrev_save_chatbot_option_field( int $user_id ) {
 add_action( 'admin_post_gcrev_meo_report_csv', 'gcrev_handle_meo_report_csv' );
 
 // /meo-report/ 固定ページ自動作成 (page-meo-report.php テンプレート割当)
+add_action( 'admin_init', 'gcrev_ensure_keyword_settings_page' );
+function gcrev_ensure_keyword_settings_page(): void {
+    if ( get_option( 'gcrev_keyword_settings_page_id', 0 ) ) {
+        return;
+    }
+    $existing = get_page_by_path( 'keyword-settings' );
+    if ( $existing ) {
+        if ( get_post_meta( $existing->ID, '_wp_page_template', true ) !== 'page-keyword-settings.php' ) {
+            update_post_meta( $existing->ID, '_wp_page_template', 'page-keyword-settings.php' );
+        }
+        update_option( 'gcrev_keyword_settings_page_id', (int) $existing->ID, false );
+        return;
+    }
+    $page_id = wp_insert_post( [
+        'post_type'    => 'page',
+        'post_status'  => 'publish',
+        'post_title'   => '計測キーワード設定',
+        'post_name'    => 'keyword-settings',
+        'post_content' => '',
+        'meta_input'   => [ '_wp_page_template' => 'page-keyword-settings.php' ],
+    ] );
+    if ( ! is_wp_error( $page_id ) && $page_id > 0 ) {
+        update_option( 'gcrev_keyword_settings_page_id', (int) $page_id, false );
+    }
+}
+
 add_action( 'admin_init', 'gcrev_ensure_meo_report_page' );
 function gcrev_ensure_meo_report_page(): void {
     if ( get_option( 'gcrev_meo_report_page_id', 0 ) ) {

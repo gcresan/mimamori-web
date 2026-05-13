@@ -682,41 +682,16 @@ get_header();
             </div>
         </div>
 
-        <!-- 計測キーワード -->
-        <div class="cs-section">
-            <h2 class="cs-section-title"><span class="icon">🔑</span> 計測キーワード</h2>
-            <p style="font-size:13px;color:#64748b;margin:0 0 14px;"><?php echo mimamori_aio_enabled() ? '順位チェック・AIO診断で計測するキーワードを設定します（最大5件）' : '順位チェックで計測するキーワードを設定します（最大5件）'; ?></p>
-
-            <div id="csKwTableWrap" style="display:none;">
-                <table class="cs-kw-table">
-                    <thead>
-                        <tr>
-                            <th>キーワード</th>
-                            <th style="text-align:center;">ランキング計測</th>
-                            <?php if ( mimamori_aio_enabled() ) : ?>
-                            <th style="text-align:center;">AIO診断</th>
-                            <?php endif; ?>
-                            <th style="text-align:right;">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="csKwTableBody"></tbody>
-                </table>
-            </div>
-
-            <div id="csKwEmpty" class="cs-kw-empty">キーワードが登録されていません。</div>
-
-            <div id="csKwFormWrap" style="display:none;">
-                <div class="cs-kw-add-form">
-                    <input type="text" id="csKwInput" placeholder="キーワードを入力（例: 愛媛 ホームページ制作）" maxlength="255">
-                    <button type="button" class="btn-kw-submit" id="csKwSubmitBtn" onclick="csSubmitKeyword()">追加する</button>
-                    <button type="button" class="btn-kw-cancel" onclick="csCancelAdd()">キャンセル</button>
-                </div>
-            </div>
-
-            <div class="cs-kw-footer">
-                <button type="button" class="btn-add-kw" id="csKwAddBtn" onclick="csShowAddForm()">＋ キーワードを追加</button>
-                <span class="cs-kw-quota" id="csKwQuota"></span>
-            </div>
+        <!-- 計測キーワード — 「検索順位チェック > 計測キーワード設定」へ移動済み -->
+        <div class="cs-section" style="background:#f8fafc;border:1px dashed #cbd5e1;">
+            <h2 class="cs-section-title" style="color:#64748b;"><span class="icon">🔑</span> 計測キーワード</h2>
+            <p style="font-size:13px;color:#475569;margin:0 0 12px;">この設定は <strong>「検索順位チェック → 計測キーワード設定」</strong> に移動しました。</p>
+            <p style="margin:0;">
+                <a href="<?php echo esc_url( home_url( '/keyword-settings/' ) ); ?>"
+                   style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#fff;color:#568184;border:1px solid #568184;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
+                   キーワード設定ページを開く →
+                </a>
+            </p>
         </div>
 
         <!-- 商圏・対応エリア -->
@@ -2281,6 +2256,9 @@ get_header();
     }
 
     function csKwFetch() {
+        // この画面ではキーワード管理UIを廃止 (検索順位チェック > 計測キーワード設定 へ移動)
+        // 関連 DOM が存在しない場合はスキップしてエラーを防ぐ
+        if ( ! document.getElementById('csKwTableWrap') ) return;
         fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
             headers: { 'X-WP-Nonce': wpNonce },
             credentials: 'same-origin'
