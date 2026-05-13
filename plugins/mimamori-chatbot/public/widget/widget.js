@@ -88,7 +88,9 @@
       'background:' + fabConfig.bg + ';color:#fff;display:flex;align-items:center;justify-content:center;' +
       'box-shadow:' + shadow + ';cursor:pointer;z-index:2147483646;border:none;font:600 24px/1 system-ui;padding:0;overflow:hidden;' +
       'opacity:' + opacity + ';pointer-events:' + pointer + ';' +
-      'transition:opacity .18s ease-out, transform .18s ' + EASE + ', filter .15s ease-out, background-color .2s ease-out, width .2s ease, height .2s ease, box-shadow .2s ease, border-radius .2s ease}' +
+      // 初回 reveal 時の青→設定色フラッシュ防止のため background/width/height/border-radius は
+      // transition から除外 (= 即時切替)。fade-in / hover アニメ用の opacity / transform / filter のみ残す
+      'transition:opacity .18s ease-out, transform .18s ' + EASE + ', filter .15s ease-out}' +
       '#' + FAB_ID + ':hover{filter:brightness(.92);transform:translateY(-2px);box-shadow:' + hoverShadow + '}' +
       '#' + FAB_ID + ':active{transform:translateY(0) scale(.96)}' +
       '#' + FAB_ID + ' img{width:100%;height:100%;object-fit:contain;padding:10px;display:block}' +
@@ -127,12 +129,15 @@
       '}' +
       // SP (< 600px): FAB 位置を SP オフセットに、ウィンドウは下から全画面スライド
       // 画像ありの時のみ、width_pct_sp が指定されていればバナー最大横幅を vw% に上書き
+      // ウィンドウ: top/right/bottom/left の 4 辺で囲って viewport にぴったり = iOS Safari の
+      //   100vh が address bar 含む大きい値になる問題 (ヘッダーが画面外にはみ出す) を回避
       '@media (max-width:600px){' +
         '#' + FAB_ID + '{right:' + xsp + 'px;bottom:' + ysp + 'px}' +
         ( fabConfig.width_pct_sp > 0
           ? '#' + FAB_ID + '.has-image{max-width:' + fabConfig.width_pct_sp + 'vw}'
           : '' ) +
-        '#' + WRAP_ID + '{right:0;bottom:0;width:100vw;height:100vh;max-height:100vh;border-radius:0;' +
+        '#' + WRAP_ID + '{top:0;right:0;bottom:0;left:0;width:auto;height:auto;' +
+          'max-width:none;max-height:none;border-radius:0;' +
           'transform:translateY(100%);transform-origin:center bottom}' +
         '#' + WRAP_ID + '.open{transform:translateY(0)}' +
       '}';
@@ -191,42 +196,81 @@
 
   // テナント別の見た目設定を取得して反映 (失敗してもデフォルトのまま動く)。
   // 反映後 (成功/失敗どちらでも) FAB を表示する — 青→正色のフラッシュを避けるため初回は opacity:0。
+  //
+  // 高速化: widget-config を localStorage にキャッシュし、再訪問は即時で正しい色の FAB を表示。
+  //         キャッシュがある場合は表示後に裏でフェッチして差分反映 (stale-while-revalidate)。
+  var CFG_CACHE_KEY = 'mb_cfg_' + tenant;
+
+  function applyConfigPayload(j) {
+    if (!j) return;
+    if (j.fab) {
+      if (j.fab.bg)       fabConfig.bg       = j.fab.bg;
+      if (j.fab.icon_url) fabConfig.icon_url = j.fab.icon_url;
+      if (typeof j.fab.offset_x === 'number') fabConfig.offset_x = j.fab.offset_x;
+      if (typeof j.fab.offset_y === 'number') fabConfig.offset_y = j.fab.offset_y;
+      fabConfig.offset_x_sp = (typeof j.fab.offset_x_sp === 'number') ? j.fab.offset_x_sp : fabConfig.offset_x;
+      fabConfig.offset_y_sp = (typeof j.fab.offset_y_sp === 'number') ? j.fab.offset_y_sp : fabConfig.offset_y;
+      if (typeof j.fab.rounded === 'boolean') fabConfig.rounded = j.fab.rounded;
+      if (typeof j.fab.shadow  === 'boolean') fabConfig.shadow  = j.fab.shadow;
+      if (typeof j.fab.size    === 'number' && j.fab.size    > 0) fabConfig.size    = j.fab.size;
+      if (typeof j.fab.size_md === 'number' && j.fab.size_md > 0) fabConfig.size_md = j.fab.size_md;
+      else fabConfig.size_md = fabConfig.size;
+      if (typeof j.fab.width_pct_sp === 'number' && j.fab.width_pct_sp > 0) {
+        fabConfig.width_pct_sp = j.fab.width_pct_sp;
+      }
+    }
+    if (j.sound && typeof j.sound.open === 'boolean') {
+      soundOpenOn = j.sound.open;
+    }
+  }
+
   function fetchConfig() {
     function reveal() {
+      if (fabReady) return; // 二重 reveal 防止
       fabReady = true;
       applyFabStyles();
       applyFabContent();
     }
-    var fetched = false;
-    // 安全弁: ネットワークが極端に遅くても 1.5 秒で必ず FAB を出す
-    setTimeout(function () { if (!fetched) reveal(); }, 1500);
+    function updateLive() {
+      // すでに表示済みの場合、最新値で再描画 (transition から色変動は除外済みなので一瞬の点滅なし)
+      if (fabReady) {
+        applyFabStyles();
+        applyFabContent();
+      }
+    }
+
+    // 1) キャッシュがあれば先に適用して即表示 (フラッシュなし)
+    var hasCache = false;
+    try {
+      var raw = localStorage.getItem(CFG_CACHE_KEY);
+      if (raw) {
+        var cached = JSON.parse(raw);
+        if (cached && cached.fab) {
+          applyConfigPayload(cached);
+          hasCache = true;
+          reveal();
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    // 2) 安全弁: キャッシュも無くフェッチも遅い場合、800ms でデフォルト表示
+    setTimeout(function () { if (!fabReady) reveal(); }, hasCache ? 0 : 800);
+
+    // 3) 常に最新を裏フェッチして反映 + キャッシュ更新
     try {
       fetch(configUrl, { credentials: 'omit' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
           if (j && j.fab) {
-            if (j.fab.bg)       fabConfig.bg       = j.fab.bg;
-            if (j.fab.icon_url) fabConfig.icon_url = j.fab.icon_url;
-            if (typeof j.fab.offset_x === 'number') fabConfig.offset_x = j.fab.offset_x;
-            if (typeof j.fab.offset_y === 'number') fabConfig.offset_y = j.fab.offset_y;
-            fabConfig.offset_x_sp = (typeof j.fab.offset_x_sp === 'number') ? j.fab.offset_x_sp : fabConfig.offset_x;
-            fabConfig.offset_y_sp = (typeof j.fab.offset_y_sp === 'number') ? j.fab.offset_y_sp : fabConfig.offset_y;
-            if (typeof j.fab.rounded === 'boolean') fabConfig.rounded = j.fab.rounded;
-            if (typeof j.fab.shadow  === 'boolean') fabConfig.shadow  = j.fab.shadow;
-            if (typeof j.fab.size    === 'number' && j.fab.size    > 0) fabConfig.size    = j.fab.size;
-            if (typeof j.fab.size_md === 'number' && j.fab.size_md > 0) fabConfig.size_md = j.fab.size_md;
-            else fabConfig.size_md = fabConfig.size;
-            if (typeof j.fab.width_pct_sp === 'number' && j.fab.width_pct_sp > 0) {
-              fabConfig.width_pct_sp = j.fab.width_pct_sp;
-            }
-          }
-          if (j && j.sound && typeof j.sound.open === 'boolean') {
-            soundOpenOn = j.sound.open;
+            applyConfigPayload(j);
+            try { localStorage.setItem(CFG_CACHE_KEY, JSON.stringify(j)); } catch (e) {}
+            if (fabReady) updateLive();
+            else reveal();
           }
         })
-        .catch(function () { /* fallback to defaults */ })
-        .then(function () { fetched = true; reveal(); });
-    } catch (e) { fetched = true; reveal(); }
+        .catch(function () { /* キャッシュ or デフォルトのまま */ })
+        .then(function () { if (!fabReady) reveal(); });
+    } catch (e) { if (!fabReady) reveal(); }
   }
 
   function createIframeWrap() {
