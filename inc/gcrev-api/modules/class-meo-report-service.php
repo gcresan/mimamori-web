@@ -232,43 +232,92 @@ class Gcrev_Meo_Report_Service {
 
     /**
      * GBP 検索キーワード TOP N。
-     * 既存の検索キーワード集計は class-gcrev-api 内にあるが、依存削減のため
-     * 専用テーブル _meo_search_terms があればそこから読み、なければ user_meta キャッシュから。
+     *
+     * GBP Performance API の月次データは MEO ダッシュボード REST が
+     * `transient: gcrev_meo_{user_id}_{period}` の `search_keywords` 配下に
+     * 「過去6ヶ月分のキーワード × 月別インプレッション」をまとめて保存している。
+     *
+     * 構造:
+     *   search_keywords.months  = ['2025/12', '2026/01', ...]
+     *   search_keywords.keywords[] = [ 'keyword' => string, 'monthly' => [int...], 'total' => int ]
+     *
+     * 指定期間 ($start 由来の年月) に該当する month_idx を引いて、各キーワードの
+     * その月のインプレッション数を取り出して TOP N で返す。
+     *
+     * cache が無ければ MEO ダッシュボード REST を内部呼び出ししてキャッシュを温める。
      */
     private static function fetch_keywords( int $user_id, string $start, string $end, int $limit ): array {
-        global $wpdb;
-        $table = $wpdb->prefix . 'gcrev_meo_search_terms';
-        $has_table = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM information_schema.tables
-              WHERE table_schema = %s AND table_name = %s",
-            DB_NAME, $table
-        ) );
-        if ( $has_table > 0 ) {
-            $rows = $wpdb->get_results( $wpdb->prepare(
-                "SELECT search_term, SUM(value) AS total
-                   FROM {$table}
-                  WHERE user_id = %d AND period_start >= %s AND period_end <= %s
-                  GROUP BY search_term
-                  ORDER BY total DESC
-                  LIMIT %d",
-                $user_id, $start, $end, $limit
-            ), ARRAY_A );
-            return array_map( static fn( $r ) => [
-                'keyword' => (string) $r['search_term'],
-                'value'   => (int) $r['total'],
-            ], $rows ?: [] );
+        $dt           = new \DateTimeImmutable( $start, wp_timezone() );
+        $target_label = (int) $dt->format( 'Y' ) . '/' . (int) $dt->format( 'n' );
+
+        $cache = self::load_search_keywords_cache( $user_id );
+        if ( ! is_array( $cache ) || empty( $cache['months'] ) || empty( $cache['keywords'] ) ) {
+            return [];
         }
 
-        // フォールバック: user_meta に保存されたキャッシュから (last 30 days)
-        $cache = get_user_meta( $user_id, '_gcrev_search_keywords_cache', true );
-        if ( is_array( $cache ) && ! empty( $cache['items'] ) ) {
-            $items = array_slice( $cache['items'], 0, $limit );
-            return array_map( static fn( $r ) => [
-                'keyword' => (string) ( $r['keyword'] ?? $r['search_term'] ?? '' ),
-                'value'   => (int) ( $r['value'] ?? $r['count'] ?? 0 ),
-            ], $items );
+        $month_idx = array_search( $target_label, (array) $cache['months'], true );
+        if ( $month_idx === false ) {
+            return [];
         }
-        return [];
+
+        $out = [];
+        foreach ( (array) $cache['keywords'] as $k ) {
+            $monthly = isset( $k['monthly'] ) && is_array( $k['monthly'] ) ? $k['monthly'] : [];
+            $val     = (int) ( $monthly[ $month_idx ] ?? 0 );
+            if ( $val > 0 ) {
+                $out[] = [
+                    'keyword' => (string) ( $k['keyword'] ?? '' ),
+                    'value'   => $val,
+                ];
+            }
+        }
+
+        usort( $out, static fn( $a, $b ) => $b['value'] - $a['value'] );
+        return array_slice( $out, 0, $limit );
+    }
+
+    /**
+     * MEOダッシュボード transient から search_keywords ブロックを取得。
+     * 複数の period キャッシュを順に試し、なければ /meo/dashboard?period=prev-month を
+     * 内部 REST 呼び出しして温める。
+     */
+    private static function load_search_keywords_cache( int $user_id ): ?array {
+        $periods = [ 'prev-month', 'prev-prev-month', 'last30', 'last90', 'last180', 'last365' ];
+
+        foreach ( $periods as $p ) {
+            $t = get_transient( 'gcrev_meo_' . $user_id . '_' . $p );
+            if ( is_array( $t ) && ! empty( $t['search_keywords']['months'] ) ) {
+                return $t['search_keywords'];
+            }
+        }
+
+        // キャッシュなし → REST を内部呼び出ししてキャッシュを温める
+        if ( function_exists( 'rest_do_request' ) ) {
+            $req = new \WP_REST_Request( 'GET', '/gcrev/v1/meo/dashboard' );
+            $req->set_param( 'period', 'prev-month' );
+            // ユーザーコンテキストを保証
+            $prev_user = get_current_user_id();
+            if ( $prev_user !== $user_id ) {
+                wp_set_current_user( $user_id );
+            }
+            $res = rest_do_request( $req );
+            if ( $prev_user !== $user_id ) {
+                wp_set_current_user( $prev_user );
+            }
+            if ( ! $res->is_error() ) {
+                $t = get_transient( 'gcrev_meo_' . $user_id . '_prev-month' );
+                if ( is_array( $t ) && ! empty( $t['search_keywords']['months'] ) ) {
+                    return $t['search_keywords'];
+                }
+                // transient に書かれていないケース: レスポンス本体に search_keywords が乗ることもある
+                $data = $res->get_data();
+                if ( is_array( $data ) && ! empty( $data['search_keywords']['months'] ) ) {
+                    return $data['search_keywords'];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
