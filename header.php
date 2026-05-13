@@ -348,7 +348,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>MEOレポート</span>
                         </a>
                      </li>
-                     <li class="nav-item nav-subgroup-wrapper">
+                     <li class="nav-item nav-subgroup-wrapper nav-subgroup-wrapper--review">
                         <span class="nav-subgroup-label">口コミアンケート</span>
                         <ul class="nav-subgroup-menu">
                            <li class="nav-item">

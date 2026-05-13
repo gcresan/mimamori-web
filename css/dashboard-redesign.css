@@ -336,6 +336,35 @@ h3 { font-size: 20px; font-weight: 700; }
   border-radius: 50%;
 }
 
+/* バリアント: 親ラベルにドット + 子は横線 (例: 口コミアンケート) */
+.sidebar-nav .nav-subgroup-wrapper--review .nav-subgroup-label {
+  position: relative;
+}
+.sidebar-nav .nav-subgroup-wrapper--review .nav-subgroup-label::before {
+  content: "";
+  position: absolute;
+  left: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ccc;
+}
+.sidebar-nav .nav-subgroup-wrapper--review .nav-subgroup-menu .nav-link::before {
+  left: 58px;
+  width: 8px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: #b0bec5;
+}
+.sidebar-nav .nav-subgroup-wrapper--review .nav-subgroup-menu .nav-link.active::before {
+  background: var(--mw-primary-blue);
+  width: 10px;
+  height: 1.5px;
+  border-radius: 1px;
+}
+
 /* 折りたたみトグル（集客のようす） */
 .nav-link-toggle {
   width: 100%;
