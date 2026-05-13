@@ -297,18 +297,33 @@ h3 { font-size: 20px; font-weight: 700; }
   padding-top: 6px;
 }
 
-/* サブグループ（口コミアンケート配下） */
+/* サブグループ (例: 口コミアンケート、サイト分析、SEO、サイトレポート)
+   - 親ラベルは親メニュー直下リンクと同じあしらい (色 #555 / 13.5px / weight 500) + 左にドット
+   - 子は薄い横線マーカー
+*/
 .sidebar-nav .nav-subgroup-wrapper {
   margin-top: 6px;
 }
 .sidebar-nav .nav-subgroup-label {
   display: block;
-  padding: 6px 24px 4px 56px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #568184;
-  letter-spacing: 0.01em;
+  position: relative;
+  padding: 9px 24px 9px 56px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #555;
+  letter-spacing: normal;
   pointer-events: none;
+}
+.sidebar-nav .nav-subgroup-label::before {
+  content: "";
+  position: absolute;
+  left: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ccc;
 }
 .sidebar-nav .nav-subgroup-menu {
   list-style: none;
@@ -321,50 +336,15 @@ h3 { font-size: 20px; font-weight: 700; }
 }
 .sidebar-nav .nav-subgroup-menu .nav-link::before {
   left: 58px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #ccc;
-}
-.sidebar-nav .nav-subgroup-menu .nav-link:hover::before {
-  background: var(--mw-primary-blue);
-}
-.sidebar-nav .nav-subgroup-menu .nav-link.active::before {
-  background: var(--mw-primary-blue);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-}
-
-/* バリアント: 親ラベルにドット + 子は横線 (例: 口コミアンケート)
-   ラベルの色・サイズ・ウェイト・余白は MEO 直下リンク (.nav-submenu .nav-link) と揃える */
-.sidebar-nav .nav-subgroup-wrapper--review .nav-subgroup-label {
-  position: relative;
-  padding: 9px 24px 9px 56px;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: #555;
-  letter-spacing: normal;
-}
-.sidebar-nav .nav-subgroup-wrapper--review .nav-subgroup-label::before {
-  content: "";
-  position: absolute;
-  left: 40px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #ccc;
-}
-.sidebar-nav .nav-subgroup-wrapper--review .nav-subgroup-menu .nav-link::before {
-  left: 58px;
   width: 8px;
   height: 1.5px;
   border-radius: 1px;
   background: #b0bec5;
 }
-.sidebar-nav .nav-subgroup-wrapper--review .nav-subgroup-menu .nav-link.active::before {
+.sidebar-nav .nav-subgroup-menu .nav-link:hover::before {
+  background: var(--mw-primary-blue);
+}
+.sidebar-nav .nav-subgroup-menu .nav-link.active::before {
   background: var(--mw-primary-blue);
   width: 10px;
   height: 1.5px;
