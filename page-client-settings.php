@@ -1347,11 +1347,16 @@ get_header();
             try {
                 var res = await fetch(restBase + 'analyze-website', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': wpNonce },
                     body: JSON.stringify({ url: siteUrl })
                 });
-                var json = await res.json();
-                if (res.ok && json.success && json.suggestions) {
+                // JSON応答前提だが、PHP fatal等で HTML が返るケースに備える
+                var raw = await res.text();
+                var json = null;
+                try { json = JSON.parse(raw); } catch (e) { json = null; }
+
+                if (res.ok && json && json.success && json.suggestions) {
                     applyHpSuggestions(json.suggestions);
                     var confBits = [];
                     if (json.suggestions.confidence) {
@@ -1364,10 +1369,21 @@ get_header();
                     if (confBits.length) { msg += '（確信度 ' + confBits.join(' / ') + '）'; }
                     showToast(msg);
                 } else {
-                    alert(json.message || '分析に失敗しました。');
+                    // 失敗の原因をできる限り具体的に表示
+                    var errMsg;
+                    if (json && json.message) {
+                        errMsg = json.message;
+                    } else if (json) {
+                        errMsg = 'HTTP ' + res.status + ' / ' + JSON.stringify(json).slice(0, 200);
+                    } else {
+                        errMsg = 'HTTP ' + res.status + ' （非JSON応答） — ' + (raw || '').replace(/\s+/g, ' ').slice(0, 200);
+                    }
+                    if (window.console) console.error('[HP Analyze] status=' + res.status, raw);
+                    alert('分析に失敗しました。\n\n' + errMsg);
                 }
             } catch (e) {
-                alert('通信エラー: ' + e.message);
+                if (window.console) console.error('[HP Analyze] exception', e);
+                alert('通信エラー: ' + (e && e.message ? e.message : e));
             } finally {
                 btnHp.disabled = false;
                 btnHp.textContent = origText;
