@@ -8234,6 +8234,19 @@ function gcrev_get_service_tier( int $user_id = 0 ): string {
  * @return bool
  */
 function mimamori_can( string $feature, int $user_id = 0 ): bool {
+    // 本部ユーザーは、自身ではなく現在 view 中の管理対象クライアントの権限を継承する。
+    // これによりサイドバーの可視性 (mimamori_can_access_meo() の引数なし呼び出し) や
+    // page-* テンプレートのガード関数が、本部の "選択中の店舗" の plan tier で判定される。
+    if ( $user_id <= 0 ) $user_id = (int) get_current_user_id();
+    if ( $user_id > 0 && function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $user_id ) ) {
+        $hq_target = (int) get_user_meta( $user_id, mimamori_hq_view_meta_key(), true );
+        if ( $hq_target <= 0 ) {
+            $managed = mimamori_get_hq_managed_user_ids( $user_id );
+            if ( ! empty( $managed ) ) $hq_target = (int) $managed[0];
+        }
+        if ( $hq_target > 0 ) $user_id = $hq_target;
+    }
+
     $tier_hierarchy = [ 'basic' => 0, 'ai_support' => 1, 'content_seo' => 2, 'bansou' => 3 ];
 
     $feature_map = [
@@ -10990,9 +11003,165 @@ function mimamori_get_view_as_target(): int {
  */
 if ( ! function_exists( 'mimamori_get_view_user_id' ) ) {
 function mimamori_get_view_user_id(): int {
+    // 優先順位: ①管理者の View As → ②本部の選択中クライアント → ③自分
     $target = mimamori_get_view_as_target();
-    return $target > 0 ? $target : (int) get_current_user_id();
+    if ( $target > 0 ) return $target;
+
+    $hq = mimamori_get_hq_view_target_for_current_user();
+    if ( $hq > 0 ) return $hq;
+
+    return (int) get_current_user_id();
 }
+}
+
+/* ============================================================
+ * 本部ユーザー (Headquarters) — 複数クライアントを切り替え閲覧
+ *   - 管理対象 user_ids は admin が wp-admin のユーザー編集画面で付与
+ *   - 本部ユーザーは「自身のデータ」を持たず、管理対象のいずれかを view する
+ *   - 既存の View As (管理者) と独立して動作。両方が同時に効く場合は View As 優先
+ * ============================================================ */
+
+if ( ! function_exists( 'mimamori_hq_managed_meta_key' ) ) {
+function mimamori_hq_managed_meta_key(): string { return '_mimamori_hq_managed_user_ids'; }
+function mimamori_hq_view_meta_key(): string    { return '_mimamori_hq_view_user_id'; }
+}
+
+/** 指定ユーザーが本部ユーザー（管理対象が1件以上ある）か。 */
+if ( ! function_exists( 'mimamori_is_hq_user' ) ) {
+function mimamori_is_hq_user( int $user_id = 0 ): bool {
+    if ( $user_id <= 0 ) $user_id = get_current_user_id();
+    if ( $user_id <= 0 ) return false;
+    $ids = mimamori_get_hq_managed_user_ids( $user_id );
+    return ! empty( $ids );
+}
+}
+
+/** 本部ユーザーが管理対象としているクライアント user_id 配列 (存在しないユーザーは除外)。 */
+if ( ! function_exists( 'mimamori_get_hq_managed_user_ids' ) ) {
+function mimamori_get_hq_managed_user_ids( int $user_id ): array {
+    if ( $user_id <= 0 ) return [];
+    $raw = get_user_meta( $user_id, mimamori_hq_managed_meta_key(), true );
+    if ( ! is_array( $raw ) ) return [];
+    $out = [];
+    foreach ( $raw as $id ) {
+        $id = (int) $id;
+        if ( $id > 0 && $id !== $user_id && get_userdata( $id ) ) $out[] = $id;
+    }
+    return array_values( array_unique( $out ) );
+}
+}
+
+/** 現在ログイン中の本部ユーザーが見ているクライアント user_id。本部でなければ 0。 */
+if ( ! function_exists( 'mimamori_get_hq_view_target_for_current_user' ) ) {
+function mimamori_get_hq_view_target_for_current_user(): int {
+    $uid = get_current_user_id();
+    if ( $uid <= 0 ) return 0;
+    // 管理者は本部ロジックを使わない (View As が優先)
+    if ( user_can( $uid, 'manage_options' ) ) return 0;
+    $managed = mimamori_get_hq_managed_user_ids( $uid );
+    if ( empty( $managed ) ) return 0;
+    $current = (int) get_user_meta( $uid, mimamori_hq_view_meta_key(), true );
+    if ( in_array( $current, $managed, true ) ) return $current;
+    // 未設定 or 管理対象から外れた → 先頭にフォールバック
+    return (int) $managed[0];
+}
+}
+
+/** 本部ユーザーが「ターゲットを切替」する admin-post ハンドラ。 */
+add_action( 'admin_post_mimamori_hq_view_set', function () {
+    $uid = get_current_user_id();
+    if ( $uid <= 0 || ! mimamori_is_hq_user( $uid ) ) {
+        wp_die( '権限がありません。', 403 );
+    }
+    check_admin_referer( 'mimamori_hq_view_set' );
+
+    $target  = isset( $_REQUEST['target_user_id'] ) ? (int) $_REQUEST['target_user_id'] : 0;
+    $managed = mimamori_get_hq_managed_user_ids( $uid );
+
+    if ( $target > 0 && in_array( $target, $managed, true ) ) {
+        update_user_meta( $uid, mimamori_hq_view_meta_key(), $target );
+    }
+    $redirect = isset( $_REQUEST['redirect'] ) ? esc_url_raw( wp_unslash( $_REQUEST['redirect'] ) ) : home_url( '/dashboard/' );
+    wp_safe_redirect( $redirect ?: home_url( '/dashboard/' ) );
+    exit;
+} );
+
+/* ----------------------------------------------------------------
+ * wp-admin ユーザー編集画面に「本部設定」セクションを追加 (admin only)
+ * ---------------------------------------------------------------- */
+add_action( 'show_user_profile', 'mimamori_render_hq_user_fields' );
+add_action( 'edit_user_profile', 'mimamori_render_hq_user_fields' );
+function mimamori_render_hq_user_fields( \WP_User $user ): void {
+    if ( ! current_user_can( 'manage_options' ) ) return;
+
+    $managed = mimamori_get_hq_managed_user_ids( $user->ID );
+    // 候補: 本人以外の WP ユーザー全員。性能のため subscriber + customer + administrator 全部含むが、表示は名前順
+    $candidates = get_users([
+        'fields'  => [ 'ID', 'display_name', 'user_login', 'user_email' ],
+        'exclude' => [ $user->ID ],
+        'orderby' => 'display_name',
+        'order'   => 'ASC',
+        'number'  => 2000, // 上限
+    ]);
+    ?>
+    <h2>みまもりウェブ — 本部ユーザー設定</h2>
+    <p class="description">
+        このユーザーを「本部アカウント」にする場合、閲覧を許可するクライアント (店舗担当) を選択してください。
+        本部ユーザーはログイン後、選択したクライアントの中から1つを切り替えて閲覧できます (合算ビューは提供しません)。
+        変更を反映するには下部「<?php echo esc_html( $user->ID === get_current_user_id() ? 'プロフィールを更新' : 'ユーザーを更新' ); ?>」を押してください。
+    </p>
+    <table class="form-table">
+        <tr>
+            <th scope="row"><label for="mimamori_hq_managed">管理対象クライアント</label></th>
+            <td>
+                <?php wp_nonce_field( 'mimamori_hq_user_save', 'mimamori_hq_user_nonce' ); ?>
+                <select name="mimamori_hq_managed[]" id="mimamori_hq_managed" multiple="multiple" size="14" style="min-width: 380px;">
+                    <?php foreach ( $candidates as $c ) :
+                        $selected = in_array( (int) $c->ID, $managed, true ); ?>
+                        <option value="<?php echo (int) $c->ID; ?>" <?php selected( $selected ); ?>>
+                            <?php echo esc_html( sprintf( '#%d %s (%s)', $c->ID, $c->display_name, $c->user_login ) ); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="description">
+                    Ctrl/Cmd 押しながら複数選択。本部ユーザー化を解除する場合は全選択解除。
+                    <?php if ( ! empty( $managed ) ) : ?>
+                        <br><strong>現在: <?php echo count( $managed ); ?>件のクライアントを管理中</strong>
+                    <?php endif; ?>
+                </p>
+            </td>
+        </tr>
+    </table>
+    <?php
+}
+
+add_action( 'personal_options_update', 'mimamori_save_hq_user_fields' );
+add_action( 'edit_user_profile_update', 'mimamori_save_hq_user_fields' );
+function mimamori_save_hq_user_fields( int $user_id ): void {
+    if ( ! current_user_can( 'manage_options' ) ) return;
+    if ( ! isset( $_POST['mimamori_hq_user_nonce'] )
+         || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['mimamori_hq_user_nonce'] ) ), 'mimamori_hq_user_save' ) ) {
+        return;
+    }
+    $raw = isset( $_POST['mimamori_hq_managed'] ) && is_array( $_POST['mimamori_hq_managed'] )
+        ? array_map( 'absint', wp_unslash( $_POST['mimamori_hq_managed'] ) )
+        : [];
+    $cleaned = [];
+    foreach ( $raw as $id ) {
+        if ( $id > 0 && $id !== $user_id && get_userdata( $id ) ) $cleaned[] = $id;
+    }
+    $cleaned = array_values( array_unique( $cleaned ) );
+    if ( empty( $cleaned ) ) {
+        delete_user_meta( $user_id, mimamori_hq_managed_meta_key() );
+        delete_user_meta( $user_id, mimamori_hq_view_meta_key() );
+    } else {
+        update_user_meta( $user_id, mimamori_hq_managed_meta_key(), $cleaned );
+        // 現在の view ターゲットが管理対象外になったらリセット
+        $current = (int) get_user_meta( $user_id, mimamori_hq_view_meta_key(), true );
+        if ( $current > 0 && ! in_array( $current, $cleaned, true ) ) {
+            update_user_meta( $user_id, mimamori_hq_view_meta_key(), (int) $cleaned[0] );
+        }
+    }
 }
 
 /**
@@ -11229,6 +11398,63 @@ if ( ! function_exists( 'mimamori_render_view_as_banner_fallback' ) ) {
 function mimamori_render_view_as_banner_fallback(): void {
     // wp_body_open が呼ばれないテーマ向けのフォールバックは現状未使用
     // 将来必要なら header.php 直書きに変更
+}
+}
+
+/**
+ * 本部ユーザー向け：管理対象クライアントを切り替えるセレクタをページ上部に表示
+ */
+add_action( 'wp_body_open', 'mimamori_render_hq_switcher_banner', 2 );
+
+if ( ! function_exists( 'mimamori_render_hq_switcher_banner' ) ) {
+function mimamori_render_hq_switcher_banner(): void {
+    static $rendered = false;
+    if ( $rendered ) return;
+    $uid = get_current_user_id();
+    if ( $uid <= 0 ) return;
+    // 管理者の View As バナーが既に出ている場合は重ねない (View As 優先)
+    if ( mimamori_get_view_as_target() > 0 ) return;
+    if ( ! mimamori_is_hq_user( $uid ) ) return;
+
+    $managed = mimamori_get_hq_managed_user_ids( $uid );
+    if ( empty( $managed ) ) return;
+    $current = mimamori_get_hq_view_target_for_current_user();
+    if ( $current <= 0 ) return;
+    $rendered = true;
+
+    $current_bn = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $current ) : '';
+    if ( $current_bn === '' ) {
+        $u = get_userdata( $current );
+        $current_bn = $u ? $u->display_name : (string) $current;
+    }
+    $current_uri = ( is_ssl() ? 'https://' : 'http://' ) . ( $_SERVER['HTTP_HOST'] ?? '' ) . ( $_SERVER['REQUEST_URI'] ?? '/' );
+    ?>
+    <div id="mimamori-hq-banner" style="position:sticky;top:0;z-index:9998;background:linear-gradient(90deg,#3a6e72,#568184);color:#fff;padding:8px 16px;font-size:13px;line-height:1.5;display:flex;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 1px 3px rgba(0,0,0,0.15);">
+        <span aria-hidden="true">🏢</span>
+        <strong>本部ビュー</strong>
+        <span style="opacity:0.85;font-size:12px;">現在: <?php echo esc_html( $current_bn ); ?></span>
+        <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+            <?php wp_nonce_field( 'mimamori_hq_view_set' ); ?>
+            <input type="hidden" name="action" value="mimamori_hq_view_set">
+            <input type="hidden" name="redirect" value="<?php echo esc_attr( $current_uri ); ?>">
+            <label for="mimamori_hq_target" style="font-size:12px;opacity:0.9;">店舗切替:</label>
+            <select id="mimamori_hq_target" name="target_user_id" onchange="this.form.submit()"
+                    style="padding:4px 10px;border-radius:4px;border:1px solid rgba(255,255,255,0.4);background:#fff;color:#2b3d3f;font-size:13px;cursor:pointer;min-width:180px;">
+                <?php foreach ( $managed as $mid ) :
+                    $mbn = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $mid ) : '';
+                    if ( $mbn === '' ) {
+                        $mu = get_userdata( $mid );
+                        $mbn = $mu ? $mu->display_name : (string) $mid;
+                    }
+                ?>
+                    <option value="<?php echo (int) $mid; ?>" <?php selected( $current, (int) $mid ); ?>>
+                        <?php echo esc_html( $mbn ); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+    </div>
+    <?php
 }
 }
 
