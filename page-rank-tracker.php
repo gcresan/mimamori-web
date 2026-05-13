@@ -571,6 +571,15 @@ get_header();
             <span>&#x1F4C8;</span> 計測キーワードランキング
         </div>
         <div class="rt-header__actions">
+            <label class="rt-slot-filter" for="slotFilter" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#374151;">
+                <span style="white-space:nowrap;">時間帯:</span>
+                <select id="slotFilter" onchange="switchSlot(this.value)" style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; background:#fff; font-size:13px; cursor:pointer;">
+                    <option value="all">全て（最新）</option>
+                    <option value="morning">朝 06:00</option>
+                    <option value="noon">昼 12:00</option>
+                    <option value="evening">夜 18:00</option>
+                </select>
+            </label>
             <button class="rt-btn rt-btn--primary" id="fetchAllBtn" onclick="fetchAllKeywords()">
                 <span class="rt-btn__icon">&#x21BB;</span>
                 最新の情報を見る
@@ -678,6 +687,7 @@ get_header();
 
     var wpNonce = '<?php echo esc_js( wp_create_nonce('wp_rest') ); ?>';
     var currentDevice = 'mobile'; // 初期表示はスマホ
+    var currentSlot = 'all';      // 時間帯フィルタ: all / morning / noon / evening
 
     // Data
     var rankData = [];
@@ -711,11 +721,20 @@ get_header();
     };
 
     // =========================================================
-    // Rankings — fetch（キャッシュ優先）
+    // Slot switch — 時間帯フィルタ切替
+    // =========================================================
+    window.switchSlot = function(slot) {
+        if (['all','morning','noon','evening'].indexOf(slot) < 0) slot = 'all';
+        currentSlot = slot;
+        fetchRankings();
+    };
+
+    // =========================================================
+    // Rankings — fetch（キャッシュ優先、slot 別に分離）
     // =========================================================
     function fetchRankings() {
-        // キャッシュチェック
-        var cacheKey = 'rank_tracker';
+        // キャッシュキーに slot を含める
+        var cacheKey = 'rank_tracker_' + currentSlot;
         var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
         if (cached) {
             rankData = cached.keywords || [];
@@ -729,7 +748,12 @@ get_header();
 
         showLoading(true);
 
-        fetch('/wp-json/gcrev/v1/rank-tracker/rankings', {
+        var url = '/wp-json/gcrev/v1/rank-tracker/rankings';
+        if (currentSlot && currentSlot !== 'all') {
+            url += '?slot=' + encodeURIComponent(currentSlot);
+        }
+
+        fetch(url, {
             headers: { 'X-WP-Nonce': wpNonce },
             credentials: 'same-origin'
         })
@@ -1240,7 +1264,8 @@ get_header();
         var blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
         var link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'rank-tracker-' + new Date().toISOString().slice(0, 10) + '.csv';
+        var slotSuffix = (currentSlot && currentSlot !== 'all') ? ('-' + currentSlot) : '';
+        link.download = 'rank-tracker-' + new Date().toISOString().slice(0, 10) + slotSuffix + '.csv';
         link.click();
     };
 

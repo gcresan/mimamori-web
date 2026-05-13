@@ -14561,6 +14561,10 @@ PROMPT;
         $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
         $res_table = $wpdb->prefix . 'gcrev_rank_results';
 
+        // 時間帯フィルタ: all (デフォルト = 全スロット最新) / morning / noon / evening
+        $slot_param = (string) $request->get_param( 'slot' );
+        $slot_param = in_array( $slot_param, [ 'morning', 'noon', 'evening' ], true ) ? $slot_param : 'all';
+
         $tz  = wp_timezone();
         $now = new \DateTimeImmutable( 'now', $tz );
 
@@ -14605,13 +14609,21 @@ PROMPT;
 
         // 直近10日分のすべての結果を一括取得（7日 + バッファ）
         $since = $now->modify( '-10 days' )->format( 'Y-m-d 00:00:00' );
+
+        $slot_where = '';
+        $params = array_merge( $keyword_ids, [ $since ] );
+        if ( $slot_param !== 'all' ) {
+            $slot_where = ' AND fetch_slot = %s';
+            $params[]   = $slot_param;
+        }
+
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $all_results = $wpdb->get_results( $wpdb->prepare(
-            "SELECT keyword_id, device, rank_group, is_ranked, fetch_date, fetched_at
+            "SELECT keyword_id, device, rank_group, is_ranked, fetch_date, fetch_slot, fetched_at
              FROM {$res_table}
-             WHERE keyword_id IN ({$placeholders}) AND fetched_at >= %s
+             WHERE keyword_id IN ({$placeholders}) AND fetched_at >= %s {$slot_where}
              ORDER BY fetched_at DESC",
-            ...array_merge( $keyword_ids, [ $since ] )
+            ...$params
         ), ARRAY_A );
 
         // keyword_id × device でグループ化
