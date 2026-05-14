@@ -21,6 +21,7 @@ WordPress テーマ「みまもりウェブ」。GA4 / GSC / GBP データを集
 | 管理画面を追加・修正 | `inc/gcrev-api/admin/class-*-page.php` |
 | 月次レポート生成を変更 | `inc/gcrev-api/modules/class-report-generator.php`, `class-monthly-report-service.php` |
 | AIチャットを修正 | `functions.php`（`mimamori_process_chat_with_trace`） |
+| SNSマルチ投稿（Meta/LINE） | `inc/gcrev-api/modules/social/class-{meta,line,social-poster}-client.php` |
 | UI テンプレートを変更 | `page-*.php` + `template-parts/` |
 | JS を修正 | `assets/js/` |
 | CSS を修正 | `sass/` → `compass compile` → `css/` |

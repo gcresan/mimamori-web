@@ -1357,6 +1357,22 @@ if ( file_exists( $gcrev_clarity_client ) ) {
 }
 
 // ========================================
+// SNS連携（Meta + LINE）モジュール
+// （class-gcrev-api.php の REST コールバックから参照されるため、API読込前に必須）
+// ========================================
+$gcrev_social_files = [
+    $gcrev_inc_path . 'gcrev-api/modules/social/class-meta-client.php',
+    $gcrev_inc_path . 'gcrev-api/modules/social/class-line-client.php',
+    $gcrev_inc_path . 'gcrev-api/modules/social/class-social-poster.php',
+];
+foreach ( $gcrev_social_files as $gcrev_social_file ) {
+    if ( file_exists( $gcrev_social_file ) ) {
+        require_once $gcrev_social_file;
+    }
+}
+unset( $gcrev_social_files, $gcrev_social_file );
+
+// ========================================
 // 戦略連動レポート: Repository / Validator / Tables を API クラス読込前に確実にロード
 // （class-gcrev-api.php 内の REST コールバックから直接参照されるため）
 // ========================================
@@ -1430,6 +1446,78 @@ add_action( 'after_setup_theme', function () {
         }
     }
 }, 20 );
+
+/**
+ * SNS連携: 必須ページの自動作成
+ *   - /social-connect/         (page-social-connect.php)
+ *   - /social-posts/           (page-social-posts.php)
+ *   - /social/meta-oauth-callback/  (page-meta-oauth-callback.php)
+ */
+add_action( 'after_setup_theme', function () {
+    $required = [
+        'social-connect' => [
+            'title'    => 'SNS連携',
+            'template' => 'page-social-connect.php',
+            'parent'   => 0,
+        ],
+        'social-posts' => [
+            'title'    => 'SNS投稿管理',
+            'template' => 'page-social-posts.php',
+            'parent'   => 0,
+        ],
+        // Meta OAuth コールバック: /social/meta-oauth-callback/ にしたいので
+        // social という親ページを先に作る
+        'social' => [
+            'title'    => 'SNS',
+            'template' => '',
+            'parent'   => 0,
+        ],
+        'meta-oauth-callback' => [
+            'title'    => 'Meta OAuth Callback',
+            'template' => 'page-meta-oauth-callback.php',
+            'parent'   => 'social',
+        ],
+    ];
+
+    $slug_to_id = [];
+
+    foreach ( $required as $slug => $meta ) {
+        $page = get_page_by_path( $slug, OBJECT, 'page' );
+
+        if ( ! $page ) {
+            $parent_id = 0;
+            if ( ! empty( $meta['parent'] ) && isset( $slug_to_id[ $meta['parent'] ] ) ) {
+                $parent_id = $slug_to_id[ $meta['parent'] ];
+            }
+            $new_id = wp_insert_post( [
+                'post_title'     => $meta['title'],
+                'post_name'      => $slug,
+                'post_status'    => 'publish',
+                'post_type'      => 'page',
+                'post_content'   => '',
+                'post_parent'    => $parent_id,
+                'comment_status' => 'closed',
+                'ping_status'    => 'closed',
+            ], true );
+            if ( ! is_wp_error( $new_id ) && $new_id ) {
+                if ( $meta['template'] !== '' ) {
+                    update_post_meta( $new_id, '_wp_page_template', $meta['template'] );
+                }
+                $slug_to_id[ $slug ] = (int) $new_id;
+            }
+            continue;
+        }
+
+        $slug_to_id[ $slug ] = (int) $page->ID;
+
+        if ( $meta['template'] !== '' ) {
+            $current = (string) get_post_meta( $page->ID, '_wp_page_template', true );
+            if ( $current === '' || $current === 'default' ) {
+                update_post_meta( $page->ID, '_wp_page_template', $meta['template'] );
+            }
+        }
+    }
+}, 25 );
 
 // 戦略レポート 単発実行用 Cron アクション（手動「やり直し生成」のバックグラウンド実行）
 add_action( 'gcrev_strategy_report_run_event', function ( $user_id, $year_month, $source ) {
@@ -6686,6 +6774,7 @@ add_action('after_setup_theme', function () {
     gcrev_survey_create_tables();
     gcrev_review_drafts_create_table();
     gcrev_gbp_posts_create_table();
+    gcrev_social_posts_create_table();
     gcrev_prefetch_status_create_table();
     gcrev_page_analysis_create_table();
     gcrev_execution_actions_create_table();
@@ -7428,6 +7517,46 @@ function gcrev_gbp_posts_create_table(): void {
         KEY user_status (user_id, status),
         KEY status_scheduled (status, scheduled_at),
         KEY ai_status (user_id, ai_image_status)
+    ) {$charset_collate};";
+
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    dbDelta( $sql );
+}
+
+/**
+ * SNSマルチプラットフォーム投稿テーブル作成
+ *
+ * Meta（Facebook / Instagram / Threads）+ LINE への
+ * 一括投稿用マスター投稿を保存する。
+ *
+ * platforms / platform_overrides / platform_results は JSON 文字列。
+ */
+function gcrev_social_posts_create_table(): void {
+    global $wpdb;
+    $table           = $wpdb->prefix . 'gcrev_social_posts';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE {$table} (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id BIGINT(20) UNSIGNED NOT NULL,
+        body TEXT NOT NULL,
+        media_url VARCHAR(2083) NULL,
+        media_attachment_id BIGINT(20) UNSIGNED NULL,
+        media_type VARCHAR(20) NULL,
+        link_url VARCHAR(2083) NULL,
+        platforms TEXT NOT NULL,
+        platform_overrides LONGTEXT NULL,
+        platform_results LONGTEXT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
+        scheduled_at DATETIME NULL,
+        posted_at DATETIME NULL,
+        error_message TEXT NULL,
+        retry_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY user_status (user_id, status),
+        KEY status_scheduled (status, scheduled_at)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

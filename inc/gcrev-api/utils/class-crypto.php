@@ -138,7 +138,13 @@ class Gcrev_Crypto {
         }
 
         $result = ['migrated' => 0, 'skipped' => 0, 'errors' => 0];
-        $meta_keys = ['_gcrev_gbp_access_token', '_gcrev_gbp_refresh_token'];
+        $meta_keys = [
+            '_gcrev_gbp_access_token',
+            '_gcrev_gbp_refresh_token',
+            '_gcrev_meta_access_token',
+            '_gcrev_meta_fb_page_token',
+            '_gcrev_line_channel_token',
+        ];
 
         $users = get_users( ['fields' => ['ID']] );
 

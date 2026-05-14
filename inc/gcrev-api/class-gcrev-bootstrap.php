@@ -41,6 +41,9 @@ class Gcrev_Bootstrap {
         // GBP予約投稿（10分ごと）
         add_action('gcrev_gbp_posts_publish_event', [__CLASS__, 'on_gbp_posts_publish']);
 
+        // SNS（Meta + LINE）予約投稿（10分ごと）
+        add_action('gcrev_social_posts_publish_event', [__CLASS__, 'on_social_posts_publish']);
+
         // MEOダッシュボード日次プリフェッチ
         add_action('gcrev_meo_dashboard_prefetch_event', [__CLASS__, 'on_meo_dashboard_prefetch']);
 
@@ -118,6 +121,12 @@ class Gcrev_Bootstrap {
             if ( file_exists($gbp_settings_path) ) {
                 require_once $gbp_settings_path;
                 (new Gcrev_GBP_Settings_Page())->register();
+            }
+
+            $social_settings_path = __DIR__ . '/admin/class-social-settings-page.php';
+            if ( file_exists($social_settings_path) ) {
+                require_once $social_settings_path;
+                (new Gcrev_Social_Settings_Page())->register();
             }
 
             $payment_settings_path = __DIR__ . '/admin/class-payment-settings-page.php';
@@ -862,6 +871,9 @@ class Gcrev_Bootstrap {
         // GBP予約投稿: 環境を問わず常に登録（予約投稿はDev/Prodどちらでも動く必要がある）
         self::maybe_schedule_gbp_publish();
 
+        // SNS予約投稿: 環境を問わず常に登録
+        self::maybe_schedule_social_publish();
+
         // Dev/Staging 環境では以降の日次バッチCronスケジュール登録をスキップ
         if ( defined( 'MIMAMORI_ENV' ) && MIMAMORI_ENV !== 'production' ) {
             return;
@@ -998,6 +1010,40 @@ class Gcrev_Bootstrap {
     }
 
     /**
+     * SNS予約投稿Cronを環境非依存で登録（10分間隔）
+     */
+    private static function maybe_schedule_social_publish(): void {
+        if ( ! wp_next_scheduled( 'gcrev_social_posts_publish_event' ) ) {
+            wp_schedule_event( time(), 'ten_minutes', 'gcrev_social_posts_publish_event' );
+            file_put_contents( '/tmp/gcrev_social_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [Cron] Scheduled gcrev_social_posts_publish_event (ten_minutes)\n",
+                FILE_APPEND
+            );
+        }
+    }
+
+    /**
+     * SNS予約投稿 Cron コールバック
+     */
+    public static function on_social_posts_publish(): void {
+        $lock_key = 'gcrev_lock_social_publish';
+        if ( get_transient( $lock_key ) ) {
+            return;
+        }
+        set_transient( $lock_key, 1, 300 );
+
+        if ( class_exists( 'Gcrev_Social_Poster' ) ) {
+            $result = Gcrev_Social_Poster::process_overdue_scheduled();
+            file_put_contents( '/tmp/gcrev_social_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [Cron] social publish: processed={$result['processed']}, errors={$result['errors']}\n",
+                FILE_APPEND
+            );
+        }
+
+        delete_transient( $lock_key );
+    }
+
+    /**
      * 期限超過の予約投稿を手動で一括処理する（管理者用）
      * REST API やWP-CLIから呼び出し可能
      */
@@ -1122,6 +1168,7 @@ class Gcrev_Bootstrap {
             'gcrev_keyword_metrics_monthly_event',
             'gcrev_monthly_data_prefetch_event',
             'gcrev_gbp_posts_publish_event',
+            'gcrev_social_posts_publish_event',
             'gcrev_meo_dashboard_prefetch_event',
             'gcrev_auto_article_daily_event',
             'gcrev_chat_analysis_monthly_event',

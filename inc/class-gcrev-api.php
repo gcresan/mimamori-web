@@ -777,6 +777,52 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== SNS連携: Meta + LINE =====
+        register_rest_route('gcrev/v1', '/social/connections', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_social_get_connections' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/social/meta/auth-url', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_social_meta_auth_url' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/social/meta/disconnect', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_social_meta_disconnect' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/social/line/save-token', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_social_line_save_token' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/social/line/disconnect', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_social_line_disconnect' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/social/posts', [
+            ['methods' => 'GET',  'callback' => [ $this, 'rest_social_get_posts' ],    'permission_callback' => [ $this->config, 'check_permission' ]],
+            ['methods' => 'POST', 'callback' => [ $this, 'rest_social_create_post' ],  'permission_callback' => [ $this->config, 'check_permission' ]],
+        ]);
+        register_rest_route('gcrev/v1', '/social/posts/(?P<id>\d+)', [
+            ['methods' => 'GET',    'callback' => [ $this, 'rest_social_get_post' ],    'permission_callback' => [ $this->config, 'check_permission' ]],
+            ['methods' => 'POST',   'callback' => [ $this, 'rest_social_update_post' ], 'permission_callback' => [ $this->config, 'check_permission' ]],
+            ['methods' => 'DELETE', 'callback' => [ $this, 'rest_social_delete_post' ], 'permission_callback' => [ $this->config, 'check_permission' ]],
+        ]);
+        register_rest_route('gcrev/v1', '/social/posts/(?P<id>\d+)/post-now', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_social_post_now' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+        register_rest_route('gcrev/v1', '/social/posts/(?P<id>\d+)/retry', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_social_retry_post' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== v2ダッシュボード用レポート生成 =====
         register_rest_route('gcrev/v1', '/report/generate-manual', [
             'methods'             => 'POST',
@@ -25315,6 +25361,292 @@ PROMPT;
 
         // WP REST に追加で何も処理させない
         exit;
+    }
+
+    // =========================================================
+    // SNS連携 REST 実装（Meta + LINE）
+    // =========================================================
+
+    /**
+     * 接続状態を返す
+     * GET /gcrev/v1/social/connections
+     */
+    public function rest_social_get_connections( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $meta    = Gcrev_Meta_Client::get_connection_status($user_id);
+        $line    = Gcrev_LINE_Client::get_connection_status($user_id);
+        $available = Gcrev_Social_Poster::get_connected_platforms($user_id);
+
+        return new \WP_REST_Response([
+            'meta'      => $meta,
+            'line'      => $line,
+            'platforms' => $available,
+        ], 200);
+    }
+
+    /**
+     * Meta 認可 URL を返す
+     * GET /gcrev/v1/social/meta/auth-url
+     */
+    public function rest_social_meta_auth_url( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $url     = Gcrev_Meta_Client::build_auth_url($user_id);
+        if ( $url === '' ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'Meta アプリ ID / Secret が管理画面で未設定です。',
+            ], 400);
+        }
+        return new \WP_REST_Response(['success' => true, 'url' => $url], 200);
+    }
+
+    /**
+     * Meta 接続解除
+     * POST /gcrev/v1/social/meta/disconnect
+     */
+    public function rest_social_meta_disconnect( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        Gcrev_Meta_Client::disconnect($user_id);
+        return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    /**
+     * LINE トークン保存
+     * POST /gcrev/v1/social/line/save-token   body: { token: "...", label: "..." }
+     */
+    public function rest_social_line_save_token( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $params  = $request->get_json_params();
+        $token   = sanitize_text_field( (string) ($params['token'] ?? '') );
+        $label   = sanitize_text_field( (string) ($params['label'] ?? '') );
+
+        if ( $token === '' ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'トークンが空です。'], 400);
+        }
+        $r = Gcrev_LINE_Client::save_token($user_id, $token, $label);
+        $status = $r['success'] ? 200 : 400;
+        return new \WP_REST_Response($r, $status);
+    }
+
+    /**
+     * LINE 接続解除
+     */
+    public function rest_social_line_disconnect( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        Gcrev_LINE_Client::disconnect($user_id);
+        return new \WP_REST_Response(['success' => true], 200);
+    }
+
+    // ---- 投稿 CRUD ----
+
+    public function rest_social_get_posts( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $table   = $wpdb->prefix . 'gcrev_social_posts';
+        $status  = sanitize_text_field( (string) $request->get_param('status') );
+
+        $sql  = "SELECT * FROM {$table} WHERE user_id = %d";
+        $args = [ $user_id ];
+        if ( $status !== '' && in_array($status, ['draft','scheduled','posted','partial','failed','cancelled'], true) ) {
+            $sql .= " AND status = %s";
+            $args[] = $status;
+        }
+        $sql .= " ORDER BY id DESC LIMIT 200";
+
+        $rows = $wpdb->get_results( $wpdb->prepare($sql, $args), ARRAY_A ) ?: [];
+        foreach ($rows as &$r) {
+            $r['platforms']          = json_decode($r['platforms'] ?? '[]', true) ?: [];
+            $r['platform_overrides'] = json_decode($r['platform_overrides'] ?? '{}', true) ?: [];
+            $r['platform_results']   = json_decode($r['platform_results']  ?? '{}', true) ?: [];
+        }
+        unset($r);
+        return new \WP_REST_Response(['posts' => $rows], 200);
+    }
+
+    public function rest_social_get_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $id      = (int) $request->get_param('id');
+        $table   = $wpdb->prefix . 'gcrev_social_posts';
+
+        $row = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM {$table} WHERE id = %d AND user_id = %d", $id, $user_id),
+            ARRAY_A
+        );
+        if ( ! $row ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'Not found'], 404);
+        }
+        $row['platforms']          = json_decode($row['platforms'] ?? '[]', true) ?: [];
+        $row['platform_overrides'] = json_decode($row['platform_overrides'] ?? '{}', true) ?: [];
+        $row['platform_results']   = json_decode($row['platform_results']  ?? '{}', true) ?: [];
+        return new \WP_REST_Response(['post' => $row], 200);
+    }
+
+    public function rest_social_create_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $params  = $request->get_json_params();
+        $table   = $wpdb->prefix . 'gcrev_social_posts';
+
+        $data = $this->social_normalize_post_input($params);
+        $data['user_id']    = $user_id;
+        $data['created_at'] = current_time('mysql');
+        $data['updated_at'] = current_time('mysql');
+
+        $ok = $wpdb->insert($table, $data);
+        if ( ! $ok ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'DB保存失敗'], 500);
+        }
+        $id = (int) $wpdb->insert_id;
+
+        $action = sanitize_text_field( (string) ($params['action'] ?? '') );
+        if ( $action === 'post_now' ) {
+            return $this->social_run_post_now($id, $user_id);
+        }
+        return new \WP_REST_Response(['success' => true, 'id' => $id], 200);
+    }
+
+    public function rest_social_update_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $id      = (int) $request->get_param('id');
+        $params  = $request->get_json_params();
+        $table   = $wpdb->prefix . 'gcrev_social_posts';
+
+        $existing = $wpdb->get_row(
+            $wpdb->prepare("SELECT id FROM {$table} WHERE id = %d AND user_id = %d", $id, $user_id),
+            ARRAY_A
+        );
+        if ( ! $existing ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'Not found'], 404);
+        }
+
+        $data = $this->social_normalize_post_input($params);
+        $data['updated_at'] = current_time('mysql');
+
+        $ok = $wpdb->update($table, $data, ['id' => $id]);
+        if ( $ok === false ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'DB更新失敗'], 500);
+        }
+        return new \WP_REST_Response(['success' => true, 'id' => $id], 200);
+    }
+
+    public function rest_social_delete_post( \WP_REST_Request $request ): \WP_REST_Response {
+        global $wpdb;
+        $user_id = get_current_user_id();
+        $id      = (int) $request->get_param('id');
+        $table   = $wpdb->prefix . 'gcrev_social_posts';
+
+        $ok = $wpdb->delete($table, ['id' => $id, 'user_id' => $user_id]);
+        return new \WP_REST_Response(['success' => (bool) $ok], $ok ? 200 : 404);
+    }
+
+    public function rest_social_post_now( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $id      = (int) $request->get_param('id');
+        return $this->social_run_post_now($id, $user_id);
+    }
+
+    public function rest_social_retry_post( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $id      = (int) $request->get_param('id');
+        return $this->social_run_post_now($id, $user_id);
+    }
+
+    /**
+     * 即時実行ヘルパー
+     */
+    private function social_run_post_now(int $id, int $user_id): \WP_REST_Response {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_social_posts';
+        $row   = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM {$table} WHERE id = %d AND user_id = %d", $id, $user_id),
+            ARRAY_A
+        );
+        if ( ! $row ) {
+            return new \WP_REST_Response(['success' => false, 'message' => 'Not found'], 404);
+        }
+
+        $result = Gcrev_Social_Poster::execute($row);
+
+        $update = [
+            'status'           => $result['status'],
+            'platform_results' => wp_json_encode($result['platform_results'], JSON_UNESCAPED_UNICODE),
+            'error_message'    => $result['error_message'],
+            'updated_at'       => current_time('mysql'),
+        ];
+        if ( $result['status'] === 'posted' || $result['status'] === 'partial' ) {
+            $update['posted_at'] = current_time('mysql');
+        }
+        if ( $result['status'] === 'failed' ) {
+            $update['retry_count'] = (int) ($row['retry_count'] ?? 0) + 1;
+        }
+        $wpdb->update($table, $update, ['id' => $id]);
+
+        $http = ($result['status'] === 'failed') ? 207 : 200;
+        return new \WP_REST_Response([
+            'success'          => $result['status'] !== 'failed',
+            'status'           => $result['status'],
+            'platform_results' => $result['platform_results'],
+            'error_message'    => $result['error_message'],
+        ], $http);
+    }
+
+    /**
+     * REST入力をDB保存用に整形
+     */
+    private function social_normalize_post_input(array $p): array {
+        $body         = (string) ($p['body'] ?? '');
+        $media_url    = esc_url_raw( (string) ($p['media_url'] ?? '') );
+        $media_id     = (int) ($p['media_attachment_id'] ?? 0);
+        $media_type   = sanitize_text_field( (string) ($p['media_type'] ?? '') );
+        $link_url     = esc_url_raw( (string) ($p['link_url'] ?? '') );
+        $platforms    = is_array($p['platforms'] ?? null) ? array_values(array_intersect($p['platforms'], Gcrev_Social_Poster::SUPPORTED_PLATFORMS)) : [];
+        $overrides    = is_array($p['platform_overrides'] ?? null) ? $p['platform_overrides'] : [];
+        $status       = sanitize_text_field( (string) ($p['status'] ?? 'draft') );
+        $scheduled_at = sanitize_text_field( (string) ($p['scheduled_at'] ?? '') );
+
+        if ( ! in_array($status, ['draft','scheduled','cancelled'], true) ) {
+            $status = 'draft';
+        }
+        // 予約投稿時間のバリデーション
+        $scheduled_at_db = null;
+        if ( $scheduled_at !== '' && $status === 'scheduled' ) {
+            $ts = strtotime($scheduled_at);
+            if ( $ts !== false ) {
+                $scheduled_at_db = wp_date('Y-m-d H:i:s', $ts);
+            }
+        }
+
+        return [
+            'body'                 => wp_kses_post($body),
+            'media_url'            => $media_url ?: null,
+            'media_attachment_id'  => $media_id ?: null,
+            'media_type'           => $media_type ?: null,
+            'link_url'             => $link_url ?: null,
+            'platforms'            => wp_json_encode($platforms, JSON_UNESCAPED_UNICODE),
+            'platform_overrides'   => wp_json_encode($overrides, JSON_UNESCAPED_UNICODE),
+            'status'               => $status,
+            'scheduled_at'         => $scheduled_at_db,
+        ];
+    }
+
+    /**
+     * Cron: 予約投稿を処理（10分間隔）
+     */
+    public function social_cron_publish_scheduled(): void {
+        if ( ! class_exists('Gcrev_Social_Poster') ) { return; }
+        Gcrev_Social_Poster::process_overdue_scheduled();
+    }
+
+    /**
+     * OAuth コールバック処理（page-meta-oauth-callback.php から呼ぶ）
+     */
+    public function social_meta_exchange_code(int $user_id, string $code, string $state): array {
+        if ( ! class_exists('Gcrev_Meta_Client') ) {
+            return ['success' => false, 'message' => 'Meta クライアント未読み込み'];
+        }
+        return Gcrev_Meta_Client::exchange_code_and_store($user_id, $code, $state);
     }
 
     } // class Gcrev_Insight_API の閉じ括弧
