@@ -851,15 +851,33 @@ h3 { font-size: 20px; font-weight: 700; }
 
 .info-kpi-breakdown {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 4px 6px;
   font-size: 11px;
   color: var(--mw-text-tertiary, #94a3b8);
   line-height: 1.4;
-  margin-top: 2px;
+  margin-top: 4px;
+  width: 100%;
+  min-width: 0;
 }
 .info-kpi-breakdown:empty { display: none; }
-.info-kpi-breakdown .bk-sep { opacity: .5; }
+.info-kpi-breakdown .bk-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: 0 0 auto;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--mw-bg-secondary, #f1f5f9);
+  color: var(--mw-text-secondary, #475569);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.info-kpi-breakdown .bk-sep { display: none; }
 
 .info-kpi-hint {
   font-size: var(--mw-font-size-xs);
