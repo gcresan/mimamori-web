@@ -3,7 +3,7 @@
  * Plugin Name: みまもりウェブ 問い合わせ集計API
  * Plugin URI:  https://mimamori-web.jp/
  * Description: Flamingo / MW WP Form の問い合わせデータを月単位で集計し、みまもりウェブに対して REST API で返却する。スパム・テスト・営業を除外した「有効問い合わせ数」も算出する。
- * Version:     1.1.0
+ * Version:     1.1.1
  * Author:      みまもりウェブ
  * License:     GPL-2.0-or-later
  * Text Domain: mimamori-inquiries-api
@@ -462,38 +462,37 @@ class Mimamori_Inquiries_API {
 
     private static function collect_mw_wp_form( string $start, string $end ): array {
         $items = [];
+        global $wpdb;
 
-        // (A) MW WP Form は v3 系で CPT 'mwf_inquiry' に保存する場合がある
-        if ( post_type_exists( 'mwf_inquiry' ) ) {
-            $posts = get_posts( [
-                'post_type'        => 'mwf_inquiry',
-                'post_status'      => 'any',
-                'posts_per_page'   => -1,
-                'no_found_rows'    => true,
-                'suppress_filters' => true,
-                'date_query'       => [
-                    [
-                        'after'     => $start,
-                        'before'    => $end,
-                        'inclusive' => true,
-                    ],
-                ],
-            ] );
-            foreach ( $posts as $post ) {
-                $meta = get_post_meta( $post->ID );
+        // (A) MW WP Form v3+ は フォームごとに個別 CPT (mwf_<form_id>) を作る方式。
+        //     post_type が 'mwf_' で始まるものを wp_posts から直接 SQL で拾う。
+        //     post_type_exists() に頼らないため、未登録 CPT (REST 初期化時点で register されていない) も拾える。
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ID, post_date, post_type
+               FROM {$wpdb->posts}
+              WHERE post_type LIKE %s ESCAPE '\\\\'
+                AND post_status NOT IN ('trash','auto-draft','inherit')
+                AND post_date BETWEEN %s AND %s",
+            'mwf\_%',
+            $start,
+            $end
+        ), ARRAY_A );
+        if ( is_array( $rows ) && ! empty( $rows ) ) {
+            foreach ( $rows as $row ) {
+                $post_id = (int) $row['ID'];
+                $meta    = get_post_meta( $post_id );
                 $items[] = [
                     'source'  => 'mw_wp_form_cpt',
                     'email'   => self::find_email_in_meta( $meta ),
                     'name'    => self::find_name_in_meta( $meta ),
                     'message' => self::find_message_in_meta( $meta ),
-                    'date'    => $post->post_date,
+                    'date'    => (string) ( $row['post_date'] ?? '' ),
                     'spam'    => false,
                 ];
             }
         }
 
         // (B) 旧式: 専用テーブル wp_mwf_entries に保存される場合
-        global $wpdb;
         $table = $wpdb->prefix . 'mwf_entries';
 
         $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
@@ -707,9 +706,20 @@ class Mimamori_Inquiries_API {
         if ( post_type_exists( 'flamingo_inbound' ) ) {
             $sources[] = 'flamingo';
         }
-        if ( post_type_exists( 'mwf_inquiry' ) ) {
+
+        // MW WP Form: フォームごとの個別CPT (mwf_<form_id>) が wp_posts に存在するかで判定。
+        // post_type_exists() ではなく実データ存在で判定するため、CPT 未登録でも検出可能。
+        $mwf_count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+              WHERE post_type LIKE %s ESCAPE '\\\\'
+                AND post_status NOT IN ('trash','auto-draft','inherit')
+              LIMIT 1",
+            'mwf\_%'
+        ) );
+        if ( $mwf_count > 0 ) {
             $sources[] = 'mw_wp_form_cpt';
         }
+
         $table  = $wpdb->prefix . 'mwf_entries';
         $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
         if ( $exists === $table ) {
