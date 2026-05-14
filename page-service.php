@@ -207,11 +207,11 @@ get_header();
                     </ul>
                 </div>
 
-                <!-- プラン2: MEO・口コミ対策プラン（おすすめ） -->
+                <!-- プラン2: MEO・検索集客強化プラン（おすすめ） -->
                 <div class="sv-plan2 sv-plan2--recommended">
                     <span class="sv-plan2__badge">★ おすすめ</span>
-                    <div class="sv-plan2__name">MEO・口コミ対策プラン</div>
-                    <div class="sv-plan2__subtitle">MEO対策や口コミ獲得で<br>地域集客を強化</div>
+                    <div class="sv-plan2__name">MEO・検索集客強化プラン</div>
+                    <div class="sv-plan2__subtitle">MEO・口コミ・検索状況をもとに<br>地域からの集客を強化</div>
                     <div class="sv-plan2__price">
                         <span class="sv-plan2__price-amount">22,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
@@ -221,6 +221,10 @@ get_header();
                         <li>口コミ返信機能</li>
                         <li>口コミアンケート＋AI機能</li>
                         <li>MEO運用代行</li>
+                        <li>SEO診断</li>
+                        <li>自然検索順位計測</li>
+                        <li>キーワード調査</li>
+                        <li>年4回の深掘りレポート</li>
                     </ul>
                 </div>
 
@@ -231,7 +235,7 @@ get_header();
                     <div class="sv-plan2__price">
                         <span class="sv-plan2__price-amount">44,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
-                    <div class="sv-plan2__cumulative">MEO・口コミ対策に加え</div>
+                    <div class="sv-plan2__cumulative">MEO・検索集客強化に加え</div>
                     <ul class="sv-plan2__features">
                         <li>コンテンツSEO機能</li>
                         <li>キーワード調査・競合分析</li>
@@ -357,7 +361,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    まずはMEO・口コミ対策プランがおすすめです。AI分析に加えて地域集客の強化機能が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、プロ伴走・改善実行プランをご検討ください。
+                    まずはMEO・検索集客強化プランがおすすめです。AI分析に加えてMEO・口コミ・検索状況をもとにした地域集客の強化機能が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、プロ伴走・改善実行プランをご検討ください。
                 </div>
             </div>
         </div>

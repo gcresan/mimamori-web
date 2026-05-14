@@ -1876,7 +1876,7 @@ add_action( 'rest_api_init', function () {
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_voice' ) ) {
                 return new WP_Error(
                     'tier_insufficient',
-                    '音声入力はMEO・口コミ対策プラン以上でご利用いただけます。',
+                    '音声入力はMEO・検索集客強化プラン以上でご利用いただけます。',
                     [ 'status' => 403 ]
                 );
             }
@@ -8279,9 +8279,9 @@ function gcrev_get_service_tier_definitions(): array {
             'description' => 'AIがデータを分析しサイトの状態をレポート化',
         ],
         'ai_support' => [
-            'name'        => 'MEO・口コミ対策プラン',
+            'name'        => 'MEO・検索集客強化プラン',
             'monthly'     => 22000,
-            'description' => 'MEO対策や口コミ獲得で地域集客を強化',
+            'description' => 'MEO・口コミ・検索状況をもとに地域からの集客を強化',
         ],
         'content_seo' => [
             'name'        => 'コンテンツSEO強化プラン',
@@ -8372,7 +8372,7 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         'report_improvements'  => 'basic',
         'report_consideration' => 'basic',
         'report_next_actions'  => 'basic',
-        // MEO機能（ai_support 以上：MEO・口コミ対策プランから提供）
+        // MEO機能（ai_support 以上：MEO・検索集客強化プランから提供）
         'meo_menu'             => 'ai_support',
         // SEO機能（content_seo 以上）
         'seo_menu'             => 'content_seo',
@@ -8422,7 +8422,7 @@ function mimamori_can_access_seo_check( int $user_id = 0 ): bool {
 /**
  * MEO関連メニュー・ページへのアクセス可否を返す。
  *
- * MEO・口コミ対策プラン以上、または管理者に許可。
+ * MEO・検索集客強化プラン以上、または管理者に許可。
  *
  * @param  int  $user_id  0 の場合はログイン中ユーザー
  * @return bool
@@ -10067,7 +10067,7 @@ function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
 
     $type_labels = [
         'plan_basic'       => 'AI分析・レポートプランに変更したい',
-        'plan_ai_support'  => 'MEO・口コミ対策プランに変更したい',
+        'plan_ai_support'  => 'MEO・検索集客強化プランに変更したい',
         'plan_content_seo' => 'コンテンツSEO強化プランに変更したい',
         'plan_bansou'      => 'プロ伴走・改善実行プランに変更したい',
         'plan_change'      => 'プラン変更について相談したい',

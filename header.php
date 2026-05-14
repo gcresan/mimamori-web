@@ -372,7 +372,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   </ul>
                </li>
 
-               <!-- ========== MEO（大カテゴリ・MEO・口コミ対策プラン以上 or 管理者のみ表示） ========== -->
+               <!-- ========== MEO（大カテゴリ・MEO・検索集客強化プラン以上 or 管理者のみ表示） ========== -->
                <?php if ( mimamori_can_access_meo() ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $meo_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'meo' ? ' collapsed' : ''; ?>" data-menu-key="meo">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleMeo" aria-expanded="<?php echo $sidebar_active_group === 'meo' ? 'true' : 'false'; ?>">

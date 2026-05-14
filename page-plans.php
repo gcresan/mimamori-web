@@ -418,8 +418,8 @@ get_header();
         ],
         [
             'id'           => 'ai_support',
-            'subtitle'     => 'MEO対策や口コミ獲得で地域集客を強化',
-            'name'         => 'MEO・口コミ対策プラン',
+            'subtitle'     => 'MEO・口コミ・検索状況をもとに地域からの集客を強化',
+            'name'         => 'MEO・検索集客強化プラン',
             'price'        => '22,000',
             'badge'        => '★ おすすめ',
             'coming_soon'  => false,
@@ -442,7 +442,7 @@ get_header();
             'price'        => '44,000',
             'badge'        => '近日公開予定',
             'coming_soon'  => true,
-            'cumulative'   => 'MEO・口コミ対策に加え',
+            'cumulative'   => 'MEO・検索集客強化に加え',
             'features'     => [
                 [ 'text' => '戦略に基づくキーワード設計',                                 'on' => true ],
                 [ 'text' => '検索意図を踏まえた記事構成設計',                             'on' => true ],
@@ -565,8 +565,8 @@ get_header();
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">📍</div>
                 <div class="plans-guide__item-heading">地域集客を強化したい</div>
-                <p class="plans-guide__item-text">MEO対策と口コミ獲得で<br>地元からの問い合わせを増やしたい方に</p>
-                <span class="plans-guide__item-plan plans-guide__item-plan--ai_support">MEO・口コミ対策</span>
+                <p class="plans-guide__item-text">MEO・口コミ・検索状況をもとに<br>地域からの集客を強化したい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--ai_support">MEO・検索集客強化</span>
             </div>
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">🚀</div>
