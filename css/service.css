@@ -420,6 +420,73 @@
   color: #8C8A85;
   font-size: 14px;
 }
+.service .content-area .sv-plan-options {
+  margin-top: 28px;
+  padding: 20px 24px;
+  background: #fff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+}
+.service .content-area .sv-plan-options__label {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #568184;
+  background: #F5F4F0;
+  padding: 4px 12px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+.service .content-area .sv-plan-options__item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.service .content-area .sv-plan-options__icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.service .content-area .sv-plan-options__body {
+  flex: 1;
+  min-width: 0;
+}
+.service .content-area .sv-plan-options__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #2B2B2B;
+  margin-bottom: 4px;
+}
+.service .content-area .sv-plan-options__desc {
+  font-size: 13px;
+  color: #666660;
+  line-height: 1.7;
+}
+.service .content-area .sv-plan-options__price {
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+.service .content-area .sv-plan-options__price-amount {
+  font-size: 22px;
+  font-weight: 700;
+  color: #2B2B2B;
+}
+.service .content-area .sv-plan-options__price-unit {
+  font-size: 12px;
+  color: #8C8A85;
+  margin-left: 2px;
+}
+@media (max-width: 768px) {
+  .service .content-area .sv-plan-options__item {
+    flex-wrap: wrap;
+  }
+  .service .content-area .sv-plan-options__price {
+    width: 100%;
+    text-align: left;
+    margin-top: 4px;
+  }
+}
 .service .content-area .sv-plan-notes {
   margin-top: 24px;
   padding: 16px 20px;

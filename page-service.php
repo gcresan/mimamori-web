@@ -262,6 +262,22 @@ get_header();
                 </div>
             </div>
 
+            <!-- 全プラン共通オプション -->
+            <div class="sv-plan-options">
+                <span class="sv-plan-options__label">全プラン共通オプション</span>
+                <div class="sv-plan-options__item">
+                    <div class="sv-plan-options__icon">💬</div>
+                    <div class="sv-plan-options__body">
+                        <div class="sv-plan-options__name">チャットボット機能</div>
+                        <div class="sv-plan-options__desc">サイト訪問者からの質問にAIが自動で回答。問い合わせ対応の負担を減らしながら、機会損失を防ぎます。</div>
+                    </div>
+                    <div class="sv-plan-options__price">
+                        <span class="sv-plan-options__price-amount">+11,000</span>
+                        <span class="sv-plan-options__price-unit">円 / 月（税込）</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- 補足 -->
             <ul class="sv-plan-notes">
                 <li>このサービスはホームページ制作費を含みません</li>

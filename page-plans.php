@@ -310,6 +310,75 @@ get_header();
 .plans-guide__item-plan--content_seo  { color: #B45309; background: rgba(245,158,11,0.08); }
 .plans-guide__item-plan--bansou       { color: #9333ea; background: rgba(147,51,234,0.08); }
 
+/* --- 全プラン共通オプション --- */
+.plans-options {
+    background: #fff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 32px;
+}
+.plans-options__label {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #4A5568;
+    background: #edf2f7;
+    padding: 4px 12px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+}
+.plans-options__item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.plans-options__icon {
+    font-size: 28px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.plans-options__body {
+    flex: 1;
+    min-width: 0;
+}
+.plans-options__name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 4px;
+}
+.plans-options__desc {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.6;
+}
+.plans-options__price {
+    flex-shrink: 0;
+    text-align: right;
+    white-space: nowrap;
+}
+.plans-options__price-amount {
+    font-size: 22px;
+    font-weight: 700;
+    color: #333;
+}
+.plans-options__price-unit {
+    font-size: 12px;
+    color: #888;
+    margin-left: 2px;
+}
+@media (max-width: 768px) {
+    .plans-options__item {
+        flex-wrap: wrap;
+    }
+    .plans-options__price {
+        width: 100%;
+        text-align: left;
+        margin-top: 4px;
+    }
+}
+
 /* --- お問い合わせ --- */
 .plans-contact {
     text-align: center;
@@ -552,6 +621,22 @@ get_header();
             <?php endif; ?>
         </div>
         <?php endforeach; ?>
+    </div>
+
+    <!-- 全プラン共通オプション -->
+    <div class="plans-options">
+        <span class="plans-options__label">全プラン共通オプション</span>
+        <div class="plans-options__item">
+            <div class="plans-options__icon">💬</div>
+            <div class="plans-options__body">
+                <div class="plans-options__name">チャットボット機能</div>
+                <div class="plans-options__desc">サイト訪問者からの質問にAIが自動で回答。問い合わせ対応の負担を減らしながら、機会損失を防ぎます。</div>
+            </div>
+            <div class="plans-options__price">
+                <span class="plans-options__price-amount">+11,000</span>
+                <span class="plans-options__price-unit">円 / 月（税込）</span>
+            </div>
+        </div>
     </div>
 
     <!-- 選び方ガイド -->
