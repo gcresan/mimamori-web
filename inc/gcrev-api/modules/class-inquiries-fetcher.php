@@ -422,6 +422,116 @@ class Mimamori_Inquiries_Fetcher {
                 'user_id' => [ 'required' => false, 'sanitize_callback' => 'absint' ],
             ],
         ] );
+
+        // POST /mimamori/v1/inquiries/override — 手動で valid/excluded を上書き
+        register_rest_route( 'mimamori/v1', '/inquiries/override', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_set_override' ],
+            'permission_callback' => static function () {
+                return is_user_logged_in();
+            },
+            'args' => [
+                'user_id'      => [ 'required' => false, 'sanitize_callback' => 'absint' ],
+                'year_month'   => [ 'required' => true,  'sanitize_callback' => 'sanitize_text_field' ],
+                'inquiry_key'  => [ 'required' => true,  'sanitize_callback' => 'sanitize_text_field' ],
+                'manual_status'=> [ 'required' => true,  'sanitize_callback' => 'sanitize_text_field' ],
+            ],
+        ] );
+    }
+
+    /* ================================================================
+     * 手動レビュー（valid/excluded を運営側で上書き）
+     * ================================================================ */
+
+    /** 1問い合わせを再取得しても変わらない安定キーを生成 */
+    public static function make_inquiry_key( array $item ): string {
+        $date    = (string) ( $item['date']    ?? '' );
+        $email   = (string) ( $item['email']   ?? '' );
+        $message = (string) ( $item['message'] ?? '' );
+        $name    = (string) ( $item['name']    ?? '' );
+        // メッセージ先頭200字 + name で十分一意性が出る
+        $material = $date . '|' . strtolower( trim( $email ) ) . '|' . trim( $name ) . '|' . mb_substr( $message, 0, 200 );
+        return sha1( $material );
+    }
+
+    /** 当該ユーザーの手動オーバーライド辞書を取得 */
+    public static function get_overrides( int $user_id ): array {
+        $raw = get_user_meta( $user_id, '_gcrev_inquiry_overrides', true );
+        if ( ! is_array( $raw ) ) {
+            $raw = [];
+        }
+        return $raw;
+    }
+
+    /** 単一の上書きを設定 (status: 'valid' | 'excluded' | 'auto' で削除) */
+    public static function set_override( int $user_id, string $year_month, string $key, string $status ): bool {
+        if ( ! preg_match( '/^\d{4}-\d{2}$/', $year_month ) || $key === '' ) {
+            return false;
+        }
+        $all = self::get_overrides( $user_id );
+        if ( ! isset( $all[ $year_month ] ) || ! is_array( $all[ $year_month ] ) ) {
+            $all[ $year_month ] = [];
+        }
+        if ( $status === 'auto' ) {
+            unset( $all[ $year_month ][ $key ] );
+            if ( empty( $all[ $year_month ] ) ) {
+                unset( $all[ $year_month ] );
+            }
+        } elseif ( in_array( $status, [ 'valid', 'excluded' ], true ) ) {
+            $all[ $year_month ][ $key ] = $status;
+        } else {
+            return false;
+        }
+        update_user_meta( $user_id, '_gcrev_inquiry_overrides', $all );
+        return true;
+    }
+
+    /** items 配列に manual_status / effective_valid を注入（破壊的更新） */
+    public static function apply_overrides_to_items( int $user_id, string $year_month, array $items ): array {
+        $all = self::get_overrides( $user_id );
+        $period_overrides = is_array( $all[ $year_month ] ?? null ) ? $all[ $year_month ] : [];
+        if ( empty( $period_overrides ) ) {
+            // それでも各 item に inquiry_key だけ付けておく（UI側で上書き操作可能に）
+            foreach ( $items as &$it ) {
+                if ( ! isset( $it['inquiry_key'] ) ) {
+                    $it['inquiry_key'] = self::make_inquiry_key( $it );
+                }
+                $it['manual_status']   = null;
+                $it['effective_valid'] = ! empty( $it['ai_valid'] );
+            }
+            unset( $it );
+            return $items;
+        }
+        foreach ( $items as &$it ) {
+            $key = $it['inquiry_key'] ?? self::make_inquiry_key( $it );
+            $it['inquiry_key'] = $key;
+            $manual = $period_overrides[ $key ] ?? null;
+            $it['manual_status'] = $manual;
+            if ( $manual === 'valid' ) {
+                $it['effective_valid'] = true;
+            } elseif ( $manual === 'excluded' ) {
+                $it['effective_valid'] = false;
+            } else {
+                $it['effective_valid'] = ! empty( $it['ai_valid'] );
+            }
+        }
+        unset( $it );
+        return $items;
+    }
+
+    public function rest_set_override( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = self::resolve_target_user_id( $request );
+        if ( $user_id === 0 ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'forbidden' ], 403 );
+        }
+        $ym     = (string) $request->get_param( 'year_month' );
+        $key    = (string) $request->get_param( 'inquiry_key' );
+        $status = (string) $request->get_param( 'manual_status' );
+        $ok = self::set_override( $user_id, $ym, $key, $status );
+        if ( ! $ok ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'invalid input' ], 400 );
+        }
+        return new \WP_REST_Response( [ 'success' => true ], 200 );
     }
 
     /**
@@ -682,10 +792,10 @@ class Mimamori_Inquiries_Fetcher {
         if ( ! $force ) {
             $cached = self::get_items_json( $user_id, $year_month );
             if ( is_array( $cached ) ) {
-                $items = $cached;
+                $items = self::apply_overrides_to_items( $user_id, $year_month, $cached );
                 if ( ! $include_excluded ) {
                     $items = array_values( array_filter( $items, static function ( $it ) {
-                        return ! empty( $it['ai_valid'] );
+                        return ! empty( $it['effective_valid'] );
                     } ) );
                 }
                 return [
@@ -702,9 +812,12 @@ class Mimamori_Inquiries_Fetcher {
         if ( $force && ! self::is_current_month( $year, $month ) ) {
             $cached = self::get_items_json( $user_id, $year_month );
             if ( is_array( $cached ) ) {
-                $items = $include_excluded ? $cached : array_values( array_filter( $cached, static function ( $it ) {
-                    return ! empty( $it['ai_valid'] );
-                } ) );
+                $items = self::apply_overrides_to_items( $user_id, $year_month, $cached );
+                if ( ! $include_excluded ) {
+                    $items = array_values( array_filter( $items, static function ( $it ) {
+                        return ! empty( $it['effective_valid'] );
+                    } ) );
+                }
                 return [
                     'success' => true,
                     'items'   => $items,
@@ -744,10 +857,13 @@ class Mimamori_Inquiries_Fetcher {
         $this->reconcile_monthly_summary_from_ai( $user_id, $year, $month, $classified );
         self::save_items_json( $user_id, $year_month, $classified );
 
-        // (5) フィルタして返す
-        $items = $include_excluded ? $classified : array_values( array_filter( $classified, static function ( $it ) {
-            return ! empty( $it['ai_valid'] );
-        } ) );
+        // (5) 手動オーバーライド適用 + フィルタして返す
+        $items = self::apply_overrides_to_items( $user_id, $year_month, $classified );
+        if ( ! $include_excluded ) {
+            $items = array_values( array_filter( $items, static function ( $it ) {
+                return ! empty( $it['effective_valid'] );
+            } ) );
+        }
 
         return [
             'success' => true,

@@ -74,6 +74,24 @@ get_header();
 .iq-detail { margin-top:8px; padding:8px 10px; background:#f9fafb; border-radius:6px; font-size:12px; color:#6b7280; white-space:pre-wrap; font-family:inherit; max-height:300px; overflow:auto; }
 .iq-loading, .iq-empty { padding:40px; text-align:center; color:#6b7280; }
 .iq-error { padding:16px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#991b1b; }
+.iq-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.iq-actions button {
+    font-size:11px; padding:4px 10px; border-radius:6px; cursor:pointer;
+    border:1px solid #d1d5db; background:#fff; color:#374151;
+    transition: background-color .15s ease, border-color .15s ease;
+}
+.iq-actions button:hover { background:#f9fafb; border-color:#9ca3af; }
+.iq-actions button.iq-btn-exclude { color:#b91c1c; border-color:#fca5a5; }
+.iq-actions button.iq-btn-exclude:hover { background:#fef2f2; }
+.iq-actions button.iq-btn-validate { color:#15803d; border-color:#86efac; }
+.iq-actions button.iq-btn-validate:hover { background:#f0fdf4; }
+.iq-actions button.iq-btn-reset { color:#6b7280; border-color:#e5e7eb; font-size:10px; }
+.iq-manual-mark {
+    display:inline-block; padding:1px 6px; border-radius:4px;
+    font-size:10px; font-weight:600; margin-left:4px;
+}
+.iq-manual-mark.valid    { background:#dcfce7; color:#166534; }
+.iq-manual-mark.excluded { background:#fee2e2; color:#991b1b; }
 @media (max-width: 768px) {
     .iq-table thead { display:none; }
     .iq-table tr { display:block; padding:12px; border-bottom:8px solid #f1f5f9; }
@@ -137,12 +155,17 @@ get_header();
         return d.innerHTML;
     }
 
+    // 「effective_valid」優先、無ければ ai_valid。手動オーバーライド適用後の真偽。
+    function isEffectiveValid(it) {
+        return ('effective_valid' in it) ? !!it.effective_valid : !!it.ai_valid;
+    }
+
     function renderItems(items, includeExcluded) {
         if (!items || items.length === 0) {
             content.innerHTML = '<div class="iq-empty">📭 問い合わせ情報がまだありません。</div>';
             return;
         }
-        const filtered = includeExcluded ? items : items.filter(it => it.ai_valid);
+        const filtered = includeExcluded ? items : items.filter(isEffectiveValid);
         if (filtered.length === 0) {
             content.innerHTML = '<div class="iq-empty">📭 有効な問い合わせはまだありません。</div>';
             return;
@@ -155,20 +178,41 @@ get_header();
             + '<th style="width:160px;">日時</th>'
             + '<th style="width:140px;">種別</th>'
             + '<th style="width:140px;">お名前</th>'
-            + '<th style="width:140px;">地域</th>'
+            + '<th style="width:120px;">地域</th>'
             + '<th>内容</th>'
+            + '<th style="width:130px;">操作</th>'
             + '</tr></thead><tbody>';
         filtered.forEach((it, i) => {
             const cat = it.ai_category || 'その他';
-            const valid = !!it.ai_valid;
+            const valid = isEffectiveValid(it);
+            const manual = it.manual_status || null; // 'valid' | 'excluded' | null
             const fullDate = String(it.date || '');
             const dateDisp = fullDate.slice(0,10);
             const timeDisp = fullDate.slice(11,16); // HH:MM
             const tagsHtml = (it.ai_tags || []).map(t => `<span class="iq-tag">${escapeHtml(t)}</span>`).join('');
-            html += `<tr class="${valid ? '' : 'invalid'}">`
+            const ikey = it.inquiry_key || '';
+
+            // 操作ボタン: 現状状態に応じて表示を変える
+            let actionHtml = '<div class="iq-actions">';
+            if (valid) {
+                actionHtml += `<button class="iq-btn-exclude" data-act="exclude" data-key="${escapeHtml(ikey)}">✕ 除外</button>`;
+            } else {
+                actionHtml += `<button class="iq-btn-validate" data-act="valid" data-key="${escapeHtml(ikey)}">✓ 有効</button>`;
+            }
+            if (manual) {
+                actionHtml += `<button class="iq-btn-reset" data-act="auto" data-key="${escapeHtml(ikey)}" title="AI判定に戻す">↺ AI判定</button>`;
+            }
+            actionHtml += '</div>';
+
+            // 手動マーク
+            let manualMark = '';
+            if (manual === 'valid')    manualMark = '<span class="iq-manual-mark valid">手動有効</span>';
+            if (manual === 'excluded') manualMark = '<span class="iq-manual-mark excluded">手動除外</span>';
+
+            html += `<tr class="${valid ? '' : 'invalid'}" data-key="${escapeHtml(ikey)}">`
                 + `<td data-label="No">${i+1}</td>`
                 + `<td data-label="日時">${escapeHtml(dateDisp)}<br><span style="font-size:11px;color:#6b7280;">${escapeHtml(timeDisp)}</span></td>`
-                + `<td data-label="種別"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span></td>`
+                + `<td data-label="種別"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span>${manualMark}</td>`
                 + `<td data-label="お名前">${escapeHtml(it.name || '')}</td>`
                 + `<td data-label="地域">${escapeHtml(it.ai_region || '—')}</td>`
                 + `<td data-label="内容"><details><summary>${escapeHtml(it.ai_summary || (it.message || '').slice(0,140))} ${tagsHtml}</summary>`
@@ -178,10 +222,100 @@ get_header();
                 + `<strong>送信元:</strong> ${escapeHtml(it.source || '')}<br><br>`
                 + escapeHtml(it.message || '')
                 + `</div></details></td>`
+                + `<td data-label="操作">${actionHtml}</td>`
                 + `</tr>`;
         });
         html += '</tbody></table>';
         content.innerHTML = html;
+
+        // 操作ボタンへのイベント委譲
+        content.querySelectorAll('.iq-actions button').forEach(btn => {
+            btn.addEventListener('click', onOverrideClick);
+        });
+    }
+
+    // ボタンクリック時の処理 — 即座にローカル状態更新 + サーバー POST
+    async function onOverrideClick(ev) {
+        const btn = ev.currentTarget;
+        const key = btn.getAttribute('data-key');
+        const act = btn.getAttribute('data-act'); // 'exclude' | 'valid' | 'auto'
+        if (!key) return;
+
+        const ym = monthSel.value;
+        if (!ym) return;
+
+        // ローカル更新: items 配列内の該当 item を変更
+        const cached = content.dataset.items;
+        if (!cached) return;
+        let items;
+        try { items = JSON.parse(cached); } catch(_) { return; }
+        const idx = items.findIndex(it => (it.inquiry_key || '') === key);
+        if (idx < 0) return;
+
+        const apiStatus = (act === 'exclude') ? 'excluded' : (act === 'valid' ? 'valid' : 'auto');
+
+        // ボタンを一時的に無効化
+        btn.disabled = true;
+        const origText = btn.textContent;
+        btn.textContent = '...';
+
+        try {
+            const res = await fetch(restBase + 'inquiries/override', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    year_month: ym,
+                    inquiry_key: key,
+                    manual_status: apiStatus,
+                }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                alert(json.message || '更新に失敗しました');
+                btn.disabled = false;
+                btn.textContent = origText;
+                return;
+            }
+        } catch (e) {
+            alert('通信エラー: ' + (e && e.message ? e.message : e));
+            btn.disabled = false;
+            btn.textContent = origText;
+            return;
+        }
+
+        // ローカル状態を更新
+        if (apiStatus === 'auto') {
+            items[idx].manual_status   = null;
+            items[idx].effective_valid = !!items[idx].ai_valid;
+        } else {
+            items[idx].manual_status   = apiStatus;
+            items[idx].effective_valid = (apiStatus === 'valid');
+        }
+        content.dataset.items = JSON.stringify(items);
+
+        // 集計バーと一覧を再描画
+        renderSummary(items);
+        renderItems(items, !validOnly.checked);
+    }
+
+    function renderSummary(items) {
+        const validCount = items.filter(isEffectiveValid).length;
+        const excludedCount = items.length - validCount;
+        const byCategory = {};
+        items.forEach(it => {
+            const c = it.ai_category || 'その他';
+            byCategory[c] = (byCategory[c] || 0) + 1;
+        });
+        let summaryHtml = `<span class="stat">合計<strong>${items.length}</strong></span>`
+            + `<span class="stat" style="color:#1e8e3e;">有効<strong>${validCount}</strong></span>`
+            + `<span class="stat" style="color:#b00;">除外<strong>${excludedCount}</strong></span>`;
+        Object.entries(byCategory).forEach(([cat, cnt]) => {
+            summaryHtml += `<span class="stat"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span><strong>${cnt}</strong></span>`;
+        });
+        summary.innerHTML = summaryHtml;
+        summary.style.display = 'flex';
     }
 
     function loadMonth(ym, force = false) {
@@ -198,23 +332,9 @@ get_header();
                 return;
             }
             const items = res.items || [];
-            const validCount = items.filter(it => it.ai_valid).length;
-            const excludedCount = items.length - validCount;
-            const byCategory = {};
-            items.forEach(it => {
-                const c = it.ai_category || 'その他';
-                byCategory[c] = (byCategory[c] || 0) + 1;
-            });
-            let summaryHtml = `<span class="stat">合計<strong>${items.length}</strong></span>`
-                + `<span class="stat" style="color:#1e8e3e;">有効<strong>${validCount}</strong></span>`
-                + `<span class="stat" style="color:#b00;">除外<strong>${excludedCount}</strong></span>`;
-            Object.entries(byCategory).forEach(([cat, cnt]) => {
-                summaryHtml += `<span class="stat"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span><strong>${cnt}</strong></span>`;
-            });
-            summary.innerHTML = summaryHtml;
-            summary.style.display = 'flex';
-            renderItems(items, !validOnly.checked ? true : false);
             content.dataset.items = JSON.stringify(items);
+            renderSummary(items);
+            renderItems(items, !validOnly.checked ? true : false);
         }).catch(err => {
             content.innerHTML = `<div class="iq-error">通信エラー: ${escapeHtml(err.message || err)}</div>`;
         });
