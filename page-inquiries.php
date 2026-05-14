@@ -316,6 +316,16 @@ get_header();
         });
         summary.innerHTML = summaryHtml;
         summary.style.display = 'flex';
+
+        // 月選択ドロップダウンの該当option表示も更新（合計X / 有効Y）
+        const ym = monthSel.value;
+        if (ym) {
+            const opt = monthSel.querySelector(`option[value="${ym}"]`);
+            if (opt) {
+                const cur = opt.dataset.current === '1' ? '（当月）' : '';
+                opt.textContent = `✓ ${ym}${cur}（合計${items.length} / 有効${validCount}）`;
+            }
+        }
     }
 
     function loadMonth(ym, force = false) {

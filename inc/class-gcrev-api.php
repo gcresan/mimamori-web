@@ -11633,8 +11633,13 @@ PROMPT;
         if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
             return $result;
         }
-        $enabled = (bool) get_user_meta( $user_id, '_gcrev_use_inquiries_api_cv', true );
-        if ( ! $enabled ) {
+        // 「問い合わせ集計APIプラグイン」のエンドポイントが登録されているクライアントは
+        // 自動的にこの値を優先（GA4キーイベントを上書き）。
+        // 未登録のクライアントは従来通り GA4 キーイベントをそのまま反映。
+        $endpoint_set = ( \Mimamori_Inquiries_Fetcher::get_endpoint( $user_id ) !== '' );
+        // 後方互換: 明示フラグもサポート（運営者が手動でON/OFFしたい場合）
+        $explicit_flag = (bool) get_user_meta( $user_id, '_gcrev_use_inquiries_api_cv', true );
+        if ( ! $endpoint_set && ! $explicit_flag ) {
             return $result;
         }
 

@@ -186,10 +186,12 @@ class Mimamori_Inquiries_Fetcher {
         if ( ! is_array( $items ) ) {
             return [];
         }
+        // 手動オーバーライド適用 (effective_valid を見る)
+        $items = self::apply_overrides_to_items( $user_id, $ym, $items );
         $tz = wp_timezone();
         $daily = [];
         foreach ( $items as $it ) {
-            if ( empty( $it['ai_valid'] ) ) continue;
+            if ( empty( $it['effective_valid'] ) ) continue;
             $date = (string) ( $it['date'] ?? '' );
             if ( $date === '' ) continue;
             try {
@@ -216,10 +218,12 @@ class Mimamori_Inquiries_Fetcher {
         if ( ! is_array( $items ) ) {
             return [];
         }
+        // 手動オーバーライド適用
+        $items = self::apply_overrides_to_items( $user_id, $ym, $items );
         $tz = wp_timezone();
         $hourly = [];
         foreach ( $items as $it ) {
-            if ( empty( $it['ai_valid'] ) ) continue;
+            if ( empty( $it['effective_valid'] ) ) continue;
             $date = (string) ( $it['date'] ?? '' );
             if ( $date === '' ) continue;
             try {
@@ -259,8 +263,10 @@ class Mimamori_Inquiries_Fetcher {
             $ym = $cursor->format( 'Y-m' );
             $items = self::get_items_json( $user_id, $ym );
             if ( is_array( $items ) ) {
+                // 手動オーバーライド適用
+                $items = self::apply_overrides_to_items( $user_id, $ym, $items );
                 foreach ( $items as $it ) {
-                    if ( empty( $it['ai_valid'] ) ) continue;
+                    if ( empty( $it['effective_valid'] ) ) continue;
                     $date = (string) ( $it['date'] ?? '' );
                     if ( $date === '' ) continue;
                     try {
@@ -483,7 +489,67 @@ class Mimamori_Inquiries_Fetcher {
             return false;
         }
         update_user_meta( $user_id, '_gcrev_inquiry_overrides', $all );
+
+        // 月次サマリ (wp_gcrev_inquiries.valid_count 等) を即時再計算
+        // → 月選択ドロップダウン / get_monthly_valid_count() / ダッシュボードCV が即反映される
+        self::recalc_monthly_summary_with_overrides( $user_id, $year_month );
+
         return true;
+    }
+
+    /**
+     * items_json + 手動オーバーライドから月次サマリ列を再計算して wp_gcrev_inquiries に upsert する。
+     * fetch経由ではなく、override変更時の同期更新用。
+     */
+    public static function recalc_monthly_summary_with_overrides( int $user_id, string $year_month ): void {
+        if ( ! preg_match( '/^(\d{4})-(\d{2})$/', $year_month, $m ) ) return;
+        $items = self::get_items_json( $user_id, $year_month );
+        if ( ! is_array( $items ) ) return;
+
+        $items = self::apply_overrides_to_items( $user_id, $year_month, $items );
+
+        $total = count( $items );
+        $valid = 0;
+        $reason_spam = 0;
+        $reason_test = 0;
+        $reason_sales = 0;
+
+        foreach ( $items as $it ) {
+            if ( ! empty( $it['effective_valid'] ) ) {
+                $valid++;
+                continue;
+            }
+            // 除外理由分類: ai_category と manual_status を踏まえて
+            $cat = (string) ( $it['ai_category'] ?? '' );
+            if ( ( $it['manual_status'] ?? null ) === 'excluded' ) {
+                // 手動除外 → カテゴリに従って sales 寄りに振る
+                if ( $cat === 'SPAM' )       $reason_spam++;
+                elseif ( $cat === '営業' || $cat === '配信停止' ) $reason_sales++;
+                else                         $reason_sales++;  // 手動除外はビジネス判断 = sales 扱い
+            } else {
+                if ( $cat === 'SPAM' )       $reason_spam++;
+                elseif ( $cat === '営業' || $cat === '配信停止' ) $reason_sales++;
+                else                         $reason_spam++;
+            }
+        }
+        $excluded = $total - $valid;
+
+        global $wpdb;
+        $table = self::table_name();
+        $wpdb->update(
+            $table,
+            [
+                'total'        => $total,
+                'valid_count'  => $valid,
+                'excluded'     => $excluded,
+                'reason_spam'  => $reason_spam,
+                'reason_test'  => $reason_test,
+                'reason_sales' => $reason_sales,
+            ],
+            [ 'user_id' => $user_id, 'year_month' => $year_month ],
+            [ '%d', '%d', '%d', '%d', '%d', '%d' ],
+            [ '%d', '%s' ]
+        );
     }
 
     /** items 配列に manual_status / effective_valid を注入（破壊的更新） */
