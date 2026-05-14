@@ -211,7 +211,7 @@ get_header();
                 <div class="sv-plan2 sv-plan2--recommended">
                     <span class="sv-plan2__badge">★ おすすめ</span>
                     <div class="sv-plan2__name">MEO・検索集客強化プラン</div>
-                    <div class="sv-plan2__subtitle">MEO・口コミ・検索状況をもとに<br>地域からの集客を強化</div>
+                    <div class="sv-plan2__subtitle">MEO・口コミ・検索で<br>地域集客を強化</div>
                     <div class="sv-plan2__price">
                         <span class="sv-plan2__price-amount">22,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
@@ -363,7 +363,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    まずはMEO・検索集客強化プランがおすすめです。AI分析に加えてMEO・口コミ・検索状況をもとにした地域集客の強化機能が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、プロ伴走・改善実行プランをご検討ください。
+                    まずはMEO・検索集客強化プランがおすすめです。AI分析に加えてMEO・口コミ・検索で地域集客を強化する機能が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、プロ伴走・改善実行プランをご検討ください。
                 </div>
             </div>
         </div>

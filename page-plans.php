@@ -418,7 +418,7 @@ get_header();
         ],
         [
             'id'           => 'ai_support',
-            'subtitle'     => 'MEO・口コミ・検索状況をもとに地域からの集客を強化',
+            'subtitle'     => 'MEO・口コミ・検索で地域集客を強化',
             'name'         => 'MEO・検索集客強化プラン',
             'price'        => '22,000',
             'badge'        => '★ おすすめ',
@@ -567,7 +567,7 @@ get_header();
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">📍</div>
                 <div class="plans-guide__item-heading">地域集客を強化したい</div>
-                <p class="plans-guide__item-text">MEO・口コミ・検索状況をもとに<br>地域からの集客を強化したい方に</p>
+                <p class="plans-guide__item-text">MEO・口コミ・検索で<br>地域集客を強化したい方に</p>
                 <span class="plans-guide__item-plan plans-guide__item-plan--ai_support">MEO・検索集客強化</span>
             </div>
             <div class="plans-guide__item">

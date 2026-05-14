@@ -8281,7 +8281,7 @@ function gcrev_get_service_tier_definitions(): array {
         'ai_support' => [
             'name'        => 'MEO・検索集客強化プラン',
             'monthly'     => 22000,
-            'description' => 'MEO・口コミ・検索状況をもとに地域からの集客を強化',
+            'description' => 'MEO・口コミ・検索で地域集客を強化',
         ],
         'content_seo' => [
             'name'        => 'コンテンツSEO強化プラン',
