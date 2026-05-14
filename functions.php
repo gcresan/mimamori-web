@@ -3983,6 +3983,99 @@ function mimamori_format_meo_for_chat( int $user_id ): string {
 }
 
 /**
+ * 深掘りレポート（手動アップロードHTML）の最新版をチャット用テキストに整形
+ *
+ * 「深掘りレポート（手動）」管理画面でアップロードされた HTML レポートを
+ * 平文化して AI チャットのコンテキストに常に付与する。
+ *
+ * 動作:
+ *   1. {@see Gcrev_Manual_Strategy_Report_Page::get_versions()} から最新版を取得（period DESC, created_at DESC）
+ *   2. 詳細版 HTML（detail_id）優先・無ければ概要版（simple_id）を読み込む
+ *   3. <script>/<style> 除去 → タグ除去 → 空白圧縮 → 最大 12000 文字
+ *   4. 添付ID + mtime をキャッシュキーに含め、ファイル更新時は自動失効
+ *
+ * @param int $user_id
+ * @return string チャット投入用ブロック（該当無しの場合は空文字）
+ */
+function mimamori_format_strategy_report_for_chat( int $user_id ): string {
+    if ( ! class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
+        return '';
+    }
+
+    $versions = Gcrev_Manual_Strategy_Report_Page::get_versions( $user_id );
+    if ( empty( $versions ) ) {
+        return '';
+    }
+
+    $latest = $versions[0];
+
+    // 詳細版優先 → 概要版フォールバック
+    $att_id  = (int) ( $latest['detail_id'] ?? 0 );
+    $kind    = '詳細版';
+    if ( $att_id <= 0 ) {
+        $att_id = (int) ( $latest['simple_id'] ?? 0 );
+        $kind   = '概要版';
+    }
+    if ( $att_id <= 0 ) {
+        return '';
+    }
+
+    $file = get_attached_file( $att_id );
+    if ( ! $file || ! file_exists( $file ) ) {
+        return '';
+    }
+
+    // ファイル変更時刻をキャッシュキーに含めて更新時は自動失効
+    $mtime     = (int) @filemtime( $file );
+    $cache_key = 'gcrev_strategy_chat_' . $user_id . '_' . $att_id . '_' . $mtime;
+    $cached    = get_transient( $cache_key );
+    if ( $cached !== false ) {
+        return (string) $cached;
+    }
+
+    $html = @file_get_contents( $file );
+    if ( $html === false || $html === '' ) {
+        return '';
+    }
+
+    // <script>/<style> ブロックを丸ごと除去 → タグ除去 → エンティティ復号
+    $html = preg_replace( '#<(script|style)[^>]*>.*?</\1>#is', ' ', $html );
+    $text = wp_strip_all_tags( (string) $html );
+    $text = html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+
+    // 空白圧縮（タブ・連続空白を 1 つに、3 行以上の空行を 2 行に）
+    $text = preg_replace( "/[ \t]+/u", ' ', $text );
+    $text = preg_replace( "/\n{3,}/u", "\n\n", $text );
+    $text = trim( (string) $text );
+
+    if ( $text === '' ) {
+        return '';
+    }
+
+    // 過大な内容はトリム
+    $max_len = 12000;
+    if ( mb_strlen( $text ) > $max_len ) {
+        $text = mb_substr( $text, 0, $max_len ) . "\n…（以下省略）";
+    }
+
+    $label  = trim( (string) ( $latest['label'] ?? '' ) );
+    $period = trim( (string) ( $latest['period'] ?? '' ) );
+
+    $title_parts = [ '最新版', $kind ];
+    if ( $period !== '' ) { $title_parts[] = $period; }
+    if ( $label  !== '' ) { $title_parts[] = $label; }
+
+    $header  = '【深掘りレポート（' . implode( '・', $title_parts ) . "）】\n";
+    $header .= "担当者がアップロードした最新の深掘りレポート全文です。回答時は本レポートの分析・示唆を踏まえてください。\n\n";
+
+    $output = $header . $text;
+
+    set_transient( $cache_key, $output, HOUR_IN_SECONDS );
+
+    return $output;
+}
+
+/**
  * ユーザーメッセージが順位トラッキング（SEO診断）の参照を必要とするか判定
  */
 function mimamori_needs_rank_tracker_context( string $message ): bool {
@@ -4325,6 +4418,15 @@ function mimamori_build_context_blocks(
         $monthly_block .= implode( "\n", $monthly_parts );
         $blocks[]   = $monthly_block;
         $ref_list[] = '先月の月次レポート設定（課題・目標等）';
+    }
+
+    // --- Block 2.85: 深掘りレポート（最新版を常に参照） ---
+    // 担当者が手動アップロードした深掘りレポートの最新版を全文として常に投入する。
+    // 詳細版優先・概要版フォールバック。該当なしの場合は空文字が返るためブロックは省略される。
+    $strategy_ctx = mimamori_format_strategy_report_for_chat( $user_id );
+    if ( $strategy_ctx !== '' ) {
+        $blocks[]   = $strategy_ctx;
+        $ref_list[] = '深掘りレポート（最新版・全文）';
     }
 
     // --- Block 2.9: 診断結果コンテキスト（関連質問時のみ） ---
