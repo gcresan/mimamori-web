@@ -426,6 +426,8 @@ get_header();
             'cumulative'   => 'AI分析・レポートに加え',
             'features'     => [
                 [ 'text' => 'MEOダッシュボード',          'on' => true ],
+                [ 'text' => 'MEO診断',                    'on' => true ],
+                [ 'text' => 'マップ順位計測',             'on' => true ],
                 [ 'text' => '口コミ返信機能',             'on' => true ],
                 [ 'text' => '口コミアンケート＋AI機能',   'on' => true ],
                 [ 'text' => 'MEO運用代行',                'on' => true ],

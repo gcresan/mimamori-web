@@ -218,6 +218,8 @@ get_header();
                     <div class="sv-plan2__cumulative">AI分析・レポートに加え</div>
                     <ul class="sv-plan2__features">
                         <li>MEOダッシュボード</li>
+                        <li>MEO診断</li>
+                        <li>マップ順位計測</li>
                         <li>口コミ返信機能</li>
                         <li>口コミアンケート＋AI機能</li>
                         <li>MEO運用代行</li>
