@@ -160,7 +160,7 @@ class Gcrev_AI_Client {
 
         if ($status < 200 || $status >= 300) {
             $msg = $json['error']['message'] ?? $raw;
-            throw new \Exception('Gemini API エラー (HTTP {$status}): ' . $msg);
+            throw new \Exception("Gemini API エラー (HTTP {$status}): " . $msg);
         }
 
         // finishReason をログに記録（STOP以外の場合は注意を促す）
