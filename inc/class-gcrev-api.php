@@ -1827,6 +1827,16 @@ class Gcrev_Insight_API {
     }
 
     private function dashboard_cache_set(int $user_id, string $range, array $data): void {
+        // 空データ/エラー結果のキャッシュ書込みを拒否（明示的な「再 fetch 必要状態」を維持）
+        // 旧コードでは fetcher 失敗時の空配列が 24h 居座る事故が発生していたため。
+        if ( ! $this->is_cacheable_dashboard_data( $data ) ) {
+            file_put_contents( '/tmp/gcrev_dash_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [cache_set] REJECT empty data user={$user_id}, range={$range}\n",
+                FILE_APPEND
+            );
+            return;
+        }
+
         $key = $this->cache_key_dashboard($user_id, $range);
         // 月固定期間（prev-month / prev-prev-month / last180 / last365）: 35日
         // 日次期間(last90): 48h（重い）
@@ -2126,6 +2136,7 @@ class Gcrev_Insight_API {
 
             $data   = $this->fetch_dashboard_data_internal($config, $range);
 
+            // dashboard_cache_set 内で「空データの場合は書き込みスキップ」検証あり
             $this->dashboard_cache_set($user_id, $range, $data);
 
             return new WP_REST_Response([
@@ -3289,6 +3300,50 @@ class Gcrev_Insight_API {
     // =========================================================
     // 内部ヘルパー: ダッシュボードデータ取得
     // =========================================================
+
+    /**
+     * GA4 fetcher 呼び出しを try-catch でガードする共通ヘルパー
+     *
+     * 一つの fetcher が例外を投げても他の fetcher は実行を継続する。
+     * これにより「1つの非推奨メトリクスが全分析ページのデータを消す」
+     * ような連鎖事故を防ぐ。
+     *
+     * @param callable $fn      実行する fetcher（クロージャ）
+     * @param mixed    $default 失敗時のデフォルト値
+     * @param string   $name    ログ用の識別名
+     * @return mixed
+     */
+    private function safe_ga4_fetch( callable $fn, $default, string $name ) {
+        try {
+            return $fn();
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " safe_ga4_fetch[{$name}] CAUGHT: " . mb_substr( $e->getMessage(), 0, 300 ) . "\n",
+                FILE_APPEND
+            );
+            return $default;
+        }
+    }
+
+    /**
+     * dashboard data がキャッシュに値する状態かを判定。
+     * 全主要指標が空 = fetcher 全滅の可能性が高い → キャッシュしない
+     * （次回アクセス時に再 fetch される）
+     */
+    private function is_cacheable_dashboard_data( array $data ): bool {
+        $sessions  = (int) str_replace( ',', '', (string) ( $data['sessions']  ?? '0' ) );
+        $pageviews = (int) str_replace( ',', '', (string) ( $data['pageViews'] ?? '0' ) );
+        $users     = (int) str_replace( ',', '', (string) ( $data['users']     ?? '0' ) );
+        if ( $sessions > 0 || $pageviews > 0 || $users > 0 ) {
+            return true;
+        }
+        // 基本 KPI が 0 でも、内訳に何か入っていれば「本当に低トラフィック」のケース → キャッシュ可
+        if ( ! empty( $data['devices'] ) || ! empty( $data['pages'] ) || ! empty( $data['daily'] ) ) {
+            return true;
+        }
+        return false;
+    }
+
     private function fetch_dashboard_data_internal(array $config, string $range): array {
 
         $ga4_id  = $config['ga4_id'];
@@ -3306,32 +3361,40 @@ class Gcrev_Insight_API {
             FILE_APPEND
         );
 
-        // GA4 / GSC 取得
-        $ga4_pages = $this->ga4->fetch_ga4_data($ga4_id, $dates['start'], $dates['end'], $site_url);
+        // GA4 fetcher 既定値（全 fetcher が安全に [] / 既定構造で返るよう保証）
+        $empty_summary = [
+            'pageViews' => '0', 'sessions' => '0', 'users' => '0',
+            'newUsers' => '0', 'returningUsers' => '0', 'avgDuration' => '0',
+            'conversions' => '0', 'engagedSessions' => '0', 'engagementRate' => '0%',
+            '_engagedSessions' => 0, '_engagementRate' => 0, '_pageViews' => 0,
+            '_sessions' => 0, '_users' => 0, '_newUsers' => 0, '_returningUsers' => 0,
+            '_avgDuration' => 0, '_conversions' => 0,
+        ];
 
-        $ga4_summary = $this->ga4->fetch_ga4_summary($ga4_id, $dates['start'], $dates['end']);
-        $ga4_prev    = $this->ga4->fetch_ga4_summary($ga4_id, $comparison['start'], $comparison['end']);
+        // GA4 / GSC 取得（各 fetcher を try-catch でガード — 1つの失敗が他を巻き込まない）
+        $ga4_pages   = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_data($ga4_id, $dates['start'], $dates['end'], $site_url), [], 'ga4_data' );
+        $ga4_summary = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_summary($ga4_id, $dates['start'], $dates['end']), $empty_summary, 'ga4_summary' );
+        $ga4_prev    = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_summary($ga4_id, $comparison['start'], $comparison['end']), $empty_summary, 'ga4_summary_prev' );
 
-        $daily = $this->ga4->fetch_ga4_daily_series($ga4_id, $dates['start'], $dates['end']);
+        $daily = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_daily_series($ga4_id, $dates['start'], $dates['end']), [], 'ga4_daily_series' );
 
-        $devices = $this->ga4->fetch_ga4_breakdown($ga4_id, $dates['start'], $dates['end'], 'deviceCategory', 'sessions');
-        $devices_detail      = $this->ga4->fetch_device_details($ga4_id, $dates['start'], $dates['end']);
-        $devices_prev_detail = $this->ga4->fetch_device_details($ga4_id, $comparison['start'], $comparison['end']);
-        $devices_daily_series = $this->ga4->fetch_device_daily_series($ga4_id, $dates['start'], $dates['end']);
+        $devices              = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_breakdown($ga4_id, $dates['start'], $dates['end'], 'deviceCategory', 'sessions'), [], 'devices' );
+        $devices_detail       = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_device_details($ga4_id, $dates['start'], $dates['end']), [], 'devices_detail' );
+        $devices_prev_detail  = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_device_details($ga4_id, $comparison['start'], $comparison['end']), [], 'devices_prev_detail' );
+        $devices_daily_series = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_device_daily_series($ga4_id, $dates['start'], $dates['end']), ['labels'=>[], 'mobile'=>[], 'desktop'=>[], 'tablet'=>[]], 'devices_daily_series' );
 
-        $medium  = $this->ga4->fetch_ga4_breakdown($ga4_id, $dates['start'], $dates['end'], 'sessionMedium', 'sessions');
-        $geo     = $this->ga4->fetch_ga4_breakdown($ga4_id, $dates['start'], $dates['end'], 'city', 'sessions');
-        
-        $geo_region = $this->ga4->fetch_ga4_breakdown($ga4_id, $dates['start'], $dates['end'], 'region', 'sessions');
-        $age     = $this->ga4->fetch_ga4_age_breakdown($ga4_id, $dates['start'], $dates['end']);
-        $age_demographics      = $this->ga4->fetch_age_demographics($ga4_id, $dates['start'], $dates['end']);
-        $age_prev_demographics = $this->ga4->fetch_age_demographics($ga4_id, $comparison['start'], $comparison['end']);
+        $medium     = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_breakdown($ga4_id, $dates['start'], $dates['end'], 'sessionMedium', 'sessions'), [], 'medium' );
+        $geo        = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_breakdown($ga4_id, $dates['start'], $dates['end'], 'city', 'sessions'), [], 'geo' );
+        $geo_region = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_breakdown($ga4_id, $dates['start'], $dates['end'], 'region', 'sessions'), [], 'geo_region' );
+        $age        = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_ga4_age_breakdown($ga4_id, $dates['start'], $dates['end']), [], 'age' );
+        $age_demographics      = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_age_demographics($ga4_id, $dates['start'], $dates['end']), [], 'age_demographics' );
+        $age_prev_demographics = $this->safe_ga4_fetch( fn() => $this->ga4->fetch_age_demographics($ga4_id, $comparison['start'], $comparison['end']), [], 'age_demographics_prev' );
 
         // 性別 × 年齢（Google Signals 必須）
-        $gender_age_cross = $this->ga4->fetch_ga4_gender_age_cross(
-            $ga4_id,
-            $dates['start'],
-            $dates['end']
+        $gender_age_cross = $this->safe_ga4_fetch(
+            fn() => $this->ga4->fetch_ga4_gender_age_cross( $ga4_id, $dates['start'], $dates['end'] ),
+            [],
+            'gender_age_cross'
         );
 
 
@@ -3362,7 +3425,7 @@ class Gcrev_Insight_API {
         }
 
 
-        $gsc_data = $this->gsc->fetch_gsc_data($gsc_url, $dates['start'], $dates['end']);
+        $gsc_data = $this->safe_ga4_fetch( fn() => $this->gsc->fetch_gsc_data($gsc_url, $dates['start'], $dates['end']), ['keywords'=>[], 'total'=>['clicks'=>0,'impressions'=>0,'ctr'=>0,'position'=>0]], 'gsc_data' );
 
         // 変化率（%）
         $trends = $this->build_trends($ga4_summary, $ga4_prev);
@@ -3400,13 +3463,13 @@ class Gcrev_Insight_API {
             ],
 
             // KPI（ダッシュボード用）
-            'pageViews'      => $ga4_summary['pageViews'],
-            'sessions'       => $ga4_summary['sessions'],
-            'users'          => $ga4_summary['users'],
-            'newUsers'       => $ga4_summary['newUsers'],
-            'returningUsers' => $ga4_summary['returningUsers'],
-            'avgDuration'    => $ga4_summary['avgDuration'],
-            'conversions'    => $ga4_summary['conversions'] ?? '0',
+            'pageViews'      => $ga4_summary['pageViews']      ?? '0',
+            'sessions'       => $ga4_summary['sessions']       ?? '0',
+            'users'          => $ga4_summary['users']          ?? '0',
+            'newUsers'       => $ga4_summary['newUsers']       ?? '0',
+            'returningUsers' => $ga4_summary['returningUsers'] ?? '0',
+            'avgDuration'    => $ga4_summary['avgDuration']    ?? '0',
+            'conversions'    => $ga4_summary['conversions']    ?? '0',
 
             // 増減（前期比）
             'trends' => $trends,
