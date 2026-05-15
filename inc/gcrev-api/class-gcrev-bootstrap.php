@@ -838,6 +838,21 @@ class Gcrev_Bootstrap {
                     date( 'Y-m-d H:i:s' ) . " [PostPublish] post_id={$post_id} user={$uid} posted OK\n",
                     FILE_APPEND
                 );
+
+                // Meta 連動投稿: 利用者が事前にチェックを入れたフラグに従う
+                if ( class_exists( 'Gcrev_Gbp_Crosspost' ) && ( ! empty( $post['crosspost_facebook'] ) || ! empty( $post['crosspost_instagram'] ) ) ) {
+                    $crosspost = Gcrev_Gbp_Crosspost::trigger( $post );
+                    if ( $crosspost['triggered'] && $crosspost['social_post_id'] > 0 ) {
+                        $wpdb->update( $table, [
+                            'social_post_id' => $crosspost['social_post_id'],
+                            'updated_at'     => current_time( 'mysql' ),
+                        ], [ 'id' => $post_id ] );
+                    }
+                    file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " [PostPublish] post_id={$post_id} user={$uid} crosspost status={$crosspost['status']} msg={$crosspost['message']}\n",
+                        FILE_APPEND
+                    );
+                }
             } else {
                 $retry = (int) $post['retry_count'] + 1;
                 $new_status = $retry >= 3 ? 'failed' : 'scheduled';
@@ -1097,6 +1112,18 @@ class Gcrev_Bootstrap {
                 $success++;
                 $log .= date( 'Y-m-d H:i:s' ) . " [ManualPublish] post_id={$post_id} 成功\n";
                 $details[] = [ 'id' => $post_id, 'result' => 'posted' ];
+
+                // Meta 連動投稿（利用者が事前にチェックを入れたフラグに従う）
+                if ( class_exists( 'Gcrev_Gbp_Crosspost' ) && ( ! empty( $post['crosspost_facebook'] ) || ! empty( $post['crosspost_instagram'] ) ) ) {
+                    $crosspost = \Gcrev_Gbp_Crosspost::trigger( $post );
+                    if ( $crosspost['triggered'] && $crosspost['social_post_id'] > 0 ) {
+                        $wpdb->update( $table, [
+                            'social_post_id' => $crosspost['social_post_id'],
+                            'updated_at'     => current_time( 'mysql' ),
+                        ], [ 'id' => $post_id ] );
+                    }
+                    $log .= date( 'Y-m-d H:i:s' ) . " [ManualPublish] post_id={$post_id} crosspost status={$crosspost['status']} msg={$crosspost['message']}\n";
+                }
             } else {
                 $retry      = (int) $post['retry_count'] + 1;
                 $new_status = $retry >= 3 ? 'failed' : 'scheduled';

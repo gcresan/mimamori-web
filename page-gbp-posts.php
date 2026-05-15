@@ -82,6 +82,11 @@ wp_enqueue_media();
 .gp-card-meta { font-size:11px; color:#94a3b8; }
 .gp-card-meta span { margin-right:12px; }
 .gp-card-error { font-size:12px; color:#dc2626; margin-top:6px; background:#fef2f2; padding:6px 10px; border-radius:6px; }
+.gp-card-crosspost { font-size:11px; color:#64748b; margin-top:6px; }
+.gp-cross-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; margin-right:4px; }
+.gp-cross-badge.cross-ok      { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+.gp-cross-badge.cross-fail    { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+.gp-cross-badge.cross-pending { background:#fefce8; color:#a16207; border:1px solid #fde68a; }
 
 .gp-card-actions { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
 .gp-card-actions .gp-btn { padding:4px 10px; font-size:11px; }
@@ -435,6 +440,19 @@ wp_enqueue_media();
                     <input type="hidden" id="imageUrl" value="">
                 </div>
 
+                <div class="gp-form-group" id="crosspostGroup">
+                    <label>同時投稿先（任意）</label>
+                    <div class="gp-checkbox-group" style="display:flex; flex-direction:column; gap:8px; padding:10px 12px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:6px;">
+                        <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
+                            <input type="checkbox" id="crosspostFacebook"> Facebookページにも投稿する
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
+                            <input type="checkbox" id="crosspostInstagram"> Instagramにも投稿する <span style="color:#94a3b8; font-size:12px;">（画像必須）</span>
+                        </label>
+                        <p id="crosspostHint" style="margin:0; font-size:12px; color:#64748b; line-height:1.5;"></p>
+                    </div>
+                </div>
+
                 <div class="gp-form-group">
                     <label>投稿タイミング</label>
                     <div class="gp-radio-group">
@@ -523,6 +541,9 @@ wp_enqueue_media();
     var currentPage   = 1;
     var totalPages    = 1;
     var editingPostId = null;
+    // Meta 連携状態のキャッシュ（モーダル表示時に一度フェッチ）
+    var metaConnections = null;
+    var metaConnectionsFetchedAt = 0;
     var mediaFrame    = null;
 
     // ===== Utilities =====
@@ -621,6 +642,36 @@ wp_enqueue_media();
             errorHtml = '<div class="gp-card-error">⚠ ' + escHtml(p.error_message) + '</div>';
         }
 
+        // 同時投稿（Facebook / Instagram）の状態バッジ
+        var crosspostHtml = '';
+        var wantFb = (parseInt(p.crosspost_facebook) === 1);
+        var wantIg = (parseInt(p.crosspost_instagram) === 1);
+        var results = p.crosspost_results || {};
+        if (wantFb || wantIg) {
+            var badges = [];
+            if (wantFb) {
+                if (results.facebook) {
+                    badges.push(results.facebook.status === 'success'
+                        ? '<span class="gp-cross-badge cross-ok">✅ Facebook</span>'
+                        : '<span class="gp-cross-badge cross-fail" title="' + escHtml(results.facebook.message || '') + '">❌ Facebook</span>');
+                } else {
+                    badges.push('<span class="gp-cross-badge cross-pending">⏳ Facebook</span>');
+                }
+            }
+            if (wantIg) {
+                if (results.instagram) {
+                    badges.push(results.instagram.status === 'success'
+                        ? '<span class="gp-cross-badge cross-ok">✅ Instagram</span>'
+                        : '<span class="gp-cross-badge cross-fail" title="' + escHtml(results.instagram.message || '') + '">❌ Instagram</span>');
+                } else {
+                    badges.push('<span class="gp-cross-badge cross-pending">⏳ Instagram</span>');
+                }
+            }
+            if (badges.length) {
+                crosspostHtml = '<div class="gp-card-crosspost">同時投稿: ' + badges.join(' ') + '</div>';
+            }
+        }
+
         var actions = '';
         actions += '<button class="gp-btn" data-action="edit" data-post-id="' + p.id + '">編集</button>';
         actions += '<button class="gp-btn" data-action="duplicate" data-post-id="' + p.id + '">複製</button>';
@@ -653,6 +704,7 @@ wp_enqueue_media();
             +   '<div class="gp-card-content">'
             +     '<div class="gp-card-summary">' + escHtml(summaryText) + '</div>'
             +     '<div class="gp-card-meta">' + metaHtml + '</div>'
+            +     crosspostHtml
             +     errorHtml
             +   '</div>'
             + '</div>'
@@ -693,11 +745,14 @@ wp_enqueue_media();
         document.getElementById('imageAttachmentId').value = '';
         document.getElementById('imageUrl').value = '';
         document.getElementById('imagePreview').style.display = 'none';
+        document.getElementById('crosspostFacebook').checked = false;
+        document.getElementById('crosspostInstagram').checked = false;
         document.querySelector('input[name="postAction"][value="draft"]').checked = true;
         document.getElementById('scheduledAt').value = '';
         toggleTopicFields();
         toggleCtaUrl();
         toggleSchedule();
+        refreshCrosspostUI();
         document.getElementById('postModal').style.display = 'flex';
     }
 
@@ -726,6 +781,8 @@ wp_enqueue_media();
             } else {
                 document.getElementById('imagePreview').style.display = 'none';
             }
+            document.getElementById('crosspostFacebook').checked = (parseInt(post.crosspost_facebook) === 1);
+            document.getElementById('crosspostInstagram').checked = (parseInt(post.crosspost_instagram) === 1);
             if (post.status === 'scheduled') {
                 document.querySelector('input[name="postAction"][value="schedule"]').checked = true;
                 document.getElementById('scheduledAt').value = (post.scheduled_at || '').substring(0, 16).replace(' ', 'T');
@@ -736,8 +793,66 @@ wp_enqueue_media();
             toggleTopicFields();
             toggleCtaUrl();
             toggleSchedule();
+            refreshCrosspostUI();
             document.getElementById('postModal').style.display = 'flex';
         });
+    }
+
+    // ===== Crosspost UI =====
+    function fetchMetaConnections(force) {
+        // 5分キャッシュ
+        if (!force && metaConnections && (Date.now() - metaConnectionsFetchedAt) < 5 * 60 * 1000) {
+            return Promise.resolve(metaConnections);
+        }
+        return fetchJson(restBase + 'social/connections').then(function(d) {
+            metaConnections = d || {};
+            metaConnectionsFetchedAt = Date.now();
+            return metaConnections;
+        }).catch(function() {
+            return { platforms: { facebook: false, instagram: false } };
+        });
+    }
+
+    function refreshCrosspostUI() {
+        var fbBox = document.getElementById('crosspostFacebook');
+        var igBox = document.getElementById('crosspostInstagram');
+        var hint  = document.getElementById('crosspostHint');
+        if (!fbBox || !igBox || !hint) return;
+
+        // 一旦無効化、フェッチ中表示
+        fbBox.disabled = true;
+        igBox.disabled = true;
+        hint.textContent = 'Meta連携状態を確認中...';
+
+        fetchMetaConnections(false).then(function(data) {
+            var p = (data && data.platforms) ? data.platforms : { facebook: false, instagram: false };
+            var fbOk = !!p.facebook;
+            var igOk = !!p.instagram;
+            fbBox.disabled = !fbOk;
+            igBox.disabled = !igOk;
+            if (!fbOk) fbBox.checked = false;
+            if (!igOk) igBox.checked = false;
+
+            if (!fbOk && !igOk) {
+                hint.innerHTML = 'Facebook / Instagramへ投稿するには、先に <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面でMeta連携を行ってください。';
+            } else if (!fbOk) {
+                hint.innerHTML = 'Facebookページが未接続です。接続するには <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面へ。';
+            } else if (!igOk) {
+                hint.innerHTML = 'Instagramビジネスアカウントが未接続です。接続するには <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面へ。';
+            } else {
+                hint.textContent = '※ Instagramはキャプション付き画像投稿になります（テキストのみは不可）。';
+            }
+            updateInstagramImageHint();
+        });
+    }
+
+    function updateInstagramImageHint() {
+        var igBox = document.getElementById('crosspostInstagram');
+        var hint  = document.getElementById('crosspostHint');
+        if (!igBox || !hint || igBox.disabled) return;
+        if (igBox.checked && !document.getElementById('imageUrl').value) {
+            hint.innerHTML = '<span style="color:#c0392b;">⚠ Instagramへ同時投稿するには画像の設定が必要です。</span>';
+        }
     }
 
     function closeModal() {
@@ -750,6 +865,17 @@ wp_enqueue_media();
     function submitPost() {
         var btn = document.getElementById('modalSubmitBtn');
         var origText = btn.textContent;
+
+        var crossFb = document.getElementById('crosspostFacebook').checked && !document.getElementById('crosspostFacebook').disabled;
+        var crossIg = document.getElementById('crosspostInstagram').checked && !document.getElementById('crosspostInstagram').disabled;
+        var imgUrl  = document.getElementById('imageUrl').value || '';
+
+        // Instagram 同時投稿は画像必須（クライアント側の事前チェック）
+        if (crossIg && !imgUrl) {
+            showToast('Instagramへ同時投稿するには画像の設定が必要です。', 'error');
+            return;
+        }
+
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-sm"></span> 処理中...';
 
@@ -765,8 +891,10 @@ wp_enqueue_media();
             event_start: (document.getElementById('eventStart').value || '').replace('T', ' '),
             event_end: (document.getElementById('eventEnd').value || '').replace('T', ' '),
             image_attachment_id: document.getElementById('imageAttachmentId').value,
-            image_url: document.getElementById('imageUrl').value,
+            image_url: imgUrl,
             scheduled_at: (document.getElementById('scheduledAt').value || '').replace('T', ' '),
+            crosspost_facebook: crossFb ? 1 : 0,
+            crosspost_instagram: crossIg ? 1 : 0,
         };
 
         var url, method;
@@ -791,7 +919,11 @@ wp_enqueue_media();
             btn.disabled = false;
             btn.textContent = origText;
             if (data.success) {
-                showToast(data.message || '保存しました。');
+                if (data.crosspost && data.crosspost.triggered) {
+                    showCrosspostResultModal('Googleビジネスプロフィール', data.crosspost);
+                } else {
+                    showToast(data.message || '保存しました。');
+                }
                 closeModal();
                 loadSummary();
                 loadPosts();
@@ -810,10 +942,46 @@ wp_enqueue_media();
     function performAction(actionName, postId, confirmMsg) {
         if (confirmMsg && !confirm(confirmMsg)) return;
         fetchJson(restBase + 'meo/posts/' + postId + '/' + actionName, { method: 'POST' }).then(function(data) {
-            showToast(data.message || (data.success ? '完了しました。' : 'エラー'), data.success ? 'success' : 'error');
+            if (data.success && data.crosspost && data.crosspost.triggered) {
+                showCrosspostResultModal('Googleビジネスプロフィール', data.crosspost);
+            } else {
+                showToast(data.message || (data.success ? '完了しました。' : 'エラー'), data.success ? 'success' : 'error');
+            }
             loadSummary();
             loadPosts();
         });
+    }
+
+    // ===== Crosspost result display =====
+    function showCrosspostResultModal(gbpLabel, crosspost) {
+        var lines = ['✅ ' + gbpLabel + '：投稿しました'];
+        if (crosspost && crosspost.results) {
+            Object.keys(crosspost.results).forEach(function(platform) {
+                var r = crosspost.results[platform];
+                var label = platformLabel(platform);
+                if (r.status === 'success') {
+                    lines.push('✅ ' + label + '：投稿しました');
+                } else {
+                    lines.push('❌ ' + label + '：投稿失敗（' + (r.message || 'エラー') + '）');
+                }
+            });
+        }
+        if (crosspost && crosspost.skipped) {
+            Object.keys(crosspost.skipped).forEach(function(platform) {
+                lines.push('⚠️ ' + platformLabel(platform) + '：' + crosspost.skipped[platform]);
+            });
+        }
+        showToast(lines.join('\n'), (crosspost.status === 'failed') ? 'error' : 'success');
+    }
+
+    function platformLabel(platform) {
+        switch (platform) {
+            case 'facebook': return 'Facebookページ';
+            case 'instagram': return 'Instagram';
+            case 'threads': return 'Threads';
+            case 'line': return 'LINE';
+            default: return platform;
+        }
     }
 
     // ===== Image Picker =====
@@ -1049,7 +1217,11 @@ wp_enqueue_media();
         document.getElementById('imageAttachmentId').value = '';
         document.getElementById('imageUrl').value = '';
         document.getElementById('imagePreview').style.display = 'none';
+        // 画像を外したら Instagram の警告を更新
+        updateInstagramImageHint();
     });
+    // Crosspost: Instagram チェック ON の時に画像が無ければ警告を出す
+    document.getElementById('crosspostInstagram').addEventListener('change', updateInstagramImageHint);
 
     // CSV
     document.getElementById('csvImportBtn').addEventListener('click', openCsvModal);

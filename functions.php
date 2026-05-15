@@ -1371,6 +1371,7 @@ $gcrev_social_files = [
     $gcrev_inc_path . 'gcrev-api/modules/social/class-meta-client.php',
     $gcrev_inc_path . 'gcrev-api/modules/social/class-line-client.php',
     $gcrev_inc_path . 'gcrev-api/modules/social/class-social-poster.php',
+    $gcrev_inc_path . 'gcrev-api/modules/social/class-gbp-crosspost.php',
 ];
 foreach ( $gcrev_social_files as $gcrev_social_file ) {
     if ( file_exists( $gcrev_social_file ) ) {
@@ -7566,6 +7567,8 @@ function gcrev_gbp_posts_create_table(): void {
     $table           = $wpdb->prefix . 'gcrev_gbp_posts';
     $charset_collate = $wpdb->get_charset_collate();
 
+    // crosspost_facebook / crosspost_instagram / social_post_id は GBP 投稿に紐付く
+    // Meta 連動投稿のチェック状態と実投稿レコード（gcrev_social_posts.id）への参照。
     $sql = "CREATE TABLE {$table} (
         id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) UNSIGNED NOT NULL,
@@ -7591,12 +7594,16 @@ function gcrev_gbp_posts_create_table(): void {
         ai_image_error VARCHAR(500) NULL,
         ai_image_generated_at DATETIME NULL,
         ai_image_manual_override TINYINT(1) NOT NULL DEFAULT 0,
+        crosspost_facebook TINYINT(1) NOT NULL DEFAULT 0,
+        crosspost_instagram TINYINT(1) NOT NULL DEFAULT 0,
+        social_post_id BIGINT(20) UNSIGNED NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY user_status (user_id, status),
         KEY status_scheduled (status, scheduled_at),
-        KEY ai_status (user_id, ai_image_status)
+        KEY ai_status (user_id, ai_image_status),
+        KEY social_post_id (social_post_id)
     ) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';

@@ -21412,6 +21412,15 @@ PROMPT;
             ARRAY_A
         );
 
+        // Meta 連動投稿の結果を各 GBP 投稿に紐付け（UI 履歴で表示する用）
+        if ( ! empty( $posts ) && class_exists( 'Gcrev_Gbp_Crosspost' ) ) {
+            foreach ( $posts as &$p ) {
+                $sid = (int) ( $p['social_post_id'] ?? 0 );
+                $p['crosspost_results'] = $sid > 0 ? Gcrev_Gbp_Crosspost::get_results_summary( $sid ) : [];
+            }
+            unset( $p );
+        }
+
         return new \WP_REST_Response( [
             'success' => true,
             'posts'   => $posts ?: [],
@@ -21472,6 +21481,8 @@ PROMPT;
             'event_end'          => sanitize_text_field( $request->get_param( 'event_end' ) ?: '' ) ?: null,
             'image_url'          => esc_url_raw( $request->get_param( 'image_url' ) ?: '' ) ?: null,
             'image_attachment_id' => absint( $request->get_param( 'image_attachment_id' ) ?: 0 ) ?: null,
+            'crosspost_facebook'  => $request->get_param( 'crosspost_facebook' ) ? 1 : 0,
+            'crosspost_instagram' => $request->get_param( 'crosspost_instagram' ) ? 1 : 0,
             'status'             => 'draft',
             'scheduled_at'       => null,
             'created_at'         => $now,
@@ -21490,6 +21501,15 @@ PROMPT;
         // 画像URLをattachment_idから解決
         if ( empty( $data['image_url'] ) && ! empty( $data['image_attachment_id'] ) ) {
             $data['image_url'] = wp_get_attachment_url( $data['image_attachment_id'] ) ?: null;
+        }
+
+        // Instagram 連動チェック時は画像必須（バックエンド側でも担保）
+        if ( $data['crosspost_instagram'] === 1 && empty( $data['image_url'] ) ) {
+            delete_transient( $lock_key );
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => 'Instagramへ同時投稿するには画像の設定が必要です。',
+            ], 400 );
         }
 
         if ( $action === 'schedule' ) {
@@ -21524,12 +21544,26 @@ PROMPT;
                 ], [ 'id' => $post_id ] );
             }
 
+            // Meta 連動投稿（GBP 成功時のみ。利用者が明示的にチェックを入れた場合のみ）
+            $crosspost = [ 'triggered' => false, 'message' => '', 'status' => 'not_triggered', 'social_post_id' => 0, 'results' => [], 'skipped' => [] ];
+            if ( $result['success'] && class_exists( 'Gcrev_Gbp_Crosspost' ) ) {
+                $row_for_xpost = array_merge( $data, [ 'id' => $post_id ] );
+                $crosspost = Gcrev_Gbp_Crosspost::trigger( $row_for_xpost );
+                if ( $crosspost['triggered'] && $crosspost['social_post_id'] > 0 ) {
+                    $wpdb->update( $table, [
+                        'social_post_id' => $crosspost['social_post_id'],
+                        'updated_at'     => current_time( 'mysql' ),
+                    ], [ 'id' => $post_id ] );
+                }
+            }
+
             delete_transient( $lock_key );
             return new \WP_REST_Response( [
-                'success' => $result['success'],
-                'post_id' => $post_id,
-                'message' => $result['success'] ? '投稿しました。' : $result['message'],
-            ], $result['success'] ? 200 : 200 );
+                'success'   => $result['success'],
+                'post_id'   => $post_id,
+                'message'   => $result['success'] ? '投稿しました。' : $result['message'],
+                'crosspost' => $crosspost,
+            ], 200 );
         }
 
         // draft or schedule
@@ -21572,6 +21606,8 @@ PROMPT;
             'event_end'          => sanitize_text_field( $request->get_param( 'event_end' ) ?: '' ) ?: null,
             'image_url'          => esc_url_raw( $request->get_param( 'image_url' ) ?: '' ) ?: null,
             'image_attachment_id' => absint( $request->get_param( 'image_attachment_id' ) ?: 0 ) ?: null,
+            'crosspost_facebook'  => $request->get_param( 'crosspost_facebook' ) ? 1 : 0,
+            'crosspost_instagram' => $request->get_param( 'crosspost_instagram' ) ? 1 : 0,
             'updated_at'         => current_time( 'mysql' ),
         ];
 
@@ -21582,6 +21618,14 @@ PROMPT;
         // 画像URLをattachment_idから解決
         if ( empty( $update['image_url'] ) && ! empty( $update['image_attachment_id'] ) ) {
             $update['image_url'] = wp_get_attachment_url( $update['image_attachment_id'] ) ?: null;
+        }
+
+        // Instagram 連動チェック時は画像必須
+        if ( $update['crosspost_instagram'] === 1 && empty( $update['image_url'] ) ) {
+            return new \WP_REST_Response( [
+                'success' => false,
+                'message' => 'Instagramへ同時投稿するには画像の設定が必要です。',
+            ], 400 );
         }
 
         if ( $action === 'schedule' ) {
@@ -21706,10 +21750,23 @@ PROMPT;
             ], [ 'id' => $post_id ] );
         }
 
+        // Meta 連動投稿（GBP 成功時のみ。利用者が事前にチェックを入れたフラグに従う）
+        $crosspost = [ 'triggered' => false, 'message' => '', 'status' => 'not_triggered', 'social_post_id' => 0, 'results' => [], 'skipped' => [] ];
+        if ( $result['success'] && class_exists( 'Gcrev_Gbp_Crosspost' ) ) {
+            $crosspost = Gcrev_Gbp_Crosspost::trigger( $existing );
+            if ( $crosspost['triggered'] && $crosspost['social_post_id'] > 0 ) {
+                $wpdb->update( $table, [
+                    'social_post_id' => $crosspost['social_post_id'],
+                    'updated_at'     => current_time( 'mysql' ),
+                ], [ 'id' => $post_id ] );
+            }
+        }
+
         delete_transient( $lock_key );
         return new \WP_REST_Response( [
-            'success' => $result['success'],
-            'message' => $result['success'] ? '投稿しました。' : $result['message'],
+            'success'   => $result['success'],
+            'message'   => $result['success'] ? '投稿しました。' : $result['message'],
+            'crosspost' => $crosspost,
         ], 200 );
     }
 
