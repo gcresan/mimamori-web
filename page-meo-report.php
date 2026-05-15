@@ -270,6 +270,19 @@ $render_pct = static function ( int $cur, int $prev ): string {
     <!-- キーワード分析 -->
     <div class="mr-section">
         <h2>🔎 GBP 検索キーワード TOP20</h2>
+        <?php
+        $kw_info = is_array( $report['keywords_info'] ?? null ) ? $report['keywords_info'] : [];
+        $kw_requested = (string) ( $kw_info['requested'] ?? '' );
+        $kw_served    = (string) ( $kw_info['served']    ?? '' );
+        $kw_fallback  = ( $kw_info['has_any_data'] ?? false ) && ( $kw_info['found'] ?? false ) === false;
+        ?>
+        <?php if ( $kw_fallback && $kw_served !== '' ) : ?>
+            <p style="margin:0 0 12px;padding:10px 14px;background:#fef3c7;border-left:3px solid #d97706;color:#92400e;font-size:13px;line-height:1.7;">
+                ⚠️ <strong><?php echo esc_html( $kw_requested ); ?></strong> 月の GBP 検索キーワードはまだ取得できていません
+                (Google Business Profile のパフォーマンスデータは通常 1 ヶ月前後の遅延があります)。
+                直近で取得済みの <strong><?php echo esc_html( $kw_served ); ?></strong> 月のデータを参考として表示しています。
+            </p>
+        <?php endif; ?>
         <?php if ( empty( $report['keywords'] ) ) : ?>
             <p style="color:#94a3b8">データなし (GBP 検索キーワード未取得 or 期間内データなし)</p>
         <?php else : ?>

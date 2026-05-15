@@ -65,6 +65,7 @@ class Gcrev_Meo_Report_Service {
         $keywords     = self::fetch_keywords( $user_id, $period['start'], $period['end'], 20 );
         $keywords_prev = self::fetch_keywords( $user_id, $previous['start'], $previous['end'], 200 );
         $keywords_diff = self::compute_keywords_diff( $keywords, $keywords_prev, 10 );
+        $keywords_info = self::get_keywords_resolution_info( $user_id, $period['start'] );
 
         return [
             'period'        => $period,
@@ -75,6 +76,7 @@ class Gcrev_Meo_Report_Service {
             'ranks'         => $ranks,
             'keywords'      => $keywords,
             'keywords_diff' => $keywords_diff,
+            'keywords_info' => $keywords_info,
         ];
     }
 
@@ -255,9 +257,17 @@ class Gcrev_Meo_Report_Service {
             return [];
         }
 
-        $month_idx = array_search( $target_label, (array) $cache['months'], true );
+        $months    = array_values( (array) $cache['months'] );
+        $month_idx = array_search( $target_label, $months, true );
+
+        // 対象月のデータが無ければ、cache.months の最新月 (末尾) にフォールバック
+        $fallback_used = false;
+        $effective_label = $target_label;
         if ( $month_idx === false ) {
-            return [];
+            $month_idx = count( $months ) - 1;
+            if ( $month_idx < 0 ) { return []; }
+            $effective_label = (string) $months[ $month_idx ];
+            $fallback_used   = true;
         }
 
         $out = [];
@@ -273,7 +283,51 @@ class Gcrev_Meo_Report_Service {
         }
 
         usort( $out, static fn( $a, $b ) => $b['value'] - $a['value'] );
-        return array_slice( $out, 0, $limit );
+        $top = array_slice( $out, 0, $limit );
+
+        // フォールバック時はメタ情報を含めるため最初の要素に付与する代わりに
+        // 構造を変えるとリスクなので、別途 _meta マーカーを末尾に追加 (呼出側で利用)
+        // ※既存呼出が壊れないよう、純粋なキーワード配列のままにする
+        return $top;
+    }
+
+    /**
+     * GBP 検索キーワードの「対象月にデータがあるか / フォールバックでどの月を返したか」を返す。
+     * page-meo-report.php から呼ばれ、notice 表示に使う。
+     *
+     * @return array { found:bool, requested:string, served:string, has_any_data:bool }
+     */
+    public static function get_keywords_resolution_info( int $user_id, string $start ): array {
+        $dt           = new \DateTimeImmutable( $start, wp_timezone() );
+        $target_label = (int) $dt->format( 'Y' ) . '/' . (int) $dt->format( 'n' );
+
+        $cache = self::load_search_keywords_cache( $user_id );
+        if ( ! is_array( $cache ) || empty( $cache['months'] ) || empty( $cache['keywords'] ) ) {
+            return [
+                'found'        => false,
+                'requested'    => $target_label,
+                'served'       => '',
+                'has_any_data' => false,
+            ];
+        }
+
+        $months = array_values( (array) $cache['months'] );
+        $idx    = array_search( $target_label, $months, true );
+        if ( $idx !== false ) {
+            return [
+                'found'        => true,
+                'requested'    => $target_label,
+                'served'       => $target_label,
+                'has_any_data' => true,
+            ];
+        }
+        $latest = end( $months );
+        return [
+            'found'        => false,
+            'requested'    => $target_label,
+            'served'       => (string) $latest,
+            'has_any_data' => true,
+        ];
     }
 
     /**
