@@ -105,6 +105,18 @@ class Gcrev_Bootstrap {
         // schedule (initで「未登録なら登録」※現状と同じ)
         add_action('init', [__CLASS__, 'maybe_schedule_events']);
 
+        // KUSANAGI/nginx 環境では WP コアの spawn_cron() が wp_remote_post を
+        // 内部で呼ぶ際に TLS ハンドシェイクで詰まり、ユーザー画面の TTFB が 30 秒
+        // 近くハングする症状があった（blocking=false でも cURL が接続段階を
+        // ブロックする）。
+        //
+        // ユーザー向けフロントページ（管理画面・REST・AJAX・wp-cron.php 直叩き
+        // 以外）では「ready jobs を空配列」で返し、wp_cron() → spawn_cron() の
+        // 連鎖を発火させないようにする。
+        // cron 自体は管理画面アクセス・REST/AJAX・KUSANAGI のシステム crontab
+        // からの /wp-cron.php 直叩きで発火するため、機能上の問題は出ない。
+        add_filter('pre_get_ready_cron_jobs', [__CLASS__, 'skip_cron_on_user_facing_request'], 99, 1);
+
         // 任意：テーマ切替時に掃除（挙動を変えたくなければ削ってOK）
         add_action('switch_theme', [__CLASS__, 'unschedule_events']);
 
@@ -665,15 +677,46 @@ class Gcrev_Bootstrap {
     }
 
     /**
+     * pre_get_ready_cron_jobs フィルタ:
+     * ユーザー向けフロントページでは ready jobs を空配列で返し、
+     * wp_cron() → spawn_cron() → wp_remote_post() の連鎖を発火させない。
+     * cron は管理画面 / REST / AJAX / wp-cron.php 直叩き経由で実行される。
+     */
+    public static function skip_cron_on_user_facing_request( $pre ) {
+        // 既に他のフィルタで決定されていればそれを尊重
+        if ( null !== $pre ) {
+            return $pre;
+        }
+        // 以下のコンテキストは通常通り cron を実行
+        if ( is_admin() ) { return $pre; }
+        if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) { return $pre; }
+        if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) { return $pre; }
+        if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) { return $pre; }
+        if ( defined( 'DOING_CRON' ) && DOING_CRON ) { return $pre; }
+        // wp-cron.php 直叩き
+        if ( isset( $_GET['doing_wp_cron'] ) ) { return $pre; }
+        // CLI（WP-CLI 等）
+        if ( defined( 'WP_CLI' ) && WP_CLI ) { return $pre; }
+
+        // ユーザー向けフロントページ → spawn_cron の発火を抑止
+        return [];
+    }
+
+    /**
      * wp_login フック: ログイン直後にダッシュボード warm をスケジュール。
      *
      * 30 分以内に warm 済みならスキップ（短時間に複数回ログインしても API を叩きすぎない）。
      *
-     * 以前は wp_remote_post で wp-cron.php を非同期トリガーしていたが、
-     * KUSANAGI/nginx 環境で blocking=false が想定どおり機能せず TLS ハンドシェイクで
-     * 数十秒ハングするケースがあった（ユーザー報告: ログインに 30 秒）。
-     * WP は次のページロード時（= ログイン直後の /dashboard/ リダイレクト先）で
-     * 自動的に wp-cron.php を spawn_cron() で起動するため、明示的トリガーは不要。
+     * 実装履歴:
+     *  - v1: wp_remote_post で wp-cron.php を直接トリガー
+     *        → KUSANAGI/nginx で TLS ハンドシェイクが詰まり login が 30 秒ハング
+     *  - v2: wp_schedule_single_event のみ残し、次のページロードでの spawn_cron() に任せる
+     *        → /dashboard/ のロード時に WP コアの spawn_cron() が同じ wp_remote_post を
+     *          内部で呼び、結局 dashboard の TTFB が 30 秒に
+     *  - v3 (現行): cron 経由を完全に止め、register_shutdown_function +
+     *               fastcgi_finish_request() でレスポンス送出後に warm を直接実行する。
+     *               これでブラウザは即座に /dashboard/ へリダイレクトされ、warm は
+     *               PHP-FPM ワーカーがバックグラウンドで処理する。
      */
     public static function schedule_user_dashboard_warm_on_login( $user_login, $user ): void {
         if ( ! $user instanceof \WP_User ) { return; }
@@ -685,11 +728,27 @@ class Gcrev_Bootstrap {
         if ( get_transient( $throttle_key ) ) { return; }
         set_transient( $throttle_key, 1, 30 * MINUTE_IN_SECONDS );
 
-        // 単発イベントをスケジュール（既に同 args でスケジュール済みなら WP が無視する）
-        // 次のページロードで wp_loaded → spawn_cron() が自動的に拾って実行する。
-        if ( ! wp_next_scheduled( 'gcrev_user_dashboard_warm_event', [ $user_id ] ) ) {
-            wp_schedule_single_event( time(), 'gcrev_user_dashboard_warm_event', [ $user_id ] );
-        }
+        // レスポンス送出後に warm を実行（ユーザーは待たされない）。
+        // PHP-FPM の fastcgi_finish_request があれば、HTTP レスポンスを完了させてから
+        // バックグラウンドで処理を続けられる。なければ通常の shutdown 動作に倣う。
+        register_shutdown_function( function () use ( $user_id ) {
+            if ( function_exists( 'fastcgi_finish_request' ) ) {
+                @fastcgi_finish_request();
+            }
+            @ignore_user_abort( true );
+            if ( function_exists( 'set_time_limit' ) ) {
+                @set_time_limit( 120 );
+            }
+            try {
+                self::on_user_dashboard_warm_event( $user_id );
+            } catch ( \Throwable $e ) {
+                @file_put_contents(
+                    '/tmp/gcrev_dash_warm_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " login shutdown warm ERROR user_id={$user_id}: " . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
+            }
+        } );
     }
 
     /**
