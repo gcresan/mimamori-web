@@ -47,16 +47,38 @@ class Gcrev_Meta_Client {
     const OAUTH_DIALOG      = 'https://www.facebook.com/v21.0/dialog/oauth';
 
     /**
-     * OAuth 認可スコープ（Facebook ログイン）
+     * OAuth 認可スコープ
+     *
+     * 実運用で投稿機能まで使うために必要なフルスコープ。
+     * Meta App Review でこれら全権限が承認されてから SCOPES として使う。
+     *
+     * 復活手順：
+     *   1. Meta App Dashboard で各権限の Advanced Access を申請・承認を得る
+     *   2. SCOPES を SCOPES_FULL に差し替えるか、'gcrev_meta_oauth_scopes' フィルタで上書き
      */
-    const SCOPES = [
+    const SCOPES_FULL = [
         'pages_show_list',
         'pages_read_engagement',
         'pages_manage_posts',
         'instagram_basic',
         'instagram_content_publish',
-        'business_management',
+        // 'business_management' は審査が重く、現時点では含めない
     ];
+
+    /**
+     * 疎通確認用の最小スコープ。Meta App Review 未申請の状態でも使える。
+     * （public_profile は明示しなくても付与されるが、明示で意図を明確化）
+     */
+    const SCOPES_MINIMAL = [
+        'public_profile',
+        'email',
+    ];
+
+    /**
+     * 現在使用するスコープ（デフォルトは疎通確認用の最小）。
+     * Review 通過後は SCOPES_FULL に切り替えるか、'gcrev_meta_oauth_scopes' フィルタで上書き。
+     */
+    const SCOPES = self::SCOPES_MINIMAL;
 
     /**
      * Meta アプリの client_id を取得
@@ -80,6 +102,19 @@ class Gcrev_Meta_Client {
     }
 
     /**
+     * 実際に Facebook 認可ダイアログへ渡すスコープを返す。
+     *
+     * 'gcrev_meta_oauth_scopes' フィルタで上書き可能:
+     *   add_filter('gcrev_meta_oauth_scopes', fn() => ['public_profile']); // さらに最小化
+     *   add_filter('gcrev_meta_oauth_scopes', fn() => Gcrev_Meta_Client::SCOPES_FULL); // 審査通過後
+     */
+    public static function get_scopes(): array {
+        $scopes = self::SCOPES;
+        $filtered = apply_filters( 'gcrev_meta_oauth_scopes', $scopes );
+        return is_array( $filtered ) && ! empty( $filtered ) ? array_values( array_unique( array_map( 'strval', $filtered ) ) ) : $scopes;
+    }
+
+    /**
      * 認可 URL を生成
      */
     public static function build_auth_url(int $user_id): string {
@@ -96,7 +131,7 @@ class Gcrev_Meta_Client {
             'redirect_uri'  => self::get_redirect_uri(),
             'state'         => $state,
             'response_type' => 'code',
-            'scope'         => implode(',', self::SCOPES),
+            'scope'         => implode(',', self::get_scopes()),
         ];
         return self::OAUTH_DIALOG . '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
     }
