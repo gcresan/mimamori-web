@@ -141,6 +141,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Notification_Settings_Page())->register();
             }
 
+            $claude_test_path = __DIR__ . '/admin/class-claude-test-page.php';
+            if ( file_exists($claude_test_path) ) {
+                require_once $claude_test_path;
+                (new Gcrev_Claude_Test_Page())->register();
+            }
+
             $cron_monitor_path = __DIR__ . '/admin/class-cron-monitor-page.php';
             if ( file_exists($cron_monitor_path) ) {
                 require_once $cron_monitor_path;
