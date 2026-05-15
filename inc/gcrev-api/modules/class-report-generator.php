@@ -2137,8 +2137,12 @@ DOMAIN;
             return '';
         }
 
-        // --- キャッシュチェック（素材テキストのハッシュで一意化） ---
-        $hash      = md5( $raw_text );
+        // --- プロバイダ判定 (claude が使えるなら Claude、それ以外は Gemini) ---
+        $provider = $this->config->get_report_ai_provider();
+        $use_claude = ( $provider === 'claude' && $this->claude !== null );
+
+        // --- キャッシュチェック（素材テキスト + プロバイダのハッシュで一意化） ---
+        $hash      = md5( $raw_text . '|' . ( $use_claude ? 'claude' : 'gemini' ) );
         $cache_key = "gcrev_beginner_rw_{$user_id}_{$year_month}_{$hash}";
         $cached    = get_transient( $cache_key );
         if ( is_string( $cached ) && $cached !== '' ) {
@@ -2147,16 +2151,24 @@ DOMAIN;
         }
 
         // --- AI リライト ---
-        error_log( '[GCREV] rewrite_report_for_beginner: calling AI rewrite, raw_text length=' . mb_strlen( $raw_text ) );
+        error_log( sprintf(
+            '[GCREV] rewrite_report_for_beginner: calling %s rewrite, raw_text length=%d',
+            $use_claude ? 'Claude' : 'Gemini',
+            mb_strlen( $raw_text )
+        ) );
 
         try {
-            $markdown = $this->ai->rewrite_for_beginner( $raw_text );
+            if ( $use_claude ) {
+                $markdown = $this->rewrite_for_beginner_with_claude( $raw_text );
+            } else {
+                $markdown = $this->ai->rewrite_for_beginner( $raw_text );
+            }
         } catch ( \Exception $e ) {
             error_log( '[GCREV] rewrite_report_for_beginner: AI error: ' . $e->getMessage() );
             return '';
         }
 
-        // Geminiが ```markdown ... ``` で囲むケースを剥がす
+        // ```markdown ... ``` で囲まれているケースを剥がす
         $markdown = trim( $markdown );
         if ( preg_match( '/^```(?:markdown|md)?\s*(.+?)\s*```$/is', $markdown, $m ) ) {
             $markdown = trim( $m[1] );
@@ -2167,6 +2179,73 @@ DOMAIN;
         error_log( "[GCREV] rewrite_report_for_beginner: cached ({$cache_key}), md length=" . mb_strlen( $markdown ) );
 
         return $markdown;
+    }
+
+    /**
+     * Claude で初心者向け Markdown を生成する。
+     *
+     * Gemini 版 (Gcrev_AI_Client::rewrite_for_beginner) と同等の指示を Claude に与え、
+     * 1 本の自然な解説 Markdown を返させる。月次レポート本体とは独立した第 2 の Claude
+     * 呼び出しのため、easy mode 時の総処理時間は約 1.5 倍になる。
+     *
+     * @param  string $raw_report_text
+     * @return string Markdown
+     * @throws \Exception
+     */
+    private function rewrite_for_beginner_with_claude( string $raw_report_text ): string {
+
+        if ( $this->claude === null ) {
+            throw new \Exception( 'Claude client is not initialized' );
+        }
+
+        $system_prompt = <<<SYS
+あなたは、地方の中小企業向けに Web 解析データを「現実的な視点で噛み砕いて説明する」伴走型のレポート編集者です。
+
+【数値の扱いルール】
+- 手動入力されたコンバージョン数がある場合は「確定した成果」として最優先で扱う
+- GA4 / Search Console の数値は、成果の背景・流れ・兆候を説明するために使う
+- 数値の良し悪しは単純な大小で判断せず「立ち位置」を踏まえて評価する
+- 絶対的な業界平均値を断定的に示さない（「一般的には〜と言えます」のように表現する）
+
+【評価に含める視点】
+1. ウェブ全体の一般的な傾向から見てどうか
+2. 地方の中小企業サイトとして見たときの評価（全国大手と比較しない）
+3. このサイト自身の成長段階としての位置づけ（立ち上げ期 / 露出拡大期 / 成果転換期 など）
+
+【文章の構成（この順番で書く）】
+1. 今月のホームページ全体の動きの流れ（成長段階にも触れる）
+2. 良かった点と、その理由（立ち位置を踏まえた評価を添える）
+3. 気をつけたい点（課題）と、その背景
+4. そこから考えられること（示唆・可能性）
+5. 次にやるとよいこと（具体的に・優先度が高いものから）
+
+【出力形式ルール（厳守）】
+- 出力は Markdown のみ。説明文・コードブロック (```...```) は付けない
+- 見出しには ## や ### を使わない。**太字テキスト** だけで見出しを表現する
+- 見出しの前後には必ず空行を入れる
+- 1 段落は 2〜3 文を目安にし、詰め込みすぎない
+- 重要な数値・判断・成果・次にやることは **太字** で強調する
+- 箇条書き（- ）を適宜使ってよい
+- 専門用語はできるだけ避ける。使う場合はカッコで短く補足（例：CV＝問い合わせなどの成果）
+- 素材テキストの各項目で同じ内容が繰り返されている場合は統合して整理する
+- 文体は丁寧で親しみやすく、経営者・担当者に寄り添うトーン
+- 不安を煽らない。断定しすぎず「可能性があります」「傾向が見えます」と表現する
+- 数値（増減、割合、回数）は根拠がある箇所にだけ残し、読みやすく表記する（例：+8.1% / 322回）
+
+※「総評（サマリー）」は別途表示するので、ここでは書かないでください。
+SYS;
+
+        $user_prompt = "以下は、アクセス解析データと、実際に確認された成果（手動入力されたコンバージョン数）を含む分析素材テキストです。\n"
+            . "これらの数値をもとに、上記ルールに従って 1 本の読みやすい解説 Markdown を作成してください。\n\n"
+            . "【素材テキスト】\n"
+            . $raw_report_text;
+
+        $result = $this->claude->call_messages_api( $system_prompt, $user_prompt, [
+            'max_tokens'  => 6000,
+            'temperature' => 0.4,
+        ] );
+
+        return (string) ( $result['text'] ?? '' );
     }
 
     public function extract_section_html(string $html, array $section): string {
