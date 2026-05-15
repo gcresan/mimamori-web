@@ -4503,30 +4503,16 @@ PROMPT;
             );
 
 
-            // === 初心者向けモード：全文リライト（Markdown出力） ===
-            $beginner_markdown = '';
+            // === 初心者向けモード判定（リライトはバックグラウンドへ後送） ===
             $is_easy_mode = (($client_info['output_mode'] ?? 'normal') === 'easy');
-            if ($is_easy_mode) {
-                $rw_year_month = $year_month;
-                if (empty($rw_year_month) && $prev_start) {
-                    $rw_year_month = substr($prev_start, 0, 7);
-                }
-                if (!empty($rw_year_month)) {
-                    $beginner_markdown = $this->generator->rewrite_report_for_beginner(
-                        $sections_html,
-                        $target_area,
-                        $user_id,
-                        $rw_year_month
-                    );
-                }
-                if ($beginner_markdown !== '') {
-                    error_log("[GCREV] generate_report: beginner_markdown generated, length=" . mb_strlen($beginner_markdown));
-                }
+            $rw_year_month = $year_month;
+            if (empty($rw_year_month) && $prev_start) {
+                $rw_year_month = substr($prev_start, 0, 7);
             }
 
-            // === 手動生成時も履歴保存 ===
+            // === 手動生成時も履歴保存 (beginner_markdown は後で update_post_meta する) ===
             $highlights = $this->highlights_mod->extract_highlights_from_html($report_html, $user_id);
-            $saved_post_id = $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown);
+            $saved_post_id = $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, '');
 
             // === AI生成メタ情報 + Claude 構造化 JSON を保存 ===
             $this->persist_ai_outputs( $saved_post_id );
@@ -4537,9 +4523,6 @@ PROMPT;
                 'report_html' => $report_html,
                 'post_id'     => $saved_post_id,
             ];
-            if ($beginner_markdown !== '') {
-                $response_data['beginner_markdown'] = $beginner_markdown;
-            }
 
             // === KPI スナップショット + インフォグラフィック (重い処理) ===
             // クライアントは既にレポート本体を受け取った状態にするため、
@@ -4553,6 +4536,24 @@ PROMPT;
                 @fastcgi_finish_request();
 
                 @set_time_limit( 600 );
+
+                // バックグラウンド: 初心者向け Markdown リライト (easy mode のみ)
+                try {
+                    if ( $is_easy_mode && ! empty( $rw_year_month ) && $saved_post_id > 0 ) {
+                        $bg_beginner_md = $this->generator->rewrite_report_for_beginner(
+                            $sections_html,
+                            $target_area,
+                            $user_id,
+                            $rw_year_month
+                        );
+                        if ( is_string( $bg_beginner_md ) && $bg_beginner_md !== '' ) {
+                            update_post_meta( $saved_post_id, '_gcrev_beginner_markdown', $bg_beginner_md );
+                            error_log( '[GCREV] generate_report (bg): beginner_markdown saved, length=' . mb_strlen( $bg_beginner_md ) );
+                        }
+                    }
+                } catch ( \Throwable $bg_e ) {
+                    error_log( '[GCREV] background beginner rewrite failed: ' . $bg_e->getMessage() );
+                }
 
                 // バックグラウンド: KPI スナップショット
                 try {
@@ -4588,6 +4589,20 @@ PROMPT;
             }
 
             // === fastcgi_finish_request 非対応環境向け 同期フォールバック ===
+            // 初心者向け Markdown もここで同期生成 (時間はかかるが nginx より先に終わるなら問題なし)
+            if ( $is_easy_mode && ! empty( $rw_year_month ) && $saved_post_id > 0 ) {
+                try {
+                    $sync_beginner_md = $this->generator->rewrite_report_for_beginner(
+                        $sections_html, $target_area, $user_id, $rw_year_month
+                    );
+                    if ( is_string( $sync_beginner_md ) && $sync_beginner_md !== '' ) {
+                        update_post_meta( $saved_post_id, '_gcrev_beginner_markdown', $sync_beginner_md );
+                        $response_data['beginner_markdown'] = $sync_beginner_md;
+                    }
+                } catch ( \Throwable $sync_e ) {
+                    error_log( '[GCREV] sync beginner rewrite failed: ' . $sync_e->getMessage() );
+                }
+            }
             if ( $saved_post_id > 0 ) {
                 $this->save_kpi_snapshot_for_report( $saved_post_id, $prev_data, $user_id, $year_month );
             }
