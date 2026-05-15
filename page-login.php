@@ -171,6 +171,28 @@ $page_title = trim( wp_title('', false) );
         color: #8C8A85;
         text-align: center;
     }
+
+    /* ポリシーリンク（Meta アプリレビュー対応の公開ページへの導線） */
+    body.login .login-policy-links {
+        margin-top: 18px;
+        text-align: center;
+        font-size: 12px;
+        color: #B0AEA8;
+        line-height: 1.8;
+    }
+    body.login .login-policy-links a {
+        color: #8C8A85;
+        text-decoration: none;
+        margin: 0 4px;
+    }
+    body.login .login-policy-links a:hover {
+        color: #568184;
+        text-decoration: underline;
+    }
+    body.login .login-policy-links .sep {
+        color: #C8C6BF;
+        margin: 0 2px;
+    }
     </style>
 </head>
 <body class="login">
@@ -216,6 +238,14 @@ $page_title = trim( wp_title('', false) );
         <div class="security-note">
             このサイトは SSL で保護されています。<br>
             ログイン情報は第三者と共有しないでください。
+        </div>
+
+        <div class="login-policy-links">
+            <a href="<?php echo esc_url( home_url( '/privacy-policy/' ) ); ?>">プライバシーポリシー</a>
+            <span class="sep">｜</span>
+            <a href="<?php echo esc_url( home_url( '/terms/' ) ); ?>">利用規約</a>
+            <span class="sep">｜</span>
+            <a href="<?php echo esc_url( home_url( '/data-deletion/' ) ); ?>">データ削除について</a>
         </div>
     </div>
 

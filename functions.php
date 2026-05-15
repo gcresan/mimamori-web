@@ -10012,6 +10012,58 @@ function gcrev_ensure_meo_report_page(): void {
 }
 
 // --------------------------------------------------
+// 公開ポリシーページ自動作成（Meta アプリレビュー対応）
+// プライバシーポリシー / 利用規約 / データ削除手順
+// すでにスラッグが存在する場合はテンプレートのみ更新（内容は上書きしない）
+// --------------------------------------------------
+add_action( 'admin_init', 'gcrev_ensure_public_policy_pages' );
+function gcrev_ensure_public_policy_pages(): void {
+    $pages = [
+        'privacy-policy' => [
+            'title'    => 'プライバシーポリシー',
+            'template' => 'page-privacy-policy.php',
+            'option'   => 'gcrev_privacy_policy_page_id',
+        ],
+        'terms' => [
+            'title'    => '利用規約',
+            'template' => 'page-terms.php',
+            'option'   => 'gcrev_terms_page_id',
+        ],
+        'data-deletion' => [
+            'title'    => 'データ削除について',
+            'template' => 'page-data-deletion.php',
+            'option'   => 'gcrev_data_deletion_page_id',
+        ],
+    ];
+
+    foreach ( $pages as $slug => $cfg ) {
+        if ( get_option( $cfg['option'], 0 ) ) {
+            continue;
+        }
+        $existing = get_page_by_path( $slug );
+        if ( $existing ) {
+            // 既存ページがあればテンプレートだけ揃える（内容は上書きしない）
+            if ( get_post_meta( $existing->ID, '_wp_page_template', true ) !== $cfg['template'] ) {
+                update_post_meta( $existing->ID, '_wp_page_template', $cfg['template'] );
+            }
+            update_option( $cfg['option'], (int) $existing->ID, false );
+            continue;
+        }
+        $page_id = wp_insert_post( [
+            'post_type'    => 'page',
+            'post_status'  => 'publish',
+            'post_title'   => $cfg['title'],
+            'post_name'    => $slug,
+            'post_content' => '',
+            'meta_input'   => [ '_wp_page_template' => $cfg['template'] ],
+        ] );
+        if ( ! is_wp_error( $page_id ) && $page_id > 0 ) {
+            update_option( $cfg['option'], (int) $page_id, false );
+        }
+    }
+}
+
+// --------------------------------------------------
 // WP管理画面 — 決済チェックボックスの保存処理（UI非表示: 2026-03-18）
 // --------------------------------------------------
 // add_action( 'edit_user_profile_update', 'gcrev_save_payment_status_fields' );
@@ -10116,6 +10168,10 @@ add_action( 'template_redirect', function () {
         'thanks',
         'register',
         'apply',
+        // 公開ポリシーページ（Meta アプリレビュー対応）
+        'privacy-policy',
+        'terms',
+        'data-deletion',
     ];
 
     $post = get_queried_object();
