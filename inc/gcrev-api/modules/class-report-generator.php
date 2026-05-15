@@ -198,7 +198,7 @@ class Gcrev_Report_Generator {
         $this->log( sprintf( '[ReportGen] Claude payload size=%d chars', $payload_chars ) );
 
         $result = mimamori_generate_monthly_report_with_claude( $report_data, [
-            'max_tokens'  => 16000,
+            'max_tokens'  => 8000,   // 過去実績で 8000 トークン出力 ≈ 140s。nginx タイムアウトに収まる
             'temperature' => 0.4,
         ] );
 
