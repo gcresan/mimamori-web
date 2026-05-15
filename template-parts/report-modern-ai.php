@@ -149,10 +149,18 @@ if ( is_array( $kpi_snapshot ) ) {
     $build_kpi = static function ( string $label, string $key, string $unit = '' ) use ( $kpi_snapshot ): ?array {
         $v = $kpi_snapshot[ $key ] ?? null;
         if ( $v === null || $v === '' ) { return null; }
-        $num = is_numeric( $v ) ? (float) $v : null;
-        if ( $num === null && is_string( $v ) ) {
-            // 文字列に数値が含まれている場合（"305件" など）の救済
-            if ( preg_match( '/-?\d+(?:\.\d+)?/', $v, $m ) ) { $num = (float) $m[0]; }
+        $num = null;
+        // 数値・数値文字列ならそのまま
+        if ( is_numeric( $v ) ) {
+            $num = (float) $v;
+        } elseif ( is_string( $v ) ) {
+            // "4,251" / "1,937 人" のような形式に対応 (カンマ・単位除去)
+            $stripped = preg_replace( '/[,\s]/u', '', $v );
+            if ( is_numeric( $stripped ) ) {
+                $num = (float) $stripped;
+            } elseif ( preg_match( '/-?\d+(?:\.\d+)?/', $stripped, $m ) ) {
+                $num = (float) $m[0];
+            }
         }
         if ( $num === null ) { return null; }
         return [
