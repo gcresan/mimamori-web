@@ -961,15 +961,15 @@ get_header();
                 <span class="tut-subgroup-title__icon">📊</span>
                 深掘りレポート（年4回）
             </h4>
-            <p class="tut-subgroup-desc">3ヶ月ごとに、月次レポートよりさらに踏み込んだ戦略レポートが自動生成されます。</p>
+            <p class="tut-subgroup-desc">3ヶ月ごとに、上級ウェブ解析士が監修した戦略レポートをお届けします。</p>
 
             <div class="tut-strategy-card">
                 <div class="tut-strategy-card-img">
                     <?php tut_screenshot( 'strategy-report.png', '深掘りレポート画面', $tut_img_dir, $tut_img_uri ); ?>
                 </div>
                 <div class="tut-strategy-card-body">
-                    <h4>サイト全体の戦略を見直すためのレポート</h4>
-                    <p>月次レポートが「先月どうだった？」のふり返りなのに対し、深掘りレポートは「今後どう動くべきか？」を提案する戦略レポート。3ヶ月分のデータを使って、サイト全体の改善方針をAIが整理してくれます。</p>
+                    <h4>AI × 上級ウェブ解析士による戦略レポート</h4>
+                    <p>月次レポートが「先月どうだった？」のふり返りなのに対し、深掘りレポートは「今後どう動くべきか？」を提案する戦略レポートです。<strong>AIによる3ヶ月分のデータ分析を上級ウェブ解析士が監修</strong>し、その視点をもとに<strong>AIがさらに深く掘り下げて</strong>、サイト全体の改善方針をご提案します。</p>
                     <a href="<?php echo esc_url( home_url( '/strategy-report-history/' ) ); ?>" class="tut-link-btn">
                         深掘りレポートを見る
                         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
