@@ -271,24 +271,34 @@ class Gcrev_Meo_Report_Service {
             $fallback_used   = true;
         }
 
+        // 対象月の値が 0 (=閾値未満) のキーワードもタイブレーク用に合計値を持たせて含める。
+        // 0 のキーワードしか残らないと「データなし」と紛らわしいので、その月で値 0 でも、
+        // 全期間合計が 0 でなければ TOP リストに残す (GBP の閾値未満キーワードを救う)。
         $out = [];
         foreach ( (array) $cache['keywords'] as $k ) {
-            $monthly = isset( $k['monthly'] ) && is_array( $k['monthly'] ) ? $k['monthly'] : [];
-            $val     = (int) ( $monthly[ $month_idx ] ?? 0 );
-            if ( $val > 0 ) {
-                $out[] = [
-                    'keyword' => (string) ( $k['keyword'] ?? '' ),
-                    'value'   => $val,
-                ];
+            $monthly  = isset( $k['monthly'] ) && is_array( $k['monthly'] ) ? $k['monthly'] : [];
+            $val      = (int) ( $monthly[ $month_idx ] ?? 0 );
+            $total    = isset( $k['total'] ) && is_numeric( $k['total'] ) ? (int) $k['total'] : array_sum( array_map( 'intval', $monthly ) );
+            // その月とその全期間がともに 0 のものはまったく登場しないキーワードなので除外
+            if ( $val === 0 && $total === 0 ) {
+                continue;
             }
+            $out[] = [
+                'keyword' => (string) ( $k['keyword'] ?? '' ),
+                'value'   => $val,
+                '_total'  => $total,
+            ];
         }
 
-        usort( $out, static fn( $a, $b ) => $b['value'] - $a['value'] );
-        $top = array_slice( $out, 0, $limit );
+        // 対象月の値 DESC → 同値なら全期間合計 DESC で並べ、対象月 0 のキーワードも含めて表示
+        usort( $out, static function ( $a, $b ) {
+            if ( $a['value'] !== $b['value'] ) { return $b['value'] - $a['value']; }
+            return $b['_total'] - $a['_total'];
+        } );
 
-        // フォールバック時はメタ情報を含めるため最初の要素に付与する代わりに
-        // 構造を変えるとリスクなので、別途 _meta マーカーを末尾に追加 (呼出側で利用)
-        // ※既存呼出が壊れないよう、純粋なキーワード配列のままにする
+        $top = array_slice( $out, 0, $limit );
+        // 内部用キーは外して返す
+        foreach ( $top as &$row ) { unset( $row['_total'] ); }
         return $top;
     }
 
