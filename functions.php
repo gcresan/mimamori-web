@@ -10166,6 +10166,16 @@ function gcrev_ensure_public_policy_pages(): void {
             'template' => 'page-user-data-deletion.php',
             'option'   => 'gcrev_user_data_deletion_page_id',
         ],
+        'meta-data-deletion-callback' => [
+            'title'    => 'Meta データ削除コールバック',
+            'template' => 'page-meta-data-deletion-callback.php',
+            'option'   => 'gcrev_meta_data_deletion_callback_page_id',
+        ],
+        'data-deletion-status' => [
+            'title'    => 'データ削除ステータス',
+            'template' => 'page-data-deletion-status.php',
+            'option'   => 'gcrev_data_deletion_status_page_id',
+        ],
     ];
 
     foreach ( $pages as $slug => $cfg ) {
@@ -10304,6 +10314,8 @@ add_action( 'template_redirect', function () {
         'privacy-policy',
         'terms-of-service',
         'user-data-deletion',
+        'meta-data-deletion-callback',
+        'data-deletion-status',
     ];
 
     $post = get_queried_object();
@@ -12179,6 +12191,12 @@ GA4とSearch Consoleを別々に説明するのではなく、横断して考察
 データが少ない場合は「データが少ないため仮説レベル」と明記してください。
 クライアントを責める表現は避け、前向きな改善提案にしてください。
 
+【出力長さの厳守事項】
+- JSON 全体で 5500 トークン (約 11000 文字) 以内に収めること
+- 各 string フィールド (title / body / evidence / action 等) は 250 文字以内
+- 各配列 (key_findings, good_points, warning_points, cross_insights, next_actions, data_notes) は 3〜4 要素まで
+- 前置きや重複表現を書かず、本質だけを書く
+
 出力はJSONのみです。
 Markdown、HTML、説明文、コードブロックは返さないでください。
 
@@ -12238,7 +12256,7 @@ TXT;
 
             $api_options = [
                 'model'       => $options['model']       ?? null,
-                'max_tokens'  => $options['max_tokens']  ?? 16000,
+                'max_tokens'  => $options['max_tokens']  ?? 8000,
                 'temperature' => $options['temperature'] ?? 0.4,
             ];
             if ( $api_options['model'] === null ) {

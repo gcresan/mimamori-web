@@ -28,6 +28,7 @@ if ( class_exists('Gcrev_Meta_Client') ) { return; }
  * トークン格納先（user_meta, 暗号化）:
  *   _gcrev_meta_access_token        — long-lived user access token (60日)
  *   _gcrev_meta_token_expires       — UNIX秒
+ *   _gcrev_meta_fb_user_id          — Facebook ユーザー ID（データ削除コールバックで照合）
  *   _gcrev_meta_fb_page_id          — Facebook ページ ID
  *   _gcrev_meta_fb_page_token       — ページアクセストークン（暗号化, 長期）
  *   _gcrev_meta_ig_user_id          — Instagram Business User ID
@@ -145,6 +146,16 @@ class Gcrev_Meta_Client {
         update_user_meta($user_id, '_gcrev_meta_access_token',  Gcrev_Crypto::encrypt($user_token));
         update_user_meta($user_id, '_gcrev_meta_token_expires', time() + $expires_in);
 
+        // 2.5) Facebook ユーザー ID を保存（データ削除コールバックで signed_request の
+        //       user_id とマッチングするために必要）
+        $me = self::http_get(self::GRAPH_BASE . '/' . self::GRAPH_API_VERSION . '/me', [
+            'access_token' => $user_token,
+            'fields'       => 'id',
+        ]);
+        if ( $me['ok'] && ! empty($me['body']['id']) ) {
+            update_user_meta($user_id, '_gcrev_meta_fb_user_id', (string) $me['body']['id']);
+        }
+
         // 3) ユーザーが管理するページ一覧 → 1つ目を選択（複数あれば後でUIで切替）
         $pages = self::http_get(self::GRAPH_BASE . '/' . self::GRAPH_API_VERSION . '/me/accounts', [
             'access_token' => $user_token,
@@ -188,6 +199,7 @@ class Gcrev_Meta_Client {
         $keys = [
             '_gcrev_meta_access_token',
             '_gcrev_meta_token_expires',
+            '_gcrev_meta_fb_user_id',
             '_gcrev_meta_fb_page_id',
             '_gcrev_meta_fb_page_token',
             '_gcrev_meta_ig_user_id',
