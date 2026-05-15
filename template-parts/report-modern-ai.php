@@ -150,11 +150,9 @@ if ( is_array( $kpi_snapshot ) ) {
         $v = $kpi_snapshot[ $key ] ?? null;
         if ( $v === null || $v === '' ) { return null; }
         $num = null;
-        // 数値・数値文字列ならそのまま
         if ( is_numeric( $v ) ) {
             $num = (float) $v;
         } elseif ( is_string( $v ) ) {
-            // "4,251" / "1,937 人" のような形式に対応 (カンマ・単位除去)
             $stripped = preg_replace( '/[,\s]/u', '', $v );
             if ( is_numeric( $stripped ) ) {
                 $num = (float) $stripped;
@@ -163,11 +161,38 @@ if ( is_array( $kpi_snapshot ) ) {
             }
         }
         if ( $num === null ) { return null; }
+
+        // 前月比 (snapshot.trends から取得)
+        $trend_obj = ( isset( $kpi_snapshot['trends'] ) && is_array( $kpi_snapshot['trends'] ) )
+            ? ( $kpi_snapshot['trends'][ $key ] ?? null )
+            : null;
+        $change_text = '';
+        $change_dir  = 'flat'; // up / down / flat
+        if ( is_array( $trend_obj ) ) {
+            $tv = $trend_obj['value'] ?? null;
+            $tt = (string) ( $trend_obj['text'] ?? '' );
+            if ( is_numeric( $tv ) ) {
+                $tvf = (float) $tv;
+                $change_text = $tt !== '' ? $tt : ( sprintf( '%+.1f%%', $tvf ) );
+                if ( $tvf > 0.05 )      { $change_dir = 'up'; }
+                elseif ( $tvf < -0.05 ) { $change_dir = 'down'; }
+                else                    { $change_dir = 'flat'; }
+            }
+        }
+
+        // 増加が良い指標 / 減少が良い指標
+        $invert_polarity = false; // 今は全指標「増加=良し」として扱う (滞在時間も増えた方が良い)
+        $variant = 'neutral';
+        if ( $change_dir === 'up' )   { $variant = $invert_polarity ? 'neg' : 'pos'; }
+        if ( $change_dir === 'down' ) { $variant = $invert_polarity ? 'pos' : 'neg'; }
+
         return [
-            'label'   => $label,
-            'value'   => number_format( $num, ( $num == (int) $num ) ? 0 : 1 ),
-            'unit'    => $unit,
-            'variant' => 'neutral',
+            'label'       => $label,
+            'value'       => number_format( $num, ( $num == (int) $num ) ? 0 : 1 ),
+            'unit'        => $unit,
+            'variant'     => $variant,
+            'change_text' => $change_text,
+            'change_dir'  => $change_dir,
         ];
     };
     foreach ( [
@@ -267,9 +292,26 @@ if ( is_array( $kpi_snapshot ) ) {
             <?php if ( ! empty( $kpi_cards ) ): ?>
             <div class="m-kpi-grid">
                 <?php foreach ( $kpi_cards as $card ): ?>
+                <?php
+                    $card_dir   = (string) ( $card['change_dir']  ?? 'flat' );
+                    $card_chtxt = (string) ( $card['change_text'] ?? '' );
+                ?>
                 <div class="m-kpi-card kpi-<?php echo esc_attr( $card['variant'] ); ?>">
                     <div class="m-kpi-label"><?php echo esc_html( $card['label'] ); ?></div>
                     <div class="m-kpi-num"><?php echo esc_html( $card['value'] ); ?><?php if ( $card['unit'] !== '' ): ?><small><?php echo esc_html( $card['unit'] ); ?></small><?php endif; ?></div>
+                    <?php if ( $card_chtxt !== '' ): ?>
+                    <div class="m-kpi-change m-kpi-change--<?php echo esc_attr( $card_dir ); ?>">
+                        <?php if ( $card_dir === 'up' ): ?>
+                            <span class="m-kpi-arrow" aria-hidden="true">▲</span>
+                        <?php elseif ( $card_dir === 'down' ): ?>
+                            <span class="m-kpi-arrow" aria-hidden="true">▼</span>
+                        <?php else: ?>
+                            <span class="m-kpi-arrow" aria-hidden="true">―</span>
+                        <?php endif; ?>
+                        <span class="m-kpi-change-text"><?php echo esc_html( $card_chtxt ); ?></span>
+                        <span class="m-kpi-change-label">前月比</span>
+                    </div>
+                    <?php endif; ?>
                 </div>
                 <?php endforeach; ?>
             </div>
@@ -294,6 +336,10 @@ if ( is_array( $kpi_snapshot ) ) {
                     $kf_sum    = (string) ( $kf['summary'] ?? '' );
                     $kf_body   = (string) ( $kf['body']    ?? '' );
                     $kf_evid   = (string) ( $kf['evidence']?? '' );
+                    // 問い合わせ関連キーワードが含まれていればアンカーリンクを出す
+                    $kf_blob   = $kf_title . ' ' . $kf_sum . ' ' . $kf_body . ' ' . $kf_evid;
+                    $kf_has_inquiry_mention = ! empty( $inquiry_list_items )
+                        && preg_match( '/問い?合わせ|見込み客|リード|資料請求|フォーム送信|お問合せ/u', $kf_blob );
                 ?>
                 <div class="m-scene-card">
                     <div class="m-scene-no"><?php echo esc_html( sprintf( '%02d', $i + 1 ) ); ?></div>
@@ -312,6 +358,9 @@ if ( is_array( $kpi_snapshot ) ) {
                         <?php endif; ?>
                         <?php if ( $kf_evid !== '' ): ?>
                             <div class="m-evidence"><strong>根拠:</strong> <?php echo $render_text( $kf_evid ); ?></div>
+                        <?php endif; ?>
+                        <?php if ( $kf_has_inquiry_mention ): ?>
+                            <a class="m-inq-link" href="#m-inquiry-list">📋 実際の問い合わせ内容を見る →</a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -505,9 +554,36 @@ if ( is_array( $kpi_snapshot ) ) {
             }
         }
     }
+
+    // name フィールドが空の場合に message 本文から抽出するヘルパー
+    $extract_name_from_message = static function ( string $message ): string {
+        if ( $message === '' ) { return ''; }
+        // よくある日本語フォームのパターン
+        $patterns = [
+            '/(?:お名前|氏名|お名前\s*\(\s*必須\s*\)|お問い合わせ者名|お問合せ者名|名前)\s*[：:＝=]\s*([^\r\n　]+?)(?:[\r\n　]|$)/u',
+            '/(?:Name|name|NAME)\s*[：:＝=]\s*([^\r\n　]+?)(?:[\r\n　]|$)/u',
+            // 「姓 名」が並んでいる場合 (姓: XXX 名: YYY → 姓+名で連結)
+        ];
+        foreach ( $patterns as $p ) {
+            if ( preg_match( $p, $message, $m ) ) {
+                $candidate = trim( $m[1] );
+                // ノイズ除外
+                if ( $candidate !== '' && mb_strlen( $candidate ) <= 40 && ! preg_match( '/^[\d\-\s]+$/u', $candidate ) ) {
+                    return $candidate;
+                }
+            }
+        }
+        // 「姓: X / 名: Y」を結合するパターン
+        if ( preg_match( '/(?:お?姓|苗字)\s*[：:＝=]\s*([^\r\n　]+)/u', $message, $sei )
+            && preg_match( '/(?:お?名前?|お名)\s*[：:＝=]\s*([^\r\n　]+)/u', $message, $mei ) ) {
+            $combined = trim( $sei[1] ) . ' ' . trim( $mei[1] );
+            if ( mb_strlen( $combined ) <= 40 ) { return $combined; }
+        }
+        return '';
+    };
     ?>
     <?php if ( ! empty( $inquiry_list_items ) ): ?>
-    <section class="m-section">
+    <section class="m-section" id="m-inquiry-list">
         <div class="m-wrap">
             <div class="m-sec-tag">SECTION 07　実際の問い合わせ内容</div>
             <h2 class="m-sec-title">見込み客から届いた問い合わせ一覧</h2>
@@ -536,6 +612,10 @@ if ( is_array( $kpi_snapshot ) ) {
                         }
                     }
                     $iq_name = trim( (string) ( $it['name'] ?? '' ) );
+                    if ( $iq_name === '' ) {
+                        // 本文から抽出を試みる (「お名前: 田中太郎」等)
+                        $iq_name = $extract_name_from_message( (string) ( $it['message'] ?? '' ) );
+                    }
                     if ( $iq_name === '' ) { $iq_name = '(名前なし)'; }
                     $iq_cat  = (string) ( $it['ai_category'] ?? '' );
                     $iq_sum  = (string) ( $it['ai_summary'] ?? mb_substr( (string) ( $it['message'] ?? '' ), 0, 140 ) );
