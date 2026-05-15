@@ -46,8 +46,13 @@ if ( $site_url !== '' ) {
     $site_host = isset( $parsed['host'] ) ? preg_replace( '/^www\./', '', strtolower( $parsed['host'] ) ) : '';
 }
 
-$user_obj      = get_userdata( $report_user_id );
-$client_name   = $user_obj ? ( $user_obj->display_name ?: $user_obj->user_login ) : '';
+// 事業者名 (gcrev_business_name → fallback: display_name)
+if ( function_exists( 'gcrev_get_business_name' ) ) {
+    $client_name = (string) gcrev_get_business_name( $report_user_id );
+} else {
+    $user_obj    = get_userdata( $report_user_id );
+    $client_name = $user_obj ? ( $user_obj->display_name ?: $user_obj->user_login ) : '';
+}
 
 $ai_provider   = (string) ( $monthly_report['ai_provider'] ?? '' );
 $ai_model      = (string) ( $monthly_report['ai_model']    ?? '' );
