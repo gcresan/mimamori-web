@@ -260,36 +260,6 @@ get_header();
     padding: 20px 0;
 }
 
-/* --- Insights Section --- */
-.sd-insights {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 40px;
-}
-
-.sd-insight-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mw-bg-primary, #FFFFFF);
-    border: 1px solid var(--mw-border-light, #C3CED0);
-    border-radius: var(--mw-radius-sm, 12px);
-    border-left: 4px solid var(--mw-primary-teal, #7AA3A6);
-}
-
-.sd-insight-icon {
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-.sd-insight-text {
-    font-size: 14px;
-    color: var(--mw-text-primary, #263335);
-    line-height: 1.6;
-}
-
 /* --- KPI Card — Selectable button reset --- */
 button.sd-kpi-selectable {
     font-family: inherit;
@@ -454,11 +424,6 @@ get_template_part('template-parts/period-selector');
         <!-- JS で描画 -->
     </div>
 
-    <!-- 気づきエリア -->
-    <h2 class="sd-section-title" id="sdInsightsTitle" style="display:none;">💡 気づき</h2>
-    <div class="sd-insights" id="sdInsights">
-        <!-- JS で描画 -->
-    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -949,92 +914,6 @@ get_template_part('template-parts/period-selector');
     }
 
     // =============================================
-    // 気づきエリア描画
-    // =============================================
-    function renderInsights(data) {
-        var container = document.getElementById('sdInsights');
-        var titleEl = document.getElementById('sdInsightsTitle');
-        if (!container) return;
-
-        var insights = generateInsights(data);
-        if (insights.length === 0) {
-            container.innerHTML = '';
-            if (titleEl) titleEl.style.display = 'none';
-            return;
-        }
-
-        if (titleEl) titleEl.style.display = '';
-
-        var html = '';
-        for (var i = 0; i < insights.length; i++) {
-            html += '<div class="sd-insight-item">' +
-                '<span class="sd-insight-icon">' + insights[i].icon + '</span>' +
-                '<span class="sd-insight-text">' + escapeHtml(insights[i].text) + '</span>' +
-            '</div>';
-        }
-        container.innerHTML = html;
-    }
-
-    function generateInsights(data) {
-        var insights = [];
-        var trends = data.trends || {};
-
-        // 1. アクセス増減
-        var sessTrend = trends.sessions;
-        if (sessTrend) {
-            var sv = parseFloat(sessTrend.value) || 0;
-            if (sv > 10) {
-                insights.push({ icon: '📈', text: 'アクセス数が前の期間より' + sessTrend.text + '増えています。好調です！' });
-            } else if (sv < -10) {
-                insights.push({ icon: '📉', text: 'アクセス数が前の期間より' + Math.abs(sv).toFixed(1) + '%減少しています。原因を確認してみましょう。' });
-            }
-        }
-
-        // 2. デバイス比率
-        var devices = data.devices || [];
-        if (devices.length > 0) {
-            var topDev = devices[0];
-            var pctStr = (topDev.percent || '').replace('%', '');
-            var pctNum = parseFloat(pctStr) || 0;
-            if (pctNum >= 55) {
-                var devLabel = mapName(topDev.device || topDev.name || '', deviceNameMap);
-                insights.push({ icon: '📱', text: devLabel + 'からのアクセスが' + pctNum.toFixed(0) + '%を占めています。' + devLabel + '向けの表示を特に意識しましょう。' });
-            }
-        }
-
-        // 3. 新規/リピーター比率
-        var users = parseFloat(data.users) || 0;
-        var newUsers = parseFloat(data.newUsers) || 0;
-        if (users > 0) {
-            var newRatio = (newUsers / users * 100).toFixed(0);
-            if (parseInt(newRatio, 10) >= 65) {
-                insights.push({ icon: '🆕', text: '訪問者の' + newRatio + '%が新しいお客さまです。新規のお客さまに見つけてもらえています。' });
-            } else if (parseInt(newRatio, 10) <= 30) {
-                insights.push({ icon: '🔄', text: 'リピーターの方が多く訪問しています。常連のお客さまに支持されています。' });
-            }
-        }
-
-        // 4. トップキーワード
-        var keywords = data.keywords || [];
-        if (keywords.length > 0 && keywords[0].query) {
-            insights.push({ icon: '🔍', text: '「' + keywords[0].query + '」が最も検索されているキーワードです。' });
-        }
-
-        // 5. ゴール増減
-        var cvTrend = trends.conversions;
-        if (cvTrend) {
-            var cv = parseFloat(cvTrend.value) || 0;
-            if (cv > 15) {
-                insights.push({ icon: '🎯', text: 'ゴール数が前の期間より' + cvTrend.text + '増加しました。成果につながっています！' });
-            } else if (cv < -15) {
-                insights.push({ icon: '⚠️', text: 'ゴール数が前の期間より' + Math.abs(cv).toFixed(1) + '%減少しています。導線の見直しを検討しましょう。' });
-            }
-        }
-
-        return insights.slice(0, 4);
-    }
-
-    // =============================================
     // KPIトレンドチャート（カード選択に連動）
     // =============================================
     var trendChart = null;
@@ -1199,7 +1078,6 @@ get_template_part('template-parts/period-selector');
             renderKpiCards(cached);
             renderTrendChart(cached);
             renderAnalysisCards(cached);
-            renderInsights(cached);
             return;
         }
 
@@ -1226,7 +1104,6 @@ get_template_part('template-parts/period-selector');
             renderKpiCards(data);
             renderTrendChart(data);
             renderAnalysisCards(data);
-            renderInsights(data);
         })
         .catch(function(err) {
             console.error('Site Dashboard fetch error:', err);

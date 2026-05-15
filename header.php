@@ -239,6 +239,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuHome">
+                     <!-- サブグループ: サイトレポート -->
+                     <li class="nav-item nav-subgroup-wrapper">
+                        <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
+                           サイトレポート
+                           <span class="nav-subgroup-toggle-arrow" aria-hidden="true">&#9662;</span>
+                        </button>
+                        <ul class="nav-subgroup-menu">
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
+                              <span>深掘りレポート</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/report/report-latest/') ); ?>" class="nav-link <?php echo ( is_page('report-latest') || is_page('report-archive') ) ? 'active' : ''; ?>">
+                              <span>月次レポート</span>
+                              </a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="<?php echo esc_url( home_url('/annual-report/') ); ?>" class="nav-link <?php echo is_page('annual-report') ? 'active' : ''; ?>">
+                              <span>年次レポート</span>
+                              </a>
+                           </li>
+                        </ul>
+                     </li>
+
                      <!-- 直下: 現状診断 (オプション) -->
                      <?php if ( $_mb_show_page_analysis ) : ?>
                      <li class="nav-item">
@@ -345,30 +370,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </ul>
                      </li>
 
-                     <!-- サブグループ: サイトレポート -->
-                     <li class="nav-item nav-subgroup-wrapper">
-                        <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
-                           サイトレポート
-                           <span class="nav-subgroup-toggle-arrow" aria-hidden="true">&#9662;</span>
-                        </button>
-                        <ul class="nav-subgroup-menu">
-                           <li class="nav-item">
-                              <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
-                              <span>深掘りレポート</span>
-                              </a>
-                           </li>
-                           <li class="nav-item">
-                              <a href="<?php echo esc_url( home_url('/report/report-latest/') ); ?>" class="nav-link <?php echo ( is_page('report-latest') || is_page('report-archive') ) ? 'active' : ''; ?>">
-                              <span>月次レポート</span>
-                              </a>
-                           </li>
-                           <li class="nav-item">
-                              <a href="<?php echo esc_url( home_url('/annual-report/') ); ?>" class="nav-link <?php echo is_page('annual-report') ? 'active' : ''; ?>">
-                              <span>年次レポート</span>
-                              </a>
-                           </li>
-                        </ul>
-                     </li>
                   </ul>
                </li>
 
