@@ -428,10 +428,10 @@ async function generateReport() {
         updateLoadingText('完了しました！', '生成回数を更新しています...');
         await loadGenerationCount();
 
-        // Step 5: 成功 - ダッシュボードへ遷移
-        updateLoadingText('完了しました！', 'ダッシュボードへ移動します...');
+        // Step 5: 成功 - 月次レポートページへ遷移
+        updateLoadingText('完了しました！', '月次レポートへ移動します...');
         await new Promise(resolve => setTimeout(resolve, 1500));
-        window.location.href = '<?php echo esc_url(home_url('/dashboard/')); ?>';
+        window.location.href = '<?php echo esc_url(home_url('/report-latest/')); ?>';
 
     } catch (err) {
         showError(err.message);
