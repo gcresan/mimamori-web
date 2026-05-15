@@ -250,7 +250,8 @@ class Gcrev_Meo_Report_Service {
      */
     private static function fetch_keywords( int $user_id, string $start, string $end, int $limit ): array {
         $dt           = new \DateTimeImmutable( $start, wp_timezone() );
-        $target_label = (int) $dt->format( 'Y' ) . '/' . (int) $dt->format( 'n' );
+        // cache.months は "2026/04" (ゼロパディング有り) 形式なので合わせる
+        $target_label = $dt->format( 'Y/m' );
 
         $cache = self::load_search_keywords_cache( $user_id );
         if ( ! is_array( $cache ) || empty( $cache['months'] ) || empty( $cache['keywords'] ) ) {
@@ -299,7 +300,8 @@ class Gcrev_Meo_Report_Service {
      */
     public static function get_keywords_resolution_info( int $user_id, string $start ): array {
         $dt           = new \DateTimeImmutable( $start, wp_timezone() );
-        $target_label = (int) $dt->format( 'Y' ) . '/' . (int) $dt->format( 'n' );
+        // cache.months は "2026/04" (ゼロパディング有り) 形式なので合わせる
+        $target_label = $dt->format( 'Y/m' );
 
         $cache = self::load_search_keywords_cache( $user_id );
         if ( ! is_array( $cache ) || empty( $cache['months'] ) || empty( $cache['keywords'] ) ) {
