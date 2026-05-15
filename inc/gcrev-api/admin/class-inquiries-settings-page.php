@@ -78,6 +78,7 @@ class Gcrev_Inquiries_Settings_Page {
             $endpoint = isset( $_POST['endpoint'] ) ? esc_url_raw( wp_unslash( (string) $_POST['endpoint'] ) ) : '';
             $token    = isset( $_POST['token'] )    ? trim( wp_unslash( (string) $_POST['token'] ) )                : '';
             $enabled  = ! empty( $_POST['enabled'] );
+            $exclude_keywords_raw = isset( $_POST['exclude_keywords'] ) ? (string) wp_unslash( $_POST['exclude_keywords'] ) : '';
 
             if ( $endpoint !== '' && ! preg_match( '#^https?://#i', $endpoint ) ) {
                 wp_safe_redirect( add_query_arg( [ 'updated' => 'invalid', 'user' => $user_id ], menu_page_url( self::MENU_SLUG, false ) ) );
@@ -89,6 +90,16 @@ class Gcrev_Inquiries_Settings_Page {
                 Mimamori_Inquiries_Fetcher::set_token( $user_id, $token );
             }
             update_user_meta( $user_id, Mimamori_Inquiries_Fetcher::META_ENABLED, $enabled ? 1 : 0 );
+            Mimamori_Inquiries_Fetcher::set_exclude_keywords( $user_id, $exclude_keywords_raw );
+
+            // 除外キーワード変更を即時反映するため、保存済み月の月次サマリを再計算
+            $months_to_recalc = Mimamori_Inquiries_Fetcher::get_recent( $user_id, 24 );
+            foreach ( (array) $months_to_recalc as $row ) {
+                $ym = (string) ( $row->year_month ?? '' );
+                if ( $ym !== '' ) {
+                    Mimamori_Inquiries_Fetcher::recalc_monthly_summary_with_overrides( $user_id, $ym );
+                }
+            }
 
             wp_safe_redirect( add_query_arg( [ 'updated' => '1', 'user' => $user_id ], menu_page_url( self::MENU_SLUG, false ) ) );
             exit;
@@ -158,6 +169,7 @@ class Gcrev_Inquiries_Settings_Page {
         $token_saved  = ( $token_raw !== '' );
         $enabled      = Mimamori_Inquiries_Fetcher::is_enabled( $current );
         $recent       = Mimamori_Inquiries_Fetcher::get_recent( $current, 12 );
+        $exclude_keywords_raw = (string) get_user_meta( $current, Mimamori_Inquiries_Fetcher::META_EXCLUDE_KEYWORDS, true );
 
         $updated = isset( $_GET['updated'] ) ? sanitize_text_field( wp_unslash( $_GET['updated'] ) ) : '';
         $msg     = isset( $_GET['msg'] )     ? sanitize_text_field( wp_unslash( $_GET['msg'] ) )     : '';
@@ -225,6 +237,18 @@ class Gcrev_Inquiries_Settings_Page {
                         <th>自動取得</th>
                         <td>
                             <label><input type="checkbox" name="enabled" value="1" <?php checked( $enabled ); ?> /> 月初に自動取得する</label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="exclude_keywords">除外キーワード</label></th>
+                        <td>
+                            <textarea id="exclude_keywords" name="exclude_keywords" rows="5" cols="50" class="large-text code" placeholder="例:&#10;営業のご案内&#10;SEO対策&#10;御社のホームページ"><?php echo esc_textarea( $exclude_keywords_raw ); ?></textarea>
+                            <p class="description">
+                                ここに入力した語句のいずれかが問い合わせ本文・送信者名・メール・AI サマリに含まれている場合、その問い合わせは強制的に「無効 (除外)」扱いになります。<br>
+                                <strong>1 行に 1 語</strong>。カンマ・読点でも区切れます。大文字小文字は区別しません。<br>
+                                <strong>適用順位:</strong> 手動オーバーライド (valid 指定) &gt; このキーワードフィルタ &gt; AI 判定。<br>
+                                保存すると過去 24 ヶ月分の集計が即時再計算されます。
+                            </p>
                         </td>
                     </tr>
                 </table>

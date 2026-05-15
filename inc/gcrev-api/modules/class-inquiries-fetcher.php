@@ -25,10 +25,11 @@ if ( class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
 
 class Mimamori_Inquiries_Fetcher {
 
-    public const CRON_HOOK     = 'gcrev_inquiries_monthly_fetch_event';
-    public const META_ENDPOINT = '_gcrev_inquiries_endpoint';
-    public const META_TOKEN    = '_gcrev_inquiries_token';
-    public const META_ENABLED  = '_gcrev_inquiries_enabled';
+    public const CRON_HOOK             = 'gcrev_inquiries_monthly_fetch_event';
+    public const META_ENDPOINT         = '_gcrev_inquiries_endpoint';
+    public const META_TOKEN            = '_gcrev_inquiries_token';
+    public const META_ENABLED          = '_gcrev_inquiries_enabled';
+    public const META_EXCLUDE_KEYWORDS = '_gcrev_inquiries_exclude_keywords';
 
     private const TABLE_BASENAME = 'gcrev_inquiries';
     private const REQUEST_TIMEOUT = 15;
@@ -416,6 +417,58 @@ class Mimamori_Inquiries_Fetcher {
     }
 
     /**
+     * 除外キーワードリストを取得 (改行 / カンマ区切りで保存されている)。
+     * 戻り値は文字列の配列 (前後空白除去・空要素除去済)。
+     */
+    public static function get_exclude_keywords( int $user_id ): array {
+        $raw = (string) get_user_meta( $user_id, self::META_EXCLUDE_KEYWORDS, true );
+        if ( $raw === '' ) { return []; }
+        // 改行・カンマ・全角カンマで区切る
+        $parts = preg_split( '/[\r\n,、]+/u', $raw );
+        $out = [];
+        foreach ( (array) $parts as $p ) {
+            $p = trim( (string) $p );
+            if ( $p !== '' ) { $out[] = $p; }
+        }
+        return $out;
+    }
+
+    /** 除外キーワードを保存 (改行区切りの生文字列をそのまま保存) */
+    public static function set_exclude_keywords( int $user_id, string $raw ): void {
+        // 正規化: 各行をトリムして改行 \n で結合 (空行除外)
+        $lines = preg_split( '/[\r\n]+/', $raw );
+        $clean = [];
+        foreach ( (array) $lines as $line ) {
+            $line = trim( (string) $line );
+            if ( $line !== '' ) { $clean[] = $line; }
+        }
+        update_user_meta( $user_id, self::META_EXCLUDE_KEYWORDS, implode( "\n", $clean ) );
+    }
+
+    /**
+     * 除外キーワードがアイテムの本文 / 名前 / メール / サマリのいずれかに
+     * 含まれているかを判定。1 つでもヒットしたら true (=除外対象)。
+     */
+    public static function item_matches_exclude_keywords( array $item, array $keywords ): bool {
+        if ( empty( $keywords ) ) { return false; }
+        $haystack_parts = [
+            (string) ( $item['message']    ?? '' ),
+            (string) ( $item['name']       ?? '' ),
+            (string) ( $item['email']      ?? '' ),
+            (string) ( $item['ai_summary'] ?? '' ),
+        ];
+        $haystack = mb_strtolower( implode( "\n", $haystack_parts ) );
+        foreach ( $keywords as $kw ) {
+            $kw_lower = mb_strtolower( trim( (string) $kw ) );
+            if ( $kw_lower === '' ) { continue; }
+            if ( mb_strpos( $haystack, $kw_lower ) !== false ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * トークンを暗号化して保存
      */
     public static function set_token( int $user_id, string $plain ): void {
@@ -627,30 +680,36 @@ class Mimamori_Inquiries_Fetcher {
         );
     }
 
-    /** items 配列に manual_status / effective_valid を注入（破壊的更新） */
+    /** items 配列に manual_status / effective_valid を注入（破壊的更新）
+     *
+     * 適用優先度:
+     *   1. 手動オーバーライド (valid/excluded) — 最優先
+     *   2. 除外キーワードフィルタ (該当語を含む item は強制 invalid)
+     *   3. AI 判定 (ai_valid)
+     */
     public static function apply_overrides_to_items( int $user_id, string $year_month, array $items ): array {
         $all = self::get_overrides( $user_id );
         $period_overrides = is_array( $all[ $year_month ] ?? null ) ? $all[ $year_month ] : [];
-        if ( empty( $period_overrides ) ) {
-            // それでも各 item に inquiry_key だけ付けておく（UI側で上書き操作可能に）
-            foreach ( $items as &$it ) {
-                if ( ! isset( $it['inquiry_key'] ) ) {
-                    $it['inquiry_key'] = self::make_inquiry_key( $it );
-                }
-                $it['manual_status']   = null;
-                $it['effective_valid'] = ! empty( $it['ai_valid'] );
-            }
-            unset( $it );
-            return $items;
-        }
+        $exclude_keywords = self::get_exclude_keywords( $user_id );
+
         foreach ( $items as &$it ) {
             $key = $it['inquiry_key'] ?? self::make_inquiry_key( $it );
             $it['inquiry_key'] = $key;
+
             $manual = $period_overrides[ $key ] ?? null;
             $it['manual_status'] = $manual;
+
+            // キーワードヒット情報も注入 (UI側で「キーワード除外」と表示できる)
+            $keyword_hit = self::item_matches_exclude_keywords( $it, $exclude_keywords );
+            $it['keyword_excluded'] = $keyword_hit;
+
             if ( $manual === 'valid' ) {
+                // 手動 valid は最優先で有効 (キーワードヒットでも上書きしない)
                 $it['effective_valid'] = true;
             } elseif ( $manual === 'excluded' ) {
+                $it['effective_valid'] = false;
+            } elseif ( $keyword_hit ) {
+                // キーワードヒット = 強制 invalid
                 $it['effective_valid'] = false;
             } else {
                 $it['effective_valid'] = ! empty( $it['ai_valid'] );
