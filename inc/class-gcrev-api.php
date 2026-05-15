@@ -4524,14 +4524,29 @@ PROMPT;
                 'post_id'     => $saved_post_id,
             ];
 
-            // === KPI スナップショット + インフォグラフィック (重い処理) ===
+            // === KPI スナップショット + インフォグラフィック + easy mode リライト (重い処理) ===
             // クライアントは既にレポート本体を受け取った状態にするため、
             // fastcgi_finish_request でレスポンスを先に flush してから残りを処理する。
             if ( function_exists( 'fastcgi_finish_request' ) ) {
                 @ignore_user_abort( true );
-                @header( 'Content-Type: application/json; charset=utf-8' );
+
+                $resp_body = wp_json_encode( $response_data, JSON_UNESCAPED_UNICODE );
+
+                // 既存の出力バッファを完全に破棄 (REST_Server が積んだ ob があっても剥がす)
+                while ( ob_get_level() > 0 ) {
+                    @ob_end_clean();
+                }
+
                 @status_header( 200 );
-                echo wp_json_encode( $response_data, JSON_UNESCAPED_UNICODE );
+                @header( 'Content-Type: application/json; charset=utf-8' );
+                @header( 'Content-Length: ' . strlen( $resp_body ) );
+                @header( 'Connection: close' );
+                // nginx の fastcgi_buffering を無効化してクライアントに即時 flush させる
+                @header( 'X-Accel-Buffering: no' );
+
+                echo $resp_body;
+                @flush();
+
                 if ( function_exists( 'session_write_close' ) ) { @session_write_close(); }
                 @fastcgi_finish_request();
 
