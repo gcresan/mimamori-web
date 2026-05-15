@@ -125,16 +125,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // サイドバー アコーディオンメニュー（トグル式：クリックで開閉）
+    // DOM 上のすべての .nav-item-collapsible を自動検出して登録する（ID 列挙不要）
     (function() {
-        var menuIds = ['navToggleReport', 'navToggleHome', 'navToggleMeo', 'navToggleSettings', 'navToggleSupport'];
         var items = [];
-
-        menuIds.forEach(function(id) {
-            var btn = document.getElementById(id);
-            if (!btn) return;
+        document.querySelectorAll('.nav-item-collapsible > .nav-link-toggle').forEach(function(btn) {
             var li = btn.closest('.nav-item-collapsible');
             if (!li) return;
-            items.push({ btn: btn, li: li, key: li.getAttribute('data-menu-key') || id });
+            items.push({ btn: btn, li: li, key: li.getAttribute('data-menu-key') || btn.id });
         });
 
         items.forEach(function(item) {
