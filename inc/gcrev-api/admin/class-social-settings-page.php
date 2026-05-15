@@ -130,13 +130,15 @@ class Gcrev_Social_Settings_Page {
                             <span id="meta-copy-feedback" style="color:#059669; font-size:12px; margin-left:8px; display:none;">✅ コピーしました</span>
                         </div>
                     </li>
-                    <li>必要なアクセス許可（権限）として以下をリクエスト：
+                    <li>必要なアクセス許可（権限）として以下をリクエスト（App Review で Advanced Access を申請）：
                         <ul style="margin:4px 0 0 16px; list-style:disc;">
-                            <li><code>pages_show_list</code> / <code>pages_manage_posts</code> / <code>pages_read_engagement</code></li>
+                            <li><code>pages_show_list</code> / <code>pages_read_engagement</code> / <code>pages_manage_posts</code></li>
                             <li><code>instagram_basic</code> / <code>instagram_content_publish</code></li>
-                            <li><code>business_management</code></li>
                             <li><code>threads_basic</code> / <code>threads_content_publish</code>（Threads製品を追加した場合）</li>
                         </ul>
+                        <p style="margin:4px 0 0 16px; font-size:12px; color:#666;">
+                            ※ <code>business_management</code> は本実装では使用しません（投稿は Page Access Token で行うため）。
+                        </p>
                     </li>
                     <li>「アプリの設定 &gt; ベーシック」から App ID / App Secret をコピーして上のフォームに入力</li>
                     <li>本番利用するにはアプリレビュー申請が必要（pages_manage_posts, instagram_content_publish 等は審査対象）</li>
