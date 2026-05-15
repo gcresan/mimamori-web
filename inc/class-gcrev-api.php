@@ -4277,6 +4277,7 @@ PROMPT;
         }
 
         return [
+            'user_id'          => $user_id, // Claude プロンプト構築で問い合わせ連携を引くために必要
             'site_url'         => $site_url,
             'site_domain'      => $site_domain,
             'maps_domain'      => $maps_domain ?: $site_domain,

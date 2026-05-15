@@ -341,6 +341,81 @@ class Mimamori_Inquiries_Fetcher {
     }
 
     /**
+     * 月次レポート (Claude) 用に問い合わせ実データを要約して返す。
+     *
+     * 連携プラグインが有効でなければ null。
+     * 連携あり・該当月の items_json があれば:
+     *   - 全件数 / 有効 (effective_valid=true) 件数
+     *   - AI分類カテゴリ別の集計
+     *   - 有効問い合わせのサンプル (最大 10 件) — Claude が「実際に来ている相談」を読める
+     *   - 営業メール混入率 (見込み客 vs ノイズの比率を可視化)
+     *
+     * @param int    $user_id
+     * @param string $ym  'YYYY-MM'
+     * @return array|null
+     */
+    public static function summarize_for_report( int $user_id, string $ym ): ?array {
+        if ( ! self::is_enabled( $user_id ) ) {
+            return null;
+        }
+
+        $items = self::get_items_json( $user_id, $ym );
+        if ( ! is_array( $items ) ) {
+            // プラグイン連携は有効だがデータ未取得
+            return [
+                'connected'      => true,
+                'has_items_data' => false,
+                'period'         => $ym,
+                'note'           => '問い合わせ集計プラグインは連携済みだが、当該月の items_json データは未取得',
+            ];
+        }
+
+        // 手動オーバーライド (営業判定の人手修正) を反映
+        $items = self::apply_overrides_to_items( $user_id, $ym, $items );
+
+        $total = count( $items );
+        $valid_items   = [];
+        $by_category   = [];
+
+        foreach ( $items as $it ) {
+            $cat = (string) ( $it['ai_category'] ?? 'その他' );
+            $by_category[ $cat ] = ( $by_category[ $cat ] ?? 0 ) + 1;
+            if ( ! empty( $it['effective_valid'] ) ) {
+                $valid_items[] = $it;
+            }
+        }
+
+        // 有効問い合わせのサンプルを最新順で最大 10 件
+        usort( $valid_items, static function ( $a, $b ) {
+            return strcmp( (string) ( $b['date'] ?? '' ), (string) ( $a['date'] ?? '' ) );
+        } );
+        $sample_max = 10;
+        $samples = [];
+        foreach ( array_slice( $valid_items, 0, $sample_max ) as $it ) {
+            $samples[] = [
+                'date'     => (string) ( $it['date'] ?? '' ),
+                'category' => (string) ( $it['ai_category'] ?? '' ),
+                'summary'  => (string) ( $it['ai_summary'] ?? mb_substr( (string) ( $it['message'] ?? '' ), 0, 140 ) ),
+            ];
+        }
+
+        $valid_count = count( $valid_items );
+
+        return [
+            'connected'              => true,
+            'has_items_data'         => true,
+            'period'                 => $ym,
+            'total'                  => $total,
+            'valid'                  => $valid_count,
+            'noise_excluded'         => max( 0, $total - $valid_count ),
+            'noise_ratio_pct'        => $total > 0 ? round( ( ( $total - $valid_count ) / $total ) * 100, 1 ) : null,
+            'by_category'            => $by_category,
+            'valid_samples'          => $samples,
+            'note'                   => 'これは契約サイトの実フォーム送信を AI 分類 + 人手レビュー済みの「真の問い合わせデータ」。GA4 のキーイベント数より、ここの valid 件数を事業上の CV 真実として優先せよ。',
+        ];
+    }
+
+    /**
      * トークンを暗号化して保存
      */
     public static function set_token( int $user_id, string $plain ): void {

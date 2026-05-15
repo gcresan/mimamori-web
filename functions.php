@@ -12219,6 +12219,18 @@ GA4とSearch Consoleを別々に説明するのではなく、横断して考察
 データが少ない場合は「データが少ないため仮説レベル」と明記してください。
 クライアントを責める表現は避け、前向きな改善提案にしてください。
 
+【コンバージョン (CV) の真実の数え方 — 厳守】
+入力データに `inquiries` フィールドが存在し `inquiries.connected === true` の場合:
+- これは契約サイトの実フォーム送信を AI 分類 + 人手レビュー済みの「真の問い合わせデータ」です
+- CV 数は `inquiries.valid` を最優先で使ってください (GA4 の events や conversions ではない)
+- `inquiries.total` と `inquiries.valid` に大きな乖離がある場合 (営業メール多数等)、それ自体がビジネス上の重要事実なので考察に組み込んでください
+- `inquiries.by_category` で内訳を確認し、「営業」「SPAM」が多いなら受信フォームへの対策を提案してください
+- `inquiries.valid_samples` の各 summary を必ず読み、実際に来ている相談内容を踏まえた顧客像・ニーズ理解を考察に反映してください (具体的な内容に触れる)
+- このとき GA4 の `events` / `conversions` は「フォーム送信全体の動き (ノイズ含む)」として参考程度に扱い、ビジネス上の真の CV は `inquiries.valid` に置く
+
+`inquiries` フィールドが無いまたは `inquiries.connected !== true` の場合:
+- 従来通り GA4 の `events` / `conversions` を CV の参考値として使う
+
 {$tone_block}
 
 【出力長さの厳守事項】

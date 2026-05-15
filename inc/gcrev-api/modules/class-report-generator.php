@@ -256,7 +256,18 @@ class Gcrev_Report_Generator {
 
         $area_label = $client_info['area_label'] ?? null;
 
-        return [
+        // 問い合わせ集計プラグイン連携データ (該当ユーザーがプラグイン設定済みの場合のみ)
+        $inquiries_block = null;
+        $user_id_for_inq = (int) ( $client_info['user_id'] ?? 0 );
+        if ( $user_id_for_inq > 0 && class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+            $prev_start = (string) ( $prev_data['current_period']['start'] ?? '' );
+            $target_ym  = $prev_start !== '' ? substr( $prev_start, 0, 7 ) : '';
+            if ( $target_ym !== '' && preg_match( '/^\d{4}-\d{2}$/', $target_ym ) ) {
+                $inquiries_block = \Mimamori_Inquiries_Fetcher::summarize_for_report( $user_id_for_inq, $target_ym );
+            }
+        }
+
+        $payload = [
             'client' => [
                 'name'              => '', // 任意項目（保存していないため空）
                 'site_url'          => $client_info['site_url']       ?? '',
@@ -317,6 +328,13 @@ class Gcrev_Report_Generator {
             'target_area'   => $target_area,
             'output_mode'   => $client_info['output_mode']   ?? 'normal',
         ];
+
+        // 問い合わせ集計プラグイン連携データを payload に乗せる (連携あり時のみ)
+        if ( is_array( $inquiries_block ) ) {
+            $payload['inquiries'] = $inquiries_block;
+        }
+
+        return $payload;
     }
 
     /**
