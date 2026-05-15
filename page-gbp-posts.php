@@ -88,6 +88,45 @@ wp_enqueue_media();
 .gp-cross-badge.cross-fail    { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
 .gp-cross-badge.cross-pending { background:#fefce8; color:#a16207; border:1px solid #fde68a; }
 
+/* 同時投稿先（GBP モーダル内）— 親 .gp-form-group label の display:block を上書きするため
+   label.gp-crosspost-row を使い、十分な詳細度で flex 配置を固定する */
+.gp-form-group .gp-crosspost-options {
+    padding: 12px 14px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+}
+.gp-form-group label.gp-crosspost-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    font-weight: normal;
+    color: #1e293b;
+    cursor: pointer;
+    line-height: 1.5;
+}
+.gp-form-group label.gp-crosspost-row:last-of-type { margin-bottom: 10px; }
+.gp-form-group label.gp-crosspost-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+}
+.gp-form-group label.gp-crosspost-row input[type="checkbox"]:disabled { cursor: not-allowed; }
+.gp-form-group label.gp-crosspost-row input[type="checkbox"]:disabled + .gp-crosspost-text { color: #94a3b8; }
+.gp-form-group .gp-crosspost-text { flex: 0 0 auto; }
+.gp-form-group .gp-crosspost-note { color: #94a3b8; font-size: 12px; }
+.gp-form-group .gp-crosspost-hint {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.5;
+}
+.gp-form-group .gp-crosspost-hint a { color: #2563eb; text-decoration: underline; }
+
 .gp-card-actions { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
 .gp-card-actions .gp-btn { padding:4px 10px; font-size:11px; }
 
@@ -442,14 +481,17 @@ wp_enqueue_media();
 
                 <div class="gp-form-group" id="crosspostGroup">
                     <label>同時投稿先（任意）</label>
-                    <div class="gp-checkbox-group" style="display:flex; flex-direction:column; gap:8px; padding:10px 12px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:6px;">
-                        <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
-                            <input type="checkbox" id="crosspostFacebook"> Facebookページにも投稿する
+                    <div class="gp-crosspost-options">
+                        <label class="gp-crosspost-row">
+                            <input type="checkbox" id="crosspostFacebook">
+                            <span class="gp-crosspost-text">Facebookページにも投稿する</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
-                            <input type="checkbox" id="crosspostInstagram"> Instagramにも投稿する <span style="color:#94a3b8; font-size:12px;">（画像必須）</span>
+                        <label class="gp-crosspost-row">
+                            <input type="checkbox" id="crosspostInstagram">
+                            <span class="gp-crosspost-text">Instagramにも投稿する</span>
+                            <span class="gp-crosspost-note">（画像必須）</span>
                         </label>
-                        <p id="crosspostHint" style="margin:0; font-size:12px; color:#64748b; line-height:1.5;"></p>
+                        <p id="crosspostHint" class="gp-crosspost-hint"></p>
                     </div>
                 </div>
 
