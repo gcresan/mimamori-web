@@ -215,7 +215,7 @@ get_header();
     margin-bottom: 10px;
 }
 .tut-flow-step__name {
-    font-size: 16px;
+    font-size: 32px;
     font-weight: 800;
     color: #1e293b;
     margin: 0 0 6px;
