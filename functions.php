@@ -10012,6 +10012,29 @@ function gcrev_ensure_meo_report_page(): void {
 }
 
 // --------------------------------------------------
+// 旧 /terms/ スラッグ採用時の後始末（一回限りのマイグレーション）
+// 直前リリースで gcrev_ensure_public_policy_pages() が既存の /terms/ ページの
+// テンプレートを page-terms.php に上書きしてしまった可能性があるため、
+// 該当する場合のみテンプレート設定を解除し、元のデフォルトに戻す。
+// （元が独自テンプレートだった場合は管理画面で再選択が必要）
+// --------------------------------------------------
+add_action( 'admin_init', 'gcrev_migrate_legacy_terms_template' );
+function gcrev_migrate_legacy_terms_template(): void {
+    if ( get_option( 'gcrev_terms_template_migrated', 0 ) ) {
+        return;
+    }
+    $legacy_id = (int) get_option( 'gcrev_terms_page_id', 0 );
+    if ( $legacy_id > 0 ) {
+        $current_tpl = get_post_meta( $legacy_id, '_wp_page_template', true );
+        if ( $current_tpl === 'page-terms.php' ) {
+            delete_post_meta( $legacy_id, '_wp_page_template' );
+        }
+        delete_option( 'gcrev_terms_page_id' );
+    }
+    update_option( 'gcrev_terms_template_migrated', 1, false );
+}
+
+// --------------------------------------------------
 // 公開ポリシーページ自動作成（Meta アプリレビュー対応）
 // プライバシーポリシー / 利用規約 / データ削除手順
 // すでにスラッグが存在する場合はテンプレートのみ更新（内容は上書きしない）
@@ -10024,10 +10047,10 @@ function gcrev_ensure_public_policy_pages(): void {
             'template' => 'page-privacy-policy.php',
             'option'   => 'gcrev_privacy_policy_page_id',
         ],
-        'terms' => [
+        'terms-of-service' => [
             'title'    => '利用規約',
-            'template' => 'page-terms.php',
-            'option'   => 'gcrev_terms_page_id',
+            'template' => 'page-terms-of-service.php',
+            'option'   => 'gcrev_terms_of_service_page_id',
         ],
         'data-deletion' => [
             'title'    => 'データ削除について',
@@ -10170,7 +10193,7 @@ add_action( 'template_redirect', function () {
         'apply',
         // 公開ポリシーページ（Meta アプリレビュー対応）
         'privacy-policy',
-        'terms',
+        'terms-of-service',
         'data-deletion',
     ];
 

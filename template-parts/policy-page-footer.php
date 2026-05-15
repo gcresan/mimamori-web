@@ -7,7 +7,7 @@
     <nav class="policy-footer-links">
         <a href="<?php echo esc_url( home_url( '/privacy-policy/' ) ); ?>">プライバシーポリシー</a>
         <span class="sep">｜</span>
-        <a href="<?php echo esc_url( home_url( '/terms/' ) ); ?>">利用規約</a>
+        <a href="<?php echo esc_url( home_url( '/terms-of-service/' ) ); ?>">利用規約</a>
         <span class="sep">｜</span>
         <a href="<?php echo esc_url( home_url( '/data-deletion/' ) ); ?>">データ削除について</a>
     </nav>

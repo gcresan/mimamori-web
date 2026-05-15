@@ -1,8 +1,9 @@
 <?php
 /**
- * Template Name: 利用規約（公開）
+ * Template Name: 利用規約（公開・サービス利用規約）
  *
  * Meta アプリレビュー対応の公開ページ。ログイン不要で閲覧可能。
+ * URL: /terms-of-service/（/terms/ は別ページが先に使用しているため回避）
  */
 
 $page_title = '利用規約';
