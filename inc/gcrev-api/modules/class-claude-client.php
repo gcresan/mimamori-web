@@ -64,7 +64,9 @@ class Gcrev_Claude_Client {
         $model       = $options['model']       ?? $this->config->get_claude_model();
         $temperature = $options['temperature'] ?? 0.4;
         $max_tokens  = $options['max_tokens']  ?? 8000;
-        $timeout     = $options['timeout']     ?? 180;
+        // KUSANAGI nginx の fastcgi_read_timeout は通常 300s。
+        // 余裕を見て 290s に設定（タイムアウト時にエラーメッセージを返せるため）
+        $timeout     = $options['timeout']     ?? 290;
 
         $body = [
             'model'       => $model,

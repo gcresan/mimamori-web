@@ -4360,7 +4360,7 @@ PROMPT;
     // レポート生成（Multi-pass）
     // =========================================================
     public function generate_report(WP_REST_Request $request): WP_REST_Response {
-        @set_time_limit( 300 );
+        @set_time_limit( 600 ); // Claude (Sonnet 4.5, 16k tokens) は最大 ~5分かかるため余裕を持たせる
 
         $user_id = get_current_user_id();
         $params  = $request->get_json_params();

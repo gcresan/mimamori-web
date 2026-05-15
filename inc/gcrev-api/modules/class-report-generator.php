@@ -198,7 +198,7 @@ class Gcrev_Report_Generator {
         $this->log( sprintf( '[ReportGen] Claude payload size=%d chars', $payload_chars ) );
 
         $result = mimamori_generate_monthly_report_with_claude( $report_data, [
-            'max_tokens'  => 8000,
+            'max_tokens'  => 16000,
             'temperature' => 0.4,
         ] );
 
@@ -295,21 +295,21 @@ class Gcrev_Report_Generator {
                 'summary'       => $ga4_prev['total']     ?? [],
                 'prev_summary'  => $ga4_two['total']      ?? [],
                 'changes'       => $changes,
-                'pages'         => array_slice( $ga4_prev['pages']    ?? [], 0, 10 ),
-                'landing_pages' => array_slice( $ga4_prev['landing']  ?? [], 0, 10 ),
-                'channels'      => $ga4_prev['channels']  ?? [],
+                'pages'         => array_slice( $ga4_prev['pages']    ?? [], 0, 5 ),
+                'landing_pages' => array_slice( $ga4_prev['landing']  ?? [], 0, 5 ),
+                'channels'      => array_slice( $ga4_prev['channels'] ?? [], 0, 8 ),
                 'devices'       => $ga4_prev['devices']   ?? [],
-                'regions'       => array_slice( $prev_data['geo_region'] ?? [], 0, 10 ),
-                'cities'        => array_slice( $prev_data['geo']        ?? [], 0, 10 ),
-                'events'        => $ga4_prev['events']    ?? [],
+                'regions'       => array_slice( $prev_data['geo_region'] ?? [], 0, 5 ),
+                'cities'        => array_slice( $prev_data['geo']        ?? [], 0, 5 ),
+                'events'        => array_slice( $ga4_prev['events']   ?? [], 0, 8 ),
                 'conversions'   => $client_info['effective_cv'] ?? [],
             ],
             'search_console' => [
                 'connected'                       => $gsc_connected,
                 'summary'                         => $gsc_prev['total'] ?? [],
                 'prev_summary'                    => $gsc_two['total']  ?? [],
-                'queries'                         => array_slice( $gsc_prev['keywords'] ?? [], 0, 20 ),
-                'pages'                           => array_slice( $gsc_prev['pages']    ?? [], 0, 20 ),
+                'queries'                         => array_slice( $gsc_prev['keywords'] ?? [], 0, 10 ),
+                'pages'                           => array_slice( $gsc_prev['pages']    ?? [], 0, 10 ),
                 'high_impression_low_ctr_queries' => $this->pick_high_impr_low_ctr( $gsc_prev['keywords'] ?? [] ),
                 'near_top_queries'                => $this->pick_near_top( $gsc_prev['keywords'] ?? [] ),
             ],
