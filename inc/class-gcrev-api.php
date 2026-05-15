@@ -11473,37 +11473,10 @@ PROMPT;
                 'has_overrides'      => false,
             ];
 
-            // CVレビュー結果があれば上書き
-            // 電話タップは「自動有効（GA4 keyEvents 由来）」と「レビュー status=1」の
-            // いずれか大きい方を採用する。これにより、以下の両方を正しく処理:
-            //  (a) GA4 側で keyEvents として記録されている → 自動カウント
-            //  (b) keyEvents 未設定だが、レビューで status=1 に手動判定 → ユーザー意思を反映
-            $reviewed = $this->get_reviewed_cv_data($year_month, $user_id, $is_phone_tap_pure);
-            if ($reviewed !== null) {
-                $result['source'] = 'reviewed';
-                $merged_daily = array_merge($empty_daily, $reviewed['daily_non_phone_tap'] ?? []);
-                $reviewed_phone_tap_daily = $reviewed['phone_tap_daily'] ?? [];
-                $phone_tap_dates = array_unique(array_merge(
-                    array_keys($phone_tap_daily),
-                    array_keys($reviewed_phone_tap_daily)
-                ));
-                foreach ($phone_tap_dates as $date) {
-                    $local_val = (int) ($phone_tap_daily[$date] ?? 0);
-                    $rev_val   = (int) ($reviewed_phone_tap_daily[$date] ?? 0);
-                    $merged_daily[$date] = ($merged_daily[$date] ?? 0) + max($local_val, $rev_val);
-                }
-                $result['daily'] = $merged_daily;
-                $result['total'] = array_sum($merged_daily);
-                $result['components']['reviewed_total'] = $reviewed['total'];
-                if (isset($reviewed['breakdown_by_label'])) {
-                    $result['breakdown_by_label'] = $reviewed['breakdown_by_label'];
-                }
-                if (isset($reviewed['daily_by_label'])) {
-                    $result['daily_by_label'] = $reviewed['daily_by_label'];
-                }
-            }
+            // 「ゴールの確認（手動調整）」タブは廃止済み。手動判定の上書きはここでは行わない。
+            // 優先順位: プラグイン連携 > GA4 キーイベント + ゴールの数え方設定
 
-            // 問い合わせAPI連携が有効ならフォーム系CVを上書き
+            // 問い合わせAPI連携が有効ならフォーム系CVを上書き（最優先）
             $result = $this->apply_inquiries_api_cv_override( $result, $year_month, $user_id );
 
             $this->effective_cv_cache[$cache_key] = $result;
@@ -11761,39 +11734,10 @@ PROMPT;
             'has_overrides'      => true,
         ];
 
-        // CVレビュー結果があれば上書き
-        // 電話タップの扱い:
-        //   - GA4 keyEvents 側に計上されている分 → 自動有効（ユーザー操作不要で常にカウント）
-        //   - GA4 keyEvents 未設定だが、レビュー画面で status=1 にした分 → ユーザー判定を尊重
-        //   両者は重複しうるので「日別に max」を取り、二重計上を避ける
-        $reviewed = $this->get_reviewed_cv_data($year_month, $user_id, $is_phone_tap);
-        if ($reviewed !== null) {
-            $result['source'] = 'reviewed';
-            // status=1 のうち電話タップ以外を base に採用
-            $merged_daily = array_merge($empty_daily, $reviewed['daily_non_phone_tap'] ?? []);
-            // 電話タップは local（GA4 由来）と reviewed の max を加算
-            $reviewed_phone_tap_daily = $reviewed['phone_tap_daily'] ?? [];
-            $phone_tap_dates = array_unique(array_merge(
-                array_keys($phone_tap_daily),
-                array_keys($reviewed_phone_tap_daily)
-            ));
-            foreach ($phone_tap_dates as $date) {
-                $local_val = (int) ($phone_tap_daily[$date] ?? 0);
-                $rev_val   = (int) ($reviewed_phone_tap_daily[$date] ?? 0);
-                $merged_daily[$date] = ($merged_daily[$date] ?? 0) + max($local_val, $rev_val);
-            }
-            $result['daily'] = $merged_daily;
-            $result['total'] = array_sum($merged_daily);
-            $result['components']['reviewed_total'] = $reviewed['total'];
-            if (isset($reviewed['breakdown_by_label'])) {
-                $result['breakdown_by_label'] = $reviewed['breakdown_by_label'];
-            }
-            if (isset($reviewed['daily_by_label'])) {
-                $result['daily_by_label'] = $reviewed['daily_by_label'];
-            }
-        }
+        // 「ゴールの確認（手動調整）」タブは廃止済み。手動判定の上書きはここでは行わない。
+        // 優先順位: プラグイン連携 > GA4 キーイベント + ゴールの数え方設定
 
-        // 問い合わせAPI連携が有効ならフォーム系CVを上書き
+        // 問い合わせAPI連携が有効ならフォーム系CVを上書き（最優先）
         $result = $this->apply_inquiries_api_cv_override( $result, $year_month, $user_id );
 
         $this->effective_cv_cache[$cache_key] = $result;
