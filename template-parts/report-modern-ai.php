@@ -581,6 +581,37 @@ if ( is_array( $kpi_snapshot ) ) {
         }
         return '';
     };
+
+    // スラッシュ等で区切られたサマリ文字列から日本語名らしきトークンを抽出するヘルパー
+    // 例: "プラン・間取りのご相談 / 兵頭亜美 / ヒョウドウアミ / 090-xxx / ..." → "兵頭亜美"
+    $extract_name_from_summary = static function ( string $summary ): string {
+        if ( $summary === '' ) { return ''; }
+        $tokens = preg_split( '/[\/／,、]/u', $summary );
+        if ( ! is_array( $tokens ) ) { return ''; }
+        $kanji_candidates = [];
+        $kana_candidates  = [];
+        foreach ( $tokens as $token ) {
+            $t = preg_replace( '/^[\s　]+|[\s　]+$/u', '', (string) $token ); // 前後の半角/全角空白を除去
+            if ( $t === '' ) { continue; }
+            // 数字・@・ハイフン・括弧・中黒・ひらがな等を含むトークンは除外
+            // ひらがなを除外することで「同意する」「ご相談」等の動詞・名詞句を弾く
+            if ( preg_match( '/[\d@\-\(\)（）・〜~:：\s　\x{3040}-\x{309F}]/u', $t ) ) { continue; }
+            // 漢字のみ 2〜6文字 — 最優先（例: 兵頭亜美, 井上博貴）
+            if ( preg_match( '/^[\x{4E00}-\x{9FFF}々]{2,6}$/u', $t ) ) {
+                $kanji_candidates[] = $t;
+                continue;
+            }
+            // カタカナのみ 3〜12文字 — フリガナや外国人名（例: ヒョウドウアミ）
+            // ただし「メール」「お電話」等の短い名詞を弾くため4文字以上を要件にする
+            if ( preg_match( '/^[\x{30A0}-\x{30FF}ー]{4,12}$/u', $t ) ) {
+                $kana_candidates[] = $t;
+                continue;
+            }
+        }
+        if ( ! empty( $kanji_candidates ) ) { return $kanji_candidates[0]; }
+        if ( ! empty( $kana_candidates ) )  { return $kana_candidates[0];  }
+        return '';
+    };
     ?>
     <?php if ( ! empty( $inquiry_list_items ) ): ?>
     <section class="m-section" id="m-inquiry-list">
@@ -615,6 +646,14 @@ if ( is_array( $kpi_snapshot ) ) {
                     if ( $iq_name === '' ) {
                         // 本文から抽出を試みる (「お名前: 田中太郎」等)
                         $iq_name = $extract_name_from_message( (string) ( $it['message'] ?? '' ) );
+                    }
+                    if ( $iq_name === '' ) {
+                        // AI サマリ（スラッシュ区切り）から日本語名らしきトークンを抽出
+                        $iq_name = $extract_name_from_summary( (string) ( $it['ai_summary'] ?? '' ) );
+                    }
+                    if ( $iq_name === '' ) {
+                        // 本文側にも同じパターンで存在する可能性がある
+                        $iq_name = $extract_name_from_summary( (string) ( $it['message'] ?? '' ) );
                     }
                     if ( $iq_name === '' ) { $iq_name = '(名前なし)'; }
                     $iq_cat  = (string) ( $it['ai_category'] ?? '' );
