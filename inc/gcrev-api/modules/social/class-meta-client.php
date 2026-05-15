@@ -67,11 +67,12 @@ class Gcrev_Meta_Client {
 
     /**
      * 疎通確認用の最小スコープ。Meta App Review 未申請の状態でも使える。
-     * （public_profile は明示しなくても付与されるが、明示で意図を明確化）
+     * ※ 'email' も Standard Access が外れて Advanced Access 申請が必要になる
+     *    アプリ種別があるため、デフォルトは public_profile のみとする。
+     *    必要なら 'gcrev_meta_oauth_scopes' フィルタで ['public_profile','email'] 等に拡張可能。
      */
     const SCOPES_MINIMAL = [
         'public_profile',
-        'email',
     ];
 
     /**
