@@ -71,11 +71,10 @@ get_header();
 .tut-hero-lead {
     font-size: 15px;
     color: #475569;
-    line-height: 1.8;
+    line-height: 1.9;
     margin: 0 0 28px;
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
+    max-width: none;
+    text-align: center;
 }
 .tut-hero-lead strong {
     color: #1e293b;
@@ -707,7 +706,7 @@ get_header();
 
     <!-- ① ヒーロー -->
     <div class="tut-hero">
-        <h2 class="tut-hero-title">はじめての方へ｜みまもりウェブの歩き方</h2>
+        <h2 class="tut-hero-title">初めての方へ</h2>
         <p class="tut-hero-lead">
             みまもりウェブは、<strong>ホームページとGoogleマップの状態をAIといっしょに見て、ふり返るツール</strong>です。<br>
             難しい数字を覚える必要はありません。<br>
