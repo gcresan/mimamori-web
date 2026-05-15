@@ -10163,10 +10163,11 @@ PROMPT;
                     continue;
                 }
                 $pct = $this->calc_pct_change($c, $p);
-                if ($pct >= 5.0)       $pts = $per_dim;      // 12.5
-                elseif ($pct >= -5.0)  $pts = $per_dim * 0.86; // ~10.75
-                elseif ($pct >= -15.0) $pts = $per_dim * 0.7;  // ~8.75
-                else                   $pts = $per_dim * 0.5;  // 6.25
+                // 「現状維持」を正当に評価: ±5% 以内は満点、緩やかな下落も緩やかに減点
+                if ($pct >= -5.0)       $pts = $per_dim;      // 12.5（現状維持以上は満点）
+                elseif ($pct >= -15.0)  $pts = $per_dim * 0.86; // ~10.75
+                elseif ($pct >= -25.0)  $pts = $per_dim * 0.7;  // ~8.75
+                else                    $pts = $per_dim * 0.5;  // 6.25
                 $raw_total += $pts;
                 $valid_count++;
                 $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => null, 'fallback' => true];
@@ -10192,11 +10193,12 @@ PROMPT;
                     continue;
                 }
                 $ratio = $c / $m;
-                if ($ratio >= 1.0)      $pts = $per_dim;       // 12.5
-                elseif ($ratio >= 0.8)  $pts = $per_dim * 0.8;  // 10
-                elseif ($ratio >= 0.6)  $pts = $per_dim * 0.6;  // 7.5
-                elseif ($ratio >= 0.4)  $pts = $per_dim * 0.4;  // 5
-                else                    $pts = $per_dim * 0.2;  // 2.5
+                // 中央値の 90% 以上なら満点（過去6ヶ月の平均的な水準を維持できていれば良評価）
+                if ($ratio >= 0.9)      $pts = $per_dim;       // 12.5
+                elseif ($ratio >= 0.7)  $pts = $per_dim * 0.85; // ~10.6
+                elseif ($ratio >= 0.5)  $pts = $per_dim * 0.65; // ~8.1
+                elseif ($ratio >= 0.3)  $pts = $per_dim * 0.45; // ~5.6
+                else                    $pts = $per_dim * 0.25; // ~3.1
                 $total += $pts;
                 $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => round($ratio, 2)];
             }
@@ -10238,20 +10240,21 @@ PROMPT;
                 continue;
             }
             $pct = $this->calc_pct_change($c, $p);
+            // 現状維持を広く評価: -10%~+5% を満点。下落側はなだらかに減点。
             if ($pct > 10.0) {
                 $pts = $per_dim;       // 7.5
                 $zone = 'high';
             } elseif ($pct > 5.0) {
                 $pts = $per_dim * 0.93; // ~7.0
                 $zone = 'mid';
-            } elseif ($pct >= -5.0) {
-                $pts = $per_dim;       // 7.5 — デッドゾーン = 満点
+            } elseif ($pct >= -10.0) {
+                $pts = $per_dim;       // 7.5 — デッドゾーン拡張 = 満点
                 $zone = 'dead';
-            } elseif ($pct >= -15.0) {
-                $pts = $per_dim * 0.53; // ~4.0
+            } elseif ($pct >= -20.0) {
+                $pts = $per_dim * 0.73; // ~5.5
                 $zone = 'soft_decline';
             } else {
-                $pts = $per_dim * 0.13; // ~1.0
+                $pts = $per_dim * 0.33; // ~2.5
                 $zone = 'hard_decline';
             }
             $raw_total += $pts;
