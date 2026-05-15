@@ -8,8 +8,9 @@
  * 動作:
  *   - POST: signed_request を受け取り、Meta App Secret で署名検証
  *           → 検証成功で該当ユーザーの Meta 連携 user_meta を削除
- *           → JSON ({ url, confirmation_code }) を返す
- *   - GET:  人間向けの簡単な説明ページを表示
+ *           → 検証失敗・signed_request 欠落時も削除はせず、HTTP 200 + JSON を返す
+ *             （Meta 管理画面の URL 保存時に空 POST で疎通確認されるため）
+ *   - GET:  HTTP 200 で人間向けの簡単な説明ページを表示
  *
  * Meta 仕様:
  *   https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback
@@ -31,8 +32,9 @@ if ( isset( $_SERVER['REQUEST_METHOD'] ) && strtoupper( $_SERVER['REQUEST_METHOD
 }
 
 // ===================================================================
-// GET: 人間向け説明ページ
+// GET: 人間向け説明ページ（HTTP 200）
 // ===================================================================
+status_header( 200 );
 $page_title = 'Meta データ削除コールバック';
 ?>
 <!DOCTYPE html>
@@ -78,11 +80,14 @@ exit;
 // ===================================================================
 
 /**
- * POST リクエストを処理し、JSON を返却する。
- * 必ず exit する。
+ * POST リクエストを処理し、HTTP 200 + JSON を返却する。
+ *
+ * Meta は「データ削除コールバック URL」を保存する際に空 POST で疎通確認するため、
+ * signed_request が無い・不正・署名検証 NG の場合でも 200 + JSON で応答する。
+ * 実際の削除処理は signed_request の HMAC-SHA256 検証に成功した場合のみ行う。
  */
 function mimamori_meta_data_deletion_handle_post(): void {
-    // 既に何か出力されていればクリア（安全策）
+    // 既に何か出力されていればクリア（安全策）。
     if ( function_exists( 'ob_get_length' ) && ob_get_length() ) {
         @ob_clean();
     }
@@ -92,84 +97,41 @@ function mimamori_meta_data_deletion_handle_post(): void {
         ? (string) wp_unslash( $_POST['signed_request'] )
         : '';
 
-    if ( $signed_request === '' ) {
-        mimamori_meta_data_deletion_log( 'missing signed_request' );
-        status_header( 400 );
-        wp_send_json( [ 'error' => 'missing signed_request' ], 400 );
-    }
+    $verification = mimamori_meta_data_deletion_verify_signed_request( $signed_request );
+    $verified     = ( $verification['status'] === 'verified' );
+    $fb_user_id   = $verification['fb_user_id'];
+    $reason       = $verification['reason'];
 
-    $parts = explode( '.', $signed_request, 2 );
-    if ( count( $parts ) !== 2 ) {
-        mimamori_meta_data_deletion_log( 'malformed signed_request' );
-        status_header( 400 );
-        wp_send_json( [ 'error' => 'malformed signed_request' ], 400 );
-    }
-    list( $encoded_sig, $payload ) = $parts;
-
-    $sig         = mimamori_meta_data_deletion_b64url_decode( $encoded_sig );
-    $payload_raw = mimamori_meta_data_deletion_b64url_decode( $payload );
-    $data        = json_decode( $payload_raw, true );
-
-    if ( ! is_array( $data ) || ( $data['algorithm'] ?? '' ) !== 'HMAC-SHA256' ) {
-        mimamori_meta_data_deletion_log( 'bad payload or algorithm' );
-        status_header( 400 );
-        wp_send_json( [ 'error' => 'unknown algorithm' ], 400 );
-    }
-
-    if ( ! class_exists( 'Gcrev_Meta_Client' ) ) {
-        mimamori_meta_data_deletion_log( 'Gcrev_Meta_Client missing' );
-        status_header( 500 );
-        wp_send_json( [ 'error' => 'server misconfigured' ], 500 );
-    }
-
-    $app_secret = Gcrev_Meta_Client::get_app_secret();
-    if ( $app_secret === '' ) {
-        mimamori_meta_data_deletion_log( 'app_secret not set' );
-        status_header( 500 );
-        wp_send_json( [ 'error' => 'app secret not configured' ], 500 );
-    }
-
-    // HMAC-SHA256 は「エンコード前のペイロード」ではなく「エンコード済みペイロード文字列」に対して計算する（Meta 仕様）
-    $expected_sig = hash_hmac( 'sha256', $payload, $app_secret, true );
-    if ( ! hash_equals( $expected_sig, $sig ) ) {
-        mimamori_meta_data_deletion_log( 'signature mismatch' );
-        status_header( 403 );
-        wp_send_json( [ 'error' => 'signature mismatch' ], 403 );
-    }
-
-    $fb_user_id = isset( $data['user_id'] ) ? (string) $data['user_id'] : '';
-    if ( $fb_user_id === '' ) {
-        mimamori_meta_data_deletion_log( 'missing user_id in payload' );
-        status_header( 400 );
-        wp_send_json( [ 'error' => 'missing user_id' ], 400 );
-    }
-
-    // 該当 WP ユーザーを検索して Meta 連携データを削除（LINE 連携は削除しない）
-    $user_query = new WP_User_Query( [
-        'meta_key'   => '_gcrev_meta_fb_user_id',
-        'meta_value' => $fb_user_id,
-        'fields'     => 'ID',
-        'number'     => 100,
-    ] );
-
-    $matched_ids = array_map( 'intval', (array) $user_query->get_results() );
-    foreach ( $matched_ids as $uid ) {
-        if ( $uid > 0 ) {
-            Gcrev_Meta_Client::disconnect( $uid );
+    // 検証成功時のみ user_meta 削除を実行。
+    $matched_ids = [];
+    if ( $verified && $fb_user_id !== '' && class_exists( 'Gcrev_Meta_Client' ) ) {
+        $user_query = new WP_User_Query( [
+            'meta_key'   => '_gcrev_meta_fb_user_id',
+            'meta_value' => $fb_user_id,
+            'fields'     => 'ID',
+            'number'     => 100,
+        ] );
+        $matched_ids = array_map( 'intval', (array) $user_query->get_results() );
+        foreach ( $matched_ids as $uid ) {
+            if ( $uid > 0 ) {
+                Gcrev_Meta_Client::disconnect( $uid );
+            }
         }
     }
 
-    // 確認コード生成（英数字 24 桁、衝突実質ゼロ）
+    // 確認コード生成（英数字 24 桁、衝突実質ゼロ）。
     $confirmation_code = 'meta-' . wp_generate_password( 24, false, false );
 
-    // 削除ログを wp_options に記録（autoload なし、上限 1000 件）
+    // 全リクエストを wp_options に記録（autoload なし、上限 1000 件）。
     $log = get_option( 'gcrev_meta_data_deletion_log', [] );
     if ( ! is_array( $log ) ) { $log = []; }
     $log[ $confirmation_code ] = [
         'fb_user_id'    => $fb_user_id,
         'matched_users' => $matched_ids,
         'requested_at'  => time(),
-        'status'        => 'completed',
+        'verified'      => $verified,
+        'reason'        => $reason,
+        'status'        => $verified ? 'completed' : 'received_no_action',
     ];
     if ( count( $log ) > 1000 ) {
         $log = array_slice( $log, -1000, null, true );
@@ -177,22 +139,69 @@ function mimamori_meta_data_deletion_handle_post(): void {
     update_option( 'gcrev_meta_data_deletion_log', $log, false );
 
     mimamori_meta_data_deletion_log( sprintf(
-        'OK fb_user_id=%s matched=%d code=%s',
-        $fb_user_id,
+        'POST signed_request=%s verified=%s reason=%s fb_user_id=%s matched=%d code=%s',
+        $signed_request === '' ? 'missing' : 'present',
+        $verified ? 'true' : 'false',
+        $reason,
+        $fb_user_id !== '' ? $fb_user_id : '-',
         count( $matched_ids ),
         $confirmation_code
     ) );
 
-    // Meta 仕様の JSON レスポンス
+    // Meta 仕様の JSON レスポンス（常に HTTP 200）。
     $status_url = add_query_arg(
         'code',
         $confirmation_code,
         home_url( '/data-deletion-status/' )
     );
+    status_header( 200 );
     wp_send_json( [
         'url'               => $status_url,
         'confirmation_code' => $confirmation_code,
     ], 200 );
+}
+
+/**
+ * signed_request の検証だけを行い、結果を返す（副作用なし）。
+ *
+ * @return array{status:string,fb_user_id:string,reason:string}
+ *   status     : 'verified' | 'unverified'
+ *   fb_user_id : 検証成功時の Facebook ユーザー ID（失敗時は ''）
+ *   reason     : 失敗理由のラベル（ログ用）
+ */
+function mimamori_meta_data_deletion_verify_signed_request( string $signed_request ): array {
+    if ( $signed_request === '' ) {
+        return [ 'status' => 'unverified', 'fb_user_id' => '', 'reason' => 'no_signed_request' ];
+    }
+    $parts = explode( '.', $signed_request, 2 );
+    if ( count( $parts ) !== 2 ) {
+        return [ 'status' => 'unverified', 'fb_user_id' => '', 'reason' => 'malformed' ];
+    }
+    list( $encoded_sig, $payload ) = $parts;
+
+    $sig         = mimamori_meta_data_deletion_b64url_decode( $encoded_sig );
+    $payload_raw = mimamori_meta_data_deletion_b64url_decode( $payload );
+    $data        = json_decode( $payload_raw, true );
+    if ( ! is_array( $data ) || ( $data['algorithm'] ?? '' ) !== 'HMAC-SHA256' ) {
+        return [ 'status' => 'unverified', 'fb_user_id' => '', 'reason' => 'bad_payload_or_algorithm' ];
+    }
+    if ( ! class_exists( 'Gcrev_Meta_Client' ) ) {
+        return [ 'status' => 'unverified', 'fb_user_id' => '', 'reason' => 'meta_client_missing' ];
+    }
+    $app_secret = Gcrev_Meta_Client::get_app_secret();
+    if ( $app_secret === '' ) {
+        return [ 'status' => 'unverified', 'fb_user_id' => '', 'reason' => 'app_secret_not_configured' ];
+    }
+    // HMAC-SHA256 は「エンコード前のペイロード」ではなく「エンコード済みペイロード文字列」に対して計算する（Meta 仕様）
+    $expected_sig = hash_hmac( 'sha256', $payload, $app_secret, true );
+    if ( ! hash_equals( $expected_sig, $sig ) ) {
+        return [ 'status' => 'unverified', 'fb_user_id' => '', 'reason' => 'signature_mismatch' ];
+    }
+    $fb_user_id = isset( $data['user_id'] ) ? (string) $data['user_id'] : '';
+    if ( $fb_user_id === '' ) {
+        return [ 'status' => 'unverified', 'fb_user_id' => '', 'reason' => 'missing_user_id' ];
+    }
+    return [ 'status' => 'verified', 'fb_user_id' => $fb_user_id, 'reason' => 'ok' ];
 }
 
 /**

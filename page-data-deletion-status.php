@@ -11,6 +11,9 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
+// 明示的に 200 を返す（リダイレクト・404 を避ける）。
+status_header( 200 );
+
 $page_title = 'データ削除ステータス';
 
 $code = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
@@ -65,20 +68,21 @@ if ( $code !== '' && preg_match( '/^[A-Za-z0-9_\-]{4,64}$/', $code ) ) {
             <?php else :
                 $requested_at = isset( $record['requested_at'] ) ? (int) $record['requested_at'] : 0;
                 $matched      = isset( $record['matched_users'] ) ? (array) $record['matched_users'] : [];
-                $status       = isset( $record['status'] ) ? (string) $record['status'] : 'unknown';
+                $verified     = ! empty( $record['verified'] );
             ?>
                 <section class="policy-section">
-                    <h2>削除リクエスト受付済み</h2>
-                    <p>確認コード：<code><?php echo esc_html( $code ); ?></code></p>
-                    <p>受付日時：<?php echo esc_html( $requested_at > 0 ? wp_date( 'Y-m-d H:i:s', $requested_at ) : '—' ); ?></p>
-                    <p>処理状況：<strong><?php echo esc_html( $status ); ?></strong></p>
-                    <p>
-                        Meta（Facebook / Instagram / Threads）連携用に保存していたアクセストークン・連携情報は削除済みです。
-                    </p>
-                    <?php if ( count( $matched ) === 0 ) : ?>
+                    <h2>データ削除リクエストを受け付けました。</h2>
+                    <p>受付番号：<code><?php echo esc_html( $code ); ?></code></p>
+                    <?php if ( $requested_at > 0 ) : ?>
+                        <p>受付日時：<?php echo esc_html( wp_date( 'Y-m-d H:i:s', $requested_at ) ); ?></p>
+                    <?php endif; ?>
+                    <?php if ( $verified ) : ?>
                         <p>
-                            <small>※ 連携情報はすでに存在しなかったため、追加の削除処理はありません。</small>
+                            Meta（Facebook / Instagram / Threads）連携用に保存していたアクセストークン・連携情報の削除処理は完了しています。
                         </p>
+                        <?php if ( count( $matched ) === 0 ) : ?>
+                            <p><small>※ 該当する連携情報は存在しませんでした。</small></p>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </section>
 
