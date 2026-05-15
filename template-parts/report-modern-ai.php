@@ -223,6 +223,35 @@ if ( is_array( $kpi_snapshot ) ) {
         </div>
     </header>
 
+    <!-- ============ レポート設定で入力された内容 (入力ありの項目のみ) ============ -->
+    <?php
+    $setting_inputs = [
+        '先月の課題'           => trim( (string) get_user_meta( $report_user_id, 'report_issue',            true ) ),
+        '先月の目標'           => trim( (string) get_user_meta( $report_user_id, 'report_goal_monthly',     true ) ),
+        '重視している数字'     => trim( (string) get_user_meta( $report_user_id, 'report_focus_numbers',    true ) ),
+        '現在のサイトの状況'   => trim( (string) get_user_meta( $report_user_id, 'report_current_state',    true ) ),
+        '大きな目標'           => trim( (string) get_user_meta( $report_user_id, 'report_goal_main',        true ) ),
+        '追加で伝えたい情報'   => trim( (string) get_user_meta( $report_user_id, 'report_additional_notes', true ) ),
+    ];
+    $setting_inputs_filled = array_filter( $setting_inputs, static fn( $v ) => $v !== '' );
+    ?>
+    <?php if ( ! empty( $setting_inputs_filled ) ): ?>
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 00　今月のご相談・目標</div>
+            <h2 class="m-sec-title">ご記入いただいた内容</h2>
+            <p class="m-sec-desc">以下にご記入いただいた内容を踏まえて、本レポートの分析・提案を行なっています。</p>
+
+            <dl class="m-settings-dl">
+                <?php foreach ( $setting_inputs_filled as $label => $value ): ?>
+                <dt><?php echo esc_html( $label ); ?></dt>
+                <dd><?php echo nl2br( esc_html( $value ) ); ?></dd>
+                <?php endforeach; ?>
+            </dl>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <!-- ============ セクション1: 結論 ============ -->
     <section class="m-section">
         <div class="m-wrap">
