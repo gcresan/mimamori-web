@@ -1486,13 +1486,21 @@ add_action( 'after_setup_theme', function () {
     $slug_to_id = [];
 
     foreach ( $required as $slug => $meta ) {
-        $page = get_page_by_path( $slug, OBJECT, 'page' );
+        // 親ページの子ページは get_page_by_path() に full path を渡さないとヒットしない。
+        // ここを誤ると子ページが毎リクエスト新規作成され、重複が無限に増殖する。
+        $parent_id = 0;
+        $lookup_path = $slug;
+        if ( ! empty( $meta['parent'] ) && isset( $slug_to_id[ $meta['parent'] ] ) ) {
+            $parent_id = $slug_to_id[ $meta['parent'] ];
+            $parent_post = get_post( $parent_id );
+            if ( $parent_post ) {
+                $lookup_path = $parent_post->post_name . '/' . $slug;
+            }
+        }
+
+        $page = get_page_by_path( $lookup_path, OBJECT, 'page' );
 
         if ( ! $page ) {
-            $parent_id = 0;
-            if ( ! empty( $meta['parent'] ) && isset( $slug_to_id[ $meta['parent'] ] ) ) {
-                $parent_id = $slug_to_id[ $meta['parent'] ];
-            }
             $new_id = wp_insert_post( [
                 'post_title'     => $meta['title'],
                 'post_name'      => $slug,
@@ -1522,6 +1530,71 @@ add_action( 'after_setup_theme', function () {
         }
     }
 }, 25 );
+
+/**
+ * 重複した Meta OAuth Callback ページの一回限り清掃
+ *
+ * 直前まで上記の SNS ページ自動作成ループに get_page_by_path() の親パス考慮漏れ
+ * バグがあり、social/meta-oauth-callback が毎リクエスト新規作成されて大量重複していた。
+ * 修正後の初回 admin 訪問で、social の子 page で post_name が
+ *   - 'meta-oauth-callback'（正規）
+ *   - 'meta-oauth-callback-2', '-3', ... （バグで増えた重複）
+ * のうち、正規 1 ページだけ残して残りをゴミ箱へ送る。
+ */
+add_action( 'admin_init', 'gcrev_cleanup_duplicate_meta_oauth_callback_pages' );
+function gcrev_cleanup_duplicate_meta_oauth_callback_pages(): void {
+    if ( get_option( 'gcrev_meta_oauth_callback_dedup_done', 0 ) ) {
+        return;
+    }
+
+    $social_page = get_page_by_path( 'social', OBJECT, 'page' );
+    if ( ! $social_page ) {
+        update_option( 'gcrev_meta_oauth_callback_dedup_done', 1, false );
+        return;
+    }
+
+    global $wpdb;
+    $children = $wpdb->get_results( $wpdb->prepare(
+        "SELECT ID, post_name FROM {$wpdb->posts}
+         WHERE post_type = 'page'
+           AND post_parent = %d
+           AND post_status IN ( 'publish', 'draft', 'pending', 'private' )
+           AND ( post_name = %s OR post_name LIKE %s )
+         ORDER BY ID ASC",
+        $social_page->ID,
+        'meta-oauth-callback',
+        $wpdb->esc_like( 'meta-oauth-callback-' ) . '%'
+    ) );
+
+    if ( count( $children ) <= 1 ) {
+        update_option( 'gcrev_meta_oauth_callback_dedup_done', 1, false );
+        return;
+    }
+
+    // 正規ページ（post_name === 'meta-oauth-callback'）を最優先で残す。
+    // なければ最も古い ID のものを残す。
+    $keep_id = 0;
+    foreach ( $children as $child ) {
+        if ( $child->post_name === 'meta-oauth-callback' ) {
+            $keep_id = (int) $child->ID;
+            break;
+        }
+    }
+    if ( $keep_id === 0 ) {
+        $keep_id = (int) $children[0]->ID;
+    }
+
+    foreach ( $children as $child ) {
+        $cid = (int) $child->ID;
+        if ( $cid === $keep_id ) {
+            continue;
+        }
+        // 完全削除ではなくゴミ箱へ。誤検出した場合に復元できるようにする。
+        wp_trash_post( $cid );
+    }
+
+    update_option( 'gcrev_meta_oauth_callback_dedup_done', 1, false );
+}
 
 // 戦略レポート 単発実行用 Cron アクション（手動「やり直し生成」のバックグラウンド実行）
 add_action( 'gcrev_strategy_report_run_event', function ( $user_id, $year_month, $source ) {
