@@ -10111,6 +10111,39 @@ function gcrev_migrate_legacy_terms_template(): void {
 }
 
 // --------------------------------------------------
+// 旧 /data-deletion/ スラッグ採用時の後始末（一回限りのマイグレーション）
+// 旧スラッグで自動作成された /data-deletion/ ページが残っているため、
+// テンプレート page-data-deletion.php を割当ていればテンプレ解除し、
+// 自動作成（content 空）であればゴミ箱へ送る。手動編集済みなら残す。
+// --------------------------------------------------
+add_action( 'admin_init', 'gcrev_migrate_legacy_data_deletion_template' );
+function gcrev_migrate_legacy_data_deletion_template(): void {
+    if ( get_option( 'gcrev_data_deletion_template_migrated', 0 ) ) {
+        return;
+    }
+    $legacy_id = (int) get_option( 'gcrev_data_deletion_page_id', 0 );
+    if ( $legacy_id > 0 ) {
+        $page = get_post( $legacy_id );
+        if ( $page && $page->post_type === 'page' ) {
+            $current_tpl = (string) get_post_meta( $legacy_id, '_wp_page_template', true );
+            $is_our_template = ( $current_tpl === 'page-data-deletion.php' );
+            $is_empty_content = ( trim( (string) $page->post_content ) === '' );
+
+            if ( $is_our_template ) {
+                delete_post_meta( $legacy_id, '_wp_page_template' );
+            }
+            // 直前のリリースで自動作成された空ページならゴミ箱へ。
+            // ユーザーが内容を入れていれば触らない。
+            if ( $is_our_template && $is_empty_content ) {
+                wp_trash_post( $legacy_id );
+            }
+        }
+        delete_option( 'gcrev_data_deletion_page_id' );
+    }
+    update_option( 'gcrev_data_deletion_template_migrated', 1, false );
+}
+
+// --------------------------------------------------
 // 公開ポリシーページ自動作成（Meta アプリレビュー対応）
 // プライバシーポリシー / 利用規約 / データ削除手順
 // すでにスラッグが存在する場合はテンプレートのみ更新（内容は上書きしない）
@@ -10128,10 +10161,10 @@ function gcrev_ensure_public_policy_pages(): void {
             'template' => 'page-terms-of-service.php',
             'option'   => 'gcrev_terms_of_service_page_id',
         ],
-        'data-deletion' => [
+        'user-data-deletion' => [
             'title'    => 'データ削除について',
-            'template' => 'page-data-deletion.php',
-            'option'   => 'gcrev_data_deletion_page_id',
+            'template' => 'page-user-data-deletion.php',
+            'option'   => 'gcrev_user_data_deletion_page_id',
         ],
     ];
 
@@ -10270,7 +10303,7 @@ add_action( 'template_redirect', function () {
         // 公開ポリシーページ（Meta アプリレビュー対応）
         'privacy-policy',
         'terms-of-service',
-        'data-deletion',
+        'user-data-deletion',
     ];
 
     $post = get_queried_object();

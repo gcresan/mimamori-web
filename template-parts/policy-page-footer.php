@@ -9,7 +9,7 @@
         <span class="sep">｜</span>
         <a href="<?php echo esc_url( home_url( '/terms-of-service/' ) ); ?>">利用規約</a>
         <span class="sep">｜</span>
-        <a href="<?php echo esc_url( home_url( '/data-deletion/' ) ); ?>">データ削除について</a>
+        <a href="<?php echo esc_url( home_url( '/user-data-deletion/' ) ); ?>">データ削除について</a>
     </nav>
     <p class="policy-copyright">&copy; <?php echo esc_html( wp_date( 'Y' ) ); ?> <?php bloginfo( 'name' ); ?></p>
 </footer>

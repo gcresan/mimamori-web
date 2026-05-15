@@ -245,7 +245,7 @@ $page_title = trim( wp_title('', false) );
             <span class="sep">｜</span>
             <a href="<?php echo esc_url( home_url( '/terms-of-service/' ) ); ?>">利用規約</a>
             <span class="sep">｜</span>
-            <a href="<?php echo esc_url( home_url( '/data-deletion/' ) ); ?>">データ削除について</a>
+            <a href="<?php echo esc_url( home_url( '/user-data-deletion/' ) ); ?>">データ削除について</a>
         </div>
     </div>
 

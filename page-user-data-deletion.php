@@ -1,9 +1,10 @@
 <?php
 /**
- * Template Name: データ削除について（公開）
+ * Template Name: データ削除について（公開・ユーザーデータ削除）
  *
  * Meta アプリレビュー対応の公開ページ。ログイン不要で閲覧可能。
  * Meta App Review の Data Deletion Instructions URL として参照される。
+ * URL: /user-data-deletion/（旧 /data-deletion/ から変更）
  */
 
 $page_title = 'データ削除について';
