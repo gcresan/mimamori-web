@@ -641,16 +641,86 @@
 
 /* ===== 印刷／PDF ===== */
 @media print {
-    body { background: #fff !important; }
+    /* ベース */
+    @page { margin: 14mm 12mm; }
+    html, body { background: #fff !important; }
+    body {
+        font-size: 12pt;
+        line-height: 1.7;
+        widows: 3;
+        orphans: 3;
+    }
+
+    /* 画面用 UI を全て隠す */
+    .app-sidebar,
+    .app-topbar,
+    .topbar,
+    .topbar-left,
+    .topbar-right,
+    .breadcrumb,
+    .period-info,
+    .report-preloader-overlay,
+    .ask-ai-btn,
+    .plan-locked-overlay,
+    .rpt-trend-chart-wrap,
+    .gcrev-ai-chat-wrap,
+    .gcrev-ai-chat-toggle,
+    .gcrev-ai-chat-launcher,
+    .gcrev-ai-chat,
+    #ai-chat-launcher,
+    .mimamori-ai-chat,
+    [class*="ai-chat"],
+    .account-dropdown,
+    .topbar-guide-btn { display: none !important; }
+
+    /* レイアウト幅を印刷向けに広げる */
+    .content-area,
+    .app-content,
+    .main-content,
+    .app-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; min-height: 0 !important; }
+
     .gcrev-ai-report-modern {
         border: none;
         margin: 0;
+        padding: 0;
         page-break-inside: auto;
+        font-size: 11.5pt;
     }
+    .gcrev-ai-report-modern .m-wrap { padding: 0 4mm; }
     .gcrev-ai-report-modern .m-section {
-        padding: 24px 0;
+        padding: 14px 0;
         page-break-inside: auto;
+        break-inside: auto;
     }
+
+    /* 見出しの直後ですぐ改ページしない */
+    .gcrev-ai-report-modern .m-eyebrow,
+    .gcrev-ai-report-modern .m-sec-tag,
+    .gcrev-ai-report-modern .m-sec-title,
+    .gcrev-ai-report-modern .m-h1,
+    .gcrev-ai-report-modern .m-hero h3,
+    .gcrev-ai-report-modern .m-scene-body h4,
+    .gcrev-ai-report-modern .m-point-card h4,
+    .gcrev-ai-report-modern .m-insight-card h4,
+    .gcrev-ai-report-modern .m-action-body h4 {
+        break-after: avoid;
+        page-break-after: avoid;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* テキスト・段落の分断を抑える */
+    .gcrev-ai-report-modern p,
+    .gcrev-ai-report-modern li,
+    .gcrev-ai-report-modern dd,
+    .gcrev-ai-report-modern dt {
+        widows: 3;
+        orphans: 3;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+
+    /* カード単位で改ページを避ける (本文が長すぎる場合は許可) */
     .gcrev-ai-report-modern .m-hero,
     .gcrev-ai-report-modern .m-scene-card,
     .gcrev-ai-report-modern .m-point-card,
@@ -661,6 +731,14 @@
         break-inside: avoid;
         page-break-inside: avoid;
     }
+
+    /* 問い合わせリストの行は途中で切れないように */
+    .gcrev-ai-report-modern .m-inq-table tbody tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* 背景色・バッジ色を印刷に反映 */
     .gcrev-ai-report-modern .m-source-bar,
     .gcrev-ai-report-modern .m-hero,
     .gcrev-ai-report-modern .m-kpi-card,
@@ -671,16 +749,10 @@
     .gcrev-ai-report-modern .m-priority-mark,
     .gcrev-ai-report-modern .m-footnote,
     .gcrev-ai-report-modern .m-evidence,
-    .gcrev-ai-report-modern .m-risk {
+    .gcrev-ai-report-modern .m-risk,
+    .gcrev-ai-report-modern .m-inq-table thead th,
+    .gcrev-ai-report-modern .m-inq-cat {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
     }
-    /* 管理画面のサイドバー等を消す側は呼び出し側 (page-report-latest.php) の責務だが
-       念のため一般的なナビ要素を非表示にしておく */
-    .app-sidebar,
-    .app-topbar,
-    .report-preloader-overlay,
-    .ask-ai-btn,
-    .plan-locked-overlay,
-    .rpt-trend-chart-wrap { display: none !important; }
 }
