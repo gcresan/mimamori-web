@@ -1,0 +1,465 @@
+<?php
+/**
+ * template-parts/report-modern-ai.php
+ *
+ * Claude (Anthropic) が生成した構造化 JSON を「月次Web改善提案書」として
+ * 描画する部分テンプレート。
+ *
+ * 期待する変数（呼び出し側で set_query_var 経由で渡す）:
+ *   $ai_data          ... mimamori_generate_monthly_report_with_claude() の出力 JSON
+ *   $monthly_report   ... Gcrev_Monthly_Report_Service::get_monthly_ai_report() の結果
+ *   $report_user_id   ... 対象ユーザー ID
+ *   $report_year      ... 年
+ *   $report_month     ... 月
+ *
+ * 設計方針:
+ * - AI 本文は esc_html / nl2br(esc_html()) でエスケープ
+ * - overall_summary が無ければ全体を出さない (呼び出し側で判定済の想定)
+ * - 各セクションは空配列なら表示しない
+ *
+ * @package Mimamori_Web
+ */
+
+if ( ! defined( 'ABSPATH' ) ) { exit; }
+
+// ---------------------------------------------------------
+// 入力の取り出し
+// ---------------------------------------------------------
+$ai_data        = isset( $ai_data )        && is_array( $ai_data )        ? $ai_data        : ( get_query_var( 'gcrev_modern_ai_data' )        ?: [] );
+$monthly_report = isset( $monthly_report ) && is_array( $monthly_report ) ? $monthly_report : ( get_query_var( 'gcrev_modern_monthly_report' ) ?: [] );
+$report_user_id = isset( $report_user_id ) ? (int) $report_user_id : (int) ( get_query_var( 'gcrev_modern_user_id' ) ?: get_current_user_id() );
+$report_year    = isset( $report_year )    ? (int) $report_year    : (int) ( get_query_var( 'gcrev_modern_year' )    ?: 0 );
+$report_month   = isset( $report_month )   ? (int) $report_month   : (int) ( get_query_var( 'gcrev_modern_month' )   ?: 0 );
+
+if ( empty( $ai_data['overall_summary'] ) ) {
+    return; // 必須セクションが無ければ何も描画しない
+}
+
+// ---------------------------------------------------------
+// ヘッダー用の補助情報
+// ---------------------------------------------------------
+$client_settings = function_exists( 'gcrev_get_client_settings' ) ? gcrev_get_client_settings( $report_user_id ) : [];
+$site_url        = (string) ( $client_settings['site_url'] ?? '' );
+$site_host       = '';
+if ( $site_url !== '' ) {
+    $parsed    = wp_parse_url( $site_url );
+    $site_host = isset( $parsed['host'] ) ? preg_replace( '/^www\./', '', strtolower( $parsed['host'] ) ) : '';
+}
+
+$user_obj      = get_userdata( $report_user_id );
+$client_name   = $user_obj ? ( $user_obj->display_name ?: $user_obj->user_login ) : '';
+
+$ai_provider   = (string) ( $monthly_report['ai_provider'] ?? '' );
+$ai_model      = (string) ( $monthly_report['ai_model']    ?? '' );
+$created_at    = (string) ( $monthly_report['created_at']  ?? '' );
+
+$period_label  = sprintf( '%d年%d月', $report_year, $report_month );
+$compare_label = '';
+if ( $report_year > 0 && $report_month > 0 ) {
+    $base = strtotime( sprintf( '%04d-%02d-01', $report_year, $report_month ) );
+    if ( $base ) {
+        $prev_ts       = strtotime( '-1 month', $base );
+        $compare_label = sprintf( '%d年%d月', (int) date( 'Y', $prev_ts ), (int) date( 'n', $prev_ts ) );
+    }
+}
+
+// KPI: スナップショットがあれば数値カードに使う
+$kpi_snapshot = null;
+$post_id_for_snapshot = (int) ( $monthly_report['id'] ?? 0 );
+if ( $post_id_for_snapshot > 0 ) {
+    $snap_raw = get_post_meta( $post_id_for_snapshot, '_gcrev_kpi_snapshot_json', true );
+    if ( $snap_raw ) {
+        $decoded = json_decode( $snap_raw, true );
+        if ( is_array( $decoded ) ) {
+            $kpi_snapshot = $decoded;
+        }
+    }
+}
+
+// ---------------------------------------------------------
+// 局所ヘルパー (テンプレ内のみ)
+// ---------------------------------------------------------
+$render_text = static function ( $text ): string {
+    if ( is_array( $text ) ) { $text = wp_json_encode( $text, JSON_UNESCAPED_UNICODE ); }
+    return nl2br( esc_html( (string) $text ) );
+};
+
+$status_class = static function ( string $status ): string {
+    $s = strtolower( trim( $status ) );
+    if ( in_array( $s, [ 'good', 'positive' ], true ) ) { return 'is-good'; }
+    if ( in_array( $s, [ 'attention' ], true ) )         { return 'is-attention'; }
+    if ( in_array( $s, [ 'warning', 'negative' ], true ) ) { return 'is-warning'; }
+    if ( in_array( $s, [ 'shift', 'change' ], true ) )   { return 'is-shift'; }
+    return 'is-watch';
+};
+
+$priority_class = static function ( string $priority ): string {
+    $p = strtolower( trim( $priority ) );
+    if ( $p === 'high' )   { return 'priority-high'; }
+    if ( $p === 'medium' ) { return 'priority-medium'; }
+    if ( $p === 'low' )    { return 'priority-low'; }
+    return 'priority-medium';
+};
+
+$priority_label_map = [
+    'high'   => '最優先',
+    'medium' => '優先',
+    'low'    => '余裕',
+];
+
+$status_label_map = [
+    'good'      => 'GOOD',
+    'attention' => 'ATTENTION',
+    'shift'     => 'SHIFT',
+    'warning'   => 'WARNING',
+];
+
+$confidence_label_map = [
+    'high'   => '確度: 高',
+    'medium' => '仮説',
+    'low'    => '参考',
+];
+
+// セクション本体
+$overall      = $ai_data['overall_summary'] ?? [];
+$key_findings = is_array( $ai_data['key_findings']   ?? null ) ? $ai_data['key_findings']   : [];
+$good_points  = is_array( $ai_data['good_points']    ?? null ) ? $ai_data['good_points']    : [];
+$warn_points  = is_array( $ai_data['warning_points'] ?? null ) ? $ai_data['warning_points'] : [];
+$cross_ins    = is_array( $ai_data['cross_insights'] ?? null ) ? $ai_data['cross_insights'] : [];
+$next_actions = is_array( $ai_data['next_actions']   ?? null ) ? $ai_data['next_actions']   : [];
+$data_notes   = is_array( $ai_data['data_notes']     ?? null ) ? $ai_data['data_notes']     : [];
+
+$report_title = (string) ( $ai_data['report_title'] ?? sprintf( '%s 月次Web改善レポート', $period_label ) );
+$overall_status_cls = $status_class( (string) ( $overall['status'] ?? '' ) );
+$hero_variant_map = [
+    'is-good'      => 'is-good',
+    'is-attention' => 'is-attention',
+    'is-warning'   => 'is-warning',
+];
+$hero_variant_cls = $hero_variant_map[ $overall_status_cls ] ?? '';
+
+// KPI カード生成データ（スナップショットがある場合のみ）
+$kpi_cards = [];
+if ( is_array( $kpi_snapshot ) ) {
+    $build_kpi = static function ( string $label, string $key, string $unit = '' ) use ( $kpi_snapshot ): ?array {
+        $v = $kpi_snapshot[ $key ] ?? null;
+        if ( $v === null || $v === '' ) { return null; }
+        $num = is_numeric( $v ) ? (float) $v : null;
+        if ( $num === null && is_string( $v ) ) {
+            // 文字列に数値が含まれている場合（"305件" など）の救済
+            if ( preg_match( '/-?\d+(?:\.\d+)?/', $v, $m ) ) { $num = (float) $m[0]; }
+        }
+        if ( $num === null ) { return null; }
+        return [
+            'label'   => $label,
+            'value'   => number_format( $num, ( $num == (int) $num ) ? 0 : 1 ),
+            'unit'    => $unit,
+            'variant' => 'neutral',
+        ];
+    };
+    foreach ( [
+        [ 'ユーザー数',         'users',        '人' ],
+        [ 'セッション数',       'sessions',     '回' ],
+        [ 'ページビュー',       'pageViews',    '回' ],
+        [ 'コンバージョン',     'conversions',  '件' ],
+        [ '新規ユーザー',       'newUsers',     '人' ],
+        [ '平均滞在時間 (秒)',  'avgDuration',  '秒' ],
+    ] as $row ) {
+        $card = $build_kpi( $row[0], $row[1], $row[2] );
+        if ( $card !== null ) { $kpi_cards[] = $card; }
+    }
+}
+?>
+<div class="gcrev-ai-report-modern" data-ai-provider="<?php echo esc_attr( $ai_provider ); ?>">
+
+    <!-- ============ ヘッダー ============ -->
+    <header class="m-header">
+        <div class="m-wrap">
+            <div class="m-client-line">
+                <div class="m-client-name">
+                    <?php if ( $client_name !== '' ): ?>
+                        <?php echo esc_html( $client_name ); ?> 様
+                    <?php endif; ?>
+                    <?php if ( $site_host !== '' ): ?>
+                        <span style="color:var(--m-ink-mute); margin-left:8px; font-size:13px;"><?php echo esc_html( $site_host ); ?></span>
+                    <?php endif; ?>
+                </div>
+                <div class="m-report-meta">
+                    <?php if ( $created_at !== '' ): ?>
+                        Report Date: <?php echo esc_html( $created_at ); ?><br>
+                    <?php endif; ?>
+                    対象期間: <?php echo esc_html( $period_label ); ?>
+                    <?php if ( $compare_label !== '' ): ?>
+                        ／ 比較: <?php echo esc_html( $compare_label ); ?>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="m-eyebrow">MONTHLY ACCESS REPORT　／　月次Web改善レポート</div>
+            <h1 class="m-h1"><?php echo esc_html( $report_title ); ?></h1>
+
+            <div class="m-source-bar">
+                <span class="lbl">DATA SOURCE</span>
+                <span>
+                    GA4 ／ Search Console
+                    <?php if ( $ai_provider !== '' ): ?>
+                        ／ AI: <?php echo esc_html( $ai_provider ); ?><?php if ( $ai_model !== '' ): ?> (<?php echo esc_html( $ai_model ); ?>)<?php endif; ?>
+                    <?php endif; ?>
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============ セクション1: 結論 ============ -->
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 01　ひとことで言うと</div>
+            <h2 class="m-sec-title"><?php echo esc_html( (string) ( $overall['title'] ?? '今月の結論' ) ); ?></h2>
+
+            <div class="m-hero <?php echo esc_attr( $hero_variant_cls ); ?>">
+                <div class="m-hero-label">CONCLUSION ／ 結論</div>
+                <h3><?php echo esc_html( (string) ( $overall['title'] ?? '' ) ); ?></h3>
+                <p><?php echo $render_text( $overall['body'] ?? '' ); ?></p>
+            </div>
+
+            <?php if ( ! empty( $kpi_cards ) ): ?>
+            <div class="m-kpi-grid">
+                <?php foreach ( $kpi_cards as $card ): ?>
+                <div class="m-kpi-card kpi-<?php echo esc_attr( $card['variant'] ); ?>">
+                    <div class="m-kpi-label"><?php echo esc_html( $card['label'] ); ?></div>
+                    <div class="m-kpi-num"><?php echo esc_html( $card['value'] ); ?><?php if ( $card['unit'] !== '' ): ?><small><?php echo esc_html( $card['unit'] ); ?></small><?php endif; ?></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <!-- ============ セクション2: 重要な変化 (key_findings) ============ -->
+    <?php if ( ! empty( $key_findings ) ): ?>
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 02　何が起きているのか</div>
+            <h2 class="m-sec-title">今月起きている重要な変化</h2>
+            <p class="m-sec-desc">データから読み取れる、注目すべき変化を順番に整理しています。</p>
+
+            <div class="m-scene-list">
+                <?php foreach ( $key_findings as $i => $kf ): ?>
+                <?php
+                    $kf_status = (string) ( $kf['status']  ?? '' );
+                    $kf_label  = $status_label_map[ strtolower( $kf_status ) ] ?? strtoupper( $kf_status );
+                    $kf_title  = (string) ( $kf['title']   ?? '' );
+                    $kf_sum    = (string) ( $kf['summary'] ?? '' );
+                    $kf_body   = (string) ( $kf['body']    ?? '' );
+                    $kf_evid   = (string) ( $kf['evidence']?? '' );
+                ?>
+                <div class="m-scene-card">
+                    <div class="m-scene-no"><?php echo esc_html( sprintf( '%02d', $i + 1 ) ); ?></div>
+                    <div class="m-scene-body">
+                        <?php if ( $kf_label !== '' ): ?>
+                            <span class="m-status-tag <?php echo esc_attr( $status_class( $kf_status ) ); ?>"><?php echo esc_html( $kf_label ); ?></span>
+                        <?php endif; ?>
+                        <?php if ( $kf_title !== '' ): ?>
+                            <h4><?php echo esc_html( $kf_title ); ?></h4>
+                        <?php endif; ?>
+                        <?php if ( $kf_sum !== '' ): ?>
+                            <p class="m-answer"><?php echo esc_html( $kf_sum ); ?></p>
+                        <?php endif; ?>
+                        <?php if ( $kf_body !== '' ): ?>
+                            <p><?php echo $render_text( $kf_body ); ?></p>
+                        <?php endif; ?>
+                        <?php if ( $kf_evid !== '' ): ?>
+                            <div class="m-evidence"><strong>根拠:</strong> <?php echo $render_text( $kf_evid ); ?></div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- ============ セクション3: 良かった点 ============ -->
+    <?php if ( ! empty( $good_points ) ): ?>
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 03　良かった点</div>
+            <h2 class="m-sec-title">続けるべき、伸ばすべきポイント</h2>
+
+            <div class="m-point-grid">
+                <?php foreach ( $good_points as $gp ): ?>
+                <?php
+                    $gp_title = (string) ( $gp['title']    ?? '' );
+                    $gp_body  = (string) ( $gp['body']     ?? '' );
+                    $gp_evid  = (string) ( $gp['evidence'] ?? '' );
+                ?>
+                <div class="m-point-card is-good">
+                    <?php if ( $gp_title !== '' ): ?>
+                        <h4><?php echo esc_html( $gp_title ); ?></h4>
+                    <?php endif; ?>
+                    <?php if ( $gp_body !== '' ): ?>
+                        <p><?php echo $render_text( $gp_body ); ?></p>
+                    <?php endif; ?>
+                    <?php if ( $gp_evid !== '' ): ?>
+                        <div class="m-evidence"><span class="m-evidence-label">根拠:</span><?php echo $render_text( $gp_evid ); ?></div>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- ============ セクション4: 注意が必要な点 ============ -->
+    <?php if ( ! empty( $warn_points ) ): ?>
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 04　注意が必要な点</div>
+            <h2 class="m-sec-title">放置せず手を打つべき課題</h2>
+
+            <div class="m-point-grid">
+                <?php foreach ( $warn_points as $wp ): ?>
+                <?php
+                    $wp_title = (string) ( $wp['title']    ?? '' );
+                    $wp_body  = (string) ( $wp['body']     ?? '' );
+                    $wp_evid  = (string) ( $wp['evidence'] ?? '' );
+                    $wp_risk  = (string) ( $wp['risk']     ?? '' );
+                ?>
+                <div class="m-point-card is-warning">
+                    <?php if ( $wp_title !== '' ): ?>
+                        <h4><span class="m-status-tag is-warning" style="margin-right:8px;">注意</span><?php echo esc_html( $wp_title ); ?></h4>
+                    <?php endif; ?>
+                    <?php if ( $wp_body !== '' ): ?>
+                        <p><?php echo $render_text( $wp_body ); ?></p>
+                    <?php endif; ?>
+                    <?php if ( $wp_risk !== '' ): ?>
+                        <div class="m-risk"><span class="m-risk-label">放置リスク:</span><?php echo $render_text( $wp_risk ); ?></div>
+                    <?php endif; ?>
+                    <?php if ( $wp_evid !== '' ): ?>
+                        <div class="m-evidence"><span class="m-evidence-label">根拠:</span><?php echo $render_text( $wp_evid ); ?></div>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- ============ セクション5: 横断考察 ============ -->
+    <?php if ( ! empty( $cross_ins ) ): ?>
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 05　GA4 × Search Console 横断考察</div>
+            <h2 class="m-sec-title">数字の裏にあるストーリー</h2>
+            <p class="m-sec-desc">GA4 と Search Console を横断して読み解いた、今月のインサイトです。</p>
+
+            <div class="m-insights">
+                <?php foreach ( $cross_ins as $ci ): ?>
+                <?php
+                    $ci_conf  = strtolower( (string) ( $ci['confidence'] ?? '' ) );
+                    $ci_label = $confidence_label_map[ $ci_conf ] ?? ( $ci_conf !== '' ? '確度: ' . $ci_conf : '' );
+                    $ci_title = (string) ( $ci['title']    ?? '' );
+                    $ci_body  = (string) ( $ci['body']     ?? '' );
+                    $ci_evid  = (string) ( $ci['evidence'] ?? '' );
+                    $conf_cls = 'is-' . ( in_array( $ci_conf, [ 'high', 'medium', 'low' ], true ) ? $ci_conf : 'high' );
+                ?>
+                <div class="m-insight-card">
+                    <?php if ( $ci_label !== '' ): ?>
+                        <span class="m-conf <?php echo esc_attr( $conf_cls ); ?>"><?php echo esc_html( $ci_label ); ?></span>
+                    <?php endif; ?>
+                    <?php if ( $ci_title !== '' ): ?>
+                        <h4><?php echo esc_html( $ci_title ); ?></h4>
+                    <?php endif; ?>
+                    <?php if ( $ci_body !== '' ): ?>
+                        <p><?php echo $render_text( $ci_body ); ?></p>
+                    <?php endif; ?>
+                    <?php if ( $ci_evid !== '' ): ?>
+                        <div class="m-evidence"><strong>根拠:</strong> <?php echo $render_text( $ci_evid ); ?></div>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- ============ セクション6: 次のアクション ============ -->
+    <?php if ( ! empty( $next_actions ) ): ?>
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 06　次にやるべきこと</div>
+            <h2 class="m-sec-title">優先度付きアクションプラン</h2>
+            <p class="m-sec-desc">今月のデータから導いた、具体的に着手すべき改善案を優先度別に並べました。</p>
+
+            <div class="m-action-list">
+                <?php foreach ( $next_actions as $i => $act ): ?>
+                <?php
+                    $pri        = strtolower( (string) ( $act['priority'] ?? '' ) );
+                    $pri_cls    = $priority_class( $pri );
+                    $pri_label  = $priority_label_map[ $pri ] ?? ( $pri !== '' ? strtoupper( $pri ) : '' );
+                    $act_title  = (string) ( $act['title']            ?? '' );
+                    $act_target = (string) ( $act['target']           ?? '' );
+                    $act_reason = (string) ( $act['reason']           ?? '' );
+                    $act_body   = (string) ( $act['action']           ?? '' );
+                    $act_effect = (string) ( $act['expected_effect']  ?? '' );
+                    $act_time   = (string) ( $act['estimated_timing'] ?? '' );
+                ?>
+                <div class="m-action-row <?php echo esc_attr( $pri_cls ); ?>">
+                    <div class="m-priority-mark">
+                        <span class="m-num"><?php echo esc_html( sprintf( '%02d', $i + 1 ) ); ?></span>
+                        <?php echo esc_html( $pri_label ); ?>
+                    </div>
+                    <div class="m-action-body">
+                        <?php if ( $act_title !== '' ): ?>
+                            <h4><?php echo esc_html( $act_title ); ?></h4>
+                        <?php endif; ?>
+                        <?php if ( $act_target !== '' ): ?>
+                            <div class="m-tags"><span class="m-tag">対象: <?php echo esc_html( $act_target ); ?></span></div>
+                        <?php endif; ?>
+                        <dl>
+                            <?php if ( $act_body !== '' ): ?>
+                                <dt>実施内容</dt><dd><?php echo $render_text( $act_body ); ?></dd>
+                            <?php endif; ?>
+                            <?php if ( $act_reason !== '' ): ?>
+                                <dt>理由</dt><dd><?php echo $render_text( $act_reason ); ?></dd>
+                            <?php endif; ?>
+                            <?php if ( $act_effect !== '' ): ?>
+                                <dt>期待効果</dt><dd><?php echo $render_text( $act_effect ); ?></dd>
+                            <?php endif; ?>
+                            <?php if ( $act_time !== '' ): ?>
+                                <dt>目安期間</dt><dd><?php echo esc_html( $act_time ); ?></dd>
+                            <?php endif; ?>
+                        </dl>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- ============ セクション7: データ・計測上の注意 ============ -->
+    <?php if ( ! empty( $data_notes ) ): ?>
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 07　データ・計測上の注意</div>
+            <h2 class="m-sec-title">読み解きの前提条件</h2>
+
+            <?php foreach ( $data_notes as $dn ): ?>
+            <?php
+                $dn_title = (string) ( $dn['title'] ?? '' );
+                $dn_body  = (string) ( $dn['body']  ?? '' );
+                if ( $dn_title === '' && $dn_body === '' ) { continue; }
+            ?>
+            <div class="m-footnote">
+                <?php if ( $dn_title !== '' ): ?>
+                    <strong><?php echo esc_html( $dn_title ); ?></strong>
+                <?php endif; ?>
+                <?php echo $render_text( $dn_body ); ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
+</div>

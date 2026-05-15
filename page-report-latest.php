@@ -773,6 +773,30 @@ get_header();
 
     <?php if ($monthly_report): ?>
 
+    <?php
+    // ============================================================
+    // Claude (Anthropic) AI が生成した構造化 JSON があれば、
+    // 「月次Web改善提案書」風の高品質ブロックを既存表示の上部に追加する。
+    // ai_json が無い場合は何も描画されず、従来表示にフォールバック。
+    // ============================================================
+    $gcrev_modern_ai_data = ( ! empty( $monthly_report['ai_json'] ) && is_array( $monthly_report['ai_json'] ) )
+        ? $monthly_report['ai_json']
+        : null;
+    if ( $gcrev_modern_ai_data && ! empty( $gcrev_modern_ai_data['overall_summary'] ) ) {
+        // CSS を読み込み (head に既に出されている場合は重複しない)
+        $modern_css_url  = get_stylesheet_directory_uri() . '/assets/css/report-modern-ai.css';
+        $modern_css_path = get_stylesheet_directory() . '/assets/css/report-modern-ai.css';
+        $modern_css_ver  = file_exists( $modern_css_path ) ? filemtime( $modern_css_path ) : '1';
+        echo '<link rel="stylesheet" href="' . esc_url( $modern_css_url . '?v=' . $modern_css_ver ) . '">';
+
+        $ai_data        = $gcrev_modern_ai_data;
+        $report_user_id = $user_id;
+        $report_year    = $year;
+        $report_month   = $month;
+        include get_stylesheet_directory() . '/template-parts/report-modern-ai.php';
+    }
+    ?>
+
     <!-- 4) report-content：総評セクション（KPIカード直下に配置） -->
     <div class="report-content">
 
