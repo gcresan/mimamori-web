@@ -1184,10 +1184,14 @@ if ( file_exists( $gcrev_gsc ) ) {
 // Step2.5: modules を読み込む（OpenAI Client / Report Prompt Builder）
 // ========================================
 $gcrev_openai_client     = $gcrev_modules_path . 'class-openai-client.php';
+$gcrev_claude_client     = $gcrev_modules_path . 'class-claude-client.php';
 $gcrev_report_prompt_bld = $gcrev_modules_path . 'class-report-prompt-builder.php';
 
 if ( file_exists( $gcrev_openai_client ) ) {
     require_once $gcrev_openai_client;
+}
+if ( file_exists( $gcrev_claude_client ) ) {
+    require_once $gcrev_claude_client;
 }
 if ( file_exists( $gcrev_report_prompt_bld ) ) {
     require_once $gcrev_report_prompt_bld;
@@ -11923,6 +11927,203 @@ add_action( 'admin_init', function () {
         }
     }
 }, 999 );
+
+/* ============================================================
+ * 月次レポートを Claude (Anthropic) で生成するヘルパー
+ *
+ * 役割: ANTHROPIC_API_KEY の存在確認、system/user プロンプト構築、
+ *       Anthropic Messages API 呼び出し、JSON パース、必須キー検証。
+ *
+ * @param  array $report_data {
+ *   @type array $client          クライアント情報
+ *   @type array $period          対象月情報
+ *   @type array $ga4             GA4 集計
+ *   @type array $search_console  GSC 集計
+ * }
+ * @param  array $options {
+ *   @type string $model       使用モデル（デフォルト: config）
+ *   @type int    $max_tokens  最大出力トークン（デフォルト: 8000）
+ *   @type float  $temperature 温度（デフォルト: 0.4）
+ * }
+ * @return array|WP_Error  パース済み JSON または WP_Error
+ * ============================================================ */
+if ( ! function_exists( 'mimamori_generate_monthly_report_with_claude' ) ) {
+    function mimamori_generate_monthly_report_with_claude( array $report_data, array $options = [] ) {
+
+        if ( ! ( defined( 'ANTHROPIC_API_KEY' ) && ANTHROPIC_API_KEY !== '' ) ) {
+            return new WP_Error(
+                'mimamori_claude_no_key',
+                'ANTHROPIC_API_KEY が wp-config.php に設定されていません。'
+            );
+        }
+
+        if ( ! class_exists( 'Gcrev_Claude_Client' ) || ! class_exists( 'Gcrev_Config' ) ) {
+            return new WP_Error(
+                'mimamori_claude_missing_classes',
+                'Claude クライアントクラスが読み込まれていません。'
+            );
+        }
+
+        // ------------------------------------------------------------
+        // system プロンプト（経営者向けコンサルタントの口調を定義）
+        // ------------------------------------------------------------
+        $system_prompt = <<<TXT
+あなたは中小企業向けのWeb改善コンサルタントです。
+
+読者はWebに詳しくない経営者・担当者です。
+GA4、Search Console、クライアント情報をもとに、月次Web改善レポートを作成してください。
+
+単なる数値説明ではなく、数字の意味を読み解いてください。
+GA4とSearch Consoleを別々に説明するのではなく、横断して考察してください。
+
+必ず以下を出してください。
+
+- 今月の結論
+- 重要な変化
+- 良かった点
+- 注意が必要な点
+- GA4 × Search Console の横断考察
+- 次に実行すべき具体的なアクション
+
+抽象的な表現は禁止です。
+「SEOを改善しましょう」「コンテンツを増やしましょう」のような表現だけで終わらせず、対象ページ・対象キーワード・具体的な作業内容まで書いてください。
+
+データが少ない場合は「データが少ないため仮説レベル」と明記してください。
+クライアントを責める表現は避け、前向きな改善提案にしてください。
+
+出力はJSONのみです。
+Markdown、HTML、説明文、コードブロックは返さないでください。
+
+出力スキーマ:
+{
+  "report_title": "string",
+  "overall_summary": {
+    "status": "good | attention | warning",
+    "title": "string",
+    "body": "string"
+  },
+  "key_findings": [
+    { "status": "good | attention | shift | warning", "title": "string", "summary": "string", "body": "string", "evidence": "string" }
+  ],
+  "good_points": [
+    { "title": "string", "body": "string", "evidence": "string" }
+  ],
+  "warning_points": [
+    { "title": "string", "body": "string", "evidence": "string", "risk": "string" }
+  ],
+  "cross_insights": [
+    { "confidence": "high | medium | low", "title": "string", "body": "string", "evidence": "string" }
+  ],
+  "next_actions": [
+    { "priority": "high | medium | low", "title": "string", "target": "string", "reason": "string", "action": "string", "expected_effect": "string", "estimated_timing": "string" }
+  ],
+  "data_notes": [
+    { "title": "string", "body": "string" }
+  ]
+}
+TXT;
+
+        // ------------------------------------------------------------
+        // user プロンプト（データを JSON として丸ごと埋め込む）
+        // ------------------------------------------------------------
+        $payload_json = wp_json_encode( $report_data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
+        if ( $payload_json === false ) {
+            return new WP_Error( 'mimamori_claude_encode_failed', '入力データの JSON エンコードに失敗しました。' );
+        }
+
+        $user_prompt = "以下のデータをもとに、指定スキーマの JSON のみで月次Web改善レポートを生成してください。\n\n"
+            . "■ 入力データ\n"
+            . $payload_json
+            . "\n\n■ 出力ルール\n"
+            . "- JSON 以外（Markdown、コードブロック、説明文）は一切出力しない\n"
+            . "- 必須キー: report_title, overall_summary, key_findings, good_points, warning_points, cross_insights, next_actions, data_notes\n"
+            . "- データ不足の指標は data_notes に明記する（例: Search Console 未接続、計測導入直後など）\n"
+            . "- next_actions は対象ページ・対象キーワードまで具体的に記述する";
+
+        // ------------------------------------------------------------
+        // Claude 呼び出し
+        // ------------------------------------------------------------
+        try {
+            $config = new Gcrev_Config();
+            $client = new Gcrev_Claude_Client( $config );
+
+            $api_options = [
+                'model'       => $options['model']       ?? null,
+                'max_tokens'  => $options['max_tokens']  ?? 8000,
+                'temperature' => $options['temperature'] ?? 0.4,
+            ];
+            if ( $api_options['model'] === null ) {
+                unset( $api_options['model'] );
+            }
+
+            $result = $client->call_messages_api( $system_prompt, $user_prompt, $api_options );
+        } catch ( \Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_claude_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' [helper] call_messages_api failed: ' . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return new WP_Error( 'mimamori_claude_api_failed', $e->getMessage() );
+        }
+
+        // ------------------------------------------------------------
+        // JSON パース（コードフェンスが入った場合の防御）
+        // ------------------------------------------------------------
+        $text = (string) ( $result['text'] ?? '' );
+        $text = preg_replace( '/^\s*```(?:json)?\s*/i', '', $text );
+        $text = preg_replace( '/\s*```\s*$/', '', $text );
+        $text = trim( $text );
+
+        $decoded = json_decode( $text, true );
+        if ( ! is_array( $decoded ) ) {
+            file_put_contents(
+                '/tmp/gcrev_claude_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' [helper] JSON parse failed: ' . substr( $text, 0, 500 ) . "\n",
+                FILE_APPEND
+            );
+            return new WP_Error( 'mimamori_claude_parse_failed', 'Claude 応答の JSON パースに失敗しました。' );
+        }
+
+        // ------------------------------------------------------------
+        // 必須キー検証（軽め: 主要キーの存在のみ。中身の正規化は呼び出し側で）
+        // ------------------------------------------------------------
+        $required = [ 'overall_summary', 'good_points', 'warning_points', 'next_actions' ];
+        $missing  = [];
+        foreach ( $required as $k ) {
+            if ( ! isset( $decoded[ $k ] ) ) {
+                $missing[] = $k;
+            }
+        }
+        if ( ! empty( $missing ) ) {
+            file_put_contents(
+                '/tmp/gcrev_claude_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' [helper] missing required keys: ' . implode( ',', $missing ) . "\n",
+                FILE_APPEND
+            );
+            return new WP_Error(
+                'mimamori_claude_missing_keys',
+                '必須キーが不足しています: ' . implode( ', ', $missing ),
+                [ 'missing' => $missing, 'raw' => $decoded ]
+            );
+        }
+
+        // ------------------------------------------------------------
+        // メタ情報を付与して返す
+        // ------------------------------------------------------------
+        return [
+            'json'  => $decoded,
+            'meta'  => [
+                'provider'         => 'claude',
+                'model'            => (string) ( $result['model'] ?? '' ),
+                'prompt_tokens'    => (int) ( $result['prompt_tokens'] ?? 0 ),
+                'completion_tokens' => (int) ( $result['completion_tokens'] ?? 0 ),
+                'stop_reason'      => (string) ( $result['stop_reason'] ?? '' ),
+                'elapsed_seconds'  => (float) ( $result['elapsed_seconds'] ?? 0 ),
+                'generated_at'     => wp_date( 'Y-m-d H:i:s' ),
+            ],
+        ];
+    }
+}
 
 /* ============================================================
  * 深掘りレポート系ページの「無駄な余白」対策

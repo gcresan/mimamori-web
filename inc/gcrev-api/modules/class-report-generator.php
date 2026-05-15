@@ -25,8 +25,14 @@ class Gcrev_Report_Generator {
     /** @var ?Gcrev_Report_Prompt_Builder ChatGPT 用プロンプトビルダー */
     private ?Gcrev_Report_Prompt_Builder $prompt_builder;
 
+    /** @var ?Gcrev_Claude_Client Claude (Anthropic) 用クライアント */
+    private ?Gcrev_Claude_Client $claude = null;
+
     /** @var array 直近の generate_report() 実行で得られた AI メタ情報 */
     private array $last_ai_meta = [];
+
+    /** @var array 直近の Claude 生成で得られた構造化 JSON（プロバイダが claude のときのみ） */
+    private array $last_ai_json = [];
 
     // ===== レポート・セクション生成設定 =====
     // 1回のGemini呼び出しで生成するセクション数の上限
@@ -79,7 +85,8 @@ class Gcrev_Report_Generator {
         Gcrev_GA4_Fetcher       $ga4,
         Gcrev_Report_Repository $repo,
         ?Gcrev_OpenAI_Client         $openai = null,
-        ?Gcrev_Report_Prompt_Builder $prompt_builder = null
+        ?Gcrev_Report_Prompt_Builder $prompt_builder = null,
+        ?Gcrev_Claude_Client         $claude = null
     ) {
         $this->config         = $config;
         $this->ai             = $ai;
@@ -87,6 +94,7 @@ class Gcrev_Report_Generator {
         $this->repo           = $repo;
         $this->openai         = $openai;
         $this->prompt_builder = $prompt_builder;
+        $this->claude         = $claude;
     }
 
     /**
@@ -96,6 +104,13 @@ class Gcrev_Report_Generator {
      */
     public function get_last_ai_meta(): array {
         return $this->last_ai_meta;
+    }
+
+    /**
+     * 直近の Claude 生成で得られた構造化 JSON を返す（無ければ空配列）
+     */
+    public function get_last_ai_json(): array {
+        return $this->last_ai_json;
     }
 
     // =========================================================
@@ -116,30 +131,330 @@ class Gcrev_Report_Generator {
      */
     public function generate_report( array $prev_data, array $two_data, array $client_info, ?string $target_area = null ): string {
 
-        $provider = $this->config->get_report_ai_provider();
+        $this->last_ai_json = [];
 
-        if ( $provider === 'openai' && $this->openai !== null && $this->prompt_builder !== null ) {
+        $provider = $this->config->get_report_ai_provider();
+        $fallback_reasons = [];
+
+        // ----- Claude (Anthropic) -----
+        if ( $provider === 'claude' && $this->claude !== null ) {
+            try {
+                $this->log( "[ReportGen] Using Claude (Anthropic) provider" );
+                return $this->generate_report_claude( $prev_data, $two_data, $client_info, $target_area );
+            } catch ( \Exception $e ) {
+                $this->log( "[ReportGen] Claude failed, falling back: " . $e->getMessage() );
+                $fallback_reasons[] = 'claude:' . $e->getMessage();
+            }
+        }
+
+        // ----- ChatGPT (OpenAI) -----
+        // claude が選択されていても、Claude 失敗時はここに落ちる（OpenAI が使えるなら）
+        $can_openai = ( $this->openai !== null && $this->prompt_builder !== null );
+        if ( ( $provider === 'openai' || $provider === 'claude' ) && $can_openai ) {
             try {
                 $this->log( "[ReportGen] Using ChatGPT (OpenAI) provider" );
                 return $this->generate_report_chatgpt( $prev_data, $two_data, $client_info, $target_area );
             } catch ( \Exception $e ) {
                 $this->log( "[ReportGen] ChatGPT failed, falling back to Gemini: " . $e->getMessage() );
-                // フォールバック: Gemini マルチパスで生成
-                $this->last_ai_meta = array_merge( $this->last_ai_meta, [
-                    'fallback_used' => true,
-                    'fallback_reason' => $e->getMessage(),
-                ] );
+                $fallback_reasons[] = 'openai:' . $e->getMessage();
             }
         }
 
+        // ----- Gemini (multi-pass) 最終フォールバック -----
         $this->log( "[ReportGen] Using Gemini (multi-pass) provider" );
         $this->last_ai_meta = [
             'provider' => 'gemini',
             'model'    => $this->config->get_gemini_model(),
             'method'   => 'multi_pass',
         ];
+        if ( ! empty( $fallback_reasons ) ) {
+            $this->last_ai_meta['fallback_used']   = true;
+            $this->last_ai_meta['fallback_reason'] = implode( ' / ', $fallback_reasons );
+        }
 
         return $this->generate_report_multi_pass( $prev_data, $two_data, $client_info, $target_area );
+    }
+
+    // =========================================================
+    // Claude (Anthropic) 単一パス生成
+    // =========================================================
+
+    /**
+     * Claude で構造化 JSON を生成し、レガシー互換 HTML に変換して返す。
+     * 成功時は $this->last_ai_json に JSON 全文、$this->last_ai_meta にプロバイダ情報を格納する。
+     *
+     * @param  array   $prev_data    前月データ
+     * @param  array   $two_data     前々月データ
+     * @param  array   $client_info  クライアント情報
+     * @param  ?string $target_area  ターゲットエリア
+     * @return string  レガシー互換 HTML（class="summary" / "good-points" / "improvement-points" / "insight-box" / "actions" を含む）
+     * @throws \Exception 生成失敗時
+     */
+    private function generate_report_claude( array $prev_data, array $two_data, array $client_info, ?string $target_area = null ): string {
+
+        $report_data = $this->build_claude_report_data( $prev_data, $two_data, $client_info, $target_area );
+
+        $payload_chars = strlen( wp_json_encode( $report_data, JSON_UNESCAPED_UNICODE ) ?: '' );
+        $this->log( sprintf( '[ReportGen] Claude payload size=%d chars', $payload_chars ) );
+
+        $result = mimamori_generate_monthly_report_with_claude( $report_data, [
+            'max_tokens'  => 8000,
+            'temperature' => 0.4,
+        ] );
+
+        if ( is_wp_error( $result ) ) {
+            throw new \Exception( $result->get_error_message() );
+        }
+
+        $json = is_array( $result['json'] ?? null ) ? $result['json'] : [];
+        $meta = is_array( $result['meta'] ?? null ) ? $result['meta'] : [];
+
+        $this->last_ai_json = $json;
+        $this->last_ai_meta = [
+            'provider'           => 'claude',
+            'model'              => $meta['model']             ?? $this->config->get_claude_model(),
+            'method'             => 'single_pass_json',
+            'prompt_tokens'      => $meta['prompt_tokens']     ?? 0,
+            'completion_tokens'  => $meta['completion_tokens'] ?? 0,
+            'stop_reason'        => $meta['stop_reason']       ?? '',
+            'elapsed_seconds'    => $meta['elapsed_seconds']   ?? 0,
+            'generated_at'       => $meta['generated_at']      ?? wp_date( 'Y-m-d H:i:s' ),
+        ];
+
+        return $this->build_html_from_claude_json( $json );
+    }
+
+    /**
+     * Claude に渡すレポート入力データ（仕様準拠の構造化 JSON）を組み立てる。
+     */
+    private function build_claude_report_data( array $prev_data, array $two_data, array $client_info, ?string $target_area = null ): array {
+
+        $prev_display = $prev_data['current_period']['display']['text'] ?? '';
+        $two_display  = $two_data['current_period']['display']['text']  ?? '';
+
+        $ga4_prev = $prev_data['ga4'] ?? [];
+        $ga4_two  = $two_data['ga4'] ?? [];
+        $gsc_prev = $prev_data['gsc'] ?? [];
+        $gsc_two  = $two_data['gsc'] ?? [];
+
+        $gsc_connected = ! empty( $gsc_prev ) || ! empty( $gsc_two );
+
+        $changes = [];
+        if ( isset( $ga4_prev['total'], $ga4_two['total'] ) ) {
+            foreach ( [ 'pageViews', 'sessions', 'users', 'engagementRate' ] as $k ) {
+                $cur = $ga4_prev['total'][ $k ] ?? null;
+                $pre = $ga4_two['total'][ $k ]  ?? null;
+                if ( is_numeric( $cur ) && is_numeric( $pre ) ) {
+                    $changes[ $k ] = [
+                        'current'    => $cur + 0,
+                        'previous'   => $pre + 0,
+                        'pct_change' => $pre != 0 ? round( ( ( $cur - $pre ) / $pre ) * 100, 1 ) : null,
+                    ];
+                }
+            }
+        }
+
+        $area_label = $client_info['area_label'] ?? null;
+
+        return [
+            'client' => [
+                'name'              => '', // 任意項目（保存していないため空）
+                'site_url'          => $client_info['site_url']       ?? '',
+                'site_domain'       => $client_info['site_domain']    ?? '',
+                'report_type'       => $client_info['report_type']    ?? '',
+                'industry'          => $client_info['industry']       ?? '',
+                'industry_subcategory' => $client_info['industry_subcategory'] ?? [],
+                'industry_detail'   => $client_info['industry_detail']   ?? '',
+                'area'              => $area_label ?: ( $target_area ?? '' ),
+                'business_type'     => $client_info['business_type']  ?? '',
+                'stage'             => $client_info['stage']          ?? '',
+                'site_goal'         => $client_info['goal_main']      ?? '',
+                'monthly_goal'      => $client_info['goal_monthly']   ?? '',
+                'current_state'     => $client_info['current_state']  ?? '',
+                'issue'             => $client_info['issue']          ?? '',
+                'main_conversions'  => $client_info['main_conversions'] ?? '',
+                'focus_numbers'     => $client_info['focus_numbers']  ?? '',
+                'additional_notes'  => $client_info['additional_notes'] ?? '',
+                'persona' => [
+                    'one_liner'        => $client_info['persona_one_liner']        ?? '',
+                    'detail_text'      => $client_info['persona_detail_text']      ?? '',
+                    'age_ranges'       => $client_info['persona_age_ranges']       ?? [],
+                    'genders'          => $client_info['persona_genders']          ?? [],
+                    'attributes'       => $client_info['persona_attributes']       ?? [],
+                    'decision_factors' => $client_info['persona_decision_factors'] ?? [],
+                    'reference_urls'   => $client_info['persona_reference_urls']   ?? [],
+                ],
+            ],
+            'period' => [
+                'target'     => $prev_display,
+                'comparison' => $two_display,
+                'target_range'     => $prev_data['current_period'] ?? null,
+                'comparison_range' => $two_data['current_period']  ?? null,
+            ],
+            'ga4' => [
+                'summary'       => $ga4_prev['total']     ?? [],
+                'prev_summary'  => $ga4_two['total']      ?? [],
+                'changes'       => $changes,
+                'pages'         => array_slice( $ga4_prev['pages']    ?? [], 0, 10 ),
+                'landing_pages' => array_slice( $ga4_prev['landing']  ?? [], 0, 10 ),
+                'channels'      => $ga4_prev['channels']  ?? [],
+                'devices'       => $ga4_prev['devices']   ?? [],
+                'regions'       => array_slice( $prev_data['geo_region'] ?? [], 0, 10 ),
+                'cities'        => array_slice( $prev_data['geo']        ?? [], 0, 10 ),
+                'events'        => $ga4_prev['events']    ?? [],
+                'conversions'   => $client_info['effective_cv'] ?? [],
+            ],
+            'search_console' => [
+                'connected'                       => $gsc_connected,
+                'summary'                         => $gsc_prev['total'] ?? [],
+                'prev_summary'                    => $gsc_two['total']  ?? [],
+                'queries'                         => array_slice( $gsc_prev['keywords'] ?? [], 0, 20 ),
+                'pages'                           => array_slice( $gsc_prev['pages']    ?? [], 0, 20 ),
+                'high_impression_low_ctr_queries' => $this->pick_high_impr_low_ctr( $gsc_prev['keywords'] ?? [] ),
+                'near_top_queries'                => $this->pick_near_top( $gsc_prev['keywords'] ?? [] ),
+            ],
+            'page_insights' => $client_info['page_insights'] ?? null,
+            'target_area'   => $target_area,
+            'output_mode'   => $client_info['output_mode']   ?? 'normal',
+        ];
+    }
+
+    /**
+     * GSC キーワードから「表示は多いが CTR が低い」候補を抽出。
+     */
+    private function pick_high_impr_low_ctr( array $keywords ): array {
+        $rows = array_filter( $keywords, static function ( $r ) {
+            $impr = (float) ( $r['impressions'] ?? 0 );
+            $ctr  = (float) ( $r['ctr']         ?? 0 );
+            return $impr >= 100 && $ctr < 0.02;
+        } );
+        usort( $rows, static fn( $a, $b ) => ( $b['impressions'] ?? 0 ) <=> ( $a['impressions'] ?? 0 ) );
+        return array_slice( array_values( $rows ), 0, 10 );
+    }
+
+    /**
+     * GSC キーワードから「もう少しで上位」(11〜20位) 候補を抽出。
+     */
+    private function pick_near_top( array $keywords ): array {
+        $rows = array_filter( $keywords, static function ( $r ) {
+            $pos = (float) ( $r['position'] ?? 0 );
+            return $pos >= 11 && $pos <= 20;
+        } );
+        usort( $rows, static fn( $a, $b ) => ( $a['position'] ?? 999 ) <=> ( $b['position'] ?? 999 ) );
+        return array_slice( array_values( $rows ), 0, 10 );
+    }
+
+    /**
+     * Claude が返した JSON をレガシー互換 HTML に変換する。
+     * 既存表示パイプライン (Gcrev_Html_Extractor + page-report-latest.php) と互換性のあるクラス名を使う。
+     */
+    private function build_html_from_claude_json( array $json ): string {
+
+        $h = static fn( $v ): string => esc_html( (string) $v );
+
+        $html = '';
+
+        // -------- 結論サマリー --------
+        $summary       = $json['overall_summary'] ?? [];
+        $summary_title = (string) ( $summary['title'] ?? '今月の結論' );
+        $summary_body  = (string) ( $summary['body']  ?? '' );
+        $html .= '<div class="summary">';
+        $html .= '<h3>' . $h( $summary_title ) . '</h3>';
+        $html .= '<p>' . nl2br( $h( $summary_body ) ) . '</p>';
+        $html .= '</div>';
+
+        // -------- 良かった点 --------
+        $html .= '<div class="good-points"><h3>先月の良かった点</h3><ul>';
+        foreach ( ( $json['good_points'] ?? [] ) as $pt ) {
+            $title    = (string) ( $pt['title']    ?? '' );
+            $body     = (string) ( $pt['body']     ?? '' );
+            $evidence = (string) ( $pt['evidence'] ?? '' );
+            $line = $title !== '' ? '<strong>' . $h( $title ) . '</strong>' : '';
+            if ( $body !== '' )     { $line .= ( $line !== '' ? '：' : '' ) . $h( $body ); }
+            if ( $evidence !== '' ) { $line .= '<br><small>根拠: ' . $h( $evidence ) . '</small>'; }
+            if ( $line !== '' ) { $html .= '<li>' . $line . '</li>'; }
+        }
+        $html .= '</ul></div>';
+
+        // -------- 注意が必要な点 --------
+        $html .= '<div class="improvement-points"><h3>改善が必要な点</h3><ul>';
+        foreach ( ( $json['warning_points'] ?? [] ) as $pt ) {
+            $title    = (string) ( $pt['title']    ?? '' );
+            $body     = (string) ( $pt['body']     ?? '' );
+            $evidence = (string) ( $pt['evidence'] ?? '' );
+            $risk     = (string) ( $pt['risk']     ?? '' );
+            $line = $title !== '' ? '<strong>' . $h( $title ) . '</strong>' : '';
+            if ( $body !== '' )     { $line .= ( $line !== '' ? '：' : '' ) . $h( $body ); }
+            if ( $risk !== '' )     { $line .= '<br><small>リスク: ' . $h( $risk ) . '</small>'; }
+            if ( $evidence !== '' ) { $line .= '<br><small>根拠: ' . $h( $evidence ) . '</small>'; }
+            if ( $line !== '' ) { $html .= '<li>' . $line . '</li>'; }
+        }
+        $html .= '</ul></div>';
+
+        // -------- 横断考察（key_findings + cross_insights） --------
+        $html .= '<div class="insight-box"><h3>考察（GA4 × Search Console）</h3>';
+        foreach ( ( $json['key_findings'] ?? [] ) as $kf ) {
+            $title = (string) ( $kf['title']   ?? '' );
+            $body  = (string) ( $kf['body']    ?? $kf['summary'] ?? '' );
+            if ( $title !== '' || $body !== '' ) {
+                $html .= '<p>';
+                if ( $title !== '' ) { $html .= '<strong>' . $h( $title ) . '</strong>　'; }
+                $html .= nl2br( $h( $body ) );
+                $html .= '</p>';
+            }
+        }
+        foreach ( ( $json['cross_insights'] ?? [] ) as $ci ) {
+            $title = (string) ( $ci['title'] ?? '' );
+            $body  = (string) ( $ci['body']  ?? '' );
+            $conf  = (string) ( $ci['confidence'] ?? '' );
+            if ( $title !== '' || $body !== '' ) {
+                $html .= '<p>';
+                if ( $title !== '' ) { $html .= '<strong>' . $h( $title ) . '</strong>　'; }
+                $html .= nl2br( $h( $body ) );
+                if ( $conf !== '' ) { $html .= '<br><small>確度: ' . $h( $conf ) . '</small>'; }
+                $html .= '</p>';
+            }
+        }
+        $html .= '</div>';
+
+        // -------- 次のアクション --------
+        $html .= '<div class="actions"><h3>ネクストアクション</h3><ol>';
+        foreach ( ( $json['next_actions'] ?? [] ) as $act ) {
+            $priority = (string) ( $act['priority']         ?? '' );
+            $title    = (string) ( $act['title']            ?? '' );
+            $target   = (string) ( $act['target']           ?? '' );
+            $reason   = (string) ( $act['reason']           ?? '' );
+            $action   = (string) ( $act['action']           ?? '' );
+            $effect   = (string) ( $act['expected_effect']  ?? '' );
+            $timing   = (string) ( $act['estimated_timing'] ?? '' );
+            $bits = [];
+            if ( $priority !== '' ) { $bits[] = '[優先度: ' . $h( $priority ) . ']'; }
+            if ( $title !== '' )    { $bits[] = '<strong>' . $h( $title ) . '</strong>'; }
+            if ( $target !== '' )   { $bits[] = '対象: ' . $h( $target ); }
+            if ( $action !== '' )   { $bits[] = '内容: ' . $h( $action ); }
+            if ( $reason !== '' )   { $bits[] = '理由: ' . $h( $reason ); }
+            if ( $effect !== '' )   { $bits[] = '期待効果: ' . $h( $effect ); }
+            if ( $timing !== '' )   { $bits[] = '時期: ' . $h( $timing ); }
+            if ( ! empty( $bits ) ) {
+                $html .= '<li>' . implode( '<br>', $bits ) . '</li>';
+            }
+        }
+        $html .= '</ol></div>';
+
+        // -------- データ注意点（任意セクション） --------
+        if ( ! empty( $json['data_notes'] ) ) {
+            $html .= '<div class="area-box"><h3>データ・計測に関する注意</h3><ul>';
+            foreach ( $json['data_notes'] as $dn ) {
+                $title = (string) ( $dn['title'] ?? '' );
+                $body  = (string) ( $dn['body']  ?? '' );
+                $line = $title !== '' ? '<strong>' . $h( $title ) . '</strong>' : '';
+                if ( $body !== '' ) { $line .= ( $line !== '' ? '：' : '' ) . $h( $body ); }
+                if ( $line !== '' ) { $html .= '<li>' . $line . '</li>'; }
+            }
+            $html .= '</ul></div>';
+        }
+
+        return $html;
     }
 
     // =========================================================

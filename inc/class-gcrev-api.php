@@ -125,17 +125,23 @@ class Gcrev_Insight_API {
         $this->repo      = new Gcrev_Report_Repository($this->config);
 
         // OpenAI Client（ChatGPT レポート生成用、設定済みの場合のみ）
+        // ※ Claude 失敗時のフォールバック先としても使用するため、OpenAI キーがあれば常に初期化する
         $openai_client  = null;
         $prompt_builder = null;
-        if ( $this->config->get_report_ai_provider() === 'openai'
-            && $this->config->get_openai_api_key() !== '' ) {
+        if ( $this->config->get_openai_api_key() !== '' && class_exists( 'Gcrev_OpenAI_Client' ) && class_exists( 'Gcrev_Report_Prompt_Builder' ) ) {
             $openai_client  = new Gcrev_OpenAI_Client( $this->config );
             $prompt_builder = new Gcrev_Report_Prompt_Builder();
         }
 
+        // Claude (Anthropic) Client（ANTHROPIC_API_KEY が設定されていれば初期化）
+        $claude_client = null;
+        if ( class_exists( 'Gcrev_Claude_Client' ) && $this->config->get_anthropic_api_key() !== '' ) {
+            $claude_client = new Gcrev_Claude_Client( $this->config );
+        }
+
         $this->generator = new Gcrev_Report_Generator(
             $this->config, $this->ai, $this->ga4, $this->repo,
-            $openai_client, $prompt_builder
+            $openai_client, $prompt_builder, $claude_client
         );
 
         // Step4: Highlights（循環依存解消済み - Generator不要）
@@ -4522,13 +4528,8 @@ PROMPT;
             $highlights = $this->highlights_mod->extract_highlights_from_html($report_html, $user_id);
             $saved_post_id = $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown);
 
-            // === AI生成メタ情報保存 ===
-            if ( $saved_post_id > 0 ) {
-                $ai_meta = $this->generator->get_last_ai_meta();
-                if ( ! empty( $ai_meta ) ) {
-                    update_post_meta( $saved_post_id, '_gcrev_report_ai_meta', wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) );
-                }
-            }
+            // === AI生成メタ情報 + Claude 構造化 JSON を保存 ===
+            $this->persist_ai_outputs( $saved_post_id );
 
             // === KPIスナップショット保存 ===
             if ( $saved_post_id > 0 ) {
@@ -5049,13 +5050,8 @@ PROMPT;
                 $highlights    = $this->highlights_mod->extract_highlights_from_html( $report_html, $user_id );
                 $saved_post_id = $this->repo->save_report_to_history( $user_id, $report_html, $client_info, 'auto', null, $highlights, $auto_beginner_md );
 
-                // === AI生成メタ情報保存 ===
-                if ( $saved_post_id > 0 ) {
-                    $ai_meta = $this->generator->get_last_ai_meta();
-                    if ( ! empty( $ai_meta ) ) {
-                        update_post_meta( $saved_post_id, '_gcrev_report_ai_meta', wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) );
-                    }
-                }
+                // === AI生成メタ情報 + Claude 構造化 JSON を保存 ===
+                $this->persist_ai_outputs( $saved_post_id );
 
                 // === KPIスナップショット保存 ===
                 if ( $saved_post_id > 0 ) {
@@ -5797,13 +5793,8 @@ PROMPT;
             $highlights = $this->highlights_mod->extract_highlights_from_html($report_html, $user_id);
             $saved_post_id = $this->repo->save_report_to_history($user_id, $report_html, $client_info, 'manual', $year_month, $highlights, $beginner_markdown2);
 
-            // === AI生成メタ情報保存 ===
-            if ( $saved_post_id > 0 ) {
-                $ai_meta = $this->generator->get_last_ai_meta();
-                if ( ! empty( $ai_meta ) ) {
-                    update_post_meta( $saved_post_id, '_gcrev_report_ai_meta', wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) );
-                }
-            }
+            // === AI生成メタ情報 + Claude 構造化 JSON を保存 ===
+            $this->persist_ai_outputs( $saved_post_id );
 
             // === KPIスナップショット保存 ===
             if ( $saved_post_id > 0 ) {
@@ -13014,6 +13005,30 @@ PROMPT;
      * @param int    $user_id    ユーザーID
      * @param string|null $year_month 対象年月 (Y-m)
      */
+
+    /**
+     * Generator から AI メタ情報と構造化 JSON (Claude 時のみ) を取り出して post meta に保存
+     */
+    private function persist_ai_outputs( int $post_id ): void {
+        if ( $post_id <= 0 ) {
+            return;
+        }
+        $ai_meta = $this->generator->get_last_ai_meta();
+        if ( ! empty( $ai_meta ) ) {
+            update_post_meta( $post_id, '_gcrev_report_ai_meta', wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) );
+            if ( isset( $ai_meta['provider'] ) ) {
+                update_post_meta( $post_id, '_gcrev_report_ai_provider', (string) $ai_meta['provider'] );
+            }
+            if ( isset( $ai_meta['model'] ) ) {
+                update_post_meta( $post_id, '_gcrev_report_ai_model', (string) $ai_meta['model'] );
+            }
+        }
+        $ai_json = $this->generator->get_last_ai_json();
+        if ( ! empty( $ai_json ) ) {
+            update_post_meta( $post_id, '_gcrev_report_ai_json', wp_slash( wp_json_encode( $ai_json, JSON_UNESCAPED_UNICODE ) ) );
+        }
+    }
+
     private function save_kpi_snapshot_for_report( int $post_id, array $prev_data, int $user_id, ?string $year_month ): void {
         try {
             $snapshot = [

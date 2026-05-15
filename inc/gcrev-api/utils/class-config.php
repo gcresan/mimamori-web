@@ -303,20 +303,69 @@ class Gcrev_Config {
      * 月次レポート生成に使用するAIプロバイダを返す
      *
      * 優先順位:
-     *   1. wp-config.php 定数 GCREV_REPORT_AI_PROVIDER ('openai' | 'gemini')
-     *   2. OpenAI API キー（MIMAMORI_OPENAI_API_KEY / OPENAI_API_KEY のいずれか）が定義されていれば 'openai'
-     *   3. デフォルト 'gemini'
+     *   1. wp-config.php 定数 MIMAMORI_REPORT_AI_PROVIDER ('claude' | 'openai' | 'gemini')
+     *   2. wp-config.php 定数 GCREV_REPORT_AI_PROVIDER（後方互換）
+     *   3. オプション 'mimamori_report_ai_provider'
+     *   4. OpenAI API キーが定義されていれば 'openai'
+     *   5. デフォルト 'gemini'
      *
-     * @return string 'openai' | 'gemini'
+     * @return string 'claude' | 'openai' | 'gemini'
      */
     public function get_report_ai_provider(): string {
-        if ( defined( 'GCREV_REPORT_AI_PROVIDER' ) && GCREV_REPORT_AI_PROVIDER !== '' ) {
-            $provider = strtolower( (string) GCREV_REPORT_AI_PROVIDER );
-            if ( in_array( $provider, [ 'openai', 'gemini' ], true ) ) {
+        $allowed = [ 'claude', 'openai', 'gemini' ];
+
+        if ( defined( 'MIMAMORI_REPORT_AI_PROVIDER' ) && MIMAMORI_REPORT_AI_PROVIDER !== '' ) {
+            $provider = strtolower( (string) MIMAMORI_REPORT_AI_PROVIDER );
+            if ( in_array( $provider, $allowed, true ) ) {
                 return $provider;
             }
         }
+        if ( defined( 'GCREV_REPORT_AI_PROVIDER' ) && GCREV_REPORT_AI_PROVIDER !== '' ) {
+            $provider = strtolower( (string) GCREV_REPORT_AI_PROVIDER );
+            if ( in_array( $provider, $allowed, true ) ) {
+                return $provider;
+            }
+        }
+        $opt = strtolower( (string) get_option( 'mimamori_report_ai_provider', '' ) );
+        if ( in_array( $opt, $allowed, true ) ) {
+            return $opt;
+        }
         return $this->get_openai_api_key() !== '' ? 'openai' : 'gemini';
+    }
+
+    /**
+     * Anthropic (Claude) API キーを返す
+     *
+     * 優先順位:
+     *   1. ANTHROPIC_API_KEY
+     *   2. MIMAMORI_ANTHROPIC_API_KEY（後方互換）
+     *
+     * @return string 未設定時は空文字
+     */
+    public function get_anthropic_api_key(): string {
+        if ( defined( 'ANTHROPIC_API_KEY' ) && ANTHROPIC_API_KEY !== '' ) {
+            return (string) ANTHROPIC_API_KEY;
+        }
+        if ( defined( 'MIMAMORI_ANTHROPIC_API_KEY' ) && MIMAMORI_ANTHROPIC_API_KEY !== '' ) {
+            return (string) MIMAMORI_ANTHROPIC_API_KEY;
+        }
+        return '';
+    }
+
+    /**
+     * Claude モデル名を返す
+     *
+     * 優先順位:
+     *   1. wp-config.php 定数 MIMAMORI_CLAUDE_MODEL
+     *   2. デフォルト 'claude-sonnet-4-5'
+     *
+     * @return string
+     */
+    public function get_claude_model(): string {
+        if ( defined( 'MIMAMORI_CLAUDE_MODEL' ) && MIMAMORI_CLAUDE_MODEL !== '' ) {
+            return (string) MIMAMORI_CLAUDE_MODEL;
+        }
+        return 'claude-sonnet-4-5';
     }
 
     /**
