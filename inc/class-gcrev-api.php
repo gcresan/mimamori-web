@@ -4531,23 +4531,75 @@ PROMPT;
             // === AI生成メタ情報 + Claude 構造化 JSON を保存 ===
             $this->persist_ai_outputs( $saved_post_id );
 
-            // === KPIスナップショット保存 ===
+            // === レスポンス組み立て ===
+            $response_data = [
+                'success'     => true,
+                'report_html' => $report_html,
+                'post_id'     => $saved_post_id,
+            ];
+            if ($beginner_markdown !== '') {
+                $response_data['beginner_markdown'] = $beginner_markdown;
+            }
+
+            // === KPI スナップショット + インフォグラフィック (重い処理) ===
+            // クライアントは既にレポート本体を受け取った状態にするため、
+            // fastcgi_finish_request でレスポンスを先に flush してから残りを処理する。
+            if ( function_exists( 'fastcgi_finish_request' ) ) {
+                @ignore_user_abort( true );
+                @header( 'Content-Type: application/json; charset=utf-8' );
+                @status_header( 200 );
+                echo wp_json_encode( $response_data, JSON_UNESCAPED_UNICODE );
+                if ( function_exists( 'session_write_close' ) ) { @session_write_close(); }
+                @fastcgi_finish_request();
+
+                @set_time_limit( 600 );
+
+                // バックグラウンド: KPI スナップショット
+                try {
+                    if ( $saved_post_id > 0 ) {
+                        $this->save_kpi_snapshot_for_report( $saved_post_id, $prev_data, $user_id, $year_month );
+                    }
+                } catch ( \Throwable $bg_e ) {
+                    error_log( '[GCREV] background KPI snapshot failed: ' . $bg_e->getMessage() );
+                }
+
+                // バックグラウンド: インフォグラフィック生成・保存
+                try {
+                    $infographic = $this->generate_infographic_json( $prev_data, $two_data, $client_info, $user_id );
+                    if ( $infographic ) {
+                        $ig_year  = $year_month ? (int) substr( $year_month, 0, 4 ) : 0;
+                        $ig_month = $year_month ? (int) substr( $year_month, 5, 2 ) : 0;
+                        if ( $ig_year > 0 && $ig_month > 0 ) {
+                            $this->save_monthly_infographic( $ig_year, $ig_month, $user_id, $infographic );
+                            error_log( "[GCREV] generate_report (bg): Infographic saved for user_id={$user_id}, {$year_month}" );
+                        } else {
+                            $tz_ig = wp_timezone();
+                            $prev_dt = new DateTimeImmutable( 'first day of last month', $tz_ig );
+                            $this->save_monthly_infographic( (int) $prev_dt->format( 'Y' ), (int) $prev_dt->format( 'n' ), $user_id, $infographic );
+                            error_log( "[GCREV] generate_report (bg): Infographic saved (fallback prev month) for user_id={$user_id}" );
+                        }
+                    }
+                } catch ( \Throwable $bg_e ) {
+                    error_log( '[GCREV] background infographic failed: ' . $bg_e->getMessage() );
+                }
+
+                // exit する前に必ず finally の restore_country_filter が走る
+                exit;
+            }
+
+            // === fastcgi_finish_request 非対応環境向け 同期フォールバック ===
             if ( $saved_post_id > 0 ) {
                 $this->save_kpi_snapshot_for_report( $saved_post_id, $prev_data, $user_id, $year_month );
             }
-
-            // === インフォグラフィックJSON生成・保存 ===
             try {
                 $infographic = $this->generate_infographic_json($prev_data, $two_data, $client_info, $user_id);
                 if ($infographic) {
-                    // year_month が 'YYYY-MM' 形式で来る場合をパース
                     $ig_year  = $year_month ? (int)substr($year_month, 0, 4) : 0;
                     $ig_month = $year_month ? (int)substr($year_month, 5, 2) : 0;
                     if ($ig_year > 0 && $ig_month > 0) {
                         $this->save_monthly_infographic($ig_year, $ig_month, $user_id, $infographic);
                         error_log("[GCREV] generate_report: Infographic saved for user_id={$user_id}, {$year_month}");
                     } else {
-                        // year_month不明の場合は前月を使用
                         $tz_ig = wp_timezone();
                         $prev_dt = new DateTimeImmutable('first day of last month', $tz_ig);
                         $this->save_monthly_infographic((int)$prev_dt->format('Y'), (int)$prev_dt->format('n'), $user_id, $infographic);
@@ -4556,14 +4608,6 @@ PROMPT;
                 }
             } catch (\Exception $ig_e) {
                 error_log("[GCREV] generate_report: Infographic error: " . $ig_e->getMessage());
-            }
-
-            $response_data = [
-                'success'     => true,
-                'report_html' => $report_html,
-            ];
-            if ($beginner_markdown !== '') {
-                $response_data['beginner_markdown'] = $beginner_markdown;
             }
 
             return new WP_REST_Response($response_data, 200);
