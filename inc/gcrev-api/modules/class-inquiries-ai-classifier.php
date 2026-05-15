@@ -85,15 +85,19 @@ class Mimamori_Inquiries_AI_Classifier {
     }
 
     /**
-     * Gemini API を呼んで items を分類
+     * Claude (Anthropic) で items を分類する。
+     * 旧称 run_gemini_classification を維持しているが内部実装は Claude。
      */
     private function run_gemini_classification( array $items ): array {
-        if ( ! class_exists( 'Gcrev_AI_Client' ) || ! class_exists( 'Gcrev_Config' ) ) {
-            throw new \Exception( 'Gcrev_AI_Client / Gcrev_Config が読み込まれていません' );
+        if ( ! class_exists( 'Gcrev_Claude_Client' ) || ! class_exists( 'Gcrev_Config' ) ) {
+            throw new \Exception( 'Gcrev_Claude_Client / Gcrev_Config が読み込まれていません' );
         }
 
         $config = new \Gcrev_Config();
-        $client = new \Gcrev_AI_Client( $config );
+        if ( $config->get_anthropic_api_key() === '' ) {
+            throw new \Exception( 'ANTHROPIC_API_KEY が wp-config.php に設定されていません' );
+        }
+        $claude = new \Gcrev_Claude_Client( $config );
 
         // items を AI に渡しやすい形に変換（個人情報は除外しすぎず、判定に必要な範囲で）
         $payload = [];
@@ -109,11 +113,10 @@ class Mimamori_Inquiries_AI_Classifier {
 
         $categories_str = implode( ' / ', self::CATEGORIES );
 
-        $prompt = <<<PROMPT
+        $system_prompt = <<<SYS
 あなたは工務店・住宅会社向けの問い合わせ内容分類アシスタントです。
 
-以下に「同月内に届いた複数の問い合わせ」を JSON で渡します。
-各問い合わせを精査し、次のフィールドを付けて JSON 配列で返してください。
+入力 JSON 配列の各問い合わせを精査し、次のフィールドを付けて JSON 配列で返してください。
 
 【出力フィールド】
 - idx: 入力と同じ通し番号
@@ -133,27 +136,24 @@ class Mimamori_Inquiries_AI_Classifier {
 - それ以外で判別困難なら「その他」
 
 回答はマークダウンや余計な解説を含めず、JSON 配列のみを返してください。
+コードブロック (```) も付けないでください。
+SYS;
 
-【入力】
-PROMPT;
+        $user_prompt = "以下の問い合わせ群を分類してください。\n\n【入力】\n"
+            . wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
 
-        $prompt .= "\n" . wp_json_encode( $payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
-
-        $response = $client->call_gemini_api( $prompt, [
-            'temperature'      => 0.1,
-            'response_mime_type' => 'application/json',
+        $result = $claude->call_messages_api( $system_prompt, $user_prompt, [
+            'temperature' => 0.1,
+            'max_tokens'  => 8000,
         ] );
 
-        // call_gemini_api の戻り値はテキスト or 構造化（実装に依存）
-        if ( is_array( $response ) ) {
-            $text = '';
-            // candidates[0].content.parts[0].text を取り出す
-            if ( isset( $response['candidates'][0]['content']['parts'][0]['text'] ) ) {
-                $text = (string) $response['candidates'][0]['content']['parts'][0]['text'];
-            }
-        } else {
-            $text = (string) $response;
-        }
+        $text = (string) ( $result['text'] ?? '' );
+
+        // コードフェンス除去
+        $text = trim( $text );
+        $text = preg_replace( '/^```(?:json)?\s*/i', '', $text );
+        $text = preg_replace( '/\s*```\s*$/', '', $text );
+        $text = trim( $text );
 
         // JSON 抽出（前後にゴミがあっても拾えるよう正規表現でフォールバック）
         $decoded = json_decode( $text, true );
@@ -163,7 +163,7 @@ PROMPT;
             }
         }
         if ( ! is_array( $decoded ) ) {
-            throw new \Exception( 'Gemini レスポンスを JSON としてパースできませんでした' );
+            throw new \Exception( 'Claude レスポンスを JSON としてパースできませんでした' );
         }
 
         // 結果を入力 items にマージ
