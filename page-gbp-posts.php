@@ -867,23 +867,44 @@ wp_enqueue_media();
         hint.textContent = 'Meta連携状態を確認中...';
 
         fetchMetaConnections(false).then(function(data) {
-            var p = (data && data.platforms) ? data.platforms : { facebook: false, instagram: false };
-            var fbOk = !!p.facebook;
-            var igOk = !!p.instagram;
+            var p             = (data && data.platforms) ? data.platforms : { facebook: false, instagram: false };
+            var scopesPending = !!(data && data.scopes_pending);
+            var isAdmin       = !!(data && data.is_admin);
+            var fbOk          = !!p.facebook;
+            var igOk          = !!p.instagram;
+
+            // App Review 未承認時は、管理者以外は投稿系の権限が無く失敗するため
+            // チェックボックスを強制的に無効化する。管理者には警告付きで開放（Dev検証用）。
+            if (scopesPending && !isAdmin) {
+                fbBox.disabled = true;
+                igBox.disabled = true;
+                fbBox.checked  = false;
+                igBox.checked  = false;
+                hint.innerHTML = '<span style="color:#a16207;">⚠ Facebook / Instagramへの同時投稿は、Meta権限承認後に利用できます。</span>';
+                return;
+            }
+
             fbBox.disabled = !fbOk;
             igBox.disabled = !igOk;
             if (!fbOk) fbBox.checked = false;
             if (!igOk) igBox.checked = false;
 
-            if (!fbOk && !igOk) {
-                hint.innerHTML = 'Facebook / Instagramへ投稿するには、先に <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面でMeta連携を行ってください。';
-            } else if (!fbOk) {
-                hint.innerHTML = 'Facebookページが未接続です。接続するには <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面へ。';
-            } else if (!igOk) {
-                hint.innerHTML = 'Instagramビジネスアカウントが未接続です。接続するには <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面へ。';
-            } else {
-                hint.textContent = '※ Instagramはキャプション付き画像投稿になります（テキストのみは不可）。';
+            // 案内文の組み立て
+            var lines = [];
+            if (scopesPending && isAdmin) {
+                lines.push('<span style="color:#a16207;">⚠ 管理者デバッグモード：Meta権限未承認のため、実際の投稿は失敗する可能性があります。</span>');
             }
+
+            if (!fbOk && !igOk) {
+                lines.push('Facebook / Instagramへ投稿するには、先に <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面でMeta連携を行ってください。');
+            } else if (!fbOk) {
+                lines.push('Facebookページが未接続です。接続するには <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面へ。');
+            } else if (!igOk) {
+                lines.push('Instagramビジネスアカウントが未接続です。接続するには <a href="' + (window.location.origin) + '/social-connect/" target="_blank" rel="noopener">SNS連携</a> 画面へ。');
+            } else if (!scopesPending) {
+                lines.push('※ Instagramはキャプション付き画像投稿になります（テキストのみは不可）。');
+            }
+            hint.innerHTML = lines.join('<br>');
             updateInstagramImageHint();
         });
     }

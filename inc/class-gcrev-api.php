@@ -21489,6 +21489,16 @@ PROMPT;
             'updated_at'         => $now,
         ];
 
+        // App Review 未承認時は、管理者以外のユーザーは crosspost フラグを保存できない。
+        // UI 側でも無効化しているが、改ざん防止のためサーバー側でも無視する。
+        if ( ( $data['crosspost_facebook'] === 1 || $data['crosspost_instagram'] === 1 )
+             && class_exists( 'Gcrev_Meta_Client' )
+             && ! Gcrev_Meta_Client::is_full_scopes_active()
+             && ! current_user_can( 'manage_options' ) ) {
+            $data['crosspost_facebook']  = 0;
+            $data['crosspost_instagram'] = 0;
+        }
+
         if ( empty( $data['summary'] ) ) {
             delete_transient( $lock_key );
             return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿本文は必須です。' ], 400 );
@@ -21610,6 +21620,15 @@ PROMPT;
             'crosspost_instagram' => $request->get_param( 'crosspost_instagram' ) ? 1 : 0,
             'updated_at'         => current_time( 'mysql' ),
         ];
+
+        // App Review 未承認時は、管理者以外は crosspost フラグを保存できない（改ざん防止）
+        if ( ( $update['crosspost_facebook'] === 1 || $update['crosspost_instagram'] === 1 )
+             && class_exists( 'Gcrev_Meta_Client' )
+             && ! Gcrev_Meta_Client::is_full_scopes_active()
+             && ! current_user_can( 'manage_options' ) ) {
+            $update['crosspost_facebook']  = 0;
+            $update['crosspost_instagram'] = 0;
+        }
 
         if ( empty( $update['summary'] ) ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => '投稿本文は必須です。' ], 400 );
@@ -25523,10 +25542,17 @@ PROMPT;
         $line    = Gcrev_LINE_Client::get_connection_status($user_id);
         $available = Gcrev_Social_Poster::get_connected_platforms($user_id);
 
+        // App Review 未承認時の判定:
+        //   投稿系スコープ（pages_manage_posts / instagram_content_publish）が
+        //   現在の OAuth スコープに含まれていない場合は scopes_pending = true
+        $scopes_pending = ! Gcrev_Meta_Client::is_full_scopes_active();
+
         return new \WP_REST_Response([
-            'meta'      => $meta,
-            'line'      => $line,
-            'platforms' => $available,
+            'meta'           => $meta,
+            'line'           => $line,
+            'platforms'      => $available,
+            'scopes_pending' => $scopes_pending,
+            'is_admin'       => current_user_can( 'manage_options' ),
         ], 200);
     }
 

@@ -68,6 +68,20 @@ class Gcrev_Gbp_Crosspost {
             return $base;
         }
 
+        // App Review 未承認時は、管理者以外は投稿実行をブロック。
+        // 投稿しても Meta 側で権限エラーになり、ユーザー混乱の元になるため。
+        if ( ! Gcrev_Meta_Client::is_full_scopes_active() && ! user_can( $user_id, 'manage_options' ) ) {
+            $base['triggered'] = true;
+            $base['skipped']   = [
+                'facebook'  => $want_fb ? 'Meta権限が承認されていないため、同時投稿はスキップされました。' : '',
+                'instagram' => $want_ig ? 'Meta権限が承認されていないため、同時投稿はスキップされました。' : '',
+            ];
+            $base['skipped'] = array_filter( $base['skipped'] );
+            $base['status']  = 'no_target';
+            $base['message'] = 'Facebook / Instagramへの同時投稿は、Meta権限承認後に利用できます。';
+            return $base;
+        }
+
         // 接続状態に応じてプラットフォームを絞る。未接続なら除外。
         $connected = Gcrev_Social_Poster::get_connected_platforms( $user_id );
         $platforms = [];

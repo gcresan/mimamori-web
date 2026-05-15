@@ -116,6 +116,26 @@ class Gcrev_Meta_Client {
     }
 
     /**
+     * 投稿系スコープ（pages_manage_posts, instagram_content_publish 等）が
+     * 現在のスコープ設定に含まれているかどうか。
+     *
+     * 含まれない（= App Review 未承認で SCOPES_MINIMAL のままなど）の場合、
+     * Facebook ページ投稿・Instagram 投稿は実行しても Meta 側で権限エラーになる。
+     * UI 側はこれを見て同時投稿チェックボックスを無効化し、誤解を防ぐ。
+     */
+    public static function is_full_scopes_active(): bool {
+        $current  = self::get_scopes();
+        // 投稿系の必須スコープが両方揃っていれば「フル」とみなす
+        $required = [ 'pages_manage_posts', 'instagram_content_publish' ];
+        foreach ( $required as $r ) {
+            if ( ! in_array( $r, $current, true ) ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * 認可 URL を生成
      */
     public static function build_auth_url(int $user_id): string {
