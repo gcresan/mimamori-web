@@ -13,7 +13,18 @@
 // =============================================
 window.gcrevCache = {
     TTL: 2 * 60 * 60 * 1000, // 2時間（サーバー側Transient 24hより十分短い）
-    PREFIX: 'gcrev_u<?php echo is_user_logged_in() ? get_current_user_id() : 0; ?>_',
+    // データ所有者ID（view-as 切替中はそのクライアントID）でプレフィックスを分ける。
+    // これにより admin が複数クライアントをビュー切替しても、それぞれ別キャッシュとして
+    // 扱われ、前のクライアントのデータが返る事故を防ぐ。
+    PREFIX: 'gcrev_u<?php
+        if ( is_user_logged_in() ) {
+            echo (int) ( function_exists( 'mimamori_get_view_user_id' )
+                ? mimamori_get_view_user_id()
+                : get_current_user_id() );
+        } else {
+            echo 0;
+        }
+    ?>_',
     MAX_AGE: 24 * 60 * 60 * 1000, // 24時間（古いエントリの自動掃除用）
 
     /** キャッシュからデータを取得（期限切れならnull） */
