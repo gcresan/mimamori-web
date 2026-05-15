@@ -451,11 +451,84 @@ if ( is_array( $kpi_snapshot ) ) {
     </section>
     <?php endif; ?>
 
-    <!-- ============ セクション7: データ・計測上の注意 ============ -->
+    <!-- ============ セクション7: 実際の問い合わせ内容 ============ -->
+    <?php
+    // 問い合わせ連携プラグインが有効なユーザーに限り、実際の問い合わせを一覧表示
+    $inquiry_list_items = [];
+    if ( class_exists( 'Mimamori_Inquiries_Fetcher' )
+        && \Mimamori_Inquiries_Fetcher::is_enabled( $report_user_id )
+        && $report_year > 0 && $report_month > 0
+    ) {
+        $iq_ym = sprintf( '%04d-%02d', $report_year, $report_month );
+        $raw_items = \Mimamori_Inquiries_Fetcher::get_items_json( $report_user_id, $iq_ym );
+        if ( is_array( $raw_items ) ) {
+            $raw_items = \Mimamori_Inquiries_Fetcher::apply_overrides_to_items( $report_user_id, $iq_ym, $raw_items );
+            // 日付降順
+            usort( $raw_items, static function ( $a, $b ) {
+                return strcmp( (string) ( $b['date'] ?? '' ), (string) ( $a['date'] ?? '' ) );
+            } );
+            // 有効問い合わせのみ最大 30 件
+            $cnt = 0;
+            foreach ( $raw_items as $it ) {
+                if ( empty( $it['effective_valid'] ) ) { continue; }
+                $inquiry_list_items[] = $it;
+                if ( ++$cnt >= 30 ) { break; }
+            }
+        }
+    }
+    ?>
+    <?php if ( ! empty( $inquiry_list_items ) ): ?>
+    <section class="m-section">
+        <div class="m-wrap">
+            <div class="m-sec-tag">SECTION 07　実際の問い合わせ内容</div>
+            <h2 class="m-sec-title">見込み客から届いた問い合わせ一覧</h2>
+            <p class="m-sec-desc">営業メール・SPAM 等を AI 分類で除外した、事業上意味のある問い合わせの内訳です。実際のお客様の声を踏まえた施策判断にお使いください。</p>
+
+            <table class="m-inq-table">
+                <thead>
+                    <tr>
+                        <th class="m-inq-th-date">日付</th>
+                        <th class="m-inq-th-name">問い合わせ者</th>
+                        <th class="m-inq-th-cat">分類</th>
+                        <th class="m-inq-th-summary">内容サマリ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ( $inquiry_list_items as $it ): ?>
+                <?php
+                    $iq_date = (string) ( $it['date'] ?? '' );
+                    $iq_date_disp = '';
+                    if ( $iq_date !== '' ) {
+                        try {
+                            $dt = new \DateTimeImmutable( $iq_date, wp_timezone() );
+                            $iq_date_disp = $dt->format( 'n/j H:i' );
+                        } catch ( \Throwable $e ) {
+                            $iq_date_disp = mb_substr( $iq_date, 0, 16 );
+                        }
+                    }
+                    $iq_name = trim( (string) ( $it['name'] ?? '' ) );
+                    if ( $iq_name === '' ) { $iq_name = '(名前なし)'; }
+                    $iq_cat  = (string) ( $it['ai_category'] ?? '' );
+                    $iq_sum  = (string) ( $it['ai_summary'] ?? mb_substr( (string) ( $it['message'] ?? '' ), 0, 140 ) );
+                ?>
+                <tr>
+                    <td class="m-inq-td-date"><?php echo esc_html( $iq_date_disp ); ?></td>
+                    <td class="m-inq-td-name"><?php echo esc_html( $iq_name ); ?></td>
+                    <td class="m-inq-td-cat"><span class="m-inq-cat"><?php echo esc_html( $iq_cat ); ?></span></td>
+                    <td class="m-inq-td-summary"><?php echo $render_text( $iq_sum ); ?></td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <?php endif; ?>
+
+    <!-- ============ セクション8: データ・計測上の注意 ============ -->
     <?php if ( ! empty( $data_notes ) ): ?>
     <section class="m-section">
         <div class="m-wrap">
-            <div class="m-sec-tag">SECTION 07　データ・計測上の注意</div>
+            <div class="m-sec-tag">SECTION 08　データ・計測上の注意</div>
             <h2 class="m-sec-title">読み解きの前提条件</h2>
 
             <?php foreach ( $data_notes as $dn ): ?>

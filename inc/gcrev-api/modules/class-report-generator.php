@@ -286,6 +286,9 @@ class Gcrev_Report_Generator {
             }
         }
 
+        // 深掘りレポート (戦略レポート) 履歴: 過去の考察・推奨アクションを Claude に伝える
+        $strategy_history = $this->collect_strategy_history( $user_id_for_inq );
+
         $payload = [
             'client' => [
                 'name'              => '', // 任意項目（保存していないため空）
@@ -353,7 +356,88 @@ class Gcrev_Report_Generator {
             $payload['inquiries'] = $inquiries_block;
         }
 
+        // 深掘りレポート履歴を payload に乗せる (存在する場合のみ)
+        if ( ! empty( $strategy_history ) ) {
+            $payload['strategy_history'] = $strategy_history;
+        }
+
         return $payload;
+    }
+
+    /**
+     * このユーザーの深掘りレポート (Strategy Report) 履歴を取得して、
+     * Claude プロンプト用にコンパクトな配列で返す。
+     *
+     * - 最新 3 件まで
+     * - 各レポートから conclusion / alignment_score / this_month_todos / actions のタイトル等を抜粋
+     * - 巨大化を避けるため各 string は適切に切り詰める
+     */
+    private function collect_strategy_history( int $user_id ): array {
+        if ( $user_id <= 0 || ! class_exists( 'Gcrev_Strategy_Report_Repository' ) ) {
+            return [];
+        }
+        try {
+            $repo    = new \Gcrev_Strategy_Report_Repository();
+            $history = $repo->get_history( $user_id, 6 );
+        } catch ( \Throwable $e ) {
+            return [];
+        }
+        if ( empty( $history ) ) {
+            return [];
+        }
+
+        $out = [];
+        $added = 0;
+        foreach ( $history as $h ) {
+            if ( ( $h['status'] ?? '' ) !== 'completed' ) { continue; }
+            $rid = (int) ( $h['id'] ?? 0 );
+            if ( $rid <= 0 ) { continue; }
+            $full = $repo->get_by_id( $rid );
+            if ( ! is_array( $full ) ) { continue; }
+            $rj = $full['report_json'] ?? null;
+            $sec = is_array( $rj ) ? ( $rj['sections'] ?? [] ) : [];
+
+            // 各セクションをコンパクト化
+            $conclusion = (string) ( $sec['conclusion'] ?? '' );
+            if ( mb_strlen( $conclusion ) > 600 ) { $conclusion = mb_substr( $conclusion, 0, 600 ) . '…'; }
+
+            $actions_titles = [];
+            foreach ( (array) ( $sec['actions'] ?? [] ) as $a ) {
+                $t = (string) ( $a['title'] ?? $a['name'] ?? '' );
+                if ( $t !== '' ) { $actions_titles[] = mb_substr( $t, 0, 120 ); }
+                if ( count( $actions_titles ) >= 8 ) { break; }
+            }
+            $todos = [];
+            foreach ( (array) ( $sec['this_month_todos'] ?? [] ) as $t ) {
+                if ( is_array( $t ) ) {
+                    $title = (string) ( $t['title'] ?? $t['text'] ?? '' );
+                } else {
+                    $title = (string) $t;
+                }
+                if ( $title !== '' ) { $todos[] = mb_substr( $title, 0, 120 ); }
+                if ( count( $todos ) >= 8 ) { break; }
+            }
+
+            $issues_titles = [];
+            foreach ( (array) ( $sec['issues'] ?? [] ) as $i ) {
+                $t = (string) ( $i['title'] ?? $i['name'] ?? '' );
+                if ( $t !== '' ) { $issues_titles[] = mb_substr( $t, 0, 120 ); }
+                if ( count( $issues_titles ) >= 6 ) { break; }
+            }
+
+            $out[] = [
+                'year_month'        => (string) ( $full['year_month'] ?? '' ),
+                'alignment_score'   => $full['alignment_score'] ?? null,
+                'finished_at'       => (string) ( $full['finished_at'] ?? '' ),
+                'conclusion'        => $conclusion,
+                'issues_titles'     => $issues_titles,
+                'this_month_todos'  => $todos,
+                'recommended_actions' => $actions_titles,
+            ];
+            $added++;
+            if ( $added >= 3 ) { break; }
+        }
+        return $out;
     }
 
     /**

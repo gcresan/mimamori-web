@@ -289,14 +289,7 @@
     line-height: 1;
     letter-spacing: -0.02em;
 }
-.gcrev-ai-report-modern .m-scene-no::before {
-    content: "Q";
-    font-size: 11px;
-    display: block;
-    color: var(--m-ink-mute);
-    letter-spacing: 0.12em;
-    margin-bottom: 4px;
-}
+/* 番号の上のラベル (旧 "Q") は不要なので非表示 */
 .gcrev-ai-report-modern .m-scene-body h4 {
     font-size: 17px;
     font-weight: 600;
@@ -526,6 +519,88 @@
     color: var(--m-ink-soft);
     line-height: 1.8;
     margin: 0;
+}
+
+/* ===== 問い合わせ一覧テーブル ===== */
+.gcrev-ai-report-modern .m-inq-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 18px;
+    background: var(--m-paper);
+    border: 1px solid var(--m-line);
+    font-size: 13.5px;
+}
+.gcrev-ai-report-modern .m-inq-table thead th {
+    background: var(--m-accent);
+    color: #fff;
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+.gcrev-ai-report-modern .m-inq-table tbody td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--m-line-soft);
+    vertical-align: top;
+    line-height: 1.65;
+}
+.gcrev-ai-report-modern .m-inq-table tbody tr:last-child td { border-bottom: none; }
+.gcrev-ai-report-modern .m-inq-table tbody tr:nth-child(even) { background: #fbfaf7; }
+.gcrev-ai-report-modern .m-inq-th-date,
+.gcrev-ai-report-modern .m-inq-td-date {
+    width: 90px;
+    white-space: nowrap;
+    color: var(--m-ink-mute);
+    font-size: 12.5px;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+}
+.gcrev-ai-report-modern .m-inq-th-name,
+.gcrev-ai-report-modern .m-inq-td-name {
+    width: 140px;
+    font-weight: 600;
+    color: var(--m-ink);
+}
+.gcrev-ai-report-modern .m-inq-th-cat,
+.gcrev-ai-report-modern .m-inq-td-cat {
+    width: 130px;
+    white-space: nowrap;
+}
+.gcrev-ai-report-modern .m-inq-cat {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--m-accent-pale);
+    color: var(--m-accent);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    border-radius: 2px;
+}
+.gcrev-ai-report-modern .m-inq-td-summary {
+    color: var(--m-ink-soft);
+    font-size: 13.5px;
+}
+
+@media (max-width: 780px) {
+    .gcrev-ai-report-modern .m-inq-table { font-size: 12.5px; }
+    .gcrev-ai-report-modern .m-inq-table thead { display: none; }
+    .gcrev-ai-report-modern .m-inq-table tbody tr {
+        display: block;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--m-line);
+    }
+    .gcrev-ai-report-modern .m-inq-table tbody td {
+        display: block;
+        padding: 2px 0;
+        border: none;
+    }
+    .gcrev-ai-report-modern .m-inq-th-date,
+    .gcrev-ai-report-modern .m-inq-td-date,
+    .gcrev-ai-report-modern .m-inq-th-name,
+    .gcrev-ai-report-modern .m-inq-td-name,
+    .gcrev-ai-report-modern .m-inq-th-cat,
+    .gcrev-ai-report-modern .m-inq-td-cat { width: auto; }
+    .gcrev-ai-report-modern .m-inq-td-name { font-size: 14px; padding-top: 4px; }
+    .gcrev-ai-report-modern .m-inq-td-summary { padding-top: 6px; }
 }
 
 /* ===== footnote (data_notes) ===== */
