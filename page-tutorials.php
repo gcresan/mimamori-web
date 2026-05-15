@@ -1012,9 +1012,6 @@ get_header();
                 <div class="tut-card-body">
                     <h4 class="tut-card-name">チャットボット</h4>
                     <p class="tut-card-desc">あなたのホームページにAIチャットボットを設置し、24時間お客様の質問に対応できるようにします。</p>
-                    <a href="<?php echo esc_url( home_url( '/chatbot/' ) ); ?>" class="tut-card-link">
-                        チャットボットを開く →
-                    </a>
                 </div>
             </div>
             <?php endif; ?>
