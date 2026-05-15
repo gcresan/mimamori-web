@@ -239,18 +239,37 @@ class Gcrev_Report_Generator {
 
         $gsc_connected = ! empty( $gsc_prev ) || ! empty( $gsc_two );
 
+        // ダッシュボード由来の値は "4,251" 等のカンマ付き文字列なので
+        // Claude に渡す前にここで明示的に数値化する。
+        $to_num = static function ( $v ) {
+            if ( is_numeric( $v ) ) { return $v + 0; }
+            if ( is_string( $v ) ) {
+                $stripped = preg_replace( '/[,\s]/u', '', $v );
+                if ( is_numeric( $stripped ) ) { return $stripped + 0; }
+            }
+            return null;
+        };
+        $normalize_total = static function ( array $total ) use ( $to_num ): array {
+            $out = [];
+            foreach ( $total as $k => $v ) {
+                $n = $to_num( $v );
+                $out[ $k ] = ( $n !== null ) ? $n : $v;
+            }
+            return $out;
+        };
+        $ga4_prev_total = isset( $ga4_prev['total'] ) && is_array( $ga4_prev['total'] ) ? $normalize_total( $ga4_prev['total'] ) : [];
+        $ga4_two_total  = isset( $ga4_two['total'] )  && is_array( $ga4_two['total'] )  ? $normalize_total( $ga4_two['total'] )  : [];
+
         $changes = [];
-        if ( isset( $ga4_prev['total'], $ga4_two['total'] ) ) {
-            foreach ( [ 'pageViews', 'sessions', 'users', 'engagementRate' ] as $k ) {
-                $cur = $ga4_prev['total'][ $k ] ?? null;
-                $pre = $ga4_two['total'][ $k ]  ?? null;
-                if ( is_numeric( $cur ) && is_numeric( $pre ) ) {
-                    $changes[ $k ] = [
-                        'current'    => $cur + 0,
-                        'previous'   => $pre + 0,
-                        'pct_change' => $pre != 0 ? round( ( ( $cur - $pre ) / $pre ) * 100, 1 ) : null,
-                    ];
-                }
+        foreach ( [ 'pageViews', 'sessions', 'users', 'newUsers', 'returningUsers', 'avgDuration', 'engagementRate', 'conversions' ] as $k ) {
+            $cur = $ga4_prev_total[ $k ] ?? null;
+            $pre = $ga4_two_total[ $k ]  ?? null;
+            if ( is_numeric( $cur ) && is_numeric( $pre ) ) {
+                $changes[ $k ] = [
+                    'current'    => $cur + 0,
+                    'previous'   => $pre + 0,
+                    'pct_change' => $pre != 0 ? round( ( ( $cur - $pre ) / $pre ) * 100, 1 ) : null,
+                ];
             }
         }
 
@@ -303,8 +322,8 @@ class Gcrev_Report_Generator {
                 'comparison_range' => $two_data['current_period']  ?? null,
             ],
             'ga4' => [
-                'summary'       => $ga4_prev['total']     ?? [],
-                'prev_summary'  => $ga4_two['total']      ?? [],
+                'summary'       => $ga4_prev_total,
+                'prev_summary'  => $ga4_two_total,
                 'changes'       => $changes,
                 'pages'         => array_slice( $ga4_prev['pages']    ?? [], 0, 5 ),
                 'landing_pages' => array_slice( $ga4_prev['landing']  ?? [], 0, 5 ),
