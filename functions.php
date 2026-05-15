@@ -183,6 +183,9 @@ function get_post_category_link($post_id) {
 
 // ユーザーが検索したワードをハイライト（正規表現安全化）
 function wps_highlight_results($text) {
+    // 管理画面（固定ページ・投稿の検索結果一覧など）は HTML が
+    // エスケープされ表示されるため、span タグが生で見えてしまう。フロントのみで動作させる。
+    if (is_admin()) return $text;
     if (!is_search()) return $text;
 
     $sr = (string) get_query_var('s');
