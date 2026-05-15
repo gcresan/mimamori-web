@@ -256,11 +256,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                               <span>月次レポート</span>
                               </a>
                            </li>
+                           <?php /* 年次レポートは一旦非表示
                            <li class="nav-item">
                               <a href="<?php echo esc_url( home_url('/annual-report/') ); ?>" class="nav-link <?php echo is_page('annual-report') ? 'active' : ''; ?>">
                               <span>年次レポート</span>
                               </a>
                            </li>
+                           */ ?>
                         </ul>
                      </li>
 
