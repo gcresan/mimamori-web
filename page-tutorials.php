@@ -1000,9 +1000,6 @@ get_header();
                 <div class="tut-card-body">
                     <h4 class="tut-card-name">現状のページ診断</h4>
                     <p class="tut-card-desc">主要なページを1つずつAIが診断して、弱点と具体的な改善案を提示します。「どこを直せばいいか」がはっきりします。</p>
-                    <a href="<?php echo esc_url( home_url( '/page-analysis/' ) ); ?>" class="tut-card-link">
-                        現状のページ診断を開く →
-                    </a>
                 </div>
             </div>
             <?php endif; ?>
@@ -1024,52 +1021,6 @@ get_header();
         </div>
     </div>
     <?php endif; ?>
-
-    <hr class="tut-divider">
-
-    <!-- ⑥ わからないときは -->
-    <div class="tut-section">
-        <h3 class="tut-section-title">
-            <span class="tut-section-num"><?php echo $sec_num(); ?></span>
-            わからないときは
-        </h3>
-        <p class="tut-section-sub">使い方で迷ったら、まずAIチャットに聞いてみてください。それでも解決しない場合は下記からどうぞ。</p>
-
-        <?php if ( $can_chat ) : ?>
-        <div class="tut-chat-box">
-            <div class="tut-chat-img">
-                <?php tut_screenshot( 'ai-chat.png', 'AIチャット画面', $tut_img_dir, $tut_img_uri ); ?>
-            </div>
-            <div class="tut-chat-body">
-                <h3>AIチャットに聞いてみる</h3>
-                <p>画面右下のチャットに、知りたいことをそのまま入力するだけ。難しい画面を読む必要はありません。</p>
-                <ul class="tut-examples">
-                    <li>「先月の訪問者数は？」</li>
-                    <li>「何を改善すればいい？」</li>
-                    <li>「お問い合わせは増えてる？」</li>
-                    <li>「スマホからのアクセスは？」</li>
-                </ul>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <div class="tut-support">
-            <a href="<?php echo esc_url( home_url( '/faq/' ) ); ?>" class="tut-support-card">
-                <div class="tut-support-card__icon">❓</div>
-                <div class="tut-support-card__body">
-                    <h4 class="tut-support-card__name">よくある質問</h4>
-                    <p class="tut-support-card__desc">他の方からよくいただく質問と回答をまとめています。</p>
-                </div>
-            </a>
-            <a href="<?php echo esc_url( home_url( '/inquiry/' ) ); ?>" class="tut-support-card">
-                <div class="tut-support-card__icon">✉️</div>
-                <div class="tut-support-card__body">
-                    <h4 class="tut-support-card__name">問い合わせ</h4>
-                    <p class="tut-support-card__desc">担当者に直接ご相談いただけます。</p>
-                </div>
-            </a>
-        </div>
-    </div>
 
 </div>
 
