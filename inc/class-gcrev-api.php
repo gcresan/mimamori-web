@@ -2077,7 +2077,10 @@ class Gcrev_Insight_API {
     // =========================================================
     public function get_dashboard_data(WP_REST_Request $request): WP_REST_Response {
 
-        $user_id = get_current_user_id();
+        // 管理者の「事業者ビュー切替」中は対象クライアントの user_id を使う
+        $user_id = function_exists( 'mimamori_get_view_user_id' )
+            ? mimamori_get_view_user_id()
+            : get_current_user_id();
         $range   = (string)($request->get_param('range') ?: 'last30');
 
         // 海外アクセス除外フィルタ
@@ -5932,7 +5935,10 @@ PROMPT;
         $cache_first = $request->get_param('cache_first') ?? '0';
         $start_date  = $request->get_param('start_date');
         $end_date    = $request->get_param('end_date');
-        $user_id     = get_current_user_id();
+        // 管理者の「事業者ビュー切替」中は対象クライアントの user_id を使う
+        $user_id     = function_exists( 'mimamori_get_view_user_id' )
+            ? mimamori_get_view_user_id()
+            : get_current_user_id();
 
         // 海外アクセス除外フィルタ
         $filter_set = $this->maybe_set_country_filter( $user_id );
