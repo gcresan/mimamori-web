@@ -668,7 +668,12 @@ class Gcrev_Bootstrap {
      * wp_login フック: ログイン直後にダッシュボード warm をスケジュール。
      *
      * 30 分以内に warm 済みならスキップ（短時間に複数回ログインしても API を叩きすぎない）。
-     * その後 wp-cron.php に非同期 POST して即時実行を促す（数秒待ちを回避）。
+     *
+     * 以前は wp_remote_post で wp-cron.php を非同期トリガーしていたが、
+     * KUSANAGI/nginx 環境で blocking=false が想定どおり機能せず TLS ハンドシェイクで
+     * 数十秒ハングするケースがあった（ユーザー報告: ログインに 30 秒）。
+     * WP は次のページロード時（= ログイン直後の /dashboard/ リダイレクト先）で
+     * 自動的に wp-cron.php を spawn_cron() で起動するため、明示的トリガーは不要。
      */
     public static function schedule_user_dashboard_warm_on_login( $user_login, $user ): void {
         if ( ! $user instanceof \WP_User ) { return; }
@@ -681,18 +686,10 @@ class Gcrev_Bootstrap {
         set_transient( $throttle_key, 1, 30 * MINUTE_IN_SECONDS );
 
         // 単発イベントをスケジュール（既に同 args でスケジュール済みなら WP が無視する）
+        // 次のページロードで wp_loaded → spawn_cron() が自動的に拾って実行する。
         if ( ! wp_next_scheduled( 'gcrev_user_dashboard_warm_event', [ $user_id ] ) ) {
             wp_schedule_single_event( time(), 'gcrev_user_dashboard_warm_event', [ $user_id ] );
         }
-
-        // wp-cron.php を非同期トリガー（ユーザーは待たされない）
-        // wp_remote_post の blocking=false で fire-and-forget
-        $cron_url = site_url( '/wp-cron.php?doing_wp_cron=' . microtime( true ) );
-        wp_remote_post( $cron_url, [
-            'blocking'  => false,
-            'timeout'   => 0.5,
-            'sslverify' => false,
-        ] );
     }
 
     /**
