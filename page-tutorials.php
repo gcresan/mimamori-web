@@ -248,6 +248,26 @@ get_header();
 }
 .tut-main-card--dashboard { border-left: 5px solid #4A6FA5; }
 .tut-main-card--analysis  { border-left: 5px solid #7B5E97; }
+.tut-main-card--strategy  {
+    border-left: 5px solid #C77B30;
+    background: linear-gradient(135deg, #fff8ee 0%, #fffbf3 100%);
+    box-shadow: 0 4px 16px rgba(199, 123, 48, .08);
+    position: relative;
+}
+.tut-main-card--strategy::before {
+    content: '★ イチオシ';
+    position: absolute;
+    top: -12px;
+    left: 28px;
+    background: linear-gradient(135deg, #C77B30 0%, #E89B4E 100%);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding: 4px 14px;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(199, 123, 48, .3);
+}
 .tut-main-card--report    { border-left: 5px solid #B8922E; }
 .tut-main-card--chat      { border-left: 5px solid #568184; }
 .tut-main-card-tag {
@@ -262,6 +282,7 @@ get_header();
 }
 .tut-main-card-tag--dashboard { background: #4A6FA5; }
 .tut-main-card-tag--analysis  { background: #7B5E97; }
+.tut-main-card-tag--strategy  { background: #C77B30; }
 .tut-main-card-tag--report    { background: #B8922E; }
 .tut-main-card-tag--chat      { background: #568184; }
 .tut-main-card {
@@ -472,47 +493,6 @@ get_header();
     color: #476C6F;
 }
 
-/* --- 深掘りレポート の単体カード --- */
-.tut-strategy-card {
-    display: flex;
-    gap: 28px;
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-left: 5px solid #5E9F73;
-    border-radius: 16px;
-    padding: 24px;
-    margin-left: 38px;
-}
-.tut-strategy-card-img {
-    flex: 0 0 38%;
-    max-width: 38%;
-}
-.tut-strategy-card-img img {
-    width: 100%;
-    height: auto;
-    border-radius: 10px;
-    border: 1px solid #e5e7eb;
-    display: block;
-}
-.tut-strategy-card-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-.tut-strategy-card-body h4 {
-    font-size: 17px;
-    font-weight: 800;
-    color: #1e293b;
-    margin: 0 0 10px;
-}
-.tut-strategy-card-body p {
-    font-size: 14px;
-    color: #475569;
-    line-height: 1.7;
-    margin: 0 0 14px;
-}
-
 /* --- image placeholder --- */
 .tut-img-placeholder {
     background: #f1f5f9;
@@ -587,55 +567,6 @@ get_header();
     content: '💬 ';
 }
 
-/* --- support links --- */
-.tut-support {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
-.tut-support-card {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 20px 24px;
-    text-decoration: none;
-    transition: box-shadow .2s, transform .2s;
-}
-.tut-support-card:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,.06);
-    transform: translateY(-1px);
-}
-.tut-support-card__icon {
-    flex: 0 0 44px;
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: #f0f7f7;
-    color: #568184;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-}
-.tut-support-card__body {
-    flex: 1;
-}
-.tut-support-card__name {
-    font-size: 15px;
-    font-weight: 800;
-    color: #1e293b;
-    margin: 0 0 2px;
-}
-.tut-support-card__desc {
-    font-size: 12.5px;
-    color: #64748b;
-    margin: 0;
-    line-height: 1.5;
-}
-
 /* --- divider --- */
 .tut-divider {
     border: none;
@@ -686,18 +617,6 @@ get_header();
     .tut-subgroup-title,
     .tut-subgroup-desc {
         padding-left: 0;
-    }
-    .tut-strategy-card {
-        flex-direction: column;
-        margin-left: 0;
-        padding: 20px;
-    }
-    .tut-strategy-card-img {
-        flex: none;
-        max-width: 100%;
-    }
-    .tut-support {
-        grid-template-columns: 1fr;
     }
 }
 </style>
@@ -817,7 +736,31 @@ get_header();
                 </div>
             </div>
 
-            <!-- 3. 月次レポート -->
+            <!-- 3. 深掘りレポート（イチオシ） -->
+            <div class="tut-main-card tut-main-card--strategy">
+                <div class="tut-main-card-img">
+                    <?php tut_screenshot( 'strategy-report.png', '深掘りレポート画面', $tut_img_dir, $tut_img_uri ); ?>
+                </div>
+                <div class="tut-main-card-body">
+                    <span class="tut-main-card-tag tut-main-card-tag--strategy">AI × 上級ウェブ解析士監修</span>
+                    <h4 class="tut-main-card-name">深掘りレポート（年3回まで）</h4>
+                    <p class="tut-main-card-desc">月次レポートが「先月どうだった？」のふり返りなのに対し、深掘りレポートは「<strong>今後どう動くべきか？</strong>」を提案する戦略レポートです。サイト全体の改善方針が明確になります。</p>
+                    <ul class="tut-points">
+                        <li><strong>AIによるデータ分析を上級ウェブ解析士が監修</strong></li>
+                        <li>解析士の視点をもとに<strong>AIがさらに深く掘り下げて</strong>提案</li>
+                        <li>お客様のご都合に合わせて<strong>年3回まで</strong>ご依頼可能</li>
+                    </ul>
+                    <div class="tut-tip">
+                        <strong>ポイント：</strong>「数字は見たけど、結局何をすべき？」が一番気になるところ。プロの視点でズバッと方針が見えるレポートです。
+                    </div>
+                    <a href="<?php echo esc_url( home_url( '/strategy-report-history/' ) ); ?>" class="tut-link-btn">
+                        深掘りレポートを見る
+                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 4. 月次レポート -->
             <div class="tut-main-card tut-main-card--report">
                 <div class="tut-main-card-img">
                     <?php tut_screenshot( 'report.png', '月次レポート画面', $tut_img_dir, $tut_img_uri ); ?>
@@ -869,7 +812,7 @@ get_header();
     <?php if ( $can_meo || $can_seo ) : ?>
     <hr class="tut-divider">
 
-    <!-- ④ MEO・SEO・深掘りレポート -->
+    <!-- ④ MEO・SEO -->
     <div class="tut-section">
         <h3 class="tut-section-title">
             <span class="tut-section-num"><?php echo $sec_num(); ?></span>
@@ -954,28 +897,6 @@ get_header();
         </div>
         <?php endif; ?>
 
-        <!-- 深掘りレポート -->
-        <div class="tut-subgroup">
-            <h4 class="tut-subgroup-title">
-                <span class="tut-subgroup-title__icon">📊</span>
-                深掘りレポート（年3回まで）
-            </h4>
-            <p class="tut-subgroup-desc">ご都合のよいタイミングでご依頼ください。上級ウェブ解析士が監修した戦略レポートを年3回までお届けします。</p>
-
-            <div class="tut-strategy-card">
-                <div class="tut-strategy-card-img">
-                    <?php tut_screenshot( 'strategy-report.png', '深掘りレポート画面', $tut_img_dir, $tut_img_uri ); ?>
-                </div>
-                <div class="tut-strategy-card-body">
-                    <h4>AI × 上級ウェブ解析士による戦略レポート</h4>
-                    <p>月次レポートが「先月どうだった？」のふり返りなのに対し、深掘りレポートは「今後どう動くべきか？」を提案する戦略レポートです。<strong>AIによるデータ分析を上級ウェブ解析士が監修</strong>し、その視点をもとに<strong>AIがさらに深く掘り下げて</strong>、サイト全体の改善方針をご提案します。お客様のご都合に合わせて年3回までご依頼いただけます。</p>
-                    <a href="<?php echo esc_url( home_url( '/strategy-report-history/' ) ); ?>" class="tut-link-btn">
-                        深掘りレポートを見る
-                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
-                    </a>
-                </div>
-            </div>
-        </div>
     </div>
     <?php endif; ?>
 
