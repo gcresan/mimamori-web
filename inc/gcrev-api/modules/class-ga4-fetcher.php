@@ -765,12 +765,20 @@ class Gcrev_GA4_Fetcher {
             usort($demographics, function($a, $b) {
                 return $b['sessions'] <=> $a['sessions'];
             });
-            
+
+            file_put_contents( '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " fetch_age_demographics OK property={$property_id}, range={$start}~{$end}, raw_rows=" . count($response->getRows()) . ", filtered_rows=" . count($demographics) . "\n",
+                FILE_APPEND
+            );
+
             return $demographics;
-            
+
         } catch (Throwable $e) {
             // Google Signals 無効などで取得できないケースは空配列を返す
-            error_log('[GCREV] fetch_age_demographics error: ' . $e->getMessage());
+            file_put_contents( '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " fetch_age_demographics ERROR property={$property_id}, range={$start}~{$end}, msg=" . mb_substr( $e->getMessage(), 0, 500 ) . "\n",
+                FILE_APPEND
+            );
             return [];
         }
     }
@@ -992,72 +1000,88 @@ class Gcrev_GA4_Fetcher {
     // GSCデータ取得
     // =========================================================
     public function fetch_device_details(string $property_id, string $start, string $end): array {
-        
-        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
-        $client = new BetaAnalyticsDataClient();
-        
-        $params = [
-            'property'    => 'properties/' . $property_id,
-            'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
-            'dimensions'  => [ new Dimension(['name' => 'deviceCategory']) ],
-            'metrics'     => [
-                new Metric(['name' => 'sessions']),
-                new Metric(['name' => 'totalUsers']),
-                new Metric(['name' => 'screenPageViews']),
-                new Metric(['name' => 'averageSessionDuration']),
-                new Metric(['name' => 'bounceRate']),
-                new Metric(['name' => 'conversions']),
-            ],
-            'limit'       => 10,
-        ];
-        $this->apply_country_filter($params);
-        $request = new RunReportRequest($params);
 
-        $response = $client->runReport($request);
+        try {
+            putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
+            $client = new BetaAnalyticsDataClient();
 
-        $devices = [];
-        $total_sessions = 0;
-        
-        // 1回目: 合計セッション数を計算
-        foreach ($response->getRows() as $row) {
-            $sessions = (int)($row->getMetricValues()[0]->getValue() ?? 0);
-            $total_sessions += $sessions;
-        }
-        
-        // 2回目: 各デバイスのデータを整形
-        foreach ($response->getRows() as $row) {
-            $device_name = $row->getDimensionValues()[0]->getValue();
-            
-            $sessions      = (int)($row->getMetricValues()[0]->getValue() ?? 0);
-            $users         = (int)($row->getMetricValues()[1]->getValue() ?? 0);
-            $pageViews     = (int)($row->getMetricValues()[2]->getValue() ?? 0);
-            $avgDuration   = (float)($row->getMetricValues()[3]->getValue() ?? 0);
-            $bounceRate    = (float)($row->getMetricValues()[4]->getValue() ?? 0);
-            $conversions   = (int)($row->getMetricValues()[5]->getValue() ?? 0);
-            
-            // シェアの計算（0除算対策）
-            $share = $total_sessions > 0 ? ($sessions / $total_sessions) * 100.0 : 0.0;
-            
-            // CVRの計算（0除算対策）
-            $cvr = $sessions > 0 ? ($conversions / $sessions) * 100.0 : 0.0;
-            
-            // デバイス名の正規化（mobile/desktop/tablet に統一）
-            $device_normalized = strtolower($device_name);
-            
-            $devices[] = [
-                'device'      => $device_normalized,
-                'sessions'    => $sessions,
-                'users'       => $users,
-                'pageViews'   => $pageViews,
-                'avgDuration' => $avgDuration, // 秒数
-                'bounceRate'  => $bounceRate * 100.0, // パーセント表記に変換（GA4は0.0-1.0で返す）
-                'conversions' => $conversions,
-                'cvr'         => $cvr,
-                'share'       => $share,
+            $params = [
+                'property'    => 'properties/' . $property_id,
+                'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
+                'dimensions'  => [ new Dimension(['name' => 'deviceCategory']) ],
+                'metrics'     => [
+                    new Metric(['name' => 'sessions']),
+                    new Metric(['name' => 'totalUsers']),
+                    new Metric(['name' => 'screenPageViews']),
+                    new Metric(['name' => 'averageSessionDuration']),
+                    new Metric(['name' => 'bounceRate']),
+                    // GA4 の最新メトリクスは keyEvents（旧 conversions は段階廃止中）
+                    new Metric(['name' => 'keyEvents']),
+                ],
+                'limit'       => 10,
             ];
+            $this->apply_country_filter($params);
+            $request = new RunReportRequest($params);
+
+            $response = $client->runReport($request);
+
+            $devices = [];
+            $total_sessions = 0;
+
+            // 1回目: 合計セッション数を計算
+            foreach ($response->getRows() as $row) {
+                $sessions = (int)($row->getMetricValues()[0]->getValue() ?? 0);
+                $total_sessions += $sessions;
+            }
+
+            // 2回目: 各デバイスのデータを整形
+            foreach ($response->getRows() as $row) {
+                $device_name = $row->getDimensionValues()[0]->getValue();
+
+                $sessions      = (int)($row->getMetricValues()[0]->getValue() ?? 0);
+                $users         = (int)($row->getMetricValues()[1]->getValue() ?? 0);
+                $pageViews     = (int)($row->getMetricValues()[2]->getValue() ?? 0);
+                $avgDuration   = (float)($row->getMetricValues()[3]->getValue() ?? 0);
+                $bounceRate    = (float)($row->getMetricValues()[4]->getValue() ?? 0);
+                $conversions   = (int)($row->getMetricValues()[5]->getValue() ?? 0);
+
+                // シェアの計算（0除算対策）
+                $share = $total_sessions > 0 ? ($sessions / $total_sessions) * 100.0 : 0.0;
+
+                // CVRの計算（0除算対策）
+                $cvr = $sessions > 0 ? ($conversions / $sessions) * 100.0 : 0.0;
+
+                // デバイス名の正規化（mobile/desktop/tablet に統一）
+                $device_normalized = strtolower($device_name);
+
+                $devices[] = [
+                    'device'      => $device_normalized,
+                    'sessions'    => $sessions,
+                    'users'       => $users,
+                    'pageViews'   => $pageViews,
+                    'avgDuration' => $avgDuration, // 秒数
+                    'bounceRate'  => $bounceRate * 100.0, // パーセント表記に変換（GA4は0.0-1.0で返す）
+                    'conversions' => $conversions,
+                    'cvr'         => $cvr,
+                    'share'       => $share,
+                ];
+            }
+
+            file_put_contents( '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " fetch_device_details OK property={$property_id}, range={$start}~{$end}, rows=" . count($devices) . "\n",
+                FILE_APPEND
+            );
+
+            return $devices;
+
+        } catch ( \Throwable $e ) {
+            // GA4 API 例外で全体のダッシュボード取得が落ちないよう、空配列で返す
+            file_put_contents( '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " fetch_device_details ERROR property={$property_id}, range={$start}~{$end}, msg=" . mb_substr( $e->getMessage(), 0, 500 ) . "\n",
+                FILE_APPEND
+            );
+            return [];
         }
-        
-        return $devices;
     }
 
     /**
