@@ -723,11 +723,14 @@ class Mimamori_Inquiries_Fetcher {
     /**
      * items_json + 手動オーバーライドから月次サマリ列を再計算して wp_gcrev_inquiries に upsert する。
      * fetch経由ではなく、override変更時の同期更新用。
+     *
+     * @return array|null 再計算結果 ['total'=>int, 'valid'=>int, 'excluded'=>int]、
+     *                    items_json が無いか不正なら null
      */
-    public static function recalc_monthly_summary_with_overrides( int $user_id, string $year_month ): void {
-        if ( ! preg_match( '/^(\d{4})-(\d{2})$/', $year_month, $m ) ) return;
+    public static function recalc_monthly_summary_with_overrides( int $user_id, string $year_month ): ?array {
+        if ( ! preg_match( '/^(\d{4})-(\d{2})$/', $year_month, $m ) ) return null;
         $items = self::get_items_json( $user_id, $year_month );
-        if ( ! is_array( $items ) ) return;
+        if ( ! is_array( $items ) ) return null;
 
         $items = self::apply_overrides_to_items( $user_id, $year_month, $items );
 
@@ -773,6 +776,12 @@ class Mimamori_Inquiries_Fetcher {
             [ '%d', '%d', '%d', '%d', '%d', '%d' ],
             [ '%d', '%s' ]
         );
+
+        return [
+            'total'    => $total,
+            'valid'    => $valid,
+            'excluded' => $excluded,
+        ];
     }
 
     /** items 配列に manual_status / effective_valid を注入（破壊的更新）
@@ -859,6 +868,11 @@ class Mimamori_Inquiries_Fetcher {
     /**
      * REST: 取得済みの年月リスト（公開ページの月セレクター用）
      * is_cached: AI 分類済みデータが永続化されているか
+     *
+     * 各行について items_json が存在する月はライブ再計算する。
+     * AI 切替・除外キーワード変更等で valid_count が陳腐化していても
+     * 月リスト取得時に自動修復され、DB にも書き戻されるためダッシュボード
+     * CV 等の他参照箇所も合わせて正しい値になる。
      */
     public function rest_get_available_months( \WP_REST_Request $request ): \WP_REST_Response {
         $user_id = self::resolve_target_user_id( $request );
@@ -875,8 +889,20 @@ class Mimamori_Inquiries_Fetcher {
         $months = [];
         if ( is_array( $rows ) ) {
             foreach ( $rows as $r ) {
-                $r['is_cached']   = (bool) (int) ( $r['is_cached'] ?? 0 );
-                $r['is_current']  = self::is_current_month_str( (string) $r['year_month'] );
+                $is_cached       = (bool) (int) ( $r['is_cached'] ?? 0 );
+                $r['is_cached']  = $is_cached;
+                $r['is_current'] = self::is_current_month_str( (string) $r['year_month'] );
+
+                // items_json があればライブ再計算（オーバーライド・キーワード除外を反映）
+                // 結果が DB の値と異なれば recalc 内で UPDATE が走る
+                if ( $is_cached ) {
+                    $recalc = self::recalc_monthly_summary_with_overrides( $user_id, (string) $r['year_month'] );
+                    if ( is_array( $recalc ) ) {
+                        $r['valid_count'] = (int) $recalc['valid'];
+                        $r['total']       = (int) $recalc['total'];
+                    }
+                }
+
                 $months[] = $r;
             }
         }
