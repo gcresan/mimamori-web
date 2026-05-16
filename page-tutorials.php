@@ -629,7 +629,7 @@ get_header();
         <p class="tut-hero-lead">
             みまもりウェブは、<strong>ホームページとGoogleマップの状態をAIといっしょに見て、ふり返るツール</strong>です。<br>
             難しい数字を覚える必要はありません。<br>
-            <strong>「見る → 深掘る → ふり返る」</strong>の3ステップをくり返すだけで、サイトがじわじわ育っていきます。
+            <strong>「見る → 気づく → ふり返る」</strong>の3ステップをくり返すだけで、サイトがじわじわ育っていきます。
         </p>
         <div class="tut-hero-buttons">
             <a href="<?php echo esc_url( home_url( '/dashboard/' ) ); ?>" class="tut-hero-btn tut-hero-btn--primary">
@@ -659,9 +659,9 @@ get_header();
             </div>
             <div class="tut-flow-step tut-flow-step--dive">
                 <div class="tut-flow-step__num">2</div>
-                <div class="tut-flow-step__name">深掘る</div>
+                <div class="tut-flow-step__name">気づく</div>
                 <div class="tut-flow-step__when">気になったら</div>
-                <p class="tut-flow-step__desc">サイト分析・SEO・MEOで<br>原因や改善点を探す</p>
+                <p class="tut-flow-step__desc">サイト分析・SEO・MEOで<br>原因や改善のヒントを見つける</p>
             </div>
             <div class="tut-flow-step tut-flow-step--review">
                 <div class="tut-flow-step__num">3</div>
@@ -672,7 +672,7 @@ get_header();
         </div>
 
         <p class="tut-flow-cycle-note">
-            <strong>見る → 深掘る → ふり返る</strong>　この3ステップを毎月くり返すだけでOK。難しい数字を読む必要はありません。
+            <strong>見る → 気づく → ふり返る</strong>　この3ステップを毎月くり返すだけでOK。難しい数字を読む必要はありません。
         </p>
     </div>
 
@@ -727,7 +727,7 @@ get_header();
                         <li>お問い合わせの数や経路を追える</li>
                     </ul>
                     <div class="tut-tip">
-                        <strong>ポイント：</strong>全部見る必要はありません。ダッシュボードで気になった数字だけ深掘りすればOK。
+                        <strong>ポイント：</strong>全部見る必要はありません。ダッシュボードで気になった数字だけ確認すればOK。
                     </div>
                     <a href="<?php echo esc_url( home_url( '/site-dashboard/' ) ); ?>" class="tut-link-btn">
                         サイト分析を開く
@@ -736,25 +736,25 @@ get_header();
                 </div>
             </div>
 
-            <!-- 3. 深掘りレポート（イチオシ） -->
+            <!-- 3. AIによる改善アドバイス（イチオシ） -->
             <div class="tut-main-card tut-main-card--strategy">
                 <div class="tut-main-card-img">
-                    <?php tut_screenshot( 'strategy-report.png', '深掘りレポート画面', $tut_img_dir, $tut_img_uri ); ?>
+                    <?php tut_screenshot( 'ai-advice.png', 'AIによる改善アドバイス', $tut_img_dir, $tut_img_uri ); ?>
                 </div>
                 <div class="tut-main-card-body">
-                    <span class="tut-main-card-tag tut-main-card-tag--strategy">AI × 上級ウェブ解析士監修</span>
-                    <h4 class="tut-main-card-name">深掘りレポート（年3回まで）</h4>
-                    <p class="tut-main-card-desc">月次レポートが「先月どうだった？」のふり返りなのに対し、深掘りレポートは「<strong>今後どう動くべきか？</strong>」を提案する戦略レポートです。サイト全体の改善方針が明確になります。</p>
+                    <span class="tut-main-card-tag tut-main-card-tag--strategy">AIが教えてくれる</span>
+                    <h4 class="tut-main-card-name">AIによる改善アドバイス</h4>
+                    <p class="tut-main-card-desc">アクセス状況やユーザー行動をもとに、<strong>AIが改善のヒントを自動で提案</strong>します。難しい用語を覚えなくても、次に取り組むべきポイントがわかります。</p>
                     <ul class="tut-points">
-                        <li><strong>AIによるデータ分析を上級ウェブ解析士が監修</strong></li>
-                        <li>解析士の視点をもとに<strong>AIがさらに深く掘り下げて</strong>提案</li>
-                        <li>お客様のご都合に合わせて<strong>年3回まで</strong>ご依頼可能</li>
+                        <li>AIによる<strong>改善ポイント表示</strong></li>
+                        <li>状況に応じたアドバイス表示</li>
+                        <li>レポートの総評表示</li>
                     </ul>
                     <div class="tut-tip">
-                        <strong>ポイント：</strong>「数字は見たけど、結局何をすべき？」が一番気になるところ。プロの視点でズバッと方針が見えるレポートです。
+                        <strong>ポイント：</strong>毎月の運用に役立つヒントが自然と手元に届きます。「何をすればいいか」がひと目でわかります。
                     </div>
-                    <a href="<?php echo esc_url( home_url( '/strategy-report-history/' ) ); ?>" class="tut-link-btn">
-                        深掘りレポートを見る
+                    <a href="<?php echo esc_url( home_url( '/dashboard/' ) ); ?>" class="tut-link-btn">
+                        ダッシュボードで確認する
                         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
                     </a>
                 </div>
