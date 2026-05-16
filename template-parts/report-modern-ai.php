@@ -240,9 +240,6 @@ if ( is_array( $kpi_snapshot ) ) {
                 <span class="lbl">DATA SOURCE</span>
                 <span>
                     GA4 ／ Search Console
-                    <?php if ( $ai_provider !== '' ): ?>
-                        ／ AI: <?php echo esc_html( $ai_provider ); ?><?php if ( $ai_model !== '' ): ?> (<?php echo esc_html( $ai_model ); ?>)<?php endif; ?>
-                    <?php endif; ?>
                 </span>
             </div>
         </div>
