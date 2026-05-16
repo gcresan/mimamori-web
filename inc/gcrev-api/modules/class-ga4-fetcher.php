@@ -694,93 +694,141 @@ class Gcrev_GA4_Fetcher {
      * @return array 年齢別詳細データの配列
      */
     public function fetch_age_demographics(string $property_id, string $start, string $end): array {
-        
+        // 1段目: フル メトリクスでリクエスト
+        // 2段目: 0行 or 例外の場合、メトリクス数を絞って再試行
+        // GA4 はユーザーレベル dimension (userAgeBracket) に対し、メトリクス数が多い
+        // または閾値以下のデータ量の場合、プライバシー保護のため空レスポンスを返すことがある。
+        // dashboard widget 用 fetch_ga4_age_breakdown が動いている (= データはある) のに
+        // この関数だけ空という症状は、この thresholding が原因と推測される。
         try {
-            putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
-            $client = new BetaAnalyticsDataClient();
-            
-            $params = [
-                'property'    => 'properties/' . $property_id,
-                'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
-                'dimensions'  => [ new Dimension(['name' => 'userAgeBracket']) ],
-                'metrics'     => [
-                    new Metric(['name' => 'sessions']),
-                    new Metric(['name' => 'totalUsers']),
-                    new Metric(['name' => 'screenPageViews']),
-                    new Metric(['name' => 'averageSessionDuration']),
-                    new Metric(['name' => 'bounceRate']),
-                    new Metric(['name' => 'engagementRate']),
-                    new Metric(['name' => 'keyEvents']), // コンバージョン
-                ],
-                'limit'       => 50,
-            ];
-            $this->apply_country_filter($params);
-            $request = new RunReportRequest($params);
-
-            $response = $client->runReport($request);
-            
-            $demographics = [];
-            $total_sessions = 0;
-            
-            // 1回目: 合計セッション数を計算
-            foreach ($response->getRows() as $row) {
-                $sessions = (int)($row->getMetricValues()[0]->getValue() ?? 0);
-                $total_sessions += $sessions;
+            $rich = $this->run_age_demographics_query( $property_id, $start, $end, /*rich*/ true );
+            if ( ! empty( $rich ) ) {
+                file_put_contents(
+                    '/tmp/gcrev_ga4_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " fetch_age_demographics OK(rich) property={$property_id}, range={$start}~{$end}, rows=" . count( $rich ) . "\n",
+                    FILE_APPEND
+                );
+                return $rich;
             }
-            
-            // 2回目: 各年齢層のデータを整形
-            foreach ($response->getRows() as $row) {
-                $age_bracket = $row->getDimensionValues()[0]->getValue();
-                
-                // 年齢層が"unknown"または空の場合はスキップ
-                if (empty($age_bracket) || $age_bracket === 'unknown' || $age_bracket === '(not set)') {
-                    continue;
-                }
-                
-                $sessions      = (int)($row->getMetricValues()[0]->getValue() ?? 0);
-                $users         = (int)($row->getMetricValues()[1]->getValue() ?? 0);
-                $pageViews     = (int)($row->getMetricValues()[2]->getValue() ?? 0);
-                $avgDuration   = (float)($row->getMetricValues()[3]->getValue() ?? 0);
-                $bounceRate    = (float)($row->getMetricValues()[4]->getValue() ?? 0);
-                $engagementRate = (float)($row->getMetricValues()[5]->getValue() ?? 0);
-                $conversions   = (int)($row->getMetricValues()[6]->getValue() ?? 0);
-                
-                // CVRの計算（0除算対策）
-                $cvr = $sessions > 0 ? ($conversions / $sessions) * 100.0 : 0.0;
-                
-                $demographics[] = [
-                    'age_range'        => $age_bracket,
-                    'sessions'         => $sessions,
-                    'users'            => $users,
-                    'pageviews'        => $pageViews,
-                    'avg_duration'     => $avgDuration, // 秒数
-                    'bounce_rate'      => $bounceRate * 100.0, // パーセント表記に変換（GA4は0.0-1.0で返す）
-                    'engagement_rate'  => $engagementRate * 100.0, // パーセント表記に変換
-                    'conversions'      => $conversions,
-                    'cvr'              => $cvr,
-                ];
-            }
-            
-            // セッション数の多い順にソート
-            usort($demographics, function($a, $b) {
-                return $b['sessions'] <=> $a['sessions'];
-            });
-
-            file_put_contents( '/tmp/gcrev_ga4_debug.log',
-                date( 'Y-m-d H:i:s' ) . " fetch_age_demographics OK property={$property_id}, range={$start}~{$end}, raw_rows=" . count($response->getRows()) . ", filtered_rows=" . count($demographics) . "\n",
+            // 0行 → シンプルクエリで再試行
+            file_put_contents(
+                '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " fetch_age_demographics rich-empty, retrying simple property={$property_id}, range={$start}~{$end}\n",
                 FILE_APPEND
             );
+        } catch ( Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " fetch_age_demographics rich-EXCEPTION, retrying simple property={$property_id}, range={$start}~{$end}, msg=" . mb_substr( $e->getMessage(), 0, 300 ) . "\n",
+                FILE_APPEND
+            );
+        }
 
-            return $demographics;
-
-        } catch (Throwable $e) {
+        try {
+            $simple = $this->run_age_demographics_query( $property_id, $start, $end, /*rich*/ false );
+            file_put_contents(
+                '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " fetch_age_demographics OK(simple) property={$property_id}, range={$start}~{$end}, rows=" . count( $simple ) . "\n",
+                FILE_APPEND
+            );
+            return $simple;
+        } catch ( Throwable $e ) {
             // Google Signals 無効などで取得できないケースは空配列を返す
-            file_put_contents( '/tmp/gcrev_ga4_debug.log',
-                date( 'Y-m-d H:i:s' ) . " fetch_age_demographics ERROR property={$property_id}, range={$start}~{$end}, msg=" . mb_substr( $e->getMessage(), 0, 500 ) . "\n",
+            file_put_contents(
+                '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " fetch_age_demographics simple-EXCEPTION property={$property_id}, range={$start}~{$end}, msg=" . mb_substr( $e->getMessage(), 0, 500 ) . "\n",
                 FILE_APPEND
             );
             return [];
         }
+    }
+
+    /**
+     * fetch_age_demographics の内部実行（1パターンのクエリ実行）。
+     * $rich=true: 7 メトリクス。false: 2 メトリクス（sessions, totalUsers のみ）に絞る。
+     */
+    private function run_age_demographics_query(string $property_id, string $start, string $end, bool $rich): array {
+        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . $this->config->get_service_account_path());
+        $client = new BetaAnalyticsDataClient();
+
+        if ( $rich ) {
+            $metrics = [
+                new Metric(['name' => 'sessions']),
+                new Metric(['name' => 'totalUsers']),
+                new Metric(['name' => 'screenPageViews']),
+                new Metric(['name' => 'averageSessionDuration']),
+                new Metric(['name' => 'bounceRate']),
+                new Metric(['name' => 'engagementRate']),
+                new Metric(['name' => 'keyEvents']),
+            ];
+        } else {
+            // GA4 thresholding 回避: dashboard widget と同じく 2 メトリクスに限定
+            $metrics = [
+                new Metric(['name' => 'sessions']),
+                new Metric(['name' => 'totalUsers']),
+            ];
+        }
+
+        $params = [
+            'property'    => 'properties/' . $property_id,
+            'date_ranges' => [ new DateRange(['start_date' => $start, 'end_date' => $end]) ],
+            'dimensions'  => [ new Dimension(['name' => 'userAgeBracket']) ],
+            'metrics'     => $metrics,
+            'limit'       => 50,
+        ];
+        $this->apply_country_filter($params);
+        $request = new RunReportRequest($params);
+
+        $response = $client->runReport($request);
+
+        $demographics = [];
+
+        foreach ($response->getRows() as $row) {
+            $age_bracket = $row->getDimensionValues()[0]->getValue();
+            // 年齢層が"unknown"または空の場合はスキップ
+            if ( empty( $age_bracket ) || $age_bracket === 'unknown' || $age_bracket === '(not set)' ) {
+                continue;
+            }
+
+            $mv = $row->getMetricValues();
+            $sessions       = (int)   ( $mv[0]->getValue() ?? 0 );
+            $users          = (int)   ( $mv[1]->getValue() ?? 0 );
+
+            if ( $rich ) {
+                $pageViews       = (int)   ( $mv[2]->getValue() ?? 0 );
+                $avgDuration     = (float) ( $mv[3]->getValue() ?? 0 );
+                $bounceRate      = (float) ( $mv[4]->getValue() ?? 0 );
+                $engagementRate  = (float) ( $mv[5]->getValue() ?? 0 );
+                $conversions     = (int)   ( $mv[6]->getValue() ?? 0 );
+            } else {
+                $pageViews      = 0;
+                $avgDuration    = 0.0;
+                $bounceRate     = 0.0;
+                $engagementRate = 0.0;
+                $conversions    = 0;
+            }
+
+            $cvr = $sessions > 0 ? ( $conversions / $sessions ) * 100.0 : 0.0;
+
+            $demographics[] = [
+                'age_range'       => $age_bracket,
+                'sessions'        => $sessions,
+                'users'           => $users,
+                'pageviews'       => $pageViews,
+                'avg_duration'    => $avgDuration,
+                'bounce_rate'     => $bounceRate * 100.0,
+                'engagement_rate' => $engagementRate * 100.0,
+                'conversions'     => $conversions,
+                'cvr'             => $cvr,
+            ];
+        }
+
+        // セッション数の多い順にソート
+        usort($demographics, function($a, $b) {
+            return $b['sessions'] <=> $a['sessions'];
+        });
+
+        return $demographics;
     }
 
 

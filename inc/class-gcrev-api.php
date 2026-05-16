@@ -3347,8 +3347,10 @@ class Gcrev_Insight_API {
      *   1. 全主要指標が 0 かつ内訳も全空 → fetcher 全滅
      *   2. 主要指標は > 0 だが devices_detail が空 → fetch_device_details だけが落ちた壊れた状態
      *      （セッションが 1 件でもあれば必ず devices_detail に行が入るため）
-     *
-     * age_demographics は Google Signals 未有効サイトでは正規に空になるため判定対象外。
+     *   3. age に非 unknown の年齢層が含まれているのに age_demographics が空
+     *      → fetch_age_demographics が thresholding 等で空を返した壊れた状態。
+     *        Google Signals が完全に無効なサイトでは age 自体も空になるため、
+     *        age に "unknown 以外" が 1 件でもあれば age_demographics も非空のはず。
      */
     private function is_cacheable_dashboard_data( array $data ): bool {
         $sessions  = (int) str_replace( ',', '', (string) ( $data['sessions']  ?? '0' ) );
@@ -3362,6 +3364,30 @@ class Gcrev_Insight_API {
             if ( ! is_array( $devices_detail ) || count( $devices_detail ) === 0 ) {
                 return false;
             }
+        }
+
+        // age と age_demographics の整合性チェック:
+        // dashboard widget 用 age に "unknown 以外" の行があるのに、
+        // 詳細ページ用 age_demographics が空 → 詳細ページ側の fetch だけ失敗
+        $age = $data['age'] ?? null;
+        if ( is_array( $age ) && ! empty( $age ) ) {
+            $has_known_age = false;
+            foreach ( $age as $row ) {
+                $name = (string) ( $row['name'] ?? '' );
+                if ( $name !== '' && $name !== 'unknown' && $name !== '(not set)' ) {
+                    $has_known_age = true;
+                    break;
+                }
+            }
+            if ( $has_known_age ) {
+                $age_demo = $data['age_demographics'] ?? null;
+                if ( ! is_array( $age_demo ) || count( $age_demo ) === 0 ) {
+                    return false;
+                }
+            }
+        }
+
+        if ( $has_traffic ) {
             return true;
         }
 
