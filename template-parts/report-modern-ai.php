@@ -134,7 +134,8 @@ $cross_ins    = is_array( $ai_data['cross_insights'] ?? null ) ? $ai_data['cross
 $next_actions = is_array( $ai_data['next_actions']   ?? null ) ? $ai_data['next_actions']   : [];
 $data_notes   = is_array( $ai_data['data_notes']     ?? null ) ? $ai_data['data_notes']     : [];
 
-$report_title = (string) ( $ai_data['report_title'] ?? sprintf( '%s 月次Web改善レポート', $period_label ) );
+// レポートタイトルは毎月同一フォーマットに固定（AI の自由生成は不採用）
+$report_title = sprintf( '%s 月次Web改善レポート', $period_label );
 $overall_status_cls = $status_class( (string) ( $overall['status'] ?? '' ) );
 $hero_variant_map = [
     'is-good'      => 'is-good',
@@ -278,7 +279,7 @@ if ( is_array( $kpi_snapshot ) ) {
     <section class="m-section">
         <div class="m-wrap">
             <div class="m-sec-tag">SECTION 01　ひとことで言うと</div>
-            <h2 class="m-sec-title"><?php echo esc_html( (string) ( $overall['title'] ?? '今月の結論' ) ); ?></h2>
+            <h2 class="m-sec-title">今月の結論</h2>
 
             <div class="m-hero <?php echo esc_attr( $hero_variant_cls ); ?>">
                 <div class="m-hero-label">CONCLUSION ／ 結論</div>

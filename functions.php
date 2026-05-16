@@ -12260,7 +12260,8 @@ GA4とSearch Consoleを別々に説明するのではなく、横断して考察
 【出力長さの厳守事項】
 - JSON 全体で 5500 トークン (約 11000 文字) 以内に収めること
 - 各 string フィールド (title / body / evidence / action 等) は 250 文字以内
-- 各配列 (key_findings, good_points, warning_points, cross_insights, next_actions, data_notes) は 3〜4 要素まで
+- 各配列は毎月同じ構成で必ず 3 件以上 4 件以下を出力すること（省略・空配列禁止）。対象は key_findings / good_points / warning_points / cross_insights / next_actions / data_notes の全 6 配列
+- データが少ない月でも、補足注記や継続観察項目で必ず 3 件以上を埋めること（埋め草・水増しではなく、その月のデータから素直に拾えるものを優先）
 - 前置きや重複表現を書かず、本質だけを書く
 
 出力はJSONのみです。
@@ -12309,7 +12310,8 @@ TXT;
             . $payload_json
             . "\n\n■ 出力ルール\n"
             . "- JSON 以外（Markdown、コードブロック、説明文）は一切出力しない\n"
-            . "- 必須キー: report_title, overall_summary, key_findings, good_points, warning_points, cross_insights, next_actions, data_notes\n"
+            . "- 必須キー: report_title, overall_summary, key_findings, good_points, warning_points, cross_insights, next_actions, data_notes（いずれも省略・空配列禁止）\n"
+            . "- 配列 6 種 (key_findings / good_points / warning_points / cross_insights / next_actions / data_notes) はいずれも必ず 3 件以上 4 件以下\n"
             . "- データ不足の指標は data_notes に明記する（例: Search Console 未接続、計測導入直後など）\n"
             . "- next_actions は対象ページ・対象キーワードまで具体的に記述する";
 
@@ -12377,7 +12379,16 @@ TXT;
         // ------------------------------------------------------------
         // 必須キー検証（軽め: 主要キーの存在のみ。中身の正規化は呼び出し側で）
         // ------------------------------------------------------------
-        $required = [ 'overall_summary', 'good_points', 'warning_points', 'next_actions' ];
+        // 月次レポートのフォーマットを毎月同一に保つため、全セクションを必須キーとして検証
+        $required = [
+            'overall_summary',
+            'key_findings',
+            'good_points',
+            'warning_points',
+            'cross_insights',
+            'next_actions',
+            'data_notes',
+        ];
         $missing  = [];
         foreach ( $required as $k ) {
             if ( ! isset( $decoded[ $k ] ) ) {
