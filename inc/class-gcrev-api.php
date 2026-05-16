@@ -1765,7 +1765,22 @@ class Gcrev_Insight_API {
         $key = $this->cache_key_dashboard($user_id, $range);
         $cached = get_transient($key);
         if ($cached === false || $cached === null) return null;
-        return is_array($cached) ? $cached : null;
+        if (!is_array($cached)) return null;
+
+        // 防御: 「主要 KPI > 0 だが devices_detail が空」は fetcher 部分失敗の壊れた
+        // キャッシュ。読み出し時にも検出して cache miss 扱いにする
+        // （devices_detail はセッションがあれば必ず非空）。
+        if ( ! $this->is_cacheable_dashboard_data( $cached ) ) {
+            file_put_contents(
+                '/tmp/gcrev_dash_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [cache_get] REJECT stale-broken user={$user_id}, range={$range}\n",
+                FILE_APPEND
+            );
+            // 壊れたキャッシュは削除してしまう（次の fetch でクリーンに上書き）
+            delete_transient( $key );
+            return null;
+        }
+        return $cached;
     }
 
     /**
@@ -3327,16 +3342,29 @@ class Gcrev_Insight_API {
 
     /**
      * dashboard data がキャッシュに値する状態かを判定。
-     * 全主要指標が空 = fetcher 全滅の可能性が高い → キャッシュしない
-     * （次回アクセス時に再 fetch される）
+     *
+     * 拒否ケース:
+     *   1. 全主要指標が 0 かつ内訳も全空 → fetcher 全滅
+     *   2. 主要指標は > 0 だが devices_detail が空 → fetch_device_details だけが落ちた壊れた状態
+     *      （セッションが 1 件でもあれば必ず devices_detail に行が入るため）
+     *
+     * age_demographics は Google Signals 未有効サイトでは正規に空になるため判定対象外。
      */
     private function is_cacheable_dashboard_data( array $data ): bool {
         $sessions  = (int) str_replace( ',', '', (string) ( $data['sessions']  ?? '0' ) );
         $pageviews = (int) str_replace( ',', '', (string) ( $data['pageViews'] ?? '0' ) );
         $users     = (int) str_replace( ',', '', (string) ( $data['users']     ?? '0' ) );
-        if ( $sessions > 0 || $pageviews > 0 || $users > 0 ) {
+        $has_traffic = ( $sessions > 0 || $pageviews > 0 || $users > 0 );
+
+        // 主要 KPI > 0 なら devices_detail も必ず非空のはず。空なら fetcher 部分失敗 → キャッシュしない
+        if ( $has_traffic ) {
+            $devices_detail = $data['devices_detail'] ?? null;
+            if ( ! is_array( $devices_detail ) || count( $devices_detail ) === 0 ) {
+                return false;
+            }
             return true;
         }
+
         // 基本 KPI が 0 でも、内訳に何か入っていれば「本当に低トラフィック」のケース → キャッシュ可
         if ( ! empty( $data['devices'] ) || ! empty( $data['pages'] ) || ! empty( $data['daily'] ) ) {
             return true;
