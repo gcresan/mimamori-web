@@ -248,26 +248,6 @@ get_header();
 }
 .tut-main-card--dashboard { border-left: 5px solid #4A6FA5; }
 .tut-main-card--analysis  { border-left: 5px solid #7B5E97; }
-.tut-main-card--strategy  {
-    border-left: 5px solid #C77B30;
-    background: linear-gradient(135deg, #fff8ee 0%, #fffbf3 100%);
-    box-shadow: 0 4px 16px rgba(199, 123, 48, .08);
-    position: relative;
-}
-.tut-main-card--strategy::before {
-    content: '★ イチオシ';
-    position: absolute;
-    top: -12px;
-    left: 28px;
-    background: linear-gradient(135deg, #C77B30 0%, #E89B4E 100%);
-    color: #fff;
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    padding: 4px 14px;
-    border-radius: 999px;
-    box-shadow: 0 2px 6px rgba(199, 123, 48, .3);
-}
 .tut-main-card--report    { border-left: 5px solid #B8922E; }
 .tut-main-card--chat      { border-left: 5px solid #568184; }
 .tut-main-card-tag {
@@ -282,7 +262,6 @@ get_header();
 }
 .tut-main-card-tag--dashboard { background: #4A6FA5; }
 .tut-main-card-tag--analysis  { background: #7B5E97; }
-.tut-main-card-tag--strategy  { background: #C77B30; }
 .tut-main-card-tag--report    { background: #B8922E; }
 .tut-main-card-tag--chat      { background: #568184; }
 .tut-main-card {
@@ -682,9 +661,9 @@ get_header();
     <div class="tut-section">
         <h3 class="tut-section-title">
             <span class="tut-section-num"><?php echo $sec_num(); ?></span>
-            まずおさえたい基本の4機能
+            まずおさえたい基本の3機能
         </h3>
-        <p class="tut-section-sub">どのプランでも使える、いちばん大切な4つの画面です。</p>
+        <p class="tut-section-sub">どのプランでも使える、いちばん大切な3つの画面です。</p>
 
         <div class="tut-main-cards">
 
@@ -736,31 +715,7 @@ get_header();
                 </div>
             </div>
 
-            <!-- 3. AIによる改善アドバイス（イチオシ） -->
-            <div class="tut-main-card tut-main-card--strategy">
-                <div class="tut-main-card-img">
-                    <?php tut_screenshot( 'ai-advice.png', 'AIによる改善アドバイス', $tut_img_dir, $tut_img_uri ); ?>
-                </div>
-                <div class="tut-main-card-body">
-                    <span class="tut-main-card-tag tut-main-card-tag--strategy">AIが教えてくれる</span>
-                    <h4 class="tut-main-card-name">AIによる改善アドバイス</h4>
-                    <p class="tut-main-card-desc">アクセス状況やユーザー行動をもとに、<strong>AIが改善のヒントを自動で提案</strong>します。難しい用語を覚えなくても、次に取り組むべきポイントがわかります。</p>
-                    <ul class="tut-points">
-                        <li>AIによる<strong>改善ポイント表示</strong></li>
-                        <li>状況に応じたアドバイス表示</li>
-                        <li>レポートの総評表示</li>
-                    </ul>
-                    <div class="tut-tip">
-                        <strong>ポイント：</strong>毎月の運用に役立つヒントが自然と手元に届きます。「何をすればいいか」がひと目でわかります。
-                    </div>
-                    <a href="<?php echo esc_url( home_url( '/dashboard/' ) ); ?>" class="tut-link-btn">
-                        ダッシュボードで確認する
-                        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd"/></svg>
-                    </a>
-                </div>
-            </div>
-
-            <!-- 4. 月次レポート -->
+            <!-- 3. 月次レポート -->
             <div class="tut-main-card tut-main-card--report">
                 <div class="tut-main-card-img">
                     <?php tut_screenshot( 'report.png', '月次レポート画面', $tut_img_dir, $tut_img_uri ); ?>
