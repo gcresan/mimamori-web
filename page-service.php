@@ -226,7 +226,6 @@ get_header();
                         <li>SEO診断</li>
                         <li>自然検索順位計測</li>
                         <li>キーワード調査</li>
-                        <li>年4回の深掘りレポート</li>
                     </ul>
                 </div>
 

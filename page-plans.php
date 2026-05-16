@@ -503,7 +503,6 @@ get_header();
                 [ 'text' => 'SEO診断',                    'on' => true ],
                 [ 'text' => '自然検索順位計測',           'on' => true ],
                 [ 'text' => 'キーワード調査',             'on' => true ],
-                [ 'text' => '年4回の深掘りレポート',      'on' => true ],
             ],
         ],
         [
