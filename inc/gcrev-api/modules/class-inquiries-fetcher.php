@@ -417,6 +417,101 @@ class Mimamori_Inquiries_Fetcher {
     }
 
     /**
+     * 指定ユーザーの問い合わせ取得データを全て削除する。
+     *
+     * 削除対象:
+     *   - wp_gcrev_inquiries テーブルの当該ユーザー全行
+     *   - user_meta _gcrev_inquiry_overrides (手動オーバーライド辞書)
+     *   - 関連 transient (一覧キャッシュ等)
+     *
+     * 削除しないもの:
+     *   - エンドポイント URL / トークン / 自動取得 / 除外キーワード設定 (=API接続設定)
+     *
+     * @return array { rows_deleted:int, overrides_cleared:bool, cache_cleared:int }
+     */
+    public static function delete_all_for_user( int $user_id ): array {
+        global $wpdb;
+        $deleted = 0;
+        if ( $user_id > 0 ) {
+            $deleted = (int) $wpdb->delete(
+                self::table_name(),
+                [ 'user_id' => $user_id ],
+                [ '%d' ]
+            );
+        }
+        // 手動オーバーライド辞書をクリア
+        delete_user_meta( $user_id, '_gcrev_inquiry_overrides' );
+
+        // 関連 transient を全削除 (gcrev_inquiries_list_{user_id}_* と gcrev_inq_*)
+        $cache_cleared = 0;
+        $like = $wpdb->esc_like( '_transient_gcrev_inquiries_list_' . $user_id . '_' ) . '%';
+        $rows = $wpdb->get_col( $wpdb->prepare(
+            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $like
+        ) );
+        foreach ( (array) $rows as $opt_name ) {
+            $key = preg_replace( '/^_transient_/', '', $opt_name );
+            if ( delete_transient( $key ) ) { $cache_cleared++; }
+        }
+        // 任意の他 transient (gcrev_inq_{user_id}_*) も
+        $like2 = $wpdb->esc_like( '_transient_gcrev_inq_' . $user_id . '_' ) . '%';
+        $rows2 = $wpdb->get_col( $wpdb->prepare(
+            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $like2
+        ) );
+        foreach ( (array) $rows2 as $opt_name ) {
+            $key = preg_replace( '/^_transient_/', '', $opt_name );
+            if ( delete_transient( $key ) ) { $cache_cleared++; }
+        }
+
+        self::log( "[DELETE_ALL] user_id={$user_id} rows={$deleted} cache_cleared={$cache_cleared}" );
+
+        return [
+            'rows_deleted'      => $deleted,
+            'overrides_cleared' => true,
+            'cache_cleared'     => $cache_cleared,
+        ];
+    }
+
+    /**
+     * 指定ユーザーの 1 ヶ月分だけ削除する。
+     *
+     * @return bool
+     */
+    public static function delete_one_month_for_user( int $user_id, string $year_month ): bool {
+        global $wpdb;
+        if ( $user_id <= 0 || ! preg_match( '/^\d{4}-\d{2}$/', $year_month ) ) {
+            return false;
+        }
+        $deleted = (int) $wpdb->delete(
+            self::table_name(),
+            [ 'user_id' => $user_id, 'year_month' => $year_month ],
+            [ '%d', '%s' ]
+        );
+
+        // 該当年月の手動オーバーライドも削除
+        $all = self::get_overrides( $user_id );
+        if ( isset( $all[ $year_month ] ) ) {
+            unset( $all[ $year_month ] );
+            update_user_meta( $user_id, '_gcrev_inquiry_overrides', $all );
+        }
+
+        // 該当月の transient を削除
+        $like = $wpdb->esc_like( '_transient_gcrev_inquiries_list_' . $user_id . '_' . str_replace( '-', '', $year_month ) ) . '%';
+        $rows = $wpdb->get_col( $wpdb->prepare(
+            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $like
+        ) );
+        foreach ( (array) $rows as $opt_name ) {
+            $key = preg_replace( '/^_transient_/', '', $opt_name );
+            delete_transient( $key );
+        }
+
+        self::log( "[DELETE_MONTH] user_id={$user_id} ym={$year_month} deleted={$deleted}" );
+        return $deleted > 0;
+    }
+
+    /**
      * 除外キーワードリストを取得 (改行 / カンマ区切りで保存されている)。
      * 戻り値は文字列の配列 (前後空白除去・空要素除去済)。
      */

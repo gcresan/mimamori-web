@@ -123,6 +123,34 @@ class Gcrev_Inquiries_Settings_Page {
             exit;
         }
 
+        if ( $action === 'delete_all' ) {
+            // 確認用テキスト ("削除") が一致しないと実行しない
+            $confirm = isset( $_POST['confirm_text'] ) ? trim( (string) wp_unslash( $_POST['confirm_text'] ) ) : '';
+            if ( $confirm !== '削除' ) {
+                wp_safe_redirect( add_query_arg( [ 'updated' => 'delete_confirm_failed', 'user' => $user_id ], menu_page_url( self::MENU_SLUG, false ) ) );
+                exit;
+            }
+            $result = Mimamori_Inquiries_Fetcher::delete_all_for_user( $user_id );
+            $msg = sprintf( '%d 行削除 / キャッシュ %d 件クリア', (int) $result['rows_deleted'], (int) $result['cache_cleared'] );
+            wp_safe_redirect( add_query_arg( [
+                'updated' => 'deleted_all',
+                'user'    => $user_id,
+                'msg'     => rawurlencode( $msg ),
+            ], menu_page_url( self::MENU_SLUG, false ) ) );
+            exit;
+        }
+
+        if ( $action === 'delete_month' ) {
+            $ym = isset( $_POST['year_month'] ) ? sanitize_text_field( wp_unslash( $_POST['year_month'] ) ) : '';
+            $ok = Mimamori_Inquiries_Fetcher::delete_one_month_for_user( $user_id, $ym );
+            wp_safe_redirect( add_query_arg( [
+                'updated' => $ok ? 'deleted_month' : 'delete_failed',
+                'user'    => $user_id,
+                'msg'     => rawurlencode( $ym ),
+            ], menu_page_url( self::MENU_SLUG, false ) ) );
+            exit;
+        }
+
         if ( $action === 'fetch_bulk' ) {
             $months = isset( $_POST['months'] ) ? absint( $_POST['months'] ) : 12;
             // タイムアウト対策（API 呼び出しを最大36回まで連続実行する想定）
@@ -191,6 +219,14 @@ class Gcrev_Inquiries_Settings_Page {
                 <div class="notice notice-success is-dismissible"><p>過去分の一括取得が完了しました。<?php echo $msg ? esc_html( '（' . $msg . '）' ) : ''; ?></p></div>
             <?php elseif ( $updated === 'bulk_failed' ) : ?>
                 <div class="notice notice-error is-dismissible"><p>一括取得が全件失敗しました。<?php echo $msg ? esc_html( '（' . $msg . '）' ) : ''; ?></p></div>
+            <?php elseif ( $updated === 'deleted_all' ) : ?>
+                <div class="notice notice-success is-dismissible"><p>取り込んだ問い合わせデータを全て削除しました。<?php echo $msg ? esc_html( '（' . $msg . '）' ) : ''; ?></p></div>
+            <?php elseif ( $updated === 'deleted_month' ) : ?>
+                <div class="notice notice-success is-dismissible"><p><?php echo esc_html( $msg ); ?> の取り込みデータを削除しました。</p></div>
+            <?php elseif ( $updated === 'delete_failed' ) : ?>
+                <div class="notice notice-error is-dismissible"><p>削除に失敗しました。<?php echo $msg ? esc_html( '（' . $msg . '）' ) : ''; ?></p></div>
+            <?php elseif ( $updated === 'delete_confirm_failed' ) : ?>
+                <div class="notice notice-error is-dismissible"><p>削除を実行するには、確認テキストに「<strong>削除</strong>」と入力してください。</p></div>
             <?php endif; ?>
 
             <h2>対象ユーザー</h2>
@@ -301,7 +337,7 @@ class Gcrev_Inquiries_Settings_Page {
             <?php if ( empty( $recent ) ) : ?>
                 <p>まだ取得履歴がありません。</p>
             <?php else : ?>
-                <table class="widefat striped" style="max-width:900px;">
+                <table class="widefat striped" style="max-width:1000px;">
                     <thead>
                         <tr>
                             <th>期間</th>
@@ -314,6 +350,7 @@ class Gcrev_Inquiries_Settings_Page {
                             <th>取得日時</th>
                             <th>エラー</th>
                             <th>明細</th>
+                            <th>削除</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -336,10 +373,34 @@ class Gcrev_Inquiries_Settings_Page {
                                 <td><?php echo esc_html( (string) $row['fetched_at'] ); ?></td>
                                 <td><?php echo $row['error_message'] ? '<span style="color:#b00">' . esc_html( (string) $row['error_message'] ) . '</span>' : ''; ?></td>
                                 <td><a href="<?php echo esc_url( $detail_url ); ?>" class="button button-small">📝 内容を見る</a></td>
+                                <td>
+                                    <form method="post" action="" style="margin:0;" onsubmit="return confirm('<?php echo esc_js( (string) $row['year_month'] ); ?> の取り込みデータを削除します。よろしいですか？');">
+                                        <?php wp_nonce_field( 'gcrev_inquiries_action', '_gcrev_inquiries_nonce' ); ?>
+                                        <input type="hidden" name="gcrev_action" value="delete_month" />
+                                        <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( (string) $current ); ?>" />
+                                        <input type="hidden" name="year_month" value="<?php echo esc_attr( (string) $row['year_month'] ); ?>" />
+                                        <button type="submit" class="button button-small button-link-delete" style="color:#b32d2e;">🗑</button>
+                                    </form>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+
+                <!-- 全件削除 (危険操作なので確認テキスト必須) -->
+                <div style="margin-top:2em;padding:16px 20px;background:#fef2f2;border:1px solid #fecaca;border-radius:4px;max-width:1000px;">
+                    <h3 style="margin-top:0;color:#b32d2e;">⚠️ 取り込みデータを全削除</h3>
+                    <p style="margin:8px 0;">この対象ユーザーの<strong>全期間の問い合わせデータ</strong>（個別問い合わせ・月次サマリ・手動オーバーライド・キャッシュ）を削除します。エンドポイント URL / トークン / 自動取得 / 除外キーワードの<strong>設定は残ります</strong>。</p>
+                    <p style="margin:8px 0;color:#b32d2e;font-weight:600;">この操作は元に戻せません。再取得する場合は手動で取り込み直す必要があります。</p>
+                    <form method="post" action="" onsubmit="return confirm('本当に全件削除しますか？元に戻せません。');" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <?php wp_nonce_field( 'gcrev_inquiries_action', '_gcrev_inquiries_nonce' ); ?>
+                        <input type="hidden" name="gcrev_action" value="delete_all" />
+                        <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( (string) $current ); ?>" />
+                        <label for="confirm_text" style="margin:0;">確認のため <strong>削除</strong> と入力:</label>
+                        <input type="text" id="confirm_text" name="confirm_text" value="" placeholder="削除" style="width:120px;" required />
+                        <button type="submit" class="button button-link-delete" style="background:#b32d2e;color:#fff;border-color:#b32d2e;">🗑 全件削除</button>
+                    </form>
+                </div>
             <?php endif; ?>
         </div>
         <?php
