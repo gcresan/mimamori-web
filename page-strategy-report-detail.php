@@ -86,6 +86,13 @@ get_header();
             <?php endif; ?>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="strategyReportDetailPrintBtn"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:1px solid #C3CED0;border-radius:8px;background:#fff;color:#384D50;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1;transition:all 0.15s;"
+                    onmouseover="this.style.background='#F5F8F8'"
+                    onmouseout="this.style.background='#fff'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                印刷
+            </button>
             <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' . ( $req_ver !== '' ? '?ver=' . rawurlencode( $req_ver ) : '' ) ) ); ?>"
                style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">📋 概要版に戻る</a>
         </div>
@@ -169,6 +176,21 @@ get_header();
         if (h <= 0) return;
         iframe.style.height = h + 'px';
     });
+
+    // 印刷ボタン: iframe 内（レポート本体）だけを印刷する
+    var printBtn = document.getElementById('strategyReportDetailPrintBtn');
+    if (printBtn) {
+        printBtn.addEventListener('click', function () {
+            try {
+                if (iframe.contentWindow) {
+                    iframe.contentWindow.focus();
+                    iframe.contentWindow.print();
+                    return;
+                }
+            } catch (err) { /* fallback */ }
+            window.open(iframe.getAttribute('src'), '_blank', 'noopener');
+        });
+    }
 })();
 </script>
 
