@@ -11892,9 +11892,18 @@ function mimamori_save_hq_user_fields( int $user_id ): void {
  */
 if ( ! function_exists( 'mimamori_get_view_user_object' ) ) {
 function mimamori_get_view_user_object(): \WP_User {
+    // 優先順位: ①管理者の View As → ②本部の選択中クライアント → ③自分
+    // (mimamori_get_view_user_id() と同じ優先順位を保つ)
     $target = mimamori_get_view_as_target();
     if ( $target > 0 ) {
         $u = get_userdata( $target );
+        if ( $u instanceof \WP_User ) {
+            return $u;
+        }
+    }
+    $hq = mimamori_get_hq_view_target_for_current_user();
+    if ( $hq > 0 ) {
+        $u = get_userdata( $hq );
         if ( $u instanceof \WP_User ) {
             return $u;
         }
