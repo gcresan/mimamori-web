@@ -67,9 +67,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             // 表示名優先 → 姓
             $company = gcrev_get_business_name( $u->ID );
+
+            // 本部ログイン中なら、表示中の店舗を強調表示
+            $_hdr_is_hq = function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( get_current_user_id() );
             ?>
-         <div class="sidebar-user-info">
-            <div class="sidebar-user-name">
+         <div class="sidebar-user-info<?php echo $_hdr_is_hq ? ' sidebar-user-info--hq' : ''; ?>"
+              <?php if ( $_hdr_is_hq ) : ?>style="background:linear-gradient(135deg,#fff8ec 0%,#fefdfb 100%);border-left:4px solid #d97706;padding:14px 20px;"<?php endif; ?>>
+            <?php if ( $_hdr_is_hq ) : ?>
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#92400e;letter-spacing:0.04em;margin-bottom:4px;">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+               </svg>
+               <span>現在表示中の店舗</span>
+            </div>
+            <?php endif; ?>
+            <div class="sidebar-user-name"<?php if ( $_hdr_is_hq ) : ?> style="font-size:15px;font-weight:700;color:#1a1a1a;"<?php endif; ?>>
                <?php echo esc_html( $company ); ?> 様
             </div>
             <?php
