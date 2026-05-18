@@ -187,9 +187,32 @@ class Gcrev_Meo_Report_Service {
             }
         }
 
-        // 指定日 (含む) までで最新の reviews_count スナップショットを返すクロージャ
-        $snapshot_at_or_before = static function ( string $on_or_before ) use ( $wpdb, $meo_table, $user_id ): ?int {
-            if ( $on_or_before === '' ) return null;
+        // フォールバック用: 取得済みの最も古い reviews_count スナップショット。
+        // 月境界のスナップショットが無い (順位取得開始から日が浅い等) 場合に、
+        // 「その時点での累計」を代わりに使うことで delta=0 を最低でも返せるようにする。
+        $earliest_row = $wpdb->get_row( $wpdb->prepare(
+            "SELECT reviews_count, fetch_date
+               FROM {$meo_table}
+              WHERE user_id = %d
+                AND reviews_count IS NOT NULL
+              ORDER BY fetch_date ASC, id ASC
+              LIMIT 1",
+            $user_id
+        ), ARRAY_A );
+
+        $has_any_snapshot = is_array( $earliest_row );
+        $earliest_count   = $has_any_snapshot ? (int) $earliest_row['reviews_count'] : 0;
+        $earliest_date    = $has_any_snapshot ? (string) $earliest_row['fetch_date'] : '';
+
+        // 指定日 (含む) までで最新の reviews_count を返す。
+        // 該当する snapshot が無く、かつ指定日が earliest_date より前なら earliest をフォールバック。
+        // それ以外 (例: 入力日が空) は単純に earliest を返す。
+        $snapshot_at_or_before = static function ( string $on_or_before ) use ( $wpdb, $meo_table, $user_id, $earliest_count, $earliest_date, $has_any_snapshot ): int {
+            if ( ! $has_any_snapshot )    return 0;
+            if ( $on_or_before === '' )   return $earliest_count;
+            // 指定日が最初の取得日より前 → 当時の累計は不明だが、最古値で代用 (差分0扱い)
+            if ( $on_or_before < $earliest_date ) return $earliest_count;
+
             $row = $wpdb->get_row( $wpdb->prepare(
                 "SELECT reviews_count
                    FROM {$meo_table}
@@ -200,30 +223,30 @@ class Gcrev_Meo_Report_Service {
                   LIMIT 1",
                 $user_id, $on_or_before
             ), ARRAY_A );
-            if ( ! is_array( $row ) ) return null;
-            return (int) $row['reviews_count'];
+
+            return is_array( $row ) ? (int) $row['reviews_count'] : $earliest_count;
         };
 
-        $count_curr_end  = $period_end   !== '' ? $snapshot_at_or_before( $period_end )   : null;
-        $count_prev_end  = $previous_end !== '' ? $snapshot_at_or_before( $previous_end ) : null;
-        $count_prev2_end = $prev2_end    !== '' ? $snapshot_at_or_before( $prev2_end )    : null;
+        $count_curr_end  = $snapshot_at_or_before( $period_end );
+        $count_prev_end  = $snapshot_at_or_before( $previous_end );
+        $count_prev2_end = $snapshot_at_or_before( $prev2_end );
 
-        $delta_curr_has_baseline = ( $count_curr_end !== null && $count_prev_end  !== null );
-        $delta_prev_has_baseline = ( $count_prev_end !== null && $count_prev2_end !== null );
-
-        $delta_curr = $delta_curr_has_baseline ? max( 0, $count_curr_end - $count_prev_end )  : 0;
-        $delta_prev = $delta_prev_has_baseline ? max( 0, $count_prev_end - $count_prev2_end ) : 0;
+        // 1件でもスナップショットがあれば常に数値を表示する (差分が0でも「+0」を出す)
+        $delta_curr = max( 0, $count_curr_end - $count_prev_end );
+        $delta_prev = max( 0, $count_prev_end - $count_prev2_end );
 
         return [
             'count'                   => $count,
             'average_rating'          => $average_rating,
-            'count_curr_end'          => (int) ( $count_curr_end ?? 0 ),
-            'count_prev_end'          => (int) ( $count_prev_end ?? 0 ),
-            'count_prev2_end'         => (int) ( $count_prev2_end ?? 0 ),
+            'count_curr_end'          => $count_curr_end,
+            'count_prev_end'          => $count_prev_end,
+            'count_prev2_end'         => $count_prev2_end,
             'delta_curr'              => $delta_curr,
             'delta_prev'              => $delta_prev,
-            'delta_curr_has_baseline' => $delta_curr_has_baseline,
-            'delta_prev_has_baseline' => $delta_prev_has_baseline,
+            // 取得データが1件でもあれば true (= UI で「+0」表示)
+            // 完全に未取得の状態のみ false (= UI で「—」表示)
+            'delta_curr_has_baseline' => $has_any_snapshot,
+            'delta_prev_has_baseline' => $has_any_snapshot,
         ];
     }
 

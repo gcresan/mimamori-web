@@ -226,7 +226,7 @@ $render_pct = static function ( int $cur, int $prev ): string {
                     <div class="mr-kpi-prev">前月: +<?php echo esc_html( number_format( $rv_delta_prev ) ); ?> <?php echo $render_pct( $rv_delta_curr, $rv_delta_prev ); ?></div>
                 <?php else : ?>
                     <div class="mr-kpi-value" style="color:#94a3b8;">—</div>
-                    <div class="mr-kpi-prev">比較データが揃うまでお待ちください</div>
+                    <div class="mr-kpi-prev">クチコミデータ未取得</div>
                 <?php endif; ?>
             </div>
             <div class="mr-kpi">
@@ -236,12 +236,12 @@ $render_pct = static function ( int $cur, int $prev ): string {
                     <div class="mr-kpi-prev"><?php echo esc_html( $report['previous']['label'] ); ?> に新たに投稿された件数</div>
                 <?php else : ?>
                     <div class="mr-kpi-value" style="color:#94a3b8;">—</div>
-                    <div class="mr-kpi-prev">比較データなし</div>
+                    <div class="mr-kpi-prev">クチコミデータ未取得</div>
                 <?php endif; ?>
             </div>
         </div>
         <p style="font-size:11px;color:#94a3b8;margin:10px 0 0;">
-            新規クチコミ数は累計件数の月末スナップショットの差分から算出しています。順位取得を開始してから2ヶ月以上経過すると比較値が表示されます。
+            新規クチコミ数は、累計クチコミ件数の月末スナップショットの差分から算出しています。順位取得を開始する前の月は履歴データが無いため「+0」と表示されます。
         </p>
     </div>
 
