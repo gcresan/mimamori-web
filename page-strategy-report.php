@@ -16,21 +16,31 @@ $is_raw       = isset( $_GET['raw'] ) && $_GET['raw'] === '1';
 
 // raw=1 が指定された時だけ、HTML レポートを生のまま配信する（iframe の中身用）。
 // それ以外はテーマのヘッダー/サイドバーを維持してメインに iframe を埋め込む。
-if ( $is_raw && class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
-    try {
-        if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'simple', $req_ver ) ) {
-            exit;
-        }
-    } catch ( \Throwable $e ) {
-        if ( function_exists( 'file_put_contents' ) ) {
-            file_put_contents(
-                '/tmp/gcrev_strategy_report_debug.log',
-                date( 'Y-m-d H:i:s' ) . ' [serve_simple] ' . $e->getMessage()
-                . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n",
-                FILE_APPEND
-            );
+if ( $is_raw ) {
+    if ( class_exists( 'Gcrev_Manual_Strategy_Report_Page' ) ) {
+        try {
+            if ( Gcrev_Manual_Strategy_Report_Page::serve_for_current_user( 'simple', $req_ver ) ) {
+                exit;
+            }
+        } catch ( \Throwable $e ) {
+            if ( function_exists( 'file_put_contents' ) ) {
+                file_put_contents(
+                    '/tmp/gcrev_strategy_report_debug.log',
+                    date( 'Y-m-d H:i:s' ) . ' [serve_simple] ' . $e->getMessage()
+                    . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n",
+                    FILE_APPEND
+                );
+            }
         }
     }
+    // raw=1 で配信できなかった場合にテーマ全体を返すと iframe 内にサイドバー付き UI が再帰描画される。
+    // 必ず最小限の HTML だけ返して exit する。
+    status_header( 404 );
+    nocache_headers();
+    header( 'Content-Type: text/html; charset=utf-8' );
+    echo '<!doctype html><meta charset="utf-8"><title>Report not available</title>'
+       . '<div style="font-family:sans-serif;padding:24px;color:#666;">レポートが見つかりませんでした。</div>';
+    exit;
 }
 
 // テーマ内表示用: 手動レポートの有無を判定

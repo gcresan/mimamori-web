@@ -613,7 +613,11 @@ class Gcrev_Manual_Strategy_Report_Page {
             wp_safe_redirect( wp_login_url( $_SERVER['REQUEST_URI'] ?? home_url('/') ) );
             exit;
         }
-        $user_id = get_current_user_id();
+        // 本部ユーザーや管理者の View As 中は閲覧対象ユーザーのレポートを配信する。
+        // get_current_user_id() を使うと本部ユーザー自身（レポート未保有）になり not_found になる。
+        $user_id = function_exists( 'mimamori_get_view_user_id' )
+            ? mimamori_get_view_user_id()
+            : get_current_user_id();
         $log( "[serve] user_id={$user_id} kind={$kind} ver_id='{$ver_id}'" );
 
         $version = $ver_id !== ''
