@@ -7709,6 +7709,59 @@ PROMPT;
                 // API レート制限（1ユーザー1期間あたり2秒）
                 sleep( 2 );
             }
+
+            // -----------------------------------------------------------------
+            // MEOレポート（page-meo-report.php）用 date-based キャッシュも温める
+            // -----------------------------------------------------------------
+            // MEOレポートは fetch_meo_metrics_safe() を経由し
+            // `gcrev_meo_perf_{uid}_{start}_{end}` キーで保存する。
+            // 上記の period ベースキャッシュとはキーが異なるため、別途プリフェッチが必要。
+            //
+            // 「今月」「前月」を毎晩上書きすることで:
+            //   - 今月: その日までの当月途中経過が前日までの数値で表示される
+            //   - 前月: GBP の集計遅延（2〜3日）で月初に値が動くため数日間は更新する
+            try {
+                $now_dt = new \DateTimeImmutable( 'now', wp_timezone() );
+                $months_to_prefetch = [
+                    $now_dt,                                          // 今月
+                    $now_dt->modify( 'first day of last month' ),     // 前月
+                ];
+
+                foreach ( $months_to_prefetch as $m_dt ) {
+                    $r_start = $m_dt->modify( 'first day of this month' )->format( 'Y-m-d' );
+                    $r_end   = $m_dt->modify( 'last day of this month' )->format( 'Y-m-d' );
+                    $r_cache_key = "gcrev_meo_perf_{$uid}_{$r_start}_{$r_end}";
+
+                    // 必ず最新化するため既存キャッシュを削除してから再取得
+                    delete_transient( $r_cache_key );
+
+                    try {
+                        $metrics = $this->gbp_fetch_performance_metrics( $access_token, $location_id, $r_start, $r_end );
+                        $is_empty = is_array( $metrics )
+                            && (int) ( $metrics['total_impressions'] ?? 0 ) === 0
+                            && (int) ( $metrics['call_clicks'] ?? 0 ) === 0
+                            && (int) ( $metrics['direction_clicks'] ?? 0 ) === 0
+                            && (int) ( $metrics['website_clicks'] ?? 0 ) === 0;
+                        if ( ! $is_empty ) {
+                            set_transient( $r_cache_key, $metrics, self::DASHBOARD_CACHE_TTL );
+                        }
+                        $fetched++;
+                    } catch ( \Throwable $e ) {
+                        $errors++;
+                        file_put_contents( '/tmp/gcrev_meo_debug.log',
+                            date( 'Y-m-d H:i:s' ) . " [MEO Prefetch] Report cache ERROR user={$uid} {$r_start}〜{$r_end}: " . $e->getMessage() . "\n",
+                            FILE_APPEND
+                        );
+                    }
+
+                    sleep( 2 );
+                }
+            } catch ( \Throwable $e ) {
+                file_put_contents( '/tmp/gcrev_meo_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [MEO Prefetch] Report cache outer ERROR user={$uid}: " . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
+            }
         }
 
         file_put_contents( '/tmp/gcrev_meo_debug.log',
