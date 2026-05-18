@@ -260,9 +260,21 @@ class Gcrev_Meo_Report_Service {
         $count_prev_end  = $snapshot_at_or_before( $previous_end );
         $count_prev2_end = $snapshot_at_or_before( $prev2_end );
 
-        // 1件でもスナップショットがあれば常に数値を表示する (差分が0でも「+0」を出す)
+        // スナップショット履歴が無くても、現在の累計が取得できていれば
+        // 「変動を観測できないので +0」として扱う。
+        // (口コミ管理ページ未訪問 / 順位取得未設定で meo_results が空のユーザーでも数値を出す)
+        if ( ! $has_any_snapshot && $count > 0 ) {
+            $count_curr_end  = $count;
+            $count_prev_end  = $count;
+            $count_prev2_end = $count;
+        }
+
+        // 1件でもスナップショットがある、または現累計が取得できていれば「+0」を表示
         $delta_curr = max( 0, $count_curr_end - $count_prev_end );
         $delta_prev = max( 0, $count_prev_end - $count_prev2_end );
+
+        // 累計件数が1以上 or 履歴1件以上あれば baseline = true (UIで「+N」表示)
+        $has_baseline = ( $has_any_snapshot || $count > 0 );
 
         return [
             'count'                   => $count,
@@ -272,10 +284,10 @@ class Gcrev_Meo_Report_Service {
             'count_prev2_end'         => $count_prev2_end,
             'delta_curr'              => $delta_curr,
             'delta_prev'              => $delta_prev,
-            // 取得データが1件でもあれば true (= UI で「+0」表示)
+            // 履歴 or 現累計のいずれかが取れていれば true (= UI で「+0」表示)
             // 完全に未取得の状態のみ false (= UI で「—」表示)
-            'delta_curr_has_baseline' => $has_any_snapshot,
-            'delta_prev_has_baseline' => $has_any_snapshot,
+            'delta_curr_has_baseline' => $has_baseline,
+            'delta_prev_has_baseline' => $has_baseline,
         ];
     }
 

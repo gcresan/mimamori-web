@@ -9783,11 +9783,13 @@ PROMPT;
         ];
 
         // 各メトリクスを複数キーに加算するマッピング
+        // SEARCH 系は search_impressions にも、MAPS 系は map_impressions にも積み上げる
+        // (MEOレポートで「検索経由」「マップ経由」を表示するため)
         $metric_map = [
-            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH' => ['desktop_impressions'],
-            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH'  => ['mobile_impressions'],
-            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS'   => ['desktop_impressions'],
-            'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => ['mobile_impressions'],
+            'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH' => ['desktop_impressions', 'search_impressions'],
+            'BUSINESS_IMPRESSIONS_MOBILE_SEARCH'  => ['mobile_impressions',  'search_impressions'],
+            'BUSINESS_IMPRESSIONS_DESKTOP_MAPS'   => ['desktop_impressions', 'map_impressions'],
+            'BUSINESS_IMPRESSIONS_MOBILE_MAPS'    => ['mobile_impressions',  'map_impressions'],
             'CALL_CLICKS'                         => ['call_clicks'],
             'WEBSITE_CLICKS'                      => ['website_clicks'],
             'BUSINESS_DIRECTION_REQUESTS'         => ['direction_clicks'],
@@ -10176,6 +10178,8 @@ PROMPT;
             'total_impressions'   => 0,
             'mobile_impressions'  => 0,
             'desktop_impressions' => 0,
+            'search_impressions'  => 0,
+            'map_impressions'     => 0,
             'call_clicks'         => 0,
             'direction_clicks'    => 0,
             'website_clicks'      => 0,
