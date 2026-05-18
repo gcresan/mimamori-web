@@ -577,6 +577,13 @@ class Gcrev_Insight_API {
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
 
+        // ===== GBPロケーションの緯度経度を取得（Google API から取得 & キャッシュ） =====
+        register_rest_route('gcrev/v1', '/meo/gbp-coords', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_gbp_coords' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== MEO基準地点の保存 =====
         register_rest_route('gcrev/v1', '/meo/base-location', [
             'methods'             => 'POST',
@@ -7171,6 +7178,113 @@ PROMPT;
     }
 
     /**
+     * REST: 選択中の GBP ロケーションの緯度経度を取得（取得後にキャッシュ）
+     * GET /gcrev/v1/meo/gbp-coords?refresh=1
+     */
+    public function rest_get_gbp_coords(\WP_REST_Request $request): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new \WP_REST_Response([ 'success' => false, 'message' => 'ログインが必要です' ], 401);
+        }
+
+        $location_id = (string) get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        $address     = (string) get_user_meta( $user_id, '_gcrev_gbp_location_address', true );
+
+        if ( $location_id === '' || strpos( $location_id, 'pending_' ) === 0 ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'Googleビジネスプロフィールが接続されていません。',
+            ], 404);
+        }
+
+        $cached_lat = (string) get_user_meta( $user_id, '_gcrev_gbp_location_lat', true );
+        $cached_lng = (string) get_user_meta( $user_id, '_gcrev_gbp_location_lng', true );
+
+        $force = (bool) $request->get_param( 'refresh' );
+
+        if ( ! $force && $cached_lat !== '' && $cached_lng !== '' ) {
+            return new \WP_REST_Response([
+                'success' => true,
+                'address' => $address,
+                'lat'     => $cached_lat,
+                'lng'     => $cached_lng,
+                'cached'  => true,
+            ], 200);
+        }
+
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( empty( $access_token ) ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'Google APIのアクセストークンを取得できませんでした。再連携してください。',
+            ], 500);
+        }
+
+        $loc_path = $location_id;
+        if ( strpos( $loc_path, 'locations/' ) !== 0 ) {
+            $loc_path = 'locations/' . $loc_path;
+        }
+
+        $url = 'https://mybusinessbusinessinformation.googleapis.com/v1/' . $loc_path
+             . '?' . http_build_query( [ 'readMask' => 'latlng' ], '', '&' );
+
+        $resp = wp_remote_get( $url, [
+            'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+            'timeout' => 15,
+        ] );
+
+        if ( is_wp_error( $resp ) ) {
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' gbp-coords API ERROR: ' . $resp->get_error_message() . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'Google API に接続できませんでした。',
+            ], 500);
+        }
+
+        $status = wp_remote_retrieve_response_code( $resp );
+        $body   = wp_remote_retrieve_body( $resp );
+        if ( $status !== 200 ) {
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " gbp-coords HTTP {$status}: " . substr( $body, 0, 500 ) . "\n",
+                FILE_APPEND
+            );
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => "Google APIエラー（HTTP {$status}）",
+            ], 500);
+        }
+
+        $data   = json_decode( $body, true );
+        $latlng = is_array( $data ) && isset( $data['latlng'] ) ? $data['latlng'] : [];
+        $lat_v  = isset( $latlng['latitude'] )  ? $latlng['latitude']  : null;
+        $lng_v  = isset( $latlng['longitude'] ) ? $latlng['longitude'] : null;
+
+        if ( $lat_v === null || $lng_v === null ) {
+            return new \WP_REST_Response([
+                'success' => false,
+                'message' => 'このGBP店舗には座標が登録されていません。緯度経度を手動で入力してください。',
+                'address' => $address,
+            ], 404);
+        }
+
+        $lat_s = (string) $lat_v;
+        $lng_s = (string) $lng_v;
+        update_user_meta( $user_id, '_gcrev_gbp_location_lat', $lat_s );
+        update_user_meta( $user_id, '_gcrev_gbp_location_lng', $lng_s );
+
+        return new \WP_REST_Response([
+            'success' => true,
+            'address' => $address,
+            'lat'     => $lat_s,
+            'lng'     => $lng_s,
+            'cached'  => false,
+        ], 200);
+    }
+
+    /**
      * REST: GBPロケーションを選択して保存
      */
     /**
@@ -7511,6 +7625,10 @@ PROMPT;
         update_user_meta($user_id, '_gcrev_gbp_location_id',      $location_id);
         update_user_meta($user_id, '_gcrev_gbp_location_name',    $title);
         update_user_meta($user_id, '_gcrev_gbp_location_address', $address);
+
+        // 過去ロケーションの座標キャッシュを破棄（次回 /meo/gbp-coords で再取得）
+        delete_user_meta($user_id, '_gcrev_gbp_location_lat');
+        delete_user_meta($user_id, '_gcrev_gbp_location_lng');
 
         // 検索範囲が未設定ならデフォルト
         $existing_radius = (int) get_user_meta($user_id, '_gcrev_gbp_location_radius', true);

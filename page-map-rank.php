@@ -29,6 +29,8 @@ $mw_saved_meo_lat     = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true
 $mw_saved_meo_lng     = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
 $mw_saved_meo_mode    = (string) get_user_meta( $user_id, '_gcrev_meo_base_mode', true );
 $mw_gbp_address       = (string) get_user_meta( $user_id, '_gcrev_gbp_location_address', true );
+$mw_gbp_lat           = (string) get_user_meta( $user_id, '_gcrev_gbp_location_lat', true );
+$mw_gbp_lng           = (string) get_user_meta( $user_id, '_gcrev_gbp_location_lng', true );
 
 // 自社住所プリセット
 // 1. base_mode が business で保存済み → 保存値（住所・lat/lng）をそのまま使う
@@ -49,6 +51,11 @@ if ( $mw_saved_meo_mode === 'business' && $mw_saved_meo_address !== '' ) {
     // GBP 住所はフォーマットが Google API の生データ（"Ehime甲 3-1平井町松山市" など）
     // で正しくジオコーディングできないため、ベストエフォートで成形。
     $mw_biz_address = trim( preg_replace( '/\s+/u', '', $mw_gbp_address ) );
+    // GBP API から取得済みの座標をキャッシュしてあれば使う（ジオコーディング失敗を防ぐ）
+    if ( $mw_gbp_lat !== '' && $mw_gbp_lng !== '' ) {
+        $mw_biz_lat = $mw_gbp_lat;
+        $mw_biz_lng = $mw_gbp_lng;
+    }
 } elseif ( $mw_saved_meo_mode === '' && $mw_saved_meo_address !== '' ) {
     // legacy: モード未保存のデータは business と仮定して流用
     $mw_biz_address = $mw_saved_meo_address;
@@ -1502,9 +1509,63 @@ get_header();
                         return;
                     }
                     delete modeFormCache.business;
-                    applyBaseMode('business');
-                    currentBaseMode = 'business';
-                    showToast('GBP の住所に戻しました。「保存する」を押すと反映されます。');
+
+                    // ① プリセットに lat/lng があれば即時反映
+                    if (basePresets.business.lat && basePresets.business.lng) {
+                        applyBaseMode('business');
+                        currentBaseMode = 'business';
+                        showToast('GBP の住所に戻しました。「保存する」を押すと反映されます。');
+                        return;
+                    }
+
+                    // ② lat/lng が無ければ Google API から取得（バックフィル）
+                    var addrEl = document.getElementById('meoBaseAddress');
+                    var latEl  = document.getElementById('meoBaseLat');
+                    var lngEl  = document.getElementById('meoBaseLng');
+                    var lblEl  = document.getElementById('meoBaseLabel');
+                    var prevHtml = baseResetBtn.innerHTML;
+                    baseResetBtn.disabled = true;
+                    baseResetBtn.innerHTML = '&#x21BB; 取得中...';
+
+                    fetch(restBase + 'meo/gbp-coords', {
+                        credentials: 'same-origin',
+                        headers: { 'X-WP-Nonce': nonce, 'Accept': 'application/json' }
+                    })
+                    .then(function(r) { return r.json().then(function(j) { return { status: r.status, json: j }; }); })
+                    .then(function(res) {
+                        var j = res.json || {};
+                        if (j.success && j.lat && j.lng) {
+                            addrEl.value = j.address || basePresets.business.address || '';
+                            lblEl.value  = '自社住所';
+                            latEl.value  = parseFloat(j.lat).toFixed(6);
+                            lngEl.value  = parseFloat(j.lng).toFixed(6);
+                            // 以降の操作のためにプリセットにも反映
+                            basePresets.business.lat = latEl.value;
+                            basePresets.business.lng = lngEl.value;
+                            updateBaseModeNote();
+                            updateVerifyLink();
+                            currentBaseMode = 'business';
+                            showToast('GBP の住所・座標に戻しました。「保存する」を押すと反映されます。');
+                        } else {
+                            // 取得失敗: 住所だけ反映、lat/lng は空のままにして手動入力を促す
+                            addrEl.value = basePresets.business.address || '';
+                            lblEl.value  = '自社住所';
+                            latEl.value  = '';
+                            lngEl.value  = '';
+                            updateBaseModeNote();
+                            updateVerifyLink();
+                            currentBaseMode = 'business';
+                            showToast(j.message || 'GBPの座標を取得できませんでした。緯度経度を手動で入力してください。', 'error');
+                        }
+                    })
+                    .catch(function() {
+                        showToast('通信エラーが発生しました', 'error');
+                    })
+                    .finally(function() {
+                        baseResetBtn.disabled = false;
+                        baseResetBtn.innerHTML = prevHtml;
+                        refreshResetBtnState();
+                    });
                 }
             });
         }
