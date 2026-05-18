@@ -331,11 +331,43 @@ $render_pct = static function ( int $cur, int $prev ): string {
                     <tr>
                         <td><?php echo esc_html( (string) ( $i + 1 ) ); ?></td>
                         <td><?php echo esc_html( (string) $k['keyword'] ); ?></td>
-                        <td class="num"><?php echo esc_html( number_format( (int) $k['value'] ) ); ?></td>
+                        <td class="num">
+                            <?php
+                            $kw_val = (int) $k['value'];
+                            if ( $kw_val === 0 ) {
+                                echo '<span style="color:#94a3b8;">0 <span title="検索された回数がごく少なく、Googleが正確な数値を非公開にしているキーワードです" style="cursor:help;">ⓘ</span></span>';
+                            } else {
+                                echo esc_html( number_format( $kw_val ) );
+                            }
+                            ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
+
+            <?php
+            // 0件のキーワードがリスト内に存在する場合のみ注釈を表示
+            $has_zero_keyword = false;
+            foreach ( $report['keywords'] as $k ) {
+                if ( (int) ( $k['value'] ?? 0 ) === 0 ) { $has_zero_keyword = true; break; }
+            }
+            if ( $has_zero_keyword ) :
+            ?>
+            <div style="margin-top:14px;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;line-height:1.8;color:#475569;">
+                <div style="font-weight:600;color:#0f172a;margin-bottom:6px;">💡 回数が「0」になっているキーワードについて</div>
+                <p style="margin:0 0 8px;">
+                    一覧の中に <strong>回数「0」</strong> と表示されているキーワードがあります。これは <strong>「誰も検索していない」という意味ではありません</strong>。
+                </p>
+                <p style="margin:0 0 8px;">
+                    Google は、検索した方のプライバシーを守るため、検索回数がごく少ないキーワードについては正確な数字を公開しない仕組みになっています。たとえば「お店の名前+地名」のような少数の検索数しかないキーワードは、表示はされていても **正確な数値は非公開**となり、システム上は「0」として扱われます。
+                </p>
+                <p style="margin:0;">
+                    つまり「0」と表示されているキーワードは、<strong>「実際には少数の検索でお店が見つけてもらえているが、Google が数字を伏せている」</strong>キーワードです。<br>
+                    過去6ヶ月のうちに実際の検索実績があったキーワードのみを表示しているため、参考としてご活用ください。
+                </p>
+            </div>
+            <?php endif; ?>
         <?php endif; ?>
 
         <?php if ( ! empty( $report['keywords_diff'] ) ) : ?>
