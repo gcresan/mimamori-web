@@ -11682,11 +11682,20 @@ function mimamori_hq_managed_meta_key(): string { return '_mimamori_hq_managed_u
 function mimamori_hq_view_meta_key(): string    { return '_mimamori_hq_view_user_id'; }
 }
 
-/** 指定ユーザーが本部ユーザー（管理対象が1件以上ある）か。 */
+/** 指定ユーザーが本部ユーザーか。
+ *  判定: ① gcrev_service_tier === 'headquarters' (admin がティアを設定した時点で本部扱い)
+ *        ② または管理対象 IDs が 1 件以上ある（旧データ互換）
+ *  → ティア設定だけ済んでまだ管理対象未割当の場合でも本部として認識し、
+ *     /hq/ 店舗一覧ページへ正しく振り分けられるようにする。
+ */
 if ( ! function_exists( 'mimamori_is_hq_user' ) ) {
 function mimamori_is_hq_user( int $user_id = 0 ): bool {
     if ( $user_id <= 0 ) $user_id = get_current_user_id();
     if ( $user_id <= 0 ) return false;
+    // ティア判定（admin が wp-admin ユーザー編集で "本部アカウント" を選んでいれば必ず true）
+    $tier = (string) get_user_meta( $user_id, 'gcrev_service_tier', true );
+    if ( $tier === 'headquarters' ) return true;
+    // 旧データ互換: ティア未設定でも管理対象 IDs があれば本部扱い
     $ids = mimamori_get_hq_managed_user_ids( $user_id );
     return ! empty( $ids );
 }
