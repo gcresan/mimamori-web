@@ -86,12 +86,12 @@ get_header();
             <?php endif; ?>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="strategyReportDetailPrintBtn"
-                    style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:1px solid #C3CED0;border-radius:8px;background:#fff;color:#384D50;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1;transition:all 0.15s;"
-                    onmouseover="this.style.background='#F5F8F8'"
-                    onmouseout="this.style.background='#fff'">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                印刷
+            <button type="button" id="strategyReportDetailPdfBtn"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;color:#344054;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;line-height:1;transition:all 0.15s;white-space:nowrap;"
+                    onmouseover="this.style.background='#f9fafb';this.style.borderColor='#98a2b3';"
+                    onmouseout="this.style.background='#fff';this.style.borderColor='#d0d5dd';">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                PDF ダウンロード
             </button>
             <a class="ss-btn" href="<?php echo esc_url( home_url( '/strategy-report/' . ( $req_ver !== '' ? '?ver=' . rawurlencode( $req_ver ) : '' ) ) ); ?>"
                style="background:#27ae60;color:#fff;border:1px solid #27ae60;text-decoration:none;">📋 概要版に戻る</a>
@@ -177,22 +177,50 @@ get_header();
         iframe.style.height = h + 'px';
     });
 
-    // 印刷ボタン: iframe 内（レポート本体）だけを印刷する
-    var printBtn = document.getElementById('strategyReportDetailPrintBtn');
-    if (printBtn) {
-        printBtn.addEventListener('click', function () {
-            try {
-                if (iframe.contentWindow) {
-                    iframe.contentWindow.focus();
-                    iframe.contentWindow.print();
-                    return;
-                }
-            } catch (err) { /* fallback */ }
-            window.open(iframe.getAttribute('src'), '_blank', 'noopener');
+    // PDF ダウンロードボタン: iframe 内（レポート本体）だけを PDF 化する
+    var pdfBtn = document.getElementById('strategyReportDetailPdfBtn');
+    if (pdfBtn) {
+        pdfBtn.addEventListener('click', function () {
+            if (typeof html2pdf === 'undefined') {
+                alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
+                return;
+            }
+            var doc = null;
+            try { doc = iframe.contentDocument || iframe.contentWindow.document; } catch (e) {}
+            if (!doc || !doc.body) {
+                window.open(iframe.getAttribute('src'), '_blank', 'noopener');
+                return;
+            }
+            var prevLabel = pdfBtn.innerHTML;
+            pdfBtn.disabled = true;
+            pdfBtn.innerHTML = 'PDF 生成中...';
+
+            var periodSlug = <?php echo wp_json_encode( (string) ( $latest_version['period'] ?? 'report' ) ); ?>;
+            var opt = {
+                margin:      [10, 8, 12, 8],
+                filename:    '深掘りレポート_詳細版_' + periodSlug + '.pdf',
+                image:       { type: 'jpeg', quality: 0.95 },
+                html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff', windowWidth: 1200 },
+                jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            var restore = function () {
+                pdfBtn.disabled = false;
+                pdfBtn.innerHTML = prevLabel;
+            };
+            html2pdf().set(opt).from(doc.body).save()
+                .then(restore)
+                .catch(function (err) {
+                    console.error('PDF generation failed', err);
+                    restore();
+                    alert('PDFの生成に失敗しました。もう一度お試しください。');
+                });
         });
     }
 })();
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 
 <?php else : ?>
 

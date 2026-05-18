@@ -559,14 +559,14 @@ get_header();
 <!-- コンテンツエリア -->
 <div class="content-area">
 
-    <!-- 印刷ボタン -->
-    <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
-        <button type="button" onclick="window.print()"
-                style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border:1px solid var(--mw-border-light,#C3CED0); border-radius:8px; background:var(--mw-bg-primary,#fff); color:var(--mw-text-secondary,#384D50); font-size:13px; font-weight:600; cursor:pointer; transition:all 0.15s;"
-                onmouseover="this.style.background='var(--mw-bg-secondary,#F5F8F8)'"
-                onmouseout="this.style.background='var(--mw-bg-primary,#fff)'">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            印刷
+    <!-- PDF ダウンロードボタン -->
+    <div id="rptPdfBar" style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+        <button type="button" id="rptPdfBtn"
+                style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;color:#344054;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;line-height:1;transition:all 0.15s;white-space:nowrap;"
+                onmouseover="this.style.background='#f9fafb';this.style.borderColor='#98a2b3';"
+                onmouseout="this.style.background='#fff';this.style.borderColor='#d0d5dd';">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            PDF ダウンロード
         </button>
     </div>
 
@@ -1585,6 +1585,72 @@ document.addEventListener('DOMContentLoaded', function() {
         <span style="margin-left:4px; color:#aaa;">mimamori-web.jp</span>
     </div>
 </div>
+
+<!-- PDF 生成中だけ適用するスタイル -->
+<style>
+body.is-printing-pdf .rpt-ym-switcher,
+body.is-printing-pdf .rpt-admin-toolbar,
+body.is-printing-pdf #rptPdfBar,
+body.is-printing-pdf .loading-overlay,
+body.is-printing-pdf .report-preloader-overlay,
+body.is-printing-pdf .sidebar,
+body.is-printing-pdf .header,
+body.is-printing-pdf .breadcrumb,
+body.is-printing-pdf #wpadminbar,
+body.is-printing-pdf .footer-area { display:none !important; }
+body.is-printing-pdf .print-footer { display:block !important; }
+body.is-printing-pdf .rpt-kpi-selectable { box-shadow:none !important; transform:none !important; }
+body.is-printing-pdf .kpi-card,
+body.is-printing-pdf .report-section,
+body.is-printing-pdf .gcrev-ai-block { page-break-inside:avoid; break-inside:avoid; }
+</style>
+
+<!-- html2pdf ライブラリ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+
+<!-- PDF ダウンロード処理 -->
+<script>
+(function () {
+    var btn = document.getElementById('rptPdfBtn');
+    if (!btn) return;
+    var periodSlug = <?php echo wp_json_encode( sprintf( '%04d-%02d', (int) $year, (int) $month ) ); ?>;
+
+    btn.addEventListener('click', function () {
+        if (typeof html2pdf === 'undefined') {
+            alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
+            return;
+        }
+        var target = document.querySelector('.content-area');
+        if (!target) return;
+
+        var prevLabel = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'PDF 生成中...';
+        document.body.classList.add('is-printing-pdf');
+
+        var opt = {
+            margin:      [10, 8, 12, 8],
+            filename:    '月次レポート_' + periodSlug + '.pdf',
+            image:       { type: 'jpeg', quality: 0.95 },
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff', windowWidth: 1200 },
+            jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:   { mode: ['css', 'legacy'] }
+        };
+        var restore = function () {
+            document.body.classList.remove('is-printing-pdf');
+            btn.disabled = false;
+            btn.innerHTML = prevLabel;
+        };
+        html2pdf().set(opt).from(target).save()
+            .then(restore)
+            .catch(function (err) {
+                console.error('PDF generation failed', err);
+                restore();
+                alert('PDFの生成に失敗しました。もう一度お試しください。');
+            });
+    });
+})();
+</script>
 
 <style>
 /* --- KPI Card — Selectable button reset --- */
