@@ -76,6 +76,13 @@ $render_pct = static function ( int $cur, int $prev ): string {
 .mr-btn-primary:hover { background:#1557b0; }
 .mr-btn:hover { background:#f9fafb; }
 
+/* ダウンロードボタン */
+.mr-dl-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border:1px solid #d0d5dd; border-radius:8px; background:#fff; color:#344054; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+.mr-dl-btn:hover { background:#f9fafb; border-color:#98a2b3; }
+.mr-dl-btn:disabled { opacity:0.55; cursor:not-allowed; }
+.mr-dl-btn-primary { background:#1a73e8; color:#fff; border-color:#1a73e8; }
+.mr-dl-btn-primary:hover { background:#1557b0; border-color:#1557b0; }
+
 /* セクション */
 .mr-section { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:24px 28px; margin-bottom:20px; }
 .mr-section h2 { margin:0 0 16px; font-size:18px; font-weight:600; color:#0f172a; padding-bottom:10px; border-bottom:2px solid #e5e7eb; }
@@ -130,20 +137,21 @@ $render_pct = static function ( int $cur, int $prev ): string {
             </select>
         </form>
         <div class="mr-actions">
-            <button type="button" onclick="window.print()"
-                    style="display:inline-flex; align-items:center; gap:6px;
-                           padding:8px 16px; border:1px solid var(--mw-border-light,#C3CED0);
-                           border-radius:8px; background:var(--mw-bg-primary,#fff);
-                           color:var(--mw-text-secondary,#384D50); font-size:13px;
-                           font-weight:600; cursor:pointer; transition:all 0.15s;"
-                    onmouseover="this.style.background='var(--mw-bg-secondary,#F5F8F8)'"
-                    onmouseout="this.style.background='var(--mw-bg-primary,#fff)'">
+            <button type="button" id="mrCsvBtn" class="mr-dl-btn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                    <rect x="6" y="14" width="12" height="8"></rect>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                印刷
+                CSV ダウンロード
+            </button>
+            <button type="button" id="mrPdfBtn" class="mr-dl-btn mr-dl-btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                PDF ダウンロード
             </button>
         </div>
     </div>
@@ -321,5 +329,185 @@ $render_pct = static function ( int $cur, int $prev ): string {
 
 </div>
 </div>
+
+<?php
+// JS で参照するレポートデータ（CSV 出力用）
+$mr_csv_payload = [
+    'period'        => $report['period'] ?? [],
+    'metrics'       => $m,
+    'metrics_prev'  => $mp,
+    'reviews'       => $report['reviews']       ?? [],
+    'ranks'         => $report['ranks']         ?? [],
+    'keywords'      => $report['keywords']      ?? [],
+    'keywords_diff' => $report['keywords_diff'] ?? [],
+];
+$mr_period_slug = sprintf( '%04d-%02d', (int) $year, (int) $month );
+?>
+<script type="application/json" id="mrReportData"><?php echo wp_json_encode( $mr_csv_payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ); ?></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+<script>
+(function() {
+    'use strict';
+
+    var PERIOD_SLUG  = <?php echo wp_json_encode( $mr_period_slug ); ?>;
+    var PERIOD_LABEL = <?php echo wp_json_encode( (string) ( $report['period']['label'] ?? $mr_period_slug ) ); ?>;
+
+    var dataEl = document.getElementById('mrReportData');
+    var reportData = null;
+    try { reportData = dataEl ? JSON.parse(dataEl.textContent || '{}') : null; }
+    catch (e) { reportData = null; }
+
+    /* ---------- CSV ---------- */
+    function csvEscape(v) {
+        if (v === null || v === undefined) return '';
+        var s = String(v);
+        if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) {
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+    }
+
+    function fmtRank(v) {
+        return (v === null || v === undefined || v === '') ? '圏外' : String(v) + '位';
+    }
+
+    function downloadCsv() {
+        if (!reportData) {
+            alert('レポートデータを読み込めませんでした。ページを再読み込みしてください。');
+            return;
+        }
+        var d = reportData;
+        var lines = [];
+        var pushRow = function(arr) { lines.push(arr.map(csvEscape).join(',')); };
+        var pushSection = function(title) {
+            if (lines.length > 0) lines.push('');
+            pushRow(['# ' + title]);
+        };
+
+        // 1) 期間
+        pushSection('期間');
+        pushRow(['対象月', PERIOD_LABEL]);
+
+        // 2) 表示回数
+        var m = d.metrics || {}, mp = d.metrics_prev || {};
+        pushSection('表示回数');
+        pushRow(['項目', '今月', '前月']);
+        pushRow(['モバイル',       m.mobile_impressions  || 0, mp.mobile_impressions  || 0]);
+        pushRow(['デスクトップ',   m.desktop_impressions || 0, mp.desktop_impressions || 0]);
+        pushRow(['検索経由',       m.search_impressions  || 0, mp.search_impressions  || 0]);
+        pushRow(['マップ経由',     m.map_impressions     || 0, mp.map_impressions     || 0]);
+
+        // 3) 行動数
+        pushSection('行動数');
+        pushRow(['項目', '今月', '前月']);
+        pushRow(['ウェブサイト', m.website_clicks   || 0, mp.website_clicks   || 0]);
+        pushRow(['電話',         m.call_clicks      || 0, mp.call_clicks      || 0]);
+        pushRow(['ルート',       m.direction_clicks || 0, mp.direction_clicks || 0]);
+
+        // 4) クチコミ
+        var rv = d.reviews || {};
+        pushSection('クチコミ');
+        pushRow(['項目', '値']);
+        pushRow(['総クチコミ数', rv.count == null ? '' : rv.count]);
+        pushRow(['平均評価',     rv.average_rating == null ? '' : Number(rv.average_rating).toFixed(2)]);
+
+        // 5) 順位
+        if (d.ranks && d.ranks.length) {
+            pushSection('順位チェック');
+            pushRow(['キーワード', 'マップ順位 今月', 'マップ順位 前月', '地域順位 今月', '地域順位 前月', '取得日']);
+            d.ranks.forEach(function(r) {
+                var mCur  = (r.maps_rank      !== undefined ? r.maps_rank      : (r.rank      !== undefined ? r.rank      : null));
+                var mPrev = (r.maps_rank_prev !== undefined ? r.maps_rank_prev : (r.rank_prev !== undefined ? r.rank_prev : null));
+                pushRow([
+                    r.keyword || '',
+                    fmtRank(mCur),
+                    fmtRank(mPrev),
+                    fmtRank(r.finder_rank      != null ? r.finder_rank      : null),
+                    fmtRank(r.finder_rank_prev != null ? r.finder_rank_prev : null),
+                    r.fetched_date || ''
+                ]);
+            });
+        }
+
+        // 6) GBP 検索キーワード TOP20
+        if (d.keywords && d.keywords.length) {
+            pushSection('GBP 検索キーワード TOP20');
+            pushRow(['#', 'キーワード', '回数']);
+            d.keywords.forEach(function(k, i) {
+                pushRow([i + 1, k.keyword || '', k.value || 0]);
+            });
+        }
+
+        // 7) 増加キーワード TOP10
+        if (d.keywords_diff && d.keywords_diff.length) {
+            pushSection('増加キーワード TOP10 (前月比)');
+            pushRow(['#', 'キーワード', '前月', '今月', '増加']);
+            d.keywords_diff.forEach(function(x, i) {
+                pushRow([i + 1, x.keyword || '', x.value_prev || 0, x.value || 0, x.delta || 0]);
+            });
+        }
+
+        var BOM = '\uFEFF';
+        var blob = new Blob([BOM + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        var url  = URL.createObjectURL(blob);
+        var a    = document.createElement('a');
+        a.href = url;
+        a.download = 'MEOレポート_' + PERIOD_SLUG + '.csv';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    }
+
+    /* ---------- PDF ---------- */
+    function downloadPdf() {
+        var el = document.querySelector('.mr-wrap');
+        if (!el) return;
+        if (typeof html2pdf === 'undefined') {
+            alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
+            return;
+        }
+        var toolbar = document.querySelector('.mr-toolbar');
+        var pdfBtn  = document.getElementById('mrPdfBtn');
+        var csvBtn  = document.getElementById('mrCsvBtn');
+        var prevLabel = pdfBtn ? pdfBtn.innerHTML : '';
+
+        if (toolbar) toolbar.style.display = 'none';
+        if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.innerHTML = 'PDF 生成中...'; }
+        if (csvBtn) csvBtn.disabled = true;
+
+        var opt = {
+            margin:      [10, 8, 12, 8],
+            filename:    'MEOレポート_' + PERIOD_SLUG + '.pdf',
+            image:       { type: 'jpeg', quality: 0.95 },
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff' },
+            jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        html2pdf().set(opt).from(el).save()
+            .then(function() {
+                if (toolbar) toolbar.style.display = '';
+                if (pdfBtn)  { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
+                if (csvBtn)  csvBtn.disabled = false;
+            })
+            .catch(function(err) {
+                console.error('PDF generation failed', err);
+                if (toolbar) toolbar.style.display = '';
+                if (pdfBtn)  { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
+                if (csvBtn)  csvBtn.disabled = false;
+                alert('PDFの生成に失敗しました。もう一度お試しください。');
+            });
+    }
+
+    var csvBtn = document.getElementById('mrCsvBtn');
+    var pdfBtn = document.getElementById('mrPdfBtn');
+    if (csvBtn) csvBtn.addEventListener('click', downloadCsv);
+    if (pdfBtn) pdfBtn.addEventListener('click', downloadPdf);
+})();
+</script>
 
 <?php get_footer(); ?>
