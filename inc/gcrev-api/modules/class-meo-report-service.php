@@ -164,10 +164,34 @@ class Gcrev_Meo_Report_Service {
         }
         // gcrev_meo_results に行が無い / 値が 0 の場合は GBP 直接取得の最新サマリで補完。
         // (rank tracker (DataForSEO) を有効化していないユーザーは meo_results 側が常に 0/null になる)
-        if ( $count <= 0 || $average_rating <= 0 ) {
+        $needs_fallback = ( $count <= 0 || $average_rating <= 0 );
+        if ( $needs_fallback ) {
             $option_value = get_user_meta( $user_id, '_gcrev_gbp_reviews_summary', true );
             if ( ! is_array( $option_value ) ) {
                 $option_value = get_transient( 'gcrev_gbp_reviews_summary_' . $user_id );
+            }
+            // user_meta も無い場合、GBP API を直接叩いて取得を試みる
+            // (口コミ管理ページを未訪問のユーザーでも MEO レポートで件数が表示されるように)
+            if ( ! is_array( $option_value ) && class_exists( 'Gcrev_Insight_API' ) ) {
+                try {
+                    $api = new \Gcrev_Insight_API( false );
+                    if ( method_exists( $api, 'gbp_fetch_reviews' ) ) {
+                        $fetched = $api->gbp_fetch_reviews( $user_id );
+                        if ( is_array( $fetched ) && ! empty( $fetched['success'] ) ) {
+                            $option_value = [
+                                'count'          => (int) ( $fetched['totalReviewCount'] ?? 0 ),
+                                'average_rating' => (float) ( $fetched['averageRating'] ?? 0 ),
+                                'updated_at'     => time(),
+                            ];
+                        }
+                    }
+                } catch ( \Throwable $e ) {
+                    file_put_contents(
+                        '/tmp/gcrev_gbp_debug.log',
+                        date( 'Y-m-d H:i:s' ) . ' [meo-report fallback fetch] ' . $e->getMessage() . "\n",
+                        FILE_APPEND
+                    );
+                }
             }
             if ( is_array( $option_value ) ) {
                 $fb_count  = (int) ( $option_value['count'] ?? 0 );
