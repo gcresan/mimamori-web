@@ -161,17 +161,22 @@ class Gcrev_Meo_Report_Service {
         if ( is_array( $latest ) ) {
             $count          = (int) ( $latest['reviews_count'] ?? 0 );
             $average_rating = (float) ( $latest['rating'] ?? 0 );
-        } else {
-            // フォールバック: user_meta / transient
+        }
+        // gcrev_meo_results に行が無い / 値が 0 の場合は GBP 直接取得の最新サマリで補完。
+        // (rank tracker (DataForSEO) を有効化していないユーザーは meo_results 側が常に 0/null になる)
+        if ( $count <= 0 || $average_rating <= 0 ) {
             $option_value = get_user_meta( $user_id, '_gcrev_gbp_reviews_summary', true );
+            if ( ! is_array( $option_value ) ) {
+                $option_value = get_transient( 'gcrev_gbp_reviews_summary_' . $user_id );
+            }
             if ( is_array( $option_value ) ) {
-                $count          = (int) ( $option_value['count'] ?? 0 );
-                $average_rating = (float) ( $option_value['average_rating'] ?? 0 );
-            } else {
-                $cached = get_transient( 'gcrev_gbp_reviews_summary_' . $user_id );
-                if ( is_array( $cached ) ) {
-                    $count          = (int) ( $cached['count'] ?? 0 );
-                    $average_rating = (float) ( $cached['average_rating'] ?? 0 );
+                $fb_count  = (int) ( $option_value['count'] ?? 0 );
+                $fb_rating = (float) ( $option_value['average_rating'] ?? 0 );
+                if ( $count <= 0 && $fb_count > 0 ) {
+                    $count = $fb_count;
+                }
+                if ( $average_rating <= 0 && $fb_rating > 0 ) {
+                    $average_rating = $fb_rating;
                 }
             }
         }
