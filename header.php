@@ -191,8 +191,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                <?php
                // 本部アカウント: サイドバー上部に「店舗一覧へ戻る」+「別の店舗を選択」セレクタを表示
+               // 二重判定: ① ヘルパ呼び出し ② 直接 user_meta フォールバック（キャッシュ/読込順対策）
                $_hq_uid = get_current_user_id();
-               $_is_hq  = function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $_hq_uid );
+               $_is_hq  = false;
+               if ( $_hq_uid > 0 ) {
+                   if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $_hq_uid ) ) {
+                       $_is_hq = true;
+                   } else {
+                       $_sb_tier = (string) get_user_meta( $_hq_uid, 'gcrev_service_tier', true );
+                       $_sb_meta = get_user_meta( $_hq_uid, '_mimamori_hq_managed_user_ids', true );
+                       if ( $_sb_tier === 'headquarters' || ( is_array( $_sb_meta ) && ! empty( $_sb_meta ) ) ) {
+                           $_is_hq = true;
+                       }
+                   }
+               }
                if ( $_is_hq ) :
                    $_hq_managed   = mimamori_get_hq_managed_user_ids( $_hq_uid );
                    $_hq_current   = mimamori_get_hq_view_target_for_current_user();
@@ -611,13 +623,26 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
    <main class="main-content">
    <?php
    // ========== 本部ビュー用コンテキストバー ==========
-   // 本部ログイン中は、店舗一覧ページ以外のすべてのページ最上部に
-   // 「本部ビュー中: ○○店舗」バーを表示して、どの店舗のデータを見ているか
-   // を絶対に見失わないようにする。
+   // 本部ログイン中は全ページ最上部に「本部ビュー中: ○○店舗」バーを表示。
+   // 店舗一覧 /hq/ ではバーの内容を「店舗を選択中」表示に切り替える。
+   // 二重判定: ① mimamori_is_hq_user() ② 直接 user_meta を見るフォールバック
    $_hq_bar_uid = get_current_user_id();
-   $_hq_bar_is_hq = function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $_hq_bar_uid );
-   if ( $_hq_bar_is_hq && ! is_page( 'hq' ) ) :
-       $_hq_bar_view_uid  = function_exists( 'mimamori_get_view_user_id' ) ? mimamori_get_view_user_id() : $_hq_bar_uid;
+   $_hq_bar_is_hq = false;
+   if ( $_hq_bar_uid > 0 ) {
+       if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $_hq_bar_uid ) ) {
+           $_hq_bar_is_hq = true;
+       } else {
+           // フォールバック: ヘルパが読み込まれていない/古い場合に備えて直接 user_meta を確認
+           $_hq_bar_tier = (string) get_user_meta( $_hq_bar_uid, 'gcrev_service_tier', true );
+           $_hq_bar_meta = get_user_meta( $_hq_bar_uid, '_mimamori_hq_managed_user_ids', true );
+           if ( $_hq_bar_tier === 'headquarters' || ( is_array( $_hq_bar_meta ) && ! empty( $_hq_bar_meta ) ) ) {
+               $_hq_bar_is_hq = true;
+           }
+       }
+   }
+   if ( $_hq_bar_is_hq ) :
+       $_hq_bar_on_list  = is_page( 'hq' );
+       $_hq_bar_view_uid = function_exists( 'mimamori_get_view_user_id' ) ? mimamori_get_view_user_id() : $_hq_bar_uid;
        $_hq_bar_store_name = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $_hq_bar_view_uid ) : '';
        if ( $_hq_bar_store_name === '' ) {
            $_hq_bar_u = get_userdata( $_hq_bar_view_uid );
@@ -634,11 +659,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </svg>
             本部ビュー中
          </span>
+         <?php if ( $_hq_bar_on_list ) : ?>
+         <span style="color:#6b7280;font-size:12px;">下の店舗カードから閲覧する店舗を選択してください（管理対象 <?php echo (int) count( $_hq_bar_managed ); ?> 店舗）</span>
+         <?php else : ?>
          <span style="color:#6b7280;font-size:12px;">現在表示中の店舗:</span>
          <strong style="color:#1a1a1a;font-size:14px;font-weight:700;word-break:break-word;"><?php echo esc_html( $_hq_bar_store_name ?: '—' ); ?></strong>
+         <?php endif; ?>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-         <?php if ( count( $_hq_bar_managed ) > 1 ) : ?>
+         <?php if ( ! $_hq_bar_on_list && count( $_hq_bar_managed ) > 1 ) : ?>
          <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" style="margin:0;display:flex;align-items:center;gap:6px;">
             <?php wp_nonce_field( 'mimamori_hq_view_set' ); ?>
             <input type="hidden" name="action" value="mimamori_hq_view_set">
@@ -658,6 +687,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </select>
          </form>
          <?php endif; ?>
+         <?php if ( ! $_hq_bar_on_list ) : ?>
          <a href="<?php echo esc_url( home_url('/hq/') ); ?>"
             style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid #d97706;border-radius:6px;background:#fff;color:#92400e;text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -665,6 +695,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </svg>
             店舗一覧へ戻る
          </a>
+         <?php endif; ?>
       </div>
    </div>
    <?php endif; ?>
