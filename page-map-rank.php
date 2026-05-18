@@ -1274,15 +1274,29 @@ get_header();
             radios.forEach(function(r) {
                 var mode = r.value;
                 var label = r.closest('.meo-base-mode');
+                if (!label) return;
+                // 既存の disable 状態をリセット（モーダル再オープン対策）
+                r.disabled = false;
+                label.classList.remove('meo-base-mode--disabled');
+                label.removeAttribute('title');
+                var existingHint = label.querySelector('.meo-base-mode__unavailable');
+                if (existingHint) existingHint.remove();
+
+                var unavailableMsg = '';
                 if (mode === 'business' && (!basePresets.business || !basePresets.business.available)) {
-                    r.disabled = true;
-                    label && label.classList.add('meo-base-mode--disabled');
-                    label && (label.title = '自社住所がまだ登録されていません。');
+                    unavailableMsg = '自社住所がまだ登録されていません。Googleビジネスプロフィールを連携してください。';
+                } else if (mode === 'city' && (!basePresets.city || !basePresets.city.available)) {
+                    unavailableMsg = '対象エリア（市区町村）が未登録のため選択できません。<a href="/client-settings/" style="color:#568184;text-decoration:underline;font-weight:600;">クライアント設定 → 「主な商圏・対応エリア」</a> で市区町村を登録してください。';
                 }
-                if (mode === 'city' && (!basePresets.city || !basePresets.city.available)) {
+                if (unavailableMsg) {
                     r.disabled = true;
-                    label && label.classList.add('meo-base-mode--disabled');
-                    label && (label.title = '対象エリア（市区町村）がまだ登録されていません。');
+                    label.classList.add('meo-base-mode--disabled');
+                    var body = label.querySelector('.meo-base-mode__body');
+                    var hint = document.createElement('span');
+                    hint.className = 'meo-base-mode__unavailable';
+                    hint.style.cssText = 'display:block;margin-top:6px;padding:6px 10px;background:#fef3c7;border-left:3px solid #d97706;color:#92400e;font-size:12px;line-height:1.6;border-radius:4px;';
+                    hint.innerHTML = '⚠️ ' + unavailableMsg;
+                    if (body) body.appendChild(hint);
                 }
             });
             // 初期選択: ① 保存済み base_mode ② 既存値からの推測 ③ custom
