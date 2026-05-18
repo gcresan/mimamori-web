@@ -60,7 +60,7 @@ class Gcrev_Meo_Report_Service {
         $metrics      = self::fetch_metrics( $user_id, $period['start'], $period['end'] );
         $metrics_prev = self::fetch_metrics( $user_id, $previous['start'], $previous['end'] );
 
-        $reviews      = self::fetch_reviews_summary( $user_id );
+        $reviews      = self::fetch_reviews_summary( $user_id, $period['end'], $previous['end'] );
         $ranks        = self::fetch_ranks( $user_id, $period['start'], $period['end'] );
         $keywords     = self::fetch_keywords( $user_id, $period['start'], $period['end'], 20 );
         $keywords_prev = self::fetch_keywords( $user_id, $previous['start'], $previous['end'], 200 );
@@ -113,17 +113,39 @@ class Gcrev_Meo_Report_Service {
     }
 
     /**
-     * クチコミサマリ: 件数 + 平均評価
-     * gcrev_meo_results の最新行から rating / reviews_count を取得する。
+     * クチコミサマリ: 件数 + 平均評価 + 当月/前月の新規クチコミ数
+     *
+     * gcrev_meo_results に日次で `reviews_count` のスナップショットが残るので、
+     *   - 当月末時点の累計
+     *   - 前月末時点の累計
+     *   - 前々月末時点の累計
+     * を取り出し、差分から「その月に増えたクチコミ件数」を算出する。
+     *
+     * 各 *_has_baseline フラグは「比較元のスナップショットがあるかどうか」を表す。
+     * false の場合、delta_* は 0 のままなので UI 側で「データなし(—)」と表示する。
+     *
+     * @param int    $user_id
+     * @param string $period_end    YYYY-MM-DD (当月末)
+     * @param string $previous_end  YYYY-MM-DD (前月末)
      */
-    private static function fetch_reviews_summary( int $user_id ): array {
-        $default = [ 'count' => 0, 'average_rating' => 0.0 ];
+    private static function fetch_reviews_summary( int $user_id, string $period_end = '', string $previous_end = '' ): array {
+        $default = [
+            'count'                   => 0,
+            'average_rating'          => 0.0,
+            'count_curr_end'          => 0,
+            'count_prev_end'          => 0,
+            'count_prev2_end'         => 0,
+            'delta_curr'              => 0,
+            'delta_prev'              => 0,
+            'delta_curr_has_baseline' => false,
+            'delta_prev_has_baseline' => false,
+        ];
 
         global $wpdb;
         $meo_table = $wpdb->prefix . 'gcrev_meo_results';
 
-        // 最新の rating / reviews_count を含む行
-        $row = $wpdb->get_row( $wpdb->prepare(
+        // 全体の最新サマリ (累計件数 + 平均評価)
+        $latest = $wpdb->get_row( $wpdb->prepare(
             "SELECT rating, reviews_count
                FROM {$meo_table}
               WHERE user_id = %d
@@ -134,29 +156,75 @@ class Gcrev_Meo_Report_Service {
             $user_id
         ), ARRAY_A );
 
-        if ( is_array( $row ) ) {
-            return [
-                'count'          => (int) ( $row['reviews_count'] ?? 0 ),
-                'average_rating' => (float) ( $row['rating'] ?? 0 ),
-            ];
+        $count          = 0;
+        $average_rating = 0.0;
+        if ( is_array( $latest ) ) {
+            $count          = (int) ( $latest['reviews_count'] ?? 0 );
+            $average_rating = (float) ( $latest['rating'] ?? 0 );
+        } else {
+            // フォールバック: user_meta / transient
+            $option_value = get_user_meta( $user_id, '_gcrev_gbp_reviews_summary', true );
+            if ( is_array( $option_value ) ) {
+                $count          = (int) ( $option_value['count'] ?? 0 );
+                $average_rating = (float) ( $option_value['average_rating'] ?? 0 );
+            } else {
+                $cached = get_transient( 'gcrev_gbp_reviews_summary_' . $user_id );
+                if ( is_array( $cached ) ) {
+                    $count          = (int) ( $cached['count'] ?? 0 );
+                    $average_rating = (float) ( $cached['average_rating'] ?? 0 );
+                }
+            }
         }
 
-        // フォールバック: user_meta / transient
-        $option_value = get_user_meta( $user_id, '_gcrev_gbp_reviews_summary', true );
-        if ( is_array( $option_value ) ) {
-            return [
-                'count'          => (int) ( $option_value['count'] ?? 0 ),
-                'average_rating' => (float) ( $option_value['average_rating'] ?? 0 ),
-            ];
+        // 月別 delta 計算用: 前々月末日も算出
+        $prev2_end = '';
+        if ( $previous_end !== '' ) {
+            try {
+                $prev_dt    = new \DateTimeImmutable( $previous_end, wp_timezone() );
+                $prev2_end  = $prev_dt->modify( 'last day of previous month' )->format( 'Y-m-d' );
+            } catch ( \Throwable $e ) {
+                $prev2_end = '';
+            }
         }
-        $cached = get_transient( 'gcrev_gbp_reviews_summary_' . $user_id );
-        if ( is_array( $cached ) ) {
-            return [
-                'count'          => (int) ( $cached['count'] ?? 0 ),
-                'average_rating' => (float) ( $cached['average_rating'] ?? 0 ),
-            ];
-        }
-        return $default;
+
+        // 指定日 (含む) までで最新の reviews_count スナップショットを返すクロージャ
+        $snapshot_at_or_before = static function ( string $on_or_before ) use ( $wpdb, $meo_table, $user_id ): ?int {
+            if ( $on_or_before === '' ) return null;
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT reviews_count
+                   FROM {$meo_table}
+                  WHERE user_id = %d
+                    AND reviews_count IS NOT NULL
+                    AND fetch_date <= %s
+                  ORDER BY fetch_date DESC, id DESC
+                  LIMIT 1",
+                $user_id, $on_or_before
+            ), ARRAY_A );
+            if ( ! is_array( $row ) ) return null;
+            return (int) $row['reviews_count'];
+        };
+
+        $count_curr_end  = $period_end   !== '' ? $snapshot_at_or_before( $period_end )   : null;
+        $count_prev_end  = $previous_end !== '' ? $snapshot_at_or_before( $previous_end ) : null;
+        $count_prev2_end = $prev2_end    !== '' ? $snapshot_at_or_before( $prev2_end )    : null;
+
+        $delta_curr_has_baseline = ( $count_curr_end !== null && $count_prev_end  !== null );
+        $delta_prev_has_baseline = ( $count_prev_end !== null && $count_prev2_end !== null );
+
+        $delta_curr = $delta_curr_has_baseline ? max( 0, $count_curr_end - $count_prev_end )  : 0;
+        $delta_prev = $delta_prev_has_baseline ? max( 0, $count_prev_end - $count_prev2_end ) : 0;
+
+        return [
+            'count'                   => $count,
+            'average_rating'          => $average_rating,
+            'count_curr_end'          => (int) ( $count_curr_end ?? 0 ),
+            'count_prev_end'          => (int) ( $count_prev_end ?? 0 ),
+            'count_prev2_end'         => (int) ( $count_prev2_end ?? 0 ),
+            'delta_curr'              => $delta_curr,
+            'delta_prev'              => $delta_prev,
+            'delta_curr_has_baseline' => $delta_curr_has_baseline,
+            'delta_prev_has_baseline' => $delta_prev_has_baseline,
+        ];
     }
 
     /**

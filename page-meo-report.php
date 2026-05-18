@@ -199,20 +199,50 @@ $render_pct = static function ( int $cur, int $prev ): string {
     </div>
 
     <!-- クチコミ -->
+    <?php
+    $rv             = $report['reviews'];
+    $rv_delta_curr  = (int) ( $rv['delta_curr'] ?? 0 );
+    $rv_delta_prev  = (int) ( $rv['delta_prev'] ?? 0 );
+    $rv_curr_has    = ! empty( $rv['delta_curr_has_baseline'] );
+    $rv_prev_has    = ! empty( $rv['delta_prev_has_baseline'] );
+    ?>
     <div class="mr-section">
         <h2>⭐ クチコミ</h2>
         <div class="mr-kpi-grid">
             <div class="mr-kpi">
                 <div class="mr-kpi-label">総クチコミ数</div>
-                <div class="mr-kpi-value"><?php echo esc_html( number_format( (int) $report['reviews']['count'] ) ); ?></div>
+                <div class="mr-kpi-value"><?php echo esc_html( number_format( (int) $rv['count'] ) ); ?></div>
                 <div class="mr-kpi-prev">累計</div>
             </div>
             <div class="mr-kpi">
                 <div class="mr-kpi-label">平均評価</div>
-                <div class="mr-kpi-value"><?php echo esc_html( number_format( (float) $report['reviews']['average_rating'], 2 ) ); ?> <span style="font-size:18px;color:#fbbf24">★</span></div>
+                <div class="mr-kpi-value"><?php echo esc_html( number_format( (float) $rv['average_rating'], 2 ) ); ?> <span style="font-size:18px;color:#fbbf24">★</span></div>
                 <div class="mr-kpi-prev">5点満点</div>
             </div>
+            <div class="mr-kpi">
+                <div class="mr-kpi-label">今月の新規クチコミ</div>
+                <?php if ( $rv_curr_has ) : ?>
+                    <div class="mr-kpi-value">+<?php echo esc_html( number_format( $rv_delta_curr ) ); ?></div>
+                    <div class="mr-kpi-prev">前月: +<?php echo esc_html( number_format( $rv_delta_prev ) ); ?> <?php echo $render_pct( $rv_delta_curr, $rv_delta_prev ); ?></div>
+                <?php else : ?>
+                    <div class="mr-kpi-value" style="color:#94a3b8;">—</div>
+                    <div class="mr-kpi-prev">比較データが揃うまでお待ちください</div>
+                <?php endif; ?>
+            </div>
+            <div class="mr-kpi">
+                <div class="mr-kpi-label">前月の新規クチコミ</div>
+                <?php if ( $rv_prev_has ) : ?>
+                    <div class="mr-kpi-value">+<?php echo esc_html( number_format( $rv_delta_prev ) ); ?></div>
+                    <div class="mr-kpi-prev"><?php echo esc_html( $report['previous']['label'] ); ?> に新たに投稿された件数</div>
+                <?php else : ?>
+                    <div class="mr-kpi-value" style="color:#94a3b8;">—</div>
+                    <div class="mr-kpi-prev">比較データなし</div>
+                <?php endif; ?>
+            </div>
         </div>
+        <p style="font-size:11px;color:#94a3b8;margin:10px 0 0;">
+            新規クチコミ数は累計件数の月末スナップショットの差分から算出しています。順位取得を開始してから2ヶ月以上経過すると比較値が表示されます。
+        </p>
     </div>
 
     <!-- 順位 -->
@@ -410,6 +440,8 @@ $mr_period_slug = sprintf( '%04d-%02d', (int) $year, (int) $month );
         pushRow(['項目', '値']);
         pushRow(['総クチコミ数', rv.count == null ? '' : rv.count]);
         pushRow(['平均評価',     rv.average_rating == null ? '' : Number(rv.average_rating).toFixed(2)]);
+        pushRow(['今月の新規クチコミ', rv.delta_curr_has_baseline ? rv.delta_curr : '—']);
+        pushRow(['前月の新規クチコミ', rv.delta_prev_has_baseline ? rv.delta_prev : '—']);
 
         // 5) 順位
         if (d.ranks && d.ranks.length) {
