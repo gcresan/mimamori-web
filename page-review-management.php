@@ -491,18 +491,8 @@ get_header();
             var draftText = draft ? draft.draft_text : (hasReply ? r.reviewReply.comment : '');
             html += '<div class="rm-reply-area">'
                 + '<div class="rm-reply-actions">'
-                + '<button class="rm-btn rm-btn-ai" data-action="ai-generate" data-review=\'' + escHtml(JSON.stringify({
-                    name: reviewName,
-                    reviewer: r.reviewer ? r.reviewer.displayName : '投稿者',
-                    rating: rating,
-                    comment: r.comment || ''
-                })) + '\'>✨ AIで返信文生成</button>'
-                + '<button class="rm-btn rm-btn-regen" data-action="ai-regen" data-review=\'' + escHtml(JSON.stringify({
-                    name: reviewName,
-                    reviewer: r.reviewer ? r.reviewer.displayName : '投稿者',
-                    rating: rating,
-                    comment: r.comment || ''
-                })) + '\' style="display:' + (draftText ? 'inline-flex' : 'none') + '">🔄 再生成</button>'
+                + '<button class="rm-btn rm-btn-ai" data-action="ai-generate" data-review-name="' + escHtml(reviewName) + '">✨ AIで返信文生成</button>'
+                + '<button class="rm-btn rm-btn-regen" data-action="ai-regen" data-review-name="' + escHtml(reviewName) + '" style="display:' + (draftText ? 'inline-flex' : 'none') + '">🔄 再生成</button>'
                 + '</div>'
                 + '<div class="rm-textarea-wrap">'
                 + '<textarea class="rm-textarea" data-review-name="' + escHtml(reviewName) + '" placeholder="返信文を入力またはAIで生成してください...">' + escHtml(draftText || '') + '</textarea>'
@@ -527,8 +517,21 @@ get_header();
         var action = btn.dataset.action;
 
         if (action === 'ai-generate' || action === 'ai-regen') {
-            var reviewData = JSON.parse(btn.dataset.review);
-            generateAiReply(btn, reviewData);
+            var targetName = btn.dataset.reviewName;
+            var review = null;
+            for (var i = 0; i < allReviews.length; i++) {
+                if (allReviews[i].name === targetName) { review = allReviews[i]; break; }
+            }
+            if (!review) {
+                showToast('対象の口コミが見つかりませんでした。ページを再読み込みしてください。', 'error');
+                return;
+            }
+            generateAiReply(btn, {
+                name: review.name || '',
+                reviewer: review.reviewer ? review.reviewer.displayName : '投稿者',
+                rating: review._rating_num || 0,
+                comment: review.comment || ''
+            });
         } else if (action === 'post-reply') {
             var reviewName = btn.dataset.reviewName;
             postReply(btn, reviewName);

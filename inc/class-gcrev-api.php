@@ -21098,23 +21098,53 @@ PROMPT;
                 . "- 定型的な締め文句を避け、口コミの内容に合わせた返信にすること\n"
                 . "- 返信文のみを出力してください（JSONや説明文は不要）";
 
-        try {
-            $reply_text = $this->ai->call_gemini_api( $prompt, [
-                'temperature'     => 0.8,
-                'maxOutputTokens' => 1024,
-            ] );
-            $reply_text = trim( $reply_text );
-            // 余分な引用符やマークダウンを除去
-            $reply_text = preg_replace( '/^["\'`]+|["\'`]+$/', '', $reply_text );
-            $reply_text = preg_replace( '/^```[a-z]*\n?|\n?```$/', '', $reply_text );
-            $reply_text = trim( $reply_text );
-        } catch ( \Throwable $e ) {
-            file_put_contents( '/tmp/gcrev_gbp_debug.log',
-                date( 'Y-m-d H:i:s' ) . " AI reply generate error: " . $e->getMessage() . "\n",
-                FILE_APPEND );
+        // 低評価レビューはネガティブ表現を含むため、安全フィルタを最大限緩和して
+        // SAFETY ブロックによる空応答を防ぐ（業務利用としての正当なユースケース）
+        $safety_settings = [
+            [ 'category' => 'HARM_CATEGORY_HARASSMENT',        'threshold' => 'BLOCK_ONLY_HIGH' ],
+            [ 'category' => 'HARM_CATEGORY_HATE_SPEECH',       'threshold' => 'BLOCK_ONLY_HIGH' ],
+            [ 'category' => 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'threshold' => 'BLOCK_ONLY_HIGH' ],
+            [ 'category' => 'HARM_CATEGORY_DANGEROUS_CONTENT', 'threshold' => 'BLOCK_ONLY_HIGH' ],
+        ];
+
+        $reply_text = '';
+        $last_error = '';
+        // SAFETY 等で空応答が返るケースに備え、最大2回まで再試行
+        for ( $attempt = 1; $attempt <= 2; $attempt++ ) {
+            try {
+                $reply_text = $this->ai->call_gemini_api( $prompt, [
+                    'temperature'     => $attempt === 1 ? 0.8 : 0.6,
+                    'maxOutputTokens' => 1024,
+                    'safetySettings'  => $safety_settings,
+                ] );
+                $reply_text = trim( $reply_text );
+                // 余分な引用符やマークダウンを除去
+                $reply_text = preg_replace( '/^["\'`]+|["\'`]+$/', '', $reply_text );
+                $reply_text = preg_replace( '/^```[a-z]*\n?|\n?```$/', '', $reply_text );
+                $reply_text = trim( $reply_text );
+                if ( $reply_text !== '' ) {
+                    break;
+                }
+                $last_error = '応答が空でした';
+            } catch ( \Throwable $e ) {
+                $last_error = $e->getMessage();
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " AI reply generate error (attempt {$attempt}): " . $e->getMessage() . "\n",
+                    FILE_APPEND );
+            }
+        }
+
+        if ( $reply_text === '' ) {
+            // 安全フィルタや一時的な障害でブロックされた場合のユーザー向けメッセージ
+            $user_message = 'AI返信文の生成に失敗しました。少し時間をおいて再度お試しください。';
+            if ( stripos( $last_error, 'SAFETY' ) !== false || stripos( $last_error, '空' ) !== false ) {
+                $user_message = 'AIが返信文を生成できませんでした。口コミ本文に表現上の制約がある可能性があります。手動で入力するか、再生成をお試しください。';
+            } elseif ( stripos( $last_error, '通信' ) !== false || stripos( $last_error, 'HTTP' ) !== false ) {
+                $user_message = 'AI生成サーバーとの通信に失敗しました。しばらくしてから再度お試しください。';
+            }
             return new \WP_REST_Response( [
                 'success' => false,
-                'message' => 'AI返信文の生成に失敗しました: ' . $e->getMessage(),
+                'message' => $user_message,
             ], 500 );
         }
 

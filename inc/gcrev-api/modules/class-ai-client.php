@@ -140,6 +140,9 @@ class Gcrev_AI_Client {
             ]],
             'generationConfig' => $this->build_generation_config( $options ),
         ];
+        if ( isset( $options['safetySettings'] ) && is_array( $options['safetySettings'] ) ) {
+            $body['safetySettings'] = $options['safetySettings'];
+        }
 
         $response = wp_remote_post($url, [
             'headers' => [
