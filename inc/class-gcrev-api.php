@@ -20953,9 +20953,13 @@ PROMPT;
 
     /**
      * GBP Reviews API でレビュー一覧を取得
+     *
+     * page_token が空 (1ページ目) の場合は全ページを一括取得して結合する。
+     * Google API は pageSize 上限が 50 のため、500件超の店舗だと従来は最初の 50 件しか
+     * 返らず「総口コミ数 50」のように見えていたのを修正。
      */
     public function gbp_fetch_reviews( int $user_id, string $page_token = '' ): array {
-        // キャッシュ（ページトークンなしの1ページ目のみ）
+        // キャッシュ（ページトークンなしの全件取得結果のみ）
         if ( empty( $page_token ) ) {
             $cached = get_transient( "gcrev_reviews_{$user_id}" );
             if ( $cached !== false && is_array( $cached ) ) {
@@ -20974,73 +20978,132 @@ PROMPT;
             return [ 'success' => false, 'message' => 'GBPロケーション情報が見つかりません。MEOダッシュボードでロケーションを設定してください。' ];
         }
 
-        $params = [ 'pageSize' => 50 ];
-        if ( ! empty( $page_token ) ) {
-            $params['pageToken'] = $page_token;
-        }
+        $base_url = "https://mybusiness.googleapis.com/v4/{$account_name}/{$location_id}/reviews";
 
-        // Google My Business API v4 で口コミ一覧を取得
-        // ※ Google Cloud Console で「Google My Business API」の有効化が必要
-        $url = "https://mybusiness.googleapis.com/v4/{$account_name}/{$location_id}/reviews"
-             . '?' . http_build_query( $params, '', '&' );
+        $all_reviews        = [];
+        $total_review_count = 0;
+        $average_rating     = 0.0;
+        $current_token      = $page_token;
+        $page_count         = 0;
+        $max_pages          = 50; // セーフティ: 50 * 50 = 2500件 (現実的な上限)
+        $started_at         = microtime( true );
+        $time_budget        = 25.0; // 秒: PHPタイムアウト前に切り上げる
 
-        file_put_contents( '/tmp/gcrev_gbp_debug.log',
-            date( 'Y-m-d H:i:s' ) . " reviews API request: {$account_name}/{$location_id}/reviews\n",
-            FILE_APPEND );
-
-        $response = wp_remote_get( $url, [
-            'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
-            'timeout' => 30,
-        ] );
-
-        if ( is_wp_error( $response ) ) {
-            file_put_contents( '/tmp/gcrev_gbp_debug.log',
-                date( 'Y-m-d H:i:s' ) . " reviews API error: " . $response->get_error_message() . "\n",
-                FILE_APPEND );
-            return [ 'success' => false, 'message' => 'Google API接続エラー: ' . $response->get_error_message() ];
-        }
-
-        $status = wp_remote_retrieve_response_code( $response );
-        if ( $status !== 200 ) {
-            $body = wp_remote_retrieve_body( $response );
-            file_put_contents( '/tmp/gcrev_gbp_debug.log',
-                date( 'Y-m-d H:i:s' ) . " reviews API HTTP {$status}: " . substr( $body, 0, 1000 ) . "\n",
-                FILE_APPEND );
-
-            // 403: API未有効化の可能性が高い
-            if ( $status === 403 ) {
-                $error_data = json_decode( $body, true );
-                $error_msg  = $error_data['error']['message'] ?? '';
-
-                // API が有効化されていない場合の案内
-                if ( strpos( $body, 'has not been used' ) !== false
-                  || strpos( $body, 'is not enabled' ) !== false
-                  || strpos( $body, 'PERMISSION_DENIED' ) !== false
-                  || strpos( $body, 'forbidden' ) !== false ) {
-                    return [
-                        'success' => false,
-                        'message' => "口コミ機能を利用するには、Google Cloud Console で「Google My Business API」を有効化してください。\n"
-                            . "手順: Google Cloud Console → APIとサービス → ライブラリ → 「My Business」で検索 → 「Google My Business API」を有効化",
-                    ];
-                }
-                return [ 'success' => false, 'message' => "口コミの取得に失敗しました（HTTP 403）。\nアクセス権限を確認してください。\n詳細: " . substr( $error_msg, 0, 200 ) ];
+        do {
+            $params = [ 'pageSize' => 50 ];
+            if ( ! empty( $current_token ) ) {
+                $params['pageToken'] = $current_token;
             }
-            return [ 'success' => false, 'message' => "口コミの取得に失敗しました（HTTP {$status}）。" ];
-        }
 
-        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+            $url = $base_url . '?' . http_build_query( $params, '', '&' );
+
+            $response = wp_remote_get( $url, [
+                'headers' => [ 'Authorization' => 'Bearer ' . $access_token ],
+                'timeout' => 15,
+            ] );
+
+            if ( is_wp_error( $response ) ) {
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " reviews API error (page {$page_count}): " . $response->get_error_message() . "\n",
+                    FILE_APPEND );
+                // 途中ページで失敗した場合は、それまでに取得できた分で返す
+                if ( $page_count === 0 ) {
+                    return [ 'success' => false, 'message' => 'Google API接続エラー: ' . $response->get_error_message() ];
+                }
+                break;
+            }
+
+            $status = wp_remote_retrieve_response_code( $response );
+            if ( $status !== 200 ) {
+                $body = wp_remote_retrieve_body( $response );
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " reviews API HTTP {$status} (page {$page_count}): " . substr( $body, 0, 500 ) . "\n",
+                    FILE_APPEND );
+                if ( $page_count === 0 ) {
+                    if ( $status === 403 ) {
+                        $error_data = json_decode( $body, true );
+                        $error_msg  = $error_data['error']['message'] ?? '';
+                        if ( strpos( $body, 'has not been used' ) !== false
+                          || strpos( $body, 'is not enabled' ) !== false
+                          || strpos( $body, 'PERMISSION_DENIED' ) !== false
+                          || strpos( $body, 'forbidden' ) !== false ) {
+                            return [
+                                'success' => false,
+                                'message' => "口コミ機能を利用するには、Google Cloud Console で「Google My Business API」を有効化してください。\n"
+                                    . "手順: Google Cloud Console → APIとサービス → ライブラリ → 「My Business」で検索 → 「Google My Business API」を有効化",
+                            ];
+                        }
+                        return [ 'success' => false, 'message' => "口コミの取得に失敗しました（HTTP 403）。\nアクセス権限を確認してください。\n詳細: " . substr( $error_msg, 0, 200 ) ];
+                    }
+                    return [ 'success' => false, 'message' => "口コミの取得に失敗しました（HTTP {$status}）。" ];
+                }
+                break;
+            }
+
+            $data = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( ! is_array( $data ) ) {
+                break;
+            }
+
+            // 1ページ目で totalReviewCount / averageRating を確定
+            if ( $page_count === 0 ) {
+                $total_review_count = (int) ( $data['totalReviewCount'] ?? 0 );
+                $average_rating     = (float) ( $data['averageRating'] ?? 0 );
+            }
+
+            $page_reviews = is_array( $data['reviews'] ?? null ) ? $data['reviews'] : [];
+            if ( ! empty( $page_reviews ) ) {
+                $all_reviews = array_merge( $all_reviews, $page_reviews );
+            }
+
+            $current_token = $data['nextPageToken'] ?? null;
+            $page_count++;
+
+            // 明示的に page_token 指定された呼び出しは「load more」スタイル: 1ページのみ返す
+            if ( ! empty( $page_token ) ) {
+                break;
+            }
+
+            // 全ページ取得: タイムバジェット / セーフティリミットでブレイク
+            if ( $page_count >= $max_pages ) {
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " reviews fetch: max_pages reached ({$max_pages})\n",
+                    FILE_APPEND );
+                break;
+            }
+            if ( ( microtime( true ) - $started_at ) > $time_budget ) {
+                file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " reviews fetch: time budget exceeded after {$page_count} pages\n",
+                    FILE_APPEND );
+                break;
+            }
+        } while ( ! empty( $current_token ) );
 
         $result = [
             'success'          => true,
-            'reviews'          => $data['reviews'] ?? [],
-            'totalReviewCount' => (int) ( $data['totalReviewCount'] ?? 0 ),
-            'averageRating'    => (float) ( $data['averageRating'] ?? 0 ),
-            'nextPageToken'    => $data['nextPageToken'] ?? null,
+            'reviews'          => $all_reviews,
+            'totalReviewCount' => $total_review_count,
+            'averageRating'    => $average_rating,
+            // 全件取得時 ($page_token が空) は nextPageToken を返さない (ロードモア不要)
+            'nextPageToken'    => ! empty( $page_token ) ? ( $current_token ?: null ) : null,
         ];
 
-        // 1ページ目のみキャッシュ (1時間)
         if ( empty( $page_token ) ) {
             set_transient( "gcrev_reviews_{$user_id}", $result, HOUR_IN_SECONDS );
+
+            // MEO レポート / ダッシュボードのフォールバック用に最新サマリを保存
+            // (gcrev_meo_results に reviews_count スナップショットが無い場合の代替経路)
+            if ( $total_review_count > 0 || ! empty( $all_reviews ) ) {
+                update_user_meta( $user_id, '_gcrev_gbp_reviews_summary', [
+                    'count'          => $total_review_count,
+                    'average_rating' => $average_rating,
+                    'updated_at'     => time(),
+                ] );
+            }
+
+            file_put_contents( '/tmp/gcrev_gbp_debug.log',
+                date( 'Y-m-d H:i:s' ) . " reviews fetched all: user={$user_id} total={$total_review_count} pages={$page_count} elapsed=" . round( microtime( true ) - $started_at, 2 ) . "s\n",
+                FILE_APPEND );
         }
 
         return $result;
@@ -21094,7 +21157,10 @@ PROMPT;
 
     // --- REST コールバック: 口コミ一覧取得 ---
     public function rest_get_reviews( \WP_REST_Request $request ): \WP_REST_Response {
-        $user_id    = get_current_user_id();
+        // 本部ユーザー / 管理者の View As 中は閲覧対象ユーザーのレビューを取得
+        $user_id    = function_exists( 'mimamori_get_view_user_id' )
+            ? mimamori_get_view_user_id()
+            : get_current_user_id();
         $filter     = sanitize_text_field( $request->get_param( 'filter' ) ?: 'all' );
         $sort       = sanitize_text_field( $request->get_param( 'sort' ) ?: 'newest' );
         $page_token = sanitize_text_field( $request->get_param( 'page_token' ) ?: '' );
@@ -21124,7 +21190,12 @@ PROMPT;
         }
 
         // サマリー集計
-        $summary = [ 'total' => count( $reviews ), 'unreplied' => 0, 'replied' => 0, 'low_rating' => 0 ];
+        // total は Google が返す totalReviewCount を採用 (取得済みレビュー件数ではなく、店舗全体の累計件数)
+        $total_count = (int) ( $result['totalReviewCount'] ?? 0 );
+        if ( $total_count <= 0 ) {
+            $total_count = count( $reviews );
+        }
+        $summary = [ 'total' => $total_count, 'unreplied' => 0, 'replied' => 0, 'low_rating' => 0 ];
         foreach ( $reviews as &$review ) {
             $has_reply = ! empty( $review['reviewReply'] );
             $rating    = (int) $this->gbp_star_to_number( $review['starRating'] ?? '' );
