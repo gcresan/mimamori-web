@@ -609,6 +609,65 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
    </aside>
    <!-- メインコンテンツ -->
    <main class="main-content">
+   <?php
+   // ========== 本部ビュー用コンテキストバー ==========
+   // 本部ログイン中は、店舗一覧ページ以外のすべてのページ最上部に
+   // 「本部ビュー中: ○○店舗」バーを表示して、どの店舗のデータを見ているか
+   // を絶対に見失わないようにする。
+   $_hq_bar_uid = get_current_user_id();
+   $_hq_bar_is_hq = function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $_hq_bar_uid );
+   if ( $_hq_bar_is_hq && ! is_page( 'hq' ) ) :
+       $_hq_bar_view_uid  = function_exists( 'mimamori_get_view_user_id' ) ? mimamori_get_view_user_id() : $_hq_bar_uid;
+       $_hq_bar_store_name = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $_hq_bar_view_uid ) : '';
+       if ( $_hq_bar_store_name === '' ) {
+           $_hq_bar_u = get_userdata( $_hq_bar_view_uid );
+           $_hq_bar_store_name = $_hq_bar_u ? $_hq_bar_u->display_name : '';
+       }
+       $_hq_bar_managed = function_exists( 'mimamori_get_hq_managed_user_ids' ) ? mimamori_get_hq_managed_user_ids( $_hq_bar_uid ) : [];
+       $_hq_bar_redirect = ( is_ssl() ? 'https://' : 'http://' ) . ( $_SERVER['HTTP_HOST'] ?? '' ) . ( $_SERVER['REQUEST_URI'] ?? '/dashboard/' );
+   ?>
+   <div class="hq-context-bar" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(90deg,#fff8ec 0%,#fef3c7 100%);border-bottom:2px solid #d97706;padding:10px 24px;font-size:13px;color:#92400e;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;">
+         <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;background:#d97706;color:#fff;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.05em;white-space:nowrap;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <path d="M3 21h18M5 21V8l7-5 7 5v13M9 9h6M9 13h6M9 17h6"></path>
+            </svg>
+            本部ビュー中
+         </span>
+         <span style="color:#6b7280;font-size:12px;">現在表示中の店舗:</span>
+         <strong style="color:#1a1a1a;font-size:14px;font-weight:700;word-break:break-word;"><?php echo esc_html( $_hq_bar_store_name ?: '—' ); ?></strong>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+         <?php if ( count( $_hq_bar_managed ) > 1 ) : ?>
+         <form method="post" action="<?php echo esc_url( admin_url('admin-post.php') ); ?>" style="margin:0;display:flex;align-items:center;gap:6px;">
+            <?php wp_nonce_field( 'mimamori_hq_view_set' ); ?>
+            <input type="hidden" name="action" value="mimamori_hq_view_set">
+            <input type="hidden" name="redirect" value="<?php echo esc_attr( $_hq_bar_redirect ); ?>">
+            <label for="hq-context-target" style="font-size:12px;color:#6b7280;white-space:nowrap;">店舗を切り替える:</label>
+            <select id="hq-context-target" name="target_user_id" onchange="this.form.submit()"
+                    style="padding:5px 8px;border:1px solid #d97706;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;color:#1a1a1a;max-width:200px;">
+               <?php foreach ( $_hq_bar_managed as $mid ) :
+                  $mbn = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $mid ) : '';
+                  if ( $mbn === '' ) {
+                     $mu = get_userdata( $mid );
+                     $mbn = $mu ? $mu->display_name : (string) $mid;
+                  }
+               ?>
+                  <option value="<?php echo (int) $mid; ?>" <?php selected( $_hq_bar_view_uid, (int) $mid ); ?>><?php echo esc_html( $mbn ); ?></option>
+               <?php endforeach; ?>
+            </select>
+         </form>
+         <?php endif; ?>
+         <a href="<?php echo esc_url( home_url('/hq/') ); ?>"
+            style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid #d97706;border-radius:6px;background:#fff;color:#92400e;text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+               <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+            店舗一覧へ戻る
+         </a>
+      </div>
+   </div>
+   <?php endif; ?>
    <!-- トップバー -->
    <div class="topbar">
       <div class="topbar-left">
