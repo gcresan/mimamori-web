@@ -76,12 +76,23 @@ $render_pct = static function ( int $cur, int $prev ): string {
 .mr-btn-primary:hover { background:#1557b0; }
 .mr-btn:hover { background:#f9fafb; }
 
-/* ダウンロードボタン */
-.mr-dl-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border:1px solid #d0d5dd; border-radius:8px; background:#fff; color:#344054; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+/* ダウンロードボタン（順位トラッキング rt-btn / 深掘りレポート ss-btn と統一） */
+.mr-dl-btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:9px 18px;
+    border:1px solid #d0d5dd; border-radius:8px;
+    background:#fff; color:#344054;
+    font-size:13px; font-weight:500;
+    font-family:inherit; line-height:1;
+    cursor:pointer; transition:all 0.15s;
+    white-space:nowrap;
+}
 .mr-dl-btn:hover { background:#f9fafb; border-color:#98a2b3; }
-.mr-dl-btn:disabled { opacity:0.55; cursor:not-allowed; }
-.mr-dl-btn-primary { background:#1a73e8; color:#fff; border-color:#1a73e8; }
-.mr-dl-btn-primary:hover { background:#1557b0; border-color:#1557b0; }
+.mr-dl-btn:disabled { opacity:0.5; cursor:not-allowed; }
+.mr-dl-btn-primary { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+.mr-dl-btn-primary:hover { background:#333; border-color:#333; }
+.mr-dl-btn-primary:disabled { background:#999; border-color:#999; }
+.mr-dl-btn svg { flex-shrink:0; }
 
 /* セクション */
 .mr-section { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:24px 28px; margin-bottom:20px; }
