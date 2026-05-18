@@ -91,6 +91,13 @@ $render_pct = static function ( int $cur, int $prev ): string {
 /* KPI グリッド */
 .mr-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
 .mr-kpi { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:16px; }
+
+/* PDF 生成中だけ適用するスタイル（html2pdf レンダリング時に body.is-printing-pdf を付与） */
+body.is-printing-pdf .mr-kpi-grid { grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; }
+body.is-printing-pdf .mr-kpi { padding:12px; page-break-inside:avoid; break-inside:avoid; }
+body.is-printing-pdf .mr-kpi-grid,
+body.is-printing-pdf .mr-section { page-break-inside:avoid; break-inside:avoid; }
+body.is-printing-pdf .mr-kpi-value { font-size:22px; }
 .mr-kpi-label { font-size:12px; color:#64748b; margin-bottom:6px; }
 .mr-kpi-value { font-size:28px; font-weight:700; color:#0f172a; line-height:1.1; }
 .mr-kpi-prev { font-size:11px; color:#94a3b8; margin-top:4px; }
@@ -543,26 +550,32 @@ $mr_period_slug = sprintf( '%04d-%02d', (int) $year, (int) $month );
         if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.innerHTML = 'PDF 生成中...'; }
         if (csvBtn) csvBtn.disabled = true;
 
+        // PDF レンダリング中だけ専用 CSS を有効化（カードが3列に折り返さないようにする）
+        document.body.classList.add('is-printing-pdf');
+
         var opt = {
             margin:      [10, 8, 12, 8],
             filename:    'MEOレポート_' + PERIOD_SLUG + '.pdf',
             image:       { type: 'jpeg', quality: 0.95 },
-            html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff' },
+            // windowWidth で 1200px のビューポートを模擬し、ユーザーの実画面幅に
+            // 関係なく常に KPI グリッドが4列レイアウトでキャプチャされるようにする
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff', windowWidth: 1200 },
             jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
             pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
         };
 
+        var cleanup = function () {
+            document.body.classList.remove('is-printing-pdf');
+            if (toolbar) toolbar.style.display = '';
+            if (pdfBtn)  { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
+            if (csvBtn)  csvBtn.disabled = false;
+        };
+
         html2pdf().set(opt).from(el).save()
-            .then(function() {
-                if (toolbar) toolbar.style.display = '';
-                if (pdfBtn)  { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
-                if (csvBtn)  csvBtn.disabled = false;
-            })
+            .then(cleanup)
             .catch(function(err) {
                 console.error('PDF generation failed', err);
-                if (toolbar) toolbar.style.display = '';
-                if (pdfBtn)  { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
-                if (csvBtn)  csvBtn.disabled = false;
+                cleanup();
                 alert('PDFの生成に失敗しました。もう一度お試しください。');
             });
     }
