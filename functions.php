@@ -922,23 +922,24 @@ add_action( 'wpmem_login_failed', function () {
     exit;
 } );
 
-// ログイン後、決済ステータス / お試し期限に応じてリダイレクト先を切替
+// ログイン後、決済ステータス / お試し期限 / プランに応じてリダイレクト先を切替
 add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
+    $uid = (int) $user_id;
     // 本部アカウント → 店舗一覧ページへ (決済/お試し状態に関わらず最優先)
-    if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( (int) $user_id ) ) {
+    if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $uid ) ) {
         return home_url('/hq/');
     }
-    // お試し中（期限内） → ダッシュボードへ
-    if ( gcrev_is_trial_active( $user_id ) ) {
-        return home_url('/dashboard/');
+    // お試し中（期限内）→ プラン別ランディングへ
+    if ( gcrev_is_trial_active( $uid ) ) {
+        return mimamori_get_default_landing_url( $uid );
     }
     // お試し期限切れ → ご利用案内ページへ（ログインは維持）
-    if ( gcrev_is_trial_expired( $user_id ) ) {
+    if ( gcrev_is_trial_expired( $uid ) ) {
         return home_url( '/payment-status/' );
     }
-    // 決済済み → ダッシュボードへ
-    if ( gcrev_is_payment_active( $user_id ) ) {
-        return home_url('/dashboard/');
+    // 決済済み → プラン別ランディングへ（MEO特化なら /meo/meo-dashboard/）
+    if ( gcrev_is_payment_active( $uid ) ) {
+        return mimamori_get_default_landing_url( $uid );
     }
     return home_url('/payment-status/');
 }, 10, 2);
@@ -8466,6 +8467,15 @@ function gcrev_get_plan_definitions(): array {
             'has_installment' => false,
             'min_months'      => 3,
         ],
+        'meo_only' => [
+            'name'            => 'みまもりウェブ MEO特化プラン',
+            'category'        => 'unyou',
+            'total'           => null,
+            'monthly'         => 10000,
+            'installments'    => 0,
+            'has_installment' => false,
+            'min_months'      => 0,
+        ],
     ];
 }
 
@@ -8513,6 +8523,11 @@ function gcrev_get_service_tier_definitions(): array {
             'name'        => '本部アカウント',
             'monthly'     => 0,
             'description' => '複数店舗を切替えて閲覧する本部用アカウント。自身のデータは持たず、admin が指定した管理対象店舗を切替閲覧。',
+        ],
+        'meo_only' => [
+            'name'        => 'MEO特化プラン',
+            'monthly'     => 10000,
+            'description' => 'MEO（口コミ・マップ順位・GBP）機能だけに特化したプラン。ログイン時はMEOダッシュボードが開き、サイドバーもMEO関連のみ表示。',
         ],
     ];
 }
@@ -8602,13 +8617,141 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         'analysis_basic'       => 'basic',
     ];
 
+    $user_tier = gcrev_get_service_tier( $user_id );
+
+    // MEO特化プラン: 通常の階層には属さず、MEO関連機能だけ許可する独自ロジック。
+    // 月次レポート閲覧 (report_summary/report_kpi 等) も許可するが、
+    // 全体ダッシュボード・ホームページ関連・SEO 関連 などは全て不可。
+    if ( $user_tier === 'meo_only' ) {
+        $meo_only_allowed = [
+            'ai_chat'         => true,
+            'ai_ask_button'   => true,
+            'meo_menu'        => true,
+            // 月次レポート/MEOレポートは閲覧可
+            'report_summary'  => true,
+            'report_kpi'      => true,
+        ];
+        return ! empty( $meo_only_allowed[ $feature ] );
+    }
+
     $required_tier  = $feature_map[ $feature ] ?? 'ai_support';
-    $user_tier      = gcrev_get_service_tier( $user_id );
     $user_level     = $tier_hierarchy[ $user_tier ] ?? 0;
     $required_level = $tier_hierarchy[ $required_tier ] ?? 0;
 
     return $user_level >= $required_level;
 }
+
+/**
+ * 「MEO特化プラン」のユーザーか判定する。
+ *
+ * @param int $user_id 0 ならログイン中ユーザー
+ * @return bool
+ */
+function mimamori_is_meo_only_user( int $user_id = 0 ): bool {
+    if ( $user_id <= 0 ) {
+        $user_id = (int) get_current_user_id();
+    }
+    if ( $user_id <= 0 ) return false;
+    // 管理者は強制的に最上位扱いのため除外
+    if ( user_can( $user_id, 'manage_options' ) ) return false;
+    // 本部アカウントは view 中の店舗の tier に従う (mimamori_can と同様)
+    if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $user_id ) ) {
+        $hq_target = (int) get_user_meta( $user_id, mimamori_hq_view_meta_key(), true );
+        if ( $hq_target > 0 ) $user_id = $hq_target;
+    }
+    return gcrev_get_service_tier( $user_id ) === 'meo_only';
+}
+
+/**
+ * ログイン後に着地すべき URL を返す。
+ *
+ * - MEO特化プラン: /meo/meo-dashboard/
+ * - それ以外: /dashboard/
+ *
+ * @param int $user_id 0 ならログイン中ユーザー
+ * @return string ホームURL付きの遷移先 URL
+ */
+function mimamori_get_default_landing_url( int $user_id = 0 ): string {
+    if ( $user_id <= 0 ) {
+        $user_id = (int) get_current_user_id();
+    }
+    if ( mimamori_is_meo_only_user( $user_id ) ) {
+        return home_url( '/meo/meo-dashboard/' );
+    }
+    return home_url( '/dashboard/' );
+}
+
+/**
+ * MEO特化プランで閲覧不可なページにアクセスしたら MEO ダッシュボードへ転送する。
+ * MEO 以外の page-*.php テンプレート先頭で呼ぶ。
+ */
+function mimamori_guard_against_meo_only(): void {
+    if ( mimamori_is_meo_only_user() ) {
+        wp_safe_redirect( home_url( '/meo/meo-dashboard/' ) );
+        exit;
+    }
+}
+
+/**
+ * MEO特化プランで閲覧を許可するページ（スラッグ）の一覧
+ *
+ * 上記以外のフロントエンドの会員専用ページにアクセスしようとした場合、
+ * template_redirect で MEO ダッシュボードへ自動転送する。
+ */
+function mimamori_meo_only_allowed_slugs(): array {
+    return [
+        // MEO 関連ページ全て
+        'meo-dashboard',
+        'map-rank',
+        'meo-diagnosis',
+        'meo-diagnosis-detail',
+        'meo-search-terms',
+        'review-survey',
+        'survey-responses',
+        'survey-analytics',
+        'survey-analysis',
+        'survey-ai-history',
+        'review-management',
+        'gbp-posts',
+        // MEO レポート
+        'meo-report',
+        // 設定系（プラン関連で必要）
+        'client-settings',
+        'keyword-settings',
+        'account-info',
+        'payment-status',
+        'plan-introduction',
+        // 認証系
+        'login',
+        'register',
+        'logout',
+        // 使い方・FAQ
+        'tutorials',
+        'faq',
+    ];
+}
+
+/**
+ * MEO特化プランのユーザーが非対応ページにアクセスしたら自動で MEOダッシュボードへ転送する。
+ * template_redirect 段階で一括判定するため、個別の page-*.php テンプレートを修正する必要はない。
+ */
+add_action( 'template_redirect', function () {
+    if ( is_admin() || wp_doing_ajax() || wp_doing_cron() ) return;
+    if ( ! is_user_logged_in() ) return;
+    if ( ! mimamori_is_meo_only_user() ) return;
+    // フロントの固定ページのみ対象
+    if ( ! is_page() ) return;
+
+    $slug = (string) get_post_field( 'post_name', get_queried_object_id() );
+    if ( $slug === '' ) return;
+
+    $allowed = mimamori_meo_only_allowed_slugs();
+    if ( in_array( $slug, $allowed, true ) ) return;
+
+    // 許可外 → MEOダッシュボードへ転送
+    wp_safe_redirect( home_url( '/meo/meo-dashboard/' ) );
+    exit;
+}, 1 );
 
 /**
  * SEO関連メニュー・ページへのアクセス可否を返す。

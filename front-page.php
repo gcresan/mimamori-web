@@ -18,7 +18,8 @@ if ( is_user_logged_in() ) {
         exit;
     }
     if ( gcrev_is_trial_active( $uid ) || gcrev_is_payment_active( $uid ) ) {
-        wp_safe_redirect( home_url( '/dashboard/' ) );
+        // MEO特化プランなら MEOダッシュボード、それ以外は通常ダッシュボード
+        wp_safe_redirect( mimamori_get_default_landing_url( $uid ) );
     } else {
         wp_safe_redirect( home_url( '/payment-status/' ) );
     }

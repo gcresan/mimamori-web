@@ -57,6 +57,11 @@ class Gcrev_Payment_Settings_Page {
             'description' => 'モニタープラン用の月額サブスクリプション決済URL（主に2年プラン側で使用）',
             'placeholder' => 'https://example.com/pay/subscribe-monitor',
         ],
+        'gcrev_url_subscribe_meo_only' => [
+            'title'       => 'F) サブスク決済URL（MEO特化プラン）',
+            'description' => 'MEO特化プラン（月額¥10,000）の決済URL。ログイン後はMEOダッシュボードのみ表示されます。',
+            'placeholder' => 'https://example.com/pay/subscribe-meo-only',
+        ],
     ];
 
     /**

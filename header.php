@@ -230,13 +230,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                <?php endif; ?>
                <?php endif; ?>
 
-               <!-- ========== 全体ダッシュボード（単独） ========== -->
+               <?php
+               // MEO特化プラン判定 — 全体ダッシュボード・ホームページ・通常のレポート項目を非表示にする
+               $_mb_is_meo_only = function_exists( 'mimamori_is_meo_only_user' ) ? mimamori_is_meo_only_user() : false;
+               ?>
+
+               <!-- ========== 全体ダッシュボード（単独・MEO特化プランは非表示） ========== -->
+               <?php if ( ! $_mb_is_meo_only ) : ?>
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/dashboard/') ); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3C6 3 2.7 5.9 1.5 10c1.2 4.1 4.5 7 8.5 7s7.3-2.9 8.5-7C17.3 5.9 14 3 10 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
                   <span>全体ダッシュボード</span>
                   </a>
                </li>
+               <?php endif; ?>
 
                <!-- ========== レポート（大カテゴリ） ========== -->
                <li class="nav-item nav-item-collapsible<?php echo $report_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'report' ? ' collapsed' : ''; ?>" data-menu-key="report">
@@ -246,6 +253,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuReport">
+                     <?php if ( ! $_mb_is_meo_only ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
                         <span>深掘りレポート</span>
@@ -256,6 +264,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>月次レポート</span>
                         </a>
                      </li>
+                     <?php endif; ?>
                      <?php if ( mimamori_can_access_meo() ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/meo-report/') ); ?>" class="nav-link <?php echo is_page('meo-report') ? 'active' : ''; ?>">
@@ -286,7 +295,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         && mimamori_page_analysis_is_enabled_for_user( $_view_uid ) );
                ?>
 
-               <!-- ========== ホームページ（大カテゴリ） ========== -->
+               <!-- ========== ホームページ（大カテゴリ・MEO特化プランは非表示） ========== -->
+               <?php if ( ! $_mb_is_meo_only ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $home_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'home' ? ' collapsed' : ''; ?>" data-menu-key="home">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleHome" aria-expanded="<?php echo $sidebar_active_group === 'home' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
@@ -402,6 +412,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                   </ul>
                </li>
+               <?php endif; // ! $_mb_is_meo_only — ホームページセクション ?>
 
                <!-- ========== MEO（大カテゴリ・MEO・検索集客強化プラン以上 or 管理者のみ表示） ========== -->
                <?php if ( mimamori_can_access_meo() ) : ?>
