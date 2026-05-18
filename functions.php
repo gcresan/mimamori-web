@@ -8728,6 +8728,8 @@ function mimamori_meo_only_allowed_slugs(): array {
         // 使い方・FAQ
         'tutorials',
         'faq',
+        // 本部ビュー（HQ の店舗一覧。MEO特化店舗を view 中でも常に表示可）
+        'hq',
     ];
 }
 
