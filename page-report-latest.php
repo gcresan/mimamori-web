@@ -1588,12 +1588,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- PDF 生成中だけ適用するスタイル -->
 <style>
+/* 装飾系（画面のレイアウト要素）を非表示 */
 body.is-printing-pdf .rpt-ym-switcher,
 body.is-printing-pdf .rpt-admin-toolbar,
 body.is-printing-pdf #rptPdfBar,
 body.is-printing-pdf .loading-overlay,
 body.is-printing-pdf .report-preloader-overlay,
 body.is-printing-pdf .sidebar,
+body.is-printing-pdf .sidebar-overlay,
+body.is-printing-pdf .topbar,
 body.is-printing-pdf .header,
 body.is-printing-pdf .breadcrumb,
 body.is-printing-pdf #wpadminbar,
@@ -1603,6 +1606,11 @@ body.is-printing-pdf .rpt-kpi-selectable { box-shadow:none !important; transform
 body.is-printing-pdf .kpi-card,
 body.is-printing-pdf .report-section,
 body.is-printing-pdf .gcrev-ai-block { page-break-inside:avoid; break-inside:avoid; }
+
+/* レイアウトオーバーライド: サイドバー分のオフセットを除去し、コンテンツを左端から全幅で配置 */
+body.is-printing-pdf .main-content { margin-left:0 !important; width:100% !important; padding-top:0 !important; }
+body.is-printing-pdf .content-area { max-width:980px !important; margin:0 auto !important; padding:16px !important; }
+body.is-printing-pdf { background:#fff !important; }
 </style>
 
 <!-- html2pdf ライブラリ -->
@@ -1628,26 +1636,41 @@ body.is-printing-pdf .gcrev-ai-block { page-break-inside:avoid; break-inside:avo
         btn.innerHTML = 'PDF 生成中...';
         document.body.classList.add('is-printing-pdf');
 
-        var opt = {
-            margin:      [10, 8, 12, 8],
-            filename:    '月次レポート_' + periodSlug + '.pdf',
-            image:       { type: 'jpeg', quality: 0.95 },
-            html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff', windowWidth: 1200 },
-            jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:   { mode: ['css', 'legacy'] }
-        };
-        var restore = function () {
-            document.body.classList.remove('is-printing-pdf');
-            btn.disabled = false;
-            btn.innerHTML = prevLabel;
-        };
-        html2pdf().set(opt).from(target).save()
-            .then(restore)
-            .catch(function (err) {
-                console.error('PDF generation failed', err);
-                restore();
-                alert('PDFの生成に失敗しました。もう一度お試しください。');
+        // クラス適用後にレイアウトが確定するのを1フレーム待ってからキャプチャ
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                // 確定後の要素実寸を採用して、PDFページ幅とのスケールがズレないようにする
+                var contentWidth = Math.max( target.scrollWidth, target.offsetWidth, 800 );
+
+                var opt = {
+                    margin:      [12, 10, 14, 10],
+                    filename:    '月次レポート_' + periodSlug + '.pdf',
+                    image:       { type: 'jpeg', quality: 0.95 },
+                    html2canvas: {
+                        scale: 2,
+                        useCORS: true,
+                        scrollX: 0, scrollY: 0,
+                        backgroundColor: '#ffffff',
+                        windowWidth: contentWidth,
+                        width: contentWidth
+                    },
+                    jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak: { mode: ['css', 'legacy'] }
+                };
+                var restore = function () {
+                    document.body.classList.remove('is-printing-pdf');
+                    btn.disabled = false;
+                    btn.innerHTML = prevLabel;
+                };
+                html2pdf().set(opt).from(target).save()
+                    .then(restore)
+                    .catch(function (err) {
+                        console.error('PDF generation failed', err);
+                        restore();
+                        alert('PDFの生成に失敗しました。もう一度お試しください。');
+                    });
             });
+        });
     });
 })();
 </script>

@@ -195,14 +195,29 @@ get_header();
             pdfBtn.disabled = true;
             pdfBtn.innerHTML = 'PDF 生成中...';
 
+            // iframe 本体の自然な幅をキャプチャ幅として採用し、PDFページとのスケールがズレないようにする
+            var bodyWidth = Math.max(
+                doc.body.scrollWidth,
+                doc.documentElement.scrollWidth,
+                doc.body.offsetWidth,
+                800
+            );
+
             var periodSlug = <?php echo wp_json_encode( (string) ( $latest_version['period'] ?? 'report' ) ); ?>;
             var opt = {
-                margin:      [10, 8, 12, 8],
+                margin:      [12, 10, 14, 10],
                 filename:    '深掘りレポート_概要版_' + periodSlug + '.pdf',
                 image:       { type: 'jpeg', quality: 0.95 },
-                html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff', windowWidth: 1200 },
-                jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    scrollX: 0, scrollY: 0,
+                    backgroundColor: '#ffffff',
+                    windowWidth: bodyWidth,
+                    width: bodyWidth
+                },
+                jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: ['css', 'legacy'] }
             };
 
             var restore = function () {
