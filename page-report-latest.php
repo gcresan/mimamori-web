@@ -1630,6 +1630,16 @@ body.is-printing-pdf .gcrev-ai-report-modern .m-section {
     box-sizing:border-box !important;
     overflow-x:hidden !important;
 }
+/* PDF モード時は m-wrap の左右パディングを縮めて、右寄せ要素 (Report Date 等) が
+   キャプチャ範囲を超えないようにする */
+body.is-printing-pdf .gcrev-ai-report-modern .m-wrap {
+    padding-left:24px !important;
+    padding-right:24px !important;
+}
+/* ボーダーを 0 にして、コンテンツが利用できる幅を最大化 */
+body.is-printing-pdf .gcrev-ai-report-modern {
+    border:0 !important;
+}
 body.is-printing-pdf { background:#fff !important; }
 </style>
 
