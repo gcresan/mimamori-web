@@ -85,6 +85,32 @@ class Gcrev_MEO_Diagnostic_Service {
 
         // --- データ収集 ---
         $business_info = $this->collect_business_info( $user_id );
+
+        // GBP アクセス権が外れている (404/403) / トークン取得失敗 / ネットワーク不通 の場合は
+        // 残りのAPI呼び出しをスキップして明確なエラーを返す。
+        // ここで中断しないと、全カテゴリ0点の誤解を招く診断レポートが保存されてしまう。
+        if ( ! empty( $business_info['_fallback'] ) ) {
+            $reason = $business_info['_fallback_reason'] ?? 'unknown';
+            $status = (int) ( $business_info['_fallback_status'] ?? 0 );
+            $abort_reasons = [ 'no_token', 'access_denied', 'network_error', 'api_error' ];
+            if ( in_array( $reason, $abort_reasons, true ) ) {
+                $this->log( "run_diagnostic ABORT user_id={$user_id} reason={$reason} status={$status}" );
+
+                $messages = [
+                    'no_token'      => 'Googleアカウントへの接続が切れています。MEOダッシュボードから「Googleアカウントを再接続」してください。',
+                    'access_denied' => 'このGoogleビジネスプロフィールへのアクセス権が外れています。Googleビジネスプロフィール (business.google.com) で、接続中のGoogleアカウントが店舗の「マネージャー」または「オーナー」として登録されているか確認してください。権限を再付与した後、もう一度診断を実行してください。',
+                    'network_error' => 'Google API との通信に失敗しました。時間を置いてもう一度お試しください。',
+                    'api_error'     => "Google API がエラーを返しました（HTTP {$status}）。時間を置いてもう一度お試しください。",
+                ];
+
+                return [
+                    'success' => false,
+                    'message' => $messages[ $reason ] ?? '診断データを取得できませんでした。GBP接続をご確認ください。',
+                    'reason'  => $reason,
+                ];
+            }
+        }
+
         $reviews_data  = $this->collect_reviews( $user_id );
         $posts_data    = $this->collect_posts( $user_id );
         $photos_data   = $this->collect_photos( $user_id );
@@ -204,13 +230,13 @@ class Gcrev_MEO_Diagnostic_Service {
         $access_token = $this->api->gbp_get_access_token( $user_id );
         if ( empty( $access_token ) ) {
             $this->log( "collect_business_info: no access token user_id={$user_id}" );
-            return $this->fallback_business_info( $user_id );
+            return $this->fallback_business_info( $user_id, 'no_token' );
         }
 
         $location_id = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
         if ( empty( $location_id ) || strpos( $location_id, 'pending_' ) === 0 ) {
             $this->log( "collect_business_info: no location_id user_id={$user_id}" );
-            return $this->fallback_business_info( $user_id );
+            return $this->fallback_business_info( $user_id, 'no_location' );
         }
 
         $read_mask = implode( ',', [
@@ -233,7 +259,7 @@ class Gcrev_MEO_Diagnostic_Service {
 
         if ( is_wp_error( $response ) ) {
             $this->log( "collect_business_info API WP_Error: " . $response->get_error_message() );
-            return $this->fallback_business_info( $user_id );
+            return $this->fallback_business_info( $user_id, 'network_error' );
         }
 
         $status = wp_remote_retrieve_response_code( $response );
@@ -267,7 +293,9 @@ class Gcrev_MEO_Diagnostic_Service {
                 }
             }
 
-            return $this->fallback_business_info( $user_id );
+            // 404/403 は接続Googleアカウントから店舗の管理権が外れているサイン
+            $reason = ( $status === 404 || $status === 403 ) ? 'access_denied' : 'api_error';
+            return $this->fallback_business_info( $user_id, $reason, $status );
         }
 
         $body = json_decode( $raw_body, true );
@@ -276,17 +304,23 @@ class Gcrev_MEO_Diagnostic_Service {
         } else {
             $this->log( "collect_business_info: JSON decode failed, raw=" . substr( $raw_body, 0, 300 ) );
         }
-        return $body ?: $this->fallback_business_info( $user_id );
+        return $body ?: $this->fallback_business_info( $user_id, 'parse_error' );
     }
 
     /**
      * GBP API にアクセスできない場合のフォールバック（user_meta から構築）
+     *
+     * @param int    $user_id
+     * @param string $reason       no_token | no_location | network_error | access_denied | api_error | parse_error
+     * @param int    $http_status  HTTP status code (access_denied / api_error 時のみ)
      */
-    private function fallback_business_info( int $user_id ): array {
+    private function fallback_business_info( int $user_id, string $reason = 'unknown', int $http_status = 0 ): array {
         return [
-            'title'            => get_user_meta( $user_id, '_gcrev_gbp_location_name', true ) ?: '',
+            'title'             => get_user_meta( $user_id, '_gcrev_gbp_location_name', true ) ?: '',
             'storefrontAddress' => [ 'addressLines' => [ get_user_meta( $user_id, '_gcrev_gbp_location_address', true ) ?: '' ] ],
-            '_fallback'        => true,
+            '_fallback'         => true,
+            '_fallback_reason'  => $reason,
+            '_fallback_status'  => $http_status,
         ];
     }
 
