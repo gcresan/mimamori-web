@@ -1640,6 +1640,25 @@ body.is-printing-pdf .gcrev-ai-report-modern .m-wrap {
 body.is-printing-pdf .gcrev-ai-report-modern {
     border:0 !important;
 }
+/* 全レポート要素のはみ出しを防止: max-width:100% で親に必ず収まるようにする */
+body.is-printing-pdf .gcrev-ai-report-modern *,
+body.is-printing-pdf .gcrev-ai-report-modern *::before,
+body.is-printing-pdf .gcrev-ai-report-modern *::after {
+    max-width:100% !important;
+    box-sizing:border-box !important;
+}
+body.is-printing-pdf .gcrev-ai-report-modern img,
+body.is-printing-pdf .gcrev-ai-report-modern table,
+body.is-printing-pdf .gcrev-ai-report-modern .m-kpi-grid {
+    width:100% !important;
+}
+/* 右寄せ要素 (.m-report-meta) が単独行で長くなって溢れるのを防ぐ */
+body.is-printing-pdf .gcrev-ai-report-modern .m-report-meta {
+    white-space:normal !important;
+    word-break:keep-all !important;
+    overflow-wrap:break-word !important;
+    max-width:50% !important;
+}
 body.is-printing-pdf { background:#fff !important; }
 </style>
 
@@ -1669,9 +1688,9 @@ body.is-printing-pdf { background:#fff !important; }
         // クラス適用後にレイアウトが確定するのを2フレーム待ってからキャプチャ
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-                // .content-area は CSS で width:980px に固定済み。
-                // html2canvas の windowWidth/width を明示するとブラウザに再レイアウトを強制し
-                // 右端切れや左寄りズレを起こすため、敢えて指定せず要素の自然な実寸を使う。
+                // 内容の自然な実寸を取得 (.content-area は CSS で width:980 固定)
+                var captureWidth = target.offsetWidth;
+
                 var opt = {
                     margin:      [10, 8, 12, 8],
                     filename:    '月次レポート_' + periodSlug + '.pdf',
@@ -1682,7 +1701,9 @@ body.is-printing-pdf { background:#fff !important; }
                         scrollX:         0,
                         scrollY:         -window.scrollY,
                         backgroundColor: '#ffffff',
-                        logging:         false
+                        logging:         false,
+                        windowWidth:     captureWidth,
+                        width:           captureWidth
                     },
                     jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
                     pagebreak: { mode: ['css', 'legacy'] }
