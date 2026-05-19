@@ -13336,7 +13336,7 @@ PROMPT;
         }
         $ai_meta = $this->generator->get_last_ai_meta();
         if ( ! empty( $ai_meta ) ) {
-            update_post_meta( $post_id, '_gcrev_report_ai_meta', wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) );
+            update_post_meta( $post_id, '_gcrev_report_ai_meta', wp_slash( wp_json_encode( $ai_meta, JSON_UNESCAPED_UNICODE ) ) );
             if ( isset( $ai_meta['provider'] ) ) {
                 update_post_meta( $post_id, '_gcrev_report_ai_provider', (string) $ai_meta['provider'] );
             }
@@ -16880,7 +16880,7 @@ PROMPT;
             }
             if ( is_array( $aliases ) ) {
                 $clean = array_values( array_filter( array_map( 'sanitize_text_field', $aliases ) ) );
-                update_user_meta( $user_id, 'gcrev_aio_company_aliases', wp_json_encode( $clean, JSON_UNESCAPED_UNICODE ) );
+                update_user_meta( $user_id, 'gcrev_aio_company_aliases', wp_slash( wp_json_encode( $clean, JSON_UNESCAPED_UNICODE ) ) );
             }
         }
 
@@ -17759,11 +17759,11 @@ PROMPT;
         }
         if ( isset( $params['preferred_groups'] ) && is_array( $params['preferred_groups'] ) ) {
             $groups = array_map( 'sanitize_text_field', $params['preferred_groups'] );
-            update_user_meta( $user_id, 'gcrev_auto_article_preferred_groups', wp_json_encode( $groups, JSON_UNESCAPED_UNICODE ) );
+            update_user_meta( $user_id, 'gcrev_auto_article_preferred_groups', wp_slash( wp_json_encode( $groups, JSON_UNESCAPED_UNICODE ) ) );
         }
         if ( isset( $params['excluded_keywords'] ) && is_array( $params['excluded_keywords'] ) ) {
             $excluded = array_map( 'sanitize_text_field', $params['excluded_keywords'] );
-            update_user_meta( $user_id, 'gcrev_auto_article_excluded_keywords', wp_json_encode( $excluded, JSON_UNESCAPED_UNICODE ) );
+            update_user_meta( $user_id, 'gcrev_auto_article_excluded_keywords', wp_slash( wp_json_encode( $excluded, JSON_UNESCAPED_UNICODE ) ) );
         }
         if ( isset( $params['preferred_tone'] ) ) {
             $tone = sanitize_text_field( $params['preferred_tone'] );
@@ -21454,7 +21454,7 @@ PROMPT;
             'business_name'     => sanitize_text_field( $request->get_param( 'business_name' ) ?: '' ),
             'industry'          => sanitize_text_field( $request->get_param( 'industry' ) ?: '' ),
         ];
-        update_user_meta( $user_id, '_gcrev_review_ai_settings', wp_json_encode( $settings, JSON_UNESCAPED_UNICODE ) );
+        update_user_meta( $user_id, '_gcrev_review_ai_settings', wp_slash( wp_json_encode( $settings, JSON_UNESCAPED_UNICODE ) ) );
 
         return new \WP_REST_Response( [ 'success' => true ], 200 );
     }
@@ -22728,7 +22728,7 @@ PROMPT;
             'auto_generate'      => (bool) $request->get_param( 'auto_generate' ),
             'aspect_ratio'       => sanitize_text_field( $request->get_param( 'aspect_ratio' ) ?: '16:9' ),
         ];
-        update_user_meta( $user_id, '_gcrev_gbp_brand_settings', wp_json_encode( $settings, JSON_UNESCAPED_UNICODE ) );
+        update_user_meta( $user_id, '_gcrev_gbp_brand_settings', wp_slash( wp_json_encode( $settings, JSON_UNESCAPED_UNICODE ) ) );
 
         return new \WP_REST_Response( [ 'success' => true, 'message' => 'ブランド設定を保存しました。' ], 200 );
     }

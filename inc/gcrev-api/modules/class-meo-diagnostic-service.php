@@ -1104,7 +1104,9 @@ PROMPT;
 
         update_post_meta( $post_id, '_gcrev_user_id', $user_id );
         update_post_meta( $post_id, '_gcrev_report_type', 'meo_diagnostic' );
-        update_post_meta( $post_id, '_gcrev_diagnostic_json', wp_json_encode( $data, JSON_UNESCAPED_UNICODE ) );
+        // update_post_meta は内部で wp_unslash() を呼ぶため、JSON 内の \" → " に変わって構文崩れする。
+        // wp_slash() で先回りエスケープしておき、相殺させる。
+        update_post_meta( $post_id, '_gcrev_diagnostic_json', wp_slash( wp_json_encode( $data, JSON_UNESCAPED_UNICODE ) ) );
         update_post_meta( $post_id, '_gcrev_overall_score', $data['overall_score'] );
         update_post_meta( $post_id, '_gcrev_overall_grade', $data['overall_grade'] );
         update_post_meta( $post_id, '_gcrev_created_at', $now->format( 'Y-m-d H:i:s' ) );

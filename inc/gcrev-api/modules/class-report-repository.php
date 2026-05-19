@@ -72,13 +72,13 @@ class Gcrev_Report_Repository {
         update_post_meta($post_id, '_gcrev_report_version', $new_version);
         update_post_meta($post_id, '_gcrev_report_source', $source);
         update_post_meta($post_id, '_gcrev_report_html', $html);
-        update_post_meta($post_id, '_gcrev_client_info_json', wp_json_encode($client_info, JSON_UNESCAPED_UNICODE));
+        update_post_meta($post_id, '_gcrev_client_info_json', wp_slash( wp_json_encode($client_info, JSON_UNESCAPED_UNICODE) ));
         update_post_meta($post_id, '_gcrev_created_at', $now->format('Y-m-d H:i:s'));
 
         // =============================================
         // highlights 保存（呼び出し元で生成済みのものを保存）
         // =============================================
-        update_post_meta($post_id, '_gcrev_highlights_json', wp_json_encode($highlights, JSON_UNESCAPED_UNICODE));
+        update_post_meta($post_id, '_gcrev_highlights_json', wp_slash( wp_json_encode($highlights, JSON_UNESCAPED_UNICODE) ));
         error_log("[GCREV] Highlights saved for post_id={$post_id}: " . wp_json_encode($highlights, JSON_UNESCAPED_UNICODE));
 
         // =============================================

@@ -2396,7 +2396,7 @@ CRITERIA;
         $strategy = $this->aggregate_strategy_metrics( $groups );
 
         // CPT を更新
-        update_post_meta( $post_id, '_gcrev_kwr_groups', wp_json_encode( $groups, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $post_id, '_gcrev_kwr_groups', wp_slash( wp_json_encode( $groups, JSON_UNESCAPED_UNICODE ) ) );
         $meta_json = get_post_meta( $post_id, '_gcrev_kwr_meta', true );
         $meta_arr = is_string( $meta_json ) ? json_decode( $meta_json, true ) : [];
         if ( ! is_array( $meta_arr ) ) { $meta_arr = []; }
@@ -2405,7 +2405,7 @@ CRITERIA;
         $meta_arr['ng_counts']            = $strategy['ng_counts'];
         $meta_arr['bd_async_finished_at'] = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y-m-d H:i:s' );
         $meta_arr['bd_async_stats']       = $bd_stats;
-        update_post_meta( $post_id, '_gcrev_kwr_meta', wp_json_encode( $meta_arr, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $post_id, '_gcrev_kwr_meta', wp_slash( wp_json_encode( $meta_arr, JSON_UNESCAPED_UNICODE ) ) );
 
         $this->log( sprintf(
             'bd_async post=%d: updated CPT, avg_roi=%s avg_win=%s',

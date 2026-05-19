@@ -46,7 +46,7 @@ class Gcrev_Highlights {
         // ② 旧データ互換：HTML から動的抽出して保存（次回以降は①で返る）
         $owner_id = (int) get_post_meta($post_id, '_gcrev_user_id', true);
         $highlights = $this->extract_highlights_from_html($html, $owner_id ?: null);
-        update_post_meta($post_id, '_gcrev_highlights_json', wp_json_encode($highlights, JSON_UNESCAPED_UNICODE));
+        update_post_meta($post_id, '_gcrev_highlights_json', wp_slash( wp_json_encode($highlights, JSON_UNESCAPED_UNICODE) ));
         error_log("[GCREV] Highlights back-filled for post_id={$post_id}");
 
         return $highlights;

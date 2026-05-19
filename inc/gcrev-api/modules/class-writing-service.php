@@ -168,7 +168,7 @@ class Gcrev_Writing_Service {
 
         update_post_meta( $id, '_gcrev_knowledge_category', $category );
         update_post_meta( $id, '_gcrev_knowledge_content', $content );
-        update_post_meta( $id, '_gcrev_knowledge_tags', wp_json_encode( $tags, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $id, '_gcrev_knowledge_tags', wp_slash( wp_json_encode( $tags, JSON_UNESCAPED_UNICODE ) ) );
         update_post_meta( $id, '_gcrev_knowledge_priority', $priority );
         update_post_meta( $id, '_gcrev_knowledge_always_ref', $always_ref );
         update_post_meta( $id, '_gcrev_knowledge_updated_at', $now );
@@ -1577,7 +1577,7 @@ INSTRUCTION;
             'created_at' => $now,
         ];
 
-        update_post_meta( $article_id, '_gcrev_article_notes', wp_json_encode( $notes, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $article_id, '_gcrev_article_notes', wp_slash( wp_json_encode( $notes, JSON_UNESCAPED_UNICODE ) ) );
         update_post_meta( $article_id, '_gcrev_article_updated_at', $now );
 
         return [ 'success' => true, 'notes' => $notes ];
@@ -1600,7 +1600,7 @@ INSTRUCTION;
             return ( $n['id'] ?? '' ) !== $note_id;
         } ) );
 
-        update_post_meta( $article_id, '_gcrev_article_notes', wp_json_encode( $notes, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $article_id, '_gcrev_article_notes', wp_slash( wp_json_encode( $notes, JSON_UNESCAPED_UNICODE ) ) );
         return [ 'success' => true, 'notes' => $notes ];
     }
 

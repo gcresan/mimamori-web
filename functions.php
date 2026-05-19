@@ -9316,7 +9316,7 @@ function gcrev_activate_contract( int $user_id, string $activated_by = '' ): voi
         'at'     => $start_at,
         'by'     => $activated_by,
     ];
-    update_user_meta( $user_id, 'gcrev_contract_audit_log', wp_json_encode( $log, JSON_UNESCAPED_UNICODE ) );
+    update_user_meta( $user_id, 'gcrev_contract_audit_log', wp_slash( wp_json_encode( $log, JSON_UNESCAPED_UNICODE ) ) );
 
     error_log( sprintf(
         '[GCREV Contract] activated user=%d by=%s start=%s next_renewal=%s cancellable=%s',

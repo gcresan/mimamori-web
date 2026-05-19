@@ -125,7 +125,7 @@ class Gcrev_AIO_Settings_Page {
                     $aliases = array_values( $lines );
 
                     if ( ! empty( $aliases ) ) {
-                        update_user_meta( $user_id, 'gcrev_aio_company_aliases', wp_json_encode( $aliases, JSON_UNESCAPED_UNICODE ) );
+                        update_user_meta( $user_id, 'gcrev_aio_company_aliases', wp_slash( wp_json_encode( $aliases, JSON_UNESCAPED_UNICODE ) ) );
                     } else {
                         delete_user_meta( $user_id, 'gcrev_aio_company_aliases' );
                     }

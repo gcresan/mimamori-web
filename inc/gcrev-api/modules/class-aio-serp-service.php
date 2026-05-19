@@ -668,7 +668,7 @@ PROMPT;
 
         // 結果保存
         $now = current_time( 'mysql' );
-        update_user_meta( $user_id, 'gcrev_aio_analysis_result', wp_json_encode( $aggregated, JSON_UNESCAPED_UNICODE ) );
+        update_user_meta( $user_id, 'gcrev_aio_analysis_result', wp_slash( wp_json_encode( $aggregated, JSON_UNESCAPED_UNICODE ) ) );
         update_user_meta( $user_id, 'gcrev_aio_analysis_updated_at', $now );
         update_user_meta( $user_id, 'gcrev_aio_analysis_status', 'complete' );
 
