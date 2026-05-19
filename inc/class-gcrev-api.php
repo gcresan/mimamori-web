@@ -7518,13 +7518,12 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => 'ログインが必要です' ], 401 );
         }
 
-        // レート制限（1時間に1回） — テストのため一時解除中。連打防止の30秒ロックのみ残す。
-        // TODO: テスト完了後に 3600 秒へ戻す。
+        // レート制限（1時間に1回）
         $lock_key = "gcrev_meo_diag_lock_{$user_id}";
         if ( get_transient( $lock_key ) ) {
-            return new \WP_REST_Response( [ 'success' => false, 'message' => '診断を実行中です。30秒ほどお待ちください。' ], 429 );
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '診断は1時間に1回まで実行できます。しばらくお待ちください。' ], 429 );
         }
-        set_transient( $lock_key, 1, 30 );
+        set_transient( $lock_key, 1, 3600 );
 
         set_time_limit( 120 );
 
