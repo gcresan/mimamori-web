@@ -1669,24 +1669,20 @@ body.is-printing-pdf { background:#fff !important; }
         // クラス適用後にレイアウトが確定するのを2フレーム待ってからキャプチャ
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-                // PDF モードで .content-area は width:980px に固定済み。
-                // scrollWidth は隠れた要素や子の透明レイヤーで膨らむことがあるので使わず、
-                // 固定値を採用してキャプチャ canvas と PDF ページ幅のスケールを安定させる。
-                var FIXED_CONTENT_WIDTH = 980;
-
+                // .content-area は CSS で width:980px に固定済み。
+                // html2canvas の windowWidth/width を明示するとブラウザに再レイアウトを強制し
+                // 右端切れや左寄りズレを起こすため、敢えて指定せず要素の自然な実寸を使う。
                 var opt = {
-                    margin:      [12, 10, 14, 10],
+                    margin:      [10, 8, 12, 8],
                     filename:    '月次レポート_' + periodSlug + '.pdf',
                     image:       { type: 'jpeg', quality: 0.95 },
                     html2canvas: {
-                        scale: 2,
-                        useCORS: true,
-                        scrollX: 0, scrollY: 0,
+                        scale:           2,
+                        useCORS:         true,
+                        scrollX:         0,
+                        scrollY:         -window.scrollY,
                         backgroundColor: '#ffffff',
-                        windowWidth: FIXED_CONTENT_WIDTH,
-                        width:       FIXED_CONTENT_WIDTH,
-                        x: 0,
-                        y: 0
+                        logging:         false
                     },
                     jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
                     pagebreak: { mode: ['css', 'legacy'] }
