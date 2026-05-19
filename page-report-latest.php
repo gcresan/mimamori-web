@@ -1609,7 +1609,27 @@ body.is-printing-pdf .gcrev-ai-block { page-break-inside:avoid; break-inside:avo
 
 /* レイアウトオーバーライド: サイドバー分のオフセットを除去し、コンテンツを左端から全幅で配置 */
 body.is-printing-pdf .main-content { margin-left:0 !important; width:100% !important; padding-top:0 !important; }
-body.is-printing-pdf .content-area { max-width:980px !important; margin:0 auto !important; padding:16px !important; }
+body.is-printing-pdf .content-area {
+    /* 固定幅 + overflow-x:hidden で、子要素の横方向オーバーフローや透明レイヤーが
+       scrollWidth を膨らませてキャプチャ範囲が狂うのを防ぐ */
+    width:980px !important;
+    max-width:980px !important;
+    margin:0 auto !important;
+    padding:16px !important;
+    overflow-x:hidden !important;
+    position:relative !important;
+    left:0 !important;
+    transform:none !important;
+}
+/* レポート本体ラッパーも幅を固定し、左右にはみ出さないようにする */
+body.is-printing-pdf .gcrev-ai-report-modern,
+body.is-printing-pdf .gcrev-ai-report-modern .m-wrap,
+body.is-printing-pdf .gcrev-ai-report-modern .m-section {
+    max-width:100% !important;
+    width:auto !important;
+    box-sizing:border-box !important;
+    overflow-x:hidden !important;
+}
 body.is-printing-pdf { background:#fff !important; }
 </style>
 
@@ -1636,11 +1656,13 @@ body.is-printing-pdf { background:#fff !important; }
         btn.innerHTML = 'PDF 生成中...';
         document.body.classList.add('is-printing-pdf');
 
-        // クラス適用後にレイアウトが確定するのを1フレーム待ってからキャプチャ
+        // クラス適用後にレイアウトが確定するのを2フレーム待ってからキャプチャ
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-                // 確定後の要素実寸を採用して、PDFページ幅とのスケールがズレないようにする
-                var contentWidth = Math.max( target.scrollWidth, target.offsetWidth, 800 );
+                // PDF モードで .content-area は width:980px に固定済み。
+                // scrollWidth は隠れた要素や子の透明レイヤーで膨らむことがあるので使わず、
+                // 固定値を採用してキャプチャ canvas と PDF ページ幅のスケールを安定させる。
+                var FIXED_CONTENT_WIDTH = 980;
 
                 var opt = {
                     margin:      [12, 10, 14, 10],
@@ -1651,8 +1673,10 @@ body.is-printing-pdf { background:#fff !important; }
                         useCORS: true,
                         scrollX: 0, scrollY: 0,
                         backgroundColor: '#ffffff',
-                        windowWidth: contentWidth,
-                        width: contentWidth
+                        windowWidth: FIXED_CONTENT_WIDTH,
+                        width:       FIXED_CONTENT_WIDTH,
+                        x: 0,
+                        y: 0
                     },
                     jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
                     pagebreak: { mode: ['css', 'legacy'] }
