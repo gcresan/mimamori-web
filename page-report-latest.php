@@ -1620,34 +1620,35 @@ body.is-printing-pdf .report-section,
 body.is-printing-pdf .gcrev-ai-block { page-break-inside:avoid; break-inside:avoid; }
 
 /* レイアウトオーバーライド:
-   .main-content は .content-area の親なので display:none にできない。
-   代わりに margin/padding/transform をすべて消して位置情報を中立化し、
-   .content-area 自体を position:fixed で画面左上 (0,0) にピン留めする。
-   こうすると html2canvas のクローンiframeで祖先の中央寄せやサイドバー
-   オフセットが残っていても、.content-area の描画位置が必ず (0,0) に
-   なるので、キャプチャ領域が確実に一致する。 */
+   position:fixed で要素をflowから外すと html2pdf のテンポラリコンテナが
+   高さ0となり canvas.height=0 で空PNGが生成されてしまう。
+   そのため .content-area は normal flow に残したまま、
+   margin:0 (auto やめる) で祖先の左端にぴったり寄せる。
+   親の .main-content と body も margin/padding を 0 にし、サイドバー類は
+   display:none にして、結果として .content-area が viewport の x=0 から
+   始まる構造を作る。 */
 body.is-printing-pdf { margin:0 !important; padding:0 !important; }
 body.is-printing-pdf .main-content {
     margin:0 !important;
     padding:0 !important;
     width:auto !important;
+    max-width:none !important;
     transform:none !important;
     position:static !important;
+    float:none !important;
 }
 body.is-printing-pdf .content-area {
-    /* 画面左上 (0,0) に固定。座標の曖昧さを完全に排除する */
-    position:fixed !important;
-    top:0 !important;
-    left:0 !important;
+    /* margin:0 (auto ではない) で祖先の左端に寄せる */
     width:980px !important;
     max-width:980px !important;
     margin:0 !important;
     padding:16px !important;
     overflow-x:hidden !important;
+    position:static !important;
     transform:none !important;
+    left:auto !important;
     box-sizing:border-box !important;
     background:#fff !important;
-    z-index:99999 !important;
 }
 /* レポート本体ラッパーも幅を固定し、左右にはみ出さないようにする */
 body.is-printing-pdf .gcrev-ai-report-modern,
