@@ -777,6 +777,11 @@ class Mimamori_Inquiries_Fetcher {
             [ '%d', '%s' ]
         );
 
+        // ダッシュボードCV Transient を即時無効化（手動オーバーライド・除外キーワード変更を反映）
+        if ( function_exists( 'gcrev_invalidate_user_cv_cache' ) ) {
+            gcrev_invalidate_user_cv_cache( $user_id );
+        }
+
         return [
             'total'    => $total,
             'valid'    => $valid,

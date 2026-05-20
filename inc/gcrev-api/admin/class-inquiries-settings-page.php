@@ -93,9 +93,12 @@ class Gcrev_Inquiries_Settings_Page {
             Mimamori_Inquiries_Fetcher::set_exclude_keywords( $user_id, $exclude_keywords_raw );
 
             // 除外キーワード変更を即時反映するため、保存済み月の月次サマリを再計算
+            // get_recent() は ARRAY_A で返すので連想配列でアクセスする
             $months_to_recalc = Mimamori_Inquiries_Fetcher::get_recent( $user_id, 24 );
             foreach ( (array) $months_to_recalc as $row ) {
-                $ym = (string) ( $row->year_month ?? '' );
+                $ym = is_array( $row )
+                    ? (string) ( $row['year_month'] ?? '' )
+                    : (string) ( $row->year_month ?? '' );
                 if ( $ym !== '' ) {
                     Mimamori_Inquiries_Fetcher::recalc_monthly_summary_with_overrides( $user_id, $ym );
                 }
