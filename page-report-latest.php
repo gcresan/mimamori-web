@@ -791,6 +791,8 @@ function updateKPIData() {
 
 // KPI表示更新（dashboard同一 + CV数追加）
 function updateKPIDisplay(data) {
+    // 新Claude単独レイアウトでは旧#kpi-*カードが存在しないので、無ければ何もしない
+    if (!document.getElementById('kpi-pageviews')) { return; }
     document.getElementById('kpi-pageviews').textContent = formatNumber(data.pageViews);
     document.getElementById('kpi-sessions').textContent = formatNumber(data.sessions);
     document.getElementById('kpi-users').textContent = formatNumber(data.users);
@@ -1601,19 +1603,23 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- PDF 生成用オフスクリーンステージ -->
 <style>
 /* キャプチャ対象を画面外に隔離する固定幅ステージ。
-   ページ本体の app-container / sidebar / main-content の影響を一切受けない。 */
+   ページ本体の app-container / sidebar / main-content の影響を一切受けない。
+   position:absolute + top:-99999px で「ドキュメントフロー外・画面外・通常レイアウト」
+   とし、html2canvas が境界を正しく測れるようにする。 */
 #rptPdfStage {
-    position: fixed;
-    top: 0;
-    left: -10000px; /* 画面外 */
-    width: 980px;
+    position: absolute !important;
+    top: -99999px !important;
+    left: 0 !important;
+    width: 980px !important;
     background: #fff;
-    z-index: -1;
-    pointer-events: none;
     box-sizing: border-box;
     padding: 16px;
+    margin: 0;
     font-family: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     color: #1f2937;
+    /* font-size のベースを画面と合わせる（rem計算のずれ防止） */
+    font-size: 16px;
+    line-height: 1.7;
 }
 /* ステージ内は max-width:100% を強制してはみ出しを防止 */
 #rptPdfStage * { max-width: 100% !important; box-sizing: border-box; }
@@ -1653,10 +1659,16 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelector('.content-area .period-info'),
             document.querySelector('.content-area .gcrev-ai-report-modern')
         ];
+        var appended = 0;
         for (var i = 0; i < sources.length; i++) {
             if (sources[i]) {
                 stage.appendChild(sources[i].cloneNode(true));
+                appended++;
             }
+        }
+        if (appended === 0) {
+            console.error('[PDF] レポート本体が見つかりませんでした');
+            return null;
         }
         document.body.appendChild(stage);
         return stage;
@@ -1672,15 +1684,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 useCORS:         true,
                 backgroundColor: '#ffffff',
                 logging:         false,
-                // ステージは position:fixed; left:-10000px で画面外に置いてある。
-                // windowWidth/width は固定980pxにすることで、html2canvas に対して
-                // 「ビューポート980px」と教える。これで@media (max-width:1024) や
+                // ステージは画面外に置いてあるが、windowWidth/width=980 を渡すことで
+                // html2canvas にビューポートが980pxだと教える。これで@media や
                 // grid auto-fill の挙動が画面サイズに依存しなくなる。
                 windowWidth:     980,
                 width:           980
             },
             jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css', 'legacy'], avoid: ['.m-kpi-card', '.m-scene-card', '.m-point-card', '.m-action-row', '.m-hero'] }
+            pagebreak: { mode: ['css', 'legacy'] }
         };
     }
 
@@ -1695,6 +1706,12 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.innerHTML = 'PDF 生成中...';
 
         var stage = buildPdfStage();
+        if (!stage) {
+            btn.disabled = false;
+            btn.innerHTML = prevLabel;
+            alert('レポートの取得に失敗しました。ページを再読み込みしてください。');
+            return;
+        }
         var cleanup = function () {
             if (stage && stage.parentNode) { stage.parentNode.removeChild(stage); }
             btn.disabled = false;
@@ -1704,6 +1721,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // クローン直後はレイアウトが未確定のことがあるので2RAF待つ
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
+                // 計測: 高さ0だと PDF が空になるので検知してエラーにする
+                var h = stage.scrollHeight;
+                var w = stage.scrollWidth;
+                console.log('[PDF] stage size:', w + 'x' + h);
+                if (h < 100) {
+                    console.error('[PDF] stage height too small, aborting', { w: w, h: h });
+                    cleanup();
+                    alert('レポートのレイアウトが取得できませんでした。ページを再読み込みしてください。');
+                    return;
+                }
                 html2pdf().set(buildOpts('月次レポート_' + periodSlug + '.pdf')).from(stage).save()
                     .then(cleanup)
                     .catch(function (err) {
@@ -1728,6 +1755,12 @@ document.addEventListener('DOMContentLoaded', function() {
             dbgBtn.innerHTML = 'キャプチャ中...';
 
             var stage = buildPdfStage();
+            if (!stage) {
+                dbgBtn.disabled = false;
+                dbgBtn.innerHTML = prevLabel;
+                alert('レポート要素が見つかりません');
+                return;
+            }
             var cleanup = function () {
                 if (stage && stage.parentNode) { stage.parentNode.removeChild(stage); }
                 dbgBtn.disabled = false;
@@ -1738,7 +1771,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 requestAnimationFrame(function () {
                     var opts = buildOpts('debug.pdf');
                     opts.html2canvas.logging = true;
-                    console.log('[PDF-DBG] stage.offsetWidth =', stage.offsetWidth, ' scrollWidth =', stage.scrollWidth);
+                    console.log('[PDF-DBG] stage size:', stage.scrollWidth + 'x' + stage.scrollHeight);
+                    console.log('[PDF-DBG] stage.getBoundingClientRect() =', stage.getBoundingClientRect());
 
                     html2pdf().set(opts).from(stage).toCanvas().get('canvas').then(function (canvas) {
                         console.log('[PDF-DBG] canvas.width =', canvas.width, ' canvas.height =', canvas.height);
