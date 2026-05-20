@@ -1598,107 +1598,32 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
-<!-- PDF 生成中だけ適用するスタイル -->
+<!-- PDF 生成用オフスクリーンステージ -->
 <style>
-/* 装飾系（画面のレイアウト要素）を非表示 */
-body.is-printing-pdf .rpt-ym-switcher,
-body.is-printing-pdf .rpt-admin-toolbar,
-body.is-printing-pdf #rptPdfBar,
-body.is-printing-pdf .loading-overlay,
-body.is-printing-pdf .report-preloader-overlay,
-body.is-printing-pdf .sidebar,
-body.is-printing-pdf .sidebar-overlay,
-body.is-printing-pdf .topbar,
-body.is-printing-pdf .header,
-body.is-printing-pdf .breadcrumb,
-body.is-printing-pdf #wpadminbar,
-body.is-printing-pdf .footer-area { display:none !important; }
-body.is-printing-pdf .print-footer { display:block !important; }
-body.is-printing-pdf .rpt-kpi-selectable { box-shadow:none !important; transform:none !important; }
-body.is-printing-pdf .kpi-card,
-body.is-printing-pdf .report-section,
-body.is-printing-pdf .gcrev-ai-block { page-break-inside:avoid; break-inside:avoid; }
-
-/* レイアウトオーバーライド:
-   position:fixed で要素をflowから外すと html2pdf のテンポラリコンテナが
-   高さ0となり canvas.height=0 で空PNGが生成されてしまう。
-   そのため .content-area は normal flow に残したまま、
-   margin:0 (auto やめる) で祖先の左端にぴったり寄せる。
-   親の .main-content と body も margin/padding を 0 にし、サイドバー類は
-   display:none にして、結果として .content-area が viewport の x=0 から
-   始まる構造を作る。 */
-body.is-printing-pdf { margin:0 !important; padding:0 !important; }
-body.is-printing-pdf .app-container {
-    /* デフォルト: display:flex (.sidebar + .main-content の横並び)
-       PDF時は flex をやめて block にし、main-content の左マージン (260px) を無効化 */
-    display:block !important;
-    margin:0 !important;
-    padding:0 !important;
-    min-height:0 !important;
+/* キャプチャ対象を画面外に隔離する固定幅ステージ。
+   ページ本体の app-container / sidebar / main-content の影響を一切受けない。 */
+#rptPdfStage {
+    position: fixed;
+    top: 0;
+    left: -10000px; /* 画面外 */
+    width: 980px;
+    background: #fff;
+    z-index: -1;
+    pointer-events: none;
+    box-sizing: border-box;
+    padding: 16px;
+    font-family: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #1f2937;
 }
-body.is-printing-pdf .main-content {
-    /* デフォルト: margin-left:260px; width: calc(100% - 260px) */
-    margin:0 !important;
-    padding:0 !important;
-    width:100% !important;
-    max-width:none !important;
-    flex:none !important;
-    transform:none !important;
-    position:static !important;
-    float:none !important;
-}
-body.is-printing-pdf .content-area {
-    /* margin:0 (auto ではない) で祖先の左端に寄せる */
-    width:980px !important;
-    max-width:980px !important;
-    margin:0 !important;
-    padding:16px !important;
-    overflow-x:hidden !important;
-    position:static !important;
-    transform:none !important;
-    left:auto !important;
-    box-sizing:border-box !important;
-    background:#fff !important;
-}
-/* レポート本体ラッパーも幅を固定し、左右にはみ出さないようにする */
-body.is-printing-pdf .gcrev-ai-report-modern,
-body.is-printing-pdf .gcrev-ai-report-modern .m-wrap,
-body.is-printing-pdf .gcrev-ai-report-modern .m-section {
-    max-width:100% !important;
-    width:auto !important;
-    box-sizing:border-box !important;
-    overflow-x:hidden !important;
-}
-/* PDF モード時は m-wrap の左右パディングを縮めて、右寄せ要素 (Report Date 等) が
-   キャプチャ範囲を超えないようにする */
-body.is-printing-pdf .gcrev-ai-report-modern .m-wrap {
-    padding-left:24px !important;
-    padding-right:24px !important;
-}
-/* ボーダーを 0 にして、コンテンツが利用できる幅を最大化 */
-body.is-printing-pdf .gcrev-ai-report-modern {
-    border:0 !important;
-}
-/* 全レポート要素のはみ出しを防止: max-width:100% で親に必ず収まるようにする */
-body.is-printing-pdf .gcrev-ai-report-modern *,
-body.is-printing-pdf .gcrev-ai-report-modern *::before,
-body.is-printing-pdf .gcrev-ai-report-modern *::after {
-    max-width:100% !important;
-    box-sizing:border-box !important;
-}
-body.is-printing-pdf .gcrev-ai-report-modern img,
-body.is-printing-pdf .gcrev-ai-report-modern table,
-body.is-printing-pdf .gcrev-ai-report-modern .m-kpi-grid {
-    width:100% !important;
-}
-/* 右寄せ要素 (.m-report-meta) が単独行で長くなって溢れるのを防ぐ */
-body.is-printing-pdf .gcrev-ai-report-modern .m-report-meta {
-    white-space:normal !important;
-    word-break:keep-all !important;
-    overflow-wrap:break-word !important;
-    max-width:50% !important;
-}
-body.is-printing-pdf { background:#fff !important; }
+/* ステージ内は max-width:100% を強制してはみ出しを防止 */
+#rptPdfStage * { max-width: 100% !important; box-sizing: border-box; }
+#rptPdfStage .m-kpi-card,
+#rptPdfStage .m-scene-card,
+#rptPdfStage .m-point-card,
+#rptPdfStage .m-insight-card,
+#rptPdfStage .m-action-row,
+#rptPdfStage .m-hero,
+#rptPdfStage .m-footnote { page-break-inside: avoid; break-inside: avoid; }
 </style>
 
 <!-- html2pdf ライブラリ -->
@@ -1711,66 +1636,86 @@ body.is-printing-pdf { background:#fff !important; }
     if (!btn) return;
     var periodSlug = <?php echo wp_json_encode( sprintf( '%04d-%02d', (int) $year, (int) $month ) ); ?>;
 
+    /**
+     * PDF用に「画面外固定幅ステージ」を組み立てて返す。
+     *   - 幅は980px固定。pageのapp-container/sidebar/main-contentの影響を受けない
+     *   - クローン対象: .period-info と .gcrev-ai-report-modern
+     *   - 不要なUI（年月切替・トーストetc）は元から含めない
+     * 使い終わったら caller が remove する。
+     */
+    function buildPdfStage() {
+        var stage = document.getElementById('rptPdfStage');
+        if (stage) { stage.remove(); }
+        stage = document.createElement('div');
+        stage.id = 'rptPdfStage';
+
+        var sources = [
+            document.querySelector('.content-area .period-info'),
+            document.querySelector('.content-area .gcrev-ai-report-modern')
+        ];
+        for (var i = 0; i < sources.length; i++) {
+            if (sources[i]) {
+                stage.appendChild(sources[i].cloneNode(true));
+            }
+        }
+        document.body.appendChild(stage);
+        return stage;
+    }
+
+    function buildOpts(filename) {
+        return {
+            margin:      [10, 8, 12, 8],
+            filename:    filename,
+            image:       { type: 'jpeg', quality: 0.95 },
+            html2canvas: {
+                scale:           2,
+                useCORS:         true,
+                backgroundColor: '#ffffff',
+                logging:         false,
+                // ステージは position:fixed; left:-10000px で画面外に置いてある。
+                // windowWidth/width は固定980pxにすることで、html2canvas に対して
+                // 「ビューポート980px」と教える。これで@media (max-width:1024) や
+                // grid auto-fill の挙動が画面サイズに依存しなくなる。
+                windowWidth:     980,
+                width:           980
+            },
+            jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['.m-kpi-card', '.m-scene-card', '.m-point-card', '.m-action-row', '.m-hero'] }
+        };
+    }
+
     btn.addEventListener('click', function () {
         if (typeof html2pdf === 'undefined') {
             alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
             return;
         }
-        var target = document.querySelector('.content-area');
-        if (!target) return;
 
         var prevLabel = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = 'PDF 生成中...';
-        document.body.classList.add('is-printing-pdf');
 
-        // クラス適用後にレイアウトが確定するのを2フレーム待ってからキャプチャ
+        var stage = buildPdfStage();
+        var cleanup = function () {
+            if (stage && stage.parentNode) { stage.parentNode.removeChild(stage); }
+            btn.disabled = false;
+            btn.innerHTML = prevLabel;
+        };
+
+        // クローン直後はレイアウトが未確定のことがあるので2RAF待つ
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-                // 内容の自然な実寸を取得 (.content-area は CSS で width:980 固定)
-                var captureWidth = target.offsetWidth;
-
-                var opt = {
-                    margin:      [10, 8, 12, 8],
-                    filename:    '月次レポート_' + periodSlug + '.pdf',
-                    image:       { type: 'jpeg', quality: 0.95 },
-                    html2canvas: {
-                        scale:           2,
-                        useCORS:         true,
-                        scrollX:         0,
-                        scrollY:         -window.scrollY,
-                        backgroundColor: '#ffffff',
-                        logging:         false,
-                        windowWidth:     captureWidth,
-                        width:           captureWidth
-                    },
-                    jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                    pagebreak: { mode: ['css', 'legacy'] }
-                };
-                var restore = function () {
-                    document.body.classList.remove('is-printing-pdf');
-                    btn.disabled = false;
-                    btn.innerHTML = prevLabel;
-                };
-                html2pdf().set(opt).from(target).save()
-                    .then(restore)
+                html2pdf().set(buildOpts('月次レポート_' + periodSlug + '.pdf')).from(stage).save()
+                    .then(cleanup)
                     .catch(function (err) {
                         console.error('PDF generation failed', err);
-                        restore();
+                        cleanup();
                         alert('PDFの生成に失敗しました。もう一度お試しください。');
                     });
             });
         });
     });
 
-    // --- デバッグ用: html2canvas が吐く生のcanvasをPNG保存 -------------------
-    // PDF と同じパイプライン (html2pdf().toCanvas()) を走らせ、jsPDF 配置の
-    // 直前で canvas を取り出して PNG として保存する。右切れの原因が
-    // html2canvas 側か jsPDF 側かを切り分けるための調査用ボタン。
-    //
-    // html2pdf 0.10.1 のバンドル版は内部の html2canvas をグローバルに
-    // 公開していないため、html2pdf().from(target).toCanvas().get('canvas')
-    // で同じ canvas オブジェクトにアクセスする。
+    // --- デバッグ用: ステージから生Canvasを取り出してPNG保存 -------------------
     var dbgBtn = document.getElementById('rptCanvasDbgBtn');
     if (dbgBtn) {
         dbgBtn.addEventListener('click', function () {
@@ -1778,48 +1723,24 @@ body.is-printing-pdf { background:#fff !important; }
                 alert('html2pdf が読み込まれていません');
                 return;
             }
-            var target = document.querySelector('.content-area');
-            if (!target) return;
-
             var prevLabel = dbgBtn.innerHTML;
             dbgBtn.disabled = true;
             dbgBtn.innerHTML = 'キャプチャ中...';
-            document.body.classList.add('is-printing-pdf');
 
-            var restore = function () {
-                document.body.classList.remove('is-printing-pdf');
+            var stage = buildPdfStage();
+            var cleanup = function () {
+                if (stage && stage.parentNode) { stage.parentNode.removeChild(stage); }
                 dbgBtn.disabled = false;
                 dbgBtn.innerHTML = prevLabel;
             };
 
             requestAnimationFrame(function () {
                 requestAnimationFrame(function () {
-                    var captureWidth = target.offsetWidth;
-                    var rect = target.getBoundingClientRect();
-                    // 計測情報をコンソールに残す（あとで原因を読むため）
-                    console.log('[PDF-DBG] target.offsetWidth =', target.offsetWidth);
-                    console.log('[PDF-DBG] target.scrollWidth =', target.scrollWidth);
-                    console.log('[PDF-DBG] target.getBoundingClientRect() =', rect);
-                    console.log('[PDF-DBG] document.documentElement.offsetWidth =', document.documentElement.offsetWidth);
-                    console.log('[PDF-DBG] window.innerWidth =', window.innerWidth);
+                    var opts = buildOpts('debug.pdf');
+                    opts.html2canvas.logging = true;
+                    console.log('[PDF-DBG] stage.offsetWidth =', stage.offsetWidth, ' scrollWidth =', stage.scrollWidth);
 
-                    var opt = {
-                        margin:      [10, 8, 12, 8],
-                        image:       { type: 'jpeg', quality: 0.95 },
-                        html2canvas: {
-                            scale:           2,
-                            useCORS:         true,
-                            scrollX:         0,
-                            scrollY:         -window.scrollY,
-                            backgroundColor: '#ffffff',
-                            logging:         true,
-                            windowWidth:     captureWidth,
-                            width:           captureWidth
-                        },
-                        jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                    };
-
-                    html2pdf().set(opt).from(target).toCanvas().get('canvas').then(function (canvas) {
+                    html2pdf().set(opts).from(stage).toCanvas().get('canvas').then(function (canvas) {
                         console.log('[PDF-DBG] canvas.width =', canvas.width, ' canvas.height =', canvas.height);
                         var link = document.createElement('a');
                         link.download = 'pdf-debug-canvas_' + periodSlug + '.png';
@@ -1827,11 +1748,11 @@ body.is-printing-pdf { background:#fff !important; }
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
-                        restore();
+                        cleanup();
                     }).catch(function (err) {
                         console.error('[PDF-DBG] toCanvas failed', err);
                         alert('キャプチャに失敗しました: ' + (err && err.message ? err.message : err));
-                        restore();
+                        cleanup();
                     });
                 });
             });
