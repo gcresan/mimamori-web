@@ -16,10 +16,32 @@
   /* ============================
      State
      ============================ */
-  var STORAGE_KEY_HISTORY  = 'mw_chat_history';
-  var STORAGE_KEY_VIEW     = 'mw_chat_viewMode';
+  // sessionStorage はタブ単位で保持されるため、同一ブラウザタブ内で
+  // 別ユーザーにログインし直すと前ユーザーの履歴が漏洩する。
+  // user_id でキーを名前空間化して防ぐ。
+  var _uid = (window.mwChatConfig && window.mwChatConfig.userId)
+    ? String(window.mwChatConfig.userId)
+    : 'anon';
+  var STORAGE_KEY_HISTORY  = 'mw_chat_history_' + _uid;
+  var STORAGE_KEY_VIEW     = 'mw_chat_viewMode_' + _uid;
+  // promptMode はユーザー横断で残ってよい設定なので、localStorage 上は無印のまま
   var STORAGE_KEY_PROMPT_MODE = 'mw_chat_promptMode';
   var MAX_PERSISTED_MESSAGES = 50;
+
+  // 旧バージョン（無印キー）に保存された他ユーザーの履歴を除去する
+  try {
+    sessionStorage.removeItem('mw_chat_history');
+    sessionStorage.removeItem('mw_chat_viewMode');
+    // 自分以外の user_id で保存されたエントリも掃除
+    for (var i = sessionStorage.length - 1; i >= 0; i--) {
+      var k = sessionStorage.key(i);
+      if (!k) continue;
+      if ((k.indexOf('mw_chat_history_') === 0 && k !== STORAGE_KEY_HISTORY) ||
+          (k.indexOf('mw_chat_viewMode_') === 0 && k !== STORAGE_KEY_VIEW)) {
+        sessionStorage.removeItem(k);
+      }
+    }
+  } catch (e) {}
 
   var state = {
     viewMode: 'closed',
