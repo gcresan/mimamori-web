@@ -1628,11 +1628,21 @@ body.is-printing-pdf .gcrev-ai-block { page-break-inside:avoid; break-inside:avo
    display:none にして、結果として .content-area が viewport の x=0 から
    始まる構造を作る。 */
 body.is-printing-pdf { margin:0 !important; padding:0 !important; }
-body.is-printing-pdf .main-content {
+body.is-printing-pdf .app-container {
+    /* デフォルト: display:flex (.sidebar + .main-content の横並び)
+       PDF時は flex をやめて block にし、main-content の左マージン (260px) を無効化 */
+    display:block !important;
     margin:0 !important;
     padding:0 !important;
-    width:auto !important;
+    min-height:0 !important;
+}
+body.is-printing-pdf .main-content {
+    /* デフォルト: margin-left:260px; width: calc(100% - 260px) */
+    margin:0 !important;
+    padding:0 !important;
+    width:100% !important;
     max-width:none !important;
+    flex:none !important;
     transform:none !important;
     position:static !important;
     float:none !important;
