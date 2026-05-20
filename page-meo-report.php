@@ -103,12 +103,9 @@ $render_pct = static function ( int $cur, int $prev ): string {
 .mr-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; }
 .mr-kpi { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:16px; }
 
-/* PDF 生成中だけ適用するスタイル（html2pdf レンダリング時に body.is-printing-pdf を付与） */
-body.is-printing-pdf .mr-kpi-grid { grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; }
-body.is-printing-pdf .mr-kpi { padding:12px; page-break-inside:avoid; break-inside:avoid; }
-body.is-printing-pdf .mr-kpi-grid,
-body.is-printing-pdf .mr-section { page-break-inside:avoid; break-inside:avoid; }
-body.is-printing-pdf .mr-kpi-value { font-size:22px; }
+/* PDFキャプチャ対象が #gcrevPdfStage 配下になった時の追加調整 */
+#gcrevPdfStage .mr-section,
+#gcrevPdfStage .mr-kpi { page-break-inside: avoid; break-inside: avoid; }
 .mr-kpi-label { font-size:12px; color:#64748b; margin-bottom:6px; }
 .mr-kpi-value { font-size:28px; font-weight:700; color:#0f172a; line-height:1.1; }
 .mr-kpi-prev { font-size:11px; color:#94a3b8; margin-top:4px; }
@@ -163,7 +160,7 @@ body.is-printing-pdf .mr-kpi-value { font-size:22px; }
                 </svg>
                 CSV ダウンロード
             </button>
-            <button type="button" id="mrPdfBtn" class="mr-dl-btn mr-dl-btn-primary">
+            <button type="button" id="mrPdfBtn" class="mr-dl-btn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                     <polyline points="7 10 12 15 17 10"></polyline>
@@ -424,7 +421,14 @@ $mr_csv_payload = [
 $mr_period_slug = sprintf( '%04d-%02d', (int) $year, (int) $month );
 ?>
 <script type="application/json" id="mrReportData"><?php echo wp_json_encode( $mr_csv_payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ); ?></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<?php
+$gcrev_pdf_export_url  = get_stylesheet_directory_uri() . '/assets/js/gcrev-pdf-export.js';
+$gcrev_pdf_export_path = get_stylesheet_directory() . '/assets/js/gcrev-pdf-export.js';
+$gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcrev_pdf_export_path ) : '1';
+?>
+<script src="<?php echo esc_url( $gcrev_pdf_export_url . '?v=' . $gcrev_pdf_export_ver ); ?>" defer></script>
 <script>
 (function() {
     'use strict';
@@ -546,49 +550,50 @@ $mr_period_slug = sprintf( '%04d-%02d', (int) $year, (int) $month );
 
     /* ---------- PDF ---------- */
     function downloadPdf() {
-        var el = document.querySelector('.mr-wrap');
-        if (!el) return;
-        if (typeof html2pdf === 'undefined') {
-            alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
-            return;
-        }
-        var toolbar = document.querySelector('.mr-toolbar');
+        var src = document.querySelector('.mr-wrap');
+        if (!src) return;
         var pdfBtn  = document.getElementById('mrPdfBtn');
         var csvBtn  = document.getElementById('mrCsvBtn');
         var prevLabel = pdfBtn ? pdfBtn.innerHTML : '';
-
-        if (toolbar) toolbar.style.display = 'none';
         if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.innerHTML = 'PDF 生成中...'; }
         if (csvBtn) csvBtn.disabled = true;
 
-        // PDF レンダリング中だけ専用 CSS を有効化（カードが3列に折り返さないようにする）
-        document.body.classList.add('is-printing-pdf');
-
-        var opt = {
-            margin:      [10, 8, 12, 8],
-            filename:    'MEOレポート_' + PERIOD_SLUG + '.pdf',
-            image:       { type: 'jpeg', quality: 0.95 },
-            // windowWidth で 1200px のビューポートを模擬し、ユーザーの実画面幅に
-            // 関係なく常に KPI グリッドが4列レイアウトでキャプチャされるようにする
-            html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff', windowWidth: 1200 },
-            jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:   { mode: ['avoid-all', 'css', 'legacy'] }
-        };
+        // 1080pxの固定ステージに .mr-wrap をクローン
+        var stage = GCREV.buildPdfStage([src], 1080);
+        if (!stage) {
+            if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
+            if (csvBtn) csvBtn.disabled = false;
+            alert('レポートの取得に失敗しました。ページを再読み込みしてください。');
+            return;
+        }
+        // クローン側のツールバーは非表示にする (DLボタン自体がPDFに写り込むのを防ぐ)
+        var clonedToolbarEl = stage.querySelector('.mr-toolbar');
+        if (clonedToolbarEl) clonedToolbarEl.style.display = 'none';
 
         var cleanup = function () {
-            document.body.classList.remove('is-printing-pdf');
-            if (toolbar) toolbar.style.display = '';
-            if (pdfBtn)  { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
-            if (csvBtn)  csvBtn.disabled = false;
+            if (stage.parentNode) stage.parentNode.removeChild(stage);
+            if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
+            if (csvBtn) csvBtn.disabled = false;
         };
 
-        html2pdf().set(opt).from(el).save()
-            .then(cleanup)
-            .catch(function(err) {
-                console.error('PDF generation failed', err);
-                cleanup();
-                alert('PDFの生成に失敗しました。もう一度お試しください。');
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                if (stage.scrollHeight < 100) {
+                    cleanup();
+                    alert('レポートのレイアウトが取得できませんでした。ページを再読み込みしてください。');
+                    return;
+                }
+                GCREV.exportPdf({
+                    element:    stage,
+                    filename:   'MEOレポート_' + PERIOD_SLUG + '.pdf',
+                    stageWidth: 1080
+                }).then(cleanup).catch(function (err) {
+                    console.error('PDF generation failed', err);
+                    cleanup();
+                    alert(err && err.message ? err.message : 'PDFの生成に失敗しました。もう一度お試しください。');
+                });
             });
+        });
     }
 
     var csvBtn = document.getElementById('mrCsvBtn');

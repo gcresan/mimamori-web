@@ -191,61 +191,55 @@ get_header();
     var pdfBtn = document.getElementById('strategyReportDetailPdfBtn');
     if (pdfBtn) {
         pdfBtn.addEventListener('click', function () {
-            if (typeof html2pdf === 'undefined') {
-                alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
-                return;
-            }
             var doc = null;
             try { doc = iframe.contentDocument || iframe.contentWindow.document; } catch (e) {}
             if (!doc || !doc.body) {
                 window.open(iframe.getAttribute('src'), '_blank', 'noopener');
                 return;
             }
+            if (typeof window.GCREV === 'undefined' || typeof GCREV.exportPdf !== 'function') {
+                alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
+                return;
+            }
             var prevLabel = pdfBtn.innerHTML;
             pdfBtn.disabled = true;
             pdfBtn.innerHTML = 'PDF 生成中...';
 
-            // iframe 本体の自然な幅をキャプチャ幅として採用し、PDFページとのスケールがズレないようにする
+            // iframe 本体の自然な幅をキャプチャ幅として採用 (最低980pxを保証)
             var bodyWidth = Math.max(
                 doc.body.scrollWidth,
                 doc.documentElement.scrollWidth,
                 doc.body.offsetWidth,
-                800
+                980
             );
 
             var periodSlug = <?php echo wp_json_encode( (string) ( $latest_version['period'] ?? 'report' ) ); ?>;
-            var opt = {
-                margin:      [12, 10, 14, 10],
-                filename:    '深掘りレポート_詳細版_' + periodSlug + '.pdf',
-                image:       { type: 'jpeg', quality: 0.95 },
-                html2canvas: {
-                    scale: 2,
-                    useCORS: true,
-                    scrollX: 0, scrollY: 0,
-                    backgroundColor: '#ffffff',
-                    windowWidth: bodyWidth,
-                    width: bodyWidth
-                },
-                jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak: { mode: ['css', 'legacy'] }
-            };
-
             var restore = function () {
                 pdfBtn.disabled = false;
                 pdfBtn.innerHTML = prevLabel;
             };
-            html2pdf().set(opt).from(doc.body).save()
-                .then(restore)
-                .catch(function (err) {
-                    console.error('PDF generation failed', err);
-                    restore();
-                    alert('PDFの生成に失敗しました。もう一度お試しください。');
-                });
+            GCREV.exportPdf({
+                element:    doc.body,
+                filename:   '深掘りレポート_詳細版_' + periodSlug + '.pdf',
+                stageWidth: bodyWidth,
+                margins:    [12, 10, 14, 10]
+            }).then(restore).catch(function (err) {
+                console.error('PDF generation failed', err);
+                restore();
+                alert(err && err.message ? err.message : 'PDFの生成に失敗しました。もう一度お試しください。');
+            });
         });
     }
 })();
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<?php
+$gcrev_pdf_export_url  = get_stylesheet_directory_uri() . '/assets/js/gcrev-pdf-export.js';
+$gcrev_pdf_export_path = get_stylesheet_directory() . '/assets/js/gcrev-pdf-export.js';
+$gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcrev_pdf_export_path ) : '1';
+?>
+<script src="<?php echo esc_url( $gcrev_pdf_export_url . '?v=' . $gcrev_pdf_export_ver ); ?>" defer></script>
 
 <?php else : ?>
 
