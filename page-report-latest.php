@@ -1632,15 +1632,23 @@ document.addEventListener('DOMContentLoaded', function() {
 #rptPdfStage .m-footnote { page-break-inside: avoid; break-inside: avoid; }
 </style>
 
-<!-- html2pdf ライブラリ -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+<!-- PDF生成: html2canvas と jsPDF を直接使う（html2pdfは内部で要素を PDFページ幅(~733px) に
+     詰め直してキャプチャするため、KPI grid が崩れる。直接呼びにして固定980pxを維持） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 
-<!-- PDF ダウンロード処理 -->
+<!-- PDF ダウンロード処理 (html2canvas + jsPDF を直接呼ぶ) -->
 <script>
 (function () {
     var btn = document.getElementById('rptPdfBtn');
     if (!btn) return;
     var periodSlug = <?php echo wp_json_encode( sprintf( '%04d-%02d', (int) $year, (int) $month ) ); ?>;
+
+    var STAGE_WIDTH = 980;        // キャプチャ幅(px)
+    var SCALE       = 2;          // html2canvasのscale
+    var MARGINS_MM  = [10, 8, 12, 8]; // top,right,bottom,left
+    var A4_W_MM     = 210;
+    var A4_H_MM     = 297;
 
     /**
      * PDF用に「画面外固定幅ステージ」を組み立てて返す。
@@ -1674,29 +1682,64 @@ document.addEventListener('DOMContentLoaded', function() {
         return stage;
     }
 
-    function buildOpts(filename) {
-        return {
-            margin:      [10, 8, 12, 8],
-            filename:    filename,
-            image:       { type: 'jpeg', quality: 0.95 },
-            html2canvas: {
-                scale:           2,
-                useCORS:         true,
-                backgroundColor: '#ffffff',
-                logging:         false,
-                // ステージは画面外に置いてあるが、windowWidth/width=980 を渡すことで
-                // html2canvas にビューポートが980pxだと教える。これで@media や
-                // grid auto-fill の挙動が画面サイズに依存しなくなる。
-                windowWidth:     980,
-                width:           980
-            },
-            jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css', 'legacy'] }
-        };
+    /**
+     * html2canvasでステージをキャプチャしてキャンバスを返す。
+     * windowWidth=980, width=980 を強制して画面サイズに依存させない。
+     */
+    function captureStage(stage) {
+        return html2canvas(stage, {
+            scale:           SCALE,
+            useCORS:         true,
+            backgroundColor: '#ffffff',
+            logging:         false,
+            windowWidth:     STAGE_WIDTH,
+            width:           STAGE_WIDTH,
+            scrollX:         0,
+            scrollY:         0
+        });
+    }
+
+    /**
+     * 縦長キャンバスをA4ページにスライス配置してPDFを作る。
+     * 大きな1枚を addImage するのではなく、ページごとに切り出した子canvasを
+     * addImageすることで、ページまたぎで画像が縦に圧縮されない。
+     */
+    function buildPdfFromCanvas(canvas, filename) {
+        var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+        var pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+        var innerWmm = A4_W_MM - MARGINS_MM[1] - MARGINS_MM[3];
+        var innerHmm = A4_H_MM - MARGINS_MM[0] - MARGINS_MM[2];
+        var pxPerMm  = canvas.width / innerWmm;
+        var pageHpx  = Math.floor(innerHmm * pxPerMm);
+
+        var yOffset = 0;
+        var page = 0;
+        while (yOffset < canvas.height) {
+            if (page > 0) pdf.addPage();
+            var sliceH = Math.min(pageHpx, canvas.height - yOffset);
+            var slice = document.createElement('canvas');
+            slice.width  = canvas.width;
+            slice.height = sliceH;
+            var ctx = slice.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, slice.width, slice.height);
+            ctx.drawImage(canvas, 0, yOffset, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+            var sliceHmm = sliceH / pxPerMm;
+            pdf.addImage(slice.toDataURL('image/jpeg', 0.95), 'JPEG',
+                MARGINS_MM[3], MARGINS_MM[0], innerWmm, sliceHmm);
+            yOffset += pageHpx;
+            page++;
+        }
+        pdf.save(filename);
+    }
+
+    function libsReady() {
+        var jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+        return typeof window.html2canvas === 'function' && typeof jsPDFCtor === 'function';
     }
 
     btn.addEventListener('click', function () {
-        if (typeof html2pdf === 'undefined') {
+        if (!libsReady()) {
             alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
             return;
         }
@@ -1721,33 +1764,32 @@ document.addEventListener('DOMContentLoaded', function() {
         // クローン直後はレイアウトが未確定のことがあるので2RAF待つ
         requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-                // 計測: 高さ0だと PDF が空になるので検知してエラーにする
-                var h = stage.scrollHeight;
-                var w = stage.scrollWidth;
-                console.log('[PDF] stage size:', w + 'x' + h);
-                if (h < 100) {
-                    console.error('[PDF] stage height too small, aborting', { w: w, h: h });
+                console.log('[PDF] stage size:', stage.scrollWidth + 'x' + stage.scrollHeight);
+                if (stage.scrollHeight < 100) {
+                    console.error('[PDF] stage height too small, aborting');
                     cleanup();
                     alert('レポートのレイアウトが取得できませんでした。ページを再読み込みしてください。');
                     return;
                 }
-                html2pdf().set(buildOpts('月次レポート_' + periodSlug + '.pdf')).from(stage).save()
-                    .then(cleanup)
-                    .catch(function (err) {
-                        console.error('PDF generation failed', err);
-                        cleanup();
-                        alert('PDFの生成に失敗しました。もう一度お試しください。');
-                    });
+                captureStage(stage).then(function (canvas) {
+                    console.log('[PDF] canvas:', canvas.width + 'x' + canvas.height);
+                    buildPdfFromCanvas(canvas, '月次レポート_' + periodSlug + '.pdf');
+                    cleanup();
+                }).catch(function (err) {
+                    console.error('PDF generation failed', err);
+                    cleanup();
+                    alert('PDFの生成に失敗しました。もう一度お試しください。');
+                });
             });
         });
     });
 
-    // --- デバッグ用: ステージから生Canvasを取り出してPNG保存 -------------------
+    // --- デバッグ用: 生Canvas をそのまま PNG 保存 -------------------
     var dbgBtn = document.getElementById('rptCanvasDbgBtn');
     if (dbgBtn) {
         dbgBtn.addEventListener('click', function () {
-            if (typeof html2pdf === 'undefined') {
-                alert('html2pdf が読み込まれていません');
+            if (!libsReady()) {
+                alert('html2canvas が読み込まれていません');
                 return;
             }
             var prevLabel = dbgBtn.innerHTML;
@@ -1769,13 +1811,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
             requestAnimationFrame(function () {
                 requestAnimationFrame(function () {
-                    var opts = buildOpts('debug.pdf');
-                    opts.html2canvas.logging = true;
-                    console.log('[PDF-DBG] stage size:', stage.scrollWidth + 'x' + stage.scrollHeight);
+                    console.log('[PDF-DBG] stage:', stage.scrollWidth + 'x' + stage.scrollHeight);
                     console.log('[PDF-DBG] stage.getBoundingClientRect() =', stage.getBoundingClientRect());
-
-                    html2pdf().set(opts).from(stage).toCanvas().get('canvas').then(function (canvas) {
-                        console.log('[PDF-DBG] canvas.width =', canvas.width, ' canvas.height =', canvas.height);
+                    captureStage(stage).then(function (canvas) {
+                        console.log('[PDF-DBG] canvas:', canvas.width + 'x' + canvas.height);
                         var link = document.createElement('a');
                         link.download = 'pdf-debug-canvas_' + periodSlug + '.png';
                         link.href = canvas.toDataURL('image/png');
@@ -1784,7 +1823,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         document.body.removeChild(link);
                         cleanup();
                     }).catch(function (err) {
-                        console.error('[PDF-DBG] toCanvas failed', err);
+                        console.error('[PDF-DBG] capture failed', err);
                         alert('キャプチャに失敗しました: ' + (err && err.message ? err.message : err));
                         cleanup();
                     });
