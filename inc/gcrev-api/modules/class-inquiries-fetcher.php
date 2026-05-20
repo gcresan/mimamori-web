@@ -1578,6 +1578,15 @@ class Mimamori_Inquiries_Fetcher {
      * 指定月の valid_count（有効問い合わせ数）だけを返す。
      * レコード未登録なら null（呼び出し側でフォールバックを判断するため）。
      *
+     * 真実の源は items_json + 手動オーバーライド + 除外キーワード（= effective_valid）。
+     * 問い合わせ一覧ページと同じ計算式で算出することで、ダッシュボードの
+     * 「お問い合わせ関連」と画面上の「有効」件数が常に一致する。
+     *
+     * DB の valid_count カラムはキャッシュ的位置付けで、設定変更後の再計算が
+     * 漏れていても (例: 過去にキーワードを設定したまま saveしていない等)、
+     * この関数からは正しい値が返るようにする。items_json が無い月のみ
+     * フォールバックで DB の valid_count を読む。
+     *
      * @param int    $user_id
      * @param string $year_month YYYY-MM
      * @return int|null
@@ -1586,6 +1595,21 @@ class Mimamori_Inquiries_Fetcher {
         if ( ! preg_match( '/^\d{4}-\d{2}$/', $year_month ) ) {
             return null;
         }
+
+        // 一次ソース: items_json から effective_valid を直接集計
+        $items = self::get_items_json( $user_id, $year_month );
+        if ( is_array( $items ) && ! empty( $items ) ) {
+            $items = self::apply_overrides_to_items( $user_id, $year_month, $items );
+            $valid = 0;
+            foreach ( $items as $it ) {
+                if ( ! empty( $it['effective_valid'] ) ) {
+                    $valid++;
+                }
+            }
+            return $valid;
+        }
+
+        // フォールバック: items_json が無い古い月は DB のサマリを読む
         global $wpdb;
         $table = self::table_name();
         $val = $wpdb->get_var( $wpdb->prepare(
