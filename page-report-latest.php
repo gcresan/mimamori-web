@@ -1737,22 +1737,18 @@ body.is-printing-pdf { background:#fff !important; }
     });
 
     // --- デバッグ用: html2canvas が吐く生のcanvasをPNG保存 -------------------
-    // PDF と同じ html2canvas オプションでキャプチャし、jsPDF を通さずに
-    // canvas 自体を PNG としてダウンロードする。右切れの原因が html2canvas 側か
-    // jsPDF 配置側かを切り分けるための調査用ボタン。
+    // PDF と同じパイプライン (html2pdf().toCanvas()) を走らせ、jsPDF 配置の
+    // 直前で canvas を取り出して PNG として保存する。右切れの原因が
+    // html2canvas 側か jsPDF 側かを切り分けるための調査用ボタン。
+    //
+    // html2pdf 0.10.1 のバンドル版は内部の html2canvas をグローバルに
+    // 公開していないため、html2pdf().from(target).toCanvas().get('canvas')
+    // で同じ canvas オブジェクトにアクセスする。
     var dbgBtn = document.getElementById('rptCanvasDbgBtn');
     if (dbgBtn) {
         dbgBtn.addEventListener('click', function () {
-            if (typeof html2canvas === 'undefined') {
-                if (typeof html2pdf === 'undefined') {
-                    alert('html2canvas/html2pdf が読み込まれていません');
-                    return;
-                }
-                // html2pdf がバンドルしている html2canvas を取り出す
-                // html2pdf 0.10.1 では html2pdf.Worker.prototype の依存として globalに
-                // 公開される。なければ alert で止める。
-                alert('html2canvas が見つかりません。コンソールを確認してください。');
-                console.warn('html2canvas global not found; html2pdf bundle may expose it differently.');
+            if (typeof html2pdf === 'undefined') {
+                alert('html2pdf が読み込まれていません');
                 return;
             }
             var target = document.querySelector('.content-area');
@@ -1762,6 +1758,12 @@ body.is-printing-pdf { background:#fff !important; }
             dbgBtn.disabled = true;
             dbgBtn.innerHTML = 'キャプチャ中...';
             document.body.classList.add('is-printing-pdf');
+
+            var restore = function () {
+                document.body.classList.remove('is-printing-pdf');
+                dbgBtn.disabled = false;
+                dbgBtn.innerHTML = prevLabel;
+            };
 
             requestAnimationFrame(function () {
                 requestAnimationFrame(function () {
@@ -1774,16 +1776,23 @@ body.is-printing-pdf { background:#fff !important; }
                     console.log('[PDF-DBG] document.documentElement.offsetWidth =', document.documentElement.offsetWidth);
                     console.log('[PDF-DBG] window.innerWidth =', window.innerWidth);
 
-                    html2canvas(target, {
-                        scale:           2,
-                        useCORS:         true,
-                        scrollX:         0,
-                        scrollY:         -window.scrollY,
-                        backgroundColor: '#ffffff',
-                        logging:         true,
-                        windowWidth:     captureWidth,
-                        width:           captureWidth
-                    }).then(function (canvas) {
+                    var opt = {
+                        margin:      [10, 8, 12, 8],
+                        image:       { type: 'jpeg', quality: 0.95 },
+                        html2canvas: {
+                            scale:           2,
+                            useCORS:         true,
+                            scrollX:         0,
+                            scrollY:         -window.scrollY,
+                            backgroundColor: '#ffffff',
+                            logging:         true,
+                            windowWidth:     captureWidth,
+                            width:           captureWidth
+                        },
+                        jsPDF:     { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    };
+
+                    html2pdf().set(opt).from(target).toCanvas().get('canvas').then(function (canvas) {
                         console.log('[PDF-DBG] canvas.width =', canvas.width, ' canvas.height =', canvas.height);
                         var link = document.createElement('a');
                         link.download = 'pdf-debug-canvas_' + periodSlug + '.png';
@@ -1791,13 +1800,11 @@ body.is-printing-pdf { background:#fff !important; }
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
+                        restore();
                     }).catch(function (err) {
-                        console.error('[PDF-DBG] html2canvas failed', err);
-                        alert('キャプチャに失敗しました: ' + err.message);
-                    }).then(function () {
-                        document.body.classList.remove('is-printing-pdf');
-                        dbgBtn.disabled = false;
-                        dbgBtn.innerHTML = prevLabel;
+                        console.error('[PDF-DBG] toCanvas failed', err);
+                        alert('キャプチャに失敗しました: ' + (err && err.message ? err.message : err));
+                        restore();
                     });
                 });
             });
