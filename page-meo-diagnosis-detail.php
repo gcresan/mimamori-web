@@ -48,9 +48,13 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
     display: inline-flex; align-items: center; gap: 6px;
     padding: 9px 18px; border: 1px solid #d0d5dd; border-radius: 8px;
     font-size: 13px; font-weight: 500; cursor: pointer;
-    background: #fff; color: #344054; transition: all 0.15s;
+    background: #fff; color: #344054;
+    font-family: inherit; line-height: 1; white-space: nowrap;
+    transition: all 0.15s;
 }
 .meo-diag-pdf-btn:hover { background: #f9fafb; border-color: #98a2b3; }
+.meo-diag-pdf-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.meo-diag-pdf-btn svg { flex-shrink: 0; }
 
 /* Score summary bar */
 .meo-diag-score-bar {
@@ -235,10 +239,12 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <button class="meo-diag-pdf-btn" id="diagCsvBtn" type="button" onclick="downloadCsv()">
-                    &#x2B07;&#xFE0F; CSV ダウンロード
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    CSV ダウンロード
                 </button>
                 <button class="meo-diag-pdf-btn" id="diagPdfBtn" type="button" onclick="downloadPdf()">
-                    &#x1F4E5; PDFダウンロード
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    PDF ダウンロード
                 </button>
             </div>
         </div>
@@ -345,7 +351,14 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
 
 <?php get_footer(); ?>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<?php
+$gcrev_pdf_export_url  = get_stylesheet_directory_uri() . '/assets/js/gcrev-pdf-export.js';
+$gcrev_pdf_export_path = get_stylesheet_directory() . '/assets/js/gcrev-pdf-export.js';
+$gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcrev_pdf_export_path ) : '1';
+?>
+<script src="<?php echo esc_url( $gcrev_pdf_export_url . '?v=' . $gcrev_pdf_export_ver ); ?>" defer></script>
 
 <script>
 (function() {
@@ -675,29 +688,55 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
 
     // PDF download
     window.downloadPdf = function() {
-        var el = document.getElementById('meo-report-content');
-        if (!el || typeof html2pdf === 'undefined') {
+        var src = document.getElementById('meo-report-content');
+        if (!src) return;
+        if (typeof window.GCREV === 'undefined' || typeof GCREV.exportPdf !== 'function') {
             alert('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。');
             return;
         }
-        var date = reportData ? reportData.diagnostic_date : 'report';
-        var opt = {
-            margin: [10, 10, 10, 10],
-            filename: 'MEO診断レポート_' + date + '.pdf',
-            image: { type: 'jpeg', quality: 0.95 },
-            html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-        // Hide buttons during PDF generation
         var pdfBtn = document.getElementById('diagPdfBtn');
-        var navLinks = document.querySelectorAll('.meo-diag-nav-link');
-        if (pdfBtn) pdfBtn.style.display = 'none';
-        navLinks.forEach(function(l) { l.style.display = 'none'; });
+        var csvBtn = document.getElementById('diagCsvBtn');
+        var prevLabel = pdfBtn ? pdfBtn.innerHTML : '';
+        if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.innerHTML = 'PDF 生成中...'; }
+        if (csvBtn) csvBtn.disabled = true;
 
-        html2pdf().set(opt).from(el).save().then(function() {
-            if (pdfBtn) pdfBtn.style.display = '';
-            navLinks.forEach(function(l) { l.style.display = ''; });
+        // 1080pxの固定ステージに #meo-report-content をクローン
+        var stage = GCREV.buildPdfStage([src], 1080);
+        if (!stage) {
+            if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
+            if (csvBtn) csvBtn.disabled = false;
+            alert('レポートの取得に失敗しました。ページを再読み込みしてください。');
+            return;
+        }
+        // クローン側のDLボタン群・遷移リンクはPDFから除外
+        stage.querySelectorAll('#diagCsvBtn, #diagPdfBtn, .meo-diag-nav-link').forEach(function (el) {
+            el.style.display = 'none';
+        });
+
+        var cleanup = function () {
+            if (stage.parentNode) stage.parentNode.removeChild(stage);
+            if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
+            if (csvBtn) csvBtn.disabled = false;
+        };
+
+        var date = reportData ? reportData.diagnostic_date : 'report';
+        requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+                if (stage.scrollHeight < 100) {
+                    cleanup();
+                    alert('レポートのレイアウトが取得できませんでした。ページを再読み込みしてください。');
+                    return;
+                }
+                GCREV.exportPdf({
+                    element:    stage,
+                    filename:   'MEO診断レポート_' + date + '.pdf',
+                    stageWidth: 1080
+                }).then(cleanup).catch(function (err) {
+                    console.error('PDF generation failed', err);
+                    cleanup();
+                    alert(err && err.message ? err.message : 'PDFの生成に失敗しました。もう一度お試しください。');
+                });
+            });
         });
     };
 
