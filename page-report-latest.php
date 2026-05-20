@@ -1619,19 +1619,35 @@ body.is-printing-pdf .kpi-card,
 body.is-printing-pdf .report-section,
 body.is-printing-pdf .gcrev-ai-block { page-break-inside:avoid; break-inside:avoid; }
 
-/* レイアウトオーバーライド: サイドバー分のオフセットを除去し、コンテンツを左端から全幅で配置 */
-body.is-printing-pdf .main-content { margin-left:0 !important; width:100% !important; padding-top:0 !important; }
+/* レイアウトオーバーライド:
+   .main-content は .content-area の親なので display:none にできない。
+   代わりに margin/padding/transform をすべて消して位置情報を中立化し、
+   .content-area 自体を position:fixed で画面左上 (0,0) にピン留めする。
+   こうすると html2canvas のクローンiframeで祖先の中央寄せやサイドバー
+   オフセットが残っていても、.content-area の描画位置が必ず (0,0) に
+   なるので、キャプチャ領域が確実に一致する。 */
+body.is-printing-pdf { margin:0 !important; padding:0 !important; }
+body.is-printing-pdf .main-content {
+    margin:0 !important;
+    padding:0 !important;
+    width:auto !important;
+    transform:none !important;
+    position:static !important;
+}
 body.is-printing-pdf .content-area {
-    /* 固定幅 + overflow-x:hidden で、子要素の横方向オーバーフローや透明レイヤーが
-       scrollWidth を膨らませてキャプチャ範囲が狂うのを防ぐ */
+    /* 画面左上 (0,0) に固定。座標の曖昧さを完全に排除する */
+    position:fixed !important;
+    top:0 !important;
+    left:0 !important;
     width:980px !important;
     max-width:980px !important;
-    margin:0 auto !important;
+    margin:0 !important;
     padding:16px !important;
     overflow-x:hidden !important;
-    position:relative !important;
-    left:0 !important;
     transform:none !important;
+    box-sizing:border-box !important;
+    background:#fff !important;
+    z-index:99999 !important;
 }
 /* レポート本体ラッパーも幅を固定し、左右にはみ出さないようにする */
 body.is-printing-pdf .gcrev-ai-report-modern,
