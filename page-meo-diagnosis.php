@@ -120,6 +120,29 @@ get_header();
 }
 .meo-diag-link:hover { text-decoration: underline; }
 
+/* 詳細レポートを見る CTA — 目立たせるためのプライマリスタイル */
+.meo-diag-detail-cta {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 26px;
+    background: #568184; color: #fff;
+    border: none; border-radius: 10px;
+    font-size: 15px; font-weight: 600;
+    text-decoration: none;
+    box-shadow: 0 2px 8px rgba(86, 129, 132, 0.25);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+.meo-diag-detail-cta:hover {
+    background: #476C6F;
+    color: #fff;
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(86, 129, 132, 0.35);
+}
+.meo-diag-detail-cta:active { transform: translateY(0); }
+.meo-diag-detail-cta__arrow { transition: transform 0.15s ease; }
+.meo-diag-detail-cta:hover .meo-diag-detail-cta__arrow { transform: translateX(3px); }
+
 /* Empty */
 .meo-diag-empty {
     text-align: center; padding: 60px 20px; color: #9ca3af;
@@ -175,9 +198,6 @@ get_header();
     <div class="meo-diag-header">
         <div class="meo-diag-header__title">&#x1F50D; MEO診断</div>
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <button class="meo-diag-btn meo-diag-btn--outline" id="meoDiagCsvBtn" type="button" style="display:none;">
-                &#x2B07;&#xFE0F; CSV ダウンロード
-            </button>
             <button class="meo-diag-btn" id="meoDiagRunBtn" type="button">
                 &#x1F680; 診断を実行する
             </button>
@@ -221,8 +241,11 @@ get_header();
                     <span class="meo-diag-date-badge" id="meoDiagDate"></span>
                 </div>
                 <div class="meo-diag-grades" id="meoDiagGrades"></div>
-                <div style="margin-top:14px;">
-                    <a href="#" class="meo-diag-link" id="meoDiagDetailLink">&#x1F4CB; 詳細レポートを見る &rarr;</a>
+                <div style="margin-top:20px;">
+                    <a href="#" class="meo-diag-detail-cta" id="meoDiagDetailLink">
+                        &#x1F4CB; 詳細レポートを見る
+                        <span class="meo-diag-detail-cta__arrow">&rarr;</span>
+                    </a>
                 </div>
             </div>
         </div>
@@ -283,7 +306,6 @@ get_header();
     var summaryEl  = document.getElementById('meoDiagSummaryWrap');
     var historyEl  = document.getElementById('meoDiagHistory');
     var runBtn     = document.getElementById('meoDiagRunBtn');
-    var csvBtn     = document.getElementById('meoDiagCsvBtn');
     var historyData = [];
 
     var gradeLabels = {
@@ -296,7 +318,6 @@ get_header();
     // Init
     document.addEventListener('DOMContentLoaded', function() {
         if (runBtn) runBtn.addEventListener('click', runDiagnostic);
-        if (csvBtn) csvBtn.addEventListener('click', exportHistoryCsv);
         loadHistory();
     });
 
@@ -326,7 +347,6 @@ get_header();
         emptyEl.style.display    = s === 'empty' ? '' : 'none';
         summaryEl.style.display  = s === 'data' ? '' : 'none';
         historyEl.style.display  = s === 'data' ? '' : 'none';
-        if (csvBtn) csvBtn.style.display = (s === 'data' && historyData.length > 0) ? 'inline-flex' : 'none';
     }
 
     function renderLatest(d) {
@@ -451,71 +471,6 @@ get_header();
         var d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
-    }
-
-    /* =========================================================
-       CSV エクスポート（診断履歴）
-       ========================================================= */
-    function csvEscape(v) {
-        if (v === null || v === undefined) return '';
-        var s = String(v);
-        if (s.indexOf('"') !== -1 || s.indexOf(',') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) {
-            return '"' + s.replace(/"/g, '""') + '"';
-        }
-        return s;
-    }
-
-    function exportHistoryCsv() {
-        if (!historyData || historyData.length === 0) {
-            showToast('出力するデータがありません。', 'error');
-            return;
-        }
-        var headers = [
-            '診断日', '総合スコア', '総合グレード',
-            '基本情報スコア', '基本情報グレード',
-            '投稿スコア', '投稿グレード',
-            '写真スコア', '写真グレード',
-            'レビュースコア', 'レビューグレード'
-        ];
-        var lines = [headers.map(csvEscape).join(',')];
-        historyData.forEach(function(d) {
-            var cats = d.categories || {};
-            var basic = cats.basic_info || {};
-            var posts = cats.posts || {};
-            var photos = cats.photos || {};
-            var reviews = cats.reviews || {};
-            lines.push([
-                d.diagnostic_date || '',
-                d.overall_score == null ? '' : d.overall_score,
-                d.overall_grade || '',
-                basic.score == null ? '' : basic.score,
-                basic.grade || '',
-                posts.score == null ? '' : posts.score,
-                posts.grade || '',
-                photos.score == null ? '' : photos.score,
-                photos.grade || '',
-                reviews.score == null ? '' : reviews.score,
-                reviews.grade || ''
-            ].map(csvEscape).join(','));
-        });
-
-        var BOM = '\uFEFF';
-        var blob = new Blob([BOM + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-        var url = URL.createObjectURL(blob);
-        var now = new Date();
-        var pad = function(n) { return (n < 10 ? '0' : '') + n; };
-        var dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'meo-diagnosis-history_' + dateStr + '.csv';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function() {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 100);
-        showToast('CSVを書き出しました');
     }
 
 })();
