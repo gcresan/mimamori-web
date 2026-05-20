@@ -56,3 +56,19 @@ jobs:
             chmod +x "$f"
           done
           REMOTE
+
+      - name: Flush OPcache and WordPress caches
+        # KUSANAGI の OPcache に PHP の旧バイトコードが残ったままになるのを防ぐ。
+        # 加えて WordPress の object cache (transients を含む) もまとめてフラッシュ。
+        run: |
+          ssh root@162.43.35.237 'bash -s' <<'REMOTE'
+          set -e
+          # PHP-FPM を reload して OPcache を破棄させる (KUSANAGI標準: php-fpm@php8.x)
+          systemctl reload 'php-fpm@*' 2>/dev/null || systemctl restart 'php-fpm@*' 2>/dev/null || \
+            systemctl restart php-fpm 2>/dev/null || true
+          # WordPress の object cache をフラッシュ
+          sudo -u kusanagi /opt/kusanagi/php/bin/php /opt/kusanagi/bin/wp \
+            cache flush --path=/home/kusanagi/mimamori-dev/DocumentRoot 2>/dev/null || true
+          # KUSANAGI bcache (ページキャッシュ) が有効ならフラッシュ
+          kusanagi bcache flush mimamori-dev 2>/dev/null || true
+          REMOTE
