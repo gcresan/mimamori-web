@@ -561,7 +561,12 @@ get_header();
 
     <!-- PDF ダウンロードボタン -->
     <div id="rptPdfBar" style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;">
-        <?php if ( current_user_can( 'manage_options' ) ) : ?>
+        <?php
+        // PDF右切れ調査用デバッグボタン: 管理者 もしくは ?debug_pdf=1 で表示
+        $gcrev_show_pdf_dbg = current_user_can( 'manage_options' )
+            || ( isset( $_GET['debug_pdf'] ) && $_GET['debug_pdf'] === '1' );
+        if ( $gcrev_show_pdf_dbg ) :
+        ?>
         <button type="button" id="rptCanvasDbgBtn"
                 title="html2canvas が吐く生のcanvasをPNGで保存（デバッグ用）"
                 style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:1px dashed #b25f3e;border-radius:8px;background:#fff7f3;color:#b25f3e;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;line-height:1;white-space:nowrap;">
