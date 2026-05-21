@@ -11779,6 +11779,17 @@ PROMPT;
         // 構造: [event_name => [ 'label' => string, 'source' => string, 'daily' => [date => count] ]]
         $daily_by_label = [];
 
+        // [DIAG-2026-05-21] ゴール集計の値を確認するための一時診断ログ
+        file_put_contents( '/tmp/gcrev_goal_debug.log',
+            date('Y-m-d H:i:s') . " get_effective_cv_monthly user={$user_id} ym={$year_month}"
+            . " override_keys=" . wp_json_encode($override_keys, JSON_UNESCAPED_UNICODE)
+            . " route_event_count_names=" . wp_json_encode($route_event_count_names, JSON_UNESCAPED_UNICODE)
+            . " phone_tap_event_count_daily=" . wp_json_encode(array_map('array_sum', $phone_tap_event_count_daily), JSON_UNESCAPED_UNICODE)
+            . " ga4_events_daily_keys=" . wp_json_encode(array_keys($ga4_events_daily), JSON_UNESCAPED_UNICODE)
+            . "\n",
+            FILE_APPEND
+        );
+
         // 1) オーバーライドイベントの処理
         foreach ($override_keys as $event_name) {
             $manual_daily = $this->get_actual_cv_daily_for_route($year_month, $user_id, $event_name);
