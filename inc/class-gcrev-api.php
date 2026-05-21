@@ -13847,65 +13847,93 @@ PROMPT;
         ?array $cv_event_names = null
     ): array {
         try {
-            $request = new RunReportRequest();
-            $request->setProperty($property);
-            $request->setDateRanges([
+            // ── Query A: sessions / totalUsers / pageviews を取得 ──
+            // eventName フィルタを掛けないこと! 掛けると sessions が
+            // 「該当イベントが発火したセッションだけ」に絞られ、ゴール達成率
+            // (= ゴール数 / セッション数) が異常に高い値になる。
+            $request_sessions = new RunReportRequest();
+            $request_sessions->setProperty($property);
+            $request_sessions->setDateRanges([
                 (new DateRange())->setStartDate($start)->setEndDate($end)
             ]);
-            $request->setDimensions([
+            $request_sessions->setDimensions([
                 (new Dimension())->setName($dimension_name)
             ]);
-
-            // 「ゴール設定」でユーザーが登録した event_names が渡された場合は、
-            // GA4 の keyEvents 指標ではなく eventCount + eventName フィルタを使う。
-            // → GA4 側でキーイベントマークが付いていない event (例: contact_complete)
-            //   も拾える。これにより流入元/デバイス別の按分計算が成立する。
-            $use_event_count_with_filter = is_array($cv_event_names) && ! empty(array_filter($cv_event_names, fn($n) => $n !== ''));
-
-            if ($use_event_count_with_filter) {
-                $request->setMetrics([
-                    (new Metric())->setName('sessions'),
-                    (new Metric())->setName('totalUsers'),
-                    (new Metric())->setName('eventCount'),
-                    (new Metric())->setName('screenPageViews'),
-                ]);
-            } else {
-                $request->setMetrics([
-                    (new Metric())->setName('sessions'),
-                    (new Metric())->setName('totalUsers'),
-                    (new Metric())->setName('keyEvents'),
-                    (new Metric())->setName('screenPageViews'),
-                ]);
-            }
-
-            // セッション数で降順ソート
-            $request->setOrderBys([
+            $request_sessions->setMetrics([
+                (new Metric())->setName('sessions'),
+                (new Metric())->setName('totalUsers'),
+                (new Metric())->setName('keyEvents'),
+                (new Metric())->setName('screenPageViews'),
+            ]);
+            $request_sessions->setOrderBys([
                 (new OrderBy())->setMetric(
                     (new OrderBy\MetricOrderBy())->setMetricName('sessions')
                 )->setDesc(true)
             ]);
 
-            // 国フィルタ + (オプション) eventName フィルタを構築
-            $filter_parts = [];
             $country_filter = $this->ga4->get_country_filter();
             if ( $country_filter !== null ) {
-                $filter_parts[] = $country_filter;
+                $request_sessions->setDimensionFilter( $country_filter );
             }
-            if ($use_event_count_with_filter) {
-                $names = array_values(array_unique(array_filter($cv_event_names, fn($n) => $n !== '')));
-                if (count($names) === 1) {
+
+            $response = $client->runReport($request_sessions);
+            $items = [];
+
+            foreach ($response->getRows() as $row) {
+                $dim_value = $row->getDimensionValues()[0]->getValue();
+                $metrics   = $row->getMetricValues();
+
+                $sessions   = (int)$metrics[0]->getValue();
+                $users      = (int)$metrics[1]->getValue();
+                $key_events = (int)$metrics[2]->getValue();
+                $pageviews  = (int)$metrics[3]->getValue();
+
+                $items[] = [
+                    'dimension'  => $dim_value,
+                    'sessions'   => $sessions,
+                    'users'      => $users,
+                    'keyEvents'  => $key_events,
+                    'pageviews'  => $pageviews,
+                    'cvr'        => $sessions > 0 ? round($key_events / $sessions * 100, 2) : 0,
+                ];
+            }
+
+            // ── Query B (オプション): ゴール設定済み event_names が渡されたら、
+            //    eventCount + eventName フィルタで取得して keyEvents を上書き ──
+            $event_names_filtered = is_array($cv_event_names)
+                ? array_values(array_unique(array_filter($cv_event_names, fn($n) => $n !== '')))
+                : [];
+            if (! empty($event_names_filtered)) {
+                $request_ev = new RunReportRequest();
+                $request_ev->setProperty($property);
+                $request_ev->setDateRanges([
+                    (new DateRange())->setStartDate($start)->setEndDate($end)
+                ]);
+                $request_ev->setDimensions([
+                    (new Dimension())->setName($dimension_name)
+                ]);
+                $request_ev->setMetrics([
+                    (new Metric())->setName('eventCount'),
+                ]);
+
+                // フィルタ: country + eventName
+                $filter_parts = [];
+                if ($country_filter !== null) {
+                    $filter_parts[] = $country_filter;
+                }
+                if (count($event_names_filtered) === 1) {
                     $event_filter = new \Google\Analytics\Data\V1beta\FilterExpression([
                         'filter' => new \Google\Analytics\Data\V1beta\Filter([
                             'field_name'    => 'eventName',
                             'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter([
-                                'value'      => $names[0],
+                                'value'      => $event_names_filtered[0],
                                 'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
                             ]),
                         ]),
                     ]);
                 } else {
                     $sub_filters = [];
-                    foreach ($names as $name) {
+                    foreach ($event_names_filtered as $name) {
                         $sub_filters[] = new \Google\Analytics\Data\V1beta\FilterExpression([
                             'filter' => new \Google\Analytics\Data\V1beta\Filter([
                                 'field_name'    => 'eventName',
@@ -13923,39 +13951,34 @@ PROMPT;
                     ]);
                 }
                 $filter_parts[] = $event_filter;
-            }
-            if (! empty($filter_parts)) {
                 if (count($filter_parts) === 1) {
-                    $request->setDimensionFilter($filter_parts[0]);
+                    $request_ev->setDimensionFilter($filter_parts[0]);
                 } else {
-                    $request->setDimensionFilter(new \Google\Analytics\Data\V1beta\FilterExpression([
+                    $request_ev->setDimensionFilter(new \Google\Analytics\Data\V1beta\FilterExpression([
                         'and_group' => new \Google\Analytics\Data\V1beta\FilterExpressionList([
                             'expressions' => $filter_parts,
                         ]),
                     ]));
                 }
-            }
 
-            $response = $client->runReport($request);
-            $items = [];
+                $response_ev = $client->runReport($request_ev);
+                $ev_counts_by_dim = [];
+                foreach ($response_ev->getRows() as $row) {
+                    $dim_value = (string) $row->getDimensionValues()[0]->getValue();
+                    $cnt       = (int) $row->getMetricValues()[0]->getValue();
+                    $ev_counts_by_dim[$dim_value] = ($ev_counts_by_dim[$dim_value] ?? 0) + $cnt;
+                }
 
-            foreach ($response->getRows() as $row) {
-                $dim_value = $row->getDimensionValues()[0]->getValue();
-                $metrics   = $row->getMetricValues();
-
-                $sessions   = (int)$metrics[0]->getValue();
-                $users      = (int)$metrics[1]->getValue();
-                $key_events = (int)$metrics[2]->getValue(); // eventCount or keyEvents
-                $pageviews  = (int)$metrics[3]->getValue();
-
-                $items[] = [
-                    'dimension'  => $dim_value,
-                    'sessions'   => $sessions,
-                    'users'      => $users,
-                    'keyEvents'  => $key_events,
-                    'pageviews'  => $pageviews,
-                    'cvr'        => $sessions > 0 ? round($key_events / $sessions * 100, 2) : 0,
-                ];
+                // $items の keyEvents を上書き (cvr も再計算)
+                foreach ($items as &$item) {
+                    $dim_value = (string) ($item['dimension'] ?? '');
+                    $new_ke    = (int) ($ev_counts_by_dim[$dim_value] ?? 0);
+                    $item['keyEvents'] = $new_ke;
+                    $item['cvr']       = $item['sessions'] > 0
+                        ? round($new_ke / $item['sessions'] * 100, 2)
+                        : 0;
+                }
+                unset($item);
             }
 
             return $items;
