@@ -12676,7 +12676,18 @@ PROMPT;
                     // ── GA4 pagePath × keyEvents を確定CV合計で按分 ──
                     $client   = new BetaAnalyticsDataClient(['credentials' => $this->service_account_path]);
                     $property = 'properties/' . $ga4_id;
-                    $ga4_rows = $this->fetch_cv_by_dimension( $client, $property, 'pagePath', $start, $end );
+                    // ゴール設定済み event_names を渡して eventCount+eventName フィルタで取得
+                    // (GA4 側でキーイベントマーク無しの contact_complete 等も拾えるようにする)
+                    $cv_routes_dd = $this->get_enabled_cv_routes($user_id);
+                    $cv_ev_dd = array_values(array_filter(
+                        array_map(fn($r) => (string) ($r['route_key'] ?? ''), $cv_routes_dd),
+                        fn($n) => $n !== ''
+                    ));
+                    $phone_ev_dd = (string) get_user_meta($user_id, '_gcrev_phone_event_name', true);
+                    if ($phone_ev_dd !== '' && ! in_array($phone_ev_dd, $cv_ev_dd, true)) {
+                        $cv_ev_dd[] = $phone_ev_dd;
+                    }
+                    $ga4_rows = $this->fetch_cv_by_dimension( $client, $property, 'pagePath', $start, $end, ! empty($cv_ev_dd) ? $cv_ev_dd : null );
 
                     // 除外パターンでフィルタ
                     $ga4_rows = array_filter( $ga4_rows, function( $row ) use ( $page_exclude ) {
@@ -13695,22 +13706,37 @@ PROMPT;
                 $effective_cv_prev = $this->get_effective_cv_for_range($comp_start, $comp_end, $user_id);
             }
 
+            // ゴール設定済み event_names を集める。これを fetch_cv_by_dimension に
+            // 渡すと、GA4 の keyEvents 指標ではなく eventCount + eventName フィルタで
+            // 取得する (GA4側でキーイベントマークが付いていない event も拾える)。
+            $cv_routes_for_dim = $this->get_enabled_cv_routes($user_id);
+            $cv_event_names_for_dim = array_values(array_filter(
+                array_map(fn($r) => (string) ($r['route_key'] ?? ''), $cv_routes_for_dim),
+                fn($n) => $n !== ''
+            ));
+            $cv_phone_event = (string) get_user_meta($user_id, '_gcrev_phone_event_name', true);
+            if ($cv_phone_event !== '' && ! in_array($cv_phone_event, $cv_event_names_for_dim, true)) {
+                $cv_event_names_for_dim[] = $cv_phone_event;
+            }
+            // 設定が無ければ null を渡す (=従来通り keyEvents 指標)
+            $cv_ev_arg = ! empty($cv_event_names_for_dim) ? $cv_event_names_for_dim : null;
+
             // ===== 2. デバイス別 × CV =====
-            $device_cv      = $this->fetch_cv_by_dimension($client, $property, 'deviceCategory', $start, $end);
-            $device_cv_prev = $this->fetch_cv_by_dimension($client, $property, 'deviceCategory', $comp_start, $comp_end);
+            $device_cv      = $this->fetch_cv_by_dimension($client, $property, 'deviceCategory', $start, $end, $cv_ev_arg);
+            $device_cv_prev = $this->fetch_cv_by_dimension($client, $property, 'deviceCategory', $comp_start, $comp_end, $cv_ev_arg);
 
             // ===== 3. 流入元別 × CV =====
-            $source_cv      = $this->fetch_cv_by_dimension($client, $property, 'sessionDefaultChannelGroup', $start, $end);
-            $source_cv_prev = $this->fetch_cv_by_dimension($client, $property, 'sessionDefaultChannelGroup', $comp_start, $comp_end);
+            $source_cv      = $this->fetch_cv_by_dimension($client, $property, 'sessionDefaultChannelGroup', $start, $end, $cv_ev_arg);
+            $source_cv_prev = $this->fetch_cv_by_dimension($client, $property, 'sessionDefaultChannelGroup', $comp_start, $comp_end, $cv_ev_arg);
 
             // ===== 4. 年齢別 × CV =====
-            $age_cv = $this->fetch_cv_by_dimension($client, $property, 'userAgeBracket', $start, $end);
+            $age_cv = $this->fetch_cv_by_dimension($client, $property, 'userAgeBracket', $start, $end, $cv_ev_arg);
 
             // ===== 5. 地域別 × CV =====
-            $region_cv = $this->fetch_cv_by_dimension($client, $property, 'city', $start, $end);
+            $region_cv = $this->fetch_cv_by_dimension($client, $property, 'city', $start, $end, $cv_ev_arg);
 
             // ===== 6. ページ別 × CV =====
-            $page_cv = $this->fetch_cv_by_dimension($client, $property, 'pagePath', $start, $end);
+            $page_cv = $this->fetch_cv_by_dimension($client, $property, 'pagePath', $start, $end, $cv_ev_arg);
 
             // ===== 7. キーワード × CV（GSCデータ） =====
             $keywords_data = $this->fetch_gsc_keywords_for_cv($config, $start, $end);
@@ -13795,7 +13821,8 @@ PROMPT;
         string $property,
         string $dimension_name,
         string $start,
-        string $end
+        string $end,
+        ?array $cv_event_names = null
     ): array {
         try {
             $request = new RunReportRequest();
@@ -13806,12 +13833,29 @@ PROMPT;
             $request->setDimensions([
                 (new Dimension())->setName($dimension_name)
             ]);
-            $request->setMetrics([
-                (new Metric())->setName('sessions'),
-                (new Metric())->setName('totalUsers'),
-                (new Metric())->setName('keyEvents'),
-                (new Metric())->setName('screenPageViews'),
-            ]);
+
+            // 「ゴール設定」でユーザーが登録した event_names が渡された場合は、
+            // GA4 の keyEvents 指標ではなく eventCount + eventName フィルタを使う。
+            // → GA4 側でキーイベントマークが付いていない event (例: contact_complete)
+            //   も拾える。これにより流入元/デバイス別の按分計算が成立する。
+            $use_event_count_with_filter = is_array($cv_event_names) && ! empty(array_filter($cv_event_names, fn($n) => $n !== ''));
+
+            if ($use_event_count_with_filter) {
+                $request->setMetrics([
+                    (new Metric())->setName('sessions'),
+                    (new Metric())->setName('totalUsers'),
+                    (new Metric())->setName('eventCount'),
+                    (new Metric())->setName('screenPageViews'),
+                ]);
+            } else {
+                $request->setMetrics([
+                    (new Metric())->setName('sessions'),
+                    (new Metric())->setName('totalUsers'),
+                    (new Metric())->setName('keyEvents'),
+                    (new Metric())->setName('screenPageViews'),
+                ]);
+            }
+
             // セッション数で降順ソート
             $request->setOrderBys([
                 (new OrderBy())->setMetric(
@@ -13819,10 +13863,55 @@ PROMPT;
                 )->setDesc(true)
             ]);
 
-            // 国フィルタ適用
+            // 国フィルタ + (オプション) eventName フィルタを構築
+            $filter_parts = [];
             $country_filter = $this->ga4->get_country_filter();
             if ( $country_filter !== null ) {
-                $request->setDimensionFilter( $country_filter );
+                $filter_parts[] = $country_filter;
+            }
+            if ($use_event_count_with_filter) {
+                $names = array_values(array_unique(array_filter($cv_event_names, fn($n) => $n !== '')));
+                if (count($names) === 1) {
+                    $event_filter = new \Google\Analytics\Data\V1beta\FilterExpression([
+                        'filter' => new \Google\Analytics\Data\V1beta\Filter([
+                            'field_name'    => 'eventName',
+                            'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter([
+                                'value'      => $names[0],
+                                'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+                            ]),
+                        ]),
+                    ]);
+                } else {
+                    $sub_filters = [];
+                    foreach ($names as $name) {
+                        $sub_filters[] = new \Google\Analytics\Data\V1beta\FilterExpression([
+                            'filter' => new \Google\Analytics\Data\V1beta\Filter([
+                                'field_name'    => 'eventName',
+                                'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter([
+                                    'value'      => $name,
+                                    'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+                                ]),
+                            ]),
+                        ]);
+                    }
+                    $event_filter = new \Google\Analytics\Data\V1beta\FilterExpression([
+                        'or_group' => new \Google\Analytics\Data\V1beta\FilterExpressionList([
+                            'expressions' => $sub_filters,
+                        ]),
+                    ]);
+                }
+                $filter_parts[] = $event_filter;
+            }
+            if (! empty($filter_parts)) {
+                if (count($filter_parts) === 1) {
+                    $request->setDimensionFilter($filter_parts[0]);
+                } else {
+                    $request->setDimensionFilter(new \Google\Analytics\Data\V1beta\FilterExpression([
+                        'and_group' => new \Google\Analytics\Data\V1beta\FilterExpressionList([
+                            'expressions' => $filter_parts,
+                        ]),
+                    ]));
+                }
             }
 
             $response = $client->runReport($request);
@@ -13834,7 +13923,7 @@ PROMPT;
 
                 $sessions   = (int)$metrics[0]->getValue();
                 $users      = (int)$metrics[1]->getValue();
-                $key_events = (int)$metrics[2]->getValue();
+                $key_events = (int)$metrics[2]->getValue(); // eventCount or keyEvents
                 $pageviews  = (int)$metrics[3]->getValue();
 
                 $items[] = [
