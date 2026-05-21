@@ -11436,9 +11436,25 @@ PROMPT;
         $result = [];
         try {
             $config = $this->config->get_user_config($user_id);
-            $result = $this->ga4->fetch_ga4_event_count_daily($config['ga4_id'], $start, $end, $event_names);
+            $ga4_id = $config['ga4_id'] ?? '';
+            // [DIAG-2026-05-21] GA4 取得診断
+            file_put_contents( '/tmp/gcrev_goal_debug.log',
+                date('Y-m-d H:i:s') . " get_ga4_event_count_daily user={$user_id} ym={$year_month}"
+                . " ga4_id=[{$ga4_id}] names=" . wp_json_encode($event_names, JSON_UNESCAPED_UNICODE) . "\n",
+                FILE_APPEND
+            );
+            $result = $this->ga4->fetch_ga4_event_count_daily($ga4_id, $start, $end, $event_names);
+            file_put_contents( '/tmp/gcrev_goal_debug.log',
+                date('Y-m-d H:i:s') . " get_ga4_event_count_daily OK result_keys=" . wp_json_encode(array_keys($result), JSON_UNESCAPED_UNICODE)
+                . " sums=" . wp_json_encode(array_map('array_sum', $result), JSON_UNESCAPED_UNICODE) . "\n",
+                FILE_APPEND
+            );
             set_transient($cache_key, $result, 36 * HOUR_IN_SECONDS);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            file_put_contents( '/tmp/gcrev_goal_debug.log',
+                date('Y-m-d H:i:s') . " get_ga4_event_count_daily EXCEPTION " . get_class($e) . ": " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
             error_log("[GCREV] get_ga4_event_count_daily ERROR: " . $e->getMessage());
         }
         return $result;
