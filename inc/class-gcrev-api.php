@@ -12001,12 +12001,6 @@ PROMPT;
         }
 
         $valid = \Mimamori_Inquiries_Fetcher::get_monthly_valid_count( $user_id, $year_month );
-        // [DIAG-2026-05-20] 不一致原因調査用ログ: $valid が想定通り effective_valid 数か確認
-        file_put_contents(
-            '/tmp/gcrev_inquiries_cv_debug.log',
-            date( 'Y-m-d H:i:s' ) . " user={$user_id} ym={$year_month} valid={$valid} caller=" . wp_debug_backtrace_summary( null, 2, false ) . "\n",
-            FILE_APPEND
-        );
         if ( $valid === null ) {
             // 該当月のレコード未登録 → フォールバックして元の result を返す
             return $result;
