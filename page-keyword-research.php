@@ -9,7 +9,7 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
-if ( ! mimamori_can_access_seo() ) {
+if ( ! mimamori_can_access_keyword_research() ) {
     wp_safe_redirect( home_url( '/dashboard/' ) );
     exit;
 }

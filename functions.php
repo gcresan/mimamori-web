@@ -8678,6 +8678,8 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         'aio_serp'             => 'content_seo',
         // SEO診断（basic 以上：AI分析・レポートプランから提供）
         'seo_check'            => 'basic',
+        // キーワード調査（ai_support 以上：MEO・検索集客強化プランから提供）
+        'keyword_research'     => 'ai_support',
         // コア機能（全プラン）
         'dashboard'            => 'basic',
         'report_summary'       => 'basic',
@@ -8839,13 +8841,25 @@ function mimamori_can_access_seo( int $user_id = 0 ): bool {
  * SEO診断ページへのアクセス可否を返す。
  *
  * SEO診断は AI分析・レポートプラン以上で利用可能。
- * （キーワード調査・ライティング等の他SEO機能は content_seo プラン以上）
+ * （ライティング等の他SEO機能は content_seo プラン以上、キーワード調査は ai_support 以上）
  *
  * @param  int  $user_id  0 の場合はログイン中ユーザー
  * @return bool
  */
 function mimamori_can_access_seo_check( int $user_id = 0 ): bool {
     return mimamori_can( 'seo_check', $user_id );
+}
+
+/**
+ * キーワード調査ページへのアクセス可否を返す。
+ *
+ * MEO・検索集客強化プラン以上で利用可能。
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ * @return bool
+ */
+function mimamori_can_access_keyword_research( int $user_id = 0 ): bool {
+    return mimamori_can( 'keyword_research', $user_id );
 }
 
 /**

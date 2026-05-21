@@ -412,7 +412,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                               <span>自然検索順位</span>
                               </a>
                            </li>
-                           <?php if ( mimamori_can_access_seo() ) : ?>
+                           <?php if ( mimamori_can_access_keyword_research() ) : ?>
                            <li class="nav-item">
                               <a href="<?php echo esc_url( home_url('/keyword-research/') ); ?>" class="nav-link <?php echo is_page('keyword-research') ? 'active' : ''; ?>">
                               <span>キーワード調査</span>
