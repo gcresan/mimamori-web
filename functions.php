@@ -2070,13 +2070,19 @@ add_action( 'rest_api_init', function () {
 add_action( 'rest_api_init', function () {
     register_rest_route( 'mimamori/v1', '/debug-opcache-reset', [
         'methods'             => 'POST',
-        'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+        // TEMP: view-as 中の運営者でも叩けるようログイン済みなら通す。デバッグ後 revert。
+        'permission_callback' => function () { return is_user_logged_in(); },
         'callback'            => function () {
+            $u = wp_get_current_user();
             $info = [
-                'theme_version' => wp_get_theme()->get( 'Version' ),
-                'php_version'   => PHP_VERSION,
+                'theme_version'     => wp_get_theme()->get( 'Version' ),
+                'php_version'       => PHP_VERSION,
+                'user_id'           => $u->ID,
+                'user_login'        => $u->user_login,
+                'roles'             => $u->roles,
+                'can_manage_options' => current_user_can( 'manage_options' ),
                 'opcache_available' => function_exists( 'opcache_reset' ),
-                'reset'         => false,
+                'reset'             => false,
             ];
             if ( function_exists( 'opcache_reset' ) ) {
                 $info['reset'] = (bool) opcache_reset();
