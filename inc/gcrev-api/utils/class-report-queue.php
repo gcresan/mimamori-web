@@ -48,30 +48,40 @@ class Gcrev_Report_Queue {
         $charset = $wpdb->get_charset_collate();
         $table   = self::table_name();
 
+        // dbDelta の要件:
+        //   - 列名はバッククォートで囲む（year_month など MariaDB 予約語衝突回避）
+        //   - PRIMARY KEY の後ろにスペース 2 個
+        //   - 各行先頭スペース 1 個
         $sql = "CREATE TABLE {$table} (
-            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-            job_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
-            user_id BIGINT(20) UNSIGNED NOT NULL,
-            year_month VARCHAR(7) NOT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'pending',
-            attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
-            max_attempts TINYINT UNSIGNED NOT NULL DEFAULT 3,
-            client_info_snapshot LONGTEXT NULL,
-            error_message TEXT NULL,
-            locked_at DATETIME NULL,
-            started_at DATETIME NULL,
-            finished_at DATETIME NULL,
-            created_at DATETIME NOT NULL,
-            updated_at DATETIME NOT NULL,
-            PRIMARY KEY  (id),
-            UNIQUE KEY user_month_job (user_id, year_month, job_id),
-            KEY status (status),
-            KEY job_id (job_id),
-            KEY job_status (job_id, status)
-        ) {$charset};";
+ `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ `job_id` bigint(20) unsigned NOT NULL DEFAULT 0,
+ `user_id` bigint(20) unsigned NOT NULL,
+ `year_month` varchar(7) NOT NULL,
+ `status` varchar(20) NOT NULL DEFAULT 'pending',
+ `attempts` tinyint unsigned NOT NULL DEFAULT 0,
+ `max_attempts` tinyint unsigned NOT NULL DEFAULT 3,
+ `client_info_snapshot` longtext NULL,
+ `error_message` text NULL,
+ `locked_at` datetime NULL,
+ `started_at` datetime NULL,
+ `finished_at` datetime NULL,
+ `created_at` datetime NOT NULL,
+ `updated_at` datetime NOT NULL,
+ PRIMARY KEY  (`id`),
+ UNIQUE KEY `user_month_job` (`user_id`, `year_month`, `job_id`),
+ KEY `status` (`status`),
+ KEY `job_id` (`job_id`),
+ KEY `job_status` (`job_id`, `status`)
+) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta( $sql );
+
+        // dbDelta が失敗する古いMariaDB環境向けのフォールバック
+        $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+        if ( $exists !== $table ) {
+            $wpdb->query( $sql );
+        }
     }
 
     // =========================================================

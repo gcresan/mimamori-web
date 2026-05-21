@@ -7085,27 +7085,31 @@ function gcrev_cv_review_create_table(): void {
     $table = $wpdb->prefix . 'gcrev_cv_review';
     $charset_collate = $wpdb->get_charset_collate();
 
+    // dbDelta の要件: 列名・インデックス列を一貫してバッククォート、
+    // 列名は小文字、PRIMARY KEY の後ろにスペース 2 個。
+    // クォートが混在していると dbDelta が既存インデックスを認識できず、
+    // 毎回 ADD UNIQUE KEY が走り Duplicate key 警告が出る。
     $sql = "CREATE TABLE {$table} (
-        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
-        user_id BIGINT(20) UNSIGNED NOT NULL,
-        `action_month` VARCHAR(7) NOT NULL,
-        row_hash VARCHAR(32) NOT NULL,
-        event_name VARCHAR(100) NOT NULL DEFAULT '',
-        date_hour_minute VARCHAR(12) NOT NULL DEFAULT '',
-        page_path VARCHAR(500) NOT NULL DEFAULT '',
-        source_medium VARCHAR(200) NOT NULL DEFAULT '',
-        device_category VARCHAR(50) NOT NULL DEFAULT '',
-        country VARCHAR(100) NOT NULL DEFAULT '',
-        event_count INT NOT NULL DEFAULT 1,
-        status TINYINT(1) NOT NULL DEFAULT 0,
-        memo VARCHAR(500) NULL,
-        updated_by BIGINT(20) UNSIGNED NULL,
-        updated_at DATETIME NOT NULL,
-        PRIMARY KEY  (id),
-        UNIQUE KEY user_month_hash (user_id, `action_month`, row_hash),
-        KEY user_month (user_id, `action_month`),
-        KEY status (status)
-    ) {$charset_collate};";
+ `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ `user_id` bigint(20) unsigned NOT NULL,
+ `action_month` varchar(7) NOT NULL,
+ `row_hash` varchar(32) NOT NULL,
+ `event_name` varchar(100) NOT NULL DEFAULT '',
+ `date_hour_minute` varchar(12) NOT NULL DEFAULT '',
+ `page_path` varchar(500) NOT NULL DEFAULT '',
+ `source_medium` varchar(200) NOT NULL DEFAULT '',
+ `device_category` varchar(50) NOT NULL DEFAULT '',
+ `country` varchar(100) NOT NULL DEFAULT '',
+ `event_count` int NOT NULL DEFAULT 1,
+ `status` tinyint(1) NOT NULL DEFAULT 0,
+ `memo` varchar(500) NULL,
+ `updated_by` bigint(20) unsigned NULL,
+ `updated_at` datetime NOT NULL,
+ PRIMARY KEY  (`id`),
+ UNIQUE KEY `user_month_hash` (`user_id`, `action_month`, `row_hash`),
+ KEY `user_month` (`user_id`, `action_month`),
+ KEY `status` (`status`)
+) {$charset_collate};";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta($sql);
@@ -8329,11 +8333,23 @@ function gcrev_rest_post_actual_cv(\WP_REST_Request $req): \WP_REST_Response {
 }
 
 /**
- * 指定ユーザーのダッシュボード・レポートキャッシュを削除
+ * 指定ユーザーのダッシュボード・レポートキャッシュを削除。
+ *
+ * KUSANAGI + Redis などのオブジェクトキャッシュ環境では transient が
+ * wp_options ではなく Redis 側に格納されるため、$wpdb->query(DELETE) だけでは
+ * 削除されない。delete_transient() を経由することで object cache backend にも
+ * 削除コマンドが届く。
+ *
+ * delete_transient() はキー名の指定が必要なため、想定される scope × filter の
+ * 組み合わせを列挙して各キーを明示削除する。任意日付ベースのキー
+ * (gcrev_dash_bydate_v2_*_YYYY-MM-DD_YYYY-MM-DD など) や年月ベースのキー
+ * (gcrev_effcv_v4_*_YYYY-MM など) は組み合わせ爆発のため列挙せず、
+ * DB DELETE のフォールバックと自然なTTL切れに任せる。
  */
 function gcrev_invalidate_user_cv_cache(int $user_id): void {
     global $wpdb;
-    // prefix は `{prefix}{user_id}_...` の形のものを一括削除
+
+    // (1) DB ベースの一括削除（object cache 無効環境向け）
     $prefixes = [
         'gcrev_dash_',
         'gcrev_report_',
@@ -8353,6 +8369,57 @@ function gcrev_invalidate_user_cv_cache(int $user_id): void {
             $wpdb->esc_like('_transient_' . $prefix . $user_id . '_') . '%',
             $wpdb->esc_like('_transient_timeout_' . $prefix . $user_id . '_') . '%'
         ));
+    }
+
+    // (2) 既知のキー組み合わせを delete_transient() で明示削除（object cache 環境向け）
+    //
+    // フィルタサフィックス: '' / '_jp' / '_ex' / '_jp_ex' に
+    //                     さらに path filter の `_pf<hash>` 有無を掛け合わせる。
+    $filter_suffixes = [ '', '_jp', '_ex', '_jp_ex' ];
+    if ( class_exists( 'Gcrev_Path_Filter' ) ) {
+        $pf = Gcrev_Path_Filter::cache_suffix( $user_id );
+        if ( $pf !== '' ) {
+            foreach ( [ '', '_jp', '_ex', '_jp_ex' ] as $base ) {
+                $filter_suffixes[] = $base . $pf;
+            }
+        }
+    }
+
+    // ダッシュボード KPI / KPI by-date のスコープ
+    $dash_scopes       = [ 'last30', 'last30_comp', 'prev_month', 'prev2_month', 'previousMonth', 'twoMonthsAgo' ];
+    // CV トレンド（grafh）の metric × view 組み合わせ
+    $trend_metrics     = [ 'sessions', 'cv', 'meo' ];
+
+    foreach ( $filter_suffixes as $sfx ) {
+        // gcrev_dash_{user_id}_{scope}{sfx}
+        foreach ( $dash_scopes as $scope ) {
+            delete_transient( "gcrev_dash_{$user_id}_{$scope}{$sfx}" );
+            delete_transient( "gcrev_dash_bydate_{$user_id}_{$scope}{$sfx}" );
+        }
+        // gcrev_trend_daily_v2_{user_id}_{metric}{sfx}
+        foreach ( $trend_metrics as $m ) {
+            delete_transient( "gcrev_trend_daily_v2_{$user_id}_{$m}{$sfx}" );
+            delete_transient( "gcrev_trend_v2_{$user_id}_{$m}{$sfx}" );
+            delete_transient( "gcrev_trend_daily_{$user_id}_{$m}{$sfx}" );
+            delete_transient( "gcrev_trend_{$user_id}_{$m}{$sfx}" );
+        }
+    }
+
+    // 当月・前月・前々月の effective_cv (gcrev_effcv_v4_{user_id}_YYYY-MM{sfx})
+    // 任意月は列挙不能だが、ダッシュボード再計算で頻繁に使われる直近3ヶ月は明示削除する
+    $tz = wp_timezone();
+    foreach ( [ 'this month', 'first day of last month', 'first day of -2 months' ] as $rel ) {
+        try {
+            $ym = ( new \DateTimeImmutable( $rel, $tz ) )->format( 'Y-m' );
+        } catch ( \Throwable $e ) {
+            continue;
+        }
+        foreach ( $filter_suffixes as $sfx ) {
+            delete_transient( "gcrev_effcv_v4_{$user_id}_{$ym}{$sfx}" );
+            delete_transient( "gcrev_effcv_v3_{$user_id}_{$ym}{$sfx}" );
+            delete_transient( "gcrev_effcv_v2_{$user_id}_{$ym}{$sfx}" );
+            delete_transient( "gcrev_effcv_{$user_id}_{$ym}{$sfx}" );
+        }
     }
 }
 

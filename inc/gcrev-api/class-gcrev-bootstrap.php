@@ -34,6 +34,9 @@ class Gcrev_Bootstrap {
         add_action('gcrev_meo_fetch_weekly_event', [__CLASS__, 'on_meo_fetch_daily_event']); // 後方互換
         add_action('gcrev_meo_fetch_chunk_event', [__CLASS__, 'on_meo_fetch_chunk_event'], 10, 2);
 
+        // Inquiries (問い合わせ集計API) 当月の自動フェッチ（毎日）
+        add_action('gcrev_inquiries_fetch_daily_event', [__CLASS__, 'on_inquiries_fetch_daily_event']);
+
         // キーワード指標（月次 — 検索ボリューム + SEO難易度）
         add_action('gcrev_keyword_metrics_monthly_event', [__CLASS__, 'on_keyword_metrics_monthly']);
         add_action('gcrev_keyword_metrics_chunk_event', [__CLASS__, 'on_keyword_metrics_chunk'], 10, 2);
@@ -574,6 +577,88 @@ class Gcrev_Bootstrap {
     }
 
     /**
+     * Inquiries (問い合わせ集計API) 当月分の日次フェッチイベント。
+     *
+     * 連携が有効な (META_ENABLED=1 かつ endpoint/token 設定済み) 全ユーザーについて、
+     * 当月の問い合わせデータを外部APIから取得して wp_gcrev_inquiries.items_json に
+     * 永続化する。これにより、ユーザーが問い合わせ一覧ページを開かなくても、
+     * ダッシュボードのゴール数 / 折れ線グラフが当月分も正しい effective_valid
+     * フィルタ後の値で表示される。
+     *
+     * 取得後は当該ユーザーの CV キャッシュも無効化して即時反映させる。
+     */
+    public static function on_inquiries_fetch_daily_event(): void {
+        $log = '/tmp/gcrev_cron_debug.log';
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily START\n", FILE_APPEND );
+
+        if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily: fetcher class not found\n", FILE_APPEND );
+            return;
+        }
+
+        global $wpdb;
+        // 連携 ON のユーザーを取得（META_ENABLED='1'）
+        $user_ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value = '1'",
+            \Mimamori_Inquiries_Fetcher::META_ENABLED
+        ) );
+
+        if ( empty( $user_ids ) ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily: no enabled users\n", FILE_APPEND );
+            return;
+        }
+
+        $tz    = wp_timezone();
+        $now   = new \DateTimeImmutable( 'now', $tz );
+        $year  = (int) $now->format( 'Y' );
+        $month = (int) $now->format( 'n' );
+
+        $fetcher    = new \Mimamori_Inquiries_Fetcher();
+        $ok_count   = 0;
+        $fail_count = 0;
+
+        foreach ( $user_ids as $uid_raw ) {
+            $uid = (int) $uid_raw;
+            if ( $uid <= 0 ) continue;
+            if ( ! \Mimamori_Inquiries_Fetcher::is_enabled( $uid ) ) continue;
+
+            try {
+                $result = $fetcher->fetch_and_store( $uid, $year, $month );
+                if ( ! empty( $result['success'] ) ) {
+                    $ok_count++;
+                    if ( function_exists( 'gcrev_invalidate_user_cv_cache' ) ) {
+                        gcrev_invalidate_user_cv_cache( $uid );
+                    }
+                    file_put_contents( $log,
+                        date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily: user={$uid} OK total=" . ( $result['total'] ?? '?' ) . " valid=" . ( $result['valid'] ?? '?' ) . "\n",
+                        FILE_APPEND
+                    );
+                } else {
+                    $fail_count++;
+                    file_put_contents( $log,
+                        date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily: user={$uid} FAIL " . ( $result['message'] ?? 'unknown' ) . "\n",
+                        FILE_APPEND
+                    );
+                }
+            } catch ( \Throwable $e ) {
+                $fail_count++;
+                file_put_contents( $log,
+                    date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily ERROR user={$uid}: " . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
+            }
+
+            // API レート負荷軽減（外部 SaaS API への連打回避）
+            usleep( 500000 ); // 0.5s
+        }
+
+        file_put_contents( $log,
+            date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily END: ok={$ok_count} fail={$fail_count} total_users=" . count( $user_ids ) . "\n",
+            FILE_APPEND
+        );
+    }
+
+    /**
      * キーワード指標 — 月次フェッチイベント（検索ボリューム + SEO難易度）
      */
     public static function on_keyword_metrics_monthly(): void {
@@ -997,6 +1082,11 @@ class Gcrev_Bootstrap {
 
         // Clarity日次蓄積（毎日 03:45）
         self::schedule_daily_if_missing('gcrev_clarity_daily_sync_event', 'tomorrow 03:45:00');
+
+        // Inquiries (問い合わせ集計API) 当月分の自動フェッチ（毎日 04:50）
+        // → ユーザーが問い合わせ一覧を手動で開かなくても、当月のフォーム CV が
+        //    ダッシュボードのゴール数 / 折れ線グラフに反映され続けるようにする。
+        self::schedule_daily_if_missing('gcrev_inquiries_fetch_daily_event', 'tomorrow 04:50:00');
 
         // 月次データプリフェッチ: 毎日 05:00（月初のみ実行、月固定期間データを取得）
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
