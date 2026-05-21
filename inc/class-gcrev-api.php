@@ -11705,6 +11705,9 @@ PROMPT;
             // 「ゴールの確認（手動調整）」タブは廃止済み。手動判定の上書きはここでは行わない。
             // 優先順位: プラグイン連携 > GA4 キーイベント + ゴールの数え方設定
 
+            // ユーザーが問い合わせ一覧ページで「✕除外」したGA4イベント (cv_review.status=2) を減算
+            $result = $this->apply_cv_review_exclusions( $result, $year_month, $user_id );
+
             // 問い合わせAPI連携が有効ならフォーム系CVを上書き（最優先）
             $result = $this->apply_inquiries_api_cv_override( $result, $year_month, $user_id );
 
@@ -11811,8 +11814,11 @@ PROMPT;
                             $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $manual_val;
                         }
                     }
-                } elseif (!$only_configured || $route_is_phone_tap) {
-                    // ルートに手動データなし & (設定イベントのみOFF or 電話タップ) → GA4値を使用
+                } else {
+                    // ルートに手動データなし → 常に GA4 値を使用
+                    // (手動入力システムは廃止済みなので、設定済みルートは GA4 値を信頼する。
+                    //  $only_configured フラグは「非オーバーライドGA4イベント」を絞る用途で
+                    //  下のループでのみ参照する)
                     // 電話タップは keyEvents と eventCount の max（どちらが大きい方）
                     $key_val = (int) ($ga4_event_daily[$date] ?? 0);
                     $ec_val  = (int) ($route_event_count_daily[$date] ?? 0);
@@ -11824,7 +11830,6 @@ PROMPT;
                         $phone_tap_daily[$date] = ($phone_tap_daily[$date] ?? 0) + $ga4_val;
                     }
                 }
-                // only_configured ON & 手動データなし & 電話タップ以外 → 0
                 if ($day_added > 0) {
                     $route_daily_vals[$date] = $day_added;
                 }
@@ -11966,11 +11971,120 @@ PROMPT;
         // 「ゴールの確認（手動調整）」タブは廃止済み。手動判定の上書きはここでは行わない。
         // 優先順位: プラグイン連携 > GA4 キーイベント + ゴールの数え方設定
 
+        // ユーザーが問い合わせ一覧ページで「✕除外」したGA4イベント (cv_review.status=2) を減算
+        $result = $this->apply_cv_review_exclusions( $result, $year_month, $user_id );
+
         // 問い合わせAPI連携が有効ならフォーム系CVを上書き（最優先）
         $result = $this->apply_inquiries_api_cv_override( $result, $year_month, $user_id );
 
         $this->effective_cv_cache[$cache_key] = $result;
         set_transient($transient_key, $result, 24 * HOUR_IN_SECONDS);
+        return $result;
+    }
+
+    /**
+     * ユーザーが問い合わせ一覧ページ (GA4モード) で「✕除外」したGA4イベントを
+     * ダッシュボード集計から減算する。
+     *
+     * 連携プラグイン未使用クライアントの場合、cv_review.status=2 が「除外操作」を表す。
+     * ここでは GA4 raw 集計後の $result から、該当行の event_count 分を:
+     *   - $result['daily'][date]
+     *   - $result['phone_tap_daily'][date] (電話タップなら)
+     *   - $result['breakdown_by_label'][event_name]['count']
+     *   - $result['daily_by_label'][event_name]['daily'][date]
+     *   - components.phone_tap_total / ga4_total
+     *   - $result['total'] (再計算)
+     * から差し引く。
+     *
+     * 連携プラグインユーザーは cv_review に行が無いので no-op。
+     */
+    private function apply_cv_review_exclusions( array $result, string $year_month, int $user_id ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_cv_review';
+        if ( ! $this->table_exists( $table ) ) {
+            return $result;
+        }
+
+        $excluded = $wpdb->get_results( $wpdb->prepare(
+            "SELECT event_name, date_hour_minute, event_count
+             FROM `{$table}`
+             WHERE user_id = %d AND `year_month` = %s AND status = 2",
+            $user_id, $year_month
+        ), ARRAY_A );
+
+        if ( empty( $excluded ) ) {
+            return $result;
+        }
+
+        // 電話タップ判定（ラベル + メタ + 慣習名）
+        $phone_event_name = (string) get_user_meta( $user_id, '_gcrev_phone_event_name', true );
+        $all_routes_for_label = $this->get_cv_routes( $user_id );
+        $label_map = array_column( $all_routes_for_label, 'label', 'route_key' );
+        $is_phone_tap_evt = function ( string $en ) use ( $phone_event_name, $label_map ): bool {
+            if ( $en === '' ) return false;
+            if ( $phone_event_name !== '' && $en === $phone_event_name ) return true;
+            if ( $en === '電話タップ' || $en === 'phone_tap' ) return true;
+            return ( $label_map[ $en ] ?? '' ) === '電話タップ';
+        };
+
+        $ga4_total_subtract = 0;
+        $phone_tap_subtract = 0;
+
+        foreach ( $excluded as $row ) {
+            $en  = (string) ( $row['event_name'] ?? '' );
+            $cnt = max( 1, (int) ( $row['event_count'] ?? 1 ) );
+            $dhm = (string) ( $row['date_hour_minute'] ?? '' );
+            if ( strlen( $dhm ) < 8 ) continue;
+            $date = substr( $dhm, 0, 4 ) . '-' . substr( $dhm, 4, 2 ) . '-' . substr( $dhm, 6, 2 );
+
+            // daily から減算
+            if ( isset( $result['daily'][ $date ] ) ) {
+                $result['daily'][ $date ] = max( 0, (int) $result['daily'][ $date ] - $cnt );
+            }
+            $ga4_total_subtract += $cnt;
+
+            // 電話タップなら phone_tap_daily / total からも減算
+            if ( $is_phone_tap_evt( $en ) ) {
+                if ( isset( $result['phone_tap_daily'][ $date ] ) ) {
+                    $result['phone_tap_daily'][ $date ] = max( 0, (int) $result['phone_tap_daily'][ $date ] - $cnt );
+                }
+                $phone_tap_subtract += $cnt;
+            }
+
+            // breakdown_by_label
+            if ( isset( $result['breakdown_by_label'][ $en ] ) ) {
+                $new_cnt = max( 0, (int) ( $result['breakdown_by_label'][ $en ]['count'] ?? 0 ) - $cnt );
+                if ( $new_cnt === 0 ) {
+                    unset( $result['breakdown_by_label'][ $en ] );
+                } else {
+                    $result['breakdown_by_label'][ $en ]['count'] = $new_cnt;
+                }
+            }
+
+            // daily_by_label
+            if ( isset( $result['daily_by_label'][ $en ]['daily'][ $date ] ) ) {
+                $new_dv = max( 0, (int) $result['daily_by_label'][ $en ]['daily'][ $date ] - $cnt );
+                if ( $new_dv === 0 ) {
+                    unset( $result['daily_by_label'][ $en ]['daily'][ $date ] );
+                } else {
+                    $result['daily_by_label'][ $en ]['daily'][ $date ] = $new_dv;
+                }
+                // ラベル全体の daily が空になったらキー自体削除
+                if ( empty( $result['daily_by_label'][ $en ]['daily'] ?? null ) ) {
+                    unset( $result['daily_by_label'][ $en ] );
+                }
+            }
+        }
+
+        // components / total を再計算
+        if ( isset( $result['components']['ga4_total'] ) ) {
+            $result['components']['ga4_total'] = max( 0, (int) $result['components']['ga4_total'] - $ga4_total_subtract );
+        }
+        if ( isset( $result['components']['phone_tap_total'] ) ) {
+            $result['components']['phone_tap_total'] = max( 0, (int) $result['components']['phone_tap_total'] - $phone_tap_subtract );
+        }
+        $result['total'] = array_sum( $result['daily'] ?? [] );
+
         return $result;
     }
 
@@ -14633,10 +14747,21 @@ PROMPT;
         }
 
         // CV変更後はダッシュボード系キャッシュを無効化
-        delete_transient("gcrev_effcv_{$user_id}_{$month}");
-        delete_transient("gcrev_dash_{$user_id}_previousMonth");
-        delete_transient("gcrev_dash_{$user_id}_twoMonthsAgo");
-        delete_transient("gcrev_trend_{$user_id}_cv_" . date('Y-m'));
+        // (オブジェクトキャッシュ Redis 対応 + 全 prefix / 全 filter suffix を網羅するため
+        //  共通ヘルパー gcrev_invalidate_user_cv_cache() 経由で削除する)
+        if ( function_exists( 'gcrev_invalidate_user_cv_cache' ) ) {
+            gcrev_invalidate_user_cv_cache( $user_id );
+        }
+        // gcrev_cvreview_* (rest_get_cv_review のキャッシュ) も削除
+        $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $wpdb->esc_like( '_transient_gcrev_cvreview_' . $user_id . '_' ) . '%',
+            $wpdb->esc_like( '_transient_timeout_gcrev_cvreview_' . $user_id . '_' ) . '%'
+        ) );
+        // object cache 側も削除（KUSANAGI + Redis 環境向け）
+        foreach ( [ '_jp_v2', '_v2', '_jp', '' ] as $sfx ) {
+            delete_transient( "gcrev_cvreview_{$user_id}_{$month}{$sfx}" );
+        }
 
         return new WP_REST_Response(['success' => true], 200);
     }
