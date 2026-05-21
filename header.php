@@ -463,6 +463,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </a>
                      </li>
                      <?php endif; // ! $_mb_is_review_survey_only — MEO 配下の他項目 ?>
+                     <?php
+                     // review_survey 時は親メニュー自体が「口コミアンケート」なので、
+                     // 重複を避けてサブグループのラッパーを外し、項目を直接列挙する。
+                     ?>
+                     <?php if ( $_mb_is_review_survey_only ) : ?>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/tools/review-survey/') ); ?>" class="nav-link <?php echo is_page('review-survey') ? 'active' : ''; ?>">
+                        <span>アンケート管理</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/survey-responses/') ); ?>" class="nav-link <?php echo is_page('survey-responses') ? 'active' : ''; ?>">
+                        <span>回答履歴</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/survey-analytics/') ); ?>" class="nav-link <?php echo is_page('survey-analytics') ? 'active' : ''; ?>">
+                        <span>集計</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/survey-analysis/') ); ?>" class="nav-link <?php echo is_page('survey-analysis') ? 'active' : ''; ?>">
+                        <span>分析</span>
+                        </a>
+                     </li>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/survey-ai-history/') ); ?>" class="nav-link <?php echo is_page('survey-ai-history') ? 'active' : ''; ?>">
+                        <span>AI生成履歴</span>
+                        </a>
+                     </li>
+                     <?php else : ?>
                      <li class="nav-item nav-subgroup-wrapper">
                         <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
                            口コミアンケート
@@ -496,6 +527,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                            </li>
                         </ul>
                      </li>
+                     <?php endif; ?>
                      <?php if ( ! $_mb_is_review_survey_only ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/review-management/') ); ?>" class="nav-link <?php echo is_page('review-management') ? 'active' : ''; ?>">
