@@ -2057,6 +2057,36 @@ add_action( 'rest_api_init', function () {
 } );
 
 /**
+ * TEMP(2026-05-21): デバッグ用 OPcache リセット REST エンドポイント
+ *
+ * デプロイ後に PHP-FPM の OPcache が古いバイトコードを返す問題を解決するため、
+ * 管理者だけが叩ける opcache_reset() トリガーを一時的に提供する。
+ * デバッグ完了後にこのブロック全体を git revert で戻すこと。
+ *
+ * 使い方（管理者でログイン中、ブラウザの DevTools Console から）:
+ *   var n=null;document.querySelectorAll('script:not([src])').forEach(function(s){var m=s.textContent.match(/wpNonce\s*=\s*['"]([^'"]+)['"]/);if(m)n=m[1];});
+ *   fetch('/wp-json/mimamori/v1/debug-opcache-reset',{method:'POST',credentials:'same-origin',headers:{'X-WP-Nonce':n}}).then(r=>r.json()).then(j=>console.log(j));
+ */
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'mimamori/v1', '/debug-opcache-reset', [
+        'methods'             => 'POST',
+        'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+        'callback'            => function () {
+            $info = [
+                'theme_version' => wp_get_theme()->get( 'Version' ),
+                'php_version'   => PHP_VERSION,
+                'opcache_available' => function_exists( 'opcache_reset' ),
+                'reset'         => false,
+            ];
+            if ( function_exists( 'opcache_reset' ) ) {
+                $info['reset'] = (bool) opcache_reset();
+            }
+            return new WP_REST_Response( [ 'success' => true, 'data' => $info ] );
+        },
+    ] );
+} );
+
+/**
  * みまもりAI システムプロンプト
  *
  * @return string
