@@ -7714,7 +7714,11 @@ PROMPT;
             }
 
             $period   = $request->get_param('period') ?? 'prev-month';
-            $no_cache = (bool) $request->get_param('nocache');
+            // admin/HQ が view-as 中なら毎回鮮度優先（キャッシュバイパス）
+            $is_admin_viewing_other = ($user_id !== (int) get_current_user_id())
+                && current_user_can('manage_options');
+            $no_cache = (bool) $request->get_param('nocache') || $is_admin_viewing_other;
+            $is_admin_request = current_user_can('manage_options');
 
             $location_id = get_user_meta($user_id, '_gcrev_gbp_location_id', true);
             if (empty($location_id)) {
@@ -7807,8 +7811,24 @@ PROMPT;
                 'api_error'           => $api_error,
             ];
 
+            // 管理者には診断情報を含める（毎回 view-as でデータが空な時の原因切り分け用）
+            if ($is_admin_request) {
+                $result['debug'] = [
+                    'effective_user_id'  => $user_id,
+                    'is_view_as'         => $is_admin_viewing_other,
+                    'location_id'        => $location_id,
+                    'has_access_token'   => !empty($access_token),
+                    'is_pending'         => $is_pending,
+                    'current_diag'       => $current_diag ?? null,
+                    'prev_diag'          => $prev_diag ?? null,
+                    'served_from_cache'  => false,
+                    'cache_key'          => $cache_key,
+                ];
+            }
+
             // エラー時はキャッシュしない（次回リクエストで再試行できるように）
-            if ($api_status !== 'error') {
+            // admin/view-as 強制ノーキャッシュ時もキャッシュしない（デバッグ情報も毎回新鮮にするため）
+            if ($api_status !== 'error' && !$no_cache) {
                 set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
             }
             error_log("[GCREV][MEO] Data fetched: user_id={$user_id}, period={$period}, status={$api_status}");

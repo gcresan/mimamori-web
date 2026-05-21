@@ -540,6 +540,22 @@ get_header();
     <!-- メインコンテンツ（データ読み込み後に表示） -->
     <div id="meo-main-content">
 
+        <!-- 管理者用診断パネル（debug データが返ってきた時のみ表示） -->
+        <div id="meo-debug-panel"
+             style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-left:4px solid #2563eb; border-radius:12px; padding:16px 20px; margin-bottom:20px; font-size:13px;">
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+                <div style="font-size:18px; line-height:1;">🔧</div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:700; color:#1e3a8a; margin-bottom:6px;">管理者向け診断情報（このパネルは管理者にのみ表示されます）</div>
+                    <div id="meo-debug-summary" style="color:#1e40af; line-height:1.8;"></div>
+                    <details style="margin-top:8px;">
+                        <summary style="cursor:pointer; font-weight:600; color:#1e40af;">📊 メトリクス取得詳細を見る</summary>
+                        <pre id="meo-debug-detail" style="margin-top:8px; padding:10px 12px; background:#fff; border-radius:6px; font-family:monospace; font-size:11px; color:#1f2937; overflow-x:auto; max-height:400px;"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+
         <!-- API取得エラーバナー（取得失敗時のみ表示） -->
         <div id="meo-api-error-banner"
              style="display:none; background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #dc2626; border-radius:12px; padding:20px 24px; margin-bottom:24px;">
@@ -776,6 +792,7 @@ get_header();
             if (cached) {
                 currentData = cached;
                 updateApiErrorBanner(currentData);
+                updateDebugPanel(currentData);
                 updatePeriodDisplay(currentData);
                 updateSummaryCards(currentData);
                 updateKeywordsTable(currentData);
@@ -831,6 +848,7 @@ get_header();
 
             // UI更新
             updateApiErrorBanner(currentData);
+            updateDebugPanel(currentData);
             updatePeriodDisplay(currentData);
             updateSummaryCards(currentData);
             updateKeywordsTable(currentData);
@@ -855,6 +873,62 @@ get_header();
         errBanner.style.display = 'block';
         if (errHintEl) errHintEl.textContent = hint;
         if (errDetailEl) errDetailEl.textContent = 'HTTP ' + httpStatus + '\n' + (serverMsg || '（詳細なし）');
+    }
+
+    // ===== 管理者用診断パネル =====
+    function updateDebugPanel(data) {
+        var panel = document.getElementById('meo-debug-panel');
+        if (!panel) return;
+        var dbg = data && data.debug;
+        if (!dbg) {
+            panel.style.display = 'none';
+            return;
+        }
+        panel.style.display = 'block';
+
+        var summaryEl = document.getElementById('meo-debug-summary');
+        var detailEl  = document.getElementById('meo-debug-detail');
+
+        // サマリー
+        var s = '';
+        s += '<b>有効ユーザーID:</b> ' + dbg.effective_user_id;
+        s += dbg.is_view_as ? '（view-as中・キャッシュ強制バイパス）' : '（自分）';
+        s += '<br><b>ロケーションID:</b> ' + (dbg.location_id || '<未設定>');
+        s += '<br><b>アクセストークン:</b> ' + (dbg.has_access_token ? '✅ 取得済み' : '❌ 取得失敗');
+        if (dbg.is_pending) s += '<br><b>pending状態:</b> ⚠️ ロケーション未確定';
+
+        var cur = dbg.current_diag;
+        if (cur) {
+            var totalCount   = cur.total_count   || 0;
+            var successCount = cur.success_count || 0;
+            var errorCount   = cur.error_count   || 0;
+            var color = errorCount === 0 ? '#16a34a' : (successCount === 0 ? '#dc2626' : '#d97706');
+            s += '<br><b>当期メトリクス取得:</b> <span style="color:' + color + ';font-weight:700;">'
+                 + successCount + '/' + totalCount + ' 成功</span>';
+            if (errorCount > 0) {
+                s += '（' + errorCount + '件エラー）';
+            }
+        }
+
+        s += '<br><b>API ステータス:</b> ' + (data.api_status || 'unknown');
+
+        if (summaryEl) summaryEl.innerHTML = s;
+
+        // 詳細（JSON整形）
+        if (detailEl) {
+            var detail = {
+                api_status:  data.api_status,
+                api_error:   data.api_error,
+                current_period:    data.current_period,
+                comparison_period: data.comparison_period,
+                debug: dbg
+            };
+            try {
+                detailEl.textContent = JSON.stringify(detail, null, 2);
+            } catch(e) {
+                detailEl.textContent = String(detail);
+            }
+        }
     }
 
     // ===== API取得エラーバナー =====
