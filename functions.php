@@ -2057,33 +2057,6 @@ add_action( 'rest_api_init', function () {
 } );
 
 /**
- * TEMP(2026-05-21): OPcache リセット REST エンドポイント（一度限り）
- *
- * deploy.sh の kill -USR2 では OPcache が完全クリアされない事象が再発したため
- * 再投入。動作確認後に git revert で戻すこと。
- *
- * 使い方（ログイン中、DevTools Console から）:
- *   var n=null;document.querySelectorAll('script:not([src])').forEach(function(s){var m=s.textContent.match(/wpNonce\s*=\s*['"]([^'"]+)['"]/);if(m)n=m[1];});
- *   fetch('/wp-json/mimamori/v1/debug-opcache-reset',{method:'POST',credentials:'same-origin',headers:{'X-WP-Nonce':n}}).then(r=>r.json()).then(j=>console.log(j));
- */
-add_action( 'rest_api_init', function () {
-    register_rest_route( 'mimamori/v1', '/debug-opcache-reset', [
-        'methods'             => 'POST',
-        'permission_callback' => function () { return is_user_logged_in(); },
-        'callback'            => function () {
-            $reset = function_exists( 'opcache_reset' ) ? (bool) opcache_reset() : false;
-            return new WP_REST_Response( [
-                'success' => true,
-                'data'    => [
-                    'theme_version' => wp_get_theme()->get( 'Version' ),
-                    'reset'         => $reset,
-                ],
-            ] );
-        },
-    ] );
-} );
-
-/**
  * みまもりAI システムプロンプト
  *
  * @return string
