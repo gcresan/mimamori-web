@@ -7705,7 +7705,10 @@ PROMPT;
      */
     public function rest_get_meo_dashboard(\WP_REST_Request $request): \WP_REST_Response {
         try {
-            $user_id = get_current_user_id();
+            // view-as / HQ閲覧時はターゲットユーザーのデータを返す（admin/HQ権限チェック内蔵）
+            $user_id = function_exists('mimamori_get_view_user_id')
+                ? mimamori_get_view_user_id()
+                : get_current_user_id();
             if (!$user_id) {
                 return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
             }
