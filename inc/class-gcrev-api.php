@@ -1709,6 +1709,44 @@ class Gcrev_Insight_API {
     /** @var bool パスフィルタ（include/exclude）が設定されているか */
     private bool $path_filters_set = false;
 
+    /**
+     * CV 検出時にパスフィルタを一時的に解除する。
+     *
+     * ジィクレブ等のクライアントが「解析対象/除外URL」を設定している場合、
+     * apply_dimension_filters で除外パス (例 /thanks/) も GA4 への問い合わせに
+     * AND 適用されてしまう。これにより contact_complete のように /thanks/ で
+     * 発火する CV イベントが GA4 から 0 件として返ってきてしまう。
+     *
+     * rest_get_cv_review (cv-review ページ) と同じ考え方で、CV 検出コンテキストでは
+     * 除外パスで発火する CV も拾うべき。そこでこの helper でパスフィルタを一旦解除し、
+     * GA4 CV 取得後に restore_path_filters_after_cv_detection() で再適用する。
+     */
+    private function clear_path_filters_for_cv_detection(): bool {
+        $was_set = $this->path_filters_set;
+        if ( $was_set ) {
+            $this->ga4->clear_include_paths_filter();
+            $this->ga4->set_page_path_filter( null );
+            $this->path_filters_set = false;
+        }
+        return $was_set;
+    }
+
+    private function restore_path_filters_after_cv_detection( int $user_id, bool $was_set ): void {
+        if ( ! $was_set ) {
+            return;
+        }
+        $include_paths = get_user_meta( $user_id, '_gcrev_include_paths', true );
+        $exclude_paths = get_user_meta( $user_id, '_gcrev_exclude_paths', true );
+        if ( is_array( $include_paths ) && ! empty( $include_paths ) ) {
+            $this->ga4->set_include_paths_filter( $include_paths );
+            $this->path_filters_set = true;
+        }
+        if ( is_array( $exclude_paths ) && ! empty( $exclude_paths ) ) {
+            $this->ga4->set_exclude_paths_filter( $exclude_paths );
+            $this->path_filters_set = true;
+        }
+    }
+
     private function maybe_set_country_filter( int $user_id ): bool {
         if ( $this->ga4->has_country_filter() ) {
             return false; // 外側で既に設定済み — 内側では解除しない
@@ -11436,25 +11474,9 @@ PROMPT;
         $result = [];
         try {
             $config = $this->config->get_user_config($user_id);
-            $ga4_id = $config['ga4_id'] ?? '';
-            // [DIAG-2026-05-21] GA4 取得診断
-            file_put_contents( '/tmp/gcrev_goal_debug.log',
-                date('Y-m-d H:i:s') . " get_ga4_event_count_daily user={$user_id} ym={$year_month}"
-                . " ga4_id=[{$ga4_id}] names=" . wp_json_encode($event_names, JSON_UNESCAPED_UNICODE) . "\n",
-                FILE_APPEND
-            );
-            $result = $this->ga4->fetch_ga4_event_count_daily($ga4_id, $start, $end, $event_names);
-            file_put_contents( '/tmp/gcrev_goal_debug.log',
-                date('Y-m-d H:i:s') . " get_ga4_event_count_daily OK result_keys=" . wp_json_encode(array_keys($result), JSON_UNESCAPED_UNICODE)
-                . " sums=" . wp_json_encode(array_map('array_sum', $result), JSON_UNESCAPED_UNICODE) . "\n",
-                FILE_APPEND
-            );
+            $result = $this->ga4->fetch_ga4_event_count_daily($config['ga4_id'] ?? '', $start, $end, $event_names);
             set_transient($cache_key, $result, 36 * HOUR_IN_SECONDS);
-        } catch (\Throwable $e) {
-            file_put_contents( '/tmp/gcrev_goal_debug.log',
-                date('Y-m-d H:i:s') . " get_ga4_event_count_daily EXCEPTION " . get_class($e) . ": " . $e->getMessage() . "\n",
-                FILE_APPEND
-            );
+        } catch (\Exception $e) {
             error_log("[GCREV] get_ga4_event_count_daily ERROR: " . $e->getMessage());
         }
         return $result;
@@ -11596,6 +11618,9 @@ PROMPT;
 
         // オーバーライド設定なし → pure GA4
         if (empty($override_keys)) {
+            // CV 検出時はパスフィルタを一時解除 (/thanks/ 等の除外パスで発火する
+            // contact_complete を拾えるようにする)
+            $cv_path_filter_was_set_pure = $this->clear_path_filters_for_cv_detection();
             $ga4_daily = $this->get_ga4_cv_daily_totals($year_month, $user_id);
             // 電話タップ起源CVを別カウント（pure GA4 経路でも内訳を返す）
             $phone_event = get_user_meta($user_id, '_gcrev_phone_event_name', true) ?: '';
@@ -11721,6 +11746,9 @@ PROMPT;
             // 「ゴールの確認（手動調整）」タブは廃止済み。手動判定の上書きはここでは行わない。
             // 優先順位: プラグイン連携 > GA4 キーイベント + ゴールの数え方設定
 
+            // GA4 CV 取得は終了 → パスフィルタを呼び出し前の状態に戻す
+            $this->restore_path_filters_after_cv_detection( $user_id, $cv_path_filter_was_set_pure );
+
             // ユーザーが問い合わせ一覧ページで「✕除外」したGA4イベント (cv_review.status=2) を減算
             $result = $this->apply_cv_review_exclusions( $result, $year_month, $user_id );
 
@@ -11733,6 +11761,9 @@ PROMPT;
         }
 
         // ハイブリッド: GA4イベント日別 + 手動オーバーライド（日単位で整合）
+        // CV 検出時はパスフィルタを一時解除 (/thanks/ 等の除外パスで発火する
+        // contact_complete を拾えるようにする)
+        $cv_path_filter_was_set = $this->clear_path_filters_for_cv_detection();
         $ga4_events_daily = $this->get_ga4_key_events_daily($year_month, $user_id);
 
         $daily = $empty_daily;
@@ -11794,17 +11825,6 @@ PROMPT;
         // 表示ラベル別の日別内訳（日付レンジ集計時に正確な期間内件数を算出するために必要）
         // 構造: [event_name => [ 'label' => string, 'source' => string, 'daily' => [date => count] ]]
         $daily_by_label = [];
-
-        // [DIAG-2026-05-21] ゴール集計の値を確認するための一時診断ログ
-        file_put_contents( '/tmp/gcrev_goal_debug.log',
-            date('Y-m-d H:i:s') . " get_effective_cv_monthly user={$user_id} ym={$year_month}"
-            . " override_keys=" . wp_json_encode($override_keys, JSON_UNESCAPED_UNICODE)
-            . " route_event_count_names=" . wp_json_encode($route_event_count_names, JSON_UNESCAPED_UNICODE)
-            . " phone_tap_event_count_daily=" . wp_json_encode(array_map('array_sum', $phone_tap_event_count_daily), JSON_UNESCAPED_UNICODE)
-            . " ga4_events_daily_keys=" . wp_json_encode(array_keys($ga4_events_daily), JSON_UNESCAPED_UNICODE)
-            . "\n",
-            FILE_APPEND
-        );
 
         // 1) オーバーライドイベントの処理
         foreach ($override_keys as $event_name) {
@@ -11996,6 +12016,9 @@ PROMPT;
 
         // 「ゴールの確認（手動調整）」タブは廃止済み。手動判定の上書きはここでは行わない。
         // 優先順位: プラグイン連携 > GA4 キーイベント + ゴールの数え方設定
+
+        // GA4 CV 取得は終了 → パスフィルタを呼び出し前の状態に戻す
+        $this->restore_path_filters_after_cv_detection( $user_id, $cv_path_filter_was_set );
 
         // ユーザーが問い合わせ一覧ページで「✕除外」したGA4イベント (cv_review.status=2) を減算
         $result = $this->apply_cv_review_exclusions( $result, $year_month, $user_id );
