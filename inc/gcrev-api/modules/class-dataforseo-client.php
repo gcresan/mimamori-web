@@ -1042,19 +1042,34 @@ class Gcrev_DataForSEO_Client {
         $body        = wp_remote_retrieve_body( $response );
         $decoded     = json_decode( $body, true );
 
+        // DEBUG: 全リクエストの結果をログに残す
+        file_put_contents( '/tmp/gcrev_rank_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [api_request] endpoint={$endpoint} http={$status_code} "
+            . "body_excerpt=" . substr( $body, 0, 300 ) . "\n",
+            FILE_APPEND );
+
         if ( $status_code === 401 || $status_code === 403 ) {
             error_log( '[GCREV][DataForSEO] Authentication failed (HTTP ' . $status_code . ')' );
-            return new \WP_Error( 'auth_failed', 'DataForSEO 認証に失敗しました。ログイン情報を確認してください。' );
+            file_put_contents( '/tmp/gcrev_rank_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [api_request] AUTH_FAILED http={$status_code}\n",
+                FILE_APPEND );
+            return new \WP_Error( 'auth_failed', "DataForSEO 認証エラー HTTP {$status_code}" );
         }
 
         if ( $status_code >= 400 ) {
             $msg = $decoded['status_message'] ?? "HTTP {$status_code}";
             error_log( "[GCREV][DataForSEO] HTTP error {$status_code}: {$msg}" );
-            return new \WP_Error( 'http_error', $msg );
+            file_put_contents( '/tmp/gcrev_rank_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [api_request] HTTP_ERROR http={$status_code} msg='{$msg}'\n",
+                FILE_APPEND );
+            return new \WP_Error( 'http_error', "HTTP {$status_code} msg={$msg}" );
         }
 
         if ( ! is_array( $decoded ) ) {
             error_log( '[GCREV][DataForSEO] Invalid JSON response' );
+            file_put_contents( '/tmp/gcrev_rank_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [api_request] INVALID_JSON body_excerpt=" . substr( $body, 0, 300 ) . "\n",
+                FILE_APPEND );
             return new \WP_Error( 'json_error', 'API レスポンスの JSON 解析に失敗しました。' );
         }
 
