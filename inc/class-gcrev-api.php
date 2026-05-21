@@ -11743,30 +11743,32 @@ PROMPT;
             return false;
         };
 
-        // 電話タップ系イベントは GA4 側で keyEvent に設定されていない場合でも
-        // レビュー画面では「デフォルト有効」として扱われるため、
-        // eventCount ベースで別途取得して keyEvents 値と max を取る。
-        // （これにより、GA4 で keyEvent 未設定のクライアントでも電話タップが集計される）
-        $phone_tap_event_names = [];
+        // GA4 側で keyEvent マークが付いていなくても、ユーザーが「ゴール設定」で登録した
+        // ルートは集計対象にしたい。そのため override_keys 全件 + 電話タップ慣習名を
+        // eventCount ベースで取得し、keyEvents 応答と日別 max を取る。
+        // (旧実装は電話タップ系のみ eventCount fallback していたため、GA4 で
+        //  keyEvent 未マークの contact_complete などが完全に0計上になる不具合があった)
+        $route_event_count_names = [];
         foreach ($override_keys as $en) {
-            if ($is_phone_tap($en)) $phone_tap_event_names[] = $en;
+            if ($en !== '' && !in_array($en, $route_event_count_names, true)) {
+                $route_event_count_names[] = $en;
+            }
         }
         foreach (array_keys($ga4_events_daily) as $en) {
-            if ($is_phone_tap($en) && !in_array($en, $phone_tap_event_names, true)) {
-                $phone_tap_event_names[] = $en;
+            if ($is_phone_tap($en) && !in_array($en, $route_event_count_names, true)) {
+                $route_event_count_names[] = $en;
             }
         }
-        // 慣習的イベント名も追加（GA4 側で keyEvents 応答に含まれていなくても拾う）
         foreach (['電話タップ', 'phone_tap'] as $en) {
-            if (!in_array($en, $phone_tap_event_names, true)) {
-                $phone_tap_event_names[] = $en;
+            if (!in_array($en, $route_event_count_names, true)) {
+                $route_event_count_names[] = $en;
             }
         }
-        if ($phone_event !== '' && !in_array($phone_event, $phone_tap_event_names, true)) {
-            $phone_tap_event_names[] = $phone_event;
+        if ($phone_event !== '' && !in_array($phone_event, $route_event_count_names, true)) {
+            $route_event_count_names[] = $phone_event;
         }
         $phone_tap_event_count_daily = $this->get_ga4_event_count_daily(
-            $year_month, $user_id, $phone_tap_event_names
+            $year_month, $user_id, $route_event_count_names
         );
 
         // ダッシュボード「電話タップ」内訳用に、電話タップ起源 CV の合計と日別を別カウント
@@ -11792,14 +11794,13 @@ PROMPT;
             $route_ga4_sum = 0;
             $route_daily_vals = [];
 
-            // 電話タップのルートは only_configured ON でも GA4 フォールバックを許可
             $route_is_phone_tap = $is_phone_tap($event_name);
 
-            // 電話タップは eventCount（全イベント）と keyEvents の max を取る
-            // → GA4 側で keyEvent 未設定でも、レビュー画面のデフォルト有効と整合する値になる
-            $route_event_count_daily = $route_is_phone_tap
-                ? ($phone_tap_event_count_daily[$event_name] ?? [])
-                : [];
+            // ★ 全ての設定済みルートで eventCount fallback を有効化
+            //   GA4 側で keyEvent マークが付いていなくても、ユーザーが「ゴール設定」で
+            //   登録した以上はそのイベント発生回数を集計する。keyEvents と eventCount の
+            //   日別 max を取ることで、両方マーク済みでも二重カウントしない。
+            $route_event_count_daily = $phone_tap_event_count_daily[$event_name] ?? [];
 
             foreach ($empty_daily as $date => $_) {
                 $day_added = 0;
@@ -11816,13 +11817,11 @@ PROMPT;
                     }
                 } else {
                     // ルートに手動データなし → 常に GA4 値を使用
-                    // (手動入力システムは廃止済みなので、設定済みルートは GA4 値を信頼する。
-                    //  $only_configured フラグは「非オーバーライドGA4イベント」を絞る用途で
-                    //  下のループでのみ参照する)
-                    // 電話タップは keyEvents と eventCount の max（どちらが大きい方）
+                    // keyEvents と eventCount の max（どちらが大きい方）。
+                    // 電話タップ以外でも eventCount を採用するのが現仕様。
                     $key_val = (int) ($ga4_event_daily[$date] ?? 0);
                     $ec_val  = (int) ($route_event_count_daily[$date] ?? 0);
-                    $ga4_val = $route_is_phone_tap ? max($key_val, $ec_val) : $key_val;
+                    $ga4_val = max($key_val, $ec_val);
                     $daily[$date] += $ga4_val;
                     $route_ga4_sum += $ga4_val;
                     $day_added = (int) $ga4_val;
