@@ -55,9 +55,20 @@ get_header();
 .iq-controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .iq-controls select, .iq-controls button { padding:8px 14px; border:1px solid #d0d5dd; border-radius:8px; font-size:13px; background:#fff; cursor:pointer; }
 .iq-controls button.primary { background:#1a73e8; color:#fff; border-color:#1a73e8; }
-.iq-summary { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; gap:24px; flex-wrap:wrap; }
+.iq-summary { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 18px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
 .iq-summary .stat { font-size:13px; color:#475569; }
 .iq-summary .stat strong { font-size:18px; color:#0f172a; margin-left:6px; }
+/* クリック可能なフィルタタブ (合計/有効/除外) */
+.iq-summary .iq-filter {
+    cursor:pointer; user-select:none; padding:6px 14px; border-radius:8px;
+    border:1px solid transparent; background:#fff; transition: all .15s ease;
+}
+.iq-summary .iq-filter:hover { background:#eef2f7; border-color:#cbd5e1; }
+.iq-summary .iq-filter.active { background:#1a73e8; color:#fff; border-color:#1a73e8; }
+.iq-summary .iq-filter.active strong { color:#fff; }
+.iq-summary .iq-filter.iq-filter-valid.active    { background:#16a34a; border-color:#16a34a; }
+.iq-summary .iq-filter.iq-filter-excluded.active { background:#dc2626; border-color:#dc2626; }
+.iq-summary .iq-divider { width:1px; align-self:stretch; background:#e2e8f0; }
 .iq-table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.06); }
 .iq-table th, .iq-table td { padding:12px 14px; text-align:left; vertical-align:top; border-bottom:1px solid #f1f5f9; }
 .iq-table thead th { background:#fffbeb; font-size:13px; color:#374151; font-weight:600; }
@@ -105,7 +116,6 @@ get_header();
         <div class="iq-controls">
             <label for="iq-month">期間:</label>
             <select id="iq-month"><option value="">読み込み中…</option></select>
-            <label><input type="checkbox" id="iq-valid-only" checked> 有効のみ表示</label>
             <button id="iq-refresh">🔄 当月の最新を再取得</button>
         </div>
     </div>
@@ -121,11 +131,13 @@ get_header();
     const nonce    = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
     const userId   = <?php echo (int) $user_id; ?>;
     const monthSel = document.getElementById('iq-month');
-    const validOnly = document.getElementById('iq-valid-only');
     const refreshBtn = document.getElementById('iq-refresh');
     const summary = document.getElementById('iq-summary');
     const content = document.getElementById('iq-content');
     const bootstrap = document.getElementById('iq-bootstrap');
+
+    // 表示フィルタ: 'valid' (有効のみ・既定) / 'excluded' (除外のみ・復活操作用) / 'all'
+    let _filter = 'valid';
 
     function api(path, params = {}) {
         const url = new URL( restBase + path );
@@ -160,14 +172,26 @@ get_header();
         return ('effective_valid' in it) ? !!it.effective_valid : !!it.ai_valid;
     }
 
-    function renderItems(items, includeExcluded) {
+    function renderItems(items) {
         if (!items || items.length === 0) {
             content.innerHTML = '<div class="iq-empty">📭 問い合わせ情報がまだありません。</div>';
             return;
         }
-        const filtered = includeExcluded ? items : items.filter(isEffectiveValid);
+        // 現在のフィルタ (_filter) に応じて表示対象を絞り込む
+        let filtered;
+        let emptyMsg;
+        if (_filter === 'valid') {
+            filtered = items.filter(isEffectiveValid);
+            emptyMsg = '📭 有効な問い合わせはまだありません。';
+        } else if (_filter === 'excluded') {
+            filtered = items.filter(it => !isEffectiveValid(it));
+            emptyMsg = '✅ 除外された問い合わせはありません。';
+        } else {
+            filtered = items.slice();
+            emptyMsg = '📭 問い合わせ情報がまだありません。';
+        }
         if (filtered.length === 0) {
-            content.innerHTML = '<div class="iq-empty">📭 有効な問い合わせはまだありません。</div>';
+            content.innerHTML = `<div class="iq-empty">${emptyMsg}</div>`;
             return;
         }
         // 時系列順に並び替え（古い→新しい）
@@ -197,7 +221,8 @@ get_header();
             if (valid) {
                 actionHtml += `<button class="iq-btn-exclude" data-act="exclude" data-key="${escapeHtml(ikey)}">✕ 除外</button>`;
             } else {
-                actionHtml += `<button class="iq-btn-validate" data-act="valid" data-key="${escapeHtml(ikey)}">✓ 有効</button>`;
+                // 除外状態 → 「復活」ボタン (ユーザーにとって意味が明確)
+                actionHtml += `<button class="iq-btn-validate" data-act="valid" data-key="${escapeHtml(ikey)}" title="有効に戻す">✓ 復活</button>`;
             }
             if (manual) {
                 actionHtml += `<button class="iq-btn-reset" data-act="auto" data-key="${escapeHtml(ikey)}" title="AI判定に戻す">↺ AI判定</button>`;
@@ -297,7 +322,7 @@ get_header();
 
         // 集計バーと一覧を再描画
         renderSummary(items);
-        renderItems(items, !validOnly.checked);
+        renderItems(items);
     }
 
     function renderSummary(items) {
@@ -308,14 +333,27 @@ get_header();
             const c = it.ai_category || 'その他';
             byCategory[c] = (byCategory[c] || 0) + 1;
         });
-        let summaryHtml = `<span class="stat">合計<strong>${items.length}</strong></span>`
-            + `<span class="stat" style="color:#1e8e3e;">有効<strong>${validCount}</strong></span>`
-            + `<span class="stat" style="color:#b00;">除外<strong>${excludedCount}</strong></span>`;
+        // クリック可能なフィルタタブ (合計 / 有効 / 除外)
+        const cls = (key) => 'stat iq-filter iq-filter-' + key + (_filter === key ? ' active' : '');
+        let summaryHtml = `<span class="${cls('all')}" data-filter="all" title="すべて表示">合計<strong>${items.length}</strong></span>`
+            + `<span class="${cls('valid')}" data-filter="valid" style="color:#1e8e3e;" title="有効のみ表示">有効<strong>${validCount}</strong></span>`
+            + `<span class="${cls('excluded')}" data-filter="excluded" style="color:#b00;" title="除外したものを一覧表示（ここから復活できます）">除外<strong>${excludedCount}</strong></span>`
+            + `<span class="iq-divider"></span>`;
         Object.entries(byCategory).forEach(([cat, cnt]) => {
             summaryHtml += `<span class="stat"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span><strong>${cnt}</strong></span>`;
         });
         summary.innerHTML = summaryHtml;
         summary.style.display = 'flex';
+
+        // フィルタタブのクリックイベント
+        summary.querySelectorAll('.iq-filter').forEach(el => {
+            el.addEventListener('click', () => {
+                const f = el.getAttribute('data-filter');
+                if (!f || f === _filter) return;
+                _filter = f;
+                rerenderFromCache();
+            });
+        });
 
         // 月選択ドロップダウンの該当option表示も更新（合計X / 有効Y）
         const ym = monthSel.value;
@@ -344,7 +382,7 @@ get_header();
             const items = res.items || [];
             content.dataset.items = JSON.stringify(items);
             renderSummary(items);
-            renderItems(items, !validOnly.checked ? true : false);
+            renderItems(items);
         }).catch(err => {
             content.innerHTML = `<div class="iq-error">通信エラー: ${escapeHtml(err.message || err)}</div>`;
         });
@@ -355,7 +393,9 @@ get_header();
         if (!cached) return;
         try {
             const items = JSON.parse(cached);
-            renderItems(items, !validOnly.checked);
+            // タブの active 状態も更新するため renderSummary も呼ぶ
+            renderSummary(items);
+            renderItems(items);
         } catch(_) {}
     }
 
@@ -454,23 +494,9 @@ get_header();
                 content.innerHTML = '<div class="iq-empty">📭 当月の問い合わせ情報がまだありません。</div>';
                 return;
             }
-            // サマリー再構築
-            const validCount = items.filter(it => it.ai_valid).length;
-            const excludedCount = items.length - validCount;
-            const byCategory = {};
-            items.forEach(it => {
-                const c = it.ai_category || 'その他';
-                byCategory[c] = (byCategory[c] || 0) + 1;
-            });
-            let summaryHtml = `<span class="stat">合計<strong>${items.length}</strong></span>`
-                + `<span class="stat" style="color:#1e8e3e;">有効<strong>${validCount}</strong></span>`
-                + `<span class="stat" style="color:#b00;">除外<strong>${excludedCount}</strong></span>`;
-            Object.entries(byCategory).forEach(([cat, cnt]) => {
-                summaryHtml += `<span class="stat"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span><strong>${cnt}</strong></span>`;
-            });
-            summary.innerHTML = summaryHtml;
-            summary.style.display = 'flex';
-            renderItems(items, !validOnly.checked);
+            // 共通の renderSummary / renderItems を使うことでフィルタタブも同期
+            renderSummary(items);
+            renderItems(items);
         } catch (err) {
             bootstrap.style.display = 'none';
             content.innerHTML = `<div class="iq-error">通信エラー: ${escapeHtml(err.message || err)}</div>`;
@@ -479,7 +505,6 @@ get_header();
 
     monthSel.addEventListener('change', () => loadMonth(monthSel.value));
     refreshBtn.addEventListener('click', refreshCurrentMonth);
-    validOnly.addEventListener('change', rerenderFromCache);
 
     init();
 })();
