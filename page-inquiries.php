@@ -15,24 +15,45 @@ $user_id      = mimamori_get_view_user_id();
 // 一般ログインなら自分）」のメタに保存された設定のみ。他クライアントの個人情報は
 // REST 側 resolve_target_user_id() が user_id 改ざんをブロックするため漏れない。
 
-// 設定が無い場合の案内（管理画面への誘導）
+// 表示モード判定:
+//   - inquiries: 問い合わせ集計プラグイン連携あり (AI 分類 + フォーム本文取得)
+//   - ga4      : 未連携 → GA4 キーイベント (wp_gcrev_cv_routes 設定) を一覧表示
 $inquiries_endpoint_set = false;
 if ( class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
     $inquiries_endpoint_set = ( Mimamori_Inquiries_Fetcher::get_endpoint( $user_id ) !== '' );
 }
-if ( ! $inquiries_endpoint_set ) {
+$page_mode = $inquiries_endpoint_set ? 'inquiries' : 'ga4';
+
+// 設定済み GA4 キーイベント数を確認 (ga4 モード時、設定ゼロなら誘導案内)
+$ga4_routes_count = 0;
+if ( $page_mode === 'ga4' && class_exists( 'Gcrev_Insight_API' ) ) {
+    try {
+        $tmp_api = new Gcrev_Insight_API( false );
+        $ga4_routes_count = count( $tmp_api->get_enabled_cv_routes( $user_id ) );
+        if ( get_user_meta( $user_id, '_gcrev_phone_event_name', true ) ) {
+            $ga4_routes_count++;
+        }
+    } catch ( \Throwable $e ) { /* fail-safe: 0 のまま */ }
+}
+
+// ゴール未設定 (プラグインも未連携 かつ GA4 キーイベントも未設定) → 設定誘導
+if ( $page_mode === 'ga4' && $ga4_routes_count === 0 ) {
     set_query_var( 'gcrev_page_title', 'お問い合わせ一覧' );
-    set_query_var( 'gcrev_page_subtitle', '契約サイトの問い合わせ取得設定が未登録です。' );
+    set_query_var( 'gcrev_page_subtitle', 'ゴール (問い合わせ) 集計に必要な設定が未登録です。' );
     set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'お問い合わせ一覧' ) );
     get_header();
     $is_admin = current_user_can( 'manage_options' );
     ?>
     <div style="max-width:760px;margin:40px auto;padding:32px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;">
-        <h2 style="margin-top:0;">📋 まずは取得設定を登録してください</h2>
-        <p>この一覧を表示するには、お使いの契約サイト（コーポレートサイト等）に「みまもりウェブ 問い合わせ集計API」プラグインを導入し、URL とトークンを登録する必要があります。</p>
+        <h2 style="margin-top:0;">📋 まずはゴール集計の設定を登録してください</h2>
+        <p>このページを表示するには、以下のどちらかを設定してください:</p>
+        <ul style="line-height:1.9;">
+            <li><strong>(A) フォーム本文も含めた詳細一覧</strong>: 契約サイトに「みまもりウェブ 問い合わせ集計API」プラグインを導入し、URL とトークンを登録</li>
+            <li><strong>(B) GA4 キーイベントベースの簡易一覧</strong>: ゴール設定画面で集計対象の GA4 イベントを登録</li>
+        </ul>
         <?php if ( $is_admin ) : ?>
-            <p>管理画面の「<a href="<?php echo esc_url( admin_url( 'admin.php?page=gcrev-inquiries-settings' ) ); ?>"><strong>みまもりウェブ → ✉️ 問い合わせ取得</strong></a>」から、対象ユーザーを選んで設定してください。</p>
-            <p style="color:#6b7280;font-size:13px;">他のクライアントの問い合わせを確認したい場合は、画面右上の「事業者ビュー切替」で対象クライアントになりきった状態でこのページにアクセスしてください。</p>
+            <p>管理画面の「<a href="<?php echo esc_url( admin_url( 'admin.php?page=gcrev-inquiries-settings' ) ); ?>"><strong>みまもりウェブ → ✉️ 問い合わせ取得</strong></a>」、または「<a href="<?php echo esc_url( home_url( '/analysis/cv-review/' ) ); ?>"><strong>ゴール設定ページ</strong></a>」から設定してください。</p>
+            <p style="color:#6b7280;font-size:13px;">他のクライアントを確認したい場合は、画面右上の「事業者ビュー切替」で対象クライアントになりきった状態でアクセスしてください。</p>
         <?php else : ?>
             <p>サポート担当者にご連絡いただくか、<a href="<?php echo esc_url( home_url( '/inquiry/' ) ); ?>">お問い合わせ</a>ページからご相談ください。</p>
         <?php endif; ?>
@@ -43,7 +64,11 @@ if ( ! $inquiries_endpoint_set ) {
 }
 
 set_query_var( 'gcrev_page_title', 'お問い合わせ一覧' );
-set_query_var( 'gcrev_page_subtitle', '契約サイトに届いた問い合わせ・見学会申込みを月別に確認できます（AIで分類済み）。' );
+if ( $page_mode === 'inquiries' ) {
+    set_query_var( 'gcrev_page_subtitle', '契約サイトに届いた問い合わせ・見学会申込みを月別に確認できます（AIで分類済み）。' );
+} else {
+    set_query_var( 'gcrev_page_subtitle', 'GA4 で計測したゴール達成イベント (問い合わせ・電話タップ等) を月別に確認できます。' );
+}
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'お問い合わせ一覧' ) );
 
 get_header();
@@ -115,12 +140,20 @@ get_header();
 }
 </style>
 
-<div class="iq-wrap">
+<div class="iq-wrap" data-mode="<?php echo esc_attr( $page_mode ); ?>">
+    <?php if ( $page_mode === 'ga4' ) : ?>
+        <div style="background:#eef6ff;border:1px solid #bdd7f5;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#1e40af;line-height:1.7;">
+            <strong>📊 GA4 ベース表示中</strong><br>
+            問い合わせ集計プラグイン未連携のため、GA4 のキーイベント（ゴール設定で登録されたイベント）を表示しています。フォーム本文・送信者情報は取得できませんが、「✕ 除外」を押すとそのゴールはダッシュボードの集計から除外されます。プラグインを導入すると AI による SPAM・営業の自動除外や本文確認が可能になります。
+        </div>
+    <?php endif; ?>
     <div class="iq-header">
         <div class="iq-controls">
             <label for="iq-month">期間:</label>
             <select id="iq-month"><option value="">読み込み中…</option></select>
-            <button id="iq-refresh">🔄 当月の最新を再取得</button>
+            <?php if ( $page_mode === 'inquiries' ) : ?>
+                <button id="iq-refresh">🔄 当月の最新を再取得</button>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -131,11 +164,14 @@ get_header();
 
 <script>
 (function() {
-    const restBase = <?php echo wp_json_encode( esc_url_raw( rest_url( 'mimamori/v1/' ) ) ); ?>;
+    const MODE     = <?php echo wp_json_encode( $page_mode ); ?>; // 'inquiries' | 'ga4'
+    const restMimamori = <?php echo wp_json_encode( esc_url_raw( rest_url( 'mimamori/v1/' ) ) ); ?>;
+    const restGcrev    = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/' ) ) ); ?>;
+    const restBase = MODE === 'ga4' ? restGcrev : restMimamori;
     const nonce    = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
     const userId   = <?php echo (int) $user_id; ?>;
     const monthSel = document.getElementById('iq-month');
-    const refreshBtn = document.getElementById('iq-refresh');
+    const refreshBtn = document.getElementById('iq-refresh'); // GA4モードでは null
     const summary = document.getElementById('iq-summary');
     const content = document.getElementById('iq-content');
     const bootstrap = document.getElementById('iq-bootstrap');
@@ -143,8 +179,8 @@ get_header();
     // 表示フィルタ: 'valid' (有効のみ・既定) / 'excluded' (除外のみ・復活操作用) / 'all'
     let _filter = 'valid';
 
-    function api(path, params = {}) {
-        const url = new URL( restBase + path );
+    function api(path, params = {}, baseOverride = null) {
+        const url = new URL( (baseOverride || restBase) + path );
         Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
         return fetch(url.toString(), {
             credentials: 'same-origin',
@@ -171,12 +207,18 @@ get_header();
         return d.innerHTML;
     }
 
-    // 「effective_valid」優先、無ければ ai_valid。手動オーバーライド適用後の真偽。
+    // モードによる「有効」判定の違いを吸収:
+    //   inquiries モード: effective_valid (AI + 手動 + キーワード除外を反映)
+    //   ga4 モード      : status !== 2 (status: 0=未判定, 1=有効, 2=除外)
     function isEffectiveValid(it) {
+        if (MODE === 'ga4') {
+            return (typeof it.status === 'number') ? (it.status !== 2) : true;
+        }
         return ('effective_valid' in it) ? !!it.effective_valid : !!it.ai_valid;
     }
 
     function renderItems(items) {
+        if (MODE === 'ga4') { return renderItemsGa4(items); }
         if (!items || items.length === 0) {
             content.innerHTML = '<div class="iq-empty">📭 問い合わせ情報がまだありません。</div>';
             return;
@@ -263,8 +305,100 @@ get_header();
         });
     }
 
+    // GA4 モード用の行レンダラ
+    // 各行 = cv-review REST が返す GA4 イベント1件
+    //   { row_hash, event_name, date_hour_minute, page_path, source_medium,
+    //     device_category, country, event_count, status, label }
+    function renderItemsGa4(rows) {
+        if (!rows || rows.length === 0) {
+            content.innerHTML = '<div class="iq-empty">📭 この期間のゴール達成はまだありません。</div>';
+            return;
+        }
+        let filtered;
+        let emptyMsg;
+        if (_filter === 'valid') {
+            filtered = rows.filter(isEffectiveValid);
+            emptyMsg = '📭 この期間に有効なゴール達成はまだありません。';
+        } else if (_filter === 'excluded') {
+            filtered = rows.filter(r => !isEffectiveValid(r));
+            emptyMsg = '✅ 除外されたゴールはありません。';
+        } else {
+            filtered = rows.slice();
+            emptyMsg = '📭 この期間のゴール達成はまだありません。';
+        }
+        if (filtered.length === 0) {
+            content.innerHTML = `<div class="iq-empty">${emptyMsg}</div>`;
+            return;
+        }
+        // 時系列順 (古い→新しい)
+        filtered.sort((a, b) => String(a.date_hour_minute || '').localeCompare(String(b.date_hour_minute || '')));
+
+        // date_hour_minute は "YYYYMMDDHHMM" 形式
+        const formatDhm = (dhm) => {
+            const s = String(dhm || '');
+            if (s.length < 12) return s;
+            return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)} ${s.slice(8,10)}:${s.slice(10,12)}`;
+        };
+
+        let html = '<table class="iq-table"><thead><tr>'
+            + '<th style="width:40px;">#</th>'
+            + '<th style="width:170px;">日時</th>'
+            + '<th style="width:160px;">ゴール</th>'
+            + '<th>ページ</th>'
+            + '<th style="width:160px;">流入元</th>'
+            + '<th style="width:80px;">デバイス</th>'
+            + '<th style="width:130px;">操作</th>'
+            + '</tr></thead><tbody>';
+
+        const deviceLabel = (d) => ({ 'mobile':'📱 スマホ', 'desktop':'💻 PC', 'tablet':'📟 タブレット' })[d] || (d || '—');
+
+        filtered.forEach((r, i) => {
+            const valid = isEffectiveValid(r);
+            const dt = formatDhm(r.date_hour_minute);
+            const dateDisp = dt.slice(0,10);
+            const timeDisp = dt.slice(11,16);
+            const eventLabel = String(r.label || r.event_name || '');
+            const pagePath  = String(r.page_path || '/');
+            const srcMed    = String(r.source_medium || '');
+            const dev       = String(r.device_category || '');
+            const evCount   = Number(r.event_count || 1);
+            const rowHash   = String(r.row_hash || '');
+
+            // 操作ボタン
+            let actionHtml = '<div class="iq-actions">';
+            if (valid) {
+                actionHtml += `<button class="iq-btn-exclude" data-act="exclude" data-key="${escapeHtml(rowHash)}">✕ 除外</button>`;
+            } else {
+                actionHtml += `<button class="iq-btn-validate" data-act="valid" data-key="${escapeHtml(rowHash)}" title="ゴールに戻す">✓ 復活</button>`;
+            }
+            actionHtml += '</div>';
+
+            // ステータス表示
+            let statusMark = '';
+            if (r.status === 1) statusMark = '<span class="iq-manual-mark valid">手動有効</span>';
+            if (r.status === 2) statusMark = '<span class="iq-manual-mark excluded">除外済み</span>';
+
+            html += `<tr class="${valid ? '' : 'invalid'}" data-key="${escapeHtml(rowHash)}">`
+                + `<td data-label="No">${i+1}</td>`
+                + `<td data-label="日時">${escapeHtml(dateDisp)}<br><span style="font-size:11px;color:#6b7280;">${escapeHtml(timeDisp)}</span></td>`
+                + `<td data-label="ゴール"><span class="iq-cat-badge iq-cat-inquiry">${escapeHtml(eventLabel)}</span>${evCount > 1 ? ` <span class="iq-tag">×${evCount}</span>` : ''}${statusMark}</td>`
+                + `<td data-label="ページ" style="word-break:break-all;font-size:12px;">${escapeHtml(pagePath)}</td>`
+                + `<td data-label="流入元" style="font-size:12px;">${escapeHtml(srcMed)}</td>`
+                + `<td data-label="デバイス">${escapeHtml(deviceLabel(dev))}</td>`
+                + `<td data-label="操作">${actionHtml}</td>`
+                + `</tr>`;
+        });
+        html += '</tbody></table>';
+        content.innerHTML = html;
+
+        content.querySelectorAll('.iq-actions button').forEach(btn => {
+            btn.addEventListener('click', onOverrideClick);
+        });
+    }
+
     // ボタンクリック時の処理 — 即座にローカル状態更新 + サーバー POST
     async function onOverrideClick(ev) {
+        if (MODE === 'ga4') { return onOverrideClickGa4(ev); }
         const btn = ev.currentTarget;
         const key = btn.getAttribute('data-key');
         const act = btn.getAttribute('data-act'); // 'exclude' | 'valid' | 'auto'
@@ -329,12 +463,84 @@ get_header();
         renderItems(items);
     }
 
+    // GA4 モード用の override クリック
+    async function onOverrideClickGa4(ev) {
+        const btn = ev.currentTarget;
+        const rowHash = btn.getAttribute('data-key');
+        const act = btn.getAttribute('data-act'); // 'exclude' | 'valid'
+        if (!rowHash) return;
+
+        const ym = monthSel.value;
+        if (!ym) return;
+
+        const cached = content.dataset.items;
+        if (!cached) return;
+        let rows;
+        try { rows = JSON.parse(cached); } catch(_) { return; }
+        const idx = rows.findIndex(r => (r.row_hash || '') === rowHash);
+        if (idx < 0) return;
+
+        // status: 1=有効, 2=除外
+        const newStatus = (act === 'exclude') ? 2 : 1;
+
+        btn.disabled = true;
+        const origText = btn.textContent;
+        btn.textContent = '...';
+
+        try {
+            const r0 = rows[idx];
+            const res = await fetch(restGcrev + 'cv-review/update', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-WP-Nonce': nonce, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    month: ym,
+                    row_hash: rowHash,
+                    status: newStatus,
+                    // 新規 INSERT 時に必要となる行情報も送る
+                    event_name:       r0.event_name || '',
+                    date_hour_minute: r0.date_hour_minute || '',
+                    page_path:        r0.page_path || '',
+                    source_medium:    r0.source_medium || '',
+                    device_category:  r0.device_category || '',
+                    country:          r0.country || '',
+                    event_count:      Number(r0.event_count || 1),
+                }),
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                alert(json.message || '更新に失敗しました');
+                btn.disabled = false;
+                btn.textContent = origText;
+                return;
+            }
+        } catch (e) {
+            alert('通信エラー: ' + (e && e.message ? e.message : e));
+            btn.disabled = false;
+            btn.textContent = origText;
+            return;
+        }
+
+        rows[idx].status = newStatus;
+        content.dataset.items = JSON.stringify(rows);
+        renderSummary(rows);
+        renderItems(rows);
+    }
+
     function renderSummary(items) {
         const validCount = items.filter(isEffectiveValid).length;
         const excludedCount = items.length - validCount;
+        // カテゴリ集計はモードで異なる:
+        //   inquiries: AI 分類 (ai_category)
+        //   ga4      : ゴール設定で付けたラベル (label) or イベント名
         const byCategory = {};
         items.forEach(it => {
-            const c = it.ai_category || 'その他';
+            let c;
+            if (MODE === 'ga4') {
+                c = String(it.label || it.event_name || 'その他');
+            } else {
+                c = it.ai_category || 'その他';
+            }
             byCategory[c] = (byCategory[c] || 0) + 1;
         });
         // クリック可能なフィルタタブ (合計 / 有効 / 除外)
@@ -374,6 +580,7 @@ get_header();
 
     function loadMonth(ym, force = false) {
         if (!ym) return;
+        if (MODE === 'ga4') { return loadMonthGa4(ym); }
         const [y, m] = ym.split('-');
         content.innerHTML = '<div class="iq-loading">📡 取得中…</div>';
         summary.style.display = 'none';
@@ -389,6 +596,25 @@ get_header();
             content.dataset.items = JSON.stringify(items);
             renderSummary(items);
             renderItems(items);
+        }).catch(err => {
+            content.innerHTML = `<div class="iq-error">通信エラー: ${escapeHtml(err.message || err)}</div>`;
+        });
+    }
+
+    // GA4 モード: cv-review エンドポイントから当月分の GA4 イベントを取得
+    function loadMonthGa4(ym) {
+        content.innerHTML = '<div class="iq-loading">📡 GA4 から取得中…</div>';
+        summary.style.display = 'none';
+
+        api('cv-review', { month: ym }).then(res => {
+            if (!res || !res.success) {
+                content.innerHTML = `<div class="iq-error">取得に失敗: ${escapeHtml((res && res.message) || '')}</div>`;
+                return;
+            }
+            const rows = res.rows || [];
+            content.dataset.items = JSON.stringify(rows);
+            renderSummary(rows);
+            renderItems(rows);
         }).catch(err => {
             content.innerHTML = `<div class="iq-error">通信エラー: ${escapeHtml(err.message || err)}</div>`;
         });
@@ -442,8 +668,23 @@ get_header();
         }).join('');
     }
 
+    // GA4 モード用: 直近12ヶ月を静的に列挙して月選択肢を作る
+    function renderMonthOptionsGa4() {
+        const tz = new Date();
+        const opts = [];
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(tz.getFullYear(), tz.getMonth() - i, 1);
+            const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            const isCurrent = (i === 0);
+            const cur = isCurrent ? '（当月）' : '';
+            opts.push(`<option value="${ym}" data-current="${isCurrent?1:0}">${ym}${cur}</option>`);
+        }
+        monthSel.innerHTML = opts.join('');
+    }
+
     // 月リスト取得 → 未キャッシュ月を一括取得 → 月リスト再読込 → 最新月を表示
     async function init() {
+        if (MODE === 'ga4') { return initGa4(); }
         let res = await api('inquiries/months', { user_id: userId });
         let months = (res && res.months) || [];
         if (months.length === 0) {
@@ -462,6 +703,12 @@ get_header();
         renderMonthOptions(months);
 
         // 最新月（先頭）を表示
+        if (monthSel.value) loadMonth(monthSel.value);
+    }
+
+    // GA4 モード用 init: 静的月リスト + 最新月を表示するだけ
+    async function initGa4() {
+        renderMonthOptionsGa4();
         if (monthSel.value) loadMonth(monthSel.value);
     }
 
@@ -510,7 +757,9 @@ get_header();
     }
 
     monthSel.addEventListener('change', () => loadMonth(monthSel.value));
-    refreshBtn.addEventListener('click', refreshCurrentMonth);
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', refreshCurrentMonth);
+    }
 
     init();
 })();
