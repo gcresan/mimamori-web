@@ -365,64 +365,8 @@ get_header();
                         </span>
                     </td>
                 </tr>
-                <tr>
-                    <th>契約ステータス</th>
-                    <td>
-                        <?php if ( $is_test ) : ?>
-                            <span class="contract-badge contract-badge--test">お試し中</span>
-                        <?php elseif ( $c_status === 'active' ) : ?>
-                            <span class="contract-badge contract-badge--active">利用中</span>
-                        <?php elseif ( $c_status === 'canceled' ) : ?>
-                            <span class="contract-badge contract-badge--canceled">解約済み</span>
-                        <?php else : ?>
-                            <span class="contract-badge contract-badge--none">未開始</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php if ( $is_test ) : ?>
-                <tr>
-                    <th>お試し終了日</th>
-                    <td><?php echo $trial_end_display ? esc_html( $trial_end_display ) : '－'; ?></td>
-                </tr>
-                <tr>
-                    <th>次回更新日</th>
-                    <td>－</td>
-                </tr>
-                <tr>
-                    <th>解約可能日</th>
-                    <td>－</td>
-                </tr>
-                <?php else : ?>
-                <tr>
-                    <th>次回更新日</th>
-                    <td>
-                        <?php if ( $has_contract && $dates['next_renewal_at'] ) : ?>
-                            <?php echo esc_html( wp_date( 'Y年n月j日', strtotime( $dates['next_renewal_at'] ) ) ); ?>
-                        <?php else : ?>
-                            —
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <tr>
-                    <th>解約可能日</th>
-                    <td>
-                        <?php if ( $has_contract && $dates['cancellable_at'] ) : ?>
-                            <?php echo esc_html( wp_date( 'Y年n月j日', strtotime( $dates['cancellable_at'] ) ) ); ?>
-                        <?php else : ?>
-                            —
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php endif; ?>
             </tbody>
         </table>
-
-        <?php if ( ! $has_contract && ! $is_test ) : ?>
-        <div class="acct-notice">
-            <span class="notice-icon">&#9432;</span>
-            <span>決済手続きが完了すると、契約情報が表示されます。</span>
-        </div>
-        <?php endif; ?>
     </div>
 
     <!-- =============================================
