@@ -1011,6 +1011,8 @@ get_header();
                 setTimeout(function() {
                     showProgress(false);
                     showToast(cnt + '件のキーワードの最新順位を取得しました。');
+                    // 直前のクライアントキャッシュ(localStorage, TTL 2h)を破棄してから再取得
+                    if (window.gcrevCache) window.gcrevCache.clear('rank_tracker_');
                     fetchRankings();
                 }, 1200);
             } else {
