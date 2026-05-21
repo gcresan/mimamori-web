@@ -7710,7 +7710,8 @@ PROMPT;
                 return new \WP_REST_Response(['success' => false, 'message' => 'ログインが必要です'], 401);
             }
 
-            $period = $request->get_param('period') ?? 'prev-month';
+            $period   = $request->get_param('period') ?? 'prev-month';
+            $no_cache = (bool) $request->get_param('nocache');
 
             $location_id = get_user_meta($user_id, '_gcrev_gbp_location_id', true);
             if (empty($location_id)) {
@@ -7734,9 +7735,13 @@ PROMPT;
 
             // キャッシュ（period だけでキー一意化。日付がスライドしてもキーは変わらない）
             $cache_key = "gcrev_meo_{$user_id}_{$period}";
-            $cached    = get_transient($cache_key);
-            if ($cached !== false && is_array($cached)) {
-                return new \WP_REST_Response($cached, 200);
+            if ($no_cache) {
+                delete_transient($cache_key);
+            } else {
+                $cached = get_transient($cache_key);
+                if ($cached !== false && is_array($cached)) {
+                    return new \WP_REST_Response($cached, 200);
+                }
             }
 
             // GBP Performance API

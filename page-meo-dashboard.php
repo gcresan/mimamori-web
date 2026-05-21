@@ -715,6 +715,8 @@ get_header();
     // REST API設定（deviceページと同一パターン）
     const REST_URL    = '<?php echo esc_js(rest_url("gcrev/v1/meo/dashboard")); ?>';
     const WP_NONCE    = '<?php echo wp_create_nonce("wp_rest"); ?>';
+    // ?nocache=1 が URL に付いていれば、サーバー側 transient + JS 側キャッシュをバイパス
+    const NO_CACHE    = /[?&]nocache=1\b/.test(window.location.search);
     let currentPeriod = 'last30';
     let currentData   = null;
 
@@ -765,24 +767,27 @@ get_header();
 
     // ===== データ取得（キャッシュ優先 + fetch） =====
     async function loadData(period) {
-        // キャッシュチェック（ローディングなしで即表示）
+        // キャッシュチェック（ローディングなしで即表示）。nocache=1 ならスキップ
         var cacheKey = 'meo_dash_' + period;
-        var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
-        if (cached) {
-            currentData = cached;
-            updateApiErrorBanner(currentData);
-            updatePeriodDisplay(currentData);
-            updateSummaryCards(currentData);
-            updateKeywordsTable(currentData);
-            updateMetricChart(currentData);
-            updateActionsChart(currentData);
-            return;
+        if (!NO_CACHE) {
+            var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+            if (cached) {
+                currentData = cached;
+                updateApiErrorBanner(currentData);
+                updatePeriodDisplay(currentData);
+                updateSummaryCards(currentData);
+                updateKeywordsTable(currentData);
+                updateMetricChart(currentData);
+                updateActionsChart(currentData);
+                return;
+            }
         }
 
         showLoading();
 
         try {
             var apiUrl = REST_URL + '?period=' + encodeURIComponent(period);
+            if (NO_CACHE) apiUrl += '&nocache=1';
             var controller = new AbortController();
             var timeoutId = setTimeout(function() { controller.abort(); }, 120000); // 2分タイムアウト
             var response = await fetch(apiUrl, {
@@ -804,8 +809,8 @@ get_header();
 
             currentData = result;
 
-            // キャッシュに保存（API取得エラー時は保存しない）
-            if (window.gcrevCache && result.api_status !== 'error') {
+            // キャッシュに保存（API取得エラー時 / nocache指定時は保存しない）
+            if (window.gcrevCache && result.api_status !== 'error' && !NO_CACHE) {
                 window.gcrevCache.set(cacheKey, currentData);
             }
 
