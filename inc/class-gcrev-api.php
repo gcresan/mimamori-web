@@ -7740,20 +7740,45 @@ PROMPT;
             }
 
             // GBP Performance API
+            $api_status = 'ok';
+            $api_error  = null;
             if ($is_pending) {
                 // pending_ IDの場合は空データで返却（ダッシュボードUIは表示する）
                 $current_metrics = $this->gbp_empty_metrics();
                 $prev_metrics    = $this->gbp_empty_metrics();
                 $daily_metrics   = [];
                 $keywords        = [];
+                $api_status      = 'pending';
                 error_log("[GCREV][MEO] Pending location, returning empty data: user_id={$user_id}");
             } else {
-                $current_metrics = $this->gbp_fetch_performance_metrics($access_token, $location_id, $dates['start'], $dates['end']);
-                $prev_metrics    = $this->gbp_fetch_performance_metrics($access_token, $location_id, $comparison['start'], $comparison['end']);
+                $current_diag    = null;
+                $prev_diag       = null;
+                $current_metrics = $this->gbp_fetch_performance_metrics($access_token, $location_id, $dates['start'], $dates['end'], $current_diag);
+                $prev_metrics    = $this->gbp_fetch_performance_metrics($access_token, $location_id, $comparison['start'], $comparison['end'], $prev_diag);
                 $daily_metrics   = $this->gbp_fetch_daily_metrics($access_token, $location_id, $dates['start'], $dates['end']);
 
                 // 検索キーワード（直近6ヶ月の月別時系列）
                 $keywords = $this->gbp_fetch_keywords_monthly_series($access_token, $location_id, 6);
+
+                // 当期のAPI呼び出し結果からステータスを判定
+                if (is_array($current_diag) && $current_diag['success_count'] === 0 && $current_diag['error_count'] > 0) {
+                    $api_status = 'error';
+                    $first_err  = $current_diag['errors'][0] ?? [];
+                    $http_code  = $first_err['status'] ?? null;
+                    $api_error  = [
+                        'http_status' => $http_code,
+                        'message'     => $first_err['message'] ?? 'GBP APIから応答がありませんでした。',
+                        'hint'        => $this->gbp_error_hint($http_code, $first_err['message'] ?? ''),
+                    ];
+                } elseif (is_array($current_diag) && $current_diag['error_count'] > 0) {
+                    $api_status = 'partial';
+                    $first_err  = $current_diag['errors'][0] ?? [];
+                    $api_error  = [
+                        'http_status' => $first_err['status'] ?? null,
+                        'message'     => $first_err['message'] ?? '',
+                        'hint'        => '一部のメトリクスが取得できませんでした。時間を置いて再度ご確認ください。',
+                    ];
+                }
             }
 
             $result = [
@@ -7766,10 +7791,15 @@ PROMPT;
                 'compare_range_label' => str_replace('-', '/', $comparison['start']) . ' 〜 ' . str_replace('-', '/', $comparison['end']),
                 'current_period'      => ['start' => $dates['start'], 'end' => $dates['end']],
                 'comparison_period'   => ['start' => $comparison['start'], 'end' => $comparison['end']],
+                'api_status'          => $api_status,
+                'api_error'           => $api_error,
             ];
 
-            set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
-            error_log("[GCREV][MEO] Data fetched: user_id={$user_id}, period={$period}");
+            // エラー時はキャッシュしない（次回リクエストで再試行できるように）
+            if ($api_status !== 'error') {
+                set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
+            }
+            error_log("[GCREV][MEO] Data fetched: user_id={$user_id}, period={$period}, status={$api_status}");
             return new \WP_REST_Response($result, 200);
 
         } catch (\Exception $e) {
@@ -9802,7 +9832,8 @@ PROMPT;
      * GBP Performance API からパフォーマンス指標を一括取得・集計
      */
     private function gbp_fetch_performance_metrics(
-        string $access_token, string $location_id, string $start_date, string $end_date
+        string $access_token, string $location_id, string $start_date, string $end_date,
+        ?array &$diagnostics = null
         ): array {
         if (strpos($location_id, 'locations/') !== 0) {
             $location_id = 'locations/' . $location_id;
@@ -9837,6 +9868,9 @@ PROMPT;
         $end_obj   = $this->gbp_date_obj($end_date);
 
         $totals = $this->gbp_empty_metrics();
+        $total_count   = count($metrics);
+        $success_count = 0;
+        $errors        = [];
 
         foreach ($metrics as $metric) {
             $params = [
@@ -9858,8 +9892,10 @@ PROMPT;
             ]);
 
             if (is_wp_error($response)) {
+                $err_msg = $response->get_error_message();
+                $errors[] = ['metric' => $metric, 'status' => 'wp_error', 'message' => $err_msg];
                 file_put_contents('/tmp/gcrev_gbp_debug.log',
-                    date('Y-m-d H:i:s') . " [Perf] wp_error: metric={$metric}, err=" . $response->get_error_message() . "\n",
+                    date('Y-m-d H:i:s') . " [Perf] wp_error: metric={$metric}, err={$err_msg}\n",
                     FILE_APPEND
                 );
                 continue;
@@ -9869,6 +9905,14 @@ PROMPT;
             $raw_body = wp_remote_retrieve_body($response);
 
             if ($status !== 200) {
+                // Google API のエラーメッセージを抽出
+                $body_parsed = json_decode($raw_body, true);
+                $api_message = $body_parsed['error']['message'] ?? '';
+                $errors[] = [
+                    'metric'  => $metric,
+                    'status'  => $status,
+                    'message' => $api_message ?: substr($raw_body, 0, 200),
+                ];
                 file_put_contents('/tmp/gcrev_gbp_debug.log',
                     date('Y-m-d H:i:s') . " [Perf] HTTP {$status}: metric={$metric}, body=" . substr($raw_body, 0, 300) . "\n",
                     FILE_APPEND
@@ -9885,9 +9929,19 @@ PROMPT;
                     $totals[$key] += $val;
                 }
             }
+            $success_count++;
         }
 
         $totals['total_impressions'] = $totals['mobile_impressions'] + $totals['desktop_impressions'];
+
+        if ($diagnostics !== null) {
+            $diagnostics = [
+                'total_count'   => $total_count,
+                'success_count' => $success_count,
+                'error_count'   => $total_count - $success_count,
+                'errors'        => $errors,
+            ];
+        }
 
         return $totals;
     }
@@ -10194,6 +10248,38 @@ PROMPT;
     }
 
     // ===== GBP ヘルパー =====
+
+    /**
+     * GBP API エラーから、ユーザー向けの対処案内文を生成
+     */
+    private function gbp_error_hint(?int $http_status, string $api_message): string {
+        $msg = strtolower($api_message);
+
+        if ($http_status === 401) {
+            return 'Googleビジネスプロフィールの認証が切れています。MEOダッシュボード上で再連携してください。';
+        }
+        if ($http_status === 403) {
+            if (strpos($msg, 'business profile performance api') !== false
+                || strpos($msg, 'has not been used') !== false
+                || strpos($msg, 'is disabled') !== false) {
+                return 'Google Cloud Console で「Business Profile Performance API」が有効化されていない可能性があります。管理者にお問い合わせください。';
+            }
+            if (strpos($msg, 'permission') !== false || strpos($msg, 'access') !== false) {
+                return '選択中のロケーションへのアクセス権限がありません。Googleビジネスプロフィールの管理権限を持つアカウントで再連携してください。';
+            }
+            return 'GBP APIへのアクセス権限がありません。連携Googleアカウントの権限をご確認ください。';
+        }
+        if ($http_status === 404) {
+            return '選択中のロケーションIDが見つかりません。設定画面からロケーションを選び直してください。';
+        }
+        if ($http_status === 429) {
+            return 'Googleビジネスプロフィールの呼び出し制限に達しました。しばらく時間を置いてから再度お試しください。';
+        }
+        if ($http_status !== null && $http_status >= 500) {
+            return 'Google側で一時的な障害が発生しています。時間を置いて再度お試しください。';
+        }
+        return 'GBP APIからエラーが返されました。問題が続く場合はサポートまでご連絡ください。';
+    }
 
     /**
      * YYYY-MM-DD → Google API用 {year, month, day} 変換

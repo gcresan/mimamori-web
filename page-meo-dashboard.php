@@ -540,6 +540,33 @@ get_header();
     <!-- メインコンテンツ（データ読み込み後に表示） -->
     <div id="meo-main-content">
 
+        <!-- API取得エラーバナー（取得失敗時のみ表示） -->
+        <div id="meo-api-error-banner"
+             style="display:none; background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #dc2626; border-radius:12px; padding:20px 24px; margin-bottom:24px;">
+            <div style="display:flex; gap:14px; align-items:flex-start;">
+                <div style="font-size:24px; line-height:1; flex-shrink:0;">⚠️</div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:16px; font-weight:700; color:#991b1b; margin-bottom:6px;">
+                        Googleビジネスプロフィールからデータを取得できませんでした
+                    </div>
+                    <div id="meo-api-error-hint" style="font-size:13px; color:#7f1d1d; line-height:1.7; margin-bottom:10px;"></div>
+                    <details style="font-size:12px; color:#991b1b;">
+                        <summary style="cursor:pointer; font-weight:600;">技術的な詳細</summary>
+                        <div id="meo-api-error-detail" style="margin-top:8px; padding:10px 12px; background:#fff; border-radius:6px; font-family:monospace; font-size:12px; color:#374151; word-break:break-all; white-space:pre-wrap;"></div>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <!-- 部分エラーバナー（一部メトリクスのみ失敗） -->
+        <div id="meo-api-partial-banner"
+             style="display:none; background:#fffbeb; border:1px solid #fde68a; border-left:4px solid #D4A842; border-radius:12px; padding:14px 20px; margin-bottom:24px;">
+            <div style="display:flex; gap:12px; align-items:center;">
+                <div style="font-size:20px; line-height:1;">ℹ️</div>
+                <div style="font-size:13px; color:#78350f; line-height:1.6;" id="meo-api-partial-hint"></div>
+            </div>
+        </div>
+
         <!-- サマリーカード：表示回数系 -->
         <div class="meo-summary-grid" id="meoSummaryCards">
             <button type="button" class="meo-summary-card is-active" data-metric="total-impressions" data-label="表示回数" aria-pressed="true">
@@ -743,6 +770,7 @@ get_header();
         var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
         if (cached) {
             currentData = cached;
+            updateApiErrorBanner(currentData);
             updatePeriodDisplay(currentData);
             updateSummaryCards(currentData);
             updateKeywordsTable(currentData);
@@ -776,10 +804,13 @@ get_header();
 
             currentData = result;
 
-            // キャッシュに保存
-            if (window.gcrevCache) window.gcrevCache.set(cacheKey, currentData);
+            // キャッシュに保存（API取得エラー時は保存しない）
+            if (window.gcrevCache && result.api_status !== 'error') {
+                window.gcrevCache.set(cacheKey, currentData);
+            }
 
             // UI更新
+            updateApiErrorBanner(currentData);
             updatePeriodDisplay(currentData);
             updateSummaryCards(currentData);
             updateKeywordsTable(currentData);
@@ -792,6 +823,41 @@ get_header();
             if (pdEl) pdEl.innerHTML = '<span style="color:#dc2626;">データ取得に失敗しました。再読み込みしてください。</span>';
         } finally {
             hideLoading();
+        }
+    }
+
+    // ===== API取得エラーバナー =====
+    function updateApiErrorBanner(data) {
+        var errBanner     = document.getElementById('meo-api-error-banner');
+        var errHintEl     = document.getElementById('meo-api-error-hint');
+        var errDetailEl   = document.getElementById('meo-api-error-detail');
+        var partialBanner = document.getElementById('meo-api-partial-banner');
+        var partialHintEl = document.getElementById('meo-api-partial-hint');
+
+        // バナーを一旦すべて非表示にリセット
+        if (errBanner)     errBanner.style.display     = 'none';
+        if (partialBanner) partialBanner.style.display = 'none';
+
+        var status = data && data.api_status;
+        if (!status || status === 'ok' || status === 'pending') return;
+
+        var apiErr = (data && data.api_error) || {};
+        var hint   = apiErr.hint    || 'データを取得できませんでした。';
+        var msg    = apiErr.message || '';
+        var http   = apiErr.http_status;
+
+        if (status === 'error' && errBanner) {
+            errBanner.style.display = 'block';
+            if (errHintEl) errHintEl.textContent = hint;
+            if (errDetailEl) {
+                var detail = '';
+                if (http !== null && http !== undefined) detail += 'HTTP ' + http + '\n';
+                if (msg) detail += msg;
+                errDetailEl.textContent = detail || '（詳細なし）';
+            }
+        } else if (status === 'partial' && partialBanner) {
+            partialBanner.style.display = 'block';
+            if (partialHintEl) partialHintEl.textContent = hint;
         }
     }
 
