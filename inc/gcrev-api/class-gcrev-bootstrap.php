@@ -1066,11 +1066,16 @@ class Gcrev_Bootstrap {
         }
         self::schedule_daily_if_missing('gcrev_rank_fetch_daily_event', 'tomorrow 03:30:00');
 
-        // 順位トラッキング 時間帯対応: 朝/昼/夜 の3スロット
-        // 各キーワードの fetch_times に応じてそのスロットだけ取得する
+        // 順位トラッキング: 1日1回（朝 06:00）に統一。
+        // 以前は朝/昼/夜の3スロットを回していたが、DataForSEO 課金が3倍になる割に
+        // 中小企業向けクライアントには時間帯比較のニーズが乏しいため morning のみ稼働させる。
         self::schedule_daily_if_missing('gcrev_rank_fetch_slot_morning_event', 'tomorrow 06:00:00');
-        self::schedule_daily_if_missing('gcrev_rank_fetch_slot_noon_event',    'tomorrow 12:00:00');
-        self::schedule_daily_if_missing('gcrev_rank_fetch_slot_evening_event', 'tomorrow 18:00:00');
+        // 旧 noon / evening スロットが残っていれば解除する（既存環境のクリーンアップ）。
+        foreach ( ['gcrev_rank_fetch_slot_noon_event', 'gcrev_rank_fetch_slot_evening_event'] as $obsolete_hook ) {
+            while ( ( $ts = wp_next_scheduled( $obsolete_hook ) ) !== false ) {
+                wp_unschedule_event( $ts, $obsolete_hook );
+            }
+        }
 
         // MEO 日次フェッチ（毎日 04:30）
         // 旧週次イベントを解除

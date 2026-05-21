@@ -571,15 +571,6 @@ get_header();
             <span>&#x1F4C8;</span> 計測キーワードランキング
         </div>
         <div class="rt-header__actions">
-            <label class="rt-slot-filter" for="slotFilter" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#374151;">
-                <span style="white-space:nowrap;">時間帯:</span>
-                <select id="slotFilter" onchange="switchSlot(this.value)" style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; background:#fff; font-size:13px; cursor:pointer;">
-                    <option value="all">全て（最新）</option>
-                    <option value="morning">朝 06:00</option>
-                    <option value="noon">昼 12:00</option>
-                    <option value="evening">夜 18:00</option>
-                </select>
-            </label>
             <button class="rt-btn rt-btn--primary" id="fetchAllBtn" onclick="fetchAllKeywords()">
                 <span class="rt-btn__icon">&#x21BB;</span>
                 最新の情報を見る
