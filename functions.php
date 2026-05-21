@@ -2090,6 +2090,65 @@ add_action( 'rest_api_init', function () {
             return new WP_REST_Response( [ 'success' => true, 'data' => $info ] );
         },
     ] );
+
+    // TEMP: 特定ファイルの存在/サイズ/更新時刻/特定文字列含有を返す（デプロイ確認用）
+    register_rest_route( 'mimamori/v1', '/debug-file-info', [
+        'methods'             => 'GET',
+        'permission_callback' => function () { return is_user_logged_in(); },
+        'callback'            => function () {
+            $targets = [
+                'dataforseo'  => get_template_directory() . '/inc/gcrev-api/modules/class-dataforseo-client.php',
+                'gcrev_api'   => get_template_directory() . '/inc/class-gcrev-api.php',
+                'functions'   => get_template_directory() . '/functions.php',
+            ];
+            $out = [];
+            foreach ( $targets as $key => $f ) {
+                if ( ! file_exists( $f ) ) {
+                    $out[ $key ] = [ 'exists' => false ];
+                    continue;
+                }
+                $body = file_get_contents( $f );
+                $out[ $key ] = [
+                    'exists' => true,
+                    'size'   => filesize( $f ),
+                    'mtime'  => date( 'Y-m-d H:i:s', filemtime( $f ) ),
+                    'sha1'   => sha1( $body ),
+                    'markers' => [
+                        'API_LEVEL_ERROR'   => strpos( $body, 'API_LEVEL_ERROR' ) !== false,
+                        'TASK_LEVEL_ERROR'  => strpos( $body, 'TASK_LEVEL_ERROR' ) !== false,
+                        'API_code_msg'      => strpos( $body, 'API code=' ) !== false,
+                        'fallback_domain'   => strpos( $body, 'fallback_domain' ) !== false,
+                        'no_target_domain'  => strpos( $body, 'no_target_domain' ) !== false,
+                        'debug_opcache'     => strpos( $body, 'debug-opcache-reset' ) !== false,
+                    ],
+                ];
+            }
+            return new WP_REST_Response( [ 'success' => true, 'data' => $out ] );
+        },
+    ] );
+
+    // TEMP: /tmp/gcrev_rank_debug.log の末尾を返す
+    register_rest_route( 'mimamori/v1', '/debug-read-log', [
+        'methods'             => 'GET',
+        'permission_callback' => function () { return is_user_logged_in(); },
+        'callback'            => function () {
+            $log = '/tmp/gcrev_rank_debug.log';
+            if ( ! file_exists( $log ) ) {
+                return new WP_REST_Response( [ 'success' => false, 'message' => 'log not found' ], 404 );
+            }
+            $size  = filesize( $log );
+            $start = max( 0, $size - 8000 );
+            $tail  = file_get_contents( $log, false, null, $start, 8000 );
+            return new WP_REST_Response( [
+                'success' => true,
+                'data'    => [
+                    'size'  => $size,
+                    'mtime' => date( 'Y-m-d H:i:s', filemtime( $log ) ),
+                    'tail'  => $tail,
+                ],
+            ] );
+        },
+    ] );
 } );
 
 /**
