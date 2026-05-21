@@ -12038,13 +12038,15 @@ PROMPT;
                 $new_breakdown_by_label[ $key ] = $item;
             }
         }
-        if ( $valid > 0 ) {
-            $new_breakdown_by_label['__inquiries_api'] = [
-                'label'  => 'お問い合わせ関連',
-                'count'  => $valid,
-                'source' => 'inquiries_api',
-            ];
-        }
+        // 連携 ON のユーザーは「お問い合わせ関連」カテゴリを 0 件でも常に明示する。
+        // (フィルタ済み件数が当該期間 0 でも、カテゴリの存在自体は分析画面で見えた方が
+        //  ユーザーが「分類自体が壊れている」と誤解しない)
+        // ダッシュボードの KPI pill 側は別途 $cnt <= 0 を除外しているので影響無し。
+        $new_breakdown_by_label['__inquiries_api'] = [
+            'label'  => 'お問い合わせ関連',
+            'count'  => $valid,
+            'source' => 'inquiries_api',
+        ];
 
         // daily_by_label も電話タップ系のみ残す（ラベル統一）
         $new_daily_by_label = [];
@@ -12193,10 +12195,16 @@ PROMPT;
 
         ksort($merged_daily);
 
-        // daily_by_label_merged → breakdown_by_label をレンジ内カウントで再集計
+        // daily_by_label_merged → breakdown_by_label をレンジ内カウントで再集計。
+        // inquiries_api / phone_tap 系の「コアCV源」はレンジ内合計が 0 でも
+        // カテゴリ自体を残す（ユーザーが「分類自体が出ていない」と誤認しないように）。
+        // それ以外（生 GA4 events）は 0 件なら表示を除外。
         foreach ($daily_by_label_merged as $key => $item) {
-            $cnt = array_sum($item['daily'] ?? []);
-            if ($cnt > 0) {
+            $cnt    = array_sum($item['daily'] ?? []);
+            $src    = (string) ($item['source'] ?? '');
+            $label  = (string) ($item['label'] ?? '');
+            $is_core = ($src === 'inquiries_api') || ($label === '電話タップ') || ($src === 'manual') || ($src === 'reviewed');
+            if ($cnt > 0 || $is_core) {
                 $breakdown_by_label[$key] = [
                     'label'  => $item['label'],
                     'count'  => (int) $cnt,

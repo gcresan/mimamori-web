@@ -73,21 +73,29 @@ get_template_part('template-parts/analysis-help');
         <summary>この分析の見方・計算方法</summary>
         <div class="cv-methodology-content">
             <strong>「ゴール」ってなに？</strong>
-            <p>ゴールとは、このホームページで「達成したい成果」を示す指標です。問い合わせ・電話・予約・フォーム送信などが含まれます。<br>
+            <p>ゴールとは、このホームページで「達成したい成果」を示す指標です。<br>
+            みまもりウェブでは <strong>「電話タップ」</strong>と<strong>「お問い合わせフォーム送信」</strong>の 2 系統を合算してゴール数としています。<br>
             このページでは、その成果が<strong>どこから来た人によるものか</strong>を分析しています。</p>
 
-            <strong>なぜGA4（Googleアナリティクス）の数字と違うの？</strong>
-            <p>GA4の自動計測は便利ですが、実際の問い合わせ件数とズレることがよくあります。<br>
-            たとえば、同じ人が2回フォームを送信したり、ロボットのアクセスが混ざったりするためです。</p>
-
-            <strong>このページの数字はどう計算しているの？</strong>
+            <strong>確定ゴール数はどう数えているの？</strong>
             <ul>
-                <li>まず、実際に達成されたゴール件数（手動で入力した確定値）を「正しい数」として使います</li>
-                <li>次に「検索から何%、SNSから何%」というGA4の割合だけを借りて、確定値を振り分けます</li>
-                <li>そのため、<strong>各項目の合計は実際のゴール件数とピッタリ一致</strong>します</li>
+                <li><strong>電話タップ</strong>: GA4（Googleアナリティクス）の電話番号タップ計測 + Google ビジネスプロフィール（マップ）からの電話発信数を合算します。</li>
+                <li><strong>お問い合わせフォーム送信</strong>: 契約サイトに導入した「問い合わせ集計プラグイン」から取得した送信記録を使い、AI が <strong>SPAM・営業・配信停止依頼を自動除外</strong>した「見込み客からの本物の問い合わせ」だけをカウントします。<br>
+                さらに、お問い合わせ一覧ページで「✕ 除外」「✓ 復活」を押したり、除外キーワードを登録した内容も即時に反映されます。</li>
+            </ul>
+
+            <strong>なぜGA4 だけだとズレるの？</strong>
+            <p>GA4 のフォームイベント計測は便利ですが、SPAM・営業フォーム送信・テスト送信・同一人物の二度押しなどを含むため、<strong>実際の見込み客の問い合わせ件数より多めに出る</strong>傾向があります。<br>
+            みまもりウェブは上記の「フィルタ済みのフォーム送信件数」をそのまま使うので、GA4 と数値が異なります。</p>
+
+            <strong>「見つけたきっかけ別」「デバイス別」はどう計算しているの？</strong>
+            <ul>
+                <li>確定ゴール数（電話タップ + フォーム送信）の合計を「正しい数」として固定します。</li>
+                <li>その合計を、GA4 の「流入元別ゴール比率」「デバイス別ゴール比率」で按分します。</li>
+                <li>そのため、<strong>各項目の合計は確定ゴール数とピッタリ一致</strong>します。</li>
             </ul>
             <div class="cv-methodology-caveat">
-                手動のゴール入力がまだの場合や、GA4のデータが取れない場合は、GA4の数値をそのまま表示します。
+                「お問い合わせ関連」が 0 件と表示されていても、選択期間内に有効問い合わせが無かっただけです。お問い合わせ一覧ページで除外設定を確認するか、上の期間選択を「前月」など別の期間に切り替えてみてください。
             </div>
         </div>
     </details>
@@ -456,6 +464,8 @@ function renderLabelBreakdown(eff) {
     }
 
     // オブジェクト → 配列化し、件数降順にソート
+    // 0件カテゴリも残す: inquiries_api / 電話タップなど「コアCV源」は
+    // 0件でも明示することで「分類が見えない」誤認を避ける
     const rows = Object.keys(breakdown)
         .map(k => ({
             key: k,
@@ -463,7 +473,12 @@ function renderLabelBreakdown(eff) {
             count: Number(breakdown[k].count || 0),
             source: breakdown[k].source || '',
         }))
-        .filter(r => r.count > 0)
+        .filter(r => {
+            if (r.count > 0) return true;
+            // 0件でも残すコアカテゴリ
+            return r.source === 'inquiries_api' || r.label === '電話タップ' ||
+                   r.source === 'manual' || r.source === 'reviewed';
+        })
         .sort((a, b) => b.count - a.count);
 
     if (rows.length === 0) {
