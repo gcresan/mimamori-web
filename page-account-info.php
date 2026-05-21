@@ -385,10 +385,6 @@ get_header();
                 <span class="acct-field-value" id="viewCompany"><?php echo esc_html( $acct_company ?: '—' ); ?></span>
             </div>
             <div class="acct-field-row">
-                <span class="acct-field-label">担当者名</span>
-                <span class="acct-field-value" id="viewPerson"><?php echo esc_html( $acct_person ?: '—' ); ?></span>
-            </div>
-            <div class="acct-field-row">
                 <span class="acct-field-label">メールアドレス</span>
                 <span class="acct-field-value" id="viewEmail"><?php echo esc_html( $acct_email ); ?></span>
             </div>
@@ -401,13 +397,6 @@ get_header();
                 <div class="acct-field-input">
                     <input type="text" id="editCompany" value="<?php echo esc_attr( $acct_company ); ?>" placeholder="例：株式会社○○">
                     <div class="field-error" id="errCompany">事業者名を入力してください</div>
-                </div>
-            </div>
-            <div class="acct-field-row">
-                <span class="acct-field-label">担当者名</span>
-                <div class="acct-field-input">
-                    <input type="text" id="editPerson" value="<?php echo esc_attr( $acct_person ); ?>" placeholder="例：山田 太郎">
-                    <div class="field-error" id="errPerson">担当者名を入力してください</div>
                 </div>
             </div>
             <div class="acct-field-row">
@@ -501,19 +490,17 @@ get_header();
         editEl.style.display = 'none';
         viewEl.style.display = 'block';
         editBtn.style.display = '';
-        hideAllErrors(['errCompany', 'errPerson', 'errEmail']);
+        hideAllErrors(['errCompany', 'errEmail']);
     });
 
     document.getElementById('userInfoSave').addEventListener('click', function() {
         var company = document.getElementById('editCompany').value.trim();
-        var person  = document.getElementById('editPerson').value.trim();
         var email   = document.getElementById('editEmail').value.trim();
         var valid   = true;
 
-        hideAllErrors(['errCompany', 'errPerson', 'errEmail']);
+        hideAllErrors(['errCompany', 'errEmail']);
 
         if (!company) { showError('errCompany'); valid = false; }
-        if (!person)  { showError('errPerson');  valid = false; }
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('errEmail'); valid = false; }
         if (!valid) return;
 
@@ -525,7 +512,6 @@ get_header();
         fd.append('action', 'gcrev_save_account_info');
         fd.append('nonce', nonce);
         fd.append('company', company);
-        fd.append('person', person);
         fd.append('email', email);
 
         fetch(ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
@@ -535,7 +521,6 @@ get_header();
                 btn.textContent = '保存';
                 if (res.success) {
                     document.getElementById('viewCompany').textContent = company;
-                    document.getElementById('viewPerson').textContent  = person;
                     document.getElementById('viewEmail').textContent   = email;
                     editEl.style.display = 'none';
                     viewEl.style.display = 'block';

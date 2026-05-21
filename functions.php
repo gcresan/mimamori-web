@@ -9531,7 +9531,7 @@ function gcrev_activate_contract( int $user_id, string $activated_by = '' ): voi
 // --------------------------------------------------
 
 /**
- * ユーザー情報（事業者名・担当者名・メール）保存
+ * ユーザー情報（事業者名・メール）保存
  */
 add_action( 'wp_ajax_gcrev_save_account_info', function () {
     if ( ! check_ajax_referer( 'gcrev_account_info', 'nonce', false ) ) {
@@ -9543,11 +9543,10 @@ add_action( 'wp_ajax_gcrev_save_account_info', function () {
 
     $user_id = get_current_user_id();
     $company = sanitize_text_field( wp_unslash( $_POST['company'] ?? '' ) );
-    $person  = sanitize_text_field( wp_unslash( $_POST['person']  ?? '' ) );
     $email   = sanitize_email( wp_unslash( $_POST['email'] ?? '' ) );
 
-    if ( empty( $company ) || empty( $person ) ) {
-        wp_send_json_error( '事業者名と担当者名は必須です' );
+    if ( empty( $company ) ) {
+        wp_send_json_error( '事業者名は必須です' );
     }
     if ( ! is_email( $email ) ) {
         wp_send_json_error( '有効なメールアドレスを入力してください' );
@@ -9562,7 +9561,6 @@ add_action( 'wp_ajax_gcrev_save_account_info', function () {
     update_user_meta( $user_id, 'gcrev_business_name', $company );
     $result = wp_update_user( [
         'ID'         => $user_id,
-        'first_name' => $person,
         'user_email' => $email,
     ] );
 
