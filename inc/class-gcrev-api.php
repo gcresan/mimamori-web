@@ -13738,6 +13738,28 @@ PROMPT;
             // ===== 6. ページ別 × CV =====
             $page_cv = $this->fetch_cv_by_dimension($client, $property, 'pagePath', $start, $end, $cv_ev_arg);
 
+            // ===== 連携プラグイン使用時の精度向上 =====
+            // プラグインが「有効」と判定した日付のセットで GA4 を絞り、
+            // 各ディメンションの keyEvents をその日付限定の eventCount に上書きする。
+            // (SPAM/営業が混ざった全体分布ではなく、実際に有効問い合わせがあった
+            //  日付の分布で按分されるようになる)
+            $year_month_curr = $this->period_to_year_month($period);
+            $valid_dates_curr = $this->get_plugin_valid_dates_yyyymmdd_for_month($user_id, $year_month_curr);
+            $comp_ym_curr    = $this->get_comparison_year_month($period);
+            $valid_dates_prev = $this->get_plugin_valid_dates_yyyymmdd_for_month($user_id, $comp_ym_curr);
+
+            if ($valid_dates_curr !== null && ! empty($cv_event_names_for_dim)) {
+                $device_cv = $this->refine_cv_dim_by_valid_dates($device_cv, $client, $property, 'deviceCategory', $start, $end, $cv_event_names_for_dim, $valid_dates_curr);
+                $source_cv = $this->refine_cv_dim_by_valid_dates($source_cv, $client, $property, 'sessionDefaultChannelGroup', $start, $end, $cv_event_names_for_dim, $valid_dates_curr);
+                $age_cv    = $this->refine_cv_dim_by_valid_dates($age_cv,    $client, $property, 'userAgeBracket', $start, $end, $cv_event_names_for_dim, $valid_dates_curr);
+                $region_cv = $this->refine_cv_dim_by_valid_dates($region_cv, $client, $property, 'city',           $start, $end, $cv_event_names_for_dim, $valid_dates_curr);
+                $page_cv   = $this->refine_cv_dim_by_valid_dates($page_cv,   $client, $property, 'pagePath',       $start, $end, $cv_event_names_for_dim, $valid_dates_curr);
+            }
+            if ($valid_dates_prev !== null && ! empty($cv_event_names_for_dim)) {
+                $device_cv_prev = $this->refine_cv_dim_by_valid_dates($device_cv_prev, $client, $property, 'deviceCategory', $comp_start, $comp_end, $cv_event_names_for_dim, $valid_dates_prev);
+                $source_cv_prev = $this->refine_cv_dim_by_valid_dates($source_cv_prev, $client, $property, 'sessionDefaultChannelGroup', $comp_start, $comp_end, $cv_event_names_for_dim, $valid_dates_prev);
+            }
+
             // ===== 7. キーワード × CV（GSCデータ） =====
             $keywords_data = $this->fetch_gsc_keywords_for_cv($config, $start, $end);
 
@@ -13942,6 +13964,160 @@ PROMPT;
             error_log("[GCREV] fetch_cv_by_dimension({$dimension_name}) ERROR: " . $e->getMessage());
             return [];
         }
+    }
+
+    /**
+     * 連携プラグイン使用クライアント向け: ディメンション別 CV 件数を
+     * 「プラグインの有効問い合わせがあった日付」だけで再集計して上書きする。
+     *
+     * 仕組み:
+     * - GA4 を [$dimension, date] の二次元 + eventName/country フィルタで叩く
+     * - レスポンスを valid_dates_yyyymmdd セットでフィルタ
+     * - dimension ごとに合計 eventCount を集計
+     * - 既存の $rows の `keyEvents` / `cvr` を上書き (sessions/users/pageviews は維持)
+     *
+     * @param array  $rows                 fetch_cv_by_dimension の戻り値
+     * @param array  $valid_dates_yyyymmdd 有効問い合わせがあった日付 (YYYYMMDD 文字列の配列)
+     * @return array 上書き済みの $rows
+     */
+    private function refine_cv_dim_by_valid_dates(
+        array $rows,
+        BetaAnalyticsDataClient $client,
+        string $property,
+        string $dimension_name,
+        string $start,
+        string $end,
+        array $event_names,
+        array $valid_dates_yyyymmdd
+    ): array {
+        // 有効日付ゼロ → 全 dimension で 0 件
+        if ( empty( $valid_dates_yyyymmdd ) ) {
+            foreach ( $rows as &$row ) {
+                $row['keyEvents'] = 0;
+                $row['cvr'] = 0;
+            }
+            unset( $row );
+            return $rows;
+        }
+        // event_names が無ければ何もしない (絞り込めない)
+        $event_names = array_values( array_unique( array_filter( $event_names, fn($n) => $n !== '' ) ) );
+        if ( empty( $event_names ) ) {
+            return $rows;
+        }
+
+        try {
+            $request = new RunReportRequest();
+            $request->setProperty( $property );
+            $request->setDateRanges( [ ( new DateRange() )->setStartDate( $start )->setEndDate( $end ) ] );
+            $request->setDimensions( [
+                ( new Dimension() )->setName( $dimension_name ),
+                ( new Dimension() )->setName( 'date' ),
+            ] );
+            $request->setMetrics( [ ( new Metric() )->setName( 'eventCount' ) ] );
+
+            // フィルタ: country + eventName
+            $filter_parts = [];
+            $country_filter = $this->ga4->get_country_filter();
+            if ( $country_filter !== null ) {
+                $filter_parts[] = $country_filter;
+            }
+            if ( count( $event_names ) === 1 ) {
+                $event_filter = new \Google\Analytics\Data\V1beta\FilterExpression( [
+                    'filter' => new \Google\Analytics\Data\V1beta\Filter( [
+                        'field_name'    => 'eventName',
+                        'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter( [
+                            'value'      => $event_names[0],
+                            'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+                        ] ),
+                    ] ),
+                ] );
+            } else {
+                $sub_filters = [];
+                foreach ( $event_names as $name ) {
+                    $sub_filters[] = new \Google\Analytics\Data\V1beta\FilterExpression( [
+                        'filter' => new \Google\Analytics\Data\V1beta\Filter( [
+                            'field_name'    => 'eventName',
+                            'string_filter' => new \Google\Analytics\Data\V1beta\Filter\StringFilter( [
+                                'value'      => $name,
+                                'match_type' => \Google\Analytics\Data\V1beta\Filter\StringFilter\MatchType::EXACT,
+                            ] ),
+                        ] ),
+                    ] );
+                }
+                $event_filter = new \Google\Analytics\Data\V1beta\FilterExpression( [
+                    'or_group' => new \Google\Analytics\Data\V1beta\FilterExpressionList( [
+                        'expressions' => $sub_filters,
+                    ] ),
+                ] );
+            }
+            $filter_parts[] = $event_filter;
+            if ( count( $filter_parts ) === 1 ) {
+                $request->setDimensionFilter( $filter_parts[0] );
+            } else {
+                $request->setDimensionFilter( new \Google\Analytics\Data\V1beta\FilterExpression( [
+                    'and_group' => new \Google\Analytics\Data\V1beta\FilterExpressionList( [
+                        'expressions' => $filter_parts,
+                    ] ),
+                ] ) );
+            }
+
+            $response = $client->runReport( $request );
+
+            $valid_set    = array_flip( $valid_dates_yyyymmdd );
+            $counts_by_dim = [];
+            foreach ( $response->getRows() as $row ) {
+                $dim_val  = (string) $row->getDimensionValues()[0]->getValue();
+                $date_val = (string) $row->getDimensionValues()[1]->getValue();
+                if ( ! isset( $valid_set[ $date_val ] ) ) continue;
+                $cnt = (int) $row->getMetricValues()[0]->getValue();
+                $counts_by_dim[ $dim_val ] = ( $counts_by_dim[ $dim_val ] ?? 0 ) + $cnt;
+            }
+
+            foreach ( $rows as &$row ) {
+                $dim_val = (string) ( $row['dimension'] ?? '' );
+                $new_ke  = (int) ( $counts_by_dim[ $dim_val ] ?? 0 );
+                $row['keyEvents'] = $new_ke;
+                $row['cvr']       = ( $row['sessions'] ?? 0 ) > 0
+                    ? round( $new_ke / $row['sessions'] * 100, 2 )
+                    : 0;
+            }
+            unset( $row );
+        } catch ( \Throwable $e ) {
+            error_log( "[GCREV] refine_cv_dim_by_valid_dates({$dimension_name}) ERROR: " . $e->getMessage() );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * 連携プラグインの items_json から、effective_valid=true の問い合わせがあった
+     * 日付 (YYYYMMDD 文字列) のセットを返す。
+     * プラグイン未連携 / レコード未登録 / 範囲が月単位でない場合は null を返す。
+     */
+    private function get_plugin_valid_dates_yyyymmdd_for_month( int $user_id, ?string $year_month ): ?array {
+        if ( $year_month === null || ! preg_match( '/^\d{4}-\d{2}$/', $year_month ) ) {
+            return null;
+        }
+        if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+            return null;
+        }
+        if ( ! \Mimamori_Inquiries_Fetcher::is_enabled( $user_id ) ) {
+            return null;
+        }
+        $items = \Mimamori_Inquiries_Fetcher::get_items_json( $user_id, $year_month );
+        if ( ! is_array( $items ) ) {
+            return null;
+        }
+        $items = \Mimamori_Inquiries_Fetcher::apply_overrides_to_items( $user_id, $year_month, $items );
+        $set = [];
+        foreach ( $items as $it ) {
+            if ( empty( $it['effective_valid'] ) ) continue;
+            $d = (string) ( $it['date'] ?? '' );
+            if ( preg_match( '/^(\d{4})-(\d{2})-(\d{2})/', $d, $m ) ) {
+                $set[ $m[1] . $m[2] . $m[3] ] = true;
+            }
+        }
+        return array_keys( $set );
     }
 
     /**
