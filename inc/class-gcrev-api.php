@@ -12002,8 +12002,16 @@ PROMPT;
 
         $valid = \Mimamori_Inquiries_Fetcher::get_monthly_valid_count( $user_id, $year_month );
         if ( $valid === null ) {
-            // 該当月のレコード未登録 → フォールバックして元の result を返す
-            return $result;
+            // 該当月のレコード未登録 (= まだ問い合わせ一覧を開いていない当月など)。
+            // ここで GA4 raw イベントへフォールバックすると、SPAM・営業・テスト送信を
+            // 含むフィルタ前の値が daily / total に流れ込み、フィルタ済みの過去月と
+            // 混在して整合が崩れる（ダッシュボードのゴール数カードと折れ線グラフが
+            // 別ルールで計算される状態になる）。
+            // → エンドポイント設定済み = 「フィルタ運用中」と見なし、当月のフォーム系
+            //    CV は 0 として扱う。電話タップは別経路なので影響を受けない。
+            //    本物のデータは問い合わせ一覧ページを開けば fetch + 永続化されて
+            //    次回ダッシュボード再計算時に自動反映される。
+            $valid = 0;
         }
 
         $phone_tap_daily = is_array( $result['phone_tap_daily'] ?? null ) ? $result['phone_tap_daily'] : [];
