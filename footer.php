@@ -5,6 +5,134 @@
     <?php get_template_part( 'template-parts/mimamori-ai-chat' ); ?>
 <?php endif; ?>
 
+<!-- ===== 共通: 保存中ローディング・オーバーレイ ===== -->
+<div id="mw-save-overlay" class="mw-save-overlay" aria-hidden="true" role="status" aria-live="polite">
+    <div class="mw-save-overlay-card">
+        <div class="mw-save-overlay-spinner" aria-hidden="true"></div>
+        <div class="mw-save-overlay-text">保存中...</div>
+    </div>
+</div>
+<style>
+.mw-save-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+.mw-save-overlay.is-active { display: flex; }
+.mw-save-overlay-card {
+    background: #fff;
+    padding: 28px 36px;
+    border-radius: 14px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.22);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    min-width: 220px;
+}
+.mw-save-overlay-spinner {
+    width: 42px;
+    height: 42px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #568184;
+    border-radius: 50%;
+    animation: mw-save-spin 0.8s linear infinite;
+}
+@keyframes mw-save-spin { to { transform: rotate(360deg); } }
+.mw-save-overlay-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+    letter-spacing: 0.02em;
+}
+</style>
+<script>
+// =============================================
+// 共通: 保存中ローディング・オーバーレイ
+//   - window.MW.saveOverlay.show(msg) / .hide()   ... 手動制御
+//   - data-mw-save 属性 or 主要な「保存」系セレクタのクリックで自動 show
+//   - 自動 show 直後の fetch がすべて完了したら自動 hide
+//   - フェイルセーフ: 30秒で強制 hide
+// =============================================
+(function () {
+    var SELECTOR = [
+        '[data-mw-save]',
+        '#userInfoSave',       // アカウント情報
+        '#btn-cs-save',        // クライアント設定
+        '#btn-save-cv-routes', // ゴール関連設定
+        '#btn-save'            // 月次レポート設定 等
+    ].join(',');
+
+    var overlay = null;
+    var textEl  = null;
+    var active  = false;
+    var pending = 0;
+    var failTimer = null;
+
+    function ensure() {
+        if (!overlay) {
+            overlay = document.getElementById('mw-save-overlay');
+            if (overlay) textEl = overlay.querySelector('.mw-save-overlay-text');
+        }
+        return !!overlay;
+    }
+
+    function show(msg) {
+        if (!ensure()) return;
+        textEl.textContent = (typeof msg === 'string' && msg) ? msg : '保存中...';
+        overlay.classList.add('is-active');
+        overlay.setAttribute('aria-hidden', 'false');
+        active = true;
+        if (failTimer) clearTimeout(failTimer);
+        // 30秒経過で強制非表示（ネットワーク異常時の出しっ放しを防ぐ）
+        failTimer = setTimeout(function () { hide(); }, 30000);
+    }
+
+    function hide() {
+        if (!ensure()) return;
+        overlay.classList.remove('is-active');
+        overlay.setAttribute('aria-hidden', 'true');
+        active  = false;
+        pending = 0;
+        if (failTimer) { clearTimeout(failTimer); failTimer = null; }
+    }
+
+    window.MW = window.MW || {};
+    window.MW.saveOverlay = { show: show, hide: hide };
+
+    // 自動フック: 保存系ボタンのクリックで show
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest(SELECTOR);
+        if (!btn || btn.disabled) return;
+        show();
+    }, true);
+
+    // fetch をラップ: show 中に発生したリクエストの完了で自動 hide
+    if (typeof window.fetch === 'function') {
+        var orig = window.fetch.bind(window);
+        window.fetch = function () {
+            if (!active) return orig.apply(this, arguments);
+            pending++;
+            return orig.apply(this, arguments).then(function (res) {
+                pending--;
+                if (pending <= 0 && active) setTimeout(hide, 250);
+                return res;
+            }).catch(function (err) {
+                pending--;
+                if (pending <= 0 && active) setTimeout(hide, 250);
+                throw err;
+            });
+        };
+    }
+})();
+</script>
+
 <script>
 // =============================================
 // クライアントサイドキャッシュ（localStorage 永続版）

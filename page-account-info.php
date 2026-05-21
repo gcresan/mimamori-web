@@ -447,7 +447,7 @@ get_header();
                 <div class="acct-pw-error" id="errPwConfirm">パスワードが一致しません</div>
             </div>
             <div class="acct-pw-actions">
-                <button type="submit" class="acct-btn acct-btn-primary">パスワードを変更</button>
+                <button type="submit" class="acct-btn acct-btn-primary" data-mw-save="1">パスワードを変更</button>
             </div>
         </form>
     </div>

@@ -536,7 +536,7 @@ get_header();
                 </div>
             </div>
             <div style="margin-top:16px;display:flex;gap:8px;">
-                <button type="button" class="sv-btn-save" id="sv-btn-save-colors">カラー設定を保存</button>
+                <button type="button" class="sv-btn-save" id="sv-btn-save-colors" data-mw-save="1">カラー設定を保存</button>
                 <button type="button" class="sv-btn-secondary" id="sv-btn-reset-colors">デフォルトに戻す</button>
             </div>
         </div>
@@ -619,7 +619,7 @@ get_header();
         <div class="sv-sticky-actions">
             <div class="sv-sticky-actions-inner">
                 <button type="button" class="sv-btn-danger sv-sticky-btn-delete" id="sv-sticky-btn-delete" style="display:none;">このアンケートを削除する</button>
-                <button type="button" class="sv-btn-save sv-sticky-btn-save" id="sv-sticky-btn-save">💾 アンケート情報を保存</button>
+                <button type="button" class="sv-btn-save sv-sticky-btn-save" id="sv-sticky-btn-save" data-mw-save="1">💾 アンケート情報を保存</button>
             </div>
         </div>
     </div>
@@ -653,7 +653,7 @@ get_header();
         <div id="sv-q-modal-body"></div>
         <div class="sv-modal-actions">
             <button type="button" class="sv-btn-secondary" id="sv-q-modal-cancel">キャンセル</button>
-            <button type="button" class="sv-btn-save" id="sv-q-modal-save">更新する</button>
+            <button type="button" class="sv-btn-save" id="sv-q-modal-save" data-mw-save="1">更新する</button>
         </div>
     </div>
 </div>
