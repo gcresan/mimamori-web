@@ -64,8 +64,12 @@ get_header();
     border:1px solid transparent; background:#fff; transition: all .15s ease;
 }
 .iq-summary .iq-filter:hover { background:#eef2f7; border-color:#cbd5e1; }
-.iq-summary .iq-filter.active { background:#1a73e8; color:#fff; border-color:#1a73e8; }
-.iq-summary .iq-filter.active strong { color:#fff; }
+/* 非アクティブ時のラベル色（タブごとに色分け） */
+.iq-summary .iq-filter.iq-filter-valid    { color:#1e8e3e; }
+.iq-summary .iq-filter.iq-filter-excluded { color:#b00; }
+/* アクティブ時: 背景色 + 白文字 (inline style と衝突しないよう CSS のみで完結) */
+.iq-summary .iq-filter.active { background:#1a73e8; color:#fff !important; border-color:#1a73e8; }
+.iq-summary .iq-filter.active strong { color:#fff !important; }
 .iq-summary .iq-filter.iq-filter-valid.active    { background:#16a34a; border-color:#16a34a; }
 .iq-summary .iq-filter.iq-filter-excluded.active { background:#dc2626; border-color:#dc2626; }
 .iq-summary .iq-divider { width:1px; align-self:stretch; background:#e2e8f0; }
@@ -334,10 +338,12 @@ get_header();
             byCategory[c] = (byCategory[c] || 0) + 1;
         });
         // クリック可能なフィルタタブ (合計 / 有効 / 除外)
+        // 色は CSS クラス (.iq-filter-valid / .iq-filter-excluded) で付けて、
+        // アクティブ時に白文字へ綺麗に切り替わるようにする
         const cls = (key) => 'stat iq-filter iq-filter-' + key + (_filter === key ? ' active' : '');
         let summaryHtml = `<span class="${cls('all')}" data-filter="all" title="すべて表示">合計<strong>${items.length}</strong></span>`
-            + `<span class="${cls('valid')}" data-filter="valid" style="color:#1e8e3e;" title="有効のみ表示">有効<strong>${validCount}</strong></span>`
-            + `<span class="${cls('excluded')}" data-filter="excluded" style="color:#b00;" title="除外したものを一覧表示（ここから復活できます）">除外<strong>${excludedCount}</strong></span>`
+            + `<span class="${cls('valid')}" data-filter="valid" title="有効のみ表示">有効<strong>${validCount}</strong></span>`
+            + `<span class="${cls('excluded')}" data-filter="excluded" title="除外したものを一覧表示（ここから復活できます）">除外<strong>${excludedCount}</strong></span>`
             + `<span class="iq-divider"></span>`;
         Object.entries(byCategory).forEach(([cat, cnt]) => {
             summaryHtml += `<span class="stat"><span class="iq-cat-badge ${categoryClass(cat)}">${escapeHtml(cat)}</span><strong>${cnt}</strong></span>`;
