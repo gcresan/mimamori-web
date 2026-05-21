@@ -55,6 +55,11 @@ if ( is_array( $exclude_paths_raw ) && ! empty( $exclude_paths_raw ) ) {
 // 海外アクセス除外
 $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true ) ?: '';
 
+// 口コミアンケート特化プラン判定 — アンケート機能に必要なものだけ表示する
+$_cs_is_review_survey_only = function_exists( 'mimamori_is_review_survey_only_user' )
+    ? mimamori_is_review_survey_only_user( $user_id )
+    : false;
+
 get_header();
 ?>
 
@@ -566,8 +571,9 @@ get_header();
     <!-- トースト通知 -->
     <div class="cs-toast" id="csToast"></div>
 
-    <!-- 対象サイト -->
+    <!-- 対象サイト（口コミアンケート特化プランは非表示） -->
     <div class="settings-card">
+        <?php if ( ! $_cs_is_review_survey_only ) : ?>
         <div class="cs-section">
             <h2 class="cs-section-title"><span class="icon">🌐</span> 対象サイト</h2>
             <div class="form-group">
@@ -599,8 +605,10 @@ get_header();
                 <small class="form-text" style="display: block; margin-top: 4px; margin-left: 26px;">ONにすると、日本以外の国からのアクセスを除外して集計・分析します。海外からの大量アクセスが含まれる場合、分析結果やAI提案に偏りが出ることがあります。</small>
             </div>
         </div>
+        <?php endif; // ! $_cs_is_review_survey_only — 対象サイトセクション ?>
 
-        <!-- 商圏・対応エリア -->
+        <!-- 商圏・対応エリア（口コミアンケート特化プランは非表示） -->
+        <?php if ( ! $_cs_is_review_survey_only ) : ?>
         <div class="cs-section">
             <h2 class="cs-section-title"><span class="icon">📍</span> 主な商圏・対応エリア</h2>
             <?php
@@ -702,6 +710,7 @@ get_header();
                 </div>
             </div>
         </div>
+        <?php endif; // ! $_cs_is_review_survey_only — 商圏・対応エリアセクション ?>
 
         <!-- クライアント情報 -->
         <div class="cs-section">
@@ -714,7 +723,8 @@ get_header();
             $saved_detail      = $settings['industry_detail'] ?? '';
             ?>
 
-            <!-- HP URL から全体推定 -->
+            <!-- HP URL から全体推定（対象サイトURLに依存するため口コミアンケート特化プランは非表示） -->
+            <?php if ( ! $_cs_is_review_survey_only ) : ?>
             <div class="ai-suggest-box" id="hpAnalyzeBox" style="background:linear-gradient(135deg,#f5f3ff 0%,#eff6ff 100%); border:1px solid #c4b5fd;">
                 <label style="color:#6d28d9;">🌐 ホームページURLから全項目をAIで自動入力</label>
                 <div class="ai-suggest-input-row" style="align-items:center; gap:10px; flex-wrap:wrap;">
@@ -724,6 +734,7 @@ get_header();
                 </div>
                 <p class="field-hint">分析には30秒〜1分程度かかります。結果は下のフォームに自動入力され、編集してから保存してください（既存の値は上書きされます）。</p>
             </div>
+            <?php endif; ?>
 
             <!-- AI業種提案 -->
             <div class="ai-suggest-box" id="aiSuggestBox">
@@ -785,6 +796,8 @@ get_header();
                 <input type="text" id="cs-industry-detail" maxlength="160" placeholder="例：小児歯科 / 外壁塗装 / 相続 / ランチ営業中心 など" value="<?php echo esc_attr( $saved_detail ); ?>">
             </div>
 
+            <!-- ビジネス形態・成長ステージ・ゴール種別（口コミアンケート特化プランは非表示） -->
+            <?php if ( ! $_cs_is_review_survey_only ) : ?>
             <div class="form-group">
                 <label>ビジネス形態</label>
                 <p class="field-hint" style="margin-top:0;margin-bottom:6px;">当てはまるものを複数選択できます</p>
@@ -831,6 +844,7 @@ get_header();
                 <input type="text" id="cs-main-conversions" class="cs-input" value="<?php echo esc_attr( $settings['main_conversions'] ?? '' ); ?>" placeholder="例: お問い合わせフォーム, 電話タップ, 来店予約">
                 <p class="field-hint">サイトの主なゴール（コンバージョン）を入力してください。AIが改善提案の優先度付けに活用します。</p>
             </div>
+            <?php endif; // ! $_cs_is_review_survey_only — ビジネス形態/成長ステージ/ゴール種別 ?>
 
             <hr style="margin:24px 0; border:none; border-top:1px solid #e5e5e5;">
             <p class="field-hint" style="margin-top:0; font-weight:600; color:#2271b1;">口コミアンケート生成用の追加情報（任意）</p>
@@ -907,6 +921,8 @@ get_header();
             $saved_decisions = $settings['persona_decision_factors'] ?? [];
             ?>
 
+            <!-- A1〜A4: 想定年齢層/性別/属性/意思決定（口コミアンケート特化プランは非表示） -->
+            <?php if ( ! $_cs_is_review_survey_only ) : ?>
             <!-- A1: 想定年齢層 -->
             <div class="form-group">
                 <label>想定年齢層</label>
@@ -966,6 +982,7 @@ get_header();
                     <?php endforeach; ?>
                 </div>
             </div>
+            <?php endif; // ! $_cs_is_review_survey_only — ペルソナ A1-A4 ?>
 
             <!-- A5: ひとことで -->
             <div class="form-group">
@@ -976,7 +993,8 @@ get_header();
             </div>
         </div>
 
-        <!-- ===== (B) 詳細ペルソナ ===== -->
+        <!-- ===== (B) 詳細ペルソナ（口コミアンケート特化プランは非表示） ===== -->
+        <?php if ( ! $_cs_is_review_survey_only ) : ?>
         <div class="cs-section">
             <h2 class="cs-section-title"><span class="icon">📝</span> 詳細ペルソナ</h2>
             <div class="form-group">
@@ -990,8 +1008,10 @@ get_header();
                 ✨ AIで詳細ペルソナを作成
             </button>
         </div>
+        <?php endif; // ! $_cs_is_review_survey_only — 詳細ペルソナ ?>
 
-        <!-- ===== (C) 参考URL ===== -->
+        <!-- ===== (C) 参考URL（口コミアンケート特化プランは非表示） ===== -->
+        <?php if ( ! $_cs_is_review_survey_only ) : ?>
         <div class="cs-section">
             <h2 class="cs-section-title"><span class="icon">🔗</span> 参考URL（競合・理想サイトなど）</h2>
             <p class="persona-section-desc">ペルソナ設計やAIレポートの参考にしたいサイトがあれば追加してください（最大5件）。</p>
@@ -1013,8 +1033,10 @@ get_header();
             </div>
             <button type="button" class="btn-add-ref-url" id="btnAddRefUrl">＋ URLを追加</button>
         </div>
+        <?php endif; // ! $_cs_is_review_survey_only — 参考URL ?>
 
-        <!-- ===== Clarity連携設定 ===== -->
+        <!-- ===== Clarity連携設定（口コミアンケート特化プランは非表示） ===== -->
+        <?php if ( ! $_cs_is_review_survey_only ) : ?>
         <div class="cs-section">
             <h2 class="cs-section-title"><span class="icon">📊</span> Clarity連携設定</h2>
             <p class="persona-section-desc">Microsoft Clarity のデータをページ分析に統合します。</p>
@@ -1126,6 +1148,7 @@ get_header();
                 </div>
             </div>
         </div>
+        <?php endif; // ! $_cs_is_review_survey_only — Clarity連携設定 ?>
 
         <div class="cs-actions">
             <button type="button" class="btn-save" id="btn-cs-save" onclick="saveClientSettings()">
