@@ -8721,14 +8721,13 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
     // 口コミアンケート特化プラン: 口コミアンケート機能のみ許可。
     // MEO 配下の他機能 (マップ順位/MEO診断/検索語句/口コミ管理/投稿管理) や
     // 全体ダッシュボード・ホームページ・SEO・レポート系は全て不可。
-    // ただし meo_menu は true にして mimamori_guard_meo_access() を通過させ、
+    // AI相談チャットボットも非対応 (ai_chat/ai_ask_button は不許可)。
+    // meo_menu のみ true にして mimamori_guard_meo_access() を通過させ、
     // template_redirect 側で許可スラッグ以外を弾く。
     if ( $user_tier === 'review_survey' ) {
         $review_survey_allowed = [
-            'ai_chat'       => true,
-            'ai_ask_button' => true,
             // page-review-survey.php 等の mimamori_guard_meo_access() を通すため
-            'meo_menu'      => true,
+            'meo_menu' => true,
         ];
         return ! empty( $review_survey_allowed[ $feature ] );
     }

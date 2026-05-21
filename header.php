@@ -555,15 +555,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   </ul>
                </li>
 
-               <!-- ========== プラン紹介（単独） ========== -->
+               <!-- ========== プラン紹介（単独・口コミアンケート特化プランは非表示） ========== -->
+               <?php if ( ! $_mb_is_review_survey_only ) : ?>
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/plans/') ); ?>" class="nav-link <?php echo is_page('plans') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 4h14M3 4v12a1 1 0 001 1h12a1 1 0 001-1V4M7 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 9h2M7 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
                   <span>プラン紹介</span>
                   </a>
                </li>
+               <?php endif; ?>
 
-               <!-- ========== サポート・問い合わせ ========== -->
+               <!-- ========== サポート・問い合わせ（口コミアンケート特化プランは非表示） ========== -->
+               <?php if ( ! $_mb_is_review_survey_only ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $support_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'support' ? ' collapsed' : ''; ?>" data-menu-key="support">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleSupport" aria-expanded="<?php echo $sidebar_active_group === 'support' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg></span>
@@ -588,6 +591,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                      </li>
                   </ul>
                </li>
+               <?php endif; // ! $_mb_is_review_survey_only — サポート・問い合わせセクション ?>
 
                <!-- オプションサービス（一旦非表示） -->
                <?php /*
@@ -727,6 +731,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
          <?php if ( is_user_logged_in() ) :
             $u = mimamori_get_view_user_object();
             $company = gcrev_get_business_name( $u->ID );
+            // 口コミアンケート特化プラン判定（topbar 側でも参照できるよう再評価）
+            $_mb_is_review_survey_only = isset( $_mb_is_review_survey_only )
+               ? $_mb_is_review_survey_only
+               : ( function_exists( 'mimamori_is_review_survey_only_user' ) ? mimamori_is_review_survey_only_user() : false );
             ?>
 
          <!-- クライアント名・サイトURL -->
@@ -745,7 +753,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <?php endif; ?>
          </div>
 
-         <!-- 初めての方へボタン -->
+         <!-- 初めての方へボタン（口コミアンケート特化プランは非表示） -->
+         <?php if ( ! $_mb_is_review_survey_only ) : ?>
          <a href="<?php echo esc_url( home_url( '/tutorials/' ) ); ?>" class="topbar-guide-btn">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
                <path d="M12 2C10 2 8.5 4 8.5 4L2 22h9l1-4 1 4h9l-6.5-18S14 2 12 2z" fill="#fff" stroke="#fff" stroke-width="0.5" stroke-linejoin="round"/>
@@ -754,6 +763,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </svg>
             <span>初めての方へ</span>
          </a>
+         <?php endif; ?>
 
          <!-- 重要設定ドロップダウン -->
          <div class="settings-menu" id="settingsMenu">
@@ -773,6 +783,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>クライアント設定</span>
                      </a>
                   </li>
+                  <?php if ( ! $_mb_is_review_survey_only ) : ?>
                   <li>
                      <a href="<?php echo esc_url( home_url( '/report/report-settings/' ) ); ?>" class="settings-dropdown-item">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z"/><path d="M12.5 2.5V6H16"/><path d="M7.5 11h5M7.5 14h3"/></svg>
@@ -785,6 +796,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>ゴール関連設定</span>
                      </a>
                   </li>
+                  <?php endif; ?>
                </ul>
             </div>
          </div>
