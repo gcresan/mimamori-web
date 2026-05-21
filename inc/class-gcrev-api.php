@@ -15103,7 +15103,20 @@ PROMPT;
                 }
 
                 // 直近7日分の daily データ（forward-fill）
+                // $days[0] より前のデータ（history は DESC 順なので、$first_day より過去の最初のヒット
+                // ＝ $first_day 直前の最新データ）を初期値に置くことで、計測開始から日が浅い場合や
+                // 取得間隔が空いている場合でも 5/15〜5/21 のセルを空欄のままにせず直前値で埋める。
                 $last_found = null;
+                $first_day  = $days[0] ?? null;
+                if ( $first_day !== null ) {
+                    foreach ( $history as $h ) {
+                        $h_date = $h['fetch_date'] ?? substr( $h['fetched_at'] ?? '', 0, 10 );
+                        if ( $h_date !== '' && $h_date < $first_day ) {
+                            $last_found = $h;
+                            break;
+                        }
+                    }
+                }
                 foreach ( $days as $day ) {
                     // この日に該当するデータを探す（history は fetched_at DESC 順）
                     $found = null;
