@@ -245,10 +245,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                <?php
                // MEO特化プラン判定 — 全体ダッシュボード・ホームページ・通常のレポート項目を非表示にする
                $_mb_is_meo_only = function_exists( 'mimamori_is_meo_only_user' ) ? mimamori_is_meo_only_user() : false;
+               // 口コミアンケート特化プラン判定 — 口コミアンケート関連のみ表示
+               $_mb_is_review_survey_only = function_exists( 'mimamori_is_review_survey_only_user' ) ? mimamori_is_review_survey_only_user() : false;
+               // 「絞り込み表示」モードの集約フラグ — ホームページ系・通常レポート・各種設定の大半を畳む
+               $_mb_is_restricted_plan = $_mb_is_meo_only || $_mb_is_review_survey_only;
                ?>
 
-               <!-- ========== 全体ダッシュボード（単独・MEO特化プランは非表示） ========== -->
-               <?php if ( ! $_mb_is_meo_only ) : ?>
+               <!-- ========== 全体ダッシュボード（単独・絞り込みプランは非表示） ========== -->
+               <?php if ( ! $_mb_is_restricted_plan ) : ?>
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/dashboard/') ); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3C6 3 2.7 5.9 1.5 10c1.2 4.1 4.5 7 8.5 7s7.3-2.9 8.5-7C17.3 5.9 14 3 10 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
@@ -257,7 +261,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                </li>
                <?php endif; ?>
 
-               <!-- ========== レポート（大カテゴリ） ========== -->
+               <!-- ========== レポート（大カテゴリ・口コミアンケート特化プランは非表示） ========== -->
+               <?php if ( ! $_mb_is_review_survey_only ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $report_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'report' ? ' collapsed' : ''; ?>" data-menu-key="report">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleReport" aria-expanded="<?php echo $sidebar_active_group === 'report' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -293,6 +298,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                      */ ?>
                   </ul>
                </li>
+               <?php endif; // ! $_mb_is_review_survey_only — レポートセクション ?>
 
                <?php
                // オプション機能の表示判定 (HPグループ内で利用)
@@ -307,8 +313,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         && mimamori_page_analysis_is_enabled_for_user( $_view_uid ) );
                ?>
 
-               <!-- ========== ホームページ（大カテゴリ・MEO特化プランは非表示） ========== -->
-               <?php if ( ! $_mb_is_meo_only ) : ?>
+               <!-- ========== ホームページ（大カテゴリ・絞り込みプランは非表示） ========== -->
+               <?php if ( ! $_mb_is_restricted_plan ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $home_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'home' ? ' collapsed' : ''; ?>" data-menu-key="home">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleHome" aria-expanded="<?php echo $sidebar_active_group === 'home' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
@@ -424,17 +430,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                   </ul>
                </li>
-               <?php endif; // ! $_mb_is_meo_only — ホームページセクション ?>
+               <?php endif; // ! $_mb_is_restricted_plan — ホームページセクション ?>
 
                <!-- ========== MEO（大カテゴリ・MEO・検索集客強化プラン以上 or 管理者のみ表示） ========== -->
                <?php if ( mimamori_can_access_meo() ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $meo_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'meo' ? ' collapsed' : ''; ?>" data-menu-key="meo">
-                  <button type="button" class="nav-link nav-link-toggle" id="navToggleMeo" aria-expanded="<?php echo $sidebar_active_group === 'meo' ? 'true' : 'false'; ?>">
+                  <button type="button" class="nav-link nav-link-toggle" id="navToggleMeo" aria-expanded="<?php echo ( $sidebar_active_group === 'meo' || $_mb_is_review_survey_only ) ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
-                  <span>MEO</span>
+                  <span><?php echo $_mb_is_review_survey_only ? '口コミアンケート' : 'MEO'; ?></span>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuMeo">
+                     <?php if ( ! $_mb_is_review_survey_only ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/meo/meo-dashboard/') ); ?>" class="nav-link <?php echo is_page('meo-dashboard') ? 'active' : ''; ?>">
                         <span>MEOダッシュボード</span>
@@ -455,6 +462,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>検索語句分析</span>
                         </a>
                      </li>
+                     <?php endif; // ! $_mb_is_review_survey_only — MEO 配下の他項目 ?>
                      <li class="nav-item nav-subgroup-wrapper">
                         <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
                            口コミアンケート
@@ -488,6 +496,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                            </li>
                         </ul>
                      </li>
+                     <?php if ( ! $_mb_is_review_survey_only ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/review-management/') ); ?>" class="nav-link <?php echo is_page('review-management') ? 'active' : ''; ?>">
                         <span>口コミ管理</span>
@@ -498,6 +507,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>投稿管理</span>
                         </a>
                      </li>
+                     <?php endif; // ! $_mb_is_review_survey_only — 口コミ管理/投稿管理 ?>
                   </ul>
                </li>
                <?php endif; ?>
@@ -515,6 +525,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>クライアント設定</span>
                         </a>
                      </li>
+                     <?php if ( ! $_mb_is_review_survey_only ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" class="nav-link <?php echo is_page('keyword-settings') ? 'active' : ''; ?>">
                         <span>計測キーワード設定</span>
@@ -535,6 +546,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>通知設定</span>
                         </a>
                      </li>
+                     <?php endif; // ! $_mb_is_review_survey_only — 設定の追加項目 ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/account-info/') ); ?>" class="nav-link <?php echo is_page('account-info') ? 'active' : ''; ?>">
                         <span>アカウント情報</span>

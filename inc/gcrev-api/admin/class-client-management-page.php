@@ -243,9 +243,11 @@ class Gcrev_Client_Management_Page {
                         $tier_defs = function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : [];
                         $tier_name = $tier_defs[ $tier ]['name'] ?? $tier;
                         $tier_badge_map = [
-                            'basic'      => ['color' => '#6B7280', 'bg' => '#f5f5f5',               'border' => ''],
-                            'ai_support' => ['color' => '#4E8A6B', 'bg' => 'rgba(78,138,107,0.08)', 'border' => '1px solid rgba(78,138,107,0.2)'],
-                            'bansou'     => ['color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)', 'border' => '1px solid rgba(147,51,234,0.2)'],
+                            'basic'         => ['color' => '#6B7280', 'bg' => '#f5f5f5',               'border' => ''],
+                            'ai_support'    => ['color' => '#4E8A6B', 'bg' => 'rgba(78,138,107,0.08)', 'border' => '1px solid rgba(78,138,107,0.2)'],
+                            'bansou'        => ['color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)', 'border' => '1px solid rgba(147,51,234,0.2)'],
+                            'meo_only'      => ['color' => '#0ea5e9', 'bg' => 'rgba(14,165,233,0.08)', 'border' => '1px solid rgba(14,165,233,0.2)'],
+                            'review_survey' => ['color' => '#e11d48', 'bg' => 'rgba(225,29,72,0.08)',  'border' => '1px solid rgba(225,29,72,0.2)'],
                         ];
                         $tb = $tier_badge_map[ $tier ] ?? $tier_badge_map['basic'];
                         $border_style = $tb['border'] ? "border:{$tb['border']};" : '';

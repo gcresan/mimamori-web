@@ -8544,6 +8544,15 @@ function gcrev_get_plan_definitions(): array {
             'has_installment' => false,
             'min_months'      => 0,
         ],
+        'review_survey' => [
+            'name'            => 'みまもりウェブ 口コミアンケート特化プラン',
+            'category'        => 'unyou',
+            'total'           => null,
+            'monthly'         => 5000,
+            'installments'    => 0,
+            'has_installment' => false,
+            'min_months'      => 0,
+        ],
     ];
 }
 
@@ -8596,6 +8605,11 @@ function gcrev_get_service_tier_definitions(): array {
             'name'        => 'MEO特化プラン',
             'monthly'     => 10000,
             'description' => 'MEO（口コミ・マップ順位・GBP）機能だけに特化したプラン。ログイン時はMEOダッシュボードが開き、サイドバーもMEO関連のみ表示。',
+        ],
+        'review_survey' => [
+            'name'        => '口コミアンケート特化プラン',
+            'monthly'     => 5000,
+            'description' => '口コミアンケート機能だけに特化したプラン。ログイン時はアンケート管理が開き、サイドバーも口コミアンケート関連のみ表示。',
         ],
     ];
 }
@@ -8704,6 +8718,21 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         return ! empty( $meo_only_allowed[ $feature ] );
     }
 
+    // 口コミアンケート特化プラン: 口コミアンケート機能のみ許可。
+    // MEO 配下の他機能 (マップ順位/MEO診断/検索語句/口コミ管理/投稿管理) や
+    // 全体ダッシュボード・ホームページ・SEO・レポート系は全て不可。
+    // ただし meo_menu は true にして mimamori_guard_meo_access() を通過させ、
+    // template_redirect 側で許可スラッグ以外を弾く。
+    if ( $user_tier === 'review_survey' ) {
+        $review_survey_allowed = [
+            'ai_chat'       => true,
+            'ai_ask_button' => true,
+            // page-review-survey.php 等の mimamori_guard_meo_access() を通すため
+            'meo_menu'      => true,
+        ];
+        return ! empty( $review_survey_allowed[ $feature ] );
+    }
+
     $required_tier  = $feature_map[ $feature ] ?? 'ai_support';
     $user_level     = $tier_hierarchy[ $user_tier ] ?? 0;
     $required_level = $tier_hierarchy[ $required_tier ] ?? 0;
@@ -8733,9 +8762,31 @@ function mimamori_is_meo_only_user( int $user_id = 0 ): bool {
 }
 
 /**
+ * 「口コミアンケート特化プラン」のユーザーか判定する。
+ *
+ * @param int $user_id 0 ならログイン中ユーザー
+ * @return bool
+ */
+function mimamori_is_review_survey_only_user( int $user_id = 0 ): bool {
+    if ( $user_id <= 0 ) {
+        $user_id = (int) get_current_user_id();
+    }
+    if ( $user_id <= 0 ) return false;
+    // 管理者は強制的に最上位扱いのため除外
+    if ( user_can( $user_id, 'manage_options' ) ) return false;
+    // 本部アカウントは view 中の店舗の tier に従う (mimamori_can と同様)
+    if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $user_id ) ) {
+        $hq_target = (int) get_user_meta( $user_id, mimamori_hq_view_meta_key(), true );
+        if ( $hq_target > 0 ) $user_id = $hq_target;
+    }
+    return gcrev_get_service_tier( $user_id ) === 'review_survey';
+}
+
+/**
  * ログイン後に着地すべき URL を返す。
  *
  * - MEO特化プラン: /meo/meo-dashboard/
+ * - 口コミアンケート特化プラン: /tools/review-survey/
  * - それ以外: /dashboard/
  *
  * @param int $user_id 0 ならログイン中ユーザー
@@ -8748,6 +8799,9 @@ function mimamori_get_default_landing_url( int $user_id = 0 ): string {
     if ( mimamori_is_meo_only_user( $user_id ) ) {
         return home_url( '/meo/meo-dashboard/' );
     }
+    if ( mimamori_is_review_survey_only_user( $user_id ) ) {
+        return home_url( '/tools/review-survey/' );
+    }
     return home_url( '/dashboard/' );
 }
 
@@ -8758,6 +8812,17 @@ function mimamori_get_default_landing_url( int $user_id = 0 ): string {
 function mimamori_guard_against_meo_only(): void {
     if ( mimamori_is_meo_only_user() ) {
         wp_safe_redirect( home_url( '/meo/meo-dashboard/' ) );
+        exit;
+    }
+}
+
+/**
+ * 口コミアンケート特化プランで閲覧不可なページにアクセスしたら
+ * アンケート管理ページへ転送する。アンケート以外の page-*.php テンプレート先頭で呼ぶ。
+ */
+function mimamori_guard_against_review_survey_only(): void {
+    if ( mimamori_is_review_survey_only_user() ) {
+        wp_safe_redirect( home_url( '/tools/review-survey/' ) );
         exit;
     }
 }
@@ -8822,6 +8887,58 @@ add_action( 'template_redirect', function () {
 
     // 許可外 → MEOダッシュボードへ転送
     wp_safe_redirect( home_url( '/meo/meo-dashboard/' ) );
+    exit;
+}, 1 );
+
+/**
+ * 口コミアンケート特化プランで閲覧を許可するページ（スラッグ）の一覧
+ *
+ * 上記以外のフロントエンドの会員専用ページにアクセスしようとした場合、
+ * template_redirect で アンケート管理ページへ自動転送する。
+ */
+function mimamori_review_survey_only_allowed_slugs(): array {
+    return [
+        // 口コミアンケート関連ページのみ
+        'review-survey',
+        'survey-responses',
+        'survey-analytics',
+        'survey-analysis',
+        'survey-ai-history',
+        // 設定系（プラン関連で必要）
+        'client-settings',
+        'account-info',
+        'payment-status',
+        'plan-introduction',
+        'plans',
+        // 認証系
+        'login',
+        'register',
+        'logout',
+        // 使い方・FAQ
+        'tutorials',
+        'faq',
+        'inquiry',
+        // 本部ビュー（HQ の店舗一覧。review_survey 店舗を view 中でも常に表示可）
+        'hq',
+    ];
+}
+
+/**
+ * 口コミアンケート特化プランのユーザーが非対応ページにアクセスしたら自動でアンケート管理へ転送する。
+ */
+add_action( 'template_redirect', function () {
+    if ( is_admin() || wp_doing_ajax() || wp_doing_cron() ) return;
+    if ( ! is_user_logged_in() ) return;
+    if ( ! mimamori_is_review_survey_only_user() ) return;
+    if ( ! is_page() ) return;
+
+    $slug = (string) get_post_field( 'post_name', get_queried_object_id() );
+    if ( $slug === '' ) return;
+
+    $allowed = mimamori_review_survey_only_allowed_slugs();
+    if ( in_array( $slug, $allowed, true ) ) return;
+
+    wp_safe_redirect( home_url( '/tools/review-survey/' ) );
     exit;
 }, 1 );
 

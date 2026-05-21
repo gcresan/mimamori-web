@@ -12,6 +12,10 @@ if (!is_user_logged_in()) {
 if ( function_exists( 'mimamori_guard_against_meo_only' ) ) {
     mimamori_guard_against_meo_only();
 }
+// 口コミアンケート特化プランは全体ダッシュボード非対応 → アンケート管理へ転送
+if ( function_exists( 'mimamori_guard_against_review_survey_only' ) ) {
+    mimamori_guard_against_review_survey_only();
+}
 
 $current_user = mimamori_get_view_user_object();
 $user_id = mimamori_get_view_user_id();
