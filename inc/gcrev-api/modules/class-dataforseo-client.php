@@ -242,28 +242,12 @@ class Gcrev_DataForSEO_Client {
         if ( $status_code !== 20000 ) {
             $msg = $response['status_message'] ?? 'Unknown error';
             error_log( "[GCREV][DataForSEO] API error: {$msg} (code: {$status_code})" );
-            file_put_contents( '/tmp/gcrev_rank_debug.log',
-                date( 'Y-m-d H:i:s' ) . " [fetch_serp] kw='{$keyword}' device={$device} "
-                . "API_LEVEL_ERROR status_code={$status_code} msg='{$msg}' "
-                . "keys=" . wp_json_encode( array_keys( $response ), JSON_UNESCAPED_UNICODE )
-                . " excerpt=" . substr( wp_json_encode( $response, JSON_UNESCAPED_UNICODE ), 0, 400 )
-                . "\n",
-                FILE_APPEND );
-            return new \WP_Error( 'api_error', "API code={$status_code} msg={$msg}" );
+            return new \WP_Error( 'api_error', $msg );
         }
 
         $tasks = $response['tasks'] ?? [];
         if ( empty( $tasks ) || empty( $tasks[0]['result'] ) ) {
-            // タスクレベルのエラーも詳細化
-            $t_code = isset( $tasks[0]['status_code'] ) ? (int) $tasks[0]['status_code'] : 0;
-            $t_msg  = $tasks[0]['status_message'] ?? 'no_tasks';
-            file_put_contents( '/tmp/gcrev_rank_debug.log',
-                date( 'Y-m-d H:i:s' ) . " [fetch_serp] kw='{$keyword}' device={$device} "
-                . "TASK_LEVEL_ERROR task_code={$t_code} task_msg='{$t_msg}' "
-                . "excerpt=" . substr( wp_json_encode( $tasks, JSON_UNESCAPED_UNICODE ), 0, 400 )
-                . "\n",
-                FILE_APPEND );
-            return new \WP_Error( 'no_result', "Task code={$t_code} msg={$t_msg}" );
+            return new \WP_Error( 'no_result', 'API 応答にデータが含まれていません。' );
         }
 
         $result = $tasks[0]['result'][0];
@@ -1042,34 +1026,19 @@ class Gcrev_DataForSEO_Client {
         $body        = wp_remote_retrieve_body( $response );
         $decoded     = json_decode( $body, true );
 
-        // DEBUG: 全リクエストの結果をログに残す
-        file_put_contents( '/tmp/gcrev_rank_debug.log',
-            date( 'Y-m-d H:i:s' ) . " [api_request] endpoint={$endpoint} http={$status_code} "
-            . "body_excerpt=" . substr( $body, 0, 300 ) . "\n",
-            FILE_APPEND );
-
         if ( $status_code === 401 || $status_code === 403 ) {
             error_log( '[GCREV][DataForSEO] Authentication failed (HTTP ' . $status_code . ')' );
-            file_put_contents( '/tmp/gcrev_rank_debug.log',
-                date( 'Y-m-d H:i:s' ) . " [api_request] AUTH_FAILED http={$status_code}\n",
-                FILE_APPEND );
-            return new \WP_Error( 'auth_failed', "DataForSEO 認証エラー HTTP {$status_code}" );
+            return new \WP_Error( 'auth_failed', 'DataForSEO 認証に失敗しました。ログイン情報を確認してください。' );
         }
 
         if ( $status_code >= 400 ) {
             $msg = $decoded['status_message'] ?? "HTTP {$status_code}";
             error_log( "[GCREV][DataForSEO] HTTP error {$status_code}: {$msg}" );
-            file_put_contents( '/tmp/gcrev_rank_debug.log',
-                date( 'Y-m-d H:i:s' ) . " [api_request] HTTP_ERROR http={$status_code} msg='{$msg}'\n",
-                FILE_APPEND );
-            return new \WP_Error( 'http_error', "HTTP {$status_code} msg={$msg}" );
+            return new \WP_Error( 'http_error', $msg );
         }
 
         if ( ! is_array( $decoded ) ) {
             error_log( '[GCREV][DataForSEO] Invalid JSON response' );
-            file_put_contents( '/tmp/gcrev_rank_debug.log',
-                date( 'Y-m-d H:i:s' ) . " [api_request] INVALID_JSON body_excerpt=" . substr( $body, 0, 300 ) . "\n",
-                FILE_APPEND );
             return new \WP_Error( 'json_error', 'API レスポンスの JSON 解析に失敗しました。' );
         }
 

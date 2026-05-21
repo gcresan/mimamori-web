@@ -16904,9 +16904,7 @@ PROMPT;
         $today     = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d' );
 
         // レート制限: 一括取得は1日1回（管理者・社内テストアカウントは無制限）
-        // TEMP(2026-05-21): target_domain 修正の動作確認のため全クライアントの制限を一時解除
-        // 確認完了後に git revert で戻すこと
-        if ( false && ! $is_admin && ! $is_internal_test ) {
+        if ( ! $is_admin && ! $is_internal_test ) {
             $bulk_key = 'gcrev_bulk_fetch_' . $user_id . '_' . $today;
             if ( get_transient( $bulk_key ) ) {
                 return new \WP_REST_Response( [
@@ -17004,8 +17002,7 @@ PROMPT;
         }
 
         // 一括取得済みフラグ（管理者・社内テストアカウントには付けない）
-        // TEMP(2026-05-21): 上記レート制限解除と対になる無効化 — git revert で戻すこと
-        if ( false && ! $is_admin && ! $is_internal_test ) {
+        if ( ! $is_admin && ! $is_internal_test ) {
             set_transient( 'gcrev_bulk_fetch_' . $user_id . '_' . $today, 1, DAY_IN_SECONDS );
         }
 
