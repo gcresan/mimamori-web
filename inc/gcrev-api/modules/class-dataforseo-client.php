@@ -242,12 +242,28 @@ class Gcrev_DataForSEO_Client {
         if ( $status_code !== 20000 ) {
             $msg = $response['status_message'] ?? 'Unknown error';
             error_log( "[GCREV][DataForSEO] API error: {$msg} (code: {$status_code})" );
-            return new \WP_Error( 'api_error', $msg );
+            file_put_contents( '/tmp/gcrev_rank_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [fetch_serp] kw='{$keyword}' device={$device} "
+                . "API_LEVEL_ERROR status_code={$status_code} msg='{$msg}' "
+                . "keys=" . wp_json_encode( array_keys( $response ), JSON_UNESCAPED_UNICODE )
+                . " excerpt=" . substr( wp_json_encode( $response, JSON_UNESCAPED_UNICODE ), 0, 400 )
+                . "\n",
+                FILE_APPEND );
+            return new \WP_Error( 'api_error', "API code={$status_code} msg={$msg}" );
         }
 
         $tasks = $response['tasks'] ?? [];
         if ( empty( $tasks ) || empty( $tasks[0]['result'] ) ) {
-            return new \WP_Error( 'no_result', 'API 応答にデータが含まれていません。' );
+            // タスクレベルのエラーも詳細化
+            $t_code = isset( $tasks[0]['status_code'] ) ? (int) $tasks[0]['status_code'] : 0;
+            $t_msg  = $tasks[0]['status_message'] ?? 'no_tasks';
+            file_put_contents( '/tmp/gcrev_rank_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [fetch_serp] kw='{$keyword}' device={$device} "
+                . "TASK_LEVEL_ERROR task_code={$t_code} task_msg='{$t_msg}' "
+                . "excerpt=" . substr( wp_json_encode( $tasks, JSON_UNESCAPED_UNICODE ), 0, 400 )
+                . "\n",
+                FILE_APPEND );
+            return new \WP_Error( 'no_result', "Task code={$t_code} msg={$t_msg}" );
         }
 
         $result = $tasks[0]['result'][0];
