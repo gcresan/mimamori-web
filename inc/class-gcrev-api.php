@@ -15522,10 +15522,10 @@ PROMPT;
         global $wpdb;
         $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
 
-        // 事前見積もり (該当スロット対象のみ)
+        // 事前見積もり (該当スロット対象のみ、target_domain は fallback されるので絞らない)
         $total_keywords = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$kw_table}
-              WHERE enabled = 1 AND target_domain != ''
+              WHERE enabled = 1
                 AND FIND_IN_SET(%s, fetch_times) > 0",
             $slot
         ) );
@@ -15550,10 +15550,10 @@ PROMPT;
         $lock_key  = 'gcrev_lock_rank_fetch_' . $slot;
         $log_key   = 'gcrev_rank_fetch_log_id_' . $slot;
 
-        // 有効キーワードを持つユーザーを取得（チャンク, slot 対象のみ）
+        // 有効キーワードを持つユーザーを取得（チャンク, slot 対象のみ、target_domain は fallback されるので絞らない）
         $user_ids = $wpdb->get_col( $wpdb->prepare(
             "SELECT DISTINCT user_id FROM {$kw_table}
-             WHERE enabled = 1 AND target_domain != ''
+             WHERE enabled = 1
                AND FIND_IN_SET(%s, fetch_times) > 0
              ORDER BY user_id ASC
              LIMIT %d OFFSET %d",
@@ -15585,16 +15585,29 @@ PROMPT;
         foreach ( $user_ids as $uid ) {
             $uid = (int) $uid;
 
+            // target_domain が空のキーワードも対象に含める（クライアント設定のドメインで fallback）
             $keywords = $wpdb->get_results( $wpdb->prepare(
                 "SELECT * FROM {$kw_table}
-                 WHERE user_id = %d AND enabled = 1 AND target_domain != ''
+                 WHERE user_id = %d AND enabled = 1
                    AND FIND_IN_SET(%s, fetch_times) > 0
                  ORDER BY sort_order ASC, id ASC",
                 $uid, $slot
             ), ARRAY_A );
 
+            $fallback_domain = $this->rank_tracker_resolve_domain( $uid );
+
             foreach ( $keywords as $kw ) {
                 $kw_id = (int) $kw['id'];
+
+                $td = $kw['target_domain'] !== '' ? $kw['target_domain'] : $fallback_domain;
+                if ( $td === '' ) {
+                    continue; // ドメインが解決できないキーワードはスキップ
+                }
+                if ( $kw['target_domain'] === '' ) {
+                    // 旧データなどで target_domain が空のままだった行を、resolve したドメインで書き戻す
+                    $wpdb->update( $kw_table, [ 'target_domain' => $td ], [ 'id' => $kw_id ] );
+                    $kw['target_domain'] = $td;
+                }
 
                 // 日次×スロット重複チェック（当日 + 同スロット分が既にあればスキップ）
                 $already = $wpdb->get_var( $wpdb->prepare(
@@ -15610,7 +15623,7 @@ PROMPT;
                 // DataForSEO API 呼び出し
                 $results = $this->dataforseo->fetch_rankings_for_keyword(
                     $kw['keyword'],
-                    $kw['target_domain'],
+                    $td,
                     (int) $kw['location_code'],
                     $kw['language_code']
                 );
@@ -16439,9 +16452,10 @@ PROMPT;
             }
         }
 
+        // target_domain が空のキーワードも対象に含める（クライアント設定のドメインで fallback）
         $keywords = $wpdb->get_results( $wpdb->prepare(
             "SELECT * FROM {$kw_table}
-             WHERE user_id = %d AND enabled = 1 AND target_domain != ''
+             WHERE user_id = %d AND enabled = 1
              ORDER BY sort_order ASC, id ASC",
             $user_id
         ), ARRAY_A );
@@ -16450,16 +16464,30 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => true, 'data' => [ 'fetched' => 0, 'results' => [] ] ] );
         }
 
+        $fallback_domain = $this->rank_tracker_resolve_domain( $user_id );
+
         $results_all = [];
         $fetched     = 0;
 
         foreach ( $keywords as $kw ) {
+            $td = $kw['target_domain'] !== '' ? $kw['target_domain'] : $fallback_domain;
+            if ( $td === '' ) {
+                file_put_contents( '/tmp/gcrev_rank_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " [fetch_all] SKIP kw_id={$kw['id']} keyword={$kw['keyword']} reason=no_target_domain\n", FILE_APPEND );
+                continue;
+            }
+            if ( $kw['target_domain'] === '' ) {
+                // 旧データなどで target_domain が空のままだった行を、resolve したドメインで書き戻す
+                $wpdb->update( $kw_table, [ 'target_domain' => $td ], [ 'id' => (int) $kw['id'] ] );
+                $kw['target_domain'] = $td;
+            }
+
             file_put_contents( '/tmp/gcrev_rank_debug.log',
-                date( 'Y-m-d H:i:s' ) . " [fetch_all] Fetching kw_id={$kw['id']} keyword={$kw['keyword']}\n", FILE_APPEND );
+                date( 'Y-m-d H:i:s' ) . " [fetch_all] Fetching kw_id={$kw['id']} keyword={$kw['keyword']} domain={$td}\n", FILE_APPEND );
 
             $results = $this->dataforseo->fetch_rankings_for_keyword(
                 $kw['keyword'],
-                $kw['target_domain'],
+                $td,
                 (int) $kw['location_code'],
                 $kw['language_code']
             );
