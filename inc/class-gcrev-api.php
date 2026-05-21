@@ -7737,9 +7737,13 @@ PROMPT;
             $comparison = $this->dates->calculate_comparison_dates($period);
 
             // キャッシュ（period だけでキー一意化。日付がスライドしてもキーは変わらない）
-            $cache_key = "gcrev_meo_{$user_id}_{$period}";
+            // v2: api_status / api_error フィールド追加に伴いキー名をバンプ。
+            //     旧キー (gcrev_meo_*) は自動で無視され、TTL 切れで自然消滅する。
+            $cache_key = "gcrev_meo_v2_{$user_id}_{$period}";
             if ($no_cache) {
                 delete_transient($cache_key);
+                // 念のため旧キーも削除
+                delete_transient("gcrev_meo_{$user_id}_{$period}");
             } else {
                 $cached = get_transient($cache_key);
                 if ($cached !== false && is_array($cached)) {
@@ -7862,8 +7866,8 @@ PROMPT;
                 try {
                     $dates      = $this->dates->calculate_period_dates( $period );
                     $comparison = $this->dates->calculate_comparison_dates( $period );
-                    // period だけでキー一意化（REST endpoint と揃える）
-                    $cache_key  = "gcrev_meo_{$uid}_{$period}";
+                    // period だけでキー一意化（REST endpoint と揃える / v2 にバンプ）
+                    $cache_key  = "gcrev_meo_v2_{$uid}_{$period}";
 
                     // 既にキャッシュが残っていればスキップ（まだ有効期限内）
                     $existing = get_transient( $cache_key );

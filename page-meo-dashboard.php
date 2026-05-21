@@ -768,7 +768,9 @@ get_header();
     // ===== データ取得（キャッシュ優先 + fetch） =====
     async function loadData(period) {
         // キャッシュチェック（ローディングなしで即表示）。nocache=1 ならスキップ
-        var cacheKey = 'meo_dash_' + period;
+        // v2: api_status / api_error フィールド追加に伴いキー名をバンプ。
+        //     旧キー (meo_dash_*) は2hで自然消滅する。
+        var cacheKey = 'meo_dash_v2_' + period;
         if (!NO_CACHE) {
             var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
             if (cached) {
