@@ -801,10 +801,23 @@ get_header();
             });
             clearTimeout(timeoutId);
 
-            var result = await response.json();
+            var httpStatus = response.status;
+            var bodyText   = await response.text();
+            var result;
+            try { result = JSON.parse(bodyText); } catch (e) { result = null; }
 
-            if (!result.success) {
-                throw new Error(result.message || 'データ取得に失敗しました');
+            // 認証エラー (401/403) の場合はWordPressレスポンスをエラーバナーで表示
+            if (httpStatus === 401 || httpStatus === 403) {
+                var serverMsg = (result && (result.message || result.code)) || bodyText.slice(0, 200);
+                var hint = httpStatus === 401
+                    ? 'ログインセッションが切れています。一度ログアウトしてから再度ログインしてください。'
+                    : 'WordPressの認証 nonce が一致していません。ページを再読み込み（Cmd+Shift+R で強制リロード）してから再度お試しください。view-as 切替を使っている場合は一度切替を解除して再設定してください。';
+                showAuthError(httpStatus, serverMsg, hint);
+                return;
+            }
+
+            if (!result || !result.success) {
+                throw new Error((result && result.message) || ('HTTP ' + httpStatus));
             }
 
             currentData = result;
@@ -824,11 +837,22 @@ get_header();
 
         } catch (error) {
             console.error('[MEO] データ取得エラー:', error);
-            var pdEl = document.getElementById('periodDisplay');
-            if (pdEl) pdEl.innerHTML = '<span style="color:#dc2626;">データ取得に失敗しました。再読み込みしてください。</span>';
+            showAuthError('?', error && error.message ? error.message : String(error),
+                'ネットワーク通信に失敗しました。再読み込みしてください。');
         } finally {
             hideLoading();
         }
+    }
+
+    // ===== 認証/通信エラー表示（api_status=error と同じバナーを流用） =====
+    function showAuthError(httpStatus, serverMsg, hint) {
+        var errBanner   = document.getElementById('meo-api-error-banner');
+        var errHintEl   = document.getElementById('meo-api-error-hint');
+        var errDetailEl = document.getElementById('meo-api-error-detail');
+        if (!errBanner) return;
+        errBanner.style.display = 'block';
+        if (errHintEl) errHintEl.textContent = hint;
+        if (errDetailEl) errDetailEl.textContent = 'HTTP ' + httpStatus + '\n' + (serverMsg || '（詳細なし）');
     }
 
     // ===== API取得エラーバナー =====
