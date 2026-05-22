@@ -568,10 +568,15 @@ get_header();
             <div style="display:flex; gap:14px; align-items:flex-start;">
                 <div style="font-size:24px; line-height:1; flex-shrink:0;">⚠️</div>
                 <div style="flex:1; min-width:0;">
-                    <div style="font-size:16px; font-weight:700; color:#991b1b; margin-bottom:6px;">
+                    <div id="meo-api-error-title" style="font-size:16px; font-weight:700; color:#991b1b; margin-bottom:8px;">
                         Googleビジネスプロフィールからデータを取得できませんでした
                     </div>
-                    <div id="meo-api-error-hint" style="font-size:13px; color:#7f1d1d; line-height:1.7; margin-bottom:10px;"></div>
+                    <div id="meo-api-error-hint" style="font-size:13px; color:#7f1d1d; line-height:1.8; margin-bottom:14px; white-space:pre-line;"></div>
+                    <div id="meo-api-error-cta-wrap" style="display:none; margin-bottom:14px;">
+                        <a id="meo-api-error-cta" href="#"
+                           style="display:inline-block; padding:10px 24px; background:#dc2626; color:#fff; border-radius:8px; text-decoration:none; font-weight:700; font-size:14px;">
+                        </a>
+                    </div>
                     <details style="font-size:12px; color:#991b1b;">
                         <summary style="cursor:pointer; font-weight:600;">技術的な詳細</summary>
                         <div id="meo-api-error-detail" style="margin-top:8px; padding:10px 12px; background:#fff; border-radius:6px; font-family:monospace; font-size:12px; color:#374151; word-break:break-all; white-space:pre-wrap;"></div>
@@ -873,11 +878,15 @@ get_header();
     // ===== 認証/通信エラー表示（api_status=error と同じバナーを流用） =====
     function showAuthError(httpStatus, serverMsg, hint) {
         var errBanner   = document.getElementById('meo-api-error-banner');
+        var errTitleEl  = document.getElementById('meo-api-error-title');
         var errHintEl   = document.getElementById('meo-api-error-hint');
         var errDetailEl = document.getElementById('meo-api-error-detail');
+        var errCtaWrap  = document.getElementById('meo-api-error-cta-wrap');
         if (!errBanner) return;
         errBanner.style.display = 'block';
-        if (errHintEl) errHintEl.textContent = hint;
+        if (errCtaWrap) errCtaWrap.style.display = 'none';
+        if (errTitleEl) errTitleEl.textContent = 'データを取得できませんでした';
+        if (errHintEl)  errHintEl.textContent  = hint;
         if (errDetailEl) errDetailEl.textContent = 'HTTP ' + httpStatus + '\n' + (serverMsg || '（詳細なし）');
     }
 
@@ -940,26 +949,40 @@ get_header();
     // ===== API取得エラーバナー =====
     function updateApiErrorBanner(data) {
         var errBanner     = document.getElementById('meo-api-error-banner');
+        var errTitleEl    = document.getElementById('meo-api-error-title');
         var errHintEl     = document.getElementById('meo-api-error-hint');
         var errDetailEl   = document.getElementById('meo-api-error-detail');
+        var errCtaWrap    = document.getElementById('meo-api-error-cta-wrap');
+        var errCtaLink    = document.getElementById('meo-api-error-cta');
         var partialBanner = document.getElementById('meo-api-partial-banner');
         var partialHintEl = document.getElementById('meo-api-partial-hint');
 
         // バナーを一旦すべて非表示にリセット
         if (errBanner)     errBanner.style.display     = 'none';
         if (partialBanner) partialBanner.style.display = 'none';
+        if (errCtaWrap)    errCtaWrap.style.display    = 'none';
 
         var status = data && data.api_status;
         if (!status || status === 'ok' || status === 'pending') return;
 
         var apiErr = (data && data.api_error) || {};
+        var title  = apiErr.title   || 'Googleビジネスプロフィールからデータを取得できませんでした';
         var hint   = apiErr.hint    || 'データを取得できませんでした。';
         var msg    = apiErr.message || '';
         var http   = apiErr.http_status;
+        var action = apiErr.action;
+        var actionUrl = apiErr.action_url;
 
         if (status === 'error' && errBanner) {
             errBanner.style.display = 'block';
-            if (errHintEl) errHintEl.textContent = hint;
+            if (errTitleEl) errTitleEl.textContent = title;
+            if (errHintEl)  errHintEl.textContent  = hint;
+            // 再接続ボタン等のCTAがあれば表示
+            if (action && actionUrl && errCtaWrap && errCtaLink) {
+                errCtaLink.textContent = action;
+                errCtaLink.href = actionUrl;
+                errCtaWrap.style.display = 'block';
+            }
             if (errDetailEl) {
                 var detail = '';
                 if (http !== null && http !== undefined) detail += 'HTTP ' + http + '\n';

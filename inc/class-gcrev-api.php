@@ -7780,19 +7780,26 @@ PROMPT;
                 if (is_array($current_diag) && $current_diag['success_count'] === 0 && $current_diag['error_count'] > 0) {
                     $api_status = 'error';
                     $first_err  = $current_diag['errors'][0] ?? [];
-                    $http_code  = $first_err['status'] ?? null;
-                    $api_error  = [
+                    $http_code  = is_int($first_err['status'] ?? null) ? $first_err['status'] : null;
+                    $hint_info  = $this->gbp_error_hint($http_code, $first_err['message'] ?? '');
+                    // action_url が 'reconnect' なら実際のOAuth URLに差し替え
+                    if (($hint_info['action_url'] ?? null) === 'reconnect') {
+                        $hint_info['action_url'] = $this->gbp_get_auth_url($user_id);
+                    }
+                    $api_error = array_merge([
                         'http_status' => $http_code,
                         'message'     => $first_err['message'] ?? 'GBP APIから応答がありませんでした。',
-                        'hint'        => $this->gbp_error_hint($http_code, $first_err['message'] ?? ''),
-                    ];
+                    ], $hint_info);
                 } elseif (is_array($current_diag) && $current_diag['error_count'] > 0) {
                     $api_status = 'partial';
                     $first_err  = $current_diag['errors'][0] ?? [];
                     $api_error  = [
-                        'http_status' => $first_err['status'] ?? null,
+                        'http_status' => is_int($first_err['status'] ?? null) ? $first_err['status'] : null,
                         'message'     => $first_err['message'] ?? '',
-                        'hint'        => '一部のメトリクスが取得できませんでした。時間を置いて再度ご確認ください。',
+                        'title'       => '一部のメトリクスが取得できませんでした',
+                        'hint'        => '時間を置いて再度ご確認ください。',
+                        'action'      => null,
+                        'action_url'  => null,
                     ];
                 }
             }
@@ -10346,35 +10353,101 @@ PROMPT;
     // ===== GBP ヘルパー =====
 
     /**
-     * GBP API エラーから、ユーザー向けの対処案内文を生成
+     * GBP API エラーから、ユーザー向けの対処案内構造を生成
+     *
+     * @return array{title:string, hint:string, action:?string, action_url:?string}
      */
-    private function gbp_error_hint(?int $http_status, string $api_message): string {
+    private function gbp_error_hint(?int $http_status, string $api_message): array {
         $msg = strtolower($api_message);
 
+        // === HTTP 401: 認証切れ ===
         if ($http_status === 401) {
-            return 'Googleビジネスプロフィールの認証が切れています。MEOダッシュボード上で再連携してください。';
+            return [
+                'title'      => 'Googleビジネスプロフィールの認証が切れています',
+                'hint'       => 'アクセストークンが失効しました。Googleビジネスプロフィールと再接続してください。',
+                'action'     => '🔄 再接続する',
+                'action_url' => 'reconnect',
+            ];
         }
+
+        // === HTTP 403: 権限不足 ===
         if ($http_status === 403) {
+
+            // ケース1: Performance API が有効化されていない
             if (strpos($msg, 'business profile performance api') !== false
                 || strpos($msg, 'has not been used') !== false
                 || strpos($msg, 'is disabled') !== false) {
-                return 'Google Cloud Console で「Business Profile Performance API」が有効化されていない可能性があります。管理者にお問い合わせください。';
+                return [
+                    'title'      => 'Business Profile Performance API が無効化されています',
+                    'hint'       => 'Google Cloud Console で「Business Profile Performance API」を有効化する必要があります。サポートまでお問い合わせください。',
+                    'action'     => null,
+                    'action_url' => null,
+                ];
             }
-            if (strpos($msg, 'permission') !== false || strpos($msg, 'access') !== false) {
-                return '選択中のロケーションへのアクセス権限がありません。Googleビジネスプロフィールの管理権限を持つアカウントで再連携してください。';
+
+            // ケース2: 「The caller does not have permission」
+            // OAuth連携したGoogleアカウントが、このGBPのオーナー/管理者ではない
+            if (strpos($msg, 'caller does not have permission') !== false
+                || strpos($msg, 'permission_denied') !== false
+                || strpos($msg, 'permission') !== false) {
+                return [
+                    'title'      => '連携中のGoogleアカウントがこの店舗のオーナー権限を持っていません',
+                    'hint'       => '現在Googleビジネスプロフィールに連携しているGoogleアカウントが、この店舗（ロケーション）の「オーナー」または「管理者」として登録されていません。'
+                                  . "\n\n"
+                                  . '【解決方法】次のいずれかを実施してください:'
+                                  . "\n"
+                                  . '① この店舗のオーナー権限を持つGoogleアカウントで、下の「再接続」ボタンから再連携する'
+                                  . "\n"
+                                  . '② Googleビジネスプロフィール管理画面（business.google.com）で、現在連携中のGoogleアカウントを「マネージャー」として追加する',
+                    'action'     => '🔄 別のGoogleアカウントで再接続',
+                    'action_url' => 'reconnect',
+                ];
             }
-            return 'GBP APIへのアクセス権限がありません。連携Googleアカウントの権限をご確認ください。';
+
+            return [
+                'title'      => 'GBP APIへのアクセスが拒否されました',
+                'hint'       => '連携Googleアカウントの権限をご確認ください。問題が続く場合はサポートまでご連絡ください。',
+                'action'     => '🔄 再接続する',
+                'action_url' => 'reconnect',
+            ];
         }
+
+        // === HTTP 404 ===
         if ($http_status === 404) {
-            return '選択中のロケーションIDが見つかりません。設定画面からロケーションを選び直してください。';
+            return [
+                'title'      => 'ロケーションが見つかりません',
+                'hint'       => '選択中のロケーションIDが Google 側で見つかりませんでした。設定画面からロケーションを選び直してください。',
+                'action'     => null,
+                'action_url' => null,
+            ];
         }
+
+        // === HTTP 429: レート制限 ===
         if ($http_status === 429) {
-            return 'Googleビジネスプロフィールの呼び出し制限に達しました。しばらく時間を置いてから再度お試しください。';
+            return [
+                'title'      => '呼び出し制限に達しました',
+                'hint'       => 'Googleビジネスプロフィールの呼び出し制限に達しました。しばらく時間を置いてから再度お試しください。',
+                'action'     => null,
+                'action_url' => null,
+            ];
         }
+
+        // === HTTP 5xx ===
         if ($http_status !== null && $http_status >= 500) {
-            return 'Google側で一時的な障害が発生しています。時間を置いて再度お試しください。';
+            return [
+                'title'      => 'Google側で一時的な障害が発生しています',
+                'hint'       => '時間を置いて再度お試しください。',
+                'action'     => null,
+                'action_url' => null,
+            ];
         }
-        return 'GBP APIからエラーが返されました。問題が続く場合はサポートまでご連絡ください。';
+
+        return [
+            'title'      => 'GBP APIからエラーが返されました',
+            'hint'       => '問題が続く場合はサポートまでご連絡ください。',
+            'action'     => null,
+            'action_url' => null,
+        ];
     }
 
     /**
