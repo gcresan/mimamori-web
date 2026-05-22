@@ -10728,6 +10728,14 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
         WP_CLI::add_command( 'mimamori strategy-report generate', [ $strategy_cli, 'generate' ] );
         WP_CLI::add_command( 'mimamori strategy-report show',     [ $strategy_cli, 'show' ] );
     }
+
+    // MEO 診断 CLI
+    $meo_cli_path = get_template_directory() . '/inc/cli/class-mimamori-meo-cli.php';
+    if ( file_exists( $meo_cli_path ) ) {
+        require_once $meo_cli_path;
+        $meo_cli = new Mimamori_MEO_CLI();
+        WP_CLI::add_command( 'mimamori meo diagnose', [ $meo_cli, 'diagnose' ] );
+    }
 }
 
 // ========================================

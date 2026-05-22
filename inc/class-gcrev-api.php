@@ -9837,6 +9837,68 @@ PROMPT;
      * @param int $user_id
      * @return string|null アクセストークン（取得不可ならnull）
      */
+    /**
+     * MEOダッシュボードのGBP取得状況を診断する（CLI/管理ツール用）
+     * REST 403 等を回避してサーバー側で直接実行する。
+     *
+     * @param int $user_id 対象ユーザーID
+     * @return array 診断結果
+     */
+    public function diagnose_meo_for_user(int $user_id): array {
+        $location_id  = (string) get_user_meta($user_id, '_gcrev_gbp_location_id', true);
+        $location_name = (string) get_user_meta($user_id, '_gcrev_gbp_location_name', true);
+        $location_addr = (string) get_user_meta($user_id, '_gcrev_gbp_location_address', true);
+        $refresh_token_raw = (string) get_user_meta($user_id, '_gcrev_gbp_refresh_token', true);
+        $token_expires    = (int) get_user_meta($user_id, '_gcrev_gbp_token_expires', true);
+        $access_token = $this->gbp_get_access_token($user_id);
+
+        $user = get_userdata($user_id);
+
+        $result = [
+            'user_id'           => $user_id,
+            'user_login'        => $user ? $user->user_login : null,
+            'user_email'        => $user ? $user->user_email : null,
+            'location_id'       => $location_id,
+            'location_name'     => $location_name,
+            'location_address'  => $location_addr,
+            'has_refresh_token' => !empty($refresh_token_raw),
+            'token_expires_at'  => $token_expires > 0 ? date('Y-m-d H:i:s', $token_expires) : null,
+            'has_access_token'  => !empty($access_token),
+            'is_pending'        => (strpos($location_id, 'pending_') === 0),
+        ];
+
+        if (empty($location_id)) {
+            $result['error'] = 'ロケーションIDが未設定';
+            return $result;
+        }
+        if ($result['is_pending']) {
+            $result['error'] = 'pending_ 状態（ロケーション未確定）';
+            return $result;
+        }
+        if (empty($access_token)) {
+            $result['error'] = 'アクセストークン取得失敗（再認証必要）';
+            return $result;
+        }
+
+        // 直近30日 + 前月で実取得
+        $dates      = $this->dates->calculate_period_dates('last30');
+        $comparison = $this->dates->calculate_comparison_dates('last30');
+
+        $current_diag = null;
+        $prev_diag    = null;
+        $current = $this->gbp_fetch_performance_metrics($access_token, $location_id, $dates['start'], $dates['end'], $current_diag);
+        $prev    = $this->gbp_fetch_performance_metrics($access_token, $location_id, $comparison['start'], $comparison['end'], $prev_diag);
+
+        $result['period_current']  = $dates;
+        $result['period_previous'] = $comparison;
+        $result['metrics_current']  = $current;
+        $result['metrics_previous'] = $prev;
+        $result['diagnostics_current']  = $current_diag;
+        $result['diagnostics_previous'] = $prev_diag;
+
+        return $result;
+    }
+
     public function gbp_get_access_token(int $user_id): ?string {
         $expires = (int) get_user_meta($user_id, '_gcrev_gbp_token_expires', true);
 
