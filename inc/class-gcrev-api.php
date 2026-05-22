@@ -10028,14 +10028,16 @@ PROMPT;
 
         $totals['total_impressions'] = $totals['mobile_impressions'] + $totals['desktop_impressions'];
 
-        if ($diagnostics !== null) {
-            $diagnostics = [
-                'total_count'   => $total_count,
-                'success_count' => $success_count,
-                'error_count'   => $total_count - $success_count,
-                'errors'        => $errors,
-            ];
-        }
+        // 診断情報を常に書き込む（参照渡しなので呼び出し側が興味なければ無視される）。
+        // 以前は `if ($diagnostics !== null)` でガードしていたが、PHP の参照渡しでは
+        // 「呼び出し側が変数を渡したか」とデフォルト null を区別できないため、
+        // 結果として常に空のままになるバグがあった。
+        $diagnostics = [
+            'total_count'   => $total_count,
+            'success_count' => $success_count,
+            'error_count'   => $total_count - $success_count,
+            'errors'        => $errors,
+        ];
 
         return $totals;
     }
