@@ -8,6 +8,12 @@ if (!is_user_logged_in()) {
     exit;
 }
 
+// KUSANAGI bcache 等の上流キャッシュがログイン中ユーザー向けページを
+// 古い wp_rest nonce 付きでキャッシュすると、JS の REST 呼び出しが
+// HTTP 403 "Cookie check failed" になる事故が発生したため、明示的に
+// no-cache を出してキャッシュ層を完全にバイパスする。
+nocache_headers();
+
 mimamori_guard_meo_access();
 
 $current_user = mimamori_get_view_user_object();
