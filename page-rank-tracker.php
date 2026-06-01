@@ -627,7 +627,11 @@ get_header();
         <div class="rt-empty" id="rankEmptyState" style="display:none;">
             <div class="rt-empty__icon">&#x1F50D;</div>
             <div class="rt-empty__text">キーワードが登録されていません</div>
-            <div style="color:#9ca3af; font-size:13px; margin-top:8px;">下の「計測キーワード」セクションからキーワードを追加すると、検索順位が表示されます。</div>
+            <div style="color:#9ca3af; font-size:13px; margin-top:8px;">「キーワード設定を開く」から計測したいキーワードを追加すると、検索順位が表示されます。</div>
+            <a class="rt-btn" href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" style="text-decoration:none; margin-top:14px; display:inline-flex;">
+                <span class="rt-btn__icon">&#x2699;&#xFE0F;</span>
+                キーワード設定を開く
+            </a>
         </div>
         <div class="rt-table-wrap" id="rankTableContainer" style="display:none;">
             <table class="rt-table" id="rankTable">
