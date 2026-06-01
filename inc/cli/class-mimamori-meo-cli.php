@@ -200,4 +200,91 @@ class Mimamori_MEO_CLI {
         \WP_CLI::success( "削除完了: meo_results {$deleted_rows} 行 / Transient {$deleted_tr} 件。"
             . '「最新の情報を見る」または日次 cron で再取得されます。' );
     }
+
+    /**
+     * DataForSEO の Maps / Local Finder 生レスポンスを診断表示する
+     *
+     * 指定ユーザーの基準座標で実際にAPIを叩き、各結果の type(maps_search/maps_paid)・
+     * rank_group・rank_absolute・domain・評価を一覧表示する。
+     * 「広告(maps_paid)が順位に混入していないか」「自然枠での本当の位置」を確認する。
+     * 保存・キャッシュは行わない（読み取り専用診断）。
+     *
+     * ## OPTIONS
+     *
+     * --user_id=<id>
+     * : 対象のユーザーID
+     *
+     * --keyword=<keyword>
+     * : 検索キーワード（例: "松山市 歯科"）
+     *
+     * [--device=<device>]
+     * : mobile | desktop（デフォルト: mobile）
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori meo probe --user_id=2 --keyword="松山市 歯科" --device=mobile
+     */
+    public function probe( array $args, array $assoc_args ): void {
+        $user_id = isset( $assoc_args['user_id'] ) ? (int) $assoc_args['user_id'] : 0;
+        $keyword = isset( $assoc_args['keyword'] ) ? (string) $assoc_args['keyword'] : '';
+        $device  = isset( $assoc_args['device'] ) ? (string) $assoc_args['device'] : 'mobile';
+        if ( $user_id <= 0 ) {
+            \WP_CLI::error( '--user_id は必須です' );
+        }
+        if ( $keyword === '' ) {
+            \WP_CLI::error( '--keyword は必須です' );
+        }
+        if ( ! in_array( $device, [ 'mobile', 'desktop' ], true ) ) {
+            $device = 'mobile';
+        }
+
+        if ( ! class_exists( 'Gcrev_Insight_API' ) ) {
+            \WP_CLI::error( 'Gcrev_Insight_API クラスが見つかりません' );
+        }
+        global $gcrev_api_instance;
+        if ( ! isset( $gcrev_api_instance ) || ! ( $gcrev_api_instance instanceof \Gcrev_Insight_API ) ) {
+            $gcrev_api_instance = new \Gcrev_Insight_API( false );
+        }
+
+        $r = $gcrev_api_instance->meo_probe_raw( $user_id, $keyword, $device );
+
+        if ( isset( $r['error'] ) ) {
+            \WP_CLI::error( $r['error'] );
+        }
+
+        \WP_CLI::log( "keyword='{$keyword}' device={$device}" );
+        \WP_CLI::log( "coordinate={$r['coordinate']} (zoom={$r['zoom']}, radius={$r['radius']}m)" );
+        \WP_CLI::log( "match_domain={$r['match_domain']}" );
+        \WP_CLI::log( str_repeat( '-', 60 ) );
+
+        $render = function ( string $label, array $items, string $err ) use ( $r ) {
+            \WP_CLI::log( "■ {$label}" . ( $err !== '' ? "  (ERROR: {$err})" : '' ) );
+            if ( empty( $items ) ) {
+                \WP_CLI::log( '  （結果なし）' );
+                return;
+            }
+            \WP_CLI::log( sprintf( '  %-4s %-4s %-14s %-22s %-26s %s',
+                'grp', 'abs', 'type', 'domain', 'title', 'rating/reviews' ) );
+            foreach ( $items as $it ) {
+                $self = ( $it['domain'] !== '' && $r['match_domain'] !== ''
+                    && preg_replace( '/^www\./i', '', strtolower( $it['domain'] ) ) === strtolower( $r['match_domain'] ) )
+                    ? ' ★self(domain)' : '';
+                \WP_CLI::log( sprintf( '  %-4s %-4s %-14s %-22s %-26s %s/%s%s',
+                    (string) ( $it['rank_group'] ?? '-' ),
+                    (string) ( $it['rank_absolute'] ?? '-' ),
+                    (string) $it['type'],
+                    (string) ( $it['domain'] ?: '-' ),
+                    mb_strimwidth( (string) $it['title'], 0, 24, '…' ),
+                    (string) ( $it['rating'] ?? '-' ),
+                    (string) ( $it['reviews'] ?? '-' ),
+                    $self
+                ) );
+            }
+        };
+
+        $render( 'Maps SERP', $r['maps'], $r['maps_error'] );
+        \WP_CLI::log( str_repeat( '-', 60 ) );
+        $render( 'Local Finder SERP', $r['finder'], $r['finder_error'] );
+        \WP_CLI::success( '診断完了（保存・キャッシュはしていません）' );
+    }
 }

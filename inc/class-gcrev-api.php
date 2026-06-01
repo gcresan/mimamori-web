@@ -8486,6 +8486,81 @@ PROMPT;
         $wpdb->query( $sql );
     }
 
+    /**
+     * MEO 生レスポンス診断（CLI 用）
+     *
+     * 指定ユーザーの基準座標で Maps SERP / Local Finder SERP を取得し、
+     * 各アイテムの type（maps_search/maps_paid 等）・rank_group・rank_absolute・
+     * domain・評価をそのまま返す。広告(maps_paid)混入や順位フィールドの読み違いを
+     * 切り分けるための診断専用メソッド。保存・キャッシュは行わない。
+     */
+    public function meo_probe_raw( int $user_id, string $keyword, string $device = 'mobile' ): array {
+        if ( ! $this->dataforseo || ! Gcrev_DataForSEO_Client::is_configured() ) {
+            return [ 'error' => 'DataForSEO API が未設定です' ];
+        }
+
+        $meo_lat    = (string) get_user_meta( $user_id, '_gcrev_meo_lat', true );
+        $meo_lng    = (string) get_user_meta( $user_id, '_gcrev_meo_lng', true );
+        $meo_radius = (int) get_user_meta( $user_id, '_gcrev_meo_radius', true ) ?: 1000;
+        if ( ( $meo_lat === '' || $meo_lng === '' ) && class_exists( 'Gcrev_City_Coordinates' ) ) {
+            $cc = Gcrev_City_Coordinates::get_for_user( $user_id );
+            if ( $cc ) {
+                $meo_lat    = (string) $cc['lat'];
+                $meo_lng    = (string) $cc['lng'];
+                $meo_radius = Gcrev_City_Coordinates::DEFAULT_RADIUS;
+            }
+        }
+
+        $zoom  = Gcrev_DataForSEO_Client::radius_to_zoom( $meo_radius );
+        $coord = ( $meo_lat !== '' && $meo_lng !== '' )
+            ? Gcrev_DataForSEO_Client::build_coordinate_string( (float) $meo_lat, (float) $meo_lng, $zoom )
+            : '';
+
+        $match_domain = (string) get_user_meta( $user_id, '_gcrev_maps_domain', true );
+        if ( $match_domain === '' ) {
+            $site = get_user_meta( $user_id, 'gcrev_client_site_url', true )
+                 ?: get_user_meta( $user_id, 'report_site_url', true );
+            if ( $site ) {
+                $p = wp_parse_url( $site );
+                $match_domain = preg_replace( '/^www\./i', '', $p['host'] ?? '' );
+            }
+        }
+
+        $maps   = $this->dataforseo->fetch_maps_serp( $keyword, $device, 2392, 'ja', $coord );
+        $finder = $this->dataforseo->fetch_local_finder_serp( $keyword, $device, 2392, 'ja', $coord );
+
+        $fmt = static function ( $items ) {
+            $out = [];
+            if ( is_wp_error( $items ) || ! is_array( $items ) ) {
+                return $out;
+            }
+            foreach ( $items as $it ) {
+                $rating = $it['rating'] ?? [];
+                $out[] = [
+                    'rank_group'    => $it['rank_group'] ?? null,
+                    'rank_absolute' => $it['rank_absolute'] ?? null,
+                    'type'          => $it['type'] ?? '',
+                    'title'         => $it['title'] ?? '',
+                    'domain'        => $it['domain'] ?? '',
+                    'rating'        => $rating['value'] ?? null,
+                    'reviews'       => $rating['votes_count'] ?? null,
+                ];
+            }
+            return $out;
+        };
+
+        return [
+            'coordinate'   => $coord,
+            'zoom'         => $zoom,
+            'radius'       => $meo_radius,
+            'match_domain' => $match_domain,
+            'maps_error'   => is_wp_error( $maps ) ? $maps->get_error_message() : '',
+            'finder_error' => is_wp_error( $finder ) ? $finder->get_error_message() : '',
+            'maps'         => $fmt( $maps ),
+            'finder'       => $fmt( $finder ),
+        ];
+    }
+
     // =========================================================
     // MEO 日次自動フェッチ（Cron: 毎日 04:30）
     // =========================================================

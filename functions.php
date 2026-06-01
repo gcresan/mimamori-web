@@ -10949,6 +10949,7 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
         $meo_cli = new Mimamori_MEO_CLI();
         WP_CLI::add_command( 'mimamori meo diagnose', [ $meo_cli, 'diagnose' ] );
         WP_CLI::add_command( 'mimamori meo purge', [ $meo_cli, 'purge' ] );
+        WP_CLI::add_command( 'mimamori meo probe', [ $meo_cli, 'probe' ] );
     }
 }
 
