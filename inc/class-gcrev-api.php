@@ -10791,11 +10791,11 @@ PROMPT;
      * @return int
      */
     private function pct_to_points(float $pct, int $max_points = 25): int {
-        if ($pct >= 15.0) return $max_points;       // 25
-        if ($pct >= 5.0)  return (int)($max_points * 0.8);  // 20
-        if ($pct >= -4.0) return (int)($max_points * 0.6);  // 15
-        if ($pct >= -14.0) return (int)($max_points * 0.32); // 8
-        return 0;
+        if ($pct >= 10.0)  return $max_points;              // 25
+        if ($pct >= -5.0)  return (int)($max_points * 0.8); // 20（維持を高評価）
+        if ($pct >= -15.0) return (int)($max_points * 0.64);// 16
+        if ($pct >= -30.0) return (int)($max_points * 0.4); // 10
+        return (int)($max_points * 0.24);                   // 6（下限を引き上げ）
     }
 
     /**
@@ -10859,18 +10859,21 @@ PROMPT;
     }
 
     /**
-     * Achievement（実績）コンポーネント — 中央値比較（50pt満点）
+     * Achievement（実績）コンポーネント — 中央値比較（60pt満点）
      *
-     * 各観点12.5pt × 4 = 50pt
+     * 各観点15pt × 4 = 60pt
      * 中央値以上なら満点、以下なら比率に応じて減点
      * 中央値データがない場合は前月比フォールバック
+     *
+     * 「現状維持」を正当に評価するメイン軸。成長(前月比)の比重を下げた分、
+     * 実績（水準を保てているか）を重視して配点する。
      *
      * @return array ['points'=>int, 'details'=>array]
      */
     private function calc_achievement_component(array $curr, ?array $medians, array $prev): array {
         $details = [];
         $total   = 0.0;
-        $per_dim = 12.5;
+        $per_dim = 15.0;
 
         if ($medians === null) {
             // フォールバック: 前月比ベースで柔らかめに配点
@@ -10889,11 +10892,11 @@ PROMPT;
                     continue;
                 }
                 $pct = $this->calc_pct_change($c, $p);
-                // 「現状維持」を正当に評価: ±5% 以内は満点、緩やかな下落も緩やかに減点
-                if ($pct >= -5.0)       $pts = $per_dim;      // 12.5（現状維持以上は満点）
-                elseif ($pct >= -15.0)  $pts = $per_dim * 0.86; // ~10.75
-                elseif ($pct >= -25.0)  $pts = $per_dim * 0.7;  // ~8.75
-                else                    $pts = $per_dim * 0.5;  // 6.25
+                // 「現状維持」を広く評価: -10% 以内は満点、下落側もなだらかに減点（下限を引き上げ）
+                if ($pct >= -10.0)      $pts = $per_dim;        // 15（維持～微減は満点）
+                elseif ($pct >= -25.0)  $pts = $per_dim * 0.9;  // 13.5
+                elseif ($pct >= -40.0)  $pts = $per_dim * 0.78; // ~11.7
+                else                    $pts = $per_dim * 0.6;  // 9.0（下限引き上げ）
                 $raw_total += $pts;
                 $valid_count++;
                 $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => null, 'fallback' => true];
@@ -10919,12 +10922,12 @@ PROMPT;
                     continue;
                 }
                 $ratio = $c / $m;
-                // 中央値の 90% 以上なら満点（過去6ヶ月の平均的な水準を維持できていれば良評価）
-                if ($ratio >= 0.9)      $pts = $per_dim;       // 12.5
-                elseif ($ratio >= 0.7)  $pts = $per_dim * 0.85; // ~10.6
-                elseif ($ratio >= 0.5)  $pts = $per_dim * 0.65; // ~8.1
-                elseif ($ratio >= 0.3)  $pts = $per_dim * 0.45; // ~5.6
-                else                    $pts = $per_dim * 0.25; // ~3.1
+                // 中央値の 80% 以上なら満点（過去6ヶ月の平均的な水準を概ね維持できていれば良評価）
+                if ($ratio >= 0.8)      $pts = $per_dim;        // 15
+                elseif ($ratio >= 0.6)  $pts = $per_dim * 0.9;  // 13.5
+                elseif ($ratio >= 0.45) $pts = $per_dim * 0.78; // ~11.7
+                elseif ($ratio >= 0.3)  $pts = $per_dim * 0.65; // ~9.75
+                else                    $pts = $per_dim * 0.5;  // 7.5（下限引き上げ）
                 $total += $pts;
                 $details[$key] = ['points' => round($pts, 1), 'max' => $per_dim, 'ratio' => round($ratio, 2)];
             }
@@ -10932,24 +10935,25 @@ PROMPT;
 
         return [
             'points'  => (int)round($total),
-            'max'     => 50,
+            'max'     => 60,
             'label'   => '実績（中央値比較）',
             'details' => $details,
         ];
     }
 
     /**
-     * Growth（成長）コンポーネント — 前月比（30pt満点）
+     * Growth（成長）コンポーネント — 前月比（15pt満点）
      *
-     * ±5%以内のデッドゾーンは満点扱い（現状維持を評価）
-     * 各観点7.5pt × 4 = 30pt
+     * 成長(前月比)は短期のブレが大きく過度に重視すべきでないため、配点は控えめ（15pt）。
+     * 現状維持を広く評価し（-15%以内は満点）、下落側もなだらかに減点する。
+     * 各観点3.75pt × 4 = 15pt
      *
      * @return array ['points'=>int, 'details'=>array]
      */
     private function calc_growth_component(array $curr, array $prev): array {
         $details = [];
         $raw_total   = 0.0;
-        $per_dim     = 7.5;
+        $per_dim     = 3.75;
         $valid_count = 0;
 
         foreach (['traffic', 'cv', 'gsc', 'meo'] as $key) {
@@ -10966,21 +10970,18 @@ PROMPT;
                 continue;
             }
             $pct = $this->calc_pct_change($c, $p);
-            // 現状維持を広く評価: -10%~+5% を満点。下落側はなだらかに減点。
-            if ($pct > 10.0) {
-                $pts = $per_dim;       // 7.5
+            // 現状維持を広く評価: -15% 以内は満点。下落側はなだらかに減点（下限を引き上げ）。
+            if ($pct > 5.0) {
+                $pts = $per_dim;        // 3.75
                 $zone = 'high';
-            } elseif ($pct > 5.0) {
-                $pts = $per_dim * 0.93; // ~7.0
-                $zone = 'mid';
-            } elseif ($pct >= -10.0) {
-                $pts = $per_dim;       // 7.5 — デッドゾーン拡張 = 満点
+            } elseif ($pct >= -15.0) {
+                $pts = $per_dim;        // 3.75 — デッドゾーン拡張 = 満点
                 $zone = 'dead';
-            } elseif ($pct >= -20.0) {
-                $pts = $per_dim * 0.73; // ~5.5
+            } elseif ($pct >= -30.0) {
+                $pts = $per_dim * 0.8;  // 3.0
                 $zone = 'soft_decline';
             } else {
-                $pts = $per_dim * 0.33; // ~2.5
+                $pts = $per_dim * 0.55; // ~2.06（下限引き上げ）
                 $zone = 'hard_decline';
             }
             $raw_total += $pts;
@@ -10996,7 +10997,7 @@ PROMPT;
 
         return [
             'points'  => (int)round($total),
-            'max'     => 30,
+            'max'     => 15,
             'label'   => '成長（前月比）',
             'details' => $details,
         ];
@@ -11040,9 +11041,9 @@ PROMPT;
         } elseif ($drops === 0) {
             $points = 10;
         } elseif ($drops === 1) {
-            $points = 6;
+            $points = 7;
         } else {
-            $points = 2;
+            $points = 4;
         }
 
         return [
@@ -11099,7 +11100,7 @@ PROMPT;
      * （自然検索順位／マップ順位／SEO診断／AIO診断／MEO診断）の
      * スコア（0〜100）の単純平均を、コンポーネント枠（最大15点）にスケールして算出する。
      *
-     *   points = round( (有効カードの平均スコア) × 15 / 100 )
+     *   points = round( (有効カードの平均スコア) × 20 / 100 )
      *
      * 「未取得（status=none）」のカードは集計対象外として平均から除外する。
      * 1件もデータが無い場合は 0pt（ダッシュボード側の has_any_data 判定で 0 点になることもある）。
@@ -11108,11 +11109,11 @@ PROMPT;
      * @return array ['points'=>int, 'max'=>int, 'label'=>string, 'cards'=>array]
      */
     private function calc_search_diag_component(int $user_id): array {
-        $max   = 15;
+        $max   = 20;
         $cards = [];
 
         if ($user_id <= 0 || ! function_exists('mimamori_get_search_diagnostic_summary')) {
-            return ['points' => 0, 'max' => $max, 'label' => '検索・診断', 'cards' => $cards];
+            return ['points' => 0, 'max' => 20, 'label' => '検索・診断', 'cards' => $cards];
         }
 
         $summary = mimamori_get_search_diagnostic_summary($user_id);
@@ -11152,11 +11153,13 @@ PROMPT;
     }
 
     /**
-     * 月次ヘルススコアを計算（v3: 5コンポーネント制）
+     * 月次ヘルススコアを計算（v4: 4コンポーネント制 / 成長の比重を縮小）
      *
-     * Achievement(50) + Growth(30) + Stability(10) + ActionBonus(10) + SearchDiag(15) = 最大115pt
-     *   → 最終スコアは min(100, ...) で 100点に丸める（フロア35）
-     * フロア: 最低35点（全指標0の場合は0点）
+     * Achievement(60) + Growth(15) + Stability(10) + SearchDiag(20) = 最大105pt
+     *   → 最終スコアは min(100, ...) で 100点に丸める（フロアなし）
+     * 成長(前月比)は短期のブレが大きいため配点を 30→15 に縮小し、
+     * 「水準を維持できているか」を見る実績(60)・検索診断(20)を重視する。
+     * フロアは廃止（全指標0の場合は0点）。
      *
      * @param array $curr    当月の指標（キー: traffic, cv, gsc, meo）
      * @param array $prev    前月の指標（同上）
@@ -11218,7 +11221,7 @@ PROMPT;
         $stability   = $this->calc_stability_component($curr, $prev);
         $search_diag = ($user_id > 0)
             ? $this->calc_search_diag_component($user_id)
-            : ['points' => 0, 'max' => 15, 'label' => '検索・診断', 'cards' => []];
+            : ['points' => 0, 'max' => 20, 'label' => '検索・診断', 'cards' => []];
 
         // 行動ボーナス（action）は採点項目から除外
         $raw_total = $achievement['points']
