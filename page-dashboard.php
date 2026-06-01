@@ -865,6 +865,8 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
   <!-- スコア + KPI 横並びエリア -->
   <div class="info-top-row">
     <!-- 今月の見守り結果（点数ではなく状態をやさしく伝えるカード） -->
+    <?php $show_watch_card = false; // 一旦非表示（再表示する場合は true に変更） ?>
+    <?php if ( $show_watch_card ): ?>
     <?php
     // 訪問数・コール数（ゴール数）・マップ表示回数の前月比から状態を判定。
     // KPI 未取得時（非同期取得待ち）は nodata 表示にしておき、JS で確定させる。
@@ -898,6 +900,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
       <div class="info-watch-title" data-watch-role="title"><?php echo esc_html($watch['title']); ?></div>
       <div class="info-watch-text" data-watch-role="text"><?php echo esc_html($watch['text']); ?></div>
     </div>
+    <?php endif; ?>
 
     <!-- KPI -->
     <div class="info-kpi-area">
