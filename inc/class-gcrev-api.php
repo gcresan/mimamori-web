@@ -5320,6 +5320,16 @@ PROMPT;
                     Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'success' );
                 }
 
+                // ─── レポート公開通知メール（クライアントの通知設定に従う） ───
+                if ( function_exists( 'gcrev_send_report_ready_notification' ) ) {
+                    try {
+                        gcrev_send_report_ready_notification( $user_id, $year_month );
+                    } catch ( \Throwable $mail_e ) {
+                        file_put_contents( '/tmp/gcrev_report_debug.log',
+                            date( 'Y-m-d H:i:s' ) . " auto_generate: notify mail error user_id={$user_id}: " . $mail_e->getMessage() . "\n", FILE_APPEND );
+                    }
+                }
+
             } catch ( \Exception $e ) {
                 // ─── 失敗 ───
                 Gcrev_Report_Queue::mark_failed( $queue_id, $e->getMessage() );

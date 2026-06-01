@@ -9608,6 +9608,123 @@ add_action( 'wp_ajax_gcrev_change_password', function () {
     wp_send_json_success();
 } );
 
+/* ============================================================
+ * レポート生成完了通知（クライアント向け）
+ *   - 各クライアントが /account/notifications/ で通知ON/OFFと送信先を設定
+ *   - 月次レポートが自動生成されたタイミングで通知メールを送信
+ *   ユーザーメタ:
+ *     gcrev_notify_report_enabled … '1' | '0'（未設定は既定で有効）
+ *     gcrev_notify_report_email   … 送信先メール（空欄ならアカウントのメール）
+ * ============================================================ */
+
+if ( ! function_exists( 'gcrev_is_report_notify_enabled' ) ) {
+/** クライアントがレポート完了通知を有効にしているか（未設定は既定で有効）。 */
+function gcrev_is_report_notify_enabled( int $user_id ): bool {
+    $v = get_user_meta( $user_id, 'gcrev_notify_report_enabled', true );
+    return $v === '' ? true : ( $v === '1' );
+}
+}
+
+if ( ! function_exists( 'gcrev_get_report_notify_email' ) ) {
+/** レポート完了通知の送信先メール（専用設定 → アカウントのメール の順）。 */
+function gcrev_get_report_notify_email( int $user_id ): string {
+    $custom = (string) get_user_meta( $user_id, 'gcrev_notify_report_email', true );
+    if ( $custom !== '' && is_email( $custom ) ) {
+        return $custom;
+    }
+    $u = get_userdata( $user_id );
+    return $u ? (string) $u->user_email : '';
+}
+}
+
+if ( ! function_exists( 'gcrev_send_report_ready_notification' ) ) {
+/**
+ * 月次レポート完成をクライアントにメール通知する。
+ *
+ * @param int    $user_id    対象ユーザー
+ * @param string $year_month 対象年月（'YYYY-MM'）
+ * @return bool 送信成功
+ */
+function gcrev_send_report_ready_notification( int $user_id, string $year_month ): bool {
+    if ( ! gcrev_is_report_notify_enabled( $user_id ) ) {
+        return false;
+    }
+
+    $to = gcrev_get_report_notify_email( $user_id );
+    if ( $to === '' || ! is_email( $to ) ) {
+        return false;
+    }
+
+    // 年月の表示整形（2026-05 → 2026年5月）
+    $ym_label = $year_month;
+    if ( preg_match( '/^(\d{4})-(\d{2})$/', $year_month, $m ) ) {
+        $ym_label = sprintf( '%d年%d月', (int) $m[1], (int) $m[2] );
+    }
+
+    $site       = get_bloginfo( 'name' );
+    $biz        = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $user_id ) : '';
+    $report_url = home_url( '/report-latest/' );
+
+    $subject = sprintf( '【%s】%sの月次レポートが公開されました', $site, $ym_label );
+
+    $body  = ( $biz !== '' ? "{$biz} 様\n\n" : '' );
+    $body .= "いつもみまもりウェブをご利用いただきありがとうございます。\n\n";
+    $body .= "{$ym_label}の月次レポートが完成しました。\n";
+    $body .= "下記よりご確認いただけます。\n\n";
+    $body .= "▼ 月次レポートを見る\n{$report_url}\n\n";
+    $body .= "----------------------------------------\n";
+    $body .= "※このメールは自動送信です。\n";
+    $body .= "※通知の停止・送信先の変更は「各種設定 > 通知設定」から行えます。\n";
+    $body .= "みまもりウェブ\n";
+
+    $sent = wp_mail( $to, $subject, $body );
+
+    if ( ! $sent ) {
+        file_put_contents(
+            '/tmp/gcrev_report_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [Notify] FAILED report-ready mail to {$to} user_id={$user_id} ym={$year_month}\n",
+            FILE_APPEND
+        );
+    }
+
+    return $sent;
+}
+}
+
+/**
+ * 通知設定の保存（クライアント向け）
+ */
+add_action( 'wp_ajax_gcrev_save_notification_settings', function () {
+    if ( ! check_ajax_referer( 'gcrev_notification_settings', 'nonce', false ) ) {
+        wp_send_json_error( '不正なリクエストです' );
+    }
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( 'ログインが必要です' );
+    }
+
+    $user_id = mimamori_get_view_user_id();
+    if ( $user_id <= 0 ) {
+        wp_send_json_error( '対象ユーザーが特定できません' );
+    }
+
+    $enabled = ( ( $_POST['report_enabled'] ?? '' ) === '1' ) ? '1' : '0';
+    $email   = sanitize_email( wp_unslash( $_POST['report_email'] ?? '' ) );
+
+    // メールが入力されている場合のみ妥当性チェック（空欄はアカウントのメールにフォールバック）
+    if ( $email !== '' && ! is_email( $email ) ) {
+        wp_send_json_error( '有効なメールアドレスを入力してください' );
+    }
+
+    update_user_meta( $user_id, 'gcrev_notify_report_enabled', $enabled );
+    update_user_meta( $user_id, 'gcrev_notify_report_email', $email );
+
+    wp_send_json_success( [
+        'enabled'         => $enabled,
+        'email'           => $email,
+        'effective_email' => gcrev_get_report_notify_email( $user_id ),
+    ] );
+} );
+
 // --------------------------------------------------
 // 既存ユーザー移行 v2（一回限り）
 // 旧3値（active/subscription_pending/installment_pending）→ 新1値（paid）
