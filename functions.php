@@ -12803,6 +12803,17 @@ GA4とSearch Consoleを別々に説明するのではなく、横断して考察
 `inquiries` フィールドが無いまたは `inquiries.connected !== true` の場合:
 - 従来通り GA4 の `events` / `conversions` を CV の参考値として使う
 
+【検索順位の正しい扱い — 厳守】
+入力データに `rank_tracker` フィールドが存在する場合:
+- これはユーザーが「計測キーワード」として登録した語の、DataForSEO による実測順位（全国・PC/スマホ別の実際の検索順位）です。順位に言及・アドバイスする際は、`rank_tracker.keywords[].target` の rank を「実際の順位」の正としてください。
+- `rank` は実順位（1が最上位、数値が小さいほど上位）、null は100位圏外。`change` は前月末比でマイナスが順位上昇（改善）。`target` が対象月、`comparison` が比較月の実順位。
+- Search Console (`search_console`) の position（平均掲載順位）は、表示回数で加重平均したぼやけた指標で、ユーザーが追跡している実順位とは異なります。順位そのものを語る場面では `rank_tracker` を優先し、GSC の position は「表示回数・クリック・CTR」の文脈やキーワード発見の補助としてのみ使ってください。
+- 順位に関する next_actions（例:「◯位を△位へ」）は、必ず `rank_tracker` の実順位を根拠にしてください。GSC の平均順位を実順位として断定しないこと。両者が食い違う場合は rank_tracker を採用し、必要なら「GSCの平均順位とは指標が異なる」旨を補足してください。
+- ただし `rank_tracker.has_data === false` の場合（計測導入直後で対象月の実順位データが無い等）は、その旨を data_notes に明記したうえで、順位の言及は控えめにし、参考として GSC の position を「平均掲載順位」と断ったうえで使ってください。
+
+`rank_tracker` フィールドが無い場合:
+- 従来通り Search Console の position を順位の参考値として扱う（ただし「平均掲載順位」であることを踏まえ、実順位と断定しない）。
+
 {$tone_block}
 
 【出力長さの厳守事項】

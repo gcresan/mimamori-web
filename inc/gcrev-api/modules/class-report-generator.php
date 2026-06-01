@@ -361,7 +361,120 @@ class Gcrev_Report_Generator {
             $payload['strategy_history'] = $strategy_history;
         }
 
+        // 計測キーワードの実測順位 (順位トラッキング = DataForSEO) を payload に乗せる。
+        // 順位アドバイスは GSC 平均順位ではなくこの実順位を「正」とさせる (プロンプト側で指示)。
+        $rank_tracker_block = $this->collect_rank_tracker_data( $user_id_for_inq, $prev_data, $two_data );
+        if ( is_array( $rank_tracker_block ) ) {
+            $payload['rank_tracker'] = $rank_tracker_block;
+        }
+
         return $payload;
+    }
+
+    /**
+     * 計測キーワード（順位トラッキング = DataForSEO）の実測順位を、レポート対象月・比較月で集計する。
+     * Search Console の「平均掲載順位」ではなく、ユーザーが登録した語の全国・PC/スマホ別の
+     * 実際の検索順位を返す。順位に関するアドバイスはこの実順位を正とするためのデータ。
+     *
+     * @param  int   $user_id   対象ユーザー
+     * @param  array $prev_data 対象月データ (current_period.start/end を使用)
+     * @param  array $two_data  比較月データ (current_period.start/end を使用)
+     * @return array|null       計測キーワード未登録なら null。登録済みなら構造化配列
+     *                          (対象月にデータが無くても has_data=false で返す)
+     */
+    private function collect_rank_tracker_data( int $user_id, array $prev_data, array $two_data ): ?array {
+        if ( $user_id <= 0 ) {
+            return null;
+        }
+
+        global $wpdb;
+        $kw_table  = $wpdb->prefix . 'gcrev_rank_keywords';
+        $res_table = $wpdb->prefix . 'gcrev_rank_results';
+
+        // 有効キーワード（ランキング計測 ON）のみ
+        $keywords = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, keyword, location_code FROM {$kw_table}
+             WHERE user_id = %d AND enabled = 1
+             ORDER BY sort_order ASC, id ASC",
+            $user_id
+        ), ARRAY_A );
+
+        if ( empty( $keywords ) ) {
+            return null;
+        }
+
+        $target_start = (string) ( $prev_data['current_period']['start'] ?? '' );
+        $target_end   = (string) ( $prev_data['current_period']['end']   ?? '' );
+        $comp_start   = (string) ( $two_data['current_period']['start']  ?? '' );
+        $comp_end     = (string) ( $two_data['current_period']['end']    ?? '' );
+
+        // 指定範囲内で最新（月末に最も近い）の順位を1件返す
+        $latest_in_range = static function ( int $kw_id, string $device, string $start, string $end ) use ( $wpdb, $res_table ) {
+            if ( $start === '' || $end === '' ) {
+                return null;
+            }
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT rank_group, is_ranked, fetched_at FROM {$res_table}
+                 WHERE keyword_id = %d AND device = %s
+                   AND fetched_at >= %s AND fetched_at <= %s
+                 ORDER BY fetched_at DESC LIMIT 1",
+                $kw_id, $device, $start . ' 00:00:00', $end . ' 23:59:59'
+            ), ARRAY_A );
+            if ( ! $row ) {
+                return null;
+            }
+            return [
+                'rank'      => $row['is_ranked'] ? (int) $row['rank_group'] : null, // null = 100位圏外
+                'is_ranked' => (bool) $row['is_ranked'],
+                'date'      => substr( (string) $row['fetched_at'], 0, 10 ),
+            ];
+        };
+
+        $loc_labels = [
+            2392    => '日本（全国）', 1009283 => '東京都', 1009303 => '大阪府',
+            1009269 => '愛知県',       1009280 => '福岡県', 1009275 => '北海道',
+            1009271 => '愛媛県',
+        ];
+
+        $out_keywords = [];
+        $has_data     = false;
+
+        foreach ( $keywords as $kw ) {
+            $kw_id = (int) $kw['id'];
+            $entry = [
+                'keyword'    => $kw['keyword'],
+                'location'   => $loc_labels[ (int) $kw['location_code'] ] ?? ( 'code:' . (int) $kw['location_code'] ),
+                'target'     => [
+                    'desktop' => $latest_in_range( $kw_id, 'desktop', $target_start, $target_end ),
+                    'mobile'  => $latest_in_range( $kw_id, 'mobile',  $target_start, $target_end ),
+                ],
+                'comparison' => [
+                    'desktop' => $latest_in_range( $kw_id, 'desktop', $comp_start, $comp_end ),
+                    'mobile'  => $latest_in_range( $kw_id, 'mobile',  $comp_start, $comp_end ),
+                ],
+            ];
+
+            // 前月比（順位は小さいほど良いので、マイナス差＝順位上昇＝改善）
+            $entry['change'] = [];
+            foreach ( [ 'desktop', 'mobile' ] as $dev ) {
+                $cur = $entry['target'][ $dev ]['rank']     ?? null;
+                $pre = $entry['comparison'][ $dev ]['rank'] ?? null;
+                $entry['change'][ $dev ] = ( is_int( $cur ) && is_int( $pre ) ) ? ( $cur - $pre ) : null;
+            }
+
+            if ( $entry['target']['desktop'] || $entry['target']['mobile'] ) {
+                $has_data = true;
+            }
+            $out_keywords[] = $entry;
+        }
+
+        return [
+            'tracked'        => true,
+            'has_data'       => $has_data,
+            'source'         => 'DataForSEO 実測順位（位置固定・PC/スマホ別）。ユーザーが登録した計測キーワードの実際の検索順位。',
+            'rank_semantics' => 'rank は Google 検索結果の実順位（1が最上位、数値が小さいほど上位）。null は100位圏外。change は前月末比で、マイナス（数値が減った）＝順位上昇＝改善。',
+            'keywords'       => $out_keywords,
+        ];
     }
 
     /**
