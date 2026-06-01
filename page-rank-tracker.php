@@ -770,8 +770,9 @@ get_header();
                 dayLabels = json.data.day_labels || [];
                 dayKeys = json.data.days || [];
                 summaryData = json.data.summary || {};
-                // キャッシュに保存
-                if (window.gcrevCache) window.gcrevCache.set(cacheKey, json.data);
+                // キャッシュに保存（空結果はキャッシュしない: 登録前の「空」が
+                // TTL 2時間残り、後から登録しても反映されない事故を防ぐ）
+                if (window.gcrevCache && rankData.length > 0) window.gcrevCache.set(cacheKey, json.data);
                 renderSummary();
                 renderTable();
             }
@@ -1019,6 +1020,10 @@ get_header();
             } else {
                 showProgress(false);
                 showToast(json.message || '取得に失敗しました。', 'error');
+                // ライブ取得自体が失敗（レート制限等）でも、登録済みキーワードと
+                // 前回までの順位は表示できるよう、キャッシュ破棄して再取得する。
+                if (window.gcrevCache) window.gcrevCache.clear('rank_tracker_');
+                fetchRankings();
             }
         })
         .catch(function(err) {
