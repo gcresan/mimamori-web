@@ -174,11 +174,6 @@ get_header();
 }
 .notif-btn:hover { background: #476C6F; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
 .notif-btn:disabled { opacity: 0.6; cursor: default; }
-.notif-btn-secondary {
-    background: #e8ecee;
-    color: var(--mw-text-primary, #2c3e50);
-}
-.notif-btn-secondary:hover { background: #dce0e3; box-shadow: none; }
 
 /* --- トースト --- */
 .notif-toast {
@@ -238,12 +233,8 @@ get_header();
         </div>
 
         <div class="notif-actions">
-            <button type="button" class="notif-btn notif-btn-secondary" id="notifTest">テスト送信</button>
             <button type="button" class="notif-btn" id="notifSave" data-mw-save="1">設定を保存</button>
         </div>
-        <p class="field-note" style="text-align:right; margin-top:10px;">
-            「テスト送信」を押すと、上の送信先（未入力の場合はご登録のメール）宛にサンプルメールを送信します。
-        </p>
     </div>
 
 </div><!-- .notif-container -->
@@ -301,46 +292,6 @@ get_header();
             .catch(function() {
                 saveBtn.disabled = false;
                 saveBtn.textContent = '設定を保存';
-                showToast('通信エラーが発生しました', 'error');
-            });
-    });
-
-    // ========== テスト送信 ==========
-    var testBtn = document.getElementById('notifTest');
-
-    testBtn.addEventListener('click', function() {
-        var email = document.getElementById('notifEmail').value.trim();
-        var errEl = document.getElementById('errEmail');
-
-        errEl.style.display = 'none';
-
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            errEl.style.display = 'block';
-            return;
-        }
-
-        testBtn.disabled = true;
-        testBtn.textContent = '送信中...';
-
-        var fd = new FormData();
-        fd.append('action', 'gcrev_send_test_notification');
-        fd.append('nonce', nonce);
-        fd.append('report_email', email);
-
-        fetch(ajaxUrl, { method: 'POST', body: fd, credentials: 'same-origin' })
-            .then(function(r) { return r.json(); })
-            .then(function(res) {
-                testBtn.disabled = false;
-                testBtn.textContent = 'テスト送信';
-                if (res.success) {
-                    showToast('テストメールを ' + (res.data && res.data.sent_to ? res.data.sent_to : '送信先') + ' に送信しました');
-                } else {
-                    showToast((res.data && res.data.message) ? res.data.message : (res.data || 'テスト送信に失敗しました'), 'error');
-                }
-            })
-            .catch(function() {
-                testBtn.disabled = false;
-                testBtn.textContent = 'テスト送信';
                 showToast('通信エラーが発生しました', 'error');
             });
     });
