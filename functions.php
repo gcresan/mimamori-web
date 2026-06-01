@@ -9637,6 +9637,50 @@ function gcrev_get_report_notify_email( int $user_id ): string {
 }
 }
 
+if ( ! function_exists( 'gcrev_build_report_ready_email' ) ) {
+/**
+ * レポート完成通知メールの件名・本文を組み立てる。
+ *
+ * @param int    $user_id    対象ユーザー
+ * @param string $year_month 対象年月（'YYYY-MM'）
+ * @param bool   $is_test    テスト送信か（件名に[テスト]を付与・冒頭に注記）
+ * @return array{subject:string, body:string}
+ */
+function gcrev_build_report_ready_email( int $user_id, string $year_month, bool $is_test = false ): array {
+    // 年月の表示整形（2026-05 → 2026年5月）
+    $ym_label = $year_month;
+    if ( preg_match( '/^(\d{4})-(\d{2})$/', $year_month, $m ) ) {
+        $ym_label = sprintf( '%d年%d月', (int) $m[1], (int) $m[2] );
+    }
+
+    $site       = get_bloginfo( 'name' );
+    $biz        = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $user_id ) : '';
+    $report_url = home_url( '/report-latest/' );
+
+    $subject = sprintf(
+        '%s【%s】%sの月次レポートが公開されました',
+        $is_test ? '[テスト] ' : '',
+        $site,
+        $ym_label
+    );
+
+    $body  = ( $biz !== '' ? "{$biz} 様\n\n" : '' );
+    if ( $is_test ) {
+        $body .= "※これは通知設定のテスト送信です。実際のレポート完成時には、以下のような内容のメールが届きます。\n\n";
+    }
+    $body .= "いつもみまもりウェブをご利用いただきありがとうございます。\n\n";
+    $body .= "{$ym_label}の月次レポートが完成しました。\n";
+    $body .= "下記よりご確認いただけます。\n\n";
+    $body .= "▼ 月次レポートを見る\n{$report_url}\n\n";
+    $body .= "----------------------------------------\n";
+    $body .= "※このメールは自動送信です。\n";
+    $body .= "※通知の停止・送信先の変更は「各種設定 > 通知設定」から行えます。\n";
+    $body .= "みまもりウェブ\n";
+
+    return [ 'subject' => $subject, 'body' => $body ];
+}
+}
+
 if ( ! function_exists( 'gcrev_send_report_ready_notification' ) ) {
 /**
  * 月次レポート完成をクライアントにメール通知する。
@@ -9655,29 +9699,8 @@ function gcrev_send_report_ready_notification( int $user_id, string $year_month 
         return false;
     }
 
-    // 年月の表示整形（2026-05 → 2026年5月）
-    $ym_label = $year_month;
-    if ( preg_match( '/^(\d{4})-(\d{2})$/', $year_month, $m ) ) {
-        $ym_label = sprintf( '%d年%d月', (int) $m[1], (int) $m[2] );
-    }
-
-    $site       = get_bloginfo( 'name' );
-    $biz        = function_exists( 'gcrev_get_business_name' ) ? (string) gcrev_get_business_name( $user_id ) : '';
-    $report_url = home_url( '/report-latest/' );
-
-    $subject = sprintf( '【%s】%sの月次レポートが公開されました', $site, $ym_label );
-
-    $body  = ( $biz !== '' ? "{$biz} 様\n\n" : '' );
-    $body .= "いつもみまもりウェブをご利用いただきありがとうございます。\n\n";
-    $body .= "{$ym_label}の月次レポートが完成しました。\n";
-    $body .= "下記よりご確認いただけます。\n\n";
-    $body .= "▼ 月次レポートを見る\n{$report_url}\n\n";
-    $body .= "----------------------------------------\n";
-    $body .= "※このメールは自動送信です。\n";
-    $body .= "※通知の停止・送信先の変更は「各種設定 > 通知設定」から行えます。\n";
-    $body .= "みまもりウェブ\n";
-
-    $sent = wp_mail( $to, $subject, $body );
+    $mail = gcrev_build_report_ready_email( $user_id, $year_month );
+    $sent = wp_mail( $to, $mail['subject'], $mail['body'] );
 
     if ( ! $sent ) {
         file_put_contents(
@@ -9723,6 +9746,48 @@ add_action( 'wp_ajax_gcrev_save_notification_settings', function () {
         'email'           => $email,
         'effective_email' => gcrev_get_report_notify_email( $user_id ),
     ] );
+} );
+
+/**
+ * 通知設定のテスト送信（クライアント向け）
+ *
+ * フォームに入力中の送信先（未入力ならアカウントのメール）宛に、
+ * レポート完成通知のサンプルメールを送信する。ON/OFFトグルや保存状態に依存しない。
+ */
+add_action( 'wp_ajax_gcrev_send_test_notification', function () {
+    if ( ! check_ajax_referer( 'gcrev_notification_settings', 'nonce', false ) ) {
+        wp_send_json_error( '不正なリクエストです' );
+    }
+    if ( ! is_user_logged_in() ) {
+        wp_send_json_error( 'ログインが必要です' );
+    }
+
+    $user_id = mimamori_get_view_user_id();
+    if ( $user_id <= 0 ) {
+        wp_send_json_error( '対象ユーザーが特定できません' );
+    }
+
+    // 送信先: フォーム入力 → 保存済み設定 → アカウントのメール
+    $to = sanitize_email( wp_unslash( $_POST['report_email'] ?? '' ) );
+    if ( $to === '' ) {
+        $to = gcrev_get_report_notify_email( $user_id );
+    }
+    if ( $to === '' || ! is_email( $to ) ) {
+        wp_send_json_error( '有効な送信先メールアドレスがありません。アドレスを入力してください。' );
+    }
+
+    // サンプルの対象年月（前月）
+    $tz         = wp_timezone();
+    $year_month = ( new DateTimeImmutable( 'first day of last month', $tz ) )->format( 'Y-m' );
+
+    $mail = gcrev_build_report_ready_email( $user_id, $year_month, true );
+    $sent = wp_mail( $to, $mail['subject'], $mail['body'] );
+
+    if ( ! $sent ) {
+        wp_send_json_error( 'メール送信に失敗しました。メールサーバーの設定をご確認ください。' );
+    }
+
+    wp_send_json_success( [ 'sent_to' => $to ] );
 } );
 
 // --------------------------------------------------
