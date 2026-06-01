@@ -27,6 +27,13 @@ class Gcrev_Error_Notifier {
     private const OPT_RECIPIENT = 'gcrev_notify_recipient';
     private const OPT_THRESHOLD = 'gcrev_notify_error_threshold';
 
+    /** レポート生成完了通知のオプションキー */
+    private const OPT_REPORT_ENABLED   = 'gcrev_report_notify_enabled';
+    private const OPT_REPORT_RECIPIENT = 'gcrev_report_notify_recipient';
+
+    /** 月次レポート生成ジョブ名（Gcrev_Cron_Logger::start の job_name と一致させる） */
+    private const REPORT_JOB_NAME = 'report_generate';
+
     /** スロットル: 同一ジョブへの通知は1時間に1回まで */
     private const THROTTLE_TTL = 3600;
 
@@ -90,6 +97,111 @@ class Gcrev_Error_Notifier {
 
         // スロットル設定
         set_transient( 'gcrev_notify_throttle_' . sanitize_key( $log->job_name ), 1, self::THROTTLE_TTL );
+    }
+
+    // =========================================================
+    // レポート生成完了通知
+    // =========================================================
+
+    public static function is_report_notify_enabled(): bool {
+        // 既定で有効（オプション未保存時も通知する）
+        return get_option( self::OPT_REPORT_ENABLED, '1' ) === '1';
+    }
+
+    /**
+     * レポート生成完了通知の送信先を取得する。
+     *
+     * 専用設定 → Cronエラー通知の送信先 → サイト管理者メール の順でフォールバック。
+     */
+    public static function get_report_recipient(): string {
+        $email = get_option( self::OPT_REPORT_RECIPIENT, '' );
+        if ( $email !== '' ) {
+            return $email;
+        }
+        return self::get_recipient();
+    }
+
+    /**
+     * 月次レポート生成ジョブの完了時に、完了通知メールを送信する。
+     *
+     * Gcrev_Cron_Logger::finish() から呼ばれる。
+     * 対象ジョブ（report_generate）かつ成功完了時のみ送信する。
+     *
+     * @param int $log_id Gcrev_Cron_Logger のログ ID
+     */
+    public static function maybe_notify_report_complete( int $log_id ): void {
+        if ( ! self::is_report_notify_enabled() ) {
+            return;
+        }
+
+        if ( ! class_exists( 'Gcrev_Cron_Logger' ) ) {
+            return;
+        }
+
+        $log = Gcrev_Cron_Logger::get_log( $log_id );
+        if ( ! $log ) {
+            return;
+        }
+
+        // 月次レポート生成ジョブ以外は対象外
+        if ( $log->job_name !== self::REPORT_JOB_NAME ) {
+            return;
+        }
+
+        // 正常完了時のみ通知（locked / error は対象外）
+        if ( $log->status !== 'success' ) {
+            return;
+        }
+
+        self::send_report_complete_notification( $log );
+    }
+
+    /**
+     * レポート生成完了通知メールを送信する。
+     *
+     * @param object $log ログオブジェクト
+     */
+    private static function send_report_complete_notification( object $log ): void {
+        $to   = self::get_report_recipient();
+        if ( $to === '' ) {
+            return;
+        }
+        $site = get_bloginfo( 'name' );
+
+        // 対象年月（meta_json に格納されている）
+        $year_month = '';
+        if ( ! empty( $log->meta_json ) ) {
+            $meta = json_decode( (string) $log->meta_json, true );
+            if ( is_array( $meta ) && ! empty( $meta['year_month'] ) ) {
+                $year_month = (string) $meta['year_month'];
+            }
+        }
+
+        $subject = "[{$site}] 月次レポートの生成が完了しました"
+            . ( $year_month !== '' ? "（{$year_month}）" : '' );
+
+        $body  = "月次レポートの自動生成が完了しました。\n\n";
+        if ( $year_month !== '' ) {
+            $body .= "対象年月: {$year_month}\n";
+        }
+        $body .= "完了時刻: " . ( $log->finished_at ?: '(不明)' ) . "\n\n";
+        $body .= "--- 生成結果 ---\n";
+        $body .= "対象クライアント数: {$log->users_total}\n";
+        $body .= "  生成成功: {$log->users_success}\n";
+        $body .= "  スキップ: {$log->users_skipped}\n";
+        $body .= "  エラー: {$log->users_error}\n\n";
+        $body .= '管理画面で確認: ' . admin_url( 'admin.php?page=gcrev-cron-monitor' ) . "\n";
+
+        $sent = wp_mail( $to, $subject, $body );
+
+        $log_line = $sent
+            ? "Sent report-complete notification to {$to} (year_month={$year_month}, success={$log->users_success})"
+            : "FAILED to send report-complete notification to {$to} (year_month={$year_month})";
+        file_put_contents(
+            '/tmp/gcrev_report_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [Notify] {$log_line}\n",
+            FILE_APPEND
+        );
     }
 
     // =========================================================

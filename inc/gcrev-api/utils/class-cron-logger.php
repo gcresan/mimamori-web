@@ -163,6 +163,8 @@ class Gcrev_Cron_Logger {
         // エラー通知チェック
         if ( class_exists( 'Gcrev_Error_Notifier' ) ) {
             Gcrev_Error_Notifier::maybe_notify( $log_id );
+            // 月次レポート生成完了通知（対象ジョブ・成功完了時のみ送信）
+            Gcrev_Error_Notifier::maybe_notify_report_complete( $log_id );
         }
     }
 

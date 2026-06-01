@@ -114,6 +114,46 @@ class Gcrev_Notification_Settings_Page {
         );
 
         // ==========================================================
+        // レポート生成完了通知セクション
+        // ==========================================================
+        $report_section = 'gcrev_report_notify_section';
+
+        register_setting( self::OPTION_GROUP, 'gcrev_report_notify_enabled', [
+            'type'              => 'string',
+            'sanitize_callback' => static function ( $v ) { return $v === '1' ? '1' : '0'; },
+            'default'           => '1',
+        ] );
+        register_setting( self::OPTION_GROUP, 'gcrev_report_notify_recipient', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_email',
+            'default'           => '',
+        ] );
+
+        add_settings_section(
+            $report_section,
+            'レポート生成完了通知',
+            static function () {
+                echo '<p>毎月1日に月次レポートの自動生成が完了した際、指定のメールアドレスに完了通知を送信します。</p>';
+            },
+            self::MENU_SLUG
+        );
+
+        add_settings_field(
+            'gcrev_report_notify_enabled',
+            '通知を有効にする',
+            [ $this, 'render_report_notify_enabled_field' ],
+            self::MENU_SLUG,
+            $report_section
+        );
+        add_settings_field(
+            'gcrev_report_notify_recipient',
+            '送信先メールアドレス',
+            [ $this, 'render_report_notify_recipient_field' ],
+            self::MENU_SLUG,
+            $report_section
+        );
+
+        // ==========================================================
         // お問い合わせメール設定セクション
         // ==========================================================
         $inquiry_section = 'gcrev_inquiry_email_section';
@@ -199,6 +239,26 @@ class Gcrev_Notification_Settings_Page {
         $val = (int) get_option( 'gcrev_notify_error_threshold', 1 );
         echo '<input type="number" name="gcrev_notify_error_threshold" value="' . esc_attr( (string) $val ) . '" min="1" max="100" class="small-text" />';
         echo '<p class="description">エラー数がこの値以上のとき通知します。</p>';
+    }
+
+    // =========================================================
+    // レポート生成完了通知フィールド
+    // =========================================================
+
+    public function render_report_notify_enabled_field(): void {
+        $val = get_option( 'gcrev_report_notify_enabled', '1' );
+        echo '<label>';
+        echo '<input type="checkbox" name="gcrev_report_notify_enabled" value="1" ' . checked( $val, '1', false ) . ' />';
+        echo ' 有効';
+        echo '</label>';
+    }
+
+    public function render_report_notify_recipient_field(): void {
+        $val      = get_option( 'gcrev_report_notify_recipient', '' );
+        $fallback = get_option( 'gcrev_notify_recipient', '' );
+        $default  = $fallback !== '' ? $fallback : get_option( 'admin_email', '' );
+        echo '<input type="email" name="gcrev_report_notify_recipient" value="' . esc_attr( $val ) . '" class="regular-text" />';
+        echo '<p class="description">空欄の場合は ' . esc_html( $default ) . ' に送信されます。</p>';
     }
 
     // =========================================================
@@ -321,6 +381,11 @@ class Gcrev_Notification_Settings_Page {
                     <hr style="margin:24px 0 16px;" />
                     <h3 style="margin:0 0 8px;">テスト送信</h3>
                     <p style="margin:0 0 8px;">現在の設定でテスト通知メールを送信します。</p>
+                </div>
+
+                <?php // ── レポート生成完了通知セクション ── ?>
+                <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:16px 24px 24px; margin-bottom:30px;">
+                    <?php self::render_single_section( self::MENU_SLUG, 'gcrev_report_notify_section' ); ?>
                 </div>
 
                 <?php // ── お問い合わせメール設定セクション ── ?>
