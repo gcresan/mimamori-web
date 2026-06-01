@@ -703,6 +703,12 @@ get_header();
         fetchRankings();
     });
 
+    // ブラウザの「戻る」(bfcache) で復帰した場合は JS が再実行されないため、
+    // 復帰時に再取得する。キーワード設定ページでキャッシュは破棄済みなので最新が取れる。
+    window.addEventListener('pageshow', function(e) {
+        if (e.persisted) fetchRankings();
+    });
+
     // =========================================================
     // Device toggle
     // =========================================================

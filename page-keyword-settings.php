@@ -214,6 +214,13 @@ get_header();
         setTimeout(function() { toast.classList.remove('show'); }, 3000);
     }
 
+    // キーワードを変更したら、自然検索順位ページの localStorage キャッシュ（2時間TTL）を破棄。
+    // これを呼ばないと、追加直後に順位ページへ戻った際、古い「空」キャッシュが返り
+    // 「キーワードが登録されていません」が最大2時間表示され続ける。
+    function kwsInvalidateRankCache() {
+        if (window.gcrevCache) window.gcrevCache.clear('rank_tracker_');
+    }
+
     function csKwFetch() {
         fetch('/wp-json/gcrev/v1/rank-tracker/my-keywords', {
             headers: { 'X-WP-Nonce': wpNonce },
@@ -315,6 +322,7 @@ get_header();
             if (json.success) {
                 input.value = '';
                 document.getElementById('csKwFormWrap').style.display = 'none';
+                kwsInvalidateRankCache();
                 csKwFetch();
                 showToast('キーワードを追加しました');
             } else {
@@ -339,6 +347,7 @@ get_header();
         .then(function(res) { return res.json(); })
         .then(function(json) {
             if (json.success) {
+                kwsInvalidateRankCache();
                 csKwFetch();
                 showToast('キーワードを削除しました');
             } else {
@@ -356,7 +365,7 @@ get_header();
         })
         .then(function(res) { return res.json(); })
         .then(function(json) {
-            if (json.success) { csKwFetch(); }
+            if (json.success) { kwsInvalidateRankCache(); csKwFetch(); }
         });
     };
 
@@ -373,6 +382,7 @@ get_header();
         .then(function(res) { return res.json(); })
         .then(function(json) {
             if (json.success) {
+                kwsInvalidateRankCache();
                 csKwFetch();
             } else {
                 alert(json.message || 'エラーが発生しました。');
