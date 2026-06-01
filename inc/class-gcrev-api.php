@@ -8192,6 +8192,7 @@ PROMPT;
             $maps_rank  = null;
             $store_data = null;
             $competitors = [];
+            $gbp_biz_name = ''; // Local Finder 側でも参照するため、Maps が WP_Error でも未定義にならないよう初期化
 
             if ( ! is_wp_error( $maps_items ) && is_array( $maps_items ) ) {
                 // デバッグ: マッチング状況を記録
@@ -8249,14 +8250,18 @@ PROMPT;
                     $item_domain = $item['domain'] ?? '';
                     $normalized_item = preg_replace( '/^www\./i', '', strtolower( $item_domain ) );
 
-                    // ドメイン一致 or ビジネス名一致で自社判定
+                    // ドメイン完全一致 or ビジネス名完全一致でのみ自社判定する。
+                    // 旧実装は双方向の部分一致(mb_strpos)で照合していたため、
+                    // 「○○歯科」のような汎用語を含む店名が上位競合のタイトルに部分一致し、
+                    // その競合の rank_group(=1位/2位)を自社順位として誤採用していた。
+                    // 圏外の店舗を圏外と表示するため、完全一致のみに厳格化する。
                     $is_self = false;
                     if ( $normalized_item !== '' && $normalized_target !== '' && $normalized_item === $normalized_target ) {
                         $is_self = true;
                     } elseif ( $gbp_biz_name !== '' && isset( $item['title'] ) ) {
                         $item_title_norm = mb_strtolower( trim( $item['title'] ) );
                         $biz_name_norm   = mb_strtolower( trim( $gbp_biz_name ) );
-                        if ( $item_title_norm === $biz_name_norm || mb_strpos( $item_title_norm, $biz_name_norm ) !== false || mb_strpos( $biz_name_norm, $item_title_norm ) !== false ) {
+                        if ( $item_title_norm !== '' && $item_title_norm === $biz_name_norm ) {
                             $is_self = true;
                         }
                     }
@@ -8321,12 +8326,12 @@ PROMPT;
                 if ( ! empty( $match_domain ) ) {
                     $my_finder = $this->dataforseo->find_business_in_maps_results( $finder_items, $match_domain );
                 }
-                // ビジネス名フォールバック
+                // ビジネス名フォールバック（完全一致のみ。部分一致は競合誤マッチのため廃止）
                 if ( ! $my_finder && $gbp_biz_name !== '' ) {
                     foreach ( $finder_items as $fi ) {
                         $ft = mb_strtolower( trim( $fi['title'] ?? '' ) );
                         $fb = mb_strtolower( trim( $gbp_biz_name ) );
-                        if ( $ft !== '' && ( $ft === $fb || mb_strpos( $ft, $fb ) !== false || mb_strpos( $fb, $ft ) !== false ) ) {
+                        if ( $ft !== '' && $ft === $fb ) {
                             $my_finder = $fi;
                             break;
                         }

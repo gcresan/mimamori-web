@@ -107,4 +107,97 @@ class Mimamori_MEO_CLI {
             \WP_CLI::success( "全{$cur_total}メトリクス取得成功" );
         }
     }
+
+    /**
+     * 保存済みのMEO順位データ（誤マッチ含む）をパージする
+     *
+     * gcrev_meo_results テーブルの順位行と gcrev_meo_rank_* Transient キャッシュを削除する。
+     * 順位照合ロジックの修正後、過去の誤った順位を消して再取得させたい場合に使う。
+     * パージ後は「最新の情報を見る」ボタン、または日次 cron で正しい順位が再取得される。
+     *
+     * ## OPTIONS
+     *
+     * --user_id=<id>
+     * : 対象のユーザーID
+     *
+     * [--from=<date>]
+     * : この日付以降(fetch_date >=)の行のみ削除（YYYY-MM-DD）。省略時は全期間。
+     *
+     * [--dry-run]
+     * : 実際には削除せず、削除対象件数のみ表示する。
+     *
+     * ## EXAMPLES
+     *
+     *     wp mimamori meo purge --user_id=23 --dry-run
+     *     wp mimamori meo purge --user_id=23
+     *     wp mimamori meo purge --user_id=23 --from=2026-05-26
+     */
+    public function purge( array $args, array $assoc_args ): void {
+        global $wpdb;
+
+        $user_id = isset( $assoc_args['user_id'] ) ? (int) $assoc_args['user_id'] : 0;
+        if ( $user_id <= 0 ) {
+            \WP_CLI::error( '--user_id は必須です' );
+        }
+        $from    = isset( $assoc_args['from'] ) ? sanitize_text_field( (string) $assoc_args['from'] ) : '';
+        $dry_run = isset( $assoc_args['dry-run'] );
+
+        if ( $from !== '' && ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $from ) ) {
+            \WP_CLI::error( '--from は YYYY-MM-DD 形式で指定してください' );
+        }
+
+        $meo_table = $wpdb->prefix . 'gcrev_meo_results';
+
+        // --- gcrev_meo_results 行 ---
+        if ( $from !== '' ) {
+            $row_count = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$meo_table} WHERE user_id = %d AND fetch_date >= %s",
+                $user_id, $from
+            ) );
+        } else {
+            $row_count = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$meo_table} WHERE user_id = %d",
+                $user_id
+            ) );
+        }
+
+        // --- gcrev_meo_rank_* Transient（options テーブル）---
+        $like_value   = $wpdb->esc_like( '_transient_gcrev_meo_rank_' . $user_id . '_' ) . '%';
+        $like_timeout = $wpdb->esc_like( '_transient_timeout_gcrev_meo_rank_' . $user_id . '_' ) . '%';
+        $transient_count = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $like_value
+        ) );
+
+        \WP_CLI::log( "対象ユーザー: user_id={$user_id}" . ( $from !== '' ? " （fetch_date >= {$from}）" : ' （全期間）' ) );
+        \WP_CLI::log( "  gcrev_meo_results 行:   {$row_count} 件" );
+        \WP_CLI::log( "  gcrev_meo_rank Transient: {$transient_count} 件" );
+
+        if ( $dry_run ) {
+            \WP_CLI::success( 'dry-run: 削除は行っていません。' );
+            return;
+        }
+
+        // 行削除
+        if ( $from !== '' ) {
+            $deleted_rows = $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$meo_table} WHERE user_id = %d AND fetch_date >= %s",
+                $user_id, $from
+            ) );
+        } else {
+            $deleted_rows = $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$meo_table} WHERE user_id = %d",
+                $user_id
+            ) );
+        }
+
+        // Transient 削除（値・timeout の両方）
+        $deleted_tr = $wpdb->query( $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $like_value, $like_timeout
+        ) );
+
+        \WP_CLI::success( "削除完了: meo_results {$deleted_rows} 行 / Transient {$deleted_tr} 件。"
+            . '「最新の情報を見る」または日次 cron で再取得されます。' );
+    }
 }
