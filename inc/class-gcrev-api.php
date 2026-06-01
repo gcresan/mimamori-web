@@ -7443,6 +7443,33 @@ PROMPT;
             update_user_meta( $user_id, $mode_prefix . 'radius', $radius );
         }
 
+        // 近接バイアス警告:
+        // 計測基準地点が店舗のすぐ近くだと、Googleマップは距離を重視するため
+        // 自店が実態より高順位に出る（「圏外なのに1位」の典型原因）。
+        // business モードは店舗自身を測る意図なので対象外。city/custom で店舗から
+        // 約500m 以内の場合に非ブロッキングの警告を返す。
+        $proximity_warning = '';
+        if ( $mode !== 'business' && $lat !== '' && $lng !== '' ) {
+            $store_lat = (string) get_user_meta( $user_id, '_gcrev_gbp_location_lat', true );
+            $store_lng = (string) get_user_meta( $user_id, '_gcrev_gbp_location_lng', true );
+            if ( $store_lat === '' || $store_lng === '' ) {
+                // GBP座標が無ければ business モードの保存座標を店舗位置として代用
+                $store_lat = (string) get_user_meta( $user_id, '_gcrev_meo_business_lat', true );
+                $store_lng = (string) get_user_meta( $user_id, '_gcrev_meo_business_lng', true );
+            }
+            if ( $store_lat !== '' && $store_lng !== '' ) {
+                $dist = $this->geo_distance_meters(
+                    (float) $lat, (float) $lng, (float) $store_lat, (float) $store_lng
+                );
+                if ( $dist >= 0 && $dist < 500 ) {
+                    $proximity_warning = sprintf(
+                        '⚠ 基準地点が店舗から約%dmと非常に近いため、Googleマップ順位が実際より高く表示される可能性があります（近接バイアス）。ターゲットエリアの中心（駅前・市役所周辺など）を基準にすることをおすすめします。',
+                        (int) round( $dist )
+                    );
+                }
+            }
+        }
+
         // MEOキャッシュ削除
         global $wpdb;
         $wpdb->query( $wpdb->prepare(
@@ -7471,6 +7498,7 @@ PROMPT;
             'success'  => true,
             'geocoded' => $geocoded,
             'message'  => $message,
+            'warning'  => $proximity_warning,
             'data'     => [
                 'address'       => $address,
                 'lat'           => $lat,
@@ -7482,6 +7510,22 @@ PROMPT;
                 'saved_by_mode' => $saved_by_mode,
             ],
         ]);
+    }
+
+    /**
+     * 2地点間の距離（メートル）を Haversine 公式で計算する。
+     * 失敗時は -1 を返す。
+     */
+    private function geo_distance_meters( float $lat1, float $lng1, float $lat2, float $lng2 ): float {
+        if ( $lat1 === 0.0 && $lng1 === 0.0 ) { return -1.0; }
+        if ( $lat2 === 0.0 && $lng2 === 0.0 ) { return -1.0; }
+        $earth = 6371000.0; // m
+        $dlat  = deg2rad( $lat2 - $lat1 );
+        $dlng  = deg2rad( $lng2 - $lng1 );
+        $a = sin( $dlat / 2 ) ** 2
+            + cos( deg2rad( $lat1 ) ) * cos( deg2rad( $lat2 ) ) * sin( $dlng / 2 ) ** 2;
+        $c = 2 * atan2( sqrt( $a ), sqrt( 1 - $a ) );
+        return $earth * $c;
     }
 
 

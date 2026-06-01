@@ -1641,6 +1641,10 @@ get_header();
                     if (json.success) {
                         closeBaseModal();
                         showToast(json.message || '基準地点を保存しました。');
+                        // 近接バイアス警告（店舗のすぐ近くを基準にした場合）
+                        if (json.warning) {
+                            setTimeout(function() { showToast(json.warning, 'error'); }, 1500);
+                        }
                         // 共通キャッシュは破棄（古いデータで誤表示しないため）
                         if (window.gcrevCache) window.gcrevCache.clear('map_rank');
 

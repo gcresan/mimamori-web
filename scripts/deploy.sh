@@ -82,9 +82,42 @@ fi
 # chown 不要: PHP-FPM が kusanagi ユーザーで動作するため rsync 後の所有権は kusanagi:kusanagi
 
 # --- 4. キャッシュクリア ---
-# OPcache リセット（PHP-FPM reload）
-if [ -f /var/run/php-fpm/php-fpm.pid ]; then
-    kill -USR2 "$(cat /var/run/php-fpm/php-fpm.pid)" 2>/dev/null || true
+# OPcache リセット（本番 opcache.validate_timestamps=0 対策）
+# 複数手段を順に試す。①ループバックHTTPでFPMプール内 opcache_reset()（最も確実・root不要）
+# ②sudo systemctl reload php-fpm ③php-fpm マスターへ USR2（PIDパス複数候補）。
+OPCACHE_CLEARED=0
+PROD_HOST="mimamori-web.jp"
+
+# ① ループバックHTTP（FPMプール内で opcache_reset を実行）
+RESET_TOKEN=$(${WP_CLI_BIN} eval 'if (function_exists("gcrev_opcache_reset_token")) echo gcrev_opcache_reset_token();' --path="${PROD_DOCROOT}" 2>/dev/null || true)
+if [ -n "${RESET_TOKEN}" ]; then
+    if curl -ksS --max-time 20 "https://${PROD_HOST}/?gcrev_opcache_reset=${RESET_TOKEN}" 2>>"$LOG_FILE" | grep -q '"opcache_reset":true'; then
+        OPCACHE_CLEARED=1
+        echo "[$TIMESTAMP] OPcache cleared via loopback HTTP" | tee -a "$LOG_FILE"
+    fi
+fi
+
+# ② sudo systemctl reload php-fpm（sudoers 設定がある場合）
+if [ "$OPCACHE_CLEARED" -eq 0 ]; then
+    if sudo -n systemctl reload php-fpm 2>/dev/null; then
+        OPCACHE_CLEARED=1
+        echo "[$TIMESTAMP] OPcache cleared via systemctl reload php-fpm" | tee -a "$LOG_FILE"
+    fi
+fi
+
+# ③ php-fpm マスターへ USR2（PIDパス複数候補）
+if [ "$OPCACHE_CLEARED" -eq 0 ]; then
+    for _pid in /run/php-fpm/php-fpm.pid /var/run/php-fpm/php-fpm.pid /run/php-fpm.pid; do
+        if [ -f "$_pid" ] && kill -USR2 "$(cat "$_pid")" 2>/dev/null; then
+            OPCACHE_CLEARED=1
+            echo "[$TIMESTAMP] OPcache reloaded via USR2 ($_pid)" | tee -a "$LOG_FILE"
+            break
+        fi
+    done
+fi
+
+if [ "$OPCACHE_CLEARED" -eq 0 ]; then
+    echo "[$TIMESTAMP] WARN: OPcache reset could not be confirmed — run 'systemctl restart php-fpm' manually if changes are not reflected" | tee -a "$LOG_FILE"
 fi
 
 # KUSANAGI fcache/bcache パージ

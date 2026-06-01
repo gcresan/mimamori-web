@@ -10954,6 +10954,45 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
 }
 
 // ========================================
+// OPcache リセットエンドポイント（デプロイ後のコード反映用）
+// ========================================
+// KUSANAGI 本番は opcache.validate_timestamps=0 のため、ファイルを差し替えても
+// PHP-FPM が古いバイトコードを返し続ける。php-fpm マスターは root 所有なので
+// デプロイ実行ユーザー(kusanagi)からは kill -USR2 / systemctl が使えない。
+// そこで「ループバックHTTPでFPMプール内の opcache_reset() を叩く」方式を用意する。
+// deploy.sh から `curl https://<host>/?gcrev_opcache_reset=<token>` で呼ぶ。
+
+/**
+ * OPcache リセット用トークン（AUTH_KEY 由来。外部から推測不可）
+ */
+function gcrev_opcache_reset_token(): string {
+    $secret = defined( 'AUTH_KEY' ) ? AUTH_KEY : ( defined( 'NONCE_KEY' ) ? NONCE_KEY : 'gcrev-fallback' );
+    return hash( 'sha256', 'gcrev-opcache-reset|' . $secret );
+}
+
+add_action( 'init', function () {
+    if ( ! isset( $_GET['gcrev_opcache_reset'] ) ) {
+        return;
+    }
+    $given    = (string) wp_unslash( $_GET['gcrev_opcache_reset'] );
+    $expected = gcrev_opcache_reset_token();
+    if ( ! hash_equals( $expected, $given ) ) {
+        status_header( 403 );
+        wp_send_json( [ 'opcache_reset' => false, 'error' => 'invalid token' ], 403 );
+    }
+
+    $reset = function_exists( 'opcache_reset' ) ? (bool) opcache_reset() : false;
+    file_put_contents( '/tmp/gcrev_deploy_debug.log',
+        date( 'Y-m-d H:i:s' ) . ' opcache_reset called: ' . ( $reset ? 'OK' : 'NG/unavailable' ) . "\n",
+        FILE_APPEND
+    );
+    wp_send_json( [
+        'opcache_reset' => $reset,
+        'available'     => function_exists( 'opcache_reset' ),
+    ] );
+}, 1 );
+
+// ========================================
 // お問い合わせ REST API
 // ========================================
 add_action( 'rest_api_init', function () {
