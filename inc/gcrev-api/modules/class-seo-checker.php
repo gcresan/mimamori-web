@@ -644,7 +644,9 @@ class Gcrev_SEO_Checker {
             'canonical'         => $this->extract_canonical( $xpath ),
             'internal_links'    => $this->count_internal_links( $xpath, $host ),
             'body_text_length'  => mb_strlen( $body_text ),
-            'body_text_excerpt' => mb_substr( $body_text, 0, 500 ),
+            // キーワード出現チェックに使うため、本文抜粋は十分な長さを確保する
+            // （500字だとページ下部のキーワードを取りこぼす）
+            'body_text_excerpt' => mb_substr( $body_text, 0, 3000 ),
             'fetch_error'       => false,
         ];
     }
@@ -1505,11 +1507,22 @@ class Gcrev_SEO_Checker {
             foreach ( $page_results as $p ) {
                 if ( ! empty( $p['fetch_error'] ) ) { continue; }
 
-                $in_title = mb_stripos( $p['title'], $keyword ) !== false;
-                $in_desc  = mb_stripos( $p['meta_description'], $keyword ) !== false;
+                $in_title = $this->keyword_in_text( $keyword, $p['title'] ?? '' );
+                $in_desc  = $this->keyword_in_text( $keyword, $p['meta_description'] ?? '' );
                 $in_h1    = $this->keyword_in_array( $keyword, $p['h1'] );
                 $in_h2    = $this->keyword_in_array( $keyword, $p['h2'] );
-                $in_body  = mb_stripos( $p['body_text_excerpt'] ?? '', $keyword ) !== false;
+                $in_body  = $this->keyword_in_text( $keyword, $p['body_text_excerpt'] ?? '' );
+
+                // ページ全体での一致（複合キーワードの各語が title/desc/h見出し/本文の
+                // どこかに散らばって存在するケースを拾う。例: 「松山市」がtitle・「歯科」が本文）
+                $combined = trim(
+                    ( $p['title'] ?? '' ) . ' '
+                    . ( $p['meta_description'] ?? '' ) . ' '
+                    . implode( ' ', $p['h1'] ?? [] ) . ' '
+                    . implode( ' ', $p['h2'] ?? [] ) . ' '
+                    . ( $p['body_text_excerpt'] ?? '' )
+                );
+                $in_page = $this->keyword_in_text( $keyword, $combined );
 
                 // rank_results の found_url と一致するか
                 $is_ranking_url = false;
@@ -1519,13 +1532,14 @@ class Gcrev_SEO_Checker {
                     $is_ranking_url = ( $found_path === $page_path );
                 }
 
-                if ( $in_title || $in_desc || $in_h1 || $in_h2 || $in_body || $is_ranking_url ) {
+                if ( $in_title || $in_desc || $in_h1 || $in_h2 || $in_body || $in_page || $is_ranking_url ) {
                     $placements = [];
                     if ( $in_title ) { $placements[] = 'title'; }
                     if ( $in_desc )  { $placements[] = 'description'; }
                     if ( $in_h1 )    { $placements[] = 'h1'; }
                     if ( $in_h2 )    { $placements[] = 'h2'; }
                     if ( $in_body )  { $placements[] = 'body'; }
+                    if ( $in_page && empty( $placements ) ) { $placements[] = 'content'; }
                     if ( $is_ranking_url ) { $placements[] = 'ranking_url'; }
 
                     $matches[] = [
@@ -1553,11 +1567,44 @@ class Gcrev_SEO_Checker {
 
     private function keyword_in_array( string $keyword, array $texts ): bool {
         foreach ( $texts as $text ) {
-            if ( mb_stripos( $text, $keyword ) !== false ) {
+            if ( $this->keyword_in_text( $keyword, (string) $text ) ) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * キーワードがテキストに含まれるか判定する。
+     *
+     * スペース区切りの複合キーワード（例「松山市 歯科」）は、各トークンが
+     * すべて含まれていれば一致とみなす（語順・間に挟まる文字は問わない）。
+     * フレーズ全体の完全一致だけを見ていた旧実装では、実ページに
+     * 「松山市の歯科医院」と書かれていても "松山市 歯科" を検出できなかった。
+     * 単語キーワード（スペースなし）は従来どおりの部分一致。
+     */
+    private function keyword_in_text( string $keyword, string $text ): bool {
+        if ( $text === '' ) { return false; }
+        $tokens = $this->tokenize_keyword( $keyword );
+        if ( empty( $tokens ) ) { return false; }
+        foreach ( $tokens as $t ) {
+            if ( mb_stripos( $text, $t ) === false ) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * キーワードを空白（全角・半角）で分割してトークン配列にする。
+     */
+    private function tokenize_keyword( string $keyword ): array {
+        $normalized = preg_replace( '/[\x{3000}\s]+/u', ' ', trim( $keyword ) );
+        if ( $normalized === null || $normalized === '' ) { return []; }
+        return array_values( array_filter(
+            explode( ' ', $normalized ),
+            static function ( $t ) { return $t !== ''; }
+        ) );
     }
 
     private function any_placement( array $matches, string $placement ): bool {
