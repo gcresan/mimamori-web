@@ -102,7 +102,8 @@ $report_id = isset( $_GET['id'] ) ? absint( $_GET['id'] ) : 0;
 
 /* Summary text */
 .meo-diag-summary-text {
-    font-size: 14px; line-height: 1.8; color: #374151; margin-bottom: 20px;
+    font-size: 14px; line-height: 1.9; color: #374151; margin-bottom: 20px;
+    white-space: pre-line;
 }
 .meo-diag-points-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 768px) { .meo-diag-points-grid { grid-template-columns: 1fr; } }
