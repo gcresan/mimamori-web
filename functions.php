@@ -9782,16 +9782,9 @@ add_action( 'wp_ajax_gcrev_send_test_notification', function () {
 
     $mail = gcrev_build_report_ready_email( $user_id, $year_month, true );
 
-    // 送信元（From）を明示。KUSANAGI 等では From 未指定だと送信拒否されることがある。
-    $site_name  = get_bloginfo( 'name' );
-    $from_email = get_option( 'gcrev_inquiry_admin_email', '' );
-    if ( empty( $from_email ) || ! is_email( $from_email ) ) {
-        $from_email = get_option( 'admin_email' );
-    }
-    $headers = [];
-    if ( is_email( $from_email ) ) {
-        $headers[] = sprintf( 'From: %s <%s>', $site_name, $from_email );
-    }
+    // 送信元（From）はコードでは指定しない。
+    // WP Mail SMTP 側の「From Email（Force From Email）」で info@g-crev.jp に一元管理する。
+    // ここで From を指定すると認証アカウントと食い違い送信拒否されるため。
 
     // wp_mail 失敗理由を捕捉
     $mail_error = '';
@@ -9802,14 +9795,14 @@ add_action( 'wp_ajax_gcrev_send_test_notification', function () {
     };
     add_action( 'wp_mail_failed', $err_listener );
 
-    $sent = wp_mail( $to, $mail['subject'], $mail['body'], $headers );
+    $sent = wp_mail( $to, $mail['subject'], $mail['body'] );
 
     remove_action( 'wp_mail_failed', $err_listener );
 
     if ( ! $sent ) {
         file_put_contents(
             '/tmp/gcrev_report_debug.log',
-            date( 'Y-m-d H:i:s' ) . " [Notify][TEST] wp_mail FAILED to={$to} from={$from_email} reason=" . ( $mail_error !== '' ? $mail_error : '(unknown)' ) . "\n",
+            date( 'Y-m-d H:i:s' ) . " [Notify][TEST] wp_mail FAILED to={$to} reason=" . ( $mail_error !== '' ? $mail_error : '(unknown)' ) . "\n",
             FILE_APPEND
         );
         wp_send_json_error( [
