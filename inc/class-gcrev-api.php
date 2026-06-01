@@ -6562,11 +6562,23 @@ PROMPT;
             set_transient( $cache_key, $kpi_cached, self::DASHBOARD_CACHE_TTL );
         }
 
+        // 全体ダッシュボードの「今月の見守り結果」状態（点数ではなく状態メッセージ）
+        // 訪問数(traffic)・コール数(cv)・マップ表示回数(meo)の前月比から判定。
+        // MEO 非対応クライアントは meo の前月値が 0 となり自動的に判定対象から除外される。
+        $watch_state = function_exists('gcrev_dashboard_watch_state')
+            ? gcrev_dashboard_watch_state(
+                $curr['traffic'], $prev['traffic'],
+                $curr['cv'], $prev['cv'],
+                $curr['meo'], $prev['meo']
+            )
+            : null;
+
         return new WP_REST_Response([
-            'success'    => true,
-            'score'      => $health['score'],
-            'status'     => $health['status'],
-            'components' => $health['components'] ?? null,
+            'success'     => true,
+            'score'       => $health['score'],
+            'status'      => $health['status'],
+            'components'  => $health['components'] ?? null,
+            'watch_state' => $watch_state,
         ], 200);
     }
 

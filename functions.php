@@ -8346,6 +8346,96 @@ function gcrev_rest_post_actual_cv(\WP_REST_Request $req): \WP_REST_Response {
  * (gcrev_effcv_v4_*_YYYY-MM など) は組み合わせ爆発のため列挙せず、
  * DB DELETE のフォールバックと自然なTTL切れに任せる。
  */
+/**
+ * 全体ダッシュボードの「今月の見守り結果」状態を判定する。
+ *
+ * 点数ではなく、訪問数・コール数（ゴール数）・マップ表示回数の前月比から
+ * やさしい状態メッセージ（good / caution / warning / nodata）を返す。
+ *
+ * 判定ロジック（簡易）:
+ *  - 比較可能な指標（前月値 > 0）が無い → nodata（データ不足）
+ *  - 2つ以上が増加、または比較可能な指標がすべて増加 → good（良い状態）
+ *  - 2つ以上が明確に減少（-10%以下） → warning（改善が必要）
+ *  - それ以外（1つ減少・小幅な減少・まちまち） → caution（やや注意）
+ *
+ * @param int      $traffic_curr 当月の訪問数
+ * @param int      $traffic_prev 前月の訪問数
+ * @param int      $cv_curr      当月のコール数（ゴール数）
+ * @param int      $cv_prev      前月のコール数（ゴール数）
+ * @param int|null $meo_curr     当月のマップ表示回数（MEO非対応なら null）
+ * @param int|null $meo_prev     前月のマップ表示回数（MEO非対応なら null）
+ * @return array{state:string,title:string,text:string}
+ */
+function gcrev_dashboard_watch_state(
+    int $traffic_curr, int $traffic_prev,
+    int $cv_curr, int $cv_prev,
+    ?int $meo_curr = null, ?int $meo_prev = null
+): array {
+    // 比較可能な指標（前月値 > 0）だけを対象に前月比を算出
+    $metrics = [
+        [$traffic_curr, $traffic_prev],
+        [$cv_curr, $cv_prev],
+    ];
+    if ($meo_curr !== null && $meo_prev !== null) {
+        $metrics[] = [$meo_curr, $meo_prev];
+    }
+
+    $valid = 0;
+    $up = 0;
+    $down = 0;
+    $clear_down = 0;
+    foreach ($metrics as [$c, $p]) {
+        if ($p <= 0) {
+            continue; // 前月データなし → 比較不能
+        }
+        $valid++;
+        $pct = (($c - $p) / $p) * 100.0;
+        if ($pct > 1.0) {
+            $up++;
+        } elseif ($pct <= -10.0) {
+            $clear_down++;
+            $down++;
+        } elseif ($pct < -1.0) {
+            $down++;
+        }
+    }
+
+    if ($valid === 0) {
+        $state = 'nodata';
+    } elseif ($up >= 2 || ($up === $valid && $down === 0)) {
+        $state = 'good';
+    } elseif ($clear_down >= 2) {
+        $state = 'warning';
+    } else {
+        $state = 'caution';
+    }
+
+    $messages = [
+        'good' => [
+            'title' => '順調に反応が出ています',
+            'text'  => "訪問数やお問い合わせにつながる動きが前月より伸びています。\nこの調子で、反応が出ているページや検索キーワードを確認しましょう。",
+        ],
+        'caution' => [
+            'title' => '反応が少し落ちています',
+            'text'  => "訪問数・コール数・マップ表示回数の一部が前月より減少しています。\nまずは、どこで変化が起きているかを確認しましょう。",
+        ],
+        'warning' => [
+            'title' => '改善が必要な状態です',
+            'text'  => "訪問数・コール数・マップ表示回数が前月より減少しています。\n早めに流入経路や検索順位の変化を確認しましょう。",
+        ],
+        'nodata' => [
+            'title' => 'データを確認中です',
+            'text'  => "十分なデータがまだ集まっていないため、今月の傾向を判定できません。\nデータが蓄積されると、状態を確認できるようになります。",
+        ],
+    ];
+
+    return [
+        'state' => $state,
+        'title' => $messages[$state]['title'],
+        'text'  => $messages[$state]['text'],
+    ];
+}
+
 function gcrev_invalidate_user_cv_cache(int $user_id): void {
     global $wpdb;
 

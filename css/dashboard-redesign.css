@@ -677,6 +677,57 @@ h3 { font-size: 20px; font-weight: 700; }
   margin-bottom: 24px;
 }
 
+/* ========== 今月の見守り結果カード（点数ではなく状態をやさしく伝える） ========== */
+.info-watch {
+  flex-shrink: 0;
+  width: 300px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px 26px;
+  background: var(--mw-bg-secondary);
+  border: 1px solid var(--mw-border-light);
+  border-left: 4px solid var(--mw-accent-neutral);
+  border-radius: var(--mw-radius-sm);
+}
+.info-watch-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.info-watch-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+.info-watch-heading {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--mw-text-tertiary);
+}
+.info-watch-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--mw-text-primary);
+}
+.info-watch-text {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--mw-text-secondary);
+  white-space: pre-line;
+}
+/* 状態別アクセント */
+.info-watch--good    { border-left-color: var(--mw-accent-positive); background: #F3FAF5; }
+.info-watch--good    .info-watch-title { color: #2F7D4F; }
+.info-watch--caution { border-left-color: #D9A441; background: #FCF8EF; }
+.info-watch--caution .info-watch-title { color: #9A6B14; }
+.info-watch--warning { border-left-color: #C95A4F; background: #FCF3F2; }
+.info-watch--warning .info-watch-title { color: #B0433A; }
+.info-watch--nodata  { border-left-color: var(--mw-accent-neutral); }
+.info-watch--nodata  .info-watch-title { color: var(--mw-text-secondary); }
+
 /* ========== Score ========== */
 .info-score {
   display: flex;
@@ -1807,6 +1858,10 @@ details[open] > .highlight-detail-toggle .highlight-detail-arrow {
   }
 
   .info-score {
+    width: 100%;
+  }
+
+  .info-watch {
     width: 100%;
   }
 

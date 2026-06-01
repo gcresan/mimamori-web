@@ -864,48 +864,39 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
   <!-- スコア + KPI 横並びエリア -->
   <div class="info-top-row">
-    <!-- スコア -->
-    <div class="info-score">
-      <?php
-      $score_val   = (int)($infographic['score'] ?? 0);
-      $score_pct   = max(0, min(100, $score_val));
-      $circumference = 326.73; // 2 * π * 52
-      $dash_offset   = $circumference * (1 - $score_pct / 100);
-      $score_diff = (int)($infographic['score_diff'] ?? 0);
-      $diff_class = $score_diff > 0 ? 'positive' : ($score_diff < 0 ? 'negative' : 'neutral');
-      $diff_icon  = $score_diff > 0 ? '↑' : ($score_diff < 0 ? '↓' : '→');
-      $diff_text  = $score_diff > 0 ? '+' . $score_diff : (string)$score_diff;
-      ?>
-      <div class="info-score-gauge">
-        <svg viewBox="0 0 120 120" class="score-svg">
-          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--mw-bg-tertiary)" stroke-width="10" />
-          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--mw-primary-blue)" stroke-width="10"
-                  stroke-linecap="round"
-                  stroke-dasharray="<?php echo esc_attr($circumference); ?>"
-                  stroke-dashoffset="<?php echo esc_attr($dash_offset); ?>"
-                  class="score-progress" transform="rotate(-90 60 60)" />
-        </svg>
-        <div class="score-center-text">
-          <span class="info-score-value"><?php
-            if (empty($kpi_curr) && $score_val === 0) {
-                echo '<span class="info-kpi-spinner"></span>';
-            } else {
-                echo esc_html((string)$score_val) . '<span class="info-score-unit">点</span>';
-            }
-          ?></span>
-          <span class="info-score-label">100点中</span>
-        </div>
+    <!-- 今月の見守り結果（点数ではなく状態をやさしく伝えるカード） -->
+    <?php
+    // 訪問数・コール数（ゴール数）・マップ表示回数の前月比から状態を判定。
+    // KPI 未取得時（非同期取得待ち）は nodata 表示にしておき、JS で確定させる。
+    if ( empty($kpi_curr) ) {
+        $watch = gcrev_dashboard_watch_state(0, 0, 0, 0, null, null); // → データ確認中
+    } else {
+        $kpi_visits = $infographic['kpi']['visits'] ?? ['value' => 0, 'diff' => 0];
+        $kpi_cv_w   = $infographic['kpi']['cv']     ?? ['value' => 0, 'diff' => 0];
+        $w_v_curr = (int)($kpi_visits['value'] ?? 0);
+        $w_v_prev = $w_v_curr - (int)($kpi_visits['diff'] ?? 0);
+        $w_c_curr = (int)($kpi_cv_w['value'] ?? 0);
+        $w_c_prev = $w_c_curr - (int)($kpi_cv_w['diff'] ?? 0);
+        if ( $can_meo && isset($infographic['kpi']['meo']) ) {
+            $kpi_meo_w = $infographic['kpi']['meo'];
+            $w_m_curr = (int)($kpi_meo_w['value'] ?? 0);
+            $w_m_prev = $w_m_curr - (int)($kpi_meo_w['diff'] ?? 0);
+        } else {
+            $w_m_curr = null;
+            $w_m_prev = null;
+        }
+        $watch = gcrev_dashboard_watch_state($w_v_curr, $w_v_prev, $w_c_curr, $w_c_prev, $w_m_curr, $w_m_prev);
+    }
+    $watch_icons = ['good' => '🌱', 'caution' => '👀', 'warning' => '⚠️', 'nodata' => '⏳'];
+    $watch_icon  = $watch_icons[$watch['state']] ?? '🌱';
+    ?>
+    <div class="info-watch info-watch--<?php echo esc_attr($watch['state']); ?>" id="watchResult">
+      <div class="info-watch-head">
+        <span class="info-watch-emoji" data-watch-role="emoji"><?php echo $watch_icon; ?></span>
+        <span class="info-watch-heading">今月の見守り結果</span>
       </div>
-
-      <span class="info-score-diff <?php echo esc_attr($diff_class); ?>">
-        <?php echo esc_html($diff_icon . ' ' . $diff_text); ?>
-      </span>
-
-      <?php if (!empty($infographic['status'])): ?>
-        <span class="info-score-status"><?php echo esc_html($infographic['status']); ?></span>
-      <?php endif; ?>
-
-      <button type="button" class="info-score-breakdown-link" id="scoreBreakdownOpen">採点の内訳を見る</button>
+      <div class="info-watch-title" data-watch-role="title"><?php echo esc_html($watch['title']); ?></div>
+      <div class="info-watch-text" data-watch-role="text"><?php echo esc_html($watch['text']); ?></div>
     </div>
 
     <!-- KPI -->
@@ -1118,255 +1109,6 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     </div>
   </div>
 
-  <!-- 採点の内訳（breakdown） -->
-  <?php
-  $breakdown  = $infographic['breakdown'] ?? null;
-  $components = $infographic['components'] ?? null;
-  $has_breakdown  = is_array($breakdown) && !empty($breakdown);
-  $has_components = is_array($components) && !empty($components);
-  $bd_icons = [
-    'traffic' => '👥',
-    'cv'      => '🎯',
-    'gsc'     => '🔍',
-    'meo'     => '📍',
-  ];
-  $bd_labels = [
-    'traffic' => 'サイトに来た人の数',
-    'cv'      => 'ゴール（問い合わせ・申込みなど）',
-    'gsc'     => '検索結果からクリックされた数',
-    'meo'     => '地図検索からの表示数',
-  ];
-  $comp_icons = [
-    'achievement' => '📊',
-    'growth'      => '📈',
-    'stability'   => "\u{1F6E1}\u{FE0F}",
-    'search_diag' => '🔍',
-  ];
-  ?>
-
-  <!-- スコア内訳モーダル -->
-  <div class="score-breakdown-overlay" id="scoreBreakdownOverlay" style="display:none;">
-    <div class="score-breakdown-modal">
-      <div class="score-breakdown-modal-header">
-        <h3 class="score-breakdown-modal-title">採点の内訳</h3>
-        <button type="button" class="score-breakdown-modal-close" id="scoreBreakdownClose" aria-label="閉じる">&times;</button>
-      </div>
-      <div class="score-breakdown-modal-body">
-        <div class="score-breakdown-total">
-          <span class="score-breakdown-total-value"><?php echo esc_html((string)($infographic['score'] ?? 0)); ?></span>
-          <span class="score-breakdown-total-unit">点</span>
-          <span class="score-breakdown-total-sep">/</span>
-          <span class="score-breakdown-total-label">100点中</span>
-        </div>
-
-        <?php if ($has_components): ?>
-          <!-- v2: 4コンポーネント表示 -->
-          <div class="score-comp-list">
-          <?php foreach ($components as $comp_key => $comp):
-            if (!is_array($comp)) continue;
-            $c_points = (int)($comp['points'] ?? 0);
-            $c_max    = (int)($comp['max'] ?? 0);
-            $c_label  = esc_html($comp['label'] ?? $comp_key);
-            $c_icon   = $comp_icons[$comp_key] ?? '📊';
-            $c_bar_pct = $c_max > 0 ? min(100, ($c_points / $c_max) * 100) : 0;
-          ?>
-            <div class="score-comp-card">
-              <div class="score-comp-header">
-                <span class="score-comp-icon"><?php echo $c_icon; ?></span>
-                <span class="score-comp-label"><?php echo $c_label; ?></span>
-                <span class="score-comp-pts"><?php echo esc_html("{$c_points} / {$c_max}pt"); ?></span>
-              </div>
-              <div class="score-comp-bar">
-                <div class="score-comp-bar-fill" style="width:<?php echo esc_attr((string)$c_bar_pct); ?>%"></div>
-              </div>
-
-              <?php if ($comp_key === 'achievement' && !empty($comp['details'])): ?>
-                <details class="score-comp-details">
-                  <summary>内訳を見る</summary>
-                  <div class="score-comp-details-body">
-                    <?php foreach ($comp['details'] as $dim_key => $dim):
-                      $d_icon   = $bd_icons[$dim_key] ?? '📊';
-                      $d_label  = $bd_labels[$dim_key] ?? $dim_key;
-                      $d_pts    = $dim['points'] ?? 0;
-                      $d_max    = $dim['max'] ?? 12.5;
-                      $d_ratio  = $dim['ratio'] ?? null;
-                      $d_fb     = !empty($dim['fallback']);
-                      $ratio_text = '';
-                      if ($d_ratio !== null) {
-                          $ratio_text = '（中央値の' . number_format($d_ratio * 100, 0) . '%）';
-                      } elseif ($d_fb) {
-                          $ratio_text = '（前月比フォールバック）';
-                      }
-                    ?>
-                      <div class="score-comp-dim-row">
-                        <span class="score-comp-dim-icon"><?php echo $d_icon; ?></span>
-                        <span class="score-comp-dim-label"><?php echo esc_html($d_label); ?></span>
-                        <span class="score-comp-dim-pts"><?php echo esc_html("{$d_pts}/{$d_max}"); ?></span>
-                        <?php if ($ratio_text): ?>
-                          <span class="score-comp-dim-note"><?php echo esc_html($ratio_text); ?></span>
-                        <?php endif; ?>
-                      </div>
-                    <?php endforeach; ?>
-                  </div>
-                </details>
-              <?php endif; ?>
-
-              <?php if ($comp_key === 'growth' && !empty($comp['details'])): ?>
-                <details class="score-comp-details">
-                  <summary>内訳を見る</summary>
-                  <div class="score-comp-details-body">
-                    <?php foreach ($comp['details'] as $dim_key => $dim):
-                      $d_icon  = $bd_icons[$dim_key] ?? '📊';
-                      $d_label = $bd_labels[$dim_key] ?? $dim_key;
-                      $d_pts   = $dim['points'] ?? 0;
-                      $d_max   = $dim['max'] ?? 7.5;
-                      $d_pct   = $dim['pct'] ?? 0;
-                      $d_zone  = $dim['zone'] ?? '';
-                      $pct_sign = $d_pct > 0 ? '+' : '';
-                      $zone_label = '';
-                      if ($d_zone === 'dead')  $zone_label = '安定（デッドゾーン）';
-                      if ($d_zone === 'zero')  $zone_label = 'データなし';
-                    ?>
-                      <div class="score-comp-dim-row">
-                        <span class="score-comp-dim-icon"><?php echo $d_icon; ?></span>
-                        <span class="score-comp-dim-label"><?php echo esc_html($d_label); ?></span>
-                        <span class="score-comp-dim-pct"><?php echo esc_html("{$pct_sign}" . number_format((float)$d_pct, 1) . '%'); ?></span>
-                        <span class="score-comp-dim-pts"><?php echo esc_html("{$d_pts}/{$d_max}"); ?></span>
-                        <?php if ($zone_label): ?>
-                          <span class="score-comp-dim-note"><?php echo esc_html($zone_label); ?></span>
-                        <?php endif; ?>
-                      </div>
-                    <?php endforeach; ?>
-                  </div>
-                </details>
-              <?php endif; ?>
-
-              <?php if ($comp_key === 'stability'): ?>
-                <?php $stab_drops = (int)($comp['drops'] ?? 0); ?>
-                <?php if (!empty($comp['details'])): ?>
-                <details class="score-comp-details">
-                  <summary><?php echo $stab_drops === 0 ? '急落なし ✓' : esc_html("{$stab_drops}観点で急落（-20%超）"); ?></summary>
-                  <div class="score-comp-details-body">
-                    <?php foreach ($comp['details'] as $dim_key => $dim):
-                      $d_icon  = $bd_icons[$dim_key] ?? '📊';
-                      $d_label = $bd_labels[$dim_key] ?? $dim_key;
-                      $d_pct   = (float)($dim['pct'] ?? 0);
-                      $d_drop  = !empty($dim['drop']);
-                      $d_zero  = !empty($dim['zero']);
-                      $pct_sign = $d_pct > 0 ? '+' : '';
-                      if ($d_zero) {
-                          $status_text = 'データなし';
-                          $status_class = 'score-comp-dim-note';
-                      } elseif ($d_drop) {
-                          $status_text = '急落 ⚠';
-                          $status_class = 'score-comp-check-ng';
-                      } else {
-                          $status_text = '安定 ✓';
-                          $status_class = 'score-comp-check-ok';
-                      }
-                    ?>
-                      <div class="score-comp-dim-row">
-                        <span class="score-comp-dim-icon"><?php echo $d_icon; ?></span>
-                        <span class="score-comp-dim-label"><?php echo esc_html($d_label); ?></span>
-                        <?php if (!$d_zero): ?>
-                          <span class="score-comp-dim-pct"><?php echo esc_html("{$pct_sign}" . number_format($d_pct, 1) . '%'); ?></span>
-                        <?php endif; ?>
-                        <span class="<?php echo esc_attr($status_class); ?>"><?php echo esc_html($status_text); ?></span>
-                      </div>
-                    <?php endforeach; ?>
-                  </div>
-                </details>
-                <?php else: ?>
-                <div class="score-comp-inline-note">
-                  <?php echo $stab_drops === 0
-                      ? '<span class="score-comp-check-ok">急落なし ✓</span>'
-                      : '<span class="score-comp-check-ng">' . esc_html("{$stab_drops}観点で急落（-20%超）") . '</span>'; ?>
-                </div>
-                <?php endif; ?>
-              <?php endif; ?>
-
-              <?php if ($comp_key === 'action' && !empty($comp['checks'])): ?>
-                <div class="score-comp-checklist">
-                  <?php foreach ($comp['checks'] as $check): ?>
-                    <span class="score-comp-check-item <?php echo $check['ok'] ? 'is-ok' : 'is-ng'; ?>">
-                      <?php echo $check['ok'] ? '✓' : '✗'; ?>
-                      <?php echo esc_html($check['label']); ?>
-                    </span>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
-
-              <?php if ($comp_key === 'search_diag' && !empty($comp['cards'])): ?>
-                <div class="score-comp-checklist">
-                  <?php foreach ($comp['cards'] as $card): ?>
-                    <span class="score-comp-check-item <?php echo $card['ok'] ? 'is-ok' : 'is-ng'; ?>">
-                      <?php if ($card['ok']): ?>
-                        <?php echo esc_html($card['label'] . ' ' . $card['score'] . '点'); ?>
-                      <?php else: ?>
-                        <?php echo esc_html($card['label'] . ' 未取得'); ?>
-                      <?php endif; ?>
-                    </span>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
-            </div>
-          <?php endforeach; ?>
-          </div>
-
-        <?php elseif ($has_breakdown): ?>
-          <!-- 旧形式: テーブル表示（後方互換） -->
-          <div class="score-breakdown-table-wrap">
-            <table class="info-breakdown-table" role="table">
-              <thead>
-                <tr>
-                  <th>観点</th>
-                  <th>当月</th>
-                  <th>先月</th>
-                  <th>前月比</th>
-                  <th>配点</th>
-                </tr>
-              </thead>
-              <tbody>
-              <?php
-              foreach ($breakdown as $bd_key => $bd):
-                if (!is_array($bd)) continue;
-
-                $bd_label  = esc_html($bd_labels[$bd_key] ?? $bd['label'] ?? $bd_key);
-                $bd_curr   = number_format((float)($bd['curr'] ?? 0));
-                $bd_prev   = number_format((float)($bd['prev'] ?? 0));
-                $bd_pct    = (float)($bd['pct'] ?? 0);
-                $bd_points = (int)($bd['points'] ?? 0);
-                $bd_max    = (int)($bd['max'] ?? 25);
-                $bd_icon   = $bd_icons[$bd_key] ?? '📊';
-
-                $pct_class = $bd_pct > 0 ? 'positive' : ($bd_pct < 0 ? 'negative' : 'neutral');
-                $pct_text  = ($bd_pct > 0 ? '+' : '') . number_format($bd_pct, 1) . '%';
-
-                $bar_pct = $bd_max > 0 ? min(100, ($bd_points / $bd_max) * 100) : 0;
-              ?>
-                <tr>
-                  <td><span class="bd-icon"><?php echo $bd_icon; ?></span><?php echo $bd_label; ?></td>
-                  <td class="bd-num"><?php echo esc_html($bd_curr); ?></td>
-                  <td class="bd-num bd-prev"><?php echo esc_html($bd_prev); ?></td>
-                  <td class="bd-num <?php echo esc_attr($pct_class); ?>"><?php echo esc_html($pct_text); ?></td>
-                  <td class="bd-score-cell">
-                    <div class="bd-score-bar-wrap">
-                      <div class="bd-score-bar" style="width:<?php echo esc_attr((string)$bar_pct); ?>%"></div>
-                    </div>
-                    <span class="bd-score-text"><?php echo esc_html("{$bd_points}/{$bd_max}"); ?></span>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-        <?php else: ?>
-          <p class="score-breakdown-empty">内訳は集計中です</p>
-        <?php endif; ?>
-      </div>
-    </div>
-  </div>
-
   <!-- 結論サマリー部分は一旦非表示（要件により削除） -->
 
 </section>
@@ -1410,136 +1152,21 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 <script>
 // 解析ユニットID（タブ切り替え時のURL ?unit=X から取得）
 (function(){
-    // スコアゲージ更新（非同期KPI取得後に呼ばれる）
-    function updateScoreGauge(score) {
-        var circumference = 326.73; // 2 * π * 52
-        var pct = Math.max(0, Math.min(100, score));
-        var offset = circumference * (1 - pct / 100);
-
-        // SVG circle
-        var circle = document.querySelector('.score-progress');
-        if (circle) {
-            circle.style.transition = 'stroke-dashoffset 0.8s ease-out';
-            circle.setAttribute('stroke-dashoffset', offset);
-        }
-
-        // スコア数値
-        var valEl = document.querySelector('.info-score-value');
-        if (valEl) valEl.innerHTML = score + '<span class="info-score-unit">点</span>';
-
-        // ステータスラベル
-        var statusEl = document.querySelector('.info-score-status');
-        if (statusEl) {
-            var status = score >= 70 ? '安定しています' : (score >= 50 ? '改善傾向です' : (score >= 35 ? 'もう少しです' : '要注意です'));
-            statusEl.textContent = status;
-        }
-    }
-
-    // スコア内訳モーダルを動的更新（非同期スコア計算後に呼ばれる）
-    function updateScoreBreakdownModal(score, components) {
-        // モーダル内の合計スコアを更新
-        var totalVal = document.querySelector('.score-breakdown-total-value');
-        if (totalVal) totalVal.textContent = String(score);
-
-        if (!components || typeof components !== 'object') return;
-
-        // コンポーネントリストを生成
-        var listEl = document.querySelector('.score-comp-list');
-        if (!listEl) {
-            // v2 リストがまだない場合（PHP側で空だった場合）、作成
-            var body = document.querySelector('.score-breakdown-modal-body');
-            if (!body) return;
-            // 「内訳は集計中です」テキストがあれば除去
-            var emptyMsg = body.querySelector('.score-breakdown-empty');
-            if (emptyMsg) emptyMsg.remove();
-            listEl = document.createElement('div');
-            listEl.className = 'score-comp-list';
-            // .score-breakdown-total の後に挿入
-            var totalDiv = body.querySelector('.score-breakdown-total');
-            if (totalDiv && totalDiv.nextSibling) {
-                body.insertBefore(listEl, totalDiv.nextSibling);
-            } else {
-                body.appendChild(listEl);
-            }
-        }
-
-        var compIcons = { achievement: '📊', growth: '📈', stability: '\u{1F6E1}\uFE0F', search_diag: '🔍' };
-        var compLabels = { achievement: '実績（中央値比較）', growth: '成長（前月比）', stability: '安定性', search_diag: '検索・診断' };
-        var dimLabels = { traffic: 'サイトに来た人の数', cv: 'ゴール（問い合わせ・申込みなど）', gsc: '検索結果からクリックされた数', meo: '地図検索からの表示数' };
-
-        var html = '';
-        var compOrder = ['achievement', 'growth', 'stability', 'search_diag'];
-        compOrder.forEach(function(key) {
-            var comp = components[key];
-            if (!comp) return;
-            var pts = parseInt(comp.points || 0, 10);
-            var max = parseInt(comp.max || 0, 10);
-            var pct = max > 0 ? Math.min(100, (pts / max) * 100) : 0;
-            var icon = compIcons[key] || '📊';
-            var label = comp.label || compLabels[key] || key;
-
-            html += '<div class="score-comp-card">';
-            html += '<div class="score-comp-header">';
-            html += '<span class="score-comp-icon">' + icon + '</span>';
-            html += '<span class="score-comp-label">' + label + '</span>';
-            html += '<span class="score-comp-pts">' + pts + ' / ' + max + 'pt</span>';
-            html += '</div>';
-            html += '<div class="score-comp-bar"><div class="score-comp-bar-fill" style="width:' + pct + '%"></div></div>';
-
-            // 内訳表示（achievement, growth）
-            if ((key === 'achievement' || key === 'growth') && comp.details) {
-                html += '<details class="score-comp-details"><summary>▶内訳を見る</summary><div class="score-comp-details-body">';
-                Object.keys(comp.details).forEach(function(dk) {
-                    var dim = comp.details[dk];
-                    var dLabel = dimLabels[dk] || dk;
-                    var dPts = dim.points || 0;
-                    var dMax = dim.max || 0;
-                    html += '<div class="score-comp-dim-row">';
-                    html += '<span class="score-comp-dim-label">' + dLabel + '</span>';
-                    html += '<span class="score-comp-dim-pts">' + dPts + '/' + dMax + '</span>';
-                    html += '</div>';
-                });
-                html += '</div></details>';
-            }
-
-            // 安定性
-            if (key === 'stability') {
-                var drops = parseInt(comp.drops || 0, 10);
-                html += '<div class="score-comp-inline-note">';
-                html += drops === 0
-                    ? '<span class="score-comp-check-ok">急落なし ✓</span>'
-                    : '<span class="score-comp-check-ng">' + drops + '観点で急落（-20%超）</span>';
-                html += '</div>';
-            }
-
-            // 行動ボーナス
-            if (key === 'action' && comp.checks) {
-                html += '<div class="score-comp-checklist">';
-                comp.checks.forEach(function(chk) {
-                    var cls = chk.ok ? 'is-ok' : 'is-ng';
-                    var mark = chk.ok ? '✓' : '✗';
-                    html += '<span class="score-comp-check-item ' + cls + '">' + mark + ' ' + chk.label + '</span>';
-                });
-                html += '</div>';
-            }
-
-            // 検索・診断（カード別スコア一覧）
-            if (key === 'search_diag' && comp.cards) {
-                html += '<div class="score-comp-checklist">';
-                comp.cards.forEach(function(card) {
-                    var cls = card.ok ? 'is-ok' : 'is-ng';
-                    var label = card.ok
-                        ? (card.label + ' ' + card.score + '点')
-                        : (card.label + ' 未取得');
-                    html += '<span class="score-comp-check-item ' + cls + '">' + label + '</span>';
-                });
-                html += '</div>';
-            }
-
-            html += '</div>';
-        });
-
-        listEl.innerHTML = html;
+    // 「今月の見守り結果」カードを更新（非同期KPI取得後に呼ばれる）
+    // ws: { state: 'good'|'caution'|'warning'|'nodata', title: string, text: string }
+    function updateWatchResult(ws) {
+        if (!ws || typeof ws !== 'object') return;
+        var card = document.getElementById('watchResult');
+        if (!card) return;
+        var emojiMap = { good: '🌱', caution: '👀', warning: '⚠️', nodata: '⏳' };
+        var state = ws.state || 'nodata';
+        card.className = 'info-watch info-watch--' + state;
+        var emojiEl = card.querySelector('[data-watch-role="emoji"]');
+        if (emojiEl) emojiEl.textContent = emojiMap[state] || '🌱';
+        var titleEl = card.querySelector('[data-watch-role="title"]');
+        if (titleEl) titleEl.textContent = ws.title || '';
+        var textEl = card.querySelector('[data-watch-role="text"]');
+        if (textEl) textEl.textContent = ws.text || '';
     }
 
     // KPI更新の共通関数
@@ -1728,9 +1355,8 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
                     prev: { traffic: pS, cv: pC, gsc: gscPrev, meo: mPrev }
                 })
             }).then(function(r){ return r.json(); }).then(function(scoreRes){
-                if (scoreRes.success && typeof updateScoreGauge === 'function') {
-                    updateScoreGauge(scoreRes.score);
-                    if (scoreRes.components) updateScoreBreakdownModal(scoreRes.score, scoreRes.components);
+                if (scoreRes.success && scoreRes.watch_state) {
+                    updateWatchResult(scoreRes.watch_state);
                 }
             });
         });
@@ -1818,7 +1444,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         }
 
         // キャッシュチェック（sessionStorage）
-        var _dashCacheKey = 'main_dash_kpi_v2'; // v2: breakdown_items 追加に伴いキー変更
+        var _dashCacheKey = 'main_dash_kpi_v3'; // v3: 総合点数→見守り結果カード化に伴いキー変更
         var _dashCached = window.gcrevCache && window.gcrevCache.get(_dashCacheKey);
         if (_dashCached && _dashCached.curr && _dashCached.meoData) {
             clearTimeout(timeoutId);
@@ -1832,7 +1458,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             updateInfoKpi('cv', cC + ccC, (cC + ccC) - (pC + ccP)); finishCard('cv');
             updateCvBreakdown(mergeCvBreakdown(curr.cv_breakdown_items || [], ccC));
             updateInfoKpi('meo', mCurr, mCurr - mPrev); finishCard('meo');
-            if (_dashCached.score !== undefined) updateScoreGauge(_dashCached.score);
+            if (_dashCached.watchState) updateWatchResult(_dashCached.watchState);
             return; // キャッシュヒット — API呼び出しなし
         }
 
@@ -1912,16 +1538,15 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
                     })
                 }).then(function(r){ return r.json(); }).then(function(scoreRes){
                     if (scoreRes.success) {
-                        updateScoreGauge(scoreRes.score);
-                        if (scoreRes.components) updateScoreBreakdownModal(scoreRes.score, scoreRes.components);
-                        // キャッシュに保存（スコア込み）
+                        if (scoreRes.watch_state) updateWatchResult(scoreRes.watch_state);
+                        // キャッシュに保存（見守り結果の状態込み）
                         if (window.gcrevCache) {
                             window.gcrevCache.set(_dashCacheKey, {
                                 curr: curr, prev: prev, meoData: meoData,
                                 cS: cS, pS: pS, cC: cC, pC: pC,
                                 ccCurr: ccC, ccPrev: ccP,
                                 mCurr: mCurr, mPrev: mPrev,
-                                score: scoreRes.score
+                                watchState: scoreRes.watch_state
                             });
                         }
                     }
@@ -2580,31 +2205,6 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     });
 })();
 
-// --- スコア内訳モーダル ---
-(function(){
-    var openBtn  = document.getElementById('scoreBreakdownOpen');
-    var overlay  = document.getElementById('scoreBreakdownOverlay');
-    var closeBtn = document.getElementById('scoreBreakdownClose');
-    if (!openBtn || !overlay || !closeBtn) return;
-
-    function openModal() {
-        overlay.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
-    }
-    function closeModal() {
-        overlay.style.display = 'none';
-        document.body.style.overflow = '';
-    }
-
-    openBtn.addEventListener('click', openModal);
-    closeBtn.addEventListener('click', closeModal);
-    overlay.addEventListener('click', function(e) {
-        if (e.target === overlay) closeModal();
-    });
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && overlay.style.display === 'flex') closeModal();
-    });
-})();
 </script>
 
 
