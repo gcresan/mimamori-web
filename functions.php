@@ -9781,10 +9781,41 @@ add_action( 'wp_ajax_gcrev_send_test_notification', function () {
     $year_month = ( new DateTimeImmutable( 'first day of last month', $tz ) )->format( 'Y-m' );
 
     $mail = gcrev_build_report_ready_email( $user_id, $year_month, true );
-    $sent = wp_mail( $to, $mail['subject'], $mail['body'] );
+
+    // 送信元（From）を明示。KUSANAGI 等では From 未指定だと送信拒否されることがある。
+    $site_name  = get_bloginfo( 'name' );
+    $from_email = get_option( 'gcrev_inquiry_admin_email', '' );
+    if ( empty( $from_email ) || ! is_email( $from_email ) ) {
+        $from_email = get_option( 'admin_email' );
+    }
+    $headers = [];
+    if ( is_email( $from_email ) ) {
+        $headers[] = sprintf( 'From: %s <%s>', $site_name, $from_email );
+    }
+
+    // wp_mail 失敗理由を捕捉
+    $mail_error = '';
+    $err_listener = static function ( $wp_error ) use ( &$mail_error ) {
+        if ( is_wp_error( $wp_error ) ) {
+            $mail_error = $wp_error->get_error_message();
+        }
+    };
+    add_action( 'wp_mail_failed', $err_listener );
+
+    $sent = wp_mail( $to, $mail['subject'], $mail['body'], $headers );
+
+    remove_action( 'wp_mail_failed', $err_listener );
 
     if ( ! $sent ) {
-        wp_send_json_error( 'メール送信に失敗しました。メールサーバーの設定をご確認ください。' );
+        file_put_contents(
+            '/tmp/gcrev_report_debug.log',
+            date( 'Y-m-d H:i:s' ) . " [Notify][TEST] wp_mail FAILED to={$to} from={$from_email} reason=" . ( $mail_error !== '' ? $mail_error : '(unknown)' ) . "\n",
+            FILE_APPEND
+        );
+        wp_send_json_error( [
+            'message' => 'メール送信に失敗しました。'
+                . ( $mail_error !== '' ? '（詳細: ' . $mail_error . '）' : '（サーバーのメール送信設定をご確認ください）' ),
+        ] );
     }
 
     wp_send_json_success( [ 'sent_to' => $to ] );
