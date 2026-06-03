@@ -90,7 +90,8 @@ class Gcrev_SEO_Checker {
         }
 
         // 1. URL一覧取得（sitemap → fallback: リンクディスカバリー）
-        $urls = $this->fetch_sitemap( $site_url );
+        $sitemap_urls = $this->fetch_sitemap( $site_url );
+        $urls = $sitemap_urls;
         if ( empty( $urls ) ) {
             $urls = $this->discover_urls_from_homepage( $site_url, $host );
         }
@@ -99,34 +100,59 @@ class Gcrev_SEO_Checker {
         $urls = array_unique( array_merge( [ $site_url_normalized ], $urls ) );
 
         // クライアント設定の解析対象URL条件 / 解析除外URL条件 を反映
-        // /media/ などの除外配下を SEO 診断のクロール対象から外す。
+        // /media/ などの除外配下を SEO／AIO 診断のクロール対象から外す。
         $urls = $this->apply_user_path_filters( $urls, $user_id, $site_url_normalized );
 
         $urls = array_slice( $urls, 0, self::MAX_PAGES );
 
-        // 2. クロール & 解析
+        // 2. robots.txt（サイトレベル）
+        $robots = $this->fetch_robots_txt( $site_url );
+
+        // 3. クロール & 解析
         $page_results = $this->crawl_and_analyze( $urls, $host );
 
-        // 3. スコアリング（8次元）
-        $scores = $this->compute_scores( $page_results );
+        // 4. AI判定（AI検索対応 + コンテンツ品質 + 構造化データ一致）— null ならルールベースで動作
+        $ai = $this->analyze_aio_with_ai( $page_results );
 
-        // 4. キーワード最適化分析
+        // 5. 6カテゴリを構築
+        $site_info = [ 'sitemap_urls' => $sitemap_urls ];
+        $built      = $this->build_categories( $page_results, $robots, $site_info, $ai );
+        $categories = $built['categories'];
+        $flat       = $built['flat'];
+
+        // カテゴリ別スコア & 総合スコア（参考値 = カテゴリスコアの平均）
+        $category_scores = [];
+        $score_sum       = 0;
+        foreach ( $categories as $c ) {
+            $category_scores[] = [
+                'key'    => $c['key'],
+                'label'  => $c['label'],
+                'score'  => $c['score'],
+                'status' => $c['status'],
+            ];
+            $score_sum += $c['score'];
+        }
+        $total_score = count( $categories ) > 0 ? (int) round( $score_sum / count( $categories ) ) : 0;
+        $rank        = $this->determine_rank( $total_score );
+
+        // 致命的 / 要改善 件数（項目ステータスから集計）
+        $critical_count = 0;
+        $warning_count  = 0;
+        foreach ( $flat as $it ) {
+            if ( ( $it['status'] ?? '' ) === 'critical' ) { $critical_count++; }
+            elseif ( ( $it['status'] ?? '' ) === 'caution' ) { $warning_count++; }
+        }
+
+        // 6. キーワード最適化分析（独立セクション）
         $keywords         = $this->fetch_user_keywords( $user_id );
         $keyword_coverage = [];
         $ai_analysis      = null;
-
         if ( ! empty( $keywords ) ) {
             $keyword_coverage = $this->analyze_keyword_coverage( $keywords, $page_results );
             $ai_analysis      = $this->analyze_keyword_with_ai( $keywords, $page_results );
-            $keyword_score    = $this->score_keyword_optimization( $keyword_coverage, $ai_analysis );
-            $scores[]         = $keyword_score;
         }
 
-        // 5. 総合スコア
-        $total_score = $this->compute_total_score( $scores );
-        $rank        = $this->determine_rank( $total_score );
-
-        // 6. 問題一覧（既存 + キーワード）
+        // 7. 問題一覧（ページ別 + キーワード）
         $issues = $this->compute_issues( $page_results );
         if ( ! empty( $keyword_coverage ) ) {
             $kw_issues = $this->compute_keyword_issues( $keyword_coverage, $ai_analysis );
@@ -137,7 +163,7 @@ class Gcrev_SEO_Checker {
             } );
         }
 
-        // 6b. 全issueにページタイトルを付与
+        // 7b. 全issueにページタイトルを付与
         $title_map = [];
         foreach ( $page_results as $p ) {
             $title_map[ $this->url_path( $p['url'] ) ] = $p['title'] ?? '';
@@ -147,44 +173,39 @@ class Gcrev_SEO_Checker {
         }
         unset( $_issue );
 
-        // 7. 改善提案（キーワード + 既存）
-        $recommendations = $this->compute_recommendations( $scores, $issues );
+        // 8. 改善提案（カテゴリ項目 + キーワード）
+        $recommendations = $this->build_recommendations( $flat );
         if ( ! empty( $keyword_coverage ) ) {
             $kw_recs = $this->compute_keyword_recommendations( $keyword_coverage, $ai_analysis );
             $recommendations = array_merge( $kw_recs, $recommendations );
-            // 全体を重要度順に再ソート
             $priority_order = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
             usort( $recommendations, function( $a, $b ) use ( $priority_order ) {
                 return ( $priority_order[ $a['priority'] ] ?? 9 ) - ( $priority_order[ $b['priority'] ] ?? 9 );
             } );
         }
 
-        // 8. 全体評価
-        $assessment = $this->compute_overall_assessment( $scores, $total_score, $rank );
-
-        $critical_count = 0;
-        $warning_count  = 0;
-        foreach ( $scores as $s ) {
-            if ( ! empty( $s['excluded'] ) ) { continue; }
-            if ( $s['status'] === 'critical' ) { $critical_count++; }
-            if ( $s['status'] === 'caution' )  { $warning_count++; }
-        }
+        // 9. 全体評価
+        $assessment = $this->compute_overall_assessment( $categories, $flat, $total_score );
 
         $now = ( new \DateTimeImmutable( 'now', wp_timezone() ) )->format( 'Y/m/d H:i' );
 
         $data = [
-            'version'           => 2,
+            'version'           => 3,
             'updated_at'        => $now,
             'site_url'          => $site_url,
+            'aiEnabled'         => $ai !== null,
             'siteSummary'       => [
-                'totalScore'    => $total_score,
-                'rank'          => $rank,
-                'criticalCount' => $critical_count,
-                'warningCount'  => $warning_count,
-                'pageCount'     => count( $page_results ),
-                'lastCheckedAt' => $now,
+                'totalScore'     => $total_score,
+                'rank'           => $rank,
+                'criticalCount'  => $critical_count,
+                'warningCount'   => $warning_count,
+                'pageCount'      => count( $page_results ),
+                'lastCheckedAt'  => $now,
+                'categoryScores' => $category_scores,
             ],
-            'seoChecks'         => array_values( $scores ),
+            'categories'        => $categories,
+            // 後方互換 + execution-service 用のフラット項目配列
+            'seoChecks'         => array_values( $flat ),
             'overallAssessment' => $assessment,
             'issuePages'        => $issues,
             'recommendations'   => $recommendations,
@@ -193,6 +214,7 @@ class Gcrev_SEO_Checker {
                 'aiAnalysis'   => $ai_analysis,
                 'keywordCount' => count( $keywords ),
             ],
+            'disclaimer'        => '本診断は、検索エンジンやAI検索がページ内容を理解しやすくするための改善ポイントを確認するものです。Google AI OverviewやChatGPT等での表示・引用を保証するものではありません。',
         ];
 
         $this->save_diagnosis( $user_id, $data );
@@ -355,28 +377,29 @@ class Gcrev_SEO_Checker {
      * ========================================================= */
 
     private function compute_comparison( array $current, ?array $previous ): ?array {
-        if ( ! $previous || empty( $previous['seoChecks'] ) ) {
+        // 旧形式（categories を持たない）の前回データとは比較しない
+        if ( ! $previous || empty( $previous['categories'] ) || empty( $current['categories'] ) ) {
             return null;
         }
 
-        $cur_scores  = [];
-        foreach ( $current['seoChecks'] as $c ) {
+        $cur_scores = [];
+        foreach ( $current['categories'] as $c ) {
             $cur_scores[ $c['key'] ] = $c['score'];
         }
         $prev_scores = [];
-        foreach ( $previous['seoChecks'] as $c ) {
+        foreach ( $previous['categories'] as $c ) {
             $prev_scores[ $c['key'] ] = $c['score'];
         }
 
-        $improved  = 0;
-        $worsened  = 0;
-        $per_check = [];
+        $improved     = 0;
+        $worsened     = 0;
+        $per_category = [];
         foreach ( $cur_scores as $key => $score ) {
             $prev  = $prev_scores[ $key ] ?? null;
             $delta = ( $prev !== null ) ? $score - $prev : null;
             if ( $delta !== null && $delta > 0 ) { $improved++; }
             if ( $delta !== null && $delta < 0 ) { $worsened++; }
-            $per_check[ $key ] = [
+            $per_category[ $key ] = [
                 'current'  => $score,
                 'previous' => $prev,
                 'delta'    => $delta,
@@ -391,7 +414,7 @@ class Gcrev_SEO_Checker {
             'totalScoreDelta' => $cur_total - $prev_total,
             'improvedCount'   => $improved,
             'worsenedCount'   => $worsened,
-            'perCheck'        => $per_check,
+            'perCategory'     => $per_category,
         ];
     }
 
@@ -461,6 +484,92 @@ class Gcrev_SEO_Checker {
             return [];
         }
         return $this->parse_sitemap_xml( $body, $site_url );
+    }
+
+    /**
+     * robots.txt を取得して解析する（クロール・インデックス診断用）
+     *
+     * 戻り値:
+     *   exists       … robots.txt が取得できたか
+     *   sitemaps     … Sitemap: ディレクティブの URL 一覧
+     *   blocks       … ['googlebot'=>bool, 'gptbot'=>bool, 'oai'=>bool]（トップ "/" がブロックされているか）
+     *   raw_excerpt  … 先頭抜粋（デバッグ用）
+     */
+    private function fetch_robots_txt( string $site_url ): array {
+        $robots_url = trailingslashit( $site_url ) . 'robots.txt';
+        $res = wp_remote_get( $robots_url, [
+            'timeout'             => 10,
+            'redirection'         => 3,
+            'user-agent'          => self::USER_AGENT,
+            'limit_response_size' => 256000,
+            'sslverify'           => false,
+        ] );
+
+        $result = [
+            'exists'      => false,
+            'sitemaps'    => [],
+            'blocks'      => [ 'googlebot' => false, 'gptbot' => false, 'oai' => false ],
+            'raw_excerpt' => '',
+        ];
+
+        if ( is_wp_error( $res ) || wp_remote_retrieve_response_code( $res ) !== 200 ) {
+            return $result;
+        }
+        $body = wp_remote_retrieve_body( $res );
+        if ( $body === '' ) {
+            return $result;
+        }
+
+        $result['exists']      = true;
+        $result['raw_excerpt'] = mb_substr( $body, 0, 500 );
+
+        // Sitemap ディレクティブ
+        if ( preg_match_all( '/^\s*Sitemap:\s*(\S+)/im', $body, $m ) ) {
+            $result['sitemaps'] = array_values( array_unique( $m[1] ) );
+        }
+
+        // User-agent ブロック単位で Disallow を判定
+        $result['blocks']['googlebot'] = $this->robots_blocks_root( $body, [ 'googlebot', '*' ] );
+        $result['blocks']['gptbot']    = $this->robots_blocks_root( $body, [ 'gptbot' ] );
+        $result['blocks']['oai']       = $this->robots_blocks_root( $body, [ 'oai-searchbot' ] );
+
+        return $result;
+    }
+
+    /**
+     * robots.txt 本文で、指定 User-agent 群のいずれかがルート "/" を Disallow しているか判定。
+     * "Disallow: /"（全面ブロック）のみを「ブロック」とみなす簡易判定。
+     */
+    private function robots_blocks_root( string $body, array $agents ): bool {
+        $lines       = preg_split( '/\r\n|\r|\n/', $body );
+        $applies     = false; // 現在のグループが対象 UA に該当するか
+        $in_rules    = false; // 直前にルール行を見たか（グループ境界判定用）
+        $blocked     = false;
+        foreach ( $lines as $line ) {
+            $line = trim( $line );
+            if ( $line === '' || $line[0] === '#' ) { continue; }
+
+            if ( preg_match( '/^User-agent:\s*(.+)$/i', $line, $mm ) ) {
+                // ルール行のあとに現れた User-agent は新しいグループの開始
+                if ( $in_rules ) { $applies = false; $in_rules = false; }
+                $ua = strtolower( trim( $mm[1] ) );
+                if ( in_array( $ua, $agents, true ) ) { $applies = true; }
+                continue;
+            }
+
+            if ( preg_match( '/^Disallow:\s*(.*)$/i', $line, $mm ) ) {
+                $in_rules = true;
+                if ( $applies && trim( $mm[1] ) === '/' ) { $blocked = true; }
+                continue;
+            }
+            if ( preg_match( '/^Allow:\s*(.*)$/i', $line, $mm ) ) {
+                $in_rules = true;
+                if ( $applies && trim( $mm[1] ) === '/' ) { $blocked = false; }
+                continue;
+            }
+            $in_rules = true; // Crawl-delay 等もグループ内ルールとして扱う
+        }
+        return $blocked;
     }
 
     private function parse_sitemap_xml( string $xml, string $site_url ): array {
@@ -564,12 +673,21 @@ class Gcrev_SEO_Checker {
                     'meta_description'  => '',
                     'h1'                => [],
                     'h2'                => [],
+                    'h3'                => [],
                     'images_total'      => 0,
                     'images_no_alt'     => 0,
                     'canonical'         => '',
                     'internal_links'    => 0,
                     'body_text_length'  => 0,
                     'body_text_excerpt' => '',
+                    'noindex'           => false,
+                    'og'                => [],
+                    'twitter'           => [],
+                    'meta_author'       => '',
+                    'jsonld_types'      => [],
+                    'jsonld_count'      => 0,
+                    'jsonld_invalid'    => 0,
+                    'script_count'      => 0,
                     'fetch_error'       => true,
                 ];
             }
@@ -631,6 +749,7 @@ class Gcrev_SEO_Checker {
         $xpath = new \DOMXPath( $dom );
 
         $body_text = $this->extract_body_text( $dom );
+        $jsonld    = $this->extract_jsonld( $xpath );
 
         return [
             'url'               => $url,
@@ -639,6 +758,7 @@ class Gcrev_SEO_Checker {
             'meta_description'  => $this->extract_meta_description( $xpath ),
             'h1'                => $this->extract_headings( $xpath, 'h1' ),
             'h2'                => $this->extract_headings( $xpath, 'h2' ),
+            'h3'                => $this->extract_headings( $xpath, 'h3' ),
             'images_total'      => $this->count_images( $xpath ),
             'images_no_alt'     => $this->count_images_no_alt( $xpath ),
             'canonical'         => $this->extract_canonical( $xpath ),
@@ -647,8 +767,116 @@ class Gcrev_SEO_Checker {
             // キーワード出現チェックに使うため、本文抜粋は十分な長さを確保する
             // （500字だとページ下部のキーワードを取りこぼす）
             'body_text_excerpt' => mb_substr( $body_text, 0, 3000 ),
+            // --- SEO／AIO 拡張シグナル ---
+            'noindex'           => $this->extract_noindex( $xpath ),
+            'og'                => $this->extract_og_tags( $xpath ),
+            'twitter'           => $this->extract_twitter_tags( $xpath ),
+            'meta_author'       => $this->extract_meta_author( $xpath ),
+            'jsonld_types'      => $jsonld['types'],
+            'jsonld_count'      => $jsonld['count'],
+            'jsonld_invalid'    => $jsonld['invalid'],
+            'script_count'      => $this->count_scripts( $xpath ),
             'fetch_error'       => false,
         ];
+    }
+
+    /* ---------------------------------------------------------
+     * SEO／AIO 拡張シグナル抽出
+     * ------------------------------------------------------- */
+
+    /** meta robots / googlebot に noindex があるか */
+    private function extract_noindex( \DOMXPath $xpath ): bool {
+        $nodes = $xpath->query( '//meta[translate(@name,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")="robots" or translate(@name,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")="googlebot"]/@content' );
+        if ( $nodes ) {
+            foreach ( $nodes as $n ) {
+                if ( stripos( (string) $n->nodeValue, 'noindex' ) !== false ) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** OGP（og:*）タグを連想配列で取得 */
+    private function extract_og_tags( \DOMXPath $xpath ): array {
+        $keys = [ 'og:title', 'og:description', 'og:image', 'og:site_name', 'og:locale', 'og:image:width', 'og:image:height', 'og:type', 'og:url' ];
+        $out  = [];
+        foreach ( $keys as $k ) {
+            $nodes = $xpath->query( '//meta[@property="' . $k . '"]/@content' );
+            $out[ $k ] = ( $nodes && $nodes->length > 0 ) ? trim( (string) $nodes->item( 0 )->nodeValue ) : '';
+        }
+        return $out;
+    }
+
+    /** Twitter Card（twitter:*）タグを連想配列で取得 */
+    private function extract_twitter_tags( \DOMXPath $xpath ): array {
+        $keys = [ 'twitter:card', 'twitter:title', 'twitter:description', 'twitter:image' ];
+        $out  = [];
+        foreach ( $keys as $k ) {
+            // twitter card は name 属性が標準だが property を使うサイトもあるため両対応
+            $nodes = $xpath->query( '//meta[@name="' . $k . '" or @property="' . $k . '"]/@content' );
+            $out[ $k ] = ( $nodes && $nodes->length > 0 ) ? trim( (string) $nodes->item( 0 )->nodeValue ) : '';
+        }
+        return $out;
+    }
+
+    /** meta author を取得 */
+    private function extract_meta_author( \DOMXPath $xpath ): string {
+        $nodes = $xpath->query( '//meta[translate(@name,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")="author"]/@content' );
+        if ( $nodes && $nodes->length > 0 ) {
+            return trim( (string) $nodes->item( 0 )->nodeValue );
+        }
+        return '';
+    }
+
+    /** script タグ数（JS依存度の簡易指標） */
+    private function count_scripts( \DOMXPath $xpath ): int {
+        $nodes = $xpath->query( '//script' );
+        return $nodes ? $nodes->length : 0;
+    }
+
+    /**
+     * JSON-LD 構造化データを抽出して @type 一覧・件数・壊れた件数を返す
+     */
+    private function extract_jsonld( \DOMXPath $xpath ): array {
+        $nodes   = $xpath->query( '//script[@type="application/ld+json"]' );
+        $types   = [];
+        $count   = 0;
+        $invalid = 0;
+        if ( $nodes ) {
+            foreach ( $nodes as $n ) {
+                $count++;
+                $raw     = trim( $n->textContent );
+                $decoded = json_decode( $raw, true );
+                if ( $decoded === null && json_last_error() !== JSON_ERROR_NONE ) {
+                    $invalid++;
+                    continue;
+                }
+                $this->collect_jsonld_types( $decoded, $types );
+            }
+        }
+        return [
+            'types'   => array_values( array_unique( $types ) ),
+            'count'   => $count,
+            'invalid' => $invalid,
+        ];
+    }
+
+    /** JSON-LD（入れ子・@graph 対応）から @type を再帰収集 */
+    private function collect_jsonld_types( $node, array &$types ): void {
+        if ( is_array( $node ) ) {
+            // @type は文字列または配列
+            if ( isset( $node['@type'] ) ) {
+                foreach ( (array) $node['@type'] as $t ) {
+                    if ( is_string( $t ) && $t !== '' ) { $types[] = $t; }
+                }
+            }
+            foreach ( $node as $v ) {
+                if ( is_array( $v ) ) {
+                    $this->collect_jsonld_types( $v, $types );
+                }
+            }
+        }
     }
 
     private function extract_title( \DOMXPath $xpath ): string {
@@ -750,360 +978,1044 @@ class Gcrev_SEO_Checker {
      * スコアリング
      * ========================================================= */
 
-    private function compute_scores( array $page_results ): array {
-        $scores = [];
-        $scores[] = $this->score_title( $page_results );
-        $scores[] = $this->score_meta_description( $page_results );
-        $scores[] = $this->score_headings( $page_results );
-        $scores[] = $this->score_images( $page_results );
-        $scores[] = $this->score_internal_links( $page_results );
-        $scores[] = $this->score_canonical( $page_results );
-        $scores[] = $this->score_status_codes( $page_results );
-        $scores[] = $this->score_body_content( $page_results );
-        return $scores;
-    }
+    /** 6カテゴリの定義（表示順・ラベル・説明） */
+    private const CATEGORY_DEFS = [
+        'seo_basic'   => [ 'label' => 'SEO基本設定',          'desc' => '検索結果に表示される基本情報や、ページ構造が適切に設定されているかを確認します。' ],
+        'ogp'         => [ 'label' => 'OGP・SNS表示',          'desc' => 'SNS共有時の見え方や、外部サービスがページ情報を取得しやすい状態かを確認します。' ],
+        'structured'  => [ 'label' => '構造化データ',          'desc' => '検索エンジンやAIが会社情報・サービス内容・ページ内容を理解しやすい形式で設定されているかを確認します。' ],
+        'ai_search'   => [ 'label' => 'AI検索対応',            'desc' => 'AI検索でページ内容が正しく理解・要約・引用されやすい情報設計になっているかを確認します。' ],
+        'crawl_index' => [ 'label' => 'クロール・インデックス', 'desc' => '検索エンジンやAI検索クローラーがページを取得・認識できる状態かを確認します。' ],
+        'content'     => [ 'label' => 'コンテンツ品質',        'desc' => 'ユーザーとAIの両方にとって、ページ内容が具体的で信頼できる情報になっているかを確認します。' ],
+    ];
 
-    private function score_title( array $pages ): array {
-        $score    = 10;
-        $findings = [];
-        $affected = [];
+    /** 重要度の重み（カテゴリスコア算出用） */
+    private const IMPORTANCE_WEIGHT = [ 'high' => 3, 'medium' => 2, 'low' => 1 ];
 
-        $titles    = [];
-        $missing   = 0;
-        $too_long  = 0;
-        $too_short = 0;
-
-        foreach ( $pages as $p ) {
-            if ( ! empty( $p['fetch_error'] ) ) { continue; }
-            $t = $p['title'];
-            if ( $t === '' ) {
-                $missing++;
-                $affected[] = $this->url_path( $p['url'] );
-            } else {
-                $len = mb_strlen( $t );
-                if ( $len > 60 ) { $too_long++; $affected[] = $this->url_path( $p['url'] ); }
-                elseif ( $len < 30 ) { $too_short++; $affected[] = $this->url_path( $p['url'] ); }
-                $titles[] = $t;
-            }
-        }
-
-        // 重複チェック
-        $dup_count = count( $titles ) - count( array_unique( $titles ) );
-
-        if ( $missing > 0 )   { $score -= 3; $findings[] = "titleタグが未設定のページが{$missing}つあります"; }
-        if ( $dup_count > 0 ) { $score -= 2; $findings[] = "重複したtitleが{$dup_count}件あります"; }
-        if ( $too_long > 0 )  { $score -= 1; $findings[] = "長すぎるtitle（60文字超）が{$too_long}ページあります"; }
-        if ( $too_short > 0 ) { $score -= 1; $findings[] = "短すぎるtitle（30文字未満）が{$too_short}ページあります"; }
-        if ( empty( $findings ) ) { $findings[] = 'すべてのページでtitleタグが適切に設定されています'; }
-
-        $score = max( 0, $score );
-        return [
-            'key'          => 'title_tag',
-            'label'        => 'タイトルタグ',
-            'score'        => $score,
-            'maxScore'     => 10,
-            'status'       => $this->status_from_score( $score ),
-            'findings'     => $findings,
-            'affectedUrls' => array_values( array_unique( $affected ) ),
+    /**
+     * 6カテゴリを構築する。
+     *
+     * @return array{categories: array, flat: array} categories=表示用、flat=後方互換のフラット項目配列
+     */
+    private function build_categories( array $pages, array $robots, array $site_info, ?array $ai ): array {
+        $items_by_cat = [
+            'seo_basic'   => $this->build_seo_basic_items( $pages ),
+            'ogp'         => $this->build_ogp_items( $pages ),
+            'structured'  => $this->build_structured_items( $pages, $ai ),
+            'ai_search'   => $this->build_ai_search_items( $pages, $ai ),
+            'crawl_index' => $this->build_crawl_items( $pages, $robots, $site_info ),
+            'content'     => $this->build_content_items( $pages, $ai ),
         ];
-    }
 
-    private function score_meta_description( array $pages ): array {
-        $score    = 10;
-        $findings = [];
-        $affected = [];
-
-        $descs     = [];
-        $missing   = 0;
-        $too_long  = 0;
-        $too_short = 0;
-
-        foreach ( $pages as $p ) {
-            if ( ! empty( $p['fetch_error'] ) ) { continue; }
-            $d = $p['meta_description'];
-            if ( $d === '' ) {
-                $missing++;
-                $affected[] = $this->url_path( $p['url'] );
-            } else {
-                $len = mb_strlen( $d );
-                if ( $len > 160 ) { $too_long++; $affected[] = $this->url_path( $p['url'] ); }
-                elseif ( $len < 70 ) { $too_short++; $affected[] = $this->url_path( $p['url'] ); }
-                $descs[] = $d;
+        $categories = [];
+        $flat       = [];
+        foreach ( self::CATEGORY_DEFS as $key => $def ) {
+            $items = $items_by_cat[ $key ] ?? [];
+            $score = $this->category_score( $items );
+            $categories[] = [
+                'key'    => $key,
+                'label'  => $def['label'],
+                'desc'   => $def['desc'],
+                'score'  => $score,
+                'status' => $this->status_from_percent( $score ),
+                'items'  => array_values( $items ),
+            ];
+            foreach ( $items as $it ) {
+                // execution-service / 後方互換用のフラット配列（label/status/score を保持）
+                $flat[] = [
+                    'key'          => $it['key'],
+                    'label'        => $it['label'],
+                    'name'         => $it['label'],
+                    'category'     => $def['label'],
+                    'categoryKey'  => $key,
+                    'score'        => $it['score'],
+                    'maxScore'     => $it['maxScore'],
+                    'status'       => $it['status'],
+                    'state'        => $it['state'],
+                    'importance'   => $it['importance'],
+                    'findings'     => array_values( array_filter( [ $it['currentState'] ] ) ),
+                    'affectedUrls' => $it['affectedUrls'],
+                ];
             }
         }
-
-        $dup_count = count( $descs ) - count( array_unique( $descs ) );
-
-        if ( $missing > 0 )   { $score -= 3; $findings[] = "meta descriptionが未設定のページが{$missing}つあります"; }
-        if ( $dup_count > 0 ) { $score -= 2; $findings[] = "重複したdescriptionが{$dup_count}件あります"; }
-        if ( $too_long > 0 )  { $score -= 1; $findings[] = "長すぎるdescription（160文字超）が{$too_long}ページあります"; }
-        if ( $too_short > 0 ) { $score -= 1; $findings[] = "短すぎるdescription（70文字未満）が{$too_short}ページあります"; }
-        if ( empty( $findings ) ) { $findings[] = 'すべてのページでmeta descriptionが適切に設定されています'; }
-
-        $score = max( 0, $score );
-        return [
-            'key'          => 'meta_description',
-            'label'        => 'メタディスクリプション',
-            'score'        => $score,
-            'maxScore'     => 10,
-            'status'       => $this->status_from_score( $score ),
-            'findings'     => $findings,
-            'affectedUrls' => array_values( array_unique( $affected ) ),
-        ];
-    }
-
-    private function score_headings( array $pages ): array {
-        $score    = 10;
-        $findings = [];
-        $affected = [];
-
-        $no_h1    = 0;
-        $multi_h1 = 0;
-        $empty_h1 = 0;
-        $no_h2    = 0;
-
-        foreach ( $pages as $p ) {
-            if ( ! empty( $p['fetch_error'] ) ) { continue; }
-            $h1_count = count( $p['h1'] );
-            $h2_count = count( $p['h2'] );
-
-            if ( $h1_count === 0 ) {
-                $no_h1++;
-                $affected[] = $this->url_path( $p['url'] );
-            } elseif ( $h1_count > 1 ) {
-                $multi_h1++;
-                $affected[] = $this->url_path( $p['url'] );
-            } else {
-                // h1が1つ — 空チェック
-                if ( $p['h1'][0] === '' ) {
-                    $empty_h1++;
-                    $affected[] = $this->url_path( $p['url'] );
-                }
-            }
-            if ( $h2_count === 0 ) {
-                $no_h2++;
-            }
-        }
-
-        if ( $no_h1 > 0 )    { $score -= 3; $findings[] = "h1が未設定のページが{$no_h1}つあります"; }
-        if ( $empty_h1 > 0 ) { $score -= 3; $findings[] = "h1タグが空のページが{$empty_h1}つあります"; }
-        if ( $multi_h1 > 0 ) { $score -= 2; $findings[] = "h1が複数あるページが{$multi_h1}つあります"; }
-        if ( $no_h2 > 0 )    { $score -= 1; $findings[] = "h2が未設定のページが{$no_h2}つあります"; }
-        if ( empty( $findings ) ) { $findings[] = 'すべてのページで見出し構造が適切です'; }
-
-        $score = max( 0, $score );
-        return [
-            'key'          => 'heading_structure',
-            'label'        => '見出し構造（h1 / h2）',
-            'score'        => $score,
-            'maxScore'     => 10,
-            'status'       => $this->status_from_score( $score ),
-            'findings'     => $findings,
-            'affectedUrls' => array_values( array_unique( $affected ) ),
-        ];
-    }
-
-    private function score_images( array $pages ): array {
-        $total_imgs  = 0;
-        $no_alt_imgs = 0;
-        $affected    = [];
-
-        foreach ( $pages as $p ) {
-            if ( ! empty( $p['fetch_error'] ) ) { continue; }
-            $total_imgs  += $p['images_total'];
-            $no_alt_imgs += $p['images_no_alt'];
-            if ( $p['images_no_alt'] > 0 ) {
-                $affected[] = $this->url_path( $p['url'] );
-            }
-        }
-
-        $findings = [];
-        if ( $total_imgs === 0 ) {
-            $score = 10;
-            $findings[] = '画像は検出されませんでした';
-        } else {
-            $alt_rate = ( $total_imgs - $no_alt_imgs ) / $total_imgs;
-            $score    = (int) round( $alt_rate * 10 );
-            if ( $no_alt_imgs > 0 ) {
-                $findings[] = "alt属性が未設定の画像が{$no_alt_imgs}つあります（全{$total_imgs}画像中）";
-            }
-            if ( $alt_rate >= 1.0 ) {
-                $findings[] = 'すべての画像にalt属性が設定されています';
-            }
-        }
-
-        return [
-            'key'          => 'image_alt',
-            'label'        => '画像alt属性',
-            'score'        => max( 0, $score ),
-            'maxScore'     => 10,
-            'status'       => $this->status_from_score( $score ),
-            'findings'     => $findings,
-            'affectedUrls' => array_values( array_unique( $affected ) ),
-        ];
-    }
-
-    private function score_internal_links( array $pages ): array {
-        $score       = 10;
-        $findings    = [];
-        $affected    = [];
-        $link_counts = [];
-        $zero_link   = 0;
-
-        foreach ( $pages as $p ) {
-            if ( ! empty( $p['fetch_error'] ) ) { continue; }
-            $link_counts[] = $p['internal_links'];
-            if ( $p['internal_links'] === 0 ) {
-                $zero_link++;
-                $affected[] = $this->url_path( $p['url'] );
-            }
-        }
-
-        $avg_links = count( $link_counts ) > 0 ? array_sum( $link_counts ) / count( $link_counts ) : 0;
-
-        // ページ数に応じた閾値
-        $page_count    = count( $link_counts );
-        $avg_threshold = 3;
-        if ( $page_count < 5 ) {
-            $avg_threshold = 1;
-        } elseif ( $page_count <= 10 ) {
-            $avg_threshold = 2;
-        }
-
-        if ( $zero_link > 0 )            { $score -= 3; $findings[] = "内部リンクが0のページが{$zero_link}つあります（孤立ページ）"; }
-        if ( $avg_links < $avg_threshold ) { $score -= 2; $findings[] = sprintf( '平均内部リンク数が少なめです（%.1f本/ページ）', $avg_links ); }
-        if ( empty( $findings ) )         { $findings[] = sprintf( '内部リンクは適切に設定されています（平均%.1f本/ページ）', $avg_links ); }
-
-        $score = max( 0, $score );
-        return [
-            'key'          => 'internal_links',
-            'label'        => '内部リンク',
-            'score'        => $score,
-            'maxScore'     => 10,
-            'status'       => $this->status_from_score( $score ),
-            'findings'     => $findings,
-            'affectedUrls' => array_values( array_unique( $affected ) ),
-        ];
-    }
-
-    private function score_canonical( array $pages ): array {
-        $score    = 10;
-        $findings = [];
-        $affected = [];
-        $missing  = 0;
-        $mismatch = 0;
-
-        foreach ( $pages as $p ) {
-            if ( ! empty( $p['fetch_error'] ) ) { continue; }
-            if ( $p['canonical'] === '' ) {
-                $missing++;
-                $affected[] = $this->url_path( $p['url'] );
-            } else {
-                // canonical URL不一致チェック
-                $canonical_normalized = untrailingslashit( $p['canonical'] );
-                $url_normalized       = untrailingslashit( $p['url'] );
-                // スキーム差異を無視して比較
-                $canonical_normalized = preg_replace( '#^https?://#', '', $canonical_normalized );
-                $url_normalized       = preg_replace( '#^https?://#', '', $url_normalized );
-                if ( $canonical_normalized !== $url_normalized ) {
-                    $mismatch++;
-                    $affected[] = $this->url_path( $p['url'] );
-                }
-            }
-        }
-
-        if ( $missing > 0 )  { $score -= 3; $findings[] = "canonicalタグが未設定のページが{$missing}つあります"; }
-        if ( $mismatch > 0 ) { $score -= 2; $findings[] = "canonicalのURLが実際のURLと異なるページが{$mismatch}つあります"; }
-        if ( empty( $findings ) ) { $findings[] = 'すべてのページでcanonicalタグが適切に設定されています'; }
-
-        $score = max( 0, $score );
-        return [
-            'key'          => 'canonical',
-            'label'        => 'canonical（正規URL）',
-            'score'        => $score,
-            'maxScore'     => 10,
-            'status'       => $this->status_from_score( $score ),
-            'findings'     => $findings,
-            'affectedUrls' => array_values( array_unique( $affected ) ),
-        ];
-    }
-
-    private function score_status_codes( array $pages ): array {
-        $score       = 10;
-        $findings    = [];
-        $affected    = [];
-        $error_count = 0;
-
-        foreach ( $pages as $p ) {
-            if ( $p['status_code'] !== 200 ) {
-                $error_count++;
-                $affected[] = $this->url_path( $p['url'] ) . ' (' . $p['status_code'] . ')';
-            }
-        }
-
-        if ( $error_count > 0 ) {
-            $score = max( 0, $score - ( $error_count * 3 ) );
-            $findings[] = "ステータスコードが200以外のページが{$error_count}つあります";
-        }
-        if ( empty( $findings ) ) { $findings[] = 'すべてのページが正常に表示されています（200 OK）'; }
-
-        return [
-            'key'          => 'status_code',
-            'label'        => 'ステータスコード',
-            'score'        => $score,
-            'maxScore'     => 10,
-            'status'       => $this->status_from_score( $score ),
-            'findings'     => $findings,
-            'affectedUrls' => array_values( array_unique( $affected ) ),
-        ];
+        return [ 'categories' => $categories, 'flat' => $flat ];
     }
 
     /**
-     * コンテンツ量スコアリング
+     * 1診断項目を組み立てる共通ヘルパー。
      *
-     * 確認ページ・送信完了ページ等（CONTENT_EXCLUDE_SLUGS）は
-     * コンテンツが少なくて当然なので評価対象から除外する。
+     * @param string $state good=良好 / caution=要改善 / none=未設定
      */
-    private function score_body_content( array $pages ): array {
-        $score     = 10;
-        $findings  = [];
-        $affected  = [];
-        $very_thin = 0;
-        $thin      = 0;
-        $excluded  = 0;
-
-        foreach ( $pages as $p ) {
-            if ( ! empty( $p['fetch_error'] ) ) { continue; }
-            // 確認・完了ページはコンテンツ量評価から除外
-            if ( $this->is_content_excluded_url( $p['url'] ) ) {
-                $excluded++;
-                continue;
-            }
-            $len = $p['body_text_length'] ?? 0;
-            if ( $len < 100 ) {
-                $very_thin++;
-                $affected[] = $this->url_path( $p['url'] ) . " ({$len}文字)";
-            } elseif ( $len < 300 ) {
-                $thin++;
-                $affected[] = $this->url_path( $p['url'] ) . " ({$len}文字)";
-            }
+    private function make_item( string $key, string $label, string $state, string $importance, string $current, string $reason, string $suggestion, string $fix = '', array $affected = [] ): array {
+        $state = in_array( $state, [ 'good', 'caution', 'none' ], true ) ? $state : 'caution';
+        $score = $state === 'good' ? 10 : ( $state === 'caution' ? 5 : 0 );
+        // 後方互換ステータス（ok/caution/critical）— 未設定は重要度が高ければ critical
+        if ( $state === 'good' ) {
+            $status = 'ok';
+        } elseif ( $state === 'caution' ) {
+            $status = 'caution';
+        } else {
+            $status = ( $importance === 'high' ) ? 'critical' : 'caution';
         }
-
-        if ( $very_thin > 0 ) { $score -= min( $very_thin * 5, 10 ); $findings[] = "コンテンツが極端に少ないページが{$very_thin}つあります（100文字未満）"; }
-        if ( $thin > 0 )      { $score -= min( $thin * 2, 6 );       $findings[] = "コンテンツが少なめのページが{$thin}つあります（300文字未満）"; }
-        if ( $excluded > 0 )  { $findings[] = "確認・完了ページ{$excluded}件はコンテンツ量評価の対象外としました"; }
-        if ( empty( $findings ) ) { $findings[] = 'すべてのページで十分なコンテンツ量があります'; }
-
-        $score = max( 0, $score );
         return [
-            'key'          => 'body_content',
-            'label'        => 'コンテンツ量',
+            'key'          => $key,
+            'label'        => $label,
+            'state'        => $state,
+            'importance'   => $importance,
+            'currentState' => $current,
+            'reason'       => $reason,
+            'suggestion'   => $suggestion,
+            'fixExample'   => $fix,
+            'affectedUrls' => array_values( array_unique( $affected ) ),
+            'status'       => $status,
             'score'        => $score,
             'maxScore'     => 10,
-            'status'       => $this->status_from_score( $score ),
-            'findings'     => $findings,
-            'affectedUrls' => array_values( array_unique( $affected ) ),
         ];
+    }
+
+    /** 重要度で重み付けしたカテゴリスコア（0〜100） */
+    private function category_score( array $items ): int {
+        if ( empty( $items ) ) { return 0; }
+        $w_sum = 0;
+        $s_sum = 0.0;
+        foreach ( $items as $it ) {
+            $w = self::IMPORTANCE_WEIGHT[ $it['importance'] ] ?? 1;
+            $w_sum += $w;
+            $s_sum += $w * ( $it['score'] / 10 );
+        }
+        if ( $w_sum === 0 ) { return 0; }
+        return (int) round( ( $s_sum / $w_sum ) * 100 );
+    }
+
+    private function status_from_percent( int $pct ): string {
+        if ( $pct >= 80 ) { return 'ok'; }
+        if ( $pct >= 50 ) { return 'caution'; }
+        return 'critical';
+    }
+
+    /** fetch_error でないページのみ */
+    private function valid_pages( array $pages ): array {
+        return array_values( array_filter( $pages, static function ( $p ) {
+            return empty( $p['fetch_error'] );
+        } ) );
+    }
+
+    /** 条件に一致したページの URL パス一覧 */
+    private function urls_where( array $pages, callable $cond ): array {
+        $out = [];
+        foreach ( $pages as $p ) {
+            if ( $cond( $p ) ) { $out[] = $this->url_path( $p['url'] ); }
+        }
+        return $out;
+    }
+
+    /** トップページ（パスが "/" のページ。無ければ先頭） */
+    private function homepage_page( array $pages ): ?array {
+        foreach ( $pages as $p ) {
+            $path = wp_parse_url( $p['url'], PHP_URL_PATH );
+            if ( $path === null || $path === '' || $path === '/' ) { return $p; }
+        }
+        return $pages[0] ?? null;
+    }
+
+    /** いずれかのページのテキスト（title/desc/見出し/本文抜粋）に needle 群を含むか */
+    private function any_page_contains( array $pages, array $needles ): bool {
+        foreach ( $pages as $p ) {
+            $hay = ( $p['title'] ?? '' ) . ' '
+                 . ( $p['meta_description'] ?? '' ) . ' '
+                 . implode( ' ', $p['h1'] ?? [] ) . ' '
+                 . implode( ' ', $p['h2'] ?? [] ) . ' '
+                 . implode( ' ', $p['h3'] ?? [] ) . ' '
+                 . ( $p['body_text_excerpt'] ?? '' );
+            foreach ( $needles as $n ) {
+                if ( mb_stripos( $hay, $n ) !== false ) { return true; }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * AI判定（あれば）を優先し、無ければルールベースのフォールバックで項目を作る。
+     *
+     * @param array  $fallback ['state','current','reason','suggestion','fix']
+     */
+    private function ai_item( ?array $ai, string $group, string $key, string $label, string $importance, array $fallback ): array {
+        $a = ( is_array( $ai ) && isset( $ai[ $group ][ $key ] ) && is_array( $ai[ $group ][ $key ] ) )
+            ? $ai[ $group ][ $key ] : null;
+        if ( $a && ! empty( $a['state'] ) ) {
+            return $this->make_item(
+                $key, $label,
+                (string) $a['state'], $importance,
+                (string) ( $a['currentState'] ?? $fallback['current'] ?? '' ),
+                (string) ( $a['reason']       ?? $fallback['reason'] ?? '' ),
+                (string) ( $a['suggestion']   ?? $fallback['suggestion'] ?? '' ),
+                (string) ( $a['fixExample']   ?? $fallback['fix'] ?? '' ),
+                []
+            );
+        }
+        return $this->make_item(
+            $key, $label,
+            (string) ( $fallback['state'] ?? 'caution' ), $importance,
+            (string) ( $fallback['current'] ?? '' ),
+            (string) ( $fallback['reason'] ?? '' ),
+            (string) ( $fallback['suggestion'] ?? '' ),
+            (string) ( $fallback['fix'] ?? '' ),
+            []
+        );
+    }
+
+    /* ---------------------------------------------------------
+     * カテゴリ1: SEO基本設定
+     * ------------------------------------------------------- */
+    private function build_seo_basic_items( array $pages ): array {
+        $valid = $this->valid_pages( $pages );
+        $total = max( 1, count( $valid ) );
+        $items = [];
+
+        // title 有無
+        $miss = $this->urls_where( $valid, static function ( $p ) { return $p['title'] === ''; } );
+        $items[] = $this->make_item(
+            'title_presence', 'titleタグの有無',
+            empty( $miss ) ? 'good' : 'none', 'high',
+            empty( $miss ) ? "全{$total}ページでtitleタグが設定されています。" : count( $miss ) . "ページでtitleタグが未設定です。",
+            'titleはGoogle検索結果やAI検索の見出しになり、ページ内容を伝える最重要要素です。',
+            '各ページに、内容を表す固有のtitleを設定してください。',
+            empty( $miss ) ? '' : '<title>みまもり歯科クリニック｜松山市の予防歯科・小児歯科</title>',
+            $miss
+        );
+
+        // title 文字数
+        $len_bad = $this->urls_where( $valid, static function ( $p ) {
+            if ( $p['title'] === '' ) { return false; }
+            $l = mb_strlen( $p['title'] );
+            return $l > 60 || $l < 30;
+        } );
+        $items[] = $this->make_item(
+            'title_length', 'titleタグの文字数',
+            empty( $len_bad ) ? 'good' : 'caution', 'low',
+            empty( $len_bad ) ? 'titleの文字数は適切です（30〜60文字）。' : count( $len_bad ) . 'ページでtitleが長すぎる（60文字超）か短すぎ（30文字未満）です。',
+            '60文字を超えると検索結果で末尾が省略され、短すぎると訴求力が弱まります。',
+            '重要なキーワードを前半に置き、30〜60文字に収めてください。',
+            '',
+            $len_bad
+        );
+
+        // meta description 有無
+        $miss = $this->urls_where( $valid, static function ( $p ) { return $p['meta_description'] === ''; } );
+        $items[] = $this->make_item(
+            'desc_presence', 'meta descriptionの有無',
+            empty( $miss ) ? 'good' : 'none', 'high',
+            empty( $miss ) ? "全{$total}ページでmeta descriptionが設定されています。" : count( $miss ) . 'ページでmeta descriptionが未設定です。',
+            'descriptionは検索結果やSNSの説明文として表示され、クリック率に影響します。AI検索でも内容把握の手がかりになります。',
+            '各ページに70〜120文字程度の固有の説明文を設定してください。',
+            empty( $miss ) ? '' : '<meta name="description" content="松山市の予防歯科・小児歯科。土曜診療・キッズスペース完備。痛みの少ない治療を心がけています。初診のご相談はお気軽にどうぞ。">',
+            $miss
+        );
+
+        // meta description 文字数
+        $len_bad = $this->urls_where( $valid, static function ( $p ) {
+            if ( $p['meta_description'] === '' ) { return false; }
+            $l = mb_strlen( $p['meta_description'] );
+            return $l > 160 || $l < 70;
+        } );
+        $items[] = $this->make_item(
+            'desc_length', 'meta descriptionの文字数',
+            empty( $len_bad ) ? 'good' : 'caution', 'low',
+            empty( $len_bad ) ? 'descriptionの文字数は適切です（70〜160文字）。' : count( $len_bad ) . 'ページでdescriptionが長すぎる（160文字超）か短すぎ（70文字未満）です。',
+            '160文字を超えると検索結果で省略され、短すぎると表示面積が小さくなります。',
+            '重要な情報を前半に置き、70〜160文字に収めてください。',
+            '',
+            $len_bad
+        );
+
+        // h1 有無
+        $miss = $this->urls_where( $valid, static function ( $p ) { return count( $p['h1'] ) === 0; } );
+        $items[] = $this->make_item(
+            'h1_presence', 'h1タグの有無',
+            empty( $miss ) ? 'good' : 'none', 'medium',
+            empty( $miss ) ? '全ページにh1が設定されています。' : count( $miss ) . 'ページでh1が未設定です。',
+            'h1はページの主題を検索エンジンとAIに伝える見出しです。',
+            '各ページにページの主題を表すh1を1つ設定してください。',
+            empty( $miss ) ? '' : '<h1>松山市の予防歯科・小児歯科 みまもり歯科クリニック</h1>',
+            $miss
+        );
+
+        // h1 単一
+        $multi = $this->urls_where( $valid, static function ( $p ) { return count( $p['h1'] ) > 1; } );
+        $items[] = $this->make_item(
+            'h1_single', 'h1タグが複数存在しないか',
+            empty( $multi ) ? 'good' : 'caution', 'medium',
+            empty( $multi ) ? 'h1の重複はありません。' : count( $multi ) . 'ページでh1が複数あります。',
+            'h1が複数あるとページの主題が曖昧になります。',
+            '最も重要な見出し1つだけをh1にし、他はh2以下に変更してください。',
+            '',
+            $multi
+        );
+
+        // h2 有無
+        $miss = $this->urls_where( $valid, static function ( $p ) { return count( $p['h2'] ) === 0; } );
+        $items[] = $this->make_item(
+            'h2_presence', 'h2見出しの有無',
+            empty( $miss ) ? 'good' : 'caution', 'low',
+            empty( $miss ) ? '各ページでh2見出しが使われています。' : count( $miss ) . 'ページでh2見出しがありません。',
+            'h2はページ内容を階層的に整理し、見出しだけで内容を把握しやすくします（AI検索でも有効）。',
+            '本文の段落構成に合わせてh2見出しを設定してください。',
+            '',
+            $miss
+        );
+
+        // canonical 有無
+        $miss = $this->urls_where( $valid, static function ( $p ) { return $p['canonical'] === ''; } );
+        $items[] = $this->make_item(
+            'canonical_presence', 'canonicalタグの有無',
+            empty( $miss ) ? 'good' : 'caution', 'medium',
+            empty( $miss ) ? '全ページにcanonicalが設定されています。' : count( $miss ) . 'ページでcanonicalが未設定です。',
+            'canonicalがないとURLパラメータ違いで重複コンテンツと判定されるリスクがあります。',
+            '各ページに自身の正規URLをcanonicalとして設定してください。',
+            empty( $miss ) ? '' : '<link rel="canonical" href="https://example.com/service/">',
+            $miss
+        );
+
+        // noindex 有無（SEO基本設定の観点）
+        $noidx = $this->urls_where( $valid, static function ( $p ) { return ! empty( $p['noindex'] ); } );
+        $items[] = $this->make_item(
+            'noindex_check', 'noindexの有無',
+            empty( $noidx ) ? 'good' : 'caution', 'medium',
+            empty( $noidx ) ? 'インデックス対象ページにnoindexは設定されていません。' : count( $noidx ) . 'ページにnoindexが設定されています。',
+            'noindexが付いたページは検索結果やAI検索に表示されません。意図しないページに付いていると集客機会を失います。',
+            '公開すべきページにnoindexが付いていないか確認し、不要なら外してください。',
+            '',
+            $noidx
+        );
+
+        // 画像alt
+        $no_alt = $this->urls_where( $valid, static function ( $p ) { return ( $p['images_no_alt'] ?? 0 ) > 0; } );
+        $items[] = $this->make_item(
+            'image_alt', '画像altの有無',
+            empty( $no_alt ) ? 'good' : 'caution', 'medium',
+            empty( $no_alt ) ? 'すべての画像にalt属性が設定されています。' : count( $no_alt ) . 'ページにalt未設定の画像があります。',
+            'altは画像の内容を検索エンジン・AI・スクリーンリーダーに伝えます。',
+            '各画像に内容を説明するalt属性を追加してください（装飾画像は alt="" で明示）。',
+            empty( $no_alt ) ? '' : '<img src="clinic.jpg" alt="みまもり歯科クリニックの診察室">',
+            $no_alt
+        );
+
+        // 内部リンク
+        $no_link = $this->urls_where( $valid, static function ( $p ) { return ( $p['internal_links'] ?? 0 ) === 0; } );
+        $items[] = $this->make_item(
+            'internal_links', '内部リンクの有無',
+            empty( $no_link ) ? 'good' : 'caution', 'medium',
+            empty( $no_link ) ? '各ページに内部リンクが設定されています。' : count( $no_link ) . 'ページが内部リンク0本（孤立ページ）です。',
+            '内部リンクはサイト内の回遊性とページ評価の分配、クローラーの発見性に影響します。',
+            '孤立ページへのリンクを関連ページから追加してください。',
+            '',
+            $no_link
+        );
+
+        return $items;
+    }
+
+    /* ---------------------------------------------------------
+     * カテゴリ2: OGP・SNS表示
+     * ------------------------------------------------------- */
+    private function build_ogp_items( array $pages ): array {
+        $valid = $this->valid_pages( $pages );
+        $items = [];
+
+        // 各 OGP / Twitter タグの定義: [key, label, importance, fix例]
+        $og_defs = [
+            [ 'og:title',        'og_title',        'og:title',        'medium', '<meta property="og:title" content="松山市の予防歯科 みまもり歯科クリニック">' ],
+            [ 'og:description',  'og_description',  'og:description',  'medium', '<meta property="og:description" content="土曜診療・キッズスペース完備。痛みの少ない治療を心がけています。">' ],
+            [ 'og:image',        'og_image',        'og:image',        'medium', '<meta property="og:image" content="https://example.com/ogp.jpg">' ],
+            [ 'og:site_name',    'og_site_name',    'og:site_name',    'low',    '<meta property="og:site_name" content="みまもり歯科クリニック">' ],
+            [ 'og:locale',       'og_locale',       'og:locale',       'low',    '<meta property="og:locale" content="ja_JP">' ],
+        ];
+
+        foreach ( $og_defs as $d ) {
+            list( $prop, $key, $label, $imp, $fix ) = $d;
+            $miss = $this->urls_where( $valid, static function ( $p ) use ( $prop ) {
+                return empty( $p['og'][ $prop ] );
+            } );
+            $all_miss = ( count( $miss ) === count( $valid ) && ! empty( $valid ) );
+            $items[] = $this->make_item(
+                $key, $label,
+                empty( $miss ) ? 'good' : ( $all_miss ? 'none' : 'caution' ), $imp,
+                empty( $miss ) ? "全ページで {$label} が設定されています。" : ( $all_miss ? "{$label} がどのページにも設定されていません。" : count( $miss ) . "ページで {$label} が未設定です。" ),
+                'OGPタグはSNS共有時の表示や、外部サービス・AIがページ情報を取得する手がかりになります。',
+                "{$label} を各ページに設定してください。",
+                empty( $miss ) ? '' : $fix,
+                $miss
+            );
+        }
+
+        // og:image サイズ指定（width/height）
+        $miss_size = $this->urls_where( $valid, static function ( $p ) {
+            // og:image があるのにサイズ未指定のページ
+            return ! empty( $p['og']['og:image'] ) && ( empty( $p['og']['og:image:width'] ) || empty( $p['og']['og:image:height'] ) );
+        } );
+        $has_image = $this->any_page_contains_og( $valid, 'og:image' );
+        $items[] = $this->make_item(
+            'og_image_size', 'og:imageサイズ指定（width/height）',
+            ! $has_image ? 'none' : ( empty( $miss_size ) ? 'good' : 'caution' ), 'low',
+            ! $has_image ? 'og:image自体が未設定です。' : ( empty( $miss_size ) ? 'og:imageにサイズ指定があります。' : count( $miss_size ) . 'ページでog:imageのwidth/heightが未指定です。' ),
+            'og:image:width / height の指定はSNS側で画像を即座に正しいサイズで表示するのに役立ちます。',
+            'og:image:width と og:image:height を指定してください。',
+            empty( $miss_size ) && $has_image ? '' : '<meta property="og:image:width" content="1200">' . "\n" . '<meta property="og:image:height" content="630">',
+            $miss_size
+        );
+
+        // Twitter Card 各種
+        $tw_defs = [
+            [ 'twitter:card',        'twitter_card',        'twitter:card',        'medium', '<meta name="twitter:card" content="summary_large_image">' ],
+            [ 'twitter:title',       'twitter_title',       'twitter:title',       'low',    '<meta name="twitter:title" content="松山市の予防歯科 みまもり歯科クリニック">' ],
+            [ 'twitter:description', 'twitter_description', 'twitter:description', 'low',    '<meta name="twitter:description" content="土曜診療・キッズスペース完備。">' ],
+            [ 'twitter:image',       'twitter_image',       'twitter:image',       'low',    '<meta name="twitter:image" content="https://example.com/ogp.jpg">' ],
+        ];
+        foreach ( $tw_defs as $d ) {
+            list( $prop, $key, $label, $imp, $fix ) = $d;
+            $miss = $this->urls_where( $valid, static function ( $p ) use ( $prop ) {
+                return empty( $p['twitter'][ $prop ] );
+            } );
+            $all_miss = ( count( $miss ) === count( $valid ) && ! empty( $valid ) );
+            $items[] = $this->make_item(
+                $key, $label,
+                empty( $miss ) ? 'good' : ( $all_miss ? 'none' : 'caution' ), $imp,
+                empty( $miss ) ? "全ページで {$label} が設定されています。" : ( $all_miss ? "{$label} がどのページにも設定されていません。" : count( $miss ) . "ページで {$label} が未設定です。" ),
+                'Twitter Card（X）は共有時の表示形式を制御します。未設定でもOGPで代替されますが、明示が望ましいです。',
+                "{$label} を設定してください。",
+                empty( $miss ) ? '' : $fix,
+                $miss
+            );
+        }
+
+        // meta author
+        $miss_author = $this->urls_where( $valid, static function ( $p ) { return ( $p['meta_author'] ?? '' ) === ''; } );
+        $all_miss = ( count( $miss_author ) === count( $valid ) && ! empty( $valid ) );
+        $items[] = $this->make_item(
+            'meta_author', 'meta authorタグ',
+            empty( $miss_author ) ? 'good' : ( $all_miss ? 'none' : 'caution' ), 'low',
+            empty( $miss_author ) ? '全ページにmeta authorが設定されています。' : ( $all_miss ? 'meta authorがどのページにも設定されていません。' : count( $miss_author ) . 'ページでmeta authorが未設定です。' ),
+            'meta authorは運営者・著者情報を示し、AI検索やコンテンツの信頼性評価の手がかりになります。',
+            '運営者名・著者名をmeta authorに設定してください。',
+            empty( $miss_author ) ? '' : '<meta name="author" content="みまもり歯科クリニック">',
+            $miss_author
+        );
+
+        return $items;
+    }
+
+    /** いずれかのページに指定 og プロパティがあるか */
+    private function any_page_contains_og( array $pages, string $prop ): bool {
+        foreach ( $pages as $p ) {
+            if ( ! empty( $p['og'][ $prop ] ) ) { return true; }
+        }
+        return false;
+    }
+
+    /* ---------------------------------------------------------
+     * カテゴリ3: 構造化データ（JSON-LD）
+     * ------------------------------------------------------- */
+    private function build_structured_items( array $pages, ?array $ai ): array {
+        $valid = $this->valid_pages( $pages );
+        $items = [];
+
+        // サイト全体で検出された @type 一覧と JSON-LD の有無・壊れ
+        $all_types     = [];
+        $has_jsonld    = false;
+        $invalid_urls  = [];
+        $no_jsonld_urls = [];
+        foreach ( $valid as $p ) {
+            $types = $p['jsonld_types'] ?? [];
+            if ( ( $p['jsonld_count'] ?? 0 ) > 0 ) {
+                $has_jsonld = true;
+            } else {
+                $no_jsonld_urls[] = $this->url_path( $p['url'] );
+            }
+            if ( ( $p['jsonld_invalid'] ?? 0 ) > 0 ) {
+                $invalid_urls[] = $this->url_path( $p['url'] );
+            }
+            foreach ( $types as $t ) { $all_types[] = $t; }
+        }
+        $all_types = array_map( 'strtolower', $all_types );
+        $has_type  = function ( $needle ) use ( $all_types ) {
+            return in_array( strtolower( $needle ), $all_types, true );
+        };
+
+        // JSON-LD 有無
+        $items[] = $this->make_item(
+            'jsonld_presence', 'JSON-LDの有無',
+            $has_jsonld ? 'good' : 'none', 'high',
+            $has_jsonld ? 'JSON-LD形式の構造化データが検出されました。' : 'JSON-LD形式の構造化データが検出されませんでした。',
+            '構造化データは検索エンジンやAIが会社情報・サービス・ページ内容を正確に理解する手がかりになります。',
+            'トップ・会社概要・サービスページにJSON-LDを設置してください。',
+            $has_jsonld ? '' : '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"みまもり歯科クリニック","url":"https://example.com/"}</script>',
+            $no_jsonld_urls
+        );
+
+        // JSON 形式の妥当性
+        $items[] = $this->make_item(
+            'jsonld_valid', 'JSON形式として壊れていないか',
+            empty( $invalid_urls ) ? 'good' : 'caution', 'high',
+            empty( $invalid_urls ) ? '検出されたJSON-LDはすべて正しいJSON形式です。' : count( $invalid_urls ) . 'ページでJSON-LDの構文エラーが検出されました。',
+            '壊れたJSON-LDは検索エンジンに無視され、構造化データの効果が得られません。',
+            'JSON-LDの構文（カンマ・括弧・引用符）を修正し、Rich Results Test等で検証してください。',
+            '',
+            $invalid_urls
+        );
+
+        // 各スキーマ型の有無
+        $schema_defs = [
+            [ 'Organization',   'schema_organization', 'Organizationの有無',   'medium', '会社・組織情報。AIが運営主体を理解する基盤になります。' ],
+            [ 'WebSite',        'schema_website',      'WebSiteの有無',         'low',    'サイト全体の情報。サイトリンク検索ボックス等に関わります。' ],
+            [ 'WebPage',        'schema_webpage',      'WebPageの有無',         'low',    '各ページの基本情報を明示します。' ],
+            [ 'Service',        'schema_service',      'Serviceの有無',         'low',    '提供サービスの内容をAI・検索エンジンに明示します。' ],
+            [ 'LocalBusiness',  'schema_localbusiness', 'LocalBusinessの有無',  'medium', '店舗・所在地・営業時間など地域ビジネス情報。MEO/AI検索で重要です。' ],
+            [ 'FAQPage',        'schema_faqpage',      'FAQPageの有無',         'low',    'よくある質問。AI検索で引用されやすくなります。' ],
+            [ 'BreadcrumbList', 'schema_breadcrumb',   'BreadcrumbListの有無',  'low',    'パンくず構造。サイト階層の理解を助けます。' ],
+        ];
+        foreach ( $schema_defs as $d ) {
+            list( $type, $key, $label, $imp, $reason ) = $d;
+            $present = $has_type( $type );
+            $items[] = $this->make_item(
+                $key, $label,
+                $present ? 'good' : 'none', $imp,
+                $present ? "{$type} 構造化データが検出されました。" : "{$type} 構造化データは検出されませんでした。",
+                $reason,
+                $present ? '設定済みです。内容が最新か確認してください。' : "{$type} のJSON-LDを該当ページに追加してください。",
+                '',
+                []
+            );
+        }
+
+        // 本文と構造化データの一致（AI判定）
+        $items[] = $this->ai_item(
+            $ai, 'structured', 'schema_consistency', '本文と構造化データの内容が一致しているか', 'medium',
+            [
+                'state'      => $has_jsonld ? 'caution' : 'none',
+                'current'    => $has_jsonld ? '構造化データは検出されましたが、本文との一致はAI分析時のみ判定します。' : '構造化データが無いため一致を判定できません。',
+                'reason'     => '構造化データと本文の内容が食い違うと、検索エンジンがスパムと判断したり、AIが誤った情報を引用するおそれがあります。',
+                'suggestion' => '構造化データに記載した会社名・住所・サービス内容が本文と一致しているか確認してください。',
+                'fix'        => '',
+            ]
+        );
+
+        return $items;
+    }
+
+    /* ---------------------------------------------------------
+     * カテゴリ4: AI検索対応（ルール信号 + AI判定のハイブリッド）
+     * ------------------------------------------------------- */
+    private function build_ai_search_items( array $pages, ?array $ai ): array {
+        $valid = $this->valid_pages( $pages );
+
+        // ルールベース信号（AIが使えない場合のフォールバック判定に使う）
+        $sig = $this->aio_rule_signals( $valid );
+
+        $items = [];
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'lead_summary', 'ページ冒頭に内容を簡潔に説明する要約文があるか', 'medium', [
+            'state'      => 'caution',
+            'current'    => '冒頭の要約文の有無はAI分析時に詳しく判定します。',
+            'reason'     => 'AI検索は冒頭の要約文をそのまま引用・要約に使うことが多く、要点が先頭にあると理解・引用されやすくなります。',
+            'suggestion' => 'ページ冒頭に「誰に・何を・どこで提供するか」を2〜3文でまとめた要約文を置いてください。',
+            'fix'        => '例：「みまもり歯科クリニックは松山市の予防歯科・小児歯科です。土曜診療・キッズスペース完備で、痛みの少ない治療を心がけています。」',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'entity_clarity', '会社名・サービス名・所在地・対応エリアが明確か', 'high', [
+            'state'      => $sig['area'] ? 'caution' : 'none',
+            'current'    => $sig['area'] ? '地域・エリアに関する記述が見られます（明確さはAI分析で判定）。' : '所在地・対応エリアの明確な記述が見つかりませんでした。',
+            'reason'     => 'AI検索は「どこの・何という事業者か」を特定できないと、地域検索の回答に含めにくくなります。',
+            'suggestion' => '会社名・サービス名・所在地（住所）・対応エリアを本文に明記してください。',
+            'fix'        => '例：「対応エリア：松山市・東温市・伊予市（出張対応可）」',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'audience_clarity', '誰向けのサービスか明確か', 'medium', [
+            'state'      => 'caution',
+            'current'    => '対象者の明確さはAI分析時に判定します。',
+            'reason'     => '対象者が明確だと、AIは「〇〇な人向けのサービス」として適切な質問に紐づけて回答できます。',
+            'suggestion' => '「お子様連れの方」「忙しい会社員」など、想定する利用者を本文に明記してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'offering_clarity', '何を提供しているサービスか明確か', 'high', [
+            'state'      => 'caution',
+            'current'    => '提供内容の明確さはAI分析時に判定します。',
+            'reason'     => '提供サービスが具体的だと、AIが正確に内容を要約・引用できます。',
+            'suggestion' => '提供するサービス・商品を箇条書き等で具体的に記載してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'strengths_clarity', '強みや他社との違いが明確か', 'medium', [
+            'state'      => 'caution',
+            'current'    => '強み・差別化の明確さはAI分析時に判定します。',
+            'reason'     => '独自の強みが明記されていると、AIが比較・推薦の文脈で引用しやすくなります。',
+            'suggestion' => '「他社との違い」「選ばれる理由」を具体的な根拠とともに記載してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'pricing_clarity', '料金・対応範囲・相談方法が明確か', 'medium', [
+            'state'      => $sig['pricing'] ? 'caution' : 'none',
+            'current'    => $sig['pricing'] ? '料金・相談に関する記述が見られます（明確さはAI分析で判定）。' : '料金・対応範囲・相談方法の記述が見つかりませんでした。',
+            'reason'     => '料金や相談方法が明確だと、AIがユーザーの「いくら？どう相談？」に答える際に引用できます。',
+            'suggestion' => '料金の目安、対応範囲、問い合わせ・相談の方法を明記してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'faq_presence', 'よくある質問が掲載されているか', 'medium', [
+            'state'      => $sig['faq'] ? 'good' : 'none',
+            'current'    => $sig['faq'] ? 'よくある質問（FAQ）が確認できました。' : 'よくある質問（FAQ）が見つかりませんでした。',
+            'reason'     => 'FAQは質問と回答の形式がAI検索の引用に最も適しており、回答に直接使われやすい要素です。',
+            'suggestion' => '想定される質問と回答をFAQとして掲載し、可能ならFAQPage構造化データも設定してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'proof_presence', '実績・事例・お客様の声が掲載されているか', 'medium', [
+            'state'      => $sig['proof'] ? 'good' : 'none',
+            'current'    => $sig['proof'] ? '実績・事例・お客様の声に関する記述が確認できました。' : '実績・事例・お客様の声が見つかりませんでした。',
+            'reason'     => '具体的な実績や声は信頼性の根拠となり、AIが推薦の裏付けとして引用しやすくなります。',
+            'suggestion' => '導入事例・施工事例・お客様の声などを具体的に掲載してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'operator_info', '代表者または運営者情報が掲載されているか', 'medium', [
+            'state'      => $sig['operator'] ? 'good' : 'none',
+            'current'    => $sig['operator'] ? '運営者・代表者・会社概要に関する記述が確認できました。' : '運営者・代表者情報が見つかりませんでした。',
+            'reason'     => '運営主体が明確だと、AI検索や検索エンジンの信頼性（E-E-A-T）評価が高まります。',
+            'suggestion' => '会社概要・運営者情報・代表者名を掲載してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'trust_signals', '経験年数・資格・受賞歴・対応実績などの信頼情報があるか', 'medium', [
+            'state'      => $sig['trust'] ? 'good' : 'none',
+            'current'    => $sig['trust'] ? '資格・受賞・経験年数などの信頼情報が確認できました。' : '資格・受賞歴・経験年数などの信頼情報が見つかりませんでした。',
+            'reason'     => '専門性・経験を示す情報はAIが「信頼できる情報源」と判断する材料になります。',
+            'suggestion' => '保有資格・受賞歴・創業/経験年数・対応実績などを明記してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'citable_snippet', 'AIが引用しやすい短い説明文があるか', 'medium', [
+            'state'      => 'caution',
+            'current'    => '引用しやすい短文の有無はAI分析時に判定します。',
+            'reason'     => '1〜2文で完結する説明文は、AI検索がそのまま引用しやすい形式です。',
+            'suggestion' => '事業内容を1〜2文で言い切る説明文を本文中に用意してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'heading_clarity', '見出しだけを読んでもページ内容が理解できるか', 'low', [
+            'state'      => 'caution',
+            'current'    => '見出しだけで内容が伝わるかはAI分析時に判定します。',
+            'reason'     => 'AIは見出し構造を手がかりにページを要約します。見出しだけで流れが分かると理解・引用されやすくなります。',
+            'suggestion' => '抽象的な見出しを避け、内容が分かる具体的な見出しにしてください。',
+            'fix'        => '例：「特徴」→「土曜も診療・キッズスペース完備の3つの特徴」',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'ai_search', 'term_explanation', '専門用語に補足説明があるか', 'low', [
+            'state'      => 'caution',
+            'current'    => '専門用語の補足の有無はAI分析時に判定します。',
+            'reason'     => '専門用語に補足があると、AIが内容を正しく解釈し、一般ユーザー向けに要約しやすくなります。',
+            'suggestion' => '専門用語には初出時にかっこ書き等で簡単な補足を添えてください。',
+            'fix'        => '',
+        ] );
+
+        return $items;
+    }
+
+    /** AI検索対応・コンテンツ品質のルールベース信号を一括算出 */
+    private function aio_rule_signals( array $valid ): array {
+        $has_faq_schema = false;
+        foreach ( $valid as $p ) {
+            foreach ( ( $p['jsonld_types'] ?? [] ) as $t ) {
+                if ( strtolower( $t ) === 'faqpage' ) { $has_faq_schema = true; break 2; }
+            }
+        }
+        return [
+            'faq'      => $has_faq_schema || $this->any_page_contains( $valid, [ 'よくある質問', 'FAQ', 'Q&A', 'Q＆A' ] ),
+            'proof'    => $this->any_page_contains( $valid, [ '実績', '事例', 'お客様の声', '口コミ', '症例', '導入事例', 'レビュー', 'お喜びの声' ] ),
+            'operator' => $this->any_page_contains( $valid, [ '会社概要', '運営者', '代表', '沿革', '院長', 'スタッフ紹介', '会社案内', '事業者' ] ),
+            'trust'    => $this->any_page_contains( $valid, [ '資格', '認定', '受賞', '創業', '設立', '年の実績', '有資格', '学会', '認定医', '実績多数' ] ),
+            'area'     => $this->any_page_contains( $valid, [ '対応エリア', '対応地域', 'サービスエリア', '出張', '営業エリア' ] ),
+            'pricing'  => $this->any_page_contains( $valid, [ '料金', '費用', '価格', 'プラン', '見積', '無料相談', 'お見積' ] ),
+        ];
+    }
+
+    /* ---------------------------------------------------------
+     * カテゴリ5: クロール・インデックス
+     * ------------------------------------------------------- */
+    private function build_crawl_items( array $pages, array $robots, array $site_info ): array {
+        $valid = $this->valid_pages( $pages );
+        $items = [];
+
+        // robots.txt 有無
+        $items[] = $this->make_item(
+            'robots_txt', 'robots.txtの有無',
+            ! empty( $robots['exists'] ) ? 'good' : 'none', 'medium',
+            ! empty( $robots['exists'] ) ? 'robots.txtが見つかりました。' : 'robots.txtが見つかりませんでした。',
+            'robots.txtはクローラーの巡回ルールとsitemapの場所を伝えるファイルです。',
+            'サイト直下に robots.txt を設置し、Sitemap の場所を記載してください。',
+            ! empty( $robots['exists'] ) ? '' : "User-agent: *\nAllow: /\nSitemap: https://example.com/sitemap.xml",
+            []
+        );
+
+        // Googlebot ブロック
+        $gb_blocked = ! empty( $robots['blocks']['googlebot'] );
+        $items[] = $this->make_item(
+            'googlebot_allowed', 'Googlebotがブロックされていないか',
+            $gb_blocked ? 'none' : 'good', 'high',
+            $gb_blocked ? 'robots.txtでGooglebotがサイト全体をブロックしています。' : 'Googlebotのクロールはブロックされていません。',
+            'Googlebotがブロックされると検索結果から消え、集客に致命的な影響があります。',
+            'robots.txtの "Disallow: /" を見直し、必要なページをクロール可能にしてください。',
+            '',
+            []
+        );
+
+        // GPTBot ブロック（AI検索クローラー）
+        $gpt_blocked = ! empty( $robots['blocks']['gptbot'] );
+        $items[] = $this->make_item(
+            'gptbot_allowed', 'GPTBotがブロックされていないか',
+            $gpt_blocked ? 'caution' : 'good', 'low',
+            $gpt_blocked ? 'robots.txtでGPTBot（ChatGPT系クローラー）がブロックされています。' : 'GPTBotのクロールはブロックされていません。',
+            'GPTBotをブロックするとChatGPT等のAI検索でページ内容が利用されにくくなります（意図的な遮断なら問題ありません）。',
+            'AI検索での露出を望む場合は、GPTBotのブロックを解除してください。',
+            '',
+            []
+        );
+
+        // OAI-SearchBot ブロック
+        $oai_blocked = ! empty( $robots['blocks']['oai'] );
+        $items[] = $this->make_item(
+            'oai_searchbot_allowed', 'OAI-SearchBotがブロックされていないか',
+            $oai_blocked ? 'caution' : 'good', 'low',
+            $oai_blocked ? 'robots.txtでOAI-SearchBot（OpenAIの検索クローラー）がブロックされています。' : 'OAI-SearchBotのクロールはブロックされていません。',
+            'OAI-SearchBotをブロックするとOpenAIのAI検索結果に表示されにくくなります（意図的な遮断なら問題ありません）。',
+            'AI検索での露出を望む場合は、OAI-SearchBotのブロックを解除してください。',
+            '',
+            []
+        );
+
+        // noindex（インデックス観点・重要）
+        $noidx = $this->urls_where( $valid, static function ( $p ) { return ! empty( $p['noindex'] ); } );
+        $items[] = $this->make_item(
+            'noindex_absent', 'noindexが設定されていないか',
+            empty( $noidx ) ? 'good' : 'caution', 'high',
+            empty( $noidx ) ? '公開ページにnoindexは設定されていません。' : count( $noidx ) . 'ページにnoindexが設定されています。',
+            'noindexのページは検索結果・AI検索に表示されません。重要ページに付いていると集客機会を失います。',
+            '集客対象のページにnoindexが付いていないか確認してください。',
+            '',
+            $noidx
+        );
+
+        // canonical 不適切（別URLを指す）
+        $bad_canon = $this->urls_where( $valid, function ( $p ) {
+            if ( $p['canonical'] === '' ) { return false; }
+            $c = preg_replace( '#^https?://#', '', untrailingslashit( $p['canonical'] ) );
+            $u = preg_replace( '#^https?://#', '', untrailingslashit( $p['url'] ) );
+            return $c !== $u;
+        } );
+        $items[] = $this->make_item(
+            'canonical_valid', 'canonicalが不適切なURLを指していないか',
+            empty( $bad_canon ) ? 'good' : 'caution', 'medium',
+            empty( $bad_canon ) ? 'canonicalは自ページの正規URLを指しています。' : count( $bad_canon ) . 'ページでcanonicalが別URLを指しています。',
+            'canonicalが別URLを指すと、そのページが検索結果に表示されなくなる可能性があります。',
+            'canonicalが自ページの正しいURLを指しているか確認してください。',
+            '',
+            $bad_canon
+        );
+
+        // sitemap.xml 有無
+        $has_sitemap = ! empty( $site_info['sitemap_urls'] ) || ! empty( $robots['sitemaps'] );
+        $items[] = $this->make_item(
+            'sitemap_presence', 'sitemap.xmlの有無',
+            $has_sitemap ? 'good' : 'none', 'medium',
+            $has_sitemap ? 'sitemap.xmlが検出されました。' : 'sitemap.xmlが検出されませんでした。',
+            'sitemapはクローラーにサイト内のページ一覧を伝え、発見性を高めます。',
+            'sitemap.xmlを生成し、robots.txtに場所を記載してください。',
+            $has_sitemap ? '' : 'Sitemap: https://example.com/sitemap.xml',
+            []
+        );
+
+        // sitemap カバレッジ（クロール対象がsitemapに含まれるか）
+        $sitemap_count = is_array( $site_info['sitemap_urls'] ?? null ) ? count( $site_info['sitemap_urls'] ) : 0;
+        $items[] = $this->make_item(
+            'sitemap_coverage', 'sitemap.xmlに対象ページが含まれているか',
+            ! $has_sitemap ? 'none' : ( $sitemap_count > 0 ? 'good' : 'caution' ), 'low',
+            ! $has_sitemap ? 'sitemapが無いため確認できません。' : ( $sitemap_count > 0 ? "sitemapから{$sitemap_count}件のURLを取得できました。" : 'sitemapは存在しますが対象URLを取得できませんでした。' ),
+            'sitemapに重要ページが含まれていないと、クローラーに発見されにくくなります。',
+            'sitemapに公開中の重要ページがすべて含まれているか確認してください。',
+            '',
+            []
+        );
+
+        // 重要ページがクロール可能か（200で取得できたか）
+        $err_pages = $this->urls_where( $pages, static function ( $p ) {
+            return (int) ( $p['status_code'] ?? 0 ) !== 200;
+        } );
+        $items[] = $this->make_item(
+            'important_pages_crawlable', '重要ページがクロール可能か',
+            empty( $err_pages ) ? 'good' : 'caution', 'medium',
+            empty( $err_pages ) ? '診断対象ページはすべて200 OKで取得できました。' : count( $err_pages ) . 'ページが200以外（取得失敗・エラー）でした。',
+            'クローラーが取得できないページは検索結果・AI検索に載りません。',
+            '404はリンク切れの修正かリダイレクト、5xxはサーバー側の調査を行ってください。',
+            '',
+            $err_pages
+        );
+
+        // JavaScript依存（本文がほぼ空でscriptが多いページ）
+        $js_dep = $this->urls_where( $valid, static function ( $p ) {
+            return ( $p['body_text_length'] ?? 0 ) < 150 && ( $p['script_count'] ?? 0 ) >= 5;
+        } );
+        $items[] = $this->make_item(
+            'js_dependency', 'JavaScript依存で本文取得が難しい状態でないか',
+            empty( $js_dep ) ? 'good' : 'caution', 'medium',
+            empty( $js_dep ) ? 'HTMLから本文テキストを取得できています。' : count( $js_dep ) . 'ページで本文がほぼ空（JS描画依存の可能性）でした。',
+            'JavaScriptでしか本文が表示されないと、AI検索クローラーや一部の検索エンジンが内容を取得できないことがあります。',
+            '重要な本文はHTMLに含める（SSR/静的出力）か、初期表示でテキストが見える構成にしてください。',
+            '',
+            $js_dep
+        );
+
+        return $items;
+    }
+
+    /* ---------------------------------------------------------
+     * カテゴリ6: コンテンツ品質（ルール信号 + AI判定のハイブリッド）
+     * ------------------------------------------------------- */
+    private function build_content_items( array $pages, ?array $ai ): array {
+        $valid = $this->valid_pages( $pages );
+        $sig   = $this->aio_rule_signals( $valid );
+        $items = [];
+
+        $items[] = $this->ai_item( $ai, 'content', 'purpose_clarity', 'ページの目的が明確か', 'medium', [
+            'state'      => 'caution',
+            'current'    => 'ページ目的の明確さはAI分析時に判定します。',
+            'reason'     => '目的が明確なページは、ユーザーにもAIにも「何のためのページか」が伝わりやすくなります。',
+            'suggestion' => '各ページが「誰に・何を伝え・何をしてほしいか」を明確にしてください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'content', 'answers_questions', 'ユーザーの疑問に答えているか', 'medium', [
+            'state'      => 'caution',
+            'current'    => 'ユーザーの疑問への回答状況はAI分析時に判定します。',
+            'reason'     => '想定される疑問に答えているページは滞在時間が伸び、AI検索でも回答に使われやすくなります。',
+            'suggestion' => '利用者がよく抱く疑問を洗い出し、本文やFAQで回答してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'content', 'concreteness', '具体的な説明があるか（抽象的すぎないか）', 'medium', [
+            'state'      => 'caution',
+            'current'    => '具体性はAI分析時に判定します。',
+            'reason'     => '具体的な記述は信頼性が高く、AIが要点を抽出・引用しやすくなります。',
+            'suggestion' => '「丁寧な対応」などの抽象表現を、数値・事例・手順など具体的な情報に置き換えてください。',
+            'fix'        => '例：「丁寧な対応」→「初回カウンセリングに30分かけ、治療計画を書面でお渡しします」',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'content', 'evidence', '実績や事例で裏付けされているか', 'medium', [
+            'state'      => $sig['proof'] ? 'good' : 'none',
+            'current'    => $sig['proof'] ? '実績・事例に関する記述が確認できました。' : '実績・事例による裏付けが見つかりませんでした。',
+            'reason'     => '主張を実績・事例で裏付けると、ユーザー・AI双方からの信頼が高まります。',
+            'suggestion' => '具体的な実績・事例・データを根拠として掲載してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'content', 'uniqueness', '独自性のある情報があるか', 'low', [
+            'state'      => 'caution',
+            'current'    => '独自性はAI分析時に判定します。',
+            'reason'     => '他サイトにない独自情報は、検索・AI検索での差別化につながります。',
+            'suggestion' => '自社ならではの知見・データ・体験を盛り込んでください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'content', 'eeat', '専門性・経験・信頼性が伝わるか', 'medium', [
+            'state'      => $sig['trust'] ? 'good' : 'caution',
+            'current'    => $sig['trust'] ? '資格・経験などの専門性情報が確認できました。' : '専門性・経験・信頼性を示す情報が十分か、AI分析時に判定します。',
+            'reason'     => 'E-E-A-T（経験・専門性・権威性・信頼性）は検索・AI検索の品質評価で重視されます。',
+            'suggestion' => '執筆者・運営者の専門性、経験、根拠を明示してください。',
+            'fix'        => '',
+        ] );
+
+        $items[] = $this->ai_item( $ai, 'content', 'reassurance', '問い合わせ前の不安を解消できているか', 'low', [
+            'state'      => 'caution',
+            'current'    => '不安解消の度合いはAI分析時に判定します。',
+            'reason'     => '料金・流れ・対応範囲などの不安要素に答えると、問い合わせ・成約につながりやすくなります。',
+            'suggestion' => '「料金は？」「流れは？」「対応エリアは？」など、問い合わせ前の疑問に答えてください。',
+            'fix'        => '',
+        ] );
+
+        // 関連ページへの内部リンク（ルール）
+        $low_link = $this->urls_where( $valid, static function ( $p ) { return ( $p['internal_links'] ?? 0 ) < 2; } );
+        $items[] = $this->make_item(
+            'related_links', '関連ページへの内部リンクがあるか',
+            empty( $low_link ) ? 'good' : 'caution', 'low',
+            empty( $low_link ) ? '各ページに関連ページへの内部リンクがあります。' : count( $low_link ) . 'ページで内部リンクがほとんどありません。',
+            '関連ページへのリンクは回遊性を高め、トピックの関連性をAI・検索エンジンに伝えます。',
+            '関連するサービス・事例・FAQページへの内部リンクを追加してください。',
+            '',
+            $low_link
+        );
+
+        // FAQ（ルール、AI検索対応と共有信号）
+        $items[] = $this->make_item(
+            'content_faq', 'FAQがあるか',
+            $sig['faq'] ? 'good' : 'none', 'low',
+            $sig['faq'] ? 'よくある質問（FAQ）が確認できました。' : 'よくある質問（FAQ）が見つかりませんでした。',
+            'FAQはユーザーの疑問解消とAI検索での引用の両方に効果的です。',
+            'よくある質問と回答を掲載してください。',
+            '',
+            []
+        );
+
+        // コンテンツ量（ルール、確認・完了ページは除外）
+        $thin = [];
+        foreach ( $valid as $p ) {
+            if ( $this->is_content_excluded_url( $p['url'] ) ) { continue; }
+            if ( ( $p['body_text_length'] ?? 0 ) < 300 ) {
+                $thin[] = $this->url_path( $p['url'] ) . ' (' . ( $p['body_text_length'] ?? 0 ) . '文字)';
+            }
+        }
+        $items[] = $this->make_item(
+            'thin_content', 'コンテンツ量が十分か',
+            empty( $thin ) ? 'good' : 'caution', 'medium',
+            empty( $thin ) ? '各ページに十分なコンテンツ量があります。' : count( $thin ) . 'ページでコンテンツが少なめ（300文字未満）です。',
+            'テキスト量が極端に少ないページは低品質と判定されやすく、AIも内容を要約しにくくなります。',
+            'ユーザーの疑問に答える有益な情報を追加し、テーマを深掘りしてください。',
+            '',
+            $thin
+        );
+
+        return $items;
+    }
+
+    /* ---------------------------------------------------------
+     * AI判定（AI検索対応 + コンテンツ品質 + 構造化データ一致）
+     *
+     * Gemini を1回だけ呼び出し、定性的なカテゴリの項目ごとに
+     * state / currentState / reason / suggestion / fixExample を返す。
+     * AI client が null またはエラー時は null を返し、ルールベースのフォールバックで動作する。
+     * ------------------------------------------------------- */
+    private function analyze_aio_with_ai( array $pages ): ?array {
+        if ( ! $this->ai_client ) {
+            return null;
+        }
+        $valid = $this->valid_pages( $pages );
+        if ( empty( $valid ) ) {
+            return null;
+        }
+
+        // トップページ + 代表ページ（最大4ページ）を要約してプロンプトへ
+        $home = $this->homepage_page( $valid );
+        $selected = [];
+        if ( $home ) { $selected[] = $home; }
+        foreach ( $valid as $p ) {
+            if ( count( $selected ) >= 4 ) { break; }
+            if ( $home && $p['url'] === $home['url'] ) { continue; }
+            $selected[] = $p;
+        }
+
+        $page_summaries = [];
+        foreach ( $selected as $p ) {
+            $page_summaries[] = [
+                'url'      => $this->url_path( $p['url'] ),
+                'title'    => mb_substr( $p['title'] ?? '', 0, 100 ),
+                'h1'       => implode( ' / ', array_slice( $p['h1'] ?? [], 0, 3 ) ),
+                'headings' => implode( ' / ', array_slice( array_merge( $p['h2'] ?? [], $p['h3'] ?? [] ), 0, 12 ) ),
+                'excerpt'  => mb_substr( $p['body_text_excerpt'] ?? '', 0, 1200 ),
+            ];
+        }
+
+        $sig         = $this->aio_rule_signals( $valid );
+        $jsonld_types = [];
+        foreach ( $valid as $p ) {
+            foreach ( ( $p['jsonld_types'] ?? [] ) as $t ) { $jsonld_types[] = $t; }
+        }
+        $jsonld_types = array_values( array_unique( $jsonld_types ) );
+
+        $pages_json  = wp_json_encode( $page_summaries, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT );
+        $signal_json = wp_json_encode( [
+            'faq_detected'      => $sig['faq'],
+            'proof_detected'    => $sig['proof'],
+            'operator_detected' => $sig['operator'],
+            'trust_detected'    => $sig['trust'],
+            'jsonld_types'      => $jsonld_types,
+        ], JSON_UNESCAPED_UNICODE );
+
+        $prompt = <<<PROMPT
+あなたはAI検索（ChatGPT・Google AI Overview等）とSEOに精通したコンサルタントです。
+以下のウェブサイトのページ情報をもとに、各診断項目を評価してください。
+
+【ページ情報】
+{$pages_json}
+
+【参考シグナル（ルールベース検出）】
+{$signal_json}
+
+各項目について、次のJSONオブジェクトを返してください。
+- state: "good"（良好）/ "caution"（要改善）/ "none"（未設定・見当たらない）のいずれか
+- currentState: 現在の状態を説明する1文（日本語、事実ベース。「AIに表示される」等の断定はしない）
+- reason: なぜ改善が必要か／重要かを説明する1文
+- suggestion: 具体的な改善提案を1文
+- fixExample: 可能なら短い修正例（無ければ空文字 ""）
+
+評価項目（キーは英語のまま使う）:
+ai_search:
+  lead_summary（冒頭に内容を簡潔に説明する要約文があるか）
+  entity_clarity（会社名・サービス名・所在地・対応エリアが明確か）
+  audience_clarity（誰向けのサービスか明確か）
+  offering_clarity（何を提供しているか明確か）
+  strengths_clarity（強み・他社との違いが明確か）
+  pricing_clarity（料金・対応範囲・相談方法が明確か）
+  faq_presence（よくある質問が掲載されているか）
+  proof_presence（実績・事例・お客様の声があるか）
+  operator_info（代表者・運営者情報があるか）
+  trust_signals（経験年数・資格・受賞歴・実績などの信頼情報があるか）
+  citable_snippet（AIが引用しやすい短い説明文があるか）
+  heading_clarity（見出しだけ読んでも内容が理解できるか）
+  term_explanation（専門用語に補足説明があるか）
+content:
+  purpose_clarity（ページの目的が明確か）
+  answers_questions（ユーザーの疑問に答えているか）
+  concreteness（具体的な説明があるか／抽象的すぎないか）
+  evidence（実績や事例で裏付けされているか）
+  uniqueness（独自性のある情報があるか）
+  eeat（専門性・経験・信頼性が伝わるか）
+  reassurance（問い合わせ前の不安を解消できているか）
+structured:
+  schema_consistency（本文の内容と構造化データの内容が一致しているか。構造化データが無ければ "none"）
+
+出力形式（厳守。JSON以外のテキストは出力しない）:
+```json
+{
+  "ai_search": {
+    "lead_summary": { "state": "...", "currentState": "...", "reason": "...", "suggestion": "...", "fixExample": "" }
+  },
+  "content": { },
+  "structured": { }
+}
+```
+ルール:
+- すべての項目に必ずエントリを返す
+- 断定的に「AIに表示される」「上位表示される」とは書かない。「理解・引用されやすくするための整備」という観点で書く
+- 日本語で回答する
+PROMPT;
+
+        try {
+            $raw = $this->ai_client->call_gemini_api( $prompt );
+            $raw = preg_replace( '/^```json\s*/s', '', (string) $raw );
+            $raw = preg_replace( '/\s*```\s*$/s', '', $raw );
+            $raw = trim( $raw );
+            $parsed = json_decode( $raw, true );
+            if ( ! is_array( $parsed ) ) {
+                file_put_contents( '/tmp/gcrev_seo_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " AIO analysis JSON parse failed: " . substr( $raw, 0, 500 ) . "\n",
+                    FILE_APPEND
+                );
+                return null;
+            }
+            return $parsed;
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_seo_debug.log',
+                date( 'Y-m-d H:i:s' ) . " AIO analysis error: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return null;
+        }
     }
 
     /* =========================================================
@@ -1346,112 +2258,89 @@ class Gcrev_SEO_Checker {
     }
 
     /* =========================================================
-     * 改善アクション生成
-     * ========================================================= */
-
-    private function compute_recommendations( array $scores, array $issues ): array {
-        $recs = [];
-
-        $sorted = $scores;
-        usort( $sorted, function( $a, $b ) { return $a['score'] - $b['score']; } );
-
-        $templates = [
-            'title_tag' => [
-                'title' => 'タイトルタグの改善',
-                'desc'  => '【問題】titleの未設定・重複・長さの問題が見つかりました。【影響】titleは検索結果の見出しとして表示され、クリック率に直結します。【対策】各ページに固有の30〜60文字のtitleを設定し、重要キーワードを前半に配置してください。',
-            ],
-            'meta_description' => [
-                'title' => 'メタディスクリプションの改善',
-                'desc'  => '【問題】descriptionの未設定・重複・長さの問題が見つかりました。【影響】descriptionは検索結果の説明文として表示され、クリック率に影響します。【対策】各ページに固有の70〜160文字のdescriptionを設定し、ページの魅力を簡潔に伝えてください。',
-            ],
-            'heading_structure' => [
-                'title' => '見出し構造の整理',
-                'desc'  => '【問題】h1の未設定・複数設定・空h1が見つかりました。【影響】h1はページの主題を検索エンジンに伝える最重要の見出しです。【対策】各ページにh1を1つだけ設定し、h2以下で内容を階層的に整理してください。',
-            ],
-            'image_alt' => [
-                'title' => '画像alt属性の追加',
-                'desc'  => '【問題】alt属性が未設定の画像が見つかりました。【影響】altは画像内容を検索エンジンとスクリーンリーダーに伝える重要な属性です。【対策】各画像の内容を簡潔に説明するalt属性を追加してください。装飾用画像はalt=""で明示してください。',
-            ],
-            'internal_links' => [
-                'title' => '内部リンクの強化',
-                'desc'  => '【問題】内部リンクが不足しているページが見つかりました。【影響】内部リンクはサイト内の回遊性とページ評価の分配に影響します。【対策】孤立ページへのリンクを追加し、関連ページ間の導線を整えてください。',
-            ],
-            'canonical' => [
-                'title' => 'canonicalタグの設定',
-                'desc'  => '【問題】canonicalタグの未設定またはURL不一致が見つかりました。【影響】canonicalが適切でないと重複コンテンツの問題が発生する可能性があります。【対策】各ページに自身の正規URLをcanonicalとして設定してください。',
-            ],
-            'status_code' => [
-                'title' => 'エラーページの修正',
-                'desc'  => '【問題】200以外のステータスコードを返すページがあります。【影響】エラーページはユーザー体験を損ない、検索エンジンの評価にも悪影響です。【対策】404はリンク切れの修正かリダイレクト設定、500はサーバー側エラーの原因を調査してください。',
-            ],
-            'body_content' => [
-                'title' => 'コンテンツ量の充実',
-                'desc'  => '【問題】テキスト量が少ないページが見つかりました。【影響】コンテンツが薄いページは検索エンジンから低品質と判定されやすくなります。【対策】ユーザーの疑問に答える有益な情報を追加し、ページのテーマを深掘りしてください。',
-            ],
-        ];
-
-        foreach ( $sorted as $s ) {
-            if ( $s['score'] >= 9 ) { continue; }
-            $key = $s['key'];
-            if ( isset( $templates[ $key ] ) ) {
-                $priority = 'low';
-                if ( $s['status'] === 'critical' ) { $priority = 'high'; }
-                elseif ( $s['status'] === 'caution' ) { $priority = 'medium'; }
-
-                $recs[] = [
-                    'title'       => $templates[ $key ]['title'],
-                    'description' => $templates[ $key ]['desc'],
-                    'priority'    => $priority,
-                ];
-            }
-        }
-
-        // 重要度の高い順にソート（high → medium → low）
-        $priority_order = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
-        usort( $recs, function( $a, $b ) use ( $priority_order ) {
-            return ( $priority_order[ $a['priority'] ] ?? 9 ) - ( $priority_order[ $b['priority'] ] ?? 9 );
-        } );
-
-        return $recs;
-    }
-
-    /* =========================================================
      * 全体評価
      * ========================================================= */
 
-    private function compute_overall_assessment( array $scores, int $total_score, string $rank ): array {
+    /**
+     * カテゴリ別スコアと項目から全体評価を生成する。
+     * 総合スコアはあくまで参考値として扱う。
+     */
+    private function compute_overall_assessment( array $categories, array $flat, int $total_score ): array {
         $good_points        = [];
         $improvement_points = [];
 
-        foreach ( $scores as $s ) {
-            if ( ! empty( $s['excluded'] ) ) { continue; }
-            if ( $s['score'] >= 8 ) {
-                $good_points[] = $s['label'] . 'は適切に設定されています';
+        foreach ( $categories as $c ) {
+            if ( ( $c['score'] ?? 0 ) >= 80 ) {
+                $good_points[] = "{$c['label']}は良好です（{$c['score']}点）";
+            } elseif ( ( $c['score'] ?? 0 ) < 50 ) {
+                $improvement_points[] = "{$c['label']}に改善の余地があります（{$c['score']}点）";
             }
-            if ( $s['score'] < 7 ) {
-                $first_finding = ! empty( $s['findings'] ) ? $s['findings'][0] : $s['label'] . 'に改善の余地があります';
-                $improvement_points[] = $first_finding;
-            }
+        }
+
+        // 重要度の高い未対応項目を改善ポイントに補足
+        $high_issues = array_filter( $flat, static function ( $it ) {
+            return ( $it['importance'] ?? '' ) === 'high' && ( $it['state'] ?? '' ) !== 'good';
+        } );
+        foreach ( array_slice( array_values( $high_issues ), 0, 3 ) as $it ) {
+            $improvement_points[] = "{$it['category']}：{$it['label']}（重要度：高）";
         }
 
         if ( empty( $good_points ) ) {
             $good_points[] = '診断対象のページがクロールできました';
         }
+        if ( empty( $improvement_points ) ) {
+            $improvement_points[] = '大きな問題は見つかりませんでした。細かな項目の見直しでさらに改善できます。';
+        }
 
-        $rank_desc = [
-            'A' => '良好な状態です。細かな改善でさらに強化できます。',
-            'B' => '基本的な設定は概ねできていますが、いくつかの改善点が見つかりました。',
-            'C' => '複数の改善点が見つかりました。優先度の高いものから対応してください。',
-            'D' => '基本的なSEO設定に不備があります。まず基礎項目の修正から着手してください。',
-        ];
-
-        $summary = "SEO総合スコアは{$total_score}点（{$rank}ランク）です。" . ( $rank_desc[ $rank ] ?? '' );
+        $summary = "総合スコアは{$total_score}点（参考値）です。総合点は目安であり、実際の改善ではカテゴリ別スコアと重要度の高い項目から優先して対応してください。";
 
         return [
             'summary'           => $summary,
-            'goodPoints'        => $good_points,
-            'improvementPoints' => $improvement_points,
+            'goodPoints'        => array_values( array_unique( $good_points ) ),
+            'improvementPoints' => array_values( array_unique( $improvement_points ) ),
         ];
+    }
+
+    /**
+     * フラット項目（state != good）から改善アクション提案を生成する。
+     */
+    private function build_recommendations( array $flat ): array {
+        $recs = [];
+        foreach ( $flat as $it ) {
+            if ( ( $it['state'] ?? '' ) === 'good' ) { continue; }
+
+            $imp   = $it['importance'] ?? 'low';
+            $state = $it['state'] ?? 'caution';
+            // 未設定 or 高重要度 → high、中重要度 → medium、それ以外 → low
+            if ( $imp === 'high' ) {
+                $priority = 'high';
+            } elseif ( $imp === 'medium' ) {
+                $priority = ( $state === 'none' ) ? 'high' : 'medium';
+            } else {
+                $priority = ( $state === 'none' ) ? 'medium' : 'low';
+            }
+
+            $desc = '';
+            if ( ! empty( $it['currentState'] ) ) { $desc .= '【現状】' . $it['currentState']; }
+            if ( ! empty( $it['reason'] ) )       { $desc .= '【理由】' . $it['reason']; }
+            if ( ! empty( $it['suggestion'] ) )   { $desc .= '【対策】' . $it['suggestion']; }
+            if ( ! empty( $it['fixExample'] ) )   { $desc .= '【修正例】' . $it['fixExample']; }
+
+            $recs[] = [
+                'title'       => "「{$it['category']}」{$it['label']}",
+                'description' => $desc,
+                'priority'    => $priority,
+                'category'    => $it['category'],
+            ];
+        }
+
+        $priority_order = [ 'high' => 0, 'medium' => 1, 'low' => 2 ];
+        usort( $recs, static function ( $a, $b ) use ( $priority_order ) {
+            return ( $priority_order[ $a['priority'] ] ?? 9 ) - ( $priority_order[ $b['priority'] ] ?? 9 );
+        } );
+
+        // 上位を中心に最大18件
+        return array_slice( $recs, 0, 18 );
     }
 
     /* =========================================================

@@ -500,7 +500,7 @@ get_header();
                 [ 'text' => '口コミ返信機能',             'on' => true ],
                 [ 'text' => '口コミアンケート＋AI機能',   'on' => true ],
                 [ 'text' => 'MEO運用代行',                'on' => true ],
-                [ 'text' => 'SEO診断',                    'on' => true ],
+                [ 'text' => 'SEO／AIO診断',               'on' => true ],
                 [ 'text' => '自然検索順位計測',           'on' => true ],
                 [ 'text' => 'キーワード調査',             'on' => true ],
             ],

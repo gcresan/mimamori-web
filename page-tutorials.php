@@ -827,7 +827,7 @@ get_header();
             <div class="tut-grid <?php echo $can_aio ? 'tut-grid--4col' : 'tut-grid--3col'; ?>">
                 <?php
                 $seo_cards = [
-                    [ 'img' => 'seo-check.png',        'name' => 'SEO診断',       'desc' => 'ホームページのSEO（検索対策）の状態をチェックし、改善点を見つけます。', 'url' => '/seo-check/', 'show' => true ],
+                    [ 'img' => 'seo-check.png',        'name' => 'SEO／AIO診断',  'desc' => '検索エンジンとAI検索の両面からホームページの状態をチェックし、改善点を見つけます。', 'url' => '/seo-check/', 'show' => true ],
                     [ 'img' => 'ai-report.png',        'name' => 'AIO診断',       'desc' => 'ChatGPTなどのAI検索に自社サイトがどう扱われているかを診断します。', 'url' => '/ai-report/', 'show' => $can_aio ],
                     [ 'img' => 'rank-tracker.png',     'name' => '自然検索順位',  'desc' => '計測キーワードのGoogle検索順位を毎日記録し、推移をグラフで確認できます。', 'url' => '/rank-tracker/', 'show' => true ],
                     [ 'img' => 'keyword-research.png', 'name' => 'キーワード調査','desc' => 'どんな言葉で記事を書けばお客様に届くか、AIが提案してくれます。', 'url' => '/keyword-research/', 'show' => true ],

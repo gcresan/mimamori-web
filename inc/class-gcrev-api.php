@@ -11134,7 +11134,7 @@ PROMPT;
         $card_labels = [
             'organic_rank'  => '自然検索順位',
             'map_rank'      => 'マップ順位',
-            'seo_diagnosis' => 'SEO診断',
+            'seo_diagnosis' => 'SEO／AIO診断',
             'meo_diagnosis' => 'MEO診断',
         ];
 

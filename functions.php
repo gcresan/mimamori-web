@@ -11998,7 +11998,7 @@ function mimamori_get_search_diagnostic_summary( int $user_id ): array {
     $card_names = [
         'organic_rank'  => '自然検索順位',
         'map_rank'      => 'マップ順位',
-        'seo_diagnosis' => 'SEO診断',
+        'seo_diagnosis' => 'SEO／AIO診断',
         'aio_score'     => 'AIO診断',
         'meo_diagnosis' => 'MEO診断',
     ];

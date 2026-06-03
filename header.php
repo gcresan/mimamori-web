@@ -403,7 +403,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <ul class="nav-subgroup-menu">
                            <li class="nav-item">
                               <a href="<?php echo esc_url( home_url('/seo-check/') ); ?>" class="nav-link <?php echo is_page('seo-check') ? 'active' : ''; ?>">
-                              <span>SEO診断</span>
+                              <span>SEO／AIO診断</span>
                               </a>
                            </li>
                            <?php if ( mimamori_aio_enabled() ) : ?>

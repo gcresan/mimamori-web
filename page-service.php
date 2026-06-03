@@ -223,7 +223,7 @@ get_header();
                         <li>口コミ返信機能</li>
                         <li>口コミアンケート＋AI機能</li>
                         <li>MEO運用代行</li>
-                        <li>SEO診断</li>
+                        <li>SEO／AIO診断</li>
                         <li>自然検索順位計測</li>
                         <li>キーワード調査</li>
                     </ul>
