@@ -342,8 +342,11 @@ body.seo-filter-caution  .seo-item:not([data-status="caution"])  { display: none
     <!-- トースト -->
     <div class="seo-toast" id="seoToast"></div>
 
-    <!-- ===== ヘッダーアクション（CSVダウンロード等） ===== -->
-    <div id="seoActionBar" style="display:none; justify-content:flex-end; margin-bottom:16px;">
+    <!-- ===== ヘッダーアクション（PDF / CSVダウンロード等） ===== -->
+    <div id="seoActionBar" style="display:none; justify-content:flex-end; gap:10px; margin-bottom:16px;">
+        <button class="seo-btn" id="seoPdfBtn" type="button" style="display:inline-flex;">
+            &#x1F4C4; PDF ダウンロード
+        </button>
         <button class="seo-btn" id="seoCsvBtn" type="button" style="display:inline-flex;">
             &#x2B07;&#xFE0F; CSV ダウンロード
         </button>
@@ -431,6 +434,15 @@ body.seo-filter-caution  .seo-item:not([data-status="caution"])  { display: none
 
 </div><!-- .content-area -->
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<?php
+$gcrev_pdf_export_url  = get_stylesheet_directory_uri() . '/assets/js/gcrev-pdf-export.js';
+$gcrev_pdf_export_path = get_stylesheet_directory() . '/assets/js/gcrev-pdf-export.js';
+$gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcrev_pdf_export_path ) : '1';
+?>
+<script src="<?php echo esc_url( $gcrev_pdf_export_url . '?v=' . $gcrev_pdf_export_ver ); ?>" defer></script>
+
 <script>
 (function() {
     'use strict';
@@ -509,6 +521,8 @@ body.seo-filter-caution  .seo-item:not([data-status="caution"])  { display: none
         if (clearBtn) clearBtn.addEventListener('click', clearFilter);
         var csvBtn = document.getElementById('seoCsvBtn');
         if (csvBtn) csvBtn.addEventListener('click', exportSeoCsv);
+        var pdfBtn = document.getElementById('seoPdfBtn');
+        if (pdfBtn) pdfBtn.addEventListener('click', exportSeoPdf);
         fetchReport();
     });
 
@@ -1126,6 +1140,82 @@ body.seo-filter-caution  .seo-item:not([data-status="caution"])  { display: none
         link.click();
         setTimeout(function() { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);
         showToast('CSVを書き出しました');
+    }
+
+    /* ================== PDF エクスポート ================== */
+    function exportSeoPdf() {
+        if (!lastReportData) { showToast('出力するデータがありません。', true); return; }
+        if (typeof window.GCREV === 'undefined' || typeof GCREV.exportPdf !== 'function') {
+            showToast('PDF生成ライブラリの読み込みに失敗しました。ページを再読み込みしてください。', true);
+            return;
+        }
+        var pdfBtn = document.getElementById('seoPdfBtn');
+        var csvBtn = document.getElementById('seoCsvBtn');
+        var prevLabel = pdfBtn ? pdfBtn.innerHTML : '';
+        if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.innerHTML = 'PDF 生成中...'; }
+        if (csvBtn) csvBtn.disabled = true;
+
+        // フィルタを解除してから（隠れている項目もPDFに含める）
+        clearFilter();
+
+        // 先頭にタイトル見出しを付与
+        var s = lastReportData.siteSummary || {};
+        var titleEl = document.createElement('div');
+        titleEl.innerHTML =
+            '<div style="font-size:22px;font-weight:700;color:#1A2F33;margin-bottom:4px;">SEO／AIO診断レポート</div>' +
+            '<div style="font-size:13px;color:#667;margin-bottom:6px;">診断日時: ' + esc(s.lastCheckedAt || '') +
+            '　／　総合スコア（参考値）: ' + esc(s.totalScore != null ? s.totalScore : '') + '点</div>';
+
+        // 結果セクションを順番にクローン対象へ（非表示のものは除外）
+        var ids = ['seoSummary', 'seoCatScores', 'seoDisclaimerTop', 'seoComparisonBar',
+                   'seoCategories', 'seoAssessmentSection', 'seoKeywordSection',
+                   'seoIssuesSection', 'seoActionsSection', 'seoDisclaimerBottom'];
+        var sources = [titleEl];
+        ids.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el && el.style.display !== 'none') sources.push(el);
+        });
+
+        var stage = GCREV.buildPdfStage(sources, 1000);
+        var restore = function() {
+            if (stage && stage.parentNode) stage.parentNode.removeChild(stage);
+            if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.innerHTML = prevLabel; }
+            if (csvBtn) csvBtn.disabled = false;
+        };
+        if (!stage) { restore(); showToast('PDFの生成に失敗しました。', true); return; }
+
+        // PDF用の体裁: 全項目を開く / トグル矢印・ヒント疑似要素を隠す
+        var pdfStyle = document.createElement('style');
+        pdfStyle.textContent =
+            '#gcrevPdfStage .seo-item__toggle{display:none!important;}' +
+            '#gcrevPdfStage .seo-summary-card--clickable::after{display:none!important;}' +
+            '#gcrevPdfStage .seo-item__head{cursor:default!important;}' +
+            '#gcrevPdfStage .seo-section,#gcrevPdfStage .seo-summary-card{box-shadow:none!important;}';
+        stage.insertBefore(pdfStyle, stage.firstChild);
+        stage.querySelectorAll('.seo-item').forEach(function(it) { it.classList.add('is-open'); });
+
+        var dateStr = (s.lastCheckedAt || '').replace(/[\/:\s]+/g, '-').replace(/-+$/, '') || 'report';
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                if (stage.scrollHeight < 100) {
+                    restore();
+                    showToast('レイアウトを取得できませんでした。ページを再読み込みしてください。', true);
+                    return;
+                }
+                GCREV.exportPdf({
+                    element:    stage,
+                    filename:   'SEO_AIO診断_' + dateStr + '.pdf',
+                    stageWidth: 1000
+                }).then(function() {
+                    restore();
+                    showToast('PDFを書き出しました');
+                }).catch(function(err) {
+                    console.error('[SEO/AIO] PDF', err);
+                    restore();
+                    showToast((err && err.message) ? err.message : 'PDFの生成に失敗しました。もう一度お試しください。', true);
+                });
+            });
+        });
     }
 
     /* ================== 診断実行 ================== */
