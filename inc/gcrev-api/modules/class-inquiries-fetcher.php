@@ -865,6 +865,12 @@ class Mimamori_Inquiries_Fetcher {
         if ( $force && ! self::is_current_month( $year, $month ) ) {
             $force = false;
         }
+        // お試し終了 かつ 未払いのユーザーは新規の外部API取得・AI分類を行わない（管理者は除外）。
+        // 既存のキャッシュ済みデータの閲覧は許可する。
+        if ( $force && ! current_user_can( 'manage_options' )
+             && function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+            $force = false;
+        }
 
         $result = $this->fetch_inquiry_list_classified( $user_id, $year, $month, $include_excluded, $force );
         return new \WP_REST_Response( $result, $result['success'] ? 200 : 500 );
@@ -949,6 +955,11 @@ class Mimamori_Inquiries_Fetcher {
         $user_id = self::resolve_target_user_id( $request );
         if ( $user_id === 0 ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => 'forbidden' ], 403 );
+        }
+        // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない（管理者は除外）
+        if ( ! current_user_can( 'manage_options' )
+             && function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'payment_required' ], 403 );
         }
         $year  = (int) $request->get_param( 'year' );
         $month = (int) $request->get_param( 'month' );

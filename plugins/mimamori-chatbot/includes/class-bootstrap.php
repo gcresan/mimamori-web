@@ -159,6 +159,9 @@ class Mimamori_Bot_Bootstrap {
 		$ran = 0;
 		foreach ( $tenants as $t ) {
 			if ( ( $t['status'] ?? '' ) !== 'active' ) continue;
+			// テナント所有者がお試し終了かつ未払いの場合は、OpenAI課金を伴うサジェスト生成をスキップ
+			$owner_id = (int) ( $t['user_id'] ?? 0 );
+			if ( $owner_id > 0 && function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $owner_id ) ) continue;
 			try {
 				Mimamori_Bot_Faq_Repository::compute_starter_suggestions( (int) $t['id'] );
 				$ran++;

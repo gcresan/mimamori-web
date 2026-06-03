@@ -334,6 +334,12 @@ class Gcrev_Bootstrap {
         foreach ( $users as $user ) {
             $uid = (int) $user->ID;
 
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) {
+                $skipped++;
+                continue;
+            }
+
             // 既にスナップショットがあればスキップ
             $existing = get_user_meta( $uid, $meta_key, true );
             if ( ! empty( $existing ) && is_array( $existing ) ) {
@@ -411,6 +417,12 @@ class Gcrev_Bootstrap {
 
         foreach ( array_slice( $users, 0, $max_users ) as $uid ) {
             $uid = (int) $uid;
+
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) {
+                continue;
+            }
+
             try {
                 wp_set_current_user( $uid );
 
@@ -621,6 +633,8 @@ class Gcrev_Bootstrap {
             $uid = (int) $uid_raw;
             if ( $uid <= 0 ) continue;
             if ( ! \Mimamori_Inquiries_Fetcher::is_enabled( $uid ) ) continue;
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) continue;
 
             try {
                 $result = $fetcher->fetch_and_store( $uid, $year, $month );
@@ -1533,6 +1547,15 @@ class Gcrev_Bootstrap {
         $user_id = (int) $user_ids[ $offset ];
         error_log( "[GCREV] AIO SERP chunk: processing user_id={$user_id} (offset={$offset})" );
 
+        // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない（次ユーザーへ）
+        if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+            $next_offset = $offset + 1;
+            if ( $next_offset < count( $user_ids ) ) {
+                wp_schedule_single_event( time() + 5, 'gcrev_aio_serp_chunk_event', [ $user_ids, $next_offset ] );
+            }
+            return;
+        }
+
         try {
             $config  = new Gcrev_Config();
             $service = new Gcrev_AIO_Serp_Service( $config );
@@ -1566,6 +1589,12 @@ class Gcrev_Bootstrap {
     public static function on_aio_page_analysis_event( $user_id ): void {
         $user_id = (int) $user_id;
         error_log( "[GCREV] AIO page analysis: starting for user_id={$user_id}" );
+
+        // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+        if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+            error_log( "[GCREV] AIO page analysis: SKIP user_id={$user_id} trial expired / payment inactive" );
+            return;
+        }
 
         @ignore_user_abort( true );
         if ( function_exists( 'set_time_limit' ) ) {

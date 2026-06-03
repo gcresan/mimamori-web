@@ -2026,6 +2026,14 @@ add_action( 'rest_api_init', function () {
             if ( ! is_user_logged_in() ) {
                 return false;
             }
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled() ) {
+                return new WP_Error(
+                    'payment_required',
+                    'お試し期間が終了しています。ご利用を続けるにはお手続きが必要です。',
+                    [ 'status' => 403 ]
+                );
+            }
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat' ) ) {
                 return new WP_Error(
                     'tier_insufficient',
@@ -2043,6 +2051,14 @@ add_action( 'rest_api_init', function () {
         'permission_callback' => function () {
             if ( ! is_user_logged_in() ) {
                 return false;
+            }
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled() ) {
+                return new WP_Error(
+                    'payment_required',
+                    'お試し期間が終了しています。ご利用を続けるにはお手続きが必要です。',
+                    [ 'status' => 403 ]
+                );
             }
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_voice' ) ) {
                 return new WP_Error(
@@ -9523,6 +9539,30 @@ function gcrev_get_payment_status( int $user_id = 0 ): string {
  */
 function gcrev_is_payment_active( int $user_id = 0 ): bool {
     return gcrev_get_payment_status( $user_id ) === 'paid';
+}
+
+/**
+ * このユーザーに対して外部API（GA4 / GSC / GBP / Gemini）の課金処理を
+ * 実行してよいかどうかの「単一の真実の源」。
+ *
+ * お試し期間中（期限内）または決済完了済みのユーザーのみ true。
+ * お試し期間が終了し、かつ決済が未完了のユーザーは false を返し、
+ * REST API・Cron・AIチャット・音声入力すべての課金経路でブロックされる。
+ *
+ * ※ 管理者は gcrev_is_payment_active()（gcrev_get_payment_status）が
+ *    常に 'paid' を返すため、ここでも自動的に許可される（ロックアウト防止）。
+ *
+ * @param  int  $user_id  0 の場合はログイン中ユーザー
+ * @return bool
+ */
+function gcrev_user_api_enabled( int $user_id = 0 ): bool {
+    if ( $user_id <= 0 ) {
+        $user_id = get_current_user_id();
+    }
+    if ( $user_id <= 0 ) {
+        return false;
+    }
+    return gcrev_is_trial_active( $user_id ) || gcrev_is_payment_active( $user_id );
 }
 
 // --------------------------------------------------

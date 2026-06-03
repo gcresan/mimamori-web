@@ -116,6 +116,11 @@ class Gcrev_Report_Queue {
                 continue;
             }
 
+            // お試し終了 かつ 未払いのユーザーはレポート生成（Gemini課金）対象外
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+                continue;
+            }
+
             // 既にキュー登録済み（同一 job_id + user_id + year_month）
             $exists = $wpdb->get_var( $wpdb->prepare(
                 "SELECT id FROM %i WHERE job_id = %d AND user_id = %d AND year_month = %s",

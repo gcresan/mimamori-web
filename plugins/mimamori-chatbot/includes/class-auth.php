@@ -42,6 +42,14 @@ class Mimamori_Bot_Auth {
 			return new WP_Error( 'tenant_suspended', 'tenant is suspended', [ 'status' => 403 ] );
 		}
 
+		// テナント所有者がお試し終了かつ未払いの場合は、ウィジェット稼働（OpenAI課金）を停止する。
+		// 課金情報を公開ウィジェットに漏らさないため suspended と同じ扱い・メッセージにする。
+		$owner_id = (int) ( $tenant['user_id'] ?? 0 );
+		if ( $owner_id > 0 && function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $owner_id ) ) {
+			Mimamori_Bot_Logger::warn( 'auth: owner payment inactive', [ 'tenant_id' => $tenant['id'], 'owner_id' => $owner_id ] );
+			return new WP_Error( 'tenant_suspended', 'tenant is suspended', [ 'status' => 403 ] );
+		}
+
 		$origin = self::request_origin( $request );
 		if ( ! self::is_origin_allowed( $origin, $tenant['allowed_origins'] ?? [] ) ) {
 			Mimamori_Bot_Logger::warn( 'auth: origin denied', [

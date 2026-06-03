@@ -2474,6 +2474,13 @@ class Gcrev_Insight_API {
             $this->prefetch_log( "[PREFETCH] START user_id={$user_id} ranges=" . implode( ',', $ranges ) );
             $user_had_error = false;
 
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+                $this->prefetch_log( "[PREFETCH] SKIP user_id={$user_id}: trial expired / payment inactive" );
+                $chunk_skip++;
+                continue;
+            }
+
             try {
                 $config = $this->config->get_user_config($user_id);
             } catch (\Exception $e) {
@@ -2752,6 +2759,15 @@ class Gcrev_Insight_API {
         foreach ( $user_ids as $user_id ) {
             $this->prefetch_log_file( $log_file, "slot_{$slot} START user_id={$user_id} ranges=" . implode( ',', $ranges ) );
             $user_had_error = false;
+
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+                $this->prefetch_log_file( $log_file, "slot_{$slot} SKIP user_id={$user_id}: trial expired / payment inactive" );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'trial expired / payment inactive' );
+                }
+                continue;
+            }
 
             try {
                 $config = $this->config->get_user_config( $user_id );
@@ -3100,6 +3116,15 @@ class Gcrev_Insight_API {
             $this->prefetch_log( "[MONTHLY_PREFETCH] processing: user_id={$user_id}" );
             $user_had_error = false;
             $period_errors  = [];
+
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+                $this->prefetch_log( "[MONTHLY_PREFETCH] SKIP user_id={$user_id}: trial expired / payment inactive" );
+                if ( $log_id > 0 ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'trial expired / payment inactive' );
+                }
+                continue;
+            }
 
             try {
                 $config = $this->config->get_user_config( $user_id );
@@ -5187,6 +5212,15 @@ PROMPT;
             $queue_id   = (int) $item->id;
             $user_id    = (int) $item->user_id;
             $year_month = $item->year_month;
+
+            // お試し終了 かつ 未払いのユーザーは外部API課金（レポート生成）を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+                Gcrev_Report_Queue::mark_skipped( $queue_id, 'trial expired / payment inactive' );
+                if ( $log_id > 0 && class_exists( 'Gcrev_Cron_Logger' ) ) {
+                    Gcrev_Cron_Logger::log_user( $log_id, $user_id, 'skip', 'trial expired / payment inactive' );
+                }
+                continue;
+            }
 
             // スナップショットからクライアント情報を復元
             $client_info = ! empty( $item->client_info_snapshot )
@@ -7947,6 +7981,13 @@ PROMPT;
 
         foreach ( $user_ids as $uid ) {
             $uid          = (int) $uid;
+
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) {
+                $skipped++;
+                continue;
+            }
+
             $location_id  = get_user_meta( $uid, '_gcrev_gbp_location_id', true );
             $access_token = $this->gbp_get_access_token( $uid );
 
@@ -8694,6 +8735,11 @@ PROMPT;
 
         foreach ( $user_ids as $uid ) {
             $uid = (int) $uid;
+
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) {
+                continue;
+            }
 
             // 座標情報の取得（手動 or 自動検出）
             $meo_lat = (string) get_user_meta( $uid, '_gcrev_meo_lat', true );
@@ -16451,6 +16497,11 @@ PROMPT;
         foreach ( $user_ids as $uid ) {
             $uid = (int) $uid;
 
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) {
+                continue;
+            }
+
             // target_domain が空のキーワードも対象に含める（クライアント設定のドメインで fallback）
             $keywords = $wpdb->get_results( $wpdb->prepare(
                 "SELECT * FROM {$kw_table}
@@ -17193,6 +17244,11 @@ PROMPT;
 
         foreach ( $user_ids as $uid ) {
             $uid = (int) $uid;
+
+            // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) {
+                continue;
+            }
 
             $keywords = $wpdb->get_results( $wpdb->prepare(
                 "SELECT id, keyword, location_code, language_code, volume_fetched_at

@@ -326,6 +326,11 @@ class Gcrev_Auto_Article_Service {
                 continue;
             }
 
+            // お試し終了 かつ 未払いのユーザーは外部API課金（記事生成）を一切行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+                continue;
+            }
+
             // 頻度判定（enabled + frequency）
             if ( ! $this->should_run_for_client( $user_id ) ) {
                 $freq = get_user_meta( $user_id, 'gcrev_auto_article_frequency', true ) ?: 'weekly_2';
@@ -430,6 +435,19 @@ class Gcrev_Auto_Article_Service {
         $keyword  = $item->keyword;
 
         $this->log( "[CHUNK] processing queue_id={$queue_id} user={$user_id} keyword={$keyword}" );
+
+        // お試し終了 かつ 未払いのユーザーは外部API課金（記事生成）を一切行わない
+        if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+            $this->log( "[CHUNK] SKIP queue_id={$queue_id} user={$user_id}: trial expired / payment inactive" );
+            Gcrev_Auto_Article_Queue::mark_skipped( $queue_id, 'trial expired / payment inactive' );
+            $counts = Gcrev_Auto_Article_Queue::get_counts_by_status( $job_id );
+            if ( ( $counts['pending'] ?? 0 ) > 0 ) {
+                wp_schedule_single_event( time() + self::CHUNK_DELAY_SEC, 'gcrev_auto_article_chunk_event', [ $job_id ] );
+            } else {
+                $this->finish_job( $job_id );
+            }
+            return;
+        }
 
         // コンテキスト切り替え
         $original_user = get_current_user_id();
