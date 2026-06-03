@@ -922,12 +922,50 @@ add_action( 'wpmem_login_failed', function () {
     exit;
 } );
 
+/**
+ * ログイン後リダイレクト先として安全な redirect_to を解決する。
+ *
+ * - 同一ホストのURLのみ許可（wp_validate_redirect による open-redirect 対策）
+ * - ログインページ / wp-login.php / 決済案内ページなど、リダイレクトしても
+ *   意味がない or ループする遷移先は除外
+ *
+ * @return string 安全な遷移先URL。無ければ空文字。
+ */
+function gcrev_resolve_post_login_redirect(): string {
+    $raw = isset( $_REQUEST['redirect_to'] ) ? wp_unslash( $_REQUEST['redirect_to'] ) : '';
+    if ( ! is_string( $raw ) || $raw === '' ) {
+        return '';
+    }
+    // 同一ホストのみ許可。不正なら空文字。
+    $safe = wp_validate_redirect( esc_url_raw( $raw ), '' );
+    if ( $safe === '' ) {
+        return '';
+    }
+    // ループ・無意味な遷移先を除外
+    $path     = untrailingslashit( (string) wp_parse_url( $safe, PHP_URL_PATH ) );
+    $excluded = [ '/login', '/wp-login.php', '/payment-status' ];
+    foreach ( $excluded as $ex ) {
+        if ( $path === untrailingslashit( $ex ) ) {
+            return '';
+        }
+    }
+    return $safe;
+}
+
 // ログイン後、決済ステータス / お試し期限 / プランに応じてリダイレクト先を切替
 add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
     $uid = (int) $user_id;
     // 本部アカウント → 店舗一覧ページへ (決済/お試し状態に関わらず最優先)
     if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $uid ) ) {
         return home_url('/hq/');
+    }
+    // ページ閲覧が可能なユーザー（お試し中 / 決済済み / 管理者）に限り、
+    // ログイン前にアクセスしようとしていたページ（redirect_to）へ戻す。
+    if ( gcrev_is_trial_active( $uid ) || gcrev_is_payment_active( $uid ) || user_can( $uid, 'manage_options' ) ) {
+        $requested = gcrev_resolve_post_login_redirect();
+        if ( $requested !== '' ) {
+            return $requested;
+        }
     }
     // お試し中（期限内）→ プラン別ランディングへ
     if ( gcrev_is_trial_active( $uid ) ) {
@@ -943,6 +981,43 @@ add_filter('wpmem_login_redirect', function ($redirect_to, $user_id) {
     }
     return home_url('/payment-status/');
 }, 10, 2);
+
+/**
+ * 未ログインユーザーが保護ページから /login/ へ飛ばされる際、元のアクセス先URLを
+ * redirect_to クエリとして付与する。各 page-*.php の
+ *   wp_safe_redirect( home_url('/login/') )
+ * を個別に書き換えなくても、ここで一元的に捕捉する。
+ *
+ * 対象は「未ログイン」かつ「クエリ無しの素の /login/ への遷移」のみ。
+ * ?trial_expired=1 / ?login_error=1 等クエリ付きの遷移や、ログインページ自身・
+ * ルート(/) からの遷移は対象外（ループ防止）。
+ */
+add_filter( 'wp_redirect', function ( $location, $status ) {
+    if ( is_user_logged_in() || ! is_string( $location ) || $location === '' ) {
+        return $location;
+    }
+    $login_path = untrailingslashit( (string) wp_parse_url( home_url( '/login/' ), PHP_URL_PATH ) );
+    $parts      = wp_parse_url( $location );
+    $loc_path   = isset( $parts['path'] ) ? untrailingslashit( $parts['path'] ) : '';
+
+    // 遷移先が素の /login/（クエリ無し）でなければ何もしない
+    if ( $loc_path !== $login_path || ! empty( $parts['query'] ) ) {
+        return $location;
+    }
+
+    $uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+    if ( $uri === '' ) {
+        return $location;
+    }
+    // 現在地がログインページ自身・ルート・wp-login の場合は付与しない
+    $cur_path = untrailingslashit( (string) wp_parse_url( $uri, PHP_URL_PATH ) );
+    $skip     = array_map( 'untrailingslashit', [ '/login', '', '/wp-login.php' ] );
+    if ( in_array( $cur_path, $skip, true ) ) {
+        return $location;
+    }
+
+    return add_query_arg( 'redirect_to', rawurlencode( $uri ), $location );
+}, 10, 2 );
 
 // ----------------------------------------
 // wp-login.php カスタマイズ

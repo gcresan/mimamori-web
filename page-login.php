@@ -11,7 +11,9 @@
 if ( is_user_logged_in() ) {
     $uid = get_current_user_id();
     if ( gcrev_is_trial_active( $uid ) || gcrev_is_payment_active( $uid ) ) {
-        wp_safe_redirect( home_url('/dashboard/') );
+        // ログイン前にアクセスしようとしていたページがあればそこへ
+        $target = function_exists( 'gcrev_resolve_post_login_redirect' ) ? gcrev_resolve_post_login_redirect() : '';
+        wp_safe_redirect( $target !== '' ? $target : home_url('/dashboard/') );
     } else {
         wp_safe_redirect( home_url('/payment-status/') );
     }
@@ -228,6 +230,21 @@ $page_title = trim( wp_title('', false) );
         $login_form = str_replace( 'value="Log In"',    'value="ログイン"', $login_form );
         // WP-Members が出力する英語リンク（<div class="link-text">...forgot/register...</div>）を除去
         $login_form = preg_replace( '/<div class="link-text">.*?<\/div>/si', '', $login_form );
+
+        // ログイン前にアクセスしようとしていたページを hidden で引き継ぐ
+        // （POST 後に wpmem_login_redirect フィルタが $_REQUEST['redirect_to'] を参照する）
+        $pending_redirect = isset( $_GET['redirect_to'] )
+            ? wp_validate_redirect( esc_url_raw( wp_unslash( $_GET['redirect_to'] ) ), '' )
+            : '';
+        if ( $pending_redirect !== '' ) {
+            $hidden = '<input type="hidden" name="redirect_to" value="' . esc_attr( $pending_redirect ) . '" />';
+            if ( stripos( $login_form, 'name="redirect_to"' ) !== false ) {
+                // WP-Members が既に出力している redirect_to を上書き
+                $login_form = preg_replace( '/<input[^>]*name=["\']redirect_to["\'][^>]*>/i', $hidden, $login_form, 1 );
+            } else {
+                $login_form = preg_replace( '/<\/form>/i', $hidden . '</form>', $login_form, 1 );
+            }
+        }
         echo $login_form;
         ?>
 
