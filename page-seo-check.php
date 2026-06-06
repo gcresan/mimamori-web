@@ -301,11 +301,11 @@ body.seo-filter-caution  .seo-item:not([data-status="caution"])  { display: none
 .seo-comparison-bar__item { display: inline-flex; align-items: center; gap: 4px; }
 .seo-comparison-bar__warn { width: 100%; color: #C95A4F; font-weight: 600; }
 
-/* AI分析未実施バナー */
+/* AI評価保留の情報バナー */
 .seo-ai-banner {
     padding: 12px 16px; margin-bottom: 24px;
-    background: rgba(201,168,76,0.10); border: 1px solid rgba(201,168,76,0.4);
-    border-radius: 10px; font-size: 13px; line-height: 1.7; color: var(--mw-text-primary);
+    background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light);
+    border-radius: 10px; font-size: 13px; line-height: 1.7; color: var(--mw-text-secondary);
 }
 
 /* スコアデルタ */
@@ -607,10 +607,11 @@ $gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcr
         var s = data.siteSummary || {};
         var pending = s.pendingCount || 0;
         el.style.display = '';
-        el.innerHTML = '🤖 <strong>この診断はAI分析なしで実行されました。</strong>' +
-            'AI判定が必要な項目' + (pending ? '（' + esc(pending) + '件）' : '') +
-            'は「判定保留」となり、カテゴリスコアの算出対象外です。' +
-            'AI分析ありで実行された回とのスコア比較は参考になりません。';
+        // スコア比較への注意は比較バー側（modeChanged時のみ）で表示するため、ここでは
+        // 「判定保留バッジが並ぶ理由」だけを簡潔に伝える
+        el.innerHTML = 'ℹ️ 文章内容のAI評価が必要な' +
+            (pending ? esc(pending) + '項目' : '項目') +
+            'は、今回は「判定保留」としています（スコアへの影響はありません）。';
     }
 
     /* ================== 注意書き ================== */
