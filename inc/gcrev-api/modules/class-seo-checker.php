@@ -91,13 +91,40 @@ class Gcrev_SEO_Checker {
 
         // 1. URL一覧取得（sitemap → fallback: リンクディスカバリー）
         $sitemap_urls = $this->fetch_sitemap( $site_url );
+        $site_url_normalized = trailingslashit( $site_url );
+
+        // トップページHTML（グローバルナビ抽出 + sitemap失敗時のリンクディスカバリーに使用）
+        $home_html = $this->fetch_body( $site_url_normalized );
+        $nav_urls  = $home_html ? $this->extract_nav_links( $home_html, $host ) : [];
+
         $urls = $sitemap_urls;
         if ( empty( $urls ) ) {
-            $urls = $this->discover_urls_from_homepage( $site_url, $host );
+            $urls = $home_html ? $this->extract_same_domain_links( $home_html, $host ) : [];
         }
-        // トップページを必ず先頭に
-        $site_url_normalized = trailingslashit( $site_url );
-        $urls = array_unique( array_merge( [ $site_url_normalized ], $urls ) );
+
+        // ユーティリティページ（HTMLサイトマップ・検索結果・確認/完了ページ等）を
+        // 診断対象から除外する。これらは meta 改善ではなく noindex 化を提案する対象。
+        $excluded_urls = [];
+        $filter_utility = function ( array $list ) use ( &$excluded_urls ) {
+            $kept = [];
+            foreach ( $list as $u ) {
+                if ( $this->is_utility_url( $u ) ) {
+                    $excluded_urls[] = $this->url_path( $u );
+                } else {
+                    $kept[] = $u;
+                }
+            }
+            return $kept;
+        };
+        $urls     = $filter_utility( $urls );
+        $nav_urls = $filter_utility( $nav_urls );
+        $excluded_urls = array_values( array_unique( $excluded_urls ) );
+
+        // 診断対象の優先順位:
+        // ①トップ ②グローバルナビからリンクされる固定ページ ③階層上位 ④新着記事等の残り
+        // 「新着記事優先」のサンプリングだと主要固定ページが対象に入らず、
+        // 実装済みの構造化データ等が「未設定」と誤報告されるため。
+        $urls = $this->prioritize_urls( $site_url_normalized, $nav_urls, $urls );
 
         // クライアント設定の解析対象URL条件 / 解析除外URL条件 を反映
         // /media/ などの除外配下を SEO／AIO 診断のクロール対象から外す。
@@ -110,6 +137,18 @@ class Gcrev_SEO_Checker {
 
         // 3. クロール & 解析
         $page_results = $this->crawl_and_analyze( $urls, $host );
+
+        // 集客上重要なページ（トップ・ナビ掲載ページ）をマーク
+        // title文字数等、記事系ページとは評価基準を分ける判定に使う
+        $priority_paths = [ '/' ];
+        foreach ( $nav_urls as $nu ) {
+            $priority_paths[] = untrailingslashit( $this->url_path( $nu ) ) ?: '/';
+        }
+        foreach ( $page_results as &$_pr ) {
+            $pr_path = untrailingslashit( $this->url_path( $_pr['url'] ) ) ?: '/';
+            $_pr['is_priority'] = in_array( $pr_path, $priority_paths, true );
+        }
+        unset( $_pr );
 
         // 4. AI判定（AI検索対応 + コンテンツ品質 + 構造化データ一致）— null ならルールベースで動作
         $ai = $this->analyze_aio_with_ai( $page_results );
@@ -135,12 +174,15 @@ class Gcrev_SEO_Checker {
         $total_score = count( $categories ) > 0 ? (int) round( $score_sum / count( $categories ) ) : 0;
         $rank        = $this->determine_rank( $total_score );
 
-        // 致命的 / 要改善 件数（項目ステータスから集計）
+        // 致命的 / 要改善 / 判定保留 件数（項目ステータスから集計）
+        // pending（AI分析未実施）は致命的にも要改善にもカウントしない
         $critical_count = 0;
         $warning_count  = 0;
+        $pending_count  = 0;
         foreach ( $flat as $it ) {
             if ( ( $it['status'] ?? '' ) === 'critical' ) { $critical_count++; }
             elseif ( ( $it['status'] ?? '' ) === 'caution' ) { $warning_count++; }
+            elseif ( ( $it['status'] ?? '' ) === 'pending' ) { $pending_count++; }
         }
 
         // 6. キーワード最適化分析（独立セクション）
@@ -175,6 +217,16 @@ class Gcrev_SEO_Checker {
 
         // 8. 改善提案（カテゴリ項目 + キーワード）
         $recommendations = $this->build_recommendations( $flat );
+        // 除外したユーティリティページには meta 改善ではなく noindex 化を提案
+        if ( ! empty( $excluded_urls ) ) {
+            $shown = implode( '、', array_slice( $excluded_urls, 0, 5 ) )
+                   . ( count( $excluded_urls ) > 5 ? ' ほか' : '' );
+            $recommendations[] = [
+                'title'       => 'ユーティリティページの noindex 化',
+                'description' => "【現状】HTMLサイトマップ・検索結果・確認/完了ページ等のユーティリティページ（{$shown}）は診断対象から除外しました。【対策】これらのページは個別のメタ情報改善ではなく、noindex の設定または無効化を検討してください。",
+                'priority'    => 'low',
+            ];
+        }
         if ( ! empty( $keyword_coverage ) ) {
             $kw_recs = $this->compute_keyword_recommendations( $keyword_coverage, $ai_analysis );
             $recommendations = array_merge( $kw_recs, $recommendations );
@@ -199,11 +251,14 @@ class Gcrev_SEO_Checker {
                 'rank'           => $rank,
                 'criticalCount'  => $critical_count,
                 'warningCount'   => $warning_count,
+                'pendingCount'   => $pending_count,
                 'pageCount'      => count( $page_results ),
                 'lastCheckedAt'  => $now,
                 'categoryScores' => $category_scores,
             ],
             'categories'        => $categories,
+            // 診断対象から除外したユーティリティページ（noindex化を提案）
+            'excludedUrls'      => $excluded_urls,
             // 後方互換 + execution-service 用のフラット項目配列
             'seoChecks'         => array_values( $flat ),
             'overallAssessment' => $assessment,
@@ -409,12 +464,17 @@ class Gcrev_SEO_Checker {
         $cur_total  = $current['siteSummary']['totalScore'] ?? 0;
         $prev_total = $previous['siteSummary']['totalScore'] ?? 0;
 
+        // AI分析の有無が異なる回同士のスコア比較は無効（判定対象が変わるため）
+        $cur_ai  = (bool) ( $current['aiEnabled'] ?? true );
+        $prev_ai = (bool) ( $previous['aiEnabled'] ?? true );
+
         return [
             'previousDate'    => $previous['updated_at'] ?? $previous['siteSummary']['lastCheckedAt'] ?? null,
             'totalScoreDelta' => $cur_total - $prev_total,
             'improvedCount'   => $improved,
             'worsenedCount'   => $worsened,
             'perCategory'     => $per_category,
+            'modeChanged'     => $cur_ai !== $prev_ai,
         ];
     }
 
@@ -616,14 +676,89 @@ class Gcrev_SEO_Checker {
     }
 
     /**
-     * トップページからリンクディスカバリー（sitemap取得失敗時のフォールバック）
+     * トップページHTMLからグローバルナビゲーション（nav / header 内）のリンクを抽出する。
+     *
+     * ナビに掲載されているページ＝会社概要・サービス・お問い合わせ等の主要固定ページであり、
+     * 診断対象サンプリングで最優先に含める。
      */
-    private function discover_urls_from_homepage( string $site_url, string $host ): array {
-        $html = $this->fetch_body( $site_url );
-        if ( ! $html ) {
-            return [];
+    private function extract_nav_links( string $html, string $host ): array {
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors( true );
+        @$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
+        libxml_clear_errors();
+        $xpath = new \DOMXPath( $dom );
+        // nav 要素 + header 内 + class/id に nav/menu を含む要素内のリンク
+        $nodes = $xpath->query(
+            '//nav//a[@href] | //header//a[@href]'
+            . ' | //*[contains(concat(" ", normalize-space(@class), " "), " nav") or contains(@class, "menu") or contains(@id, "nav") or contains(@id, "menu")]//a[@href]'
+        );
+        $urls = [];
+        if ( $nodes ) {
+            foreach ( $nodes as $node ) {
+                $href = trim( $node->getAttribute( 'href' ) );
+                if ( ! $href || $href[0] === '#' || strpos( $href, 'javascript:' ) === 0 || strpos( $href, 'mailto:' ) === 0 || strpos( $href, 'tel:' ) === 0 ) {
+                    continue;
+                }
+                if ( strpos( $href, '//' ) === false ) {
+                    $href = 'https://' . $host . '/' . ltrim( $href, '/' );
+                }
+                $href = strtok( $href, '?#' );
+                $h = wp_parse_url( $href, PHP_URL_HOST );
+                if ( $h !== $host ) { continue; }
+                if ( preg_match( '#\.(jpg|jpeg|png|gif|svg|webp|pdf|zip|css|js)$#i', $href ) ) { continue; }
+                if ( preg_match( '#/wp-(admin|login|content|includes|json)/#', $href ) ) { continue; }
+                $urls[] = $href;
+            }
         }
-        return $this->extract_same_domain_links( $html, $host );
+        return array_values( array_unique( $urls ) );
+    }
+
+    /**
+     * 診断対象URLを ①トップ ②ナビ掲載固定ページ ③階層上位 ④残り（新着記事等）の
+     * 優先順位で並べ替える。重複は正規化（末尾スラッシュ除去）したURLで除去。
+     */
+    private function prioritize_urls( string $top, array $nav_urls, array $urls ): array {
+        // ③ 階層上位（パスのセグメント数が少ない順、同数なら元の順序）
+        $indexed = [];
+        foreach ( array_values( $urls ) as $i => $u ) {
+            $path  = (string) wp_parse_url( $u, PHP_URL_PATH );
+            $depth = count( array_filter( explode( '/', trim( $path, '/' ) ), 'strlen' ) );
+            $indexed[] = [ 'url' => $u, 'depth' => $depth, 'idx' => $i ];
+        }
+        usort( $indexed, static function ( $a, $b ) {
+            return ( $a['depth'] <=> $b['depth'] ) ?: ( $a['idx'] <=> $b['idx'] );
+        } );
+
+        $ordered = array_merge( [ $top ], $nav_urls, array_column( $indexed, 'url' ) );
+
+        $seen = [];
+        $out  = [];
+        foreach ( $ordered as $u ) {
+            $key = untrailingslashit( $u );
+            if ( isset( $seen[ $key ] ) ) { continue; }
+            $seen[ $key ] = true;
+            $out[] = $u;
+        }
+        return $out;
+    }
+
+    /**
+     * 診断対象から除外するユーティリティページか判定する。
+     *
+     * HTMLサイトマップ・検索結果・フィード・確認/完了ページ等は
+     * メタ情報が薄くて当然であり、診断対象に含めると誤った「致命的な問題」を生む。
+     * これらには個別のメタ改善ではなく noindex 化を提案する。
+     */
+    private function is_utility_url( string $url ): bool {
+        $path = strtolower( (string) wp_parse_url( $url, PHP_URL_PATH ) );
+        if ( $path === '' || $path === '/' ) { return false; }
+        $slug = strtolower( basename( rtrim( $path, '/' ) ) );
+        // HTMLサイトマップ（/sitemap.html, /sitemap/, /sitemap_index 等）
+        if ( strpos( $slug, 'sitemap' ) !== false ) { return true; }
+        // 検索結果・フィード
+        if ( preg_match( '#/(search|feed)(/|$)#', $path ) ) { return true; }
+        // 確認・送信完了ページ等（既存の除外スラッグを流用）
+        return $this->is_content_excluded_url( $url );
     }
 
     private function extract_same_domain_links( string $html, string $host ): array {
@@ -775,6 +910,7 @@ class Gcrev_SEO_Checker {
             'jsonld_types'      => $jsonld['types'],
             'jsonld_count'      => $jsonld['count'],
             'jsonld_invalid'    => $jsonld['invalid'],
+            'jsonld_local_info' => $jsonld['local_info'],
             'script_count'      => $this->count_scripts( $xpath ),
             'fetch_error'       => false,
         ];
@@ -839,10 +975,11 @@ class Gcrev_SEO_Checker {
      * JSON-LD 構造化データを抽出して @type 一覧・件数・壊れた件数を返す
      */
     private function extract_jsonld( \DOMXPath $xpath ): array {
-        $nodes   = $xpath->query( '//script[@type="application/ld+json"]' );
-        $types   = [];
-        $count   = 0;
-        $invalid = 0;
+        $nodes      = $xpath->query( '//script[@type="application/ld+json"]' );
+        $types      = [];
+        $count      = 0;
+        $invalid    = 0;
+        $local_info = false;
         if ( $nodes ) {
             foreach ( $nodes as $n ) {
                 $count++;
@@ -853,13 +990,32 @@ class Gcrev_SEO_Checker {
                     continue;
                 }
                 $this->collect_jsonld_types( $decoded, $types );
+                if ( ! $local_info && $this->jsonld_node_has_local_info( $decoded ) ) {
+                    $local_info = true;
+                }
             }
         }
         return [
-            'types'   => array_values( array_unique( $types ) ),
-            'count'   => $count,
-            'invalid' => $invalid,
+            'types'      => array_values( array_unique( $types ) ),
+            'count'      => $count,
+            'invalid'    => $invalid,
+            'local_info' => $local_info,
         ];
+    }
+
+    /**
+     * JSON-LD ノード内（@graph・入れ子含む）に住所＋電話を持つノードがあるか。
+     * LocalBusiness 型そのものが無くても「同等情報あり」と区別表示するための判定。
+     */
+    private function jsonld_node_has_local_info( $node ): bool {
+        if ( ! is_array( $node ) ) { return false; }
+        if ( isset( $node['@type'] ) && ! empty( $node['address'] ) && ! empty( $node['telephone'] ) ) {
+            return true;
+        }
+        foreach ( $node as $v ) {
+            if ( is_array( $v ) && $this->jsonld_node_has_local_info( $v ) ) { return true; }
+        }
+        return false;
     }
 
     /** JSON-LD（入れ子・@graph 対応）から @type を再帰収集 */
@@ -1043,16 +1199,28 @@ class Gcrev_SEO_Checker {
     /**
      * 1診断項目を組み立てる共通ヘルパー。
      *
-     * @param string $state good=良好 / caution=要改善 / none=未設定
+     * @param string $state good=良好 / caution=要改善 / none=未設定 / pending=判定保留（スコア対象外）
+     *
+     * pending は「AI分析が実行されなかったため判定できない」項目に使う。
+     * カテゴリスコア・致命的/要改善カウント・改善提案の対象から除外される。
+     * AI未実施の項目を caution/none として減点すると、AI実施回と未実施回で
+     * スコアが大きく変動し時系列比較が無意味になるための措置。
      */
     private function make_item( string $key, string $label, string $state, string $importance, string $current, string $reason, string $suggestion, string $fix = '', array $affected = [] ): array {
-        $state = in_array( $state, [ 'good', 'caution', 'none' ], true ) ? $state : 'caution';
-        $score = $state === 'good' ? 10 : ( $state === 'caution' ? 5 : 0 );
-        // 後方互換ステータス（ok/caution/critical）— 未設定は重要度が高ければ critical
+        $state = in_array( $state, [ 'good', 'caution', 'none', 'pending' ], true ) ? $state : 'caution';
+        if ( $state === 'pending' ) {
+            // 判定保留: スコアなし（カテゴリスコア算出から除外）
+            $score = null;
+        } else {
+            $score = $state === 'good' ? 10 : ( $state === 'caution' ? 5 : 0 );
+        }
+        // 後方互換ステータス（ok/caution/critical/pending）— 未設定は重要度が高ければ critical
         if ( $state === 'good' ) {
             $status = 'ok';
         } elseif ( $state === 'caution' ) {
             $status = 'caution';
+        } elseif ( $state === 'pending' ) {
+            $status = 'pending';
         } else {
             $status = ( $importance === 'high' ) ? 'critical' : 'caution';
         }
@@ -1072,12 +1240,17 @@ class Gcrev_SEO_Checker {
         ];
     }
 
-    /** 重要度で重み付けしたカテゴリスコア（0〜100） */
+    /**
+     * 重要度で重み付けしたカテゴリスコア（0〜100）
+     *
+     * pending（判定保留）の項目はスコア対象外。判定済み項目のみで算出する。
+     */
     private function category_score( array $items ): int {
         if ( empty( $items ) ) { return 0; }
         $w_sum = 0;
         $s_sum = 0.0;
         foreach ( $items as $it ) {
+            if ( ( $it['state'] ?? '' ) === 'pending' || $it['score'] === null ) { continue; }
             $w = self::IMPORTANCE_WEIGHT[ $it['importance'] ] ?? 1;
             $w_sum += $w;
             $s_sum += $w * ( $it['score'] / 10 );
@@ -1179,22 +1352,26 @@ class Gcrev_SEO_Checker {
             empty( $miss ) ? "全{$total}ページでtitleタグが設定されています。" : count( $miss ) . "ページでtitleタグが未設定です。",
             'titleはGoogle検索結果やAI検索の見出しになり、ページ内容を伝える最重要要素です。',
             '各ページに、内容を表す固有のtitleを設定してください。',
-            empty( $miss ) ? '' : '<title>みまもり歯科クリニック｜松山市の予防歯科・小児歯科</title>',
+            empty( $miss ) ? '' : '<title>{社名}｜{地域名}の{サービス内容}</title>',
             $miss
         );
 
         // title 文字数
+        // 「長すぎ（60文字超）」は全ページ対象。「短すぎ（30文字未満）」は
+        // 集客ページ（トップ・ナビ掲載の固定ページ）のみ対象とする。
+        // お知らせ・ブログ等の記事タイトルをSEO目的で引き伸ばすことは推奨されないため。
         $len_bad = $this->urls_where( $valid, static function ( $p ) {
             if ( $p['title'] === '' ) { return false; }
             $l = mb_strlen( $p['title'] );
-            return $l > 60 || $l < 30;
+            if ( $l > 60 ) { return true; }
+            return $l < 30 && ! empty( $p['is_priority'] );
         } );
         $items[] = $this->make_item(
             'title_length', 'titleタグの文字数',
             empty( $len_bad ) ? 'good' : 'caution', 'low',
-            empty( $len_bad ) ? 'titleの文字数は適切です（30〜60文字）。' : count( $len_bad ) . 'ページでtitleが長すぎる（60文字超）か短すぎ（30文字未満）です。',
-            '60文字を超えると検索結果で末尾が省略され、短すぎると訴求力が弱まります。',
-            '重要なキーワードを前半に置き、30〜60文字に収めてください。',
+            empty( $len_bad ) ? 'titleの文字数は適切です（集客ページ30〜60文字・記事ページ60文字以内）。' : count( $len_bad ) . 'ページでtitleが長すぎる（60文字超）か、集客ページで短すぎ（30文字未満）です。お知らせ等の記事タイトルは短くても問題ありません。',
+            '60文字を超えると検索結果で末尾が省略されます。集客ページでは短すぎると訴求力が弱まります。',
+            '集客ページは重要なキーワードを前半に置き30〜60文字に、記事ページは内容が伝わる自然な長さにしてください。',
             '',
             $len_bad
         );
@@ -1207,7 +1384,7 @@ class Gcrev_SEO_Checker {
             empty( $miss ) ? "全{$total}ページでmeta descriptionが設定されています。" : count( $miss ) . 'ページでmeta descriptionが未設定です。',
             'descriptionは検索結果やSNSの説明文として表示され、クリック率に影響します。AI検索でも内容把握の手がかりになります。',
             '各ページに70〜120文字程度の固有の説明文を設定してください。',
-            empty( $miss ) ? '' : '<meta name="description" content="松山市の予防歯科・小児歯科。土曜診療・キッズスペース完備。痛みの少ない治療を心がけています。初診のご相談はお気軽にどうぞ。">',
+            empty( $miss ) ? '' : '<meta name="description" content="{地域名}の{サービス内容}。{特徴1}・{特徴2}。{顧客への一言}。ご相談はお気軽にどうぞ。">',
             $miss
         );
 
@@ -1235,7 +1412,7 @@ class Gcrev_SEO_Checker {
             empty( $miss ) ? '全ページにh1が設定されています。' : count( $miss ) . 'ページでh1が未設定です。',
             'h1はページの主題を検索エンジンとAIに伝える見出しです。',
             '各ページにページの主題を表すh1を1つ設定してください。',
-            empty( $miss ) ? '' : '<h1>松山市の予防歯科・小児歯科 みまもり歯科クリニック</h1>',
+            empty( $miss ) ? '' : '<h1>{地域名}の{サービス内容} {社名}</h1>',
             $miss
         );
 
@@ -1295,7 +1472,7 @@ class Gcrev_SEO_Checker {
             empty( $no_alt ) ? 'すべての画像にalt属性が設定されています。' : count( $no_alt ) . 'ページにalt未設定の画像があります。',
             'altは画像の内容を検索エンジン・AI・スクリーンリーダーに伝えます。',
             '各画像に内容を説明するalt属性を追加してください（装飾画像は alt="" で明示）。',
-            empty( $no_alt ) ? '' : '<img src="clinic.jpg" alt="みまもり歯科クリニックの診察室">',
+            empty( $no_alt ) ? '' : '<img src="photo.jpg" alt="{社名}の{写真の内容（例: 事務所外観・施工風景）}">',
             $no_alt
         );
 
@@ -1323,10 +1500,10 @@ class Gcrev_SEO_Checker {
 
         // 各 OGP / Twitter タグの定義: [key, label, importance, fix例]
         $og_defs = [
-            [ 'og:title',        'og_title',        'og:title',        'medium', '<meta property="og:title" content="松山市の予防歯科 みまもり歯科クリニック">' ],
-            [ 'og:description',  'og_description',  'og:description',  'medium', '<meta property="og:description" content="土曜診療・キッズスペース完備。痛みの少ない治療を心がけています。">' ],
+            [ 'og:title',        'og_title',        'og:title',        'medium', '<meta property="og:title" content="{地域名}の{サービス内容} {社名}">' ],
+            [ 'og:description',  'og_description',  'og:description',  'medium', '<meta property="og:description" content="{特徴1}・{特徴2}。{顧客への一言}。">' ],
             [ 'og:image',        'og_image',        'og:image',        'medium', '<meta property="og:image" content="https://example.com/ogp.jpg">' ],
-            [ 'og:site_name',    'og_site_name',    'og:site_name',    'low',    '<meta property="og:site_name" content="みまもり歯科クリニック">' ],
+            [ 'og:site_name',    'og_site_name',    'og:site_name',    'low',    '<meta property="og:site_name" content="{社名}">' ],
             [ 'og:locale',       'og_locale',       'og:locale',       'low',    '<meta property="og:locale" content="ja_JP">' ],
         ];
 
@@ -1366,8 +1543,8 @@ class Gcrev_SEO_Checker {
         // Twitter Card 各種
         $tw_defs = [
             [ 'twitter:card',        'twitter_card',        'twitter:card',        'medium', '<meta name="twitter:card" content="summary_large_image">' ],
-            [ 'twitter:title',       'twitter_title',       'twitter:title',       'low',    '<meta name="twitter:title" content="松山市の予防歯科 みまもり歯科クリニック">' ],
-            [ 'twitter:description', 'twitter_description', 'twitter:description', 'low',    '<meta name="twitter:description" content="土曜診療・キッズスペース完備。">' ],
+            [ 'twitter:title',       'twitter_title',       'twitter:title',       'low',    '<meta name="twitter:title" content="{地域名}の{サービス内容} {社名}">' ],
+            [ 'twitter:description', 'twitter_description', 'twitter:description', 'low',    '<meta name="twitter:description" content="{特徴1}・{特徴2}。">' ],
             [ 'twitter:image',       'twitter_image',       'twitter:image',       'low',    '<meta name="twitter:image" content="https://example.com/ogp.jpg">' ],
         ];
         foreach ( $tw_defs as $d ) {
@@ -1396,7 +1573,7 @@ class Gcrev_SEO_Checker {
             empty( $miss_author ) ? '全ページにmeta authorが設定されています。' : ( $all_miss ? 'meta authorがどのページにも設定されていません。' : count( $miss_author ) . 'ページでmeta authorが未設定です。' ),
             'meta authorは運営者・著者情報を示し、AI検索やコンテンツの信頼性評価の手がかりになります。',
             '運営者名・著者名をmeta authorに設定してください。',
-            empty( $miss_author ) ? '' : '<meta name="author" content="みまもり歯科クリニック">',
+            empty( $miss_author ) ? '' : '<meta name="author" content="{社名}">',
             $miss_author
         );
 
@@ -1411,34 +1588,96 @@ class Gcrev_SEO_Checker {
         return false;
     }
 
+    /**
+     * schema.org の主要な型階層（subClassOf）の下位型マップ。
+     *
+     * 検出された @type がリテラル一致しなくても、下位型（例: Corporation は
+     * Organization のサブタイプ）であれば「設定あり」と判定するために使う。
+     * Google リッチリザルトテストで有効判定されるものをツールが「未設定」と
+     * 誤報告しないための措置。キー・値とも小文字で保持する。
+     */
+    private const SCHEMA_SUBTYPES = [
+        'organization' => [
+            'corporation', 'educationalorganization', 'governmentorganization',
+            'medicalorganization', 'ngo', 'newsmediaorganization', 'onlinebusiness',
+            'performinggroup', 'sportsorganization', 'airline', 'consortium',
+        ],
+        'localbusiness' => [
+            'dentist', 'medicalbusiness', 'medicalclinic', 'physician', 'store',
+            'restaurant', 'foodestablishment', 'professionalservice',
+            'homeandconstructionbusiness', 'generalcontractor', 'plumber', 'electrician',
+            'housepainter', 'roofingcontractor', 'movingcompany', 'locksmith',
+            'hvacbusiness', 'legalservice', 'attorney', 'notary', 'financialservice',
+            'accountingservice', 'insuranceagency', 'automotivebusiness', 'autorepair',
+            'autodealer', 'childcare', 'drycleaningorlaundry', 'emergencyservice',
+            'employmentagency', 'entertainmentbusiness', 'healthandbeautybusiness',
+            'beautysalon', 'hairsalon', 'nailsalon', 'dayspa', 'lodgingbusiness',
+            'hotel', 'realestateagent', 'recyclingcenter', 'selfstorage',
+            'shoppingcenter', 'sportsactivitylocation', 'exercisegym',
+            'touristinformationcenter', 'travelagency', 'veterinarycare',
+        ],
+        'webpage' => [
+            'aboutpage', 'contactpage', 'collectionpage', 'itempage', 'profilepage',
+            'qapage', 'faqpage', 'searchresultspage', 'checkoutpage', 'medicalwebpage',
+            'realestatelisting',
+        ],
+        'service' => [
+            'financialproduct', 'foodservice', 'governmentservice', 'broadcastservice',
+            'taxiservice', 'webapi',
+        ],
+    ];
+
+    /**
+     * 検出済み型一覧（小文字）から、wanted 型（下位型含む）に一致する型を返す。
+     */
+    private function schema_matching_types( string $wanted, array $detected_types_lower ): array {
+        $wanted_l = strtolower( $wanted );
+        $accept   = array_merge( [ $wanted_l ], self::SCHEMA_SUBTYPES[ $wanted_l ] ?? [] );
+        // LocalBusiness の下位型はすべて Organization の下位型でもある
+        if ( $wanted_l === 'organization' ) {
+            $accept = array_merge( $accept, [ 'localbusiness' ], self::SCHEMA_SUBTYPES['localbusiness'] ?? [] );
+        }
+        return array_values( array_intersect( $detected_types_lower, $accept ) );
+    }
+
     /* ---------------------------------------------------------
      * カテゴリ3: 構造化データ（JSON-LD）
      * ------------------------------------------------------- */
     private function build_structured_items( array $pages, ?array $ai ): array {
         $valid = $this->valid_pages( $pages );
+        $total = count( $valid );
         $items = [];
 
-        // サイト全体で検出された @type 一覧と JSON-LD の有無・壊れ
-        $all_types     = [];
-        $has_jsonld    = false;
-        $invalid_urls  = [];
-        $no_jsonld_urls = [];
+        // サイト全体で検出された @type 一覧（型 → 検出ページ）と JSON-LD の有無・壊れ
+        // 「構造化データの有無」はページ単位ではなくサイト単位で集計し、
+        // どのページで検出されたかを併記する。
+        $type_pages       = []; // 小文字型名 → [URLパス]
+        $local_info_pages = []; // 住所+電話を持つJSON-LDがあるページ
+        $type_labels      = []; // 小文字型名 → 元の表記
+        $has_jsonld       = false;
+        $invalid_urls     = [];
+        $no_jsonld_urls   = [];
         foreach ( $valid as $p ) {
+            $path  = $this->url_path( $p['url'] );
             $types = $p['jsonld_types'] ?? [];
             if ( ( $p['jsonld_count'] ?? 0 ) > 0 ) {
                 $has_jsonld = true;
             } else {
-                $no_jsonld_urls[] = $this->url_path( $p['url'] );
+                $no_jsonld_urls[] = $path;
             }
             if ( ( $p['jsonld_invalid'] ?? 0 ) > 0 ) {
-                $invalid_urls[] = $this->url_path( $p['url'] );
+                $invalid_urls[] = $path;
             }
-            foreach ( $types as $t ) { $all_types[] = $t; }
+            if ( ! empty( $p['jsonld_local_info'] ) ) {
+                $local_info_pages[] = $path;
+            }
+            foreach ( $types as $t ) {
+                $tl = strtolower( $t );
+                $type_pages[ $tl ][] = $path;
+                $type_labels[ $tl ]  = $t;
+            }
         }
-        $all_types = array_map( 'strtolower', $all_types );
-        $has_type  = function ( $needle ) use ( $all_types ) {
-            return in_array( strtolower( $needle ), $all_types, true );
-        };
+        $all_types = array_keys( $type_pages );
 
         // JSON-LD 有無
         $items[] = $this->make_item(
@@ -1447,7 +1686,7 @@ class Gcrev_SEO_Checker {
             $has_jsonld ? 'JSON-LD形式の構造化データが検出されました。' : 'JSON-LD形式の構造化データが検出されませんでした。',
             '構造化データは検索エンジンやAIが会社情報・サービス・ページ内容を正確に理解する手がかりになります。',
             'トップ・会社概要・サービスページにJSON-LDを設置してください。',
-            $has_jsonld ? '' : '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"みまもり歯科クリニック","url":"https://example.com/"}</script>',
+            $has_jsonld ? '' : '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"{社名}","url":"https://example.com/"}</script>',
             $no_jsonld_urls
         );
 
@@ -1474,13 +1713,57 @@ class Gcrev_SEO_Checker {
         ];
         foreach ( $schema_defs as $d ) {
             list( $type, $key, $label, $imp, $reason ) = $d;
-            $present = $has_type( $type );
+            // 型階層（subClassOf）を解決して判定（例: Corporation → Organization）
+            $matched = $this->schema_matching_types( $type, $all_types );
+            $present = ! empty( $matched );
+
+            $detected_pages = [];
+            $detected_names = [];
+            foreach ( $matched as $m ) {
+                $detected_names[] = $type_labels[ $m ] ?? $m;
+                foreach ( $type_pages[ $m ] ?? [] as $dp ) { $detected_pages[] = $dp; }
+            }
+            $detected_pages = array_values( array_unique( $detected_pages ) );
+
+            if ( $present ) {
+                $name_note = ( count( $detected_names ) === 1 && strtolower( $detected_names[0] ) === strtolower( $type ) )
+                    ? ''
+                    : '（検出型: ' . implode( ', ', $detected_names ) . '）';
+                $items[] = $this->make_item(
+                    $key, $label,
+                    'good', $imp,
+                    "{$type} 相当の構造化データが検出されました{$name_note}。",
+                    $reason,
+                    '設定済みです。内容が最新か確認してください。',
+                    '',
+                    $detected_pages
+                );
+                continue;
+            }
+
+            // LocalBusiness のみ: 型そのものは無いが Organization 系 + 住所・電話があれば
+            // 「同等情報あり」として未設定とは区別する
+            if ( strtolower( $type ) === 'localbusiness' && ! empty( $local_info_pages )
+                && ! empty( $this->schema_matching_types( 'Organization', $all_types ) ) ) {
+                $items[] = $this->make_item(
+                    $key, $label,
+                    'caution', $imp,
+                    'LocalBusiness 型そのものは検出されませんでしたが、Organization 系の構造化データに住所・電話の記載があり、同等の情報は提供されています（検出ページ: ' . implode( ', ', array_slice( $local_info_pages, 0, 5 ) ) . '）。',
+                    $reason,
+                    '現状でも組織情報としては有効です。店舗・営業時間など地域ビジネス情報を強調したい場合は、LocalBusiness（または業種別の下位型）への変更を検討してください。',
+                    '',
+                    $local_info_pages
+                );
+                continue;
+            }
+
+            // 未検出: 診断対象ページ内での話であり、サイト全体での未実装とは断定しない
             $items[] = $this->make_item(
                 $key, $label,
-                $present ? 'good' : 'none', $imp,
-                $present ? "{$type} 構造化データが検出されました。" : "{$type} 構造化データは検出されませんでした。",
+                'none', $imp,
+                "診断対象{$total}ページ内では {$type} 構造化データは検出されませんでした（診断対象外のページに実装されている可能性があります）。",
                 $reason,
-                $present ? '設定済みです。内容が最新か確認してください。' : "{$type} のJSON-LDを該当ページに追加してください。",
+                "{$type} のJSON-LDを該当ページに追加してください。すでに実装済みの場合は、該当ページが診断対象に含まれているか確認してください。",
                 '',
                 []
             );
@@ -1490,8 +1773,8 @@ class Gcrev_SEO_Checker {
         $items[] = $this->ai_item(
             $ai, 'structured', 'schema_consistency', '本文と構造化データの内容が一致しているか', 'medium',
             [
-                'state'      => $has_jsonld ? 'caution' : 'none',
-                'current'    => $has_jsonld ? '構造化データは検出されましたが、本文との一致はAI分析時のみ判定します。' : '構造化データが無いため一致を判定できません。',
+                'state'      => $has_jsonld ? 'pending' : 'none',
+                'current'    => $has_jsonld ? '構造化データは検出されました。本文との一致はAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。' : '構造化データが無いため一致を判定できません。',
                 'reason'     => '構造化データと本文の内容が食い違うと、検索エンジンがスパムと判断したり、AIが誤った情報を引用するおそれがあります。',
                 'suggestion' => '構造化データに記載した会社名・住所・サービス内容が本文と一致しているか確認してください。',
                 'fix'        => '',
@@ -1513,48 +1796,48 @@ class Gcrev_SEO_Checker {
         $items = [];
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'lead_summary', 'ページ冒頭に内容を簡潔に説明する要約文があるか', 'medium', [
-            'state'      => 'caution',
-            'current'    => '冒頭の要約文の有無はAI分析時に詳しく判定します。',
+            'state'      => 'pending',
+            'current'    => '冒頭の要約文の有無はAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => 'AI検索は冒頭の要約文をそのまま引用・要約に使うことが多く、要点が先頭にあると理解・引用されやすくなります。',
             'suggestion' => 'ページ冒頭に「誰に・何を・どこで提供するか」を2〜3文でまとめた要約文を置いてください。',
-            'fix'        => '例：「みまもり歯科クリニックは松山市の予防歯科・小児歯科です。土曜診療・キッズスペース完備で、痛みの少ない治療を心がけています。」',
+            'fix'        => '例：「{社名}は{地域名}の{サービス内容}です。{特徴1}・{特徴2}で、{顧客への約束}を心がけています。」',
         ] );
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'entity_clarity', '会社名・サービス名・所在地・対応エリアが明確か', 'high', [
-            'state'      => $sig['area'] ? 'caution' : 'none',
-            'current'    => $sig['area'] ? '地域・エリアに関する記述が見られます（明確さはAI分析で判定）。' : '所在地・対応エリアの明確な記述が見つかりませんでした。',
+            'state'      => $sig['area'] ? 'caution' : 'pending',
+            'current'    => $sig['area'] ? '地域・エリアに関する記述が見られます（明確さはAI分析で判定）。' : '対応エリアに関するキーワードはルール検出では見つかりませんでした。明確さの判定はAI分析時に行います（判定保留・スコア対象外）。',
             'reason'     => 'AI検索は「どこの・何という事業者か」を特定できないと、地域検索の回答に含めにくくなります。',
             'suggestion' => '会社名・サービス名・所在地（住所）・対応エリアを本文に明記してください。',
-            'fix'        => '例：「対応エリア：松山市・東温市・伊予市（出張対応可）」',
+            'fix'        => '例：「対応エリア：{市区町村名}・{近隣市区町村}（出張対応可）」',
         ] );
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'audience_clarity', '誰向けのサービスか明確か', 'medium', [
-            'state'      => 'caution',
-            'current'    => '対象者の明確さはAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '対象者の明確さはAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '対象者が明確だと、AIは「〇〇な人向けのサービス」として適切な質問に紐づけて回答できます。',
             'suggestion' => '「お子様連れの方」「忙しい会社員」など、想定する利用者を本文に明記してください。',
             'fix'        => '',
         ] );
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'offering_clarity', '何を提供しているサービスか明確か', 'high', [
-            'state'      => 'caution',
-            'current'    => '提供内容の明確さはAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '提供内容の明確さはAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '提供サービスが具体的だと、AIが正確に内容を要約・引用できます。',
             'suggestion' => '提供するサービス・商品を箇条書き等で具体的に記載してください。',
             'fix'        => '',
         ] );
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'strengths_clarity', '強みや他社との違いが明確か', 'medium', [
-            'state'      => 'caution',
-            'current'    => '強み・差別化の明確さはAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '強み・差別化の明確さはAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '独自の強みが明記されていると、AIが比較・推薦の文脈で引用しやすくなります。',
             'suggestion' => '「他社との違い」「選ばれる理由」を具体的な根拠とともに記載してください。',
             'fix'        => '',
         ] );
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'pricing_clarity', '料金・対応範囲・相談方法が明確か', 'medium', [
-            'state'      => $sig['pricing'] ? 'caution' : 'none',
-            'current'    => $sig['pricing'] ? '料金・相談に関する記述が見られます（明確さはAI分析で判定）。' : '料金・対応範囲・相談方法の記述が見つかりませんでした。',
+            'state'      => $sig['pricing'] ? 'caution' : 'pending',
+            'current'    => $sig['pricing'] ? '料金・相談に関する記述が見られます（明確さはAI分析で判定）。' : '料金・対応範囲・相談方法のキーワードはルール検出では見つかりませんでした。明確さの判定はAI分析時に行います（判定保留・スコア対象外）。',
             'reason'     => '料金や相談方法が明確だと、AIがユーザーの「いくら？どう相談？」に答える際に引用できます。',
             'suggestion' => '料金の目安、対応範囲、問い合わせ・相談の方法を明記してください。',
             'fix'        => '',
@@ -1593,24 +1876,24 @@ class Gcrev_SEO_Checker {
         ] );
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'citable_snippet', 'AIが引用しやすい短い説明文があるか', 'medium', [
-            'state'      => 'caution',
-            'current'    => '引用しやすい短文の有無はAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '引用しやすい短文の有無はAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '1〜2文で完結する説明文は、AI検索がそのまま引用しやすい形式です。',
             'suggestion' => '事業内容を1〜2文で言い切る説明文を本文中に用意してください。',
             'fix'        => '',
         ] );
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'heading_clarity', '見出しだけを読んでもページ内容が理解できるか', 'low', [
-            'state'      => 'caution',
-            'current'    => '見出しだけで内容が伝わるかはAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '見出しだけで内容が伝わるかはAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => 'AIは見出し構造を手がかりにページを要約します。見出しだけで流れが分かると理解・引用されやすくなります。',
             'suggestion' => '抽象的な見出しを避け、内容が分かる具体的な見出しにしてください。',
-            'fix'        => '例：「特徴」→「土曜も診療・キッズスペース完備の3つの特徴」',
+            'fix'        => '例：「特徴」→「{具体的な特徴が伝わる見出し}（例：{特徴1}・{特徴2}の3つの特徴）」',
         ] );
 
         $items[] = $this->ai_item( $ai, 'ai_search', 'term_explanation', '専門用語に補足説明があるか', 'low', [
-            'state'      => 'caution',
-            'current'    => '専門用語の補足の有無はAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '専門用語の補足の有無はAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '専門用語に補足があると、AIが内容を正しく解釈し、一般ユーザー向けに要約しやすくなります。',
             'suggestion' => '専門用語には初出時にかっこ書き等で簡単な補足を添えてください。',
             'fix'        => '',
@@ -1784,27 +2067,27 @@ class Gcrev_SEO_Checker {
         $items = [];
 
         $items[] = $this->ai_item( $ai, 'content', 'purpose_clarity', 'ページの目的が明確か', 'medium', [
-            'state'      => 'caution',
-            'current'    => 'ページ目的の明確さはAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => 'ページ目的の明確さはAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '目的が明確なページは、ユーザーにもAIにも「何のためのページか」が伝わりやすくなります。',
             'suggestion' => '各ページが「誰に・何を伝え・何をしてほしいか」を明確にしてください。',
             'fix'        => '',
         ] );
 
         $items[] = $this->ai_item( $ai, 'content', 'answers_questions', 'ユーザーの疑問に答えているか', 'medium', [
-            'state'      => 'caution',
-            'current'    => 'ユーザーの疑問への回答状況はAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => 'ユーザーの疑問への回答状況はAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '想定される疑問に答えているページは滞在時間が伸び、AI検索でも回答に使われやすくなります。',
             'suggestion' => '利用者がよく抱く疑問を洗い出し、本文やFAQで回答してください。',
             'fix'        => '',
         ] );
 
         $items[] = $this->ai_item( $ai, 'content', 'concreteness', '具体的な説明があるか（抽象的すぎないか）', 'medium', [
-            'state'      => 'caution',
-            'current'    => '具体性はAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '具体性はAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '具体的な記述は信頼性が高く、AIが要点を抽出・引用しやすくなります。',
             'suggestion' => '「丁寧な対応」などの抽象表現を、数値・事例・手順など具体的な情報に置き換えてください。',
-            'fix'        => '例：「丁寧な対応」→「初回カウンセリングに30分かけ、治療計画を書面でお渡しします」',
+            'fix'        => '例：「丁寧な対応」→「{所要時間や回数などの数値}・{具体的な手順や成果物}を明記した説明」',
         ] );
 
         $items[] = $this->ai_item( $ai, 'content', 'evidence', '実績や事例で裏付けされているか', 'medium', [
@@ -1816,24 +2099,24 @@ class Gcrev_SEO_Checker {
         ] );
 
         $items[] = $this->ai_item( $ai, 'content', 'uniqueness', '独自性のある情報があるか', 'low', [
-            'state'      => 'caution',
-            'current'    => '独自性はAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '独自性はAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '他サイトにない独自情報は、検索・AI検索での差別化につながります。',
             'suggestion' => '自社ならではの知見・データ・体験を盛り込んでください。',
             'fix'        => '',
         ] );
 
         $items[] = $this->ai_item( $ai, 'content', 'eeat', '専門性・経験・信頼性が伝わるか', 'medium', [
-            'state'      => $sig['trust'] ? 'good' : 'caution',
-            'current'    => $sig['trust'] ? '資格・経験などの専門性情報が確認できました。' : '専門性・経験・信頼性を示す情報が十分か、AI分析時に判定します。',
+            'state'      => $sig['trust'] ? 'good' : 'pending',
+            'current'    => $sig['trust'] ? '資格・経験などの専門性情報が確認できました。' : '専門性・経験・信頼性を示す情報が十分かはAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => 'E-E-A-T（経験・専門性・権威性・信頼性）は検索・AI検索の品質評価で重視されます。',
             'suggestion' => '執筆者・運営者の専門性、経験、根拠を明示してください。',
             'fix'        => '',
         ] );
 
         $items[] = $this->ai_item( $ai, 'content', 'reassurance', '問い合わせ前の不安を解消できているか', 'low', [
-            'state'      => 'caution',
-            'current'    => '不安解消の度合いはAI分析時に判定します。',
+            'state'      => 'pending',
+            'current'    => '不安解消の度合いはAI分析時に判定します（AI分析未実施のため判定保留・スコア対象外）。',
             'reason'     => '料金・流れ・対応範囲などの不安要素に答えると、問い合わせ・成約につながりやすくなります。',
             'suggestion' => '「料金は？」「流れは？」「対応エリアは？」など、問い合わせ前の疑問に答えてください。',
             'fix'        => '',
@@ -1992,6 +2275,8 @@ structured:
 ルール:
 - すべての項目に必ずエントリを返す
 - 断定的に「AIに表示される」「上位表示される」とは書かない。「理解・引用されやすくするための整備」という観点で書く
+- fixExample は必ず診断対象サイトの社名・業種・実際のページ内容に基づいて作成する。他業種のサンプル（例: 歯科医院の文例を建設会社に出す等）を流用しない
+- ページ情報から社名・業種が特定できない場合は {社名} {サービス名} {地域名} のプレースホルダー表記で書く
 - 日本語で回答する
 PROMPT;
 
@@ -2063,14 +2348,16 @@ PROMPT;
                         'priority'    => 'low',
                         'suggestion'  => '60文字を超えると検索結果で末尾が省略されます。重要なキーワードを前半に配置し、60文字以内に収めてください。',
                     ];
-                } elseif ( $title_len < 30 ) {
+                } elseif ( $title_len < 30 && ! empty( $p['is_priority'] ) ) {
+                    // 「短すぎ」指摘は集客ページ（トップ・ナビ掲載）のみ。
+                    // お知らせ等の記事タイトルを引き伸ばすことは推奨されない。
                     $issues[] = [
                         'url'         => $url_path,
                         'statusCode'  => $code,
                         'issueType'   => 'タイトルタグ',
                         'issueDetail' => "titleが短すぎます（{$title_len}文字）",
                         'priority'    => 'low',
-                        'suggestion'  => '30文字未満だと検索結果での訴求力が弱くなります。ターゲットキーワードを含む30〜60文字のtitleに変更してください。',
+                        'suggestion'  => '集客ページでは30文字未満だと検索結果での訴求力が弱くなります。ターゲットキーワードを含む30〜60文字のtitleに変更してください。',
                     ];
                 }
             }
@@ -2277,9 +2564,10 @@ PROMPT;
             }
         }
 
-        // 重要度の高い未対応項目を改善ポイントに補足
+        // 重要度の高い未対応項目を改善ポイントに補足（判定保留は除外）
         $high_issues = array_filter( $flat, static function ( $it ) {
-            return ( $it['importance'] ?? '' ) === 'high' && ( $it['state'] ?? '' ) !== 'good';
+            $state = $it['state'] ?? '';
+            return ( $it['importance'] ?? '' ) === 'high' && $state !== 'good' && $state !== 'pending';
         } );
         foreach ( array_slice( array_values( $high_issues ), 0, 3 ) as $it ) {
             $improvement_points[] = "{$it['category']}：{$it['label']}（重要度：高）";
@@ -2307,7 +2595,8 @@ PROMPT;
     private function build_recommendations( array $flat ): array {
         $recs = [];
         foreach ( $flat as $it ) {
-            if ( ( $it['state'] ?? '' ) === 'good' ) { continue; }
+            // 良好・判定保留（AI分析未実施）は改善提案の対象外
+            if ( in_array( $it['state'] ?? '', [ 'good', 'pending' ], true ) ) { continue; }
 
             $imp   = $it['importance'] ?? 'low';
             $state = $it['state'] ?? 'caution';

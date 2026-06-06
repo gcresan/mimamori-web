@@ -176,6 +176,7 @@ get_header();
 .seo-item__state--good { background: rgba(78,138,107,0.12); color: #4E8A6B; }
 .seo-item__state--caution { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .seo-item__state--none { background: rgba(201,90,79,0.12); color: #C95A4F; }
+.seo-item__state--pending { background: var(--mw-bg-secondary); color: var(--mw-text-tertiary); }
 .seo-item__label { flex: 1; font-size: 14px; font-weight: 600; color: var(--mw-text-primary); }
 .seo-item__imp {
     flex-shrink: 0; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
@@ -298,6 +299,14 @@ body.seo-filter-caution  .seo-item:not([data-status="caution"])  { display: none
 /* 比較バー */
 .seo-comparison-bar { display: flex; gap: 16px; padding: 12px 16px; background: var(--mw-bg-secondary); border: 1px solid var(--mw-border-light); border-radius: 8px; margin-bottom: 24px; font-size: 13px; color: var(--mw-text-secondary); align-items: center; flex-wrap: wrap; }
 .seo-comparison-bar__item { display: inline-flex; align-items: center; gap: 4px; }
+.seo-comparison-bar__warn { width: 100%; color: #C95A4F; font-weight: 600; }
+
+/* AI分析未実施バナー */
+.seo-ai-banner {
+    padding: 12px 16px; margin-bottom: 24px;
+    background: rgba(201,168,76,0.10); border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 10px; font-size: 13px; line-height: 1.7; color: var(--mw-text-primary);
+}
 
 /* スコアデルタ */
 .seo-score-delta { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 600; margin-top: 4px; }
@@ -360,6 +369,9 @@ body.seo-filter-caution  .seo-item:not([data-status="caution"])  { display: none
 
     <!-- ===== 注意書き（上部） ===== -->
     <div class="seo-disclaimer" id="seoDisclaimerTop" style="display:none;"></div>
+
+    <!-- ===== AI分析未実施バナー ===== -->
+    <div class="seo-ai-banner" id="seoAiBanner" style="display:none;"></div>
 
     <!-- ===== 前回比較バー ===== -->
     <div id="seoComparisonBar" style="display:none;"></div>
@@ -452,9 +464,9 @@ $gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcr
     var SEO_CACHE_KEY = 'gcrev_seo_report_cache_v3_<?php echo (int) $gcrev_seo_user_id; ?>';
     var SEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-    var SECTION_IDS = ['seoSummary','seoCatScores','seoDisclaimerTop','seoComparisonBar','seoCategories','seoKeywordSection','seoAssessmentSection','seoIssuesSection','seoActionsSection','seoDisclaimerBottom'];
+    var SECTION_IDS = ['seoSummary','seoCatScores','seoDisclaimerTop','seoAiBanner','seoComparisonBar','seoCategories','seoKeywordSection','seoAssessmentSection','seoIssuesSection','seoActionsSection','seoDisclaimerBottom'];
 
-    var STATE_LABELS = { good: '良好', caution: '要改善', none: '未設定' };
+    var STATE_LABELS = { good: '良好', caution: '要改善', none: '未設定', pending: '判定保留' };
     var IMP_LABELS   = { high: '高', medium: '中', low: '低' };
     var PRIORITY_LABELS = { high: '高', medium: '中', low: '低' };
     var CAT_ICONS = {
@@ -577,12 +589,28 @@ $gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcr
         renderSummary(data.siteSummary, comp, kwData);
         renderCatScores(data.siteSummary, comp);
         renderDisclaimer(data.disclaimer);
+        renderAiBanner(data);
         renderComparisonBar(comp);
         renderCategories(data.categories);
         renderAssessment(data.overallAssessment);
         renderKeywords(kwData);
-        renderIssues(data.issuePages);
+        renderIssues(data.issuePages, data.excludedUrls);
         renderActions(data.recommendations);
+    }
+
+    /* ================== AI分析未実施バナー ================== */
+    function renderAiBanner(data) {
+        var el = document.getElementById('seoAiBanner');
+        if (!el) return;
+        // aiEnabled が明示的に false の場合のみ表示（旧データは undefined）
+        if (data.aiEnabled !== false) { el.style.display = 'none'; return; }
+        var s = data.siteSummary || {};
+        var pending = s.pendingCount || 0;
+        el.style.display = '';
+        el.innerHTML = '🤖 <strong>この診断はAI分析なしで実行されました。</strong>' +
+            'AI判定が必要な項目' + (pending ? '（' + esc(pending) + '件）' : '') +
+            'は「判定保留」となり、カテゴリスコアの算出対象外です。' +
+            'AI分析ありで実行された回とのスコア比較は参考になりません。';
     }
 
     /* ================== 注意書き ================== */
@@ -605,6 +633,9 @@ $gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcr
         html += '<div class="seo-comparison-bar__item">スコア変動: ' + deltaHtml(comp.totalScoreDelta) + (comp.totalScoreDelta === 0 ? '<span class="seo-score-delta seo-score-delta--same">→ 変動なし</span>' : '') + '</div>';
         html += '<div class="seo-comparison-bar__item" style="color:#4E8A6B;">改善: ' + esc(comp.improvedCount) + 'カテゴリ</div>';
         html += '<div class="seo-comparison-bar__item" style="color:#C95A4F;">悪化: ' + esc(comp.worsenedCount) + 'カテゴリ</div>';
+        if (comp.modeChanged) {
+            html += '<div class="seo-comparison-bar__warn">⚠️ 前回と今回でAI分析の実施有無が異なるため、スコアの増減は診断モードの違いによるものです（サイトの変化を示すものではありません）。</div>';
+        }
         html += '</div>';
         el.innerHTML = html;
     }
@@ -854,13 +885,24 @@ $gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcr
     var _issuesSortKey = 'priority';
     var _issuesSortAsc = true;
 
-    function renderIssues(pages) {
+    function renderIssues(pages, excludedUrls) {
+        var note = '';
+        if (excludedUrls && excludedUrls.length) {
+            var list = excludedUrls.map(function(u) { try { u = decodeURI(u); } catch (e) {} return esc(u); }).join(', ');
+            note = '<div style="font-size:12px;color:var(--mw-text-tertiary);margin-bottom:12px;line-height:1.7;">' +
+                'ℹ️ ユーティリティページ（' + list + '）はサイトマップ・検索結果・確認ページ等のため診断対象から除外しました。これらは noindex 化を推奨します。' +
+                '</div>';
+        }
         if (!pages || !pages.length) {
-            document.getElementById('seoIssuesContent').innerHTML = '<div class="seo-empty">問題は検出されませんでした</div>';
+            document.getElementById('seoIssuesContent').innerHTML = note + '<div class="seo-empty">問題は検出されませんでした</div>';
             return;
         }
         _issuesData = pages;
         _renderIssuesTable();
+        if (note) {
+            var c = document.getElementById('seoIssuesContent');
+            c.insertAdjacentHTML('afterbegin', note);
+        }
     }
     function _sortIssues(data, key, asc) {
         var priorityOrder = { high: 0, medium: 1, low: 2 };
@@ -1046,8 +1088,13 @@ $gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcr
         pushRow(['総合スコア（参考値）', s.totalScore == null ? '' : s.totalScore]);
         pushRow(['致命的な問題', s.criticalCount == null ? 0 : s.criticalCount]);
         pushRow(['要改善項目', s.warningCount == null ? 0 : s.warningCount]);
+        pushRow(['判定保留項目（スコア対象外）', s.pendingCount == null ? 0 : s.pendingCount]);
+        pushRow(['AI分析', d.aiEnabled === false ? '未実施（判定保留項目はスコア対象外）' : '実施']);
         pushRow(['診断対象ページ数', s.pageCount == null ? 0 : s.pageCount]);
         pushRow(['最終診断日時', s.lastCheckedAt || '']);
+        if (d.excludedUrls && d.excludedUrls.length) {
+            pushRow(['診断対象外（ユーティリティページ）', d.excludedUrls.join(' / ')]);
+        }
 
         if (s.categoryScores && s.categoryScores.length) {
             pushSection('カテゴリ別スコア');
@@ -1167,7 +1214,7 @@ $gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcr
             '　／　総合スコア（参考値）: ' + esc(s.totalScore != null ? s.totalScore : '') + '点</div>';
 
         // 結果セクションを順番にクローン対象へ（非表示のものは除外）
-        var ids = ['seoSummary', 'seoCatScores', 'seoDisclaimerTop', 'seoComparisonBar',
+        var ids = ['seoSummary', 'seoCatScores', 'seoDisclaimerTop', 'seoAiBanner', 'seoComparisonBar',
                    'seoCategories', 'seoAssessmentSection', 'seoKeywordSection',
                    'seoIssuesSection', 'seoActionsSection', 'seoDisclaimerBottom'];
         var sources = [titleEl];
