@@ -96,6 +96,13 @@ class Gcrev_Client_Management_Page {
                 }
                 break;
 
+            case 'delete_seo_history':
+                if ( $user_id > 0 ) {
+                    $deleted    = $this->delete_user_seo_history( $user_id );
+                    $result_msg = "user_{$user_id}_seo_deleted_{$deleted}";
+                }
+                break;
+
             case 'clear_all_cache':
                 $deleted    = $this->delete_all_cache();
                 $result_msg = "all_cache_cleared_{$deleted}";
@@ -153,6 +160,10 @@ class Gcrev_Client_Management_Page {
             $user = get_user_by( 'id', (int) $m[1] );
             $name = $user ? esc_html( gcrev_get_business_name( (int) $m[1] ) ) : "ID:{$m[1]}";
             $text = "{$name} のレポートを {$m[2]} 件削除しました。";
+        } elseif ( preg_match( '/^user_(\d+)_seo_deleted_(\d+)$/', $msg, $m ) ) {
+            $user = get_user_by( 'id', (int) $m[1] );
+            $name = $user ? esc_html( gcrev_get_business_name( (int) $m[1] ) ) : "ID:{$m[1]}";
+            $text = "{$name} のSEO／AIO診断履歴を {$m[2]} 件削除しました。";
         } elseif ( preg_match( '/^all_cache_cleared_(\d+)$/', $msg, $m ) ) {
             $text = "全クライアントのキャッシュを {$m[1]} 件削除しました。";
         } else {
@@ -207,6 +218,7 @@ class Gcrev_Client_Management_Page {
                     <th>状態</th>
                     <th style="text-align: center;">キャッシュ</th>
                     <th style="text-align: center;">レポート</th>
+                    <th style="text-align: center;">SEO診断</th>
                     <th style="text-align: center;">オプション</th>
                     <th>操作</th>
                 </tr>
@@ -221,6 +233,7 @@ class Gcrev_Client_Management_Page {
                     $is_paid   = function_exists( 'gcrev_is_payment_active' ) ? gcrev_is_payment_active( $uid ) : false;
                     $cache_cnt = $this->get_user_cache_count( $uid );
                     $report_cnt = $this->get_user_report_count( $uid );
+                    $seo_cnt   = $this->get_user_seo_history_count( $uid );
                 ?>
                 <tr>
                     <td style="color: #999;"><?php echo esc_html( $uid ); ?></td>
@@ -277,6 +290,13 @@ class Gcrev_Client_Management_Page {
                             <span style="color: #999;">0</span>
                         <?php endif; ?>
                     </td>
+                    <td style="text-align: center;">
+                        <?php if ( $seo_cnt > 0 ) : ?>
+                            <span style="font-weight: 600; color: #568184;"><?php echo esc_html( $seo_cnt ); ?></span>件
+                        <?php else : ?>
+                            <span style="color: #999;">0</span>
+                        <?php endif; ?>
+                    </td>
                     <td style="text-align: center; white-space: nowrap;">
                         <?php
                         $chatbot_enabled = function_exists( 'mimamori_bot_is_enabled_for_user' )
@@ -324,6 +344,15 @@ class Gcrev_Client_Management_Page {
                         </form>
                         <?php endif; ?>
 
+                        <?php if ( $seo_cnt > 0 ) : ?>
+                        <form method="post" style="display: inline;" onsubmit="return confirm('<?php echo esc_js( gcrev_get_business_name( $user->ID ) ); ?> のSEO／AIO診断履歴（<?php echo esc_js( (string) $seo_cnt ); ?>件）をすべて削除します。この操作は取り消せません。よろしいですか？');">
+                            <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
+                            <input type="hidden" name="gcrev_action" value="delete_seo_history">
+                            <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $uid ); ?>">
+                            <button type="submit" class="button button-small" style="color: #C95A4F;" title="SEO／AIO診断履歴を全削除">🗑 SEO診断</button>
+                        </form>
+                        <?php endif; ?>
+
                         <a href="<?php echo esc_url( get_edit_user_link( $uid ) ); ?>" class="button button-small" title="ユーザー編集">✏️</a>
                     </td>
                 </tr>
@@ -332,7 +361,8 @@ class Gcrev_Client_Management_Page {
         </table>
         <p class="description" style="margin-top: 8px;">
             ※ キャッシュ削除: ダッシュボード・分析ページのデータキャッシュを削除します（次回アクセス時に再取得）。<br>
-            ※ レポート全削除: そのクライアントの全月次レポートを完全に削除します（復元不可）。
+            ※ レポート全削除: そのクライアントの全月次レポートを完全に削除します（復元不可）。<br>
+            ※ SEO診断削除: そのクライアントのSEO／AIO診断履歴（最大10件）と前回比較データを完全に削除します（復元不可）。次回診断は初回扱いになります。
         </p>
         <?php
     }
@@ -423,6 +453,29 @@ class Gcrev_Client_Management_Page {
         }
 
         error_log( "[GCREV] Admin: {$deleted} reports deleted for user {$user_id}" );
+        return $deleted;
+    }
+
+    /**
+     * 指定ユーザーのSEO／AIO診断履歴件数を取得
+     */
+    private function get_user_seo_history_count( int $user_id ): int {
+        if ( ! class_exists( 'Gcrev_SEO_Checker' ) ) {
+            return 0;
+        }
+        return ( new Gcrev_SEO_Checker() )->get_history_count( $user_id );
+    }
+
+    /**
+     * 指定ユーザーのSEO／AIO診断履歴をすべて削除（復元不可）
+     */
+    private function delete_user_seo_history( int $user_id ): int {
+        if ( ! class_exists( 'Gcrev_SEO_Checker' ) ) {
+            return 0;
+        }
+        $deleted = ( new Gcrev_SEO_Checker() )->delete_diagnosis( $user_id );
+
+        error_log( "[GCREV] Admin: {$deleted} SEO diagnosis histories deleted for user {$user_id}" );
         return $deleted;
     }
 

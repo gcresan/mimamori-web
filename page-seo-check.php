@@ -572,6 +572,11 @@ $gcrev_pdf_export_ver  = file_exists( $gcrev_pdf_export_path ) ? filemtime( $gcr
                 var sameAsCached = cached && cached.updated_at && json.data.updated_at && cached.updated_at === json.data.updated_at;
                 if (!sameAsCached) { showSections(true); renderAll(json.data); }
                 saveCachedReport(json.data);
+            } else if (json.success && !json.data) {
+                // サーバー側に診断データが無い（管理画面から削除された等）
+                // → ローカルキャッシュも破棄して未診断表示に戻す
+                try { localStorage.removeItem(SEO_CACHE_KEY); } catch (e) {}
+                showSections(false);
             } else if (!cached || !cached.categories) {
                 showSections(false);
             }

@@ -411,6 +411,45 @@ class Gcrev_SEO_Checker {
     }
 
     /**
+     * 保存済み診断履歴の件数を取得（管理画面の表示用）
+     */
+    public function get_history_count( int $user_id ): int {
+        $raw = get_user_meta( $user_id, self::META_KEY_HISTORY, true );
+
+        // 新形式: PHP配列
+        if ( is_array( $raw ) && ! empty( $raw['history'] ) ) {
+            return count( $raw['history'] );
+        }
+        // 旧形式: JSON文字列
+        if ( $raw && is_string( $raw ) ) {
+            $decoded = json_decode( $raw, true );
+            if ( is_array( $decoded ) && ! empty( $decoded['history'] ) ) {
+                return count( $decoded['history'] );
+            }
+        }
+        // レガシーキーのみ存在する場合は1件扱い
+        $legacy = get_user_meta( $user_id, self::META_KEY, true );
+        return $legacy ? 1 : 0;
+    }
+
+    /**
+     * 指定ユーザーの診断履歴をすべて削除する（管理画面用・復元不可）
+     *
+     * 履歴 user_meta（新形式）・レガシー user_meta・結果キャッシュ Transient を削除。
+     *
+     * @return int 削除した履歴件数
+     */
+    public function delete_diagnosis( int $user_id ): int {
+        $count = $this->get_history_count( $user_id );
+
+        delete_user_meta( $user_id, self::META_KEY_HISTORY );
+        delete_user_meta( $user_id, self::META_KEY );
+        delete_transient( self::report_cache_key( $user_id ) );
+
+        return $count;
+    }
+
+    /**
      * 配列内の文字列を再帰的にUTF-8サニタイズ
      */
     private function sanitize_utf8_recursive( $value ) {
