@@ -1883,6 +1883,7 @@ add_action('wp_enqueue_scripts', function() {
     wp_localize_script( 'mw-ai-chat', 'mwChatConfig', [
         'apiUrl'            => rest_url( 'mimamori/v1/ai-chat' ),
         'voiceUrl'          => rest_url( 'mimamori/v1/voice-transcribe' ),
+        'notifyContextUrl'  => rest_url( 'mimamori/v1/chat-notify-context' ),
         'nonce'             => wp_create_nonce( 'wp_rest' ),
         'userId'            => get_current_user_id(),
         'paymentActive'     => gcrev_is_payment_active() || gcrev_is_trial_active( get_current_user_id() ),
@@ -6515,6 +6516,20 @@ function mimamori_handle_ai_chat_request( WP_REST_Request $request ): WP_REST_Re
         ], 400 );
     }
 
+    // 通知ディープリンク経由: トークンから通知内容を解決し、システムコンテキストとして注入。
+    // トークン不正・期限切れ・他テナントは黙ってスキップ（通常チャットとして処理）。
+    $notify_token = sanitize_text_field( $data['notifyToken'] ?? '' );
+    if ( $notify_token !== '' && function_exists( 'mimamori_resolve_notify_chat_context' ) ) {
+        $notify_ctx = mimamori_resolve_notify_chat_context( $notify_token, get_current_user_id() );
+        if ( $notify_ctx !== null && empty( $data['sectionContext']['sectionBody'] ) ) {
+            $data['sectionContext'] = [
+                'sectionType'  => 'mimamori_notify',
+                'sectionTitle' => 'お送りした通知の内容（この件についての質問に答える）',
+                'sectionBody'  => (string) $notify_ctx['summary'],
+            ];
+        }
+    }
+
     $result = mimamori_process_chat_with_trace( $data, get_current_user_id() );
 
     if ( ! $result['success'] ) {
@@ -7007,6 +7022,7 @@ function gcrev_chat_logs_create_table(): void {
         page_url VARCHAR(500) NOT NULL DEFAULT '',
         is_followup TINYINT(1) NOT NULL DEFAULT 0,
         is_quick_prompt TINYINT(1) NOT NULL DEFAULT 0,
+        source VARCHAR(32) NOT NULL DEFAULT '',
         param_gate VARCHAR(255) NOT NULL DEFAULT '',
         model VARCHAR(64) NOT NULL DEFAULT '',
         error_message VARCHAR(500) NOT NULL DEFAULT '',
@@ -7076,6 +7092,12 @@ function gcrev_save_chat_log(
         $response_text = (string) ( $result['raw_text'] ?? '' );
         $error_message = (string) ( $result['error'] ?? '' );
 
+        // 起動経路（通知種別 / 通常起動）。不正値は空にフォールバック
+        $chat_source = (string) ( $data['chatSource'] ?? '' );
+        if ( ! in_array( $chat_source, [ 'notify_alert', 'notify_digest', 'notify_suggest', 'normal' ], true ) ) {
+            $chat_source = '';
+        }
+
         // トレースは flex_results 等の巨大データを除外して保存
         $trace_slim = [
             'page_type'             => $trace['page_type']             ?? '',
@@ -7101,13 +7123,14 @@ function gcrev_save_chat_log(
                 'page_url'        => substr( $page_url, 0, 500 ),
                 'is_followup'     => ! empty( $trace['followup_resolved'] ) ? 1 : 0,
                 'is_quick_prompt' => ! empty( $data['isQuickPrompt'] ) ? 1 : 0,
+                'source'          => substr( $chat_source, 0, 32 ),
                 'param_gate'      => substr( $param_gate, 0, 255 ),
                 'model'           => substr( (string) ( $trace['model'] ?? '' ), 0, 64 ),
                 'error_message'   => substr( $error_message, 0, 500 ),
                 'trace_json'      => wp_json_encode( $trace_slim, JSON_UNESCAPED_UNICODE ),
                 'created_at'      => current_time( 'mysql' ),
             ],
-            [ '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s' ]
+            [ '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s' ]
         );
     } catch ( \Throwable $e ) {
         file_put_contents(
@@ -11231,7 +11254,116 @@ add_action( 'rest_api_init', function () {
             return is_user_logged_in();
         },
     ] );
+
+    // 通知ディープリンク → チャットコンテキスト解決
+    register_rest_route( 'mimamori/v1', '/chat-notify-context', [
+        'methods'             => 'GET',
+        'callback'            => 'mimamori_get_notify_chat_context',
+        'permission_callback' => function () {
+            return is_user_logged_in();
+        },
+        'args'                => [
+            'token' => [ 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ],
+        ],
+    ] );
 } );
+
+/**
+ * 通知トークンからチャットコンテキストを解決する。
+ *
+ * - トークンは Mimamori_Notification_Service::create_chat_link() が発行した
+ *   transient（30日TTL）。期限切れ・削除済みは null。
+ * - 他テナント遮断: トークンに埋め込まれた user_id とログイン中ユーザーの
+ *   一致を必ず検証する。
+ *
+ * @return array{user_id:int, type:string, summary:string}|null
+ */
+function mimamori_resolve_notify_chat_context( string $token, int $user_id ): ?array {
+    if ( $user_id <= 0 || ! preg_match( '/^[a-f0-9]{32}$/', $token ) ) {
+        return null;
+    }
+    $ctx = get_transient( 'mimamori_notify_ctx_' . $token );
+    if ( ! is_array( $ctx ) || (int) ( $ctx['user_id'] ?? 0 ) !== $user_id ) {
+        return null;
+    }
+    return $ctx;
+}
+
+/**
+ * 通知種別ごとの冒頭メッセージと質問候補チップ（固定テンプレート）。
+ */
+function mimamori_notify_chat_presets( string $type, string $summary ): array {
+    $first_line = trim( (string) strtok( $summary, "\n" ) );
+
+    switch ( $type ) {
+        case 'alert_access_drop':
+            return [
+                'intro' => $first_line . "\nこの件について、何でも聞いてください。",
+                'chips' => [ '考えられる原因は？', 'まず何をすべき？', '様子見でいい？' ],
+            ];
+        case 'alert_access_surge':
+            return [
+                'intro' => $first_line . "\nこの件について、何でも聞いてください。",
+                'chips' => [ '何が伸びた？', 'この流れを活かすには？' ],
+            ];
+        case 'alert_cv_stall':
+            return [
+                'intro' => $first_line . "\nこの件について、何でも聞いてください。",
+                'chips' => [ '考えられる原因は？', 'まず何をすべき？', '様子見でいい？' ],
+            ];
+        case 'alert_site_down':
+        case 'alert_ssl_expiry':
+            return [
+                'intro' => $first_line . "\nこの件について、何でも聞いてください。",
+                'chips' => [ '今すぐ何をすべき？', '放置するとどうなる？' ],
+            ];
+        case 'digest':
+            return [
+                'intro' => "今週のみまもり週次便の内容ですね。\n{$summary}\n気になる数字があれば、何でも聞いてください。",
+                'chips' => [ '先週と比べてどう？', '気になる点はある？' ],
+            ];
+        case 'suggest':
+            return [
+                'intro' => "AIからの改善提案の件ですね。\n{$first_line}\nこの提案について、何でも聞いてください。",
+                'chips' => [ '具体的な手順を教えて', '効果はどれくらい見込める？', '他に優先すべきことは？' ],
+            ];
+        default:
+            return [
+                'intro' => "お送りした通知の件ですね。何でも聞いてください。",
+                'chips' => [ '詳しく教えて', 'まず何をすべき？' ],
+            ];
+    }
+}
+
+/**
+ * GET /chat-notify-context
+ * トークン不正・期限切れ・他社・チャット権限なしは context:null で返し、
+ * フロント側は通常チャットにフォールバックする（エラー画面にしない）。
+ */
+function mimamori_get_notify_chat_context( \WP_REST_Request $request ): \WP_REST_Response {
+    $user_id  = get_current_user_id();
+    $fallback = new \WP_REST_Response( [ 'success' => true, 'context' => null ], 200 );
+
+    // 見える化プラン等、チャット利用不可プランは文脈なし（ウィジェット自体も非表示）
+    if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_chat', $user_id ) ) {
+        return $fallback;
+    }
+
+    $ctx = mimamori_resolve_notify_chat_context( (string) $request->get_param( 'token' ), $user_id );
+    if ( $ctx === null ) {
+        return $fallback;
+    }
+
+    $presets = mimamori_notify_chat_presets( (string) $ctx['type'], (string) $ctx['summary'] );
+    return new \WP_REST_Response( [
+        'success' => true,
+        'context' => [
+            'type'  => (string) $ctx['type'],
+            'intro' => $presets['intro'],
+            'chips' => $presets['chips'],
+        ],
+    ], 200 );
+}
 
 /**
  * 通知受信設定の保存（本人のみ）。

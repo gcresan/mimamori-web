@@ -66,6 +66,12 @@
   var promptCat  = 'status';    // 'status' | 'action' | 'trouble'
 
   /* ============================
+     Notify Deep-link State
+     （通知メールのリンク経由で開いた場合の文脈）
+     ============================ */
+  var notifyState = { token: null, source: '' };
+
+  /* ============================
      DOM references (populated on init)
      ============================ */
   var els = {};
@@ -522,6 +528,14 @@
     // Quick Prompt（質問例チップ由来）
     if (isQuickPrompt) {
       body.isQuickPrompt = true;
+    }
+
+    // 起動経路（通知ディープリンク経由 / 通常起動）— 利用ログ集計用
+    body.chatSource = notifyState.source || 'normal';
+
+    // 通知ディープリンク経由: サーバ側で通知内容をコンテキスト注入する
+    if (notifyState.token) {
+      body.notifyToken = notifyState.token;
     }
 
     // セクションコンテキスト（「AIに聞く」ボタンから抽出）
@@ -1492,6 +1506,88 @@
   /* ============================
      Init
      ============================ */
+  /* ============================
+     通知ディープリンク
+     （通知メールのリンクから、文脈と質問候補を持った状態でチャットを開く）
+     ============================ */
+
+  /** 通知文脈の質問候補チップを入力欄の上に描画する。タップで送信。 */
+  function renderNotifyChips(chips) {
+    if (!chips || !chips.length || !els.inputArea || !els.inputArea.parentNode) return;
+
+    var row = document.createElement('div');
+    row.className = 'mw-chat-quick__chips mw-chat-notify-chips';
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px 0;';
+    for (var i = 0; i < chips.length; i++) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mw-chat-quick__chip';
+      btn.setAttribute('data-question', chips[i]);
+      btn.textContent = chips[i];
+      row.appendChild(btn);
+    }
+    row.addEventListener('click', function (e) {
+      var chip = e.target.closest('.mw-chat-quick__chip');
+      if (!chip) return;
+      var q = chip.getAttribute('data-question');
+      if (!q) return;
+      if (els.textarea) { els.textarea.dataset.quickPrompt = '1'; }
+      if (row.parentNode) { row.parentNode.removeChild(row); }
+      sendMessage(q);
+    });
+    els.inputArea.parentNode.insertBefore(row, els.inputArea);
+  }
+
+  /** URLの mw_chat_notify トークンを処理し、文脈付きでチャットを開く。 */
+  function initNotifyDeepLink() {
+    if (window.location.search.indexOf('mw_chat_notify=') === -1) return;
+    if (typeof URLSearchParams === 'undefined' || typeof fetch === 'undefined') return;
+
+    var params = new URLSearchParams(window.location.search);
+    var token  = params.get('mw_chat_notify');
+
+    // リロード時の再発火を防ぐため、URLからトークンを除去しておく
+    try {
+      params.delete('mw_chat_notify');
+      var qs = params.toString();
+      window.history.replaceState(
+        {}, '',
+        window.location.pathname + (qs ? '?' + qs : '') + window.location.hash
+      );
+    } catch (e) { /* replaceState 非対応環境では何もしない */ }
+
+    if (!token || !config.notifyContextUrl) return;
+    if (!config.paymentActive) return; // 決済未完了は既存フローに任せる
+
+    fetch(config.notifyContextUrl + '?token=' + encodeURIComponent(token), {
+      credentials: 'same-origin',
+      headers: { 'X-WP-Nonce': config.nonce }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (json) {
+      var ctx = json && json.context;
+      // 不正・期限切れ・他社のトークンは context:null → 文脈なしの通常チャットにフォールバック
+      if (!ctx || !ctx.intro) return;
+
+      notifyState.token  = token;
+      notifyState.source = (ctx.type && ctx.type.indexOf('alert_') === 0) ? 'notify_alert'
+                         : (ctx.type === 'digest')  ? 'notify_digest'
+                         : (ctx.type === 'suggest') ? 'notify_suggest'
+                         : 'normal';
+
+      // 文脈と質問候補を持った状態でパネル表示
+      switchViewMode('panel');
+
+      var payload = { type: 'talk', text: ctx.intro };
+      appendAssistantMessage(payload);
+      state.history.push({ role: 'assistant', content: ctx.intro, structured: payload });
+      saveSession();
+
+      renderNotifyChips(ctx.chips);
+    })
+    .catch(function () { /* 取得失敗時は通常チャットとして動作 */ });
+  }
+
   function init() {
     els.root        = document.getElementById('mw-chat');
     if (!els.root) return;
@@ -1526,6 +1622,9 @@
     if (savedMode && hadHistory) {
       switchViewMode(savedMode);
     }
+
+    // 通知メールのディープリンク（?mw_chat_notify=）処理
+    initNotifyDeepLink();
   }
 
   /* ============================

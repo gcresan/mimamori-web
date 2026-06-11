@@ -203,6 +203,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Chat_Analysis_Page())->register();
             }
 
+            $chat_log_path = __DIR__ . '/admin/class-chat-log-page.php';
+            if ( file_exists( $chat_log_path ) ) {
+                require_once $chat_log_path;
+                (new Gcrev_Chat_Log_Page())->register();
+            }
+
             $rank_tracker_path = __DIR__ . '/admin/class-rank-tracker-settings-page.php';
             if ( file_exists( $rank_tracker_path ) ) {
                 require_once $rank_tracker_path;

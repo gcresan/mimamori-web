@@ -119,6 +119,38 @@ class Mimamori_Notification_Service {
     }
 
     // =================================================================
+    // 通知 → AIチャット連携（ワンタップ導線）
+    // =================================================================
+
+    /**
+     * 通知コンテキストトークンを発行し、チャット起動URLを返す。
+     *
+     * トークンは transient（30日TTL）に user_id 付きで保存し、チャット側の
+     * 参照時に「ログイン中ユーザー == トークンの user_id」を検証する
+     * （他テナントの通知内容は参照不可。期限切れは transient の失効で担保）。
+     *
+     * URL は /login/?redirect_to= を経由する:
+     *   - ログイン済み  → 即座に /dashboard/?mw_chat_notify={token} へ
+     *   - 未ログイン    → ログイン後に同URLへ復帰（既存の認証フロー）
+     */
+    private function create_chat_link( int $uid, string $type, string $summary ): string {
+        try {
+            $token = bin2hex( random_bytes( 16 ) );
+        } catch ( \Throwable $e ) {
+            $token = md5( uniqid( (string) $uid, true ) . wp_salt( 'auth' ) );
+        }
+        set_transient( 'mimamori_notify_ctx_' . $token, [
+            'user_id' => $uid,
+            'type'    => $type,
+            'summary' => mb_substr( $summary, 0, 1500 ),
+            'created' => time(),
+        ], 30 * DAY_IN_SECONDS );
+
+        $target = home_url( '/dashboard/' ) . '?mw_chat_notify=' . $token;
+        return home_url( '/login/' ) . '?redirect_to=' . rawurlencode( $target );
+    }
+
+    // =================================================================
     // A. みまもりアラート（日次）
     // =================================================================
 
@@ -357,6 +389,11 @@ class Mimamori_Notification_Service {
             }
             $lines[] = '詳しい状況はダッシュボードでご確認いただけます。';
             $lines[] = home_url( '/dashboard/' );
+            $lines[] = '';
+            // ワンタップでチャットが文脈付きで開く導線
+            $ctx_summary = $alert['facts'] . ( $analysis !== '' ? "\n\n【AIによる分析】\n" . $analysis : '' );
+            $lines[] = '▼ この件についてAIに質問する';
+            $lines[] = $this->create_chat_link( $uid, 'alert_' . $alert['type'], $ctx_summary );
         } else {
             // 見える化プラン: 事実のみ + 固定のアップグレード案内
             $lines[] = '現在の状況はダッシュボードでご確認いただけます。';
@@ -445,18 +482,30 @@ class Mimamori_Notification_Service {
             : '今週も異常はありませんでした。';
 
         $subject = '【みまもりウェブ】みまもり週次便';
-        $body    = implode( "\n", [
-            ( $user->display_name ?: $user->user_login ) . ' 様',
-            '',
+        $summary_lines = [
             '・今週の訪問数: ' . $fmt_pair( $sessions, '件' ),
             '・今週のお問い合わせ: ' . $fmt_pair( $cv, '件' ),
             '・異常検知: ' . $anomaly_line,
-            '',
-            '引き続きAIが24時間サイトを見守っています。',
-            '詳細: ' . home_url( '/dashboard/' ),
-        ] );
+        ];
 
-        $sent = wp_mail( $user->user_email, $subject, $body );
+        $lines   = [ ( $user->display_name ?: $user->user_login ) . ' 様', '' ];
+        $lines   = array_merge( $lines, $summary_lines );
+        $lines[] = '';
+        $lines[] = '引き続きAIが24時間サイトを見守っています。';
+        $lines[] = '詳細: ' . home_url( '/dashboard/' );
+
+        if ( $this->has_analysis_plan( $uid ) ) {
+            $lines[] = '';
+            $lines[] = '▼ 今週の数字についてAIに聞いてみる';
+            $lines[] = $this->create_chat_link( $uid, 'digest', implode( "\n", $summary_lines ) );
+        } else {
+            // 見える化プラン: チャットは対象外のためアップグレード導線を表示
+            $lines[] = '';
+            $lines[] = '数字の見方のご相談やAIチャットは、改善提案プラン以上でご利用いただけます。';
+            $lines[] = 'プランのご案内: ' . home_url( '/plans/' );
+        }
+
+        $sent = wp_mail( $user->user_email, $subject, implode( "\n", $lines ) );
         self::log( sprintf( 'weekly digest sent user=%d result=%s', $uid, $sent ? 'OK' : 'FAIL' ) );
     }
 
@@ -553,6 +602,17 @@ class Mimamori_Notification_Service {
         $lines[] = '';
         $lines[] = '詳しい内容と他の提案は「改善施策提案」ページでご確認いただけます。';
         $lines[] = home_url( '/execution-dashboard/' );
+        $lines[] = '';
+        // ワンタップでチャットが文脈付きで開く導線（C は改善提案プラン以上のみが対象）
+        $ctx_summary = trim( (string) ( $action['title'] ?? '' ) );
+        if ( ! empty( $action['reason'] ) ) {
+            $ctx_summary .= "\n根拠: " . trim( (string) $action['reason'] );
+        }
+        if ( ! empty( $action['expected_effect'] ) ) {
+            $ctx_summary .= "\n期待効果: " . trim( (string) $action['expected_effect'] );
+        }
+        $lines[] = '▼ この提案の進め方をAIに相談する';
+        $lines[] = $this->create_chat_link( $uid, 'suggest', $ctx_summary );
         $lines[] = '';
         $lines[] = '────────────────────';
         $lines[] = 'みまもりウェブ';
