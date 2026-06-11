@@ -603,6 +603,12 @@ class Gcrev_Bootstrap {
         $log = '/tmp/gcrev_cron_debug.log';
         file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily START\n", FILE_APPEND );
 
+        // ユーザーごとの外部API取得 + キャッシュ再ウォームで長時間化するため制限を解除
+        @ignore_user_abort( true );
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 0 );
+        }
+
         if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
             file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily: fetcher class not found\n", FILE_APPEND );
             return;
@@ -642,6 +648,18 @@ class Gcrev_Bootstrap {
                     $ok_count++;
                     if ( function_exists( 'gcrev_invalidate_user_cv_cache' ) ) {
                         gcrev_invalidate_user_cv_cache( $uid );
+                        // 全消し後、/dashboard/ が同期読み出しする月次KPIを即再ウォームする。
+                        // これを怠ると当日最初のダッシュボード表示が GA4/GSC 同期取得でブロックされる
+                        // （プリフェッチ cron は 03:10〜04:40 実行のため、この 04:50 の削除を温め直せない）。
+                        try {
+                            $api = new \Gcrev_Insight_API( false );
+                            $api->warm_monthly_dashboard_kpi( $uid );
+                        } catch ( \Throwable $warm_e ) {
+                            file_put_contents( $log,
+                                date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily: rewarm FAIL user={$uid} " . $warm_e->getMessage() . "\n",
+                                FILE_APPEND
+                            );
+                        }
                     }
                     file_put_contents( $log,
                         date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily: user={$uid} OK total=" . ( $result['total'] ?? '?' ) . " valid=" . ( $result['valid'] ?? '?' ) . "\n",
@@ -825,12 +843,11 @@ class Gcrev_Bootstrap {
         // スロットル: 30 分以内に warm 済みならスキップ
         $throttle_key = "gcrev_throttle_dash_warm_{$user_id}";
         if ( get_transient( $throttle_key ) ) { return; }
-        set_transient( $throttle_key, 1, 30 * MINUTE_IN_SECONDS );
 
         // レスポンス送出後に warm を実行（ユーザーは待たされない）。
         // PHP-FPM の fastcgi_finish_request があれば、HTTP レスポンスを完了させてから
         // バックグラウンドで処理を続けられる。なければ通常の shutdown 動作に倣う。
-        register_shutdown_function( function () use ( $user_id ) {
+        register_shutdown_function( function () use ( $user_id, $throttle_key ) {
             if ( function_exists( 'fastcgi_finish_request' ) ) {
                 @fastcgi_finish_request();
             }
@@ -840,6 +857,10 @@ class Gcrev_Bootstrap {
             }
             try {
                 self::on_user_dashboard_warm_event( $user_id );
+                // warm 完了後にスロットルを立てる（実行前に立てると、warm が
+                // 途中で死んだ場合に 30 分間リトライ不能になる）。
+                // 同時多重実行は warm event 側の gcrev_lock_dash_warm_* が防ぐ。
+                set_transient( $throttle_key, 1, 30 * MINUTE_IN_SECONDS );
             } catch ( \Throwable $e ) {
                 @file_put_contents(
                     '/tmp/gcrev_dash_warm_debug.log',

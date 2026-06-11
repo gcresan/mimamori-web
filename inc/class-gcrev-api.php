@@ -2297,10 +2297,20 @@ class Gcrev_Insight_API {
             ], 200);
 
         } catch (\Exception $e) {
-            error_log("[GCREV] REST /kpi ERROR (user_id={$user_id}): " . $e->getMessage());
+            file_put_contents( '/tmp/gcrev_ga4_debug.log',
+                date( 'Y-m-d H:i:s' ) . " [REST /kpi] ERROR user_id={$user_id}: " . mb_substr( $e->getMessage(), 0, 300 ) . "\n",
+                FILE_APPEND
+            );
+
+            // 例外メッセージは内部情報（パス・DBエラー等）を含みうるため一般ユーザーには返さない
+            if ( current_user_can( 'manage_options' ) ) {
+                $front_msg = 'エラー: ' . mb_substr( $e->getMessage(), 0, 200 );
+            } else {
+                $front_msg = 'データの取得に失敗しました。しばらくしてからお試しください。';
+            }
             return new WP_REST_Response([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => $front_msg,
             ], 500);
         } finally {
             $this->restore_country_filter( $filter_set );
@@ -2312,6 +2322,8 @@ class Gcrev_Insight_API {
     //
     // 用途: ログイン直後 / ダッシュボードキャッシュミス時の背景プリフェッチ。
     // page-dashboard.php の同期読み出しに必要な最小キャッシュだけを温める：
+    //   - gcrev_dash_bydate_{user_id}_prev_month / _prev2_month （月次確定KPI ※ページが最初に読む）
+    //   - gcrev_meo_perf_{user_id}_prev_month / _prev2_month    （MEO 月次）
     //   - gcrev_dash_{user_id}_last30{_jp?_ex?}             （主要KPI）
     //   - gcrev_dash_bydate_{user_id}_last30_comp{_filtered?_pf?} （比較期間、period ベース安定キー）
     //   - gcrev_meo_perf_{user_id}_last30 / _last30_comp    （MEO 当期 + 前期、period ベース安定キー）
@@ -2336,6 +2348,10 @@ class Gcrev_Insight_API {
         $exclude_foreign = $this->is_exclude_foreign( $user_id );
 
         try {
+            // (0) 月次確定KPI（prev_month / prev2_month）
+            // /dashboard/ が描画ブロックする最重要キャッシュのため最初に温める
+            $this->warm_monthly_dashboard_kpi( $user_id );
+
             $last30      = $this->dates->get_date_range( 'last30' );
             $last30_comp = $this->dates->get_comparison_range( $last30['start'], $last30['end'] );
 
@@ -2412,6 +2428,45 @@ class Gcrev_Insight_API {
             );
         } finally {
             $this->restore_country_filter( $filter_set );
+        }
+    }
+
+    // =========================================================
+    // 月次確定KPI（前月 / 前々月）のキャッシュ温め
+    //
+    // page-dashboard.php は描画中に以下を同期読み出しする：
+    //   - gcrev_dash_bydate_{uid}_prev_month{filter}  / _prev2_month{filter}
+    //   - gcrev_meo_perf_{uid}_prev_month / _prev2_month
+    // これらのキーはここ以外のどの cron / warm でも書かれないため、
+    // 温め漏れがあると /dashboard/ の TTFB が GA4/GSC 同期取得（十数回）でブロックされる。
+    //
+    // get_dashboard_kpi_by_dates は内部でキャッシュ確認・国フィルタ設定を行うため、
+    // 単体呼び出しでも安全（プリフェッチ文脈でのネスト set/restore も既存パターン）。
+    // =========================================================
+    public function warm_monthly_dashboard_kpi( int $user_id ): void {
+        $tz          = wp_timezone();
+        $prev_start  = new \DateTimeImmutable( 'first day of last month', $tz );
+        $prev_end    = new \DateTimeImmutable( 'last day of last month', $tz );
+        $prev2_start = $prev_start->modify( '-1 month' );
+        $prev2_end   = $prev2_start->modify( 'last day of this month' );
+
+        $this->get_dashboard_kpi_by_dates(
+            $prev_start->format( 'Y-m-d' ), $prev_end->format( 'Y-m-d' ), $user_id, 'prev_month'
+        );
+        $this->get_dashboard_kpi_by_dates(
+            $prev2_start->format( 'Y-m-d' ), $prev2_end->format( 'Y-m-d' ), $user_id, 'prev2_month'
+        );
+
+        // MEO 月次（page-dashboard.php の同期 MEO フォールバック発火を防ぐ）
+        try {
+            $this->fetch_meo_metrics_safe(
+                $user_id, $prev_start->format( 'Y-m-d' ), $prev_end->format( 'Y-m-d' ), 'prev_month'
+            );
+            $this->fetch_meo_metrics_safe(
+                $user_id, $prev2_start->format( 'Y-m-d' ), $prev2_end->format( 'Y-m-d' ), 'prev2_month'
+            );
+        } catch ( \Throwable $e ) {
+            // MEO 失敗は致命ではない（未連携ユーザー等）
         }
     }
 
@@ -2525,6 +2580,19 @@ class Gcrev_Insight_API {
                 }
 
                 usleep(self::PREFETCH_SLEEP_US);
+            }
+
+            // --- (1b) 月次確定KPI（/dashboard/ が同期読み出しするキー）---
+            try {
+                $warm_start = microtime( true );
+                $this->warm_monthly_dashboard_kpi( $user_id );
+                $elapsed = round( microtime( true ) - $warm_start, 1 );
+                $this->prefetch_log( "[PREFETCH] OK user_id={$user_id} period=monthly_kpi elapsed={$elapsed}s" );
+            } catch (\Exception $e) {
+                $error_msg = mb_substr( $e->getMessage(), 0, 500 );
+                $this->prefetch_log( "[PREFETCH] FAIL user_id={$user_id} period=monthly_kpi error=" . $error_msg );
+                $user_had_error = true;
+                $period_errors['monthly_kpi'] = $error_msg;
             }
 
             // --- (2) 各分析ページキャッシュ ---
@@ -5653,7 +5721,14 @@ PROMPT;
         }
         $cached = get_transient( $cache_key );
         if ( $cached !== false && is_array( $cached ) ) {
-            return $cached;
+            // 月次スコープはキーに年月を含まないため、月替わり直後はキーが同じまま
+            // 中身が旧月分（TTL 7日）になりうる。期間一致を検証し、不一致なら再取得する。
+            // ※ last30 系スコープは「日付がスライドしても翌日 cron までキャッシュを使う」設計のため検証しない。
+            $is_monthly_scope = in_array( $cache_scope, [ 'prev_month', 'prev2_month' ], true );
+            $cached_start     = $cached['current_period']['start'] ?? '';
+            if ( ! $is_monthly_scope || $cached_start === $start_date ) {
+                return $cached;
+            }
         }
 
         $config = $this->config->get_user_config( $user_id );
