@@ -416,6 +416,13 @@ class Gcrev_Insight_API {
             ]
         ]);
 
+        // ===== 月次KPIキャッシュの準備状況（/dashboard/ の「集計中」ポーリング用） =====
+        register_rest_route('gcrev/v1', '/dashboard/monthly-kpi-status', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_get_monthly_kpi_status' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
+
         // ===== ダッシュボードスコア計算（JS非同期取得後の統一スコア） =====
         register_rest_route('gcrev/v1', '/dashboard/score', [
             'methods'             => 'POST',
@@ -5702,14 +5709,63 @@ PROMPT;
      * @param int    $user_id    ユーザーID
      * @return array KPIデータ
      */
-    public function get_dashboard_kpi_by_dates( string $start_date, string $end_date, int $user_id, ?string $cache_scope = null ): array {
-        // --- Transient キャッシュ（12+ API呼び出しを回避）---
+    /**
+     * by-date KPI キャッシュキーのフィルタサフィックス
+     * （海外除外フラグ + 解析対象/除外URL条件のハッシュ）
+     */
+    private function bydate_filter_suffix( int $user_id ): string {
         $exclude_foreign = get_user_meta( $user_id, 'report_exclude_foreign', true );
         $filter_suffix   = $exclude_foreign ? '_filtered' : '';
-        // 解析対象/除外URL条件があればキャッシュキーを差別化（条件内容のハッシュ）
         if ( class_exists( 'Gcrev_Path_Filter' ) ) {
             $filter_suffix .= Gcrev_Path_Filter::cache_suffix( $user_id );
         }
+        return $filter_suffix;
+    }
+
+    /**
+     * 月次スコープ KPI キャッシュの読み出し専用アクセサ。
+     *
+     * page-dashboard.php の描画パスから呼ぶ — キャッシュミス時に同期 fetch は
+     * 一切行わず null を返す（描画をブロックしないため）。fetch が必要な場合は
+     * バックグラウンドの warm（warm_monthly_dashboard_kpi）に任せる。
+     *
+     * @param string $expected_start 期待する期間開始日（Y-m-d）。キーに年月を含まない
+     *                               月次スコープで、月替わり後の旧データ誤用を防ぐ。
+     */
+    public function get_dashboard_kpi_cached( int $user_id, string $scope, string $expected_start = '' ): ?array {
+        $cache_key = "gcrev_dash_bydate_{$user_id}_{$scope}" . $this->bydate_filter_suffix( $user_id );
+        $cached    = get_transient( $cache_key );
+        if ( $cached === false || ! is_array( $cached ) ) {
+            return null;
+        }
+        if ( $expected_start !== '' && ( $cached['current_period']['start'] ?? '' ) !== $expected_start ) {
+            return null; // キーは同じまま旧期間の中身が残っているケース（月替わり直後）
+        }
+        return $cached;
+    }
+
+    // =========================================================
+    // REST: /dashboard/monthly-kpi-status
+    // /dashboard/ の「集計中」表示が完成を検知するためのポーリング先
+    // =========================================================
+    public function rest_get_monthly_kpi_status( WP_REST_Request $request ): WP_REST_Response {
+        $user_id     = get_current_user_id();
+        $tz          = wp_timezone();
+        $prev_start  = new \DateTimeImmutable( 'first day of last month', $tz );
+        $prev2_start = $prev_start->modify( '-1 month' );
+
+        $curr = $this->get_dashboard_kpi_cached( $user_id, 'prev_month', $prev_start->format( 'Y-m-d' ) );
+        $prev = $this->get_dashboard_kpi_cached( $user_id, 'prev2_month', $prev2_start->format( 'Y-m-d' ) );
+
+        return new WP_REST_Response([
+            'success' => true,
+            'ready'   => ( $curr !== null && $prev !== null ),
+        ], 200);
+    }
+
+    public function get_dashboard_kpi_by_dates( string $start_date, string $end_date, int $user_id, ?string $cache_scope = null ): array {
+        // --- Transient キャッシュ（12+ API呼び出しを回避）---
+        $filter_suffix = $this->bydate_filter_suffix( $user_id );
         if ( $cache_scope !== null && $cache_scope !== '' ) {
             // period ベースの安定キー。日付が毎日スライドしても同じキーを使う
             // → cron が書いたキャッシュを翌日 cron までヒットできる

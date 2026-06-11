@@ -794,6 +794,36 @@ class Gcrev_Bootstrap {
     }
 
     /**
+     * 現在のリクエストのレスポンス送出後にダッシュボード warm を実行する。
+     *
+     * page-dashboard.php がキャッシュミス時に呼ぶ。描画は「集計中」表示で即返し、
+     * fastcgi_finish_request() でレスポンスを完了させてから同一ワーカーで warm を回す
+     * （wp_login 後の warm と同じパターン）。
+     * 多重実行は on_user_dashboard_warm_event 内の gcrev_lock_dash_warm_* が防ぐ。
+     */
+    public static function warm_user_dashboard_after_response( int $user_id ): void {
+        if ( $user_id <= 0 ) { return; }
+
+        register_shutdown_function( function () use ( $user_id ) {
+            if ( function_exists( 'fastcgi_finish_request' ) ) {
+                @fastcgi_finish_request();
+            }
+            @ignore_user_abort( true );
+            if ( function_exists( 'set_time_limit' ) ) {
+                @set_time_limit( 300 );
+            }
+            try {
+                self::on_user_dashboard_warm_event( $user_id );
+            } catch ( \Throwable $e ) {
+                @file_put_contents( '/tmp/gcrev_dash_warm_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " page shutdown warm ERROR user_id={$user_id}: " . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
+            }
+        } );
+    }
+
+    /**
      * pre_get_ready_cron_jobs フィルタ:
      * ユーザー向けフロントページでは ready jobs を空配列で返し、
      * wp_cron() → spawn_cron() → wp_remote_post() の連鎖を発火させない。

@@ -520,23 +520,30 @@ if ( ! $infographic ) {
 $kpi_curr = [];
 $kpi_prev = [];
 
+// 「集計中」フラグ: KPIキャッシュ未生成時に true。
+// 描画は即返し、バックグラウンド warm + JSポーリングで完成後に自動リロードする。
+$gcrev_kpi_warming = false;
+
 // === 月次ベースのKPI・スコア算出（前月 vs 前々月の確定データ） ===
 if ($infographic && is_array($infographic)) {
     try {
         // --- 前月のKPIデータ（GA4+GSC）---
-        // 全体ダッシュボードは「月次の確定データを見る場所」なので、月次レンジで取得する。
-        // get_dashboard_kpi_by_dates は cache_scope を付ければトランジェントキャッシュも効く。
-        $kpi_curr = $gcrev_api->get_dashboard_kpi_by_dates(
-            $month_curr['start'], $month_curr['end'], $user_id, 'prev_month'
-        );
+        // 描画パスでは「キャッシュのみ」読む（キャッシュミス時の同期 GA4/GSC 取得は
+        // 十数回の直列API呼び出しで TTFB が30〜60秒ブロックされるため禁止）。
+        // ミス時はレスポンス送出後の warm に取得を任せる。
+        $kpi_curr_cached = $gcrev_api->get_dashboard_kpi_cached( $user_id, 'prev_month', $month_curr['start'] );
+        $kpi_prev_cached = ( $kpi_curr_cached !== null )
+            ? $gcrev_api->get_dashboard_kpi_cached( $user_id, 'prev2_month', $month_comp['start'] )
+            : null;
 
-        // 比較期間のKPI（前々月）
-        $kpi_prev = [];
-        if ( ! empty( $kpi_curr ) ) {
-            $kpi_prev = $gcrev_api->get_dashboard_kpi_by_dates(
-                $month_comp['start'], $month_comp['end'], $user_id, 'prev2_month'
-            );
+        if ( $kpi_curr_cached === null || $kpi_prev_cached === null ) {
+            $gcrev_kpi_warming = true;
+            if ( class_exists( 'Gcrev_Bootstrap' ) ) {
+                Gcrev_Bootstrap::warm_user_dashboard_after_response( $user_id );
+            }
         }
+        $kpi_curr = is_array( $kpi_curr_cached ) ? $kpi_curr_cached : [];
+        $kpi_prev = is_array( $kpi_prev_cached ) ? $kpi_prev_cached : [];
 
         // --- MEO月次（前月 / 前々月） ---
         // get_transient_with_stale で TTL 切れでもキャッシュ値を再利用
@@ -588,9 +595,15 @@ if ($infographic && is_array($infographic)) {
         // 同期 MEO fetch を試行する（全体ダッシュボードは月次確定データ表示のため）。
         // 空メトリクスは fetch_meo_metrics_safe 内でキャッシュ書き込みされないため、
         // マップ表示への副作用は無い。
+        // ※ 集計中（KPI warm 待ち）は warm 側が MEO も温めるためスキップ。
+        // ※ 空振り時は 2時間スキップする（MEO 未連携/電話タップ0のユーザーで
+        //    毎回の描画が同期 GBP API 呼び出しでブロックされるのを防ぐ）。
+        $meo_fb_skip_key = "gcrev_meo_fb_skip_{$user_id}";
         if (
-            method_exists( $gcrev_api, 'fetch_meo_metrics_safe_public' )
+            ! $gcrev_kpi_warming
+            && method_exists( $gcrev_api, 'fetch_meo_metrics_safe_public' )
             && ( ! is_array( $meo_cache_curr ) || (int) ( $meo_cache_curr['call_clicks'] ?? 0 ) === 0 )
+            && get_transient( $meo_fb_skip_key ) === false
         ) {
             try {
                 $fresh = $gcrev_api->fetch_meo_metrics_safe_public(
@@ -598,9 +611,12 @@ if ($infographic && is_array($infographic)) {
                 );
                 if ( is_array( $fresh ) && (int) ( $fresh['call_clicks'] ?? 0 ) > 0 ) {
                     $meo_cache_curr = $fresh;
+                } else {
+                    set_transient( $meo_fb_skip_key, 1, 2 * HOUR_IN_SECONDS );
                 }
             } catch ( \Throwable $meo_e ) {
                 // フォールバック失敗 → 既存値を維持
+                set_transient( $meo_fb_skip_key, 1, 2 * HOUR_IN_SECONDS );
             }
         }
 
@@ -632,23 +648,28 @@ if ($infographic && is_array($infographic)) {
         // get_effective_cv_monthly（月次確定 CV）の合計値だけを使用する。
         // breakdown は GA4 由来の cv_breakdown_items 配列形式を保つ
         // （breakdown_by_label は連想配列形式で JS の forEach 互換性がないため）。
-        try {
-            $eff_cv_curr = $gcrev_api->get_effective_cv_monthly(
-                sprintf( '%04d-%02d', (int) $prev_month_start->format( 'Y' ), (int) $prev_month_start->format( 'n' ) ),
-                $user_id
-            );
-            if ( is_array( $eff_cv_curr ) && isset( $eff_cv_curr['total'] ) ) {
-                $cv_curr = (int) $eff_cv_curr['total'];
+        // 集計中（KPI warm 待ち）はスキップ: get_effective_cv_monthly はキャッシュミス時に
+        // GA4 を同期で数回呼ぶため、コールドキャッシュ時の描画ブロック要因になる。
+        // warm が KPI と一緒に effcv キャッシュも生成するため、リロード後に正しい値が出る。
+        if ( ! $gcrev_kpi_warming ) {
+            try {
+                $eff_cv_curr = $gcrev_api->get_effective_cv_monthly(
+                    sprintf( '%04d-%02d', (int) $prev_month_start->format( 'Y' ), (int) $prev_month_start->format( 'n' ) ),
+                    $user_id
+                );
+                if ( is_array( $eff_cv_curr ) && isset( $eff_cv_curr['total'] ) ) {
+                    $cv_curr = (int) $eff_cv_curr['total'];
+                }
+                $eff_cv_prev = $gcrev_api->get_effective_cv_monthly(
+                    sprintf( '%04d-%02d', (int) $prev2_month_start->format( 'Y' ), (int) $prev2_month_start->format( 'n' ) ),
+                    $user_id
+                );
+                if ( is_array( $eff_cv_prev ) && isset( $eff_cv_prev['total'] ) ) {
+                    $cv_prev = (int) $eff_cv_prev['total'];
+                }
+            } catch ( \Throwable $cve ) {
+                error_log( '[GCREV] page-dashboard effective_cv error: ' . $cve->getMessage() );
             }
-            $eff_cv_prev = $gcrev_api->get_effective_cv_monthly(
-                sprintf( '%04d-%02d', (int) $prev2_month_start->format( 'Y' ), (int) $prev2_month_start->format( 'n' ) ),
-                $user_id
-            );
-            if ( is_array( $eff_cv_prev ) && isset( $eff_cv_prev['total'] ) ) {
-                $cv_prev = (int) $eff_cv_prev['total'];
-            }
-        } catch ( \Throwable $cve ) {
-            error_log( '[GCREV] page-dashboard effective_cv error: ' . $cve->getMessage() );
         }
 
         // infographic KPI 上書き（訪問数・ゴール数・MEO）
@@ -786,6 +807,45 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
             <span class="period-value"><?php echo esc_html( $month_comp['display']['label'] ); ?></span>
         </div>
     </div>
+
+<?php if ( ! empty( $gcrev_kpi_warming ) ) : ?>
+    <!-- KPI集計中バナー: バックグラウンド warm の完成をポーリングして自動リロード -->
+    <div id="gcrev-kpi-warming" role="status"
+         style="display:flex;align-items:center;gap:10px;margin:12px 0;padding:12px 16px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-size:14px;">
+        <span aria-hidden="true"
+              style="display:inline-block;width:16px;height:16px;border:2px solid #93c5fd;border-top-color:#1d4ed8;border-radius:50%;animation:gcrevKpiSpin 0.8s linear infinite;flex:none;"></span>
+        <span id="gcrev-kpi-warming-msg">最新データを集計しています。完了すると自動的に表示が更新されます（通常1分以内）。</span>
+    </div>
+    <style>@keyframes gcrevKpiSpin{to{transform:rotate(360deg)}}</style>
+    <script>
+    (function () {
+        var statusUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/dashboard/monthly-kpi-status' ) ), JSON_UNESCAPED_UNICODE ); ?>;
+        var nonce     = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+        var tries = 0, MAX_TRIES = 36; // 5秒 × 36 = 3分
+        var timer = setInterval(function () {
+            tries++;
+            if (tries > MAX_TRIES) {
+                clearInterval(timer);
+                var msg = document.getElementById('gcrev-kpi-warming-msg');
+                if (msg) {
+                    msg.textContent = '集計に時間がかかっています。しばらくしてからページを再読み込みしてください。';
+                }
+                return;
+            }
+            fetch(statusUrl, { credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce } })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    if (j && j.ready) {
+                        clearInterval(timer);
+                        location.reload();
+                    }
+                })
+                .catch(function () { /* 一時的な失敗は次のポーリングで再試行 */ });
+        }, 5000);
+    })();
+    </script>
+<?php endif; ?>
+
 <?php if ($infographic): ?>
 <section class="dashboard-infographic">
 
