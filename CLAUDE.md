@@ -340,10 +340,13 @@ wp/
 
 | イベント | 時刻 | 目的 | 関連クラス |
 |---|---|---|---|
+| `gcrev_inquiries_fetch_daily_event` | 02:50 | 問い合わせ当月分フェッチ + CVキャッシュ無効化 | `Bootstrap::on_inquiries_fetch_daily_event()` |
 | `gcrev_prefetch_daily_event` | 03:10 | GA4/GSCデータ先読み | `Bootstrap` → `API::prefetch_chunk()` |
 | `gcrev_monthly_report_generate_event` | 04:00 | 月次レポート自動生成 | `Bootstrap` → `API::auto_generate_monthly_reports()` |
 | `gcrev_monthly_report_finalize_event` | 23:00 | レポート確定・公開 | `Bootstrap` → `API::auto_finalize_monthly_reports()` |
 | `gcrev_cron_log_cleanup_event` | 02:00 | 90日超ログ削除 | `Bootstrap` → `Cron_Logger::cleanup_old(90)` |
+
+**cron 順序の制約（重要）**: キャッシュを無効化する cron（問い合わせフェッチ等）は、必ずプリフェッチ（03:10〜04:40）より**前**に実行すること。後に動かすと「温めた直後に消す」ことになり、日中最初のページ閲覧が外部API同期取得でブロックされる。
 
 **スロット分散プリフェッチ** (`Gcrev_Prefetch_Scheduler`):
 - 4スロット × 30分間隔（03:10, 03:40, 04:10, 04:40）

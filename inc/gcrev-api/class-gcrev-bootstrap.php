@@ -1153,10 +1153,16 @@ class Gcrev_Bootstrap {
         // Clarity日次蓄積（毎日 03:45）
         self::schedule_daily_if_missing('gcrev_clarity_daily_sync_event', 'tomorrow 03:45:00');
 
-        // Inquiries (問い合わせ集計API) 当月分の自動フェッチ（毎日 04:50）
+        // Inquiries (問い合わせ集計API) 当月分の自動フェッチ（毎日 02:50）
         // → ユーザーが問い合わせ一覧を手動で開かなくても、当月のフォーム CV が
         //    ダッシュボードのゴール数 / 折れ線グラフに反映され続けるようにする。
-        self::schedule_daily_if_missing('gcrev_inquiries_fetch_daily_event', 'tomorrow 04:50:00');
+        //
+        // ※ 必ずプリフェッチ（03:10〜04:40）より前に実行すること。
+        //   この cron は取得成功時に gcrev_invalidate_user_cv_cache() で
+        //   gcrev_dash_* / gcrev_effcv_* / CVトレンド を全消しするため、
+        //   プリフェッチの後に動かすと「温めた直後に消す」ことになり、
+        //   日中最初のページ閲覧が GA4/GSC 同期取得でブロックされる。
+        self::schedule_daily_if_missing('gcrev_inquiries_fetch_daily_event', 'tomorrow 02:50:00');
 
         // 月次データプリフェッチ: 毎日 05:00（月初のみ実行、月固定期間データを取得）
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {
@@ -1370,11 +1376,20 @@ class Gcrev_Bootstrap {
     }
 
     private static function schedule_daily_if_missing(string $hook, string $when): void {
-        if (wp_next_scheduled($hook)) {
-            return;
-        }
         $tz = wp_timezone();
         $dt = new DateTimeImmutable($when, $tz);
+
+        $next = wp_next_scheduled($hook);
+        if ($next) {
+            // 既存スケジュールの実行時刻が指定時刻と一致していればそのまま
+            $next_local = (new DateTimeImmutable('@' . $next))->setTimezone($tz);
+            if ($next_local->format('H:i') === $dt->format('H:i')) {
+                return;
+            }
+            // コード側で実行時刻が変更された場合は再スケジュール
+            // （例: 問い合わせ取得をプリフェッチ前に移動 04:50 → 02:50）
+            wp_clear_scheduled_hook($hook);
+        }
 
         wp_schedule_event($dt->getTimestamp(), 'daily', $hook);
         error_log('[GCREV] Scheduled ' . $hook . ' at ' . $dt->format('Y-m-d H:i:s T'));

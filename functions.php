@@ -8538,17 +8538,32 @@ function gcrev_invalidate_user_cv_cache(int $user_id): void {
         'gcrev_effcv_v2_',
         'gcrev_effcv_v3_',
         'gcrev_effcv_v4_',
-        // CV トレンドグラフ（月別 / 日別）— ダッシュボードの CV カードと整合させるため無効化
-        'gcrev_trend_',
-        'gcrev_trend_v2_',
-        'gcrev_trend_daily_',
-        'gcrev_trend_daily_v2_',
     ];
     foreach ($prefixes as $prefix) {
         $wpdb->query($wpdb->prepare(
             "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
             $wpdb->esc_like('_transient_' . $prefix . $user_id . '_') . '%',
             $wpdb->esc_like('_transient_timeout_' . $prefix . $user_id . '_') . '%'
+        ));
+    }
+
+    // CV トレンドグラフ（月別 / 日別）— ダッシュボードの CV カードと整合させるため無効化。
+    // ※ CV 指標のみ削除する。sessions / meo トレンドは CV データと無関係であり、
+    //   全指標を消すと再構築に1指標あたり最大12回の GA4 呼び出しがかかり、
+    //   無効化後最初のページ閲覧が長時間ブロックされるため。
+    // キー形式: gcrev_trend_{uid}_cv_{Y-m}{sfx} / gcrev_trend_daily_{uid}_cv_{Y-m-d}{sfx}
+    //           gcrev_trend_v2_{uid}_cv{sfx}    / gcrev_trend_daily_v2_{uid}_cv{sfx}
+    $cv_trend_patterns = [
+        "gcrev_trend_{$user_id}_cv",
+        "gcrev_trend_v2_{$user_id}_cv",
+        "gcrev_trend_daily_{$user_id}_cv",
+        "gcrev_trend_daily_v2_{$user_id}_cv",
+    ];
+    foreach ($cv_trend_patterns as $pat) {
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $wpdb->esc_like('_transient_' . $pat) . '%',
+            $wpdb->esc_like('_transient_timeout_' . $pat) . '%'
         ));
     }
 
@@ -8568,8 +8583,8 @@ function gcrev_invalidate_user_cv_cache(int $user_id): void {
 
     // ダッシュボード KPI / KPI by-date のスコープ
     $dash_scopes       = [ 'last30', 'last30_comp', 'prev_month', 'prev2_month', 'previousMonth', 'twoMonthsAgo' ];
-    // CV トレンド（grafh）の metric × view 組み合わせ
-    $trend_metrics     = [ 'sessions', 'cv', 'meo' ];
+    // CV トレンド（グラフ）— CV 指標のみ無効化（sessions/meo は CV と無関係のため保持）
+    $trend_metrics     = [ 'cv' ];
 
     foreach ( $filter_suffixes as $sfx ) {
         // gcrev_dash_{user_id}_{scope}{sfx}
