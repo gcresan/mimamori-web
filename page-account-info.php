@@ -33,7 +33,7 @@ $monthly   = $plan_info ? number_format( $plan_info['monthly'] ) : '—';
 // サービスティア
 $service_tier  = gcrev_get_service_tier( $user_id );
 $tier_defs_all = gcrev_get_service_tier_definitions();
-$tier_name     = $tier_defs_all[ $service_tier ]['name'] ?? 'AI分析・レポートプラン';
+$tier_name     = $tier_defs_all[ $service_tier ]['name'] ?? '改善提案プラン';
 
 $c_status     = $dates['status'];
 $has_contract = ! empty( $dates['start_at'] );
@@ -451,6 +451,45 @@ get_header();
             </div>
         </form>
     </div>
+
+    <!-- 通知設定 -->
+    <?php
+    $alert_on  = get_user_meta( $user_id, 'mimamori_alert_optout', true ) !== '1';
+    $digest_on = get_user_meta( $user_id, 'mimamori_digest_optout', true ) !== '1';
+    ?>
+    <div class="acct-card">
+        <div class="acct-card-header">
+            <h2>通知設定</h2>
+        </div>
+        <p style="font-size:13px;color:#6b7280;margin:0 0 12px;">みまもりウェブからの自動メール通知の受信設定です。</p>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="notifyAlertToggle" <?php checked( $alert_on ); ?>>
+            みまもりアラート（異常検知時のお知らせ）を受け取る
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px;cursor:pointer;">
+            <input type="checkbox" id="notifyDigestToggle" <?php checked( $digest_on ); ?>>
+            みまもり週次便（毎週のサマリーメール）を受け取る
+        </label>
+    </div>
+    <script>
+    (function () {
+        var prefsUrl  = <?php echo wp_json_encode( esc_url_raw( rest_url( 'mimamori/v1/notification-prefs' ) ), JSON_UNESCAPED_UNICODE ); ?>;
+        var restNonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+        function savePrefs() {
+            fetch( prefsUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': restNonce },
+                body: JSON.stringify( {
+                    alert_enabled:  document.getElementById('notifyAlertToggle').checked,
+                    digest_enabled: document.getElementById('notifyDigestToggle').checked
+                } )
+            } ).catch( function () {} );
+        }
+        document.getElementById('notifyAlertToggle').addEventListener('change', savePrefs);
+        document.getElementById('notifyDigestToggle').addEventListener('change', savePrefs);
+    })();
+    </script>
 
 </div><!-- .acct-container -->
 

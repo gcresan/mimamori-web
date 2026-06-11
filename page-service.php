@@ -72,14 +72,22 @@ get_header();
          ============================= -->
     <section class="sv-section" id="plans">
         <h2 class="sv-section__title">プラン紹介</h2>
-        <p class="sv-section__subtitle">ご状況に合わせて、4つのプランからお選びいただけます</p>
+        <p class="sv-section__subtitle">ご状況に合わせて、5つのプランからお選びいただけます</p>
 
         <style>
         .sv-plans-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
             margin-bottom: 24px;
+        }
+        @media (max-width: 1500px) {
+            .sv-plans-grid {
+                grid-template-columns: repeat(3, 1fr);
+                max-width: 1080px;
+                margin-left: auto;
+                margin-right: auto;
+            }
         }
         .sv-plan2 {
             background: #fff;
@@ -189,34 +197,51 @@ get_header();
         <div class="sv-plans-section">
 
             <div class="sv-plans-grid">
-                <!-- プラン1: AI分析・レポートプラン -->
+                <!-- プラン1: 見える化プラン -->
                 <div class="sv-plan2">
-                    <div class="sv-plan2__name">AI分析・レポートプラン</div>
-                    <div class="sv-plan2__subtitle">AIがデータを分析し<br>サイトの状態をレポート化</div>
+                    <div class="sv-plan2__name">見える化プラン</div>
+                    <div class="sv-plan2__subtitle">AIが24時間見守り<br>何かあればお知らせ</div>
                     <div class="sv-plan2__price">
-                        <span class="sv-plan2__price-amount">11,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
+                        <span class="sv-plan2__price-amount">5,500</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
                     <ul class="sv-plan2__features">
-                        <li>サイト健康スコア</li>
                         <li>アクセス状況ダッシュボード</li>
                         <li>基本データの可視化</li>
-                        <li>月次レポート総評</li>
+                        <li>みまもりアラート（異常検知通知）</li>
+                        <li>みまもり週次便（週1サマリーメール）</li>
                         <li>基本保守・管理</li>
-                        <li>AI改善アクション提示</li>
-                        <li>AIチャット相談</li>
                     </ul>
                 </div>
 
-                <!-- プラン2: MEO・検索集客強化プラン（おすすめ） -->
+                <!-- プラン2: 改善提案プラン -->
+                <div class="sv-plan2">
+                    <div class="sv-plan2__name">改善提案プラン</div>
+                    <div class="sv-plan2__subtitle">AIがデータを分析し<br>次の一手まで提案</div>
+                    <div class="sv-plan2__price">
+                        <span class="sv-plan2__price-amount">11,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
+                    </div>
+                    <div class="sv-plan2__cumulative">見える化プランに加え</div>
+                    <ul class="sv-plan2__features">
+                        <li>月次レポート総評</li>
+                        <li>AI改善アクション提示</li>
+                        <li>AIチャット相談</li>
+                        <li>詳細レポート閲覧</li>
+                        <li>分析付きアラート</li>
+                        <li>AI改善提案通知</li>
+                    </ul>
+                </div>
+
+                <!-- プラン3: プロ分析・集客プラン（おすすめ） -->
                 <div class="sv-plan2 sv-plan2--recommended">
                     <span class="sv-plan2__badge">★ おすすめ</span>
-                    <div class="sv-plan2__name">MEO・検索集客強化プラン</div>
-                    <div class="sv-plan2__subtitle">MEO・口コミ・検索で<br>地域集客を強化</div>
+                    <div class="sv-plan2__name">プロ分析・集客プラン</div>
+                    <div class="sv-plan2__subtitle">プロの分析とMEO・口コミ・<br>検索対策で地域集客を強化</div>
                     <div class="sv-plan2__price">
                         <span class="sv-plan2__price-amount">22,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
-                    <div class="sv-plan2__cumulative">AI分析・レポートに加え</div>
+                    <div class="sv-plan2__cumulative">改善提案プランに加え</div>
                     <ul class="sv-plan2__features">
+                        <li>四半期ごとの深掘り分析レポート</li>
                         <li>MEOダッシュボード</li>
                         <li>MEO診断</li>
                         <li>マップ順位計測</li>
@@ -229,34 +254,35 @@ get_header();
                     </ul>
                 </div>
 
-                <!-- プラン3: コンテンツSEO強化プラン -->
+                <!-- プラン4: コンテンツ資産化プラン -->
                 <div class="sv-plan2">
-                    <div class="sv-plan2__name">コンテンツSEO強化プラン</div>
-                    <div class="sv-plan2__subtitle">コンテンツSEOを強化し<br>検索流入を拡大</div>
+                    <div class="sv-plan2__name">コンテンツ資産化プラン</div>
+                    <div class="sv-plan2__subtitle">毎月の取材で、AIにも人にも<br>選ばれる情報資産を育てる</div>
                     <div class="sv-plan2__price">
-                        <span class="sv-plan2__price-amount">44,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
+                        <span class="sv-plan2__price-amount">66,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
-                    <div class="sv-plan2__cumulative">MEO・検索集客強化に加え</div>
+                    <div class="sv-plan2__cumulative">プロ分析・集客プランに加え</div>
                     <ul class="sv-plan2__features">
-                        <li>コンテンツSEO機能</li>
-                        <li>キーワード調査・競合分析</li>
-                        <li>コラム記事作成機能</li>
-                        <li>一次情報ストック機能</li>
+                        <li>月1回のプロによる取材ヒアリング（60〜90分・オンライン）</li>
+                        <li>一次情報コンテンツ制作 月3本（AI×プロ編集）</li>
+                        <li>AIO／LLMO対策（構造化データ・FAQ整備）</li>
+                        <li>AI検索での言及状況モニタリング</li>
+                        <li>SEO内部最適化</li>
                     </ul>
                 </div>
 
-                <!-- プラン4: プロ伴走・改善実行プラン -->
+                <!-- プラン5: プロ伴走・改善実行プラン -->
                 <div class="sv-plan2">
                     <div class="sv-plan2__name">プロ伴走・改善実行プラン</div>
                     <div class="sv-plan2__subtitle">プロが伴走し<br>改善施策の実行まで全面サポート</div>
                     <div class="sv-plan2__price">
                         <span class="sv-plan2__price-amount">110,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
-                    <div class="sv-plan2__cumulative">コンテンツSEO強化に加え</div>
+                    <div class="sv-plan2__cumulative">コンテンツ資産化プランに加え</div>
                     <ul class="sv-plan2__features">
-                        <li>改善指示に基づく作業</li>
+                        <li>改善指示に基づく作業（月8件まで）</li>
                         <li>専門スタッフ伴走支援</li>
-                        <li>定例ミーティング</li>
+                        <li>定例ミーティング（月1回・90分）</li>
                     </ul>
                 </div>
             </div>
@@ -369,7 +395,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    はい、いつでもプラン変更が可能です。まずはAI分析・レポートプランから始めて、必要に応じてアップグレードされる方が多いです。
+                    はい、いつでもプラン変更が可能です。まずは見える化プランや改善提案プランから始めて、必要に応じてアップグレードされる方が多いです。
                 </div>
             </div>
             <div class="sv-faq__item">
@@ -378,7 +404,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    まずはMEO・検索集客強化プランがおすすめです。AI分析に加えてMEO・口コミ・検索で地域集客を強化する機能が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、プロ伴走・改善実行プランをご検討ください。
+                    まずはプロ分析・集客プランがおすすめです。AI分析に加えてプロの深掘り分析とMEO・口コミ・検索で地域集客を強化する機能が含まれており、コストパフォーマンスに優れています。より手厚いサポートが必要な場合は、コンテンツ資産化プランやプロ伴走・改善実行プランをご検討ください。
                 </div>
             </div>
         </div>

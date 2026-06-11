@@ -261,8 +261,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                </li>
                <?php endif; ?>
 
-               <!-- ========== レポート（大カテゴリ・口コミアンケート特化プランは非表示） ========== -->
-               <?php if ( ! $_mb_is_review_survey_only ) : ?>
+               <!-- ========== レポート（大カテゴリ・口コミアンケート特化プラン/見える化プランは非表示） ========== -->
+               <?php
+               // 見える化プラン: レポート系（深掘り/月次/MEO）は全て対象外のためカテゴリごと非表示
+               $_mb_can_view_reports = function_exists( 'mimamori_can_view_reports' ) ? mimamori_can_view_reports() : true;
+               ?>
+               <?php if ( ! $_mb_is_review_survey_only && ( $_mb_can_view_reports || mimamori_can_access_meo() ) ) : ?>
                <li class="nav-item nav-item-collapsible<?php echo $report_child_active ? ' child-active' : ''; ?><?php echo $sidebar_active_group !== 'report' ? ' collapsed' : ''; ?>" data-menu-key="report">
                   <button type="button" class="nav-link nav-link-toggle" id="navToggleReport" aria-expanded="<?php echo $sidebar_active_group === 'report' ? 'true' : 'false'; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -270,7 +274,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuReport">
-                     <?php if ( ! $_mb_is_meo_only ) : ?>
+                     <?php if ( ! $_mb_is_meo_only && $_mb_can_view_reports ) : ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
                         <span>深掘りレポート</span>

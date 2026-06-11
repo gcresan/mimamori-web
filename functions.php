@@ -2138,7 +2138,7 @@ add_action( 'rest_api_init', function () {
             if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'ai_voice' ) ) {
                 return new WP_Error(
                     'tier_insufficient',
-                    '音声入力はMEO・検索集客強化プラン以上でご利用いただけます。',
+                    '音声入力はプロ分析・集客プラン以上でご利用いただけます。',
                     [ 'status' => 403 ]
                 );
             }
@@ -8731,6 +8731,15 @@ function gcrev_get_plan_definitions(): array {
             'has_installment' => false,
             'min_months'      => 3,
         ],
+        'mieruka' => [
+            'name'            => 'みまもりウェブ 見える化プラン',
+            'category'        => 'unyou',
+            'total'           => null,
+            'monthly'         => 5500,
+            'installments'    => 0,
+            'has_installment' => false,
+            'min_months'      => 0,
+        ],
         'meo_only' => [
             'name'            => 'みまもりウェブ MEO特化プラン',
             'category'        => 'unyou',
@@ -8772,20 +8781,33 @@ function gcrev_get_valid_plan_ids(): array {
  */
 function gcrev_get_service_tier_definitions(): array {
     return [
+        'mieruka' => [
+            'name'        => '見える化プラン',
+            'monthly'     => 5500,
+            'description' => 'AIが24時間見守り、何かあればお知らせする基本プラン',
+        ],
         'basic' => [
-            'name'        => 'AI分析・レポートプラン',
+            'name'        => '改善提案プラン',
             'monthly'     => 11000,
-            'description' => 'AIがデータを分析しサイトの状態をレポート化',
+            'description' => 'AIがデータを分析し、次の一手まで提案',
         ],
         'ai_support' => [
-            'name'        => 'MEO・検索集客強化プラン',
+            'name'        => 'プロ分析・集客プラン',
             'monthly'     => 22000,
-            'description' => 'MEO・口コミ・検索で地域集客を強化',
+            'description' => 'プロの分析とMEO・口コミ・検索対策で地域集客を強化',
         ],
+        // 旧「コンテンツSEO強化プラン(44,000円)」— 未販売のまま廃止。
+        // 既存データ互換のため定義は残すが、新規選択は不可（deprecated）。
         'content_seo' => [
-            'name'        => 'コンテンツSEO強化プラン',
+            'name'        => '【廃止】コンテンツSEO強化プラン',
             'monthly'     => 44000,
-            'description' => 'コンテンツSEOを強化し検索流入を拡大',
+            'description' => '廃止済み（コンテンツ資産化プランへ置換）。新規選択不可。',
+            'deprecated'  => true,
+        ],
+        'content_asset' => [
+            'name'        => 'コンテンツ資産化プラン',
+            'monthly'     => 66000,
+            'description' => '毎月の取材で、AIにも人にも選ばれる情報資産を育てる',
         ],
         'bansou' => [
             'name'        => 'プロ伴走・改善実行プラン',
@@ -8867,34 +8889,48 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         if ( $hq_target > 0 ) $user_id = $hq_target;
     }
 
-    $tier_hierarchy = [ 'headquarters' => 0, 'basic' => 0, 'ai_support' => 1, 'content_seo' => 2, 'bansou' => 3 ];
+    // ティア階層: mieruka(0) < basic(1) < ai_support(2) < content_asset(3) < bansou(4)
+    // content_seo は廃止済みの旧ティア（content_asset と同レベルの互換扱い）。
+    // headquarters は mimamori_can 冒頭で閲覧中店舗の tier に変換されるため、ここは未選択時のフォールバック。
+    $tier_hierarchy = [
+        'headquarters'  => 0,
+        'mieruka'       => 0,
+        'basic'         => 1,
+        'ai_support'    => 2,
+        'content_seo'   => 3, // deprecated（互換）
+        'content_asset' => 3,
+        'bansou'        => 4,
+    ];
 
     $feature_map = [
-        // AIチャット相談（全プラン共通）
+        // コア機能（見える化プラン = 全プラン共通）
+        'dashboard'            => 'mieruka',
+        'analysis_basic'       => 'mieruka',
+        // AIチャット相談（改善提案プラン以上。見える化プランは不可）
         'ai_chat'              => 'basic',
         'ai_ask_button'        => 'basic',
-        // AI機能（ai_support 以上）
-        'ai_voice'             => 'ai_support',
-        'dashboard_highlights' => 'ai_support',
-        // AIレポート分析機能（basic = AI分析・レポートプランから提供）
+        // 月次レポート閲覧（改善提案プラン以上。見える化プランは不可 — 2026-06 改定）
+        'report_summary'       => 'basic',
+        'report_kpi'           => 'basic',
+        // AI改善アクション提示／改善施策提案ページ（改善提案プラン以上）
+        'improvement_actions'  => 'basic',
+        // AIレポート分析機能（改善提案プラン以上）
         'report_good_points'   => 'basic',
         'report_improvements'  => 'basic',
         'report_consideration' => 'basic',
         'report_next_actions'  => 'basic',
-        // MEO機能（ai_support 以上：MEO・検索集客強化プランから提供）
+        // AI機能（ai_support 以上）
+        'ai_voice'             => 'ai_support',
+        'dashboard_highlights' => 'ai_support',
+        // MEO機能（ai_support 以上：プロ分析・集客プランから提供）
         'meo_menu'             => 'ai_support',
-        // SEO機能（content_seo 以上）
-        'seo_menu'             => 'content_seo',
-        'aio_serp'             => 'content_seo',
-        // SEO診断（basic 以上：AI分析・レポートプランから提供）
+        // SEO機能（content_asset 以上）
+        'seo_menu'             => 'content_asset',
+        'aio_serp'             => 'content_asset',
+        // SEO診断（basic 以上：改善提案プランから提供）
         'seo_check'            => 'basic',
-        // キーワード調査（ai_support 以上：MEO・検索集客強化プランから提供）
+        // キーワード調査（ai_support 以上：プロ分析・集客プランから提供）
         'keyword_research'     => 'ai_support',
-        // コア機能（全プラン）
-        'dashboard'            => 'basic',
-        'report_summary'       => 'basic',
-        'report_kpi'           => 'basic',
-        'analysis_basic'       => 'basic',
     ];
 
     $user_tier = gcrev_get_service_tier( $user_id );
@@ -9184,6 +9220,30 @@ function mimamori_can_access_keyword_research( int $user_id = 0 ): bool {
  */
 function mimamori_can_access_meo( int $user_id = 0 ): bool {
     return mimamori_can( 'meo_menu', $user_id );
+}
+
+/**
+ * 月次レポート系ページ（最新月次/年次/深掘り）の閲覧可否。
+ * 見える化プラン(mieruka)は閲覧不可（2026-06 プラン改定）。
+ */
+function mimamori_can_view_reports( int $user_id = 0 ): bool {
+    return mimamori_can( 'report_summary', $user_id );
+}
+
+/**
+ * 機能ブロック＋アップグレード案内ページを表示して処理を終了する。
+ * ページテンプレート冒頭のティアゲートから呼び出す。
+ *
+ * @param string $feature_label ブロックされた機能名（例: '月次レポート'）
+ * @param string $required_plan 必要プラン名（例: '改善提案プラン'）
+ */
+function mimamori_render_upgrade_page( string $feature_label, string $required_plan ): void {
+    set_query_var( 'gcrev_upgrade_feature', $feature_label );
+    set_query_var( 'gcrev_upgrade_required_plan', $required_plan );
+    get_header();
+    get_template_part( 'template-parts/upgrade-notice' );
+    get_footer();
+    exit;
 }
 
 /**
@@ -10465,7 +10525,10 @@ function gcrev_render_service_tier_field( $user ) {
             <th><label for="gcrev_service_tier">プラン</label></th>
             <td>
                 <select id="gcrev_service_tier" name="gcrev_service_tier">
-                    <?php foreach ( $tier_defs as $tier_id => $tier_info ): ?>
+                    <?php foreach ( $tier_defs as $tier_id => $tier_info ):
+                        // 廃止済みティアは新規選択不可（現在割当中のユーザーにのみ表示）
+                        if ( ! empty( $tier_info['deprecated'] ) && $current_tier !== $tier_id ) continue;
+                    ?>
                     <option value="<?php echo esc_attr( $tier_id ); ?>"
                             <?php selected( $current_tier, $tier_id ); ?>>
                         <?php echo esc_html( $tier_info['name'] ); ?>
@@ -10474,9 +10537,10 @@ function gcrev_render_service_tier_field( $user ) {
                     <?php endforeach; ?>
                 </select>
                 <p class="description">
-                    ベーシック: AIがデータを見てレポート作成（総評・スコア・KPI）<br>
-                    AIサポート: 上記＋改善アドバイス・AIチャット・ネクストアクション<br>
-                    集客強化: 上記＋SEOキーワード調査・競合分析・コラム記事作成<br>
+                    見える化: ダッシュボード閲覧＋みまもりアラート・週次便（レポート・AIチャットなし）<br>
+                    改善提案: 上記＋月次レポート・AI改善アクション・AIチャット相談<br>
+                    プロ分析・集客: 上記＋深掘りレポート・MEO・口コミ・検索対策<br>
+                    コンテンツ資産化: 上記＋取材ヒアリング・一次情報コンテンツ制作・AIO/LLMO対策<br>
                     伴走: 上記すべて＋専門スタッフによる伴走・MTG
                 </p>
             </td>
@@ -10487,10 +10551,12 @@ function gcrev_render_service_tier_field( $user ) {
             <td>
                 <?php
                 $badge_styles = [
-                    'basic'       => [ 'color' => '#666',    'bg' => '#f0f0f0' ],
-                    'ai_support'  => [ 'color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)' ],
-                    'content_seo' => [ 'color' => '#B45309', 'bg' => 'rgba(245,158,11,0.08)' ],
-                    'bansou'      => [ 'color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)' ],
+                    'mieruka'       => [ 'color' => '#0f766e', 'bg' => 'rgba(15,118,110,0.08)' ],
+                    'basic'         => [ 'color' => '#666',    'bg' => '#f0f0f0' ],
+                    'ai_support'    => [ 'color' => '#1d4ed8', 'bg' => 'rgba(29,78,216,0.08)' ],
+                    'content_seo'   => [ 'color' => '#B45309', 'bg' => 'rgba(245,158,11,0.08)' ],
+                    'content_asset' => [ 'color' => '#B45309', 'bg' => 'rgba(245,158,11,0.08)' ],
+                    'bansou'        => [ 'color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)' ],
                 ];
                 $bs    = $badge_styles[ $current_tier ] ?? $badge_styles['basic'];
                 $label = $tier_defs[ $current_tier ]['name'] ?? ( $tier_defs['basic']['name'] ?? 'ベーシック' );
@@ -10523,6 +10589,12 @@ function gcrev_save_service_tier_field( int $user_id ) {
         : 'basic';
     if ( ! in_array( $tier, gcrev_get_valid_service_tiers(), true ) ) {
         $tier = 'basic';
+    }
+    // 廃止済みティアへの新規変更は不可（既にそのティアのユーザーの再保存のみ許容）
+    $defs = gcrev_get_service_tier_definitions();
+    if ( ! empty( $defs[ $tier ]['deprecated'] )
+         && get_user_meta( $user_id, 'gcrev_service_tier', true ) !== $tier ) {
+        return;
     }
     update_user_meta( $user_id, 'gcrev_service_tier', $tier );
 }
@@ -11150,19 +11222,50 @@ add_action( 'rest_api_init', function () {
             return is_user_logged_in();
         },
     ] );
+
+    // 通知設定（みまもりアラート / 週次便の受信ON/OFF）
+    register_rest_route( 'mimamori/v1', '/notification-prefs', [
+        'methods'             => 'POST',
+        'callback'            => 'mimamori_save_notification_prefs',
+        'permission_callback' => function () {
+            return is_user_logged_in();
+        },
+    ] );
 } );
+
+/**
+ * 通知受信設定の保存（本人のみ）。
+ * body: { alert_enabled: bool, digest_enabled: bool }
+ */
+function mimamori_save_notification_prefs( \WP_REST_Request $request ): \WP_REST_Response {
+    $user_id = get_current_user_id();
+    $params  = $request->get_json_params();
+
+    // '1' = 受信停止（optout）として保存する
+    if ( array_key_exists( 'alert_enabled', $params ) ) {
+        update_user_meta( $user_id, 'mimamori_alert_optout', $params['alert_enabled'] ? '0' : '1' );
+    }
+    if ( array_key_exists( 'digest_enabled', $params ) ) {
+        update_user_meta( $user_id, 'mimamori_digest_optout', $params['digest_enabled'] ? '0' : '1' );
+    }
+
+    return new \WP_REST_Response( [ 'success' => true ], 200 );
+}
 
 function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
     $params = $request->get_json_params();
 
     $type_labels = [
-        'plan_basic'       => 'AI分析・レポートプランに変更したい',
-        'plan_ai_support'  => 'MEO・検索集客強化プランに変更したい',
-        'plan_content_seo' => 'コンテンツSEO強化プランに変更したい',
-        'plan_bansou'      => 'プロ伴走・改善実行プランに変更したい',
-        'plan_change'      => 'プラン変更について相談したい',
-        'support'          => 'サポートをお願いしたい',
-        'other'            => 'その他のお問い合わせ',
+        'plan_mieruka'       => '見える化プランに変更したい',
+        'plan_basic'         => '改善提案プランに変更したい',
+        'plan_ai_support'    => 'プロ分析・集客プランに変更したい',
+        'plan_content_asset' => 'コンテンツ資産化プランに変更したい',
+        // 旧プラン（廃止済み・過去リンク互換のため残置）
+        'plan_content_seo'   => 'コンテンツSEO強化プラン（廃止）に変更したい',
+        'plan_bansou'        => 'プロ伴走・改善実行プランに変更したい',
+        'plan_change'        => 'プラン変更について相談したい',
+        'support'            => 'サポートをお願いしたい',
+        'other'              => 'その他のお問い合わせ',
     ];
 
     $inquiry_type = sanitize_text_field( $params['inquiry_type'] ?? '' );

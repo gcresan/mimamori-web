@@ -851,6 +851,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
 
   <!-- レポートアクション群（月次確定データ系 + 速報系を明確に分離） -->
   <div class="report-actions">
+    <?php if ( ! function_exists( 'mimamori_can_view_reports' ) || mimamori_can_view_reports( $user_id ) ) : ?>
     <div class="monthly-actions">
       <p class="report-actions__label">前月の確定データ</p>
       <div class="report-actions__buttons">
@@ -864,6 +865,7 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         </a>
       </div>
     </div>
+    <?php endif; // mimamori_can_view_reports ?>
 
     <div class="recent-actions">
       <p class="report-actions__label">最新の動き（速報）</p>

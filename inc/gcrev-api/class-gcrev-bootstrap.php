@@ -37,6 +37,11 @@ class Gcrev_Bootstrap {
         // Inquiries (問い合わせ集計API) 当月の自動フェッチ（毎日）
         add_action('gcrev_inquiries_fetch_daily_event', [__CLASS__, 'on_inquiries_fetch_daily_event']);
 
+        // - みまもり通知（アラート日次 / 週次便 / AI改善提案）
+        add_action('gcrev_alert_daily_event', [__CLASS__, 'on_alert_daily_event']);
+        add_action('gcrev_weekly_digest_event', [__CLASS__, 'on_weekly_digest_event']);
+        add_action('gcrev_improvement_suggest_event', [__CLASS__, 'on_improvement_suggest_event']);
+
         // キーワード指標（月次 — 検索ボリューム + SEO難易度）
         add_action('gcrev_keyword_metrics_monthly_event', [__CLASS__, 'on_keyword_metrics_monthly']);
         add_action('gcrev_keyword_metrics_chunk_event', [__CLASS__, 'on_keyword_metrics_chunk'], 10, 2);
@@ -599,6 +604,40 @@ class Gcrev_Bootstrap {
      *
      * 取得後は当該ユーザーの CV キャッシュも無効化して即時反映させる。
      */
+    /**
+     * みまもり通知 cron 共通実行ヘルパー。
+     */
+    private static function run_notification_job( string $method ): void {
+        @ignore_user_abort( true );
+        if ( function_exists( 'set_time_limit' ) ) { @set_time_limit( 0 ); }
+
+        require_once __DIR__ . '/modules/class-mimamori-notification-service.php';
+        try {
+            $service = new \Mimamori_Notification_Service();
+            $service->{$method}();
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_notify_debug.log',
+                date( 'Y-m-d H:i:s' ) . " {$method} FATAL: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+        }
+    }
+
+    /** みまもりアラート: 日次スキャン */
+    public static function on_alert_daily_event(): void {
+        self::run_notification_job( 'run_daily_alert_scan' );
+    }
+
+    /** みまもり週次便: 週次サマリー送信 */
+    public static function on_weekly_digest_event(): void {
+        self::run_notification_job( 'run_weekly_digest' );
+    }
+
+    /** AI改善提案通知: 週次スキャン（月2回上限はサービス側で制御） */
+    public static function on_improvement_suggest_event(): void {
+        self::run_notification_job( 'run_improvement_suggestions' );
+    }
+
     public static function on_inquiries_fetch_daily_event(): void {
         $log = '/tmp/gcrev_cron_debug.log';
         file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " inquiries_fetch_daily START\n", FILE_APPEND );
@@ -1163,6 +1202,16 @@ class Gcrev_Bootstrap {
         //   プリフェッチの後に動かすと「温めた直後に消す」ことになり、
         //   日中最初のページ閲覧が GA4/GSC 同期取得でブロックされる。
         self::schedule_daily_if_missing('gcrev_inquiries_fetch_daily_event', 'tomorrow 02:50:00');
+
+        // みまもりアラート: 日次スキャン（毎日 07:10）
+        // プリフェッチ（03:10〜04:40）後に実行し、夜間に温めたトレンドキャッシュを読むだけにする
+        self::schedule_daily_if_missing('gcrev_alert_daily_event', 'tomorrow 07:10:00');
+
+        // みまもり週次便: 毎週月曜 08:00（異常がなくても必ず送る定期サマリー）
+        self::schedule_weekly_if_missing('gcrev_weekly_digest_event', 'next monday 08:00:00');
+
+        // AI改善提案通知: 毎週水曜 09:30 にスキャン（月2回上限は サービス側で制御）
+        self::schedule_weekly_if_missing('gcrev_improvement_suggest_event', 'next wednesday 09:30:00');
 
         // 月次データプリフェッチ: 毎日 05:00（月初のみ実行、月固定期間データを取得）
         if ( class_exists( 'Gcrev_Prefetch_Scheduler' ) ) {

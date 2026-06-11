@@ -12,6 +12,11 @@ if (!is_user_logged_in()) {
 $current_user = mimamori_get_view_user_object();
 $user_id = mimamori_get_view_user_id();
 
+// プランゲート: 見える化プランは月次レポート閲覧不可（2026-06 改定）
+if ( function_exists( 'mimamori_can_view_reports' ) && ! mimamori_can_view_reports( $user_id ) ) {
+    mimamori_render_upgrade_page( '月次レポート', '改善提案プラン' );
+}
+
 // サービスティア判定
 $can_ai              = mimamori_can( 'ai_chat', $user_id );
 $can_good_points     = mimamori_can( 'report_good_points', $user_id );

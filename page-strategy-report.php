@@ -10,6 +10,12 @@ if ( ! is_user_logged_in() ) {
 
 $current_user = mimamori_get_view_user_object();
 $user_id = mimamori_get_view_user_id();
+
+// プランゲート: 見える化プランはレポート閲覧不可（2026-06 改定）
+if ( function_exists( 'mimamori_can_view_reports' ) && ! mimamori_can_view_reports( $user_id ) ) {
+    mimamori_render_upgrade_page( '深掘りレポート', '改善提案プラン' );
+}
+
 $req_ver      = isset( $_GET['ver'] ) ? sanitize_text_field( wp_unslash( $_GET['ver'] ) ) : '';
 // 注: WordPress コアが ?embed=1 を予約しているため、独自パラメータは ?raw=1 を使う
 $is_raw       = isset( $_GET['raw'] ) && $_GET['raw'] === '1';

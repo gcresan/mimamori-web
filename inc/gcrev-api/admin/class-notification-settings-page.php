@@ -214,11 +214,99 @@ class Gcrev_Notification_Settings_Page {
             self::MENU_SLUG,
             $inquiry_section
         );
+
+        // ==========================================================
+        // みまもりアラート設定セクション（クライアント向け自動通知）
+        // ==========================================================
+        $alert_section = 'gcrev_mimamori_alert_section';
+
+        register_setting( self::OPTION_GROUP, 'mimamori_alert_settings', [
+            'type'              => 'array',
+            'sanitize_callback' => [ $this, 'sanitize_alert_settings' ],
+            'default'           => [],
+        ] );
+
+        add_settings_section(
+            $alert_section,
+            'みまもりアラート設定',
+            static function () {
+                echo '<p>クライアント向けの自動通知（みまもりアラート／週次便／AI改善提案）の閾値・上限を設定します。空欄はデフォルト値が使われます。</p>';
+            },
+            self::MENU_SLUG
+        );
+
+        add_settings_field(
+            'mimamori_alert_settings',
+            '閾値・上限',
+            [ $this, 'render_alert_settings_fields' ],
+            self::MENU_SLUG,
+            $alert_section
+        );
+    }
+
+    /**
+     * みまもりアラート設定のサニタイズ。
+     */
+    public function sanitize_alert_settings( $input ): array {
+        if ( ! is_array( $input ) ) { return []; }
+        $out = [];
+        // 負値を許容する項目（急減閾値）と正の整数のみの項目を分けて処理
+        if ( isset( $input['drop_threshold_pct'] ) && $input['drop_threshold_pct'] !== '' ) {
+            $out['drop_threshold_pct'] = max( -100, min( 0, (int) $input['drop_threshold_pct'] ) );
+        }
+        foreach ( [ 'surge_threshold_pct', 'min_weekly_sessions', 'cv_stall_days', 'cv_lookback_days',
+                    'ssl_warn_days', 'cooldown_days', 'weekly_alert_limit',
+                    'suggest_monthly_max', 'suggest_dedup_days' ] as $key ) {
+            if ( isset( $input[ $key ] ) && $input[ $key ] !== '' ) {
+                $out[ $key ] = absint( $input[ $key ] );
+            }
+        }
+        return $out;
     }
 
     // =========================================================
     // フィールド描画
     // =========================================================
+
+    /**
+     * みまもりアラート設定の入力フィールド群。
+     */
+    public function render_alert_settings_fields(): void {
+        $module = dirname( __DIR__ ) . '/modules/class-mimamori-notification-service.php';
+        if ( ! class_exists( 'Mimamori_Notification_Service' ) && file_exists( $module ) ) {
+            require_once $module;
+        }
+        $defaults = class_exists( 'Mimamori_Notification_Service' )
+            ? Mimamori_Notification_Service::get_settings()
+            : [];
+        $saved = get_option( 'mimamori_alert_settings', [] );
+        $saved = is_array( $saved ) ? $saved : [];
+
+        $fields = [
+            'drop_threshold_pct'  => 'アクセス急減の閾値（前週比%・負の値）',
+            'surge_threshold_pct' => 'アクセス急増の閾値（前週比%）',
+            'min_weekly_sessions' => '母数条件: 前週の最低訪問数',
+            'cv_stall_days'       => 'CV停滞の判定日数',
+            'cv_lookback_days'    => 'CV停滞の実績参照日数',
+            'ssl_warn_days'       => 'SSL期限警告の残日数',
+            'cooldown_days'       => '同一アラートのクールダウン（日）',
+            'weekly_alert_limit'  => '週あたり通知上限（通）',
+            'suggest_monthly_max' => 'AI改善提案の月間上限（通）',
+            'suggest_dedup_days'  => '同一提案の再送禁止期間（日）',
+        ];
+
+        echo '<table class="form-table" role="presentation" style="margin:0;">';
+        foreach ( $fields as $key => $label ) {
+            $value       = $saved[ $key ] ?? '';
+            $placeholder = isset( $defaults[ $key ] ) ? (string) $defaults[ $key ] : '';
+            echo '<tr>';
+            echo '<td style="padding:4px 8px 4px 0;">' . esc_html( $label ) . '</td>';
+            echo '<td style="padding:4px 0;"><input type="number" name="mimamori_alert_settings[' . esc_attr( $key ) . ']" value="' . esc_attr( $value ) . '" placeholder="' . esc_attr( $placeholder ) . '" class="small-text" /></td>';
+            echo '</tr>';
+        }
+        echo '</table>';
+        echo '<p class="description">空欄の項目はデフォルト値（プレースホルダー表示）が使われます。</p>';
+    }
 
     public function render_enabled_field(): void {
         $val = get_option( 'gcrev_notify_enabled', '0' );

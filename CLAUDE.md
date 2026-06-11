@@ -345,6 +345,9 @@ wp/
 | `gcrev_monthly_report_generate_event` | 04:00 | 月次レポート自動生成 | `Bootstrap` → `API::auto_generate_monthly_reports()` |
 | `gcrev_monthly_report_finalize_event` | 23:00 | レポート確定・公開 | `Bootstrap` → `API::auto_finalize_monthly_reports()` |
 | `gcrev_cron_log_cleanup_event` | 02:00 | 90日超ログ削除 | `Bootstrap` → `Cron_Logger::cleanup_old(90)` |
+| `gcrev_alert_daily_event` | 07:10 | みまもりアラート（異常検知メール） | `Bootstrap` → `Mimamori_Notification_Service::run_daily_alert_scan()` |
+| `gcrev_weekly_digest_event` | 月曜 08:00 | みまもり週次便（週次サマリーメール） | `Bootstrap` → `Mimamori_Notification_Service::run_weekly_digest()` |
+| `gcrev_improvement_suggest_event` | 水曜 09:30 | AI改善提案通知（月2回上限） | `Bootstrap` → `Mimamori_Notification_Service::run_improvement_suggestions()` |
 
 **cron 順序の制約（重要）**: キャッシュを無効化する cron（問い合わせフェッチ等）は、必ずプリフェッチ（03:10〜04:40）より**前**に実行すること。後に動かすと「温めた直後に消す」ことになり、日中最初のページ閲覧が外部API同期取得でブロックされる。
 

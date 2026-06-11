@@ -257,11 +257,17 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'get_generation_count' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        // 月次レポート系の権限: ログイン + プランゲート（見える化プランは不可）
+        $report_permission = function () {
+            if ( ! $this->config->check_permission() ) { return false; }
+            return ! function_exists( 'mimamori_can_view_reports' ) || mimamori_can_view_reports();
+        };
+
         // レポート生成（Multi-pass セクション単位生成に変更）
         register_rest_route('gcrev_insights/v1', '/generate-report', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'generate_report' ],
-            'permission_callback' => [ $this->config, 'check_permission' ],
+            'permission_callback' => $report_permission,
         ]);
 
         // レポート生成回数リセット（管理者のみ）
@@ -276,19 +282,19 @@ class Gcrev_Insight_API {
         register_rest_route('gcrev_insights/v1', '/report/current', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'get_current_report' ],
-            'permission_callback' => [ $this->config, 'check_permission' ],
+            'permission_callback' => $report_permission,
         ]);
 
         register_rest_route('gcrev_insights/v1', '/report/history', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'get_report_history' ],
-            'permission_callback' => [ $this->config, 'check_permission' ],
+            'permission_callback' => $report_permission,
         ]);
 
         register_rest_route('gcrev_insights/v1', '/report/(?P<report_id>\d+)', [
             'methods'             => 'GET',
             'callback'            => [ $this, 'get_report_by_id' ],
-            'permission_callback' => [ $this->config, 'check_permission' ],
+            'permission_callback' => $report_permission,
         ]);
 
         // ===== 戦略（Strategy）API — 戦略連動型 月次レポート PR2 =====
@@ -15319,6 +15325,20 @@ PROMPT;
      * @param int    $days    日数（デフォルト30）
      * @return array {success, metric, labels, values, view}
      */
+    /**
+     * 外部呼び出し用: ユーザーの国フィルタを適用した上で日次トレンドを返す。
+     * cron 等のリクエスト外コンテキストから呼ぶ場合はこちらを使う
+     * （キャッシュキーのフィルタサフィックスを REST 経由と一致させるため）。
+     */
+    public function get_daily_metric_trend_for_user( int $user_id, string $metric, int $days = 30 ): array {
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+        try {
+            return $this->get_daily_metric_trend( $user_id, $metric, $days );
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
     public function get_daily_metric_trend(int $user_id, string $metric, int $days = 30): array {
 
         $filter_sfx = (isset($this->ga4) && $this->ga4->has_country_filter()) ? '_jp' : '';
@@ -18679,7 +18699,7 @@ PROMPT;
        実行ダッシュボード — Lazy Getter & Handlers
        ================================================================== */
 
-    private function get_execution_service(): ?Gcrev_Execution_Service {
+    public function get_execution_service(): ?Gcrev_Execution_Service {
         static $instance = null;
         if ( $instance !== null ) { return $instance; }
         require_once __DIR__ . '/gcrev-api/modules/class-execution-service.php';

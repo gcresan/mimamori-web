@@ -9,7 +9,7 @@ if ( ! is_user_logged_in() ) {
 }
 
 set_query_var( 'gcrev_page_title', 'プラン紹介' );
-set_query_var( 'gcrev_page_subtitle', '目的に合わせて選べる4つのプラン。' );
+set_query_var( 'gcrev_page_subtitle', '目的に合わせて選べる5つのプラン。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'プラン紹介' ) );
 
 get_header();
@@ -39,8 +39,8 @@ get_header();
 /* --- プランカード並び --- */
 .plans-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
     margin-bottom: 48px;
 }
 
@@ -79,6 +79,15 @@ get_header();
     letter-spacing: 0.05em;
 }
 /* 近日公開予定バッジ */
+.plan-card__badge--new {
+    background: #f59e0b;
+}
+.plan-card__note {
+    margin: 12px 0 0;
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.6;
+}
 .plan-card__badge--coming-soon {
     background: #F59E0B;
 }
@@ -275,7 +284,7 @@ get_header();
 }
 .plans-guide__list {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 16px;
 }
 .plans-guide__item {
@@ -305,10 +314,11 @@ get_header();
     padding: 2px 10px;
     border-radius: 10px;
 }
-.plans-guide__item-plan--basic        { color: #888; background: #f0f0f0; }
-.plans-guide__item-plan--ai_support   { color: #4ECDC4; background: rgba(78,205,196,0.08); }
-.plans-guide__item-plan--content_seo  { color: #B45309; background: rgba(245,158,11,0.08); }
-.plans-guide__item-plan--bansou       { color: #9333ea; background: rgba(147,51,234,0.08); }
+.plans-guide__item-plan--mieruka       { color: #0f766e; background: rgba(15,118,110,0.08); }
+.plans-guide__item-plan--basic         { color: #888; background: #f0f0f0; }
+.plans-guide__item-plan--ai_support    { color: #4ECDC4; background: rgba(78,205,196,0.08); }
+.plans-guide__item-plan--content_asset { color: #B45309; background: rgba(245,158,11,0.08); }
+.plans-guide__item-plan--bansou        { color: #9333ea; background: rgba(147,51,234,0.08); }
 
 /* --- 全プラン共通オプション --- */
 .plans-options {
@@ -411,6 +421,17 @@ get_header();
 }
 
 /* --- レスポンシブ --- */
+@media (max-width: 1500px) {
+    .plans-grid {
+        grid-template-columns: repeat(3, 1fr);
+        max-width: 1080px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .plans-guide__list {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
 @media (max-width: 1200px) {
     .plans-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -455,7 +476,7 @@ get_header();
 
     <!-- リード文 -->
     <div class="plans-lead">
-        <h2 class="plans-lead-heading">見える化から改善代行まで。<br>目的に合わせて選べる4つのプラン</h2>
+        <h2 class="plans-lead-heading">見える化から改善代行まで。<br>目的に合わせて選べる5つのプラン</h2>
         <p class="plans-lead-sub">すべてのプランにサイト保守・管理が含まれています。</p>
     </div>
 
@@ -465,35 +486,52 @@ get_header();
         ? gcrev_get_service_tier( get_current_user_id() )
         : 'basic';
 
-    // プラン定義（4プラン・累積構造）
+    // プラン定義（5プラン・累積構造）
     $plans = [
         [
-            'id'           => 'basic',
-            'subtitle'     => 'AIがデータを分析しサイトの状態をレポート化',
-            'name'         => 'AI分析・レポートプラン',
-            'price'        => '11,000',
+            'id'           => 'mieruka',
+            'subtitle'     => 'AIが24時間見守り、何かあればお知らせする基本プラン',
+            'name'         => '見える化プラン',
+            'price'        => '5,500',
             'badge'        => false,
             'coming_soon'  => false,
             'cumulative'   => '',
+            'note'         => '※月次レポート・AI改善提案・AIチャット相談は含まれません',
             'features'     => [
-                [ 'text' => 'サイト健康スコア',           'on' => true ],
-                [ 'text' => 'アクセス状況ダッシュボード', 'on' => true ],
-                [ 'text' => '基本データの可視化',         'on' => true ],
-                [ 'text' => '月次レポート総評',           'on' => true ],
-                [ 'text' => '基本保守・管理',             'on' => true ],
-                [ 'text' => 'AI改善アクション提示',       'on' => true ],
-                [ 'text' => 'AIチャット相談',             'on' => true ],
+                [ 'text' => 'アクセス状況ダッシュボード',                       'on' => true ],
+                [ 'text' => '基本データの可視化',                               'on' => true ],
+                [ 'text' => 'みまもりアラート（AIによる異常検知通知）',         'on' => true ],
+                [ 'text' => 'みまもり週次便（毎週届く簡易サマリーメール）',     'on' => true ],
+                [ 'text' => '基本保守・管理',                                   'on' => true ],
+            ],
+        ],
+        [
+            'id'           => 'basic',
+            'subtitle'     => 'AIがデータを分析し、次の一手まで提案',
+            'name'         => '改善提案プラン',
+            'price'        => '11,000',
+            'badge'        => false,
+            'coming_soon'  => false,
+            'cumulative'   => '見える化プランに加え',
+            'features'     => [
+                [ 'text' => '月次レポート総評',                                 'on' => true ],
+                [ 'text' => 'AI改善アクション提示',                             'on' => true ],
+                [ 'text' => 'AIチャット相談',                                   'on' => true ],
+                [ 'text' => '詳細レポート閲覧',                                 'on' => true ],
+                [ 'text' => '分析付きアラート（原因分析と推奨アクション付き）', 'on' => true ],
+                [ 'text' => 'AI改善提案通知（月1〜2回）',                       'on' => true ],
             ],
         ],
         [
             'id'           => 'ai_support',
-            'subtitle'     => 'MEO・口コミ・検索で地域集客を強化',
-            'name'         => 'MEO・検索集客強化プラン',
+            'subtitle'     => 'プロの分析とMEO・口コミ・検索対策で地域集客を強化',
+            'name'         => 'プロ分析・集客プラン',
             'price'        => '22,000',
             'badge'        => '★ おすすめ',
             'coming_soon'  => false,
-            'cumulative'   => 'AI分析・レポートに加え',
+            'cumulative'   => '改善提案プランに加え',
             'features'     => [
+                [ 'text' => '四半期ごとの深掘り分析レポート（プロが3ヶ月に1回、データを直接分析・解説）', 'on' => true, 'new' => true ],
                 [ 'text' => 'MEOダッシュボード',          'on' => true ],
                 [ 'text' => 'MEO診断',                    'on' => true ],
                 [ 'text' => 'マップ順位計測',             'on' => true ],
@@ -506,20 +544,20 @@ get_header();
             ],
         ],
         [
-            'id'           => 'content_seo',
-            'subtitle'     => 'コンテンツSEOを強化し検索流入を拡大',
-            'name'         => 'コンテンツSEO強化プラン',
-            'price'        => '44,000',
-            'badge'        => '近日公開予定',
-            'coming_soon'  => true,
-            'cumulative'   => 'MEO・検索集客強化に加え',
+            'id'           => 'content_asset',
+            'subtitle'     => '毎月の取材で、AIにも人にも選ばれる情報資産を育てる',
+            'name'         => 'コンテンツ資産化プラン',
+            'price'        => '66,000',
+            'badge'        => 'NEW',
+            'coming_soon'  => false,
+            'cumulative'   => 'プロ分析・集客プランに加え',
+            'note'         => '※コンテンツ制作の未使用分は翌月へ繰り越されません',
             'features'     => [
-                [ 'text' => '戦略に基づくキーワード設計',                                 'on' => true ],
-                [ 'text' => '検索意図を踏まえた記事構成設計',                             'on' => true ],
-                [ 'text' => 'AI活用＋人の編集による記事制作（週1本／4,000〜7,000文字）', 'on' => true ],
-                [ 'text' => '音声インタビューによる一次情報の収集・コンテンツ反映',        'on' => true ],
-                [ 'text' => '品質チェックおよび改善対応',                                 'on' => true ],
-                [ 'text' => 'SEO内部最適化',                                             'on' => true ],
+                [ 'text' => '月1回のプロによる取材ヒアリング（60〜90分・オンライン）',       'on' => true ],
+                [ 'text' => '取材をもとにした一次情報コンテンツ制作 月3本（AI×プロ編集）',   'on' => true ],
+                [ 'text' => 'AIO／LLMO対策（構造化データ・FAQ整備）',                        'on' => true ],
+                [ 'text' => 'AI検索での言及状況モニタリング',                                 'on' => true ],
+                [ 'text' => 'SEO内部最適化',                                                 'on' => true ],
             ],
         ],
         [
@@ -529,11 +567,11 @@ get_header();
             'price'        => '110,000',
             'badge'        => false,
             'coming_soon'  => false,
-            'cumulative'   => 'コンテンツSEO強化に加え',
+            'cumulative'   => 'コンテンツ資産化プランに加え',
             'features'     => [
-                [ 'text' => '改善指示に基づく作業',       'on' => true ],
-                [ 'text' => '専門スタッフ伴走支援',       'on' => true ],
-                [ 'text' => '定例ミーティング',           'on' => true ],
+                [ 'text' => '改善指示に基づく作業（月8件まで）',   'on' => true ],
+                [ 'text' => '専門スタッフ伴走支援',                'on' => true ],
+                [ 'text' => '定例ミーティング（月1回・90分）',     'on' => true ],
             ],
         ],
     ];
@@ -557,7 +595,12 @@ get_header();
         ?>
         <div class="<?php echo esc_attr( $card_classes ); ?>">
             <?php if ( $plan['badge'] ) : ?>
-                <span class="plan-card__badge<?php echo $is_coming ? ' plan-card__badge--coming-soon' : ''; ?>"><?php echo esc_html( $plan['badge'] ); ?></span>
+                <?php
+                $badge_mod = '';
+                if ( $is_coming )                        $badge_mod = ' plan-card__badge--coming-soon';
+                elseif ( $plan['badge'] === 'NEW' )      $badge_mod = ' plan-card__badge--new';
+                ?>
+                <span class="plan-card__badge<?php echo esc_attr( $badge_mod ); ?>"><?php echo esc_html( $plan['badge'] ); ?></span>
             <?php endif; ?>
 
             <div class="plan-card__header">
@@ -609,6 +652,10 @@ get_header();
                 <?php endforeach; ?>
             </ul>
 
+            <?php if ( ! empty( $plan['note'] ) ) : ?>
+                <p class="plan-card__note"><?php echo esc_html( $plan['note'] ); ?></p>
+            <?php endif; ?>
+
             <?php if ( $is_coming ) : ?>
                 <span class="plan-card__cta plan-card__cta--coming-soon">近日公開予定</span>
             <?php elseif ( $is_current ) : ?>
@@ -643,22 +690,28 @@ get_header();
         <h3 class="plans-guide__title">どのプランが合っていますか？</h3>
         <div class="plans-guide__list">
             <div class="plans-guide__item">
+                <div class="plans-guide__item-icon">👀</div>
+                <div class="plans-guide__item-heading">まずは低コストで見守りたい</div>
+                <p class="plans-guide__item-text">AIが24時間見守り<br>何かあれば知らせてほしい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--mieruka">見える化</span>
+            </div>
+            <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">📊</div>
-                <div class="plans-guide__item-heading">まずはデータで現状把握したい</div>
-                <p class="plans-guide__item-text">AIの分析と月次レポートで<br>サイトの状態を見える化したい方に</p>
-                <span class="plans-guide__item-plan plans-guide__item-plan--basic">AI分析・レポート</span>
+                <div class="plans-guide__item-heading">改善のヒントが欲しい</div>
+                <p class="plans-guide__item-text">AIの分析と月次レポートで<br>次の一手まで提案してほしい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--basic">改善提案</span>
             </div>
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">📍</div>
                 <div class="plans-guide__item-heading">地域集客を強化したい</div>
-                <p class="plans-guide__item-text">MEO・口コミ・検索で<br>地域集客を強化したい方に</p>
-                <span class="plans-guide__item-plan plans-guide__item-plan--ai_support">MEO・検索集客強化</span>
+                <p class="plans-guide__item-text">プロの分析とMEO・口コミ・検索で<br>地域集客を強化したい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--ai_support">プロ分析・集客</span>
             </div>
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">🚀</div>
-                <div class="plans-guide__item-heading">検索流入を拡大したい</div>
-                <p class="plans-guide__item-text">SEO・記事作成・競合分析で<br>コンテンツからの集客を強化したい方に</p>
-                <span class="plans-guide__item-plan plans-guide__item-plan--content_seo">コンテンツSEO強化</span>
+                <div class="plans-guide__item-heading">情報資産を育てたい</div>
+                <p class="plans-guide__item-text">毎月の取材とコンテンツ制作で<br>AIにも人にも選ばれたい方に</p>
+                <span class="plans-guide__item-plan plans-guide__item-plan--content_asset">コンテンツ資産化</span>
             </div>
             <div class="plans-guide__item">
                 <div class="plans-guide__item-icon">🤝</div>

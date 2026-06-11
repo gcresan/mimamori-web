@@ -11,6 +11,11 @@ if ( ! is_user_logged_in() ) {
 $current_user = mimamori_get_view_user_object();
 $user_id = mimamori_get_view_user_id();
 
+// プランゲート: 見える化プランはレポート閲覧不可（2026-06 改定）
+if ( function_exists( 'mimamori_can_view_reports' ) && ! mimamori_can_view_reports( $user_id ) ) {
+    mimamori_render_upgrade_page( '深掘りレポート', '改善提案プラン' );
+}
+
 set_query_var( 'gcrev_page_title', '深掘りレポート履歴' );
 set_query_var( 'gcrev_page_subtitle', 'これまでにアップロードされた深掘りレポートを一覧で閲覧できます。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( '深掘りレポート履歴', 'レポート' ) );

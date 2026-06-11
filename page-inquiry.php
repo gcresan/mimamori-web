@@ -15,15 +15,10 @@ set_query_var( 'gcrev_page_title', 'お問い合わせ' );
 set_query_var( 'gcrev_page_subtitle', 'プランに関するご相談や、サポートに関するお問い合わせはこちらからご連絡ください。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'お問い合わせ', 'サポート・問い合わせ' ) );
 
-// 現在のティア
+// 現在のティア（表示名はティア定義から取得し、表記を一元化する）
 $current_tier = function_exists( 'gcrev_get_service_tier' ) ? gcrev_get_service_tier( $user_id ) : 'basic';
-$tier_labels  = [
-    'basic'       => 'AI分析・レポートプラン',
-    'ai_support'  => 'MEO・検索集客強化プラン',
-    'content_seo' => 'コンテンツSEO強化プラン',
-    'bansou'      => 'プロ伴走・改善実行プラン',
-];
-$current_plan_label = $tier_labels[ $current_tier ] ?? 'AI分析・レポートプラン';
+$tier_defs    = function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : [];
+$current_plan_label = $tier_defs[ $current_tier ]['name'] ?? '改善提案プラン';
 
 // URLパラメータから初期値を取得
 $preset_type = isset( $_GET['type'] ) ? sanitize_text_field( $_GET['type'] ) : '';
@@ -31,22 +26,23 @@ $preset_plan = isset( $_GET['plan'] ) ? sanitize_text_field( $_GET['plan'] ) : '
 
 // type → 問い合わせ種別の初期値マッピング
 $type_map = [
-    'basic'       => 'plan_basic',
-    'ai_support'  => 'plan_ai_support',
-    'content_seo' => 'plan_content_seo',
-    'bansou'      => 'plan_bansou',
-    'change'      => 'plan_change',
-    'support'     => 'support',
+    'mieruka'       => 'plan_mieruka',
+    'basic'         => 'plan_basic',
+    'ai_support'    => 'plan_ai_support',
+    'content_asset' => 'plan_content_asset',
+    'bansou'        => 'plan_bansou',
+    'change'        => 'plan_change',
+    'support'       => 'support',
 ];
 $initial_type = $type_map[ $preset_type ] ?? '';
 
-// plan → 希望プランの初期値マッピング
-$plan_map = [
-    'basic'       => 'AI分析・レポートプラン',
-    'ai_support'  => 'MEO・検索集客強化プラン',
-    'content_seo' => 'コンテンツSEO強化プラン',
-    'bansou'      => 'プロ伴走・改善実行プラン',
-];
+// plan → 希望プランの初期値マッピング（表示名はティア定義に追従）
+$plan_map = [];
+foreach ( [ 'mieruka', 'basic', 'ai_support', 'content_asset', 'bansou' ] as $tid ) {
+    if ( isset( $tier_defs[ $tid ]['name'] ) ) {
+        $plan_map[ $tid ] = $tier_defs[ $tid ]['name'];
+    }
+}
 $initial_plan = $plan_map[ $preset_plan ] ?? '';
 
 get_header();
@@ -335,16 +331,20 @@ get_header();
                     <span class="inq-label">お問い合わせ種別 <span class="inq-required">必須</span></span>
                     <div class="inq-type-list" id="inqTypeList">
                         <label class="inq-type-item">
+                            <input type="radio" name="inquiry_type" value="plan_mieruka">
+                            <span class="inq-type-box"><span class="inq-type-radio"></span>見える化プランに変更したい</span>
+                        </label>
+                        <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="plan_basic">
-                            <span class="inq-type-box"><span class="inq-type-radio"></span>AI分析・レポートプランに変更したい</span>
+                            <span class="inq-type-box"><span class="inq-type-radio"></span>改善提案プランに変更したい</span>
                         </label>
                         <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="plan_ai_support">
-                            <span class="inq-type-box"><span class="inq-type-radio"></span>MEO・検索集客強化プランに変更したい</span>
+                            <span class="inq-type-box"><span class="inq-type-radio"></span>プロ分析・集客プランに変更したい</span>
                         </label>
                         <label class="inq-type-item">
-                            <input type="radio" name="inquiry_type" value="plan_content_seo">
-                            <span class="inq-type-box"><span class="inq-type-radio"></span>コンテンツSEO強化プランに変更したい</span>
+                            <input type="radio" name="inquiry_type" value="plan_content_asset">
+                            <span class="inq-type-box"><span class="inq-type-radio"></span>コンテンツ資産化プランに変更したい</span>
                         </label>
                         <label class="inq-type-item">
                             <input type="radio" name="inquiry_type" value="plan_bansou">
@@ -378,10 +378,9 @@ get_header();
                         <label class="inq-label" for="inqDesiredPlan">変更を検討しているプラン <span class="inq-optional">任意</span></label>
                         <select id="inqDesiredPlan" name="desired_plan" class="inq-select">
                             <option value="">選択してください</option>
-                            <option value="AI分析・レポートプラン"<?php echo $initial_plan === 'AI分析・レポートプラン' ? ' selected' : ''; ?>>AI分析・レポートプラン</option>
-                            <option value="MEO・検索集客強化プラン"<?php echo $initial_plan === 'MEO・検索集客強化プラン' ? ' selected' : ''; ?>>MEO・検索集客強化プラン</option>
-                            <option value="コンテンツSEO強化プラン"<?php echo $initial_plan === 'コンテンツSEO強化プラン' ? ' selected' : ''; ?>>コンテンツSEO強化プラン</option>
-                            <option value="プロ伴走・改善実行プラン"<?php echo $initial_plan === 'プロ伴走・改善実行プラン' ? ' selected' : ''; ?>>プロ伴走・改善実行プラン</option>
+                            <?php foreach ( $plan_map as $plan_name ) : ?>
+                            <option value="<?php echo esc_attr( $plan_name ); ?>"<?php echo $initial_plan === $plan_name ? ' selected' : ''; ?>><?php echo esc_html( $plan_name ); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                 </div>
