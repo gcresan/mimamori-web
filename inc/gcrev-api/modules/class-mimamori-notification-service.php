@@ -368,10 +368,29 @@ class Mimamori_Notification_Service {
         if ( ! $user ) { return; }
 
         $with_analysis = $this->has_analysis_plan( $uid );
-        $subject       = '【みまもりウェブ】' . $alert['subject'];
+        // 改善提案プラン以上のみ AI 分析（Gemini 呼び出し）を行う
+        $analysis = $with_analysis ? $this->generate_analysis( $uid, $alert ) : '';
+        $email    = $this->build_alert_email( $uid, ( $user->display_name ?: $user->user_login ), $alert, $with_analysis, $analysis );
+
+        $sent = wp_mail( $user->user_email, $email['subject'], $email['body'] );
+        self::log( sprintf( 'alert sent user=%d type=%s analysis=%s result=%s', $uid, $alert['type'], $with_analysis ? 'yes' : 'no', $sent ? 'OK' : 'FAIL' ) );
+    }
+
+    /**
+     * アラートメールの件名・本文を組み立てる（実送信・テスト送信で共有）。
+     *
+     * @param int    $link_uid      チャット起動リンクのトークン所有者（クリック時に文脈解決する本人）
+     * @param string $name          宛名
+     * @param array  $alert         ['type','subject','facts']
+     * @param bool   $with_analysis 分析付き（改善提案プラン以上）か
+     * @param string $analysis      AI分析テキスト（空なら分析ブロックを省略）
+     * @return array{subject:string, body:string}
+     */
+    private function build_alert_email( int $link_uid, string $name, array $alert, bool $with_analysis, string $analysis ): array {
+        $subject = '【みまもりウェブ】' . $alert['subject'];
 
         $lines   = [];
-        $lines[] = ( $user->display_name ?: $user->user_login ) . ' 様';
+        $lines[] = $name . ' 様';
         $lines[] = '';
         $lines[] = 'みまもりウェブのAIが、サイトの変化を検知しました。';
         $lines[] = '';
@@ -381,7 +400,6 @@ class Mimamori_Notification_Service {
 
         if ( $with_analysis ) {
             // 改善提案プラン以上: AIによる原因分析と推奨アクションを付ける
-            $analysis = $this->generate_analysis( $uid, $alert );
             if ( $analysis !== '' ) {
                 $lines[] = '■ AIによる分析と推奨アクション';
                 $lines[] = $analysis;
@@ -393,7 +411,7 @@ class Mimamori_Notification_Service {
             // ワンタップでチャットが文脈付きで開く導線
             $ctx_summary = $alert['facts'] . ( $analysis !== '' ? "\n\n【AIによる分析】\n" . $analysis : '' );
             $lines[] = '▼ この件についてAIに質問する';
-            $lines[] = $this->create_chat_link( $uid, 'alert_' . $alert['type'], $ctx_summary );
+            $lines[] = $this->create_chat_link( $link_uid, 'alert_' . $alert['type'], $ctx_summary );
         } else {
             // 見える化プラン: 事実のみ + 固定のアップグレード案内
             $lines[] = '現在の状況はダッシュボードでご確認いただけます。';
@@ -408,8 +426,7 @@ class Mimamori_Notification_Service {
         $lines[] = 'みまもりウェブ';
         $lines[] = '※このメールはみまもりアラートの自動通知です。';
 
-        $sent = wp_mail( $user->user_email, $subject, implode( "\n", $lines ) );
-        self::log( sprintf( 'alert sent user=%d type=%s analysis=%s result=%s', $uid, $alert['type'], $with_analysis ? 'yes' : 'no', $sent ? 'OK' : 'FAIL' ) );
+        return [ 'subject' => $subject, 'body' => implode( "\n", $lines ) ];
     }
 
     /**
@@ -463,13 +480,6 @@ class Mimamori_Notification_Service {
         $sessions = $this->weekly_pair( $uid, 'sessions' );
         $cv       = $this->weekly_pair( $uid, 'cv' );
 
-        $fmt_pair = static function ( ?array $pair, string $unit ): string {
-            if ( $pair === null ) { return 'データ取得中です'; }
-            $diff = $pair['recent'] - $pair['prev'];
-            $sign = $diff > 0 ? '+' : ( $diff < 0 ? '−' : '±' );
-            return sprintf( '%s%s（前週比 %s%s%s）', number_format( $pair['recent'] ), $unit, $sign, number_format( abs( $diff ) ), $unit );
-        };
-
         // 直近7日にアラートを送ったかどうか
         $log        = get_user_meta( $uid, self::META_ALERT_LOG, true );
         $log        = is_array( $log ) ? $log : [];
@@ -481,6 +491,31 @@ class Mimamori_Notification_Service {
             ? sprintf( '今週はアラートを%d件お送りしました。詳細は過去のメールをご確認ください。', $week_alert )
             : '今週も異常はありませんでした。';
 
+        $email = $this->build_digest_email(
+            $uid, ( $user->display_name ?: $user->user_login ),
+            $this->has_analysis_plan( $uid ), $sessions, $cv, $anomaly_line
+        );
+
+        $sent = wp_mail( $user->user_email, $email['subject'], $email['body'] );
+        self::log( sprintf( 'weekly digest sent user=%d result=%s', $uid, $sent ? 'OK' : 'FAIL' ) );
+    }
+
+    /**
+     * 週次便メールの件名・本文を組み立てる（実送信・テスト送信で共有）。
+     * 本文は意図的に薄く保つ（3〜5行・分析や提案は含めない）。
+     *
+     * @param array{recent:int,prev:int}|null $sessions 訪問数の今週/前週
+     * @param array{recent:int,prev:int}|null $cv       問い合わせの今週/前週
+     * @return array{subject:string, body:string}
+     */
+    private function build_digest_email( int $link_uid, string $name, bool $with_analysis, ?array $sessions, ?array $cv, string $anomaly_line ): array {
+        $fmt_pair = static function ( ?array $pair, string $unit ): string {
+            if ( $pair === null ) { return 'データ取得中です'; }
+            $diff = $pair['recent'] - $pair['prev'];
+            $sign = $diff > 0 ? '+' : ( $diff < 0 ? '−' : '±' );
+            return sprintf( '%s%s（前週比 %s%s%s）', number_format( $pair['recent'] ), $unit, $sign, number_format( abs( $diff ) ), $unit );
+        };
+
         $subject = '【みまもりウェブ】みまもり週次便';
         $summary_lines = [
             '・今週の訪問数: ' . $fmt_pair( $sessions, '件' ),
@@ -488,16 +523,16 @@ class Mimamori_Notification_Service {
             '・異常検知: ' . $anomaly_line,
         ];
 
-        $lines   = [ ( $user->display_name ?: $user->user_login ) . ' 様', '' ];
+        $lines   = [ $name . ' 様', '' ];
         $lines   = array_merge( $lines, $summary_lines );
         $lines[] = '';
         $lines[] = '引き続きAIが24時間サイトを見守っています。';
         $lines[] = '詳細: ' . home_url( '/dashboard/' );
 
-        if ( $this->has_analysis_plan( $uid ) ) {
+        if ( $with_analysis ) {
             $lines[] = '';
             $lines[] = '▼ 今週の数字についてAIに聞いてみる';
-            $lines[] = $this->create_chat_link( $uid, 'digest', implode( "\n", $summary_lines ) );
+            $lines[] = $this->create_chat_link( $link_uid, 'digest', implode( "\n", $summary_lines ) );
         } else {
             // 見える化プラン: チャットは対象外のためアップグレード導線を表示
             $lines[] = '';
@@ -505,8 +540,7 @@ class Mimamori_Notification_Service {
             $lines[] = 'プランのご案内: ' . home_url( '/plans/' );
         }
 
-        $sent = wp_mail( $user->user_email, $subject, implode( "\n", $lines ) );
-        self::log( sprintf( 'weekly digest sent user=%d result=%s', $uid, $sent ? 'OK' : 'FAIL' ) );
+        return [ 'subject' => $subject, 'body' => implode( "\n", $lines ) ];
     }
 
     // =================================================================
@@ -582,8 +616,21 @@ class Mimamori_Notification_Service {
         $user = get_userdata( $uid );
         if ( ! $user ) { return; }
 
+        $email = $this->build_suggestion_email( $uid, ( $user->display_name ?: $user->user_login ), $action );
+
+        $sent = wp_mail( $user->user_email, $email['subject'], $email['body'] );
+        self::log( sprintf( 'suggest sent user=%d result=%s', $uid, $sent ? 'OK' : 'FAIL' ) );
+    }
+
+    /**
+     * AI改善提案メールの件名・本文を組み立てる（実送信・テスト送信で共有）。
+     *
+     * @param array $action ['title','reason','expected_effect']
+     * @return array{subject:string, body:string}
+     */
+    private function build_suggestion_email( int $link_uid, string $name, array $action ): array {
         $lines   = [];
-        $lines[] = ( $user->display_name ?: $user->user_login ) . ' 様';
+        $lines[] = $name . ' 様';
         $lines[] = '';
         $lines[] = 'みまもりウェブのAIが、データから改善のチャンスを見つけました。';
         $lines[] = '';
@@ -612,13 +659,92 @@ class Mimamori_Notification_Service {
             $ctx_summary .= "\n期待効果: " . trim( (string) $action['expected_effect'] );
         }
         $lines[] = '▼ この提案の進め方をAIに相談する';
-        $lines[] = $this->create_chat_link( $uid, 'suggest', $ctx_summary );
+        $lines[] = $this->create_chat_link( $link_uid, 'suggest', $ctx_summary );
         $lines[] = '';
         $lines[] = '────────────────────';
         $lines[] = 'みまもりウェブ';
         $lines[] = '※このメールはAI改善提案の自動通知です（月2回まで）。';
 
-        $sent = wp_mail( $user->user_email, '【みまもりウェブ】AIからの改善提案', implode( "\n", $lines ) );
-        self::log( sprintf( 'suggest sent user=%d result=%s', $uid, $sent ? 'OK' : 'FAIL' ) );
+        return [ 'subject' => '【みまもりウェブ】AIからの改善提案', 'body' => implode( "\n", $lines ) ];
+    }
+
+    // =================================================================
+    // テスト送信（管理画面「通知設定」から呼ぶ）
+    // =================================================================
+
+    /**
+     * 通知メールのテスト送信。ダミーデータで本文レイアウトを確認する用途。
+     *
+     * 閾値判定・クールダウン・送信履歴記録・実データ取得・Gemini呼び出しは
+     * 一切行わず、固定のサンプル内容を組み立てて指定アドレスに送る。
+     * 件名に [テスト] を付与し、冒頭に注記を入れる。
+     *
+     * @param string $kind      'alert' | 'digest' | 'suggest'
+     * @param string $recipient 送信先メールアドレス
+     * @param array  $opts      ['with_analysis'=>bool, 'link_uid'=>int]
+     *                          with_analysis: alert/digest のプラン別見え方の切替
+     *                          link_uid: チャット起動リンクの所有者（既定はログイン中ユーザー）
+     * @return array{ok:bool, message:string}
+     */
+    public function send_test_email( string $kind, string $recipient, array $opts = [] ): array {
+        if ( ! is_email( $recipient ) ) {
+            return [ 'ok' => false, 'message' => '送信先メールアドレスが不正です。' ];
+        }
+
+        $with_analysis = ! empty( $opts['with_analysis'] );
+        $link_uid      = (int) ( $opts['link_uid'] ?? get_current_user_id() );
+        $name          = 'テスト';
+
+        switch ( $kind ) {
+            case 'alert':
+                $alert = [
+                    'type'    => 'access_drop',
+                    'subject' => 'アクセスが急減しています',
+                    'facts'   => '直近7日間の訪問数が 120件 となり、前の7日間（218件）から 45.0% 減少しています。',
+                ];
+                // テストでは Gemini を呼ばず固定の分析サンプルを使う
+                $analysis = $with_analysis
+                    ? "・検索からの流入が減っている可能性があります（特定ページの順位下落など）。\n"
+                      . "・SNSやキャンペーンの反響が一段落したことも考えられます。\n"
+                      . "・まずは流入元の内訳と、下落しているページを確認することをおすすめします。"
+                    : '';
+                $email = $this->build_alert_email( $link_uid, $name, $alert, $with_analysis, $analysis );
+                break;
+
+            case 'digest':
+                $email = $this->build_digest_email(
+                    $link_uid, $name, $with_analysis,
+                    [ 'recent' => 218, 'prev' => 240 ],
+                    [ 'recent' => 5, 'prev' => 3 ],
+                    '今週も異常はありませんでした。'
+                );
+                break;
+
+            case 'suggest':
+                $action = [
+                    'title'           => 'トップページのタイトルに地域名を入れて、検索結果での見え方を改善してください',
+                    'reason'          => '「（地域名） （業種）」での表示回数が月1,200回ありますが、クリック率が1.2%と低い状態です。',
+                    'expected_effect' => 'タイトル最適化により、同キーワードでのクリック率改善とお問い合わせ増加が期待できます。',
+                ];
+                $email = $this->build_suggestion_email( $link_uid, $name, $action );
+                break;
+
+            default:
+                return [ 'ok' => false, 'message' => '不明な通知種別です。' ];
+        }
+
+        $subject = '[テスト] ' . $email['subject'];
+        $body    = "※これは通知設定からのテスト送信です。実際の通知では、各クライアントのサイトデータやAIによる分析が反映されます。\n\n"
+                 . $email['body'];
+
+        $sent = wp_mail( $recipient, $subject, $body );
+        self::log( sprintf( 'TEST %s to=%s analysis=%s result=%s', $kind, $recipient, $with_analysis ? 'yes' : 'no', $sent ? 'OK' : 'FAIL' ) );
+
+        return [
+            'ok'      => (bool) $sent,
+            'message' => $sent
+                ? "テストメールを {$recipient} に送信しました。"
+                : 'メール送信に失敗しました。サーバーのメール設定をご確認ください。',
+        ];
     }
 }

@@ -28,6 +28,7 @@ class Gcrev_Notification_Settings_Page {
         add_action( 'admin_menu', [ $this, 'add_menu_page' ] );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
         add_action( 'admin_init', [ $this, 'handle_test_notification' ] );
+        add_action( 'admin_init', [ $this, 'handle_test_mimamori_notification' ] );
     }
 
     // =========================================================
@@ -412,6 +413,57 @@ class Gcrev_Notification_Settings_Page {
         }
     }
 
+    /**
+     * みまもり通知（アラート / 週次便 / AI改善提案）のテスト送信ハンドラ。
+     * ダミーデータで本文レイアウトを確認する用途。
+     */
+    public function handle_test_mimamori_notification(): void {
+        if ( ! isset( $_POST['gcrev_test_mimamori_notify'] ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        check_admin_referer( 'gcrev_test_mimamori_notify_nonce' );
+
+        $kind = isset( $_POST['mimamori_test_kind'] ) ? sanitize_text_field( wp_unslash( $_POST['mimamori_test_kind'] ) ) : '';
+        if ( ! in_array( $kind, [ 'alert', 'digest', 'suggest' ], true ) ) {
+            add_settings_error( 'gcrev_notification', 'mm_test_kind', '通知種別を選択してください。', 'error' );
+            return;
+        }
+
+        // 送信先: 未入力・不正ならログイン中の管理者宛
+        $recipient = isset( $_POST['mimamori_test_recipient'] ) ? sanitize_email( wp_unslash( $_POST['mimamori_test_recipient'] ) ) : '';
+        if ( ! is_email( $recipient ) ) {
+            $current   = wp_get_current_user();
+            $recipient = ( $current && is_email( $current->user_email ) ) ? $current->user_email : get_option( 'admin_email' );
+        }
+
+        $with_analysis = ( isset( $_POST['mimamori_test_plan'] ) && $_POST['mimamori_test_plan'] === 'facts' ) ? false : true;
+
+        $module = dirname( __DIR__ ) . '/modules/class-mimamori-notification-service.php';
+        if ( ! class_exists( 'Mimamori_Notification_Service' ) && file_exists( $module ) ) {
+            require_once $module;
+        }
+        if ( ! class_exists( 'Mimamori_Notification_Service' ) ) {
+            add_settings_error( 'gcrev_notification', 'mm_test_nocls', '通知サービスが見つかりません。', 'error' );
+            return;
+        }
+
+        $service = new Mimamori_Notification_Service();
+        $result  = $service->send_test_email( $kind, $recipient, [
+            'with_analysis' => $with_analysis,
+            'link_uid'      => get_current_user_id(),
+        ] );
+
+        add_settings_error(
+            'gcrev_notification',
+            'mm_test_result',
+            $result['message'],
+            $result['ok'] ? 'success' : 'error'
+        );
+    }
+
     // =========================================================
     // セクション個別描画ヘルパー
     // =========================================================
@@ -490,6 +542,47 @@ class Gcrev_Notification_Settings_Page {
                 <input type="hidden" name="gcrev_test_notification" value="1" />
                 <?php submit_button( 'Cronエラー テスト通知を送信', 'secondary' ); ?>
             </form>
+
+            <?php // ── みまもり通知 テスト送信（アラート / 週次便 / AI改善提案） ── ?>
+            <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:16px 24px 24px; margin-top:10px;">
+                <h2 style="margin-top:0;">みまもり通知 テスト送信</h2>
+                <p>みまもりアラート・週次便・AI改善提案の各メールを、<strong>ダミーデータ</strong>でテスト送信します（実データやAI分析は含まれません。文面・レイアウトの確認用です）。</p>
+                <form method="post">
+                    <?php wp_nonce_field( 'gcrev_test_mimamori_notify_nonce' ); ?>
+                    <input type="hidden" name="gcrev_test_mimamori_notify" value="1" />
+                    <table class="form-table" role="presentation">
+                        <tr>
+                            <th scope="row"><label for="mimamori_test_kind">通知種別</label></th>
+                            <td>
+                                <select name="mimamori_test_kind" id="mimamori_test_kind">
+                                    <option value="alert">みまもりアラート（異常検知）</option>
+                                    <option value="digest">みまもり週次便</option>
+                                    <option value="suggest">AI改善提案通知</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="mimamori_test_plan">プラン別の見え方</label></th>
+                            <td>
+                                <select name="mimamori_test_plan" id="mimamori_test_plan">
+                                    <option value="analysis">改善提案プラン以上（分析・AIチャット導線あり）</option>
+                                    <option value="facts">見える化プラン（事実のみ・アップグレード案内）</option>
+                                </select>
+                                <p class="description">みまもりアラート・週次便で本文が変わります。AI改善提案は常に改善提案プラン向けの内容です。</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="mimamori_test_recipient">送信先メールアドレス</label></th>
+                            <td>
+                                <input type="email" name="mimamori_test_recipient" id="mimamori_test_recipient"
+                                       value="<?php echo esc_attr( wp_get_current_user()->user_email ); ?>" class="regular-text" />
+                                <p class="description">空欄または不正な場合は、ログイン中の管理者メール宛に送信します。</p>
+                            </td>
+                        </tr>
+                    </table>
+                    <?php submit_button( 'みまもり通知をテスト送信', 'secondary' ); ?>
+                </form>
+            </div>
         </div>
         <?php
     }
