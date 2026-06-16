@@ -19576,7 +19576,7 @@ PROMPT;
 
         $client = new \Gcrev_Claude_Client( $this->config );
         $result = $client->call_messages_api( $system, $prompt, [
-            'model'       => 'claude-sonnet-4-6',
+            'model'       => 'claude-haiku-4-5', // 口コミ下書き用途。Sonnet比で約1/3のコスト
             'temperature' => 0.75,
             'max_tokens'  => 4096, // 最長パターン（650〜900字）でも途中切断されないよう確保
         ] );
