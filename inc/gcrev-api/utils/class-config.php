@@ -256,51 +256,6 @@ class Gcrev_Config {
     }
 
     /**
-     * Claude (Vertex AI 経由) のモデルIDを返す。
-     *
-     * 既存の get_claude_model()（直 Anthropic API キー用・別系統）とは用途が
-     * 異なるため別名で定義する。Vertex のモデルID形式に注意:
-     *   - Sonnet 4.6 / Opus 4.8 等は素の ID（例 'claude-sonnet-4-6'）
-     *   - Sonnet 4.5 等は @日付 サフィックス付き（例 'claude-sonnet-4-5@20250929'）
-     *
-     * 優先順位:
-     *   1. wp-config.php 定数 GCREV_CLAUDE_VERTEX_MODEL
-     *   2. 環境変数 CLAUDE_VERTEX_MODEL
-     *   3. デフォルト 'claude-sonnet-4-6'
-     *
-     * @return string
-     */
-    public function get_claude_vertex_model(): string {
-        if ( defined( 'GCREV_CLAUDE_VERTEX_MODEL' ) && GCREV_CLAUDE_VERTEX_MODEL !== '' ) {
-            return (string) GCREV_CLAUDE_VERTEX_MODEL;
-        }
-        $model = getenv( 'CLAUDE_VERTEX_MODEL' );
-        return ( $model !== false && $model !== '' ) ? (string) $model : 'claude-sonnet-4-6';
-    }
-
-    /**
-     * Claude (Vertex AI 経由) のロケーションを返す。
-     *
-     * Claude は Gemini と利用可能リージョンが異なるため、Gemini とは
-     * 独立して指定できるようにする。global エンドポイント（地域プレミアム
-     * なし・高可用）を既定とする。
-     *
-     * 優先順位:
-     *   1. wp-config.php 定数 GCREV_CLAUDE_VERTEX_LOCATION
-     *   2. 環境変数 CLAUDE_VERTEX_LOCATION
-     *   3. デフォルト 'global'
-     *
-     * @return string
-     */
-    public function get_claude_vertex_location(): string {
-        if ( defined( 'GCREV_CLAUDE_VERTEX_LOCATION' ) && GCREV_CLAUDE_VERTEX_LOCATION !== '' ) {
-            return (string) GCREV_CLAUDE_VERTEX_LOCATION;
-        }
-        $loc = getenv( 'CLAUDE_VERTEX_LOCATION' );
-        return ( $loc !== false && $loc !== '' ) ? (string) $loc : 'global';
-    }
-
-    /**
      * Google Business Profile OAuth の Client ID を返す
      * wp-config.php の定数があればそれを優先し、なければ wp_options を参照
      */

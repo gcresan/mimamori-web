@@ -3130,6 +3130,76 @@ class Gcrev_Insight_API {
         }
     }
 
+    /**
+     * 初回ページ表示用：cron が温めた分析キャッシュを「外部APIへの同期 fetch を一切せず」
+     * cache-only で読み出し、フロントの window.gcrevCache にそのまま seed できる形で返す。
+     *
+     * 各分析ページは「描画 → JS が REST へ fetch」の2段ロケットで、初回（または localStorage
+     * TTL 2h 経過後）は必ず REST 往復（=2回目の WordPress フルブート）が発生し、これが
+     * 初回表示の遅さの主因。cron はサーバー側 transient を温めるだけでこの往復は消えない。
+     * 本メソッドでページ描画時に温まったデータを読み、HTML へ inline 注入することで
+     * 初回 fetch を消し、即時描画させる。
+     *
+     * 温まっていなければ null（→ フロントは従来どおり非同期 fetch にフォールバック）。
+     *
+     * @param string $type    'source'|'device'|'age'|'region'|'pages'|'keywords'
+     * @param string $period  'last30' 等（各ページの初期 period）
+     * @param int    $user_id データ所有者ID
+     * @return array|null gcrevCache.set にそのまま渡せる値（各ページの保存形状に合わせ済み）
+     */
+    public function get_warm_cache_seed( string $type, string $period, int $user_id ): ?array {
+        if ( $user_id <= 0 ) { return null; }
+
+        // REST エンドポイントと同じフィルタ文脈（海外除外 + パスフィルタ）を確立する。
+        // これを通すことで $filter_sfx が live リクエストと完全一致する。
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+
+        try {
+            $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
+
+            switch ( $type ) {
+                // source / device / age は同一エンドポイント gcrev/v1/dashboard/kpi を使う
+                case 'source':
+                case 'age':
+                case 'device':
+                    // cache_first=1 → キャッシュ命中時のみ返し、ミス時は外部 fetch せず空を返す
+                    $kpi = $this->get_dashboard_kpi( $period, $user_id, 1 );
+                    if ( empty( $kpi ) || ! is_array( $kpi ) ) { return null; }
+                    // stale（TTL切れ option 残存）は seed しない：従来の非同期 fetch に委ねる
+                    if ( ! empty( $kpi['_stale'] ) ) { return null; }
+
+                    if ( $type === 'device' ) {
+                        return $kpi; // loadData は result.data をそのまま保存
+                    }
+                    // source / age は { data, _fullResult } 形式で保存している
+                    return [ 'data' => $kpi, '_fullResult' => [ 'success' => true, 'data' => $kpi ] ];
+
+                case 'region':
+                    $cached = get_transient( "gcrev_region_{$user_id}_{$period}{$filter_sfx}" );
+                    return ( $cached !== false && is_array( $cached ) ) ? $cached : null;
+
+                case 'pages':
+                    $cached = get_transient( "gcrev_page_{$user_id}_{$period}{$filter_sfx}" );
+                    if ( $cached === false || ! is_array( $cached ) || ! isset( $cached['data'] ) ) { return null; }
+                    return $cached['data']; // loadData は result.data を保存
+
+                case 'keywords':
+                    $cached = get_transient( "gcrev_keywords_{$user_id}_{$period}{$filter_sfx}" );
+                    if ( $cached === false || ! is_array( $cached ) || ! isset( $cached['data'] ) ) { return null; }
+                    return $cached['data']; // loadData は result.data を保存
+            }
+
+            return null;
+
+        } catch ( \Throwable $e ) {
+            // seed は best-effort。失敗時は黙って null（フロントの非同期 fetch にフォールバック）
+            return null;
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
     // =========================================================
     // 月次プリフェッチ処理（月初にCronから呼ばれる）
     // =========================================================
@@ -19494,24 +19564,30 @@ PROMPT;
      * @throws \Exception 両プロバイダとも失敗した場合
      */
     private function call_review_generation_api( string $prompt ): string {
-        // 口コミ下書きは Claude (Anthropic) を Vertex AI 経由で生成する。
-        // Gemini と同じ GCP サービスアカウント／アクセストークン・課金で呼べるため
-        // 追加のAPIキーは不要。モデル／ロケーションは Gcrev_Config 側で切替可能
-        // （既定: claude-sonnet-4-6 / global エンドポイント）。
+        // 口コミ下書きは Claude (Anthropic Messages API) で生成する。
+        // 既存の Gcrev_Claude_Client（ANTHROPIC_API_KEY 使用・月次レポートで実績あり）を流用。
+        if ( ! class_exists( 'Gcrev_Claude_Client' ) || $this->config->get_anthropic_api_key() === '' ) {
+            throw new \Exception( 'Claude が利用できません（ANTHROPIC_API_KEY 未設定）。wp-config.php を確認してください。' );
+        }
+
         $system = 'あなたは実際にサービスを利用した顧客の立場で、Google口コミの下書きを作成するプロのライターです。'
             . '与えられた指示・参考口コミ・禁止事項を厳密に守り、自然で現実的な1本の口コミを JSON 形式で返してください。'
             . 'JSON 以外の前置き・説明・コードフェンスは一切出力しないでください。';
 
-        $raw = $this->ai->call_claude_vertex( $prompt, [
-            'system'      => $system,
+        $client = new \Gcrev_Claude_Client( $this->config );
+        $result = $client->call_messages_api( $system, $prompt, [
+            'model'       => 'claude-sonnet-4-6',
             'temperature' => 0.75,
             'max_tokens'  => 4096, // 最長パターン（650〜900字）でも途中切断されないよう確保
         ] );
+
         file_put_contents( '/tmp/gcrev_review_debug.log',
-            date( 'Y-m-d H:i:s' ) . ' [review-gen] Claude (Vertex) used (len=' . strlen( (string) $raw ) . ")\n",
+            date( 'Y-m-d H:i:s' ) . ' [review-gen] Claude success tokens='
+                . (int) ( $result['prompt_tokens'] ?? 0 ) . '/' . (int) ( $result['completion_tokens'] ?? 0 )
+                . ', model=' . (string) ( $result['model'] ?? '' ) . "\n",
             FILE_APPEND
         );
-        return (string) $raw;
+        return (string) ( $result['text'] ?? '' );
     }
 
     /**
