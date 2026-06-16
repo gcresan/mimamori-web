@@ -19494,48 +19494,21 @@ PROMPT;
      * @throws \Exception 両プロバイダとも失敗した場合
      */
     private function call_review_generation_api( string $prompt ): string {
-        $openai_key = $this->config->get_openai_api_key();
+        // 口コミ下書きは Claude (Anthropic) を Vertex AI 経由で生成する。
+        // Gemini と同じ GCP サービスアカウント／アクセストークン・課金で呼べるため
+        // 追加のAPIキーは不要。モデル／ロケーションは Gcrev_Config 側で切替可能
+        // （既定: claude-sonnet-4-6 / global エンドポイント）。
+        $system = 'あなたは実際にサービスを利用した顧客の立場で、Google口コミの下書きを作成するプロのライターです。'
+            . '与えられた指示・参考口コミ・禁止事項を厳密に守り、自然で現実的な1本の口コミを JSON 形式で返してください。'
+            . 'JSON 以外の前置き・説明・コードフェンスは一切出力しないでください。';
 
-        // OpenAI を優先
-        if ( $openai_key !== '' && class_exists( 'Gcrev_OpenAI_Client' ) ) {
-            try {
-                $client = new \Gcrev_OpenAI_Client( $this->config );
-                $system = 'あなたは実際にサービスを利用した顧客の立場で、Google口コミの下書きを作成するプロのライターです。'
-                    . '与えられた指示・参考口コミ・禁止事項を厳密に守り、自然で現実的な1本の口コミを JSON 形式で返してください。';
-                $result = $client->call_chat_api( $system, $prompt, [
-                    'model'       => 'gpt-4.1',
-                    'temperature' => 0.75,
-                    'max_tokens'  => 4096, // 最長パターン（650〜900字）でも途中切断されないよう確保
-                ] );
-                if ( ! empty( $result['text'] ) && is_string( $result['text'] ) ) {
-                    file_put_contents( '/tmp/gcrev_review_debug.log',
-                        date( 'Y-m-d H:i:s' ) . ' [review-gen] OpenAI gpt-4.1 success tokens=' . (int) ( $result['prompt_tokens'] ?? 0 ) . '/' . (int) ( $result['completion_tokens'] ?? 0 ) . "\n",
-                        FILE_APPEND
-                    );
-                    return (string) $result['text'];
-                }
-            } catch ( \Throwable $e ) {
-                file_put_contents( '/tmp/gcrev_review_debug.log',
-                    date( 'Y-m-d H:i:s' ) . ' [review-gen] OpenAI failed, fallback to Gemini: ' . $e->getMessage() . "\n",
-                    FILE_APPEND
-                );
-                // Fall through to Gemini
-            }
-        }
-
-        // Gemini フォールバック
-        // gemini-2.5 系は thinking が既定で有効で、出力枠（maxOutputTokens）を
-        // 食い潰して本文が finishReason=MAX_TOKENS で途中切断される事故が起きる。
-        // 口コミ下書きは短い構造化JSONなので thinking は不要 → 明示的に 0 で無効化し、
-        // 最長パターン（650〜900字）でも切れないよう出力枠も広げる。
-        $raw = $this->ai->call_gemini_api( $prompt, [
-            'temperature'     => 0.75,
-            'topP'            => 0.9,
-            'maxOutputTokens' => 8192,
-            'thinkingBudget'  => 0,
+        $raw = $this->ai->call_claude_vertex( $prompt, [
+            'system'      => $system,
+            'temperature' => 0.75,
+            'max_tokens'  => 4096, // 最長パターン（650〜900字）でも途中切断されないよう確保
         ] );
         file_put_contents( '/tmp/gcrev_review_debug.log',
-            date( 'Y-m-d H:i:s' ) . ' [review-gen] Gemini used (len=' . strlen( (string) $raw ) . ")\n",
+            date( 'Y-m-d H:i:s' ) . ' [review-gen] Claude (Vertex) used (len=' . strlen( (string) $raw ) . ")\n",
             FILE_APPEND
         );
         return (string) $raw;
