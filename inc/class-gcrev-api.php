@@ -19505,7 +19505,7 @@ PROMPT;
                 $result = $client->call_chat_api( $system, $prompt, [
                     'model'       => 'gpt-4.1',
                     'temperature' => 0.75,
-                    'max_tokens'  => 2048,
+                    'max_tokens'  => 4096, // 最長パターン（650〜900字）でも途中切断されないよう確保
                 ] );
                 if ( ! empty( $result['text'] ) && is_string( $result['text'] ) ) {
                     file_put_contents( '/tmp/gcrev_review_debug.log',
@@ -19524,10 +19524,15 @@ PROMPT;
         }
 
         // Gemini フォールバック
+        // gemini-2.5 系は thinking が既定で有効で、出力枠（maxOutputTokens）を
+        // 食い潰して本文が finishReason=MAX_TOKENS で途中切断される事故が起きる。
+        // 口コミ下書きは短い構造化JSONなので thinking は不要 → 明示的に 0 で無効化し、
+        // 最長パターン（650〜900字）でも切れないよう出力枠も広げる。
         $raw = $this->ai->call_gemini_api( $prompt, [
             'temperature'     => 0.75,
             'topP'            => 0.9,
-            'maxOutputTokens' => 4096,
+            'maxOutputTokens' => 8192,
+            'thinkingBudget'  => 0,
         ] );
         file_put_contents( '/tmp/gcrev_review_debug.log',
             date( 'Y-m-d H:i:s' ) . ' [review-gen] Gemini used (len=' . strlen( (string) $raw ) . ")\n",
