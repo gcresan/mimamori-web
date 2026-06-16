@@ -144,25 +144,55 @@ class Gcrev_AI_Client {
             $body['safetySettings'] = $options['safetySettings'];
         }
 
-        $response = wp_remote_post($url, [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $access_token,
-                'Content-Type'  => 'application/json; charset=utf-8',
-            ],
-            'body'    => wp_json_encode($body, JSON_UNESCAPED_UNICODE),
-            'timeout' => 180, // 長いレスポンス対応のため延長
-        ]);
+        $request_body = wp_json_encode($body, JSON_UNESCAPED_UNICODE);
+        $max_retries  = 2;          // 429/503 時の最大リトライ回数
+        $retry_waits  = [ 8, 20 ];  // リトライ前の待機秒数（指数的に増やす）
+        $status       = 0;
+        $raw          = '';
+        $json         = null;
 
-        if (is_wp_error($response)) {
-            throw new \Exception('Gemini API 通信エラー: ' . $response->get_error_message());
+        for ($attempt = 0; $attempt <= $max_retries; $attempt++) {
+
+            $response = wp_remote_post($url, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $access_token,
+                    'Content-Type'  => 'application/json; charset=utf-8',
+                ],
+                'body'    => $request_body,
+                'timeout' => 180, // 長いレスポンス対応のため延長
+            ]);
+
+            if (is_wp_error($response)) {
+                throw new \Exception('Gemini API 通信エラー: ' . $response->get_error_message());
+            }
+
+            $status = (int) wp_remote_retrieve_response_code($response);
+            $raw    = (string) wp_remote_retrieve_body($response);
+            $json   = json_decode($raw, true);
+
+            // 429 (Resource exhausted) / 503 (Unavailable) は一時的なので待機してリトライ
+            if (($status === 429 || $status === 503) && $attempt < $max_retries) {
+                $wait = $retry_waits[$attempt] ?? 20;
+                file_put_contents('/tmp/gcrev_chat_debug.log',
+                    date('Y-m-d H:i:s') . " call_gemini_api: HTTP {$status} (rate limited), retry " . ($attempt + 1) . "/{$max_retries} after {$wait}s\n",
+                    FILE_APPEND
+                );
+                sleep($wait);
+                continue;
+            }
+
+            break;
         }
-
-        $status = (int) wp_remote_retrieve_response_code($response);
-        $raw    = (string) wp_remote_retrieve_body($response);
-        $json   = json_decode($raw, true);
 
         if ($status < 200 || $status >= 300) {
             $msg = $json['error']['message'] ?? $raw;
+            file_put_contents('/tmp/gcrev_chat_debug.log',
+                date('Y-m-d H:i:s') . " call_gemini_api: API ERROR HTTP {$status}: " . substr($raw, 0, 500) . "\n",
+                FILE_APPEND
+            );
+            if ($status === 429) {
+                throw new \Exception("Gemini API エラー (HTTP 429): アクセスが集中しています。1〜2分ほど待ってから、もう一度お試しください。（" . ($msg) . "）");
+            }
             throw new \Exception("Gemini API エラー (HTTP {$status}): " . $msg);
         }
 
