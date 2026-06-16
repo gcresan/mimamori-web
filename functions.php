@@ -598,22 +598,22 @@ function gcrev_pickup_survey_questions( array $all_questions, int $limit = 8 ): 
         $picked[]     = $q;
     };
 
-    // 1. 固定質問（シャッフル + 上限 3スロット）
-    //    is_fixed=1 が多いと全スロットを占めてランダム性が消えるので、
-    //    最大 3 件（または limit/3 の大きい方）に制限し、中身もシャッフル。
-    $max_fixed_slots = max( 2, (int) floor( $limit / 3 ) ); // limit=8 → 2, limit=12 → 4
-    $max_fixed_slots = min( 3, $max_fixed_slots ); // 上限は 3 にキャップ
-    $fixed_candidates = [];
+    // 1. 固定質問（is_fixed=1）は「必ず表示」: 全件を無条件に含める。
+    //    管理画面で明示的に「固定」指定された質問なので、$limit や textarea 上限
+    //    （必須1・任意1）よりも優先して確実に表示する。
+    //    固定の合計が $limit を超える場合は、固定だけで $limit を超えても全件出す。
+    //    （※ 旧仕様は「最大3問シャッフル」で必ず表示の保証がなかった）
     foreach ( $all_questions as $q ) {
-        if ( ! empty( $q['is_fixed'] ) ) { $fixed_candidates[] = $q; }
-    }
-    if ( ! empty( $fixed_candidates ) ) {
-        shuffle( $fixed_candidates );
-        $take_fixed = min( $max_fixed_slots, count( $fixed_candidates ) );
-        for ( $i = 0; $i < $take_fixed; $i++ ) {
-            if ( count( $picked ) >= $limit ) break;
-            $add_question( $fixed_candidates[ $i ] );
+        if ( empty( $q['is_fixed'] ) ) { continue; }
+        $id = $q['id'] ?? null;
+        if ( $id === null || in_array( $id, $picked_ids, true ) ) { continue; }
+        // 後続のランダム補充で自由記述（textarea）が重複しないよう、フラグだけ立てておく
+        if ( ( $q['type'] ?? '' ) === 'textarea' ) {
+            if ( ! empty( $q['required'] ) ) { $has_required_textarea = true; }
+            else { $has_optional_textarea = true; }
         }
+        $picked_ids[] = $id;
+        $picked[]     = $q;
     }
 
     // 2. 必須 textarea（自由回答・メイン）を1問だけ確保

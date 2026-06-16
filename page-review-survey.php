@@ -263,6 +263,7 @@ get_header();
 }
 .sv-q-required { color: #dc2626; font-size: 12px; font-weight: 600; }
 .sv-q-optional { color: #16a34a; font-size: 12px; }
+.sv-q-fixed-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; font-size: 11px; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px; vertical-align: middle; white-space: nowrap; }
 .sv-q-actions { display: flex; gap: 6px; }
 .sv-q-btn {
     padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 4px;
@@ -592,6 +593,13 @@ get_header();
                         <select class="sv-form-select" id="sv-q-required">
                             <option value="1">必須</option>
                             <option value="0">任意</option>
+                        </select>
+                    </div>
+                    <div class="sv-form-group" style="max-width:150px;">
+                        <label class="sv-form-label">固定表示</label>
+                        <select class="sv-form-select" id="sv-q-fixed">
+                            <option value="0">ランダム対象</option>
+                            <option value="1">📌 必ず表示</option>
                         </select>
                     </div>
                     <input type="hidden" id="sv-q-sort" value="0">
@@ -1406,7 +1414,7 @@ get_header();
             html += ' <button type="button" id="sv-q-filter-clear" style="margin-left:8px; background:none; border:none; color:#2271b1; cursor:pointer; text-decoration:underline; font-size:12px;">すべて表示に戻す</button>';
             html += '</p>';
         } else {
-            html += '<p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">💡 行をドラッグして並び順を変更できます。カテゴリピルをクリックで絞り込み。<span class="sv-q-sort-status" id="sv-sort-status"></span></p>';
+            html += '<p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">💡 行をドラッグして並び順を変更できます。カテゴリピルをクリックで絞り込み。<span style="color:#b45309;">📌固定</span>の質問は毎回必ず表示され、それ以外はランダムに出題されます。<span class="sv-q-sort-status" id="sv-sort-status"></span></p>';
         }
 
         if (filtered.length === 0) {
@@ -1432,7 +1440,7 @@ get_header();
             html += '<td><input type="checkbox" class="sv-q-row-check" data-qid="' + q.id + '"></td>';
             html += '<td><span class="sv-q-drag-handle" title="' + (currentCategoryFilter === null ? 'ドラッグで並び替え' : 'ドラッグはフィルタ解除中のみ有効') + '" style="' + (currentCategoryFilter !== null ? 'opacity:0.2;cursor:not-allowed;' : '') + '">☰</span></td>';
             html += '<td style="font-weight:600;color:#6b7280;">' + (idx + 1) + '</td>';
-            html += '<td>' + esc(q.label) + '</td>';
+            html += '<td>' + esc(q.label) + (q.is_fixed ? ' <span class="sv-q-fixed-badge" title="この質問は必ずアンケートに表示されます">📌 固定</span>' : '') + '</td>';
             html += '<td>' + categoryBadgeHtml(q.category) + '</td>';
             html += '<td><span class="sv-q-type-badge">' + (typeLabels[q.type] || q.type) + '</span></td>';
             html += '<td>' + (q.required ? '<span class="sv-q-required">必須</span>' : '<span class="sv-q-optional">任意</span>') + '</td>';
@@ -1627,6 +1635,7 @@ get_header();
         document.getElementById('sv-q-label').value = '';
         qTypeSelect.value = 'checkbox';
         document.getElementById('sv-q-required').value = '1';
+        document.getElementById('sv-q-fixed').value = '0';
         // 新規追加時はリストの末尾に配置されるよう max sort_order + 10 をセット
         var maxSort = 0;
         var qContainer = document.getElementById('sv-questions-container');
@@ -1774,6 +1783,7 @@ get_header();
             label: label,
             type: type,
             required: document.getElementById('sv-q-required').value === '1',
+            is_fixed: document.getElementById('sv-q-fixed').value === '1',
             sort_order: parseInt(document.getElementById('sv-q-sort').value) || 0,
             description: document.getElementById('sv-q-description').value.trim(),
             placeholder: document.getElementById('sv-q-placeholder').value.trim(),
@@ -1816,6 +1826,7 @@ get_header();
             '<option value="textarea"' + (q.type === 'textarea' ? ' selected' : '') + '>' + (typeLabels.textarea) + '</option>' +
             '</select></div>' +
             '<div class="sv-form-group" style="max-width:100px;"><label class="sv-form-label">必須</label><select class="sv-form-select" id="sv-qm-required"><option value="1"' + (q.required ? ' selected' : '') + '>必須</option><option value="0"' + (!q.required ? ' selected' : '') + '>任意</option></select></div>' +
+            '<div class="sv-form-group" style="max-width:140px;"><label class="sv-form-label">固定表示</label><select class="sv-form-select" id="sv-qm-fixed"><option value="0"' + (!q.is_fixed ? ' selected' : '') + '>ランダム対象</option><option value="1"' + (q.is_fixed ? ' selected' : '') + '>📌 必ず表示</option></select></div>' +
             '<input type="hidden" id="sv-qm-sort" value="' + q.sort_order + '">' +
             '</div>' +
             '<div class="sv-form-group"><label class="sv-form-label">補助説明</label><input type="text" class="sv-form-input" id="sv-qm-desc" value="' + esc(q.description) + '"></div>' +
@@ -1856,6 +1867,7 @@ get_header();
             label: label,
             type: type,
             required: document.getElementById('sv-qm-required').value === '1',
+            is_fixed: document.getElementById('sv-qm-fixed').value === '1',
             sort_order: parseInt(document.getElementById('sv-qm-sort').value) || 0,
             description: document.getElementById('sv-qm-desc').value.trim(),
             placeholder: document.getElementById('sv-qm-ph').value.trim(),
