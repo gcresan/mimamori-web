@@ -240,6 +240,23 @@ window.gcrevCache = {
 })();
 
 // =============================================
+// サーバー側 cache seed の流し込み
+// 分析ページが描画時に window.__GCREV_SEED へ注入した「cron で温め済みデータ」を
+// gcrevCache へ同期で書き込む。これにより各ページの初回 loadData() が REST 往復せず
+// 即座に localStorage 命中で描画でき、初回表示の遅さを解消する。
+// （gcrevCache 定義の直後・DOMContentLoaded 発火前にこの場で実行されるのが肝）
+// =============================================
+(function () {
+    try {
+        var seed = window.__GCREV_SEED;
+        if (!seed || typeof window.gcrevCache === 'undefined') { return; }
+        Object.keys(seed).forEach(function (k) {
+            try { window.gcrevCache.set(k, seed[k]); } catch (e) {}
+        });
+    } catch (e) {}
+})();
+
+// =============================================
 // 共通JavaScript
 // =============================================
 

@@ -12764,6 +12764,53 @@ function mimamori_get_view_user_object(): \WP_User {
 }
 
 /**
+ * 分析ページの初回表示を高速化するための cache seed をHTMLに出力する。
+ *
+ * 各分析ページは「描画 → JS が REST へ fetch」の2段構えで、初回（または localStorage の
+ * gcrevCache TTL 2h 経過後）は必ず REST 往復が走り、cron で温めても初回表示が遅い主因に
+ * なっている。ページ描画時に cron が温めた同じデータを cache-only で読み、window.__GCREV_SEED
+ * に注入しておくことで、footer.php が gcrevCache へ流し込み、load() が fetch せず即時描画する。
+ *
+ * キャッシュが冷たい場合は何も出力せず、従来の非同期 fetch にフォールバックする（退行なし）。
+ *
+ * @param string $type   'source'|'device'|'age'|'region'|'pages'|'keywords'
+ * @param string $period 各ページの初期 period（既定 'last30'）
+ */
+function mimamori_seed_analysis_cache( string $type, string $period = 'last30' ): void {
+    if ( ! is_user_logged_in() || ! class_exists( 'Gcrev_Insight_API' ) ) {
+        return;
+    }
+    $user_id = function_exists( 'mimamori_get_view_user_id' )
+        ? mimamori_get_view_user_id()
+        : get_current_user_id();
+    if ( $user_id <= 0 ) {
+        return;
+    }
+
+    try {
+        $api  = new Gcrev_Insight_API( false );
+        $seed = $api->get_warm_cache_seed( $type, $period, (int) $user_id );
+    } catch ( \Throwable $e ) {
+        return;
+    }
+    if ( empty( $seed ) ) {
+        return;
+    }
+
+    $cache_key = 'an_' . $type . '_' . $period;
+    ?>
+    <script>
+    (function () {
+        try {
+            window.__GCREV_SEED = window.__GCREV_SEED || {};
+            window.__GCREV_SEED[<?php echo wp_json_encode( $cache_key, JSON_UNESCAPED_UNICODE ); ?>] = <?php echo wp_json_encode( $seed, JSON_UNESCAPED_UNICODE ); ?>;
+        } catch (e) {}
+    })();
+    </script>
+    <?php
+}
+
+/**
  * ビュー切替の開始/解除（admin-post.php 経由）
  */
 add_action( 'admin_post_mimamori_view_as_set', function () {

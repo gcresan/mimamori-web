@@ -19,6 +19,11 @@ set_query_var('gcrev_page_subtitle', 'ホームページを見ている人の年
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('見ている人の年代', 'ホームページ'));
 
 get_header();
+
+// 初回表示高速化：cron で温め済みデータをHTMLに seed し、初回の REST 往復を消す
+if ( function_exists( 'mimamori_seed_analysis_cache' ) ) {
+    mimamori_seed_analysis_cache( 'age', 'last30' );
+}
 ?>
 
 <!-- Chart.js -->
@@ -304,7 +309,14 @@ function checkDataNotice(data) {
 async function loadData(period, selectorId) {
     // キャッシュチェック（ローディングなしで即表示）
     var cacheKey = 'an_age_' + period;
-    var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+    var cached = (window.gcrevCache && window.gcrevCache.get(cacheKey)) || null;
+    // サーバー側 seed（cron で温め済み）へのフォールバック。
+    // 初回 loadData は footer の gcrevCache 定義より前に走るため、早期注入の
+    // __GCREV_SEED を直接参照して初回 REST 往復を消す。
+    if (!cached && window.__GCREV_SEED && window.__GCREV_SEED[cacheKey]) {
+        try { cached = JSON.parse(JSON.stringify(window.__GCREV_SEED[cacheKey])); }
+        catch (e) { cached = window.__GCREV_SEED[cacheKey]; }
+    }
     if (cached) {
         currentPeriod = period;
         updatePeriodDisplay(cached._fullResult);
