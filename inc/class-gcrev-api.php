@@ -2570,7 +2570,10 @@ class Gcrev_Insight_API {
             // --- (1) ダッシュボード／デバイスキャッシュ ---
             foreach ($ranges as $range) {
                 $cached = $this->dashboard_cache_get($user_id, $range);
-                if ($cached) {
+                // 月固定期間（previousMonth/twoMonthsAgo/last180/last365）はキャッシュがあればスキップ。
+                // スライディング期間（last30/last90）はキャッシュがあっても毎晩最新ウィンドウへ再取得する
+                // （= 古い「直近30日」を表示し続けないため）。
+                if ($cached && Gcrev_Date_Helper::is_monthly_fixed_period($range)) {
                     $this->prefetch_log( "[PREFETCH] SKIP user_id={$user_id} period={$range} reason=cache_hit" );
                     continue;
                 }
@@ -2870,7 +2873,8 @@ class Gcrev_Insight_API {
             // --- (1) ダッシュボード（全6期間） ---
             foreach ( $ranges as $range ) {
                 $cached = $this->dashboard_cache_get( $user_id, $range );
-                if ( $cached ) {
+                // 月固定期間はキャッシュがあればスキップ／スライディング期間（last30/last90）は毎晩再取得する。
+                if ( $cached && Gcrev_Date_Helper::is_monthly_fixed_period( $range ) ) {
                     $this->prefetch_log_file( $log_file, "slot_{$slot} SKIP user_id={$user_id} period={$range} reason=cache_hit" );
                     continue;
                 }
@@ -3046,6 +3050,9 @@ class Gcrev_Insight_API {
         // ----- 流入元 -----
         // period だけでキー一意化（last30 のように日付がスライドする期間でも 0 時跨ぎで無効化されない）
         $key_source   = "gcrev_source_{$user_id}_{$source_period}{$filter_sfx}";
+        // スライディング期間（last30/last90）は毎晩最新ウィンドウへ再取得する（古い「直近◯日」固定を防ぐ）。
+        // 月固定期間は既存キャッシュをそのまま再利用。
+        if ( ! Gcrev_Date_Helper::is_monthly_fixed_period($period) ) { delete_transient($key_source); }
         if (get_transient($key_source) === false) {
             try {
                 // get_source_analysis は内部でキャッシュ保存するので呼ぶだけでOK
@@ -3059,6 +3066,7 @@ class Gcrev_Insight_API {
 
         // ----- 地域 -----
         $key_region = "gcrev_region_{$user_id}_{$period}{$filter_sfx}";
+        if ( ! Gcrev_Date_Helper::is_monthly_fixed_period($period) ) { delete_transient($key_region); }
         if (get_transient($key_region) === false) {
             try {
                 $regions       = $this->ga4->fetch_region_details($ga4_id, $dates['start'], $dates['end']);
@@ -3079,6 +3087,7 @@ class Gcrev_Insight_API {
 
         // ----- ページ分析 -----
         $key_page = "gcrev_page_{$user_id}_{$period}{$filter_sfx}";
+        if ( ! Gcrev_Date_Helper::is_monthly_fixed_period($period) ) { delete_transient($key_page); }
         if (get_transient($key_page) === false) {
             try {
                 $pages      = $this->ga4->fetch_page_details($ga4_id, $dates['start'], $dates['end'], $gsc_url);
@@ -3103,6 +3112,7 @@ class Gcrev_Insight_API {
 
         // ----- キーワード -----
         $key_kw = "gcrev_keywords_{$user_id}_{$period}{$filter_sfx}";
+        if ( ! Gcrev_Date_Helper::is_monthly_fixed_period($period) ) { delete_transient($key_kw); }
         if (get_transient($key_kw) === false) {
             try {
                 $current_gsc = $this->gsc->fetch_gsc_data($gsc_url, $dates['start'], $dates['end']);
@@ -3188,6 +3198,28 @@ class Gcrev_Insight_API {
                     $cached = get_transient( "gcrev_keywords_{$user_id}_{$period}{$filter_sfx}" );
                     if ( $cached === false || ! is_array( $cached ) || ! isset( $cached['data'] ) ) { return null; }
                     return $cached['data']; // loadData は result.data を保存
+
+                // サイトダッシュボード / 分析ハブ用: 素の KPI（loadData は result.data を保存）。
+                // get_dashboard_kpi(cache_first=1) はキャッシュのみ読み、ミス時は外部 fetch せず空を返す。
+                case 'dashboard':
+                    $kpi = $this->get_dashboard_kpi( $period, $user_id, 1 );
+                    if ( empty( $kpi ) || ! is_array( $kpi ) || ! empty( $kpi['_stale'] ) ) { return null; }
+                    return $kpi;
+
+                // CV分析ページ用（result.data を保存）。cron では別途温める必要あり。
+                case 'cv':
+                    $cached = get_transient( "gcrev_cv_analysis_{$user_id}_{$period}{$filter_sfx}" );
+                    if ( $cached === false || ! is_array( $cached ) || ! isset( $cached['data'] ) ) { return null; }
+                    return $cached['data'];
+
+                // MEOダッシュボード / MEO検索キーワード用: full result を保存する形。
+                // MEO は GA4/GSC 国フィルタ非対象のため suffix なし（REST/cron と同じ素キー）。
+                case 'meo':
+                case 'meo_search_terms':
+                    $cached = get_transient( "gcrev_meo_v2_{$user_id}_{$period}" );
+                    if ( $cached === false || ! is_array( $cached ) || empty( $cached['success'] ) ) { return null; }
+                    if ( ( $cached['api_status'] ?? '' ) === 'error' ) { return null; }
+                    return $cached; // loadData は result 全体を保存
             }
 
             return null;
@@ -6359,7 +6391,17 @@ PROMPT;
         try {
             // start_date / end_date が指定されている場合は日付範囲で取得
             if ( $start_date && $end_date ) {
-                $kpi_data = $this->get_dashboard_kpi_by_dates( $start_date, $end_date, $user_id );
+                // cron が period ベースの安定キー（gcrev_dash_bydate_{uid}_prev_month / _prev2_month）で
+                // 温めた比較期間キャッシュにヒットさせるため、既知の月次レンジ（前月・前々月）なら
+                // 対応する cache_scope を割り当てる。日付キー（v2）では cron キャッシュに当たらず、
+                // ダッシュボードの比較KPIが毎回 GA4/GSC 同期取得でブロックされていた不具合の解消。
+                // 任意日付（レポート過去閲覧等）は scope=null のまま従来どおり日付キーへフォールバック。
+                $tz    = wp_timezone();
+                $p1s   = ( new \DateTimeImmutable( 'first day of last month', $tz ) )->format( 'Y-m-d' );
+                $p2s   = ( new \DateTimeImmutable( 'first day of last month', $tz ) )->modify( '-1 month' )->format( 'Y-m-d' );
+                $scope = ( $start_date === $p2s ) ? 'prev2_month'
+                       : ( ( $start_date === $p1s ) ? 'prev_month' : null );
+                $kpi_data = $this->get_dashboard_kpi_by_dates( $start_date, $end_date, $user_id, $scope );
             } else {
                 $kpi_data = $this->get_dashboard_kpi($period, $user_id, (int)$cache_first);
             }
@@ -15404,6 +15446,24 @@ PROMPT;
         $filter_set = $this->maybe_set_country_filter( $user_id );
         try {
             return $this->get_daily_metric_trend( $user_id, $metric, $days );
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
+    /**
+     * 日次メトリクストレンドを「キャッシュのみ」読み出す（外部 fetch を一切しない）。
+     * ダッシュボードのトレンドチャート seed 用。cron が温めた
+     * gcrev_trend_daily_v2_{uid}_{metric}{filter_sfx} と同一キーを参照する。
+     * 冷えていれば null（→ フロントは従来どおり非同期 fetch にフォールバック＝退行なし）。
+     */
+    public function get_daily_metric_trend_cached( int $user_id, string $metric, int $days = 30 ): ?array {
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+        try {
+            $filter_sfx = ( isset( $this->ga4 ) && $this->ga4->has_country_filter() ) ? '_jp' : '';
+            if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
+            $cached = get_transient( "gcrev_trend_daily_v2_{$user_id}_{$metric}{$filter_sfx}" );
+            return is_array( $cached ) ? $cached : null;
         } finally {
             $this->restore_country_filter( $filter_set );
         }

@@ -728,6 +728,14 @@ get_header();
 </div><!-- .content-area -->
 
 <?php if ( $is_connected && ! $needs_reauth && $has_location ): ?>
+<?php
+// cron(prefetch_meo_dashboard_data) が温めた last30 transient（gcrev_meo_v2_{uid}_last30）を
+// 初回表示用に seed → REST 往復を消す。外部 GBP fetch は一切しない（cache-only）。
+// nocache=1 のときは seed しない（鮮度優先の挙動と整合）。冷キャッシュ時は何も出さず従来 fetch へ。
+if ( empty( $_GET['nocache'] ) && function_exists( 'mimamori_seed_cache' ) ) {
+    mimamori_seed_cache( 'meo', 'last30', 'meo_dash_v2_last30' );
+}
+?>
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -800,6 +808,11 @@ get_header();
         var cacheKey = 'meo_dash_v2_' + period;
         if (!NO_CACHE) {
             var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+            // cron 温め済み seed へのフォールバック（footer が gcrevCache へ流し込むが直接参照でも可）
+            if (!cached && window.__GCREV_SEED && window.__GCREV_SEED[cacheKey]) {
+                try { cached = JSON.parse(JSON.stringify(window.__GCREV_SEED[cacheKey])); }
+                catch (e) { cached = window.__GCREV_SEED[cacheKey]; }
+            }
             if (cached) {
                 currentData = cached;
                 updateApiErrorBanner(currentData);
@@ -1309,7 +1322,13 @@ get_header();
     }
 
     // ===== 初期読み込み =====
-    loadData(currentPeriod);
+    // footer.php の window.gcrevCache 定義・seed 流し込みより後に走らせるため
+    // DOMContentLoaded まで遅延する（即時実行だと gcrevCache 未定義で localStorage 命中しない）。
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { loadData(currentPeriod); });
+    } else {
+        loadData(currentPeriod);
+    }
 
 })();
 </script>

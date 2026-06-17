@@ -196,6 +196,13 @@ get_header();
 </div><!-- .content-area -->
 
 <?php if ( $is_connected && ! $needs_reauth && $has_location ): ?>
+<?php
+// cron(prefetch_meo_dashboard_data) が温めた gcrev_meo_v2_{uid}_prev-month を初回表示用に seed →
+// REST 往復を消す。冷キャッシュ時は何も出力せず従来の非同期 fetch にフォールバック（退行なし）。
+if ( function_exists( 'mimamori_seed_cache' ) ) {
+    mimamori_seed_cache( 'meo_search_terms', 'prev-month', 'meo_search_terms' );
+}
+?>
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -220,6 +227,11 @@ get_header();
         // キャッシュチェック（ローディングなしで即表示）
         var cacheKey = 'meo_search_terms';
         var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        // cron 温め済み seed へのフォールバック（初回・温め直後は localStorage より先にこちらが命中）
+        if (!cached && window.__GCREV_SEED && window.__GCREV_SEED[cacheKey]) {
+            try { cached = JSON.parse(JSON.stringify(window.__GCREV_SEED[cacheKey])); }
+            catch (e) { cached = window.__GCREV_SEED[cacheKey]; }
+        }
         if (cached) {
             renderKeywordsTable(cached);
             renderKeywordsChart(cached);
@@ -376,7 +388,12 @@ get_header();
     }
 
     // 初期読み込み
-    loadData();
+    // footer.php の gcrevCache 定義・seed 流し込みより後に走らせるため DOMContentLoaded まで遅延。
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadData);
+    } else {
+        loadData();
+    }
 
 })();
 </script>

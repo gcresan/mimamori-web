@@ -12776,7 +12776,7 @@ function mimamori_get_view_user_object(): \WP_User {
  * @param string $type   'source'|'device'|'age'|'region'|'pages'|'keywords'
  * @param string $period 各ページの初期 period（既定 'last30'）
  */
-function mimamori_seed_analysis_cache( string $type, string $period = 'last30' ): void {
+function mimamori_seed_cache( string $type, string $period, string $js_cache_key ): void {
     if ( ! is_user_logged_in() || ! class_exists( 'Gcrev_Insight_API' ) ) {
         return;
     }
@@ -12796,18 +12796,24 @@ function mimamori_seed_analysis_cache( string $type, string $period = 'last30' )
     if ( empty( $seed ) ) {
         return;
     }
-
-    $cache_key = 'an_' . $type . '_' . $period;
     ?>
     <script>
     (function () {
         try {
             window.__GCREV_SEED = window.__GCREV_SEED || {};
-            window.__GCREV_SEED[<?php echo wp_json_encode( $cache_key, JSON_UNESCAPED_UNICODE ); ?>] = <?php echo wp_json_encode( $seed, JSON_UNESCAPED_UNICODE ); ?>;
+            window.__GCREV_SEED[<?php echo wp_json_encode( $js_cache_key, JSON_UNESCAPED_UNICODE ); ?>] = <?php echo wp_json_encode( $seed, JSON_UNESCAPED_UNICODE ); ?>;
         } catch (e) {}
     })();
     </script>
     <?php
+}
+
+/**
+ * 分析ページ（source/device/age/region/pages/keywords/cv）用の seed。
+ * JS 側キャッシュキー 'an_<type>_<period>' に注入する従来仕様の薄いラッパー。
+ */
+function mimamori_seed_analysis_cache( string $type, string $period = 'last30' ): void {
+    mimamori_seed_cache( $type, $period, 'an_' . $type . '_' . $period );
 }
 
 /**

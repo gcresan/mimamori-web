@@ -18,6 +18,12 @@ set_query_var('gcrev_page_title', '集客分析');
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('集客分析', 'ホームページ'));
 
 get_header();
+
+// cron が温めた前月KPI（gcrev_dash_{uid}_previousMonth）を初回表示用に seed → 初回 REST 往復を消す。
+// 冷キャッシュ時は何も出力せず従来の非同期 fetch にフォールバック（退行なし）。
+if ( function_exists( 'mimamori_seed_cache' ) ) {
+    mimamori_seed_cache( 'dashboard', 'prev-month', 'an_dashboard_prev-month' );
+}
 ?>
 
 <!-- Chart.js -->
@@ -247,6 +253,25 @@ document.addEventListener('DOMContentLoaded', function() {
  * 分析データを更新
  */
 function updateAnalysisData(period) {
+    // cron 温め済み seed / localStorage キャッシュがあれば REST 往復せず即描画する。
+    var __cacheKey = 'an_dashboard_' + period;
+    var __cached = (window.gcrevCache && window.gcrevCache.get(__cacheKey)) || null;
+    if (!__cached && window.__GCREV_SEED && window.__GCREV_SEED[__cacheKey]) {
+        try { __cached = JSON.parse(JSON.stringify(window.__GCREV_SEED[__cacheKey])); }
+        catch (e) { __cached = window.__GCREV_SEED[__cacheKey]; }
+    }
+    if (__cached) {
+        updateAnalysisDisplay(__cached);
+        if (window.GCREV?.updatePeriodRange) {
+            GCREV.updatePeriodRange(
+                'analysis-period',
+                __cached.current_range_label || '',
+                __cached.compare_range_label || ''
+            );
+        }
+        return;
+    }
+
     showLoading();
 
     const apiUrl =
@@ -284,6 +309,9 @@ function updateAnalysisData(period) {
             }
 
             const data = result.data;
+
+            // 次回（2h以内・同期間）の即時表示用に localStorage へ保存
+            if (window.gcrevCache) window.gcrevCache.set('an_dashboard_' + period, data);
 
             // ===============================
             // ▼ 各分析表示更新

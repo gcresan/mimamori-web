@@ -18,6 +18,13 @@ set_query_var('gcrev_page_title', 'ゴール分析');
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('ゴール分析', 'ホームページ'));
 
 get_header();
+
+// 温まった CV分析キャッシュ（gcrev_cv_analysis_{uid}_last30）を初回表示用に seed → REST 往復を消す。
+// CV は cron で温めないため初回（日次）は cold だが、2回目以降・温め直後は即時描画になる。
+// 冷キャッシュ時は何も出力せず従来の非同期 fetch にフォールバック（退行なし）。
+if ( function_exists( 'mimamori_seed_analysis_cache' ) ) {
+    mimamori_seed_analysis_cache( 'cv', 'last30' );
+}
 ?>
 
 <!-- Chart.js -->
@@ -276,6 +283,26 @@ function checkDataNotice(data) {
 // ===== データ取得 =====
 async function loadCvData(period) {
     currentPeriod = period;
+
+    // cron/前回取得で温まった seed / localStorage キャッシュがあれば REST 往復せず即描画する。
+    var __cacheKey = 'an_cv_' + period;
+    var __cached = (window.gcrevCache && window.gcrevCache.get(__cacheKey)) || null;
+    if (!__cached && window.__GCREV_SEED && window.__GCREV_SEED[__cacheKey]) {
+        try { __cached = JSON.parse(JSON.stringify(window.__GCREV_SEED[__cacheKey])); }
+        catch (e) { __cached = window.__GCREV_SEED[__cacheKey]; }
+    }
+    if (__cached) {
+        currentCvData = __cached;
+        updatePeriodDisplay(currentCvData);
+        checkDataNotice(currentCvData);
+        renderCvSummary(currentCvData);
+        renderCvCompare(currentCvData);
+        renderSourceCv(currentCvData);
+        renderDeviceCv(currentCvData);
+        hideLoading();
+        return;
+    }
+
     showLoading();
 
     try {
@@ -295,6 +322,9 @@ async function loadCvData(period) {
         }
 
         currentCvData = result.data;
+
+        // 次回（2h以内・同期間）の即時表示用に localStorage へ保存
+        if (window.gcrevCache) window.gcrevCache.set('an_cv_' + period, currentCvData);
 
         // 期間表示更新
         updatePeriodDisplay(currentCvData);

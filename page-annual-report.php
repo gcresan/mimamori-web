@@ -23,6 +23,25 @@ set_query_var('gcrev_page_title', '年次レポート');
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('年次レポート', 'レポート'));
 
 get_header();
+
+// 過去年の確定スナップショット（gcrev_annual_snapshot_{year}）を初回表示用に seed し、初回 REST 往復を消す。
+// 当年は未確定（フィルタ付き transient で別管理）なので seed しない。
+// スナップショット未生成（冷）時は何も出力せず従来の非同期 fetch にフォールバック（退行なし）。
+if ( $current_year_param < (int) date('Y') ) {
+    $ar_seed = get_user_meta( $user_id, "gcrev_annual_snapshot_{$current_year_param}", true );
+    if ( ! empty( $ar_seed ) && is_array( $ar_seed ) ) {
+        ?>
+        <script>
+        (function () {
+            try {
+                window.__GCREV_SEED = window.__GCREV_SEED || {};
+                window.__GCREV_SEED[<?php echo wp_json_encode( 'annual_' . $current_year_param, JSON_UNESCAPED_UNICODE ); ?>] = <?php echo wp_json_encode( $ar_seed, JSON_UNESCAPED_UNICODE ); ?>;
+            } catch (e) {}
+        })();
+        </script>
+        <?php
+    }
+}
 ?>
 
 <style>
@@ -1112,6 +1131,21 @@ get_header();
     // データ取得 & 描画
     // =============================================
     function loadAnnualReport(year, refresh) {
+        // 過去年の確定スナップショットが seed 済みなら REST 往復せず即描画（再生成 refresh 時は除外）。
+        if (!refresh && window.__GCREV_SEED && window.__GCREV_SEED['annual_' + year]) {
+            var __ar = window.__GCREV_SEED['annual_' + year];
+            cachedData = __ar;
+            updatePeriodBar(__ar);
+            renderKPI(__ar);
+            renderTrendChart(__ar);
+            renderChannels(__ar);
+            renderPages(__ar);
+            renderKeywords(__ar);
+            renderAiSummary(__ar);
+            hideLoading();
+            return;
+        }
+
         showLoading();
         hideError();
 

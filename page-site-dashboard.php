@@ -18,6 +18,12 @@ set_query_var('gcrev_page_title', 'サイトダッシュボード');
 set_query_var('gcrev_breadcrumb', gcrev_breadcrumb('サイトダッシュボード', 'ホームページ'));
 
 get_header();
+
+// cron が温めた KPI（gcrev_dash_{uid}_last30）を初回表示用に seed し、初回の REST 往復を消す。
+// 冷キャッシュ時は何も出力されず従来の非同期 fetch にフォールバックする（退行なし）。
+if ( function_exists( 'mimamori_seed_cache' ) ) {
+    mimamori_seed_cache( 'dashboard', 'last30', 'sd_kpi_last30' );
+}
 ?>
 
 <style>
@@ -1071,6 +1077,11 @@ get_template_part('template-parts/period-selector');
 
         // キャッシュがあれば即座に描画（ローディングなし）
         var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        // cron 温め済み seed へのフォールバック（footer が gcrevCache へ流し込むが直接参照でも可）
+        if (!cached && window.__GCREV_SEED && window.__GCREV_SEED[cacheKey]) {
+            try { cached = JSON.parse(JSON.stringify(window.__GCREV_SEED[cacheKey])); }
+            catch (e) { cached = window.__GCREV_SEED[cacheKey]; }
+        }
         if (cached) {
             currentData = cached;
             updatePeriodDisplay(cached);

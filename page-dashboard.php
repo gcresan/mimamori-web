@@ -1650,6 +1650,13 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
     var _retryLabel   = null;
     var _retryIcon    = null;
 
+    // cron が温めた日次 sessions トレンドの seed（gcrev_trend_daily_v2_*）。
+    // 温まっていれば REST 往復なしで即描画する。無ければ null → 従来の fetch にフォールバック（退行なし）。
+    var _seedTrendSessions = <?php
+        $gcrev_dash_trend_sessions = $gcrev_api->get_daily_metric_trend_cached( $user_id, 'sessions', 30 );
+        echo $gcrev_dash_trend_sessions ? wp_json_encode( $gcrev_dash_trend_sessions, JSON_UNESCAPED_UNICODE ) : 'null';
+    ?>;
+
     // DOM参照
     var titleText = document.getElementById('kpiTrendTitleText');
     var titleIcon = document.getElementById('kpiTrendIcon');
@@ -1694,6 +1701,25 @@ $search_diag = mimamori_get_search_diagnostic_summary( $user_id );
         }, 15000);
 
         loading.classList.add('active');
+
+        // cron 温め済みデータが seed されていれば REST 往復せず即描画（初回表示の遅延を解消）。
+        // 冷えていれば下の fetch がそのまま走る＝従来挙動のフォールバック。
+        if (_seedTrendSessions && _seedTrendSessions.success && Array.isArray(_seedTrendSessions.values)) {
+            clearTimeout(timeoutId);
+            _trendCache.daily['sessions'] = _seedTrendSessions;
+            _activeMetric = 'sessions';
+            _activeLabel  = '訪問数';
+            _activeIcon   = '👥';
+            setActiveCard('sessions');
+            if (titleText) titleText.textContent = '訪問数 — 直近30日の推移';
+            if (titleIcon) titleIcon.textContent = '👥';
+            if (errorEl)   errorEl.style.display = 'none';
+            loading.classList.remove('active');
+            chartWrap.style.display = 'block';
+            chartWrap.style.opacity = '1';
+            renderTrendChart(_seedTrendSessions, '訪問数');
+            return;
+        }
 
         fetch(restBase + 'dashboard/trends?metric=sessions&view=daily', {
             headers: { 'X-WP-Nonce': nonce },
