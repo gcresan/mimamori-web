@@ -8561,6 +8561,9 @@ function gcrev_invalidate_user_cv_cache(int $user_id): void {
         'gcrev_effcv_v2_',
         'gcrev_effcv_v3_',
         'gcrev_effcv_v4_',
+        // CV分析スナップショット。手動CV編集で effective_cv が変わるため無効化が必須。
+        // これが無いと page-analysis-cv.php の seed が編集前の effective_cv を表示し続ける。
+        'gcrev_cv_analysis_',
     ];
     foreach ($prefixes as $prefix) {
         $wpdb->query($wpdb->prepare(

@@ -3138,6 +3138,14 @@ class Gcrev_Insight_API {
             }
             usleep(self::PREFETCH_SLEEP_US);
         }
+
+        // ----- ゴール分析(CV) -----
+        // CV は軸別×CV を最大15回 GA4 取得する重い処理。冷えていると初回表示が 8〜15 秒ブロックされるため、
+        // ページ既定の last30 のみ事前に温める（全期間温めると GA4 コストが嵩むため絞る）。
+        if ( $period === 'last30' ) {
+            $this->warm_cv_analysis( $user_id, $period );
+            usleep(self::PREFETCH_SLEEP_US);
+        }
     }
 
     /**
@@ -14335,10 +14343,43 @@ PROMPT;
 
         // 海外アクセス除外フィルタ
         $filter_set = $this->maybe_set_country_filter( $user_id );
-
-        error_log("[GCREV] REST get_cv_analysis: user_id={$user_id}, period={$period}");
-
         try {
+            $data = $this->build_cv_analysis_data( $user_id, $period );
+            return new WP_REST_Response( $data, 200 );
+        } catch ( \Exception $e ) {
+            error_log( "[GCREV] REST get_cv_analysis ERROR: " . $e->getMessage() );
+            return new WP_REST_Response( [ 'success' => false, 'message' => $e->getMessage() ], 500 );
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
+    /**
+     * CV分析を cron から事前に温める。first daily visit の 8〜15回 GA4 同期取得（8〜15秒ブロック）
+     * を解消する。既に温まっていれば重い再取得はしない。国フィルタは内部で set/restore する。
+     */
+    public function warm_cv_analysis( int $user_id, string $period ): void {
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+        try {
+            $filter_sfx = $this->ga4->has_country_filter() ? '_jp' : '';
+            if ( $this->path_filters_set ) { $filter_sfx .= '_ex'; }
+            if ( get_transient( "gcrev_cv_analysis_{$user_id}_{$period}{$filter_sfx}" ) !== false ) {
+                return; // 既に温まっている
+            }
+            $this->build_cv_analysis_data( $user_id, $period );
+        } catch ( \Throwable $e ) {
+            error_log( "[GCREV] warm_cv_analysis ERR user={$user_id} period={$period}: " . $e->getMessage() );
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
+    /**
+     * CV分析データを構築（cache優先 / cache-hit時は effective_cv のみ再計算）。
+     * 国フィルタは呼び出し側（rest_get_cv_analysis / warm_cv_analysis）で set/restore 済みであること。
+     */
+    private function build_cv_analysis_data( int $user_id, string $period ): array {
+            error_log("[GCREV] build_cv_analysis_data: user_id={$user_id}, period={$period}");
             $config  = $this->config->get_user_config($user_id);
             $ga4_id  = $config['ga4_id'];
 
@@ -14383,7 +14424,7 @@ PROMPT;
                 $cached['data']['source_realloc_prev'] = $this->build_cv_dimension_payload($cached['data']['source_cv_prev'] ?? [], $cp);
 
                 error_log("[GCREV] CV analysis cache HIT: {$cache_key}");
-                return new WP_REST_Response($cached, 200);
+                return $cached;
             }
 
             // ===== GA4 Data API クライアント =====
@@ -14520,17 +14561,7 @@ PROMPT;
             // キャッシュ保存（7日。読み出し時に effective_cv は動的再計算するので、GA4 由来の重い部分だけキャッシュ）
             set_transient($cache_key, $result, self::DASHBOARD_CACHE_TTL);
 
-            return new WP_REST_Response($result, 200);
-
-        } catch (\Exception $e) {
-            error_log("[GCREV] REST get_cv_analysis ERROR: " . $e->getMessage());
-            return new WP_REST_Response([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
-        } finally {
-            $this->restore_country_filter( $filter_set );
-        }
+            return $result;
     }
 
     /**

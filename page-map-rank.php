@@ -1097,6 +1097,44 @@ get_header();
 <!-- Toast -->
 <div class="rt-toast" id="meoToast"></div>
 
+<?php
+// ============================================================
+// 初回表示高速化: meo/history は DB-only（gcrev_rank_keywords + gcrev_meo_results
+// + user_meta、外部 API なし）なので、ページ描画時に同じハンドラを同期呼び出しして
+// 結果を window.__GCREV_SEED['map_rank'] に注入する。footer.php の flush が gcrevCache へ
+// 流し込むため、fetchMeoData の gcrevCache.get('map_rank') が初回から命中し REST 往復が消える。
+// 失敗・空データ時は何も出さず、従来の fetch（SWR）にそのままフォールバック（退行なし）。
+// nocache=1 のときは seed しない（鮮度優先）。
+if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
+    try {
+        $mr_api  = new Gcrev_Insight_API( false );
+        $mr_req  = new WP_REST_Request( 'GET', '/gcrev/v1/meo/history' );
+        $mr_resp = $mr_api->rest_get_meo_history( $mr_req );
+        $mr_body = $mr_resp->get_data();
+        if (
+            is_array( $mr_body )
+            && ! empty( $mr_body['success'] )
+            && ! empty( $mr_body['data'] )
+            && is_array( $mr_body['data'] )
+            && ! empty( $mr_body['data']['keywords'] )
+        ) {
+            ?>
+            <script>
+            (function () {
+                try {
+                    window.__GCREV_SEED = window.__GCREV_SEED || {};
+                    window.__GCREV_SEED['map_rank'] = <?php echo wp_json_encode( $mr_body['data'], JSON_UNESCAPED_UNICODE ); ?>;
+                } catch (e) {}
+            })();
+            </script>
+            <?php
+        }
+    } catch ( \Throwable $mr_e ) {
+        // 何も出力しない → JS は従来どおり meo/history を fetch する
+    }
+}
+?>
+
 <?php get_footer(); ?>
 
 <script>
@@ -1781,6 +1819,16 @@ get_header();
         // 2) その後、必ずサーバへ最新を取りに行き、内容に差があれば更新する
         var cacheKey = 'map_rank';
         var cached = window.gcrevCache && window.gcrevCache.get(cacheKey);
+        // SSR seed フォールバック（footer の流し込み順に依存せず直接参照でも命中させる）。
+        // 初回のみ: 一度消費したら以後の reload は通常どおり gcrevCache / REST を使う。
+        if (!cached && window.__GCREV_SEED && window.__GCREV_SEED[cacheKey]) {
+            try { cached = JSON.parse(JSON.stringify(window.__GCREV_SEED[cacheKey])); }
+            catch (e) { cached = window.__GCREV_SEED[cacheKey]; }
+        }
+        // ワンショット: gcrevCache 命中・seed 直接参照のどちらで消費しても初回で破棄（mutation 後の stale 再表示防止）
+        if (window.__GCREV_SEED && window.__GCREV_SEED[cacheKey] !== undefined) {
+            try { delete window.__GCREV_SEED[cacheKey]; } catch (e) {}
+        }
         var hadCache = false;
         if (cached) {
             hadCache = true;

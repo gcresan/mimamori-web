@@ -40,6 +40,59 @@ set_query_var( 'gcrev_page_title', 'キーワード調査' );
 set_query_var( 'gcrev_page_subtitle', 'サイト情報をもとに、SEOで狙うべきキーワード候補を調査・提案します。' );
 set_query_var( 'gcrev_breadcrumb', gcrev_breadcrumb( 'キーワード調査', 'SEO' ) );
 
+// ============================================================
+// 初回表示の REST 往復を消すための SSR シード（DB/post_meta 読み取りのみ）
+// ハンドラを WP_REST_Request 経由でそのまま呼び、get_data() を取り込む。
+// ハンドラは内部で get_current_user_id() を使うため、非同期フェッチと同一のデータになる。
+// 失敗・空・?nocache=1 時は null を入れ、JS は従来どおりライブ fetch する。
+// ============================================================
+$kwr_seed_latest  = null; // gcrev/v1/seo/keyword-research（最新調査結果。トップレベル配列）
+$kwr_seed_tracked = null; // gcrev/v1/rank-tracker/my-keywords（{success,data:{...}}）
+
+if ( empty( $_GET['nocache'] ) ) {
+    try {
+        $kwr_seed_api = new Gcrev_Insight_API( false );
+
+        // (a) 計測キーワード（DB）
+        try {
+            $kwr_req_tracked  = new WP_REST_Request( 'GET', '/gcrev/v1/rank-tracker/my-keywords' );
+            $kwr_resp_tracked = $kwr_seed_api->rest_get_my_keywords( $kwr_req_tracked );
+            $kwr_data_tracked = $kwr_resp_tracked->get_data();
+            if ( is_array( $kwr_data_tracked )
+                && ! empty( $kwr_data_tracked['success'] )
+                && isset( $kwr_data_tracked['data'] ) && is_array( $kwr_data_tracked['data'] ) ) {
+                $kwr_seed_tracked = $kwr_data_tracked['data'];
+            }
+        } catch ( \Throwable $e ) {
+            $kwr_seed_tracked = null;
+        }
+
+        // (b) 最新調査結果（CPT + post_meta）
+        try {
+            $kwr_req_latest  = new WP_REST_Request( 'GET', '/gcrev/v1/seo/keyword-research' );
+            $kwr_resp_latest = $kwr_seed_api->rest_seo_keyword_research_latest( $kwr_req_latest );
+            $kwr_data_latest = $kwr_resp_latest->get_data();
+            // 実データがある時だけシード（success かつ groups/summary 等が存在）
+            if ( is_array( $kwr_data_latest ) && ! empty( $kwr_data_latest['success'] ) ) {
+                $kwr_has_groups = isset( $kwr_data_latest['groups'] ) && is_array( $kwr_data_latest['groups'] )
+                    && ! empty( array_filter( $kwr_data_latest['groups'], function ( $g ) {
+                        return is_array( $g ) && ! empty( $g );
+                    } ) );
+                $kwr_has_summary = isset( $kwr_data_latest['summary'] ) && is_array( $kwr_data_latest['summary'] )
+                    && ! empty( array_filter( $kwr_data_latest['summary'] ) );
+                if ( $kwr_has_groups || $kwr_has_summary ) {
+                    $kwr_seed_latest = $kwr_data_latest;
+                }
+            }
+        } catch ( \Throwable $e ) {
+            $kwr_seed_latest = null;
+        }
+    } catch ( \Throwable $e ) {
+        $kwr_seed_latest  = null;
+        $kwr_seed_tracked = null;
+    }
+}
+
 get_header();
 ?>
 <style>
@@ -646,6 +699,9 @@ get_header();
     var rankTrackerUrl = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/rank-tracker/my-keywords' ) ) ); ?>;
     var writingUrl = <?php echo wp_json_encode( esc_url( home_url( '/writing/' ) ) ); ?>;
     var nonce = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
+    // SSR シード（初回表示の REST 往復を消す）。データが無ければ null → 従来どおりライブ fetch。
+    var kwrSeedLatest = <?php echo $kwr_seed_latest !== null ? wp_json_encode( $kwr_seed_latest, JSON_UNESCAPED_UNICODE ) : 'null'; ?>;
+    var kwrSeedTracked = <?php echo $kwr_seed_tracked !== null ? wp_json_encode( $kwr_seed_tracked, JSON_UNESCAPED_UNICODE ) : 'null'; ?>;
     var btn = document.getElementById('kwrRunBtn');
     if (!btn) return;
 
@@ -654,7 +710,21 @@ get_header();
     var trackCanAdd     = true; // 上限に達していないか
     var trackLoaded     = false;
 
+    var _trackedSeedUsed = false;
+
     function loadTrackedKeywords() {
+        // 初回のみ SSR シードを使い、REST 往復をスキップ（成功ハンドラと同じ代入を行う）。
+        // 以降の再取得（addToTracker 後など）は必ずライブ fetch する。
+        if (!_trackedSeedUsed && kwrSeedTracked) {
+            _trackedSeedUsed = true;
+            trackedKeywords = (kwrSeedTracked.keywords || []).map(function(k) {
+                return k.keyword.toLowerCase();
+            });
+            trackCanAdd = kwrSeedTracked.can_add;
+            trackLoaded = true;
+            return Promise.resolve();
+        }
+        _trackedSeedUsed = true;
         return fetch(rankTrackerUrl, {
             credentials: 'same-origin',
             headers: { 'X-WP-Nonce': nonce }
@@ -915,10 +985,14 @@ get_header();
     /* ===== ページ読み込み時に前回結果を取得（計測キーワード取得完了後に描画） ===== */
     Promise.all([
         trackedReady,
-        fetch(restUrl, {
-            method: 'GET',
-            headers: { 'X-WP-Nonce': nonce }
-        }).then(function(r) { return r.json(); })
+        // 初回は SSR シードがあれば fetch を省略（renderAll をシードから走らせる）。
+        // シードが無ければ従来どおりライブ fetch（コールドフォールバック）。
+        kwrSeedLatest
+            ? Promise.resolve(kwrSeedLatest)
+            : fetch(restUrl, {
+                method: 'GET',
+                headers: { 'X-WP-Nonce': nonce }
+            }).then(function(r) { return r.json(); })
     ])
     .then(function(results) {
         var data = results[1];

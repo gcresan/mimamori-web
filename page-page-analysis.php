@@ -839,9 +839,61 @@ get_header();
     <img src="" alt="プレビュー" id="paLightboxImg">
 </div>
 
+<?php
+// ===== 初回ペイントの REST 往復を消すための SSR シード =====
+// gcrev/v1/page-analysis/pages と gcrev/v1/clarity/settings の DB/post-meta だけを
+// レンダリング中に同じハンドラーで読み、結果を JS に inline する。
+// - ハンドラーは get_current_user_id() でユーザーを解決するため、view-as は渡さない
+//   （非同期 fetch が今返す値とバイト単位で一致させる）。
+// - 失敗・空データ時は何も出さず、JS は元の fetch をそのまま実行する（cold path 不変）。
+// - ?nocache=1 の時はシードしない。
+$pa_seed_pages       = null; // array|null
+$pa_seed_clarity_pid = '';   // string
+if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
+    try {
+        $pa_seed_api = new Gcrev_Insight_API( false );
+
+        // (a) ページ一覧
+        $pa_seed_req  = new \WP_REST_Request( 'GET', '/gcrev/v1/page-analysis/pages' );
+        $pa_seed_resp = $pa_seed_api->rest_get_page_analysis_pages( $pa_seed_req );
+        $pa_seed_data = $pa_seed_resp->get_data();
+        if ( is_array( $pa_seed_data )
+             && ! empty( $pa_seed_data['success'] )
+             && ! empty( $pa_seed_data['data']['pages'] )
+             && is_array( $pa_seed_data['data']['pages'] ) ) {
+            $pa_seed_pages = $pa_seed_data['data']['pages'];
+        }
+
+        // (b) Clarity 設定（project_id のみ JS が使用）
+        if ( $pa_seed_pages !== null ) {
+            $pa_clr_req  = new \WP_REST_Request( 'GET', '/gcrev/v1/clarity/settings' );
+            $pa_clr_resp = $pa_seed_api->rest_get_clarity_settings( $pa_clr_req );
+            $pa_clr_data = $pa_clr_resp->get_data();
+            if ( is_array( $pa_clr_data )
+                 && ! empty( $pa_clr_data['success'] )
+                 && ! empty( $pa_clr_data['data']['clarity_project_id'] ) ) {
+                $pa_seed_clarity_pid = (string) $pa_clr_data['data']['clarity_project_id'];
+            }
+        }
+    } catch ( \Throwable $e ) {
+        // 失敗時はシードしない（JS が元の fetch を実行）
+        $pa_seed_pages       = null;
+        $pa_seed_clarity_pid = '';
+    }
+}
+?>
 <script>
 (function() {
     'use strict';
+
+<?php if ( $pa_seed_pages !== null ) : ?>
+    var PA_SEED = { pages: <?php echo wp_json_encode( $pa_seed_pages, JSON_UNESCAPED_UNICODE ); ?> };
+    var PA_SEED_CLARITY_PID = <?php echo wp_json_encode( $pa_seed_clarity_pid, JSON_UNESCAPED_UNICODE ); ?>;
+<?php else : ?>
+    var PA_SEED = null;
+    var PA_SEED_CLARITY_PID = '';
+<?php endif; ?>
+    var _paSeedUsed = false;
 
     var API_BASE = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/page-analysis/pages' ) ) ); ?>;
     var NONCE    = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
@@ -935,6 +987,14 @@ get_header();
 
     // --- 一覧読み込み ---
     function loadPages() {
+        // 初回のみ: SSR シードがあれば REST 往復を省略する（ワンショット）。
+        // 後続の再読み込み（追加/編集/削除/アップロード後）は必ずライブ REST を叩く。
+        if (!_paSeedUsed && PA_SEED && PA_SEED.pages) {
+            _paSeedUsed = true;
+            renderList(PA_SEED.pages);
+            initHeaderClarityLink();
+            return;
+        }
         showLoading();
         apiFetch(API_BASE).then(function(res) {
             hideLoading();
@@ -948,9 +1008,17 @@ get_header();
         });
     }
 
+    var _paClarityLinkSeeded = false;
     function initHeaderClarityLink() {
         var link = document.getElementById('paHeaderClarityLink');
         if (!link) return;
+        // 初回ペイント: SSR シードの project ID があれば fetch を省略する（ワンショット）。
+        if (!_paClarityLinkSeeded && PA_SEED_CLARITY_PID) {
+            _paClarityLinkSeeded = true;
+            link.href = 'https://clarity.microsoft.com/projects/view/' + encodeURIComponent(PA_SEED_CLARITY_PID) + '/dashboard';
+            link.style.display = '';
+            return;
+        }
         // クライアント設定のClarity project ID を REST APIから取得
         fetch('<?php echo esc_url_raw( rest_url( 'gcrev/v1/clarity/settings' ) ); ?>', {
             credentials: 'same-origin',
