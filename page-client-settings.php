@@ -60,6 +60,17 @@ $_cs_is_review_survey_only = function_exists( 'mimamori_is_review_survey_only_us
     ? mimamori_is_review_survey_only_user( $user_id )
     : false;
 
+// 見える化プランは AIレポート/AI相談 用の項目（事業情報・ペルソナ・参考URL）を非表示にし、
+// データ分析に効く項目（対象サイト・商圏・Clarity連携）のみ残す。
+$_cs_is_mieruka = function_exists( 'mimamori_is_mieruka_user' )
+    ? mimamori_is_mieruka_user( $user_id )
+    : false;
+
+// 見える化プランは AI 項目を出さないため、サブタイトルも分析向けの文言に差し替える。
+if ( $_cs_is_mieruka ) {
+    set_query_var( 'gcrev_page_subtitle', 'データ分析で使用する、対象サイトや商圏などの基本情報を設定します。' );
+}
+
 get_header();
 ?>
 
@@ -712,6 +723,10 @@ get_header();
         </div>
         <?php endif; // ! $_cs_is_review_survey_only — 商圏・対応エリアセクション ?>
 
+        <!-- ↓ 見える化プランでは非表示（AIレポート/AI相談用の情報）。
+             保存JSがこれらの入力値を参照するため DOM からは消さず、display:none で隠す。
+             これにより保存時は既存値がそのまま往復し、データを失わない。 -->
+        <div<?php echo $_cs_is_mieruka ? ' style="display:none;"' : ''; ?>>
         <!-- クライアント情報 -->
         <div class="cs-section">
             <h2 class="cs-section-title"><span class="icon">🏢</span> クライアント情報（任意）</h2>
@@ -1034,6 +1049,7 @@ get_header();
             <button type="button" class="btn-add-ref-url" id="btnAddRefUrl">＋ URLを追加</button>
         </div>
         <?php endif; // ! $_cs_is_review_survey_only — 参考URL ?>
+        </div><!-- /見える化プラン非表示ラッパ（AIレポート/AI相談用セクション群） -->
 
         <!-- ===== Clarity連携設定（口コミアンケート特化プランは非表示） ===== -->
         <?php if ( ! $_cs_is_review_survey_only ) : ?>
