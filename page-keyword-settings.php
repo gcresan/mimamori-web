@@ -8,6 +8,11 @@ if ( ! is_user_logged_in() ) {
     exit;
 }
 
+// 見える化プランは順位計測(SEO)非対応 → サイトダッシュボードへ転送
+if ( function_exists( 'mimamori_guard_against_mieruka' ) ) {
+    mimamori_guard_against_mieruka();
+}
+
 $current_user = mimamori_get_view_user_object();
 $user_id      = mimamori_get_view_user_id();
 

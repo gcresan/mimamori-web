@@ -566,6 +566,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </a>
                      </li>
                      <?php if ( ! $_mb_is_review_survey_only ) : ?>
+                     <?php if ( ! $_mb_is_mieruka ) : // 見える化プランは順位計測(SEO)・月次レポートが対象外 ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/keyword-settings/') ); ?>" class="nav-link <?php echo is_page('keyword-settings') ? 'active' : ''; ?>">
                         <span>計測キーワード設定</span>
@@ -576,6 +577,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>月次レポート設定・生成</span>
                         </a>
                      </li>
+                     <?php endif; // ! $_mb_is_mieruka ?>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/analysis/cv-review/') ); ?>" class="nav-link <?php echo is_page('cv-review') ? 'active' : ''; ?>">
                         <span>ゴール関連設定</span>
@@ -824,12 +826,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                      </a>
                   </li>
                   <?php if ( ! $_mb_is_review_survey_only ) : ?>
+                  <?php if ( ! $_mb_is_mieruka ) : // 見える化プランは月次レポートが対象外 ?>
                   <li>
                      <a href="<?php echo esc_url( home_url( '/report/report-settings/' ) ); ?>" class="settings-dropdown-item">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5h8.5L16 6v11.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V2.5Z"/><path d="M12.5 2.5V6H16"/><path d="M7.5 11h5M7.5 14h3"/></svg>
                         <span>月次レポート設定・生成</span>
                      </a>
                   </li>
+                  <?php endif; // ! $_mb_is_mieruka ?>
                   <li>
                      <a href="<?php echo esc_url( home_url( '/analysis/cv-review/' ) ); ?>" class="settings-dropdown-item">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>
