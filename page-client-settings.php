@@ -590,7 +590,7 @@ get_header();
             <div class="form-group">
                 <label for="cs-site-url">解析対象のサイトURL <span class="required">*</span></label>
                 <input type="url" id="cs-site-url" placeholder="https://example.com" value="<?php echo esc_attr( $initial_site_url ); ?>">
-                <small class="form-text">AIレポートやAI相談で参照されるWebサイトのURLです</small>
+                <small class="form-text"><?php echo $_cs_is_mieruka ? 'データ分析の対象となるWebサイトのURLです' : 'AIレポートやAI相談で参照されるWebサイトのURLです'; ?></small>
             </div>
             <div class="form-group" style="margin-top:16px;">
                 <label for="cs-maps-domain">Googleマップ用ドメイン <span style="font-size:11px;color:#94a3b8;font-weight:400;">（任意）</span></label>
@@ -613,7 +613,7 @@ get_header();
                            <?php checked( $exclude_foreign, '1' ); ?>>
                     <span>海外アクセスを除外して集計する</span>
                 </label>
-                <small class="form-text" style="display: block; margin-top: 4px; margin-left: 26px;">ONにすると、日本以外の国からのアクセスを除外して集計・分析します。海外からの大量アクセスが含まれる場合、分析結果やAI提案に偏りが出ることがあります。</small>
+                <small class="form-text" style="display: block; margin-top: 4px; margin-left: 26px;">ONにすると、日本以外の国からのアクセスを除外して集計・分析します。海外からの大量アクセスが含まれる場合、<?php echo $_cs_is_mieruka ? '分析結果' : '分析結果やAI提案'; ?>に偏りが出ることがあります。</small>
             </div>
         </div>
         <?php endif; // ! $_cs_is_review_survey_only — 対象サイトセクション ?>
