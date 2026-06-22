@@ -23,6 +23,15 @@ if ( $u ) {
     $account_email = (string) $u->user_email;
 }
 
+// みまもりアラート／週次便の受信設定（opt-out 方式 — 未設定=受信ON）
+$alert_on  = get_user_meta( $user_id, 'mimamori_alert_optout', true )  !== '1';
+$digest_on = get_user_meta( $user_id, 'mimamori_digest_optout', true ) !== '1';
+
+// 見える化プランは月次レポート非対応 → レポート完成通知カードは非表示
+$_notif_is_mieruka = function_exists( 'mimamori_is_mieruka_user' )
+    ? mimamori_is_mieruka_user( $user_id )
+    : false;
+
 get_header();
 ?>
 
@@ -203,6 +212,39 @@ get_header();
 
 <div class="notif-container">
 
+    <!-- みまもりメール通知（全プラン共通） -->
+    <div class="notif-card">
+        <div class="notif-card-header">
+            <h2>みまもりメール通知</h2>
+        </div>
+        <p class="notif-desc">
+            みまもりウェブからの自動メール通知の受信設定です。変更は自動で保存されます。
+        </p>
+
+        <div class="notif-row">
+            <div>
+                <div class="notif-row-label">みまもりアラート</div>
+                <div class="notif-row-note">サイトの数値に異常を検知したときに、お知らせメールが届きます。</div>
+            </div>
+            <label class="notif-switch">
+                <input type="checkbox" id="notifyAlertToggle" <?php checked( $alert_on ); ?> />
+                <span class="notif-slider"></span>
+            </label>
+        </div>
+
+        <div class="notif-row">
+            <div>
+                <div class="notif-row-label">みまもり週次便</div>
+                <div class="notif-row-note">毎週、サイトの状態をまとめたサマリーメールが届きます。</div>
+            </div>
+            <label class="notif-switch">
+                <input type="checkbox" id="notifyDigestToggle" <?php checked( $digest_on ); ?> />
+                <span class="notif-slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <?php if ( ! $_notif_is_mieruka ) : // 見える化プランは月次レポート非対応 ?>
     <div class="notif-card">
         <div class="notif-card-header">
             <h2>月次レポート通知</h2>
@@ -236,6 +278,7 @@ get_header();
             <button type="button" class="notif-btn" id="notifSave" data-mw-save="1">設定を保存</button>
         </div>
     </div>
+    <?php endif; // ! $_notif_is_mieruka ?>
 
 </div><!-- .notif-container -->
 
@@ -256,7 +299,7 @@ get_header();
 
     var saveBtn = document.getElementById('notifSave');
 
-    saveBtn.addEventListener('click', function() {
+    if (saveBtn) saveBtn.addEventListener('click', function() {
         var enabled = document.getElementById('notifEnabled').checked;
         var email   = document.getElementById('notifEmail').value.trim();
         var errEl   = document.getElementById('errEmail');
@@ -295,6 +338,30 @@ get_header();
                 showToast('通信エラーが発生しました', 'error');
             });
     });
+
+    // --- みまもりアラート／週次便（変更時に自動保存） ---
+    var prefsUrl    = <?php echo wp_json_encode( esc_url_raw( rest_url( 'mimamori/v1/notification-prefs' ) ), JSON_UNESCAPED_UNICODE ); ?>;
+    var prefsNonce  = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
+    var alertToggle  = document.getElementById('notifyAlertToggle');
+    var digestToggle = document.getElementById('notifyDigestToggle');
+
+    function savePrefs() {
+        fetch(prefsUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': prefsNonce },
+            body: JSON.stringify({
+                alert_enabled:  alertToggle.checked,
+                digest_enabled: digestToggle.checked
+            })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function() { showToast('設定を保存しました'); })
+        .catch(function() { showToast('通信エラーが発生しました', 'error'); });
+    }
+
+    if (alertToggle)  alertToggle.addEventListener('change', savePrefs);
+    if (digestToggle) digestToggle.addEventListener('change', savePrefs);
 })();
 </script>
 
