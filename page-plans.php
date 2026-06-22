@@ -508,7 +508,7 @@ get_header();
         [
             'id'           => 'basic',
             'subtitle'     => 'AIがデータを分析し、次の一手まで提案',
-            'name'         => '改善提案プラン',
+            'name'         => 'AI改善提案プラン',
             'price'        => '11,000',
             'badge'        => false,
             'coming_soon'  => false,
@@ -529,7 +529,7 @@ get_header();
             'price'        => '22,000',
             'badge'        => '★ おすすめ',
             'coming_soon'  => false,
-            'cumulative'   => '改善提案プランに加え',
+            'cumulative'   => 'AI改善提案プランに加え',
             'features'     => [
                 [ 'text' => '四半期ごとの深掘り分析レポート（プロが3ヶ月に1回、データを直接分析・解説）', 'on' => true, 'new' => true ],
                 [ 'text' => 'MEOダッシュボード',          'on' => true ],

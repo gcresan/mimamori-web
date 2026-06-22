@@ -14,7 +14,7 @@ $user_id = mimamori_get_view_user_id();
 
 // プランゲート: 見える化プランはAI改善アクション提示を利用不可（2026-06 改定）
 if ( function_exists( 'mimamori_can' ) && ! mimamori_can( 'improvement_actions', $user_id ) ) {
-    mimamori_render_upgrade_page( 'AI改善アクション提示', '改善提案プラン' );
+    mimamori_render_upgrade_page( 'AI改善アクション提示', 'AI改善提案プラン' );
 }
 
 set_query_var( 'gcrev_page_title', '改善施策提案' );

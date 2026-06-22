@@ -565,10 +565,10 @@ class Gcrev_Notification_Settings_Page {
                             <th scope="row"><label for="mimamori_test_plan">プラン別の見え方</label></th>
                             <td>
                                 <select name="mimamori_test_plan" id="mimamori_test_plan">
-                                    <option value="analysis">改善提案プラン以上（分析・AIチャット導線あり）</option>
+                                    <option value="analysis">AI改善提案プラン以上（分析・AIチャット導線あり）</option>
                                     <option value="facts">見える化プラン（事実のみ・アップグレード案内）</option>
                                 </select>
-                                <p class="description">みまもりアラート・週次便で本文が変わります。AI改善提案は常に改善提案プラン向けの内容です。</p>
+                                <p class="description">みまもりアラート・週次便で本文が変わります。AI改善提案は常にAI改善提案プラン向けの内容です。</p>
                             </td>
                         </tr>
                         <tr>

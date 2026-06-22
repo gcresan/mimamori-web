@@ -14,7 +14,7 @@ $user_id = mimamori_get_view_user_id();
 
 // プランゲート: 見える化プランは月次レポート閲覧不可（2026-06 改定）
 if ( function_exists( 'mimamori_can_view_reports' ) && ! mimamori_can_view_reports( $user_id ) ) {
-    mimamori_render_upgrade_page( '月次レポート', '改善提案プラン' );
+    mimamori_render_upgrade_page( '月次レポート', 'AI改善提案プラン' );
 }
 
 // サービスティア判定

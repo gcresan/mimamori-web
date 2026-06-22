@@ -123,6 +123,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </div>
             <?php endif; ?>
             <?php endif; ?>
+            <?php
+            // 現在のプラン名（ドメインの下に表示）。本部閲覧中は表示中店舗の tier に従う。
+            $_sb_tier      = function_exists( 'gcrev_get_service_tier' ) ? gcrev_get_service_tier( $u->ID ) : '';
+            $_sb_tier_defs = function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : array();
+            $_sb_plan_name = isset( $_sb_tier_defs[ $_sb_tier ]['name'] ) ? $_sb_tier_defs[ $_sb_tier ]['name'] : '';
+            if ( $_sb_plan_name !== '' ) :
+            ?>
+            <div class="sidebar-user-planname" style="margin-top:6px;">
+               <span style="display:inline-block;padding:2px 10px;font-size:11px;font-weight:600;color:#568184;background:rgba(86,129,132,0.08);border:1px solid rgba(86,129,132,0.2);border-radius:4px;letter-spacing:0.03em;white-space:nowrap;"><?php echo esc_html( $_sb_plan_name ); ?></span>
+            </div>
+            <?php endif; ?>
             <?php if ( function_exists( 'gcrev_is_trial_active' ) && gcrev_is_trial_active( $u->ID ) ) : ?>
             <div style="margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;">
                <span style="display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: 600; color: #d97706; background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.2); border-radius: 4px; letter-spacing: 0.05em; white-space: nowrap;">お試し中</span>

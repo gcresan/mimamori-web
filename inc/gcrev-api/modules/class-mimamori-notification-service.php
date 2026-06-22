@@ -6,10 +6,10 @@
 //  A. みまもりアラート（日次）  — 異常検知時のみメール通知（全プラン）
 //     ・アクセス急減 / 急増 / CV停滞 / サイトダウン / SSL期限
 //     ・見える化プラン  : 事実のみ + アップグレード案内
-//     ・改善提案プラン以上: AIによる原因分析と推奨アクション付き
+//     ・AI改善提案プラン以上: AIによる原因分析と推奨アクション付き
 //  B. みまもり週次便（週次）    — 異常がなくても毎週必ず届く簡易サマリー
 //  C. AI改善提案通知            — 優先度「高」の改善アクションをプッシュ通知
-//                                 （改善提案プラン以上・月2回上限）
+//                                 （AI改善提案プラン以上・月2回上限）
 //
 // 閾値・上限は option 'mimamori_alert_settings' で変更可能（管理画面「通知設定」）。
 // =====================================================================
@@ -87,7 +87,7 @@ class Mimamori_Notification_Service {
     }
 
     /**
-     * 分析付き通知の対象か（改善提案プラン以上か）。
+     * 分析付き通知の対象か（AI改善提案プラン以上か）。
      */
     private function has_analysis_plan( int $user_id ): bool {
         return function_exists( 'mimamori_can' ) && mimamori_can( 'improvement_actions', $user_id );
@@ -368,7 +368,7 @@ class Mimamori_Notification_Service {
         if ( ! $user ) { return; }
 
         $with_analysis = $this->has_analysis_plan( $uid );
-        // 改善提案プラン以上のみ AI 分析（Gemini 呼び出し）を行う
+        // AI改善提案プラン以上のみ AI 分析（Gemini 呼び出し）を行う
         $analysis = $with_analysis ? $this->generate_analysis( $uid, $alert ) : '';
         $email    = $this->build_alert_email( $uid, ( $user->display_name ?: $user->user_login ), $alert, $with_analysis, $analysis );
 
@@ -382,7 +382,7 @@ class Mimamori_Notification_Service {
      * @param int    $link_uid      チャット起動リンクのトークン所有者（クリック時に文脈解決する本人）
      * @param string $name          宛名
      * @param array  $alert         ['type','subject','facts']
-     * @param bool   $with_analysis 分析付き（改善提案プラン以上）か
+     * @param bool   $with_analysis 分析付き（AI改善提案プラン以上）か
      * @param string $analysis      AI分析テキスト（空なら分析ブロックを省略）
      * @return array{subject:string, body:string}
      */
@@ -399,7 +399,7 @@ class Mimamori_Notification_Service {
         $lines[] = '';
 
         if ( $with_analysis ) {
-            // 改善提案プラン以上: AIによる原因分析と推奨アクションを付ける
+            // AI改善提案プラン以上: AIによる原因分析と推奨アクションを付ける
             if ( $analysis !== '' ) {
                 $lines[] = '■ AIによる分析と推奨アクション';
                 $lines[] = $analysis;
@@ -417,7 +417,7 @@ class Mimamori_Notification_Service {
             $lines[] = '現在の状況はダッシュボードでご確認いただけます。';
             $lines[] = home_url( '/dashboard/' );
             $lines[] = '';
-            $lines[] = '原因の分析と改善アクションのご提案は、改善提案プラン以上でご利用いただけます。';
+            $lines[] = '原因の分析と改善アクションのご提案は、AI改善提案プラン以上でご利用いただけます。';
             $lines[] = 'プランのご案内: ' . home_url( '/plans/' );
         }
 
@@ -536,7 +536,7 @@ class Mimamori_Notification_Service {
         } else {
             // 見える化プラン: チャットは対象外のためアップグレード導線を表示
             $lines[] = '';
-            $lines[] = '数字の見方のご相談やAIチャットは、改善提案プラン以上でご利用いただけます。';
+            $lines[] = '数字の見方のご相談やAIチャットは、AI改善提案プラン以上でご利用いただけます。';
             $lines[] = 'プランのご案内: ' . home_url( '/plans/' );
         }
 
@@ -544,7 +544,7 @@ class Mimamori_Notification_Service {
     }
 
     // =================================================================
-    // C. AI改善提案通知（改善提案プラン以上・月2回上限）
+    // C. AI改善提案通知（AI改善提案プラン以上・月2回上限）
     // =================================================================
 
     public function run_improvement_suggestions(): void {
@@ -650,7 +650,7 @@ class Mimamori_Notification_Service {
         $lines[] = '詳しい内容と他の提案は「改善施策提案」ページでご確認いただけます。';
         $lines[] = home_url( '/execution-dashboard/' );
         $lines[] = '';
-        // ワンタップでチャットが文脈付きで開く導線（C は改善提案プラン以上のみが対象）
+        // ワンタップでチャットが文脈付きで開く導線（C はAI改善提案プラン以上のみが対象）
         $ctx_summary = trim( (string) ( $action['title'] ?? '' ) );
         if ( ! empty( $action['reason'] ) ) {
             $ctx_summary .= "\n根拠: " . trim( (string) $action['reason'] );

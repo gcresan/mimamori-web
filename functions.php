@@ -8813,7 +8813,7 @@ function gcrev_get_service_tier_definitions(): array {
             'description' => 'AIが24時間見守り、何かあればお知らせする基本プラン',
         ],
         'basic' => [
-            'name'        => '改善提案プラン',
+            'name'        => 'AI改善提案プラン',
             'monthly'     => 11000,
             'description' => 'AIがデータを分析し、次の一手まで提案',
         ],
@@ -8932,15 +8932,15 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         // コア機能（見える化プラン = 全プラン共通）
         'dashboard'            => 'mieruka',
         'analysis_basic'       => 'mieruka',
-        // AIチャット相談（改善提案プラン以上。見える化プランは不可）
+        // AIチャット相談（AI改善提案プラン以上。見える化プランは不可）
         'ai_chat'              => 'basic',
         'ai_ask_button'        => 'basic',
-        // 月次レポート閲覧（改善提案プラン以上。見える化プランは不可 — 2026-06 改定）
+        // 月次レポート閲覧（AI改善提案プラン以上。見える化プランは不可 — 2026-06 改定）
         'report_summary'       => 'basic',
         'report_kpi'           => 'basic',
-        // AI改善アクション提示／改善施策提案ページ（改善提案プラン以上）
+        // AI改善アクション提示／改善施策提案ページ（AI改善提案プラン以上）
         'improvement_actions'  => 'basic',
-        // AIレポート分析機能（改善提案プラン以上）
+        // AIレポート分析機能（AI改善提案プラン以上）
         'report_good_points'   => 'basic',
         'report_improvements'  => 'basic',
         'report_consideration' => 'basic',
@@ -8953,7 +8953,7 @@ function mimamori_can( string $feature, int $user_id = 0 ): bool {
         // SEO機能（content_asset 以上）
         'seo_menu'             => 'content_asset',
         'aio_serp'             => 'content_asset',
-        // SEO診断（basic 以上：改善提案プランから提供）
+        // SEO診断（basic 以上：AI改善提案プランから提供）
         'seo_check'            => 'basic',
         // キーワード調査（ai_support 以上：プロ分析・集客プランから提供）
         'keyword_research'     => 'ai_support',
@@ -9302,7 +9302,7 @@ function mimamori_can_view_reports( int $user_id = 0 ): bool {
  * ページテンプレート冒頭のティアゲートから呼び出す。
  *
  * @param string $feature_label ブロックされた機能名（例: '月次レポート'）
- * @param string $required_plan 必要プラン名（例: '改善提案プラン'）
+ * @param string $required_plan 必要プラン名（例: 'AI改善提案プラン'）
  */
 function mimamori_render_upgrade_page( string $feature_label, string $required_plan ): void {
     set_query_var( 'gcrev_upgrade_feature', $feature_label );
@@ -11433,7 +11433,7 @@ function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
 
     $type_labels = [
         'plan_mieruka'       => '見える化プランに変更したい',
-        'plan_basic'         => '改善提案プランに変更したい',
+        'plan_basic'         => 'AI改善提案プランに変更したい',
         'plan_ai_support'    => 'プロ分析・集客プランに変更したい',
         'plan_content_asset' => 'コンテンツ資産化プランに変更したい',
         // 旧プラン（廃止済み・過去リンク互換のため残置）

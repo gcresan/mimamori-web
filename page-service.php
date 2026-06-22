@@ -213,9 +213,9 @@ get_header();
                     </ul>
                 </div>
 
-                <!-- プラン2: 改善提案プラン -->
+                <!-- プラン2: AI改善提案プラン -->
                 <div class="sv-plan2">
-                    <div class="sv-plan2__name">改善提案プラン</div>
+                    <div class="sv-plan2__name">AI改善提案プラン</div>
                     <div class="sv-plan2__subtitle">AIがデータを分析し<br>次の一手まで提案</div>
                     <div class="sv-plan2__price">
                         <span class="sv-plan2__price-amount">11,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
@@ -239,7 +239,7 @@ get_header();
                     <div class="sv-plan2__price">
                         <span class="sv-plan2__price-amount">22,000</span><span class="sv-plan2__price-unit">円 / 月（税込）</span>
                     </div>
-                    <div class="sv-plan2__cumulative">改善提案プランに加え</div>
+                    <div class="sv-plan2__cumulative">AI改善提案プランに加え</div>
                     <ul class="sv-plan2__features">
                         <li>四半期ごとの深掘り分析レポート</li>
                         <li>MEOダッシュボード</li>
@@ -395,7 +395,7 @@ get_header();
                     <span>▼</span>
                 </div>
                 <div class="sv-faq__a">
-                    はい、いつでもプラン変更が可能です。まずは見える化プランや改善提案プランから始めて、必要に応じてアップグレードされる方が多いです。
+                    はい、いつでもプラン変更が可能です。まずは見える化プランやAI改善提案プランから始めて、必要に応じてアップグレードされる方が多いです。
                 </div>
             </div>
             <div class="sv-faq__item">

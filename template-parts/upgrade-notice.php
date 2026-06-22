@@ -5,7 +5,7 @@
  * プランの機能ゲートに引っかかった場合に、ページ本文の代わりに表示する。
  * 呼び出し側で以下の query_var を設定すること:
  *   - gcrev_upgrade_feature       : ブロックされた機能名（例: '月次レポート'）
- *   - gcrev_upgrade_required_plan : 必要プラン名（例: '改善提案プラン'）
+ *   - gcrev_upgrade_required_plan : 必要プラン名（例: 'AI改善提案プラン'）
  *
  * 通常は mimamori_render_upgrade_page() 経由で使用する（functions.php）。
  */
