@@ -9040,10 +9040,36 @@ function mimamori_is_review_survey_only_user( int $user_id = 0 ): bool {
 }
 
 /**
+ * 「見える化プラン」(mieruka) のユーザーか判定する。
+ *
+ * 見える化プランは最下位ティアで AIレポート/月次レポート/SEO/MEO は全て対象外。
+ * 全体ダッシュボード（AIインフォグラフィック前提）も対象外で、
+ * データ可視化の「サイトダッシュボード」を起点に運用する（2026-06 改定）。
+ *
+ * @param int $user_id 0 ならログイン中ユーザー
+ * @return bool
+ */
+function mimamori_is_mieruka_user( int $user_id = 0 ): bool {
+    if ( $user_id <= 0 ) {
+        $user_id = (int) get_current_user_id();
+    }
+    if ( $user_id <= 0 ) return false;
+    // 管理者は強制的に最上位扱いのため除外
+    if ( user_can( $user_id, 'manage_options' ) ) return false;
+    // 本部アカウントは view 中の店舗の tier に従う (mimamori_can と同様)
+    if ( function_exists( 'mimamori_is_hq_user' ) && mimamori_is_hq_user( $user_id ) ) {
+        $hq_target = (int) get_user_meta( $user_id, mimamori_hq_view_meta_key(), true );
+        if ( $hq_target > 0 ) $user_id = $hq_target;
+    }
+    return gcrev_get_service_tier( $user_id ) === 'mieruka';
+}
+
+/**
  * ログイン後に着地すべき URL を返す。
  *
  * - MEO特化プラン: /meo/meo-dashboard/
  * - 口コミアンケート特化プラン: /tools/review-survey/
+ * - 見える化プラン: /site-dashboard/（全体ダッシュボードは非対応）
  * - それ以外: /dashboard/
  *
  * @param int $user_id 0 ならログイン中ユーザー
@@ -9058,6 +9084,9 @@ function mimamori_get_default_landing_url( int $user_id = 0 ): string {
     }
     if ( mimamori_is_review_survey_only_user( $user_id ) ) {
         return home_url( '/tools/review-survey/' );
+    }
+    if ( mimamori_is_mieruka_user( $user_id ) ) {
+        return home_url( '/site-dashboard/' );
     }
     return home_url( '/dashboard/' );
 }
@@ -9080,6 +9109,18 @@ function mimamori_guard_against_meo_only(): void {
 function mimamori_guard_against_review_survey_only(): void {
     if ( mimamori_is_review_survey_only_user() ) {
         wp_safe_redirect( home_url( '/tools/review-survey/' ) );
+        exit;
+    }
+}
+
+/**
+ * 見える化プランで全体ダッシュボード（AIレポート前提）にアクセスしたら
+ * データ可視化のサイトダッシュボードへ転送する。
+ * page-dashboard.php の先頭で呼ぶ。
+ */
+function mimamori_guard_against_mieruka(): void {
+    if ( mimamori_is_mieruka_user() ) {
+        wp_safe_redirect( home_url( '/site-dashboard/' ) );
         exit;
     }
 }

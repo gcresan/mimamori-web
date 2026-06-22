@@ -249,10 +249,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                $_mb_is_review_survey_only = function_exists( 'mimamori_is_review_survey_only_user' ) ? mimamori_is_review_survey_only_user() : false;
                // 「絞り込み表示」モードの集約フラグ — ホームページ系・通常レポート・各種設定の大半を畳む
                $_mb_is_restricted_plan = $_mb_is_meo_only || $_mb_is_review_survey_only;
+               // 見える化プラン判定 — 全体ダッシュボード(AIレポート前提)・SEO は非表示にし、サイト分析を起点にする
+               $_mb_is_mieruka = function_exists( 'mimamori_is_mieruka_user' ) ? mimamori_is_mieruka_user() : false;
                ?>
 
-               <!-- ========== 全体ダッシュボード（単独・絞り込みプランは非表示） ========== -->
-               <?php if ( ! $_mb_is_restricted_plan ) : ?>
+               <!-- ========== 全体ダッシュボード（絞り込みプラン・見える化プランは非表示） ========== -->
+               <?php if ( ! $_mb_is_restricted_plan && ! $_mb_is_mieruka ) : ?>
                <li class="nav-item">
                   <a href="<?php echo esc_url( home_url('/dashboard/') ); ?>" class="nav-link <?php echo is_page('dashboard') ? 'active' : ''; ?>">
                   <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3C6 3 2.7 5.9 1.5 10c1.2 4.1 4.5 7 8.5 7s7.3-2.9 8.5-7C17.3 5.9 14 3 10 3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/></svg></span>
@@ -398,7 +400,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </ul>
                      </li>
 
-                     <!-- サブグループ: SEO -->
+                     <!-- サブグループ: SEO（見える化プランは対象外のため非表示） -->
+                     <?php if ( ! $_mb_is_mieruka ) : ?>
                      <li class="nav-item nav-subgroup-wrapper">
                         <button type="button" class="nav-subgroup-label nav-subgroup-toggle" aria-expanded="true">
                            SEO
@@ -431,6 +434,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                            <?php endif; ?>
                         </ul>
                      </li>
+                     <?php endif; // ! $_mb_is_mieruka — SEOサブグループ ?>
 
                   </ul>
                </li>

@@ -16,6 +16,10 @@ if ( function_exists( 'mimamori_guard_against_meo_only' ) ) {
 if ( function_exists( 'mimamori_guard_against_review_survey_only' ) ) {
     mimamori_guard_against_review_survey_only();
 }
+// 見える化プランは全体ダッシュボード（AIレポート前提）非対応 → サイトダッシュボードへ転送
+if ( function_exists( 'mimamori_guard_against_mieruka' ) ) {
+    mimamori_guard_against_mieruka();
+}
 
 $current_user = mimamori_get_view_user_object();
 $user_id = mimamori_get_view_user_id();
