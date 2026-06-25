@@ -3,7 +3,7 @@
  * Plugin Name: みまもりウェブ 問い合わせ集計API
  * Plugin URI:  https://mimamori-web.jp/
  * Description: Flamingo / MW WP Form の問い合わせデータを月単位で集計し、みまもりウェブに対して REST API で返却する。スパム・テスト・営業を除外した「有効問い合わせ数」も算出する。
- * Version:     1.1.2
+ * Version:     1.1.3
  * Author:      みまもりウェブ
  * License:     GPL-2.0-or-later
  * Text Domain: mimamori-inquiries-api
@@ -39,6 +39,38 @@ if ( ! function_exists( 'mimamori_inquiries_api_register_routes_bridge' ) ) {
             Mimamori_Inquiries_API::register_routes();
         } else {
             error_log( '[MIMAMORI_INQUIRIES_API] bridge: class not loaded yet!' );
+        }
+    }
+}
+
+// 管理メニュー登録も REST と同様にファイル先頭で行う。
+// bootstrap() はクラス定義の後（下記 class_exists ガードの後）でしか呼ばれないため、
+// 別のコピーが先にクラスを定義していると early-return で設定メニューが登録されず、
+// 「設定 → みまもり問い合わせAPI」が出ない不具合が起きていた。ガードより前で登録する。
+if ( ! has_action( 'admin_menu', 'mimamori_inquiries_api_admin_menu_bridge' ) ) {
+    add_action( 'admin_menu',                                         'mimamori_inquiries_api_admin_menu_bridge' );
+    add_action( 'admin_post_mimamori_inquiries_api_regenerate_token', 'mimamori_inquiries_api_regenerate_token_bridge' );
+    add_action( 'admin_post_mimamori_inquiries_api_save_ips',         'mimamori_inquiries_api_save_ips_bridge' );
+}
+
+if ( ! function_exists( 'mimamori_inquiries_api_admin_menu_bridge' ) ) {
+    function mimamori_inquiries_api_admin_menu_bridge() {
+        if ( class_exists( 'Mimamori_Inquiries_API' ) && method_exists( 'Mimamori_Inquiries_API', 'add_settings_menu' ) ) {
+            Mimamori_Inquiries_API::add_settings_menu();
+        }
+    }
+}
+if ( ! function_exists( 'mimamori_inquiries_api_regenerate_token_bridge' ) ) {
+    function mimamori_inquiries_api_regenerate_token_bridge() {
+        if ( class_exists( 'Mimamori_Inquiries_API' ) && method_exists( 'Mimamori_Inquiries_API', 'handle_regenerate_token' ) ) {
+            Mimamori_Inquiries_API::handle_regenerate_token();
+        }
+    }
+}
+if ( ! function_exists( 'mimamori_inquiries_api_save_ips_bridge' ) ) {
+    function mimamori_inquiries_api_save_ips_bridge() {
+        if ( class_exists( 'Mimamori_Inquiries_API' ) && method_exists( 'Mimamori_Inquiries_API', 'handle_save_allowed_ips' ) ) {
+            Mimamori_Inquiries_API::handle_save_allowed_ips();
         }
     }
 }
@@ -140,10 +172,9 @@ class Mimamori_Inquiries_API {
         error_log( '[MIMAMORI_INQUIRIES_API] bootstrap() called' );
         add_action( 'rest_api_init',  [ __CLASS__, 'register_routes' ] );
 
-        // 管理画面: 設定ページ + 再発行ハンドラ
-        add_action( 'admin_menu',                                              [ __CLASS__, 'add_settings_menu' ] );
-        add_action( 'admin_post_mimamori_inquiries_api_regenerate_token',      [ __CLASS__, 'handle_regenerate_token' ] );
-        add_action( 'admin_post_mimamori_inquiries_api_save_ips',              [ __CLASS__, 'handle_save_allowed_ips' ] );
+        // 管理画面の登録（設定ページ + admin_post ハンドラ）はファイル先頭の
+        // ブリッジ（mimamori_inquiries_api_admin_menu_bridge 等）で行うため、
+        // ここでは登録しない。二重ロード時の early-return でメニューが消えるのを防ぐ。
     }
 
     /* ================================================================
