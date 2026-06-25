@@ -210,6 +210,36 @@ class Gcrev_Inquiries_Settings_Page {
             <h1>✉️ 問い合わせ取得設定</h1>
             <p>契約サイトに導入した「みまもりウェブ 問い合わせ集計API」プラグインの URL とトークンを登録します。月初 09:30 に前月分を自動取得します。</p>
 
+            <details open style="margin:1em 0;background:#f0f7ff;border:1px solid #b7d9ff;border-radius:6px;max-width:1000px;">
+                <summary style="cursor:pointer;padding:12px 16px;font-weight:600;font-size:15px;color:#0b4f9c;">
+                    📘 設定の流れ（はじめての方・忘れたとき用）
+                </summary>
+                <div style="padding:4px 20px 16px;">
+                    <p style="margin:8px 0;">問い合わせ件数は、<strong>契約サイト側のプラグイン</strong>と<strong>このみまもりウェブ画面</strong>の2か所を連携させて取得します。下の順番で設定してください。</p>
+
+                    <h3 style="margin:16px 0 6px;color:#0b4f9c;">① 契約サイト側（クライアントの WordPress）</h3>
+                    <ol style="margin:0 0 8px 1.4em;line-height:1.9;">
+                        <li>「<strong>みまもりウェブ 問い合わせ集計API</strong>」プラグインをインストール →「<strong>有効化</strong>」する</li>
+                        <li>契約サイトの <code>wp-admin</code> → <strong>設定 → みまもり問い合わせAPI</strong> を開く</li>
+                        <li>画面に表示される <strong>エンドポイント URL</strong> と <strong>トークン</strong> をコピーする<br>
+                            <span style="color:#666;font-size:13px;">※ トークンは初回アクセス時に自動生成されます（wp-config.php の編集は不要）。</span></li>
+                    </ol>
+
+                    <h3 style="margin:16px 0 6px;color:#0b4f9c;">② みまもりウェブ側（この画面）</h3>
+                    <ol style="margin:0 0 8px 1.4em;line-height:1.9;">
+                        <li>上の「<strong>対象ユーザー</strong>」で、設定するクライアントを選ぶ</li>
+                        <li>下の「<strong>API 接続設定</strong>」に、①でコピーした <strong>エンドポイント URL</strong> と <strong>トークン</strong> を貼り付ける</li>
+                        <li>「<strong>月初に自動取得する</strong>」にチェックを入れて、「<strong>設定を保存</strong>」を押す</li>
+                        <li>（任意）過去分も必要なら「<strong>一括取得（過去◯ヶ月）</strong>」で取り込む。当月分の動作確認は「<strong>単月取得</strong>」が便利</li>
+                    </ol>
+
+                    <p style="margin:12px 0 4px;padding:10px 14px;background:#e7f3ff;border-radius:4px;font-size:13px;">
+                        💡 設定後は、毎月初め（09:30）に前月分が自動で取り込まれます。取得結果は下の「取得済みデータ」で確認できます。<br>
+                        ⚠️ 「取得に失敗」する場合は、URL とトークンが契約サイト側の表示値と<strong>完全に一致</strong>しているか（前後の空白に注意）を確認してください。
+                    </p>
+                </div>
+            </details>
+
             <?php if ( $updated === '1' ) : ?>
                 <div class="notice notice-success is-dismissible"><p>設定を保存しました。</p></div>
             <?php elseif ( $updated === 'invalid' ) : ?>
