@@ -162,6 +162,37 @@ class Mimamori_Notification_Service {
         return $extras;
     }
 
+    /**
+     * 全通知メール共通の署名（サービス署名）。
+     * 個人署名ではなくサービス窓口として組み立てる（代表直通は載せない）。
+     * 種別ごとの自動送信注記は $auto_note で受け、配信停止案内は常に添える。
+     *
+     * @param string $auto_note 種別別の自動送信注記（例「※本メールは…の自動通知です。」）
+     */
+    private function email_signature( string $auto_note = '' ): string {
+        $lines = [
+            '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+            'みまもりウェブ',
+            '運営：株式会社ジィクレブ（GCREV）',
+            '',
+            'お問い合わせ・サポート窓口',
+            '　フリーダイヤル：0120-793-508（平日 10:00〜18:00）',
+            '　E-mail：info@g-crev.jp',
+            '　Website：https://g-crev.jp/',
+            '',
+            '■ 愛媛本社　〒790-0003 愛媛県松山市三番町7-12-1',
+            '■ 東京オフィス　〒150-0044 東京都渋谷区円山町5-3 MIEUX渋谷ビル8階',
+            '',
+            'GCREV - Guide to Create Victory',
+            '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+        ];
+        if ( $auto_note !== '' ) {
+            $lines[] = $auto_note;
+        }
+        $lines[] = '※配信の停止・設定変更は、マイページまたはサポート窓口までご連絡ください。';
+        return implode( "\n", $lines );
+    }
+
     // =================================================================
     // 通知 → AIチャット連携（ワンタップ導線）
     // =================================================================
@@ -466,9 +497,7 @@ class Mimamori_Notification_Service {
         }
 
         $lines[] = '';
-        $lines[] = '────────────────────';
-        $lines[] = 'みまもりウェブ';
-        $lines[] = '※このメールはみまもりアラートの自動通知です。';
+        $lines[] = $this->email_signature( '※本メールはみまもりアラートの自動通知です。' );
 
         return [ 'subject' => $subject, 'body' => implode( "\n", $lines ) ];
     }
@@ -620,6 +649,9 @@ class Mimamori_Notification_Service {
         }
         $lines[] = 'プランの確認・ご変更はこちら: ' . home_url( '/plans/' );
 
+        $lines[] = '';
+        $lines[] = $this->email_signature( '※本メールは「みまもりウェブ」週次便の自動送信です。' );
+
         return [ 'subject' => $subject, 'body' => implode( "\n", $lines ) ];
     }
 
@@ -741,9 +773,7 @@ class Mimamori_Notification_Service {
         $lines[] = '▼ この提案の進め方をAIに相談する';
         $lines[] = $this->create_chat_link( $link_uid, 'suggest', $ctx_summary );
         $lines[] = '';
-        $lines[] = '────────────────────';
-        $lines[] = 'みまもりウェブ';
-        $lines[] = '※このメールはAI改善提案の自動通知です（月2回まで）。';
+        $lines[] = $this->email_signature( '※本メールはAI改善提案の自動通知です（月2回まで）。' );
 
         return [ 'subject' => '【みまもりウェブ】AIからの改善提案', 'body' => implode( "\n", $lines ) ];
     }
