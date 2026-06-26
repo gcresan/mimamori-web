@@ -29,6 +29,7 @@ class Gcrev_Notification_Settings_Page {
         add_action( 'admin_init', [ $this, 'register_settings' ] );
         add_action( 'admin_init', [ $this, 'handle_test_notification' ] );
         add_action( 'admin_init', [ $this, 'handle_test_mimamori_notification' ] );
+        add_action( 'admin_init', [ $this, 'handle_test_mimamori_real' ] );
     }
 
     // =========================================================
@@ -464,6 +465,59 @@ class Gcrev_Notification_Settings_Page {
         );
     }
 
+    /**
+     * みまもり通知（アラート / 週次便 / AI改善提案）の実データテスト送信ハンドラ。
+     * 選択した対象クライアントの実データから本番同等の本文を組み立て、
+     * 送信先だけ指定アドレスに差し替えて送る（送信履歴・上限は更新しない）。
+     */
+    public function handle_test_mimamori_real(): void {
+        if ( ! isset( $_POST['gcrev_test_mimamori_real'] ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        check_admin_referer( 'gcrev_test_mimamori_real_nonce' );
+
+        $kind = isset( $_POST['mm_real_kind'] ) ? sanitize_text_field( wp_unslash( $_POST['mm_real_kind'] ) ) : '';
+        if ( ! in_array( $kind, [ 'alert', 'digest', 'suggest' ], true ) ) {
+            add_settings_error( 'gcrev_notification', 'mm_real_kind', '通知種別を選択してください。', 'error' );
+            return;
+        }
+
+        $target_uid = isset( $_POST['mm_real_target'] ) ? absint( $_POST['mm_real_target'] ) : 0;
+        if ( $target_uid <= 0 ) {
+            add_settings_error( 'gcrev_notification', 'mm_real_target', '対象クライアントを選択してください。', 'error' );
+            return;
+        }
+
+        // 送信先: 未入力・不正ならログイン中の管理者宛
+        $recipient = isset( $_POST['mm_real_recipient'] ) ? sanitize_email( wp_unslash( $_POST['mm_real_recipient'] ) ) : '';
+        if ( ! is_email( $recipient ) ) {
+            $current   = wp_get_current_user();
+            $recipient = ( $current && is_email( $current->user_email ) ) ? $current->user_email : get_option( 'admin_email' );
+        }
+
+        $module = dirname( __DIR__ ) . '/modules/class-mimamori-notification-service.php';
+        if ( ! class_exists( 'Mimamori_Notification_Service' ) && file_exists( $module ) ) {
+            require_once $module;
+        }
+        if ( ! class_exists( 'Mimamori_Notification_Service' ) ) {
+            add_settings_error( 'gcrev_notification', 'mm_real_nocls', '通知サービスが見つかりません。', 'error' );
+            return;
+        }
+
+        $service = new Mimamori_Notification_Service();
+        $result  = $service->send_real_test_email( $kind, $target_uid, $recipient );
+
+        add_settings_error(
+            'gcrev_notification',
+            'mm_real_result',
+            $result['message'],
+            $result['ok'] ? 'success' : 'error'
+        );
+    }
+
     // =========================================================
     // セクション個別描画ヘルパー
     // =========================================================
@@ -582,6 +636,69 @@ class Gcrev_Notification_Settings_Page {
                     </table>
                     <?php submit_button( 'みまもり通知をテスト送信', 'secondary' ); ?>
                 </form>
+            </div>
+
+            <?php
+            // ── みまもり通知 実データ テスト送信（顧客を選択） ──
+            $mm_module = dirname( __DIR__ ) . '/modules/class-mimamori-notification-service.php';
+            if ( ! class_exists( 'Mimamori_Notification_Service' ) && file_exists( $mm_module ) ) {
+                require_once $mm_module;
+            }
+            $mm_targets = [];
+            if ( class_exists( 'Mimamori_Notification_Service' ) ) {
+                $mm_service = new Mimamori_Notification_Service();
+                $mm_targets = $mm_service->get_test_target_users();
+            }
+            $mm_admin_email = wp_get_current_user()->user_email;
+            ?>
+            <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:16px 24px 24px; margin-top:20px;">
+                <h2 style="margin-top:0;">みまもり通知 実データ テスト送信（顧客を選択）</h2>
+                <p>選択した<strong>クライアントの実データ</strong>から本番と同じ本文を組み立て、指定アドレスに送信します。送信先だけ差し替えるため、<strong>クライアント本人には届きません</strong>。送信履歴・上限カウントは更新しません。プラン別の見え方は対象クライアントの実際のプランに従います。</p>
+                <ul style="margin:0 0 12px 1.2em; color:#646970; font-size:13px; list-style:disc;">
+                    <li><strong>みまもり週次便</strong>: いつでも送信できます（実際の訪問数・お問い合わせ数が入ります）。</li>
+                    <li><strong>みまもりアラート</strong>: 実データ上で異常が検知されている顧客のみ送信できます（異常がなければ送信されません）。</li>
+                    <li><strong>AI改善提案</strong>: AI（Gemini）を呼び出すため数秒かかり、AI改善提案プラン以上かつ「優先度: 高」の提案がある場合のみ送信されます。</li>
+                </ul>
+                <?php if ( empty( $mm_targets ) ) : ?>
+                    <p style="color:#b32d2e;">対象クライアントが見つかりません（自動通知の対象ユーザーが存在しません）。</p>
+                <?php else : ?>
+                <form method="post">
+                    <?php wp_nonce_field( 'gcrev_test_mimamori_real_nonce' ); ?>
+                    <input type="hidden" name="gcrev_test_mimamori_real" value="1" />
+                    <table class="form-table" role="presentation">
+                        <tr>
+                            <th scope="row"><label for="mm_real_kind">通知種別</label></th>
+                            <td>
+                                <select name="mm_real_kind" id="mm_real_kind">
+                                    <option value="digest">みまもり週次便</option>
+                                    <option value="alert">みまもりアラート（異常検知）</option>
+                                    <option value="suggest">AI改善提案通知</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="mm_real_target">対象クライアント</label></th>
+                            <td>
+                                <select name="mm_real_target" id="mm_real_target" class="regular-text">
+                                    <?php foreach ( $mm_targets as $t ) : ?>
+                                        <option value="<?php echo esc_attr( $t['id'] ); ?>"><?php echo esc_html( $t['label'] ); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="description">このクライアントの実データからメール本文を組み立てます。</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="mm_real_recipient">送信先メールアドレス</label></th>
+                            <td>
+                                <input type="email" name="mm_real_recipient" id="mm_real_recipient"
+                                       value="<?php echo esc_attr( $mm_admin_email ); ?>" class="regular-text" />
+                                <p class="description">空欄または不正な場合は、ログイン中の管理者メール宛に送信します。</p>
+                            </td>
+                        </tr>
+                    </table>
+                    <?php submit_button( '実データでテスト送信', 'secondary' ); ?>
+                </form>
+                <?php endif; ?>
             </div>
         </div>
         <?php

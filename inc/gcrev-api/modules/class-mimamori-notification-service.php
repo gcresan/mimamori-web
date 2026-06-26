@@ -747,4 +747,129 @@ class Mimamori_Notification_Service {
                 : 'メール送信に失敗しました。サーバーのメール設定をご確認ください。',
         ];
     }
+
+    /**
+     * テスト送信の「対象クライアント」候補一覧（管理画面のセレクト用）。
+     *
+     * 自動通知の対象判定（get_target_user_ids）と同じ条件で絞り込み、
+     * 名前・ID・プランを付与したラベルを返す。
+     *
+     * @return array<int,array{id:int,label:string,email:string}>
+     */
+    public function get_test_target_users(): array {
+        $out = [];
+        foreach ( $this->get_target_user_ids() as $uid ) {
+            $u = get_userdata( $uid );
+            if ( ! $u ) { continue; }
+            $name = $u->display_name ?: $u->user_login;
+            $plan = $this->has_analysis_plan( $uid ) ? 'AI改善提案プラン以上' : '見える化プラン';
+            $out[] = [
+                'id'    => $uid,
+                'label' => sprintf( '%s（ID:%d / %s）', $name, $uid, $plan ),
+                'email' => (string) $u->user_email,
+            ];
+        }
+        usort( $out, static function ( $a, $b ) { return strcmp( $a['label'], $b['label'] ); } );
+        return $out;
+    }
+
+    /**
+     * 実データでの通知テスト送信（管理画面「通知設定」から呼ぶ）。
+     *
+     * 指定した「対象クライアント（$target_uid）」の実データから本番と同じ本文を
+     * 組み立て、送信先だけ $recipient に差し替えて送る。閾値判定・クールダウン・
+     * 送信履歴・月間上限などの状態は一切更新しない（純粋なプレビュー）。
+     * プラン別の見え方は対象クライアントの実プランに従う。
+     *
+     * @param string $kind       'alert' | 'digest' | 'suggest'
+     * @param int    $target_uid データ取得元の対象ユーザー
+     * @param string $recipient  送信先メールアドレス
+     * @return array{ok:bool, message:string}
+     */
+    public function send_real_test_email( string $kind, int $target_uid, string $recipient ): array {
+        if ( ! is_email( $recipient ) ) {
+            return [ 'ok' => false, 'message' => '送信先メールアドレスが不正です。' ];
+        }
+        $user = get_userdata( $target_uid );
+        if ( ! $user ) {
+            return [ 'ok' => false, 'message' => '対象クライアントが見つかりません。' ];
+        }
+
+        $name          = ( $user->display_name ?: $user->user_login );
+        $with_analysis = $this->has_analysis_plan( $target_uid );
+
+        switch ( $kind ) {
+            case 'digest':
+                $sessions = $this->weekly_pair( $target_uid, 'sessions' );
+                $cv       = $this->weekly_pair( $target_uid, 'cv' );
+
+                $log        = get_user_meta( $target_uid, self::META_ALERT_LOG, true );
+                $log        = is_array( $log ) ? $log : [];
+                $week_alert = 0;
+                foreach ( $log as $entry ) {
+                    if ( ( time() - (int) ( $entry['ts'] ?? 0 ) ) < 7 * DAY_IN_SECONDS ) { $week_alert++; }
+                }
+                $anomaly_line = $week_alert > 0
+                    ? sprintf( '今週はアラートを%d件お送りしました。詳細は過去のメールをご確認ください。', $week_alert )
+                    : '今週も異常はありませんでした。';
+
+                $email = $this->build_digest_email( $target_uid, $name, $with_analysis, $sessions, $cv, $anomaly_line );
+                break;
+
+            case 'alert':
+                $s      = self::get_settings();
+                $alerts = array_merge(
+                    $this->detect_traffic_alerts( $target_uid, $s ),
+                    $this->detect_cv_stall( $target_uid, $s ),
+                    $this->detect_site_health( $target_uid, $s )
+                );
+                if ( empty( $alerts ) ) {
+                    return [ 'ok' => false, 'message' => 'この顧客には現在、送信対象となるアラートがありません（実データ上、異常が検知されていません）。文面の確認はダミーデータのテスト送信をご利用ください。' ];
+                }
+                $alert    = $alerts[0];
+                $analysis = $with_analysis ? $this->generate_analysis( $target_uid, $alert ) : '';
+                $email    = $this->build_alert_email( $target_uid, $name, $alert, $with_analysis, $analysis );
+                break;
+
+            case 'suggest':
+                if ( ! $with_analysis ) {
+                    return [ 'ok' => false, 'message' => 'この顧客はAI改善提案プラン未満のため、AI改善提案は対象外です。' ];
+                }
+                $exec = $this->api->get_execution_service();
+                if ( ! $exec ) {
+                    return [ 'ok' => false, 'message' => '改善提案サービスが利用できません。' ];
+                }
+                $actions = $exec->get_or_generate_actions( $target_uid, wp_date( 'Y-m' ) );
+                $action  = null;
+                foreach ( (array) $actions as $a ) {
+                    if ( ( $a['priority'] ?? '' ) === 'high' && trim( (string) ( $a['title'] ?? '' ) ) !== '' ) {
+                        $action = $a;
+                        break;
+                    }
+                }
+                if ( ! $action ) {
+                    return [ 'ok' => false, 'message' => 'この顧客には現在、「優先度: 高」の改善提案がありません。' ];
+                }
+                $email = $this->build_suggestion_email( $target_uid, $name, $action );
+                break;
+
+            default:
+                return [ 'ok' => false, 'message' => '不明な通知種別です。' ];
+        }
+
+        $subject = '[実データテスト/' . $name . '] ' . $email['subject'];
+        $body    = "※これは通知設定からの「実データ」テスト送信です（対象クライアント: {$name} / ID: {$target_uid}）。\n"
+                 . "本文は実際のデータから組み立てた本番同等の内容です。送信履歴・上限カウントは更新していません。\n\n"
+                 . $email['body'];
+
+        $sent = wp_mail( $recipient, $subject, $body );
+        self::log( sprintf( 'REAL-TEST %s target=%d to=%s result=%s', $kind, $target_uid, $recipient, $sent ? 'OK' : 'FAIL' ) );
+
+        return [
+            'ok'      => (bool) $sent,
+            'message' => $sent
+                ? "実データテストメール（{$name} のデータ）を {$recipient} に送信しました。"
+                : 'メール送信に失敗しました。サーバーのメール設定をご確認ください。',
+        ];
+    }
 }
