@@ -15490,6 +15490,119 @@ PROMPT;
     }
 
     /**
+     * 週次便用: 直近7日のエリア別訪問 Top N（前週比つき）。
+     * 期間は weekly_pair（sessions）と同じ「昨日まで7日／その前7日」に揃える。
+     * 見える化プランでも提供する指標（GA4 region = analysis_basic）。
+     *
+     * @return array<int,array{region:string,sessions:int,prev:int}> sessions 降順
+     */
+    public function get_weekly_region_top( int $user_id, int $limit = 3 ): array {
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+        try {
+            $config = $this->config->get_user_config( $user_id );
+            $ga4_id = $config['ga4_id'] ?? '';
+            if ( empty( $ga4_id ) ) { return []; }
+
+            $tz      = wp_timezone();
+            $r_end   = new \DateTimeImmutable( 'yesterday', $tz );
+            $r_start = $r_end->sub( new \DateInterval( 'P6D' ) );
+            $p_end   = $r_start->sub( new \DateInterval( 'P1D' ) );
+            $p_start = $p_end->sub( new \DateInterval( 'P6D' ) );
+
+            $recent = $this->ga4->fetch_region_details( $ga4_id, $r_start->format( 'Y-m-d' ), $r_end->format( 'Y-m-d' ) );
+            $prev   = $this->ga4->fetch_region_details( $ga4_id, $p_start->format( 'Y-m-d' ), $p_end->format( 'Y-m-d' ) );
+
+            // 前週の地域→sessions マップ（英語名キー）
+            $prev_map = [];
+            foreach ( $prev as $row ) {
+                $prev_map[ (string) ( $row['region'] ?? '' ) ] = (int) ( $row['sessions'] ?? 0 );
+            }
+
+            // fetch_region_details は sessions 降順で返るため先頭から limit 件
+            $out = [];
+            foreach ( array_slice( $recent, 0, max( 1, $limit ) ) as $row ) {
+                $name = (string) ( $row['region'] ?? '' );
+                if ( $name === '' ) { continue; }
+                $out[] = [
+                    'region'   => self::region_name_to_ja( $name ),
+                    'sessions' => (int) ( $row['sessions'] ?? 0 ),
+                    'prev'     => (int) ( $prev_map[ $name ] ?? 0 ),
+                ];
+            }
+            return $out;
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_digest_debug.log',
+                date( 'Y-m-d H:i:s' ) . " region_top ERROR user={$user_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return [];
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
+    /**
+     * 週次便用: 直近7日のMEO主要3指標（マップ表示・電話タップ・ルート検索）を前週比つきで返す。
+     * 期間は weekly_pair と同じ「昨日まで7日／その前7日」。GBP未設定・トークン失効時は null。
+     * プロ分析・集客プラン以上（meo_menu）限定で呼ぶこと。
+     *
+     * @return array{map:array{recent:int,prev:int},calls:array{recent:int,prev:int},directions:array{recent:int,prev:int}}|null
+     */
+    public function get_weekly_meo_summary( int $user_id ): ?array {
+        $location_id = get_user_meta( $user_id, '_gcrev_gbp_location_id', true );
+        if ( empty( $location_id ) || strpos( (string) $location_id, 'pending_' ) === 0 ) { return null; }
+
+        $access_token = $this->gbp_get_access_token( $user_id );
+        if ( empty( $access_token ) ) { return null; }
+
+        $tz      = wp_timezone();
+        $r_end   = new \DateTimeImmutable( 'yesterday', $tz );
+        $r_start = $r_end->sub( new \DateInterval( 'P6D' ) );
+        $p_end   = $r_start->sub( new \DateInterval( 'P1D' ) );
+        $p_start = $p_end->sub( new \DateInterval( 'P6D' ) );
+
+        try {
+            $recent = $this->gbp_fetch_performance_metrics( $access_token, $location_id, $r_start->format( 'Y-m-d' ), $r_end->format( 'Y-m-d' ) );
+            $prev   = $this->gbp_fetch_performance_metrics( $access_token, $location_id, $p_start->format( 'Y-m-d' ), $p_end->format( 'Y-m-d' ) );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_digest_debug.log',
+                date( 'Y-m-d H:i:s' ) . " meo_summary ERROR user={$user_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return null;
+        }
+
+        $pick = static function ( array $m, string $key ): int { return (int) ( $m[ $key ] ?? 0 ); };
+        return [
+            'map'        => [ 'recent' => $pick( $recent, 'map_impressions' ),  'prev' => $pick( $prev, 'map_impressions' ) ],
+            'calls'      => [ 'recent' => $pick( $recent, 'call_clicks' ),      'prev' => $pick( $prev, 'call_clicks' ) ],
+            'directions' => [ 'recent' => $pick( $recent, 'direction_clicks' ), 'prev' => $pick( $prev, 'direction_clicks' ) ],
+        ];
+    }
+
+    /**
+     * GA4 の region ディメンション値（英語）を都道府県の日本語表記へ変換する。
+     * マップにない値（海外・(not set) 等）はそのまま返す。
+     */
+    private static function region_name_to_ja( string $region ): string {
+        static $map = [
+            'Hokkaido' => '北海道', 'Aomori' => '青森県', 'Iwate' => '岩手県', 'Miyagi' => '宮城県',
+            'Akita' => '秋田県', 'Yamagata' => '山形県', 'Fukushima' => '福島県',
+            'Ibaraki' => '茨城県', 'Tochigi' => '栃木県', 'Gunma' => '群馬県', 'Saitama' => '埼玉県',
+            'Chiba' => '千葉県', 'Tokyo' => '東京都', 'Kanagawa' => '神奈川県',
+            'Niigata' => '新潟県', 'Toyama' => '富山県', 'Ishikawa' => '石川県', 'Fukui' => '福井県',
+            'Yamanashi' => '山梨県', 'Nagano' => '長野県', 'Gifu' => '岐阜県', 'Shizuoka' => '静岡県', 'Aichi' => '愛知県',
+            'Mie' => '三重県', 'Shiga' => '滋賀県', 'Kyoto' => '京都府', 'Osaka' => '大阪府',
+            'Hyogo' => '兵庫県', 'Nara' => '奈良県', 'Wakayama' => '和歌山県',
+            'Tottori' => '鳥取県', 'Shimane' => '島根県', 'Okayama' => '岡山県', 'Hiroshima' => '広島県', 'Yamaguchi' => '山口県',
+            'Tokushima' => '徳島県', 'Kagawa' => '香川県', 'Ehime' => '愛媛県', 'Kochi' => '高知県',
+            'Fukuoka' => '福岡県', 'Saga' => '佐賀県', 'Nagasaki' => '長崎県', 'Kumamoto' => '熊本県',
+            'Oita' => '大分県', 'Miyazaki' => '宮崎県', 'Kagoshima' => '鹿児島県', 'Okinawa' => '沖縄県',
+        ];
+        return $map[ $region ] ?? $region;
+    }
+
+    /**
      * 日次メトリクストレンドを「キャッシュのみ」読み出す（外部 fetch を一切しない）。
      * ダッシュボードのトレンドチャート seed 用。cron が温めた
      * gcrev_trend_daily_v2_{uid}_{metric}{filter_sfx} と同一キーを参照する。

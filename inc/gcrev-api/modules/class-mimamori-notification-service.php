@@ -131,6 +131,28 @@ class Mimamori_Notification_Service {
         ];
     }
 
+    /**
+     * 週次便のプラン別追加ブロックを実データから集計する。
+     * - region_top: エリア別訪問 Top3（analysis_basic = 見える化プラン以上）
+     * - meo:        MEO主要3指標（meo_menu = プロ分析・集客プラン以上）
+     * 取得失敗・対象外プランのキーは省略される（呼び出し側は素直にスキップ）。
+     */
+    private function collect_digest_extras( int $uid ): array {
+        $extras = [];
+
+        if ( function_exists( 'mimamori_can' ) && mimamori_can( 'analysis_basic', $uid ) ) {
+            $region = $this->api->get_weekly_region_top( $uid, 3 );
+            if ( ! empty( $region ) ) { $extras['region_top'] = $region; }
+        }
+
+        if ( function_exists( 'mimamori_can' ) && mimamori_can( 'meo_menu', $uid ) ) {
+            $meo = $this->api->get_weekly_meo_summary( $uid );
+            if ( $meo !== null ) { $extras['meo'] = $meo; }
+        }
+
+        return $extras;
+    }
+
     // =================================================================
     // 通知 → AIチャット連携（ワンタップ導線）
     // =================================================================
@@ -506,7 +528,8 @@ class Mimamori_Notification_Service {
 
         $email = $this->build_digest_email(
             $uid, $this->client_name( $uid, $user ),
-            $this->has_analysis_plan( $uid ), $sessions, $cv, $anomaly_line
+            $this->has_analysis_plan( $uid ), $sessions, $cv, $anomaly_line,
+            $this->collect_digest_extras( $uid )
         );
 
         $sent = wp_mail( $user->user_email, $email['subject'], $email['body'] );
@@ -519,14 +542,20 @@ class Mimamori_Notification_Service {
      *
      * @param array{recent:int,prev:int}|null $sessions 訪問数の今週/前週
      * @param array{recent:int,prev:int}|null $cv       問い合わせの今週/前週
+     * @param array $extras プラン別の追加ブロック。
+     *                      region_top: array<int,array{region:string,sessions:int,prev:int}>（見える化以上）
+     *                      meo:        array{map:array,calls:array,directions:array}（プロ分析・集客以上）
      * @return array{subject:string, body:string}
      */
-    private function build_digest_email( int $link_uid, string $name, bool $with_analysis, ?array $sessions, ?array $cv, string $anomaly_line ): array {
-        $fmt_pair = static function ( ?array $pair, string $unit ): string {
-            if ( $pair === null ) { return 'データ取得中です'; }
-            $diff = $pair['recent'] - $pair['prev'];
+    private function build_digest_email( int $link_uid, string $name, bool $with_analysis, ?array $sessions, ?array $cv, string $anomaly_line, array $extras = [] ): array {
+        $fmt_delta = static function ( int $recent, int $prev, string $unit ): string {
+            $diff = $recent - $prev;
             $sign = $diff > 0 ? '+' : ( $diff < 0 ? '−' : '±' );
-            return sprintf( '%s%s（前週比 %s%s%s）', number_format( $pair['recent'] ), $unit, $sign, number_format( abs( $diff ) ), $unit );
+            return sprintf( '%s%s（前週比 %s%s%s）', number_format( $recent ), $unit, $sign, number_format( abs( $diff ) ), $unit );
+        };
+        $fmt_pair = static function ( ?array $pair, string $unit ) use ( $fmt_delta ): string {
+            if ( $pair === null ) { return 'データ取得中です'; }
+            return $fmt_delta( (int) $pair['recent'], (int) $pair['prev'], $unit );
         };
 
         $subject = '【みまもりウェブ】みまもり週次便';
@@ -535,6 +564,26 @@ class Mimamori_Notification_Service {
             '・今週のお問い合わせ: ' . $fmt_pair( $cv, '件' ),
             '・異常検知: ' . $anomaly_line,
         ];
+
+        // 追加ブロック（チャット連携の summary にも含めるため summary_lines に積む）。
+        // エリア別: 見える化プラン以上で表示。MEO: プロ分析・集客プラン以上で表示。
+        $region_top = isset( $extras['region_top'] ) && is_array( $extras['region_top'] ) ? $extras['region_top'] : [];
+        if ( ! empty( $region_top ) ) {
+            $summary_lines[] = '';
+            $summary_lines[] = '▼ よく見られているエリア（直近7日）';
+            foreach ( $region_top as $r ) {
+                $summary_lines[] = '・' . (string) ( $r['region'] ?? '' ) . ': '
+                    . $fmt_delta( (int) ( $r['sessions'] ?? 0 ), (int) ( $r['prev'] ?? 0 ), '件' );
+            }
+        }
+        $meo = isset( $extras['meo'] ) && is_array( $extras['meo'] ) ? $extras['meo'] : null;
+        if ( $meo !== null ) {
+            $summary_lines[] = '';
+            $summary_lines[] = '▼ Googleマップでの反応（直近7日）';
+            $summary_lines[] = '・マップ表示: ' . $fmt_delta( (int) ( $meo['map']['recent'] ?? 0 ),        (int) ( $meo['map']['prev'] ?? 0 ),        '回' );
+            $summary_lines[] = '・ルート検索: ' . $fmt_delta( (int) ( $meo['directions']['recent'] ?? 0 ), (int) ( $meo['directions']['prev'] ?? 0 ), '回' );
+            $summary_lines[] = '・電話タップ: ' . $fmt_delta( (int) ( $meo['calls']['recent'] ?? 0 ),      (int) ( $meo['calls']['prev'] ?? 0 ),      '回' );
+        }
 
         $lines   = [ $name . ' 様', '' ];
         $lines   = array_merge( $lines, $summary_lines );
@@ -725,11 +774,27 @@ class Mimamori_Notification_Service {
                 break;
 
             case 'digest':
+                // プレビュー用サンプル。エリア別は全プラン、MEO は上位プラン（with_analysis）想定で出し分ける。
+                $extras = [
+                    'region_top' => [
+                        [ 'region' => '東京都',   'sessions' => 8, 'prev' => 6 ],
+                        [ 'region' => '神奈川県', 'sessions' => 5, 'prev' => 6 ],
+                        [ 'region' => '埼玉県',   'sessions' => 3, 'prev' => 3 ],
+                    ],
+                ];
+                if ( $with_analysis ) {
+                    $extras['meo'] = [
+                        'map'        => [ 'recent' => 120, 'prev' => 105 ],
+                        'directions' => [ 'recent' => 6,   'prev' => 5 ],
+                        'calls'      => [ 'recent' => 3,   'prev' => 3 ],
+                    ];
+                }
                 $email = $this->build_digest_email(
                     $link_uid, $name, $with_analysis,
                     [ 'recent' => 218, 'prev' => 240 ],
                     [ 'recent' => 5, 'prev' => 3 ],
-                    '今週も異常はありませんでした。'
+                    '今週も異常はありませんでした。',
+                    $extras
                 );
                 break;
 
@@ -840,7 +905,10 @@ class Mimamori_Notification_Service {
                     ? sprintf( '今週はアラートを%d件お送りしました。詳細は過去のメールをご確認ください。', $week_alert )
                     : '今週も異常はありませんでした。';
 
-                $email = $this->build_digest_email( $target_uid, $name, $with_analysis, $sessions, $cv, $anomaly_line );
+                $email = $this->build_digest_email(
+                    $target_uid, $name, $with_analysis, $sessions, $cv, $anomaly_line,
+                    $this->collect_digest_extras( $target_uid )
+                );
                 break;
 
             case 'alert':
