@@ -15581,6 +15581,48 @@ PROMPT;
     }
 
     /**
+     * 週次便用: 直近7日／前7日の「フォーム有効問い合わせ」と「サイト電話タップ」を分離して返す。
+     * - form:       有効CV（レビューの除外反映済み）から電話タップを除いたフォーム系の問い合わせ
+     * - phone_site: サイト内の電話タップ（GA4キーイベント由来。components.phone_tap_total）
+     * 期間は weekly_pair と同じ「昨日まで7日／その前7日」。MEO（GBP）の電話タップは含めない
+     * （別途 get_weekly_meo_summary の calls を使う）。失敗時は空配列。
+     *
+     * @return array{form:array{recent:int,prev:int},phone_site:array{recent:int,prev:int}}|array{}
+     */
+    public function get_weekly_cv_split( int $user_id ): array {
+        $filter_set = $this->maybe_set_country_filter( $user_id );
+        try {
+            $tz      = wp_timezone();
+            $r_end   = new \DateTimeImmutable( 'yesterday', $tz );
+            $r_start = $r_end->sub( new \DateInterval( 'P6D' ) );
+            $p_end   = $r_start->sub( new \DateInterval( 'P1D' ) );
+            $p_start = $p_end->sub( new \DateInterval( 'P6D' ) );
+
+            $calc = function ( \DateTimeImmutable $s, \DateTimeImmutable $e ) use ( $user_id ): array {
+                $eff   = $this->get_effective_cv_for_range( $s->format( 'Y-m-d' ), $e->format( 'Y-m-d' ), $user_id );
+                $total = (int) ( $eff['total'] ?? array_sum( $eff['daily'] ?? [] ) );
+                $phone = (int) ( $eff['components']['phone_tap_total'] ?? 0 );
+                return [ 'form' => max( 0, $total - $phone ), 'phone_site' => $phone ];
+            };
+            $r = $calc( $r_start, $r_end );
+            $p = $calc( $p_start, $p_end );
+
+            return [
+                'form'       => [ 'recent' => $r['form'],       'prev' => $p['form'] ],
+                'phone_site' => [ 'recent' => $r['phone_site'], 'prev' => $p['phone_site'] ],
+            ];
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_digest_debug.log',
+                date( 'Y-m-d H:i:s' ) . " cv_split ERROR user={$user_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            return [];
+        } finally {
+            $this->restore_country_filter( $filter_set );
+        }
+    }
+
+    /**
      * GA4 の region ディメンション値（英語）を都道府県の日本語表記へ変換する。
      * マップにない値（海外・(not set) 等）はそのまま返す。
      */

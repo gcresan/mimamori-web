@@ -133,9 +133,10 @@ class Mimamori_Notification_Service {
 
     /**
      * 週次便のプラン別追加ブロックを実データから集計する。
-     * - plan_name:  現在のプラン表示名（全プラン共通・フッターで常時表示）
-     * - region_top: エリア別訪問 Top3（analysis_basic = 見える化プラン以上）
-     * - meo:        MEO主要3指標（meo_menu = プロ分析・集客プラン以上）
+     * - plan_name:           現在のプラン表示名（全プラン共通・フッターで常時表示）
+     * - cv_form/phone_site:  フォーム有効問い合わせ / サイト電話タップ（全プラン共通）
+     * - region_top:          エリア別訪問 Top3（analysis_basic = 見える化プラン以上）
+     * - meo:                 MEO主要3指標（meo_menu = プロ分析・集客プラン以上）
      * 取得失敗・対象外プランのキーは省略される（呼び出し側は素直にスキップ）。
      */
     private function collect_digest_extras( int $uid ): array {
@@ -148,6 +149,11 @@ class Mimamori_Notification_Service {
                 $extras['plan_name'] = (string) $defs[ $tier ]['name'];
             }
         }
+
+        // お問い合わせ（有効フォーム）とサイト電話タップの分離（全プラン共通）
+        $cv_split = $this->api->get_weekly_cv_split( $uid );
+        if ( isset( $cv_split['form'] ) )       { $extras['cv_form']    = $cv_split['form']; }
+        if ( isset( $cv_split['phone_site'] ) ) { $extras['phone_site'] = $cv_split['phone_site']; }
 
         if ( function_exists( 'mimamori_can' ) && mimamori_can( 'analysis_basic', $uid ) ) {
             $region = $this->api->get_weekly_region_top( $uid, 3 );
@@ -582,6 +588,8 @@ class Mimamori_Notification_Service {
      * @param array{recent:int,prev:int}|null $cv       問い合わせの今週/前週
      * @param array $extras プラン別の追加ブロック。
      *                      plan_name:  string 現在のプラン表示名（フッターで常時表示）
+     *                      cv_form:    array{recent:int,prev:int} フォーム有効問い合わせ（電話タップ除外）
+     *                      phone_site: array{recent:int,prev:int} サイト電話タップ（GA4キーイベント）
      *                      region_top: array<int,array{region:string,sessions:int,prev:int}>（見える化以上）
      *                      meo:        array{map:array,calls:array,directions:array}（プロ分析・集客以上）
      * @return array{subject:string, body:string}
@@ -597,12 +605,31 @@ class Mimamori_Notification_Service {
             return $fmt_delta( (int) $pair['recent'], (int) $pair['prev'], $unit );
         };
 
+        // プラン別の追加データを先に読む（お問い合わせ行の組み立てに MEO の電話タップを使うため）。
+        $meo        = isset( $extras['meo'] ) && is_array( $extras['meo'] ) ? $extras['meo'] : null;
+        $cv_form    = isset( $extras['cv_form'] ) && is_array( $extras['cv_form'] ) ? $extras['cv_form'] : null;
+        $phone_site = isset( $extras['phone_site'] ) && is_array( $extras['phone_site'] ) ? $extras['phone_site'] : null;
+
         $subject = '【みまもりウェブ】みまもり週次便';
-        $summary_lines = [
-            '・今週の訪問数: ' . $fmt_pair( $sessions, '件' ),
-            '・今週のお問い合わせ: ' . $fmt_pair( $cv, '件' ),
-            '・異常検知: ' . $anomaly_line,
-        ];
+        $summary_lines = [ '・今週の訪問数: ' . $fmt_pair( $sessions, '件' ) ];
+
+        // お問い合わせ: フォームの有効問い合わせ（電話タップを除いた有効CV）。
+        // 分離データが無ければ従来の合算CVにフォールバック。
+        $summary_lines[] = ( $cv_form !== null )
+            ? '・今週のお問い合わせ（有効）: ' . $fmt_pair( $cv_form, '件' )
+            : '・今週のお問い合わせ: ' . $fmt_pair( $cv, '件' );
+
+        // 電話タップ: サイト内（GA4キーイベント）と Googleマップ（MEO）を分けて表示。
+        if ( $phone_site !== null ) {
+            $summary_lines[] = '・今週の電話タップ（サイト）: ' . $fmt_pair( $phone_site, '回' );
+        }
+        // MEO はプロ分析・集客プラン以上のみ（$meo が無ければ非表示）。
+        if ( $meo !== null ) {
+            $summary_lines[] = '・今週の電話タップ（Googleマップ）: '
+                . $fmt_delta( (int) ( $meo['calls']['recent'] ?? 0 ), (int) ( $meo['calls']['prev'] ?? 0 ), '回' );
+        }
+
+        $summary_lines[] = '・異常検知: ' . $anomaly_line;
 
         // 追加ブロック（チャット連携の summary にも含めるため summary_lines に積む）。
         // エリア別: 見える化プラン以上で表示。MEO: プロ分析・集客プラン以上で表示。
@@ -615,13 +642,12 @@ class Mimamori_Notification_Service {
                     . $fmt_delta( (int) ( $r['sessions'] ?? 0 ), (int) ( $r['prev'] ?? 0 ), '件' );
             }
         }
-        $meo = isset( $extras['meo'] ) && is_array( $extras['meo'] ) ? $extras['meo'] : null;
+        // Googleマップでの「見られ方」（電話タップは上の問い合わせ欄に集約済みのため除外）。
         if ( $meo !== null ) {
             $summary_lines[] = '';
             $summary_lines[] = '▼ Googleマップでの反応（直近7日）';
             $summary_lines[] = '・マップ表示: ' . $fmt_delta( (int) ( $meo['map']['recent'] ?? 0 ),        (int) ( $meo['map']['prev'] ?? 0 ),        '回' );
             $summary_lines[] = '・ルート検索: ' . $fmt_delta( (int) ( $meo['directions']['recent'] ?? 0 ), (int) ( $meo['directions']['prev'] ?? 0 ), '回' );
-            $summary_lines[] = '・電話タップ: ' . $fmt_delta( (int) ( $meo['calls']['recent'] ?? 0 ),      (int) ( $meo['calls']['prev'] ?? 0 ),      '回' );
         }
 
         $lines   = [ $name . ' 様', '' ];
@@ -825,6 +851,8 @@ class Mimamori_Notification_Service {
                 // プレビュー用サンプル。エリア別は全プラン、MEO は上位プラン（with_analysis）想定で出し分ける。
                 $extras = [
                     'plan_name'  => $with_analysis ? 'プロ分析・集客プラン' : '見える化プラン',
+                    'cv_form'    => [ 'recent' => 2, 'prev' => 1 ],
+                    'phone_site' => [ 'recent' => 4, 'prev' => 5 ],
                     'region_top' => [
                         [ 'region' => '東京都',   'sessions' => 8, 'prev' => 6 ],
                         [ 'region' => '神奈川県', 'sessions' => 5, 'prev' => 6 ],
