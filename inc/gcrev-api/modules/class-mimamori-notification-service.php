@@ -1041,7 +1041,7 @@ class Mimamori_Notification_Service {
                 return [ 'ok' => false, 'message' => '不明な通知種別です。' ];
         }
 
-        $subject = '[実データテスト/' . $name . '] ' . $email['subject'];
+        $subject = '[実データテスト/' . $name . ' 様] ' . $email['subject'];
         $body    = "※これは通知設定からの「実データ」テスト送信です（対象クライアント: {$name} / ID: {$target_uid}）。\n"
                  . "本文は実際のデータから組み立てた本番同等の内容です。送信履歴・上限カウントは更新していません。\n\n"
                  . $email['body'];
