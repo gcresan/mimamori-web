@@ -331,7 +331,7 @@ class Gcrev_Client_Management_Page {
                             <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
                             <input type="hidden" name="gcrev_action" value="clear_user_cache">
                             <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $uid ); ?>">
-                            <button type="submit" class="button button-small" title="キャッシュ削除">🔄 キャッシュ</button>
+                            <button type="submit" class="button button-small" style="color: #C95A4F;" title="キャッシュ削除">🗑 キャッシュ削除</button>
                         </form>
                         <?php endif; ?>
 
