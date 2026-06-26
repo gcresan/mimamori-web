@@ -108,6 +108,26 @@ class Gcrev_Client_Management_Page {
                 $result_msg = "all_cache_cleared_{$deleted}";
                 break;
 
+            case 'change_tier':
+                if ( $user_id > 0 ) {
+                    $new_tier   = isset( $_POST['gcrev_new_tier'] ) ? sanitize_text_field( wp_unslash( $_POST['gcrev_new_tier'] ) ) : '';
+                    $result_msg = $this->change_user_tier( $user_id, $new_tier );
+                }
+                break;
+
+            case 'change_state':
+                if ( $user_id > 0 ) {
+                    $new_state  = isset( $_POST['gcrev_new_state'] ) ? sanitize_text_field( wp_unslash( $_POST['gcrev_new_state'] ) ) : '';
+                    $result_msg = $this->change_user_state( $user_id, $new_state );
+                }
+                break;
+
+            case 'delete_client':
+                if ( $user_id > 0 ) {
+                    $result_msg = $this->delete_client( $user_id );
+                }
+                break;
+
             default:
                 return;
         }
@@ -133,7 +153,7 @@ class Gcrev_Client_Management_Page {
         ?>
         <div class="wrap">
             <h1>👥 クライアント管理</h1>
-            <p>クライアントごとのキャッシュ削除・レポート管理を行います。</p>
+            <p>クライアントごとのプラン・状態の変更、キャッシュ削除・レポート管理、クライアント削除を行います。</p>
 
             <?php $this->render_bulk_actions(); ?>
             <?php $this->render_client_table(); ?>
@@ -166,6 +186,23 @@ class Gcrev_Client_Management_Page {
             $text = "{$name} のSEO／AIO診断履歴を {$m[2]} 件削除しました。";
         } elseif ( preg_match( '/^all_cache_cleared_(\d+)$/', $msg, $m ) ) {
             $text = "全クライアントのキャッシュを {$m[1]} 件削除しました。";
+        } elseif ( preg_match( '/^user_(\d+)_tier_changed$/', $msg, $m ) ) {
+            $user = get_user_by( 'id', (int) $m[1] );
+            $name = $user ? esc_html( gcrev_get_business_name( (int) $m[1] ) ) : "ID:{$m[1]}";
+            $defs = function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : [];
+            $tier = $user ? (string) get_user_meta( (int) $m[1], 'gcrev_service_tier', true ) : '';
+            $tier_name = $defs[ $tier ]['name'] ?? $tier;
+            $text = "{$name} のプランを「" . esc_html( $tier_name ) . "」に変更しました。";
+        } elseif ( preg_match( '/^user_(\d+)_state_(paid|trial|pending)$/', $msg, $m ) ) {
+            $user = get_user_by( 'id', (int) $m[1] );
+            $name = $user ? esc_html( gcrev_get_business_name( (int) $m[1] ) ) : "ID:{$m[1]}";
+            $state_labels = [ 'paid' => '利用中（支払い済み）', 'trial' => 'お試し中', 'pending' => '手続中' ];
+            $text = "{$name} の状態を「{$state_labels[ $m[2] ]}」に変更しました。";
+        } elseif ( $msg === 'client_deleted' ) {
+            $text = "クライアントを削除しました（ユーザー・レポート・データを完全削除）。";
+        } elseif ( $msg === 'action_failed' ) {
+            echo '<div class="notice notice-error is-dismissible"><p>⚠️ 操作に失敗しました。対象が管理者でないか、入力値をご確認ください。</p></div>';
+            return;
         } else {
             return;
         }
@@ -254,27 +291,35 @@ class Gcrev_Client_Management_Page {
                         <?php
                         $tier = function_exists( 'gcrev_get_service_tier' ) ? gcrev_get_service_tier( $uid ) : 'basic';
                         $tier_defs = function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : [];
-                        $tier_name = $tier_defs[ $tier ]['name'] ?? $tier;
-                        $tier_badge_map = [
-                            'basic'         => ['color' => '#6B7280', 'bg' => '#f5f5f5',               'border' => ''],
-                            'ai_support'    => ['color' => '#4E8A6B', 'bg' => 'rgba(78,138,107,0.08)', 'border' => '1px solid rgba(78,138,107,0.2)'],
-                            'bansou'        => ['color' => '#9333ea', 'bg' => 'rgba(147,51,234,0.08)', 'border' => '1px solid rgba(147,51,234,0.2)'],
-                            'meo_only'      => ['color' => '#0ea5e9', 'bg' => 'rgba(14,165,233,0.08)', 'border' => '1px solid rgba(14,165,233,0.2)'],
-                            'review_survey' => ['color' => '#e11d48', 'bg' => 'rgba(225,29,72,0.08)',  'border' => '1px solid rgba(225,29,72,0.2)'],
-                        ];
-                        $tb = $tier_badge_map[ $tier ] ?? $tier_badge_map['basic'];
-                        $border_style = $tb['border'] ? "border:{$tb['border']};" : '';
                         ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:<?php echo esc_attr($tb['color']); ?>; background:<?php echo esc_attr($tb['bg']); ?>; <?php echo $border_style; ?> border-radius:3px;"><?php echo esc_html( $tier_name ); ?></span>
+                        <form method="post" style="margin:0;">
+                            <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
+                            <input type="hidden" name="gcrev_action" value="change_tier">
+                            <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $uid ); ?>">
+                            <select name="gcrev_new_tier" style="font-size:11px; max-width:170px;"
+                                onchange="if(confirm('プランを「'+this.options[this.selectedIndex].text+'」に変更します。よろしいですか？')){this.form.submit();}else{this.value='<?php echo esc_js( $tier ); ?>';}">
+                                <?php foreach ( $tier_defs as $tkey => $tdef ) :
+                                    // 廃止ティアは「現在そのティア」の場合のみ選択肢に残す
+                                    if ( ! empty( $tdef['deprecated'] ) && $tkey !== $tier ) { continue; }
+                                ?>
+                                    <option value="<?php echo esc_attr( $tkey ); ?>" <?php selected( $tier, $tkey ); ?>><?php echo esc_html( $tdef['name'] ?? $tkey ); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </form>
                     </td>
                     <td>
-                        <?php if ( $is_test ) : ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#d97706; background:rgba(217,119,6,0.08); border:1px solid rgba(217,119,6,0.2); border-radius:3px;">お試し中</span>
-                        <?php elseif ( $is_paid ) : ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#4E8A6B; background:rgba(78,138,107,0.08); border-radius:3px;">利用中</span>
-                        <?php else : ?>
-                            <span style="display:inline-block; padding:2px 8px; font-size:11px; font-weight:600; color:#999; background:#f5f5f5; border-radius:3px;">手続中</span>
-                        <?php endif; ?>
+                        <?php $current_state = $is_test ? 'trial' : ( $is_paid ? 'paid' : 'pending' ); ?>
+                        <form method="post" style="margin:0;">
+                            <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
+                            <input type="hidden" name="gcrev_action" value="change_state">
+                            <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $uid ); ?>">
+                            <select name="gcrev_new_state" style="font-size:11px;"
+                                onchange="if(confirm('状態を「'+this.options[this.selectedIndex].text+'」に変更します。よろしいですか？')){this.form.submit();}else{this.value='<?php echo esc_js( $current_state ); ?>';}">
+                                <option value="paid" <?php selected( $current_state, 'paid' ); ?>>利用中（支払い済み）</option>
+                                <option value="trial" <?php selected( $current_state, 'trial' ); ?>>お試し中</option>
+                                <option value="pending" <?php selected( $current_state, 'pending' ); ?>>手続中</option>
+                            </select>
+                        </form>
                     </td>
                     <td style="text-align: center;">
                         <?php if ( $cache_cnt > 0 ) : ?>
@@ -354,15 +399,25 @@ class Gcrev_Client_Management_Page {
                         <?php endif; ?>
 
                         <a href="<?php echo esc_url( get_edit_user_link( $uid ) ); ?>" class="button button-small" title="ユーザー編集">✏️</a>
+
+                        <form method="post" style="display: inline;" onsubmit="return confirm('【警告】<?php echo esc_js( gcrev_get_business_name( $user->ID ) ); ?> を完全に削除します。\nこのクライアントのユーザーアカウント・レポート・データがすべて削除され、復元できません。\n\n本当に削除しますか？');">
+                            <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
+                            <input type="hidden" name="gcrev_action" value="delete_client">
+                            <input type="hidden" name="gcrev_target_user" value="<?php echo esc_attr( $uid ); ?>">
+                            <button type="submit" class="button button-small" style="color:#fff; background:#C95A4F; border-color:#C95A4F;" title="クライアント完全削除（復元不可）">🗑 クライアント削除</button>
+                        </form>
                     </td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
         <p class="description" style="margin-top: 8px;">
+            ※ プラン変更: ティアのプルダウンを選ぶと即時に変更されます（廃止プランは新規選択不可）。<br>
+            ※ 状態変更: 「利用中（支払い済み）／お試し中／手続中」を切り替えます。お試し中にすると開始・終了日時が未設定なら自動設定されます。状態は通知配信（支払い済み or 契約中のみ送信）にも影響します。<br>
             ※ キャッシュ削除: ダッシュボード・分析ページのデータキャッシュを削除します（次回アクセス時に再取得）。<br>
             ※ レポート全削除: そのクライアントの全月次レポートを完全に削除します（復元不可）。<br>
-            ※ SEO診断削除: そのクライアントのSEO／AIO診断履歴（最大10件）と前回比較データを完全に削除します（復元不可）。次回診断は初回扱いになります。
+            ※ SEO診断削除: そのクライアントのSEO／AIO診断履歴（最大10件）と前回比較データを完全に削除します（復元不可）。次回診断は初回扱いになります。<br>
+            ※ <strong style="color:#C95A4F;">クライアント削除</strong>: そのクライアントのユーザーアカウントと投稿（レポート等）を<strong>完全に削除</strong>します（復元不可）。
         </p>
         <?php
     }
@@ -406,6 +461,79 @@ class Gcrev_Client_Management_Page {
         ]);
 
         return count( $reports );
+    }
+
+    /**
+     * プラン（ティア）変更。成功時 "user_{id}_tier_changed"、失敗時 "action_failed"。
+     */
+    private function change_user_tier( int $user_id, string $tier ): string {
+        if ( user_can( $user_id, 'manage_options' ) ) { return 'action_failed'; }
+        if ( ! function_exists( 'gcrev_get_valid_service_tiers' ) ) { return 'action_failed'; }
+        if ( ! in_array( $tier, gcrev_get_valid_service_tiers(), true ) ) { return 'action_failed'; }
+        // 廃止ティアへの新規変更は不可（既存ユーザーの再保存のみ許容）
+        $defs = gcrev_get_service_tier_definitions();
+        if ( ! empty( $defs[ $tier ]['deprecated'] )
+             && get_user_meta( $user_id, 'gcrev_service_tier', true ) !== $tier ) {
+            return 'action_failed';
+        }
+        update_user_meta( $user_id, 'gcrev_service_tier', $tier );
+        return "user_{$user_id}_tier_changed";
+    }
+
+    /**
+     * 状態変更（利用中=支払い済み / お試し中 / 手続中）。
+     * - paid    : gcrev_payment_completed='1' かつ お試し解除
+     * - trial   : gcrev_test_operation='1'（開始/終了日が未設定なら自動設定）かつ 支払い解除
+     * - pending : 両方解除
+     * 成功時 "user_{id}_state_{state}"、失敗時 "action_failed"。
+     */
+    private function change_user_state( int $user_id, string $state ): string {
+        if ( user_can( $user_id, 'manage_options' ) ) { return 'action_failed'; }
+        if ( ! in_array( $state, [ 'paid', 'trial', 'pending' ], true ) ) { return 'action_failed'; }
+
+        if ( $state === 'paid' ) {
+            update_user_meta( $user_id, 'gcrev_payment_completed', '1' );
+            delete_user_meta( $user_id, 'gcrev_test_operation' );
+        } elseif ( $state === 'trial' ) {
+            delete_user_meta( $user_id, 'gcrev_payment_completed' );
+            update_user_meta( $user_id, 'gcrev_test_operation', '1' );
+            // 開始/終了日時が未設定なら自動設定（プロフィール保存と同じ挙動）
+            $tz    = wp_timezone();
+            $start = get_user_meta( $user_id, 'gcrev_trial_start', true );
+            if ( empty( $start ) ) {
+                $start = ( new \DateTimeImmutable( 'now', $tz ) )->format( 'Y-m-d H:i:s' );
+                update_user_meta( $user_id, 'gcrev_trial_start', $start );
+            }
+            $end = get_user_meta( $user_id, 'gcrev_trial_end', true );
+            if ( empty( $end ) ) {
+                $days    = function_exists( 'gcrev_trial_default_days' ) ? (int) gcrev_trial_default_days() : 14;
+                $end_obj = ( new \DateTimeImmutable( $start, $tz ) )->modify( "+{$days} days" );
+                update_user_meta( $user_id, 'gcrev_trial_end', $end_obj->format( 'Y-m-d H:i:s' ) );
+            }
+        } else { // pending
+            delete_user_meta( $user_id, 'gcrev_payment_completed' );
+            delete_user_meta( $user_id, 'gcrev_test_operation' );
+        }
+        return "user_{$user_id}_state_{$state}";
+    }
+
+    /**
+     * クライアント（WPユーザー）を完全削除する。復元不可。管理者は削除不可。
+     * 投稿（レポート等）も削除される。成功時 "client_deleted"、失敗時 "action_failed"。
+     */
+    private function delete_client( int $user_id ): string {
+        if ( user_can( $user_id, 'manage_options' ) ) { return 'action_failed'; }
+        $user = get_userdata( $user_id );
+        if ( ! $user ) { return 'action_failed'; }
+
+        // 孤児transient防止のため先にキャッシュも掃除
+        $this->delete_user_cache( $user_id );
+
+        if ( ! function_exists( 'wp_delete_user' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+        }
+        $ok = wp_delete_user( $user_id ); // 投稿（レポート等）も削除される
+        return $ok ? 'client_deleted' : 'action_failed';
     }
 
     /**
