@@ -3209,9 +3209,16 @@ class Gcrev_Insight_API {
 
                 // サイトダッシュボード / 分析ハブ用: 素の KPI（loadData は result.data を保存）。
                 // get_dashboard_kpi(cache_first=1) はキャッシュのみ読み、ミス時は外部 fetch せず空を返す。
+                // TTL 切れ（option は残存）の場合は _stale=true 付きで返る。
+                // 【重要】以前は _stale を弾いて null（＝シード無し→初回 REST 往復）にしていたが、
+                // それだと「TTL が切れた瞬間に初回描画が毎回 1.5〜1.9 秒ブロックされる」症状になる。
+                // warm（ログイン後 / cron）はキャッシュ欠落時のみ温め、かつログイン warm は
+                // レスポンス送出後に走るため、"その日最初のログイン" は必ず stale を踏む。
+                // → stale でも即シードして描画し、鮮度は loadData 側のバックグラウンド再取得
+                //   （seed に乗る _stale=true を見て revalidate）で担保する（stale-while-revalidate）。
                 case 'dashboard':
                     $kpi = $this->get_dashboard_kpi( $period, $user_id, 1 );
-                    if ( empty( $kpi ) || ! is_array( $kpi ) || ! empty( $kpi['_stale'] ) ) { return null; }
+                    if ( empty( $kpi ) || ! is_array( $kpi ) ) { return null; }
                     return $kpi;
 
                 // CV分析ページ用（result.data を保存）。cron では別途温める必要あり。

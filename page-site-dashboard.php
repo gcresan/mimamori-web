@@ -1072,6 +1072,49 @@ get_template_part('template-parts/period-selector');
     // =============================================
     // データ取得 & 描画
     // =============================================
+    function renderAll(data) {
+        currentData = data;
+        updatePeriodDisplay(data);
+        checkDataNotice(data);
+        renderKpiCards(data);
+        renderTrendChart(data);
+        renderAnalysisCards(data);
+    }
+
+    // 最新データを取得して描画＋キャッシュ更新。
+    // silent=true: stale な温めキャッシュ（seed）を即描画した後、裏で取り直す用途。
+    //   ローディング表示もエラーアラートも出さず、成功時だけ静かに差し替える。
+    function fetchAndRender(period, cacheKey, silent) {
+        if (!silent) showLoading();
+
+        return fetch(restBase + 'dashboard/kpi?period=' + encodeURIComponent(period), {
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (!res.success) {
+                if (!silent) alert('データの取得に失敗しました: ' + (res.message || '不明なエラー'));
+                return;
+            }
+            var data = res.data || res;
+            // 再取得で得た最新データには stale マーカーを残さない（次回以降 revalidate しない）
+            if (data && data._stale) { delete data._stale; }
+
+            // キャッシュに保存
+            if (window.gcrevCache) window.gcrevCache.set(cacheKey, data);
+
+            renderAll(data);
+        })
+        .catch(function(err) {
+            console.error('Site Dashboard fetch error:', err);
+            if (!silent) alert('データの取得に失敗しました。しばらく待ってからお試しください。');
+        })
+        .finally(function() {
+            if (!silent) hideLoading();
+        });
+    }
+
     function loadData(period) {
         var cacheKey = 'sd_kpi_' + period;
 
@@ -1083,46 +1126,15 @@ get_template_part('template-parts/period-selector');
             catch (e) { cached = window.__GCREV_SEED[cacheKey]; }
         }
         if (cached) {
-            currentData = cached;
-            updatePeriodDisplay(cached);
-            checkDataNotice(cached);
-            renderKpiCards(cached);
-            renderTrendChart(cached);
-            renderAnalysisCards(cached);
+            renderAll(cached);
+            // TTL 切れの温めキャッシュ（_stale=true でシードされたもの）を即描画した場合は、
+            // 裏で最新を取り直して差し替える。初回描画は常に即時、表示値は最終的に最新へ収束する
+            // （stale-while-revalidate）。これにより "その日最初のログインだけ毎回遅い" を解消する。
+            if (cached._stale) { fetchAndRender(period, cacheKey, true); }
             return;
         }
 
-        showLoading();
-
-        fetch(restBase + 'dashboard/kpi?period=' + encodeURIComponent(period), {
-            credentials: 'same-origin',
-            headers: { 'X-WP-Nonce': nonce }
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-            if (!res.success) {
-                alert('データの取得に失敗しました: ' + (res.message || '不明なエラー'));
-                return;
-            }
-            var data = res.data || res;
-            currentData = data;
-
-            // キャッシュに保存
-            if (window.gcrevCache) window.gcrevCache.set(cacheKey, data);
-
-            updatePeriodDisplay(data);
-            checkDataNotice(data);
-            renderKpiCards(data);
-            renderTrendChart(data);
-            renderAnalysisCards(data);
-        })
-        .catch(function(err) {
-            console.error('Site Dashboard fetch error:', err);
-            alert('データの取得に失敗しました。しばらく待ってからお試しください。');
-        })
-        .finally(function() {
-            hideLoading();
-        });
+        fetchAndRender(period, cacheKey, false);
     }
 
     // =============================================

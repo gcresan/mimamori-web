@@ -269,6 +269,39 @@ function updateAnalysisData(period) {
                 __cached.compare_range_label || ''
             );
         }
+        // TTL 切れの温めキャッシュ（_stale=true でシードされたもの）を即描画した場合は、
+        // 裏で最新を取り直して静かに差し替える（stale-while-revalidate）。
+        // 初回描画は常に即時、表示値は最終的に最新へ収束する。
+        if (__cached._stale) {
+            fetch(
+                '<?php echo rest_url("gcrev/v1/dashboard/kpi"); ?>?period=' +
+                    encodeURIComponent(period),
+                {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-WP-Nonce': '<?php echo wp_create_nonce("wp_rest"); ?>'
+                    },
+                    credentials: 'same-origin'
+                }
+            )
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (result) {
+                    if (!result || !result.success || !result.data) return;
+                    var data = result.data;
+                    if (data._stale) { delete data._stale; }
+                    if (window.gcrevCache) window.gcrevCache.set(__cacheKey, data);
+                    updateAnalysisDisplay(data);
+                    if (window.GCREV?.updatePeriodRange) {
+                        GCREV.updatePeriodRange(
+                            'analysis-period',
+                            data.current_range_label || '',
+                            data.compare_range_label || ''
+                        );
+                    }
+                })
+                .catch(function () { /* 静かに失敗（stale 表示を維持） */ });
+        }
         return;
     }
 
