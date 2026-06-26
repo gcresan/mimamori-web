@@ -133,12 +133,21 @@ class Mimamori_Notification_Service {
 
     /**
      * 週次便のプラン別追加ブロックを実データから集計する。
+     * - plan_name:  現在のプラン表示名（全プラン共通・フッターで常時表示）
      * - region_top: エリア別訪問 Top3（analysis_basic = 見える化プラン以上）
      * - meo:        MEO主要3指標（meo_menu = プロ分析・集客プラン以上）
      * 取得失敗・対象外プランのキーは省略される（呼び出し側は素直にスキップ）。
      */
     private function collect_digest_extras( int $uid ): array {
         $extras = [];
+
+        if ( function_exists( 'gcrev_get_service_tier' ) && function_exists( 'gcrev_get_service_tier_definitions' ) ) {
+            $tier = gcrev_get_service_tier( $uid );
+            $defs = gcrev_get_service_tier_definitions();
+            if ( isset( $defs[ $tier ]['name'] ) && $defs[ $tier ]['name'] !== '' ) {
+                $extras['plan_name'] = (string) $defs[ $tier ]['name'];
+            }
+        }
 
         if ( function_exists( 'mimamori_can' ) && mimamori_can( 'analysis_basic', $uid ) ) {
             $region = $this->api->get_weekly_region_top( $uid, 3 );
@@ -543,6 +552,7 @@ class Mimamori_Notification_Service {
      * @param array{recent:int,prev:int}|null $sessions 訪問数の今週/前週
      * @param array{recent:int,prev:int}|null $cv       問い合わせの今週/前週
      * @param array $extras プラン別の追加ブロック。
+     *                      plan_name:  string 現在のプラン表示名（フッターで常時表示）
      *                      region_top: array<int,array{region:string,sessions:int,prev:int}>（見える化以上）
      *                      meo:        array{map:array,calls:array,directions:array}（プロ分析・集客以上）
      * @return array{subject:string, body:string}
@@ -595,12 +605,20 @@ class Mimamori_Notification_Service {
             $lines[] = '';
             $lines[] = '▼ 今週の数字についてAIに聞いてみる';
             $lines[] = $this->create_chat_link( $link_uid, 'digest', implode( "\n", $summary_lines ) );
-        } else {
-            // 見える化プラン: チャットは対象外のためアップグレード導線を表示
-            $lines[] = '';
-            $lines[] = '数字の見方のご相談やAIチャットは、AI改善提案プラン以上でご利用いただけます。';
-            $lines[] = 'プランのご案内: ' . home_url( '/plans/' );
         }
+
+        // プラン情報フッター（常時表示）。現在のプラン名と変更導線を必ず添える。
+        // 文言は中立に保ち、下位プランのときだけ前向きなアップセル一文を加える。
+        $plan_name = ( isset( $extras['plan_name'] ) && $extras['plan_name'] !== '' )
+            ? (string) $extras['plan_name'] : 'ご契約プラン';
+        $lines[] = '';
+        $lines[] = '────────────────';
+        $lines[] = 'ご利用中のプラン: ' . $plan_name;
+        if ( ! $with_analysis ) {
+            // 見える化プラン: AIチャット・改善提案は上位プランで提供
+            $lines[] = '数字の見方のご相談やAIチャット、改善提案は上位プランでご利用いただけます。';
+        }
+        $lines[] = 'プランの確認・ご変更はこちら: ' . home_url( '/plans/' );
 
         return [ 'subject' => $subject, 'body' => implode( "\n", $lines ) ];
     }
@@ -776,6 +794,7 @@ class Mimamori_Notification_Service {
             case 'digest':
                 // プレビュー用サンプル。エリア別は全プラン、MEO は上位プラン（with_analysis）想定で出し分ける。
                 $extras = [
+                    'plan_name'  => $with_analysis ? 'プロ分析・集客プラン' : '見える化プラン',
                     'region_top' => [
                         [ 'region' => '東京都',   'sessions' => 8, 'prev' => 6 ],
                         [ 'region' => '神奈川県', 'sessions' => 5, 'prev' => 6 ],
