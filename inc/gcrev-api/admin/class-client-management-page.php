@@ -229,6 +229,21 @@ class Gcrev_Client_Management_Page {
     }
 
     /**
+     * クライアントの状態を 'paid' | 'trial' | 'pending' で返す（表示・絞り込み・ソート共通）。
+     * 優先順位は表示バッジと同じ「お試し中 > 利用中 > 手続中」。
+     * （gcrev_payment_completed と gcrev_test_operation が両方立っている場合はお試し中扱い）
+     */
+    private function client_state( int $uid ): string {
+        if ( get_user_meta( $uid, 'gcrev_test_operation', true ) === '1' ) {
+            return 'trial';
+        }
+        if ( function_exists( 'gcrev_is_payment_active' ) && gcrev_is_payment_active( $uid ) ) {
+            return 'paid';
+        }
+        return 'pending';
+    }
+
+    /**
      * 並べ替え用のヘッダーリンクを生成する（クリックで asc/desc トグル）。
      */
     private function sort_link( string $key, string $label, string $orderby, string $order ): string {
@@ -325,10 +340,7 @@ class Gcrev_Client_Management_Page {
                     if ( $t !== $filter_tier ) { return false; }
                 }
                 if ( $filter_state !== '' ) {
-                    $is_test_ = ( get_user_meta( $uid_, 'gcrev_test_operation', true ) === '1' );
-                    $is_paid_ = function_exists( 'gcrev_is_payment_active' ) && gcrev_is_payment_active( $uid_ );
-                    $st = $is_paid_ ? 'paid' : ( $is_test_ ? 'trial' : 'pending' );
-                    if ( $st !== $filter_state ) { return false; }
+                    if ( $this->client_state( $uid_ ) !== $filter_state ) { return false; }
                 }
                 return true;
             } ) );
@@ -347,10 +359,9 @@ class Gcrev_Client_Management_Page {
                     $t = function_exists( 'gcrev_get_service_tier' ) ? gcrev_get_service_tier( $uid_ ) : 'basic';
                     $rank[ $uid_ ] = $tier_rank[ $t ] ?? 999;
                 } else {
-                    $is_test_ = ( get_user_meta( $uid_, 'gcrev_test_operation', true ) === '1' );
-                    $is_paid_ = function_exists( 'gcrev_is_payment_active' ) && gcrev_is_payment_active( $uid_ );
                     // 利用中(0) < お試し中(1) < 手続中(2)
-                    $rank[ $uid_ ] = $is_paid_ ? 0 : ( $is_test_ ? 1 : 2 );
+                    $state_rank = [ 'paid' => 0, 'trial' => 1, 'pending' => 2 ];
+                    $rank[ $uid_ ] = $state_rank[ $this->client_state( $uid_ ) ] ?? 2;
                 }
             }
             usort( $users, function ( $a, $b ) use ( $rank, $order ) {
@@ -400,7 +411,7 @@ class Gcrev_Client_Management_Page {
                 <tr>
                     <td style="color: #999;"><?php echo esc_html( $uid ); ?></td>
                     <td>
-                        <strong><?php echo esc_html( gcrev_get_business_name( $user->ID ) ); ?></strong>
+                        <a href="<?php echo esc_url( get_edit_user_link( $uid ) ); ?>" title="編集画面を開く"><strong><?php echo esc_html( gcrev_get_business_name( $user->ID ) ); ?></strong></a>
                     </td>
                     <td><?php echo esc_html( $user->user_email ); ?></td>
                     <td>
@@ -433,7 +444,7 @@ class Gcrev_Client_Management_Page {
                         </form>
                     </td>
                     <td>
-                        <?php $current_state = $is_test ? 'trial' : ( $is_paid ? 'paid' : 'pending' ); ?>
+                        <?php $current_state = $this->client_state( $uid ); ?>
                         <form method="post" style="margin:0;">
                             <?php wp_nonce_field( 'gcrev_client_mgmt_action', '_gcrev_client_mgmt_nonce' ); ?>
                             <input type="hidden" name="gcrev_action" value="change_state">
