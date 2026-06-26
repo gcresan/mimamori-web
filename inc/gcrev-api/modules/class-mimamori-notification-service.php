@@ -737,14 +737,28 @@ class Mimamori_Notification_Service {
         $body    = "※これは通知設定からのテスト送信です。実際の通知では、各クライアントのサイトデータやAIによる分析が反映されます。\n\n"
                  . $email['body'];
 
+        // 失敗時の PHPMailer エラー理由を捕捉する（サーバーのメール設定診断用）
+        $mail_error = '';
+        $capture    = static function ( $wp_error ) use ( &$mail_error ) {
+            if ( is_wp_error( $wp_error ) ) { $mail_error = $wp_error->get_error_message(); }
+        };
+        add_action( 'wp_mail_failed', $capture );
         $sent = wp_mail( $recipient, $subject, $body );
-        self::log( sprintf( 'TEST %s to=%s analysis=%s result=%s', $kind, $recipient, $with_analysis ? 'yes' : 'no', $sent ? 'OK' : 'FAIL' ) );
+        remove_action( 'wp_mail_failed', $capture );
+
+        self::log( sprintf(
+            'TEST %s to=%s analysis=%s result=%s%s',
+            $kind, $recipient, $with_analysis ? 'yes' : 'no', $sent ? 'OK' : 'FAIL',
+            ( ! $sent && $mail_error !== '' ) ? ' err=' . $mail_error : ''
+        ) );
 
         return [
             'ok'      => (bool) $sent,
             'message' => $sent
                 ? "テストメールを {$recipient} に送信しました。"
-                : 'メール送信に失敗しました。サーバーのメール設定をご確認ください。',
+                : 'メール送信に失敗しました。' . ( $mail_error !== ''
+                    ? '（詳細: ' . $mail_error . '）'
+                    : 'サーバーのメール設定をご確認ください。' ),
         ];
     }
 
@@ -862,14 +876,28 @@ class Mimamori_Notification_Service {
                  . "本文は実際のデータから組み立てた本番同等の内容です。送信履歴・上限カウントは更新していません。\n\n"
                  . $email['body'];
 
+        // 失敗時の PHPMailer エラー理由を捕捉する（サーバーのメール設定診断用）
+        $mail_error = '';
+        $capture    = static function ( $wp_error ) use ( &$mail_error ) {
+            if ( is_wp_error( $wp_error ) ) { $mail_error = $wp_error->get_error_message(); }
+        };
+        add_action( 'wp_mail_failed', $capture );
         $sent = wp_mail( $recipient, $subject, $body );
-        self::log( sprintf( 'REAL-TEST %s target=%d to=%s result=%s', $kind, $target_uid, $recipient, $sent ? 'OK' : 'FAIL' ) );
+        remove_action( 'wp_mail_failed', $capture );
+
+        self::log( sprintf(
+            'REAL-TEST %s target=%d to=%s result=%s%s',
+            $kind, $target_uid, $recipient, $sent ? 'OK' : 'FAIL',
+            ( ! $sent && $mail_error !== '' ) ? ' err=' . $mail_error : ''
+        ) );
 
         return [
             'ok'      => (bool) $sent,
             'message' => $sent
                 ? "実データテストメール（{$name} のデータ）を {$recipient} に送信しました。"
-                : 'メール送信に失敗しました。サーバーのメール設定をご確認ください。',
+                : 'メール送信に失敗しました。' . ( $mail_error !== ''
+                    ? '（詳細: ' . $mail_error . '）'
+                    : 'サーバーのメール設定をご確認ください。' ),
         ];
     }
 }
