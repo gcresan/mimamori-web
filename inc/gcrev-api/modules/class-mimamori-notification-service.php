@@ -90,9 +90,15 @@ class Mimamori_Notification_Service {
 
     /**
      * 通知を送ってよいクライアントか（支払い済み or 正式契約中）。
-     * お試し中のみ・未契約・解約済みは false。
+     * お試し中・未契約・解約済みは false。
+     *
+     * お試し中（gcrev_test_operation='1'）は、支払いフラグが併存していても
+     * 「お試し中」を優先して対象外にする（クライアント管理画面の状態表示と一致させる）。
      */
     private function is_billable_client( int $uid ): bool {
+        if ( get_user_meta( $uid, 'gcrev_test_operation', true ) === '1' ) {
+            return false;
+        }
         $paid = function_exists( 'gcrev_is_payment_active' ) && gcrev_is_payment_active( $uid );
         $contracted = function_exists( 'gcrev_get_contract_status' ) && gcrev_get_contract_status( $uid ) === 'active';
         return $paid || $contracted;
