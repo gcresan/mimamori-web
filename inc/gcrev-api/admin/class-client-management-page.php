@@ -229,6 +229,23 @@ class Gcrev_Client_Management_Page {
     }
 
     /**
+     * 並べ替え用のヘッダーリンクを生成する（クリックで asc/desc トグル）。
+     */
+    private function sort_link( string $key, string $label, string $orderby, string $order ): string {
+        $is_active  = ( $orderby === $key );
+        $next_order = ( $is_active && $order === 'asc' ) ? 'desc' : 'asc';
+        $url        = add_query_arg(
+            [ 'page' => self::MENU_SLUG, 'mc_orderby' => $key, 'mc_order' => $next_order ],
+            admin_url( 'admin.php' )
+        );
+        $arrow = $is_active ? ( $order === 'asc' ? ' ▲' : ' ▼' ) : ' ⇅';
+        $color = $is_active ? '#2271b1' : '#bbb';
+        return '<a href="' . esc_url( $url ) . '" style="text-decoration:none; color:inherit;">'
+             . esc_html( $label )
+             . '<span style="color:' . esc_attr( $color ) . '; font-size:11px;">' . esc_html( $arrow ) . '</span></a>';
+    }
+
+    /**
      * クライアント一覧テーブル
      */
     private function render_client_table(): void {
@@ -243,6 +260,34 @@ class Gcrev_Client_Management_Page {
             return;
         }
 
+        // ソート（ティア / 状態）。未指定時は従来どおり登録日 DESC。
+        $orderby = isset( $_GET['mc_orderby'] ) ? sanitize_key( wp_unslash( $_GET['mc_orderby'] ) ) : '';
+        $order   = ( isset( $_GET['mc_order'] ) && strtolower( (string) wp_unslash( $_GET['mc_order'] ) ) === 'asc' ) ? 'asc' : 'desc';
+
+        if ( in_array( $orderby, [ 'tier', 'state' ], true ) ) {
+            $tier_rank = array_flip( array_keys(
+                function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : []
+            ) );
+            $rank = [];
+            foreach ( $users as $u ) {
+                $uid_ = (int) $u->ID;
+                if ( $orderby === 'tier' ) {
+                    $t = function_exists( 'gcrev_get_service_tier' ) ? gcrev_get_service_tier( $uid_ ) : 'basic';
+                    $rank[ $uid_ ] = $tier_rank[ $t ] ?? 999;
+                } else {
+                    $is_test_ = ( get_user_meta( $uid_, 'gcrev_test_operation', true ) === '1' );
+                    $is_paid_ = function_exists( 'gcrev_is_payment_active' ) && gcrev_is_payment_active( $uid_ );
+                    // 利用中(0) < お試し中(1) < 手続中(2)
+                    $rank[ $uid_ ] = $is_paid_ ? 0 : ( $is_test_ ? 1 : 2 );
+                }
+            }
+            usort( $users, function ( $a, $b ) use ( $rank, $order ) {
+                $cmp = $rank[ (int) $a->ID ] <=> $rank[ (int) $b->ID ];
+                if ( $cmp === 0 ) { $cmp = (int) $b->ID <=> (int) $a->ID; } // 同順位は ID 降順で安定
+                return $order === 'asc' ? $cmp : -$cmp;
+            } );
+        }
+
         ?>
         <table class="widefat striped" style="margin-top: 16px;">
             <thead>
@@ -251,8 +296,8 @@ class Gcrev_Client_Management_Page {
                     <th>ユーザー</th>
                     <th>メール</th>
                     <th>サイトURL</th>
-                    <th>ティア</th>
-                    <th>状態</th>
+                    <th><?php echo $this->sort_link( 'tier', 'ティア', $orderby, $order ); ?></th>
+                    <th><?php echo $this->sort_link( 'state', '状態', $orderby, $order ); ?></th>
                     <th style="text-align: center;">キャッシュ</th>
                     <th style="text-align: center;">レポート</th>
                     <th style="text-align: center;">SEO診断</th>
