@@ -169,7 +169,7 @@ class Gcrev_Chat_Log_Page {
                         <option value="">すべて</option>
                         <?php foreach ( $user_ids as $uid ) :
                             $u = get_userdata( (int) $uid );
-                            $label = $u ? ( $u->display_name ?: $u->user_login ) : "user #{$uid}";
+                            $label = $u ? ( gcrev_get_business_name( (int) $u->ID ) ?: $u->display_name ?: $u->user_login ) : "user #{$uid}";
                         ?>
                         <option value="<?php echo esc_attr( $uid ); ?>" <?php selected( $f['user_id'], (int) $uid ); ?>>
                             <?php echo esc_html( $label ); ?>
@@ -210,7 +210,7 @@ class Gcrev_Chat_Log_Page {
                 ?>
                     <tr>
                         <td><?php echo esc_html( $row['created_at'] ); ?></td>
-                        <td><?php echo esc_html( $u ? ( $u->display_name ?: $u->user_login ) : "user #{$row['user_id']}" ); ?></td>
+                        <td><?php echo esc_html( $u ? ( gcrev_get_business_name( (int) $u->ID ) ?: $u->display_name ?: $u->user_login ) : "user #{$row['user_id']}" ); ?></td>
                         <td><?php echo esc_html( self::source_label( (string) $row['source'] ) ); ?></td>
                         <td><?php echo esc_html( mb_substr( (string) $row['message'], 0, 120 ) ); ?></td>
                         <td><?php echo esc_html( (string) $row['intent'] ); ?></td>
@@ -263,7 +263,7 @@ class Gcrev_Chat_Log_Page {
             fputcsv( $out, [
                 $row['created_at'],
                 $row['user_id'],
-                $u ? ( $u->display_name ?: $u->user_login ) : '',
+                $u ? ( gcrev_get_business_name( (int) $u->ID ) ?: $u->display_name ?: $u->user_login ) : '',
                 self::source_label( (string) $row['source'] ),
                 (string) $row['message'],
                 (string) $row['response'],

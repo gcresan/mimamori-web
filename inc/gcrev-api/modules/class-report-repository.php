@@ -53,7 +53,7 @@ class Gcrev_Report_Repository {
         // 新規レポート作成
         $post_data = [
             'post_type'   => 'gcrev_report',
-            'post_title'  => sprintf('%s %s様 月次レポート v%d', $year_month, get_userdata($user_id)->display_name, $new_version),
+            'post_title'  => sprintf('%s %s様 月次レポート v%d', $year_month, ( function_exists('gcrev_get_business_name') ? gcrev_get_business_name($user_id) : get_userdata($user_id)->display_name ), $new_version),
             'post_status' => 'publish',
             'post_author' => $user_id,
         ];

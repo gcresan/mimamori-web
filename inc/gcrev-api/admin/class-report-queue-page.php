@@ -384,7 +384,7 @@ class Gcrev_Report_Queue_Page {
                 <tbody>
                 <?php foreach ( $items as $item ) :
                     $user      = get_userdata( (int) $item->user_id );
-                    $user_name = $user ? $user->display_name : "ID:{$item->user_id}";
+                    $user_name = $user ? ( gcrev_get_business_name( (int) $item->user_id ) ?: $user->display_name ) : "ID:{$item->user_id}";
                     $color     = self::STATUS_COLORS[ $item->status ] ?? '#666';
                 ?>
                     <tr>

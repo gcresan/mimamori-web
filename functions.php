@@ -8672,9 +8672,10 @@ function gcrev_rest_get_actual_cv_users(\WP_REST_Request $req): \WP_REST_Respons
     $q = new WP_User_Query($args);
     $users = [];
     foreach ($q->get_results() as $u) {
+        $bn = gcrev_get_business_name( (int) $u->ID );
         $users[] = [
             'id' => (int)$u->ID,
-            'name' => $u->display_name ?: $u->user_login,
+            'name' => $bn !== '' ? $bn : ( $u->display_name ?: $u->user_login ),
         ];
     }
 
@@ -12683,7 +12684,7 @@ function mimamori_render_hq_user_fields( \WP_User $user ): void {
                                        name="mimamori_hq_managed[]"
                                        value="<?php echo (int) $c->ID; ?>"
                                        <?php checked( $checked ); ?> />
-                                <span><?php echo esc_html( sprintf( '#%d %s (%s)', $c->ID, $c->display_name, $c->user_login ) ); ?></span>
+                                <span><?php echo esc_html( sprintf( '#%d %s (%s)', $c->ID, ( gcrev_get_business_name( (int) $c->ID ) ?: $c->display_name ), $c->user_login ) ); ?></span>
                             </label>
                         <?php endforeach; ?>
                     <?php endif; ?>

@@ -267,7 +267,7 @@ class Gcrev_Inquiries_Settings_Page {
                 <input type="hidden" name="page" value="<?php echo esc_attr( self::MENU_SLUG ); ?>" />
                 <select name="user" onchange="this.form.submit()">
                     <?php foreach ( $users as $u ) :
-                        $label = sprintf( '#%d %s (%s)', (int) $u->ID, $u->display_name, $u->user_login );
+                        $label = sprintf( '#%d %s (%s)', (int) $u->ID, ( gcrev_get_business_name( (int) $u->ID ) ?: $u->display_name ), $u->user_login );
                         ?>
                         <option value="<?php echo esc_attr( (string) $u->ID ); ?>" <?php selected( $current, (int) $u->ID ); ?>><?php echo esc_html( $label ); ?></option>
                     <?php endforeach; ?>
@@ -516,7 +516,7 @@ class Gcrev_Inquiries_Settings_Page {
         <div class="wrap">
             <h1>📝 問い合わせ明細 — <?php echo esc_html( sprintf( '%04d年%02d月', $year, $month ) ); ?>
                 <span style="font-size:14px;font-weight:normal;color:#666;">
-                    （対象: <?php echo esc_html( $user_info ? sprintf( '#%d %s', (int) $user_info->ID, $user_info->display_name ) : '#' . $user_id ); ?>）
+                    （対象: <?php echo esc_html( $user_info ? sprintf( '#%d %s', (int) $user_info->ID, ( gcrev_get_business_name( (int) $user_info->ID ) ?: $user_info->display_name ) ) : '#' . $user_id ); ?>）
                 </span>
             </h1>
 

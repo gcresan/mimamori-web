@@ -14143,7 +14143,7 @@ PROMPT;
             if (!empty($config)) {
                 $data[] = [
                     'id'   => $u->ID,
-                    'name' => $u->display_name,
+                    'name' => function_exists('gcrev_get_business_name') ? ( gcrev_get_business_name((int) $u->ID) ?: $u->display_name ) : $u->display_name,
                 ];
             }
         }

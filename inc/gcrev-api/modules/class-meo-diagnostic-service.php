@@ -1125,7 +1125,9 @@ PROMPT;
         $tz  = wp_timezone();
         $now = new \DateTimeImmutable( 'now', $tz );
 
-        $display_name = get_userdata( $user_id )->display_name ?? '';
+        $display_name = function_exists( 'gcrev_get_business_name' )
+            ? (string) gcrev_get_business_name( $user_id )
+            : ( get_userdata( $user_id )->display_name ?? '' );
         $post_data = [
             'post_type'   => 'gcrev_report',
             'post_title'  => sprintf( '%s %s様 MEO診断レポート', $data['diagnostic_date'], $display_name ),

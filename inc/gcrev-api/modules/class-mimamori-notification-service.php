@@ -93,6 +93,19 @@ class Mimamori_Notification_Service {
         return function_exists( 'mimamori_can' ) && mimamori_can( 'improvement_actions', $user_id );
     }
 
+    /**
+     * 宛名・表示に使うクライアント名（事業者名を最優先）。
+     * gcrev_get_business_name() のフォールバック: 事業者名 → last_name → display_name。
+     */
+    private function client_name( int $uid, ?\WP_User $user = null ): string {
+        if ( function_exists( 'gcrev_get_business_name' ) ) {
+            $name = (string) gcrev_get_business_name( $uid );
+            if ( $name !== '' ) { return $name; }
+        }
+        if ( ! $user ) { $user = get_userdata( $uid ); }
+        return $user ? ( $user->display_name ?: $user->user_login ) : '';
+    }
+
     // =================================================================
     // 共通: トレンド集計
     // =================================================================
@@ -370,7 +383,7 @@ class Mimamori_Notification_Service {
         $with_analysis = $this->has_analysis_plan( $uid );
         // AI改善提案プラン以上のみ AI 分析（Gemini 呼び出し）を行う
         $analysis = $with_analysis ? $this->generate_analysis( $uid, $alert ) : '';
-        $email    = $this->build_alert_email( $uid, ( $user->display_name ?: $user->user_login ), $alert, $with_analysis, $analysis );
+        $email    = $this->build_alert_email( $uid, $this->client_name( $uid, $user ), $alert, $with_analysis, $analysis );
 
         $sent = wp_mail( $user->user_email, $email['subject'], $email['body'] );
         self::log( sprintf( 'alert sent user=%d type=%s analysis=%s result=%s', $uid, $alert['type'], $with_analysis ? 'yes' : 'no', $sent ? 'OK' : 'FAIL' ) );
@@ -492,7 +505,7 @@ class Mimamori_Notification_Service {
             : '今週も異常はありませんでした。';
 
         $email = $this->build_digest_email(
-            $uid, ( $user->display_name ?: $user->user_login ),
+            $uid, $this->client_name( $uid, $user ),
             $this->has_analysis_plan( $uid ), $sessions, $cv, $anomaly_line
         );
 
@@ -616,7 +629,7 @@ class Mimamori_Notification_Service {
         $user = get_userdata( $uid );
         if ( ! $user ) { return; }
 
-        $email = $this->build_suggestion_email( $uid, ( $user->display_name ?: $user->user_login ), $action );
+        $email = $this->build_suggestion_email( $uid, $this->client_name( $uid, $user ), $action );
 
         $sent = wp_mail( $user->user_email, $email['subject'], $email['body'] );
         self::log( sprintf( 'suggest sent user=%d result=%s', $uid, $sent ? 'OK' : 'FAIL' ) );
@@ -775,7 +788,7 @@ class Mimamori_Notification_Service {
         foreach ( $this->get_target_user_ids() as $uid ) {
             $u = get_userdata( $uid );
             if ( ! $u ) { continue; }
-            $name = $u->display_name ?: $u->user_login;
+            $name = $this->client_name( $uid, $u );
             $plan = $this->has_analysis_plan( $uid ) ? 'AI改善提案プラン以上' : '見える化プラン';
             $out[] = [
                 'id'    => $uid,
@@ -809,7 +822,7 @@ class Mimamori_Notification_Service {
             return [ 'ok' => false, 'message' => '対象クライアントが見つかりません。' ];
         }
 
-        $name          = ( $user->display_name ?: $user->user_login );
+        $name          = $this->client_name( $target_uid, $user );
         $with_analysis = $this->has_analysis_plan( $target_uid );
 
         switch ( $kind ) {

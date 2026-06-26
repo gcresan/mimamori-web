@@ -81,7 +81,7 @@ class Gcrev_WP_Publish_Settings_Page {
                         <option value="">選択してください</option>
                         <?php foreach ( $users as $u ) : ?>
                             <option value="<?php echo esc_attr( $u->ID ); ?>" <?php selected( $selected_user_id, $u->ID ); ?>>
-                                <?php echo esc_html( $u->display_name ?: $u->user_login ); ?> (ID: <?php echo esc_html( $u->ID ); ?>)
+                                <?php echo esc_html( gcrev_get_business_name( (int) $u->ID ) ?: ( $u->display_name ?: $u->user_login ) ); ?> (ID: <?php echo esc_html( $u->ID ); ?>)
                             </option>
                         <?php endforeach; ?>
                     </select>
