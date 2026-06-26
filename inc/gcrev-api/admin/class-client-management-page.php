@@ -234,15 +234,62 @@ class Gcrev_Client_Management_Page {
     private function sort_link( string $key, string $label, string $orderby, string $order ): string {
         $is_active  = ( $orderby === $key );
         $next_order = ( $is_active && $order === 'asc' ) ? 'desc' : 'asc';
-        $url        = add_query_arg(
-            [ 'page' => self::MENU_SLUG, 'mc_orderby' => $key, 'mc_order' => $next_order ],
-            admin_url( 'admin.php' )
+        // 現在のクエリ（絞り込み等）を保持したまま並べ替えだけ差し替える
+        $url        = remove_query_arg(
+            'action_done',
+            add_query_arg( [ 'mc_orderby' => $key, 'mc_order' => $next_order ] )
         );
         $arrow = $is_active ? ( $order === 'asc' ? ' ▲' : ' ▼' ) : ' ⇅';
         $color = $is_active ? '#2271b1' : '#bbb';
         return '<a href="' . esc_url( $url ) . '" style="text-decoration:none; color:inherit;">'
              . esc_html( $label )
              . '<span style="color:' . esc_attr( $color ) . '; font-size:11px;">' . esc_html( $arrow ) . '</span></a>';
+    }
+
+    /**
+     * 絞り込みフォーム（ティア・状態のセレクト）を描画する。
+     */
+    private function render_filter_form( array $tier_defs, string $filter_tier, string $filter_state, int $shown, int $total, string $orderby, string $order ): void {
+        $state_labels = [ 'paid' => '利用中（支払い済み）', 'trial' => 'お試し中', 'pending' => '手続中' ];
+        $is_filtered  = ( $filter_tier !== '' || $filter_state !== '' );
+        ?>
+        <form method="get" style="margin: 12px 0; padding: 12px 16px; background:#fff; border:1px solid #c3c4c7; border-radius:4px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <input type="hidden" name="page" value="<?php echo esc_attr( self::MENU_SLUG ); ?>">
+            <?php if ( in_array( $orderby, [ 'tier', 'state' ], true ) ) : ?>
+                <input type="hidden" name="mc_orderby" value="<?php echo esc_attr( $orderby ); ?>">
+                <input type="hidden" name="mc_order" value="<?php echo esc_attr( $order ); ?>">
+            <?php endif; ?>
+
+            <strong style="font-size:13px;">🔍 絞り込み</strong>
+
+            <label style="font-size:12px;">プラン:
+                <select name="mc_filter_tier" style="font-size:12px;">
+                    <option value="">すべて</option>
+                    <?php foreach ( $tier_defs as $tkey => $tdef ) : ?>
+                        <option value="<?php echo esc_attr( $tkey ); ?>" <?php selected( $filter_tier, $tkey ); ?>><?php echo esc_html( $tdef['name'] ?? $tkey ); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+
+            <label style="font-size:12px;">状態:
+                <select name="mc_filter_state" style="font-size:12px;">
+                    <option value="">すべて</option>
+                    <?php foreach ( $state_labels as $skey => $slabel ) : ?>
+                        <option value="<?php echo esc_attr( $skey ); ?>" <?php selected( $filter_state, $skey ); ?>><?php echo esc_html( $slabel ); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+
+            <button type="submit" class="button button-primary button-small">絞り込む</button>
+
+            <?php if ( $is_filtered ) : ?>
+                <a href="<?php echo esc_url( admin_url( 'admin.php?page=' . self::MENU_SLUG ) ); ?>" class="button button-small">クリア</a>
+                <span style="font-size:12px; color:#646970;">該当 <strong><?php echo esc_html( (string) $shown ); ?></strong> 件 / 全 <?php echo esc_html( (string) $total ); ?> 件</span>
+            <?php else : ?>
+                <span style="font-size:12px; color:#646970;">全 <?php echo esc_html( (string) $total ); ?> 件</span>
+            <?php endif; ?>
+        </form>
+        <?php
     }
 
     /**
@@ -260,14 +307,39 @@ class Gcrev_Client_Management_Page {
             return;
         }
 
+        // 絞り込み（ティア / 状態）
+        $valid_tiers  = function_exists( 'gcrev_get_valid_service_tiers' ) ? gcrev_get_valid_service_tiers() : [];
+        $tier_defs    = function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : [];
+        $filter_tier  = isset( $_GET['mc_filter_tier'] ) ? sanitize_key( wp_unslash( $_GET['mc_filter_tier'] ) ) : '';
+        $filter_state = isset( $_GET['mc_filter_state'] ) ? sanitize_key( wp_unslash( $_GET['mc_filter_state'] ) ) : '';
+        if ( ! in_array( $filter_tier, $valid_tiers, true ) ) { $filter_tier = ''; }
+        if ( ! in_array( $filter_state, [ 'paid', 'trial', 'pending' ], true ) ) { $filter_state = ''; }
+
+        $total_count = count( $users );
+
+        if ( $filter_tier !== '' || $filter_state !== '' ) {
+            $users = array_values( array_filter( $users, function ( $u ) use ( $filter_tier, $filter_state ) {
+                $uid_ = (int) $u->ID;
+                if ( $filter_tier !== '' ) {
+                    $t = function_exists( 'gcrev_get_service_tier' ) ? gcrev_get_service_tier( $uid_ ) : 'basic';
+                    if ( $t !== $filter_tier ) { return false; }
+                }
+                if ( $filter_state !== '' ) {
+                    $is_test_ = ( get_user_meta( $uid_, 'gcrev_test_operation', true ) === '1' );
+                    $is_paid_ = function_exists( 'gcrev_is_payment_active' ) && gcrev_is_payment_active( $uid_ );
+                    $st = $is_paid_ ? 'paid' : ( $is_test_ ? 'trial' : 'pending' );
+                    if ( $st !== $filter_state ) { return false; }
+                }
+                return true;
+            } ) );
+        }
+
         // ソート（ティア / 状態）。未指定時は従来どおり登録日 DESC。
         $orderby = isset( $_GET['mc_orderby'] ) ? sanitize_key( wp_unslash( $_GET['mc_orderby'] ) ) : '';
         $order   = ( isset( $_GET['mc_order'] ) && strtolower( (string) wp_unslash( $_GET['mc_order'] ) ) === 'asc' ) ? 'asc' : 'desc';
 
         if ( in_array( $orderby, [ 'tier', 'state' ], true ) ) {
-            $tier_rank = array_flip( array_keys(
-                function_exists( 'gcrev_get_service_tier_definitions' ) ? gcrev_get_service_tier_definitions() : []
-            ) );
+            $tier_rank = array_flip( array_keys( $tier_defs ) );
             $rank = [];
             foreach ( $users as $u ) {
                 $uid_ = (int) $u->ID;
@@ -286,6 +358,14 @@ class Gcrev_Client_Management_Page {
                 if ( $cmp === 0 ) { $cmp = (int) $b->ID <=> (int) $a->ID; } // 同順位は ID 降順で安定
                 return $order === 'asc' ? $cmp : -$cmp;
             } );
+        }
+
+        // 絞り込みフォーム（セレクトで選んだティア・状態のクライアントだけ表示）
+        $this->render_filter_form( $tier_defs, $filter_tier, $filter_state, count( $users ), $total_count, $orderby, $order );
+
+        if ( empty( $users ) ) {
+            echo '<p style="margin-top:12px;">条件に一致するクライアントがいません。<a href="' . esc_url( admin_url( 'admin.php?page=' . self::MENU_SLUG ) ) . '">絞り込みを解除</a></p>';
+            return;
         }
 
         ?>
