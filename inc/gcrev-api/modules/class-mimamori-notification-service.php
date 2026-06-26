@@ -68,6 +68,7 @@ class Mimamori_Notification_Service {
     /**
      * 通知対象ユーザーIDを返す。
      * 通常階層プランのみ（本部・MEO特化・口コミ特化・管理者は対象外）。
+     * かつ「支払い済み or 正式契約中」のクライアントのみ（お試し中・未契約は除外）。
      */
     private function get_target_user_ids(): array {
         $users = get_users( [ 'fields' => [ 'ID' ] ] );
@@ -76,7 +77,8 @@ class Mimamori_Notification_Service {
             $uid = (int) $u->ID;
             if ( $uid <= 0 ) continue;
             if ( user_can( $uid, 'manage_options' ) ) continue;
-            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) continue;
+            // 支払い済み or 正式契約中のみ通知（お試し中のみ・未契約は対象外）
+            if ( ! $this->is_billable_client( $uid ) ) continue;
             $tier = gcrev_get_service_tier( $uid );
             if ( in_array( $tier, [ 'headquarters', 'meo_only', 'review_survey' ], true ) ) continue;
             $user = get_userdata( $uid );
@@ -84,6 +86,16 @@ class Mimamori_Notification_Service {
             $ids[] = $uid;
         }
         return $ids;
+    }
+
+    /**
+     * 通知を送ってよいクライアントか（支払い済み or 正式契約中）。
+     * お試し中のみ・未契約・解約済みは false。
+     */
+    private function is_billable_client( int $uid ): bool {
+        $paid = function_exists( 'gcrev_is_payment_active' ) && gcrev_is_payment_active( $uid );
+        $contracted = function_exists( 'gcrev_get_contract_status' ) && gcrev_get_contract_status( $uid ) === 'active';
+        return $paid || $contracted;
     }
 
     /**
