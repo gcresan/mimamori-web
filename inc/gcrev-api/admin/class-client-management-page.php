@@ -424,6 +424,18 @@ class Gcrev_Client_Management_Page {
             ) );
         }
 
+        // トレンドv2キャッシュは prefix と user_id の間に "daily_v2_" / "v2_" が入るため
+        // 上記の {prefix}{user_id}_ 照合から漏れる。明示的に削除する（全フィルタ接尾辞を含む）。
+        // 例: gcrev_trend_daily_v2_29_sessions, gcrev_trend_daily_v2_29_cv_jp, gcrev_trend_v2_29_sessions_jp_ex
+        foreach ( [ 'gcrev_trend_daily_v2_', 'gcrev_trend_v2_' ] as $trend_prefix ) {
+            $trend_user_prefix = $trend_prefix . $user_id . '_';
+            $deleted += (int) $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+                $wpdb->esc_like( '_transient_' . $trend_user_prefix ) . '%',
+                $wpdb->esc_like( '_transient_timeout_' . $trend_user_prefix ) . '%'
+            ) );
+        }
+
         error_log( "[GCREV] Admin: cache cleared for user {$user_id}: {$deleted} entries" );
         return $deleted;
     }
