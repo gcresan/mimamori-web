@@ -765,7 +765,8 @@ class Mimamori_Notification_Service {
             }
             if ( $duplicate ) { continue; }
 
-            $this->send_suggestion_mail( $uid, $action );
+            // 上位3件をまとめて掲載し、残りは件数案内＋リンクで誘導する
+            $this->send_suggestion_mail( $uid, array_slice( $actions, 0, 3 ), count( $actions ) );
 
             $log[] = [ 'ts' => $now, 'hash' => $hash ];
             $log   = array_values( array_filter( $log, static function ( $e ) use ( $now, $dedup_window ) {
@@ -776,55 +777,83 @@ class Mimamori_Notification_Service {
         }
     }
 
-    private function send_suggestion_mail( int $uid, array $action ): void {
+    /**
+     * @param array<int,array> $actions 掲載する提案（上位3件まで）
+     * @param int   $total   全提案件数
+     */
+    private function send_suggestion_mail( int $uid, array $actions, int $total ): void {
         $user = get_userdata( $uid );
         if ( ! $user ) { return; }
 
-        $email = $this->build_suggestion_email( $uid, $this->client_name( $uid, $user ), $action );
+        $email = $this->build_suggestion_email( $uid, $this->client_name( $uid, $user ), $actions, $total );
 
         $sent = wp_mail( $user->user_email, $email['subject'], $email['body'] );
-        self::log( sprintf( 'suggest sent user=%d result=%s', $uid, $sent ? 'OK' : 'FAIL' ) );
+        self::log( sprintf( 'suggest sent user=%d shown=%d total=%d result=%s', $uid, min( count( $actions ), 3 ), $total, $sent ? 'OK' : 'FAIL' ) );
     }
 
     /**
      * AI改善提案メールの件名・本文を組み立てる（実送信・テスト送信で共有）。
      *
-     * @param array $action ['title','reason','expected_effect']
+     * 複数提案がある場合は上位3件までを本文に掲載し、総数が掲載数を上回る場合は
+     * 「全部で◯件」の案内と改善施策提案ページへのリンクで残りに誘導する。
+     *
+     * @param array<int,array{title:string,reason?:string,expected_effect?:string}> $actions 提案一覧（上位順）
+     * @param int   $total   全提案件数（$actions の件数以上）
      * @return array{subject:string, body:string}
      */
-    private function build_suggestion_email( int $link_uid, string $name, array $action ): array {
+    private function build_suggestion_email( int $link_uid, string $name, array $actions, int $total ): array {
+        $actions = array_values( array_filter( $actions, 'is_array' ) );
+        $shown   = array_slice( $actions, 0, 3 );
+        $count   = count( $shown );
+        $total   = max( $total, $count );
+
         $lines   = [];
         $lines[] = $name . ' 様';
         $lines[] = '';
         $lines[] = 'みまもりウェブのAIが、データから改善のチャンスを見つけました。';
         $lines[] = '';
-        $lines[] = '■ ご提案';
-        $lines[] = trim( (string) ( $action['title'] ?? '' ) );
-        if ( ! empty( $action['reason'] ) ) {
+        if ( $count > 1 ) {
+            $lines[] = sprintf( '今回は特におすすめの%d件をご紹介します。', $count );
             $lines[] = '';
-            $lines[] = '■ データ上の根拠';
-            $lines[] = trim( (string) $action['reason'] );
         }
-        if ( ! empty( $action['expected_effect'] ) ) {
+
+        foreach ( $shown as $i => $action ) {
+            $lines[] = $count > 1 ? sprintf( '■ ご提案%d', $i + 1 ) : '■ ご提案';
+            $lines[] = trim( (string) ( $action['title'] ?? '' ) );
+            if ( ! empty( $action['reason'] ) ) {
+                $lines[] = '　データ上の根拠: ' . trim( (string) $action['reason'] );
+            }
+            if ( ! empty( $action['expected_effect'] ) ) {
+                $lines[] = '　期待できる効果: ' . trim( (string) $action['expected_effect'] );
+            }
             $lines[] = '';
-            $lines[] = '■ 期待できる効果';
-            $lines[] = trim( (string) $action['expected_effect'] );
         }
-        $lines[] = '';
-        $lines[] = '詳しい内容と他の提案は「改善施策提案」ページでご確認いただけます。';
+
+        // 残りの提案がある場合は件数を案内し、ページへ誘導する
+        if ( $total > $count ) {
+            $lines[] = sprintf( '現在、全部で%d件の改善提案があります。', $total );
+            $lines[] = sprintf( '残り%d件と詳しい内容は「改善施策提案」ページでご確認いただけます。', $total - $count );
+        } else {
+            $lines[] = '詳しい内容は「改善施策提案」ページでご確認いただけます。';
+        }
         $lines[] = home_url( '/execution-dashboard/' );
         $lines[] = '';
-        // ワンタップでチャットが文脈付きで開く導線（C はAI改善提案プラン以上のみが対象）
-        $ctx_summary = trim( (string) ( $action['title'] ?? '' ) );
-        if ( ! empty( $action['reason'] ) ) {
-            $ctx_summary .= "\n根拠: " . trim( (string) $action['reason'] );
+
+        // ワンタップでチャットが文脈付きで開く導線（先頭の提案を文脈にする）
+        $primary     = $shown[0] ?? [];
+        $ctx_summary = trim( (string) ( $primary['title'] ?? '' ) );
+        if ( ! empty( $primary['reason'] ) ) {
+            $ctx_summary .= "\n根拠: " . trim( (string) $primary['reason'] );
         }
-        if ( ! empty( $action['expected_effect'] ) ) {
-            $ctx_summary .= "\n期待効果: " . trim( (string) $action['expected_effect'] );
+        if ( ! empty( $primary['expected_effect'] ) ) {
+            $ctx_summary .= "\n期待効果: " . trim( (string) $primary['expected_effect'] );
         }
-        $lines[] = '▼ この提案の進め方をAIに相談する';
-        $lines[] = $this->create_chat_link( $link_uid, 'suggest', $ctx_summary );
-        $lines[] = '';
+        if ( $ctx_summary !== '' ) {
+            $lines[] = '▼ この提案の進め方をAIに相談する';
+            $lines[] = $this->create_chat_link( $link_uid, 'suggest', $ctx_summary );
+            $lines[] = '';
+        }
+
         $lines[] = $this->email_signature( '※本メールはAI改善提案の自動通知です（月2回まで）。' );
 
         return [ 'subject' => '【みまもりウェブ】AIからの改善提案', 'body' => implode( "\n", $lines ) ];
@@ -902,12 +931,25 @@ class Mimamori_Notification_Service {
                 break;
 
             case 'suggest':
-                $action = [
-                    'title'           => 'トップページのタイトルに地域名を入れて、検索結果での見え方を改善してください',
-                    'reason'          => '「（地域名） （業種）」での表示回数が月1,200回ありますが、クリック率が1.2%と低い状態です。',
-                    'expected_effect' => 'タイトル最適化により、同キーワードでのクリック率改善とお問い合わせ増加が期待できます。',
+                // 複数提案＋残り件数の見え方を確認できるよう、上位3件＋総数4件のサンプルにする
+                $actions = [
+                    [
+                        'title'           => 'トップページのタイトルに地域名を入れて、検索結果での見え方を改善してください',
+                        'reason'          => '「（地域名） （業種）」での表示回数が月1,200回ありますが、クリック率が1.2%と低い状態です。',
+                        'expected_effect' => 'タイトル最適化により、同キーワードでのクリック率改善とお問い合わせ増加が期待できます。',
+                    ],
+                    [
+                        'title'           => 'お問い合わせボタンをページ上部にも設置してください',
+                        'reason'          => 'サービス紹介ページで、最初の画面にお問い合わせ導線がない状態です。',
+                        'expected_effect' => '迷わず問い合わせできるようになり、お問い合わせ数の増加につながります。',
+                    ],
+                    [
+                        'title'           => '「料金・費用」に関する記事を新しく作成してください',
+                        'reason'          => '検索キーワードに「料金」が含まれる流入が増えていますが、該当ページがありません。',
+                        'expected_effect' => '費用を知りたいお客様の検索に応え、比較検討段階での集客が期待できます。',
+                    ],
                 ];
-                $email = $this->build_suggestion_email( $link_uid, $name, $action );
+                $email = $this->build_suggestion_email( $link_uid, $name, $actions, 4 );
                 break;
 
             case 'report':
@@ -1046,18 +1088,20 @@ class Mimamori_Notification_Service {
                 if ( ! $exec ) {
                     return [ 'ok' => false, 'message' => '改善提案サービスが利用できません。' ];
                 }
-                $actions = $exec->get_or_generate_actions( $target_uid, wp_date( 'Y-m' ) );
-                $action  = null;
-                foreach ( (array) $actions as $a ) {
-                    if ( ( $a['priority'] ?? '' ) === 'high' && trim( (string) ( $a['title'] ?? '' ) ) !== '' ) {
-                        $action = $a;
-                        break;
-                    }
+                $actions = (array) $exec->get_or_generate_actions( $target_uid, wp_date( 'Y-m' ) );
+                $actions = array_values( array_filter( $actions, static function ( $a ) {
+                    return is_array( $a ) && trim( (string) ( $a['title'] ?? '' ) ) !== '';
+                } ) );
+                // 本番同様、優先度「高」の提案が1件以上ある場合のみ対象
+                $has_high = false;
+                foreach ( $actions as $a ) {
+                    if ( ( $a['priority'] ?? '' ) === 'high' ) { $has_high = true; break; }
                 }
-                if ( ! $action ) {
+                if ( ! $has_high ) {
                     return [ 'ok' => false, 'message' => 'この顧客には現在、「優先度: 高」の改善提案がありません。' ];
                 }
-                $email = $this->build_suggestion_email( $target_uid, $name, $action );
+                // 上位3件を掲載し、残りは件数案内＋リンクで誘導する
+                $email = $this->build_suggestion_email( $target_uid, $name, array_slice( $actions, 0, 3 ), count( $actions ) );
                 break;
 
             case 'report':
