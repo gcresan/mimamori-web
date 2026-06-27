@@ -302,17 +302,16 @@ class Gcrev_Manual_Strategy_Report_Page {
         if ( $text === '' ) {
             return '';
         }
-        if ( ! class_exists( 'Gcrev_Config' ) || ! class_exists( 'Gcrev_AI_Client' ) ) {
-            throw new \Exception( 'AIクライアントが利用できません' );
+        if ( ! class_exists( 'Gcrev_Config' ) || ! class_exists( 'Gcrev_Claude_Client' ) ) {
+            throw new \Exception( 'Claude クライアントが利用できません' );
         }
 
         $config = new Gcrev_Config();
-        $ai     = new Gcrev_AI_Client( $config );
+        $claude = new Gcrev_Claude_Client( $config );
 
-        $prompt = <<<PROMPT
+        $system_prompt = <<<SYS
 あなたは、Webアクセス解析レポートに見出し（タイトル）を付けるプロの編集者です。
-以下は、クライアントに提出する「深掘りレポート（概要版）」の本文テキストです。
-このレポート全体の内容にふさわしい、簡潔で具体的な日本語のタイトルを1つだけ作成してください。
+渡されたレポート本文の内容にふさわしい、簡潔で具体的な日本語のタイトルを1つだけ作成します。
 
 【ルール】
 - 全角30文字以内
@@ -320,18 +319,17 @@ class Gcrev_Manual_Strategy_Report_Page {
 - クライアント名や事業・LP名が本文にあれば活かしてよい
 - 鉤括弧（「」）・引用符・記号での装飾や「タイトル：」などの接頭辞は付けない
 - タイトル本文のみを1行で出力する（説明・補足・前置きは一切不要）
+SYS;
 
-【レポート本文】
-{$text}
-PROMPT;
+        $user_prompt = "以下は、クライアントに提出する「深掘りレポート（概要版）」の本文テキストです。\n"
+            . "このレポート全体にふさわしいタイトルを1つだけ出力してください。\n\n"
+            . "【レポート本文】\n" . $text;
 
-        // gemini-2.5-flash は thinking が出力枠を食うため maxOutputTokens を厚めに確保する
-        // （256 だと thinking で枯渇し finishReason=MAX_TOKENS で本文が空になる）。
-        $raw   = (string) $ai->call_gemini_api( $prompt, [
-            'temperature'     => 0.6,
-            'maxOutputTokens' => 2048,
-            'thinkingBudget'  => 0,
+        $resp  = $claude->call_messages_api( $system_prompt, $user_prompt, [
+            'temperature' => 0.6,
+            'max_tokens'  => 256,
         ] );
+        $raw   = (string) ( $resp['text'] ?? '' );
         $title = self::normalize_title( $raw );
 
         file_put_contents(
