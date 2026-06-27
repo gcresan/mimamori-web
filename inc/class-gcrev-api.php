@@ -12350,7 +12350,7 @@ PROMPT;
             $is_phone_tap_pure = function (string $en) use ($phone_event, $all_label_map): bool {
                 if ($en === '') return false;
                 if ($phone_event !== '' && $en === $phone_event) return true;
-                if ($en === '電話タップ' || $en === 'phone_tap') return true;
+                if ($en === '電話タップ' || $en === 'phone_tap' || $en === 'phone_click') return true;
                 return ($all_label_map[$en] ?? '') === '電話タップ';
             };
             // 電話タップ系は GA4 keyEvents に含まれていなくても eventCount で補完
@@ -12358,7 +12358,7 @@ PROMPT;
             foreach (array_keys($ga4_events_daily_for_phone) as $en) {
                 if ($is_phone_tap_pure($en)) $phone_tap_event_names_pure[] = $en;
             }
-            foreach (['電話タップ', 'phone_tap'] as $en) {
+            foreach (['電話タップ', 'phone_tap', 'phone_click'] as $en) {
                 if (!in_array($en, $phone_tap_event_names_pure, true)) {
                     $phone_tap_event_names_pure[] = $en;
                 }
@@ -12493,12 +12493,12 @@ PROMPT;
 
         // 電話タップ判定ヘルパー: 以下いずれかで true
         //  - ユーザー設定の _gcrev_phone_event_name と一致
-        //  - GA4 イベント名 / ラベルが '電話タップ' or 'phone_tap'（デフォルト慣習）
+        //  - GA4 イベント名 / ラベルが '電話タップ' / 'phone_tap' / 'phone_click'（デフォルト慣習）
         $route_label_map = array_column( $override_routes, 'label', 'route_key' );
         $is_phone_tap = function (string $event_name) use ($phone_event, $route_label_map): bool {
             if ($event_name === '') return false;
             if ($phone_event !== '' && $event_name === $phone_event) return true;
-            if ($event_name === '電話タップ' || $event_name === 'phone_tap') return true;
+            if ($event_name === '電話タップ' || $event_name === 'phone_tap' || $event_name === 'phone_click') return true;
             $label = $route_label_map[$event_name] ?? '';
             if ($label === '電話タップ') return true;
             return false;
@@ -12674,7 +12674,7 @@ PROMPT;
 
         // 3) 電話タップ系で keyEvents にも override_keys にも現れなかったイベントを補完
         //    （GA4 側で keyEvent 未設定で、ルートにも登録されていないが
-        //      慣習イベント名 '電話タップ'/'phone_tap' に一致するケース）
+        //      慣習イベント名 '電話タップ'/'phone_tap'/'phone_click' に一致するケース）
         $already_counted_phone_tap_events = array_merge(
             $override_keys,
             array_keys($ga4_events_daily)
@@ -12786,7 +12786,7 @@ PROMPT;
         $is_phone_tap_evt = function ( string $en ) use ( $phone_event_name, $label_map ): bool {
             if ( $en === '' ) return false;
             if ( $phone_event_name !== '' && $en === $phone_event_name ) return true;
-            if ( $en === '電話タップ' || $en === 'phone_tap' ) return true;
+            if ( $en === '電話タップ' || $en === 'phone_tap' || $en === 'phone_click' ) return true;
             return ( $label_map[ $en ] ?? '' ) === '電話タップ';
         };
 
@@ -16285,7 +16285,7 @@ PROMPT;
         $is_phone_tap = function (string $event_name) use ($phone_event_meta, $route_label_map): bool {
             if ($event_name === '') return false;
             if ($phone_event_meta !== '' && $event_name === $phone_event_meta) return true;
-            if ($event_name === '電話タップ' || $event_name === 'phone_tap') return true;
+            if ($event_name === '電話タップ' || $event_name === 'phone_tap' || $event_name === 'phone_click') return true;
             $label = $route_label_map[$event_name] ?? '';
             if ($label === '電話タップ') return true;
             return false;
