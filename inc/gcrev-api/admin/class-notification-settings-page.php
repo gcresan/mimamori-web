@@ -428,7 +428,7 @@ class Gcrev_Notification_Settings_Page {
         check_admin_referer( 'gcrev_test_mimamori_notify_nonce' );
 
         $kind = isset( $_POST['mimamori_test_kind'] ) ? sanitize_text_field( wp_unslash( $_POST['mimamori_test_kind'] ) ) : '';
-        if ( ! in_array( $kind, [ 'alert', 'digest', 'suggest' ], true ) ) {
+        if ( ! in_array( $kind, [ 'alert', 'digest', 'suggest', 'report' ], true ) ) {
             add_settings_error( 'gcrev_notification', 'mm_test_kind', '通知種別を選択してください。', 'error' );
             return;
         }
@@ -480,7 +480,7 @@ class Gcrev_Notification_Settings_Page {
         check_admin_referer( 'gcrev_test_mimamori_real_nonce' );
 
         $kind = isset( $_POST['mm_real_kind'] ) ? sanitize_text_field( wp_unslash( $_POST['mm_real_kind'] ) ) : '';
-        if ( ! in_array( $kind, [ 'alert', 'digest', 'suggest' ], true ) ) {
+        if ( ! in_array( $kind, [ 'alert', 'digest', 'suggest', 'report' ], true ) ) {
             add_settings_error( 'gcrev_notification', 'mm_real_kind', '通知種別を選択してください。', 'error' );
             return;
         }
@@ -600,7 +600,7 @@ class Gcrev_Notification_Settings_Page {
             <?php // ── みまもり通知 テスト送信（アラート / 週次便 / AI改善提案） ── ?>
             <div style="background:#fff; border:1px solid #ccd0d4; border-radius:4px; padding:16px 24px 24px; margin-top:10px;">
                 <h2 style="margin-top:0;">みまもり通知 テスト送信</h2>
-                <p>みまもりアラート・週次便・AI改善提案の各メールを、<strong>ダミーデータ</strong>でテスト送信します（実データやAI分析は含まれません。文面・レイアウトの確認用です）。</p>
+                <p>みまもりアラート・週次便・AI改善提案・月次レポート完成通知の各メールを、<strong>ダミーデータ</strong>でテスト送信します（実データやAI分析は含まれません。文面・レイアウトの確認用です）。</p>
                 <form method="post">
                     <?php wp_nonce_field( 'gcrev_test_mimamori_notify_nonce' ); ?>
                     <input type="hidden" name="gcrev_test_mimamori_notify" value="1" />
@@ -612,6 +612,7 @@ class Gcrev_Notification_Settings_Page {
                                     <option value="alert">みまもりアラート（異常検知）</option>
                                     <option value="digest">みまもり週次便</option>
                                     <option value="suggest">AI改善提案通知</option>
+                                    <option value="report">月次レポート完成通知</option>
                                 </select>
                             </td>
                         </tr>
@@ -658,6 +659,7 @@ class Gcrev_Notification_Settings_Page {
                     <li><strong>みまもり週次便</strong>: いつでも送信できます（実際の訪問数・お問い合わせ数が入ります）。</li>
                     <li><strong>みまもりアラート</strong>: 実データ上で異常が検知されている顧客のみ送信できます（異常がなければ送信されません）。</li>
                     <li><strong>AI改善提案</strong>: AI（Gemini）を呼び出すため数秒かかり、AI改善提案プラン以上かつ「優先度: 高」の提案がある場合のみ送信されます。</li>
+                    <li><strong>月次レポート完成通知</strong>: いつでも送信できます（前月分を対象に、実際のレポート公開時と同じ文面で届きます）。</li>
                 </ul>
                 <?php if ( empty( $mm_targets ) ) : ?>
                     <p style="color:#b32d2e;">対象クライアントが見つかりません（自動通知の対象ユーザーが存在しません）。</p>
@@ -673,6 +675,7 @@ class Gcrev_Notification_Settings_Page {
                                     <option value="digest">みまもり週次便</option>
                                     <option value="alert">みまもりアラート（異常検知）</option>
                                     <option value="suggest">AI改善提案通知</option>
+                                    <option value="report">月次レポート完成通知</option>
                                 </select>
                             </td>
                         </tr>

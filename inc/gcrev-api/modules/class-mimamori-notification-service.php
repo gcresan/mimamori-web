@@ -904,6 +904,15 @@ class Mimamori_Notification_Service {
                 $email = $this->build_suggestion_email( $link_uid, $name, $action );
                 break;
 
+            case 'report':
+                // 月次レポート完成通知（functions.php のビルダーを流用）。
+                if ( ! function_exists( 'gcrev_build_report_ready_email' ) ) {
+                    return [ 'ok' => false, 'message' => 'レポート完成通知のメールビルダーが見つかりません。' ];
+                }
+                $ym    = ( new \DateTimeImmutable( 'first day of last month', wp_timezone() ) )->format( 'Y-m' );
+                $email = gcrev_build_report_ready_email( $link_uid, $ym, false );
+                break;
+
             default:
                 return [ 'ok' => false, 'message' => '不明な通知種別です。' ];
         }
@@ -1043,6 +1052,15 @@ class Mimamori_Notification_Service {
                     return [ 'ok' => false, 'message' => 'この顧客には現在、「優先度: 高」の改善提案がありません。' ];
                 }
                 $email = $this->build_suggestion_email( $target_uid, $name, $action );
+                break;
+
+            case 'report':
+                // 月次レポート完成通知。対象クライアントの事業者名で本番同等の本文を組み立てる。
+                if ( ! function_exists( 'gcrev_build_report_ready_email' ) ) {
+                    return [ 'ok' => false, 'message' => 'レポート完成通知のメールビルダーが見つかりません。' ];
+                }
+                $ym    = ( new \DateTimeImmutable( 'first day of last month', wp_timezone() ) )->format( 'Y-m' );
+                $email = gcrev_build_report_ready_email( $target_uid, $ym, false );
                 break;
 
             default:
