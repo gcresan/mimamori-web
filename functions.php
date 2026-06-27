@@ -10057,7 +10057,7 @@ function gcrev_build_report_ready_email( int $user_id, string $year_month, bool 
     $body .= "{$ym_label}の月次レポートが完成しました。\n";
     $body .= "下記よりご確認いただけます。\n\n";
     $body .= "▼ 月次レポートを見る\n{$report_url}\n\n";
-    $body .= gcrev_notification_email_signature( '※本メールは月次レポート完成のお知らせの自動送信です。' );
+    $body .= gcrev_notification_email_signature( '※月次レポートは毎月1日ごろに完成し、本メールで自動的にお知らせしています。' );
 
     return [ 'subject' => $subject, 'body' => $body ];
 }

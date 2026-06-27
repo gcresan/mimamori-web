@@ -703,7 +703,7 @@ class Mimamori_Notification_Service {
         $lines[] = 'プランの確認・ご変更はこちら: ' . home_url( '/plans/' );
 
         $lines[] = '';
-        $lines[] = $this->email_signature( '※本メールは「みまもりウェブ」週次便の自動送信です。' );
+        $lines[] = $this->email_signature( '※本メールは「みまもりウェブ」週次便として、毎週月曜日に自動でお届けしています。' );
 
         return [ 'subject' => $subject, 'body' => implode( "\n", $lines ) ];
     }
