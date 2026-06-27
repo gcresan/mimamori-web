@@ -9985,6 +9985,43 @@ function gcrev_get_report_notify_email( int $user_id ): string {
 }
 }
 
+if ( ! function_exists( 'gcrev_notification_email_signature' ) ) {
+/**
+ * 全通知メール共通の署名（サービス署名）。
+ *
+ * みまもりアラート・週次便・AI改善提案・月次レポート完成通知など、
+ * すべての自動通知メールでこの署名を共有する（単一の真実）。個人署名では
+ * なくサービス窓口として組み立てる。種別ごとの自動送信注記は $auto_note で
+ * 受け、配信停止案内は常に添える。
+ *
+ * @param string $auto_note 種別別の自動送信注記（例「※本メールは…の自動通知です。」）
+ * @return string プレーンテキストの署名ブロック
+ */
+function gcrev_notification_email_signature( string $auto_note = '' ): string {
+    $lines = [
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+        'みまもりウェブ',
+        '運営：株式会社ジィクレブ（GCREV）',
+        '',
+        'お問い合わせ・サポート窓口',
+        '　フリーダイヤル：0120-793-508（平日 10:00〜18:00）',
+        '　E-mail：info@g-crev.jp',
+        '　Website：https://g-crev.jp/',
+        '',
+        '■ 愛媛本社　〒790-0003 愛媛県松山市三番町7-12-1',
+        '■ 東京オフィス　〒150-0044 東京都渋谷区円山町5-3 MIEUX渋谷ビル8階',
+        '',
+        'GCREV - Guide to Create Victory',
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    ];
+    if ( $auto_note !== '' ) {
+        $lines[] = $auto_note;
+    }
+    $lines[] = '※配信の停止・設定変更は、マイページまたはサポート窓口までご連絡ください。';
+    return implode( "\n", $lines );
+}
+}
+
 if ( ! function_exists( 'gcrev_build_report_ready_email' ) ) {
 /**
  * レポート完成通知メールの件名・本文を組み立てる。
@@ -10020,10 +10057,7 @@ function gcrev_build_report_ready_email( int $user_id, string $year_month, bool 
     $body .= "{$ym_label}の月次レポートが完成しました。\n";
     $body .= "下記よりご確認いただけます。\n\n";
     $body .= "▼ 月次レポートを見る\n{$report_url}\n\n";
-    $body .= "----------------------------------------\n";
-    $body .= "※このメールは自動送信です。\n";
-    $body .= "※通知の停止・送信先の変更は「各種設定 > 通知設定」から行えます。\n";
-    $body .= "みまもりウェブ\n";
+    $body .= gcrev_notification_email_signature( '※本メールは月次レポート完成のお知らせの自動送信です。' );
 
     return [ 'subject' => $subject, 'body' => $body ];
 }

@@ -194,6 +194,12 @@ class Mimamori_Notification_Service {
      * @param string $auto_note 種別別の自動送信注記（例「※本メールは…の自動通知です。」）
      */
     private function email_signature( string $auto_note = '' ): string {
+        // 署名は functions.php のグローバル関数で一元管理（全通知メール共通）。
+        if ( function_exists( 'gcrev_notification_email_signature' ) ) {
+            return gcrev_notification_email_signature( $auto_note );
+        }
+
+        // フォールバック（テーマ関数が未ロードの場合のみ）。
         $lines = [
             '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
             'みまもりウェブ',
