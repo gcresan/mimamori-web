@@ -11444,9 +11444,119 @@ function mimamori_get_notify_chat_context( \WP_REST_Request $request ): \WP_REST
     ], 200 );
 }
 
+if ( ! function_exists( 'gcrev_suggestion_accuracy_checklist' ) ) {
+/**
+ * 改善提案の精度を上げるためにクライアントが対応すべき項目と、その達成状況。
+ *
+ * 各項目は AI 改善施策生成（class-execution-service の collect_context_for_ai）が
+ * 根拠に使うデータと対応しており、揃っているほど提案の精度が上がる。
+ *
+ * @param int $user_id
+ * @return array<int,array{key:string,label:string,done:bool,url:string,note:string}>
+ */
+function gcrev_suggestion_accuracy_checklist( int $user_id ): array {
+    $meta = function ( string $key ) use ( $user_id ): string {
+        $v = get_user_meta( $user_id, $key, true );
+        if ( is_array( $v ) ) { $v = implode( '', array_map( 'strval', $v ) ); }
+        return trim( (string) $v );
+    };
+
+    $industry = $meta( 'gcrev_client_industry_category' );
+    $site_url = $meta( 'gcrev_client_site_url' );
+    $area     = $meta( 'gcrev_client_area_pref' ) . $meta( 'gcrev_client_area_city' )
+              . $meta( 'gcrev_client_area_custom' ) . $meta( 'gcrev_client_area_type' );
+
+    $persona  = $meta( 'gcrev_client_persona_one_liner' )
+              . $meta( 'gcrev_client_persona_detail_text' )
+              . $meta( 'gcrev_client_persona_attributes' );
+
+    $policy   = $meta( 'report_issue' ) . $meta( 'report_goal_monthly' );
+
+    // 競合サイト登録（最新のキーワード調査CPTに status=ok の競合があるか）
+    $competitor_done = false;
+    $kw_posts = get_posts( [
+        'post_type'      => 'gcrev_kw_research',
+        'posts_per_page' => 1,
+        'orderby'        => 'date',
+        'order'          => 'DESC',
+        'meta_key'       => '_gcrev_kwr_user_id',
+        'meta_value'     => (string) $user_id,
+        'fields'         => 'ids',
+        'post_status'    => 'any',
+        'no_found_rows'  => true,
+    ] );
+    if ( ! empty( $kw_posts ) ) {
+        $raw  = get_post_meta( (int) $kw_posts[0], '_gcrev_kwr_competitor_data', true );
+        $data = json_decode( (string) $raw, true );
+        if ( is_array( $data ) ) {
+            foreach ( $data as $c ) {
+                if ( is_array( $c ) && ( $c['status'] ?? '' ) === 'ok' ) { $competitor_done = true; break; }
+            }
+        }
+    }
+
+    // SEO／AIO診断（保存済みのサイト全体サマリーがあるか）
+    $seo_done = false;
+    if ( class_exists( 'Gcrev_SEO_Checker' ) ) {
+        try {
+            $checker = new \Gcrev_SEO_Checker();
+            $diag    = $checker->get_diagnosis( $user_id );
+            $seo_done = is_array( $diag ) && ! empty( $diag['siteSummary'] );
+        } catch ( \Throwable $e ) {
+            $seo_done = false;
+        }
+    }
+
+    return [
+        [
+            'key'   => 'business',
+            'label' => '事業者情報（業種・サイトURL・商圏）を登録する',
+            'done'  => ( $industry !== '' && $site_url !== '' && $area !== '' ),
+            'url'   => home_url( '/client-settings/' ),
+            'note'  => '業種・地域・サイトURLは、提案を地域や業種に合わせるための基礎情報です。',
+        ],
+        [
+            'key'   => 'main_cv',
+            'label' => '主要なお問い合わせ経路（CV）を設定する',
+            'done'  => ( $meta( 'gcrev_client_main_conversions' ) !== '' ),
+            'url'   => home_url( '/client-settings/' ),
+            'note'  => '何を成果（電話・フォーム等）とみなすかを設定すると、お問い合わせ導線の提案精度が上がります。',
+        ],
+        [
+            'key'   => 'persona',
+            'label' => 'ペルソナ（理想のお客様像）を設定する',
+            'done'  => ( $persona !== '' ),
+            'url'   => home_url( '/client-settings/' ),
+            'note'  => 'お客様像が明確だと、刺さる訴求やコンテンツの提案ができます。',
+        ],
+        [
+            'key'   => 'report_policy',
+            'label' => '月次レポート方針（先月の課題・今月の目標）を入力する',
+            'done'  => ( $policy !== '' ),
+            'url'   => home_url( '/report-settings/' ),
+            'note'  => '重視している課題・目標に沿って、提案の優先順位を合わせられます。',
+        ],
+        [
+            'key'   => 'competitor',
+            'label' => '競合サイトを登録する（キーワード調査）',
+            'done'  => $competitor_done,
+            'url'   => home_url( '/keyword-research/' ),
+            'note'  => '競合の見出し構成と比較し、不足している情報カテゴリの提案ができます。',
+        ],
+        [
+            'key'   => 'seo',
+            'label' => 'SEO／AIO診断を実施する',
+            'done'  => $seo_done,
+            'url'   => home_url( '/seo-check/' ),
+            'note'  => '技術・内部最適化の課題を提案の根拠にできます。',
+        ],
+    ];
+}
+}
+
 /**
  * 通知受信設定の保存（本人のみ）。
- * body: { alert_enabled: bool, digest_enabled: bool }
+ * body: { alert_enabled: bool, digest_enabled: bool, suggest_enabled: bool }
  */
 function mimamori_save_notification_prefs( \WP_REST_Request $request ): \WP_REST_Response {
     $user_id = get_current_user_id();
@@ -11458,6 +11568,9 @@ function mimamori_save_notification_prefs( \WP_REST_Request $request ): \WP_REST
     }
     if ( array_key_exists( 'digest_enabled', $params ) ) {
         update_user_meta( $user_id, 'mimamori_digest_optout', $params['digest_enabled'] ? '0' : '1' );
+    }
+    if ( array_key_exists( 'suggest_enabled', $params ) ) {
+        update_user_meta( $user_id, 'mimamori_suggest_optout', $params['suggest_enabled'] ? '0' : '1' );
     }
 
     return new \WP_REST_Response( [ 'success' => true ], 200 );

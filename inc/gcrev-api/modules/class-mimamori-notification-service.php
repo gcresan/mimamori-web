@@ -24,8 +24,9 @@ class Mimamori_Notification_Service {
     private const LOG = '/tmp/gcrev_notify_debug.log';
 
     // ユーザー側設定（user_meta、'1' で受信停止）
-    public const META_OPTOUT_ALERT  = 'mimamori_alert_optout';
-    public const META_OPTOUT_DIGEST = 'mimamori_digest_optout';
+    public const META_OPTOUT_ALERT   = 'mimamori_alert_optout';
+    public const META_OPTOUT_DIGEST  = 'mimamori_digest_optout';
+    public const META_OPTOUT_SUGGEST = 'mimamori_suggest_optout';
 
     // 送信履歴（user_meta）
     private const META_ALERT_LOG   = 'mimamori_alert_log';   // [ ['ts'=>int, 'type'=>string], ... ]
@@ -718,7 +719,8 @@ class Mimamori_Notification_Service {
 
         foreach ( $ids as $uid ) {
             if ( ! $this->has_analysis_plan( $uid ) ) { continue; }
-            if ( get_user_meta( $uid, self::META_OPTOUT_ALERT, true ) === '1' ) { continue; }
+            // 改善提案の受信停止（通知設定の専用トグル）
+            if ( get_user_meta( $uid, self::META_OPTOUT_SUGGEST, true ) === '1' ) { continue; }
             try {
                 $this->maybe_send_suggestion( $uid, $s );
             } catch ( \Throwable $e ) {

@@ -26,6 +26,15 @@ if ( $u ) {
 // みまもりアラート／週次便の受信設定（opt-out 方式 — 未設定=受信ON）
 $alert_on  = get_user_meta( $user_id, 'mimamori_alert_optout', true )  !== '1';
 $digest_on = get_user_meta( $user_id, 'mimamori_digest_optout', true ) !== '1';
+$suggest_on = get_user_meta( $user_id, 'mimamori_suggest_optout', true ) !== '1';
+
+// AI改善提案通知は AI改善提案プラン以上のみ
+$_notif_can_suggest = function_exists( 'mimamori_can' )
+    ? mimamori_can( 'improvement_actions', $user_id )
+    : false;
+$suggest_checklist = ( $_notif_can_suggest && function_exists( 'gcrev_suggestion_accuracy_checklist' ) )
+    ? gcrev_suggestion_accuracy_checklist( $user_id )
+    : [];
 
 // 見える化プランは月次レポート非対応 → レポート完成通知カードは非表示
 $_notif_is_mieruka = function_exists( 'mimamori_is_mieruka_user' )
@@ -204,9 +213,98 @@ get_header();
 .notif-toast--success { background: #4E8A6B; }
 .notif-toast--error   { background: #C0392B; }
 
+/* --- 精度向上チェックリスト --- */
+.notif-checklist {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+}
+.notif-check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--mw-border-light, #e8ecee);
+}
+.notif-check-item:last-child { border-bottom: none; }
+.notif-check-mark {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 1px;
+}
+.notif-check-mark--done {
+    background: #4E8A6B;
+    color: #fff;
+}
+.notif-check-mark--todo {
+    background: #fff;
+    color: #c0392b;
+    border: 2px solid #e0b4ae;
+}
+.notif-check-body { flex: 1; min-width: 0; }
+.notif-check-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mw-text-primary, #2c3e50);
+}
+.notif-check-item--done .notif-check-label { color: #6b7c74; }
+.notif-check-note {
+    font-size: 12px;
+    color: var(--mw-text-secondary, #666);
+    margin-top: 3px;
+    line-height: 1.6;
+}
+.notif-check-action {
+    flex-shrink: 0;
+    align-self: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--mw-primary-blue, #568184);
+    text-decoration: none;
+    white-space: nowrap;
+    padding: 6px 12px;
+    border: 1px solid var(--mw-primary-blue, #568184);
+    border-radius: 6px;
+    transition: background 0.2s, color 0.2s;
+}
+.notif-check-action:hover { background: var(--mw-primary-blue, #568184); color: #fff; }
+.notif-check-status {
+    flex-shrink: 0;
+    align-self: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #4E8A6B;
+    white-space: nowrap;
+}
+.notif-checklist-msg {
+    margin: 18px 0 0;
+    padding: 14px 16px;
+    background: #f4f8f7;
+    border-left: 4px solid var(--mw-primary-blue, #568184);
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--mw-text-primary, #2c3e50);
+}
+.notif-subhead {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--mw-text-primary, #2c3e50);
+    margin: 22px 0 4px;
+}
+
 @media (max-width: 768px) {
     .notif-container { padding: 24px 16px 40px; }
     .notif-card { padding: 20px 16px; }
+    .notif-check-action, .notif-check-status { align-self: flex-start; margin-top: 2px; }
 }
 </style>
 
@@ -243,6 +341,56 @@ get_header();
             </label>
         </div>
     </div>
+
+    <?php if ( $_notif_can_suggest ) : // AI改善提案プラン以上のみ ?>
+    <div class="notif-card">
+        <div class="notif-card-header">
+            <h2>AI改善提案通知</h2>
+        </div>
+        <p class="notif-desc">
+            みまもりウェブのAIが見つけた「今やるべき改善施策」を、月に数回メールでお届けします。
+        </p>
+
+        <div class="notif-row">
+            <div>
+                <div class="notif-row-label">改善提案メールを受け取る</div>
+                <div class="notif-row-note">優先度の高い改善提案が見つかったときに、お知らせメールが届きます。</div>
+            </div>
+            <label class="notif-switch">
+                <input type="checkbox" id="notifySuggestToggle" <?php checked( $suggest_on ); ?> />
+                <span class="notif-slider"></span>
+            </label>
+        </div>
+
+        <?php if ( ! empty( $suggest_checklist ) ) : ?>
+        <div class="notif-subhead">提案の精度を上げるための設定</div>
+        <p class="notif-row-note" style="margin-bottom:6px;">
+            次の情報が揃っているほど、あなたのサイトに合った精度の高い提案ができます。未対応の項目は「設定する」から登録してください。
+        </p>
+        <ul class="notif-checklist">
+            <?php foreach ( $suggest_checklist as $item ) : ?>
+            <li class="notif-check-item <?php echo $item['done'] ? 'notif-check-item--done' : ''; ?>">
+                <span class="notif-check-mark <?php echo $item['done'] ? 'notif-check-mark--done' : 'notif-check-mark--todo'; ?>">
+                    <?php echo $item['done'] ? '✓' : '!'; ?>
+                </span>
+                <span class="notif-check-body">
+                    <span class="notif-check-label"><?php echo esc_html( $item['label'] ); ?></span>
+                    <span class="notif-check-note"><?php echo esc_html( $item['note'] ); ?></span>
+                </span>
+                <?php if ( $item['done'] ) : ?>
+                    <span class="notif-check-status">対応済み</span>
+                <?php else : ?>
+                    <a class="notif-check-action" href="<?php echo esc_url( $item['url'] ); ?>">設定する</a>
+                <?php endif; ?>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+        <p class="notif-checklist-msg">
+            改善提案の精度を上げるために、上記をなるべく対応するようにしてください。
+        </p>
+        <?php endif; ?>
+    </div>
+    <?php endif; // $_notif_can_suggest ?>
 
     <?php if ( ! $_notif_is_mieruka ) : // 見える化プランは月次レポート非対応 ?>
     <div class="notif-card">
@@ -342,26 +490,31 @@ get_header();
     // --- みまもりアラート／週次便（変更時に自動保存） ---
     var prefsUrl    = <?php echo wp_json_encode( esc_url_raw( rest_url( 'mimamori/v1/notification-prefs' ) ), JSON_UNESCAPED_UNICODE ); ?>;
     var prefsNonce  = '<?php echo esc_js( wp_create_nonce( 'wp_rest' ) ); ?>';
-    var alertToggle  = document.getElementById('notifyAlertToggle');
-    var digestToggle = document.getElementById('notifyDigestToggle');
+    var alertToggle   = document.getElementById('notifyAlertToggle');
+    var digestToggle  = document.getElementById('notifyDigestToggle');
+    var suggestToggle = document.getElementById('notifySuggestToggle');
 
     function savePrefs() {
+        var payload = {
+            alert_enabled:  alertToggle ? alertToggle.checked : true,
+            digest_enabled: digestToggle ? digestToggle.checked : true
+        };
+        if (suggestToggle) { payload.suggest_enabled = suggestToggle.checked; }
+
         fetch(prefsUrl, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': prefsNonce },
-            body: JSON.stringify({
-                alert_enabled:  alertToggle.checked,
-                digest_enabled: digestToggle.checked
-            })
+            body: JSON.stringify(payload)
         })
         .then(function(r) { return r.json(); })
         .then(function() { showToast('設定を保存しました'); })
         .catch(function() { showToast('通信エラーが発生しました', 'error'); });
     }
 
-    if (alertToggle)  alertToggle.addEventListener('change', savePrefs);
-    if (digestToggle) digestToggle.addEventListener('change', savePrefs);
+    if (alertToggle)   alertToggle.addEventListener('change', savePrefs);
+    if (digestToggle)  digestToggle.addEventListener('change', savePrefs);
+    if (suggestToggle) suggestToggle.addEventListener('change', savePrefs);
 })();
 </script>
 
