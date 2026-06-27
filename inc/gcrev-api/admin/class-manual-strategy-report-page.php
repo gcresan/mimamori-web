@@ -38,6 +38,7 @@ class Gcrev_Manual_Strategy_Report_Page {
         add_action( 'admin_menu', [ $this, 'add_menu_page' ] );
         add_action( 'admin_init', [ $this, 'handle_actions' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+        add_action( 'wp_ajax_gcrev_generate_strategy_title', [ $this, 'ajax_generate_title' ] );
     }
 
     public function add_menu_page(): void {
@@ -243,6 +244,152 @@ class Gcrev_Manual_Strategy_Report_Page {
         }
     }
 
+    // =========================================================
+    // AI タイトル自動生成（Ajax）
+    // =========================================================
+
+    /**
+     * 概要版HTML（簡易レポート）の内容をもとに、AIでラベル（タイトル）を生成して返す。
+     * 管理画面の「深掘りレポート（手動）」フォームから admin-ajax 経由で呼ばれる。
+     */
+    public function ajax_generate_title(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => '権限がありません' ], 403 );
+        }
+        $nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+        if ( ! wp_verify_nonce( $nonce, 'gcrev_gen_title' ) ) {
+            wp_send_json_error( [ 'message' => '不正なリクエストです' ], 403 );
+        }
+
+        $simple_id = isset( $_POST['simple_id'] ) ? absint( $_POST['simple_id'] ) : 0;
+        if ( $simple_id <= 0 || ! $this->is_valid_html_attachment( $simple_id ) ) {
+            wp_send_json_error( [ 'message' => '概要版HTMLファイルが選択されていません' ] );
+        }
+
+        $file = get_attached_file( $simple_id );
+        if ( ! $file || ! is_readable( $file ) ) {
+            wp_send_json_error( [ 'message' => 'ファイルを読み込めませんでした' ] );
+        }
+        $html = file_get_contents( $file );
+        if ( $html === false || $html === '' ) {
+            wp_send_json_error( [ 'message' => 'ファイルの内容が空です' ] );
+        }
+
+        try {
+            $title = $this->generate_title_from_html( (string) $html );
+        } catch ( \Throwable $e ) {
+            file_put_contents(
+                '/tmp/gcrev_strategy_report_debug.log',
+                date( 'Y-m-d H:i:s' ) . ' [gen_title] ERROR: ' . $e->getMessage() . "\n",
+                FILE_APPEND
+            );
+            wp_send_json_error( [ 'message' => 'タイトル生成に失敗しました: ' . $e->getMessage() ] );
+        }
+
+        if ( $title === '' ) {
+            wp_send_json_error( [ 'message' => 'タイトルを生成できませんでした' ] );
+        }
+        wp_send_json_success( [ 'title' => $title ] );
+    }
+
+    /**
+     * 概要版HTML の本文テキストを抽出し、Gemini にタイトル生成を依頼する。
+     *
+     * @throws \Exception AIクライアント未準備・API エラー時
+     */
+    private function generate_title_from_html( string $html ): string {
+        $text = self::extract_readable_text( $html );
+        if ( $text === '' ) {
+            return '';
+        }
+        if ( ! class_exists( 'Gcrev_Config' ) || ! class_exists( 'Gcrev_AI_Client' ) ) {
+            throw new \Exception( 'AIクライアントが利用できません' );
+        }
+
+        $config = new Gcrev_Config();
+        $ai     = new Gcrev_AI_Client( $config );
+
+        $prompt = <<<PROMPT
+あなたは、Webアクセス解析レポートに見出し（タイトル）を付けるプロの編集者です。
+以下は、クライアントに提出する「深掘りレポート（概要版）」の本文テキストです。
+このレポート全体の内容にふさわしい、簡潔で具体的な日本語のタイトルを1つだけ作成してください。
+
+【ルール】
+- 全角30文字以内
+- レポートの主題（対象の事業・LP・サービス名、対象期間、最も伝えたい結論）を反映する
+- クライアント名や事業・LP名が本文にあれば活かしてよい
+- 鉤括弧（「」）・引用符・記号での装飾や「タイトル：」などの接頭辞は付けない
+- タイトル本文のみを1行で出力する（説明・補足・前置きは一切不要）
+
+【レポート本文】
+{$text}
+PROMPT;
+
+        $raw = $ai->call_gemini_api( $prompt, [
+            'temperature'     => 0.6,
+            'maxOutputTokens' => 256,
+            'thinkingBudget'  => 0,
+        ] );
+
+        return self::normalize_title( (string) $raw );
+    }
+
+    /**
+     * HTML から、タイトル生成に使える本文テキストを抽出する。
+     * <head> / <style> / <script> を除去し、<title> を先頭に添えて返す。
+     */
+    private static function extract_readable_text( string $html ): string {
+        // <title> タグを優先的に確保
+        $title_tag = '';
+        if ( preg_match( '#<title[^>]*>(.*?)</title>#is', $html, $m ) ) {
+            $title_tag = trim( wp_strip_all_tags( $m[1] ) );
+        }
+
+        // 本文（<body>）を取り出す。なければ全体を対象にする。
+        $body = $html;
+        if ( preg_match( '#<body[^>]*>(.*)</body>#is', $html, $bm ) ) {
+            $body = $bm[1];
+        }
+        // script / style を除去してからタグを落とす
+        $body = preg_replace( '#<script\b[^>]*>.*?</script>#is', ' ', $body );
+        $body = preg_replace( '#<style\b[^>]*>.*?</style>#is', ' ', (string) $body );
+        $body = wp_strip_all_tags( (string) $body );
+
+        // 空白を正規化
+        $body = preg_replace( '/[ \t\x{3000}]+/u', ' ', (string) $body );
+        $body = preg_replace( '/\s*\n\s*/u', "\n", (string) $body );
+        $body = trim( (string) $body );
+
+        $combined = ( $title_tag !== '' ? "ページタイトル: {$title_tag}\n\n" : '' ) . $body;
+
+        // 概要版は冒頭に結論・KPIが来るため先頭重視で切り詰める
+        if ( mb_strlen( $combined ) > 6000 ) {
+            $combined = mb_substr( $combined, 0, 6000 );
+        }
+        return $combined;
+    }
+
+    /**
+     * AI 応答からタイトル1行を抽出・整形する。
+     */
+    private static function normalize_title( string $raw ): string {
+        // 最初の非空行を採用
+        $line = trim( $raw );
+        foreach ( preg_split( '/\r\n|\r|\n/', $raw ) as $l ) {
+            $l = trim( (string) $l );
+            if ( $l !== '' ) { $line = $l; break; }
+        }
+        // 「タイトル：」等の接頭辞・前後の引用符/鉤括弧を除去
+        $line = preg_replace( '/^(タイトル|題名|案)\s*[:：]\s*/u', '', $line );
+        $line = trim( (string) $line, " \t\n\r\0\x0B\"'" );
+        $line = trim( $line, '「」『』【】' );
+        $line = sanitize_text_field( $line );
+        if ( mb_strlen( $line ) > 60 ) {
+            $line = mb_substr( $line, 0, 60 );
+        }
+        return $line;
+    }
+
     private function redirect_with_msg( string $msg, int $user_id ): void {
         $args = [ 'page' => self::MENU_SLUG, 'msg' => $msg ];
         if ( $user_id > 0 ) $args['user_id'] = $user_id;
@@ -397,7 +544,50 @@ class Gcrev_Manual_Strategy_Report_Page {
         </div>
 
         <script>
+        var gcrevStrategyTitleNonce = '<?php echo esc_js( wp_create_nonce( 'gcrev_gen_title' ) ); ?>';
         jQuery(function($) {
+            // 概要版HTMLの内容からAIでラベル（タイトル）を生成して入力欄へ反映する。
+            // force=false: ラベルが空のときだけ自動生成（ファイル選択時の自動入力用）
+            // force=true : 既存値があっても上書き生成（ボタンクリック用）
+            function gcrevGenerateTitle($form, force) {
+                var simpleId = $form.find('input.js-simple-id').val();
+                var $label   = $form.find('input.js-label-input');
+                var $status  = $form.find('.js-gen-title-status');
+                var $btn     = $form.find('.js-gen-title');
+
+                if (!simpleId || simpleId === '0') {
+                    if (force) { $status.text('先に概要版HTMLを選択してください').css('color', '#b32d2e'); }
+                    return;
+                }
+                if (!force && $.trim($label.val()) !== '') { return; } // 入力済みなら自動上書きしない
+
+                $btn.prop('disabled', true);
+                $status.text('AIがタイトルを生成中…（数秒かかります）').css('color', '#666');
+
+                $.post(ajaxurl, {
+                    action: 'gcrev_generate_strategy_title',
+                    nonce: gcrevStrategyTitleNonce,
+                    simple_id: simpleId
+                }).done(function(res) {
+                    if (res && res.success && res.data && res.data.title) {
+                        $label.val(res.data.title);
+                        $status.text('✓ 生成しました（必要なら修正できます）').css('color', '#15803d');
+                    } else {
+                        var msg = (res && res.data && res.data.message) ? res.data.message : 'タイトル生成に失敗しました';
+                        $status.text(msg).css('color', '#b32d2e');
+                    }
+                }).fail(function() {
+                    $status.text('通信エラーが発生しました').css('color', '#b32d2e');
+                }).always(function() {
+                    $btn.prop('disabled', false);
+                });
+            }
+
+            $(document).on('click', '.js-gen-title', function(e) {
+                e.preventDefault();
+                gcrevGenerateTitle($(this).closest('form'), true);
+            });
+
             $(document).on('click', '.js-pick-file', function(e) {
                 e.preventDefault();
                 var $btn   = $(this);
@@ -417,6 +607,10 @@ class Gcrev_Manual_Strategy_Report_Page {
                         $hidden.val(att.id);
                         var name = att.filename || att.title || ('attachment ' + att.id);
                         $info.html('<a href="' + att.url + '" target="_blank" rel="noopener">' + name + '</a>');
+                        // 概要版を選んだら、ラベルが空のときに限りAIタイトルを自動生成
+                        if (target === 'simple') {
+                            gcrevGenerateTitle($form, false);
+                        }
                     }
                 });
                 frame.open();
@@ -534,7 +728,11 @@ class Gcrev_Manual_Strategy_Report_Page {
             <span><input type="text" name="gcrev_period" value="<?php echo esc_attr( $period ); ?>" placeholder="2026-04" pattern="\d{4}-(0[1-9]|1[0-2])" style="width:120px;"> <span style="color:#666;font-size:12px;">YYYY-MM 形式（並び順に使用、空でも可）</span></span>
 
             <label style="font-weight:600;">ラベル</label>
-            <input type="text" name="gcrev_label" value="<?php echo esc_attr( $label ); ?>" placeholder="例: 2026年4月リニューアル報告" style="width:100%;">
+            <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="text" class="js-label-input" name="gcrev_label" value="<?php echo esc_attr( $label ); ?>" placeholder="例: 2026年4月リニューアル報告" style="flex:1;min-width:240px;">
+                <button type="button" class="button js-gen-title" title="概要版HTMLの内容からAIがタイトルを生成します">✨ AIで生成</button>
+                <span class="js-gen-title-status" style="font-size:12px;color:#666;"></span>
+            </span>
 
             <label style="font-weight:600;">📋 概要版HTML</label>
             <span>
