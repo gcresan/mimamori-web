@@ -443,6 +443,12 @@ class Gcrev_Execution_Service {
             // SEO診断結果（既存の保存済み診断があれば参照、なければ空配列）
             $context['seo_diagnosis']  = $this->collect_seo_diagnosis( $user_id );
 
+            // 月次レポート要約（AI改善提案プラン以上）— 前月分の確定レポートを踏まえた提案のため
+            $context['monthly_report'] = $this->collect_monthly_report( $user_id );
+
+            // 深掘り（戦略）レポート要約（プロ分析・集客プラン以上）— 年4回の深掘り内容を踏まえた提案のため
+            $context['strategy_report'] = $this->collect_strategy_report( $user_id );
+
         } catch ( \Throwable $e ) {
             $this->log( "collect_context_for_ai ERROR: " . $e->getMessage() );
         }
@@ -874,6 +880,140 @@ class Gcrev_Execution_Service {
         return $out;
     }
 
+    /**
+     * 月次レポート要約（AI改善提案プラン以上のみ）。
+     *
+     * 前月（無ければ前々月）の確定/最新レポートから、初心者向けMarkdown、
+     * 無ければ本文HTMLをプレーンテキスト化したものを抜粋する。
+     * 外部API呼び出しなし（既存CPTの参照のみ）。
+     *
+     * @return array{year_month:string,summary:string}|array{}
+     */
+    private function collect_monthly_report( int $user_id ): array {
+        if ( ! ( function_exists( 'mimamori_can' ) && mimamori_can( 'improvement_actions', $user_id ) ) ) {
+            return [];
+        }
+        if ( ! class_exists( 'Gcrev_Report_Repository' ) ) {
+            $f = __DIR__ . '/class-report-repository.php';
+            if ( file_exists( $f ) ) { require_once $f; }
+        }
+        if ( ! class_exists( 'Gcrev_Report_Repository' ) ) { return []; }
+
+        try {
+            $repo = new Gcrev_Report_Repository( $this->config );
+            $tz   = wp_timezone();
+            foreach ( [ 'first day of last month', 'first day of -2 months' ] as $rel ) {
+                $ym      = ( new \DateTimeImmutable( $rel, $tz ) )->format( 'Y-m' );
+                $reports = $repo->get_reports_by_month( $user_id, $ym );
+                if ( empty( $reports ) ) { continue; }
+
+                // is_current（公開中）を優先、無ければ先頭
+                $chosen = $reports[0];
+                foreach ( $reports as $r ) {
+                    if ( ! empty( $r['is_current'] ) ) { $chosen = $r; break; }
+                }
+
+                $summary = trim( (string) ( $chosen['beginner_markdown'] ?? '' ) );
+                if ( $summary === '' ) {
+                    $summary = trim( wp_strip_all_tags( (string) ( $chosen['report_html'] ?? '' ) ) );
+                }
+                if ( $summary === '' ) { continue; }
+
+                return [
+                    'year_month' => $ym,
+                    'summary'    => mb_substr( $summary, 0, 1800 ),
+                ];
+            }
+        } catch ( \Throwable $e ) {
+            $this->log( 'collect_monthly_report ERROR: ' . $e->getMessage() );
+        }
+        return [];
+    }
+
+    /**
+     * 深掘り（戦略）レポート要約（プロ分析・集客プラン以上のみ）。
+     *
+     * 年4回の深掘りレポートのうち最新の完了済みを参照し、
+     * 結論・課題・原因・推奨アクションを簡潔なテキストにまとめる。
+     * 外部API呼び出しなし（既存テーブルの参照のみ）。
+     *
+     * @return array{year_month:string,summary:string}|array{}
+     */
+    private function collect_strategy_report( int $user_id ): array {
+        if ( ! ( function_exists( 'mimamori_can' ) && mimamori_can( 'meo_menu', $user_id ) ) ) {
+            return [];
+        }
+        if ( ! class_exists( 'Gcrev_Strategy_Report_Repository' ) ) {
+            $f = __DIR__ . '/class-strategy-report-repository.php';
+            if ( file_exists( $f ) ) { require_once $f; }
+        }
+        if ( ! class_exists( 'Gcrev_Strategy_Report_Repository' ) ) { return []; }
+
+        try {
+            $repo = new Gcrev_Strategy_Report_Repository();
+            $row  = $repo->get_latest_completed( $user_id );
+            if ( ! $row ) { return []; }
+
+            $json = is_array( $row['report_json'] ?? null ) ? $row['report_json'] : [];
+            $sec  = is_array( $json['sections'] ?? null ) ? $json['sections'] : [];
+
+            $lines = [];
+            if ( isset( $row['alignment_score'] ) && $row['alignment_score'] !== null ) {
+                $lines[] = '戦略整合スコア: ' . (int) $row['alignment_score'] . '/100';
+            }
+            if ( ! empty( $sec['conclusion'] ) ) {
+                $lines[] = '結論: ' . trim( (string) $sec['conclusion'] );
+            }
+            foreach ( array_slice( (array) ( $sec['issues'] ?? [] ), 0, 3 ) as $i => $issue ) {
+                $lines[] = sprintf(
+                    '課題%d[%s]: %s',
+                    $i + 1,
+                    (string) ( $issue['severity'] ?? '' ),
+                    trim( (string) ( $issue['title'] ?? '' ) )
+                );
+            }
+            foreach ( array_slice( (array) ( $sec['actions'] ?? [] ), 0, 5 ) as $a ) {
+                $lines[] = sprintf(
+                    '推奨アクション[%s]: %s',
+                    (string) ( $a['horizon'] ?? '' ),
+                    trim( (string) ( $a['title'] ?? '' ) )
+                );
+            }
+
+            $summary = trim( implode( "\n", array_filter( $lines ) ) );
+            if ( $summary === '' ) {
+                $summary = trim( wp_strip_all_tags( (string) ( $row['rendered_html'] ?? '' ) ) );
+            }
+            if ( $summary === '' ) { return []; }
+
+            return [
+                'year_month' => (string) ( $row['year_month'] ?? '' ),
+                'summary'    => mb_substr( $summary, 0, 1800 ),
+            ];
+        } catch ( \Throwable $e ) {
+            $this->log( 'collect_strategy_report ERROR: ' . $e->getMessage() );
+        }
+        return [];
+    }
+
+    /**
+     * Claude クライアント（ANTHROPIC_API_KEY 設定時のみ）。未設定なら null。
+     * 改善施策の生成は Claude を優先し、利用不可なら Gemini にフォールバックする。
+     */
+    private function claude_client(): ?Gcrev_Claude_Client {
+        if ( $this->config->get_anthropic_api_key() === '' ) {
+            return null;
+        }
+        if ( ! class_exists( 'Gcrev_Claude_Client' ) ) {
+            $f = __DIR__ . '/class-claude-client.php';
+            if ( file_exists( $f ) ) { require_once $f; }
+        }
+        if ( ! class_exists( 'Gcrev_Claude_Client' ) ) {
+            return null;
+        }
+        return new Gcrev_Claude_Client( $this->config );
+    }
+
     private function call_ai_for_actions( array $context, int $user_id ): array {
         $business = $context['business'] ?? [];
         $industry = trim( ( $business['industry'] ?? '' ) . ' ' . ( $business['industry_detail'] ?? '' ) . ' ' . ( $business['industry_sub'] ?? '' ) );
@@ -1078,6 +1218,18 @@ class Gcrev_Execution_Service {
         }
         if ( $comp_lines === '' ) { $comp_lines = "（競合参考URL未登録）\n"; }
 
+        // 月次レポート要約（AI改善提案プラン以上のみ提供される）
+        $mr = $context['monthly_report'] ?? [];
+        $monthly_report_lines = ! empty( $mr['summary'] )
+            ? "対象月: {$mr['year_month']}\n{$mr['summary']}\n"
+            : "（対象プラン外、または直近の月次レポート未確定）\n";
+
+        // 深掘り（戦略）レポート要約（プロ分析・集客プラン以上のみ提供される）
+        $sr = $context['strategy_report'] ?? [];
+        $strategy_report_lines = ! empty( $sr['summary'] )
+            ? "対象月: {$sr['year_month']}\n{$sr['summary']}\n"
+            : "（対象プラン外、または深掘りレポート未作成）\n";
+
         // 記事数
         $article_count = count( $context['recent_articles'] ?? [] );
 
@@ -1096,6 +1248,11 @@ class Gcrev_Execution_Service {
   - ❌ データ欄にないのに「あなたのサイトは◯◯件」「競合は平均◯本」等の数値を創作するのは禁止
 - ページ診断・Clarity・競合・SEO診断 のいずれかが「未実施/未登録」と書かれている場合、そのセクションに基づく断定はしないこと。
 - ページ診断の「AI診断本文」「AI所見」は OpenAI GPT がそのページのスクリーンショット・コンテンツ・ペルソナを総合して書いた一次診断結果であり、施策の根拠として最優先で参照すること。
+
+【月次レポート・深掘りレポートとの整合（最重要）】
+- 「月次レポート要約」が与えられている場合（AI改善提案プラン以上）、その所見・課題・方針と矛盾しない提案にすること。レポートで指摘済みの課題があれば、それを解消するアクションを優先し、reason にレポート由来である旨を明記する（例:「今月の月次レポートで〇〇が課題と報告されています」）。
+- 「深掘りレポート要約」が与えられている場合（プロ分析・集客プラン以上、年4回作成）、その結論・課題・推奨アクション（特に this_month / next_month の horizon）を今月の具体的な実行ステップに落とし込むこと。深掘りレポートの戦略方針に沿った提案を最優先とし、reason に深掘りレポート由来である旨を明記する（例:「深掘りレポートの推奨アクション〇〇に基づき」）。
+- これらのレポートが「対象プラン外」「未確定/未作成」と書かれている場合は、その存在を前提にした断定はしないこと。
 
 【アクションのgrounding（具体性）の優先度】
 - 以下の順でより具体的なアクションを優先:
@@ -1166,6 +1323,10 @@ class Gcrev_Execution_Service {
 {$meo_lines}
 【競合サイト内容（ユーザー登録の参考URL解析）】
 {$comp_lines}
+【月次レポート要約（AI改善提案プラン以上）】
+{$monthly_report_lines}
+【深掘りレポート要約（プロ分析・集客プラン以上・年4回）】
+{$strategy_report_lines}
 === 出力形式 ===
 action_type: article_create / rewrite / internal_link / meo_post / meta_fix / page_speed / ux_fix / cv_improvement
 priority: high(最大2個) / medium / low
@@ -1174,6 +1335,33 @@ JSON配列のみ出力。コードブロック記法禁止。最大5件。
 [{"action_type":"rewrite","priority":"high","title":"松山ホームページ制作のサービスページを2,000文字以上にリライトしてください","reason":"当該キーワードの順位が19位→34位に下落しており、競合サイトのH2が10項目以上でコンテンツ量に差が出ています","target_keyword":"松山 ホームページ制作","target_url":"","quantity":1,"unit":"ページ","expected_effect":"対象キーワードの順位改善と検索表示回数の増加が期待できます"}]
 PROMPT;
 
+        // 改善施策の生成は Claude を優先。利用不可・失敗時は Gemini にフォールバックする。
+        $claude = $this->claude_client();
+        if ( $claude ) {
+            try {
+                $system = 'あなたは中小企業のWeb集客コンサルタントです。'
+                    . '与えられた実データのみを根拠に、指示された形式の JSON 配列だけを出力してください。'
+                    . 'コードブロック記法・前置き・後書きは一切不要です。';
+                $res = $claude->call_messages_api( $system, $prompt, [
+                    'temperature' => 0.3,
+                    'max_tokens'  => 8000,
+                ] );
+
+                $parsed = $this->parse_ai_json( (string) ( $res['text'] ?? '' ) );
+                if ( is_array( $parsed ) && ! empty( $parsed ) ) {
+                    $deduped = $this->dedupe_and_cap_actions( $parsed );
+                    $this->log( "Claude parse success: raw=" . count( $parsed ) . " deduped=" . count( $deduped ) );
+                    return $deduped;
+                }
+                $this->log( "Claude JSON parse failed. Raw: " . substr( (string) ( $res['text'] ?? '' ), 0, 500 ) );
+            } catch ( \Throwable $e ) {
+                $this->log( "call_ai_for_actions Claude ERROR (fallback to Gemini): " . $e->getMessage() );
+            }
+        } else {
+            $this->log( 'Claude unavailable (ANTHROPIC_API_KEY 未設定) — Gemini にフォールバック' );
+        }
+
+        // フォールバック: Gemini
         try {
             $response = $this->ai->call_gemini_api( $prompt, [
                 'temperature'     => 0.3,
@@ -1183,14 +1371,14 @@ PROMPT;
             $parsed = $this->parse_ai_json( $response );
             if ( is_array( $parsed ) && ! empty( $parsed ) ) {
                 $deduped = $this->dedupe_and_cap_actions( $parsed );
-                $this->log( "AI parse success: raw=" . count( $parsed ) . " deduped=" . count( $deduped ) );
+                $this->log( "Gemini parse success: raw=" . count( $parsed ) . " deduped=" . count( $deduped ) );
                 return $deduped;
             }
 
-            $this->log( "AI JSON parse failed. Raw: " . substr( $response, 0, 500 ) );
+            $this->log( "Gemini JSON parse failed. Raw: " . substr( $response, 0, 500 ) );
 
         } catch ( \Throwable $e ) {
-            $this->log( "call_ai_for_actions ERROR: " . $e->getMessage() );
+            $this->log( "call_ai_for_actions Gemini ERROR: " . $e->getMessage() );
         }
 
         return [];
