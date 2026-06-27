@@ -594,7 +594,9 @@ class Mimamori_Notification_Service {
             $this->collect_digest_extras( $uid )
         );
 
-        $sent = wp_mail( $user->user_email, $email['subject'], $email['body'] );
+        // 送信内容を管理者宛 (info@g-crev.jp) にもCCする。
+        $headers = [ 'Cc: info@g-crev.jp' ];
+        $sent    = wp_mail( $user->user_email, $email['subject'], $email['body'], $headers );
         self::log( sprintf( 'weekly digest sent user=%d result=%s', $uid, $sent ? 'OK' : 'FAIL' ) );
     }
 
