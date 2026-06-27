@@ -325,13 +325,49 @@ class Gcrev_Manual_Strategy_Report_Page {
 {$text}
 PROMPT;
 
-        $raw = $ai->call_gemini_api( $prompt, [
+        // gemini-2.5-flash は thinking が出力枠を食うため maxOutputTokens を厚めに確保する
+        // （256 だと thinking で枯渇し finishReason=MAX_TOKENS で本文が空になる）。
+        $raw   = (string) $ai->call_gemini_api( $prompt, [
             'temperature'     => 0.6,
-            'maxOutputTokens' => 256,
+            'maxOutputTokens' => 2048,
             'thinkingBudget'  => 0,
         ] );
+        $title = self::normalize_title( $raw );
 
-        return self::normalize_title( (string) $raw );
+        file_put_contents(
+            '/tmp/gcrev_strategy_report_debug.log',
+            date( 'Y-m-d H:i:s' ) . ' [gen_title] text_len=' . mb_strlen( $text )
+                . ' raw_len=' . mb_strlen( $raw )
+                . ' raw=' . substr( $raw, 0, 200 )
+                . ' title=' . $title . "\n",
+            FILE_APPEND
+        );
+
+        // AI が空を返した場合は <title> / 最初の <h1> にフォールバック
+        if ( $title === '' ) {
+            $title = self::normalize_title( self::extract_fallback_title( $html ) );
+        }
+
+        return $title;
+    }
+
+    /**
+     * AI が使えない／空応答のときのフォールバックタイトル。
+     * <title>（区切り文字以前）→ 最初の <h1> の順で採用する。
+     */
+    private static function extract_fallback_title( string $html ): string {
+        if ( preg_match( '#<title[^>]*>(.*?)</title>#is', $html, $m ) ) {
+            $t = trim( wp_strip_all_tags( $m[1] ) );
+            // "○○レポート｜会社名" のような区切りは先頭部分だけ採用
+            $t = preg_split( '/\s*[｜|\-–—]\s*/u', $t )[0] ?? $t;
+            $t = trim( (string) $t );
+            if ( $t !== '' ) return $t;
+        }
+        if ( preg_match( '#<h1[^>]*>(.*?)</h1>#is', $html, $m ) ) {
+            $t = trim( preg_replace( '/\s+/u', ' ', wp_strip_all_tags( $m[1] ) ) );
+            if ( $t !== '' ) return $t;
+        }
+        return '';
     }
 
     /**
