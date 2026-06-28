@@ -28,6 +28,27 @@ $alert_on  = get_user_meta( $user_id, 'mimamori_alert_optout', true )  !== '1';
 $digest_on = get_user_meta( $user_id, 'mimamori_digest_optout', true ) !== '1';
 $suggest_on = get_user_meta( $user_id, 'mimamori_suggest_optout', true ) !== '1';
 
+// アラート種類別の受信設定（管理画面で配信ONの種類のみ、本人の受信状況つきで表示）
+$alert_types = [];
+$_mm_module = get_template_directory() . '/inc/gcrev-api/modules/class-mimamori-notification-service.php';
+if ( ! class_exists( 'Mimamori_Notification_Service' ) && file_exists( $_mm_module ) ) {
+    require_once $_mm_module;
+}
+if ( class_exists( 'Mimamori_Notification_Service' ) ) {
+    $_mm_settings    = Mimamori_Notification_Service::get_settings();
+    $_mm_type_optout = get_user_meta( $user_id, 'mimamori_alert_type_optout', true );
+    $_mm_type_optout = is_array( $_mm_type_optout ) ? $_mm_type_optout : [];
+    foreach ( Mimamori_Notification_Service::alert_type_labels() as $_type => $_label ) {
+        // 管理者が全体OFFにした種類はクライアントにも表示しない
+        if ( ! Mimamori_Notification_Service::alert_type_enabled( $_mm_settings, $_type ) ) { continue; }
+        $alert_types[] = [
+            'type'  => $_type,
+            'label' => $_label,
+            'on'    => empty( $_mm_type_optout[ $_type ] ),
+        ];
+    }
+}
+
 // AI改善提案通知は AI改善提案プラン以上のみ
 $_notif_can_suggest = function_exists( 'mimamori_can' )
     ? mimamori_can( 'improvement_actions', $user_id )
@@ -91,6 +112,38 @@ get_header();
     border-bottom: 1px solid var(--mw-border-light, #e8ecee);
 }
 .notif-row:last-child { border-bottom: none; }
+
+/* --- アラート種類別サブトグル --- */
+.notif-subrows {
+    margin: 0 0 4px;
+    padding: 4px 0 4px 14px;
+    border-left: 2px solid var(--mw-border-light, #e8ecee);
+}
+.notif-subrows-head {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--mw-text-secondary, #666);
+    margin: 6px 0 2px;
+}
+.notif-subrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px dashed var(--mw-border-light, #e8ecee);
+}
+.notif-subrow:last-child { border-bottom: none; }
+.notif-subrow-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mw-text-primary, #2c3e50);
+}
+.notif-subrows.is-disabled { opacity: 0.45; }
+.notif-switch--sm { width: 40px; height: 23px; }
+.notif-switch--sm .notif-slider::before { height: 17px; width: 17px; }
+.notif-switch--sm input:checked + .notif-slider::before { transform: translateX(17px); }
+
 .notif-row-label {
     font-size: 14px;
     font-weight: 600;
@@ -330,6 +383,23 @@ get_header();
             </label>
         </div>
 
+        <?php if ( ! empty( $alert_types ) ) : ?>
+        <div class="notif-subrows<?php echo $alert_on ? '' : ' is-disabled'; ?>" id="alertTypeRows">
+            <div class="notif-subrows-head">受け取るアラートの種類を選べます</div>
+            <?php foreach ( $alert_types as $at ) : ?>
+            <div class="notif-subrow">
+                <span class="notif-subrow-label"><?php echo esc_html( $at['label'] ); ?></span>
+                <label class="notif-switch notif-switch--sm">
+                    <input type="checkbox" class="js-alert-type"
+                           data-type="<?php echo esc_attr( $at['type'] ); ?>"
+                           <?php checked( $at['on'] ); ?> <?php disabled( ! $alert_on ); ?> />
+                    <span class="notif-slider"></span>
+                </label>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
         <div class="notif-row">
             <div>
                 <div class="notif-row-label">みまもり週次便</div>
@@ -493,6 +563,8 @@ get_header();
     var alertToggle   = document.getElementById('notifyAlertToggle');
     var digestToggle  = document.getElementById('notifyDigestToggle');
     var suggestToggle = document.getElementById('notifySuggestToggle');
+    var alertTypeEls  = Array.prototype.slice.call(document.querySelectorAll('.js-alert-type'));
+    var alertTypeRows = document.getElementById('alertTypeRows');
 
     function savePrefs() {
         var payload = {
@@ -500,6 +572,12 @@ get_header();
             digest_enabled: digestToggle ? digestToggle.checked : true
         };
         if (suggestToggle) { payload.suggest_enabled = suggestToggle.checked; }
+        if (alertTypeEls.length) {
+            payload.alert_types = {};
+            alertTypeEls.forEach(function(el) {
+                payload.alert_types[el.getAttribute('data-type')] = el.checked;
+            });
+        }
 
         fetch(prefsUrl, {
             method: 'POST',
@@ -512,9 +590,20 @@ get_header();
         .catch(function() { showToast('通信エラーが発生しました', 'error'); });
     }
 
-    if (alertToggle)   alertToggle.addEventListener('change', savePrefs);
+    // みまもりアラート全体OFF時は種類別トグルを無効表示にする
+    function syncAlertTypeState() {
+        var on = alertToggle ? alertToggle.checked : true;
+        alertTypeEls.forEach(function(el) { el.disabled = !on; });
+        if (alertTypeRows) { alertTypeRows.classList.toggle('is-disabled', !on); }
+    }
+
+    if (alertToggle) alertToggle.addEventListener('change', function() {
+        syncAlertTypeState();
+        savePrefs();
+    });
     if (digestToggle)  digestToggle.addEventListener('change', savePrefs);
     if (suggestToggle) suggestToggle.addEventListener('change', savePrefs);
+    alertTypeEls.forEach(function(el) { el.addEventListener('change', savePrefs); });
 })();
 </script>
 

@@ -27,6 +27,8 @@ class Mimamori_Notification_Service {
     public const META_OPTOUT_ALERT   = 'mimamori_alert_optout';
     public const META_OPTOUT_DIGEST  = 'mimamori_digest_optout';
     public const META_OPTOUT_SUGGEST = 'mimamori_suggest_optout';
+    // アラート種類別のユーザー受信停止（array: [ type => '1' ] で停止）
+    public const META_ALERT_TYPE_OPTOUT = 'mimamori_alert_type_optout';
 
     // 送信履歴（user_meta）
     private const META_ALERT_LOG   = 'mimamori_alert_log';   // [ ['ts'=>int, 'type'=>string], ... ]
@@ -89,6 +91,15 @@ class Mimamori_Notification_Service {
         $key = 'alert_' . $type;
         if ( ! array_key_exists( $key, $s ) ) { return true; }
         return ! empty( $s[ $key ] );
+    }
+
+    /**
+     * このユーザーがこの種類のアラートを受信停止しているか（クライアント側の種類別設定）。
+     * 未設定は受信扱い（false）。
+     */
+    public static function user_alert_type_optout( int $uid, string $type ): bool {
+        $m = get_user_meta( $uid, self::META_ALERT_TYPE_OPTOUT, true );
+        return is_array( $m ) && ! empty( $m[ $type ] );
     }
 
     private static function log( string $msg ): void {
@@ -314,8 +325,11 @@ class Mimamori_Notification_Service {
                     $this->detect_site_health( $uid, $s )
                 );
                 foreach ( $alerts as $alert ) {
+                    $type = (string) $alert['type'];
                     // 管理画面でこの種類の配信がOFFならスキップ
-                    if ( ! self::alert_type_enabled( $s, (string) $alert['type'] ) ) { continue; }
+                    if ( ! self::alert_type_enabled( $s, $type ) ) { continue; }
+                    // クライアント本人がこの種類を受信停止していればスキップ
+                    if ( self::user_alert_type_optout( $uid, $type ) ) { continue; }
                     $urgent = ! empty( $alert['urgent'] );
                     if ( ! $this->can_send( $uid, $alert['type'], $s, $urgent ) ) { continue; }
                     $this->send_alert_mail( $uid, $alert );

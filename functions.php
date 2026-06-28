@@ -11573,6 +11573,28 @@ function mimamori_save_notification_prefs( \WP_REST_Request $request ): \WP_REST
         update_user_meta( $user_id, 'mimamori_suggest_optout', $params['suggest_enabled'] ? '0' : '1' );
     }
 
+    // アラート種類別の受信設定（{ access_drop: bool, ... }）。
+    // 値は array [ type => '1' ]（'1'=受信停止）として保存する。
+    if ( array_key_exists( 'alert_types', $params ) && is_array( $params['alert_types'] ) ) {
+        $valid   = array_keys(
+            class_exists( 'Mimamori_Notification_Service' )
+                ? Mimamori_Notification_Service::alert_type_labels()
+                : [ 'access_drop' => '', 'access_surge' => '', 'cv_stall' => '', 'site_down' => '', 'ssl_expiry' => '' ]
+        );
+        $existing = get_user_meta( $user_id, 'mimamori_alert_type_optout', true );
+        $optout   = is_array( $existing ) ? $existing : [];
+        foreach ( $params['alert_types'] as $type => $enabled ) {
+            $type = sanitize_key( (string) $type );
+            if ( ! in_array( $type, $valid, true ) ) { continue; }
+            if ( $enabled ) {
+                unset( $optout[ $type ] );      // 受信ON → 停止解除
+            } else {
+                $optout[ $type ] = '1';          // 受信OFF → 停止
+            }
+        }
+        update_user_meta( $user_id, 'mimamori_alert_type_optout', $optout );
+    }
+
     return new \WP_REST_Response( [ 'success' => true ], 200 );
 }
 
