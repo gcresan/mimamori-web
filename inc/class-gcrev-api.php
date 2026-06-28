@@ -24362,7 +24362,7 @@ PROMPT;
      */
     private static $valid_page_types = [
         'top', 'service', 'lp', 'contact', 'blog',
-        'company', 'access', 'staff', 'price', 'other',
+        'company', 'access', 'staff', 'price', 'works', 'faq', 'other',
     ];
 
     /**
@@ -24928,6 +24928,47 @@ PROMPT;
     }
 
     /**
+     * URL・タイトルからページ種別（page_type）を推定する。
+     * 判定できなければ 'other' を返す。
+     */
+    private function guess_page_type( string $url, string $title = '', bool $is_home = false ): string {
+        if ( $is_home ) { return 'top'; }
+
+        $parts = wp_parse_url( $url );
+        $path  = strtolower( (string) ( $parts['path'] ?? '' ) );
+        $t     = (string) $title;
+
+        // トップページ（パスが無い/ルート）
+        if ( $path === '' || $path === '/' || $path === '/index.html' || $path === '/index.php' ) {
+            return 'top';
+        }
+
+        // キーワード（URLパス・タイトルの両方で照合）
+        $rules = [
+            'contact' => [ 'contact', 'inquiry', 'form', 'toiawase', 'otoiawase', '問い合わせ', 'お問い合わせ', '相談' ],
+            'faq'     => [ 'faq', 'qa', 'question', 'yokuaru', 'よくある', 'よくあるご質問', 'q&a' ],
+            'price'   => [ 'price', 'pricing', 'plan', 'cost', 'fee', 'ryokin', '料金', '価格', '費用', 'プラン' ],
+            'works'   => [ 'works', 'case', 'jisseki', 'portfolio', 'achievement', 'result', '事例', '実績', '制作事例' ],
+            'staff'   => [ 'staff', 'member', 'team', 'people', 'recruit', 'スタッフ', '担当者', 'メンバー', 'チーム', '採用', '社員' ],
+            'company' => [ 'company', 'about', 'corporate', 'profile', 'overview', '会社概要', '会社案内', '企業情報', '私たち', 'について' ],
+            'access'  => [ 'access', 'map', 'location', 'tenpo', 'shop', 'store', 'アクセス', '地図', '所在地', '店舗' ],
+            'blog'    => [ 'blog', 'column', 'news', 'article', 'post', 'topics', 'media', 'コラム', 'ブログ', 'お知らせ', '記事', 'ニュース' ],
+            'service' => [ 'service', 'product', 'menu', 'business', 'jigyo', 'サービス', '商品', '事業', 'メニュー' ],
+            'lp'      => [ 'lp', 'campaign', 'landing', 'cv', 'ランディング', 'キャンペーン' ],
+        ];
+
+        $haystack = $path . ' ' . mb_strtolower( $t );
+        foreach ( $rules as $type => $keywords ) {
+            foreach ( $keywords as $kw ) {
+                if ( $kw !== '' && mb_strpos( $haystack, mb_strtolower( $kw ) ) !== false ) {
+                    return $type;
+                }
+            }
+        }
+        return 'other';
+    }
+
+    /**
      * 重要そうなページを自動抽出する（トップページ + GA4 閲覧数上位）。
      *
      * @return array<int,array{url:string,title:string,type:string}>
@@ -24957,7 +24998,7 @@ PROMPT;
         };
 
         // 1) トップページ
-        $add( $base . '/', 'トップページ', 'top' );
+        $add( $base . '/', 'トップページ', $this->guess_page_type( $base . '/', 'トップページ', true ) );
 
         // 2) GA4 閲覧数上位ページ
         try {
@@ -24972,7 +25013,8 @@ PROMPT;
                     if ( ! $this->is_capturable_path( $path ) ) { continue; }
                     $full = $this->path_to_url( $base, $path );
                     if ( $full === '' ) { continue; }
-                    $add( $full, (string) ( $p['title'] ?? '' ), 'other' );
+                    $ptitle = (string) ( $p['title'] ?? '' );
+                    $add( $full, $ptitle, $this->guess_page_type( $full, $ptitle ) );
                 }
             }
         } catch ( \Throwable $e ) {
@@ -25089,14 +25131,22 @@ PROMPT;
         foreach ( $candidates as $c ) {
             $url = $c['url'];
             $row = $wpdb->get_row( $wpdb->prepare(
-                "SELECT id, status, screenshot_pc FROM {$table} WHERE user_id = %d AND page_url = %s",
+                "SELECT id, status, screenshot_pc, page_type FROM {$table} WHERE user_id = %d AND page_url = %s",
                 $user_id, $url
             ), ARRAY_A );
             if ( $row ) {
                 $pid = (int) $row['id'];
+                $upd = [];
                 if ( $row['status'] !== 'active' ) {
-                    $wpdb->update( $table, [ 'status' => 'active' ], [ 'id' => $pid ], [ '%s' ], [ '%d' ] );
+                    $upd['status'] = 'active';
                     $added++;
+                }
+                // 未分類（その他/空）なら推定種別で自動振り分け
+                if ( in_array( (string) ( $row['page_type'] ?? '' ), [ '', 'other' ], true ) && $c['type'] !== 'other' ) {
+                    $upd['page_type'] = $c['type'];
+                }
+                if ( ! empty( $upd ) ) {
+                    $wpdb->update( $table, $upd, [ 'id' => $pid ] );
                 }
                 $has_shot = ! empty( $row['screenshot_pc'] );
             } else {
@@ -25121,6 +25171,19 @@ PROMPT;
                 "SELECT id FROM {$table} WHERE user_id = %d AND status = 'active'",
                 $user_id
             ) ) );
+        }
+
+        // 既存の未分類ページ（その他/空）も URL・タイトルから推定して自動振り分け（外部API不要）
+        $others = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, page_url, page_title FROM {$table}
+             WHERE user_id = %d AND status = 'active' AND ( page_type = '' OR page_type = 'other' )",
+            $user_id
+        ), ARRAY_A );
+        foreach ( (array) $others as $o ) {
+            $guess = $this->guess_page_type( (string) $o['page_url'], (string) $o['page_title'] );
+            if ( $guess !== 'other' ) {
+                $wpdb->update( $table, [ 'page_type' => $guess ], [ 'id' => (int) $o['id'] ], [ '%s' ], [ '%d' ] );
+            }
         }
 
         $job = [
@@ -25479,7 +25542,8 @@ PROMPT;
         $type_names = [
             'top' => 'トップページ', 'service' => 'サービス紹介', 'lp' => 'LP',
             'contact' => 'お問い合わせ', 'blog' => 'ブログ', 'company' => '会社概要',
-            'access' => 'アクセス', 'staff' => 'スタッフ', 'price' => '料金', 'other' => 'その他',
+            'access' => 'アクセス', 'staff' => 'スタッフ', 'price' => '料金',
+            'works' => '制作事例・実績', 'faq' => 'よくある質問', 'other' => 'その他',
         ];
         $page_info = [
             'url'          => $row['page_url'],

@@ -811,6 +811,8 @@ get_header();
                 <option value="access">アクセス</option>
                 <option value="staff">スタッフ紹介</option>
                 <option value="price">料金</option>
+                <option value="works">制作事例・実績</option>
+                <option value="faq">よくある質問</option>
                 <option value="other" selected>その他</option>
             </select>
         </div>
@@ -917,7 +919,7 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
     var PAGE_TYPES = {
         top: 'トップページ', service: 'サービス', lp: 'LP', contact: 'お問い合わせ',
         blog: 'ブログ', company: '会社概要', access: 'アクセス', staff: 'スタッフ',
-        price: '料金', other: 'その他'
+        price: '料金', works: '制作事例・実績', faq: 'よくある質問', other: 'その他'
     };
 
     // --- DOM ---
