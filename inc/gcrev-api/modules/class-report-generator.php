@@ -1104,9 +1104,15 @@ DOMAIN;
         $prompt .= "\n\n# 前月データ（最新）\n";
         $prompt .= $this->format_data_for_prompt($prev);
 
-        // ページ改善分析データ（あれば）
+        // 現状のページ診断（あれば必ず踏まえる）
         if ( ! empty( $client['page_insights']['available'] ) ) {
             $prompt .= $this->format_page_insights_for_prompt( $client['page_insights'] );
+        }
+
+        // 深掘り（戦略）レポート履歴（あれば必ず踏まえる）
+        $strategy_hist = $this->collect_strategy_history( (int) ( $client['user_id'] ?? 0 ) );
+        if ( ! empty( $strategy_hist ) ) {
+            $prompt .= $this->format_strategy_history_for_prompt( $strategy_hist );
         }
 
         $prompt .= <<<INSTRUCTIONS
@@ -1417,9 +1423,9 @@ DOMAIN;
             return '';
         }
 
-        $output  = "\n\n# ページ改善分析（補足データ）\n";
-        $output .= "※ 以下は直近のページ改善分析で得られた所見です。月次レポートの主データ（GA4/GSC）とは分析期間が異なる場合があるため、補足情報として参照してください。\n";
-        $output .= "※ 月次レポート本文にページ改善の知見を自然に織り込んでください。別枠で機械的に列挙するのではなく、各セクションの文脈に合わせて統合すること。\n\n";
+        $output  = "\n\n# 現状のページ診断（必ず踏まえること）\n";
+        $output .= "※ 以下は「現状のページ診断」（実際のページ画像・Clarity行動データ・AIによるページ診断）から得た所見です。GA4/GSCとは分析期間が異なる場合があるため、各ページの『データ信頼度』の注記には必ず従うこと。\n";
+        $output .= "※ 信頼度の制約を守った上で、ここで得られた所見は**必ずレポートに反映**し、特に「改善提案」「考察」の各セクションへ自然に織り込むこと（別枠で機械的に列挙するのではなく、文脈に統合する）。\n\n";
 
         foreach ( $page_insights['pages'] as $i => $page ) {
             $num = $i + 1;
@@ -1476,6 +1482,53 @@ DOMAIN;
         }
 
         return $output;
+    }
+
+    /**
+     * 深掘り（戦略）レポート履歴をプロンプト用テキストに整形する。
+     * collect_strategy_history() の出力（最新の完了済みレポートの抜粋）を受け取る。
+     */
+    public function format_strategy_history_for_prompt( array $strategy_history ): string {
+        if ( empty( $strategy_history ) ) {
+            return '';
+        }
+
+        $output  = "\n\n# 深掘りレポート（プロによる四半期分析・必ず踏まえること）\n";
+        $output .= "※ 以下はプロが四半期ごとに作成した「深掘りレポート」の要点です。中長期の戦略方針として、今月のレポート（特に考察・次にやること）と矛盾しないよう、必ず内容を踏まえて整合させること。\n\n";
+
+        foreach ( $strategy_history as $i => $h ) {
+            if ( $i >= 2 ) { break; } // 直近2件まで
+            $ym = (string) ( $h['year_month'] ?? '' );
+            $output .= "## 深掘りレポート（{$ym}）\n";
+            if ( isset( $h['alignment_score'] ) && $h['alignment_score'] !== null ) {
+                $output .= "- 戦略整合スコア: " . (int) $h['alignment_score'] . "/100\n";
+            }
+            if ( ! empty( $h['conclusion'] ) ) {
+                $output .= "- 結論: " . $h['conclusion'] . "\n";
+            }
+            foreach ( (array) ( $h['issues_titles'] ?? [] ) as $t ) {
+                $output .= "- 課題: {$t}\n";
+            }
+            foreach ( (array) ( $h['recommended_actions'] ?? [] ) as $t ) {
+                $output .= "- 推奨アクション: {$t}\n";
+            }
+            foreach ( (array) ( $h['this_month_todos'] ?? [] ) as $t ) {
+                $output .= "- 今月のToDo: {$t}\n";
+            }
+            $output .= "\n";
+        }
+
+        return $output;
+    }
+
+    /**
+     * ユーザーIDから深掘りレポート履歴を収集し、プロンプト用テキストを返す（無ければ空文字）。
+     * 他経路（prompt-builder等）から呼べる公開ラッパー。
+     */
+    public function build_strategy_history_prompt( int $user_id ): string {
+        if ( $user_id <= 0 ) { return ''; }
+        $hist = $this->collect_strategy_history( $user_id );
+        return empty( $hist ) ? '' : $this->format_strategy_history_for_prompt( $hist );
     }
 
     public function validate_section_complete(string $html, array $section): bool {

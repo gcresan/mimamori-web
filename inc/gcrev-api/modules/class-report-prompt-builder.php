@@ -102,9 +102,14 @@ SYSTEM;
         $prompt .= "\n\n# 前月データ（最新）\n";
         $prompt .= $generator->format_data_for_prompt( $prev_data );
 
-        // ページ改善分析データ（あれば）
+        // 現状のページ診断（あれば必ず踏まえる）
         if ( ! empty( $client_info['page_insights']['available'] ) ) {
             $prompt .= $generator->format_page_insights_for_prompt( $client_info['page_insights'] );
+        }
+
+        // 深掘り（戦略）レポート履歴（あれば必ず踏まえる）
+        if ( ! empty( $client_info['user_id'] ) ) {
+            $prompt .= $generator->build_strategy_history_prompt( (int) $client_info['user_id'] );
         }
 
         $prompt .= "\n\n上記データに基づき、指定されたJSON形式でレポートを出力してください。";
