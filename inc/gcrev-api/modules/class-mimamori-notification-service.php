@@ -53,9 +53,42 @@ class Mimamori_Notification_Service {
             'weekly_alert_limit'  => 2,    // 1サイトあたり週の通知上限（サイトダウン/SSLは例外）
             'suggest_monthly_max' => 2,    // AI改善提案通知の月間上限
             'suggest_dedup_days'  => 60,   // 同一内容の提案の再送禁止期間
+            // アラートの配信ON/OFF（1=配信する / 0=配信しない）
+            'alert_enabled'       => 1,    // みまもりアラート全体の配信
+            'alert_access_drop'   => 1,    // アクセス急減
+            'alert_access_surge'  => 1,    // アクセス急増
+            'alert_cv_stall'      => 1,    // お問い合わせ停滞
+            'alert_site_down'     => 1,    // サイトダウン/エラー
+            'alert_ssl_expiry'    => 1,    // SSL証明書の期限
         ];
         $saved = get_option( self::OPTION_KEY, [] );
         return is_array( $saved ) ? array_merge( $defaults, array_intersect_key( $saved, $defaults ) ) : $defaults;
+    }
+
+    /**
+     * アラート種類別の配信ラベル（管理画面のチェックボックスと配信判定で共有）。
+     * キーはアラートの type、値は設定キー suffix と表示ラベル。
+     *
+     * @return array<string,string> type => label
+     */
+    public static function alert_type_labels(): array {
+        return [
+            'access_drop'  => 'アクセス急減',
+            'access_surge' => 'アクセス急増',
+            'cv_stall'     => 'お問い合わせ停滞',
+            'site_down'    => 'サイトダウン・エラー',
+            'ssl_expiry'   => 'SSL証明書の期限切れ間近',
+        ];
+    }
+
+    /**
+     * この種類のアラートを配信してよいか（管理画面の種類別トグル）。
+     * 未知の type は安全側で配信扱い（true）。
+     */
+    public static function alert_type_enabled( array $s, string $type ): bool {
+        $key = 'alert_' . $type;
+        if ( ! array_key_exists( $key, $s ) ) { return true; }
+        return ! empty( $s[ $key ] );
     }
 
     private static function log( string $msg ): void {
@@ -262,6 +295,13 @@ class Mimamori_Notification_Service {
 
     public function run_daily_alert_scan(): void {
         $s   = self::get_settings();
+
+        // 管理画面でアラート全体の配信がOFFなら何もしない
+        if ( empty( $s['alert_enabled'] ) ) {
+            self::log( 'alert scan SKIP (alert_enabled=0)' );
+            return;
+        }
+
         $ids = $this->get_target_user_ids();
         self::log( 'alert scan START users=' . count( $ids ) );
 
@@ -274,6 +314,8 @@ class Mimamori_Notification_Service {
                     $this->detect_site_health( $uid, $s )
                 );
                 foreach ( $alerts as $alert ) {
+                    // 管理画面でこの種類の配信がOFFならスキップ
+                    if ( ! self::alert_type_enabled( $s, (string) $alert['type'] ) ) { continue; }
                     $urgent = ! empty( $alert['urgent'] );
                     if ( ! $this->can_send( $uid, $alert['type'], $s, $urgent ) ) { continue; }
                     $this->send_alert_mail( $uid, $alert );

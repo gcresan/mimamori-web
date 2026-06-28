@@ -232,14 +232,14 @@ class Gcrev_Notification_Settings_Page {
             $alert_section,
             'みまもりアラート設定',
             static function () {
-                echo '<p>クライアント向けの自動通知（みまもりアラート／週次便／AI改善提案）の閾値・上限を設定します。空欄はデフォルト値が使われます。</p>';
+                echo '<p>クライアント向けの自動通知（みまもりアラート／週次便／AI改善提案）の配信ON/OFF・閾値・上限を設定します。アラートは種類ごとに配信可否を選べます。空欄はデフォルト値が使われます。</p>';
             },
             self::MENU_SLUG
         );
 
         add_settings_field(
             'mimamori_alert_settings',
-            '閾値・上限',
+            'アラート配信・閾値',
             [ $this, 'render_alert_settings_fields' ],
             self::MENU_SLUG,
             $alert_section
@@ -263,6 +263,11 @@ class Gcrev_Notification_Settings_Page {
                 $out[ $key ] = absint( $input[ $key ] );
             }
         }
+        // アラートの配信ON/OFF（チェックボックス: 未チェックは送信されないので明示的に0で保存）
+        foreach ( [ 'alert_enabled', 'alert_access_drop', 'alert_access_surge',
+                    'alert_cv_stall', 'alert_site_down', 'alert_ssl_expiry' ] as $flag ) {
+            $out[ $flag ] = empty( $input[ $flag ] ) ? 0 : 1;
+        }
         return $out;
     }
 
@@ -283,6 +288,35 @@ class Gcrev_Notification_Settings_Page {
             : [];
         $saved = get_option( 'mimamori_alert_settings', [] );
         $saved = is_array( $saved ) ? $saved : [];
+
+        // ── みまもりアラートの配信ON/OFF（全体＋種類別） ──
+        $cur = static function ( string $key ) use ( $defaults ): bool {
+            // get_settings() が既定値とのマージ済み値を返すため、それを現在値とする
+            return ! empty( $defaults[ $key ] );
+        };
+
+        echo '<h4 style="margin:0 0 6px;">みまもりアラートの配信</h4>';
+        echo '<p style="margin:0 0 8px;">';
+        echo '<label><input type="hidden" name="mimamori_alert_settings[alert_enabled]" value="0" />';
+        echo '<input type="checkbox" name="mimamori_alert_settings[alert_enabled]" value="1" ' . checked( $cur( 'alert_enabled' ), true, false ) . ' /> ';
+        echo '<strong>みまもりアラートを配信する</strong>（オフにすると下記すべてのアラートを停止）</label></p>';
+
+        echo '<p style="margin:0 0 4px;">配信するアラートの種類:</p>';
+        echo '<ul style="margin:0 0 16px 4px; list-style:none;">';
+        if ( class_exists( 'Mimamori_Notification_Service' ) ) {
+            foreach ( Mimamori_Notification_Service::alert_type_labels() as $type => $label ) {
+                $flag = 'alert_' . $type;
+                echo '<li style="margin:2px 0;">';
+                // 未チェック時も値を送るための hidden（チェックボックスより前に置く）
+                echo '<label><input type="hidden" name="mimamori_alert_settings[' . esc_attr( $flag ) . ']" value="0" />';
+                echo '<input type="checkbox" name="mimamori_alert_settings[' . esc_attr( $flag ) . ']" value="1" ' . checked( $cur( $flag ), true, false ) . ' /> ';
+                echo esc_html( $label ) . '</label>';
+                echo '</li>';
+            }
+        }
+        echo '</ul>';
+
+        echo '<h4 style="margin:8px 0 6px;">閾値・上限</h4>';
 
         $fields = [
             'drop_threshold_pct'  => 'アクセス急減の閾値（前週比%・負の値）',
