@@ -96,13 +96,11 @@ class Gcrev_Screenshot_Client {
      * 管理画面設定から ScreenshotOne の取得URL（{URL} プレースホルダ付き）を組み立てる。
      */
     private static function build_screenshotone_url( string $device, array $s ): string {
-        $width  = $device === 'mobile' ? $s['mobile_width'] : $s['pc_width'];
         $params = [
             'access_key'           => $s['access_key'],
             'full_page'            => 'true',
             'full_page_scroll'     => 'true',
             'format'               => $s['format'],
-            'viewport_width'       => (string) $width,
             'block_cookie_banners' => 'true',
             'block_ads'            => 'true',
             'cache'                => 'true',
@@ -111,8 +109,10 @@ class Gcrev_Screenshot_Client {
             $params['image_quality'] = '80';
         }
         if ( $device === 'mobile' ) {
-            $params['viewport_mobile']     = 'true';
-            $params['device_scale_factor'] = '2';
+            // デバイスプリセットで UA・viewport・モバイルモードを一括設定（確実にスマホ表示にする）
+            $params['viewport_device'] = 'iphone_15';
+        } else {
+            $params['viewport_width'] = (string) $s['pc_width'];
         }
         // url={URL} は最後に固定で付与（capture() が {URL} を実URLに置換する）
         return 'https://api.screenshotone.com/take?' . http_build_query( $params ) . '&url={URL}';
