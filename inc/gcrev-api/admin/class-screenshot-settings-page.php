@@ -87,7 +87,7 @@ class Gcrev_Screenshot_Settings_Page {
         if ( ! empty( $input['clear_key'] ) ) {
             $out['access_key'] = '';
         } else {
-            $new = isset( $input['access_key'] ) ? trim( (string) $input['access_key'] ) : '';
+            $new = isset( $input['access_key'] ) ? trim( wp_unslash( (string) $input['access_key'] ) ) : '';
             if ( $new !== '' && strpos( $new, '*' ) === false ) {
                 $out['access_key'] = class_exists( 'Gcrev_Crypto' ) ? Gcrev_Crypto::encrypt( $new ) : $new;
             } else {
