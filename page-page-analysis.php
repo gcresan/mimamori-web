@@ -1678,33 +1678,82 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
             });
     };
 
-    // おすすめページを自動設定＋撮影（トップ + GA4閲覧上位）
+    // おすすめページを自動設定＋撮影（バックグラウンドジョブ＋進捗バー）
     (function() {
+        var apiRoot   = API_BASE.replace(/\/pages$/, '');
+        var startUrl  = apiRoot + '/auto-setup';
+        var statusUrl = apiRoot + '/auto-setup/status';
+        var pollTimer = null;
+        var bar = null;
+
+        function ensureBar() {
+            if (bar) return bar;
+            bar = document.createElement('div');
+            bar.id = 'paAutoProgress';
+            bar.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:99999;background:#fff;border:1px solid #e0e6e8;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.15);padding:14px 16px;width:280px;font-size:13px;';
+            bar.innerHTML = '<div style="font-weight:700;color:#2c3e50;margin-bottom:8px;">&#128247; ページ画像を自動取得中...</div>'
+                + '<div style="background:#eef2f3;border-radius:6px;height:10px;overflow:hidden;"><div id="paAutoFill" style="height:100%;width:0%;background:#568184;transition:width .3s;"></div></div>'
+                + '<div id="paAutoText" style="margin-top:6px;color:#666;">準備中...</div>'
+                + '<div style="margin-top:4px;color:#999;font-size:11px;">この画面を離れても処理は続きます。</div>';
+            document.body.appendChild(bar);
+            return bar;
+        }
+        function updateBar(done, total, label) {
+            ensureBar();
+            var pct = total > 0 ? Math.round(done / total * 100) : 0;
+            document.getElementById('paAutoFill').style.width = pct + '%';
+            document.getElementById('paAutoText').textContent = label || (done + ' / ' + total + ' ページ');
+        }
+        function finishBar(msg) {
+            if (!bar) return;
+            document.getElementById('paAutoFill').style.width = '100%';
+            document.getElementById('paAutoText').textContent = msg;
+            setTimeout(function() { if (bar) { bar.remove(); bar = null; } }, 3000);
+        }
+        function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+        function poll() {
+            apiFetch(statusUrl).then(function(res) {
+                if (!res || res.status === 'none') { stopPoll(); if (bar) { bar.remove(); bar = null; } return; }
+                if (res.status === 'running') {
+                    updateBar(res.done || 0, res.total || 0);
+                } else if (res.status === 'done') {
+                    stopPoll();
+                    updateBar(res.total || 0, res.total || 0);
+                    finishBar('完了しました（' + (res.captured || 0) + '枚撮影）');
+                    setTimeout(function() { if (window.location) window.location.reload(); }, 1500);
+                }
+            }).catch(function() { /* 一時的な失敗は無視して継続 */ });
+        }
+        function startPolling() { stopPoll(); poll(); pollTimer = setInterval(poll, 2500); }
+
         var btn = document.getElementById('paAutoSetupBtn');
-        if (!btn) return;
-        btn.addEventListener('click', function() {
-            if (!confirm('アクセスの多い主要ページを自動で登録し、PC・スマホのキャプチャを撮影します。\nよろしいですか？（数十秒かかる場合があります）')) return;
+        if (btn) btn.addEventListener('click', function() {
+            if (!confirm('アクセスの多い主要ページを自動で登録し、PC・スマホのキャプチャを撮影します。\nバックグラウンドで進むので、この画面を離れても大丈夫です。よろしいですか？')) return;
             btn.disabled = true;
             var orig = btn.innerHTML;
-            btn.textContent = '自動設定中...';
-            apiFetch(API_BASE.replace(/\/pages$/, '') + '/auto-setup', { method: 'POST' })
-                .then(function(res) {
-                    btn.disabled = false; btn.innerHTML = orig;
-                    if (res.success) {
-                        var d = res.data || {};
-                        var added = (d.added || []).length, shot = (d.captured || []).length;
-                        alert('完了しました。\n登録: ' + added + '件 / 撮影: ' + shot + '件'
-                            + ((d.errors && d.errors.length) ? '\n（一部失敗: ' + d.errors.length + '件）' : ''));
-                        if (window.location) window.location.reload();
-                    } else {
-                        alert(res.message || '自動設定に失敗しました');
-                    }
-                })
-                .catch(function() {
-                    btn.disabled = false; btn.innerHTML = orig;
-                    alert('通信エラーが発生しました');
-                });
+            btn.textContent = '開始中...';
+            apiFetch(startUrl, { method: 'POST' }).then(function(res) {
+                btn.disabled = false; btn.innerHTML = orig;
+                if (!res.success) { alert(res.message || '自動設定に失敗しました'); return; }
+                if (res.status === 'done') {
+                    ensureBar(); updateBar(res.total || 0, res.total || 0);
+                    finishBar('対象ページはすべて取得済みです');
+                    setTimeout(function() { if (window.location) window.location.reload(); }, 1200);
+                    return;
+                }
+                ensureBar(); updateBar(0, res.total || 0, '撮影を開始しました...');
+                startPolling();
+            }).catch(function() {
+                btn.disabled = false; btn.innerHTML = orig;
+                alert('通信エラーが発生しました');
+            });
         });
+
+        // ページ読込時: 実行中ジョブがあれば進捗バーを復帰
+        apiFetch(statusUrl).then(function(res) {
+            if (res && res.status === 'running') { ensureBar(); updateBar(res.done || 0, res.total || 0); startPolling(); }
+        }).catch(function() {});
     })();
 
     // ===== 行動データ（PC/SP同時表示） =====

@@ -64,6 +64,9 @@ class Gcrev_Bootstrap {
         // ページ分析: スクリーンショット月次自動取得（外部スクショAPI）
         add_action('gcrev_page_autocapture_event', [__CLASS__, 'on_page_autocapture']);
 
+        // ページ分析: 自動設定ジョブのワーカー（1ページずつ撮影し自己連鎖）
+        add_action('gcrev_pa_autosetup_event', [__CLASS__, 'on_pa_autosetup_event'], 10, 1);
+
         // AIO SERP 週次取得（Bright Data）
         add_action('gcrev_aio_serp_weekly_event', [__CLASS__, 'on_aio_serp_weekly_event']);
         add_action('gcrev_aio_serp_chunk_event', [__CLASS__, 'on_aio_serp_chunk_event'], 10, 2);
@@ -478,6 +481,21 @@ class Gcrev_Bootstrap {
 
         wp_set_current_user( 0 );
         file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync END: synced={$synced}\n", FILE_APPEND );
+    }
+
+    /**
+     * ページ分析: 自動設定ジョブのワーカー（単発cron・自己連鎖）。
+     */
+    public static function on_pa_autosetup_event( $user_id = 0 ): void {
+        $uid = (int) $user_id;
+        if ( $uid <= 0 ) { return; }
+        try {
+            $api = new \Gcrev_Insight_API( false );
+            $api->pa_autosetup_tick( $uid );
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_page_analysis_debug.log',
+                date( 'Y-m-d H:i:s' ) . " pa_autosetup_event ERROR user={$uid}: " . $e->getMessage() . "\n", FILE_APPEND );
+        }
     }
 
     /**

@@ -949,6 +949,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_auto_setup_page_analysis' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/page-analysis/auto-setup/status', [
+            'methods'             => 'GET',
+            'callback'            => [ $this, 'rest_pa_autosetup_status' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         // ===== Clarity 連携 =====
         register_rest_route('gcrev/v1', '/clarity/test-connection', [
@@ -25049,18 +25054,149 @@ PROMPT;
      * POST /gcrev/v1/page-analysis/auto-setup
      * 重要ページの自動設定＋キャプチャ（本人のみ）。
      */
+    /** 自動設定ジョブの transient キー */
+    private function pa_autosetup_key( int $user_id ): string {
+        return 'gcrev_pa_autosetup_' . $user_id;
+    }
+
+    /**
+     * 自動設定ジョブを開始する（重要ページを登録し、撮影はバックグラウンドに回す）。
+     * 撮影は gcrev_pa_autosetup_event（単発cron自己連鎖）で1ページずつ進む。
+     *
+     * @return array ジョブ状態
+     */
+    public function pa_autosetup_start( int $user_id, int $limit = 6 ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_page_analysis';
+        $key   = $this->pa_autosetup_key( $user_id );
+
+        // 実行中なら現状を返す（二重起動防止）
+        $existing = get_transient( $key );
+        if ( is_array( $existing ) && ( $existing['status'] ?? '' ) === 'running' ) {
+            return $existing;
+        }
+
+        $candidates = $this->discover_candidate_pages( $user_id, $limit );
+        if ( empty( $candidates ) ) {
+            return [ 'status' => 'error', 'message' => 'サイトURLまたはGA4設定が見つからず、対象ページを自動抽出できませんでした。' ];
+        }
+
+        $added   = 0;
+        $pending = [];
+        foreach ( $candidates as $c ) {
+            $url = $c['url'];
+            $row = $wpdb->get_row( $wpdb->prepare(
+                "SELECT id, status, screenshot_pc FROM {$table} WHERE user_id = %d AND page_url = %s",
+                $user_id, $url
+            ), ARRAY_A );
+            if ( $row ) {
+                $pid = (int) $row['id'];
+                if ( $row['status'] !== 'active' ) {
+                    $wpdb->update( $table, [ 'status' => 'active' ], [ 'id' => $pid ], [ '%s' ], [ '%d' ] );
+                    $added++;
+                }
+                $has_shot = ! empty( $row['screenshot_pc'] );
+            } else {
+                $title = $c['title'] !== '' ? $c['title'] : $this->fetch_page_title( $url );
+                $wpdb->insert( $table, [
+                    'user_id'         => $user_id,
+                    'page_url'        => $url,
+                    'page_title'      => sanitize_text_field( $title ),
+                    'page_type'       => $c['type'],
+                    'is_auto_capture' => 1,
+                ], [ '%d', '%s', '%s', '%s', '%d' ] );
+                $pid      = (int) $wpdb->insert_id;
+                $added++;
+                $has_shot = false;
+            }
+            if ( $pid > 0 && ! $has_shot ) { $pending[] = $pid; }
+        }
+
+        $job = [
+            'status'   => empty( $pending ) ? 'done' : 'running',
+            'total'    => count( $pending ),
+            'done'     => 0,
+            'pending'  => $pending,
+            'added'    => $added,
+            'captured' => 0,
+            'errors'   => [],
+            'updated'  => current_time( 'mysql' ),
+        ];
+        set_transient( $key, $job, 1800 );
+
+        if ( ! empty( $pending ) && ! wp_next_scheduled( 'gcrev_pa_autosetup_event', [ $user_id ] ) ) {
+            wp_schedule_single_event( time(), 'gcrev_pa_autosetup_event', [ $user_id ] );
+        }
+        return $job;
+    }
+
+    /**
+     * 自動設定ジョブのワーカー（cronから呼ぶ）。pending を1ページ撮影して自己連鎖。
+     */
+    public function pa_autosetup_tick( int $user_id ): void {
+        @set_time_limit( 180 );
+        $key = $this->pa_autosetup_key( $user_id );
+        $job = get_transient( $key );
+        if ( ! is_array( $job ) || ( $job['status'] ?? '' ) !== 'running' ) { return; }
+
+        $pending = (array) ( $job['pending'] ?? [] );
+        if ( empty( $pending ) ) {
+            $job['status'] = 'done';
+            set_transient( $key, $job, 1800 );
+            return;
+        }
+
+        $pid = (int) array_shift( $pending );
+        $res = $this->autocapture_page( $pid, $user_id );
+
+        $job['done']    = (int) $job['done'] + 1;
+        $job['pending'] = $pending;
+        if ( ! empty( $res['ok'] ) ) {
+            $job['captured'] = (int) $job['captured'] + 1;
+        } else {
+            $errs = (array) ( $job['errors'] ?? [] );
+            $errs[] = (string) ( $res['message'] ?? '撮影失敗' );
+            $job['errors'] = array_slice( $errs, 0, 10 );
+        }
+        if ( empty( $pending ) ) { $job['status'] = 'done'; }
+        $job['updated'] = current_time( 'mysql' );
+        set_transient( $key, $job, 1800 );
+
+        if ( $job['status'] === 'running' ) {
+            wp_schedule_single_event( time() + 2, 'gcrev_pa_autosetup_event', [ $user_id ] );
+        }
+    }
+
+    /**
+     * POST /gcrev/v1/page-analysis/auto-setup
+     * 重要ページを登録し、撮影ジョブを開始する（撮影はバックグラウンド）。
+     */
     public function rest_auto_setup_page_analysis( \WP_REST_Request $request ): \WP_REST_Response {
-        @set_time_limit( 300 ); // GA4取得＋複数ページの撮影で時間がかかるため
+        @set_time_limit( 120 ); // GA4取得＋登録（撮影はバックグラウンド）
         $user_id = get_current_user_id();
         if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => '現在のご契約状況ではご利用いただけません。' ], 403 );
         }
         $limit = absint( $request->get_param( 'limit' ) ) ?: 6;
-        $res   = $this->auto_setup_pages( $user_id, min( 12, max( 1, $limit ) ), true );
-        return new \WP_REST_Response(
-            [ 'success' => $res['ok'], 'message' => $res['message'] ?? '', 'data' => $res ],
-            $res['ok'] ? 200 : 400
-        );
+        $job   = $this->pa_autosetup_start( $user_id, min( 12, max( 1, $limit ) ) );
+        if ( ( $job['status'] ?? '' ) === 'error' ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => $job['message'] ?? '自動設定に失敗しました' ], 400 );
+        }
+        return new \WP_REST_Response( [ 'success' => true ] + $job, 200 );
+    }
+
+    /**
+     * GET /gcrev/v1/page-analysis/auto-setup/status
+     * 自動設定ジョブの進捗を返す。
+     */
+    public function rest_pa_autosetup_status( \WP_REST_Request $request ): \WP_REST_Response {
+        $job = get_transient( $this->pa_autosetup_key( get_current_user_id() ) );
+        if ( ! is_array( $job ) ) {
+            return new \WP_REST_Response( [ 'success' => true, 'status' => 'none' ], 200 );
+        }
+        // pending の中身（page_id配列）はフロントに返さない
+        unset( $job['pending'] );
+        return new \WP_REST_Response( [ 'success' => true ] + $job, 200 );
     }
 
     /**
