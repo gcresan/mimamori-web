@@ -11,10 +11,12 @@ if ( ! is_user_logged_in() ) {
 $current_user = mimamori_get_view_user_object();
 $user_id = mimamori_get_view_user_id();
 
-// オプション機能ガード: 運営者(admin)は素通し、それ以外は view 中ユーザーのフラグで判定
-if ( ! current_user_can( 'manage_options' )
-     && function_exists( 'mimamori_page_analysis_is_enabled_for_user' )
-     && ! mimamori_page_analysis_is_enabled_for_user( $user_id ) ) {
+// プランガード: 運営者(admin)は素通し。それ以外は「見える化プラン以外（レポート閲覧可）」のみ許可。
+// 旧来の個別フラグ（mimamori_page_analysis_enabled）が立っているユーザーも引き続き許可する。
+$_pa_can_access = current_user_can( 'manage_options' )
+    || ( function_exists( 'mimamori_can_view_reports' ) && mimamori_can_view_reports( $user_id ) )
+    || ( function_exists( 'mimamori_page_analysis_is_enabled_for_user' ) && mimamori_page_analysis_is_enabled_for_user( $user_id ) );
+if ( ! $_pa_can_access ) {
     wp_safe_redirect( home_url( '/dashboard/' ) );
     exit;
 }

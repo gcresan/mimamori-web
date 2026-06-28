@@ -152,14 +152,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       // --- アコーディオン初期状態: 子ページがアクティブな親を開く / なければ全部閉じ ---
       // ホームページグループ: 現状診断・チャットボット・サイト分析・SEO
       $home_pages = array(
-          'page-analysis', 'chatbot',
+          'chatbot',
           // サイト分析
           'site-dashboard','analysis-device','analysis-age','analysis-source','analysis-region','analysis-pages','analysis-keywords','analysis-cv','inquiries',
           // SEO
           'seo-check','ai-report','rank-tracker','keyword-research',
       );
-      // レポートグループ: 深掘りレポート・月次レポート・改善施策提案・MEOレポート（年次レポートは非表示中）
+      // レポートグループ: 現状のページ診断・深掘りレポート・月次レポート・改善施策提案・MEOレポート（年次レポートは非表示中）
       $report_pages = array(
+          'page-analysis',
           'strategy-report','strategy-report-detail','strategy-report-history',
           'report-latest','report-archive','annual-report',
           'execution-dashboard',
@@ -289,6 +290,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuReport">
                      <?php if ( ! $_mb_is_meo_only && $_mb_can_view_reports ) : ?>
+                     <?php // 現状のページ診断（見える化プランは対象外） ?>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/page-analysis/') ); ?>" class="nav-link <?php echo is_page('page-analysis') ? 'active' : ''; ?>">
+                        <span>現状のページ診断</span>
+                        </a>
+                     </li>
                      <li class="nav-item">
                         <a href="<?php echo esc_url( home_url('/strategy-report-history/') ); ?>" class="nav-link <?php echo ( is_page('strategy-report') || is_page('strategy-report-detail') || is_page('strategy-report-history') ) ? 'active' : ''; ?>">
                         <span>深掘りレポート</span>
@@ -334,9 +341,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                $_mb_show_chatbot = current_user_can( 'manage_options' )
                    || ( function_exists( 'mimamori_bot_is_enabled_for_user' )
                         && mimamori_bot_is_enabled_for_user( $_view_uid ) );
-               $_mb_show_page_analysis = current_user_can( 'manage_options' )
-                   || ( function_exists( 'mimamori_page_analysis_is_enabled_for_user' )
-                        && mimamori_page_analysis_is_enabled_for_user( $_view_uid ) );
+               // 現状のページ診断はレポートグループへ移設（見える化プラン以外で表示）
                ?>
 
                <!-- ========== ホームページ（大カテゴリ・絞り込みプランは非表示） ========== -->
@@ -348,14 +353,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                   <span class="nav-toggle-arrow" aria-hidden="true">&#9662;</span>
                   </button>
                   <ul class="nav-submenu" id="navSubmenuHome">
-                     <!-- 直下: 現状診断 (オプション) -->
-                     <?php if ( $_mb_show_page_analysis ) : ?>
-                     <li class="nav-item">
-                        <a href="<?php echo esc_url( home_url('/page-analysis/') ); ?>" class="nav-link <?php echo is_page('page-analysis') ? 'active' : ''; ?>">
-                        <span>現状のページ診断</span>
-                        </a>
-                     </li>
-                     <?php endif; ?>
                      <!-- 直下: チャットボット (オプション) -->
                      <?php if ( $_mb_show_chatbot ) : ?>
                      <li class="nav-item">
