@@ -158,10 +158,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           // SEO
           'seo-check','ai-report','rank-tracker','keyword-research',
       );
-      // レポートグループ: 深掘りレポート・月次レポート・MEOレポート（年次レポートは非表示中）
+      // レポートグループ: 深掘りレポート・月次レポート・改善施策提案・MEOレポート（年次レポートは非表示中）
       $report_pages = array(
           'strategy-report','strategy-report-detail','strategy-report-history',
           'report-latest','report-archive','annual-report',
+          'execution-dashboard',
           'meo-report',
       );
       // MEOグループ: MEO関連 (レポート系は report グループへ移管)
@@ -298,6 +299,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <span>月次レポート</span>
                         </a>
                      </li>
+                     <?php // 改善施策提案（AI改善提案プラン以上。見える化プランは対象外） ?>
+                     <?php if ( ! function_exists( 'mimamori_can' ) || mimamori_can( 'improvement_actions' ) ) : ?>
+                     <li class="nav-item">
+                        <a href="<?php echo esc_url( home_url('/execution-dashboard/') ); ?>" class="nav-link <?php echo is_page('execution-dashboard') ? 'active' : ''; ?>">
+                        <span>改善施策提案</span>
+                        </a>
+                     </li>
+                     <?php endif; ?>
                      <?php endif; ?>
                      <?php if ( mimamori_can_access_meo() ) : ?>
                      <li class="nav-item">
