@@ -25540,10 +25540,10 @@ PROMPT;
 
         // --- ページ基本情報 ---
         $type_names = [
-            'top' => 'トップページ', 'service' => 'サービス紹介', 'lp' => 'LP',
-            'contact' => 'お問い合わせ', 'blog' => 'ブログ', 'company' => '会社概要',
-            'access' => 'アクセス', 'staff' => 'スタッフ', 'price' => '料金',
-            'works' => '制作事例・実績', 'faq' => 'よくある質問', 'other' => 'その他',
+            'top' => 'トップページ', 'service' => 'サービス・商品紹介', 'lp' => 'LP',
+            'contact' => 'お問い合わせ', 'blog' => 'ブログ・コラム', 'company' => '会社・店舗案内',
+            'access' => 'アクセス', 'staff' => 'スタッフ紹介', 'price' => '料金・メニュー',
+            'works' => '実績・事例紹介', 'faq' => 'よくある質問', 'other' => 'その他',
         ];
         $page_info = [
             'url'          => $row['page_url'],

@@ -803,15 +803,15 @@ get_header();
             <label for="paType">ページ種別</label>
             <select id="paType">
                 <option value="top">トップページ</option>
-                <option value="service">サービス紹介</option>
+                <option value="service">サービス・商品紹介</option>
                 <option value="lp">LP（ランディングページ）</option>
                 <option value="contact">お問い合わせ</option>
                 <option value="blog">ブログ・コラム</option>
-                <option value="company">会社概要</option>
+                <option value="company">会社・店舗案内</option>
                 <option value="access">アクセス</option>
                 <option value="staff">スタッフ紹介</option>
-                <option value="price">料金</option>
-                <option value="works">制作事例・実績</option>
+                <option value="price">料金・メニュー</option>
+                <option value="works">実績・事例紹介</option>
                 <option value="faq">よくある質問</option>
                 <option value="other" selected>その他</option>
             </select>
@@ -917,9 +917,9 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
     var NONCE    = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
 
     var PAGE_TYPES = {
-        top: 'トップページ', service: 'サービス', lp: 'LP', contact: 'お問い合わせ',
-        blog: 'ブログ', company: '会社概要', access: 'アクセス', staff: 'スタッフ',
-        price: '料金', works: '制作事例・実績', faq: 'よくある質問', other: 'その他'
+        top: 'トップページ', service: 'サービス・商品', lp: 'LP', contact: 'お問い合わせ',
+        blog: 'ブログ・コラム', company: '会社・店舗案内', access: 'アクセス', staff: 'スタッフ紹介',
+        price: '料金・メニュー', works: '実績・事例紹介', faq: 'よくある質問', other: 'その他'
     };
 
     // --- DOM ---
