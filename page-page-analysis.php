@@ -26,7 +26,7 @@ if ( ! class_exists( 'Gcrev_Screenshot_Client' ) && file_exists( $_pa_ss_module 
     require_once $_pa_ss_module;
 }
 if ( class_exists( 'Gcrev_Screenshot_Client' ) ) {
-    $pa_autocapture_enabled = Gcrev_Screenshot_Client::is_configured();
+    $pa_autocapture_enabled = Gcrev_Screenshot_Client::is_enabled();
 }
 
 // ページタイトル設定

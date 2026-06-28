@@ -27,12 +27,26 @@ class Gcrev_Screenshot_Client {
     private const LOG = '/tmp/gcrev_page_analysis_debug.log';
 
     /**
-     * 指定デバイス（'pc' / 'mobile'）または全体のテンプレートが設定済みか。
+     * 指定デバイス（'pc' / 'mobile'）または全体でキャプチャURLを組み立て可能か。
+     * 「有効化」フラグとは独立（キー/定数があれば true）。接続テスト等で使う。
      */
     public static function is_configured( string $device = '' ): bool {
         if ( $device === 'pc' )     { return self::template( 'pc' ) !== ''; }
         if ( $device === 'mobile' ) { return self::template( 'mobile' ) !== ''; }
         return self::template( 'pc' ) !== '' || self::template( 'mobile' ) !== '';
+    }
+
+    /**
+     * 自動キャプチャ（cron・クライアントの取得ボタン）を実行してよいか。
+     * wp-config 定数があれば常に有効、無ければ管理画面の「有効化」トグルに従う。
+     */
+    public static function is_enabled(): bool {
+        if ( ( defined( 'GCREV_SCREENSHOT_API_PC' ) && GCREV_SCREENSHOT_API_PC )
+            || ( defined( 'GCREV_SCREENSHOT_API_MOBILE' ) && GCREV_SCREENSHOT_API_MOBILE ) ) {
+            return true;
+        }
+        $s = self::admin_settings();
+        return $s['enabled'] && $s['access_key'] !== '';
     }
 
     private static function template( string $device ): string {
@@ -41,9 +55,10 @@ class Gcrev_Screenshot_Client {
         if ( defined( $const ) && constant( $const ) ) {
             return (string) constant( $const );
         }
-        // 2) 管理画面設定（ScreenshotOne）
+        // 2) 管理画面設定（ScreenshotOne）— キーがあればURLを組み立てる
+        //    （有効化フラグは is_enabled() で別途判定。テストはキーだけで実行可能）
         $s = self::admin_settings();
-        if ( ! $s['enabled'] || $s['access_key'] === '' ) {
+        if ( $s['access_key'] === '' ) {
             return '';
         }
         return self::build_screenshotone_url( $device, $s );

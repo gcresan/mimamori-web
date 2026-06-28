@@ -24822,8 +24822,8 @@ PROMPT;
             $f = __DIR__ . '/gcrev-api/modules/class-screenshot-client.php';
             if ( file_exists( $f ) ) { require_once $f; }
         }
-        if ( ! class_exists( 'Gcrev_Screenshot_Client' ) || ! Gcrev_Screenshot_Client::is_configured() ) {
-            return [ 'ok' => false, 'message' => 'スクリーンショットAPIが未設定です（wp-config.php の GCREV_SCREENSHOT_API_PC / _MOBILE をご確認ください）。' ];
+        if ( ! class_exists( 'Gcrev_Screenshot_Client' ) || ! Gcrev_Screenshot_Client::is_enabled() ) {
+            return [ 'ok' => false, 'message' => 'スクリーンショット自動キャプチャが有効になっていません（管理画面「スクショAPI設定」でアクセスキー設定と「有効化」をご確認ください）。' ];
         }
 
         $table = $wpdb->prefix . 'gcrev_page_analysis';
