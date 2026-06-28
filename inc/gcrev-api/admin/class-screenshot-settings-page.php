@@ -78,7 +78,8 @@ class Gcrev_Screenshot_Settings_Page {
         $existing = is_array( $existing ) ? $existing : [];
 
         $out = [];
-        $out['enabled']      = empty( $input['enabled'] ) ? '0' : '1';
+        $out['enabled']         = empty( $input['enabled'] ) ? '0' : '1';
+        $out['monthly_enabled'] = empty( $input['monthly_enabled'] ) ? '0' : '1';
         $out['format']       = ( isset( $input['format'] ) && $input['format'] === 'png' ) ? 'png' : 'jpg';
         $out['pc_width']          = max( 320, min( 2560, absint( $input['pc_width'] ?? 1280 ) ?: 1280 ) );
         $out['mobile_width']      = max( 320, min( 1280, absint( $input['mobile_width'] ?? 390 ) ?: 390 ) );
@@ -106,6 +107,7 @@ class Gcrev_Screenshot_Settings_Page {
         $s = is_array( $s ) ? $s : [];
 
         $enabled = ! empty( $s['enabled'] );
+        $monthly = array_key_exists( 'monthly_enabled', $s ) ? ! empty( $s['monthly_enabled'] ) : true; // 既定ON
         $format  = ( ( $s['format'] ?? 'jpg' ) === 'png' ) ? 'png' : 'jpg';
         $pc_w    = (int) ( $s['pc_width'] ?? 1280 ) ?: 1280;
         $sp_w    = (int) ( $s['mobile_width'] ?? 390 ) ?: 390;
@@ -129,7 +131,12 @@ class Gcrev_Screenshot_Settings_Page {
         echo '<tr><th>有効化</th><td><label>';
         echo '<input type="hidden" name="' . esc_attr( $n ) . '[enabled]" value="0" />';
         echo '<input type="checkbox" name="' . esc_attr( $n ) . '[enabled]" value="1" ' . checked( $enabled, true, false ) . ' /> 自動キャプチャを有効にする';
-        echo '</label></td></tr>';
+        echo '</label><p class="description">オフにすると、月次の自動キャプチャも手動の取得ボタンも使えなくなります（手動アップロードは可）。</p></td></tr>';
+
+        echo '<tr><th>毎月の自動キャプチャ</th><td><label>';
+        echo '<input type="hidden" name="' . esc_attr( $n ) . '[monthly_enabled]" value="0" />';
+        echo '<input type="checkbox" name="' . esc_attr( $n ) . '[monthly_enabled]" value="1" ' . checked( $monthly, true, false ) . ' /> 毎月1日に自動でキャプチャを取得する';
+        echo '</label><p class="description">オフにすると<strong>毎月の自動取得だけ</strong>を停止します（画面の「おすすめページを自動設定」「PC・スマホを自動取得」ボタンは引き続き使えます）。</p></td></tr>';
 
         echo '<tr><th>アクセスキー</th><td>';
         echo '<input type="text" name="' . esc_attr( $n ) . '[access_key]" value="" class="regular-text" autocomplete="off" placeholder="' . esc_attr( $key_mask !== '' ? '設定済み: ' . $key_mask . '（変更する場合のみ入力）' : 'ScreenshotOne の Access key を入力' ) . '" />';

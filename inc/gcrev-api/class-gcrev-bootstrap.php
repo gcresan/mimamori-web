@@ -521,8 +521,8 @@ class Gcrev_Bootstrap {
             $f = get_template_directory() . '/inc/gcrev-api/modules/class-screenshot-client.php';
             if ( file_exists( $f ) ) { require_once $f; }
         }
-        if ( ! class_exists( 'Gcrev_Screenshot_Client' ) || ! Gcrev_Screenshot_Client::is_enabled() ) {
-            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " page_autocapture SKIP (未設定 or 無効)\n", FILE_APPEND );
+        if ( ! class_exists( 'Gcrev_Screenshot_Client' ) || ! Gcrev_Screenshot_Client::is_monthly_enabled() ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " page_autocapture SKIP (未設定 / 無効 / 月次OFF)\n", FILE_APPEND );
             return;
         }
 

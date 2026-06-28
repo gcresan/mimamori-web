@@ -49,6 +49,20 @@ class Gcrev_Screenshot_Client {
         return $s['enabled'] && $s['access_key'] !== '';
     }
 
+    /**
+     * 毎月の自動キャプチャ（cron）を実行してよいか。
+     * 全体が有効（is_enabled）かつ、月次トグルがONのときのみ true。
+     * wp-config 定数運用時は常に true（定数運用＝月次も有効とみなす）。
+     */
+    public static function is_monthly_enabled(): bool {
+        if ( ! self::is_enabled() ) { return false; }
+        if ( ( defined( 'GCREV_SCREENSHOT_API_PC' ) && GCREV_SCREENSHOT_API_PC )
+            || ( defined( 'GCREV_SCREENSHOT_API_MOBILE' ) && GCREV_SCREENSHOT_API_MOBILE ) ) {
+            return true;
+        }
+        return ! empty( self::admin_settings()['monthly_enabled'] );
+    }
+
     private static function template( string $device ): string {
         // 1) wp-config 定数（上級者・他社プロバイダ用の上書き）
         $const = $device === 'mobile' ? 'GCREV_SCREENSHOT_API_MOBILE' : 'GCREV_SCREENSHOT_API_PC';
@@ -85,6 +99,8 @@ class Gcrev_Screenshot_Client {
 
         return [
             'enabled'           => ! empty( $s['enabled'] ),
+            // 毎月の自動キャプチャ（cron）。未設定の既存環境は既定ON。
+            'monthly_enabled'   => array_key_exists( 'monthly_enabled', $s ) ? ! empty( $s['monthly_enabled'] ) : true,
             'access_key'        => $key,
             'pc_width'          => (int) ( $s['pc_width'] ?? 1280 ) ?: 1280,
             'mobile_width'      => (int) ( $s['mobile_width'] ?? 390 ) ?: 390,
