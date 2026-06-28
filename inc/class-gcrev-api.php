@@ -25070,10 +25070,13 @@ PROMPT;
         $table = $wpdb->prefix . 'gcrev_page_analysis';
         $key   = $this->pa_autosetup_key( $user_id );
 
-        // 実行中なら現状を返す（二重起動防止）
+        // 実行中なら現状を返す（二重起動防止）。ただし10分以上更新が無ければストール扱いで作り直す。
         $existing = get_transient( $key );
         if ( is_array( $existing ) && ( $existing['status'] ?? '' ) === 'running' ) {
-            return $existing;
+            $age = time() - (int) ( $existing['ts'] ?? 0 );
+            if ( $age < 600 ) {
+                return $existing;
+            }
         }
 
         $candidates = $this->discover_candidate_pages( $user_id, $limit );
@@ -25129,29 +25132,27 @@ PROMPT;
             'captured' => 0,
             'errors'   => [],
             'updated'  => current_time( 'mysql' ),
+            'ts'       => time(),
         ];
         set_transient( $key, $job, 1800 );
-
-        if ( ! empty( $pending ) && ! wp_next_scheduled( 'gcrev_pa_autosetup_event', [ $user_id ] ) ) {
-            wp_schedule_single_event( time(), 'gcrev_pa_autosetup_event', [ $user_id ] );
-        }
         return $job;
     }
 
     /**
-     * 自動設定ジョブのワーカー（cronから呼ぶ）。pending を1ページ撮影して自己連鎖。
+     * pending を1ページ撮影して進捗を更新する。
+     * @return bool まだ pending が残っていれば true
      */
-    public function pa_autosetup_tick( int $user_id ): void {
-        @set_time_limit( 180 );
+    private function pa_autosetup_capture_next( int $user_id ): bool {
         $key = $this->pa_autosetup_key( $user_id );
         $job = get_transient( $key );
-        if ( ! is_array( $job ) || ( $job['status'] ?? '' ) !== 'running' ) { return; }
+        if ( ! is_array( $job ) || ( $job['status'] ?? '' ) !== 'running' ) { return false; }
 
         $pending = (array) ( $job['pending'] ?? [] );
         if ( empty( $pending ) ) {
             $job['status'] = 'done';
+            $job['ts']     = time();
             set_transient( $key, $job, 1800 );
-            return;
+            return false;
         }
 
         $pid = (int) array_shift( $pending );
@@ -25162,15 +25163,43 @@ PROMPT;
         if ( ! empty( $res['ok'] ) ) {
             $job['captured'] = (int) $job['captured'] + 1;
         } else {
-            $errs = (array) ( $job['errors'] ?? [] );
+            $errs   = (array) ( $job['errors'] ?? [] );
             $errs[] = (string) ( $res['message'] ?? '撮影失敗' );
             $job['errors'] = array_slice( $errs, 0, 10 );
         }
         if ( empty( $pending ) ) { $job['status'] = 'done'; }
         $job['updated'] = current_time( 'mysql' );
+        $job['ts']      = time();
         set_transient( $key, $job, 1800 );
 
-        if ( $job['status'] === 'running' ) {
+        return ( $job['status'] === 'running' );
+    }
+
+    /**
+     * 同一リクエスト内で残り全ページを撮影する（fastcgi_finish_request 後の裏処理用）。
+     */
+    public function pa_autosetup_run_all( int $user_id ): void {
+        $lock = 'gcrev_pa_autosetup_lock_' . $user_id;
+        if ( get_transient( $lock ) ) { return; } // 既にワーカーが動作中
+        set_transient( $lock, 1, 120 );
+        @set_time_limit( 0 );
+        try {
+            $guard = 0;
+            do {
+                $more = $this->pa_autosetup_capture_next( $user_id );
+            } while ( $more && ++$guard < 60 );
+        } finally {
+            delete_transient( $lock );
+        }
+    }
+
+    /**
+     * 自動設定ジョブのワーカー（cronフォールバック）。1ページ撮影して自己連鎖。
+     */
+    public function pa_autosetup_tick( int $user_id ): void {
+        @set_time_limit( 180 );
+        $more = $this->pa_autosetup_capture_next( $user_id );
+        if ( $more ) {
             wp_schedule_single_event( time() + 2, 'gcrev_pa_autosetup_event', [ $user_id ] );
         }
     }
@@ -25180,7 +25209,7 @@ PROMPT;
      * 重要ページを登録し、撮影ジョブを開始する（撮影はバックグラウンド）。
      */
     public function rest_auto_setup_page_analysis( \WP_REST_Request $request ): \WP_REST_Response {
-        @set_time_limit( 120 ); // GA4取得＋登録（撮影はバックグラウンド）
+        @set_time_limit( 120 ); // GA4取得＋登録
         $user_id = get_current_user_id();
         if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => '現在のご契約状況ではご利用いただけません。' ], 403 );
@@ -25191,7 +25220,35 @@ PROMPT;
         if ( ( $job['status'] ?? '' ) === 'error' ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => $job['message'] ?? '自動設定に失敗しました' ], 400 );
         }
-        return new \WP_REST_Response( [ 'success' => true ] + $job, 200 );
+
+        $payload = [ 'success' => true ] + $job;
+        unset( $payload['pending'] );
+
+        // 撮影が必要な場合、PHP-FPM ならレスポンスを即返してから裏で全ページ撮影する
+        // （WP-cron に依存せず確実に最後まで進める）。
+        if ( ( $job['status'] ?? '' ) === 'running' ) {
+            if ( function_exists( 'fastcgi_finish_request' ) ) {
+                nocache_headers();
+                status_header( 200 );
+                header( 'Content-Type: application/json; charset=utf-8' );
+                echo wp_json_encode( $payload, JSON_UNESCAPED_UNICODE );
+                fastcgi_finish_request(); // クライアントへ応答を返し、以降はバックグラウンド実行
+                ignore_user_abort( true );
+                try {
+                    $this->pa_autosetup_run_all( $user_id );
+                } catch ( \Throwable $e ) {
+                    file_put_contents( '/tmp/gcrev_page_analysis_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " autosetup run_all ERROR user={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
+                }
+                exit;
+            }
+            // フォールバック（fastcgi不可環境）: WP-cron 自己連鎖で進める
+            if ( ! wp_next_scheduled( 'gcrev_pa_autosetup_event', [ $user_id ] ) ) {
+                wp_schedule_single_event( time(), 'gcrev_pa_autosetup_event', [ $user_id ] );
+            }
+        }
+
+        return new \WP_REST_Response( $payload, 200 );
     }
 
     /**
@@ -25199,13 +25256,36 @@ PROMPT;
      * 自動設定ジョブの進捗を返す。
      */
     public function rest_pa_autosetup_status( \WP_REST_Request $request ): \WP_REST_Response {
-        $job = get_transient( $this->pa_autosetup_key( get_current_user_id() ) );
+        $user_id = get_current_user_id();
+        $job = get_transient( $this->pa_autosetup_key( $user_id ) );
         if ( ! is_array( $job ) ) {
             return new \WP_REST_Response( [ 'success' => true, 'status' => 'none' ], 200 );
         }
-        // pending の中身（page_id配列）はフロントに返さない
-        unset( $job['pending'] );
-        return new \WP_REST_Response( [ 'success' => true ] + $job, 200 );
+
+        $payload = [ 'success' => true ] + $job;
+        unset( $payload['pending'] ); // page_id配列はフロントに返さない
+
+        // 実行中なのにワーカーが居ない（ストール）場合、開いている画面のポーリングで自動再開する
+        $running   = ( $job['status'] ?? '' ) === 'running';
+        $no_worker = ! get_transient( 'gcrev_pa_autosetup_lock_' . $user_id );
+        $has_pend  = ! empty( $job['pending'] );
+        if ( $running && $no_worker && $has_pend && function_exists( 'fastcgi_finish_request' ) ) {
+            nocache_headers();
+            status_header( 200 );
+            header( 'Content-Type: application/json; charset=utf-8' );
+            echo wp_json_encode( $payload, JSON_UNESCAPED_UNICODE );
+            fastcgi_finish_request();
+            ignore_user_abort( true );
+            try {
+                $this->pa_autosetup_run_all( $user_id );
+            } catch ( \Throwable $e ) {
+                file_put_contents( '/tmp/gcrev_page_analysis_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " autosetup status-resume ERROR user={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
+            }
+            exit;
+        }
+
+        return new \WP_REST_Response( $payload, 200 );
     }
 
     /**
