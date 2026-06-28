@@ -90,6 +90,7 @@ class Gcrev_Screenshot_Client {
             'mobile_width'      => (int) ( $s['mobile_width'] ?? 390 ) ?: 390,
             'pc_max_height'     => (int) ( $s['pc_max_height'] ?? 12000 ) ?: 12000,
             'mobile_max_height' => (int) ( $s['mobile_max_height'] ?? 20000 ) ?: 20000,
+            'delay'             => isset( $s['delay'] ) ? max( 0, min( 15, (int) $s['delay'] ) ) : 3,
             'format'            => ( ( $s['format'] ?? 'jpg' ) === 'png' ) ? 'png' : 'jpg',
         ];
     }
@@ -104,6 +105,8 @@ class Gcrev_Screenshot_Client {
             'full_page'            => 'true',
             'full_page_scroll'     => 'true',
             'full_page_max_height' => (string) $max_height, // 縦長ページの生成失敗・タイムアウト対策（device別）
+            'wait_until'           => 'networkidle2', // 埋め込み(YouTube等)の読み込み完了を待つ
+            'delay'                => (string) ( $s['delay'] ?? 3 ), // 遅延読み込みコンテンツの描画待ち（秒）
             'format'               => $s['format'],
             'block_cookie_banners' => 'true',
             'block_ads'            => 'true',
