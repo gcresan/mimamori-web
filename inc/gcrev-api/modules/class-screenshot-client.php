@@ -120,6 +120,7 @@ class Gcrev_Screenshot_Client {
             'access_key'           => $s['access_key'],
             'full_page'            => 'true',
             'full_page_scroll'     => 'true',
+            'full_page_algorithm'  => 'by_sections', // 遅延読み込み(YouTube埋め込み等)をセクション単位で確実に描画
             'full_page_max_height' => (string) $max_height, // 縦長ページの生成失敗・タイムアウト対策（device別）
             'wait_until'           => 'networkidle2', // 埋め込み(YouTube等)の読み込み完了を待つ
             'delay'                => (string) ( $s['delay'] ?? 3 ), // 遅延読み込みコンテンツの描画待ち（秒）
