@@ -752,6 +752,9 @@ get_header();
                class="pa-clarity-link" style="display:none;">
                 Clarityで詳細を見る &#8599;
             </a>
+            <?php if ( $pa_autocapture_enabled ) : ?>
+            <button type="button" class="pa-add-btn" id="paAutoSetupBtn" style="background:#568184;">&#10024; おすすめページを自動設定</button>
+            <?php endif; ?>
             <button type="button" class="pa-add-btn" id="paAddBtn">+ ページを追加</button>
         </div>
     </div>
@@ -763,7 +766,7 @@ get_header();
             <div class="pa-empty" id="paEmpty" style="display:none;">
                 <div class="pa-empty-icon">&#128196;</div>
                 <div class="pa-empty-text">まだページが登録されていません</div>
-                <div class="pa-empty-sub">「+ ページを追加」からサイトの主要ページを登録してください</div>
+                <div class="pa-empty-sub"><?php echo $pa_autocapture_enabled ? '「✨ おすすめページを自動設定」で主要ページを自動登録・撮影できます（手動追加も可能です）' : '「+ ページを追加」からサイトの主要ページを登録してください'; ?></div>
             </div>
 
             <!-- テーブル -->
@@ -1674,6 +1677,35 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
                 if (btn) { btn.disabled = false; btn.innerHTML = '\u{1F504} PC・スマホを自動取得'; }
             });
     };
+
+    // おすすめページを自動設定＋撮影（トップ + GA4閲覧上位）
+    (function() {
+        var btn = document.getElementById('paAutoSetupBtn');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            if (!confirm('アクセスの多い主要ページを自動で登録し、PC・スマホのキャプチャを撮影します。\nよろしいですか？（数十秒かかる場合があります）')) return;
+            btn.disabled = true;
+            var orig = btn.innerHTML;
+            btn.textContent = '自動設定中...';
+            apiFetch(API_BASE.replace(/\/pages$/, '') + '/auto-setup', { method: 'POST' })
+                .then(function(res) {
+                    btn.disabled = false; btn.innerHTML = orig;
+                    if (res.success) {
+                        var d = res.data || {};
+                        var added = (d.added || []).length, shot = (d.captured || []).length;
+                        alert('完了しました。\n登録: ' + added + '件 / 撮影: ' + shot + '件'
+                            + ((d.errors && d.errors.length) ? '\n（一部失敗: ' + d.errors.length + '件）' : ''));
+                        if (window.location) window.location.reload();
+                    } else {
+                        alert(res.message || '自動設定に失敗しました');
+                    }
+                })
+                .catch(function() {
+                    btn.disabled = false; btn.innerHTML = orig;
+                    alert('通信エラーが発生しました');
+                });
+        });
+    })();
 
     // ===== 行動データ（PC/SP同時表示） =====
 

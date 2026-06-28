@@ -525,6 +525,25 @@ class Gcrev_Bootstrap {
                 "SELECT id FROM {$pa_table} WHERE user_id = %d AND status = 'active'",
                 $uid
             ) );
+
+            // 登録ページが1件も無いクライアントは、重要ページを自動抽出して登録＋撮影する
+            if ( empty( $page_ids ) ) {
+                try {
+                    $res = $api->auto_setup_pages( $uid, 6, true );
+                    file_put_contents( $log,
+                        date( 'Y-m-d H:i:s' ) . " page_autocapture: user={$uid} auto_setup added=" . ( ! empty( $res['added'] ) ? count( $res['added'] ) : 0 ) . " captured=" . ( ! empty( $res['captured'] ) ? count( $res['captured'] ) : 0 ) . "\n",
+                        FILE_APPEND
+                    );
+                    if ( ! empty( $res['captured'] ) ) { $captured += count( $res['captured'] ); }
+                } catch ( \Throwable $e ) {
+                    file_put_contents( $log,
+                        date( 'Y-m-d H:i:s' ) . " page_autocapture auto_setup ERROR: user={$uid} " . $e->getMessage() . "\n",
+                        FILE_APPEND
+                    );
+                }
+                continue; // 既存ページ撮影ループはスキップ（自動設定側で撮影済み）
+            }
+
             foreach ( $page_ids as $pid ) {
                 try {
                     $res = $api->autocapture_page( (int) $pid, $uid );

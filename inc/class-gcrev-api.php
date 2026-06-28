@@ -944,6 +944,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_autocapture_page_snapshot' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/page-analysis/auto-setup', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_auto_setup_page_analysis' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         // ===== Clarity 連携 =====
         register_rest_route('gcrev/v1', '/clarity/test-connection', [
@@ -24874,6 +24879,183 @@ PROMPT;
         }
 
         $res = $this->autocapture_page( $id, $user_id );
+        return new \WP_REST_Response(
+            [ 'success' => $res['ok'], 'message' => $res['message'] ?? '', 'data' => $res ],
+            $res['ok'] ? 200 : 400
+        );
+    }
+
+    /**
+     * 自動キャプチャ対象として妥当なパスか（管理系・カート・サンクス等を除外）。
+     */
+    private function is_capturable_path( string $path ): bool {
+        $path = trim( $path );
+        if ( $path === '' ) { return false; }
+        // クエリ・アンカーのみ等は除外
+        if ( $path[0] === '#' || $path[0] === '?' ) { return false; }
+        $lower = strtolower( $path );
+        $ng = [ '/wp-admin', '/wp-login', '/cart', '/checkout', '/thank', '/thanks', '/order-received',
+                '/my-account', '/feed', '/?', '/wp-json', '/.', '/search' ];
+        foreach ( $ng as $n ) {
+            if ( strpos( $lower, $n ) === 0 || strpos( $lower, $n ) !== false && ( $n === '/?' ) ) { return false; }
+        }
+        // 拡張子付き（画像・PDF・xml等）は除外
+        if ( preg_match( '#\.(pdf|xml|json|jpg|jpeg|png|gif|webp|css|js|zip)$#i', $lower ) ) { return false; }
+        return true;
+    }
+
+    /**
+     * GA4 の pagePath をサイトのフルURLに変換し、クエリ・フラグメントを除く。
+     */
+    private function path_to_url( string $base, string $path ): string {
+        $path = trim( $path );
+        if ( $path === '' ) { return ''; }
+        if ( preg_match( '#^https?://#i', $path ) ) {
+            $url = $path;
+        } else {
+            if ( $path[0] !== '/' ) { $path = '/' . $path; }
+            $url = rtrim( $base, '/' ) . $path;
+        }
+        // クエリ・フラグメント除去
+        $url = preg_replace( '/[?#].*$/', '', $url );
+        return esc_url_raw( $url );
+    }
+
+    /**
+     * 重要そうなページを自動抽出する（トップページ + GA4 閲覧数上位）。
+     *
+     * @return array<int,array{url:string,title:string,type:string}>
+     */
+    private function discover_candidate_pages( int $user_id, int $limit = 6 ): array {
+        // サイトのベースURL（クライアント設定 → GSC URL の順）
+        $settings = function_exists( 'gcrev_get_client_settings' ) ? gcrev_get_client_settings( $user_id ) : [];
+        $site_url = trim( (string) ( $settings['site_url'] ?? '' ) );
+        $cfg      = $this->config->get_user_config( $user_id );
+        if ( $site_url === '' ) { $site_url = trim( (string) ( $cfg['gsc_url'] ?? '' ) ); }
+        if ( $site_url === '' || ! preg_match( '#^https?://#i', $site_url ) ) { return []; }
+
+        $parts = wp_parse_url( $site_url );
+        if ( empty( $parts['host'] ) ) { return []; }
+        $base = ( $parts['scheme'] ?? 'https' ) . '://' . $parts['host'];
+
+        $out  = [];
+        $seen = [];
+        $add  = function ( string $url, string $title, string $type ) use ( &$out, &$seen ) {
+            $url = preg_replace( '/[?#].*$/', '', trim( $url ) );
+            $url = esc_url_raw( $url );
+            if ( $url === '' ) { return; }
+            $key = rtrim( $url, '/' );
+            if ( isset( $seen[ $key ] ) ) { return; }
+            $seen[ $key ] = true;
+            $out[] = [ 'url' => $url, 'title' => $title, 'type' => $type ];
+        };
+
+        // 1) トップページ
+        $add( $base . '/', 'トップページ', 'top' );
+
+        // 2) GA4 閲覧数上位ページ
+        try {
+            $ga4_id = (string) ( $cfg['ga4_id'] ?? '' );
+            if ( $ga4_id !== '' ) {
+                $helper = new Gcrev_Date_Helper();
+                $range  = $helper->get_date_range( 'last30' );
+                $ga4    = $this->ga4->fetch_ga4_data( $ga4_id, $range['start'], $range['end'], $site_url );
+                foreach ( (array) ( $ga4['pages'] ?? [] ) as $p ) {
+                    if ( count( $out ) >= $limit ) { break; }
+                    $path = (string) ( $p['page'] ?? '' );
+                    if ( ! $this->is_capturable_path( $path ) ) { continue; }
+                    $full = $this->path_to_url( $base, $path );
+                    if ( $full === '' ) { continue; }
+                    $add( $full, (string) ( $p['title'] ?? '' ), 'other' );
+                }
+            }
+        } catch ( \Throwable $e ) {
+            file_put_contents( '/tmp/gcrev_page_analysis_debug.log',
+                date( 'Y-m-d H:i:s' ) . " discover GA4 error user={$user_id}: " . $e->getMessage() . "\n", FILE_APPEND );
+        }
+
+        return array_slice( $out, 0, max( 1, $limit ) );
+    }
+
+    /**
+     * 重要そうなページを自動で登録し、必要に応じてキャプチャまで行う。
+     * REST（ボタン）と Cron から共通で呼ぶ。
+     *
+     * @return array{ok:bool, added?:array, captured?:array, errors?:array, message?:string}
+     */
+    public function auto_setup_pages( int $user_id, int $limit = 6, bool $capture = true ): array {
+        global $wpdb;
+        $table = $wpdb->prefix . 'gcrev_page_analysis';
+
+        $candidates = $this->discover_candidate_pages( $user_id, $limit );
+        if ( empty( $candidates ) ) {
+            return [ 'ok' => false, 'message' => 'サイトURLまたはGA4設定が見つからず、対象ページを自動抽出できませんでした。' ];
+        }
+
+        $added = [];
+        $captured = [];
+        $errors = [];
+
+        foreach ( $candidates as $c ) {
+            $url = $c['url'];
+            $existing = $wpdb->get_row( $wpdb->prepare(
+                "SELECT id, status, screenshot_pc FROM {$table} WHERE user_id = %d AND page_url = %s",
+                $user_id, $url
+            ), ARRAY_A );
+
+            if ( $existing ) {
+                $page_id = (int) $existing['id'];
+                if ( $existing['status'] !== 'active' ) {
+                    $wpdb->update( $table, [ 'status' => 'active' ], [ 'id' => $page_id ], [ '%s' ], [ '%d' ] );
+                    $added[] = $url;
+                }
+                $has_shot = ! empty( $existing['screenshot_pc'] );
+            } else {
+                $title = $c['title'] !== '' ? $c['title'] : $this->fetch_page_title( $url );
+                $wpdb->insert( $table, [
+                    'user_id'         => $user_id,
+                    'page_url'        => $url,
+                    'page_title'      => sanitize_text_field( $title ),
+                    'page_type'       => $c['type'],
+                    'is_auto_capture' => 1,
+                ], [ '%d', '%s', '%s', '%s', '%d' ] );
+                $page_id  = (int) $wpdb->insert_id;
+                $added[]  = $url;
+                $has_shot = false;
+            }
+
+            // 既にPC画像があるページは再撮影しない（APIコスト節約）
+            if ( $capture && $page_id > 0 && ! $has_shot ) {
+                $res = $this->autocapture_page( $page_id, $user_id );
+                if ( ! empty( $res['ok'] ) ) {
+                    $captured[] = $url;
+                } else {
+                    $errors[] = $url . ': ' . ( $res['message'] ?? '撮影失敗' );
+                }
+            }
+        }
+
+        return [
+            'ok'               => true,
+            'added'            => $added,
+            'captured'         => $captured,
+            'errors'           => $errors,
+            'total_candidates' => count( $candidates ),
+        ];
+    }
+
+    /**
+     * POST /gcrev/v1/page-analysis/auto-setup
+     * 重要ページの自動設定＋キャプチャ（本人のみ）。
+     */
+    public function rest_auto_setup_page_analysis( \WP_REST_Request $request ): \WP_REST_Response {
+        @set_time_limit( 300 ); // GA4取得＋複数ページの撮影で時間がかかるため
+        $user_id = get_current_user_id();
+        if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '現在のご契約状況ではご利用いただけません。' ], 403 );
+        }
+        $limit = absint( $request->get_param( 'limit' ) ) ?: 6;
+        $res   = $this->auto_setup_pages( $user_id, min( 12, max( 1, $limit ) ), true );
         return new \WP_REST_Response(
             [ 'success' => $res['ok'], 'message' => $res['message'] ?? '', 'data' => $res ],
             $res['ok'] ? 200 : 400
