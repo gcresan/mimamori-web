@@ -19,6 +19,16 @@ if ( ! current_user_can( 'manage_options' )
     exit;
 }
 
+// スクリーンショット自動取得（外部スクショAPI）が利用可能か
+$pa_autocapture_enabled = false;
+$_pa_ss_module = get_template_directory() . '/inc/gcrev-api/modules/class-screenshot-client.php';
+if ( ! class_exists( 'Gcrev_Screenshot_Client' ) && file_exists( $_pa_ss_module ) ) {
+    require_once $_pa_ss_module;
+}
+if ( class_exists( 'Gcrev_Screenshot_Client' ) ) {
+    $pa_autocapture_enabled = Gcrev_Screenshot_Client::is_configured();
+}
+
 // ページタイトル設定
 set_query_var( 'gcrev_page_title', '現状のページ診断' );
 set_query_var( 'gcrev_page_subtitle', '主要ページのページ画像・行動データ・AI改善案をまとめて管理できます。' );
@@ -896,6 +906,7 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
     var _paSeedUsed = false;
 
     var API_BASE = <?php echo wp_json_encode( esc_url_raw( rest_url( 'gcrev/v1/page-analysis/pages' ) ) ); ?>;
+    var PA_AUTOCAPTURE = <?php echo $pa_autocapture_enabled ? 'true' : 'false'; ?>;
     var NONCE    = <?php echo wp_json_encode( wp_create_nonce( 'wp_rest' ) ); ?>;
 
     var PAGE_TYPES = {
@@ -1257,6 +1268,13 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
             + '<button type="button" class="pa-img-tab is-active" data-img-tab="pc">&#128187; PC版</button>'
             + '<button type="button" class="pa-img-tab" data-img-tab="mobile">&#128241; スマホ版</button>'
             + '</div>'
+            + ( PA_AUTOCAPTURE
+                ? '<div style="margin:6px 0 10px;">'
+                  + '<button type="button" class="pa-upload-btn" style="background:#568184;color:#fff;border-color:#568184;" '
+                  + 'onclick="window._paAutoCapture(' + data.id + ')">&#128260; PC・スマホを自動取得</button>'
+                  + '<span style="display:block;font-size:11px;color:#888;margin-top:4px;">URLから自動でキャプチャを取得します（手動アップロードも引き続き可能です）。</span>'
+                  + '</div>'
+                : '' )
             + legendHtml
             + '<div class="pa-img-pane is-active" data-img-pane="pc">'
             + '<div class="pa-capture-box">' + buildImgWithScroll(pcImg, pcScroll)
@@ -1631,6 +1649,27 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
             }).catch(function() {
                 _aiGenerating = false;
                 if (data) renderAiTab(data);
+            });
+    };
+
+    // 外部スクショAPIでPC・スマホを自動取得
+    window._paAutoCapture = function(id) {
+        if (!confirm('このページのキャプチャをPC・スマホ両方、自動で取得します。よろしいですか？')) return;
+        var btn = event && event.target ? event.target.closest('button') : null;
+        if (btn) { btn.disabled = true; btn.textContent = '取得中...'; }
+
+        apiFetch(API_BASE + '/' + id + '/autocapture', { method: 'POST' })
+            .then(function(res) {
+                if (res.success) {
+                    if (window._paShowDetail) window._paShowDetail(id); // 画像を再読み込み
+                } else {
+                    alert(res.message || '自動取得に失敗しました');
+                    if (btn) { btn.disabled = false; btn.innerHTML = '\u{1F504} PC・スマホを自動取得'; }
+                }
+            })
+            .catch(function() {
+                alert('通信エラーが発生しました');
+                if (btn) { btn.disabled = false; btn.innerHTML = '\u{1F504} PC・スマホを自動取得'; }
             });
     };
 

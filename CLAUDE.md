@@ -158,6 +158,8 @@ wp/
 | `MIMAMORI_SCRIPTS_DIR` | スクリプトディレクトリ（dev のみ） |
 | `MIMAMORI_UPDATES_INGEST_TOKEN` | 更新情報APIトークン |
 | `GCREV_ENCRYPTION_KEY` | トークン暗号化キー（Base64, 32byte） |
+| `GCREV_SCREENSHOT_API_PC` | ページ分析の自動キャプチャ用 外部スクショAPIのURLテンプレート（PC幅）。`{URL}` が対象URL(encode済)に置換。画像バイナリを返すこと |
+| `GCREV_SCREENSHOT_API_MOBILE` | 同上（スマホ幅）。未設定のデバイスはキャプチャ対象外 |
 
 ### サービスアカウントJSON
 

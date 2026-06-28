@@ -61,6 +61,9 @@ class Gcrev_Bootstrap {
         // Clarity日次蓄積
         add_action('gcrev_clarity_daily_sync_event', [__CLASS__, 'on_clarity_daily_sync']);
 
+        // ページ分析: スクリーンショット月次自動取得（外部スクショAPI）
+        add_action('gcrev_page_autocapture_event', [__CLASS__, 'on_page_autocapture']);
+
         // AIO SERP 週次取得（Bright Data）
         add_action('gcrev_aio_serp_weekly_event', [__CLASS__, 'on_aio_serp_weekly_event']);
         add_action('gcrev_aio_serp_chunk_event', [__CLASS__, 'on_aio_serp_chunk_event'], 10, 2);
@@ -469,6 +472,73 @@ class Gcrev_Bootstrap {
 
         wp_set_current_user( 0 );
         file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync END: synced={$synced}\n", FILE_APPEND );
+    }
+
+    /**
+     * ページ分析: スクリーンショットの月次自動取得（外部スクショAPI）。
+     * ページ分析が有効なクライアントの登録ページを PC/SP でキャプチャして保存する。
+     */
+    public static function on_page_autocapture(): void {
+        $log = '/tmp/gcrev_cron_debug.log';
+
+        if ( ! class_exists( 'Gcrev_Screenshot_Client' ) ) {
+            $f = get_template_directory() . '/inc/gcrev-api/modules/class-screenshot-client.php';
+            if ( file_exists( $f ) ) { require_once $f; }
+        }
+        if ( ! class_exists( 'Gcrev_Screenshot_Client' ) || ! Gcrev_Screenshot_Client::is_configured() ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " page_autocapture SKIP (API未設定)\n", FILE_APPEND );
+            return;
+        }
+
+        global $wpdb;
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " page_autocapture START\n", FILE_APPEND );
+
+        // ページ分析が有効なユーザー
+        $users = $wpdb->get_col( $wpdb->prepare(
+            "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value = '1'",
+            'mimamori_page_analysis_enabled'
+        ) );
+        if ( empty( $users ) ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " page_autocapture: no enabled users\n", FILE_APPEND );
+            return;
+        }
+
+        $api      = new \Gcrev_Insight_API( false );
+        $pa_table = $wpdb->prefix . 'gcrev_page_analysis';
+        $captured = 0;
+
+        foreach ( $users as $uid ) {
+            $uid = (int) $uid;
+
+            // お試し終了かつ未払いユーザーは外部API課金を行わない
+            if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) {
+                continue;
+            }
+
+            $page_ids = $wpdb->get_col( $wpdb->prepare(
+                "SELECT id FROM {$pa_table} WHERE user_id = %d AND status = 'active'",
+                $uid
+            ) );
+            foreach ( $page_ids as $pid ) {
+                try {
+                    $res = $api->autocapture_page( (int) $pid, $uid );
+                    if ( ! empty( $res['ok'] ) ) { $captured++; }
+                    file_put_contents( $log,
+                        date( 'Y-m-d H:i:s' ) . " page_autocapture: user={$uid} page={$pid} ok=" . ( ! empty( $res['ok'] ) ? '1' : '0' ) . "\n",
+                        FILE_APPEND
+                    );
+                } catch ( \Throwable $e ) {
+                    file_put_contents( $log,
+                        date( 'Y-m-d H:i:s' ) . " page_autocapture ERROR: user={$uid} page={$pid} " . $e->getMessage() . "\n",
+                        FILE_APPEND
+                    );
+                }
+                // 外部API負荷軽減
+                sleep( 2 );
+            }
+        }
+
+        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " page_autocapture END: captured_pages={$captured}\n", FILE_APPEND );
     }
 
     /**
@@ -1198,6 +1268,9 @@ class Gcrev_Bootstrap {
         // Clarity日次蓄積（毎日 03:45）
         self::schedule_daily_if_missing('gcrev_clarity_daily_sync_event', 'tomorrow 03:45:00');
 
+        // ページ分析: スクリーンショット自動取得（毎月1日 04:30）
+        self::schedule_monthly_if_missing('gcrev_page_autocapture_event', 'first day of next month 04:30:00');
+
         // Inquiries (問い合わせ集計API) 当月分の自動フェッチ（毎日 02:50）
         // → ユーザーが問い合わせ一覧を手動で開かなくても、当月のフォーム CV が
         //    ダッシュボードのゴール数 / 折れ線グラフに反映され続けるようにする。
@@ -1491,6 +1564,7 @@ class Gcrev_Bootstrap {
             'gcrev_meo_dashboard_prefetch_event',
             'gcrev_auto_article_daily_event',
             'gcrev_chat_analysis_monthly_event',
+            'gcrev_page_autocapture_event',
             // chunk は single schedule が連鎖するので掃除したい場合は下も
             // 'gcrev_prefetch_chunk_event',
             // 'gcrev_monthly_report_generate_chunk_event',

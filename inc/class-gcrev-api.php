@@ -939,6 +939,11 @@ class Gcrev_Insight_API {
             'callback'            => [ $this, 'rest_trigger_page_analysis' ],
             'permission_callback' => [ $this->config, 'check_permission' ],
         ]);
+        register_rest_route('gcrev/v1', '/page-analysis/pages/(?P<id>\d+)/autocapture', [
+            'methods'             => 'POST',
+            'callback'            => [ $this, 'rest_autocapture_page_snapshot' ],
+            'permission_callback' => [ $this->config, 'check_permission' ],
+        ]);
 
         // ===== Clarity 連携 =====
         register_rest_route('gcrev/v1', '/clarity/test-connection', [
@@ -24743,6 +24748,136 @@ PROMPT;
         }
 
         return new \WP_REST_Response( [ 'success' => true ], 200 );
+    }
+
+    /**
+     * 画像バイナリをページのスクリーンショットとして保存する（自動キャプチャ用）。
+     * 手動アップロード（rest_upload_page_snapshot）と同じ保存先に格納する。
+     *
+     * @param int    $page_id  gcrev_page_analysis の id
+     * @param string $device   'pc' | 'mobile'
+     * @param string $bytes    画像バイナリ
+     * @param string $mime     image/jpeg | image/png | image/webp
+     * @param bool   $is_auto  自動キャプチャか（is_auto_capture フラグ）
+     * @return int 添付ファイルID（失敗時 0）
+     */
+    private function store_page_snapshot_bytes( int $page_id, string $device, string $bytes, string $mime, bool $is_auto ): int {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+
+        $device = ( $device === 'mobile' ) ? 'mobile' : 'pc';
+        $ext    = $mime === 'image/png' ? 'png' : ( $mime === 'image/webp' ? 'webp' : 'jpg' );
+        $name   = sprintf( 'pa_%d_%s_%s_%s.%s', $page_id, $device, date( 'Ymd_His' ), substr( bin2hex( random_bytes( 4 ) ), 0, 8 ), $ext );
+
+        $up = wp_upload_bits( $name, null, $bytes );
+        if ( ! empty( $up['error'] ) ) {
+            @file_put_contents( '/tmp/gcrev_page_analysis_debug.log', date( 'Y-m-d H:i:s' ) . " autocapture: wp_upload_bits error=" . $up['error'] . "\n", FILE_APPEND );
+            return 0;
+        }
+
+        $attachment_id = wp_insert_attachment( [
+            'post_mime_type' => $mime,
+            'post_title'     => sanitize_file_name( $name ),
+            'post_content'   => '',
+            'post_status'    => 'inherit',
+        ], $up['file'] );
+        if ( is_wp_error( $attachment_id ) ) {
+            return 0;
+        }
+        wp_update_attachment_metadata( $attachment_id, wp_generate_attachment_metadata( $attachment_id, $up['file'] ) );
+
+        $table = $wpdb->prefix . 'gcrev_page_analysis';
+        $col   = $device === 'mobile' ? 'screenshot_mobile' : 'screenshot_pc';
+        $wpdb->update(
+            $table,
+            [
+                $col              => $attachment_id,
+                'capture_date'    => current_time( 'mysql' ),
+                'is_auto_capture' => $is_auto ? 1 : 0,
+            ],
+            [ 'id' => $page_id ],
+            [ '%d', '%s', '%d' ],
+            [ '%d' ]
+        );
+
+        $wpdb->insert(
+            $wpdb->prefix . 'gcrev_page_snapshots',
+            [ 'page_analysis_id' => $page_id, 'device_type' => $device, 'attachment_id' => $attachment_id ],
+            [ '%d', '%s', '%d' ]
+        );
+
+        return (int) $attachment_id;
+    }
+
+    /**
+     * 指定ページのスクリーンショットを外部APIで自動取得して保存する。
+     * REST（手動ボタン）と Cron（月次）から共通で呼ぶ。
+     *
+     * @return array{ok:bool, captured?:array, errors?:array, message?:string}
+     */
+    public function autocapture_page( int $page_id, int $user_id ): array {
+        global $wpdb;
+
+        if ( ! class_exists( 'Gcrev_Screenshot_Client' ) ) {
+            $f = __DIR__ . '/gcrev-api/modules/class-screenshot-client.php';
+            if ( file_exists( $f ) ) { require_once $f; }
+        }
+        if ( ! class_exists( 'Gcrev_Screenshot_Client' ) || ! Gcrev_Screenshot_Client::is_configured() ) {
+            return [ 'ok' => false, 'message' => 'スクリーンショットAPIが未設定です（wp-config.php の GCREV_SCREENSHOT_API_PC / _MOBILE をご確認ください）。' ];
+        }
+
+        $table = $wpdb->prefix . 'gcrev_page_analysis';
+        $row   = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id, page_url FROM {$table} WHERE id = %d AND user_id = %d AND status = 'active'",
+            $page_id,
+            $user_id
+        ) );
+        if ( ! $row ) {
+            return [ 'ok' => false, 'message' => '対象ページが見つかりません。' ];
+        }
+        $url = (string) $row->page_url;
+
+        $captured = [];
+        $errors   = [];
+        foreach ( [ 'pc', 'mobile' ] as $device ) {
+            if ( ! Gcrev_Screenshot_Client::is_configured( $device ) ) { continue; }
+            $cap = Gcrev_Screenshot_Client::capture( $url, $device );
+            if ( empty( $cap['ok'] ) ) {
+                $errors[] = "{$device}: " . ( $cap['error'] ?? '取得失敗' );
+                continue;
+            }
+            $att = $this->store_page_snapshot_bytes( $page_id, $device, $cap['bytes'], $cap['mime'], true );
+            if ( $att > 0 ) {
+                $captured[] = $device;
+            } else {
+                $errors[] = "{$device}: 保存失敗";
+            }
+        }
+
+        if ( empty( $captured ) ) {
+            return [ 'ok' => false, 'message' => '自動取得に失敗しました（' . implode( ' / ', $errors ) . '）', 'errors' => $errors ];
+        }
+        return [ 'ok' => true, 'captured' => $captured, 'errors' => $errors ];
+    }
+
+    /**
+     * POST /gcrev/v1/page-analysis/pages/{id}/autocapture
+     * 外部スクショAPIで今すぐキャプチャを取得（本人のみ）。
+     */
+    public function rest_autocapture_page_snapshot( \WP_REST_Request $request ): \WP_REST_Response {
+        $user_id = get_current_user_id();
+        $id      = absint( $request->get_param( 'id' ) );
+
+        // お試し終了かつ未払いユーザーは外部API課金を行わない
+        if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $user_id ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => '現在のご契約状況ではご利用いただけません。' ], 403 );
+        }
+
+        $res = $this->autocapture_page( $id, $user_id );
+        return new \WP_REST_Response(
+            [ 'success' => $res['ok'], 'message' => $res['message'] ?? '', 'data' => $res ],
+            $res['ok'] ? 200 : 400
+        );
     }
 
     /**
