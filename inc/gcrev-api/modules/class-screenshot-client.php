@@ -125,7 +125,7 @@ class Gcrev_Screenshot_Client {
             'delay'                => (string) ( $s['delay'] ?? 3 ), // 遅延読み込みコンテンツの描画待ち（秒）
             'format'               => $s['format'],
             'block_cookie_banners' => 'true',
-            'block_ads'            => 'true',
+            // block_ads は YouTube 等の埋め込み(iframe/サムネ)を遮断することがあるため有効化しない
             'cache'                => 'true',
         ];
         if ( $s['format'] === 'jpg' ) {
