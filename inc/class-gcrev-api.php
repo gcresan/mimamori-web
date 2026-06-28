@@ -24870,6 +24870,7 @@ PROMPT;
      * 外部スクショAPIで今すぐキャプチャを取得（本人のみ）。
      */
     public function rest_autocapture_page_snapshot( \WP_REST_Request $request ): \WP_REST_Response {
+        @set_time_limit( 180 ); // PC+SP の2回撮影で時間がかかるため延長
         $user_id = get_current_user_id();
         $id      = absint( $request->get_param( 'id' ) );
 
