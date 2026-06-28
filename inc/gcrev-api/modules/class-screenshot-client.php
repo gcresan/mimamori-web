@@ -113,8 +113,13 @@ class Gcrev_Screenshot_Client {
             $params['image_quality'] = '80';
         }
         if ( $device === 'mobile' ) {
-            // デバイスプリセットで UA・viewport・モバイルモードを一括設定（確実にスマホ表示にする）
-            $params['viewport_device'] = 'iphone_15';
+            // モバイル表示を手動設定（iPhoneのUAを明示）。倍率は2倍に抑え、縦長でも
+            // JPEGの寸法上限(65,535px)に達しにくくする（プリセットの3倍だと縦長で超過する）。
+            $params['viewport_width']     = (string) $s['mobile_width'];
+            $params['viewport_mobile']    = 'true';
+            $params['viewport_has_touch'] = 'true';
+            $params['device_scale_factor'] = '2';
+            $params['user_agent'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
         } else {
             $params['viewport_width'] = (string) $s['pc_width'];
         }
