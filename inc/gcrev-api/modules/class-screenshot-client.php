@@ -151,8 +151,17 @@ class Gcrev_Screenshot_Client {
         $ctype = (string) wp_remote_retrieve_header( $resp, 'content-type' );
 
         if ( $code < 200 || $code >= 300 || strpos( (string) $ctype, 'image/' ) !== 0 ) {
-            self::log( "capture HTTP {$code} ctype={$ctype} device={$device} url={$page_url} body=" . substr( $body, 0, 300 ) );
-            return [ 'ok' => false, 'error' => "スクショAPIエラー (HTTP {$code})" ];
+            self::log( "capture HTTP {$code} ctype={$ctype} device={$device} url={$page_url} body=" . substr( $body, 0, 500 ) );
+            // ScreenshotOne 等はエラー時に JSON を返すので、その理由を抽出して表示する
+            $detail = '';
+            $j      = json_decode( $body, true );
+            if ( is_array( $j ) ) {
+                $detail = (string) ( $j['error_message'] ?? $j['message'] ?? $j['error_code'] ?? '' );
+            }
+            if ( $detail === '' && $body !== '' ) {
+                $detail = mb_substr( wp_strip_all_tags( $body ), 0, 200 );
+            }
+            return [ 'ok' => false, 'error' => "スクショAPIエラー (HTTP {$code})" . ( $detail !== '' ? ': ' . $detail : '' ) ];
         }
         if ( $body === '' ) {
             return [ 'ok' => false, 'error' => 'スクショAPIの応答が空でした' ];
