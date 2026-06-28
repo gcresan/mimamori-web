@@ -366,6 +366,17 @@ get_header();
     white-space: nowrap;
 }
 .kwr-badge-tracked svg { width: 11px; height: 11px; flex-shrink: 0; }
+.kwr-tracked-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.kwr-btn-untrack {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    background: transparent; color: var(--mw-text-secondary, #888);
+    border: 1px solid rgba(0,0,0,0.12); cursor: pointer;
+    white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.kwr-btn-untrack:hover { background: rgba(201,90,79,0.08); color: #C95A4F; border-color: rgba(201,90,79,0.35); }
+.kwr-btn-untrack:disabled { opacity: 0.5; cursor: not-allowed; }
+.kwr-btn-untrack svg { width: 11px; height: 11px; flex-shrink: 0; }
 
 .kwr-badge--action-title    { background: rgba(201,168,76,0.15); color: #C9A84C; }
 .kwr-badge--action-heading  { background: rgba(124,58,237,0.1); color: #7C3AED; }
@@ -707,19 +718,29 @@ get_header();
 
     /* 計測キーワード管理 */
     var trackedKeywords = [];   // 登録済みキーワード文字列の配列（小文字正規化）
+    var trackedIds      = {};   // 小文字キーワード → キーワードID（解除に使用）
     var trackCanAdd     = true; // 上限に達していないか
     var trackLoaded     = false;
 
     var _trackedSeedUsed = false;
+
+    // キーワード配列から trackedKeywords / trackedIds を構築
+    function applyTrackedKeywords(keywords) {
+        trackedKeywords = [];
+        trackedIds = {};
+        (keywords || []).forEach(function(k) {
+            var lk = k.keyword.toLowerCase();
+            trackedKeywords.push(lk);
+            if (k.id) trackedIds[lk] = k.id;
+        });
+    }
 
     function loadTrackedKeywords() {
         // 初回のみ SSR シードを使い、REST 往復をスキップ（成功ハンドラと同じ代入を行う）。
         // 以降の再取得（addToTracker 後など）は必ずライブ fetch する。
         if (!_trackedSeedUsed && kwrSeedTracked) {
             _trackedSeedUsed = true;
-            trackedKeywords = (kwrSeedTracked.keywords || []).map(function(k) {
-                return k.keyword.toLowerCase();
-            });
+            applyTrackedKeywords(kwrSeedTracked.keywords);
             trackCanAdd = kwrSeedTracked.can_add;
             trackLoaded = true;
             return Promise.resolve();
@@ -732,9 +753,7 @@ get_header();
         .then(function(r) { return r.json(); })
         .then(function(json) {
             if (json.success && json.data) {
-                trackedKeywords = (json.data.keywords || []).map(function(k) {
-                    return k.keyword.toLowerCase();
-                });
+                applyTrackedKeywords(json.data.keywords);
                 trackCanAdd = json.data.can_add;
             }
             trackLoaded = true;
@@ -762,10 +781,13 @@ get_header();
         .then(function(r) { return r.json(); })
         .then(function(json) {
             if (json.success) {
-                trackedKeywords.push(keyword.toLowerCase());
-                // ボタンをバッジに差し替え
+                var lk = keyword.toLowerCase();
+                trackedKeywords.push(lk);
+                if (json.data && json.data.id) trackedIds[lk] = json.data.id;
+                // ボタンをバッジ（＋解除ボタン）に差し替え
                 var td = btnEl.parentNode;
-                td.innerHTML = trackBadgeHtml();
+                td.innerHTML = trackBadgeHtml(keyword);
+                bindUntrackButtons(td);
                 // 上限再チェック
                 loadTrackedKeywords();
             } else {
@@ -781,12 +803,83 @@ get_header();
         });
     }
 
+    function removeFromTracker(keyword, btnEl) {
+        var lk = keyword.toLowerCase();
+        var id = trackedIds[lk];
+        if (!id) {
+            // ID 未取得（古い表示など）。最新の登録状況を取り直してから再試行できるよう促す。
+            alert('計測情報の取得中です。少し待ってからもう一度お試しください。');
+            loadTrackedKeywords();
+            return;
+        }
+        if (!confirm('「' + keyword + '」を計測から外しますか？')) return;
+        btnEl.disabled = true;
+        btnEl.textContent = '解除中…';
+        fetch(rankTrackerUrl + '/' + id, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(json) {
+            if (json.success) {
+                var idx = trackedKeywords.indexOf(lk);
+                if (idx !== -1) trackedKeywords.splice(idx, 1);
+                delete trackedIds[lk];
+                // バッジを「計測に追加」ボタンに戻す
+                var td = btnEl.parentNode.parentNode; // .kwr-btn-untrack → .kwr-tracked-wrap → td
+                td.innerHTML = '<button type="button" class="kwr-btn-track" data-keyword="' + esc(keyword).replace(/"/g, '&quot;') + '">' + trackBtnInner() + '</button>';
+                bindTrackButtons(td);
+                // 上限再チェック
+                loadTrackedKeywords();
+            } else {
+                alert(json.message || '解除に失敗しました。');
+                btnEl.disabled = false;
+                btnEl.innerHTML = untrackBtnInner();
+            }
+        })
+        .catch(function() {
+            alert('通信エラーが発生しました。');
+            btnEl.disabled = false;
+            btnEl.innerHTML = untrackBtnInner();
+        });
+    }
+
     function trackBtnInner() {
         return '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"/></svg>計測に追加';
     }
 
-    function trackBadgeHtml() {
-        return '<span class="kwr-badge-tracked"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>追加済み</span>';
+    function untrackBtnInner() {
+        return '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>解除';
+    }
+
+    function trackBadgeHtml(keyword) {
+        return '<span class="kwr-tracked-wrap">'
+            + '<span class="kwr-badge-tracked"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>追加済み</span>'
+            + '<button type="button" class="kwr-btn-untrack" data-keyword="' + esc(keyword).replace(/"/g, '&quot;') + '" title="計測から外す">' + untrackBtnInner() + '</button>'
+            + '</span>';
+    }
+
+    // 指定スコープ内の追加/解除ボタンにクリックハンドラを束ねる（再利用可能）
+    function bindTrackButtons(scope) {
+        (scope || document).querySelectorAll('.kwr-btn-track').forEach(function(btn) {
+            if (btn._kwrBound) return;
+            btn._kwrBound = true;
+            btn.addEventListener('click', function() {
+                var kw = btn.getAttribute('data-keyword');
+                if (kw) addToTracker(kw, btn);
+            });
+        });
+    }
+    function bindUntrackButtons(scope) {
+        (scope || document).querySelectorAll('.kwr-btn-untrack').forEach(function(btn) {
+            if (btn._kwrBound) return;
+            btn._kwrBound = true;
+            btn.addEventListener('click', function() {
+                var kw = btn.getAttribute('data-keyword');
+                if (kw) removeFromTracker(kw, btn);
+            });
+        });
     }
 
     // ページ読み込み時に登録済みキーワードを取得（Promise を保持して待機可能に）
@@ -1678,7 +1771,7 @@ get_header();
                 + esc(item.reason) + '</td>'
                 + '<td>' + badge(item.action, actClass) + '</td>'
                 + '<td>' + (isKeywordTracked(item.keyword)
-                    ? trackBadgeHtml()
+                    ? trackBadgeHtml(item.keyword)
                     : '<button type="button" class="kwr-btn-track" data-keyword="' + esc(item.keyword).replace(/"/g, '&quot;') + '">' + trackBtnInner() + '</button>')
                 + '</td>'
                 + '<td><a href="' + writingUrl + '?keyword=' + encodeURIComponent(item.keyword) + '" class="kwr-btn-create" title="このキーワードで記事を作成"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"/><path d="M16 12.25a.75.75 0 01.75.75v2.25H19a.75.75 0 010 1.5h-2.25V19a.75.75 0 01-1.5 0v-2.25H13a.75.75 0 010-1.5h2.25V13a.75.75 0 01.75-.75z"/></svg>記事作成</a></td>'
@@ -1699,13 +1792,9 @@ get_header();
             });
         });
 
-        // 計測キーワード追加ボタン
-        body.querySelectorAll('.kwr-btn-track').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var kw = btn.getAttribute('data-keyword');
-                if (kw) addToTracker(kw, btn);
-            });
-        });
+        // 計測キーワード 追加 / 解除 ボタン
+        bindTrackButtons(body);
+        bindUntrackButtons(body);
     }
 
     /* excluded 専用テーブル（採択基準を満たさず除外されたKW） */
