@@ -100,6 +100,7 @@ class Gcrev_Screenshot_Client {
             'access_key'           => $s['access_key'],
             'full_page'            => 'true',
             'full_page_scroll'     => 'true',
+            'full_page_max_height' => '12000', // 縦長ページ（特にスマホ）の生成失敗・タイムアウト対策
             'format'               => $s['format'],
             'block_cookie_banners' => 'true',
             'block_ads'            => 'true',
@@ -137,7 +138,7 @@ class Gcrev_Screenshot_Client {
         $api_url = str_replace( '{URL}', rawurlencode( $page_url ), $tpl );
 
         $resp = wp_remote_get( $api_url, [
-            'timeout' => 60, // フルページ生成は時間がかかるため長めに
+            'timeout' => 90, // 縦長フルページの生成は時間がかかるため長めに
         ] );
 
         if ( is_wp_error( $resp ) ) {

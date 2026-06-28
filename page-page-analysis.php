@@ -1668,6 +1668,9 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
         apiFetch(API_BASE + '/' + id + '/autocapture', { method: 'POST' })
             .then(function(res) {
                 if (res.success) {
+                    // 一部のデバイスだけ失敗した場合は理由を表示
+                    var errs = (res.data && res.data.errors) ? res.data.errors : [];
+                    if (errs.length) { alert('一部のキャプチャに失敗しました:\n' + errs.join('\n')); }
                     if (window._paShowDetail) window._paShowDetail(id); // 画像を再読み込み
                 } else {
                     alert(res.message || '自動取得に失敗しました');
