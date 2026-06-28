@@ -84,11 +84,13 @@ class Gcrev_Screenshot_Client {
         }
 
         return [
-            'enabled'      => ! empty( $s['enabled'] ),
-            'access_key'   => $key,
-            'pc_width'     => (int) ( $s['pc_width'] ?? 1280 ) ?: 1280,
-            'mobile_width' => (int) ( $s['mobile_width'] ?? 390 ) ?: 390,
-            'format'       => ( ( $s['format'] ?? 'jpg' ) === 'png' ) ? 'png' : 'jpg',
+            'enabled'           => ! empty( $s['enabled'] ),
+            'access_key'        => $key,
+            'pc_width'          => (int) ( $s['pc_width'] ?? 1280 ) ?: 1280,
+            'mobile_width'      => (int) ( $s['mobile_width'] ?? 390 ) ?: 390,
+            'pc_max_height'     => (int) ( $s['pc_max_height'] ?? 12000 ) ?: 12000,
+            'mobile_max_height' => (int) ( $s['mobile_max_height'] ?? 20000 ) ?: 20000,
+            'format'            => ( ( $s['format'] ?? 'jpg' ) === 'png' ) ? 'png' : 'jpg',
         ];
     }
 
@@ -96,11 +98,12 @@ class Gcrev_Screenshot_Client {
      * 管理画面設定から ScreenshotOne の取得URL（{URL} プレースホルダ付き）を組み立てる。
      */
     private static function build_screenshotone_url( string $device, array $s ): string {
+        $max_height = $device === 'mobile' ? $s['mobile_max_height'] : $s['pc_max_height'];
         $params = [
             'access_key'           => $s['access_key'],
             'full_page'            => 'true',
             'full_page_scroll'     => 'true',
-            'full_page_max_height' => '12000', // 縦長ページ（特にスマホ）の生成失敗・タイムアウト対策
+            'full_page_max_height' => (string) $max_height, // 縦長ページの生成失敗・タイムアウト対策（device別）
             'format'               => $s['format'],
             'block_cookie_banners' => 'true',
             'block_ads'            => 'true',

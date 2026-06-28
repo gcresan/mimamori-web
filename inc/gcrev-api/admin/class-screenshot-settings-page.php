@@ -80,8 +80,10 @@ class Gcrev_Screenshot_Settings_Page {
         $out = [];
         $out['enabled']      = empty( $input['enabled'] ) ? '0' : '1';
         $out['format']       = ( isset( $input['format'] ) && $input['format'] === 'png' ) ? 'png' : 'jpg';
-        $out['pc_width']     = max( 320, min( 2560, absint( $input['pc_width'] ?? 1280 ) ?: 1280 ) );
-        $out['mobile_width'] = max( 320, min( 1280, absint( $input['mobile_width'] ?? 390 ) ?: 390 ) );
+        $out['pc_width']          = max( 320, min( 2560, absint( $input['pc_width'] ?? 1280 ) ?: 1280 ) );
+        $out['mobile_width']      = max( 320, min( 1280, absint( $input['mobile_width'] ?? 390 ) ?: 390 ) );
+        $out['pc_max_height']     = max( 2000, min( 30000, absint( $input['pc_max_height'] ?? 12000 ) ?: 12000 ) );
+        $out['mobile_max_height'] = max( 2000, min( 30000, absint( $input['mobile_max_height'] ?? 20000 ) ?: 20000 ) );
 
         // アクセスキー: 削除指定 → 空 / 新規入力（マスクでない）→ 暗号化 / それ以外 → 既存維持
         if ( ! empty( $input['clear_key'] ) ) {
@@ -106,6 +108,8 @@ class Gcrev_Screenshot_Settings_Page {
         $format  = ( ( $s['format'] ?? 'jpg' ) === 'png' ) ? 'png' : 'jpg';
         $pc_w    = (int) ( $s['pc_width'] ?? 1280 ) ?: 1280;
         $sp_w    = (int) ( $s['mobile_width'] ?? 390 ) ?: 390;
+        $pc_h    = (int) ( $s['pc_max_height'] ?? 12000 ) ?: 12000;
+        $sp_h    = (int) ( $s['mobile_max_height'] ?? 20000 ) ?: 20000;
 
         // 既存キーのマスク表示（復号して先頭4＋末尾4のみ）
         $key_mask = '';
@@ -139,7 +143,9 @@ class Gcrev_Screenshot_Settings_Page {
         echo '</select></td></tr>';
 
         echo '<tr><th>PC表示幅(px)</th><td><input type="number" name="' . esc_attr( $n ) . '[pc_width]" value="' . esc_attr( (string) $pc_w ) . '" class="small-text" min="320" max="2560" /></td></tr>';
-        echo '<tr><th>スマホ表示幅(px)</th><td><input type="number" name="' . esc_attr( $n ) . '[mobile_width]" value="' . esc_attr( (string) $sp_w ) . '" class="small-text" min="320" max="1280" /></td></tr>';
+        echo '<tr><th>スマホ表示幅(px)</th><td><input type="number" name="' . esc_attr( $n ) . '[mobile_width]" value="' . esc_attr( (string) $sp_w ) . '" class="small-text" min="320" max="1280" /><p class="description">※スマホはiPhoneプリセットを使うため、幅は参考値です。</p></td></tr>';
+        echo '<tr><th>PCの高さ上限(px)</th><td><input type="number" name="' . esc_attr( $n ) . '[pc_max_height]" value="' . esc_attr( (string) $pc_h ) . '" class="small-text" min="2000" max="30000" step="1000" /></td></tr>';
+        echo '<tr><th>スマホの高さ上限(px)</th><td><input type="number" name="' . esc_attr( $n ) . '[mobile_max_height]" value="' . esc_attr( (string) $sp_h ) . '" class="small-text" min="2000" max="30000" step="1000" /><p class="description">縦長ページの撮影が見切れる場合は上げてください（大きすぎると生成失敗・低速化の恐れ）。スマホは縦に長くなるため初期値を高めにしています。</p></td></tr>';
 
         echo '</table>';
     }
