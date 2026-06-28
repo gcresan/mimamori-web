@@ -58,8 +58,9 @@ class Gcrev_Bootstrap {
         // 年次レポート自動生成（1月のみ実行）
         add_action('gcrev_annual_report_generate_event', [__CLASS__, 'on_annual_report_generate_event']);
 
-        // Clarity日次蓄積
+        // Clarity日次蓄積（全社をチャンク分散・自己連鎖で処理）
         add_action('gcrev_clarity_daily_sync_event', [__CLASS__, 'on_clarity_daily_sync']);
+        add_action('gcrev_clarity_sync_chunk_event', [__CLASS__, 'clarity_sync_chunk'], 10, 1);
 
         // ページ分析: スクリーンショット月次自動取得（外部スクショAPI）
         add_action('gcrev_page_autocapture_event', [__CLASS__, 'on_page_autocapture']);
@@ -414,73 +415,84 @@ class Gcrev_Bootstrap {
         error_log( "[GCREV] annual_report_generate: completed. generated={$generated}, skipped={$skipped}" );
     }
 
+    /** Clarity日次同期: 1チャンクで処理する社数 */
+    private const CLARITY_SYNC_CHUNK = 3;
+
     /**
-     * Clarity日次蓄積 — numOfDays=1 で直近1日分を取得し gcrev_clarity_daily に保存
+     * Clarity日次蓄積の起点（毎日 03:45）。全社をチャンク分散・自己連鎖で処理する。
+     * 各クライアントは独立した Clarity プロジェクト（10回/日制限はプロジェクト単位）のため、
+     * 社数に上限を設けず、最大100社規模でも全社を毎日同期できる。
      */
     public static function on_clarity_daily_sync(): void {
-        $log = '/tmp/gcrev_cron_debug.log';
-        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync START\n", FILE_APPEND );
+        self::clarity_sync_chunk( 0 );
+    }
 
+    /**
+     * Clarity日次同期のチャンクワーカー（自己連鎖）。
+     * numOfDays=1 で直近1日分を取得し gcrev_clarity_daily に保存、AI改善案も（スロットリングのうえ）再生成。
+     *
+     * @param int $offset 対象ユーザー配列の開始位置
+     */
+    public static function clarity_sync_chunk( $offset = 0 ): void {
+        @set_time_limit( 280 );
+        $offset = (int) $offset;
+        $log    = '/tmp/gcrev_cron_debug.log';
         global $wpdb;
 
-        // Clarity連携が有効なユーザーを取得
+        // Clarity連携が有効なユーザー（安定した順序で）
         $users = $wpdb->get_col( $wpdb->prepare(
-            "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value = '1'",
+            "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value = '1' ORDER BY user_id ASC",
             '_gcrev_clarity_enabled'
         ) );
-
-        if ( empty( $users ) ) {
-            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync: no enabled users\n", FILE_APPEND );
+        $users = array_values( array_unique( array_map( 'intval', (array) $users ) ) );
+        $total = count( $users );
+        if ( $total === 0 || $offset >= $total ) {
+            if ( $offset === 0 ) {
+                file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_sync: no enabled users\n", FILE_APPEND );
+            }
             return;
         }
 
-        // API制限に配慮: 3コール/ユーザー × 最大3ユーザー = 9コール (10制限以内)
-        $max_users = 3;
-        $synced    = 0;
+        if ( $offset === 0 ) {
+            file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_sync START total={$total}\n", FILE_APPEND );
+        }
 
-        foreach ( array_slice( $users, 0, $max_users ) as $uid ) {
+        $batch = array_slice( $users, $offset, self::CLARITY_SYNC_CHUNK );
+        $next  = $offset + self::CLARITY_SYNC_CHUNK;
+
+        // 次チャンクを先にスケジュール（このチャンクが失敗/タイムアウトしても連鎖を止めない）
+        if ( $next < $total && ! wp_next_scheduled( 'gcrev_clarity_sync_chunk_event', [ $next ] ) ) {
+            wp_schedule_single_event( time() + 20, 'gcrev_clarity_sync_chunk_event', [ $next ] );
+        }
+
+        foreach ( $batch as $uid ) {
             $uid = (int) $uid;
-
             // お試し終了 かつ 未払いのユーザーは外部API課金を一切行わない
             if ( function_exists( 'gcrev_user_api_enabled' ) && ! gcrev_user_api_enabled( $uid ) ) {
                 continue;
             }
-
             try {
                 wp_set_current_user( $uid );
-
                 $result = Gcrev_Clarity_Client::sync_data( $uid, 'scheduled', 1 );
-
-                // 日次スナップショット保存
-                if ( $result['success'] ) {
+                if ( ! empty( $result['success'] ) ) {
                     Gcrev_Clarity_Client::save_daily_snapshot( $uid, $result, 1 );
-                    $synced++;
-
-                    // AI改善案を再生成（画像+Clarityデータが揃っているページのみ）
-                    $ai_generated = self::regenerate_ai_for_user( $uid, $log );
+                    $ai = self::regenerate_ai_for_user( $uid, $log );
                     file_put_contents( $log,
-                        date( 'Y-m-d H:i:s' ) . " clarity_daily_sync: user={$uid}, ai_regenerated={$ai_generated}\n",
-                        FILE_APPEND
-                    );
+                        date( 'Y-m-d H:i:s' ) . " clarity_sync: user={$uid} ok ai_regen={$ai}\n", FILE_APPEND );
+                } else {
+                    file_put_contents( $log,
+                        date( 'Y-m-d H:i:s' ) . " clarity_sync: user={$uid} status=" . ( $result['summary']['status'] ?? 'unknown' ) . "\n", FILE_APPEND );
                 }
-
-                file_put_contents( $log,
-                    date( 'Y-m-d H:i:s' ) . " clarity_daily_sync: user={$uid}, status=" . ( $result['summary']['status'] ?? 'unknown' ) . "\n",
-                    FILE_APPEND
-                );
             } catch ( \Throwable $e ) {
                 file_put_contents( $log,
-                    date( 'Y-m-d H:i:s' ) . " clarity_daily_sync ERROR: user={$uid}, " . $e->getMessage() . "\n",
-                    FILE_APPEND
-                );
+                    date( 'Y-m-d H:i:s' ) . " clarity_sync ERROR: user={$uid} " . $e->getMessage() . "\n", FILE_APPEND );
             }
-
-            // API負荷軽減
-            sleep( 2 );
+            sleep( 2 ); // API負荷軽減
         }
 
         wp_set_current_user( 0 );
-        file_put_contents( $log, date( 'Y-m-d H:i:s' ) . " clarity_daily_sync END: synced={$synced}\n", FILE_APPEND );
+        file_put_contents( $log,
+            date( 'Y-m-d H:i:s' ) . " clarity_sync chunk done offset={$offset} (" . count( $batch ) . "/{$total})\n", FILE_APPEND );
     }
 
     /**
@@ -591,17 +603,25 @@ class Gcrev_Bootstrap {
      * @param string $log  デバッグログファイルパス
      * @return int   生成したページ数
      */
+    /** AI改善案の自動再生成は、同一ページにつきこの日数より新しければスキップ（コスト/負荷対策） */
+    private const CLARITY_AI_REGEN_MIN_DAYS = 6;
+
     private static function regenerate_ai_for_user( int $user_id, string $log ): int {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_page_analysis';
 
-        // 画像 + Clarityデータが揃っているページを取得
+        // 画像 + Clarityデータが揃っているページを取得。
+        // 直近 CLARITY_AI_REGEN_MIN_DAYS 日以内にAI生成済みのページは再生成しない
+        // （100社規模での過剰なAI呼び出しを防ぐスロットリング）。
         $pages = $wpdb->get_results( $wpdb->prepare(
             "SELECT id FROM {$table}
              WHERE user_id = %d AND status = 'active'
                AND screenshot_pc IS NOT NULL
-               AND clarity_data IS NOT NULL AND clarity_data != ''",
-            $user_id
+               AND clarity_data IS NOT NULL AND clarity_data != ''
+               AND ( ai_analysis_date IS NULL
+                     OR ai_analysis_date < DATE_SUB( NOW(), INTERVAL %d DAY ) )",
+            $user_id,
+            self::CLARITY_AI_REGEN_MIN_DAYS
         ), ARRAY_A );
 
         if ( empty( $pages ) ) return 0;
