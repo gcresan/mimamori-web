@@ -92,6 +92,7 @@ wp/
 │           ├── class-deploy-page.php                # デプロイ管理（dev限定）
 │           ├── class-notification-settings-page.php # 通知設定
 │           ├── class-payment-settings-page.php      # 決済設定
+│           ├── class-screenshot-settings-page.php   # スクショAPI設定（ScreenshotOne）
 │           └── class-qa-report-page.php             # QAレポート
 │
 ├── inc/cli/                           # WP-CLI コマンド
@@ -158,7 +159,7 @@ wp/
 | `MIMAMORI_SCRIPTS_DIR` | スクリプトディレクトリ（dev のみ） |
 | `MIMAMORI_UPDATES_INGEST_TOKEN` | 更新情報APIトークン |
 | `GCREV_ENCRYPTION_KEY` | トークン暗号化キー（Base64, 32byte） |
-| `GCREV_SCREENSHOT_API_PC` | ページ分析の自動キャプチャ用 外部スクショAPIのURLテンプレート（PC幅）。`{URL}` が対象URL(encode済)に置換。画像バイナリを返すこと |
+| `GCREV_SCREENSHOT_API_PC` | （任意・上書き用）ページ分析の自動キャプチャ用 外部スクショAPIのURLテンプレート（PC幅）。`{URL}` が対象URL(encode済)に置換。**通常は管理画面「スクショAPI設定」で設定**（ScreenshotOneのキー）。この定数があれば優先される |
 | `GCREV_SCREENSHOT_API_MOBILE` | 同上（スマホ幅）。未設定のデバイスはキャプチャ対象外 |
 
 ### サービスアカウントJSON

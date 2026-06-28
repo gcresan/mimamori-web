@@ -170,6 +170,12 @@ class Gcrev_Bootstrap {
                 (new Gcrev_Claude_Test_Page())->register();
             }
 
+            $screenshot_settings_path = __DIR__ . '/admin/class-screenshot-settings-page.php';
+            if ( file_exists($screenshot_settings_path) ) {
+                require_once $screenshot_settings_path;
+                (new Gcrev_Screenshot_Settings_Page())->register();
+            }
+
             $cron_monitor_path = __DIR__ . '/admin/class-cron-monitor-page.php';
             if ( file_exists($cron_monitor_path) ) {
                 require_once $cron_monitor_path;
