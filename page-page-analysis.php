@@ -1728,26 +1728,35 @@ if ( empty( $_GET['nocache'] ) && class_exists( 'Gcrev_Insight_API' ) ) {
         function startPolling() { stopPoll(); poll(); pollTimer = setInterval(poll, 2500); }
 
         var btn = document.getElementById('paAutoSetupBtn');
-        if (btn) btn.addEventListener('click', function() {
-            if (!confirm('アクセスの多い主要ページを自動で登録し、PC・スマホのキャプチャを撮影します。\nバックグラウンドで進むので、この画面を離れても大丈夫です。よろしいですか？')) return;
+
+        function startJob(force) {
             btn.disabled = true;
             var orig = btn.innerHTML;
             btn.textContent = '開始中...';
-            apiFetch(startUrl, { method: 'POST' }).then(function(res) {
+            apiFetch(startUrl + (force ? '?force=1' : ''), { method: 'POST' }).then(function(res) {
                 btn.disabled = false; btn.innerHTML = orig;
                 if (!res.success) { alert(res.message || '自動設定に失敗しました'); return; }
                 if (res.status === 'done') {
+                    // すべて取得済み → 再取得するか確認（スマホ画像の取り直し等）
+                    if (!force && confirm('対象ページはすべて取得済みです。\n全ページのキャプチャを撮り直しますか？（スマホ画像の取り直しなど）')) {
+                        startJob(true);
+                        return;
+                    }
                     ensureBar(); updateBar(res.total || 0, res.total || 0);
-                    finishBar('対象ページはすべて取得済みです');
-                    setTimeout(function() { if (window.location) window.location.reload(); }, 1200);
+                    finishBar(force ? '対象ページがありませんでした' : '対象ページはすべて取得済みです');
                     return;
                 }
-                ensureBar(); updateBar(0, res.total || 0, '撮影を開始しました...');
+                ensureBar(); updateBar(0, res.total || 0, (force ? '再取得を開始しました...' : '撮影を開始しました...'));
                 startPolling();
             }).catch(function() {
                 btn.disabled = false; btn.innerHTML = orig;
                 alert('通信エラーが発生しました');
             });
+        }
+
+        if (btn) btn.addEventListener('click', function() {
+            if (!confirm('アクセスの多い主要ページを自動で登録し、PC・スマホのキャプチャを撮影します。\nバックグラウンドで進むので、この画面を離れても大丈夫です。よろしいですか？')) return;
+            startJob(false);
         });
 
         // ページ読込時: 実行中ジョブがあれば進捗バーを復帰

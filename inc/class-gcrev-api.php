@@ -25065,7 +25065,7 @@ PROMPT;
      *
      * @return array ジョブ状態
      */
-    public function pa_autosetup_start( int $user_id, int $limit = 6 ): array {
+    public function pa_autosetup_start( int $user_id, int $limit = 6, bool $force = false ): array {
         global $wpdb;
         $table = $wpdb->prefix . 'gcrev_page_analysis';
         $key   = $this->pa_autosetup_key( $user_id );
@@ -25110,6 +25110,14 @@ PROMPT;
                 $has_shot = false;
             }
             if ( $pid > 0 && ! $has_shot ) { $pending[] = $pid; }
+        }
+
+        // 強制再取得: 撮影済みも含め、登録済みの全アクティブページを対象にする
+        if ( $force ) {
+            $pending = array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare(
+                "SELECT id FROM {$table} WHERE user_id = %d AND status = 'active'",
+                $user_id
+            ) ) );
         }
 
         $job = [
@@ -25178,7 +25186,8 @@ PROMPT;
             return new \WP_REST_Response( [ 'success' => false, 'message' => '現在のご契約状況ではご利用いただけません。' ], 403 );
         }
         $limit = absint( $request->get_param( 'limit' ) ) ?: 6;
-        $job   = $this->pa_autosetup_start( $user_id, min( 12, max( 1, $limit ) ) );
+        $force = (bool) absint( $request->get_param( 'force' ) );
+        $job   = $this->pa_autosetup_start( $user_id, min( 12, max( 1, $limit ) ), $force );
         if ( ( $job['status'] ?? '' ) === 'error' ) {
             return new \WP_REST_Response( [ 'success' => false, 'message' => $job['message'] ?? '自動設定に失敗しました' ], 400 );
         }
