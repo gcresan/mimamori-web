@@ -129,7 +129,7 @@ class Mimamori_Inquiries_AI_Classifier {
 - category: 次のいずれかちょうど1つ → {$categories_str}
 - valid: true/false（営業・配信停止・SPAM・テスト系は false。実利用ユーザーや見込み客なら true）
 - region: 「愛媛県松山市」のように都道府県＋市区町村。本文や住所欄に書かれていれば抽出。不明なら "—"
-- summary: 内容を 60〜140 文字程度の自然な日本語で要約。実家のリフォーム検討等の核心情報は残す。フォーム特有の制御文字（[][][]、行番号、駅名など）は無視。
+- summary: 内容を 60〜140 文字程度の自然な日本語で要約。実家のリフォーム検討等の核心情報は残す。フォーム特有の制御文字（[][][]、行番号、駅名など）は無視。【重要・個人情報保護】氏名・電話番号・メールアドレス・正確な住所（番地・建物名）は要約に含めないこと。氏名は「お客様」、住所は市区町村までにとどめる（番地以下は書かない）。
 - tags: 来場者数や予約日時など、ハイライトしたい情報を短いラベル配列で返す（例: ["大人2名","お子様1名"]、無ければ空配列）
 
 【判定ガイド】
@@ -200,12 +200,55 @@ SYS;
                 'ai_category' => $category,
                 'ai_valid'    => $valid,
                 'ai_region'   => isset( $row['region'] ) && (string) $row['region'] !== '' ? (string) $row['region'] : '—',
-                'ai_summary'  => isset( $row['summary'] ) ? (string) $row['summary'] : '',
+                'ai_summary'  => self::mask_pii( isset( $row['summary'] ) ? (string) $row['summary'] : '', $it ),
                 'ai_tags'     => $tags,
             ] );
         }
 
         return $result;
+    }
+
+    /**
+     * 要約文から個人特定情報を除去する（2層マスク）。
+     *
+     * 1) 既知の値で名指し除去: 元itemの氏名・メールを完全一致で置換。
+     *    （氏名は文中だと正規表現で検出できないが、手元に正解があるので確実に消せる）
+     * 2) パターン除去: メールアドレス・電話番号の安全網。
+     *
+     * みまもりWeb側に保存されうる唯一の自由記述（ai_summary）からPIIを落とすための関数。
+     *
+     * @param array<string,mixed> $it 元の問い合わせ item（name/email を参照）
+     */
+    private static function mask_pii( string $text, array $it ): string {
+        if ( $text === '' ) {
+            return $text;
+        }
+        $name  = trim( (string) ( $it['name'] ?? '' ) );
+        $email = trim( (string) ( $it['email'] ?? '' ) );
+
+        // (1) 既知値での名指し除去
+        if ( $name !== '' && mb_strlen( $name ) >= 2 ) {
+            $text = str_replace( $name, 'お客様', $text );
+        }
+        if ( $email !== '' ) {
+            $text = str_replace( $email, '[メール]', $text );
+        }
+
+        // (2) パターン除去（安全網）
+        $text = (string) preg_replace( '/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', '[メール]', $text );
+        // 日本の電話番号（市外局番〜携帯、ハイフン/空白/括弧の有無を許容）
+        $text = (string) preg_replace( '/0\d{1,4}[-(\s]?\d{1,4}[-)\s]?\d{3,4}/', '[電話]', $text );
+
+        return $text;
+    }
+
+    /**
+     * 移行処理（保存済みデータのスクラブ）から呼ぶための公開ラッパー。
+     *
+     * @param array<string,mixed> $it
+     */
+    public static function mask_pii_public( string $text, array $it ): string {
+        return self::mask_pii( $text, $it );
     }
 
     /**
@@ -218,7 +261,7 @@ SYS;
                 'ai_category' => 'その他',
                 'ai_valid'    => ! empty( $it['valid'] ),
                 'ai_region'   => '—',
-                'ai_summary'  => mb_substr( (string) ( $it['message'] ?? '' ), 0, 140 ),
+                'ai_summary'  => self::mask_pii( mb_substr( (string) ( $it['message'] ?? '' ), 0, 140 ), $it ),
                 'ai_tags'     => [],
                 'ai_failed'   => true,
             ] );

@@ -260,6 +260,33 @@ class Gcrev_CLI {
         }
     }
 
+    /**
+     * 既存の問い合わせ items_json に残っている生PII（氏名/メール/本文）を一括除去する。
+     *
+     * ai_summary は保存済みの氏名/メールでマスクしてから、name/email/message を削除する。
+     * 一度実行すれば、以後は分類時に自動でPII除去されて保存される。
+     *
+     * ## EXAMPLES
+     *
+     *     wp gcrev scrub-inquiry-pii
+     *
+     * @param array $args       Positional arguments.
+     * @param array $assoc_args Named arguments.
+     */
+    public function scrub_inquiry_pii( array $args, array $assoc_args ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+        if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+            WP_CLI::error( 'Mimamori_Inquiries_Fetcher class not found.' );
+        }
+
+        WP_CLI::log( '問い合わせ items_json から生PIIを除去しています ...' );
+        $result = \Mimamori_Inquiries_Fetcher::scrub_all_stored_pii();
+        WP_CLI::success( sprintf(
+            '完了: 対象 %d 行中 %d 行をスクラブしました。',
+            (int) ( $result['rows'] ?? 0 ),
+            (int) ( $result['scrubbed'] ?? 0 )
+        ) );
+    }
+
     // =========================================================
     // rate-limit-status: レートリミッターの現在値
     // =========================================================

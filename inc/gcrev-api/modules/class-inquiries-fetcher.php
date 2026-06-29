@@ -683,6 +683,117 @@ class Mimamori_Inquiries_Fetcher {
         return sha1( $material );
     }
 
+    /** 同一リクエスト内での生PII再取得を避けるためのインメモリキャッシュ（DB/transientには保存しない） */
+    private static array $raw_list_mem = [];
+
+    /**
+     * 保存前に生PII（氏名/メール/本文）を除去する。
+     *
+     * inquiry_key（PIIから sha1 で導出する非可逆の結合キー）は保持するため、表示時に
+     * クライアントWPから取得した生データと突き合わせ（hydrate）できる。
+     * これにより、みまもりWeb の DB（items_json）に顧客の生PIIを蓄積しない。
+     *
+     * @param array<int,array<string,mixed>> $items
+     * @return array<int,array<string,mixed>>
+     */
+    public static function strip_pii_for_storage( array $items ): array {
+        $out = [];
+        foreach ( $items as $it ) {
+            if ( ! is_array( $it ) ) { continue; }
+            $key = ( isset( $it['inquiry_key'] ) && $it['inquiry_key'] !== '' )
+                ? (string) $it['inquiry_key']
+                : self::make_inquiry_key( $it );
+            unset( $it['name'], $it['email'], $it['message'] );
+            $it['inquiry_key'] = $key;
+            $out[] = $it;
+        }
+        return $out;
+    }
+
+    /**
+     * 保存済み（PII除去済み）items に、クライアントWPから取得した生PIIを
+     * inquiry_key で突き合わせて結合する（オンデマンド取得）。
+     *
+     * クライアントWPに到達できない場合は氏名/メール/本文を空のまま返す（本文非表示で割り切り）。
+     * 生PIIはこのリクエストのメモリ上にのみ存在し、みまもりWeb側には保存しない。
+     *
+     * @param array<int,array<string,mixed>> $stored
+     * @return array<int,array<string,mixed>>
+     */
+    private function hydrate_pii_from_source( int $user_id, int $year, int $month, array $stored ): array {
+        $raw = $this->fetch_inquiry_list( $user_id, $year, $month, true );
+        if ( empty( $raw['success'] ) || ! is_array( $raw['items'] ?? null ) ) {
+            return $stored; // 到達不可 → 本文非表示で割り切り
+        }
+        $by_key = [];
+        foreach ( $raw['items'] as $r ) {
+            if ( ! is_array( $r ) ) { continue; }
+            $k = ( isset( $r['inquiry_key'] ) && $r['inquiry_key'] !== '' )
+                ? (string) $r['inquiry_key']
+                : self::make_inquiry_key( $r );
+            $by_key[ $k ] = $r;
+        }
+        foreach ( $stored as &$it ) {
+            if ( ! is_array( $it ) ) { continue; }
+            $k = (string) ( $it['inquiry_key'] ?? '' );
+            if ( $k !== '' && isset( $by_key[ $k ] ) ) {
+                $src = $by_key[ $k ];
+                $it['name']    = (string) ( $src['name'] ?? '' );
+                $it['email']   = (string) ( $src['email'] ?? '' );
+                $it['message'] = (string) ( $src['message'] ?? '' );
+            }
+        }
+        unset( $it );
+        return $stored;
+    }
+
+    /**
+     * 既存の items_json に残っている生PIIを一括除去する（移行用）。
+     *
+     * ai_summary は保存済みの氏名/メールでマスクしてから、name/email/message を削除する。
+     * WP-CLI: wp gcrev scrub-inquiry-pii から呼ぶ。
+     *
+     * @return array{rows:int, scrubbed:int}
+     */
+    public static function scrub_all_stored_pii(): array {
+        global $wpdb;
+        $table = self::table_name();
+        self::maybe_add_items_json_column();
+        $rows = $wpdb->get_results(
+            "SELECT `id`, `items_json` FROM `{$table}` WHERE `items_json` IS NOT NULL AND CHAR_LENGTH(`items_json`) > 0",
+            ARRAY_A
+        );
+        $scrubbed = 0;
+        foreach ( (array) $rows as $row ) {
+            $items = json_decode( (string) $row['items_json'], true );
+            if ( ! is_array( $items ) ) { continue; }
+            $changed = false;
+            foreach ( $items as &$it ) {
+                if ( ! is_array( $it ) ) { continue; }
+                if ( isset( $it['name'] ) || isset( $it['email'] ) || isset( $it['message'] ) ) {
+                    // ai_summary を保存済みPIIでマスクしてから生PIIを削除
+                    if ( class_exists( 'Mimamori_Inquiries_AI_Classifier' ) && isset( $it['ai_summary'] ) ) {
+                        $it['ai_summary'] = \Mimamori_Inquiries_AI_Classifier::mask_pii_public( (string) $it['ai_summary'], $it );
+                    }
+                    $changed = true;
+                }
+            }
+            unset( $it );
+            if ( $changed ) {
+                $clean = self::strip_pii_for_storage( $items );
+                $wpdb->update(
+                    $table,
+                    [ 'items_json' => wp_json_encode( $clean, JSON_UNESCAPED_UNICODE ) ],
+                    [ 'id' => (int) $row['id'] ],
+                    [ '%s' ],
+                    [ '%d' ]
+                );
+                $scrubbed++;
+            }
+        }
+        return [ 'rows' => count( (array) $rows ), 'scrubbed' => $scrubbed ];
+    }
+
     /** 当該ユーザーの手動オーバーライド辞書を取得 */
     public static function get_overrides( int $user_id ): array {
         $raw = get_user_meta( $user_id, '_gcrev_inquiry_overrides', true );
@@ -1055,11 +1166,11 @@ class Mimamori_Inquiries_Fetcher {
             return [ 'success' => false, 'message' => 'endpoint or token not configured' ];
         }
 
-        // 短期トランジェントキャッシュ（1時間）
-        $cache_key = sprintf( 'gcrev_inquiries_list_%d_%04d-%02d_%d', $user_id, $year, $month, $include_excluded ? 1 : 0 );
-        $cached    = get_transient( $cache_key );
-        if ( is_array( $cached ) ) {
-            return $cached;
+        // 生PII（氏名/メール/本文）を含むため DB(transient) には保存しない。
+        // 同一リクエスト内での重複取得だけをインメモリで回避する（リクエスト終了で消える）。
+        $mem_key = sprintf( '%d_%04d-%02d_%d', $user_id, $year, $month, $include_excluded ? 1 : 0 );
+        if ( isset( self::$raw_list_mem[ $mem_key ] ) ) {
+            return self::$raw_list_mem[ $mem_key ];
         }
 
         $base = self::normalize_endpoint( $endpoint );
@@ -1109,7 +1220,7 @@ class Mimamori_Inquiries_Fetcher {
             'count'   => (int) ( $data['count'] ?? count( $data['items'] ) ),
             'period'  => (string) ( $data['period'] ?? sprintf( '%04d-%02d', $year, $month ) ),
         ];
-        set_transient( $cache_key, $result, HOUR_IN_SECONDS );
+        self::$raw_list_mem[ $mem_key ] = $result;
         return $result;
     }
 
@@ -1124,7 +1235,7 @@ class Mimamori_Inquiries_Fetcher {
      *
      * @return array{success:bool, items?:array, count?:int, message?:string}
      */
-    public function fetch_inquiry_list_classified( int $user_id, int $year, int $month, bool $include_excluded = true, bool $force = false ): array {
+    public function fetch_inquiry_list_classified( int $user_id, int $year, int $month, bool $include_excluded = true, bool $force = false, bool $with_pii = true ): array {
         $year_month = sprintf( '%04d-%02d', $year, $month );
 
         // (1) 永続キャッシュチェック（force=false のとき）
@@ -1132,6 +1243,10 @@ class Mimamori_Inquiries_Fetcher {
             $cached = self::get_items_json( $user_id, $year_month );
             if ( is_array( $cached ) ) {
                 $items = self::apply_overrides_to_items( $user_id, $year_month, $cached );
+                // 表示用途のみ、生PII（氏名/メール/本文）をクライアントWPからオンデマンド結合。
+                if ( $with_pii ) {
+                    $items = $this->hydrate_pii_from_source( $user_id, $year, $month, $items );
+                }
                 if ( ! $include_excluded ) {
                     $items = array_values( array_filter( $items, static function ( $it ) {
                         return ! empty( $it['effective_valid'] );
@@ -1152,6 +1267,9 @@ class Mimamori_Inquiries_Fetcher {
             $cached = self::get_items_json( $user_id, $year_month );
             if ( is_array( $cached ) ) {
                 $items = self::apply_overrides_to_items( $user_id, $year_month, $cached );
+                if ( $with_pii ) {
+                    $items = $this->hydrate_pii_from_source( $user_id, $year, $month, $items );
+                }
                 if ( ! $include_excluded ) {
                     $items = array_values( array_filter( $items, static function ( $it ) {
                         return ! empty( $it['effective_valid'] );
@@ -1193,8 +1311,10 @@ class Mimamori_Inquiries_Fetcher {
         $classified = $classifier->classify_items( $items_raw, $user_id, $year_month );
 
         // (4) 月次集計を再計算 + 永続キャッシュ保存
+        // 集計は生PIIを含む $classified（メモリ上）で行い、保存時は生PIIを除去して
+        // 非PII（分類結果・inquiry_key・マスク済み要約）のみDBに残す。
         $this->reconcile_monthly_summary_from_ai( $user_id, $year, $month, $classified );
-        self::save_items_json( $user_id, $year_month, $classified );
+        self::save_items_json( $user_id, $year_month, self::strip_pii_for_storage( $classified ) );
 
         // (5) 手動オーバーライド適用 + フィルタして返す
         $items = self::apply_overrides_to_items( $user_id, $year_month, $classified );
@@ -1362,8 +1482,9 @@ class Mimamori_Inquiries_Fetcher {
                 continue;
             }
             // (2) 明細を AI 分類して永続キャッシュに保存（失敗してもサマリーは生きるので fail とはみなさない）
+            // cron/集計用途のため生PIIのオンデマンド結合は不要（with_pii=false）。
             try {
-                $this->fetch_inquiry_list_classified( $user_id, $year, $month, true, false );
+                $this->fetch_inquiry_list_classified( $user_id, $year, $month, true, false, false );
             } catch ( \Throwable $e ) {
                 self::log( "[CRON] AI classify failed user={$user_id} period={$year}-{$month}: " . $e->getMessage() );
             }
