@@ -2094,6 +2094,25 @@ add_action( 'wp_enqueue_scripts', function () {
 /**
  * REST API ルート登録
  */
+/**
+ * セキュリティ堅牢化: REST API でのユーザー列挙を防止する。
+ *
+ * 既定の /wp-json/wp/v2/users は未ログインでもユーザー名・slug を列挙でき、
+ * 総当たりログインや個人情報推測の足掛かりになる。ログイン済み（list_users 権限）
+ * 以外には users コレクション/個別エンドポイントを公開しない。
+ */
+add_filter( 'rest_endpoints', function ( $endpoints ) {
+    if ( current_user_can( 'list_users' ) ) {
+        return $endpoints; // 管理者等はそのまま（ブロックエディタ等で必要）
+    }
+    foreach ( [ '/wp/v2/users', '/wp/v2/users/(?P<id>[\d]+)' ] as $route ) {
+        if ( isset( $endpoints[ $route ] ) ) {
+            unset( $endpoints[ $route ] );
+        }
+    }
+    return $endpoints;
+} );
+
 add_action( 'rest_api_init', function () {
     register_rest_route( 'mimamori/v1', '/ai-chat', [
         'methods'             => 'POST',
@@ -6885,16 +6904,17 @@ VISION_ADDENDUM;
     ];
 
     // Debug log: Vision 添付の有無を記録（§7.1 準拠）
+    // 個人情報保護: ユーザー発話の本文は出力しない（文字数のみ）。
     @file_put_contents(
         '/tmp/gcrev_chat_debug.log',
         sprintf(
-            "%s vision user=%d mode=%s pages=%d images=%d msg=%s\n",
+            "%s vision user=%d mode=%s pages=%d images=%d msglen=%d\n",
             date( 'Y-m-d H:i:s' ),
             (int) $user_id,
             $screenshot_pack['meta']['mode'] ?? 'none',
             (int) ( $screenshot_pack['meta']['page_count'] ?? 0 ),
             count( $screenshot_pack['images'] ),
-            mb_substr( $effective_message ?? $message, 0, 80 )
+            mb_strlen( (string) ( $effective_message ?? $message ) )
         ),
         FILE_APPEND
     );
@@ -11711,8 +11731,11 @@ function gcrev_handle_inquiry( \WP_REST_Request $request ): \WP_REST_Response {
     }
 
     if ( ! $sent ) {
+        // 個人情報保護: 宛先メールアドレスはログに残さない（ドメイン部のみ記録）。
+        $to_at     = strrpos( (string) $to, '@' );
+        $to_domain = ( $to_at !== false ) ? substr( (string) $to, $to_at ) : '(no-domain)';
         file_put_contents( '/tmp/gcrev_inquiry_debug.log',
-            date( 'Y-m-d H:i:s' ) . " wp_mail failed: to={$to}, type={$inquiry_type}\n",
+            date( 'Y-m-d H:i:s' ) . " wp_mail failed: to_domain={$to_domain}, type={$inquiry_type}\n",
             FILE_APPEND
         );
         return new \WP_REST_Response( [ 'success' => false, 'message' => '送信に失敗しました。しばらくしてからもう一度お試しください。' ], 500 );

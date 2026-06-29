@@ -778,10 +778,12 @@ get_header();
 // =============================================
 
 // Effective CV データ（PHP → JS）
-const effectiveCvData = <?php echo $effective_cv_json ?? '{}'; ?>;
+// XSS対策: JSON 内に "</script>" 相当が混入してもスクリプトを抜け出せないよう "</" を "<\/" にエスケープ。
+// （JSON としては等価で JS パースに影響なし）
+const effectiveCvData = <?php echo str_replace( '</', '<\/', (string) ( $effective_cv_json ?? '{}' ) ); ?>;
 
 // KPIスナップショット（保存済みデータのみ — API再取得なし）
-const kpiSnapshot = <?php echo $kpi_snapshot_json; ?>;
+const kpiSnapshot = <?php echo str_replace( '</', '<\/', (string) ( $kpi_snapshot_json ?? 'null' ) ); ?>;
 const reportMonth = <?php echo (int)$month; ?>;
 
 let sparklineCharts = {};

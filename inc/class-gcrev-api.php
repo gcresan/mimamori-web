@@ -26688,6 +26688,19 @@ PROMPT;
             }
 
             $keyword_id = absint( $request['id'] );
+
+            // 所有者チェック（IDOR防止）: 他ユーザーのキーワードIDを総当たりで閲覧できないようにする。
+            // 兄弟ハンドラ rest_get_aio_keyword_detail と同じパターン。
+            global $wpdb;
+            $kw_table = $wpdb->prefix . 'gcrev_rank_keywords';
+            $owner    = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT user_id FROM {$kw_table} WHERE id = %d",
+                $keyword_id
+            ) );
+            if ( $owner !== $user_id && ! current_user_can( 'manage_options' ) ) {
+                return new \WP_REST_Response( [ 'success' => false, 'message' => '権限がありません' ], 403 );
+            }
+
             $service    = $this->get_aio_serp_service();
             if ( ! $service ) {
                 return new \WP_REST_Response( [ 'success' => false, 'message' => 'AIO SERP service not available' ], 500 );

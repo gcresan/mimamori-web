@@ -80,7 +80,8 @@ class Gcrev_Inquiries_Settings_Page {
             $enabled  = ! empty( $_POST['enabled'] );
             $exclude_keywords_raw = isset( $_POST['exclude_keywords'] ) ? (string) wp_unslash( $_POST['exclude_keywords'] ) : '';
 
-            if ( $endpoint !== '' && ! preg_match( '#^https?://#i', $endpoint ) ) {
+            // 個人情報保護: トークン＋顧客PIIを載せる通信のため https を必須とする（http は盗聴リスク）。
+            if ( $endpoint !== '' && ! preg_match( '#^https://#i', $endpoint ) ) {
                 wp_safe_redirect( add_query_arg( [ 'updated' => 'invalid', 'user' => $user_id ], menu_page_url( self::MENU_SLUG, false ) ) );
                 exit;
             }

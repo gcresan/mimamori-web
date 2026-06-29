@@ -978,9 +978,11 @@ class Mimamori_Inquiries_Fetcher {
         $token    = isset( $params['token'] )    ? (string) $params['token']    : '';
         $enabled  = ! empty( $params['enabled'] );
 
-        // endpoint バリデーション: http(s) のみ許可
-        if ( $endpoint !== '' && ! preg_match( '#^https?://#i', $endpoint ) ) {
-            return new \WP_REST_Response( [ 'success' => false, 'message' => 'invalid endpoint' ], 400 );
+        // endpoint バリデーション: https のみ許可。
+        // 個人情報保護: 取得元エンドポイントは認証トークンと顧客PII（氏名/メール/本文）を載せて通信するため、
+        // 平文の http を許すとトークン・PIIが盗聴される。https を必須とする。
+        if ( $endpoint !== '' && ! preg_match( '#^https://#i', $endpoint ) ) {
+            return new \WP_REST_Response( [ 'success' => false, 'message' => 'エンドポイントは https:// で始まる必要があります（個人情報保護のため http は不可）' ], 400 );
         }
 
         update_user_meta( $user_id, self::META_ENDPOINT, $endpoint );

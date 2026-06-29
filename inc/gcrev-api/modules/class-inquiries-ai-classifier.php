@@ -99,15 +99,21 @@ class Mimamori_Inquiries_AI_Classifier {
         }
         $claude = new \Gcrev_Claude_Client( $config );
 
-        // items を AI に渡しやすい形に変換（個人情報は除外しすぎず、判定に必要な範囲で）
+        // items を AI に渡しやすい形に変換。
+        // 個人情報最小化: 外部LLM（Anthropic）には氏名を送らず、メールはドメイン部のみ送る。
+        // - 氏名: カテゴリ/有効判定に寄与しないため送信しない（高い識別性のPII）。
+        // - メール: ドメインは営業/SPAM判定の手掛かりになるためドメインのみ送る（ローカル部=個人特定要素は除去）。
+        // 分類結果は呼び出し側で元の item に array_merge され、氏名・メールはみまもりWeb内の表示用に保持される。
         $payload = [];
         foreach ( $items as $i => $it ) {
+            $email_raw    = (string) ( $it['email'] ?? '' );
+            $at_pos       = strrpos( $email_raw, '@' );
+            $email_domain = ( $at_pos !== false ) ? substr( $email_raw, $at_pos ) : '';
             $payload[] = [
-                'idx'     => $i,
-                'date'    => (string) ( $it['date'] ?? '' ),
-                'name'    => (string) ( $it['name'] ?? '' ),
-                'email'   => (string) ( $it['email'] ?? '' ),
-                'message' => (string) ( $it['message'] ?? '' ),
+                'idx'          => $i,
+                'date'         => (string) ( $it['date'] ?? '' ),
+                'email_domain' => $email_domain,
+                'message'      => (string) ( $it['message'] ?? '' ),
             ];
         }
 
