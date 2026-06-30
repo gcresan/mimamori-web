@@ -849,6 +849,33 @@ function gcrev_migrate_business_name() {
 }
 
 // ----------------------------------------
+// 問い合わせ items_json の生PII一括除去（ワンタイム移行）
+// ----------------------------------------
+// レガシー行の items_json に残っている氏名/メール/本文を、起動時に一度だけ除去する。
+// 新規保存は strip_pii_for_storage() で既にPII除去済みのため、これは過去データの是正用。
+// 人手での `wp gcrev scrub-inquiry-pii` 実行に依存せず、dev/prod とも自動で fail-safe に。
+add_action( 'admin_init', 'gcrev_migrate_scrub_inquiry_pii' );
+
+function gcrev_migrate_scrub_inquiry_pii() {
+    if ( get_option( 'gcrev_inquiry_pii_scrubbed' ) ) {
+        return;
+    }
+    // フェッチャークラスが未ロードなら、まだフラグを立てず次回 admin_init で再試行する。
+    if ( ! class_exists( 'Mimamori_Inquiries_Fetcher' ) ) {
+        return;
+    }
+    $result = \Mimamori_Inquiries_Fetcher::scrub_all_stored_pii();
+    update_option( 'gcrev_inquiry_pii_scrubbed', '1' );
+
+    file_put_contents(
+        '/tmp/gcrev_inquiry_debug.log',
+        date( 'Y-m-d H:i:s' ) . ' [MIGRATE] scrub_all_stored_pii: '
+        . wp_json_encode( $result, JSON_UNESCAPED_UNICODE ) . "\n",
+        FILE_APPEND
+    );
+}
+
+// ----------------------------------------
 // Mobile detection
 // ----------------------------------------
 
