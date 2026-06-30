@@ -10242,15 +10242,21 @@ PROMPT;
             return ['success' => false, 'message' => 'トークンの取得に失敗しました: ' . $error_desc];
         }
 
-        // user_metaに保存（暗号化）
-        update_user_meta($user_id, '_gcrev_gbp_access_token',  Gcrev_Crypto::encrypt($body['access_token']));
-        update_user_meta($user_id, '_gcrev_gbp_token_expires', time() + (int)($body['expires_in'] ?? 3600));
+        // user_metaに保存（暗号化）。Fail-closed: 暗号化不可なら平文保存せずエラーを返す
+        try {
+            update_user_meta($user_id, '_gcrev_gbp_access_token',  Gcrev_Crypto::encrypt($body['access_token']));
+            update_user_meta($user_id, '_gcrev_gbp_token_expires', time() + (int)($body['expires_in'] ?? 3600));
 
-        if (!empty($body['refresh_token'])) {
-            update_user_meta($user_id, '_gcrev_gbp_refresh_token', Gcrev_Crypto::encrypt($body['refresh_token']));
+            if (!empty($body['refresh_token'])) {
+                update_user_meta($user_id, '_gcrev_gbp_refresh_token', Gcrev_Crypto::encrypt($body['refresh_token']));
+            }
+        } catch ( \Throwable $e ) {
+            file_put_contents('/tmp/gcrev_gbp_debug.log',
+                date('Y-m-d H:i:s') . " token NOT stored (crypto unavailable) user_id={$user_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND);
+            return ['success' => false, 'message' => '暗号化キー(GCREV_ENCRYPTION_KEY)が未設定のため、トークンを安全に保存できませんでした。管理者にお問い合わせください。'];
         }
 
-        error_log("[GCREV][GBP] Tokens stored (encrypted) for user_id={$user_id}");
         return ['success' => true, 'message' => ''];
     }
 
@@ -10297,15 +10303,22 @@ PROMPT;
             return false;
         }
 
-        update_user_meta($user_id, '_gcrev_gbp_access_token',  Gcrev_Crypto::encrypt($body['access_token']));
-        update_user_meta($user_id, '_gcrev_gbp_token_expires', time() + (int)($body['expires_in'] ?? 3600));
+        // Fail-closed: 暗号化不可なら平文保存せず失敗扱い
+        try {
+            update_user_meta($user_id, '_gcrev_gbp_access_token',  Gcrev_Crypto::encrypt($body['access_token']));
+            update_user_meta($user_id, '_gcrev_gbp_token_expires', time() + (int)($body['expires_in'] ?? 3600));
 
-        // Google がリフレッシュ時に新しい refresh_token を返す場合がある（ローテーション対応）
-        if ( ! empty( $body['refresh_token'] ) ) {
-            update_user_meta( $user_id, '_gcrev_gbp_refresh_token', Gcrev_Crypto::encrypt( $body['refresh_token'] ) );
+            // Google がリフレッシュ時に新しい refresh_token を返す場合がある（ローテーション対応）
+            if ( ! empty( $body['refresh_token'] ) ) {
+                update_user_meta( $user_id, '_gcrev_gbp_refresh_token', Gcrev_Crypto::encrypt( $body['refresh_token'] ) );
+            }
+        } catch ( \Throwable $e ) {
+            file_put_contents('/tmp/gcrev_gbp_debug.log',
+                date('Y-m-d H:i:s') . " refresh token NOT stored (crypto unavailable) user_id={$user_id}: " . $e->getMessage() . "\n",
+                FILE_APPEND);
+            return false;
         }
 
-        error_log("[GCREV][GBP] Token refreshed (encrypted) for user_id={$user_id}");
         return true;
     }
 

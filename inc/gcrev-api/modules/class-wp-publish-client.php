@@ -48,7 +48,16 @@ class Gcrev_WP_Publish_Client {
             update_user_meta( $user_id, 'gcrev_wp_publish_username', sanitize_text_field( $data['username'] ) );
         }
         if ( isset( $data['app_password'] ) && $data['app_password'] !== '' ) {
-            update_user_meta( $user_id, 'gcrev_wp_publish_app_password', self::encrypt_password( $data['app_password'] ) );
+            try {
+                update_user_meta( $user_id, 'gcrev_wp_publish_app_password', self::encrypt_password( $data['app_password'] ) );
+            } catch ( \Throwable $e ) {
+                // Fail-closed: 暗号化できない場合はアプリパスワードを平文保存しない
+                file_put_contents(
+                    '/tmp/gcrev_crypto_debug.log',
+                    date( 'Y-m-d H:i:s' ) . " wp-publish app_password NOT stored (crypto unavailable) user_id={$user_id}: " . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
+            }
         }
         if ( isset( $data['default_status'] ) ) {
             $status = in_array( $data['default_status'], [ 'draft', 'pending', 'publish' ], true ) ? $data['default_status'] : 'draft';
@@ -64,10 +73,11 @@ class Gcrev_WP_Publish_Client {
     // =========================================================
 
     private static function encrypt_password( string $plain ): string {
-        if ( class_exists( 'Gcrev_Crypto' ) ) {
+        // Fail-closed: 暗号化が使えない場合は平文を返さず例外を投げる（呼び出し側で握る）
+        if ( class_exists( 'Gcrev_Crypto' ) && Gcrev_Crypto::is_available() ) {
             return Gcrev_Crypto::encrypt( $plain );
         }
-        return $plain;
+        throw new \RuntimeException( 'Encryption unavailable: refusing to store WP app password as plaintext.' );
     }
 
     private static function decrypt_password( string $encrypted ): string {

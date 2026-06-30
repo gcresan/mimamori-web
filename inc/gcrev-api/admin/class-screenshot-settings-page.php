@@ -93,7 +93,13 @@ class Gcrev_Screenshot_Settings_Page {
         } else {
             $new = isset( $input['access_key'] ) ? trim( wp_unslash( (string) $input['access_key'] ) ) : '';
             if ( $new !== '' && strpos( $new, '*' ) === false ) {
-                $out['access_key'] = class_exists( 'Gcrev_Crypto' ) ? Gcrev_Crypto::encrypt( $new ) : $new;
+                if ( class_exists( 'Gcrev_Crypto' ) && Gcrev_Crypto::is_available() ) {
+                    $out['access_key'] = Gcrev_Crypto::encrypt( $new );
+                } else {
+                    // Fail-closed: 暗号化できない場合は平文保存せず既存値を維持し、管理者に通知
+                    add_settings_error( self::OPTION_KEY, 'gcrev_crypto_unavailable', 'GCREV_ENCRYPTION_KEY が未設定のため、アクセスキーを安全に保存できませんでした。wp-config.php に暗号化キーを設定してください。', 'error' );
+                    $out['access_key'] = (string) ( $existing['access_key'] ?? '' );
+                }
             } else {
                 $out['access_key'] = (string) ( $existing['access_key'] ?? '' );
             }

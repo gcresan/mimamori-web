@@ -61,9 +61,14 @@ class Gcrev_Crypto {
             return '';
         }
         if ( ! self::is_available() ) {
-            // 鍵未設定時はそのまま返す（後方互換）
-            error_log( '[GCREV][Crypto] WARNING: GCREV_ENCRYPTION_KEY not set, storing plaintext' );
-            return $plaintext;
+            // Fail-closed: 鍵が無いときに平文を保存しない（シークレット/PII漏洩防止）。
+            // 例外を投げ、呼び出し側は「平文保存」ではなく「保存失敗」として扱う。
+            file_put_contents(
+                '/tmp/gcrev_crypto_debug.log',
+                date( 'Y-m-d H:i:s' ) . " ENCRYPT REFUSED: GCREV_ENCRYPTION_KEY not available; refusing to store plaintext\n",
+                FILE_APPEND
+            );
+            throw new \RuntimeException( 'Encryption unavailable: GCREV_ENCRYPTION_KEY is not configured; refusing to store secret as plaintext.' );
         }
 
         $key   = self::get_key();

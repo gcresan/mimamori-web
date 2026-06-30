@@ -42,6 +42,10 @@ class Gcrev_LINE_Client {
         if ( $token === '' ) {
             return ['success' => false, 'message' => 'チャネルアクセストークンが空です。', 'basic_id' => ''];
         }
+        // Fail-closed: 暗号化キーが無いとトークンを平文保存することになるため、保存前に拒否
+        if ( ! class_exists( 'Gcrev_Crypto' ) || ! \Gcrev_Crypto::is_available() ) {
+            return ['success' => false, 'message' => '暗号化キー(GCREV_ENCRYPTION_KEY)が未設定のため、トークンを安全に保存できません。管理者にお問い合わせください。', 'basic_id' => ''];
+        }
 
         // 接続検証 — /v2/bot/info を呼ぶ
         $info = self::call('GET', '/v2/bot/info', null, $token);

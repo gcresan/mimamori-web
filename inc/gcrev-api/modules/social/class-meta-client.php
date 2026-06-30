@@ -173,6 +173,10 @@ class Gcrev_Meta_Client {
         if ( $app_id === '' || $app_secret === '' ) {
             return ['success' => false, 'message' => 'Meta アプリ ID / Secret が未設定です（管理画面で設定してください）。'];
         }
+        // Fail-closed: 暗号化キーが無いとトークンを平文保存することになるため、保存前に拒否
+        if ( ! class_exists( 'Gcrev_Crypto' ) || ! \Gcrev_Crypto::is_available() ) {
+            return ['success' => false, 'message' => '暗号化キー(GCREV_ENCRYPTION_KEY)が未設定のため、トークンを安全に保存できません。管理者にお問い合わせください。'];
+        }
 
         // 1) code → short-lived user token
         $short = self::http_get(self::GRAPH_BASE . '/' . self::GRAPH_API_VERSION . '/oauth/access_token', [

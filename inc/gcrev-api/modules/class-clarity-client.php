@@ -113,8 +113,14 @@ class Gcrev_Clarity_Client {
         if ( isset( $data['clarity_api_token'] ) ) {
             $token = sanitize_text_field( $data['clarity_api_token'] );
             if ( $token !== '' ) {
-                $encrypted = self::encrypt_token( $token );
-                update_user_meta( $user_id, self::META_API_TOKEN, $encrypted );
+                // Fail-closed: 暗号化不可なら平文保存しない
+                try {
+                    update_user_meta( $user_id, self::META_API_TOKEN, self::encrypt_token( $token ) );
+                } catch ( \Throwable $e ) {
+                    file_put_contents( '/tmp/gcrev_crypto_debug.log',
+                        date( 'Y-m-d H:i:s' ) . " clarity token NOT stored (crypto unavailable) user_id={$user_id}: " . $e->getMessage() . "\n",
+                        FILE_APPEND );
+                }
             }
             // 空文字の場合は既存トークンを維持（設定画面ではパスワードフィールドが常に空のため）
         }
@@ -766,10 +772,11 @@ class Gcrev_Clarity_Client {
      * トークンを暗号化
      */
     private static function encrypt_token( string $token ): string {
+        // Fail-closed: 暗号化が使えない場合は平文を返さず例外を投げる（呼び出し側で握る）
         if ( class_exists( 'Gcrev_Crypto' ) && Gcrev_Crypto::is_available() ) {
             return Gcrev_Crypto::encrypt( $token );
         }
-        return $token; // フォールバック: 平文
+        throw new \RuntimeException( 'Encryption unavailable: refusing to store Clarity token as plaintext.' );
     }
 
     /**

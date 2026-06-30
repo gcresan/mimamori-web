@@ -571,14 +571,16 @@ class Mimamori_Inquiries_Fetcher {
             delete_user_meta( $user_id, self::META_TOKEN );
             return;
         }
-        $stored = $plain;
-        if ( class_exists( 'Gcrev_Crypto' ) ) {
-            $enc = Gcrev_Crypto::encrypt( $plain );
-            if ( is_string( $enc ) && $enc !== '' ) {
-                $stored = $enc;
-            }
+        // Fail-closed: 暗号化できない場合は連携トークンを平文保存しない
+        if ( ! class_exists( 'Gcrev_Crypto' ) || ! \Gcrev_Crypto::is_available() ) {
+            file_put_contents(
+                '/tmp/gcrev_crypto_debug.log',
+                date( 'Y-m-d H:i:s' ) . " inquiry token NOT stored (crypto unavailable) user_id={$user_id}\n",
+                FILE_APPEND
+            );
+            return;
         }
-        update_user_meta( $user_id, self::META_TOKEN, $stored );
+        update_user_meta( $user_id, self::META_TOKEN, Gcrev_Crypto::encrypt( $plain ) );
     }
 
     /* ================================================================
