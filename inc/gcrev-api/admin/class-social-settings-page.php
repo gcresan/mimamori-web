@@ -64,7 +64,7 @@ class Gcrev_Social_Settings_Page {
         ]);
         register_setting(self::OPTION_GROUP, 'gcrev_meta_app_secret', [
             'type'              => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
+            'sanitize_callback' => [ $this, 'sanitize_app_secret' ],
             'default'           => '',
         ]);
 
@@ -201,27 +201,54 @@ class Gcrev_Social_Settings_Page {
         <?php
     }
 
+    /**
+     * App Secret を暗号化して保存する sanitize コールバック。
+     * - 空入力 → 既存の保存値を維持（フォームは実値を表示しないため）
+     * - 定数(GCREV_META_APP_SECRET)設定済み → DB に保存しない
+     * - 暗号化不可 → 平文保存せず既存維持＋エラー通知（fail-closed）
+     */
+    public function sanitize_app_secret( $input ): string {
+        $input = is_string($input) ? trim($input) : '';
+        if ( defined('GCREV_META_APP_SECRET') && GCREV_META_APP_SECRET !== '' ) {
+            return ''; // 定数優先のため DB には保持しない
+        }
+        if ( $input === '' ) {
+            return (string) get_option('gcrev_meta_app_secret', ''); // 変更なし
+        }
+        if ( ! class_exists('Gcrev_Crypto') || ! \Gcrev_Crypto::is_available() ) {
+            add_settings_error('gcrev_meta_app_secret', 'gcrev_crypto_unavailable', 'GCREV_ENCRYPTION_KEY が未設定のため、App Secret を安全に保存できませんでした。', 'error');
+            return (string) get_option('gcrev_meta_app_secret', '');
+        }
+        return \Gcrev_Crypto::encrypt($input);
+    }
+
     public function render_field_app_secret(): void {
-        $value = get_option('gcrev_meta_app_secret', '');
-        $has   = ! empty($value);
+        $const_set = defined('GCREV_META_APP_SECRET') && GCREV_META_APP_SECRET !== '';
+        $has       = $const_set || get_option('gcrev_meta_app_secret', '') !== '';
         ?>
         <div style="position:relative; max-width:560px;">
-            <input type="<?php echo $has ? 'password' : 'text'; ?>"
+            <input type="password"
                    id="gcrev_meta_app_secret"
                    name="gcrev_meta_app_secret"
-                   value="<?php echo esc_attr($value); ?>"
+                   value=""
                    class="regular-text"
                    placeholder="••••••••••••••••"
                    style="width:100%; padding-right:44px;"
-                   autocomplete="off">
+                   autocomplete="off"
+                   <?php echo $const_set ? 'disabled' : ''; ?>>
             <button type="button" onclick="
                 var f=document.getElementById('gcrev_meta_app_secret');
                 f.type = (f.type==='password') ? 'text' : 'password';
             " style="position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:18px;">👁️</button>
         </div>
         <p class="description">
-            <?php if ($has): ?><span style="color:#059669;">✅ 設定済み</span> — <?php endif; ?>
-            Meta for Developers のアプリ設定からコピー。
+            <?php if ($const_set): ?>
+                <span style="color:#059669;">🔒 wp-config.php の定数で設定済み</span>
+            <?php elseif ($has): ?>
+                <span style="color:#059669;">✅ 設定済み（暗号化保存）</span> — 変更する場合のみ新しい値を入力してください。
+            <?php else: ?>
+                Meta for Developers のアプリ設定からコピー。
+            <?php endif; ?>
         </p>
         <?php
     }

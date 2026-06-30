@@ -84,7 +84,7 @@ class Gcrev_GBP_Settings_Page {
         ]);
         register_setting(self::OPTION_GROUP, 'gcrev_gbp_client_secret', [
             'type'              => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
+            'sanitize_callback' => [ $this, 'sanitize_client_secret' ],
             'default'           => '',
         ]);
 
@@ -217,21 +217,43 @@ class Gcrev_GBP_Settings_Page {
     }
 
     /**
-     * クライアントシークレットフィールド
+     * クライアントシークレットを暗号化して保存する sanitize コールバック。
+     * - 空入力 → 既存の保存値を維持（フォームは実値を表示しないため）
+     * - 定数(GCREV_GBP_CLIENT_SECRET)設定済み → DB に保存しない
+     * - 暗号化不可 → 平文保存せず既存維持＋エラー通知（fail-closed）
+     */
+    public function sanitize_client_secret( $input ): string {
+        $input = is_string($input) ? trim($input) : '';
+        if ( defined('GCREV_GBP_CLIENT_SECRET') && GCREV_GBP_CLIENT_SECRET !== '' ) {
+            return ''; // 定数優先のため DB には保持しない
+        }
+        if ( $input === '' ) {
+            return (string) get_option('gcrev_gbp_client_secret', ''); // 変更なし
+        }
+        if ( ! class_exists('Gcrev_Crypto') || ! \Gcrev_Crypto::is_available() ) {
+            add_settings_error('gcrev_gbp_client_secret', 'gcrev_crypto_unavailable', 'GCREV_ENCRYPTION_KEY が未設定のため、クライアントシークレットを安全に保存できませんでした。', 'error');
+            return (string) get_option('gcrev_gbp_client_secret', '');
+        }
+        return \Gcrev_Crypto::encrypt($input);
+    }
+
+    /**
+     * クライアントシークレットフィールド（実値は HTML に出力しない）
      */
     public function render_field_client_secret(): void {
-        $value = get_option('gcrev_gbp_client_secret', '');
-        $has_value = ! empty($value);
+        $const_set = defined('GCREV_GBP_CLIENT_SECRET') && GCREV_GBP_CLIENT_SECRET !== '';
+        $has_value = $const_set || get_option('gcrev_gbp_client_secret', '') !== '';
         ?>
         <div style="position:relative; max-width:560px;">
-            <input type="<?php echo $has_value ? 'password' : 'text'; ?>"
+            <input type="password"
                    name="gcrev_gbp_client_secret"
                    id="gcrev_gbp_client_secret"
-                   value="<?php echo esc_attr($value); ?>"
+                   value=""
                    class="regular-text"
                    placeholder="GOCSPX-xxxxxxxxxxxxxx"
                    style="width:100%; padding-right:44px;"
-                   autocomplete="off">
+                   autocomplete="off"
+                   <?php echo $const_set ? 'disabled' : ''; ?>>
             <button type="button"
                     onclick="toggleSecretVisibility()"
                     style="position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:18px; padding:4px 8px;"
@@ -240,10 +262,13 @@ class Gcrev_GBP_Settings_Page {
             </button>
         </div>
         <p class="description">
-            <?php if ($has_value): ?>
-                <span style="color:#059669;">✅ 設定済み</span> —
+            <?php if ($const_set): ?>
+                <span style="color:#059669;">🔒 wp-config.php の定数で設定済み</span>
+            <?php elseif ($has_value): ?>
+                <span style="color:#059669;">✅ 設定済み（暗号化保存）</span> — 変更する場合のみ新しい値を入力してください。
+            <?php else: ?>
+                Google Cloud Console からコピーして貼り付けてください。
             <?php endif; ?>
-            Google Cloud Console からコピーして貼り付けてください。
         </p>
         <script>
         function toggleSecretVisibility() {

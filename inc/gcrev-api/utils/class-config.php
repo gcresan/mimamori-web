@@ -274,7 +274,12 @@ class Gcrev_Config {
         if (defined('GCREV_GBP_CLIENT_SECRET') && GCREV_GBP_CLIENT_SECRET !== '') {
             return (string) GCREV_GBP_CLIENT_SECRET;
         }
-        return (string) get_option('gcrev_gbp_client_secret', '');
+        // wp_options 保存分は暗号化されている（decrypt は平文もそのまま返すため後方互換）
+        $stored = (string) get_option('gcrev_gbp_client_secret', '');
+        if ($stored !== '' && class_exists('Gcrev_Crypto')) {
+            return \Gcrev_Crypto::decrypt($stored);
+        }
+        return $stored;
     }
 
 

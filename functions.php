@@ -876,6 +876,46 @@ function gcrev_migrate_scrub_inquiry_pii() {
 }
 
 // ----------------------------------------
+// アプリ認証情報（GBP/Meta シークレット）の暗号化移行（ワンタイム）
+// ----------------------------------------
+// wp_options に平文保存されていた GBP クライアントシークレット / Meta App Secret を
+// 一度だけ暗号化する。wp-config 定数で設定済みのものは DB から削除する。
+// 暗号化キー未設定時はフラグを立てず次回 admin_init で再試行（fail-safe）。
+add_action( 'admin_init', 'gcrev_migrate_encrypt_app_secrets' );
+
+function gcrev_migrate_encrypt_app_secrets() {
+    if ( get_option( 'gcrev_app_secrets_encrypted' ) ) {
+        return;
+    }
+    if ( ! class_exists( 'Gcrev_Crypto' ) || ! Gcrev_Crypto::is_available() ) {
+        return; // 鍵未設定 → 次回再試行
+    }
+    $map = [
+        'gcrev_gbp_client_secret' => 'GCREV_GBP_CLIENT_SECRET',
+        'gcrev_meta_app_secret'   => 'GCREV_META_APP_SECRET',
+    ];
+    foreach ( $map as $opt => $const ) {
+        // 定数で設定済み → DB の値（平文/暗号文問わず）を削除
+        if ( defined( $const ) && constant( $const ) !== '' ) {
+            if ( get_option( $opt, '' ) !== '' ) {
+                delete_option( $opt );
+            }
+            continue;
+        }
+        $raw = (string) get_option( $opt, '' );
+        if ( $raw === '' ) {
+            continue;
+        }
+        // 既に暗号化済み（復号して別値に戻る）ならスキップ
+        if ( Gcrev_Crypto::decrypt( $raw ) !== $raw ) {
+            continue;
+        }
+        update_option( $opt, Gcrev_Crypto::encrypt( $raw ) );
+    }
+    update_option( 'gcrev_app_secrets_encrypted', '1' );
+}
+
+// ----------------------------------------
 // Mobile detection
 // ----------------------------------------
 

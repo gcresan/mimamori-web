@@ -83,16 +83,29 @@ class Gcrev_Meta_Client {
 
     /**
      * Meta アプリの client_id を取得
+     * wp-config.php の定数があれば優先、なければ wp_options を参照
      */
     public static function get_app_id(): string {
+        if ( defined('GCREV_META_APP_ID') && GCREV_META_APP_ID !== '' ) {
+            return (string) GCREV_META_APP_ID;
+        }
         return (string) get_option('gcrev_meta_app_id', '');
     }
 
     /**
      * Meta アプリの client_secret を取得
+     * wp-config.php の定数があれば優先、なければ wp_options（暗号化保存）を復号して参照
      */
     public static function get_app_secret(): string {
-        return (string) get_option('gcrev_meta_app_secret', '');
+        if ( defined('GCREV_META_APP_SECRET') && GCREV_META_APP_SECRET !== '' ) {
+            return (string) GCREV_META_APP_SECRET;
+        }
+        // wp_options 保存分は暗号化されている（decrypt は平文もそのまま返すため後方互換）
+        $stored = (string) get_option('gcrev_meta_app_secret', '');
+        if ( $stored !== '' && class_exists('Gcrev_Crypto') ) {
+            return \Gcrev_Crypto::decrypt($stored);
+        }
+        return $stored;
     }
 
     /**
